@@ -27,10 +27,16 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 
 	process(codeElement: HTMLElement) {
 		if (codeElement.hasClass("language-power-roll") || codeElement.hasClass("language-pr")) {
-			// this.cssClasses().forEach(c => codeElement.classList.add(c));
-			let result = "<div class='pr-container'>"
-
 			const yaml = YAML.parse(codeElement.getText());
+			let containerClasses = [];
+			const indent = yaml["indent"]
+
+			if (indent && Number.isNumber(indent)) {
+				containerClasses.push("indent-" + indent);
+			}
+
+			let result = "<div class='pr-container " + containerClasses.join(" ") + "'>"
+
 			const type = yaml["type"] ?? yaml["name"];
 			if (type) {
 				result += "<div class='pr-type-line'><span class='pr-type-value'>" + type.trim() + "</span></div>";
