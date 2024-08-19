@@ -1,5 +1,5 @@
 .pr-container {
-	background: rgba(255,255,255,1%);
+	background: var(--code-background);
 	margin-top: .5em;
 	margin-bottom: .5em;
 	padding: 1em;
