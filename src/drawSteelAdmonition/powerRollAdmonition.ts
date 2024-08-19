@@ -26,8 +26,6 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 	}
 
 	process(codeElement: HTMLElement) {
-		console.log(codeElement);
-
 		if (codeElement.hasClass("language-power-roll") || codeElement.hasClass("language-pr")) {
 			// this.cssClasses().forEach(c => codeElement.classList.add(c));
 			let result = "<div class='pr-container'>"
