@@ -23,7 +23,7 @@ export namespace DrawSteelAdmonitionSettingsIO {
 		for (const identifier in settings.drawSteelAdmonitions) {
 			const dsa = settings.drawSteelAdmonitions[identifier];
 			const typedDSA = DrawSteelAdmonitionType.unmarshal(dsa);
-			dsas.set(typedDSA.slug, typedDSA);
+			dsas.set(typedDSA.type, typedDSA);
 		}
 		settings.drawSteelAdmonitions = dsas;
 		return [settings, dataMigrated];

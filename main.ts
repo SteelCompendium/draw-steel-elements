@@ -1,7 +1,6 @@
 import {MarkdownView, Plugin} from 'obsidian';
 import {DrawSteelAdmonitionSettingTab} from "./src/settings/drawSteelAdmonitionSettingTab";
 import {DrawSteelAdmonitionSettings, DrawSteelAdmonitionSettingsIO} from "./src/settings/drawSteelAdmonitionSettings";
-import {setCssForClass, wipeCss} from "./src/io/drawSteelAdmonitionCss";
 import {DrawSteelAdmonitionsPostProcessor} from "./src/drawSteelAdmonition/drawSteelAdmonitionPostProcessor";
 import {drawSteelAdmonitionPlugin} from "./src/drawSteelAdmonition/drawSteelAdmonitionExtension";
 
@@ -31,22 +30,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		if (dataMigrated) {
 			await this.saveSettings();
 		}
-		await this.refreshCss();
 	}
 
 	async saveSettings() {
 		const settingData = DrawSteelAdmonitionSettingsIO.marshal(this.settings);
 		await this.saveData(settingData);
-		await this.refreshCss();
 		this.rerenderMarkdownViews();
-	}
-
-	async refreshCss() {
-		await wipeCss(this.app);
-		for (const dsa of this.settings.drawSteelAdmonitions.values()) {
-			// console.log("setting " + dsa.cssClasses().last() + " to " + dsa.simpleStyle());
-			await setCssForClass(this.app, dsa.cssClasses().last(), dsa.simpleStyle());
-		}
 	}
 
 	private rerenderMarkdownViews() {

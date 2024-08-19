@@ -1,4 +1,3 @@
-import {sanitizeClassName, slugify} from "../utils";
 import {DrawSteelAdmonition} from "./drawSteelAdmonition";
 import {Setting} from "obsidian";
 import {DrawSteelAdmonitionType} from "./drawSteelAdmonitionType";
@@ -109,39 +108,32 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 		// }
 	}
 
-	cssClasses(): string[] {
-		const classes = super.cssClasses();
-		classes.push("dsa-prefix")
-		classes.push("dsa-prefix-" + sanitizeClassName(this.prefix));
-		return classes;
-	}
-
 	buildSettings(contentEl: HTMLElement, updateSampleFunction: () => void): Setting[] {
 		const results = new Array<Setting>();
 
-		results.push(new Setting(contentEl)
-			.setName("Prefix")
-			.setDesc("Inline codeblock prefix to trigger this formatting")
-			.addText((text) => text
-				.setPlaceholder("Enter prefix")
-				.setValue(this.prefix)
-				.onChange((value) => {
-					this.prefix = value;
-					updateSampleFunction();
-				})
-			));
-
-		results.push(new Setting(contentEl)
-			.setName("Hide prefix text")
-			.setDesc("If enabled, the 'prefix' text will not show in resulting Inline Admonition")
-			.addToggle((toggle) => toggle
-				.setValue(this.hideTriggerString)
-				.onChange((val) => {
-					this.hideTriggerString = val;
-					updateSampleFunction();
-				})
-			)
-		);
+		// results.push(new Setting(contentEl)
+		// 	.setName("Prefix")
+		// 	.setDesc("Inline codeblock prefix to trigger this formatting")
+		// 	.addText((text) => text
+		// 		.setPlaceholder("Enter prefix")
+		// 		.setValue(this.prefix)
+		// 		.onChange((value) => {
+		// 			this.prefix = value;
+		// 			updateSampleFunction();
+		// 		})
+		// 	));
+		//
+		// results.push(new Setting(contentEl)
+		// 	.setName("Hide prefix text")
+		// 	.setDesc("If enabled, the 'prefix' text will not show in resulting Inline Admonition")
+		// 	.addToggle((toggle) => toggle
+		// 		.setValue(this.hideTriggerString)
+		// 		.onChange((val) => {
+		// 			this.hideTriggerString = val;
+		// 			updateSampleFunction();
+		// 		})
+		// 	)
+		// );
 
 		return results;
 	}
