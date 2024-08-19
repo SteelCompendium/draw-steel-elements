@@ -1,5 +1,6 @@
 import {DrawSteelAdmonition} from "../drawSteelAdmonition/drawSteelAdmonition";
 import {DrawSteelAdmonitionType} from "../drawSteelAdmonition/drawSteelAdmonitionType";
+import {PowerRollAdmonition} from "../drawSteelAdmonition/powerRollAdmonition";
 
 export interface DrawSteelAdmonitionSettings {
 	version: number;
@@ -20,11 +21,7 @@ export namespace DrawSteelAdmonitionSettingsIO {
 		settings = newSettings;
 
 		const dsas = new Map<string, DrawSteelAdmonition>();
-		for (const identifier in settings.drawSteelAdmonitions) {
-			const dsa = settings.drawSteelAdmonitions[identifier];
-			const typedDSA = DrawSteelAdmonitionType.unmarshal(dsa);
-			dsas.set(typedDSA.type, typedDSA);
-		}
+		dsas.set(DrawSteelAdmonitionType.PowerRoll, PowerRollAdmonition.create());
 		settings.drawSteelAdmonitions = dsas;
 		return [settings, dataMigrated];
 	}

@@ -8,7 +8,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 	settings: DrawSteelAdmonitionSettings;
 
 	async onload() {
-		console.log("Loading Inline Admonitions.")
+		console.log("Loading Draw Steel Elements Plugin.")
 		await this.loadSettings();
 
 		this.registerMarkdownPostProcessor((element, context) => {
