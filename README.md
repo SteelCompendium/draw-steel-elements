@@ -42,7 +42,7 @@ The generated html is simple, but should be highly customizable with css:
 
 ### Fields
 
-| Keys                          | Description                                              | Example                                   |
+| Property                      | Description                                              | Example                                   |
 |-------------------------------| -------------------------------------------------------- | ----------------------------------------- |
 | `name`, `type`                | The "Title" or "Description" of the Power Roll.          | `name: Might Resistance Roll`             |
 | `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll        | `t1: 2 damage`                            |

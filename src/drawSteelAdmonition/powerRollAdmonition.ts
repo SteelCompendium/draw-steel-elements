@@ -9,7 +9,6 @@ import YAML from 'yaml'
 export class PowerRollAdmonition extends DrawSteelAdmonition {
 	type= DrawSteelAdmonitionType.PowerRoll;
 
-	// TODO - I dont like this...
 	static create() {
 		return new PowerRollAdmonition();
 	}
@@ -122,35 +121,10 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 
 	buildSettings(contentEl: HTMLElement, updateSampleFunction: () => void): Setting[] {
 		const results = new Array<Setting>();
-
-		// results.push(new Setting(contentEl)
-		// 	.setName("Prefix")
-		// 	.setDesc("Inline codeblock prefix to trigger this formatting")
-		// 	.addText((text) => text
-		// 		.setPlaceholder("Enter prefix")
-		// 		.setValue(this.prefix)
-		// 		.onChange((value) => {
-		// 			this.prefix = value;
-		// 			updateSampleFunction();
-		// 		})
-		// 	));
-		//
-		// results.push(new Setting(contentEl)
-		// 	.setName("Hide prefix text")
-		// 	.setDesc("If enabled, the 'prefix' text will not show in resulting Inline Admonition")
-		// 	.addToggle((toggle) => toggle
-		// 		.setValue(this.hideTriggerString)
-		// 		.onChange((val) => {
-		// 			this.hideTriggerString = val;
-		// 			updateSampleFunction();
-		// 		})
-		// 	)
-		// );
-
 		return results;
 	}
 
 	public toString = (): string => {
-		return "PowerRollAdmonition()";
+		return "PowerRollAdmonition{}";
 	}
 }
