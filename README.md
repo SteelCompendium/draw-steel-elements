@@ -43,6 +43,7 @@ The generated html is simple, but should be highly customizable with css:
 ## Future work
 
 - Customize the Power Roll Element's output (ex: display `Tier 1:` instead of `11 or lower:`)
+- Support Live Preview mode
 - Add ability to roll Power Rolls from Power Roll Element
 - Integrate with the dice plugin
 - Something with statblocks...
@@ -50,8 +51,8 @@ The generated html is simple, but should be highly customizable with css:
 
 ### Known Issues
 
+- No support for Live Preview
 - This repo is in a very primitive state
-- BRAT plugin not setup yet
 - Integrate into the community plugins
 
 ## Development
