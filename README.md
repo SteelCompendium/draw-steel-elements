@@ -40,6 +40,18 @@ The generated html is simple, but should be highly customizable with css:
 </div>
 ```
 
+### Fields
+
+| Keys                          | Description                                              | Example                                   |
+|-------------------------------| -------------------------------------------------------- | ----------------------------------------- |
+| `name`, `type`                | The "Title" or "Description" of the Power Roll.          | `name: Might Resistance Roll`             |
+| `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll        | `t1: 2 damage`                            |
+| `tier 2`, `t2`, `12-16`       | The tier-2 (12-16) result of the Power Roll              | `t2: 3 damage`                            |
+| `tier 3`, `t3`, `17+`         | The tier-3 (17+) result of the Power Roll                | `t3: 4 damage`                            |
+| `crit`, `nat 19-20`           | The critical result of the Power Roll                    | `crit: 4 damage, Extra Action`            |
+| `note`, `notes`               | Notes and reminders about the Power Roll                 | `note: Grant Edge if creature is bracing` |
+| `indent`                      | Left-margin indentation for the block (for nested lists) | `indent: 2`                               |
+
 ## Future work
 
 - Customize the Power Roll Element's output (ex: display `Tier 1:` instead of `11 or lower:`)

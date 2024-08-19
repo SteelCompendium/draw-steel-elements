@@ -66,7 +66,7 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 					"</div>";
 			}
 
-			const crit = yaml["critical"] ?? yaml["crit"] ?? yaml["Nat 19-20"];
+			const crit = yaml["critical"] ?? yaml["crit"] ?? yaml["nat 19-20"];
 			if (crit) {
 				result += "<div class='pr-tier-line pr-crit-line'>" +
 					"<span class='pr-tier-key pr-crit-key'>Nat 19-20:</span> " +
