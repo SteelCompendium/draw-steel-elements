@@ -60,12 +60,14 @@ The generated html is simple, but should be highly customizable with css:
 - Integrate with the dice plugin
 - Something with statblocks...
 - Something with encounter building...
+- Maybe an inline Power Roll (`pr Might RR|5 damage;fall Prone|3 damage|No effect`)
 
 ### Known Issues
 
 - No support for Live Preview
+- Links dont render
 - This repo is in a very primitive state
-- Integrate into the community plugins
+- Integrate into the community plugins (pending: https://github.com/obsidianmd/obsidian-releases/pull/4083)
 
 ## Development
 
@@ -78,4 +80,10 @@ See the [changelog](CHANGELOG.md) for changes
 
 ### Release
 
-Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments
+- Make sure the `manifest.json` has the right release version
+  - This should be semver without the `v` prefix
+- Update `CHANGELOG.md`
+- Create release in github
+  - Tag should match `manifest.json`
+  - Tag and release name should match
+  - Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments
