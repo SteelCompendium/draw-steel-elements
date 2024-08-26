@@ -54,13 +54,16 @@ The generated html is simple, but should be highly customizable with css:
 
 ## Future work
 
+- Optionally add hidden header for a Power Roll Element for linking 
 - Customize the Power Roll Element's output (ex: display `Tier 1:` instead of `11 or lower:`)
 - Support Live Preview mode
+- Attack power rolls (see Melee Free Strike)
 - Add ability to roll Power Rolls from Power Roll Element
 - Integrate with the dice plugin
 - Something with statblocks...
 - Something with encounter building...
 - Maybe an inline Power Roll (`pr Might RR|5 damage;fall Prone|3 damage|No effect`)
+- Negotiation tracker
 
 ### Known Issues
 

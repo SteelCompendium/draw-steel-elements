@@ -1,35 +1,78 @@
 .pr-container {
+	position: relative;
 	background: var(--code-background);
 	margin-top: .5em;
 	margin-bottom: .5em;
 	padding: 1em;
+	font-family: Bitter;
+	letter-spacing: 0.03em;
+}
+
+/* top-left border fade */
+
+.pr-container::before,
+.pr-container::after {
+	content: '';
+	position: absolute;
+	background: linear-gradient(to right, transparent, var(--text-normal));
+	height: 1px; /* Border thickness */
+	width: 100%;
+}
+
+.pr-container::before {
+	top: 0;
+	left: 0;
+	background: linear-gradient(to right, var(--text-normal), transparent);
+	width: 10em; /* 1/3 of the width */
+}
+
+.pr-container::after {
+	top: 0;
+	left: 0;
+	height: 10em; /* 1/3 of the height */
+	background: linear-gradient(to bottom, var(--text-normal), transparent);
+	width: 1px; /* Border thickness */
 }
 
 .pr-container.indent-1 {
 	margin-left: calc(var(--list-indent) * 1);
 }
+
 .pr-container.indent-2 {
 	margin-left: calc(var(--list-indent) * 2);
 }
+
 .pr-container.indent-3 {
 	margin-left: calc(var(--list-indent) * 3);
 }
+
 .pr-container.indent-4 {
 	margin-left: calc(var(--list-indent) * 4);
 }
+
 .pr-container.indent-5 {
 	margin-left: calc(var(--list-indent) * 5);
 }
+
 .pr-container.indent-6 {
 	margin-left: calc(var(--list-indent) * 6);
 }
 
-.pr-container .pr-type-value {
+.pr-container .pr-name-value {
+	font-weight: bold;
+	margin-left: 0.5em;
+}
+
+.pr-container .pr-roll-value {
 	font-weight: bold;
 }
 
 .pr-container .pr-tier-key {
 	font-weight: bold;
+}
+
+.pr-container .pr-flavor-value {
+	font-style: italic;
 }
 
 .pr-container .pr-note-list, .pr-container .pr-note-line {
@@ -39,7 +82,6 @@
 .pr-container .pr-note-list {
 	margin-bottom: 0;
 }
-
 
 span.dsa,
 code.dsa {
@@ -53,6 +95,182 @@ code.dsa {
 	padding: var(--tag-padding-y) var(--tag-padding-x);
 	line-height: 1;
 }
+
+.pr-detail-line {
+	margin: 0.5em;
+	margin-bottom: .75em;
+}
+
+.pr-detail-table-row {
+	display: flex;
+	margin-left: 0.5em;
+}
+
+.pr-detail-table-cell {
+	width: 50%;
+}
+
+.pr-detail-key {
+	font-weight: bold;
+}
+
+/* ==================== */
+/* Tier key symbol boxes */
+/* ==================== */
+
+.pr-tier-line {
+	display: flex;
+	line-height: 1em;
+}
+
+.tier-key-container {
+	display: flex;
+	font-size: 1em;
+	margin-right: .75em;
+}
+
+/* Tier 1 */
+
+.t1-key-body {
+	border-top: 1px solid var(--text-normal);
+	border-bottom: 1px solid var(--text-normal);
+	border-right: 1px solid var(--text-normal);
+	border-top-right-radius: .3em;
+	border-bottom-right-radius: .3em;
+	padding-right: .25em;
+	padding-left: 0em;
+	width: 2.9em;
+	padding-top: 0.1em;
+	/*height: 1em;*/
+	text-align: center;
+	line-height: 1em;
+	font-size: .8em;
+	font-weight: bold;
+	/* background-color: yellow; */
+}
+
+/* TODO - remove? */
+.t1-key-brace-part {
+	margin: 0;
+	padding: 0;
+}
+
+.t1-key-brace-p1 {
+	border-left: 1px solid var(--text-normal);
+	border-top: 1px solid var(--text-normal);
+	border-top-left-radius: 1em;
+	margin-left: .25em;
+	width: .25em;
+	height: .25em;
+	/* background-color:red; */
+}
+
+.t1-key-brace-p2 {
+	border-right: 1px solid var(--text-normal);
+	border-bottom: 1px solid var(--text-normal);
+	border-bottom-right-radius: .75em;
+	width: .25em;
+	height: .25em;
+	/* background-color: blue; */
+}
+
+.t1-key-brace-p3 {
+	border-right: 1px solid var(--text-normal);
+	border-top: 1px solid var(--text-normal);
+	border-top-right-radius: .75em;
+	width: .25em;
+	height: .25em;
+}
+
+.t1-key-brace-p4 {
+	border-left: 1px solid var(--text-normal);
+	border-bottom: 1px solid var(--text-normal);
+	border-bottom-left-radius: 20px;
+	margin-left: .25em;
+	width: .25em;
+	height: .25em;
+}
+
+/* Tier 2  */
+
+.t2-key-body {
+	border: 1px solid var(--text-normal);
+	border-radius: .3em;
+	padding-right: .25em;
+	padding-left: .25em;
+	width: 3.5em;
+	padding-top: 0.1em;
+	/*height: 1em;*/
+	text-align: center;
+	line-height: 1em;
+	font-size: .8em;
+	font-weight: bold;
+	/* background-color: yellow; */
+}
+
+/* Tier 3  */
+
+.t3-key-body {
+	border-top: 1px solid var(--text-normal);
+	border-bottom: 1px solid var(--text-normal);
+	border-left: 1px solid var(--text-normal);
+	border-top-left-radius: .3em;
+	border-bottom-left-radius: .3em;
+	padding-left: .25em;
+	padding-right: 0em;
+	width: 2.9em;
+	padding-top: 0.1em;
+	/*height: 1em;*/
+	text-align: center;
+	line-height: 1em;
+	font-size: .8em;
+	font-weight: bold;
+	/* background-color: yellow; */
+}
+
+/* TODO - remove? */
+.t3-key-brace-part {
+	margin: 0;
+	padding: 0;
+}
+
+.t3-key-brace-p1 {
+	border-right: 1px solid var(--text-normal);
+	border-top: 1px solid var(--text-normal);
+	border-top-right-radius: 1em;
+	width: .25em;
+	height: .25em;
+	/* background-color:red; */
+}
+
+.t3-key-brace-p2 {
+	border-left: 1px solid var(--text-normal);
+	border-bottom: 1px solid var(--text-normal);
+	border-bottom-left-radius: .75em;
+	width: .25em;
+	height: .25em;
+	margin-left: .25em;
+	/* background-color: blue; */
+}
+
+.t3-key-brace-p3 {
+	border-left: 1px solid var(--text-normal);
+	border-top: 1px solid var(--text-normal);
+	border-top-left-radius: .75em;
+	margin-left: .25em;
+	width: .25em;
+	height: .25em;
+}
+
+.t3-key-brace-p4 {
+	border-right: 1px solid var(--text-normal);
+	border-bottom: 1px solid var(--text-normal);
+	border-bottom-right-radius: 20px;
+	width: .25em;
+	height: .25em;
+}
+
+/* ==================== */
 
 .dsa-setting-row {
 	display: flex;
