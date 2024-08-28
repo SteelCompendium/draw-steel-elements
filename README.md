@@ -64,6 +64,8 @@ The generated html is simple, but should be highly customizable with css:
 - Something with encounter building...
 - Maybe an inline Power Roll (`pr Might RR|5 damage;fall Prone|3 damage|No effect`)
 - Negotiation tracker
+- Tracker for turn and who has gone in a round
+- Party tracker (XP, Victories)
 
 ### Known Issues
 

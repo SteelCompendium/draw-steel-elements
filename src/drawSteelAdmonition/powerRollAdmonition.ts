@@ -115,7 +115,8 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const crit = yaml["critical"] ?? yaml["crit"] ?? yaml["nat 19-20"];
 			if (crit) {
 				const critContainer = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
-				critContainer.createEl("span", {cls: "pr-tier-key pr-crit-key", text: "Nat 19-20: "});
+				// critContainer.createEl("span", {cls: "pr-tier-key pr-crit-key", text: "Nat 19-20: "});
+				PowerRollAdmonition.critKey(critContainer);
 				critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: crit.trim()});
 			}
 
@@ -203,11 +204,20 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 
 		container.createEl('div', {cls: "t3-key-body", text: "17+"});
 
-		const rightSide = container.createEl('div', {cls: "t1-key-right-side"});
+		const rightSide = container.createEl('div', {cls: "t3-key-right-side"});
 		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p1"});
 		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p2"});
 		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p3"});
 		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p4"});
+	}
 
+	private static critKey(parentElement) {
+		const container = parentElement.createEl("div", {cls: "tier-key-container crit-key-container"})
+
+		container.createEl('div', {cls: "crit-key-body", text: "crit"});
+
+		const rightSide = container.createEl('div', {cls: "crit-key-right-side"});
+		// rightSide.createEl("div", {cls: "crit-key-brace-part crit-key-brace-p1"});
+		// rightSide.createEl("div", {cls: "crit-key-brace-part crit-key-brace-p2"});
 	}
 }
