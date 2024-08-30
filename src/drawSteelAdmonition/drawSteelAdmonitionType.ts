@@ -1,9 +1,11 @@
 import {DrawSteelAdmonition} from "./drawSteelAdmonition";
 import {Modal} from "obsidian";
 import {PowerRollAdmonition} from "./powerRollAdmonition";
+import {HorizontalRuleAdmonition} from "./horizontalRuleAdmonition";
 
 export enum DrawSteelAdmonitionType {
 	PowerRoll = "powerRoll",
+	HorizontalRule = "horizontalRule",
 }
 
 export namespace DrawSteelAdmonitionType {
@@ -11,15 +13,20 @@ export namespace DrawSteelAdmonitionType {
 		switch (type) {
 			case DrawSteelAdmonitionType.PowerRoll:
 				return PowerRollAdmonition.create();
+			case DrawSteelAdmonitionType.HorizontalRule:
+				return HorizontalRuleAdmonition.create();
 			default:
 				throw new Error("Cannot create, invalid Inline Admonition type")
 		}
 	}
 
+	// why does this exist?  Looks like a leftover after a refactor...
 	export function from(type: string): DrawSteelAdmonitionType {
 		switch (type) {
 			case DrawSteelAdmonitionType.PowerRoll:
 				return DrawSteelAdmonitionType.PowerRoll
+			case DrawSteelAdmonitionType.HorizontalRule:
+				return DrawSteelAdmonitionType.HorizontalRule
 			default:
 				throw new Error("Invalid Inline Admonition type: " + type)
 		}
@@ -35,6 +42,8 @@ export namespace DrawSteelAdmonitionType {
 		switch (type) {
 			case DrawSteelAdmonitionType.PowerRoll:
 				return PowerRollAdmonition.unmarshal(data);
+			case DrawSteelAdmonitionType.HorizontalRule:
+				return HorizontalRuleAdmonition.unmarshal(data);
 			default:
 				throw new Error("Cannot Unmarshal, invalid Inline Admonition type: " + type)
 		}
