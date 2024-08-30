@@ -4,39 +4,59 @@ Some helper elements for the MCDM Draw Steel TTRPG
 
 ## Power Roll Codeblock
 
+Power Roll element for Tests, Resistance Rolls, Abilities, and other Power Rolls. Triggered with a codeblock leading 
+with `ds-power-roll` or `ds-pr`
+
 ![powerroll.png](powerroll.png)
 
-	```power-roll
-	type: Slice and dice
-	t1: 3 damage
-	t2: 4 damage
-	t3: 5 damage; push 2
-	crit: 5 damage; push 2; Extra Action
-	notes: You have an Edge on this attack if its raining
+	```ds-power-roll
+	name: Draconian Pride
+	flavor: You let loose a mighty roar to repel your foes and shake their spirits
+	keywords: Area, Magic
+	type: Action
+	distance: 2 burst
+	target: All enemies
+	roll: Power Roll + Might or Presence
+	t1: "2 damage; push 1"
+	t2: "4 damage; push 3"
+	t3: 7 damage; push 5; frightened (EoT)
+	effect: You have a bane on the power roll for this ability when you use it in consecutive rounds of the same encounter.
 	```
 
 The generated html is simple, but should be highly customizable with css:
 
 ```html
-<div class="pr-container">
-    <div class="pr-type-line"><span class="pr-type-value">Slice and dice</span></div>
-    <div class="pr-tier-line pr-tier-1-line">
-        <span class="pr-tier-key pr-tier-1-key">11 or lower:</span>
-        <span class="pr-tier-value pr-tier-1-value">3 damage</span>
+<div class="pr-container indent-2">
+    <div class="pr-name-line"><span class="pr-name-value">Might Test</span></div>
+    <div class="pr-detail-line pr-tier-line pr-tier-1-line">
+        <div class="tier-key-container t1-key-container">
+            <div class="t1-key-left-side">
+                <div class="t1-key-brace-part t1-key-brace-p1"></div>
+                <div class="t1-key-brace-part t1-key-brace-p2"></div>
+                <div class="t1-key-brace-part t1-key-brace-p3"></div>
+                <div class="t1-key-brace-part t1-key-brace-p4"></div>
+            </div>
+            <div class="t1-key-body">≤11</div>
+        </div>
+        <span class="pr-tier-value pr-tier-1-value">1 damage</span></div>
+    <div class="pr-detail-line pr-tier-line pr-tier-2-line">
+        <div class="tier-key-container t2-key-container">
+            <div class="t2-key-body">12-16</div>
+        </div>
+        <span class="pr-tier-value pr-tier-2-value">2 damage</span></div>
+    <div class="pr-detail-line pr-tier-line pr-tier-3-line">
+        <div class="tier-key-container t3-key-container">
+            <div class="t3-key-body">17+</div>
+            <div class="t3-key-right-side">
+                <div class="t3-key-brace-part t3-key-brace-p1"></div>
+                <div class="t3-key-brace-part t3-key-brace-p2"></div>
+                <div class="t3-key-brace-part t3-key-brace-p3"></div>
+                <div class="t3-key-brace-part t3-key-brace-p4"></div>
+            </div>
+        </div>
+        <span class="pr-tier-value pr-tier-3-value">3 damage; push 2</span></div>
+    <div class="pr-detail-line pr-note-line"><span class="pr-note">You have an Edge on this attack if its raining</span>
     </div>
-    <div class="pr-tier-line pr-tier-2-line">
-		<span class="pr-tier-key pr-tier-2-key">12-16:</span> 
-		<span class="pr-tier-value pr-tier-2-value">4 damage</span>
-	</div>
-    <div class="pr-tier-line pr-tier-3-line">
-		<span class="pr-tier-key pr-tier-3-key">17+:</span> 
-		<span class="pr-tier-value pr-tier-3-value">5 damage; push 2</span>
-	</div>
-    <div class="pr-tier-line pr-crit-line">
-		<span class="pr-tier-key pr-crit-key">Nat 19-20:</span> 
-		<span class="pr-tier-value pr-crit-value">5 damage; push 2; Extra Action</span>
-	</div>
-    <div class="pr-note-line"><span class="pr-note">You have an Edge on this attack if its raining</span></div>
 </div>
 ```
 
@@ -57,6 +77,13 @@ The generated html is simple, but should be highly customizable with css:
 | `effect`                      | Effect of the ability                                    | `effect: Gain an Edge if you didn't move` |
 | `note`, `notes`               | Notes and reminders about the Power Roll                 | `note: Grant Edge if creature is bracing` |
 | `indent`                      | Left-margin indentation for the block (for nested lists) | `indent: 2`                               |
+
+## Horizontal Rule 
+
+Horizontal line to separate sections. Triggered with a codeblock leading with `ds-horizontal-rule` or `ds-hr`
+
+![horizontalRule.png](horizontalRule.png)
+
 
 ## Future work
 

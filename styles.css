@@ -114,9 +114,9 @@ code.dsa {
 	font-weight: bold;
 }
 
-/* ==================== */
+/* ===================== */
 /* Tier key symbol boxes */
-/* ==================== */
+/* ===================== */
 
 .pr-tier-line {
 	display: flex;
@@ -291,15 +291,6 @@ code.dsa {
 /* ==================== */
 /* Horizontal Rule      */
 /* ==================== */
-
-/*body {*/
-/*	display: flex;*/
-/*	justify-content: center;*/
-/*	align-items: center;*/
-/*	height: 100vh;*/
-/*	margin: 0;*/
-/*	background-color: #f0f0f0;*/
-/*}*/
 
 .ds-hr-container {
 	display: flex;
