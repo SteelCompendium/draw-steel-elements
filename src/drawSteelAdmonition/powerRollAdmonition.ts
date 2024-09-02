@@ -185,30 +185,21 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 	private static tier1Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t1-key-container"})
 
-		const leftSide = container.createEl('div', {cls: "t1-key-left-side"});
-		leftSide.createEl("div", {cls: "t1-key-brace-part t1-key-brace-p1"});
-		leftSide.createEl("div", {cls: "t1-key-brace-part t1-key-brace-p2"});
-		leftSide.createEl("div", {cls: "t1-key-brace-part t1-key-brace-p3"});
-		leftSide.createEl("div", {cls: "t1-key-brace-part t1-key-brace-p4"});
-
-		container.createEl('div', {cls: "t1-key-body", text: "≤11"});
+		const body = container.createEl('div', {cls: "t1-key-body"});
+		body.createEl('div', {cls: "t1-key-body-text", text: "≤11"});
 	}
 
 	private static tier2Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t2-key-container"})
-		container.createEl('div', {cls: "t2-key-body", text: "12-16"});
+		const body = container.createEl('div', {cls: "t2-key-body"});
+		body.createEl('div', {cls: "t2-key-body-text", text: "12-16"});
 	}
 
 	private static tier3Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t3-key-container"})
 
-		container.createEl('div', {cls: "t3-key-body", text: "17+"});
-
-		const rightSide = container.createEl('div', {cls: "t3-key-right-side"});
-		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p1"});
-		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p2"});
-		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p3"});
-		rightSide.createEl("div", {cls: "t3-key-brace-part t3-key-brace-p4"});
+		const body = container.createEl('div', {cls: "t3-key-body"});
+		body.createEl('div', {cls: "t3-key-body-text", text: "17+"});
 	}
 
 	private static critKey(parentElement) {

@@ -132,130 +132,139 @@ code.dsa {
 /* Tier 1 */
 
 .t1-key-body {
-	border-top: 1px solid var(--text-normal);
-	border-bottom: 1px solid var(--text-normal);
-	border-right: 1px solid var(--text-normal);
-	border-top-right-radius: .3em;
-	border-bottom-right-radius: .3em;
-	padding-right: .25em;
-	padding-left: 0em;
-	width: 2.9em;
-	padding-top: 0.1em;
-	/*height: 1em;*/
+	position: relative;
+	width: 3em;
 	text-align: center;
-	line-height: 1em;
 	font-size: .8em;
 	font-weight: bold;
-	/* background-color: yellow; */
 }
 
-.t1-key-brace-p1 {
-	border-left: 1px solid var(--text-normal);
-	border-top: 1px solid var(--text-normal);
-	border-top-left-radius: 1em;
-	margin-left: .25em;
-	width: .25em;
-	height: .25em;
-	/* background-color:red; */
+.t1-key-body:before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--text-normal);
+
+	clip-path: polygon(
+		0.2em 0.2em,
+		0.4em 0,
+		calc(100% - 0.2em) 0,
+		100% 0.2em,
+		100% calc(100% - 0.2em),
+		calc(100% - 0.2em) 100%,
+		0.4em 100%,
+		0.2em calc(100% - 0.2em),
+		0.2em calc(50% + 0.2em),
+		0 50%,
+		0.2em calc(50% - 0.2em),
+		0.2em 0.2em,
+
+		calc(0.2em + 1px)  calc(0.2em + 0.41px),
+		calc(0.2em + 1px) calc(50% - 0.2em + 0.41px),
+		1.41px 50%,
+		calc(0.2em + 1px) calc(50% + 0.2em - 0.41px),
+		calc(0.2em + 1px) calc(100% - 0.2em - 0.41px),
+		calc(0.4em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
+		calc(100% - 1px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 1px) calc(0.2em + 0.41px),
+		calc(100% - 0.2em - 0.41px) 1px,
+		calc(0.4em + 0.41px) 1px,
+		calc(0.2em + 1px)  calc(0.2em + 0.41px)
+	);
 }
 
-.t1-key-brace-p2 {
-	border-right: 1px solid var(--text-normal);
-	border-bottom: 1px solid var(--text-normal);
-	border-bottom-right-radius: .75em;
-	width: .25em;
-	height: .25em;
-	/* background-color: blue; */
-}
-
-.t1-key-brace-p3 {
-	border-right: 1px solid var(--text-normal);
-	border-top: 1px solid var(--text-normal);
-	border-top-right-radius: .75em;
-	width: .25em;
-	height: .25em;
-}
-
-.t1-key-brace-p4 {
-	border-left: 1px solid var(--text-normal);
-	border-bottom: 1px solid var(--text-normal);
-	border-bottom-left-radius: 20px;
-	margin-left: .25em;
-	width: .25em;
-	height: .25em;
+.t1-key-body-text {
+	font-size: .9em;
 }
 
 /* Tier 2  */
 
 .t2-key-body {
-	border: 1px solid var(--text-normal);
-	border-radius: .3em;
-	padding-right: .25em;
-	padding-left: .25em;
-	width: 3.5em;
-	padding-top: 0.1em;
-	/*height: 1em;*/
+	position: relative;
+	width: 3em;
 	text-align: center;
-	line-height: 1em;
 	font-size: .8em;
 	font-weight: bold;
-	/* background-color: yellow; */
+}
+.t2-key-body:before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--text-normal);
+	clip-path: polygon(
+		0 0.2em,
+		0.2em 0,
+		calc(100% - 0.2em) 0,
+		100% 0.2em,
+		100% calc(100% - 0.2em),
+		calc(100% - 0.2em) 100%,
+		0.2em 100%,
+		0 calc(100% - 0.2em),
+		0 0.2em,
+
+		1px  calc(0.2em + 0.41px),
+		1px calc(100% - 0.2em - 0.41px),
+		calc(0.2em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
+		calc(100% - 1px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 1px) calc(0.2em + 0.41px),
+		calc(100% - 0.2em - 0.41px) 1px,
+		calc(0.2em + 0.41px) 1px,
+		1px  calc(0.2em + 0.41px)
+	);
+}
+
+.t2-key-body-text {
+	font-size: .9em;
 }
 
 /* Tier 3  */
 
 .t3-key-body {
-	border-top: 1px solid var(--text-normal);
-	border-bottom: 1px solid var(--text-normal);
-	border-left: 1px solid var(--text-normal);
-	border-top-left-radius: .3em;
-	border-bottom-left-radius: .3em;
-	padding-left: .25em;
-	padding-right: 0em;
-	width: 2.9em;
-	padding-top: 0.1em;
-	/*height: 1em;*/
+	position: relative;
+	width: 3em;
 	text-align: center;
-	line-height: 1em;
 	font-size: .8em;
 	font-weight: bold;
-	/* background-color: yellow; */
 }
 
-.t3-key-brace-p1 {
-	border-right: 1px solid var(--text-normal);
-	border-top: 1px solid var(--text-normal);
-	border-top-right-radius: 1em;
-	width: .25em;
-	height: .25em;
-	/* background-color:red; */
+.t3-key-body:before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--text-normal);
+	clip-path: polygon(
+		0 0.2em,
+		0.2em 0,
+		calc(100% - 0.4em) 0,
+		calc(100% - 0.2em) 0.2em,
+		calc(100% - 0.2em) calc(50% - 0.2em),
+		100% 50%,
+		calc(100% - 0.2em) calc(50% + 0.2em),
+		calc(100% - 0.2em) calc(100% - 0.2em),
+		calc(100% - 0.4em) 100%,
+		0.2em 100%,
+		0 calc(100% - 0.2em),
+		0 0.2em,
+
+		1px  calc(0.2em + 0.41px),
+		1px calc(100% - 0.2em - 0.41px),
+		calc(0.2em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px),
+		calc(100% - 1.41px) 50%,
+		calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px),
+		calc(100% - 0.2em - 1px) calc(0.2em + 0.41px),
+		calc(100% - 0.4em - 0.41px) 1px,
+		calc(0.2em + 0.41px) 1px,
+		1px  calc(0.2em + 0.41px)
+	);
 }
 
-.t3-key-brace-p2 {
-	border-left: 1px solid var(--text-normal);
-	border-bottom: 1px solid var(--text-normal);
-	border-bottom-left-radius: .75em;
-	width: .25em;
-	height: .25em;
-	margin-left: .25em;
-	/* background-color: blue; */
-}
-
-.t3-key-brace-p3 {
-	border-left: 1px solid var(--text-normal);
-	border-top: 1px solid var(--text-normal);
-	border-top-left-radius: .75em;
-	margin-left: .25em;
-	width: .25em;
-	height: .25em;
-}
-
-.t3-key-brace-p4 {
-	border-right: 1px solid var(--text-normal);
-	border-bottom: 1px solid var(--text-normal);
-	border-bottom-right-radius: 20px;
-	width: .25em;
-	height: .25em;
+.t3-key-body-text {
+	font-size: .9em;
 }
 
 /* Critical */
