@@ -205,9 +205,10 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 	private static critKey(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container crit-key-container"})
 
-		container.createEl('div', {cls: "crit-key-body", text: "crit"});
+		const body = container.createEl('div', {cls: "crit-key-body"});
+		body.createEl('div', {cls: "crit-key-body-text", text: "crit"});
 
-		const rightSide = container.createEl('div', {cls: "crit-key-right-side"});
+		// const rightSide = container.createEl('div', {cls: "crit-key-right-side"});
 		// rightSide.createEl("div", {cls: "crit-key-brace-part crit-key-brace-p1"});
 		// rightSide.createEl("div", {cls: "crit-key-brace-part crit-key-brace-p2"});
 	}
