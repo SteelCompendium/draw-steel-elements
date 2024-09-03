@@ -184,7 +184,6 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 
 	private static tier1Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t1-key-container"})
-
 		const body = container.createEl('div', {cls: "t1-key-body"});
 		body.createEl('div', {cls: "t1-key-body-text", text: "≤11"});
 	}
@@ -197,19 +196,13 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 
 	private static tier3Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t3-key-container"})
-
 		const body = container.createEl('div', {cls: "t3-key-body"});
 		body.createEl('div', {cls: "t3-key-body-text", text: "17+"});
 	}
 
 	private static critKey(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container crit-key-container"})
-
 		const body = container.createEl('div', {cls: "crit-key-body"});
 		body.createEl('div', {cls: "crit-key-body-text", text: "crit"});
-
-		// const rightSide = container.createEl('div', {cls: "crit-key-right-side"});
-		// rightSide.createEl("div", {cls: "crit-key-brace-part crit-key-brace-p1"});
-		// rightSide.createEl("div", {cls: "crit-key-brace-part crit-key-brace-p2"});
 	}
 }
