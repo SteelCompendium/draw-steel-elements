@@ -104,7 +104,8 @@ code.dsa {
 	line-height: 1;
 }
 
-.pr-detail-line {
+.pr-detail-line,
+.pr-field-line {
 	margin: 0.5em;
 	margin-bottom: .75em;
 }
@@ -119,6 +120,10 @@ code.dsa {
 }
 
 .pr-detail-key {
+	font-weight: bold;
+}
+
+.pr-field-key {
 	font-weight: bold;
 }
 

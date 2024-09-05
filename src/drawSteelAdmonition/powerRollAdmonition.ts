@@ -120,12 +120,23 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value ds-multiline", text: crit.trim()});
 			}
 
-			const effect = yaml["effect"] ;
+			const effect = yaml["effect"];
 			if (effect) {
 				const effectContainer = container.createEl("div", {cls: "pr-detail-line pr-effect-line"});
 				effectContainer.createEl("span", {cls: "pr-detail-key pr-effect-key", text: "Effect: "});
 				effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline", text: effect.trim()})
+			}
 
+			const fields = yaml["custom_fields"] ?? yaml["fields"];
+			if (fields) {
+				if (Array.isArray(fields)) {
+					const fieldsContainer = container.createEl("div", {cls: "pr-fields-container"});
+					fields.forEach(field => {
+						const fieldLine = fieldsContainer.createEl("div", {cls: "pr-field-line"});
+						fieldLine.createEl("span", {cls: "pr-field-key", text: field["name"].trim() + ": "});
+						fieldLine.createEl("span", {cls: "pr-field-value ds-multiline", text: field["value"].trim()})
+					});
+				}
 			}
 
 			const notes = yaml["notes"] ?? yaml["note"];

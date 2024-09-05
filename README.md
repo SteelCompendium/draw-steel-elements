@@ -75,9 +75,22 @@ The generated html is simple, but should be highly customizable with css:
 | `tier 3`, `t3`, `17+`         | The tier-3 (17+) result of the Power Roll                | `t3: 4 damage`                            |
 | `crit`, `nat 19-20`           | The critical result of the Power Roll                    | `crit: 4 damage, Extra Action`            |
 | `effect`                      | Effect of the ability                                    | `effect: Gain an Edge if you didn't move` |
+| `custom_fields`, `fields`     | Custom fields and values                                 | See below                                 |
 | `note`, `notes`               | Notes and reminders about the Power Roll                 | `note: Grant Edge if creature is bracing` |
 | `indent`                      | Left-margin indentation for the block (for nested lists) | `indent: 2`                               |
 
+**`custom_fields` and `fields`**
+
+These are for arbitrary fields under the power roll and effects:
+```
+fields:
+  - name: "Spend 1 Piety"
+    value: "The attack has a double edge and deals holy damage equal to twice your Intuition score."
+  - name: "Eat a Sandwich"
+    value: "Immune to everything"
+```
+
+Yaml is incredibly sensitive, be sure to format exactly.
 ## Horizontal Rule 
 
 Horizontal line to separate sections. Triggered with a codeblock leading with `ds-horizontal-rule` or `ds-hr`
