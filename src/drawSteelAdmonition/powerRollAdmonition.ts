@@ -87,6 +87,13 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				}
 			}
 
+			const trigger = yaml["trigger"];
+			if (trigger) {
+				const triggerContainer = container.createEl("div", {cls: "pr-detail-line pr-trigger-line"});
+				triggerContainer.createEl("span", {cls: "pr-detail-key pr-trigger-key", text: "Trigger: "});
+				triggerContainer.createEl("span", {cls: "pr-detail-value pr-trigger-value ds-multiline", text: trigger.trim()})
+			}
+
 			const roll = yaml["roll"];
 			if (roll) {
 				const typeContainer = container.createEl("div", {cls: "pr-detail-line pr-roll-line"});

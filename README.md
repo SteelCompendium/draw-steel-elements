@@ -69,7 +69,8 @@ The generated html is simple, but should be highly customizable with css:
 | `keywords`                    | Keywords of the ability                                  | `keywords: Area, Magic`                   |
 | `type`                        | Type of the ability                                      | `type: Action`                            |
 | `distance`                    | Distance of the ability                                  | `distance: 2 burst`                       |
-| `Target`                      | Target of the ability                                    | `target: All enemies`                     |
+| `target`                      | Target of the ability                                    | `target: All enemies`                     |
+| `trigger`                     | The Trigger for a Triggered Action                       | `trigger: You are damaged`                |
 | `roll`                        | Power Roll                                               | `roll: Power Roll + Might or Presence`    |
 | `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll        | `t1: 2 damage`                            |
 | `tier 2`, `t2`, `12-16`       | The tier-2 (12-16) result of the Power Roll              | `t2: 3 damage`                            |
