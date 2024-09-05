@@ -2,6 +2,7 @@ import {DrawSteelAdmonition} from "../drawSteelAdmonition/drawSteelAdmonition";
 import {DrawSteelAdmonitionType} from "../drawSteelAdmonition/drawSteelAdmonitionType";
 import {PowerRollAdmonition} from "../drawSteelAdmonition/powerRollAdmonition";
 import {HorizontalRuleAdmonition} from "../drawSteelAdmonition/horizontalRuleAdmonition";
+import {NegotiationTrackerAdmonition} from "../drawSteelAdmonition/negotiationTrackerAdmonition";
 
 export interface DrawSteelAdmonitionSettings {
 	version: number;
@@ -24,6 +25,7 @@ export namespace DrawSteelAdmonitionSettingsIO {
 		const dsas = new Map<string, DrawSteelAdmonition>();
 		dsas.set(DrawSteelAdmonitionType.PowerRoll, PowerRollAdmonition.create());
 		dsas.set(DrawSteelAdmonitionType.HorizontalRule, HorizontalRuleAdmonition.create());
+		dsas.set(DrawSteelAdmonitionType.NegotiationTracker, NegotiationTrackerAdmonition.create());
 		settings.drawSteelAdmonitions = dsas;
 		return [settings, dataMigrated];
 	}

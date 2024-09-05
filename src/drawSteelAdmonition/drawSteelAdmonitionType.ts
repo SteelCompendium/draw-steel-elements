@@ -2,10 +2,12 @@ import {DrawSteelAdmonition} from "./drawSteelAdmonition";
 import {Modal} from "obsidian";
 import {PowerRollAdmonition} from "./powerRollAdmonition";
 import {HorizontalRuleAdmonition} from "./horizontalRuleAdmonition";
+import {NegotiationTrackerAdmonition} from "./negotiationTrackerAdmonition";
 
 export enum DrawSteelAdmonitionType {
 	PowerRoll = "powerRoll",
 	HorizontalRule = "horizontalRule",
+	NegotiationTracker = "negotiationTracker",
 }
 
 export namespace DrawSteelAdmonitionType {
@@ -15,6 +17,8 @@ export namespace DrawSteelAdmonitionType {
 				return PowerRollAdmonition.create();
 			case DrawSteelAdmonitionType.HorizontalRule:
 				return HorizontalRuleAdmonition.create();
+			case DrawSteelAdmonitionType.NegotiationTracker:
+				return NegotiationTrackerAdmonition.create();
 			default:
 				throw new Error("Cannot create, invalid Inline Admonition type")
 		}
@@ -27,6 +31,8 @@ export namespace DrawSteelAdmonitionType {
 				return DrawSteelAdmonitionType.PowerRoll
 			case DrawSteelAdmonitionType.HorizontalRule:
 				return DrawSteelAdmonitionType.HorizontalRule
+			case DrawSteelAdmonitionType.NegotiationTracker:
+				return DrawSteelAdmonitionType.NegotiationTracker
 			default:
 				throw new Error("Invalid Inline Admonition type: " + type)
 		}
@@ -44,6 +50,8 @@ export namespace DrawSteelAdmonitionType {
 				return PowerRollAdmonition.unmarshal(data);
 			case DrawSteelAdmonitionType.HorizontalRule:
 				return HorizontalRuleAdmonition.unmarshal(data);
+			case DrawSteelAdmonitionType.NegotiationTracker:
+				return NegotiationTrackerAdmonition.unmarshal(data);
 			default:
 				throw new Error("Cannot Unmarshal, invalid Inline Admonition type: " + type)
 		}
