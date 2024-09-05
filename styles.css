@@ -66,7 +66,8 @@
 	margin-left: calc(var(--list-indent) * 6);
 }
 
-.pr-container .pr-name-value {
+.pr-container .pr-name-value,
+.pr-container .pr-cost-value {
 	font-weight: bold;
 	margin-left: 0.5em;
 }

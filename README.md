@@ -65,6 +65,7 @@ The generated html is simple, but should be highly customizable with css:
 | Property                      | Description                                              | Example                                   |
 | ----------------------------- | -------------------------------------------------------- | ----------------------------------------- |
 | `name`                        | The "Title" or "Description" of the Power Roll.          | `name: Might Resistance Roll`             |
+| `cost`                        | The cost to use the ability                              | `cost: 3 Piety`                           |
 | `keywords`                    | Keywords of the ability                                  | `keywords: Area, Magic`                   |
 | `type`                        | Type of the ability                                      | `type: Action`                            |
 | `distance`                    | Distance of the ability                                  | `distance: 2 burst`                       |
@@ -75,7 +76,7 @@ The generated html is simple, but should be highly customizable with css:
 | `tier 3`, `t3`, `17+`         | The tier-3 (17+) result of the Power Roll                | `t3: 4 damage`                            |
 | `crit`, `nat 19-20`           | The critical result of the Power Roll                    | `crit: 4 damage, Extra Action`            |
 | `effect`                      | Effect of the ability                                    | `effect: Gain an Edge if you didn't move` |
-| `custom_fields`, `fields`     | Custom fields and values                                 | See below                                 |
+| `custom_fields`, `fields`     | Custom fields and values. Displays after Effects         | See below                                 |
 | `note`, `notes`               | Notes and reminders about the Power Roll                 | `note: Grant Edge if creature is bracing` |
 | `indent`                      | Left-margin indentation for the block (for nested lists) | `indent: 2`                               |
 

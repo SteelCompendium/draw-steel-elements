@@ -38,10 +38,15 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			container.addClass("pr-container");
 			container.addClasses(containerClasses);
 
+			const typeContainer = container.createEl("div", {cls: "pr-name-line"});
 			const name = yaml["name"];
 			if (name) {
-				const typeContainer = container.createEl("div", {cls: "pr-name-line"});
 				typeContainer.createEl("span", {cls: "pr-name-value ds-multiline", text: name.trim()});
+			}
+
+			const cost = yaml["cost"];
+			if (cost) {
+				typeContainer.createEl("span", {cls: "pr-cost-value", text: "(" + cost.trim() + ")"});
 			}
 
 			const flavor = yaml["flavor"];
