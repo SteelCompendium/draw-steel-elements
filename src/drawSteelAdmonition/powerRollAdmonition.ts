@@ -124,7 +124,9 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			if (effect) {
 				const effectContainer = container.createEl("div", {cls: "pr-detail-line pr-effect-line"});
 				effectContainer.createEl("span", {cls: "pr-detail-key pr-effect-key", text: "Effect: "});
-				effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value", text: effect.trim()});
+				effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value", text: effect.trim()})
+					.setAttribute("style", "white-space: pre-line");
+
 			}
 
 			const notes = yaml["notes"] ?? yaml["note"];
@@ -182,25 +184,25 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 		return "PowerRollAdmonition{}";
 	}
 
-	private static tier1Key(parentElement) {
+	public static tier1Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t1-key-container"})
 		const body = container.createEl('div', {cls: "t1-key-body"});
 		body.createEl('div', {cls: "t1-key-body-text", text: "≤11"});
 	}
 
-	private static tier2Key(parentElement) {
+	public static tier2Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t2-key-container"})
 		const body = container.createEl('div', {cls: "t2-key-body"});
 		body.createEl('div', {cls: "t2-key-body-text", text: "12-16"});
 	}
 
-	private static tier3Key(parentElement) {
+	public static tier3Key(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container t3-key-container"})
 		const body = container.createEl('div', {cls: "t3-key-body"});
 		body.createEl('div', {cls: "t3-key-body-text", text: "17+"});
 	}
 
-	private static critKey(parentElement) {
+	public static critKey(parentElement) {
 		const container = parentElement.createEl("div", {cls: "tier-key-container crit-key-container"})
 		const body = container.createEl('div', {cls: "crit-key-body"});
 		body.createEl('div', {cls: "crit-key-body-text", text: "crit"});
