@@ -150,8 +150,15 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const spend = yaml["spend"];
 			if (spend) {
 				const spendLine = container.createEl("div", {cls: "pr-detail-line pr-spend-line"});
-				spendLine.createEl("span", {cls: "pr-detail-key pr-spend-key", text: "Spend " + spend["cost"].trim() + ": "});
+				spendLine.createEl("span", {cls: "pr-detail-key pr-spend-key", text: "Spend " + String(spend["cost"]).trim() + ": "});
 				spendLine.createEl("span", {cls: "pr-detail-value pr-spend-value ds-multiline", text: spend["value"].trim()})
+			}
+
+			const persistent = yaml["persistent"];
+			if (persistent) {
+				const persistentLine = container.createEl("div", {cls: "pr-detail-line pr-persistent-line"});
+				persistentLine.createEl("span", {cls: "pr-detail-key pr-persistent-key", text: "Persistent " + String(persistent["cost"]).trim() + ": "});
+				persistentLine.createEl("span", {cls: "pr-detail-value pr-persistent-value ds-multiline", text: persistent["value"].trim()})
 			}
 
 			const notes = yaml["notes"] ?? yaml["note"];
