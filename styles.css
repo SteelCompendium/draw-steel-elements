@@ -1,3 +1,11 @@
+/*         */
+/* General */
+/*         */
+
+.ds-multiline {
+	white-space: pre-line;
+
+}
 .pr-container {
 	position: relative;
 	background: var(--code-background);

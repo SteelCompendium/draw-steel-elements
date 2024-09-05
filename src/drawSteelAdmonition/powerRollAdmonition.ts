@@ -41,13 +41,13 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const name = yaml["name"];
 			if (name) {
 				const typeContainer = container.createEl("div", {cls: "pr-name-line"});
-				typeContainer.createEl("span", {cls: "pr-name-value", text: name.trim()});
+				typeContainer.createEl("span", {cls: "pr-name-value ds-multiline", text: name.trim()});
 			}
 
 			const flavor = yaml["flavor"];
 			if (flavor) {
 				const typeContainer = container.createEl("div", {cls: "pr-detail-line pr-flavor-line"});
-				typeContainer.createEl("span", {cls: "pr-flavor-value", text: flavor.trim()});
+				typeContainer.createEl("span", {cls: "pr-flavor-value ds-multiline", text: flavor.trim()});
 			}
 
 			const keywords = yaml["keywords"];
@@ -57,12 +57,12 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				const keywordCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-keyword-cell"});
 				if (keywords) {
 					keywordCell.createEl("span", {cls: "pr-detail-key pr-keyword-key", text: "Keywords: "});
-					keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value", text: keywords.trim()});
+					keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value ds-multiline", text: keywords.trim()});
 				}
 				const typeCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-type-cell"});
 				if (type) {
 					typeCell.createEl("span", {cls: "pr-detail-key pr-type-key", text: "Type: "});
-					typeCell.createEl("span", {cls: "pr-detail-value pr-type-value", text: type.trim()});
+					typeCell.createEl("span", {cls: "pr-detail-value pr-type-value ds-multiline", text: type.trim()});
 				}
 			}
 
@@ -73,19 +73,19 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				const distanceCell = row2.createEl("div", {cls: "pr-detail-table-cell pr-distance-cell"});
 				if (distance) {
 					distanceCell.createEl("span", {cls: "pr-detail-key pr-distance-key", text: "Distance: "});
-					distanceCell.createEl("span", {cls: "pr-detail-value pr-distance-value", text: distance.trim()});
+					distanceCell.createEl("span", {cls: "pr-detail-value pr-distance-value ds-multiline", text: distance.trim()});
 				}
 				const targetCell = row2.createEl("div", {cls: "pr-detail-table-cell pr-target-cell"});
 				if (target) {
 					targetCell.createEl("span", {cls: "pr-detail-key pr-target-key", text: "Target: "});
-					targetCell.createEl("span", {cls: "pr-detail-value pr-target-value", text: target.trim()});
+					targetCell.createEl("span", {cls: "pr-detail-value pr-target-value ds-multiline", text: target.trim()});
 				}
 			}
 
 			const roll = yaml["roll"];
 			if (roll) {
 				const typeContainer = container.createEl("div", {cls: "pr-detail-line pr-roll-line"});
-				typeContainer.createEl("span", {cls: "pr-roll-value", text: roll.trim()});
+				typeContainer.createEl("span", {cls: "pr-roll-value ds-multiline", text: roll.trim()});
 			}
 
 			const t1 = yaml["t1"] ?? yaml["tier 1"] ?? yaml["11 or lower"];
@@ -93,7 +93,7 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				const t1Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
 				// t1Container.createEl("span", {cls: "pr-tier-key pr-tier-1-key", text: "11 or lower: "});
 				PowerRollAdmonition.tier1Key(t1Container);
-				t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: t1.trim()});
+				t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value ds-multiline", text: t1.trim()});
 			}
 
 			const t2 = yaml["t2"] ?? yaml["tier 2"] ?? yaml["12-16"];
@@ -101,7 +101,7 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				const t2Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
 				// t2Container.createEl("span", {cls: "pr-tier-key pr-tier-2-key", text: "12-16: "});
 				PowerRollAdmonition.tier2Key(t2Container);
-				t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: t2.trim()});
+				t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value ds-multiline", text: t2.trim()});
 			}
 
 			const t3 = yaml["t3"] ?? yaml["tier 3"] ?? yaml["17+"];
@@ -109,7 +109,7 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				const t3Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
 				// t3Container.createEl("span", {cls: "pr-tier-key pr-tier-3-key", text: "17+: "});
 				PowerRollAdmonition.tier3Key(t3Container);
-				t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: t3.trim()});
+				t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value ds-multiline", text: t3.trim()});
 			}
 
 			const crit = yaml["critical"] ?? yaml["crit"] ?? yaml["nat 19-20"];
@@ -117,15 +117,14 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 				const critContainer = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
 				// critContainer.createEl("span", {cls: "pr-tier-key pr-crit-key", text: "Nat 19-20: "});
 				PowerRollAdmonition.critKey(critContainer);
-				critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: crit.trim()});
+				critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value ds-multiline", text: crit.trim()});
 			}
 
 			const effect = yaml["effect"] ;
 			if (effect) {
 				const effectContainer = container.createEl("div", {cls: "pr-detail-line pr-effect-line"});
 				effectContainer.createEl("span", {cls: "pr-detail-key pr-effect-key", text: "Effect: "});
-				effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value", text: effect.trim()})
-					.setAttribute("style", "white-space: pre-line");
+				effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline", text: effect.trim()})
 
 			}
 
@@ -136,7 +135,7 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 					notes.forEach(note => notesContainer.createEl("li", {cls: "pr-note-item", text: note.trim()}));
 				} else {
 					const noteContainer = container.createEl("div", {cls: "pr-detail-line pr-note-line"});
-					noteContainer.createEl("span", {cls: "pr-note", text: notes.trim()});
+					noteContainer.createEl("span", {cls: "pr-note ds-multiline", text: notes.trim()});
 				}
 			}
 
