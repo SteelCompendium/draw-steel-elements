@@ -103,7 +103,6 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const t1 = yaml["t1"] ?? yaml["tier 1"] ?? yaml["11 or lower"];
 			if (t1) {
 				const t1Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
-				// t1Container.createEl("span", {cls: "pr-tier-key pr-tier-1-key", text: "11 or lower: "});
 				PowerRollAdmonition.tier1Key(t1Container);
 				t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value ds-multiline", text: t1.trim()});
 			}
@@ -111,7 +110,6 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const t2 = yaml["t2"] ?? yaml["tier 2"] ?? yaml["12-16"];
 			if (t2) {
 				const t2Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
-				// t2Container.createEl("span", {cls: "pr-tier-key pr-tier-2-key", text: "12-16: "});
 				PowerRollAdmonition.tier2Key(t2Container);
 				t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value ds-multiline", text: t2.trim()});
 			}
@@ -119,7 +117,6 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const t3 = yaml["t3"] ?? yaml["tier 3"] ?? yaml["17+"];
 			if (t3) {
 				const t3Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
-				// t3Container.createEl("span", {cls: "pr-tier-key pr-tier-3-key", text: "17+: "});
 				PowerRollAdmonition.tier3Key(t3Container);
 				t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value ds-multiline", text: t3.trim()});
 			}
@@ -127,7 +124,6 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 			const crit = yaml["critical"] ?? yaml["crit"] ?? yaml["nat 19-20"];
 			if (crit) {
 				const critContainer = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
-				// critContainer.createEl("span", {cls: "pr-tier-key pr-crit-key", text: "Nat 19-20: "});
 				PowerRollAdmonition.critKey(critContainer);
 				critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value ds-multiline", text: crit.trim()});
 			}
@@ -149,6 +145,13 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 						fieldLine.createEl("span", {cls: "pr-field-value ds-multiline", text: field["value"].trim()})
 					});
 				}
+			}
+
+			const spend = yaml["spend"];
+			if (spend) {
+				const spendLine = container.createEl("div", {cls: "pr-detail-line pr-spend-line"});
+				spendLine.createEl("span", {cls: "pr-detail-key pr-spend-key", text: "Spend " + spend["cost"].trim() + ": "});
+				spendLine.createEl("span", {cls: "pr-detail-value pr-spend-value ds-multiline", text: spend["value"].trim()})
 			}
 
 			const notes = yaml["notes"] ?? yaml["note"];
