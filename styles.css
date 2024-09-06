@@ -592,7 +592,7 @@ code.dsa {
 
 /* disabled checkboxes */
 .ds-nt-argument-body input[type=checkbox]:disabled,
-	/* labels with disabled inputs */
+/* labels with disabled inputs */
 .ds-nt-argument-body label:has(input:disabled) {
 	color: var(--text-faint);
 }
@@ -604,6 +604,10 @@ code.dsa {
 
 .ds-nt-argument-body input[type=checkbox]:disabled:checked {
 	background-color: var(--checkbox-border-color);
+}
+
+.ds-nt-arg-motivation-used {
+	text-decoration: line-through;
 }
 
 .ds-nt-argument-power-roll .pr-roll-line {
@@ -619,16 +623,24 @@ code.dsa {
 	font-style: italic;
 }
 
-.ds-nt-details {
-
-}
-
-.ds-nt-motivations {
-
+.ds-nt-details-label {
+	display: block;
+	margin-left: 2em;
 }
 
 .ds-nt-details-header {
 	font-weight: bold;
+	margin-top: 1em;
+	margin-bottom: 1em;
+}
+
+.ds-nt-details-name {
+	font-weight: bold;
+}
+
+/* labels with disabled inputs */
+.ds-nt-motivation-label:has(input:checked) {
+	text-decoration: line-through;
 }
 
 /* ==================== */

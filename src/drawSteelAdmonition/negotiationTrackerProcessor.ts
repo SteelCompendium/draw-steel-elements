@@ -17,10 +17,10 @@ export class NegotiationTrackerProcessor {
 		const trackers = container.createEl("div", {cls: "ds-nt-trackers"});
 		NegotiationTrackerProcessor.addPatience(trackers, yaml);
 		NegotiationTrackerProcessor.addInterest(trackers, yaml);
-		NegotiationTrackerProcessor.addActions(yaml, trackers);
+		NegotiationTrackerProcessor.addActions(yaml, trackers, container);
 
 		const details = container.createEl("div", {cls: "ds-nt-details"});
-		NegotiationTrackerProcessor.addMotivations(yaml, details);
+		NegotiationTrackerProcessor.addMotivations(yaml, details, container);
 		NegotiationTrackerProcessor.addPitfalls(yaml, details);
 	}
 
@@ -90,7 +90,7 @@ export class NegotiationTrackerProcessor {
 		}
 	}
 
-	private static addActions(yaml: any, trackers: any) {
+	private static addActions(yaml: any, trackers: any, root: HTMLElement) {
 		const actionsContainer = trackers.createEl("div", {cls: "ds-nt-actions-container"});
 
 		const actionTab = actionsContainer.createEl("div", {cls: "ds-nt-action-tabs"});
@@ -118,7 +118,7 @@ export class NegotiationTrackerProcessor {
 					type: "checkbox"
 				});
 				motLine.createEl("label", {cls: "ds-nt-argument-modifier-motivation-label", text: mot["name"].trim()});
-				motCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+				motCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 			});
 		}
 
@@ -134,7 +134,7 @@ export class NegotiationTrackerProcessor {
 			cls: "ds-nt-argument-modifier-reuse-motivation-text",
 			text: "Reused Motivation"
 		});
-		reuseMotivationCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+		reuseMotivationCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 
 		// Pitfalls
 		const pitfalls = yaml["pitfalls"];
@@ -151,7 +151,7 @@ export class NegotiationTrackerProcessor {
 					type: "checkbox"
 				});
 				pitLine.createEl("label", {cls: "ds-nt-argument-modifier-pitfall-label", text: pit["name"].trim()});
-				pitCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+				pitCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 			});
 		}
 
@@ -160,7 +160,7 @@ export class NegotiationTrackerProcessor {
 		setTooltip(lieLine, "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.");
 		const lieCheckbox = lieLine.createEl("input", {cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox"})
 		lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie"});
-		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 
 		// Same Argument
 		const sameArgLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line"});
@@ -171,7 +171,7 @@ export class NegotiationTrackerProcessor {
 			type: "checkbox"
 		})
 		sameArgLabel.createEl("span", {cls: "ds-nt-argument-modifier-same-arg-text", text: "Same Argument"})
-		sameArgCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+		sameArgCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 
 		// Power Roll
 		const argPowerRoll = argumentBody.createEl("div", {cls: "ds-nt-argument-power-roll"});
@@ -200,19 +200,23 @@ export class NegotiationTrackerProcessor {
 		argumentContainer.createEl("div", {cls: "ds-nt-argument-footer", text: ""});
 
 		// Update the argument for initial state
-		NegotiationTrackerProcessor.updateArgument(argumentBody)
+		NegotiationTrackerProcessor.updateArgument(root)
 	}
 
-	private static addMotivations(yaml: any, details: any) {
+	private static addMotivations(yaml: any, details: any, root: HTMLElement) {
 		const motivations = yaml["motivations"];
 		if (motivations) {
 			const motivationsCont = details.createEl("div", {cls: "ds-nt-motivations"});
 			motivationsCont.createEl("div", {cls: "ds-nt-details-header ds-nt-motivation-header", text: "Motivations"});
-			const motivationList = details.createEl("ul", {cls: "ds-nt-motivation-list"});
+			const motivationList = details.createEl("div", {cls: "ds-nt-motivation-list"});
 
 			motivations.forEach(mot => {
-				const motText = mot["name"].trim() + ": " + mot["reason"].trim();
-				motivationList.createEl("li", {cls: "ds-nt-motivation-item", text: motText})
+				const label = motivationList.createEl("label", {cls: "ds-nt-details-label ds-nt-motivation-label"})
+				setTooltip(label, "Check Motivations that have already been appealed to.");
+				label.addEventListener("click", evt => NegotiationTrackerProcessor.updateArgument(root));
+				label.createEl("input", {cls: "ds-nt-details-checkbox ds-nt-motivation-checkbox", type: "checkbox"});
+				label.createEl("span", {cls: "ds-nt-details-name ds-nt-motivation-name", text: mot["name"].trim() + ": "});
+				label.createEl("span", {cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot["reason"].trim()});
 			});
 		}
 	}
@@ -222,11 +226,13 @@ export class NegotiationTrackerProcessor {
 		if (pitfalls) {
 			const pitfallsCont = details.createEl("div", {cls: "ds-nt-pitfalls"});
 			pitfallsCont.createEl("div", {cls: "ds-nt-details-header ds-nt-pitfall-header", text: "Pitfalls"});
-			const pitfallList = details.createEl("ul", {cls: "ds-nt-pitfall-list"});
+			const pitfallList = details.createEl("div", {cls: "ds-nt-pitfall-list"});
 
 			pitfalls.forEach(pit => {
-				const pitText = pit["name"].trim() + ": " + pit["reason"].trim();
-				pitfallList.createEl("li", {cls: "ds-nt-pitfall-item", text: pitText});
+				const label = pitfallList.createEl("label", {cls: "ds-nt-details-label ds-nt-pitfall-label"});
+				// label.createEl("input", {cls: "ds-nt-details-checkbox ds-nt-pitfall-checkbox", type: "checkbox"});
+				label.createEl("span", {cls: "ds-nt-details-name ds-nt-pitfall-name", text: pit["name"].trim() + ": "});
+				label.createEl("span", {cls: "ds-nt-details-reason ds-nt-pitfall-reason", text: pit["reason"].trim()});
 			});
 		}
 	}
@@ -262,19 +268,20 @@ export class NegotiationTrackerProcessor {
 	}
 
 	// Updates an argument (options and results) based on the current state of the argument options
-	private static updateArgument(argumentContainer: HTMLElement) {
-		let lieCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement;
-		let sameArgumentCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement;
-		let reuseMotivationCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-reuse-motivation-checkbox")[0] as HTMLInputElement;
+	private static updateArgument(parent: HTMLElement) {
+		let lieCheckbox = parent.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement;
+		let sameArgumentCheckbox = parent.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement;
+		let reuseMotivationCheckbox = parent.findAll(".ds-nt-argument-modifier-reuse-motivation-checkbox")[0] as HTMLInputElement;
 
 		let usedMotivation = false;
-		for (let motivationEle of argumentContainer.findAll(".ds-nt-argument-modifier-motivation-checkbox")) {
+		for (let motivationEle of parent.findAll(".ds-nt-argument-modifier-motivation-checkbox")) {
+			// TODO - if the matching Motivation Detail is checked (previously used) the reusedMotivation checkbox should auto-check
 			if ((motivationEle as HTMLInputElement).checked) {
 				usedMotivation = true;
 			}
 		}
 		let usedPitfall = false;
-		for (let pitfallEle of argumentContainer.findAll(".ds-nt-argument-modifier-pitfall-checkbox")) {
+		for (let pitfallEle of parent.findAll(".ds-nt-argument-modifier-pitfall-checkbox")) {
 			if ((pitfallEle as HTMLInputElement).checked) {
 				usedPitfall = true;
 			}
@@ -291,10 +298,30 @@ export class NegotiationTrackerProcessor {
 
 		const prTiers = NegotiationTrackerProcessor.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
 
-		(argumentContainer.findAll(".pr-tier-1-value")[0] as HTMLInputElement).setText(prTiers.t1);
-		(argumentContainer.findAll(".pr-tier-2-value")[0] as HTMLInputElement).setText(prTiers.t2);
-		(argumentContainer.findAll(".pr-tier-3-value")[0] as HTMLInputElement).setText(prTiers.t3);
-		(argumentContainer.findAll(".pr-crit-value")[0] as HTMLInputElement).setText(prTiers.crit);
+		(parent.findAll(".pr-tier-1-value")[0] as HTMLInputElement).setText(prTiers.t1);
+		(parent.findAll(".pr-tier-2-value")[0] as HTMLInputElement).setText(prTiers.t2);
+		(parent.findAll(".pr-tier-3-value")[0] as HTMLInputElement).setText(prTiers.t3);
+		(parent.findAll(".pr-crit-value")[0] as HTMLInputElement).setText(prTiers.crit);
+
+		const motivationDetailLabels = parent.findAll(".ds-nt-motivation-label");
+		// For all the Argument Motivations...
+		parent.findAll(".ds-nt-argument-modifier-motivation-label").forEach(argMot => {
+			const argMotivationName= argMot.getText();
+			// Remove any previous markings
+			argMot.removeClass("ds-nt-arg-motivation-used");
+
+			// Iterate over all the Motivation Details...
+			motivationDetailLabels.forEach(label => {
+				const motivationDetailName = label.find(".ds-nt-motivation-name")?.getText();
+				// ...to see if the names match and if the Motivation Detail is checked - then mark the Arg Motivation
+				if (motivationDetailName?.contains(argMotivationName)) {
+					if ((label.find(".ds-nt-motivation-checkbox") as HTMLInputElement).checked) {
+						argMot.addClass("ds-nt-arg-motivation-used");
+						setTooltip(argMot, "This Motivation was used in a previous Argument.");
+					}
+				}
+			});
+		});
 	}
 
 	// Returns the PowerRollTiers for an Argument
