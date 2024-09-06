@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.6
+
+- Internal cleanup, bugfixes
+
 ## 0.0.2
 
 - Adds `indent` property to Power Roll Element to support nested lists
