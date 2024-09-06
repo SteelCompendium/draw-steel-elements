@@ -68,6 +68,7 @@ export class NegotiationTrackerProcessor {
 		i1Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-1-offer", text: yaml["i1"]});
 	}
 
+	// TODO - lots of tooltips
 	private static addActions(yaml: any, trackers: any) {
 		const actionsContainer = trackers.createEl("div", {cls: "ds-nt-actions-container"});
 
@@ -77,8 +78,11 @@ export class NegotiationTrackerProcessor {
 
 		const argumentContainer = actionsContainer.createEl("div", {cls: "ds-nt-action-container ds-nt-argument-container"});
 
-		const argModifiers = argumentContainer.createEl("div", {cls: "ds-nt-argument-modifiers"});
+		const argumentBody = argumentContainer.createEl("div", {cls: "ds-nt-argument-body"});
 
+		const argModifiers = argumentBody.createEl("div", {cls: "ds-nt-argument-modifiers"});
+
+		// Motivations
 		const motivations = yaml["motivations"];
 		if (motivations) {
 			argModifiers.createEl("div", {
@@ -87,31 +91,50 @@ export class NegotiationTrackerProcessor {
 			});
 			motivations.forEach(mot => {
 				const motLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-motivation-line"});
-				const motCB = motLine.createEl("input", {cls: "ds-nt-argument-modifier-motivation-checkbox", type: "checkbox"});
+				const motCB = motLine.createEl("input", {
+					cls: "ds-nt-argument-modifier-motivation-checkbox",
+					type: "checkbox"
+				});
 				motLine.createEl("label", {cls: "ds-nt-argument-modifier-motivation-label", text: mot["name"].trim()});
-				motCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentContainer));
+				motCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
 			});
 		}
 
+		// Pitfalls
 		const pitfalls = yaml["pitfalls"];
 		if (pitfalls) {
 			argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-header", text: "Mentions Pitfall"});
 			pitfalls.forEach(pit => {
 				const pitLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-line"});
-				const pitCB = pitLine.createEl("input", {cls: "ds-nt-argument-modifier-pitfall-checkbox", type: "checkbox"});
+				const pitCB = pitLine.createEl("input", {
+					cls: "ds-nt-argument-modifier-pitfall-checkbox",
+					type: "checkbox"
+				});
 				pitLine.createEl("label", {cls: "ds-nt-argument-modifier-pitfall-label", text: pit["name"].trim()});
-				pitCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentContainer));
+				pitCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
 			});
 		}
 
-		const lieLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-lie-line"});
+		// Lie used
+		const lieLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line"});
 		const lieCheckbox = lieLine.createEl("input", {cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox"})
 		lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie"});
-		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentContainer));
+		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
 
-		// TODO - same arg twice rules!
+		// Reused Motivation
+		const reuseMotivationLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line"});
+		const reuseMotivationCheckbox = reuseMotivationLine.createEl("input", {cls: "ds-nt-argument-modifier-reuse-motivation-checkbox", type: "checkbox"})
+		reuseMotivationLine.createEl("label", {cls: "ds-nt-argument-modifier-reuse-motivation-label", text: "Reused Motivation"});
+		reuseMotivationCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
 
-		const argPowerRoll = argumentContainer.createEl("div", {cls: "ds-nt-argument-power-roll"});
+		// Same Argument
+		const sameArgLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line"});
+		const sameArgCheckbox = sameArgLine.createEl("input", {cls: "ds-nt-argument-modifier-same-arg-checkbox", type: "checkbox"})
+		sameArgLine.createEl("label", {cls: "ds-nt-argument-modifier-same-arg-label", text: "Same Argument (w/o Motivation)"});
+		sameArgCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+
+		// Power Roll
+		const argPowerRoll = argumentBody.createEl("div", {cls: "ds-nt-argument-power-roll"});
 
 		const typeContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-roll-line"});
 		typeContainer.createEl("span", {cls: "pr-roll-value", text: "Power Roll + Reason, Intuition, or Presence"});
@@ -131,6 +154,10 @@ export class NegotiationTrackerProcessor {
 		const critContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
 		PowerRollProcessor.critKey(critContainer);
 		critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: "+1 Interest"});
+
+		// TODO
+		// Footer
+		argumentContainer.createEl("div", {cls: "ds-nt-argument-footer", text: ""});
 	}
 
 	private static addMotivations(yaml: any, details: any) {
@@ -175,8 +202,10 @@ export class NegotiationTrackerProcessor {
 			}
 		}
 		let caughtLying = (argumentContainer.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement).checked;
+		let reusedMotivation = (argumentContainer.findAll(".ds-nt-argument-modifier-reuse-motivation-checkbox")[0] as HTMLInputElement).checked;
+		let sameArgument = (argumentContainer.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement).checked;
 
-		const prTiers = NegotiationTrackerProcessor.recalculateArgument(usedMotivation, usedPitfall, caughtLying);
+		const prTiers = NegotiationTrackerProcessor.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
 
 		(argumentContainer.findAll(".pr-tier-1-value")[0] as HTMLInputElement).setText(prTiers.t1);
 		(argumentContainer.findAll(".pr-tier-2-value")[0] as HTMLInputElement).setText(prTiers.t2);
@@ -184,44 +213,138 @@ export class NegotiationTrackerProcessor {
 		(argumentContainer.findAll(".pr-crit-value")[0] as HTMLInputElement).setText(prTiers.crit);
 	}
 
-	private static recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean): PowerRollTiers {
-		if (usedPitfall && !caughtLying) {
-			return new PowerRollTiers(
-				"-1 Interest, -1 Patience",
-				"-1 Interest, -1 Patience",
-				"-1 Interest, -1 Patience",
-				"-1 Interest, -1 Patience");
-		} else if (usedPitfall && caughtLying) {
-			return new PowerRollTiers(
-				"-2 Interest, -1 Patience",
-				"-2 Interest, -1 Patience",
-				"-2 Interest, -1 Patience",
-				"-2 Interest, -1 Patience");
-		} else if (usedMotivation && !caughtLying) {
-			return new PowerRollTiers(
-				"-1 Patience",
-				"+1 Interest, -1 Patience",
-				"+1 Interest",
-				"+1 Interest");
-		} else if (usedMotivation && caughtLying) {
-			return new PowerRollTiers(
-				"-1 Interest, -1 Patience",
-				"-1 Patience",
-				"No effect",
-				"No effect");
-		} else if (!usedMotivation && !caughtLying) {
-			return new PowerRollTiers(
-				"-1 Interest, -1 Patience",
-				"-1 Patience",
-				"+1 Interest, -1 Patience",
-				"+1 Interest");
-		} else if (!usedMotivation && caughtLying) {
-			return new PowerRollTiers(
-				"-2 Interest, -1 Patience",
-				"-1 Interest, -1 Patience",
-				"-1 Patience",
-				"No effect");
+	// Returns the PowerRollTiers for an Argument
+	private static recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean, reusedMotivation: boolean, sameArgument:boolean): PowerRollTiers {
+		let result = this.baselineArgument(usedMotivation, usedPitfall, reusedMotivation, sameArgument);
+
+		// Modify if caught lying
+		if (caughtLying) {
+			result.t1.interest -= 1;
+			result.t2.interest -= 1;
+			result.t3.interest -= 1;
+			result.crit.interest -= 1;
 		}
-		throw new Error("Failed to make power roll for those combo")
+
+		return result.toPowerRollTiers();
+	}
+
+	// Returns the Negotiation Result given the type of argument being made.  Does NOT account for modifiers
+	private static baselineArgument(usedMotivation: boolean, usedPitfall: boolean, reusedMotivation: boolean, sameArgument: boolean): NegotiationResult {
+		// Used pitfall
+		if (usedPitfall) {
+			return new NegotiationResult(
+				new NegotiationTierResult(-1, -1),
+				new NegotiationTierResult(-1, -1),
+				new NegotiationTierResult(-1, -1),
+				new NegotiationTierResult(-1, -1),
+			);
+		}
+
+		// Used same motivation a second time, no pitfall
+		if (reusedMotivation) {
+			if (usedMotivation) {
+				console.log("[WARN|draw-steel-elements] Argument made with 'reusedMotivation', but 'usedMotivation' is false");
+			}
+			if (sameArgument) {
+				console.log("[WARN|draw-steel-elements] Argument made with 'reusedMotivation', but 'sameArgument' is true - invalid state.");
+			}
+			return new NegotiationResult(
+				new NegotiationTierResult(0, -1),
+				new NegotiationTierResult(0, -1),
+				new NegotiationTierResult(0, -1),
+				new NegotiationTierResult(0, -1),
+			);
+		}
+
+		// Used motivation without pitfall
+		if (usedMotivation) {
+			if (sameArgument) {
+				console.log("[WARN|draw-steel-elements] Argument 'usedMotivation', but 'sameArgument' is true - invalid state.");
+			}
+			return new NegotiationResult(
+				new NegotiationTierResult(0, -1),
+				new NegotiationTierResult(+1, -1),
+				new NegotiationTierResult(+1, 0),
+				new NegotiationTierResult(+1, 0),
+			);
+		}
+
+		// No motivation/pitfall, but used same argument twice
+		if (sameArgument) {
+			return new NegotiationResult(
+				new NegotiationTierResult(-1, -1),
+				new NegotiationTierResult(-1, -1),
+				new NegotiationTierResult(-1, -1),
+				new NegotiationTierResult(-1, -1)
+			);
+		}
+
+		// No motivation/pitfall, normal argument
+		return new NegotiationResult(
+			new NegotiationTierResult(-1, -1),
+			new NegotiationTierResult(0, -1),
+			new NegotiationTierResult(+1, -1),
+			new NegotiationTierResult(+1, 0),
+		);
+	}
+}
+
+// Represents the full result of a negotiation power roll
+export class NegotiationResult {
+	public t1: NegotiationTierResult;
+	public t2: NegotiationTierResult;
+	public t3: NegotiationTierResult;
+	public crit: NegotiationTierResult;
+
+	constructor(t1: NegotiationTierResult, t2: NegotiationTierResult, t3: NegotiationTierResult, crit: NegotiationTierResult) {
+		this.t1 = t1;
+		this.t2 = t2;
+		this.t3 = t3;
+		this.crit = crit;
+	}
+
+	toPowerRollTiers() {
+		return new PowerRollTiers(
+			this.t1.toString(),
+			this.t2.toString(),
+			this.t3.toString(),
+			this.crit.toString(),
+		)
+	}
+}
+
+// Represents the result of a single negotiation power roll's tier
+export class NegotiationTierResult {
+	public interest: number;
+	public patience: number;
+	public other: string;
+
+	constructor(interest: number, patience: number, other: string | void) {
+		this.interest = interest;
+		this.patience = patience;
+		this.other = other ?? "";
+	}
+
+	public toString = (): string => {
+		let result = ""
+		if (this.interest != 0) {
+			result += this.interest + " Interest"
+		}
+		if (this.patience != 0) {
+			if (result != "") {
+				result += ", "
+			}
+			result += this.patience + " Patience"
+		}
+		if (this.other != "") {
+			if (result != "") {
+				result += ", "
+			}
+			result += this.other
+		}
+		if (result == "") {
+			result = "No effect"
+		}
+		return result;
 	}
 }

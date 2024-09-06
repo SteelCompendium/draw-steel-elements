@@ -526,7 +526,7 @@ code.dsa {
 	padding: 1em;
 }
 
-.ds-nt-argument-container {
+.ds-nt-argument-body {
 	display: flex;
 	justify-content: space-between;
 	padding-left: 2em;
@@ -549,6 +549,11 @@ code.dsa {
 
 .ds-nt-argument-power-roll .pr-tier-line {
 	margin-left: 1em;
+}
+
+.ds-nt-argument-footer {
+	text-align: center;
+	font-style: italic;
 }
 
 .ds-nt-details {
