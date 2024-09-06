@@ -1,5 +1,6 @@
 import {MarkdownPostProcessorContext, parseYaml} from "obsidian";
 import {PowerRollProcessor} from "./powerRollProcessor";
+import {PowerRollTiers} from "../model/powerRoll";
 
 export class NegotiationTrackerProcessor {
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
@@ -86,8 +87,9 @@ export class NegotiationTrackerProcessor {
 			});
 			motivations.forEach(mot => {
 				const motLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-motivation-line"});
-				motLine.createEl("input", {cls: "ds-nt-argument-modifier-motivation-checkbox", type: "checkbox"});
+				const motCB = motLine.createEl("input", {cls: "ds-nt-argument-modifier-motivation-checkbox", type: "checkbox"});
 				motLine.createEl("label", {cls: "ds-nt-argument-modifier-motivation-label", text: mot["name"].trim()});
+				motCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentContainer));
 			});
 		}
 
@@ -96,27 +98,18 @@ export class NegotiationTrackerProcessor {
 			argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-header", text: "Mentions Pitfall"});
 			pitfalls.forEach(pit => {
 				const pitLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-line"});
-				pitLine.createEl("input", {cls: "ds-nt-argument-modifier-pitfall-checkbox", type: "checkbox"});
+				const pitCB = pitLine.createEl("input", {cls: "ds-nt-argument-modifier-pitfall-checkbox", type: "checkbox"});
 				pitLine.createEl("label", {cls: "ds-nt-argument-modifier-pitfall-label", text: pit["name"].trim()});
+				pitCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentContainer));
 			});
 		}
 
 		const lieLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-lie-line"});
 		const lieCheckbox = lieLine.createEl("input", {cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox"})
-		lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "Included a lie"});
-		lieCheckbox.addEventListener("change", evt => {
-			if (lieCheckbox.checked) {
-				console.log("Checkbox is checked..");
-				let tierValues = argumentContainer.findAll(".pr-tier-value")
-				for (let tierValue of tierValues) {
-					if (tierValue.getText().contains("-1 Interest")) {
-						tierValue.setText(tierValue.getText().replace("-1 Interest", "-2 Interest"));
-					} else if (!tierValue.getText().contains("+1 Interest")) {
-						tierValue.setText("-1 Interest, " + tierValue.getText());
-					}
-				}
-			}
-		});
+		lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie"});
+		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentContainer));
+
+		// TODO - same arg twice rules!
 
 		const argPowerRoll = argumentContainer.createEl("div", {cls: "ds-nt-argument-power-roll"});
 
@@ -166,5 +159,69 @@ export class NegotiationTrackerProcessor {
 				pitfallList.createEl("li", {cls: "ds-nt-pitfall-item", text: pitText});
 			});
 		}
+	}
+
+	private static updateArgument(argumentContainer: HTMLElement) {
+		let usedMotivation = false;
+		for (let motivationEle of argumentContainer.findAll(".ds-nt-argument-modifier-motivation-checkbox")) {
+			if ((motivationEle as HTMLInputElement).checked) {
+				usedMotivation = true;
+			}
+		}
+		let usedPitfall = false;
+		for (let pitfallEle of argumentContainer.findAll(".ds-nt-argument-modifier-pitfall-checkbox")) {
+			if ((pitfallEle as HTMLInputElement).checked) {
+				usedPitfall = true;
+			}
+		}
+		let caughtLying = (argumentContainer.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement).checked;
+
+		const prTiers = NegotiationTrackerProcessor.recalculateArgument(usedMotivation, usedPitfall, caughtLying);
+
+		(argumentContainer.findAll(".pr-tier-1-value")[0] as HTMLInputElement).setText(prTiers.t1);
+		(argumentContainer.findAll(".pr-tier-2-value")[0] as HTMLInputElement).setText(prTiers.t2);
+		(argumentContainer.findAll(".pr-tier-3-value")[0] as HTMLInputElement).setText(prTiers.t3);
+		(argumentContainer.findAll(".pr-crit-value")[0] as HTMLInputElement).setText(prTiers.crit);
+	}
+
+	private static recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean): PowerRollTiers {
+		if (usedPitfall && !caughtLying) {
+			return new PowerRollTiers(
+				"-1 Interest, -1 Patience",
+				"-1 Interest, -1 Patience",
+				"-1 Interest, -1 Patience",
+				"-1 Interest, -1 Patience");
+		} else if (usedPitfall && caughtLying) {
+			return new PowerRollTiers(
+				"-2 Interest, -1 Patience",
+				"-2 Interest, -1 Patience",
+				"-2 Interest, -1 Patience",
+				"-2 Interest, -1 Patience");
+		} else if (usedMotivation && !caughtLying) {
+			return new PowerRollTiers(
+				"-1 Patience",
+				"+1 Interest, -1 Patience",
+				"+1 Interest",
+				"+1 Interest");
+		} else if (usedMotivation && caughtLying) {
+			return new PowerRollTiers(
+				"-1 Interest, -1 Patience",
+				"-1 Patience",
+				"No effect",
+				"No effect");
+		} else if (!usedMotivation && !caughtLying) {
+			return new PowerRollTiers(
+				"-1 Interest, -1 Patience",
+				"-1 Patience",
+				"+1 Interest, -1 Patience",
+				"+1 Interest");
+		} else if (!usedMotivation && caughtLying) {
+			return new PowerRollTiers(
+				"-2 Interest, -1 Patience",
+				"-1 Interest, -1 Patience",
+				"-1 Patience",
+				"No effect");
+		}
+		throw new Error("Failed to make power roll for those combo")
 	}
 }
