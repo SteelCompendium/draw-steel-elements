@@ -440,32 +440,67 @@ code.dsa {
 
 }
 
-.ds-nt-button-selected {
-	background-color: var(--background-modifier-border-focus);
-}
+/*.ds-nt-button-selected {*/
+/*	background-color: var(--background-modifier-border-focus);*/
+/*}*/
 
 .ds-nt-patience-container {
 	display: flex;
-	justify-content: space-between;
+	/*justify-content: space-between;*/
 	margin-top: 1em;
 	margin-bottom: 1em;
 }
 
+.ds-nt-patience-bubble-container {
+	display: flex;
+	justify-content: space-between;
+	width: 100%;
+	position: relative;
+	margin-left: 1em;
+	margin-right: 1em;
+}
+
+.ds-nt-patience-bubble-container:before {
+	content: "";
+	position: absolute;
+	width: 100%;
+	transform: translateY(-50%);
+	height: 5px;
+	background-color: var(--color-base-35);
+	top: 50%;
+}
+
 .ds-nt-patience-label {
 	font-weight: bold;
+	display: flex;
+	align-items: center;
 }
 
 .ds-nt-patience-bubble {
+	background-color: var(--code-background);
 	border: 1px solid var(--text-normal);
 	border-radius: 50%;
 	height: 2em;
 	width: 2em;
 	text-align: center;
 	line-height: 2em;
+	z-index: 1;
+	cursor: pointer;
 }
 
-.ds-nt-interest-container {
+.ds-nt-interest-offer-container {
+	position: relative;
+}
 
+.ds-nt-interest-offer-container:before {
+	content: "";
+	position: absolute;
+	height: calc(100% - 2em);
+	margin-top: 1em;
+	transform: translateX(-50%);
+	width: 5px;
+	background-color: var(--color-base-35);
+	left: 1.5em;
 }
 
 .ds-nt-interest-header {
@@ -474,9 +509,21 @@ code.dsa {
 
 .ds-nt-interest-line {
 	display: flex;
+	position: relative;
+	z-index: 1;
+}
+
+.ds-nt-interest-line.ds-nt-interest-selected .ds-nt-interest-label,
+.ds-nt-patience-container .ds-nt-patience-selected {
+	background-color: var(--background-modifier-border-focus);
+}
+
+.ds-nt-interest-line .ds-nt-interest-faded {
+	color: var(--text-faint);
 }
 
 .ds-nt-interest-label {
+	background-color: var(--code-background);
 	border: 1px solid var(--text-normal);
 	margin: 0.5em;
 	border-radius: 50%;
@@ -484,6 +531,7 @@ code.dsa {
 	height: 2em;
 	line-height: 2em;
 	text-align: center;
+	cursor: pointer;
 }
 
 .ds-nt-interest-offer {

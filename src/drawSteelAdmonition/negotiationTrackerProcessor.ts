@@ -15,7 +15,7 @@ export class NegotiationTrackerProcessor {
 		}
 
 		const trackers = container.createEl("div", {cls: "ds-nt-trackers"});
-		NegotiationTrackerProcessor.addPatience(trackers);
+		NegotiationTrackerProcessor.addPatience(trackers, yaml);
 		NegotiationTrackerProcessor.addInterest(trackers, yaml);
 		NegotiationTrackerProcessor.addActions(yaml, trackers);
 
@@ -24,51 +24,72 @@ export class NegotiationTrackerProcessor {
 		NegotiationTrackerProcessor.addPitfalls(yaml, details);
 	}
 
-	private static addPatience(trackers: any) {
+	private static addPatience(trackers: any, yaml: any) {
 		const patienceCont = trackers.createEl("div", {cls: "ds-nt-patience-container"});
 		patienceCont.createEl("div", {cls: "ds-nt-patience-label", text: "Patience"});
-		patienceCont.createEl("div", {
-			cls: "ds-nt-patience-bubble ds-nt-patience-bubble-1 ds-nt-button-selected",
-			text: "1"
-		});
-		patienceCont.createEl("div", {
-			cls: "ds-nt-patience-bubble ds-nt-patience-bubble-2 ds-nt-button-selected",
-			text: "2"
-		});
-		patienceCont.createEl("div", {
-			cls: "ds-nt-patience-bubble ds-nt-patience-bubble-3 ds-nt-button-selected",
-			text: "3"
-		});
-		patienceCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-4", text: "4"});
-		patienceCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-5", text: "5"});
+
+		const bubbleCont = patienceCont.createEl("div", {cls: "ds-nt-patience-bubble-container"});
+		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-0", text: "0"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(0, trackers));
+		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-1", text: "1"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(1, trackers));
+		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-2", text: "2"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(2, trackers));
+		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-3", text: "3"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(3, trackers));
+		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-4", text: "4"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(4, trackers));
+		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-5", text: "5"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(5, trackers));
+
+		const initialPatience = yaml["initial_patience"];
+		if (initialPatience) {
+			NegotiationTrackerProcessor.setPatience(initialPatience, trackers)
+		}
 	}
 
 	private static addInterest(trackers: any, yaml: any) {
 		const interestCont = trackers.createEl("div", {cls: "ds-nt-interest-container"});
 		interestCont.createEl("div", {cls: "ds-nt-interest-header", text: "Interest"});
 
-		const i5Line = interestCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-5-line"});
-		i5Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-5-label", text: "5"});
+		const offerCont = interestCont.createEl("div", {cls: "ds-nt-interest-offer-container"});
+
+		const i5Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-5-line"});
+		i5Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-5-label", text: "5"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(5, trackers));
 		i5Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-5-offer", text: yaml["i5"]});
 
-		const i4Line = interestCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-4-line"});
-		i4Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-4-label", text: "4"});
+		const i4Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-4-line"});
+		i4Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-4-label", text: "4"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(4, trackers));
 		i4Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-4-offer", text: yaml["i4"]});
 
-		const i3Line = interestCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-3-line"});
-		i3Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-3-label", text: "3"});
+		const i3Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-3-line"});
+		i3Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-3-label", text: "3"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(3, trackers));
 		i3Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-3-offer", text: yaml["i3"]});
 
-		const i2Line = interestCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-2-line"});
-		i2Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-2-label ds-nt-button-selected", text: "2"});
+		const i2Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-2-line"});
+		i2Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-2-label", text: "2"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(2, trackers));
 		i2Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-2-offer", text: yaml["i2"]});
 
-		const i1Line = interestCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-1-line"});
-		i1Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-1-label ds-nt-button-selected", text: "1"});
+		const i1Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-1-line"});
+		i1Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-1-label", text: "1"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(1, trackers));
 		i1Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-1-offer", text: yaml["i1"]});
+
+		const i0Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-0-line"});
+		i0Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-0-label", text: "0"})
+			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(0, trackers));
+		i0Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-0-offer", text: yaml["i0"]});
+
+		const initialInterest = yaml["initial_interest"];
+		if (initialInterest) {
+			NegotiationTrackerProcessor.setInterest(initialInterest, trackers)
+		}
 	}
 
-	// TODO - lots of tooltips
 	private static addActions(yaml: any, trackers: any) {
 		const actionsContainer = trackers.createEl("div", {cls: "ds-nt-actions-container"});
 
@@ -118,7 +139,10 @@ export class NegotiationTrackerProcessor {
 		// Pitfalls
 		const pitfalls = yaml["pitfalls"];
 		if (pitfalls) {
-			const pitHeader = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-header", text: "Mentions Pitfall"});
+			const pitHeader = argModifiers.createEl("div", {
+				cls: "ds-nt-argument-modifier-pitfall-header",
+				text: "Mentions Pitfall"
+			});
 			setTooltip(pitHeader, "If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.");
 			pitfalls.forEach(pit => {
 				const pitLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-line"});
@@ -207,6 +231,37 @@ export class NegotiationTrackerProcessor {
 		}
 	}
 
+	// Updates the interest display to reflect the new interest level
+	private static setPatience(newPatience: number, container: HTMLElement) {
+		for (let i = 0; i <= 5; i++) {
+			const bubble = container.find(".ds-nt-patience-bubble-" + i) as HTMLInputElement;
+			if (i > newPatience) {
+				bubble.removeClass("ds-nt-patience-selected");
+			} else {
+				bubble.addClass("ds-nt-patience-selected");
+			}
+		}
+	}
+
+	// Updates the interest display to reflect the new interest level
+	private static setInterest(newInterest: number, container: HTMLElement) {
+		for (let i = 0; i <= 5; i++) {
+			const line = container.find(".ds-nt-interest-" + i + "-line") as HTMLInputElement;
+			const offer = (line.find(".ds-nt-interest-offer") as HTMLElement)
+			if (i > newInterest) {
+				line.removeClass("ds-nt-interest-selected");
+			} else {
+				line.addClass("ds-nt-interest-selected");
+			}
+			if (i < newInterest) {
+				offer.addClass("ds-nt-interest-faded");
+			} else {
+				offer.removeClass("ds-nt-interest-faded");
+			}
+		}
+	}
+
+	// Updates an argument (options and results) based on the current state of the argument options
 	private static updateArgument(argumentContainer: HTMLElement) {
 		let lieCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement;
 		let sameArgumentCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement;
