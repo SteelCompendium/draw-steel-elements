@@ -529,6 +529,8 @@ code.dsa {
 .ds-nt-argument-container {
 	display: flex;
 	justify-content: space-between;
+	padding-left: 2em;
+	padding-right: 2em;
 }
 
 .ds-nt-argument-modifier-motivation-header,
