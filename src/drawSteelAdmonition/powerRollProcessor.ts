@@ -20,7 +20,7 @@ export class PowerRollProcessor {
 
 		const cost = yaml["cost"];
 		if (cost) {
-			typeContainer.createEl("span", {cls: "pr-cost-value", text: "(" + cost.trim() + ")"});
+			typeContainer.createEl("span", {cls: "pr-cost-value", text: "(" + String(cost).trim() + ")"});
 		}
 
 		const flavor = yaml["flavor"];

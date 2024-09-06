@@ -141,20 +141,21 @@ Horizontal line to separate sections. Triggered with a codeblock leading with `d
 
 ![horizontalRule.png](horizontalRule.png)
 
+    ```ds-hr
+    ```
 
 ## Future work
 
-- Optionally add hidden header for a Power Roll Element for linking 
-- Customize the Power Roll Element's output (ex: display `Tier 1:` instead of `11 or lower:`)
+- Optionally add hidden header for a Power Roll Element for linking
 - Support Live Preview mode
 - Add ability to roll Power Rolls from Power Roll Element
 - Integrate with the dice plugin
 - Something with statblocks...
 - Something with encounter building...
-- Maybe an inline Power Roll (`pr Might RR|5 damage;fall Prone|3 damage|No effect`)
 - Negotiation tracker
 - Tracker for turn and who has gone in a round
 - Party tracker (XP, Victories)
+- Text parser for generating power-roll admonitions from raw copied text
 
 ### Known Issues
 
