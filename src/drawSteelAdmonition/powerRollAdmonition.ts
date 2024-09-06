@@ -1,10 +1,9 @@
 import {DrawSteelAdmonition} from "./drawSteelAdmonition";
-import {Setting} from "obsidian";
+import {parseYaml, Setting} from "obsidian";
 import {DrawSteelAdmonitionType} from "./drawSteelAdmonitionType";
 import {SyntaxNodeRef} from "@lezer/common";
 import {RangeSetBuilder} from "@codemirror/state";
 import {Decoration} from "@codemirror/view";
-import YAML from 'yaml'
 
 export class PowerRollAdmonition extends DrawSteelAdmonition {
 	type = DrawSteelAdmonitionType.PowerRoll;
@@ -26,7 +25,7 @@ export class PowerRollAdmonition extends DrawSteelAdmonition {
 
 	process(codeElement: HTMLElement) {
 		if (codeElement.hasClass("language-power-roll") || codeElement.hasClass("language-pr")) {
-			const yaml = YAML.parse(codeElement.getText());
+			const yaml = parseYaml(codeElement.getText());
 			let containerClasses = [];
 			const indent = yaml["indent"]
 
