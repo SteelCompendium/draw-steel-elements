@@ -179,7 +179,7 @@ code.dsa {
 		0.2em calc(50% - 0.2em),
 		0.2em 0.2em,
 
-		calc(0.2em + 1px)  calc(0.2em + 0.41px),
+		calc(0.2em + 1px) calc(0.2em + 0.41px),
 		calc(0.2em + 1px) calc(50% - 0.2em + 0.41px),
 		1.41px 50%,
 		calc(0.2em + 1px) calc(50% + 0.2em - 0.41px),
@@ -190,7 +190,7 @@ code.dsa {
 		calc(100% - 1px) calc(0.2em + 0.41px),
 		calc(100% - 0.2em - 0.41px) 1px,
 		calc(0.4em + 0.41px) 1px,
-		calc(0.2em + 1px)  calc(0.2em + 0.41px)
+		calc(0.2em + 1px) calc(0.2em + 0.41px)
 	);
 }
 
@@ -207,6 +207,7 @@ code.dsa {
 	font-size: .8em;
 	font-weight: bold;
 }
+
 .t2-key-body:before {
 	content: "";
 	position: absolute;
@@ -223,7 +224,7 @@ code.dsa {
 		0 calc(100% - 0.2em),
 		0 0.2em,
 
-		1px  calc(0.2em + 0.41px),
+		1px calc(0.2em + 0.41px),
 		1px calc(100% - 0.2em - 0.41px),
 		calc(0.2em + 0.41px) calc(100% - 1px),
 		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
@@ -231,7 +232,7 @@ code.dsa {
 		calc(100% - 1px) calc(0.2em + 0.41px),
 		calc(100% - 0.2em - 0.41px) 1px,
 		calc(0.2em + 0.41px) 1px,
-		1px  calc(0.2em + 0.41px)
+		1px calc(0.2em + 0.41px)
 	);
 }
 
@@ -267,8 +268,7 @@ code.dsa {
 		0.2em 100%,
 		0 calc(100% - 0.2em),
 		0 0.2em,
-
-		1px  calc(0.2em + 0.41px),
+		1px calc(0.2em + 0.41px),
 		1px calc(100% - 0.2em - 0.41px),
 		calc(0.2em + 0.41px) calc(100% - 1px),
 		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
@@ -279,7 +279,7 @@ code.dsa {
 		calc(100% - 0.2em - 1px) calc(0.2em + 0.41px),
 		calc(100% - 0.4em - 0.41px) 1px,
 		calc(0.2em + 0.41px) 1px,
-		1px  calc(0.2em + 0.41px)
+		1px calc(0.2em + 0.41px)
 	);
 }
 
@@ -315,8 +315,7 @@ code.dsa {
 		0.2em 100%,
 		0 calc(100% - 0.2em),
 		0 0.2em,
-
-		1px  calc(0.2em + 0.41px),
+		1px calc(0.2em + 0.41px),
 		1px calc(100% - 0.2em - 0.41px),
 		calc(0.2em + 0.41px) calc(100% - 1px),
 		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
@@ -324,7 +323,7 @@ code.dsa {
 		calc(100% - 0.2em - 3px) calc(0.2em + 0.41px),
 		calc(100% - 0.4em - 0.41px) 1px,
 		calc(0.2em + 0.41px) 1px,
-		1px  calc(0.2em + 0.41px)
+		1px calc(0.2em + 0.41px)
 	);
 }
 
@@ -541,6 +540,22 @@ code.dsa {
 .ds-nt-argument-modifier-motivation-line,
 .ds-nt-argument-modifier-pitfall-line {
 	margin-left: 2em;
+}
+
+/* disabled checkboxes */
+.ds-nt-argument-body input[type=checkbox]:disabled,
+	/* labels with disabled inputs */
+.ds-nt-argument-body label:has(input:disabled) {
+	color: var(--text-faint);
+}
+
+/* Make sure hover effects on disabled checkboxes dont show */
+.ds-nt-argument-body input[type=checkbox]:disabled {
+	border: 1px solid var(--checkbox-border-color);
+}
+
+.ds-nt-argument-body input[type=checkbox]:disabled:checked {
+	background-color: var(--checkbox-border-color);
 }
 
 .ds-nt-argument-power-roll .pr-roll-line {

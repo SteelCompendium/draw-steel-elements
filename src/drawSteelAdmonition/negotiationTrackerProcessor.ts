@@ -1,4 +1,4 @@
-import {MarkdownPostProcessorContext, parseYaml} from "obsidian";
+import {MarkdownPostProcessorContext, parseYaml, setTooltip} from "obsidian";
 import {PowerRollProcessor} from "./powerRollProcessor";
 import {PowerRollTiers} from "../model/powerRoll";
 
@@ -85,10 +85,11 @@ export class NegotiationTrackerProcessor {
 		// Motivations
 		const motivations = yaml["motivations"];
 		if (motivations) {
-			argModifiers.createEl("div", {
+			const motHeader = argModifiers.createEl("div", {
 				cls: "ds-nt-argument-modifier-motivation-header",
 				text: "Appeals to Motivation"
 			});
+			setTooltip(motHeader, "If the Heroes appeal to a Motivation (w/o a Pitfall): Difficulty of the Argument Test is Easy.");
 			motivations.forEach(mot => {
 				const motLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-motivation-line"});
 				const motCB = motLine.createEl("input", {
@@ -100,10 +101,25 @@ export class NegotiationTrackerProcessor {
 			});
 		}
 
+		// Reused Motivation
+		const reuseMotivationLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line"});
+		setTooltip(reuseMotivationLine, "If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.");
+		const reuseMotivationLabel = reuseMotivationLine.createEl("label", {cls: "ds-nt-argument-modifier-reuse-motivation-label"});
+		const reuseMotivationCheckbox = reuseMotivationLabel.createEl("input", {
+			cls: "ds-nt-argument-modifier-reuse-motivation-checkbox",
+			type: "checkbox"
+		})
+		reuseMotivationLabel.createEl("span", {
+			cls: "ds-nt-argument-modifier-reuse-motivation-text",
+			text: "Reused Motivation"
+		});
+		reuseMotivationCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
+
 		// Pitfalls
 		const pitfalls = yaml["pitfalls"];
 		if (pitfalls) {
-			argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-header", text: "Mentions Pitfall"});
+			const pitHeader = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-header", text: "Mentions Pitfall"});
+			setTooltip(pitHeader, "If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.");
 			pitfalls.forEach(pit => {
 				const pitLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-line"});
 				const pitCB = pitLine.createEl("input", {
@@ -117,20 +133,20 @@ export class NegotiationTrackerProcessor {
 
 		// Lie used
 		const lieLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line"});
+		setTooltip(lieLine, "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.");
 		const lieCheckbox = lieLine.createEl("input", {cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox"})
 		lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie"});
 		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
 
-		// Reused Motivation
-		const reuseMotivationLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line"});
-		const reuseMotivationCheckbox = reuseMotivationLine.createEl("input", {cls: "ds-nt-argument-modifier-reuse-motivation-checkbox", type: "checkbox"})
-		reuseMotivationLine.createEl("label", {cls: "ds-nt-argument-modifier-reuse-motivation-label", text: "Reused Motivation"});
-		reuseMotivationCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
-
 		// Same Argument
 		const sameArgLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line"});
-		const sameArgCheckbox = sameArgLine.createEl("input", {cls: "ds-nt-argument-modifier-same-arg-checkbox", type: "checkbox"})
-		sameArgLine.createEl("label", {cls: "ds-nt-argument-modifier-same-arg-label", text: "Same Argument (w/o Motivation)"});
+		setTooltip(sameArgLine, "If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.");
+		const sameArgLabel = sameArgLine.createEl("label", {cls: "ds-nt-argument-modifier-same-arg-label"});
+		const sameArgCheckbox = sameArgLabel.createEl("input", {
+			cls: "ds-nt-argument-modifier-same-arg-checkbox",
+			type: "checkbox"
+		})
+		sameArgLabel.createEl("span", {cls: "ds-nt-argument-modifier-same-arg-text", text: "Same Argument"})
 		sameArgCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(argumentBody));
 
 		// Power Roll
@@ -141,23 +157,26 @@ export class NegotiationTrackerProcessor {
 
 		const t1Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
 		PowerRollProcessor.tier1Key(t1Container);
-		t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: "-1 Interest, -1 Patience"});
+		t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: ""});
 
 		const t2Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
 		PowerRollProcessor.tier2Key(t2Container);
-		t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: "-1 Patience"});
+		t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: ""});
 
 		const t3Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
 		PowerRollProcessor.tier3Key(t3Container);
-		t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: "+1 Interest, -1 Patience"});
+		t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: ""});
 
 		const critContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
 		PowerRollProcessor.critKey(critContainer);
-		critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: "+1 Interest"});
+		critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: ""});
 
 		// TODO
 		// Footer
 		argumentContainer.createEl("div", {cls: "ds-nt-argument-footer", text: ""});
+
+		// Update the argument for initial state
+		NegotiationTrackerProcessor.updateArgument(argumentBody)
 	}
 
 	private static addMotivations(yaml: any, details: any) {
@@ -189,6 +208,10 @@ export class NegotiationTrackerProcessor {
 	}
 
 	private static updateArgument(argumentContainer: HTMLElement) {
+		let lieCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement;
+		let sameArgumentCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement;
+		let reuseMotivationCheckbox = argumentContainer.findAll(".ds-nt-argument-modifier-reuse-motivation-checkbox")[0] as HTMLInputElement;
+
 		let usedMotivation = false;
 		for (let motivationEle of argumentContainer.findAll(".ds-nt-argument-modifier-motivation-checkbox")) {
 			if ((motivationEle as HTMLInputElement).checked) {
@@ -201,9 +224,15 @@ export class NegotiationTrackerProcessor {
 				usedPitfall = true;
 			}
 		}
-		let caughtLying = (argumentContainer.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement).checked;
-		let reusedMotivation = (argumentContainer.findAll(".ds-nt-argument-modifier-reuse-motivation-checkbox")[0] as HTMLInputElement).checked;
-		let sameArgument = (argumentContainer.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement).checked;
+
+		// enable "Reused Motivation" checkbox only if motivation used
+		reuseMotivationCheckbox.disabled = !usedMotivation;
+		// enable "Same Argument" checkbox only if motivation not used
+		sameArgumentCheckbox.disabled = usedMotivation;
+
+		let caughtLying = lieCheckbox.checked;
+		let reusedMotivation = reuseMotivationCheckbox.checked && !reuseMotivationCheckbox.disabled;
+		let sameArgument = sameArgumentCheckbox.checked;
 
 		const prTiers = NegotiationTrackerProcessor.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
 
@@ -214,15 +243,15 @@ export class NegotiationTrackerProcessor {
 	}
 
 	// Returns the PowerRollTiers for an Argument
-	private static recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean, reusedMotivation: boolean, sameArgument:boolean): PowerRollTiers {
+	private static recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean, reusedMotivation: boolean, sameArgument: boolean): PowerRollTiers {
 		let result = this.baselineArgument(usedMotivation, usedPitfall, reusedMotivation, sameArgument);
 
 		// Modify if caught lying
 		if (caughtLying) {
-			result.t1.interest -= 1;
-			result.t2.interest -= 1;
-			result.t3.interest -= 1;
-			result.crit.interest -= 1;
+			if (result.t1.interest <= 0) result.t1.interest -= 1;
+			if (result.t2.interest <= 0) result.t2.interest -= 1;
+			if (result.t3.interest <= 0) result.t3.interest -= 1;
+			if (result.crit.interest <= 0) result.crit.interest -= 1;
 		}
 
 		return result.toPowerRollTiers();
