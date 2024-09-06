@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.6
+
+- Internal cleanup, bugfixes
+
 ## 0.0.5
 
 - Avoids innerHTML call for compliance
