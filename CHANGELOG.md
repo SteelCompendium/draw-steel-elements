@@ -1,12 +1,13 @@
 # Changelog
 
-## 0.0.7 (unreleased)
+## (unreleased)
 
 - Adds `horizontal-rule` element
 - Adds a ton of new fields to `power-roll` element (See readme)
 - [PSEUDO-BREAKING] No longer supports inline-codeblocks for `horizontal-rule`
   - This was unreleased, but for those who built manually...
   - Use a regular multi-line codeblock for functionality
+- Adds support for rendering markdown in Power Roll values
 
 ## 0.0.6
 
