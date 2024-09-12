@@ -6,11 +6,13 @@
 	white-space: pre-line;
 }
 
-.ds-pr-inline-p {
-	display: inline-block;
+.ds-pr-inline-p,
+.ds-pr-inline-p p {
+	display: inline;
 }
 
-.ds-pr-inline-p p {
+.ds-pr-inline-p p,
+.ds-pr-inline-p ul {
 	margin-block-start: 0;
 	margin-block-end: 0;
 }
