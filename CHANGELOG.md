@@ -1,6 +1,10 @@
 # Changelog
 
-## (unreleased)
+## 1.0.1
+
+- Cleanup bulleted lists
+
+## 1.0.0
 
 - Adds `horizontal-rule` element
 - Adds a ton of new fields to `power-roll` element (See readme)
@@ -8,6 +12,7 @@
   - This was unreleased, but for those who built manually...
   - Use a regular multi-line codeblock for functionality
 - Adds support for rendering markdown in Power Roll values
+- Much more!
 
 ## 0.0.6
 
