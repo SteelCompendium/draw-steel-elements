@@ -17,6 +17,10 @@
 	margin-block-end: 0;
 }
 
+.ds-pr-inline-p ul {
+	display: grid;
+}
+
 .pr-container {
 	position: relative;
 	background: var(--code-background);
