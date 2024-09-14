@@ -23,45 +23,10 @@ with `ds-power-roll` or `ds-pr`
 	effect: You have a bane on the power roll for this ability when you use it in consecutive rounds of the same encounter.
 	```
 
-The generated html is simple, but should be highly customizable with css:
-
-```html
-<div class="pr-container indent-2">
-    <div class="pr-name-line"><span class="pr-name-value">Might Test</span></div>
-    <div class="pr-detail-line pr-tier-line pr-tier-1-line">
-        <div class="tier-key-container t1-key-container">
-            <div class="t1-key-left-side">
-                <div class="t1-key-brace-part t1-key-brace-p1"></div>
-                <div class="t1-key-brace-part t1-key-brace-p2"></div>
-                <div class="t1-key-brace-part t1-key-brace-p3"></div>
-                <div class="t1-key-brace-part t1-key-brace-p4"></div>
-            </div>
-            <div class="t1-key-body">≤11</div>
-        </div>
-        <span class="pr-tier-value pr-tier-1-value">1 damage</span></div>
-    <div class="pr-detail-line pr-tier-line pr-tier-2-line">
-        <div class="tier-key-container t2-key-container">
-            <div class="t2-key-body">12-16</div>
-        </div>
-        <span class="pr-tier-value pr-tier-2-value">2 damage</span></div>
-    <div class="pr-detail-line pr-tier-line pr-tier-3-line">
-        <div class="tier-key-container t3-key-container">
-            <div class="t3-key-body">17+</div>
-            <div class="t3-key-right-side">
-                <div class="t3-key-brace-part t3-key-brace-p1"></div>
-                <div class="t3-key-brace-part t3-key-brace-p2"></div>
-                <div class="t3-key-brace-part t3-key-brace-p3"></div>
-                <div class="t3-key-brace-part t3-key-brace-p4"></div>
-            </div>
-        </div>
-        <span class="pr-tier-value pr-tier-3-value">3 damage; push 2</span></div>
-    <div class="pr-detail-line pr-note-line"><span class="pr-note">You have an Edge on this attack if its raining</span>
-    </div>
-</div>
-```
+- The values should support standard markdown rendering for bold, italics, links, etc. 
+- The generated html should be highly customizable with css
 
 ### Fields
-
 
 | Property                      | Description                                              | Example                                   |
 | ----------------------------- | -------------------------------------------------------- | ----------------------------------------- |
