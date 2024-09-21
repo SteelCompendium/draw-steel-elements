@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Corrects sizing issue on power roll tiers
+
 ## 1.0.1
 
 - Cleanup bulleted lists
