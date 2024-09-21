@@ -156,6 +156,7 @@ code.dsa {
 	display: flex;
 	font-size: 1em;
 	margin-right: .75em;
+	max-height: 1em;
 }
 
 /* Tier 1 */
