@@ -81,12 +81,12 @@ export class InitiativeProcessor {
 		});
 
 		// Enemies UI
-		const enemiesContainer = container.createEl('div', {cls: 'enemies-container'});
-		enemiesContainer.createEl('h2', {text: 'Enemies'});
+		const enemiesContainer = container.createEl('div', { cls: 'enemies-container' });
+		enemiesContainer.createEl('h2', { text: 'Enemies' });
 
 		data.enemy_groups.forEach((group) => {
-			const groupEl = enemiesContainer.createEl('div', {cls: 'enemy-group'});
-			groupEl.createEl('h3', {text: group.name});
+			const groupEl = enemiesContainer.createEl('div', { cls: 'enemy-group' });
+			groupEl.createEl('h3', { text: group.name });
 
 			group.creatures.forEach((creature) => {
 				this.buildCreatureRow(groupEl, creature, data, ctx, lang);
@@ -134,7 +134,7 @@ export class InitiativeProcessor {
 		this.updateHpDisplay(hpEl, character);
 
 		hpEl.addEventListener('click', () => {
-			const modal = new HpEditModal(this.app, character, data, ctx, () => {
+			const modal = new HpEditModal(this.app, character, null, data, ctx, () => {
 				this.updateHpDisplay(hpEl, character);
 				this.updateCodeBlock(data, ctx);
 			});
@@ -149,39 +149,133 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext,
 		lang: string
 	): void {
-		const groupEl = container.createEl('div', {cls: 'creature-group'});
+		const groupEl = container.createEl('div', { cls: 'creature-group' });
 
-		// Display creature name
-		const nameEl = groupEl.createEl('div', {cls: 'creature-name'});
-		nameEl.createEl('span', {text: creature.name});
+		// Display creature group name
+		groupEl.createEl('h3', { text: creature.name });
 
-		// Display creature instances
-		const instancesContainer = groupEl.createEl('div', {cls: 'creature-instances'});
+		// Detailed Creature Instance Row Container
+		const detailRowContainer = groupEl.createEl('div', { cls: 'creature-detail-row' });
 
-		creature.instances?.forEach((instance) => {
-			const instanceEl = instancesContainer.createEl('div', {cls: 'creature-instance'});
+		// Initialize with the first creature instance
+		let selectedInstanceIndex = 0;
+		if (creature.instances && creature.instances.length > 0) {
+			this.buildDetailedCreatureRow(
+				detailRowContainer,
+				creature,
+				creature.instances[selectedInstanceIndex],
+				data,
+				ctx,
+				lang
+			);
+		}
 
-			// Left: Instance Identifier (e.g., number or ID)
-			instanceEl.createEl('span', {cls: 'instance-id', text: `#${instance.id}`});
+		// Grid of Creature Instances
+		const instancesGrid = groupEl.createEl('div', { cls: 'creature-instances-grid' });
 
-			// Middle: Conditions (space under name)
-			const conditionsEl = instanceEl.createEl('div', {cls: 'instance-conditions'});
-			// Placeholder for conditions
+		creature.instances?.forEach((instance, index) => {
+			const cellEl = instancesGrid.createEl('div', { cls: 'creature-instance-cell' });
 
-			// Right: Health Info
-			const hpEl = instanceEl.createEl('div', {cls: 'instance-hp'});
-			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
-			hpEl.addEventListener('click', () => {
-				const modal = new HpEditModal(this.app, instance, creature, data, ctx, () => {
-					hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
-					this.updateCodeBlock(data, ctx, lang);
+			// Handle selection highlighting
+			if (index === selectedInstanceIndex) {
+				cellEl.addClass('selected');
+			}
+
+			// Display creature image in the cell
+			const imgEl = cellEl.createEl('div', { cls: 'instance-image' });
+			const imgSrcRaw = creature.image ?? null;
+			this.resolveImageSource(imgSrcRaw)
+				.then((imgSrc) => {
+					imgEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
+				})
+				.catch(() => {
+					// Use default image or handle error
+					imgEl.createEl('img', { attr: { src: 'path/to/default-image.png', alt: creature.name } });
 				});
-				modal.open();
+
+			// Display health status below the image
+			const hpEl = cellEl.createEl('div', { cls: 'instance-hp' });
+			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+
+			// Add click event to update detailed view
+			cellEl.addEventListener('click', () => {
+				// Remove 'selected' class from all cells
+				instancesGrid.querySelectorAll('.creature-instance-cell').forEach((cell) => {
+					cell.removeClass('selected');
+				});
+				// Add 'selected' class to the clicked cell
+				cellEl.addClass('selected');
+
+				// Update the detailed creature row
+				detailRowContainer.empty();
+				this.buildDetailedCreatureRow(
+					detailRowContainer,
+					creature,
+					instance,
+					data,
+					ctx,
+					lang
+				);
 			});
 		});
 	}
 
+	private buildDetailedCreatureRow(
+		container: HTMLElement,
+		creature: Creature,
+		instance: CreatureInstance,
+		data: EncounterData,
+		ctx: MarkdownPostProcessorContext,
+		lang: string
+	): void {
+		container.addClass('character-row');
 
+		// Left: Creature Image
+		const imageEl = container.createEl('div', { cls: 'character-image' });
+		const imgSrcRaw = creature.image ?? null;
+		this.resolveImageSource(imgSrcRaw)
+			.then((imgSrc) => {
+				imageEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
+			})
+			.catch(() => {
+				// Use default image or handle error
+				imageEl.createEl('img', { attr: { src: 'path/to/default-image.png', alt: creature.name } });
+			});
+
+		// Middle: Creature Info
+		const infoEl = container.createEl('div', { cls: 'character-info' });
+
+		// Top: Creature Name (include instance ID)
+		infoEl.createEl('div', { cls: 'character-name', text: `${creature.name} #${instance.id}` });
+
+		// Bottom: Condition Icons (Placeholder)
+		infoEl.createEl('div', { cls: 'character-conditions' });
+		// TODO: Implement condition icons
+
+		// Right: Health Info
+		const healthEl = container.createEl('div', { cls: 'character-health' });
+		const hpEl = healthEl.createEl('div', { cls: 'character-hp' });
+		hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+
+		// HP Click Handler
+		hpEl.addEventListener('click', () => {
+			const modal = new HpEditModal(this.app, instance, creature, data, ctx, () => {
+				hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+				this.updateCodeBlock(data, ctx, lang);
+
+				// Update the HP in the grid cell as well
+				const gridCell = container.parentElement?.querySelector(
+					`.creature-instance-cell:nth-child(${instance.id}) .instance-hp`
+				);
+				if (gridCell) {
+					gridCell.textContent = `${instance.current_hp}/${creature.max_hp}`;
+				}
+			});
+			modal.open();
+		});
+	}
+
+	// TODO - move this to utils
 	private async resolveImageSource(imgSrcRaw: string): Promise<string> {
 		// Check if it's an Obsidian link
 		const obsidianLinkMatch = imgSrcRaw.match(/!\[\[(.+?)\]\]/);
@@ -236,6 +330,7 @@ export class InitiativeProcessor {
 		return 'temp_hp' in character;
 	}
 
+	// TODO - move this to utils
 	private async updateCodeBlock(data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
 		if (!(file instanceof TFile)) return;

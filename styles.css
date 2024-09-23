@@ -436,6 +436,51 @@ code.dsa {
 /* ==================== */
 /* ==================== */
 
+/* Enemies */
+
+/* Creature Group */
+.creature-group {
+	margin-bottom: 20px;
+}
+
+/* Detailed Creature Row */
+.creature-detail-row {
+	margin-bottom: 10px;
+}
+
+/* Instances Grid */
+.creature-instances-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+	gap: 10px;
+}
+
+/* Instance Cell */
+.creature-instance-cell {
+	text-align: center;
+	padding: 5px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.creature-instance-cell.selected {
+	border-color: #007BFF;
+	box-shadow: 0 0 5px #007BFF;
+}
+
+.instance-image img {
+	width: 50px;
+	height: 50px;
+	object-fit: cover;
+}
+
+.instance-hp {
+	margin-top: 5px;
+	font-size: 12px;
+}
+
+/* Character Row (Detailed View) */
 .character-row {
 	display: flex;
 	align-items: center;
@@ -443,8 +488,8 @@ code.dsa {
 }
 
 .character-image img {
-	width: 50px;
-	height: 50px;
+	width: 60px;
+	height: 60px;
 	object-fit: cover;
 }
 
@@ -459,7 +504,7 @@ code.dsa {
 
 .character-conditions {
 	margin-top: 5px;
-	/* Add styles for condition icons */
+	/* Placeholder for condition icons */
 }
 
 .character-health {
@@ -469,47 +514,6 @@ code.dsa {
 .character-hp {
 	cursor: pointer;
 	font-weight: bold;
-}
-
-/* Enemies */
-
-.enemy-group {
-	border: 1px solid var(--text-normal);
-	padding: 1em;
-}
-
-.creature-group {
-	margin-bottom: 10px;
-}
-
-.creature-name {
-	font-weight: bold;
-	margin-bottom: 5px;
-}
-
-.creature-instances {
-	margin-left: 10px;
-}
-
-.creature-instance {
-	display: flex;
-	align-items: center;
-	margin-bottom: 5px;
-}
-
-.instance-id {
-	width: 30px;
-}
-
-.instance-conditions {
-	flex: 1;
-	margin-left: 5px;
-	/* Placeholder for conditions */
-}
-
-.instance-hp {
-	margin-left: 5px;
-	cursor: pointer;
 }
 
 /* TODO - do I need these?? */
