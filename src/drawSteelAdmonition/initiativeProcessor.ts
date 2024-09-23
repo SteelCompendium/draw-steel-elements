@@ -1,13 +1,14 @@
-import {App, MarkdownPostProcessorContext, TFile, parseYaml, stringifyYaml} from "obsidian";
+import {App, MarkdownPostProcessorContext, TFile, parseYaml, stringifyYaml, setIcon} from "obsidian";
 import {HpEditModal} from "../utils/HpEditModal";
 
 interface Hero {
 	name: string;
 	max_hp: number;
-	current_hp?: number;    // Can be negative down to -50% of max_hp
-	temp_hp?: number;       // Temporary HP (heroes only)
+	current_hp?: number;
+	temp_hp?: number;
 	image?: string;
 	isHero: boolean;
+	has_taken_turn?: boolean; // New property
 }
 
 interface CreatureInstance {
@@ -28,6 +29,7 @@ interface Creature {
 interface EnemyGroup {
 	name: string;
 	creatures: Creature[];
+	has_taken_turn?: boolean; // New property7
 }
 
 interface EncounterData {
@@ -56,9 +58,18 @@ export class InitiativeProcessor {
 
 		// set all heroes
 		data.heroes.forEach((h) => h.isHero = true);
+		data.heroes.forEach(hero => {
+			hero.isHero = true;
+			if (hero.has_taken_turn === undefined) {
+				hero.has_taken_turn = false;
+			}
+		});
 
 		// Initialize instances for creatures
 		data.enemy_groups.forEach((group) => {
+			if (group.has_taken_turn === undefined) {
+				group.has_taken_turn = false;
+			}
 			group.creatures.forEach((creature) => {
 				if (!creature.instances || creature.instances.length !== creature.amount) {
 					creature.instances = [];
@@ -77,12 +88,34 @@ export class InitiativeProcessor {
 	}
 
 	private buildUI(container: HTMLElement, data: EncounterData, ctx: MarkdownPostProcessorContext): void {
+		// Reset Round Button
+		const resetButton = container.createEl('button', { text: 'Reset Round', cls: 'reset-round-button' });
+		resetButton.addEventListener('click', () => {
+			// Reset has_taken_turn for heroes
+			data.heroes.forEach(hero => {
+				hero.has_taken_turn = false;
+			});
+
+			// Reset has_taken_turn for enemy groups
+			data.enemy_groups.forEach(group => {
+				group.has_taken_turn = false;
+			});
+
+			// Rebuild the UI
+			container.empty();
+			this.buildUI(container, data, ctx);
+
+			// Update the codeblock
+			this.updateCodeBlock(data, ctx);
+		});
+
 		// Heroes UI
 		const heroesContainer = container.createEl('div', {cls: 'heroes-container'});
 		heroesContainer.createEl('h2', {text: 'Heroes'});
 
 		data.heroes.forEach((hero) => {
-			this.buildCharacterRow(heroesContainer, hero, data, ctx);
+			const heroContEl = heroesContainer.createEl('div', { cls: 'hero-container' });
+			this.buildCharacterRow(heroContEl, hero, data, ctx);
 		});
 
 		// Enemies UI
@@ -91,11 +124,7 @@ export class InitiativeProcessor {
 
 		data.enemy_groups.forEach((group) => {
 			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
-			const groupEl = groupContEl.createEl('div', { cls: 'enemy-group' });
-			groupEl.createEl('h3', { text: group.name });
-
-			// Call the new method
-			this.buildEnemyGroupRow(groupEl, group, data, ctx, lang);
+			this.buildEnemyGroupRow(groupContEl, group, data, ctx, lang);
 		});
 	}
 
@@ -105,9 +134,25 @@ export class InitiativeProcessor {
 		data: EncounterData,
 		ctx: MarkdownPostProcessorContext
 	): void {
+		// left icons
+		const icon  = container.createEl('div', {cls: 'character-icon'});
+
+		// Turn Indicator
+		const turnIndicatorEl = icon.createEl('div', { cls: 'turn-indicator' });
+		this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn ?? false);
+
+		// Add click handler to toggle has_taken_turn
+		turnIndicatorEl.addEventListener('click', () => {
+			if (this.isHero(character)) {
+				character.has_taken_turn = !(character.has_taken_turn ?? false);
+				this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn);
+				this.updateCodeBlock(data, ctx);
+			}
+		});
+
 		const rowEl = container.createEl('div', {cls: 'character-row'});
 
-		// Left: Character Image
+		// Character Image
 		const imageEl = rowEl.createEl('div', {cls: 'character-image'});
 		const imgSrcRaw = character.image ?? null;
 
@@ -128,11 +173,12 @@ export class InitiativeProcessor {
 		// Bottom: Condition Icons (Placeholder)
 		infoEl.createEl('div', {cls: 'character-conditions'});
 
-		// Right: Health Info
-		const healthEl = rowEl.createEl('div', {cls: 'character-health'});
-		const hpEl = healthEl.createEl('div', {
-			cls: 'character-hp',
-		});
+		// Right: Health Info and Turn Indicator Container
+		const rightContainer = rowEl.createEl('div', { cls: 'character-right' });
+
+		// Health Info
+		const healthEl = rightContainer.createEl('div', { cls: 'character-health' });
+		const hpEl = healthEl.createEl('div', { cls: 'character-hp' });
 		this.updateHpDisplay(hpEl, character);
 
 		hpEl.addEventListener('click', () => {
@@ -151,8 +197,27 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext,
 		lang: string
 	): void {
+		// left icons
+		const icon  = container.createEl('div', {cls: 'enemy-group-icon'});
+
+		// Turn Indicator
+		const turnIndicatorEl = icon.createEl('div', { cls: 'turn-indicator' });
+		this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn ?? false);
+
+		turnIndicatorEl.addEventListener('click', () => {
+			group.has_taken_turn = !(group.has_taken_turn ?? false);
+			this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn);
+			this.updateCodeBlock(data, ctx);
+		});
+
+		const groupEl = container.createEl('div', { cls: 'enemy-group' });
+
+		// Group Header with Name and Turn Indicator
+		const groupHeader = groupEl.createEl('div', { cls: 'group-header' });
+		groupHeader.createEl('h3', { text: group.name });
+
 		// Detailed Creature Row Container
-		const detailRowContainer = container.createEl('div', { cls: 'creature-detail-row' });
+		const detailRowContainer = groupEl.createEl('div', { cls: 'creature-detail-row' });
 
 		// Initialize with the first instance of the first creature
 		let selectedInstance: { creature: Creature; instance: CreatureInstance } | null = null;
@@ -180,7 +245,7 @@ export class InitiativeProcessor {
 		}
 
 		// Grid of Creature Instances
-		const instancesGrid = container.createEl('div', { cls: 'creature-instances-grid' });
+		const instancesGrid = groupEl.createEl('div', { cls: 'creature-instances-grid' });
 
 		// Create cells for all instances of all creatures in the group
 		group.creatures.forEach((creature) => {
@@ -312,6 +377,17 @@ export class InitiativeProcessor {
 			return this.app.vault.getResourcePath(file);
 		} else {
 			throw new Error('Image file not found in vault.');
+		}
+	}
+
+	private updateTurnIndicator(el: HTMLElement, hasTakenTurn: boolean): void {
+		el.empty();
+		if (hasTakenTurn) {
+			el.addClass('taken-turn');
+			setIcon(el, "check")
+		} else {
+			el.removeClass('taken-turn');
+			setIcon(el, "dot")
 		}
 	}
 

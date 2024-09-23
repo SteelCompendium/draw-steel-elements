@@ -436,18 +436,39 @@ code.dsa {
 /* ==================== */
 /* ==================== */
 
-/* Enemies */
+.turn-indicator {
+	cursor: pointer;
+}
 
-.enemy-group {
+.turn-indicator svg {
+	margin: 1px;
+	height: calc(100% - 2px);
+	width: calc(100% - 2px);
+	color: var(--text-normal);
+	background-color: var(--code-background);
+	border-radius: 4px 0 0 4px;
+}
+
+.turn-indicator.taken-turn svg {
+	background-color: limegreen;
+	color: var(--code-background);
+}
+
+.reset-round-button {
+	margin-bottom: 10px;
+	/* Additional styling */
+}
+
+.heroes-container .character-row, .enemy-group {
 	position: relative;
-	padding: 1em;
 	padding-top: 1px;
+	padding-right: 1em;
 	margin-bottom: 1em;
 	background-color: var(--code-background);
 }
 
-.enemy-group::before,
-.enemy-group::after {
+.heroes-container .character-row::before, .enemy-group::before,
+.heroes-container .character-row::after, .enemy-group::after {
 	content: '';
 	position: absolute;
 	background: linear-gradient(to right, transparent, var(--text-normal));
@@ -455,20 +476,34 @@ code.dsa {
 	width: 100%;
 }
 
-.enemy-group::before {
+.heroes-container .character-row::before, .enemy-group::before {
 	top: 0;
 	left: 0;
 	background: linear-gradient(to right, var(--text-normal), transparent);
 	width: 12em;
 }
 
-.enemy-group::after {
+.heroes-container .character-row::after, .enemy-group::after {
 	top: 0;
 	left: 0;
 	height: 100%;
 	max-height: 12em;
 	background: linear-gradient(to bottom, var(--text-normal), transparent);
 	width: 1px; /* Border thickness */
+}
+
+.enemy-group-container {
+	display: flex;
+}
+.enemy-group {
+	padding: 1em;
+	width: 100%;
+}
+
+.group-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
 /* Creature Group */
@@ -517,11 +552,29 @@ code.dsa {
 	font-size: 12px;
 }
 
+.hero-container {
+	display: flex;
+}
+
+.character-icon, .enemy-group-icon {
+	height: 1.5em;
+	width: 1.5em;
+	border: 1px solid var(--text-normal);
+	border-right: 0;
+	border-radius: 5px 0 0 5px;
+}
+
 /* Character Row (Detailed View) */
 .character-row {
 	display: flex;
 	align-items: center;
 	margin-bottom: 10px;
+	width: 100%;
+}
+
+
+.character-image {
+	display: flex;
 }
 
 .character-image img {
