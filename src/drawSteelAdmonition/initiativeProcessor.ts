@@ -1,17 +1,20 @@
-import {App, MarkdownPostProcessorContext, parseYaml} from "obsidian";
-import {CodeBlocks} from "../utils/CodeBlocks";
+import { App, MarkdownPostProcessorContext, TFile, parseYaml, stringifyYaml } from "obsidian";
+import {HpEditModal} from "../utils/HpEditModal";
 
 interface Hero {
 	name: string;
 	max_hp: number;
-	current_hp?: number;
+	current_hp?: number;    // Can be negative down to -50% of max_hp
+	temp_hp?: number;       // Temporary HP (heroes only)
+	image?: string;
 }
 
 interface Creature {
 	name: string;
 	amount: number;
 	max_hp: number;
-	current_hp?: number;
+	current_hp?: number;    // For creatures, current_hp cannot go below 0
+	image?: string;
 }
 
 interface EnemyGroup {
@@ -33,17 +36,12 @@ export class InitiativeProcessor {
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
 		const container = el.createEl('div', { cls: "ds-init-container" });
-
-		// Parse the source (assumed to be YAML)
 		const data = this.parseYaml(source);
-
-		// Build the UI using the data
 		this.buildUI(container, data, ctx);
 	}
 
 	private parseYaml(source: string): EncounterData {
 		const data = parseYaml(source) as EncounterData;
-		// You might want to add validation here to ensure data integrity
 		return data;
 	}
 
@@ -53,18 +51,7 @@ export class InitiativeProcessor {
 		heroesContainer.createEl('h2', { text: 'Heroes' });
 
 		data.heroes.forEach((hero) => {
-			const heroEl = heroesContainer.createEl('div', { cls: 'hero' });
-			heroEl.createEl('span', { text: `${hero.name} (HP: ${hero.current_hp ?? hero.max_hp}/${hero.max_hp})` });
-
-			const damageButton = heroEl.createEl('button', { text: 'Take Damage' });
-			damageButton.addEventListener('click', async () => {
-				hero.current_hp = (hero.current_hp ?? hero.max_hp) - 5;
-				if (hero.current_hp < 0) hero.current_hp = 0;
-
-				heroEl.querySelector('span')!.textContent = `${hero.name} (HP: ${hero.current_hp}/${hero.max_hp})`;
-
-				await CodeBlocks.updateCodeBlock(this.app, data, ctx);
-			});
+			this.buildCharacterRow(heroesContainer, hero, data, ctx);
 		});
 
 		// Enemies UI
@@ -76,20 +63,88 @@ export class InitiativeProcessor {
 			groupEl.createEl('h3', { text: group.name });
 
 			group.creatures.forEach((creature) => {
-				const creatureEl = groupEl.createEl('div', { cls: 'creature' });
-				creatureEl.createEl('span', { text: `${creature.name} x${creature.amount} (HP: ${creature.current_hp ?? creature.max_hp}/${creature.max_hp})` });
-
-				const damageButton = creatureEl.createEl('button', { text: 'Take Damage' });
-				damageButton.addEventListener('click', async () => {
-					creature.current_hp = (creature.current_hp ?? creature.max_hp) - 5;
-					if (creature.current_hp < 0) creature.current_hp = 0;
-
-					creatureEl.querySelector('span')!.textContent = `${creature.name} x${creature.amount} (HP: ${creature.current_hp}/${creature.max_hp})`;
-
-					await CodeBlocks.updateCodeBlock(this.app, data, ctx);
-				});
+				this.buildCharacterRow(groupEl, creature, data, ctx);
 			});
 		});
 	}
 
+	private buildCharacterRow(
+		container: HTMLElement,
+		character: Hero | Creature,
+		data: EncounterData,
+		ctx: MarkdownPostProcessorContext
+	): void {
+		const rowEl = container.createEl('div', { cls: 'character-row' });
+
+		// ... (other parts of the method remain the same)
+
+		// Right: Health Info
+		const healthEl = rowEl.createEl('div', { cls: 'character-health' });
+		const hpEl = healthEl.createEl('div', {
+			cls: 'character-hp',
+		});
+		this.updateHpDisplay(hpEl, character);
+
+		hpEl.addEventListener('click', () => {
+			const modal = new HpEditModal(this.app, character, data, ctx, () => {
+				this.updateHpDisplay(hpEl, character);
+				this.updateCodeBlock(data, ctx);
+			});
+			modal.open();
+		});
+	}
+
+	private updateHpDisplay(hpEl: HTMLElement, character: Hero | Creature): void {
+		const currentHp = character.current_hp ?? character.max_hp;
+		const tempHp = this.isHero(character) ? character.temp_hp ?? 0 : 0;
+		const maxHp = character.max_hp;
+
+		let displayText = `${currentHp}`;
+		if (tempHp > 0) {
+			displayText += ` (+${tempHp})`;
+		}
+		displayText += `/${maxHp}`;
+
+		hpEl.textContent = displayText;
+
+		// Optional: Color code the HP display
+		if (this.isHero(character) && currentHp < 0) {
+			hpEl.style.color = 'red';
+		} else if (tempHp > 0) {
+			hpEl.style.color = 'green';
+		} else {
+			hpEl.style.color = '';
+		}
+	}
+
+	private isHero(character: Hero | Creature): character is Hero {
+		return 'temp_hp' in character;
+	}
+
+	private async updateCodeBlock(data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
+		if (!(file instanceof TFile)) return;
+
+		const content = await this.app.vault.read(file);
+		const lines = content.split('\n');
+
+		const section = ctx.getSectionInfo(ctx.el);
+		if (!section) return;
+
+		const { lineStart, lineEnd } = section;
+
+		// Reconstruct the code block with the updated data
+		const newCodeBlockContent = [];
+		newCodeBlockContent.push('```' + ctx.lang);
+		newCodeBlockContent.push(stringifyYaml(data).trim());
+		newCodeBlockContent.push('```');
+
+		// Replace the old code block with the new one
+		lines.splice(lineStart, lineEnd - lineStart + 1, ...newCodeBlockContent);
+
+		const newContent = lines.join('\n');
+
+		// Write the updated content back to the file
+		await this.app.vault.modify(file, newContent);
+	}
 }

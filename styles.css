@@ -429,3 +429,102 @@ code.dsa {
 .cm-active .dsa-hidden {
 	display: inline;
 }
+
+/* ==================== */
+/* ==================== */
+/* Initiative Tracker */
+/* ==================== */
+/* ==================== */
+
+.character-row {
+	display: flex;
+	align-items: center;
+	margin-bottom: 10px;
+}
+
+.character-image img {
+	width: 50px;
+	height: 50px;
+	object-fit: cover;
+}
+
+.character-info {
+	flex: 1;
+	margin-left: 10px;
+}
+
+.character-name {
+	font-weight: bold;
+}
+
+.character-conditions {
+	margin-top: 5px;
+	/* Add styles for condition icons */
+}
+
+.character-health {
+	margin-left: 10px;
+}
+
+.character-hp {
+	cursor: pointer;
+	font-weight: bold;
+}
+
+/* TODO - do I need these?? */
+.hp-edit-popup {
+	background: #fff;
+	border: 1px solid #ccc;
+	padding: 10px;
+	/* Add shadows or other styles as needed */
+}
+
+.hp-edit-popup button {
+	margin-right: 5px;
+}
+
+/* END TODO */
+
+/* Modal styles */
+.modal-button-container {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 20px;
+}
+
+.modal-save-btn, .modal-cancel-btn {
+	margin-left: 10px;
+}
+
+.hp-input-container {
+	display: flex;
+	align-items: center;
+	margin-bottom: 10px;
+}
+
+.hp-input-container label {
+	width: 100px;
+}
+
+.hp-input {
+	flex: 1;
+}
+
+.hp-adjust-container {
+	margin-bottom: 10px;
+}
+
+.hp-adjust-input {
+	width: 100px;
+	margin-left: 10px;
+}
+
+.hp-adjust-buttons {
+	display: flex;
+	justify-content: space-around;
+	margin-bottom: 10px;
+}
+
+.hp-adjust-btn {
+	width: 100px;
+}
