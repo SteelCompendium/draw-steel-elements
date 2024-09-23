@@ -442,8 +442,8 @@ code.dsa {
 
 .turn-indicator svg {
 	margin: 1px;
-	height: calc(100% - 2px);
-	width: calc(100% - 2px);
+	height: calc(100% - 1px);
+	width: calc(100% - 1px);
 	color: var(--text-normal);
 	background-color: var(--code-background);
 	border-radius: 4px 0 0 4px;
@@ -463,7 +463,7 @@ code.dsa {
 	position: relative;
 	padding-top: 1px;
 	padding-right: 1em;
-	margin-bottom: 1em;
+	margin-bottom: .75em;
 	background-color: var(--code-background);
 }
 
@@ -506,6 +506,10 @@ code.dsa {
 	justify-content: space-between;
 }
 
+.group-header h4 {
+	margin-top: 0;
+}
+
 /* Creature Group */
 .creature-group {
 	margin-bottom: 20px;
@@ -527,7 +531,8 @@ code.dsa {
 .creature-instance-cell {
 	text-align: center;
 	padding: 5px;
-	border: 1px solid #ccc;
+	background-color: var(--color-base-30);
+	border: 1px solid transparent;
 	border-radius: 4px;
 	cursor: pointer;
 }
@@ -548,8 +553,7 @@ code.dsa {
 }
 
 .instance-hp {
-	margin-top: 5px;
-	font-size: 12px;
+	font-size: 16px;
 }
 
 .hero-container {
