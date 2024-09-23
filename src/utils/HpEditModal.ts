@@ -29,7 +29,9 @@ export class HpEditModal extends Modal {
 		contentEl.empty();
 
 		// Character Info
-		contentEl.createEl('h2', {text: `Edit HP for ${this.character.name}`});
+		// TODO - handle creature instance names better
+		const name = this.isHero(this.character) ? this.character.name : this.creature.name + " #" + this.character.id;
+		contentEl.createEl('h2', {text: `Edit HP for ${name}`});
 
 		// Adjust maxHp and negativeHpLimit based on character type
 		const maxHp = this.isHero(this.character)
