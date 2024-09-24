@@ -442,8 +442,8 @@ code.dsa {
 
 .turn-indicator svg {
 	margin: 1px;
-	height: calc(100% - 1px);
-	width: calc(100% - 1px);
+	height: calc(100% - 2px);
+	width: calc(100% - 2px);
 	color: var(--text-normal);
 	background-color: var(--code-background);
 	border-radius: 4px 0 0 4px;
@@ -626,6 +626,25 @@ code.dsa {
 	height: 100%;
 	position: relative;
 	display: flex;
+}
+
+.hp-bar-overlay {
+	position: absolute;
+	height: calc(100% - 2px);
+	width: 33.33%;
+	background-color: rgba(0, 0, 0, 0.2);
+	/* opacity: 40%; */
+	left: 1px;
+	top: 1px;
+	border: 1.5px dashed var(--code-background);
+	/* border-right: 1px solid var(--text-normal); */
+	z-index: 1;
+	border-radius: 3px 0 0 3px;
+	color: var(--code-background);
+	text-align: center;
+	line-height: 100%;
+	font-size: .7em;
+	padding-top: 1px;
 }
 
 .hp-bar-fill-left {
