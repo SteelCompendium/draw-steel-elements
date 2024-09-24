@@ -97,7 +97,9 @@ export class HpEditModal extends Modal {
 		});
 
 		// Third Row: Apply Damage/Healing with Input
-		const applyContainer = contentEl.createEl('div', { cls: 'apply-container' });
+		const modifierContainer = contentEl.createEl('div', { cls: 'modifier-container' });
+
+		const applyContainer = modifierContainer.createEl('div', { cls: 'apply-container' });
 		applyContainer.createEl('span', { text: 'Apply' });
 
 		const applyInput = applyContainer.createEl('input', {
@@ -128,6 +130,38 @@ export class HpEditModal extends Modal {
 			}
 		});
 
+		const tempStaminaButton = applyContainer.createEl('button', { text: 'Temp Stamina', cls: 'apply-btn' });
+
+		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' '});
+
+		const quickModContainer = modifierContainer.createEl('div', { cls: 'quick-mod-container' });
+		const killButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn', text: 'Kill'});
+		killButton.addEventListener('click', () => {
+			this.pendingHpChange = currentHp * -1;
+			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, 0, maxHp);
+			this.updateActionButton(actionButton);
+		});
+
+		const fullHealButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn', text: 'Full Heal'});
+		fullHealButton.addEventListener('click', () => {
+			this.pendingHpChange = maxHp - currentHp;
+			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, maxHp, maxHp);
+			this.updateActionButton(actionButton);
+		});
+
+		const recoveryButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn', text: 'Spend Recovery' });
+		recoveryButton.addEventListener('click', () => {
+			const adjustment = Math.min(Math.floor(maxHp / 3), maxHp);
+			if (!isNaN(adjustment)) {
+				this.pendingHpChange += adjustment;
+				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+				this.updateActionButton(actionButton);
+			}
+		});
+
 		// Bottom: Action Button
 		const actionButtonContainer = contentEl.createEl('div', { cls: 'action-button-container' });
 		const actionButton = actionButtonContainer.createEl('button', { cls: 'action-button' });
@@ -140,9 +174,6 @@ export class HpEditModal extends Modal {
 			this.updateCallback();
 			this.close();
 		});
-
-		actionButtonContainer.createEl('button', { cls: 'kill-button', text: 'Kill'});
-		actionButtonContainer.createEl('button', { cls: 'action-button', text: 'Spend Recovery' });
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
