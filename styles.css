@@ -701,6 +701,7 @@ code.dsa {
 	display: flex;
 	justify-content: space-around;
 	align-items: center;
+	margin-top: 8px;
 }
 
 .apply-input {
