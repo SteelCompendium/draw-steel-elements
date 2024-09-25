@@ -1,4 +1,4 @@
-import {App, Modal, MarkdownPostProcessorContext} from "obsidian";
+import {App, Modal, MarkdownPostProcessorContext, setIcon} from "obsidian";
 
 export class HpEditModal extends Modal {
 	private character: Hero | CreatureInstance;
@@ -6,6 +6,9 @@ export class HpEditModal extends Modal {
 	private data: EncounterData;
 	private ctx: MarkdownPostProcessorContext;
 	private updateCallback: () => void;
+
+	// New properties for pending HP change
+	private pendingHpChange: number = 0;
 
 	constructor(
 		app: App,
@@ -24,95 +27,116 @@ export class HpEditModal extends Modal {
 	}
 
 	onOpen() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 
 		contentEl.empty();
 
 		// Character Info
-		// TODO - handle creature instance names better
-		const name = this.isHero(this.character) ? this.character.name : this.creature.name + " #" + this.character.id;
-		contentEl.createEl('h2', {text: `Edit HP for ${name}`});
+		const name = this.isHero(this.character)
+			? this.character.name
+			: this.creature.name + " #" + this.character.id;
+		contentEl.createEl('h2', { text: `Edit HP for ${name}` });
 
 		// Adjust maxHp and negativeHpLimit based on character type
 		const maxHp = this.isHero(this.character)
 			? this.character.max_hp
 			: this.creature?.max_hp ?? 0;
+		const currentHp = this.character.current_hp ?? maxHp;
 		const negativeHpLimit = this.isHero(this.character)
 			? -0.5 * maxHp
 			: 0; // Enemies cannot have negative HP
 
-		// Current HP Input
-		const currentHpContainer = contentEl.createEl('div', {cls: 'hp-input-container'});
-		currentHpContainer.createEl('label', {text: 'Current HP:'});
-		const currentHpInput = currentHpContainer.createEl('input', {
-			attr: {type: 'number', step: '1'},
-			cls: 'hp-input',
+		// First Row: HP Bar
+		const hpBarContainer = contentEl.createEl('div', { cls: 'hp-bar-container' });
+		const hpBar = hpBarContainer.createEl('div', { cls: 'hp-bar' });
+		const hpBarFill = hpBar.createEl('div', { cls: 'hp-bar-fill' });
+
+		// Update the HP bar display
+		this.updateHpBar(hpBarFill, currentHp, maxHp);
+
+		// Second Row: Numeric HP Display with Increment/Decrement Buttons
+		const hpNumericContainer = contentEl.createEl('div', { cls: 'hp-numeric-container' });
+
+		// Decrement Button
+		const decrementButton = hpNumericContainer.createEl('div', { text: '-', cls: 'hp-adjust-btn' });
+		setIcon(decrementButton, "minus-circle")
+		decrementButton.addEventListener('click', () => {
+			this.pendingHpChange -= 1;
+			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+			this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+			this.updateActionButton(actionButton);
 		});
-		currentHpInput.value = (this.character.current_hp ?? maxHp).toString();
 
-		// Temp HP Input (Heroes Only)
-		let tempHpInput: HTMLInputElement | null = null;
-		if (this.isHero(this.character)) {
-			const tempHpContainer = contentEl.createEl('div', {cls: 'hp-input-container'});
-			tempHpContainer.createEl('label', {text: 'Temp HP:'});
-			tempHpInput = tempHpContainer.createEl('input', {
-				attr: {type: 'number', step: '1', min: '0'},
-				cls: 'hp-input',
-			});
-			tempHpInput.value = (this.character.temp_hp ?? 0).toString();
-		}
-
-		// Adjustment Input
-		const adjustContainer = contentEl.createEl('div', {cls: 'hp-adjust-container'});
-		adjustContainer.createEl('label', {text: 'Adjustment Amount:'});
-		const adjustInput = adjustContainer.createEl('input', {
-			attr: {type: 'number', step: '1'},
-			cls: 'hp-adjust-input',
+		// HP Value Display (Editable)
+		const hpValueDisplay = hpNumericContainer.createEl('input', {
+			type: 'number',
+			cls: 'hp-value-display',
+		}) as HTMLInputElement;
+		hpValueDisplay.value = (currentHp + this.pendingHpChange).toString();
+		hpValueDisplay.addEventListener('input', () => {
+			const newHpValue = parseInt(hpValueDisplay.value);
+			if (!isNaN(newHpValue)) {
+				this.pendingHpChange = newHpValue - currentHp;
+				this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+				this.updateActionButton(actionButton);
+			}
 		});
-		adjustInput.value = '0';
 
-		const adjustButtonsContainer = contentEl.createEl('div', {cls: 'hp-adjust-buttons'});
-		const damageButton = adjustButtonsContainer.createEl('button', {text: 'Damage', cls: 'hp-adjust-btn'});
-		const healButton = adjustButtonsContainer.createEl('button', {text: 'Heal', cls: 'hp-adjust-btn'});
+		// Display Max HP
+		const maxHpDisplay = hpNumericContainer.createEl('span', { text: `/ ${maxHp}`, cls: 'max-hp-display' });
 
+		// Increment Button
+		const incrementButton = hpNumericContainer.createEl('div', { text: '+', cls: 'hp-adjust-btn' });
+		setIcon(incrementButton, "plus-circle")
+		incrementButton.addEventListener('click', () => {
+			this.pendingHpChange += 1;
+			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+			this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+			this.updateActionButton(actionButton);
+		});
+
+		// Third Row: Apply Damage/Healing with Input
+		const applyContainer = contentEl.createEl('div', { cls: 'apply-container' });
+		applyContainer.createEl('span', { text: 'Apply' });
+
+		const applyInput = applyContainer.createEl('input', {
+			type: 'number',
+			cls: 'apply-input',
+		}) as HTMLInputElement;
+		applyInput.value = '0';
+
+		const damageButton = applyContainer.createEl('button', { text: 'Damage', cls: 'apply-btn' });
 		damageButton.addEventListener('click', () => {
-			const adjustment = parseInt(adjustInput.value);
+			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
-				this.adjustHp(-adjustment, negativeHpLimit);
-				currentHpInput.value = this.character.current_hp!.toString();
+				this.pendingHpChange -= adjustment;
+				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+				this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+				this.updateActionButton(actionButton);
 			}
 		});
 
-		healButton.addEventListener('click', () => {
-			const adjustment = parseInt(adjustInput.value);
+		const healingButton = applyContainer.createEl('button', { text: 'Healing', cls: 'apply-btn' });
+		healingButton.addEventListener('click', () => {
+			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
-				this.adjustHp(adjustment, negativeHpLimit);
-				currentHpInput.value = this.character.current_hp!.toString();
+				this.pendingHpChange += adjustment;
+				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+				this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+				this.updateActionButton(actionButton);
 			}
 		});
 
-		// Save and Cancel Buttons
-		const buttonContainer = contentEl.createEl('div', {cls: 'modal-button-container'});
-		const saveButton = buttonContainer.createEl('button', {text: 'Save', cls: 'modal-save-btn'});
-		const cancelButton = buttonContainer.createEl('button', {text: 'Cancel', cls: 'modal-cancel-btn'});
+		// Bottom: Action Button
+		const actionButtonContainer = contentEl.createEl('div', { cls: 'action-button-container' });
+		const actionButton = actionButtonContainer.createEl('button', { cls: 'action-button' });
+		this.updateActionButton(actionButton);
 
-		saveButton.addEventListener('click', () => {
-			let newCurrentHp = parseInt(currentHpInput.value);
-			if (isNaN(newCurrentHp)) newCurrentHp = this.character.current_hp ?? maxHp;
-			newCurrentHp = this.clampHp(newCurrentHp, negativeHpLimit);
+		actionButton.addEventListener('click', () => {
+			const newCurrentHp = this.clampHp(currentHp + this.pendingHpChange, negativeHpLimit, maxHp);
 			this.character.current_hp = newCurrentHp;
 
-			if (tempHpInput) {
-				let newTempHp = parseInt(tempHpInput.value);
-				if (isNaN(newTempHp) || newTempHp < 0) newTempHp = 0;
-				this.character.temp_hp = newTempHp;
-			}
-
 			this.updateCallback();
-			this.close();
-		});
-
-		cancelButton.addEventListener('click', () => {
 			this.close();
 		});
 	}
@@ -121,18 +145,46 @@ export class HpEditModal extends Modal {
 		return character.isHero;
 	}
 
-	private clampHp(hp: number, negativeHpLimit: number): number {
-		const maxPossibleHp = this.isHero(this.character)
-			? this.character.max_hp + (this.character.temp_hp ?? 0)
-			: this.creature?.max_hp ?? 0;
-		hp = Math.min(hp, maxPossibleHp); // Cannot exceed max HP plus temp HP
+	private clampHp(hp: number, negativeHpLimit: number, maxPossibleHp: number): number {
+		hp = Math.min(hp, maxPossibleHp); // Cannot exceed max HP
 		hp = Math.max(hp, negativeHpLimit); // Cannot go below negative HP limit
 		return hp;
 	}
 
-	private adjustHp(amount: number, negativeHpLimit: number) {
-		let newHp = (this.character.current_hp ?? this.character.max_hp) + amount;
-		newHp = this.clampHp(newHp, negativeHpLimit);
-		this.character.current_hp = newHp;
+	private updateHpBar(hpBarFill: HTMLElement, hpValue: number, maxHp: number) {
+		const percentage = (hpValue / maxHp) * 100;
+
+		hpBarFill.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
+
+		if (this.pendingHpChange > 0) {
+			// Healing
+			hpBarFill.style.backgroundColor = 'green';
+		} else if (this.pendingHpChange < 0) {
+			// Damage
+			hpBarFill.style.backgroundColor = 'red';
+		} else {
+			// No change
+			hpBarFill.style.backgroundColor = ''; // Default color
+		}
+	}
+
+	private updateHpDisplay(hpValueDisplay: HTMLInputElement, currentHp: number, maxHp: number) {
+		const newHpValue = currentHp + this.pendingHpChange;
+		hpValueDisplay.value = newHpValue.toString();
+	}
+
+	private updateActionButton(actionButton: HTMLElement) {
+		const change = this.pendingHpChange;
+
+		if (change < 0) {
+			actionButton.textContent = `Lose ${Math.abs(change)} HP`;
+		} else if (change > 0) {
+			actionButton.textContent = `Gain ${change} HP`;
+		} else {
+			actionButton.textContent = `No HP Change`;
+		}
+
+		// Disable the button if no change
+		actionButton.toggleClass('disabled', change === 0);
 	}
 }
