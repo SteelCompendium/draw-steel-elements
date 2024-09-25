@@ -471,6 +471,47 @@ code.dsa {
 	font-weight: bold;
 }
 
+/* Enemies */
+
+.enemy-group {
+	border: 1px solid var(--text-normal);
+	padding: 1em;
+}
+
+.creature-group {
+	margin-bottom: 10px;
+}
+
+.creature-name {
+	font-weight: bold;
+	margin-bottom: 5px;
+}
+
+.creature-instances {
+	margin-left: 10px;
+}
+
+.creature-instance {
+	display: flex;
+	align-items: center;
+	margin-bottom: 5px;
+}
+
+.instance-id {
+	width: 30px;
+}
+
+.instance-conditions {
+	flex: 1;
+	margin-left: 5px;
+	/* Placeholder for conditions */
+}
+
+.instance-hp {
+	margin-left: 5px;
+	cursor: pointer;
+}
+
 /* TODO - do I need these?? */
 .hp-edit-popup {
 	background: #fff;
