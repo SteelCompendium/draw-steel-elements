@@ -439,11 +439,36 @@ code.dsa {
 /* Enemies */
 
 .enemy-group {
-	border: 1px solid var(--color-base-40);
-	border-radius: 5px;
+	position: relative;
 	padding: 1em;
-	background-color: var(--code-background);
+	padding-top: 1px;
 	margin-bottom: 1em;
+	background-color: var(--code-background);
+}
+
+.enemy-group::before,
+.enemy-group::after {
+	content: '';
+	position: absolute;
+	background: linear-gradient(to right, transparent, var(--text-normal));
+	height: 1px; /* Border thickness */
+	width: 100%;
+}
+
+.enemy-group::before {
+	top: 0;
+	left: 0;
+	background: linear-gradient(to right, var(--text-normal), transparent);
+	width: 12em;
+}
+
+.enemy-group::after {
+	top: 0;
+	left: 0;
+	height: 100%;
+	max-height: 12em;
+	background: linear-gradient(to bottom, var(--text-normal), transparent);
+	width: 1px; /* Border thickness */
 }
 
 /* Creature Group */
@@ -516,7 +541,7 @@ code.dsa {
 
 .character-conditions {
 	margin-top: 5px;
-	/* Placeholder for condition icons */
+	height: 24px;
 }
 
 .character-health {

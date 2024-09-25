@@ -35,7 +35,7 @@ interface EncounterData {
 	enemy_groups: EnemyGroup[];
 }
 
-const DEFAULT_IMAGE_PATH = 'token_1.png';
+const DEFAULT_IMAGE_PATH = 'Media/token_1.png';
 const lang = "ds-initiative"
 
 export class InitiativeProcessor {
@@ -87,10 +87,11 @@ export class InitiativeProcessor {
 
 		// Enemies UI
 		const enemiesContainer = container.createEl('div', { cls: 'enemies-container' });
-		enemiesContainer.createEl('h2', { text: 'Enemies' });
+		enemiesContainer.createEl('h2', { text: 'Enemy Groups' });
 
 		data.enemy_groups.forEach((group) => {
-			const groupEl = enemiesContainer.createEl('div', { cls: 'enemy-group' });
+			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
+			const groupEl = groupContEl.createEl('div', { cls: 'enemy-group' });
 			groupEl.createEl('h3', { text: group.name });
 
 			// Call the new method
@@ -114,7 +115,7 @@ export class InitiativeProcessor {
 			imageEl.createEl('img', {attr: {src: imgSrc, alt: character.name}});
 		}).catch(() => {
 			// Use default image
-			imageEl.createEl('img', {attr: {src: 'path/to/default-image.png', alt: character.name}});
+			imageEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: character.name}});
 		});
 
 		// Middle: Character Info
@@ -200,7 +201,7 @@ export class InitiativeProcessor {
 					})
 					.catch(() => {
 						// Use default image or handle error
-						imgEl.createEl('img', { attr: { src: 'path/to/default-image.png', alt: creature.name } });
+						imgEl.createEl('img', { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
 					});
 
 				// Display health status below the image
@@ -250,7 +251,7 @@ export class InitiativeProcessor {
 			})
 			.catch(() => {
 				// Use default image or handle error
-				imageEl.createEl('img', { attr: { src: 'path/to/default-image.png', alt: creature.name } });
+				imageEl.createEl('img', { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
 			});
 
 		// Middle: Creature Info
