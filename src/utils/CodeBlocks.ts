@@ -1,7 +1,8 @@
 import { App, MarkdownPostProcessorContext, TFile, stringifyYaml } from "obsidian";
+import {EncounterData} from "../drawSteelAdmonition/initiativeProcessor";
 
 export class CodeBlocks {
-	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext): Promise<void> {
+	static async updateCodeBlock(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
 		const file = app.vault.getAbstractFileByPath(ctx.sourcePath);
 		if (!(file instanceof TFile)) return;
 
@@ -11,7 +12,7 @@ export class CodeBlocks {
 		const section = ctx.getSectionInfo(ctx.el);
 		if (!section) return;
 
-		const { lineStart, lineEnd } = section;
+		const {lineStart, lineEnd} = section;
 
 		// Reconstruct the code block with the updated data
 		const newCodeBlockContent = [];

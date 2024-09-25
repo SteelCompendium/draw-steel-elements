@@ -2,6 +2,8 @@ import {App, MarkdownPostProcessorContext, parseYaml, setIcon, stringifyYaml, TF
 import {HpEditModal} from "../utils/HpEditModal";
 import {ConditionManager} from "../utils/Conditions";
 import {ConditionSelectModal} from "../utils/ConditionSelectModal";
+import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
+import {CodeBlocks} from "../utils/CodeBlocks";
 
 interface Hero {
 	name: string;
@@ -15,9 +17,9 @@ interface Hero {
 }
 
 interface CreatureInstance {
-	id: number;             // Unique identifier within the group
-	current_hp: number;     // Current HP of the individual creature
-	conditions?: string[];  // Conditions affecting the creature (optional)
+	id: number;
+	current_hp: number;
+	conditions?: string[];
 }
 
 interface Creature {
@@ -32,16 +34,13 @@ interface Creature {
 interface EnemyGroup {
 	name: string;
 	creatures: Creature[];
-	has_taken_turn?: boolean; // New property7
+	has_taken_turn?: boolean;
 }
 
-interface EncounterData {
+export interface EncounterData {
 	heroes: Hero[];
 	enemy_groups: EnemyGroup[];
 }
-
-const DEFAULT_IMAGE_PATH = 'Media/token_1.png';
-const lang = "ds-initiative"
 
 export class InitiativeProcessor {
 	private app: App;
@@ -113,7 +112,7 @@ export class InitiativeProcessor {
 			this.buildUI(container, data, ctx);
 
 			// Update the codeblock
-			this.updateCodeBlock(data, ctx);
+			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 		});
 
 		// Heroes UI
@@ -131,7 +130,7 @@ export class InitiativeProcessor {
 
 		data.enemy_groups.forEach((group) => {
 			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
-			this.buildEnemyGroupRow(groupContEl, group, data, ctx, lang);
+			this.buildEnemyGroupRow(groupContEl, group, data, ctx);
 		});
 	}
 
@@ -153,7 +152,7 @@ export class InitiativeProcessor {
 			if (this.isHero(character)) {
 				character.has_taken_turn = !(character.has_taken_turn ?? false);
 				this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn);
-				this.updateCodeBlock(data, ctx);
+				CodeBlocks.updateCodeBlock(this.app, data, ctx);
 			}
 		});
 
@@ -163,7 +162,7 @@ export class InitiativeProcessor {
 		const imageEl = rowEl.createEl('div', {cls: 'character-image'});
 		const imgSrcRaw = character.image ?? null;
 
-		this.resolveImageSource(imgSrcRaw).then((imgSrc) => {
+		Images.resolveImageSource(this.app, imgSrcRaw).then((imgSrc) => {
 			imageEl.createEl('img', {attr: {src: imgSrc, alt: character.name}});
 		}).catch(() => {
 			// Use default image
@@ -192,7 +191,7 @@ export class InitiativeProcessor {
 		hpEl.addEventListener('click', () => {
 			const modal = new HpEditModal(this.app, character, null, data, ctx, () => {
 				this.updateHpDisplay(hpEl, character);
-				this.updateCodeBlock(data, ctx);
+				CodeBlocks.updateCodeBlock(this.app, data, ctx);
 			});
 			modal.open();
 		});
@@ -202,8 +201,7 @@ export class InitiativeProcessor {
 		container: HTMLElement,
 		group: EnemyGroup,
 		data: EncounterData,
-		ctx: MarkdownPostProcessorContext,
-		lang: string
+		ctx: MarkdownPostProcessorContext
 	): void {
 		// left icons
 		const icon  = container.createEl('div', {cls: 'enemy-group-icon'});
@@ -215,7 +213,7 @@ export class InitiativeProcessor {
 		turnIndicatorEl.addEventListener('click', () => {
 			group.has_taken_turn = !(group.has_taken_turn ?? false);
 			this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn);
-			this.updateCodeBlock(data, ctx);
+			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 		});
 
 		const groupEl = container.createEl('div', { cls: 'enemy-group' });
@@ -237,14 +235,7 @@ export class InitiativeProcessor {
 		}
 
 		if (selectedInstance) {
-			this.buildDetailedCreatureRow(
-				detailRowContainer,
-				selectedInstance.creature,
-				selectedInstance.instance,
-				data,
-				ctx,
-				lang
-			);
+			this.buildDetailedCreatureRow(detailRowContainer, selectedInstance.creature, selectedInstance.instance, data, ctx);
 		}
 
 		// If the enemy group contains a single creature, no need for a grid
@@ -268,7 +259,7 @@ export class InitiativeProcessor {
 				// Display creature image in the cell
 				const imgEl = cellEl.createEl('div', { cls: 'instance-image' });
 				const imgSrcRaw = creature.image ?? null;
-				this.resolveImageSource(imgSrcRaw)
+				Images.resolveImageSource(this.app, imgSrcRaw)
 					.then((imgSrc) => {
 						imgEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
 					})
@@ -292,17 +283,10 @@ export class InitiativeProcessor {
 
 					// Update the detailed creature row
 					detailRowContainer.empty();
-					this.buildDetailedCreatureRow(
-						detailRowContainer,
-						creature,
-						instance,
-						data,
-						ctx,
-						lang
-					);
+					this.buildDetailedCreatureRow(detailRowContainer, creature, instance, data, ctx);
 				});
 				cellEl.addEventListener('dblclick', () => {
-					this.editStaminaModal(instance, creature, data, ctx, hpEl, lang, container).open();
+					this.editStaminaModal(instance, creature, data, ctx, hpEl, container).open();
 				});
 			});
 		});
@@ -313,15 +297,14 @@ export class InitiativeProcessor {
 		creature: Creature,
 		instance: CreatureInstance,
 		data: EncounterData,
-		ctx: MarkdownPostProcessorContext,
-		lang: string
+		ctx: MarkdownPostProcessorContext
 	): void {
 		container.addClass('character-row');
 
 		// Left: Creature Image
 		const imageEl = container.createEl('div', { cls: 'character-image' });
 		const imgSrcRaw = creature.image ?? null;
-		this.resolveImageSource(imgSrcRaw)
+		Images.resolveImageSource(this.app, imgSrcRaw)
 			.then((imgSrc) => {
 				imageEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
 			})
@@ -347,14 +330,14 @@ export class InitiativeProcessor {
 
 		// HP Click Handler
 		hpEl.addEventListener('click', () => {
-			this.editStaminaModal(instance, creature, data, ctx, hpEl, lang, container).open();
+			this.editStaminaModal(instance, creature, data, ctx, hpEl, container).open();
 		});
 	}
 
-	private editStaminaModal(instance: CreatureInstance, creature: Creature, data: EncounterData, ctx: MarkdownPostProcessorContext, hpEl: any, lang: string, container: HTMLElement) {
+	private editStaminaModal(instance: CreatureInstance, creature: Creature, data: EncounterData, ctx: MarkdownPostProcessorContext, hpEl: any, container: HTMLElement) {
 		const modal = new HpEditModal(this.app, instance, creature, data, ctx, () => {
 			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
-			this.updateCodeBlock(data, ctx, lang);
+			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 
 			// Update the HP in the grid cell as well
 			const gridCell = container.parentElement?.querySelector(
@@ -367,33 +350,6 @@ export class InitiativeProcessor {
 		return modal;
 	}
 
-// TODO - move this to utils
-	private async resolveImageSource(imgSrcRaw: string): Promise<string> {
-		// Check if it's an Obsidian link
-		const obsidianLinkMatch = imgSrcRaw.match(/!\[\[(.+?)\]\]/);
-		if (obsidianLinkMatch) {
-			const fileName = obsidianLinkMatch[1];
-			const file = this.app.metadataCache.getFirstLinkpathDest(fileName, '');
-			if (file instanceof TFile) {
-				return this.app.vault.getResourcePath(file);
-			} else {
-				throw new Error('Image file not found in vault.');
-			}
-		}
-
-		// Check if it's a URL
-		if (imgSrcRaw.match(/^https?:\/\//)) {
-			return imgSrcRaw;
-		}
-
-		// Assume it's a vault path
-		const file = this.app.vault.getAbstractFileByPath(imgSrcRaw);
-		if (file instanceof TFile) {
-			return this.app.vault.getResourcePath(file);
-		} else {
-			throw new Error('Image file not found in vault.');
-		}
-	}
 
 	private updateTurnIndicator(el: HTMLElement, hasTakenTurn: boolean): void {
 		el.empty();
@@ -420,7 +376,6 @@ export class InitiativeProcessor {
 
 		hpEl.textContent = displayText;
 
-		// Optional: Color code the HP display
 		if (this.isHero(character) && currentHp < 0) {
 			hpEl.style.color = 'red';
 		} else if (tempHp > 0) {
@@ -441,20 +396,15 @@ export class InitiativeProcessor {
 		conditions.forEach(conditionKey => {
 			const condition = this.conditionManager.getConditionByKey(conditionKey);
 			if (condition) {
-				// Create icon element
 				const iconEl = container.createEl('div', { cls: 'condition-icon' });
 				setIcon(iconEl, condition.iconName);
 				iconEl.title = condition.displayName;
 
-				// Add click handler to remove condition
 				iconEl.addEventListener('click', () => {
-					// Remove condition
 					character.conditions = conditions.filter(key => key !== conditionKey);
-					// Rebuild the condition icons
 					container.empty();
 					this.buildConditionIcons(container, character, data, ctx);
-					// Update codeblock
-					this.updateCodeBlock(data, ctx);
+					CodeBlocks.updateCodeBlock(this.app, data, ctx);
 				});
 			}
 		});
@@ -463,10 +413,7 @@ export class InitiativeProcessor {
 		const addConditionEl = container.createEl('div', { cls: 'add-condition-icon' });
 		setIcon(addConditionEl, 'plus-circle');
 		addConditionEl.title = 'Add Condition';
-
-		// Click handler to add a condition
 		addConditionEl.addEventListener('click', () => {
-			// Open modal to select condition
 			this.openAddConditionModal(character, data, ctx, container);
 		});
 	}
@@ -484,8 +431,7 @@ export class InitiativeProcessor {
 			data,
 			ctx,
 			() => {
-				// Callback after condition is added
-				// Rebuild the condition icons
+				// Callback after condition is added, rebuild the condition icons
 				container.empty();
 				this.buildConditionIcons(container, character, data, ctx);
 			}
@@ -495,33 +441,5 @@ export class InitiativeProcessor {
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
 		return character.isHero;
-	}
-
-	// TODO - move this to utils
-	private async updateCodeBlock(data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
-		if (!(file instanceof TFile)) return;
-
-		const content = await this.app.vault.read(file);
-		const lines = content.split('\n');
-
-		const section = ctx.getSectionInfo(ctx.el);
-		if (!section) return;
-
-		const {lineStart, lineEnd} = section;
-
-		// Reconstruct the code block with the updated data
-		const newCodeBlockContent = [];
-		newCodeBlockContent.push('```' + "ds-initiative");
-		newCodeBlockContent.push(stringifyYaml(data).trim());
-		newCodeBlockContent.push('```');
-
-		// Replace the old code block with the new one
-		lines.splice(lineStart, lineEnd - lineStart + 1, ...newCodeBlockContent);
-
-		const newContent = lines.join('\n');
-
-		// Write the updated content back to the file
-		await this.app.vault.modify(file, newContent);
 	}
 }
