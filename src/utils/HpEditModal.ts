@@ -116,7 +116,7 @@ export class HpEditModal extends Modal {
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
-		return 'temp_hp' in character;
+		return character.isHero;
 	}
 
 	private clampHp(hp: number, negativeHpLimit: number): number {

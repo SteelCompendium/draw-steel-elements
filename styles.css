@@ -438,6 +438,14 @@ code.dsa {
 
 /* Enemies */
 
+.enemy-group {
+	border: 1px solid var(--color-base-40);
+	border-radius: 5px;
+	padding: 1em;
+	background-color: var(--code-background);
+	margin-bottom: 1em;
+}
+
 /* Creature Group */
 .creature-group {
 	margin-bottom: 20px;
@@ -465,14 +473,18 @@ code.dsa {
 }
 
 .creature-instance-cell.selected {
-	border-color: #007BFF;
-	box-shadow: 0 0 5px #007BFF;
+	/*border-color: #007BFF;*/
+	/*box-shadow: 0 0 5px #007BFF;*/
+	border-color: #D50000;
+	box-shadow: 0 0 5px #D50000;
 }
 
 .instance-image img {
 	width: 50px;
 	height: 50px;
 	object-fit: cover;
+	/* Prevent any image on-click events from firing since we override with our behavior */
+	pointer-events: none;
 }
 
 .instance-hp {
