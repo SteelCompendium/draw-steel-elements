@@ -599,6 +599,24 @@ code.dsa {
 .character-conditions {
 	margin-top: 5px;
 	height: 24px;
+	display: flex;
+	align-items: center;
+}
+
+.condition-icon, .add-condition-icon {
+	width: 24px;
+	height: 24px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.character-conditions svg {
+	display: block;
+}
+
+.add-condition-icon {
+	color: var(--color-base-70);
 }
 
 .character-health {
@@ -756,3 +774,18 @@ code.dsa {
 	pointer-events: none;
 }
 
+/* ---------------- */
+/* Condition Modal  */
+/* ---------------- */
+
+.condition-select-item {
+	display: inline-grid;
+	justify-items: center;
+	margin: 0.25em;
+	border: 1px solid var(--color-base-30);
+	border-radius: 2px;
+	background-color: var(--code-background);
+	padding: 1em;
+	width: 7em;
+	height: 5em;
+}
