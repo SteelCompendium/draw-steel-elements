@@ -49,10 +49,11 @@ export class HpEditModal extends Modal {
 		// First Row: HP Bar
 		const hpBarContainer = contentEl.createEl('div', { cls: 'hp-bar-container' });
 		const hpBar = hpBarContainer.createEl('div', { cls: 'hp-bar' });
-		const hpBarFill = hpBar.createEl('div', { cls: 'hp-bar-fill' });
+		const hpBarFillLeft = hpBar.createEl('div', { cls: 'hp-bar-fill-left' });
+		const hpBarFillRight = hpBar.createEl('div', { cls: 'hp-bar-fill-right' });
 
 		// Update the HP bar display
-		this.updateHpBar(hpBarFill, currentHp, maxHp);
+		this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp, maxHp);
 
 		// Second Row: Numeric HP Display with Increment/Decrement Buttons
 		const hpNumericContainer = contentEl.createEl('div', { cls: 'hp-numeric-container' });
@@ -63,7 +64,7 @@ export class HpEditModal extends Modal {
 		decrementButton.addEventListener('click', () => {
 			this.pendingHpChange -= 1;
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -77,7 +78,7 @@ export class HpEditModal extends Modal {
 			const newHpValue = parseInt(hpValueDisplay.value);
 			if (!isNaN(newHpValue)) {
 				this.pendingHpChange = newHpValue - currentHp;
-				this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -91,7 +92,7 @@ export class HpEditModal extends Modal {
 		incrementButton.addEventListener('click', () => {
 			this.pendingHpChange += 1;
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -111,7 +112,7 @@ export class HpEditModal extends Modal {
 			if (!isNaN(adjustment)) {
 				this.pendingHpChange -= adjustment;
 				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-				this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -122,7 +123,7 @@ export class HpEditModal extends Modal {
 			if (!isNaN(adjustment)) {
 				this.pendingHpChange += adjustment;
 				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-				this.updateHpBar(hpBarFill, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -151,20 +152,26 @@ export class HpEditModal extends Modal {
 		return hp;
 	}
 
-	private updateHpBar(hpBarFill: HTMLElement, hpValue: number, maxHp: number) {
-		const percentage = (hpValue / maxHp) * 100;
-
-		hpBarFill.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
-
+	private updateHpBar(hpBarFillLeft: HTMLElement, hpBarFillRight: HTMLElement, hpValue: number, maxHp: number) {
 		if (this.pendingHpChange > 0) {
 			// Healing
-			hpBarFill.style.backgroundColor = 'green';
+			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;
+			hpBarFillLeft.style.backgroundColor = 'lightgreen';
+			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * 100}%`;
+			hpBarFillRight.style.backgroundColor = 'green';
 		} else if (this.pendingHpChange < 0) {
 			// Damage
-			hpBarFill.style.backgroundColor = 'red';
+			// TODO - negative stamina
+			hpBarFillLeft.style.width = `${( (this.character.current_hp + this.pendingHpChange) / maxHp) * 100}%`;
+			hpBarFillLeft.style.backgroundColor = 'lightgreen';
+			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * -100}%`;
+			hpBarFillRight.style.backgroundColor = 'red';
 		} else {
 			// No change
-			hpBarFill.style.backgroundColor = ''; // Default color
+			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;
+			hpBarFillLeft.style.backgroundColor = 'lightgreen';
+			hpBarFillRight.style.width = `0%`;
+			hpBarFillRight.style.backgroundColor = 'green';
 		}
 	}
 
