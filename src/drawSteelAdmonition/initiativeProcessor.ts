@@ -111,7 +111,7 @@ export class InitiativeProcessor {
 
 		// Heroes UI
 		const heroesContainer = container.createEl('div', {cls: 'heroes-container'});
-		heroesContainer.createEl('h2', {text: 'Heroes'});
+		heroesContainer.createEl('h3', {text: 'Heroes'});
 
 		data.heroes.forEach((hero) => {
 			const heroContEl = heroesContainer.createEl('div', { cls: 'hero-container' });
@@ -120,7 +120,7 @@ export class InitiativeProcessor {
 
 		// Enemies UI
 		const enemiesContainer = container.createEl('div', { cls: 'enemies-container' });
-		enemiesContainer.createEl('h2', { text: 'Enemy Groups' });
+		enemiesContainer.createEl('h3', { text: 'Enemy Groups' });
 
 		data.enemy_groups.forEach((group) => {
 			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
@@ -214,7 +214,7 @@ export class InitiativeProcessor {
 
 		// Group Header with Name and Turn Indicator
 		const groupHeader = groupEl.createEl('div', { cls: 'group-header' });
-		groupHeader.createEl('h3', { text: group.name });
+		groupHeader.createEl('h4', { text: group.name });
 
 		// Detailed Creature Row Container
 		const detailRowContainer = groupEl.createEl('div', { cls: 'creature-detail-row' });
