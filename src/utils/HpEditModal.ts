@@ -35,7 +35,7 @@ export class HpEditModal extends Modal {
 		const name = this.isHero(this.character)
 			? this.character.name
 			: this.creature.name + " #" + this.character.id;
-		contentEl.createEl('h2', { text: `Edit HP for ${name}` });
+		contentEl.createEl('h2', { text: `Edit Stamina for ${name}` });
 
 		// Adjust maxHp and negativeHpLimit based on character type
 		const maxHp = this.isHero(this.character)
@@ -140,6 +140,9 @@ export class HpEditModal extends Modal {
 			this.updateCallback();
 			this.close();
 		});
+
+		actionButtonContainer.createEl('button', { cls: 'kill-button', text: 'Kill'});
+		actionButtonContainer.createEl('button', { cls: 'action-button', text: 'Spend Recovery' });
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
@@ -156,22 +159,22 @@ export class HpEditModal extends Modal {
 		if (this.pendingHpChange > 0) {
 			// Healing
 			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;
-			hpBarFillLeft.style.backgroundColor = 'lightgreen';
+			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * 100}%`;
-			hpBarFillRight.style.backgroundColor = 'green';
+			hpBarFillRight.style.backgroundColor = 'deepskyblue';
 		} else if (this.pendingHpChange < 0) {
 			// Damage
 			// TODO - negative stamina
 			hpBarFillLeft.style.width = `${( (this.character.current_hp + this.pendingHpChange) / maxHp) * 100}%`;
-			hpBarFillLeft.style.backgroundColor = 'lightgreen';
+			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * -100}%`;
 			hpBarFillRight.style.backgroundColor = 'red';
 		} else {
 			// No change
 			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;
-			hpBarFillLeft.style.backgroundColor = 'lightgreen';
+			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `0%`;
-			hpBarFillRight.style.backgroundColor = 'green';
+			hpBarFillRight.style.backgroundColor = 'deepskyblue';
 		}
 	}
 
@@ -184,11 +187,11 @@ export class HpEditModal extends Modal {
 		const change = this.pendingHpChange;
 
 		if (change < 0) {
-			actionButton.textContent = `Lose ${Math.abs(change)} HP`;
+			actionButton.textContent = `Lose ${Math.abs(change)} Stamina`;
 		} else if (change > 0) {
-			actionButton.textContent = `Gain ${change} HP`;
+			actionButton.textContent = `Gain ${change} Stamina`;
 		} else {
-			actionButton.textContent = `No HP Change`;
+			actionButton.textContent = `No Stamina Change`;
 		}
 
 		// Disable the button if no change

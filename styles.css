@@ -613,8 +613,8 @@ code.dsa {
 /* HP Bar */
 .hp-bar-container {
 	width: 100%;
-	background-color: #ccc;
-	border: 1px solid #999;
+	background-color: var(--code-background);
+	border: 1px solid var(--text-normal);
 	border-radius: 5px;
 	margin-bottom: 10px;
 	position: relative;
@@ -629,17 +629,23 @@ code.dsa {
 }
 
 .hp-bar-fill-left {
-	height: 100%;
-	background-color: #4caf50; /* Default color */
+	position: relative;
+	height: calc(100% - 2px);
+	top: 1px;
+	left: 1px;
+	background-color: limegreen; /* Default color */
 	width: 50%; /* Will be updated dynamically */
-	border-radius: 5px 0 0 5px;
+	border-radius: 3px 0 0 3px;
 }
 
 .hp-bar-fill-right {
-	height: 100%;
-	background-color: #4caf50; /* Default color */
+	height: calc(100% - 2px);
+	top: 1px;
+	position: relative;
+	background-color: deepskyblue; /* Default color */
 	width: 50%; /* Will be updated dynamically */
-	border-radius: 0 5px 5px 0;
+	border-radius: 0 3px 3px 0;
+	border-left: 1px solid var(--code-background);
 }
 
 /* Numeric HP Display */
@@ -675,6 +681,7 @@ code.dsa {
 	display: flex;
 	align-items: center;
 	margin-bottom: 10px;
+	justify-content: center;
 }
 
 .apply-input {
