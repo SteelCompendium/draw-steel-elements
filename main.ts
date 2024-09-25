@@ -1,6 +1,7 @@
 import {Plugin} from 'obsidian';
 import {PowerRollProcessor} from "./src/drawSteelAdmonition/powerRollProcessor";
 import {HorizontalRuleProcessor} from "./src/drawSteelAdmonition/horizontalRuleProcessor";
+import {InitiativeProcessor} from "./src/drawSteelAdmonition/initiativeProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
 	async onload() {
@@ -15,6 +16,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		const hrHandler = (source, el, ctx) => hrProcessor.postProcess(source, el, ctx);
 		this.registerMarkdownCodeBlockProcessor("ds-hr", hrHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrHandler);
+
+		const initProcessor = new InitiativeProcessor(this.app);
+		const initHandler = (source, el, ctx) => initProcessor.postProcess(source, el, ctx);
+		this.registerMarkdownCodeBlockProcessor("ds-init", initHandler);
+		this.registerMarkdownCodeBlockProcessor("ds-initiative", initHandler);
 	}
 
 	onunload() {
