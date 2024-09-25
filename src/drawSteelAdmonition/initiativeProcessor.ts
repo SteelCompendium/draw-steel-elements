@@ -1,5 +1,7 @@
 import {App, MarkdownPostProcessorContext, parseYaml, setIcon, stringifyYaml, TFile} from "obsidian";
 import {HpEditModal} from "../utils/HpEditModal";
+import {ConditionManager} from "../utils/Conditions";
+import {ConditionSelectModal} from "../utils/ConditionSelectModal";
 
 interface Hero {
 	name: string;
@@ -8,7 +10,8 @@ interface Hero {
 	temp_hp?: number;
 	image?: string;
 	isHero: boolean;
-	has_taken_turn?: boolean; // New property
+	has_taken_turn?: boolean;
+	conditions?: string[];
 }
 
 interface CreatureInstance {
@@ -42,9 +45,11 @@ const lang = "ds-initiative"
 
 export class InitiativeProcessor {
 	private app: App;
+	private conditionManager: ConditionManager;
 
 	constructor(app: App) {
 		this.app = app;
+		this.conditionManager = new ConditionManager();
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
@@ -56,16 +61,18 @@ export class InitiativeProcessor {
 	private parseYaml(source: string): EncounterData {
 		const data = parseYaml(source) as EncounterData;
 
-		// set all heroes
-		data.heroes.forEach((h) => h.isHero = true);
+		// Initialize heroes
 		data.heroes.forEach(hero => {
 			hero.isHero = true;
 			if (hero.has_taken_turn === undefined) {
 				hero.has_taken_turn = false;
 			}
+			if (hero.conditions === undefined) {
+				hero.conditions = [];
+			}
 		});
 
-		// Initialize instances for creatures
+		// Initialize enemy groups and creatures
 		data.enemy_groups.forEach((group) => {
 			if (group.has_taken_turn === undefined) {
 				group.has_taken_turn = false;
@@ -170,8 +177,9 @@ export class InitiativeProcessor {
 		let displayName = character.name;
 		infoEl.createEl('div', {cls: 'character-name', text: displayName});
 
-		// Bottom: Condition Icons (Placeholder)
-		infoEl.createEl('div', {cls: 'character-conditions'});
+		// Bottom: Conditions
+		const conditionsEl = infoEl.createEl('div', { cls: 'character-conditions' });
+		this.buildConditionIcons(conditionsEl, character, data, ctx);
 
 		// Right: Health Info and Turn Indicator Container
 		const rightContainer = rowEl.createEl('div', { cls: 'character-right' });
@@ -328,9 +336,9 @@ export class InitiativeProcessor {
 		// Top: Creature Name (include instance ID)
 		infoEl.createEl('div', { cls: 'character-name', text: `${creature.name} #${instance.id}` });
 
-		// Bottom: Condition Icons (Placeholder)
-		infoEl.createEl('div', { cls: 'character-conditions' });
-		// TODO: Implement condition icons
+		// Bottom: Conditions
+		const conditionsEl = infoEl.createEl('div', { cls: 'character-conditions' });
+		this.buildConditionIcons(conditionsEl, instance, data, ctx);
 
 		// Right: Health Info
 		const healthEl = container.createEl('div', { cls: 'character-health' });
@@ -420,6 +428,69 @@ export class InitiativeProcessor {
 		} else {
 			hpEl.style.color = '';
 		}
+	}
+
+	private buildConditionIcons(
+		container: HTMLElement,
+		character: Hero | CreatureInstance,
+		data: EncounterData,
+		ctx: MarkdownPostProcessorContext
+	): void {
+		const conditions = character.conditions || [];
+
+		conditions.forEach(conditionKey => {
+			const condition = this.conditionManager.getConditionByKey(conditionKey);
+			if (condition) {
+				// Create icon element
+				const iconEl = container.createEl('div', { cls: 'condition-icon' });
+				setIcon(iconEl, condition.iconName);
+				iconEl.title = condition.displayName;
+
+				// Add click handler to remove condition
+				iconEl.addEventListener('click', () => {
+					// Remove condition
+					character.conditions = conditions.filter(key => key !== conditionKey);
+					// Rebuild the condition icons
+					container.empty();
+					this.buildConditionIcons(container, character, data, ctx);
+					// Update codeblock
+					this.updateCodeBlock(data, ctx);
+				});
+			}
+		});
+
+		// Add Condition Button
+		const addConditionEl = container.createEl('div', { cls: 'add-condition-icon' });
+		setIcon(addConditionEl, 'plus-circle');
+		addConditionEl.title = 'Add Condition';
+
+		// Click handler to add a condition
+		addConditionEl.addEventListener('click', () => {
+			// Open modal to select condition
+			this.openAddConditionModal(character, data, ctx, container);
+		});
+	}
+
+	private openAddConditionModal(
+		character: Hero | CreatureInstance,
+		data: EncounterData,
+		ctx: MarkdownPostProcessorContext,
+		container: HTMLElement
+	): void {
+		const modal = new ConditionSelectModal(
+			this.app,
+			this.conditionManager,
+			character,
+			data,
+			ctx,
+			() => {
+				// Callback after condition is added
+				// Rebuild the condition icons
+				container.empty();
+				this.buildConditionIcons(container, character, data, ctx);
+			}
+		);
+		modal.open();
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
