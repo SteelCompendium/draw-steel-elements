@@ -645,6 +645,9 @@ code.dsa {
 	line-height: 100%;
 	font-size: .7em;
 	padding-top: 1px;
+	text-shadow: 0.5px 0.5px 4px var(--text-normal);
+	font-weight: bold;
+	box-shadow: 1px 0px 0px 0px var(--text-normal);
 }
 
 .hp-bar-fill-left {
