@@ -39,7 +39,6 @@ export class HpEditModal extends Modal {
 			? -0.5 * maxHp
 			: 0; // Enemies cannot have negative HP
 
-
 		// Current HP Input
 		const currentHpContainer = contentEl.createEl('div', {cls: 'hp-input-container'});
 		currentHpContainer.createEl('label', {text: 'Current HP:'});
