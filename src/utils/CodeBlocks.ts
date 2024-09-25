@@ -1,5 +1,6 @@
 import { App, MarkdownPostProcessorContext, TFile, stringifyYaml } from "obsidian";
-import {EncounterData} from "../drawSteelAdmonition/initiativeProcessor";
+
+import {EncounterData} from "../drawSteelAdmonition/model";
 
 export class CodeBlocks {
 	static async updateCodeBlock(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
@@ -16,6 +17,7 @@ export class CodeBlocks {
 
 		// Reconstruct the code block with the updated data
 		const newCodeBlockContent = [];
+		// TODO - the language should be extracted from the original
 		newCodeBlockContent.push('```' + "ds-initiative");
 		newCodeBlockContent.push(stringifyYaml(data).trim());
 		newCodeBlockContent.push('```');

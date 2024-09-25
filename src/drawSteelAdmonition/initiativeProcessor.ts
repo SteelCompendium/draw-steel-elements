@@ -1,46 +1,10 @@
-import {App, MarkdownPostProcessorContext, parseYaml, setIcon, stringifyYaml, TFile} from "obsidian";
+import {App, MarkdownPostProcessorContext, parseYaml, setIcon} from "obsidian";
 import {HpEditModal} from "../utils/HpEditModal";
 import {ConditionManager} from "../utils/Conditions";
 import {ConditionSelectModal} from "../utils/ConditionSelectModal";
 import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
 import {CodeBlocks} from "../utils/CodeBlocks";
-
-interface Hero {
-	name: string;
-	max_hp: number;
-	current_hp?: number;
-	temp_hp?: number;
-	image?: string;
-	isHero: boolean;
-	has_taken_turn?: boolean;
-	conditions?: string[];
-}
-
-interface CreatureInstance {
-	id: number;
-	current_hp: number;
-	conditions?: string[];
-}
-
-interface Creature {
-	name: string;
-	max_hp: number;
-	amount: number;
-	instances?: CreatureInstance[];
-	image?: string;
-	isHero: boolean;
-}
-
-interface EnemyGroup {
-	name: string;
-	creatures: Creature[];
-	has_taken_turn?: boolean;
-}
-
-export interface EncounterData {
-	heroes: Hero[];
-	enemy_groups: EnemyGroup[];
-}
+import {Creature, CreatureInstance, EncounterData, EnemyGroup, Hero} from "./model";
 
 export class InitiativeProcessor {
 	private app: App;
@@ -90,6 +54,10 @@ export class InitiativeProcessor {
 			});
 		});
 
+		if (data.villain_power === undefined) {
+			data.villain_power = {value: 0};
+		}
+
 		return data;
 	}
 
@@ -126,7 +94,29 @@ export class InitiativeProcessor {
 
 		// Enemies UI
 		const enemiesContainer = container.createEl('div', { cls: 'enemies-container' });
-		enemiesContainer.createEl('h3', { text: 'Enemy Groups' });
+		const enemyHeader = enemiesContainer.createEl('div', { cls: 'enemies-header' });
+		enemyHeader.createEl('h3', { text: 'Enemy Groups' });
+
+		// Villain Power
+		const vpContainer = enemyHeader.createEl('div', { cls: 'vp-container' });
+		const vpModifiers = vpContainer.createEl('div', { cls: 'vp-modifiers' });
+		let vpUp = vpModifiers.createEl('div', { cls: 'vp-modifier' });
+		let vpDown = vpModifiers.createEl('div', { cls: 'vp-modifier' });
+		vpContainer.createEl('div', {cls: 'vp-text', text: "VP: " + data.villain_power.value});
+
+		setIcon(vpUp, 'chevron-up');
+		setIcon(vpDown, 'chevron-down');
+
+		vpUp.addEventListener('click', () => {
+			data.villain_power.value += 1;
+			vpContainer.setText("VP: " + data.villain_power.value);
+			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+		});
+		vpDown.addEventListener('click', () => {
+			data.villain_power.value -= 1;
+			vpContainer.setText("VP: " + data.villain_power.value);
+			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+		});
 
 		data.enemy_groups.forEach((group) => {
 			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
@@ -335,7 +325,7 @@ export class InitiativeProcessor {
 	}
 
 	private editStaminaModal(instance: CreatureInstance, creature: Creature, data: EncounterData, ctx: MarkdownPostProcessorContext, hpEl: any, container: HTMLElement) {
-		const modal = new HpEditModal(this.app, instance, creature, data, ctx, () => {
+		return new HpEditModal(this.app, instance, creature, data, ctx, () => {
 			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 
@@ -347,9 +337,7 @@ export class InitiativeProcessor {
 				gridCell.textContent = `${instance.current_hp}/${creature.max_hp}`;
 			}
 		});
-		return modal;
 	}
-
 
 	private updateTurnIndicator(el: HTMLElement, hasTakenTurn: boolean): void {
 		el.empty();
@@ -363,7 +351,6 @@ export class InitiativeProcessor {
 	}
 
 	private updateHpDisplay(hpEl: HTMLElement, character: Hero | CreatureInstance, creature?: Creature): void {
-		console.log(character)
 		const currentHp = character.current_hp ?? (this.isHero(character) ? character.max_hp : creature?.max_hp ?? 0);
 		const tempHp = this.isHero(character) ? character.temp_hp ?? 0 : 0;
 		const maxHp = this.isHero(character) ? character.max_hp : creature?.max_hp ?? 0;

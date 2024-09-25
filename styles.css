@@ -492,9 +492,46 @@ code.dsa {
 	width: 1px; /* Border thickness */
 }
 
+.enemies-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.vp-container {
+	font-weight: bold;
+	color: red;
+	display: flex;
+	align-items: center;
+}
+
+.vp-container .vp-modifiers {
+	visibility: hidden;
+	margin-right: 0.5em;
+}
+
+.vp-container:hover .vp-modifiers {
+	visibility: visible;
+}
+
+.vp-modifiers svg {
+	height: 100%;
+	width: 100%;
+}
+
+.vp-modifier {
+	cursor: pointer;
+	height: 24px;
+}
+
+.vp-modifier:hover {
+	background-color: var(--code-background);
+}
+
 .enemy-group-container {
 	display: flex;
 }
+
 .enemy-group {
 	padding: 1em;
 	width: 100%;
