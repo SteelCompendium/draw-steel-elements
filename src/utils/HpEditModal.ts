@@ -48,14 +48,16 @@ export class HpEditModal extends Modal {
 
 		// First Row: HP Bar
 		const hpBarContainer = contentEl.createEl('div', { cls: 'hp-bar-container' });
-		const hpBarOverlay = hpBarContainer.createEl('div', { cls: 'hp-bar-overlay', text: "Dying" });
+		if (this.isHero(this.character)) {
+			const hpBarOverlay = hpBarContainer.createEl('div', { cls: 'hp-bar-overlay', text: "Dying" });
+		}
 		const hpBar = hpBarContainer.createEl('div', { cls: 'hp-bar' });
 		const hpBarFillLeft = hpBar.createEl('div', { cls: 'hp-bar-fill-left' });
 		const hpBarFillRight = hpBar.createEl('div', { cls: 'hp-bar-fill-right' });
 
 
 		// Update the HP bar display
-		this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp, maxHp);
+		this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 
 		// Second Row: Numeric HP Display with Increment/Decrement Buttons
 		const hpNumericContainer = contentEl.createEl('div', { cls: 'hp-numeric-container' });
@@ -64,9 +66,9 @@ export class HpEditModal extends Modal {
 		const decrementButton = hpNumericContainer.createEl('div', { text: '-', cls: 'hp-adjust-btn' });
 		setIcon(decrementButton, "minus-circle")
 		decrementButton.addEventListener('click', () => {
-			this.pendingHpChange -= 1;
+			this.pendingHpChange -= Math.min(1, this.amountToDeath(currentHp, negativeHpLimit));
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -81,7 +83,7 @@ export class HpEditModal extends Modal {
 			const newHpValue = parseInt(hpValueDisplay.value);
 			if (!isNaN(newHpValue)) {
 				this.pendingHpChange = newHpValue - currentHp;
-				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -93,9 +95,9 @@ export class HpEditModal extends Modal {
 		const incrementButton = hpNumericContainer.createEl('div', { text: '+', cls: 'hp-adjust-btn' });
 		setIcon(incrementButton, "plus-circle")
 		incrementButton.addEventListener('click', () => {
-			this.pendingHpChange += 1;
+			this.pendingHpChange += Math.min(1, this.amountToMaxHp(currentHp, maxHp));
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -120,9 +122,9 @@ export class HpEditModal extends Modal {
 		damageButton.addEventListener('click', () => {
 			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
-				this.pendingHpChange -= adjustment;
+				this.pendingHpChange -= Math.min(adjustment, this.amountToDeath(currentHp, negativeHpLimit));
 				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -133,9 +135,9 @@ export class HpEditModal extends Modal {
 		healingButton.addEventListener('click', () => {
 			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
-				this.pendingHpChange += adjustment;
+				this.pendingHpChange += Math.min(adjustment, this.amountToMaxHp(currentHp, maxHp));
 				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -155,7 +157,7 @@ export class HpEditModal extends Modal {
 		killButton.addEventListener('click', () => {
 			this.pendingHpChange = (currentHp * -1 ) - (this.isHero(this.character) ? (maxHp *.5) : 0);
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFillLeft, hpBarFillRight, 0, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -165,7 +167,7 @@ export class HpEditModal extends Modal {
 		fullHealButton.addEventListener('click', () => {
 			this.pendingHpChange = maxHp - currentHp;
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFillLeft, hpBarFillRight, maxHp, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -177,7 +179,7 @@ export class HpEditModal extends Modal {
 			if (!isNaN(adjustment)) {
 				this.pendingHpChange += adjustment;
 				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-				this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp + this.pendingHpChange, maxHp);
+				this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 				this.updateActionButton(actionButton);
 			}
 		});
@@ -188,7 +190,7 @@ export class HpEditModal extends Modal {
 		resetButton.addEventListener('click', () => {
 			this.pendingHpChange = 0;
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
-			this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 			this.updateActionButton(actionButton);
 		});
 
@@ -219,9 +221,17 @@ export class HpEditModal extends Modal {
 		return hp;
 	}
 
-	private updateHpBar(hpBarFillLeft: HTMLElement, hpBarFillRight: HTMLElement, hpValue: number, maxHp: number) {
-		const barLength = maxHp * 1.5;
-		const dyingLength = maxHp * .5;
+	private amountToMaxHp(currentHp, maxHp) {
+		return maxHp - currentHp - this.pendingHpChange;
+	}
+
+	private amountToDeath(currentHp, negativeHpLimit) {
+		 return (negativeHpLimit * -1) + currentHp + this.pendingHpChange;
+	}
+
+	private updateHpBar(hpBarFillLeft: HTMLElement, hpBarFillRight: HTMLElement, negativeHpLimit: number, maxHp: number) {
+		const dyingLength = negativeHpLimit * -1;
+		const barLength = maxHp + dyingLength;
 		if (this.pendingHpChange > 0) {
 			// Healing
 			hpBarFillLeft.style.width = `${((this.character.current_hp + dyingLength) / barLength) * 100}%`;
@@ -264,5 +274,9 @@ export class HpEditModal extends Modal {
 
 		// Disable the button if no change
 		actionButton.toggleClass('disabled', change === 0);
+	}
+
+	private generate_random() {
+		return 4;
 	}
 }
