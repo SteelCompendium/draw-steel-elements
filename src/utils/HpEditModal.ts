@@ -48,9 +48,11 @@ export class HpEditModal extends Modal {
 
 		// First Row: HP Bar
 		const hpBarContainer = contentEl.createEl('div', { cls: 'hp-bar-container' });
+		const hpBarOverlay = hpBarContainer.createEl('div', { cls: 'hp-bar-overlay', text: "Dying" });
 		const hpBar = hpBarContainer.createEl('div', { cls: 'hp-bar' });
 		const hpBarFillLeft = hpBar.createEl('div', { cls: 'hp-bar-fill-left' });
 		const hpBarFillRight = hpBar.createEl('div', { cls: 'hp-bar-fill-right' });
+
 
 		// Update the HP bar display
 		this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp, maxHp);
@@ -151,7 +153,7 @@ export class HpEditModal extends Modal {
 		setIcon(killButton.createEl('div', {cls: 'btn-icon'}), "skull");
 		killButton.createEl('div', {cls: 'btn-text', text: 'Kill'})
 		killButton.addEventListener('click', () => {
-			this.pendingHpChange = currentHp * -1;
+			this.pendingHpChange = (currentHp * -1 ) - (this.isHero(this.character) ? (maxHp *.5) : 0);
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
 			this.updateHpBar(hpBarFillLeft, hpBarFillRight, 0, maxHp);
 			this.updateActionButton(actionButton);
@@ -218,24 +220,26 @@ export class HpEditModal extends Modal {
 	}
 
 	private updateHpBar(hpBarFillLeft: HTMLElement, hpBarFillRight: HTMLElement, hpValue: number, maxHp: number) {
+		const barLength = maxHp * 1.5;
+		const dyingLength = maxHp * .5;
 		if (this.pendingHpChange > 0) {
 			// Healing
-			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;
+			hpBarFillLeft.style.width = `${((this.character.current_hp + dyingLength) / barLength) * 100}%`;
 			hpBarFillLeft.style.backgroundColor = 'limegreen';
-			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * 100}%`;
+			hpBarFillRight.style.width = `${((this.pendingHpChange) / barLength) * 100}%`;
 			hpBarFillRight.style.backgroundColor = 'deepskyblue';
 			hpBarFillRight.style.borderRadius = '0 3px 3px 0';
 		} else if (this.pendingHpChange < 0) {
 			// Damage
 			// TODO - negative stamina
-			hpBarFillLeft.style.width = `${( (this.character.current_hp + this.pendingHpChange) / maxHp) * 100}%`;
+			hpBarFillLeft.style.width = `${( (this.character.current_hp + this.pendingHpChange + dyingLength) / barLength) * 100}%`;
 			hpBarFillLeft.style.backgroundColor = 'limegreen';
-			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * -100}%`;
+			hpBarFillRight.style.width = `${(this.pendingHpChange / barLength) * -100}%`;
 			hpBarFillRight.style.backgroundColor = 'crimson';
 			hpBarFillRight.style.borderRadius = '3px 0 0 3px';
 		} else {
 			// No change
-			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;
+			hpBarFillLeft.style.width = `${((this.character.current_hp + dyingLength) / barLength) * 100}%`;
 			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `0%`;
 			hpBarFillRight.style.backgroundColor = 'deepskyblue';
