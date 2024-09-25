@@ -1,4 +1,4 @@
-import {App, MarkdownPostProcessorContext, TFile, parseYaml, stringifyYaml, setIcon} from "obsidian";
+import {App, MarkdownPostProcessorContext, parseYaml, setIcon, stringifyYaml, TFile} from "obsidian";
 import {HpEditModal} from "../utils/HpEditModal";
 
 interface Hero {
@@ -293,6 +293,9 @@ export class InitiativeProcessor {
 						lang
 					);
 				});
+				cellEl.addEventListener('dblclick', () => {
+					this.editStaminaModal(instance, creature, data, ctx, hpEl, lang, container).open();
+				});
 			});
 		});
 	}
@@ -336,23 +339,27 @@ export class InitiativeProcessor {
 
 		// HP Click Handler
 		hpEl.addEventListener('click', () => {
-			const modal = new HpEditModal(this.app, instance, creature, data, ctx, () => {
-				hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
-				this.updateCodeBlock(data, ctx, lang);
-
-				// Update the HP in the grid cell as well
-				const gridCell = container.parentElement?.querySelector(
-					`.creature-instance-cell:nth-child(${instance.id}) .instance-hp`
-				);
-				if (gridCell) {
-					gridCell.textContent = `${instance.current_hp}/${creature.max_hp}`;
-				}
-			});
-			modal.open();
+			this.editStaminaModal(instance, creature, data, ctx, hpEl, lang, container).open();
 		});
 	}
 
-	// TODO - move this to utils
+	private editStaminaModal(instance: CreatureInstance, creature: Creature, data: EncounterData, ctx: MarkdownPostProcessorContext, hpEl: any, lang: string, container: HTMLElement) {
+		const modal = new HpEditModal(this.app, instance, creature, data, ctx, () => {
+			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+			this.updateCodeBlock(data, ctx, lang);
+
+			// Update the HP in the grid cell as well
+			const gridCell = container.parentElement?.querySelector(
+				`.creature-instance-cell:nth-child(${instance.id}) .instance-hp`
+			);
+			if (gridCell) {
+				gridCell.textContent = `${instance.current_hp}/${creature.max_hp}`;
+			}
+		});
+		return modal;
+	}
+
+// TODO - move this to utils
 	private async resolveImageSource(imgSrcRaw: string): Promise<string> {
 		// Check if it's an Obsidian link
 		const obsidianLinkMatch = imgSrcRaw.match(/!\[\[(.+?)\]\]/);

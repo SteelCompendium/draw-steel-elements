@@ -180,6 +180,16 @@ export class HpEditModal extends Modal {
 			}
 		});
 
+		const resetButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn' });
+		setIcon(resetButton.createEl('div', {cls: 'btn-icon'}), "undo");
+		resetButton.createEl('div', {cls: 'btn-text', text: 'Reset'})
+		resetButton.addEventListener('click', () => {
+			this.pendingHpChange = 0;
+			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
+			this.updateHpBar(hpBarFillLeft, hpBarFillRight, currentHp, maxHp);
+			this.updateActionButton(actionButton);
+		});
+
 		// Bottom: Action Button
 		const actionButtonContainer = contentEl.createEl('div', { cls: 'action-button-container' });
 		const actionButton = actionButtonContainer.createEl('button', { cls: 'action-button' });
@@ -221,7 +231,7 @@ export class HpEditModal extends Modal {
 			hpBarFillLeft.style.width = `${( (this.character.current_hp + this.pendingHpChange) / maxHp) * 100}%`;
 			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * -100}%`;
-			hpBarFillRight.style.backgroundColor = 'red';
+			hpBarFillRight.style.backgroundColor = 'crimson';
 			hpBarFillRight.style.borderRadius = '3px 0 0 3px';
 		} else {
 			// No change
