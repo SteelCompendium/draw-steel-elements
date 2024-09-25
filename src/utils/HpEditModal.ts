@@ -74,6 +74,7 @@ export class HpEditModal extends Modal {
 			cls: 'hp-value-display',
 		}) as HTMLInputElement;
 		hpValueDisplay.value = (currentHp + this.pendingHpChange).toString();
+		hpValueDisplay.autofocus = false;
 		hpValueDisplay.addEventListener('input', () => {
 			const newHpValue = parseInt(hpValueDisplay.value);
 			if (!isNaN(newHpValue)) {
@@ -100,15 +101,20 @@ export class HpEditModal extends Modal {
 		const modifierContainer = contentEl.createEl('div', { cls: 'modifier-container' });
 
 		const applyContainer = modifierContainer.createEl('div', { cls: 'apply-container' });
-		applyContainer.createEl('span', { text: 'Apply' });
 
-		const applyInput = applyContainer.createEl('input', {
+		const applyRow = applyContainer.createEl('div', { cls: 'apply-row' });
+		applyRow.createEl('span', { text: 'Apply' });
+
+		const applyInput = applyRow.createEl('input', {
 			type: 'number',
 			cls: 'apply-input',
 		}) as HTMLInputElement;
 		applyInput.value = '0';
+		applyInput.focus();
 
-		const damageButton = applyContainer.createEl('button', { text: 'Damage', cls: 'apply-btn' });
+		const damageButton = applyContainer.createEl('button', { cls: 'apply-btn' });
+		setIcon(damageButton.createEl('div', {cls: 'btn-icon'}), "sword");
+		damageButton.createEl('div', {cls: 'btn-text', text: 'Damage'})
 		damageButton.addEventListener('click', () => {
 			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
@@ -119,7 +125,9 @@ export class HpEditModal extends Modal {
 			}
 		});
 
-		const healingButton = applyContainer.createEl('button', { text: 'Healing', cls: 'apply-btn' });
+		const healingButton = applyContainer.createEl('button', { cls: 'apply-btn' });
+		setIcon(healingButton.createEl('div', {cls: 'btn-icon'}), "plus");
+		healingButton.createEl('div', {cls: 'btn-text', text: 'Healing'})
 		healingButton.addEventListener('click', () => {
 			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
@@ -130,12 +138,18 @@ export class HpEditModal extends Modal {
 			}
 		});
 
-		const tempStaminaButton = applyContainer.createEl('button', { text: 'Temp Stamina', cls: 'apply-btn' });
+		// TODO
+		const tempStaminaButton = applyContainer.createEl('button', { cls: 'apply-btn' });
+		setIcon(tempStaminaButton.createEl('div', {cls: 'btn-icon'}), "plus-circle");
+		tempStaminaButton.createEl('div', {cls: 'btn-text', text: 'Temp Stamina'})
 
 		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' '});
 
 		const quickModContainer = modifierContainer.createEl('div', { cls: 'quick-mod-container' });
-		const killButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn', text: 'Kill'});
+
+		const killButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn'});
+		setIcon(killButton.createEl('div', {cls: 'btn-icon'}), "skull");
+		killButton.createEl('div', {cls: 'btn-text', text: 'Kill'})
 		killButton.addEventListener('click', () => {
 			this.pendingHpChange = currentHp * -1;
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
@@ -143,7 +157,9 @@ export class HpEditModal extends Modal {
 			this.updateActionButton(actionButton);
 		});
 
-		const fullHealButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn', text: 'Full Heal'});
+		const fullHealButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn'});
+		setIcon(fullHealButton.createEl('div', {cls: 'btn-icon'}), "plus");
+		fullHealButton.createEl('div', {cls: 'btn-text', text: 'Full Heal'})
 		fullHealButton.addEventListener('click', () => {
 			this.pendingHpChange = maxHp - currentHp;
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp);
@@ -151,7 +167,9 @@ export class HpEditModal extends Modal {
 			this.updateActionButton(actionButton);
 		});
 
-		const recoveryButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn', text: 'Spend Recovery' });
+		const recoveryButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn' });
+		setIcon(recoveryButton.createEl('div', {cls: 'btn-icon'}), "syringe");
+		recoveryButton.createEl('div', {cls: 'btn-text', text: 'Spend Recovery'})
 		recoveryButton.addEventListener('click', () => {
 			const adjustment = Math.min(Math.floor(maxHp / 3), maxHp);
 			if (!isNaN(adjustment)) {
@@ -174,6 +192,9 @@ export class HpEditModal extends Modal {
 			this.updateCallback();
 			this.close();
 		});
+
+		// Set focus once we have loaded
+		queueMicrotask(() => {applyInput.focus()});
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
@@ -193,6 +214,7 @@ export class HpEditModal extends Modal {
 			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * 100}%`;
 			hpBarFillRight.style.backgroundColor = 'deepskyblue';
+			hpBarFillRight.style.borderRadius = '0 3px 3px 0';
 		} else if (this.pendingHpChange < 0) {
 			// Damage
 			// TODO - negative stamina
@@ -200,6 +222,7 @@ export class HpEditModal extends Modal {
 			hpBarFillLeft.style.backgroundColor = 'limegreen';
 			hpBarFillRight.style.width = `${(this.pendingHpChange / maxHp) * -100}%`;
 			hpBarFillRight.style.backgroundColor = 'red';
+			hpBarFillRight.style.borderRadius = '3px 0 0 3px';
 		} else {
 			// No change
 			hpBarFillLeft.style.width = `${(this.character.current_hp / maxHp) * 100}%`;

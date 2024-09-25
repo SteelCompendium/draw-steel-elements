@@ -697,22 +697,26 @@ code.dsa {
 	/*border-radius: 0.25em;*/
 }
 
+.apply-row {
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+}
+
 .apply-input {
 	width: 60px;
-	margin: 0 5px;
 }
 
-.apply-btn {
-	margin-left: 5px;
-	display: block;
+.apply-btn, .quick-mod-btn {
+	display: flex;
 	width: 100%;
-	margin: 5px;
+	margin-top: 8px;
+	justify-content: start;
 }
 
-.quick-mod-btn {
-	display: block;
-	width: 100%;
-	margin: 5px;
+.apply-btn .btn-text, .quick-mod-btn .btn-text {
+	height: 100%;
+	margin-left: .5em;
 }
 
 /* Action Button */
