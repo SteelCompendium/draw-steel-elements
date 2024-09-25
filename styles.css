@@ -609,6 +609,7 @@ code.dsa {
 	display: flex;
 	justify-content: center;
 	align-items: center;
+	cursor: pointer;
 }
 
 .character-conditions svg {
@@ -616,7 +617,11 @@ code.dsa {
 }
 
 .add-condition-icon {
-	color: var(--color-base-70);
+	color: var(--color-base-50);
+}
+
+.add-condition-icon:hover {
+	color: var(--color-base-100);
 }
 
 .character-health {
@@ -699,6 +704,7 @@ code.dsa {
 	height: 30px;
 	display: flex;
 	justify-content: center;
+	cursor: pointer;
 }
 
 .hp-adjust-btn svg {

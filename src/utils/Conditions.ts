@@ -8,10 +8,10 @@ export class ConditionManager {
 	private conditions: Condition[] = [
 		{key: 'bleeding', displayName: 'Bleeding', iconName: 'droplet'},
 		{key: 'dazed', displayName: 'Dazed', iconName: 'waves'},
-		{key: 'frightened', displayName: 'Frightened', iconName: 'navigation-off'},
+		{key: 'frightened', displayName: 'Frightened', iconName: 'ghost'},
 		{key: 'grabbed', displayName: 'Grabbed', iconName: 'hand'},
 		{key: 'prone', displayName: 'Prone', iconName: 'bed'},
-		{key: 'restrained', displayName: 'Restrained', iconName: 'lock'},
+		{key: 'restrained', displayName: 'Restrained', iconName: 'navigation-off'},
 		{key: 'slowed', displayName: 'Slowed', iconName: 'snail'},
 		{key: 'weakened', displayName: 'Weakened', iconName: 'trending-down'},
 
