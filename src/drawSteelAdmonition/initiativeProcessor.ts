@@ -17,45 +17,117 @@ export class InitiativeProcessor {
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
 		const container = el.createEl('div', {cls: "ds-init-container"});
-		const data = this.parseYaml(source);
-		this.buildUI(container, data, ctx);
+
+		try {
+			const data = this.parseYaml(source);
+			this.buildUI(container, data, ctx);
+		} catch (error) {
+			// Display error message to the user
+
+			let userMessage = "The Draw Steel Elements plugin loaded the Initiative Tracker properly, but " +
+				"failed to process the input config.  Please correct the following error:\n\n"
+			userMessage += error.message;
+			container.createEl('div', {text: userMessage, cls: 'error-message ds-container'});
+		}
 	}
 
 	private parseYaml(source: string): EncounterData {
-		const data = parseYaml(source) as EncounterData;
+		let data: EncounterData;
+
+		// Try parsing the YAML input
+		try {
+			data = parseYaml(source) as EncounterData;
+		} catch (error) {
+			throw new Error("Invalid YAML format: " + error.message);
+		}
+
+		// Validate that data is an object
+		if (typeof data !== 'object' || data === null) {
+			throw new Error("The input must be a YAML object.");
+		}
+
+		// Validate 'heroes' field
+		if (!data.heroes || !Array.isArray(data.heroes)) {
+			throw new Error("Invalid data: 'heroes' field is missing or is not a list.");
+		}
+
+		// Validate 'enemy_groups' field
+		if (!data.enemy_groups || !Array.isArray(data.enemy_groups)) {
+			throw new Error("Invalid data: 'enemy_groups' field is missing or is not a list.");
+		}
 
 		// Initialize heroes
-		data.heroes.forEach(hero => {
+		data.heroes.forEach((hero, index) => {
+			if (!hero.name) {
+				throw new Error(`Hero at index ${index} is missing the 'name' field.`);
+			}
+			if (typeof hero.max_hp !== 'number') {
+				throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_hp' field.`);
+			}
+
 			hero.isHero = true;
-			if (hero.has_taken_turn === undefined) {
-				hero.has_taken_turn = false;
-			}
-			if (hero.conditions === undefined) {
-				hero.conditions = [];
-			}
+			hero.has_taken_turn = hero.has_taken_turn ?? false;
+			hero.conditions = hero.conditions ?? [];
+			hero.current_hp = hero.current_hp ?? hero.max_hp;
 		});
 
 		// Initialize enemy groups and creatures
-		data.enemy_groups.forEach((group) => {
-			if (group.has_taken_turn === undefined) {
-				group.has_taken_turn = false;
+		data.enemy_groups.forEach((group, groupIndex) => {
+			if (!group.name) {
+				throw new Error(`Enemy group at index ${groupIndex} is missing the 'name' field.`);
 			}
-			group.creatures.forEach((creature) => {
+			if (!group.creatures || !Array.isArray(group.creatures)) {
+				throw new Error(`Enemy group '${group.name}' has an invalid or missing 'creatures' field.`);
+			}
+
+			group.has_taken_turn = group.has_taken_turn ?? false;
+
+			group.creatures.forEach((creature, creatureIndex) => {
+				if (!creature.name) {
+					throw new Error(
+						`Creature at index ${creatureIndex} in group '${group.name}' is missing the 'name' field.`
+					);
+				}
+				if (typeof creature.amount !== 'number') {
+					throw new Error(
+						`Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'amount' field.`
+					);
+				}
+				if (typeof creature.max_hp !== 'number') {
+					throw new Error(
+						`Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'max_hp' field.`
+					);
+				}
+
+				// Initialize instances
 				if (!creature.instances || creature.instances.length !== creature.amount) {
 					creature.instances = [];
 					for (let i = 0; i < creature.amount; i++) {
 						creature.instances.push({
 							id: i + 1,
 							current_hp: creature.max_hp,
-							conditions: []
+							conditions: [],
 						});
 					}
+				} else {
+					// Validate existing instances
+					creature.instances.forEach((instance, instanceIndex) => {
+						if (typeof instance.id !== 'number') {
+							throw new Error(
+								`Instance at index ${instanceIndex} of creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'id' field.`
+							);
+						}
+						instance.current_hp = instance.current_hp ?? creature.max_hp;
+						instance.conditions = instance.conditions ?? [];
+					});
 				}
 			});
 		});
 
-		if (data.villain_power === undefined) {
-			data.villain_power = {value: 0};
+		// Initialize villain power
+		data.villain_power = data.villain_power ?? {value: 0};
+		if (typeof data.villain_power.value !== 'number') {
+			throw new Error("Invalid data: 'villain_power.value' must be a number.");
 		}
 
 		return data;
@@ -63,7 +135,7 @@ export class InitiativeProcessor {
 
 	private buildUI(container: HTMLElement, data: EncounterData, ctx: MarkdownPostProcessorContext): void {
 		// Reset Round Button
-		const resetButton = container.createEl('button', { text: 'Reset Round', cls: 'reset-round-button' });
+		const resetButton = container.createEl('button', {text: 'Reset Round', cls: 'reset-round-button'});
 		resetButton.addEventListener('click', () => {
 			// Reset has_taken_turn for heroes
 			data.heroes.forEach(hero => {
@@ -88,20 +160,20 @@ export class InitiativeProcessor {
 		heroesContainer.createEl('h3', {text: 'Heroes'});
 
 		data.heroes.forEach((hero) => {
-			const heroContEl = heroesContainer.createEl('div', { cls: 'hero-container' });
+			const heroContEl = heroesContainer.createEl('div', {cls: 'hero-container'});
 			this.buildCharacterRow(heroContEl, hero, data, ctx);
 		});
 
 		// Enemies UI
-		const enemiesContainer = container.createEl('div', { cls: 'enemies-container' });
-		const enemyHeader = enemiesContainer.createEl('div', { cls: 'enemies-header' });
-		enemyHeader.createEl('h3', { text: 'Enemy Groups' });
+		const enemiesContainer = container.createEl('div', {cls: 'enemies-container'});
+		const enemyHeader = enemiesContainer.createEl('div', {cls: 'enemies-header'});
+		enemyHeader.createEl('h3', {text: 'Enemy Groups'});
 
 		// Villain Power
-		const vpContainer = enemyHeader.createEl('div', { cls: 'vp-container' });
-		const vpModifiers = vpContainer.createEl('div', { cls: 'vp-modifiers' });
-		let vpUp = vpModifiers.createEl('div', { cls: 'vp-modifier' });
-		let vpDown = vpModifiers.createEl('div', { cls: 'vp-modifier' });
+		const vpContainer = enemyHeader.createEl('div', {cls: 'vp-container'});
+		const vpModifiers = vpContainer.createEl('div', {cls: 'vp-modifiers'});
+		let vpUp = vpModifiers.createEl('div', {cls: 'vp-modifier'});
+		let vpDown = vpModifiers.createEl('div', {cls: 'vp-modifier'});
 		vpContainer.createEl('div', {cls: 'vp-text', text: "VP: " + data.villain_power.value});
 
 		setIcon(vpUp, 'chevron-up');
@@ -119,7 +191,7 @@ export class InitiativeProcessor {
 		});
 
 		data.enemy_groups.forEach((group) => {
-			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
+			const groupContEl = enemiesContainer.createEl('div', {cls: 'enemy-group-container'});
 			this.buildEnemyGroupRow(groupContEl, group, data, ctx);
 		});
 	}
@@ -131,10 +203,10 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext
 	): void {
 		// left icons
-		const icon  = container.createEl('div', {cls: 'character-icon'});
+		const icon = container.createEl('div', {cls: 'character-icon'});
 
 		// Turn Indicator
-		const turnIndicatorEl = icon.createEl('div', { cls: 'turn-indicator' });
+		const turnIndicatorEl = icon.createEl('div', {cls: 'turn-indicator'});
 		this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn ?? false);
 
 		// Add click handler to toggle has_taken_turn
@@ -167,15 +239,15 @@ export class InitiativeProcessor {
 		infoEl.createEl('div', {cls: 'character-name', text: displayName});
 
 		// Bottom: Conditions
-		const conditionsEl = infoEl.createEl('div', { cls: 'character-conditions' });
+		const conditionsEl = infoEl.createEl('div', {cls: 'character-conditions'});
 		this.buildConditionIcons(conditionsEl, character, data, ctx);
 
 		// Right: Health Info and Turn Indicator Container
-		const rightContainer = rowEl.createEl('div', { cls: 'character-right' });
+		const rightContainer = rowEl.createEl('div', {cls: 'character-right'});
 
 		// Health Info
-		const healthEl = rightContainer.createEl('div', { cls: 'character-health' });
-		const hpEl = healthEl.createEl('div', { cls: 'character-hp' });
+		const healthEl = rightContainer.createEl('div', {cls: 'character-health'});
+		const hpEl = healthEl.createEl('div', {cls: 'character-hp'});
 		this.updateHpDisplay(hpEl, character);
 
 		hpEl.addEventListener('click', () => {
@@ -194,10 +266,10 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext
 	): void {
 		// left icons
-		const icon  = container.createEl('div', {cls: 'enemy-group-icon'});
+		const icon = container.createEl('div', {cls: 'enemy-group-icon'});
 
 		// Turn Indicator
-		const turnIndicatorEl = icon.createEl('div', { cls: 'turn-indicator' });
+		const turnIndicatorEl = icon.createEl('div', {cls: 'turn-indicator'});
 		this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn ?? false);
 
 		turnIndicatorEl.addEventListener('click', () => {
@@ -206,20 +278,20 @@ export class InitiativeProcessor {
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 		});
 
-		const groupEl = container.createEl('div', { cls: 'enemy-group' });
+		const groupEl = container.createEl('div', {cls: 'enemy-group'});
 
 		// Group Header with Name and Turn Indicator
-		const groupHeader = groupEl.createEl('div', { cls: 'group-header' });
-		groupHeader.createEl('h4', { text: group.name });
+		const groupHeader = groupEl.createEl('div', {cls: 'group-header'});
+		groupHeader.createEl('h4', {text: group.name});
 
 		// Detailed Creature Row Container
-		const detailRowContainer = groupEl.createEl('div', { cls: 'creature-detail-row' });
+		const detailRowContainer = groupEl.createEl('div', {cls: 'creature-detail-row'});
 
 		// Initialize with the first instance of the first creature
 		let selectedInstance: { creature: Creature; instance: CreatureInstance } | null = null;
 		for (const creature of group.creatures) {
 			if (creature.instances && creature.instances.length > 0) {
-				selectedInstance = { creature, instance: creature.instances[0] };
+				selectedInstance = {creature, instance: creature.instances[0]};
 				break;
 			}
 		}
@@ -234,12 +306,12 @@ export class InitiativeProcessor {
 		}
 
 		// Grid of Creature Instances
-		const instancesGrid = groupEl.createEl('div', { cls: 'creature-instances-grid' });
+		const instancesGrid = groupEl.createEl('div', {cls: 'creature-instances-grid'});
 
 		// Create cells for all instances of all creatures in the group
 		group.creatures.forEach((creature) => {
 			creature.instances?.forEach((instance) => {
-				const cellEl = instancesGrid.createEl('div', { cls: 'creature-instance-cell' });
+				const cellEl = instancesGrid.createEl('div', {cls: 'creature-instance-cell'});
 
 				// Handle selection highlighting
 				if (selectedInstance && selectedInstance.instance === instance) {
@@ -247,19 +319,19 @@ export class InitiativeProcessor {
 				}
 
 				// Display creature image in the cell
-				const imgEl = cellEl.createEl('div', { cls: 'instance-image' });
+				const imgEl = cellEl.createEl('div', {cls: 'instance-image'});
 				const imgSrcRaw = creature.image ?? null;
 				Images.resolveImageSource(this.app, imgSrcRaw)
 					.then((imgSrc) => {
-						imgEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
+						imgEl.createEl('img', {attr: {src: imgSrc, alt: creature.name}});
 					})
 					.catch(() => {
 						// Use default image or handle error
-						imgEl.createEl('img', { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
+						imgEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: creature.name}});
 					});
 
 				// Display health status below the image
-				const hpEl = cellEl.createEl('div', { cls: 'instance-hp' });
+				const hpEl = cellEl.createEl('div', {cls: 'instance-hp'});
 				hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
 
 				// Add click event to update detailed view
@@ -292,30 +364,30 @@ export class InitiativeProcessor {
 		container.addClass('character-row');
 
 		// Left: Creature Image
-		const imageEl = container.createEl('div', { cls: 'character-image' });
+		const imageEl = container.createEl('div', {cls: 'character-image'});
 		const imgSrcRaw = creature.image ?? null;
 		Images.resolveImageSource(this.app, imgSrcRaw)
 			.then((imgSrc) => {
-				imageEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
+				imageEl.createEl('img', {attr: {src: imgSrc, alt: creature.name}});
 			})
 			.catch(() => {
 				// Use default image or handle error
-				imageEl.createEl('img', { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
+				imageEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: creature.name}});
 			});
 
 		// Middle: Creature Info
-		const infoEl = container.createEl('div', { cls: 'character-info' });
+		const infoEl = container.createEl('div', {cls: 'character-info'});
 
 		// Top: Creature Name (include instance ID)
-		infoEl.createEl('div', { cls: 'character-name', text: `${creature.name} #${instance.id}` });
+		infoEl.createEl('div', {cls: 'character-name', text: `${creature.name} #${instance.id}`});
 
 		// Bottom: Conditions
-		const conditionsEl = infoEl.createEl('div', { cls: 'character-conditions' });
+		const conditionsEl = infoEl.createEl('div', {cls: 'character-conditions'});
 		this.buildConditionIcons(conditionsEl, instance, data, ctx);
 
 		// Right: Health Info
-		const healthEl = container.createEl('div', { cls: 'character-health' });
-		const hpEl = healthEl.createEl('div', { cls: 'character-hp' });
+		const healthEl = container.createEl('div', {cls: 'character-health'});
+		const hpEl = healthEl.createEl('div', {cls: 'character-hp'});
 		hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
 
 		// HP Click Handler
@@ -383,7 +455,7 @@ export class InitiativeProcessor {
 		conditions.forEach(conditionKey => {
 			const condition = this.conditionManager.getConditionByKey(conditionKey);
 			if (condition) {
-				const iconEl = container.createEl('div', { cls: 'condition-icon' });
+				const iconEl = container.createEl('div', {cls: 'condition-icon'});
 				setIcon(iconEl, condition.iconName);
 				iconEl.title = condition.displayName;
 
@@ -397,7 +469,7 @@ export class InitiativeProcessor {
 		});
 
 		// Add Condition Button
-		const addConditionEl = container.createEl('div', { cls: 'add-condition-icon' });
+		const addConditionEl = container.createEl('div', {cls: 'add-condition-icon'});
 		setIcon(addConditionEl, 'plus-circle');
 		addConditionEl.title = 'Add Condition';
 		addConditionEl.addEventListener('click', () => {

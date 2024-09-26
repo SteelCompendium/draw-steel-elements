@@ -6,6 +6,37 @@
 	white-space: pre-line;
 }
 
+/* top-left border fade */
+
+.ds-container::before,
+.ds-container::after {
+	content: '';
+	position: absolute;
+	background: linear-gradient(to right, transparent, var(--text-normal));
+	height: 1px; /* Border thickness */
+	width: 100%;
+}
+
+.ds-container::before {
+	top: 0;
+	left: 0;
+	background: linear-gradient(to right, var(--text-normal), transparent);
+	width: 12em;
+}
+
+.ds-container::after {
+	top: 0;
+	left: 0;
+	height: 100%;
+	max-height: 12em;
+	background: linear-gradient(to bottom, var(--text-normal), transparent);
+	width: 1px; /* Border thickness */
+}
+
+/*         */
+/* Power Roll */
+/*         */
+
 .ds-pr-inline-p,
 .ds-pr-inline-p p {
 	display: inline;
@@ -435,6 +466,15 @@ code.dsa {
 /* Initiative Tracker */
 /* ==================== */
 /* ==================== */
+
+.error-message {
+	font-family: monospace;
+	white-space: pre;
+	text-wrap: wrap;
+	background-color: var(--code-background);
+	padding: 1em;
+	position: relative;
+}
 
 .turn-indicator {
 	cursor: pointer;
