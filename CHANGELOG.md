@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0
+
+- Adds the Initiative Tracker Element!
+
 ## 1.0.2
 
 - Corrects sizing issue on power roll tiers
