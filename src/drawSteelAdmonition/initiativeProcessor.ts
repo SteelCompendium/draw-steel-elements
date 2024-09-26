@@ -1,10 +1,10 @@
-import {App, MarkdownPostProcessorContext, parseYaml, setIcon} from "obsidian";
+import {App, MarkdownPostProcessorContext, setIcon} from "obsidian";
 import {HpEditModal} from "../utils/HpEditModal";
 import {ConditionManager} from "../utils/Conditions";
 import {ConditionSelectModal} from "../utils/ConditionSelectModal";
 import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
 import {CodeBlocks} from "../utils/CodeBlocks";
-import {Creature, CreatureInstance, EncounterData, EnemyGroup, Hero} from "./model";
+import {Creature, CreatureInstance, EncounterData, EnemyGroup, Hero, parseEncounterData} from "./EncounterData";
 
 export class InitiativeProcessor {
 	private app: App;
@@ -19,118 +19,15 @@ export class InitiativeProcessor {
 		const container = el.createEl('div', {cls: "ds-init-container"});
 
 		try {
-			const data = this.parseYaml(source);
+			const data = parseEncounterData(source);
 			this.buildUI(container, data, ctx);
 		} catch (error) {
 			// Display error message to the user
-
 			let userMessage = "The Draw Steel Elements plugin loaded the Initiative Tracker properly, but " +
 				"failed to process the input config.  Please correct the following error:\n\n"
 			userMessage += error.message;
 			container.createEl('div', {text: userMessage, cls: 'error-message ds-container'});
 		}
-	}
-
-	private parseYaml(source: string): EncounterData {
-		let data: EncounterData;
-
-		// Try parsing the YAML input
-		try {
-			data = parseYaml(source) as EncounterData;
-		} catch (error) {
-			throw new Error("Invalid YAML format: " + error.message);
-		}
-
-		// Validate that data is an object
-		if (typeof data !== 'object' || data === null) {
-			throw new Error("The input must be a YAML object.");
-		}
-
-		// Validate 'heroes' field
-		if (!data.heroes || !Array.isArray(data.heroes)) {
-			throw new Error("Invalid data: 'heroes' field is missing or is not a list.");
-		}
-
-		// Validate 'enemy_groups' field
-		if (!data.enemy_groups || !Array.isArray(data.enemy_groups)) {
-			throw new Error("Invalid data: 'enemy_groups' field is missing or is not a list.");
-		}
-
-		// Initialize heroes
-		data.heroes.forEach((hero, index) => {
-			if (!hero.name) {
-				throw new Error(`Hero at index ${index} is missing the 'name' field.`);
-			}
-			if (typeof hero.max_hp !== 'number') {
-				throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_hp' field.`);
-			}
-
-			hero.isHero = true;
-			hero.has_taken_turn = hero.has_taken_turn ?? false;
-			hero.conditions = hero.conditions ?? [];
-			hero.current_hp = hero.current_hp ?? hero.max_hp;
-		});
-
-		// Initialize enemy groups and creatures
-		data.enemy_groups.forEach((group, groupIndex) => {
-			if (!group.name) {
-				throw new Error(`Enemy group at index ${groupIndex} is missing the 'name' field.`);
-			}
-			if (!group.creatures || !Array.isArray(group.creatures)) {
-				throw new Error(`Enemy group '${group.name}' has an invalid or missing 'creatures' field.`);
-			}
-
-			group.has_taken_turn = group.has_taken_turn ?? false;
-
-			group.creatures.forEach((creature, creatureIndex) => {
-				if (!creature.name) {
-					throw new Error(
-						`Creature at index ${creatureIndex} in group '${group.name}' is missing the 'name' field.`
-					);
-				}
-				if (typeof creature.amount !== 'number') {
-					throw new Error(
-						`Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'amount' field.`
-					);
-				}
-				if (typeof creature.max_hp !== 'number') {
-					throw new Error(
-						`Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'max_hp' field.`
-					);
-				}
-
-				// Initialize instances
-				if (!creature.instances || creature.instances.length !== creature.amount) {
-					creature.instances = [];
-					for (let i = 0; i < creature.amount; i++) {
-						creature.instances.push({
-							id: i + 1,
-							current_hp: creature.max_hp,
-							conditions: [],
-						});
-					}
-				} else {
-					// Validate existing instances
-					creature.instances.forEach((instance, instanceIndex) => {
-						if (typeof instance.id !== 'number') {
-							throw new Error(
-								`Instance at index ${instanceIndex} of creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'id' field.`
-							);
-						}
-						instance.current_hp = instance.current_hp ?? creature.max_hp;
-						instance.conditions = instance.conditions ?? [];
-					});
-				}
-			});
-		});
-
-		// Initialize villain power
-		data.villain_power = data.villain_power ?? {value: 0};
-		if (typeof data.villain_power.value !== 'number') {
-			throw new Error("Invalid data: 'villain_power.value' must be a number.");
-		}
-
-		return data;
 	}
 
 	private buildUI(container: HTMLElement, data: EncounterData, ctx: MarkdownPostProcessorContext): void {
@@ -483,19 +380,12 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext,
 		container: HTMLElement
 	): void {
-		const modal = new ConditionSelectModal(
-			this.app,
-			this.conditionManager,
-			character,
-			data,
-			ctx,
-			() => {
-				// Callback after condition is added, rebuild the condition icons
-				container.empty();
-				this.buildConditionIcons(container, character, data, ctx);
-			}
-		);
-		modal.open();
+		let callback = () => {
+			// Callback after condition is added, rebuild the condition icons
+			container.empty();
+			this.buildConditionIcons(container, character, data, ctx);
+		};
+		new ConditionSelectModal(this.app, this.conditionManager, character, data, ctx, callback).open();
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
