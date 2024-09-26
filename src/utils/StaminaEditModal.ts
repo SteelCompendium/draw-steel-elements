@@ -1,4 +1,5 @@
 import { App, Modal, MarkdownPostProcessorContext, setIcon } from "obsidian";
+import {Creature, CreatureInstance, EncounterData, Hero} from "../drawSteelAdmonition/EncounterData";
 
 export class StaminaEditModal extends Modal {
 	private character: Hero | CreatureInstance;
