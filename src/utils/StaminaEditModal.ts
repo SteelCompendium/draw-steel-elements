@@ -163,6 +163,9 @@ export class StaminaEditModal extends Modal {
 		const decrementTempButton = tempStaminaBody.createEl('div', { cls: 'temp-stamina-btn' });
 		setIcon(decrementTempButton, 'minus-circle');
 		decrementTempButton.addEventListener('click', () => {
+			if (this.pendingTempStaminaChange <= 0) {
+				return;
+			}
 			this.pendingTempStaminaChange -= 1;
 			tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
 			this.updateActionButton(actionButton);
@@ -173,10 +176,16 @@ export class StaminaEditModal extends Modal {
 			type: 'number',
 			cls: 'temp-stamina-input',
 		}) as HTMLInputElement;
+		tempStaminaInput.min = '0';
 		tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
 		tempStaminaInput.addEventListener('input', () => {
-			const newTempStaminaValue = parseInt(tempStaminaInput.value);
+			let newTempStaminaValue = parseInt(tempStaminaInput.value);
 			if (!isNaN(newTempStaminaValue)) {
+				// Ensure the temp stamina value is not negative
+				if (newTempStaminaValue < 0) {
+					newTempStaminaValue = 0;
+					tempStaminaInput.value = '0'; // Update the input field to reflect the corrected value
+				}
 				this.pendingTempStaminaChange = newTempStaminaValue - currentTempStamina;
 				this.updateActionButton(actionButton);
 			}

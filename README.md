@@ -2,6 +2,8 @@
 
 Some helper elements for the MCDM Draw Steel TTRPG
 
+**IMPORTANT: This plugin does NOT (yet) work in "Live Preview" mode.**
+
 ## Elements
 
 ### Power Roll Element
