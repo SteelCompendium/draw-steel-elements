@@ -2,9 +2,9 @@ import {parseYaml} from "obsidian";
 
 export interface Hero {
 	name: string;
-	max_hp: number;
-	current_hp?: number;
-	temp_hp?: number;
+	max_stamina: number;
+	current_stamina?: number;
+	temp_stamina?: number;
 	image?: string;
 	isHero: boolean;
 	has_taken_turn?: boolean;
@@ -13,13 +13,13 @@ export interface Hero {
 
 export interface CreatureInstance {
 	id: number;
-	current_hp: number;
+	current_stamina: number;
 	conditions?: string[];
 }
 
 export interface Creature {
 	name: string;
-	max_hp: number;
+	max_stamina: number;
 	amount: number;
 	instances?: CreatureInstance[];
 	image?: string;
@@ -30,7 +30,7 @@ export interface EnemyGroup {
 	name: string;
     creatures: Creature[];
     has_taken_turn?: boolean;
-    selectedInstanceKey: Boolean;
+    selectedInstanceKey: string;
 }
 
 export interface VillainPower {
@@ -73,14 +73,14 @@ export function parseEncounterData(source: string): EncounterData {
         if (!hero.name) {
             throw new Error(`Hero at index ${index} is missing the 'name' field.`);
         }
-        if (typeof hero.max_hp !== 'number') {
-            throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_hp' field.`);
+        if (typeof hero.max_stamina !== 'number') {
+            throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_stamina' field.`);
         }
 
         hero.isHero = true;
         hero.has_taken_turn = hero.has_taken_turn ?? false;
         hero.conditions = hero.conditions ?? [];
-        hero.current_hp = hero.current_hp ?? hero.max_hp;
+        hero.current_stamina = hero.current_stamina ?? hero.max_stamina;
     });
 
     // Initialize enemy groups and creatures
@@ -105,9 +105,9 @@ export function parseEncounterData(source: string): EncounterData {
                     `Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'amount' field.`
                 );
             }
-            if (typeof creature.max_hp !== 'number') {
+            if (typeof creature.max_stamina !== 'number') {
                 throw new Error(
-                    `Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'max_hp' field.`
+                    `Creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'max_stamina' field.`
                 );
             }
 
@@ -117,7 +117,7 @@ export function parseEncounterData(source: string): EncounterData {
                 for (let i = 0; i < creature.amount; i++) {
                     creature.instances.push({
                         id: i + 1,
-                        current_hp: creature.max_hp,
+                        current_stamina: creature.max_stamina,
                         conditions: [],
                     });
                 }
@@ -129,7 +129,7 @@ export function parseEncounterData(source: string): EncounterData {
                             `Instance at index ${instanceIndex} of creature '${creature.name}' in group '${group.name}' is missing or has an invalid 'id' field.`
                         );
                     }
-                    instance.current_hp = instance.current_hp ?? creature.max_hp;
+                    instance.current_stamina = instance.current_stamina ?? creature.max_stamina;
                     instance.conditions = instance.conditions ?? [];
                 });
             }

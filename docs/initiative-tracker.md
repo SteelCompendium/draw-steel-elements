@@ -14,20 +14,20 @@ easy transfer to other systems via whatever file-sync solution you use.
     ```ds-initiative
     heroes:
       - name: "Frodo Baggins"
-        max_hp: 80
+        max_stamina: 80
         image: "images/frodo.png"
       - name: "Samwise Gamgee"
-        max_hp: 90
+        max_stamina: 90
         image: "images/sam.png"
     enemy_groups:
       - name: "Mordor Forces"
         creatures:
           - name: "Orc"
-            max_hp: 40
+            max_stamina: 40
             amount: 4
             image: "images/orc.png"
           - name: "Troll"
-            max_hp: 150
+            max_stamina: 150
             amount: 1
             image: "images/troll.png"
     villain_power:
@@ -48,12 +48,12 @@ To use the Initiative Tracker, you need to include a code block with the `initia
 ```yaml
 heroes:
   - name: "Aragorn"
-    max_hp: 120
+    max_stamina: 120
 enemy_groups:
   - name: "Orc Horde"
     creatures:
       - name: "Orc Warrior"
-        max_hp: 50
+        max_stamina: 50
         amount: 3
 villain_power:
   value: 2
@@ -72,9 +72,9 @@ The encounter data consists of three main sections:
 #### Hero Fields
 
 - `name` (string, required): The name of the hero.
-- `max_hp` (number, required): The maximum health points (stamina) of the hero.
-- `current_hp` (number, optional): The current health points of the hero. Defaults to `max_hp` if not provided.
-- `temp_hp` (number, optional): Temporary health points (stamina). Defaults to `0`.
+- `max_stamina` (number, required): The maximum health points (stamina) of the hero.
+- `current_stamina` (number, optional): The current health points of the hero. Defaults to `max_stamina` if not provided.
+- `temp_stamina` (number, optional): Temporary health points (stamina). Defaults to `0`.
 - `image` (string, optional): Path to the hero's image.
 - `conditions` (list of strings, optional): List of condition keys affecting the hero.
 - `has_taken_turn` (boolean, managed): Indicates if the hero has taken a turn. Managed by the tracker.
@@ -84,9 +84,9 @@ The encounter data consists of three main sections:
 ```yaml
 heroes:
   - name: "Gandalf"
-    max_hp: 100
-    current_hp: 85
-    temp_hp: 5
+    max_stamina: 100
+    current_stamina: 85
+    temp_stamina: 5
     image: "images/gandalf.png"
     conditions:
       - "blinded"
@@ -108,7 +108,7 @@ An enemy group represents a collection of creatures that act together in the ini
 Each creature in the creatures list has the following fields:
 
 - `name` (string, required): The name of the creature.
-- `max_hp` (number, required): The maximum health points of the creature.
+- `max_stamina` (number, required): The maximum health points of the creature.
 - `amount` (number, required): The number of instances of this creature.
 - `instances` (list of CreatureInstance, managed): List of creature instances. Managed by the tracker.
 - `image` (string, optional): Path to the creature's image.
@@ -116,7 +116,7 @@ Each creature in the creatures list has the following fields:
 #### Creature Instance Fields
 
 - `id` (number, managed): Unique identifier for the instance.
-- `current_hp` (number, managed): Current health points of the instance.
+- `current_stamina` (number, managed): Current health points of the instance.
 - `conditions` (list of strings, managed): Conditions affecting the instance.
 
 #### Example
@@ -126,7 +126,7 @@ enemy_groups:
   - name: "Goblin Gang"
     creatures:
       - name: "Goblin"
-        max_hp: 30
+        max_stamina: 30
         amount: 5
         image: "images/goblin.png"
 ```

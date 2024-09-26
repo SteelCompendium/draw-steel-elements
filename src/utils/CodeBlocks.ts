@@ -1,6 +1,5 @@
 import { App, MarkdownPostProcessorContext, TFile, stringifyYaml } from "obsidian";
-
-import {EncounterData} from "../drawSteelAdmonition/model";
+import {EncounterData} from "../drawSteelAdmonition/EncounterData";
 
 export class CodeBlocks {
 	static async updateCodeBlock(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {

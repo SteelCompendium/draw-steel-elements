@@ -1,5 +1,5 @@
 import {App, MarkdownPostProcessorContext, setIcon} from "obsidian";
-import {HpEditModal} from "../utils/HpEditModal";
+import {StaminaEditModal} from "../utils/StaminaEditModal";
 import {ConditionManager} from "../utils/Conditions";
 import {ConditionSelectModal} from "../utils/ConditionSelectModal";
 import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
@@ -144,12 +144,12 @@ export class InitiativeProcessor {
 
 		// Health Info
 		const healthEl = rightContainer.createEl('div', {cls: 'character-health'});
-		const hpEl = healthEl.createEl('div', {cls: 'character-hp'});
-		this.updateHpDisplay(hpEl, character);
+		const staminaEl = healthEl.createEl('div', {cls: 'character-stamina'});
+		this.updateStaminaDisplay(staminaEl, character);
 
-		hpEl.addEventListener('click', () => {
-			const modal = new HpEditModal(this.app, character, null, data, ctx, () => {
-				this.updateHpDisplay(hpEl, character);
+		staminaEl.addEventListener('click', () => {
+			const modal = new StaminaEditModal(this.app, character, null, data, ctx, () => {
+				this.updateStaminaDisplay(staminaEl, character);
 				CodeBlocks.updateCodeBlock(this.app, data, ctx);
 			});
 			modal.open();
@@ -249,8 +249,8 @@ export class InitiativeProcessor {
 					});
 
 				// Display health status below the image
-				const hpEl = cellEl.createEl('div', {cls: 'instance-hp'});
-				hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+				const staminaEl = cellEl.createEl('div', {cls: 'instance-stamina'});
+				staminaEl.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
 
 				// Add click event to update detailed view
 				cellEl.addEventListener('click', () => {
@@ -270,9 +270,9 @@ export class InitiativeProcessor {
 					CodeBlocks.updateCodeBlock(this.app, data, ctx);
 				});
 
-				// Double-click to edit HP
+				// Double-click to edit STAMINA
 				cellEl.addEventListener('dblclick', () => {
-					this.editStaminaModal(instance, creature, data, ctx, hpEl, container).open();
+					this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
 				});
 			});
 		});
@@ -311,12 +311,12 @@ export class InitiativeProcessor {
 
 		// Right: Health Info
 		const healthEl = container.createEl('div', {cls: 'character-health'});
-		const hpEl = healthEl.createEl('div', {cls: 'character-hp'});
-		hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+		const staminaEl = healthEl.createEl('div', {cls: 'character-stamina'});
+		staminaEl.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
 
-		// HP Click Handler
-		hpEl.addEventListener('click', () => {
-			this.editStaminaModal(instance, creature, data, ctx, hpEl, container).open();
+		// STAMINA Click Handler
+		staminaEl.addEventListener('click', () => {
+			this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
 		});
 	}
 
@@ -325,19 +325,19 @@ export class InitiativeProcessor {
 		creature: Creature,
 		data: EncounterData,
 		ctx: MarkdownPostProcessorContext,
-		hpEl: HTMLElement,
+		staminaEl: HTMLElement,
 		container: HTMLElement
 	) {
-		return new HpEditModal(this.app, instance, creature, data, ctx, () => {
-			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
+		return new StaminaEditModal(this.app, instance, creature, data, ctx, () => {
+			staminaEl.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 
-			// Update the HP in the grid cell as well
+			// Update the STAMINA in the grid cell as well
 			const gridCell = container.parentElement?.querySelector(
-				`.creature-instance-cell:nth-child(${instance.id}) .instance-hp`
+				`.creature-instance-cell:nth-child(${instance.id}) .instance-stamina`
 			);
 			if (gridCell) {
-				gridCell.textContent = `${instance.current_hp}/${creature.max_hp}`;
+				gridCell.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
 			}
 		});
 	}
@@ -353,25 +353,25 @@ export class InitiativeProcessor {
 		}
 	}
 
-	private updateHpDisplay(hpEl: HTMLElement, character: Hero | CreatureInstance, creature?: Creature): void {
-		const currentHp = character.current_hp ?? (this.isHero(character) ? character.max_hp : creature?.max_hp ?? 0);
-		const tempHp = this.isHero(character) ? character.temp_hp ?? 0 : 0;
-		const maxHp = this.isHero(character) ? character.max_hp : creature?.max_hp ?? 0;
+	private updateStaminaDisplay(staminaEl: HTMLElement, character: Hero | CreatureInstance, creature?: Creature): void {
+		const currentStamina = character.current_stamina ?? (this.isHero(character) ? character.max_stamina : creature?.max_stamina ?? 0);
+		const tempStamina = this.isHero(character) ? character.temp_stamina ?? 0 : 0;
+		const maxStamina = this.isHero(character) ? character.max_stamina : creature?.max_stamina ?? 0;
 
-		let displayText = `${currentHp}`;
-		if (tempHp > 0) {
-			displayText += ` (+${tempHp})`;
+		let displayText = `${currentStamina}`;
+		if (tempStamina > 0) {
+			displayText += ` (+${tempStamina})`;
 		}
-		displayText += `/${maxHp}`;
+		displayText += `/${maxStamina}`;
 
-		hpEl.textContent = displayText;
+		staminaEl.textContent = displayText;
 
-		if (this.isHero(character) && currentHp < 0) {
-			hpEl.style.color = 'red';
-		} else if (tempHp > 0) {
-			hpEl.style.color = 'green';
+		if (this.isHero(character) && currentStamina < 0) {
+			staminaEl.style.color = 'red';
+		} else if (tempStamina > 0) {
+			staminaEl.style.color = 'green';
 		} else {
-			hpEl.style.color = '';
+			staminaEl.style.color = '';
 		}
 	}
 
