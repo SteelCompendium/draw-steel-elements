@@ -60,9 +60,6 @@ export class HpEditModal extends Modal {
 		// Update the HP bar display
 		this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 
-		// Second Row: Numeric HP Display with Increment/Decrement Buttons
-		// (leaving this open for future...)
-
 		// Third Row: Apply Damage/Healing with Input
 		const modifierContainer = contentEl.createEl('div', { cls: 'modifier-container' });
 
@@ -84,8 +81,15 @@ export class HpEditModal extends Modal {
 		damageButton.addEventListener('click', () => {
 			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
-				this.pendingHpChange -= Math.min(adjustment, this.amountToDeath(currentHp, negativeHpLimit));
+				// Apply damage to temp HP first
+				let tempHpAvailable = currentTempHp + this.pendingTempHpChange;
+				let tempHpUsed = Math.min(adjustment, tempHpAvailable);
+				this.pendingTempHpChange -= tempHpUsed;
+				let remainingDamage = adjustment - tempHpUsed;
+				this.pendingHpChange -= Math.min(remainingDamage, this.amountToDeath(currentHp, negativeHpLimit));
+
 				this.updateHpDisplay(hpValueDisplay, currentHp, maxHp, currentTempHp);
+				tempStaminaInput.value = (currentTempHp + this.pendingTempHpChange).toString();
 				this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 				this.updateActionButton(actionButton);
 			}
@@ -104,7 +108,7 @@ export class HpEditModal extends Modal {
 			}
 		});
 
-		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' '});
+		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' ' });
 
 		// Stamina edit container
 		const staminaModContainer = modifierContainer.createEl('div', { cls: 'stamina-mod-container' });
@@ -186,7 +190,7 @@ export class HpEditModal extends Modal {
 			this.updateActionButton(actionButton);
 		});
 
-		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' '});
+		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' ' });
 
 		// Quick Modifiers
 		const quickModContainer = modifierContainer.createEl('div', { cls: 'quick-mod-container' });
@@ -196,6 +200,8 @@ export class HpEditModal extends Modal {
 		killButton.createEl('div', { cls: 'btn-text', text: 'Kill' });
 		killButton.addEventListener('click', () => {
 			this.pendingHpChange = (currentHp * -1) - (this.isHero(this.character) ? (maxHp * 0.5) : 0);
+			this.pendingTempHpChange = -currentTempHp; // Remove all temp HP
+			tempStaminaInput.value = '0';
 			this.updateHpDisplay(hpValueDisplay, currentHp, maxHp, currentTempHp);
 			this.updateHpBar(hpBarFillLeft, hpBarFillRight, negativeHpLimit, maxHp);
 			this.updateActionButton(actionButton);
