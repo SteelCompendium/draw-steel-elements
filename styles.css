@@ -710,6 +710,12 @@ code.dsa {
 	font-weight: bold;
 }
 
+/* Stamina modal */
+
+.stamina-header {
+	text-align: center;
+}
+
 /* HP Bar */
 .hp-bar-container {
 	width: 100%;
@@ -770,9 +776,7 @@ code.dsa {
 
 /* Numeric HP Display */
 .hp-numeric-container {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	display: -webkit-inline-box;
 	margin-bottom: 10px;
 }
 
@@ -804,11 +808,18 @@ code.dsa {
 	display: flex;
 	align-items: center;
 	margin-bottom: 10px;
-	justify-content: space-evenly;
+	justify-content: space-between;
+}
+
+.modifier-container>div {
+	width: 100%;
+	padding: 1em;
 }
 
 .vertical-divider {
-	padding-top: 8em;
+	padding: 0 !important;
+	padding-top: 8em !important;
+	width: 1px !important;
 	border-left: 1px solid var(--color-base-40);
 }
 
@@ -822,7 +833,7 @@ code.dsa {
 	display: flex;
 	justify-content: space-around;
 	align-items: center;
-	margin-top: 8px;
+	margin-top: .5em;
 }
 
 .apply-input {
@@ -832,29 +843,58 @@ code.dsa {
 .apply-btn, .quick-mod-btn {
 	display: flex;
 	width: 100%;
-	margin-top: 8px;
+	margin-top: .5em;
 	justify-content: start;
 }
 
-.apply-btn .btn-text, .quick-mod-btn .btn-text {
+.apply-btn .btn-text,
+.quick-mod-btn .btn-text,
+.reset-button .btn-text {
 	height: 100%;
 	margin-left: .5em;
+}
+
+.temp-stamina-container {
+	background-color: var(--code-background);
+	margin-top: 0.5em;
+	border-radius: 5px;
+	padding: 0.5em 0;
+}
+
+.temp-stamina-title {
+	text-align: center;
+	font-size: var(--font-ui-small);
+}
+
+.temp-stamina-body {
+	display: flex;
+	justify-content: space-evenly;
+	align-items: center;
+	margin-top: 0.5em;
+}
+
+.temp-stamina-input {
+	width: 3em;
 }
 
 /* Action Button */
 .action-button-container {
 	text-align: center;
 	margin-top: 20px;
+	display: flex;
+	justify-content: space-between;
 }
 
-.action-button {
+button.action-button {
 	padding: 10px 20px;
 	font-size: 16px;
+	background-color: var(--interactive-accent);
 }
 
 .action-button.disabled {
 	opacity: 0.5;
 	pointer-events: none;
+	background-color: var(--interactive-normal);
 }
 
 /* ---------------- */
