@@ -909,6 +909,14 @@ button.action-button {
 	border-radius: 2px;
 	background-color: var(--code-background);
 	padding: 1em;
-	width: 7em;
-	height: 5em;
+	width: calc((100% - 2em) / 4);
+	height: 7em;
+	justify-content: center;
+	text-align: center;
+}
+
+.horizontal-divider {
+	margin: 2em 9em;
+	height: 1px;
+	background-color: var(--color-base-40);
 }

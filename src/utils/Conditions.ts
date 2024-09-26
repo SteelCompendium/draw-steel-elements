@@ -14,9 +14,16 @@ export class ConditionManager {
 		{key: 'restrained', displayName: 'Restrained', iconName: 'navigation-off'},
 		{key: 'slowed', displayName: 'Slowed', iconName: 'snail'},
 		{key: 'weakened', displayName: 'Weakened', iconName: 'trending-down'},
-
-		{key: 'marked', displayName: 'Marked', iconName: 'locate-fixed'},
 	];
+
+	private pseudoConditions: Condition[] = [
+		{key: 'marked', displayName: 'Marked', iconName: 'locate-fixed'},
+		{key: 'used-triggered-action', displayName: 'Triggered Action Used', iconName: 'repeat'},
+	];
+
+	public getAnyConditionByKey(key: string): Condition | undefined {
+		return this.getConditionByKey(key) || this.getPseudoConditionByKey(key);
+	}
 
 	public getConditions(): Condition[] {
 		return this.conditions;
@@ -24,6 +31,14 @@ export class ConditionManager {
 
 	public getConditionByKey(key: string): Condition | undefined {
 		return this.conditions.find(c => c.key === key);
+	}
+
+	public getPseudoConditions(): Condition[] {
+		return this.pseudoConditions;
+	}
+
+	public getPseudoConditionByKey(key: string): Condition | undefined {
+		return this.pseudoConditions.find(c => c.key === key);
 	}
 }
 

@@ -350,7 +350,7 @@ export class InitiativeProcessor {
 		const conditions = character.conditions || [];
 
 		conditions.forEach(conditionKey => {
-			const condition = this.conditionManager.getConditionByKey(conditionKey);
+			const condition = this.conditionManager.getAnyConditionByKey(conditionKey);
 			if (condition) {
 				const iconEl = container.createEl('div', {cls: 'condition-icon'});
 				setIcon(iconEl, condition.iconName);
