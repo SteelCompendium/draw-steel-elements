@@ -28,8 +28,9 @@ export interface Creature {
 
 export interface EnemyGroup {
 	name: string;
-	creatures: Creature[];
-	has_taken_turn?: boolean;
+    creatures: Creature[];
+    has_taken_turn?: boolean;
+    selectedInstanceKey: Boolean;
 }
 
 export interface VillainPower {

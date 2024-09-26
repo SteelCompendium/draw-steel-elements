@@ -99,7 +99,7 @@ export class InitiativeProcessor {
 		data: EncounterData,
 		ctx: MarkdownPostProcessorContext
 	): void {
-		// left icons
+		// Left icons
 		const icon = container.createEl('div', {cls: 'character-icon'});
 
 		// Turn Indicator
@@ -162,7 +162,7 @@ export class InitiativeProcessor {
 		data: EncounterData,
 		ctx: MarkdownPostProcessorContext
 	): void {
-		// left icons
+		// Left icons
 		const icon = container.createEl('div', {cls: 'enemy-group-icon'});
 
 		// Turn Indicator
@@ -184,12 +184,31 @@ export class InitiativeProcessor {
 		// Detailed Creature Row Container
 		const detailRowContainer = groupEl.createEl('div', {cls: 'creature-detail-row'});
 
-		// Initialize with the first instance of the first creature
+		// Determine the selected creature instance
 		let selectedInstance: { creature: Creature; instance: CreatureInstance } | null = null;
-		for (const creature of group.creatures) {
-			if (creature.instances && creature.instances.length > 0) {
-				selectedInstance = {creature, instance: creature.instances[0]};
-				break;
+		if (group.selectedInstanceKey != null) {
+			// Try to find the previously selected instance using the unique key
+			for (let creatureIndex = 0; creatureIndex < group.creatures.length; creatureIndex++) {
+				const creature = group.creatures[creatureIndex];
+				if (creature.instances) {
+					const instance = creature.instances.find(inst => {
+						const instanceKey = `${creatureIndex}-${inst.id}`;
+						return instanceKey === group.selectedInstanceKey;
+					});
+					if (instance) {
+						selectedInstance = { creature, instance };
+						break;
+					}
+				}
+			}
+		}
+		if (!selectedInstance) {
+			// If no selected instance, default to the first instance
+			for (const creature of group.creatures) {
+				if (creature.instances && creature.instances.length > 0) {
+					selectedInstance = { creature, instance: creature.instances[0] };
+					break;
+				}
 			}
 		}
 
@@ -199,19 +218,21 @@ export class InitiativeProcessor {
 
 		// If the enemy group contains a single creature, no need for a grid
 		if (group.creatures.length === 1 && group.creatures[0].amount === 1) {
-			return
+			return;
 		}
 
 		// Grid of Creature Instances
 		const instancesGrid = groupEl.createEl('div', {cls: 'creature-instances-grid'});
 
 		// Create cells for all instances of all creatures in the group
-		group.creatures.forEach((creature) => {
+		group.creatures.forEach((creature, creatureIndex) => {
 			creature.instances?.forEach((instance) => {
 				const cellEl = instancesGrid.createEl('div', {cls: 'creature-instance-cell'});
 
+				const instanceKey = `${creatureIndex}-${instance.id}`;
+
 				// Handle selection highlighting
-				if (selectedInstance && selectedInstance.instance === instance) {
+				if (group.selectedInstanceKey === instanceKey) {
 					cellEl.addClass('selected');
 				}
 
@@ -223,7 +244,7 @@ export class InitiativeProcessor {
 						imgEl.createEl('img', {attr: {src: imgSrc, alt: creature.name}});
 					})
 					.catch(() => {
-						// Use default image or handle error
+						// Use default image
 						imgEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: creature.name}});
 					});
 
@@ -243,7 +264,13 @@ export class InitiativeProcessor {
 					// Update the detailed creature row
 					detailRowContainer.empty();
 					this.buildDetailedCreatureRow(detailRowContainer, creature, instance, data, ctx);
+
+					// Persist the selected instance key
+					group.selectedInstanceKey = instanceKey;
+					CodeBlocks.updateCodeBlock(this.app, data, ctx);
 				});
+
+				// Double-click to edit HP
 				cellEl.addEventListener('dblclick', () => {
 					this.editStaminaModal(instance, creature, data, ctx, hpEl, container).open();
 				});
@@ -268,7 +295,7 @@ export class InitiativeProcessor {
 				imageEl.createEl('img', {attr: {src: imgSrc, alt: creature.name}});
 			})
 			.catch(() => {
-				// Use default image or handle error
+				// Use default image
 				imageEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: creature.name}});
 			});
 
@@ -293,7 +320,14 @@ export class InitiativeProcessor {
 		});
 	}
 
-	private editStaminaModal(instance: CreatureInstance, creature: Creature, data: EncounterData, ctx: MarkdownPostProcessorContext, hpEl: any, container: HTMLElement) {
+	private editStaminaModal(
+		instance: CreatureInstance,
+		creature: Creature,
+		data: EncounterData,
+		ctx: MarkdownPostProcessorContext,
+		hpEl: HTMLElement,
+		container: HTMLElement
+	) {
 		return new HpEditModal(this.app, instance, creature, data, ctx, () => {
 			hpEl.textContent = `${instance.current_hp}/${creature.max_hp}`;
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
