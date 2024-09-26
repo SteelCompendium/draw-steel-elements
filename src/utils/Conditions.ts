@@ -19,6 +19,20 @@ export class ConditionManager {
 	private pseudoConditions: Condition[] = [
 		{key: 'marked', displayName: 'Marked', iconName: 'locate-fixed'},
 		{key: 'used-triggered-action', displayName: 'Triggered Action Used', iconName: 'repeat'},
+		{key: 'covered', displayName: 'Covered', iconName: 'trees'},
+		{key: 'concealed', displayName: 'Concealed', iconName: 'cloud-fog'},
+		{key: 'dead', displayName: 'Dead', iconName: 'skull'},
+		{key: 'defending', displayName: 'Defending', iconName: 'shield'},
+		{key: 'dying', displayName: 'Dying', iconName: 'heart-crack'},
+		{key: 'falling', displayName: 'Falling', iconName: 'arrow-big-down-dash'},
+		{key: 'flanking', displayName: 'Flanking', iconName: 'minimize-2'},
+		{key: 'hidden', displayName: 'Hidden', iconName: 'locate-off'},
+		{key: 'high-ground', displayName: 'High Ground', iconName: 'layers'},
+		{key: 'invisible', displayName: 'Invisible', iconName: 'eye-off'},
+		{key: 'sneaking', displayName: 'Sneaking', iconName: 'more-horizontal'},
+		{key: 'unconscious', displayName: 'Unconscious', iconName: 'zap-off'},
+		{key: 'winded', displayName: 'Winded', iconName: 'wind'},
+		{key: 'taunted', displayName: 'Taunted', iconName: 'mouse-pointer-click'},
 	];
 
 	public getAnyConditionByKey(key: string): Condition | undefined {
