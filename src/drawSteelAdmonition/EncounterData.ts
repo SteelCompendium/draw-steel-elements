@@ -1,46 +1,47 @@
 import {parseYaml} from "obsidian";
 
 export interface Hero {
-	name: string;
-	max_stamina: number;
-	current_stamina?: number;
-	temp_stamina?: number;
-	image?: string;
-	isHero: boolean;
-	has_taken_turn?: boolean;
-	conditions?: string[];
+    name: string;
+    max_stamina: number;
+    current_stamina?: number;
+    temp_stamina?: number;
+    image?: string;
+    isHero: boolean;
+    has_taken_turn?: boolean;
+    conditions?: string[];
 }
 
 export interface CreatureInstance {
-	id: number;
-	current_stamina: number;
-	conditions?: string[];
+    id: number;
+    current_stamina: number;
+    temp_stamina?: number;
+    conditions?: string[];
 }
 
 export interface Creature {
-	name: string;
-	max_stamina: number;
-	amount: number;
-	instances?: CreatureInstance[];
-	image?: string;
-	isHero: boolean;
+    name: string;
+    max_stamina: number;
+    amount: number;
+    instances?: CreatureInstance[];
+    image?: string;
+    isHero: boolean;
 }
 
 export interface EnemyGroup {
-	name: string;
+    name: string;
     creatures: Creature[];
     has_taken_turn?: boolean;
     selectedInstanceKey: string;
 }
 
 export interface VillainPower {
-	value: number;
+    value: number;
 }
 
 export interface EncounterData {
-	heroes: Hero[];
-	enemy_groups: EnemyGroup[];
-	villain_power: VillainPower;
+    heroes: Hero[];
+    enemy_groups: EnemyGroup[];
+    villain_power: VillainPower;
 }
 
 export function parseEncounterData(source: string): EncounterData {
@@ -81,6 +82,7 @@ export function parseEncounterData(source: string): EncounterData {
         hero.has_taken_turn = hero.has_taken_turn ?? false;
         hero.conditions = hero.conditions ?? [];
         hero.current_stamina = hero.current_stamina ?? hero.max_stamina;
+        hero.temp_stamina = hero.temp_stamina ?? 0;
     });
 
     // Initialize enemy groups and creatures
@@ -118,6 +120,7 @@ export function parseEncounterData(source: string): EncounterData {
                     creature.instances.push({
                         id: i + 1,
                         current_stamina: creature.max_stamina,
+                        temp_stamina: 0,
                         conditions: [],
                     });
                 }
@@ -130,6 +133,7 @@ export function parseEncounterData(source: string): EncounterData {
                         );
                     }
                     instance.current_stamina = instance.current_stamina ?? creature.max_stamina;
+                    instance.temp_stamina = instance.temp_stamina ?? 0;
                     instance.conditions = instance.conditions ?? [];
                 });
             }

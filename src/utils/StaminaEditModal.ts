@@ -44,7 +44,7 @@ export class StaminaEditModal extends Modal {
 			? this.character.max_stamina
 			: this.creature?.max_stamina ?? 0;
 		const currentStamina = this.character.current_stamina ?? maxStamina;
-		const currentTempStamina = this.isHero(this.character) ? this.character.temp_stamina ?? 0 : 0;
+		const currentTempStamina = this.character.temp_stamina ?? 0;
 		const negativeStaminaLimit = this.isHero(this.character)
 			? -0.5 * maxStamina
 			: 0; // Enemies cannot have negative STAMINA
@@ -163,7 +163,7 @@ export class StaminaEditModal extends Modal {
 		const decrementTempButton = tempStaminaBody.createEl('div', { cls: 'temp-stamina-btn' });
 		setIcon(decrementTempButton, 'minus-circle');
 		decrementTempButton.addEventListener('click', () => {
-			if (this.pendingTempStaminaChange <= 0) {
+			if (currentTempStamina + this.pendingTempStaminaChange <= 0) {
 				return;
 			}
 			this.pendingTempStaminaChange -= 1;
@@ -222,6 +222,8 @@ export class StaminaEditModal extends Modal {
 		fullHealButton.createEl('div', { cls: 'btn-text', text: 'Full Heal' });
 		fullHealButton.addEventListener('click', () => {
 			this.pendingStaminaChange = maxStamina - currentStamina;
+			this.pendingTempStaminaChange = -currentTempStamina; // Reset temp stamina to 0
+			tempStaminaInput.value = '0';
 			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
 			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 			this.updateActionButton(actionButton);
@@ -239,6 +241,11 @@ export class StaminaEditModal extends Modal {
 				this.updateActionButton(actionButton);
 			}
 		});
+
+		// For creatures, hide the recovery button (assuming only heroes can spend recovery)
+		if (!this.isHero(this.character)) {
+			recoveryButton.style.display = 'none';
+		}
 
 		// Bottom: Action Button and Reset Button
 		const actionButtonContainer = contentEl.createEl('div', { cls: 'action-button-container' });
@@ -262,10 +269,8 @@ export class StaminaEditModal extends Modal {
 			const newCurrentStamina = this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
 			this.character.current_stamina = newCurrentStamina;
 
-			if (this.isHero(this.character)) {
-				const newTempStamina = currentTempStamina + this.pendingTempStaminaChange;
-				this.character.temp_stamina = newTempStamina;
-			}
+			const newTempStamina = currentTempStamina + this.pendingTempStaminaChange;
+			this.character.temp_stamina = newTempStamina;
 
 			this.updateCallback();
 			this.close();

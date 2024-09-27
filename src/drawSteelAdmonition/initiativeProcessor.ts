@@ -250,7 +250,7 @@ export class InitiativeProcessor {
 
 				// Display health status below the image
 				const staminaEl = cellEl.createEl('div', {cls: 'instance-stamina'});
-				staminaEl.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
+				this.updateStaminaDisplay(staminaEl, instance, creature);
 
 				// Add click event to update detailed view
 				cellEl.addEventListener('click', () => {
@@ -312,7 +312,7 @@ export class InitiativeProcessor {
 		// Right: Health Info
 		const healthEl = container.createEl('div', {cls: 'character-health'});
 		const staminaEl = healthEl.createEl('div', {cls: 'character-stamina'});
-		staminaEl.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
+		this.updateStaminaDisplay(staminaEl, instance, creature);
 
 		// STAMINA Click Handler
 		staminaEl.addEventListener('click', () => {
@@ -329,7 +329,7 @@ export class InitiativeProcessor {
 		container: HTMLElement
 	) {
 		return new StaminaEditModal(this.app, instance, creature, data, ctx, () => {
-			staminaEl.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
+			this.updateStaminaDisplay(staminaEl, instance, creature);
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 
 			// Update the STAMINA in the grid cell as well
@@ -337,7 +337,7 @@ export class InitiativeProcessor {
 				`.creature-instance-cell:nth-child(${instance.id}) .instance-stamina`
 			);
 			if (gridCell) {
-				gridCell.textContent = `${instance.current_stamina}/${creature.max_stamina}`;
+				this.updateStaminaDisplay(gridCell as HTMLElement, instance, creature);
 			}
 		});
 	}
@@ -354,19 +354,19 @@ export class InitiativeProcessor {
 	}
 
 	private updateStaminaDisplay(staminaEl: HTMLElement, character: Hero | CreatureInstance, creature?: Creature): void {
-		const currentStamina = character.current_stamina ?? (this.isHero(character) ? character.max_stamina : creature?.max_stamina ?? 0);
-		const tempStamina = this.isHero(character) ? character.temp_stamina ?? 0 : 0;
-		const maxStamina = this.isHero(character) ? character.max_stamina : creature?.max_stamina ?? 0;
+		const currentStamina = character.current_stamina ?? 0;
+		const tempStamina = character.temp_stamina ?? 0;
+		const maxStamina = this.isHero(character) ? (character as Hero).max_stamina : creature?.max_stamina ?? 0;
 
 		let displayText = `${currentStamina}`;
 		if (tempStamina > 0) {
-			displayText += ` (+${tempStamina})`;
+			displayText += `(+${tempStamina})`;
 		}
 		displayText += `/${maxStamina}`;
 
 		staminaEl.textContent = displayText;
 
-		if (this.isHero(character) && currentStamina < 0) {
+		if (currentStamina < 0) {
 			staminaEl.style.color = 'red';
 		} else if (tempStamina > 0) {
 			staminaEl.style.color = 'green';
