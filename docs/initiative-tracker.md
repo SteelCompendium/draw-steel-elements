@@ -6,7 +6,7 @@ The Initiative Tracker uses YAML-defined data to represent the state of an encou
 The YAML codeblock is where the initial encounter data is configured, but it will also be where state is persisted for 
 easy transfer to other systems via whatever file-sync solution you use. 
 
-![initiative-tracker.png](Media/initiative-tracker.png)
+![initiative-tracker](Media/initiative-tracker.gif)
 
 ## Quick Start Example
 
