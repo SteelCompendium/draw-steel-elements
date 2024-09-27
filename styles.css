@@ -1,12 +1,12 @@
-/*         */
-/* General */
-/*         */
+/* ==================== */
+/*     General Styles    */
+/* ==================== */
 
 .ds-multiline {
 	white-space: pre-line;
 }
 
-/* top-left border fade */
+/* Top-left border fade for containers */
 
 .ds-container::before,
 .ds-container::after {
@@ -33,9 +33,9 @@
 	width: 1px; /* Border thickness */
 }
 
-/*         */
-/* Power Roll */
-/*         */
+/* ==================== */
+/*   Power Roll Styles   */
+/* ==================== */
 
 .ds-pr-inline-p,
 .ds-pr-inline-p p {
@@ -55,14 +55,14 @@
 .pr-container {
 	position: relative;
 	background: var(--code-background);
-	margin-top: .5em;
-	margin-bottom: .5em;
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
 	padding: 1em;
 	font-family: Bitter;
 	letter-spacing: 0.03em;
 }
 
-/* top-left border fade */
+/* Top-left border fade for power roll container */
 
 .pr-container::before,
 .pr-container::after {
@@ -88,6 +88,8 @@
 	width: 1px; /* Border thickness */
 }
 
+/* Indentation levels for power roll container */
+
 .pr-container.indent-1 {
 	margin-left: calc(var(--list-indent) * 1);
 }
@@ -112,31 +114,30 @@
 	margin-left: calc(var(--list-indent) * 6);
 }
 
+/* Styling for power roll elements */
+
 .pr-container .pr-name-value,
 .pr-container .pr-cost-value {
 	font-weight: bold;
 	margin-left: 0.5em;
 }
 
-.pr-container .pr-roll-value {
-	font-weight: bold;
-}
-
+.pr-container .pr-roll-value,
 .pr-container .pr-tier-key {
 	font-weight: bold;
 }
 
-.pr-container .pr-flavor-value {
-	font-style: italic;
-}
-
-.pr-container .pr-note-list, .pr-container .pr-note-line {
+.pr-container .pr-flavor-value,
+.pr-container .pr-note-list,
+.pr-container .pr-note-line {
 	font-style: italic;
 }
 
 .pr-container .pr-note-list {
 	margin-bottom: 0;
 }
+
+/* DSA tag styling */
 
 span.dsa,
 code.dsa {
@@ -151,10 +152,12 @@ code.dsa {
 	line-height: 1;
 }
 
+/* Detail and field lines */
+
 .pr-detail-line,
 .pr-field-line {
 	margin: 0.5em;
-	margin-bottom: .75em;
+	margin-bottom: 0.75em;
 }
 
 .pr-detail-table-row {
@@ -166,17 +169,14 @@ code.dsa {
 	width: 50%;
 }
 
-.pr-detail-key {
-	font-weight: bold;
-}
-
+.pr-detail-key,
 .pr-field-key {
 	font-weight: bold;
 }
 
-/* ===================== */
-/* Tier key symbol boxes */
-/* ===================== */
+/* =========================== */
+/*   Tier Key Symbol Boxes     */
+/* =========================== */
 
 .pr-tier-line {
 	display: flex;
@@ -186,7 +186,7 @@ code.dsa {
 .tier-key-container {
 	display: flex;
 	font-size: 1em;
-	margin-right: .75em;
+	margin-right: 0.75em;
 	max-height: 1em;
 }
 
@@ -196,7 +196,7 @@ code.dsa {
 	position: relative;
 	width: 3em;
 	text-align: center;
-	font-size: .8em;
+	font-size: 0.8em;
 	font-weight: bold;
 }
 
@@ -207,36 +207,36 @@ code.dsa {
 	background: var(--text-normal);
 
 	clip-path: polygon(
-		0.2em 0.2em,
-		0.4em 0,
-		calc(100% - 0.2em) 0,
-		100% 0.2em,
-		100% calc(100% - 0.2em),
-		calc(100% - 0.2em) 100%,
-		0.4em 100%,
-		0.2em calc(100% - 0.2em),
-		0.2em calc(50% + 0.2em),
-		0 50%,
-		0.2em calc(50% - 0.2em),
-		0.2em 0.2em,
+			0.2em 0.2em,
+			0.4em 0,
+			calc(100% - 0.2em) 0,
+			100% 0.2em,
+			100% calc(100% - 0.2em),
+			calc(100% - 0.2em) 100%,
+			0.4em 100%,
+			0.2em calc(100% - 0.2em),
+			0.2em calc(50% + 0.2em),
+			0 50%,
+			0.2em calc(50% - 0.2em),
+			0.2em 0.2em,
 
-		calc(0.2em + 1px)  calc(0.2em + 0.41px),
-		calc(0.2em + 1px) calc(50% - 0.2em + 0.41px),
-		1.41px 50%,
-		calc(0.2em + 1px) calc(50% + 0.2em - 0.41px),
-		calc(0.2em + 1px) calc(100% - 0.2em - 0.41px),
-		calc(0.4em + 0.41px) calc(100% - 1px),
-		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
-		calc(100% - 1px) calc(100% - 0.2em - 0.41px),
-		calc(100% - 1px) calc(0.2em + 0.41px),
-		calc(100% - 0.2em - 0.41px) 1px,
-		calc(0.4em + 0.41px) 1px,
-		calc(0.2em + 1px)  calc(0.2em + 0.41px)
+			calc(0.2em + 1px) calc(0.2em + 0.41px),
+			calc(0.2em + 1px) calc(50% - 0.2em + 0.41px),
+			1.41px 50%,
+			calc(0.2em + 1px) calc(50% + 0.2em - 0.41px),
+			calc(0.2em + 1px) calc(100% - 0.2em - 0.41px),
+			calc(0.4em + 0.41px) calc(100% - 1px),
+			calc(100% - 0.2em - 0.41px) calc(100% - 1px),
+			calc(100% - 1px) calc(100% - 0.2em - 0.41px),
+			calc(100% - 1px) calc(0.2em + 0.41px),
+			calc(100% - 0.2em - 0.41px) 1px,
+			calc(0.4em + 0.41px) 1px,
+			calc(0.2em + 1px) calc(0.2em + 0.41px)
 	);
 }
 
 .t1-key-body-text {
-	font-size: .9em;
+	font-size: 0.9em;
 }
 
 /* Tier 2  */
@@ -245,48 +245,49 @@ code.dsa {
 	position: relative;
 	width: 3em;
 	text-align: center;
-	font-size: .8em;
+	font-size: 0.8em;
 	font-weight: bold;
 }
+
 .t2-key-body:before {
 	content: "";
 	position: absolute;
 	inset: 0;
 	background: var(--text-normal);
 	clip-path: polygon(
-		0 0.2em,
-		0.2em 0,
-		calc(100% - 0.2em) 0,
-		100% 0.2em,
-		100% calc(100% - 0.2em),
-		calc(100% - 0.2em) 100%,
-		0.2em 100%,
-		0 calc(100% - 0.2em),
-		0 0.2em,
+			0 0.2em,
+			0.2em 0,
+			calc(100% - 0.2em) 0,
+			100% 0.2em,
+			100% calc(100% - 0.2em),
+			calc(100% - 0.2em) 100%,
+			0.2em 100%,
+			0 calc(100% - 0.2em),
+			0 0.2em,
 
-		1px  calc(0.2em + 0.41px),
-		1px calc(100% - 0.2em - 0.41px),
-		calc(0.2em + 0.41px) calc(100% - 1px),
-		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
-		calc(100% - 1px) calc(100% - 0.2em - 0.41px),
-		calc(100% - 1px) calc(0.2em + 0.41px),
-		calc(100% - 0.2em - 0.41px) 1px,
-		calc(0.2em + 0.41px) 1px,
-		1px  calc(0.2em + 0.41px)
+			1px calc(0.2em + 0.41px),
+			1px calc(100% - 0.2em - 0.41px),
+			calc(0.2em + 0.41px) calc(100% - 1px),
+			calc(100% - 0.2em - 0.41px) calc(100% - 1px),
+			calc(100% - 1px) calc(100% - 0.2em - 0.41px),
+			calc(100% - 1px) calc(0.2em + 0.41px),
+			calc(100% - 0.2em - 0.41px) 1px,
+			calc(0.2em + 0.41px) 1px,
+			1px calc(0.2em + 0.41px)
 	);
 }
 
 .t2-key-body-text {
-	font-size: .9em;
+	font-size: 0.9em;
 }
 
-/* Tier 3  */
+/* Tier 3 */
 
 .t3-key-body {
 	position: relative;
 	width: 3em;
 	text-align: center;
-	font-size: .8em;
+	font-size: 0.8em;
 	font-weight: bold;
 }
 
@@ -296,36 +297,36 @@ code.dsa {
 	inset: 0;
 	background: var(--text-normal);
 	clip-path: polygon(
-		0 0.2em,
-		0.2em 0,
-		calc(100% - 0.4em) 0,
-		calc(100% - 0.2em) 0.2em,
-		calc(100% - 0.2em) calc(50% - 0.2em),
-		100% 50%,
-		calc(100% - 0.2em) calc(50% + 0.2em),
-		calc(100% - 0.2em) calc(100% - 0.2em),
-		calc(100% - 0.4em) 100%,
-		0.2em 100%,
-		0 calc(100% - 0.2em),
-		0 0.2em,
+			0 0.2em,
+			0.2em 0,
+			calc(100% - 0.4em) 0,
+			calc(100% - 0.2em) 0.2em,
+			calc(100% - 0.2em) calc(50% - 0.2em),
+			100% 50%,
+			calc(100% - 0.2em) calc(50% + 0.2em),
+			calc(100% - 0.2em) calc(100% - 0.2em),
+			calc(100% - 0.4em) 100%,
+			0.2em 100%,
+			0 calc(100% - 0.2em),
+			0 0.2em,
 
-		1px  calc(0.2em + 0.41px),
-		1px calc(100% - 0.2em - 0.41px),
-		calc(0.2em + 0.41px) calc(100% - 1px),
-		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
-		calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px),
-		calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px),
-		calc(100% - 1.41px) 50%,
-		calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px),
-		calc(100% - 0.2em - 1px) calc(0.2em + 0.41px),
-		calc(100% - 0.4em - 0.41px) 1px,
-		calc(0.2em + 0.41px) 1px,
-		1px  calc(0.2em + 0.41px)
+			1px calc(0.2em + 0.41px),
+			1px calc(100% - 0.2em - 0.41px),
+			calc(0.2em + 0.41px) calc(100% - 1px),
+			calc(100% - 0.4em - 0.41px) calc(100% - 1px),
+			calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px),
+			calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px),
+			calc(100% - 1.41px) 50%,
+			calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px),
+			calc(100% - 0.2em - 1px) calc(0.2em + 0.41px),
+			calc(100% - 0.4em - 0.41px) 1px,
+			calc(0.2em + 0.41px) 1px,
+			1px calc(0.2em + 0.41px)
 	);
 }
 
 .t3-key-body-text {
-	font-size: .9em;
+	font-size: 0.9em;
 }
 
 /* Critical */
@@ -334,7 +335,7 @@ code.dsa {
 	position: relative;
 	width: 3em;
 	text-align: center;
-	font-size: .8em;
+	font-size: 0.8em;
 	font-weight: bold;
 }
 
@@ -344,48 +345,38 @@ code.dsa {
 	inset: 0;
 	background: var(--text-normal);
 	clip-path: polygon(
-		0 0.2em,
-		0.2em 0,
-		calc(100% - 0.4em) 0,
-		calc(100% - 0.2em) 0.2em,
-		calc(100% - 0.2em) calc(50% - 0.2em),
-		100% 50%,
-		calc(100% - 0.2em) calc(50% + 0.2em),
-		calc(100% - 0.2em) calc(100% - 0.2em),
-		calc(100% - 0.4em) 100%,
-		0.2em 100%,
-		0 calc(100% - 0.2em),
-		0 0.2em,
+			0 0.2em,
+			0.2em 0,
+			calc(100% - 0.4em) 0,
+			calc(100% - 0.2em) 0.2em,
+			calc(100% - 0.2em) calc(50% - 0.2em),
+			100% 50%,
+			calc(100% - 0.2em) calc(50% + 0.2em),
+			calc(100% - 0.2em) calc(100% - 0.2em),
+			calc(100% - 0.4em) 100%,
+			0.2em 100%,
+			0 calc(100% - 0.2em),
+			0 0.2em,
 
-		1px  calc(0.2em + 0.41px),
-		1px calc(100% - 0.2em - 0.41px),
-		calc(0.2em + 0.41px) calc(100% - 1px),
-		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
-		calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px),
-		calc(100% - 0.2em - 3px) calc(0.2em + 0.41px),
-		calc(100% - 0.4em - 0.41px) 1px,
-		calc(0.2em + 0.41px) 1px,
-		1px  calc(0.2em + 0.41px)
+			1px calc(0.2em + 0.41px),
+			1px calc(100% - 0.2em - 0.41px),
+			calc(0.2em + 0.41px) calc(100% - 1px),
+			calc(100% - 0.4em - 0.41px) calc(100% - 1px),
+			calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px),
+			calc(100% - 0.2em - 3px) calc(0.2em + 0.41px),
+			calc(100% - 0.4em - 0.41px) 1px,
+			calc(0.2em + 0.41px) 1px,
+			1px calc(0.2em + 0.41px)
 	);
 }
 
 .crit-key-body-text {
-	font-size: .9em;
+	font-size: 0.9em;
 	padding-right: 3px;
 }
 
-/*.crit-key-right-side {*/
-/*	--s: 4px;*/
-/*	height: 1em;*/
-/*	width: 0.5em;*/
-/*	clip-path: polygon(0 0,var(--s) 0,100% 50%,var(--s) 100%,0 100%,calc(100% - var(--s)) 50%);*/
-/*	background: var(--text-normal);*/
-/*	margin-left: -1px;*/
-/*	border-bottom: 1px solid var(--text-normal);*/
-/*}*/
-
 /* ==================== */
-/* Horizontal Rule      */
+/*    Horizontal Rule   */
 /* ==================== */
 
 .ds-hr-container {
@@ -395,35 +386,31 @@ code.dsa {
 	margin-top: 6px;
 }
 
-.ds-hr-left-line {
-	flex-grow: 1;
-	height: 2px;
-	background-color: var(--text-normal);
-	top: 50%; /* Center it vertically in the container */
-	left: 0;
-	right: 0;
-	background: linear-gradient(to left, var(--text-normal) 0%, var(--background-primary) 100%);
-
-}
-
+.ds-hr-left-line,
 .ds-hr-right-line {
 	flex-grow: 1;
 	height: 2px;
 	background-color: var(--text-normal);
-	top: 50%; /* Center it vertically in the container */
+	top: 50%; /* Center it vertically */
 	left: 0;
 	right: 0;
-	background: linear-gradient(to right, var(--text-normal) 0%, var(--background-primary) 100%);
+}
 
+.ds-hr-left-line {
+	background: linear-gradient(to left, var(--text-normal) 0%, var(--background-primary) 100%);
+}
+
+.ds-hr-right-line {
+	background: linear-gradient(to right, var(--text-normal) 0%, var(--background-primary) 100%);
 }
 
 .ds-hr-center {
 	width: 14px;
 	height: 14px;
 	background-color: var(--text-normal);
-	transform: translateZ(1px) translateY(1px) rotate(45deg); /* Rotate the square to make it a diamond */
+	transform: translateZ(1px) translateY(1px) rotate(45deg); /* Rotate to make a diamond */
 	position: relative;
-	z-index: 1; /* Ensure the diamond is on top of the line */
+	z-index: 1; /* Ensure the diamond is above the lines */
 	margin: 0 auto; /* Center the diamond */
 	border-bottom: 2px solid var(--text-normal);
 	border-right: 2px solid var(--text-normal);
@@ -431,10 +418,12 @@ code.dsa {
 }
 
 /* ==================== */
+/*    DSA Settings      */
+/* ==================== */
 
 .dsa-setting-row {
 	display: flex;
-	justify-content: end;
+	justify-content: flex-end;
 }
 
 .dsa-setting-row * {
@@ -462,10 +451,10 @@ code.dsa {
 }
 
 /* ==================== */
+/*   Initiative Tracker */
 /* ==================== */
-/* Initiative Tracker */
-/* ==================== */
-/* ==================== */
+
+/* Error Message Styling */
 
 .error-message {
 	font-family: monospace;
@@ -475,6 +464,8 @@ code.dsa {
 	padding: 1em;
 	position: relative;
 }
+
+/* Turn Indicator Styling */
 
 .turn-indicator {
 	cursor: pointer;
@@ -494,21 +485,29 @@ code.dsa {
 	color: var(--code-background);
 }
 
+/* Reset Round Button */
+
 .reset-round-button {
 	margin-bottom: 10px;
-	/* Additional styling */
 }
 
-.heroes-container .character-row, .enemy-group {
+/* Character Rows */
+
+.heroes-container .character-row,
+.enemy-group {
 	position: relative;
 	padding-top: 1px;
 	padding-right: 1em;
-	margin-bottom: .75em;
+	margin-bottom: 0.75em;
 	background-color: var(--code-background);
 }
 
-.heroes-container .character-row::before, .enemy-group::before,
-.heroes-container .character-row::after, .enemy-group::after {
+/* Top-left border fade for character rows */
+
+.heroes-container .character-row::before,
+.enemy-group::before,
+.heroes-container .character-row::after,
+.enemy-group::after {
 	content: '';
 	position: absolute;
 	background: linear-gradient(to right, transparent, var(--text-normal));
@@ -516,14 +515,16 @@ code.dsa {
 	width: 100%;
 }
 
-.heroes-container .character-row::before, .enemy-group::before {
+.heroes-container .character-row::before,
+.enemy-group::before {
 	top: 0;
 	left: 0;
 	background: linear-gradient(to right, var(--text-normal), transparent);
 	width: 12em;
 }
 
-.heroes-container .character-row::after, .enemy-group::after {
+.heroes-container .character-row::after,
+.enemy-group::after {
 	top: 0;
 	left: 0;
 	height: 100%;
@@ -532,11 +533,15 @@ code.dsa {
 	width: 1px; /* Border thickness */
 }
 
+/* Enemies Header */
+
 .enemies-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 }
+
+/* Villain Power Styling */
 
 .vp-container {
 	font-weight: bold;
@@ -568,6 +573,8 @@ code.dsa {
 	background-color: var(--code-background);
 }
 
+/* Enemy Group Container */
+
 .enemy-group-container {
 	display: flex;
 }
@@ -588,23 +595,27 @@ code.dsa {
 }
 
 /* Creature Group */
+
 .creature-group {
 	margin-bottom: 20px;
 }
 
 /* Detailed Creature Row */
+
 .creature-detail-row {
 	margin-bottom: 10px;
 }
 
-/* Instances Grid */
+/* ============================= */
+/*    Creature Instances Grid     */
+/* ============================= */
+
 .creature-instances-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
 	gap: 10px;
 }
 
-/* Instance Cell */
 .creature-instance-cell {
 	text-align: center;
 	padding: 5px;
@@ -615,6 +626,7 @@ code.dsa {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
+	min-width: 80px;
 }
 
 .creature-instance-cell.selected {
@@ -642,10 +654,7 @@ code.dsa {
 	max-width: 100%;
 }
 
-/* Adjustments for longer stamina text */
-.creature-instance-cell {
-	min-width: 80px;
-}
+/* Responsive Adjustments for Grid */
 
 @media (min-width: 600px) {
 	.creature-instances-grid {
@@ -665,11 +674,16 @@ code.dsa {
 	}
 }
 
+/* =========================== */
+/*    Hero and Character Rows  */
+/* =========================== */
+
 .hero-container {
 	display: flex;
 }
 
-.character-icon, .enemy-group-icon {
+.character-icon,
+.enemy-group-icon {
 	height: 1.5em;
 	width: 1.5em;
 	border: 1px solid var(--text-normal);
@@ -677,14 +691,12 @@ code.dsa {
 	border-radius: 5px 0 0 5px;
 }
 
-/* Character Row (Detailed View) */
 .character-row {
 	display: flex;
 	align-items: center;
 	margin-bottom: 10px;
 	width: 100%;
 }
-
 
 .character-image {
 	display: flex;
@@ -712,7 +724,8 @@ code.dsa {
 	align-items: center;
 }
 
-.condition-icon, .add-condition-icon {
+.condition-icon,
+.add-condition-icon {
 	width: 24px;
 	height: 24px;
 	display: flex;
@@ -742,13 +755,16 @@ code.dsa {
 	font-weight: bold;
 }
 
-/* Stamina modal */
+/* ==================== */
+/*     Stamina Modal    */
+/* ==================== */
 
 .stamina-header {
 	text-align: center;
 }
 
-/* STAMINA Bar */
+/* Stamina Bar */
+
 .stamina-bar-container {
 	width: 100%;
 	background-color: var(--code-background);
@@ -779,7 +795,7 @@ code.dsa {
 	color: var(--code-background);
 	text-align: center;
 	line-height: 100%;
-	font-size: .7em;
+	font-size: 0.7em;
 	padding-top: 1px;
 	text-shadow: 0.5px 0.5px 4px var(--text-normal);
 	font-weight: bold;
@@ -806,7 +822,8 @@ code.dsa {
 	border-left: 1px solid var(--code-background);
 }
 
-/* Numeric STAMINA Display */
+/* Numeric Stamina Display */
+
 .stamina-numeric-container {
 	display: -webkit-inline-box;
 	margin-bottom: 10px;
@@ -836,6 +853,7 @@ code.dsa {
 }
 
 /* Apply Damage/Healing */
+
 .modifier-container {
 	display: flex;
 	align-items: center;
@@ -843,7 +861,7 @@ code.dsa {
 	justify-content: space-between;
 }
 
-.modifier-container>div {
+.modifier-container > div {
 	width: 100%;
 	padding: 1em;
 }
@@ -855,27 +873,22 @@ code.dsa {
 	border-left: 1px solid var(--color-base-40);
 }
 
-.apply-container, .quick-mod-container {
-	/*border: 1px solid var(--color-base-40);*/
-	/*padding: 1em 3em;*/
-	/*border-radius: 0.25em;*/
-}
-
 .apply-row {
 	display: flex;
 	justify-content: space-around;
 	align-items: center;
-	margin-top: .5em;
+	margin-top: 0.5em;
 }
 
 .apply-input {
 	width: 60px;
 }
 
-.apply-btn, .quick-mod-btn {
+.apply-btn,
+.quick-mod-btn {
 	display: flex;
 	width: 100%;
-	margin-top: .5em;
+	margin-top: 0.5em;
 	justify-content: start;
 }
 
@@ -883,8 +896,10 @@ code.dsa {
 .quick-mod-btn .btn-text,
 .reset-button .btn-text {
 	height: 100%;
-	margin-left: .5em;
+	margin-left: 0.5em;
 }
+
+/* Temporary Stamina Container */
 
 .temp-stamina-container {
 	background-color: var(--code-background);
@@ -910,6 +925,7 @@ code.dsa {
 }
 
 /* Action Button */
+
 .action-button-container {
 	text-align: center;
 	margin-top: 20px;
@@ -929,9 +945,9 @@ button.action-button {
 	background-color: var(--interactive-normal);
 }
 
-/* ---------------- */
-/* Condition Modal  */
-/* ---------------- */
+/* ===================== */
+/*    Condition Modal    */
+/* ===================== */
 
 .condition-select-item {
 	display: inline-grid;
