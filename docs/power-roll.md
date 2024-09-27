@@ -1,13 +1,13 @@
 # Power Roll Element
 
-![power roll.png](power-roll-simple.png)
+![power roll.png](Media/power-roll-simple.png)
 
 ## Codeblock
 
 Power Roll element for Tests, Resistance Rolls, Abilities, and other Power Rolls. Triggered with a codeblock leading
 with `ds-power-roll` or `ds-pr`
 
-![powerroll.png](powerroll.png)
+![powerroll.png](Media/powerroll.png)
 
 	```ds-power-roll
 	name: Draconian Pride

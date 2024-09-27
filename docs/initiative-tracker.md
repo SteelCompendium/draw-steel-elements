@@ -6,7 +6,7 @@ The Initiative Tracker uses YAML-defined data to represent the state of an encou
 The YAML codeblock is where the initial encounter data is configured, but it will also be where state is persisted for 
 easy transfer to other systems via whatever file-sync solution you use. 
 
-![initiative-tracker.png](initiative-tracker.png)
+![initiative-tracker.png](Media/initiative-tracker.png)
 
 ## Quick Start Example
 
@@ -174,7 +174,7 @@ Click the "Reset Round" button to clear all turn indicators and start a new roun
 
 ### Stamina Management
 
-![initiative-tracker-stamina-modal.png](initiative-tracker-stamina-modal.png)
+![initiative-tracker-stamina-modal.png](Media/initiative-tracker-stamina-modal.png)
 
 #### Adjusting Stamina Incrementally
 
@@ -202,7 +202,7 @@ Click the "Reset Round" button to clear all turn indicators and start a new roun
 
 Conditions represent status effects affecting heroes or creatures, such as "dazed" or "slowed".
 
-![initiative-tracker-conditions-select.png](initiative-tracker-conditions-select.png)
+![initiative-tracker-conditions-select.png](Media/initiative-tracker-conditions-select.png)
 
 Adding a Condition to a Hero or Creature:
 

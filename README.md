@@ -10,13 +10,13 @@ Some helper elements for the MCDM Draw Steel TTRPG
 
 The [Power Roll Element](./docs/power-roll.md) is used to quickly format Tests, Abilities, Resistance Rolls, and other Power Rolls.
 
-![power roll.png](./docs/power-roll-simple.png)
+![power roll.png](./docs/Media/power-roll-simple.png)
 
 ### Initiative Tracker Element
 
 The [Initiative Tracker Element](./docs/initiative-tracker.md) is used to manage and run encounters.
 
-![Initiative Tracker.png](./docs/initiative-tracker.png)
+![Initiative Tracker.png](./docs/Media/initiative-tracker.png)
 
 ### Horizontal Rule Element
 
