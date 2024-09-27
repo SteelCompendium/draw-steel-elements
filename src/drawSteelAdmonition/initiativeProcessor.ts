@@ -104,6 +104,7 @@ export class InitiativeProcessor {
 
 		// Turn Indicator
 		const turnIndicatorEl = icon.createEl('div', {cls: 'turn-indicator'});
+		turnIndicatorEl.title = "Toggle to mark turn taken"
 		this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn ?? false);
 
 		// Add click handler to toggle has_taken_turn
@@ -167,6 +168,7 @@ export class InitiativeProcessor {
 
 		// Turn Indicator
 		const turnIndicatorEl = icon.createEl('div', {cls: 'turn-indicator'});
+		turnIndicatorEl.title = "Toggle to mark turn taken"
 		this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn ?? false);
 
 		turnIndicatorEl.addEventListener('click', () => {
