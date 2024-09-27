@@ -29,8 +29,9 @@ with `ds-power-roll` or `ds-pr`
 ### Fields
 
 | Property                      | Description                                              | Example                                   |
-| ----------------------------- | -------------------------------------------------------- | ----------------------------------------- |
+|-------------------------------|----------------------------------------------------------|-------------------------------------------|
 | `name`                        | The "Title" or "Description" of the Power Roll.          | `name: Might Resistance Roll`             |
+| `flavor`                      | The flavor text of the Power Roll.                       | `flavor: Be strong`                       |
 | `cost`                        | The cost to use the ability                              | `cost: 3 Piety`                           |
 | `keywords`                    | Keywords of the ability                                  | `keywords: Area, Magic`                   |
 | `type`                        | Type of the ability                                      | `type: Action`                            |
