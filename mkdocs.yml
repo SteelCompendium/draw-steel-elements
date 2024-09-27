@@ -1,0 +1,64 @@
+site_name: Obsidian Plugin - Draw Steel Elements
+site_url: https://github.com/SteelCompendium/draw-steel-elements
+
+copyright: The Draw Steel Compendium is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC.
+
+theme:
+    name: 'material'
+    font:
+        text: 'Source Serif 4'
+    palette:
+        scheme: slate
+        primary: black
+        accent: blue
+    logo: Media/favicon.ico
+    favicon: Media/favicon.ico
+
+# Extensions
+markdown_extensions:
+    - footnotes
+    # - attr_list
+    -  pymdownx.arithmatex:
+           generic: true
+    # - pymdownx.superfences
+    # - pymdownx.details
+    # - pymdownx.magiclink
+    -  pymdownx.tasklist:
+           custom_checkbox: true
+    - def_list
+    - pymdownx.critic
+    - pymdownx.caret
+    - pymdownx.keys
+    - pymdownx.mark
+    - pymdownx.tilde
+    -  pymdownx.superfences:
+           custom_fences:
+               -  name: mermaid
+                  class: mermaid
+                  format: !!python/name:pymdownx.superfences.fence_code_format
+
+    -  toc:
+           permalink: true
+           toc_depth: 1-6
+
+plugins:
+    - search
+    - roamlinks
+      #  - blog
+      #  - rss:
+      #  match_path: blog/posts/.*
+      #  date_from_meta:
+      #    as_creation: date
+    #  categories:
+    #    - categories
+    #    - tags
+extra_css:
+    - stylesheets/extra.css
+
+extra_javascript:
+    - javascripts/mathjax.js
+    - https://polyfill.io/v3/polyfill.min.js?features=es6
+    - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+    - https://unpkg.com/mermaid/dist/mermaid.min.js
+    - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js
+    - javascripts/tablesort.js
