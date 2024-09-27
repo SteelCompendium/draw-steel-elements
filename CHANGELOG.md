@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2
+
+- [BUGFIX] Allow enemies to use recoveries
+
 ## 1.1.1
 
 - [BUGFIX] Corrects bugs allowing for non-integer stamina

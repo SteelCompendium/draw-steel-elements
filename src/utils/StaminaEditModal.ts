@@ -240,11 +240,6 @@ export class StaminaEditModal extends Modal {
 			}
 		});
 
-		// For creatures, hide the recovery button (assuming only heroes can spend recovery)
-		if (!this.isHero(this.character)) {
-			recoveryButton.style.display = 'none';
-		}
-
 		// Bottom: Action Button and Reset Button
 		const actionButtonContainer = contentEl.createEl('div', { cls: 'action-button-container' });
 
