@@ -45,9 +45,7 @@ export class StaminaEditModal extends Modal {
 			: this.creature?.max_stamina ?? 0;
 		const currentStamina = this.character.current_stamina ?? maxStamina;
 		const currentTempStamina = this.character.temp_stamina ?? 0;
-		const negativeStaminaLimit = this.isHero(this.character)
-			? -0.5 * maxStamina
-			: 0; // Enemies cannot have negative STAMINA
+		const negativeStaminaLimit = this.isHero(this.character) ? Math.ceil(-0.5 * maxStamina) : 0;
 
 		// First Row: STAMINA Bar
 		const staminaBarContainer = contentEl.createEl('div', { cls: 'stamina-bar-container' });
@@ -209,7 +207,7 @@ export class StaminaEditModal extends Modal {
 		setIcon(killButton.createEl('div', { cls: 'btn-icon' }), "skull");
 		killButton.createEl('div', { cls: 'btn-text', text: 'Kill' });
 		killButton.addEventListener('click', () => {
-			this.pendingStaminaChange = (currentStamina * -1) - (this.isHero(this.character) ? (maxStamina * 0.5) : 0);
+			this.pendingStaminaChange = negativeStaminaLimit - currentStamina;
 			this.pendingTempStaminaChange = -currentTempStamina; // Remove all temp STAMINA
 			tempStaminaInput.value = '0';
 			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);

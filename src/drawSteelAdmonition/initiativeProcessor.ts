@@ -315,8 +315,6 @@ export class InitiativeProcessor {
 		const healthEl = container.createEl('div', {cls: 'character-health'});
 		const staminaEl = healthEl.createEl('div', {cls: 'character-stamina'});
 		this.updateStaminaDisplay(staminaEl, instance, creature);
-
-		// STAMINA Click Handler
 		staminaEl.addEventListener('click', () => {
 			this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
 		});

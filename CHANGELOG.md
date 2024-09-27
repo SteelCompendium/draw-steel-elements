@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- [BUGFIX] Corrects bugs allowing for non-integer stamina
+
 ## 1.1.0
 
 - Adds the Initiative Tracker Element!
