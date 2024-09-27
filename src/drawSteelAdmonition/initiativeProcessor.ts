@@ -1,7 +1,7 @@
 import {App, MarkdownPostProcessorContext, setIcon} from "obsidian";
-import {StaminaEditModal} from "../utils/StaminaEditModal";
+import {StaminaEditModal} from "../views/StaminaEditModal";
 import {ConditionManager} from "../utils/Conditions";
-import {ConditionSelectModal} from "../utils/ConditionSelectModal";
+import {ConditionSelectModal} from "../views/ConditionSelectModal";
 import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
 import {CodeBlocks} from "../utils/CodeBlocks";
 import {Creature, CreatureInstance, EncounterData, EnemyGroup, Hero, parseEncounterData} from "./EncounterData";
