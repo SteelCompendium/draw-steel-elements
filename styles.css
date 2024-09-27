@@ -600,7 +600,7 @@ code.dsa {
 /* Instances Grid */
 .creature-instances-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
 	gap: 10px;
 }
 
@@ -612,25 +612,57 @@ code.dsa {
 	border: 1px solid transparent;
 	border-radius: 4px;
 	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
 }
 
 .creature-instance-cell.selected {
-	/*border-color: #007BFF;*/
-	/*box-shadow: 0 0 5px #007BFF;*/
 	border-color: #D50000;
 	box-shadow: 0 0 5px #D50000;
 }
 
-.instance-image img {
+.instance-image {
 	width: 50px;
 	height: 50px;
+	margin-bottom: 5px;
+}
+
+.instance-image img {
+	width: 100%;
+	height: 100%;
 	object-fit: cover;
-	/* Prevent any image on-click events from firing since we override with our behavior */
 	pointer-events: none;
 }
 
 .instance-stamina {
-	font-size: 16px;
+	font-size: 14px;
+	word-wrap: break-word;
+	text-align: center;
+	max-width: 100%;
+}
+
+/* Adjustments for longer stamina text */
+.creature-instance-cell {
+	min-width: 80px;
+}
+
+@media (min-width: 600px) {
+	.creature-instances-grid {
+		grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+	}
+}
+
+@media (max-width: 599px) {
+	.creature-instances-grid {
+		grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+	}
+	.creature-instance-cell {
+		min-width: 60px;
+	}
+	.instance-stamina {
+		font-size: 12px;
+	}
 }
 
 .hero-container {
