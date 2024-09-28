@@ -947,56 +947,82 @@ button.action-button {
 /*    Condition Modal    */
 /* ===================== */
 
-/*.condition-select-item {*/
-/*	display: inline-grid;*/
-/*	justify-items: center;*/
-/*	margin: 0.25em;*/
-/*	border: 1px solid var(--color-base-30);*/
-/*	border-radius: 2px;*/
-/*	background-color: var(--code-background);*/
-/*	padding: 1em;*/
-/*	width: calc((100% - 2em) / 4);*/
-/*	height: 7em;*/
-/*	justify-content: center;*/
-/*	text-align: center;*/
-/*}*/
+/* Conditions List */
+.conditions-list {
+	display: flex;
+	flex-wrap: wrap;
+}
 
-/*.horizontal-divider {*/
-/*	margin: 2em 9em;*/
-/*	height: 1px;*/
-/*	background-color: var(--color-base-40);*/
-/*}*/
-
+/* Condition Item */
 .condition-item {
+	position: relative;
 	display: flex;
 	align-items: center;
-	margin-bottom: 8px;
+	width: calc(50% - 2em);
+	padding: 4px 1em;
+	/* padding-left: 1em; */
+	cursor: pointer;
+	box-sizing: border-box;
+	transition: background-color 0.2s;
+	margin: 0 1em 0.25em 1em;
+	border: 2px solid transparent;
+	border-radius: 4px;
 }
 
 .condition-item:hover {
 	background-color: var(--code-background);
 }
 
-.condition-item label {
+/* Selected Condition */
+.condition-item.selected {
+	border: 2px solid var(--interactive-accent);
+	border-radius: 4px;
+}
+
+/* Condition Icon Preview */
+.condition-icon-preview {
+	font-size: 1.5em;
+}
+
+/* Condition Label */
+.condition-label {
 	margin-left: 8px;
 	flex-grow: 1;
 }
 
-.customize-btn {
+/* Customize Icon (Cog) */
+.condition-customize-icon {
 	margin-left: 8px;
+	cursor: pointer;
+	display: none; /* Hidden by default */
 }
 
+.condition-item:hover .condition-customize-icon {
+	display: inline-block; /* Show on hover */
+}
+
+.condition-customize-icon {
+	position: absolute;
+	right: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+/* Customize Icon Size */
+.condition-customize-icon svg {
+	width: 1em;
+	height: 1em;
+}
+
+/* Horizontal Divider */
 .horizontal-divider {
-	margin: 2em 9em;
+	width: 100%;
+	margin: 1em 0;
 	height: 1px;
 	background-color: var(--color-base-40);
 }
 
-.condition-icon-preview {
-	margin-left: 8px;
-	font-size: 1.5em;
-}
-
+/* Modal Buttons */
 .add-condition-modal .modal-buttons button,
 .customize-condition-modal .modal-buttons button {
 	margin: 1em 0 0 1em;
@@ -1040,7 +1066,7 @@ button.action-button {
 /* ===================== */
 
 
-/* For blink effect */
+/* Blink effect */
 .condition-effect-blink {
 	animation: blink-animation 1s steps(2, start) infinite;
 }
@@ -1052,8 +1078,8 @@ button.action-button {
 }
 
 /* For blur-blink effect */
-
-.condition-effect-blur-pulse path, .condition-effect-blur-pulse svg {
+.condition-effect-blur-pulse path,
+.condition-effect-blur-pulse svg {
 	animation: blur-pulse-animation 2s infinite;
 	overflow: visible;
 }
@@ -1072,14 +1098,16 @@ button.action-button {
 
 /* Glow Effect */
 
-.condition-effect-glow path, .condition-effect-glow svg {
+.condition-effect-glow path,
+.condition-effect-glow svg {
 	filter: drop-shadow(0 0 4px currentColor);
 	overflow: visible;
 }
 
-/* Glow Blink Effect */
+/* Glow Pulse Effect */
 
-.condition-effect-glow-pulse path, .condition-effect-glow-pulse svg {
+.condition-effect-glow-pulse path,
+.condition-effect-glow-pulse svg {
 	animation: glow-pulse-animation 2s infinite;
 	overflow: visible;
 }
@@ -1096,7 +1124,7 @@ button.action-button {
 	}
 }
 
-/* For breathing effect */
+/* Breathing effect */
 .condition-effect-breathing {
 	animation: breathing-animation 3s ease-in-out infinite;
 }
