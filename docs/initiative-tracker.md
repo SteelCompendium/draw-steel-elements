@@ -202,12 +202,20 @@ Click the "Reset Round" button to clear all turn indicators and start a new roun
 
 Conditions represent status effects affecting heroes or creatures, such as "dazed" or "slowed".
 
-![initiative-tracker-conditions-select.png](Media/initiative-tracker-conditions-select.png)
+![initiative-tracker-add-conditions](Media/initiative-tracker-add-conditions.png)
 
 Adding a Condition to a Hero or Creature:
 
 - Click the "+" icon in the conditions section.
-- Select a condition from the list.
+- Select conditions from the list by clicking them
+- Click "Add Conditions"
+
+Optionally, you can customize the appearance of the condition:
+
+- Open the condition customization modal
+  - Click the "cog" icon when hovering over the condition in the "Add Conditions" modal OR
+  - Double-click the condition in the "Add Conditions" modal
+- Change the color or effect with the provided selectors
 
 Removing a Condition:
 

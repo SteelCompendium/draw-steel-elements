@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- Initiative Tracker
+  - Overhauls the condition modal and adds support for customizing the condition appearance 
+
 ## 1.1.2
 
 - [BUGFIX] Allow enemies to use recoveries
