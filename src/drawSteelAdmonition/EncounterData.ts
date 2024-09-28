@@ -8,14 +8,14 @@ export interface Hero {
     image?: string;
     isHero: boolean;
     has_taken_turn?: boolean;
-    conditions?: string[];
+    conditions?: (string | Condition)[];
 }
 
 export interface CreatureInstance {
     id: number;
     current_stamina: number;
     temp_stamina?: number;
-    conditions?: string[];
+    conditions?: (string | Condition)[];
 }
 
 export interface Creature {
@@ -36,6 +36,12 @@ export interface EnemyGroup {
 
 export interface VillainPower {
     value: number;
+}
+
+export interface Condition {
+    key: string;
+    color?: string;
+    effect?: string;
 }
 
 export interface EncounterData {
@@ -78,9 +84,23 @@ export function parseEncounterData(source: string): EncounterData {
             throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_stamina' field.`);
         }
 
+        // Update conditions handling
+        hero.conditions = hero.conditions?.map(cond => {
+            if (typeof cond === 'string') {
+                return cond; // Keep as is for backward compatibility
+            } else if (typeof cond === 'object' && cond.key) {
+                return {
+                    key: cond.key,
+                    color: cond.color ?? null,
+                    effect: cond.effect ?? null,
+                };
+            } else {
+                throw new Error(`Invalid condition format for hero '${hero.name}'.`);
+            }
+        }) ?? [];
+
         hero.isHero = true;
         hero.has_taken_turn = hero.has_taken_turn ?? false;
-        hero.conditions = hero.conditions ?? [];
         hero.current_stamina = hero.current_stamina ?? hero.max_stamina;
         hero.temp_stamina = hero.temp_stamina ?? 0;
     });
@@ -134,7 +154,20 @@ export function parseEncounterData(source: string): EncounterData {
                     }
                     instance.current_stamina = instance.current_stamina ?? creature.max_stamina;
                     instance.temp_stamina = instance.temp_stamina ?? 0;
-                    instance.conditions = instance.conditions ?? [];
+                    // Update conditions handling
+                    instance.conditions = instance.conditions?.map(cond => {
+                        if (typeof cond === 'string') {
+                            return cond; // Keep as is for backward compatibility
+                        } else if (typeof cond === 'object' && cond.key) {
+                            return {
+                                key: cond.key,
+                                color: cond.color ?? null,
+                                effect: cond.effect ?? null,
+                            };
+                        } else {
+                            throw new Error(`Invalid condition format for hero '${hero.name}'.`);
+                        }
+                    }) ?? [];
                 });
             }
         });

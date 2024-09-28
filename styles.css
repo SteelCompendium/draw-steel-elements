@@ -207,31 +207,30 @@ code.dsa {
 	background: var(--text-normal);
 
 	clip-path: polygon(
-			0.2em 0.2em,
-			0.4em 0,
-			calc(100% - 0.2em) 0,
-			100% 0.2em,
-			100% calc(100% - 0.2em),
-			calc(100% - 0.2em) 100%,
-			0.4em 100%,
-			0.2em calc(100% - 0.2em),
-			0.2em calc(50% + 0.2em),
-			0 50%,
-			0.2em calc(50% - 0.2em),
-			0.2em 0.2em,
-
-			calc(0.2em + 1px) calc(0.2em + 0.41px),
-			calc(0.2em + 1px) calc(50% - 0.2em + 0.41px),
-			1.41px 50%,
-			calc(0.2em + 1px) calc(50% + 0.2em - 0.41px),
-			calc(0.2em + 1px) calc(100% - 0.2em - 0.41px),
-			calc(0.4em + 0.41px) calc(100% - 1px),
-			calc(100% - 0.2em - 0.41px) calc(100% - 1px),
-			calc(100% - 1px) calc(100% - 0.2em - 0.41px),
-			calc(100% - 1px) calc(0.2em + 0.41px),
-			calc(100% - 0.2em - 0.41px) 1px,
-			calc(0.4em + 0.41px) 1px,
-			calc(0.2em + 1px) calc(0.2em + 0.41px)
+		0.2em 0.2em,
+		0.4em 0,
+		calc(100% - 0.2em) 0,
+		100% 0.2em,
+		100% calc(100% - 0.2em),
+		calc(100% - 0.2em) 100%,
+		0.4em 100%,
+		0.2em calc(100% - 0.2em),
+		0.2em calc(50% + 0.2em),
+		0 50%,
+		0.2em calc(50% - 0.2em),
+		0.2em 0.2em,
+		calc(0.2em + 1px) calc(0.2em + 0.41px),
+		calc(0.2em + 1px) calc(50% - 0.2em + 0.41px),
+		1.41px 50%,
+		calc(0.2em + 1px) calc(50% + 0.2em - 0.41px),
+		calc(0.2em + 1px) calc(100% - 0.2em - 0.41px),
+		calc(0.4em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
+		calc(100% - 1px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 1px) calc(0.2em + 0.41px),
+		calc(100% - 0.2em - 0.41px) 1px,
+		calc(0.4em + 0.41px) 1px,
+		calc(0.2em + 1px) calc(0.2em + 0.41px)
 	);
 }
 
@@ -255,25 +254,24 @@ code.dsa {
 	inset: 0;
 	background: var(--text-normal);
 	clip-path: polygon(
-			0 0.2em,
-			0.2em 0,
-			calc(100% - 0.2em) 0,
-			100% 0.2em,
-			100% calc(100% - 0.2em),
-			calc(100% - 0.2em) 100%,
-			0.2em 100%,
-			0 calc(100% - 0.2em),
-			0 0.2em,
-
-			1px calc(0.2em + 0.41px),
-			1px calc(100% - 0.2em - 0.41px),
-			calc(0.2em + 0.41px) calc(100% - 1px),
-			calc(100% - 0.2em - 0.41px) calc(100% - 1px),
-			calc(100% - 1px) calc(100% - 0.2em - 0.41px),
-			calc(100% - 1px) calc(0.2em + 0.41px),
-			calc(100% - 0.2em - 0.41px) 1px,
-			calc(0.2em + 0.41px) 1px,
-			1px calc(0.2em + 0.41px)
+		0 0.2em,
+		0.2em 0,
+		calc(100% - 0.2em) 0,
+		100% 0.2em,
+		100% calc(100% - 0.2em),
+		calc(100% - 0.2em) 100%,
+		0.2em 100%,
+		0 calc(100% - 0.2em),
+		0 0.2em,
+		1px calc(0.2em + 0.41px),
+		1px calc(100% - 0.2em - 0.41px),
+		calc(0.2em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 0.41px) calc(100% - 1px),
+		calc(100% - 1px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 1px) calc(0.2em + 0.41px),
+		calc(100% - 0.2em - 0.41px) 1px,
+		calc(0.2em + 0.41px) 1px,
+		1px calc(0.2em + 0.41px)
 	);
 }
 
@@ -297,31 +295,30 @@ code.dsa {
 	inset: 0;
 	background: var(--text-normal);
 	clip-path: polygon(
-			0 0.2em,
-			0.2em 0,
-			calc(100% - 0.4em) 0,
-			calc(100% - 0.2em) 0.2em,
-			calc(100% - 0.2em) calc(50% - 0.2em),
-			100% 50%,
-			calc(100% - 0.2em) calc(50% + 0.2em),
-			calc(100% - 0.2em) calc(100% - 0.2em),
-			calc(100% - 0.4em) 100%,
-			0.2em 100%,
-			0 calc(100% - 0.2em),
-			0 0.2em,
-
-			1px calc(0.2em + 0.41px),
-			1px calc(100% - 0.2em - 0.41px),
-			calc(0.2em + 0.41px) calc(100% - 1px),
-			calc(100% - 0.4em - 0.41px) calc(100% - 1px),
-			calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px),
-			calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px),
-			calc(100% - 1.41px) 50%,
-			calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px),
-			calc(100% - 0.2em - 1px) calc(0.2em + 0.41px),
-			calc(100% - 0.4em - 0.41px) 1px,
-			calc(0.2em + 0.41px) 1px,
-			1px calc(0.2em + 0.41px)
+		0 0.2em,
+		0.2em 0,
+		calc(100% - 0.4em) 0,
+		calc(100% - 0.2em) 0.2em,
+		calc(100% - 0.2em) calc(50% - 0.2em),
+		100% 50%,
+		calc(100% - 0.2em) calc(50% + 0.2em),
+		calc(100% - 0.2em) calc(100% - 0.2em),
+		calc(100% - 0.4em) 100%,
+		0.2em 100%,
+		0 calc(100% - 0.2em),
+		0 0.2em,
+		1px calc(0.2em + 0.41px),
+		1px calc(100% - 0.2em - 0.41px),
+		calc(0.2em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px),
+		calc(100% - 1.41px) 50%,
+		calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px),
+		calc(100% - 0.2em - 1px) calc(0.2em + 0.41px),
+		calc(100% - 0.4em - 0.41px) 1px,
+		calc(0.2em + 0.41px) 1px,
+		1px calc(0.2em + 0.41px)
 	);
 }
 
@@ -345,28 +342,27 @@ code.dsa {
 	inset: 0;
 	background: var(--text-normal);
 	clip-path: polygon(
-			0 0.2em,
-			0.2em 0,
-			calc(100% - 0.4em) 0,
-			calc(100% - 0.2em) 0.2em,
-			calc(100% - 0.2em) calc(50% - 0.2em),
-			100% 50%,
-			calc(100% - 0.2em) calc(50% + 0.2em),
-			calc(100% - 0.2em) calc(100% - 0.2em),
-			calc(100% - 0.4em) 100%,
-			0.2em 100%,
-			0 calc(100% - 0.2em),
-			0 0.2em,
-
-			1px calc(0.2em + 0.41px),
-			1px calc(100% - 0.2em - 0.41px),
-			calc(0.2em + 0.41px) calc(100% - 1px),
-			calc(100% - 0.4em - 0.41px) calc(100% - 1px),
-			calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px),
-			calc(100% - 0.2em - 3px) calc(0.2em + 0.41px),
-			calc(100% - 0.4em - 0.41px) 1px,
-			calc(0.2em + 0.41px) 1px,
-			1px calc(0.2em + 0.41px)
+		0 0.2em,
+		0.2em 0,
+		calc(100% - 0.4em) 0,
+		calc(100% - 0.2em) 0.2em,
+		calc(100% - 0.2em) calc(50% - 0.2em),
+		100% 50%,
+		calc(100% - 0.2em) calc(50% + 0.2em),
+		calc(100% - 0.2em) calc(100% - 0.2em),
+		calc(100% - 0.4em) 100%,
+		0.2em 100%,
+		0 calc(100% - 0.2em),
+		0 0.2em,
+		1px calc(0.2em + 0.41px),
+		1px calc(100% - 0.2em - 0.41px),
+		calc(0.2em + 0.41px) calc(100% - 1px),
+		calc(100% - 0.4em - 0.41px) calc(100% - 1px),
+		calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px),
+		calc(100% - 0.2em - 3px) calc(0.2em + 0.41px),
+		calc(100% - 0.4em - 0.41px) 1px,
+		calc(0.2em + 0.41px) 1px,
+		1px calc(0.2em + 0.41px)
 	);
 }
 
@@ -666,9 +662,11 @@ code.dsa {
 	.creature-instances-grid {
 		grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
 	}
+
 	.creature-instance-cell {
 		min-width: 60px;
 	}
+
 	.instance-stamina {
 		font-size: 12px;
 	}
@@ -949,22 +947,168 @@ button.action-button {
 /*    Condition Modal    */
 /* ===================== */
 
-.condition-select-item {
-	display: inline-grid;
-	justify-items: center;
-	margin: 0.25em;
-	border: 1px solid var(--color-base-30);
-	border-radius: 2px;
+/*.condition-select-item {*/
+/*	display: inline-grid;*/
+/*	justify-items: center;*/
+/*	margin: 0.25em;*/
+/*	border: 1px solid var(--color-base-30);*/
+/*	border-radius: 2px;*/
+/*	background-color: var(--code-background);*/
+/*	padding: 1em;*/
+/*	width: calc((100% - 2em) / 4);*/
+/*	height: 7em;*/
+/*	justify-content: center;*/
+/*	text-align: center;*/
+/*}*/
+
+/*.horizontal-divider {*/
+/*	margin: 2em 9em;*/
+/*	height: 1px;*/
+/*	background-color: var(--color-base-40);*/
+/*}*/
+
+.condition-item {
+	display: flex;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.condition-item:hover {
 	background-color: var(--code-background);
-	padding: 1em;
-	width: calc((100% - 2em) / 4);
-	height: 7em;
-	justify-content: center;
-	text-align: center;
+}
+
+.condition-item label {
+	margin-left: 8px;
+	flex-grow: 1;
+}
+
+.customize-btn {
+	margin-left: 8px;
 }
 
 .horizontal-divider {
 	margin: 2em 9em;
 	height: 1px;
 	background-color: var(--color-base-40);
+}
+
+.condition-icon-preview {
+	margin-left: 8px;
+	font-size: 1.5em;
+}
+
+.add-condition-modal .modal-buttons button,
+.customize-condition-modal .modal-buttons button {
+	margin: 1em 0 0 1em;
+}
+
+.add-condition-modal .modal-buttons,
+.customize-condition-modal .modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.customize-condition-body {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.customize-condition-modal .color-picker-container,
+.customize-condition-modal .effect-container {
+	margin-top: 1em;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+.customize-condition-modal label {
+	width: 4em;
+	margin-right: 1em;
+}
+
+.customize-condition-preview {
+	height: 2em;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+/* ===================== */
+/*    Effects            */
+/* ===================== */
+
+
+/* For blink effect */
+.condition-effect-blink {
+	animation: blink-animation 1s steps(2, start) infinite;
+}
+
+@keyframes blink-animation {
+	to {
+		visibility: hidden;
+	}
+}
+
+/* For blur-blink effect */
+
+.condition-effect-blur-pulse path, .condition-effect-blur-pulse svg {
+	animation: blur-pulse-animation 2s infinite;
+	overflow: visible;
+}
+
+@keyframes blur-pulse-animation {
+	0% {
+		filter: blur(0px);
+	}
+	50% {
+		filter: blur(2px);
+	}
+	100% {
+		filter: blur(0px);
+	}
+}
+
+/* Glow Effect */
+
+.condition-effect-glow path, .condition-effect-glow svg {
+	filter: drop-shadow(0 0 4px currentColor);
+	overflow: visible;
+}
+
+/* Glow Blink Effect */
+
+.condition-effect-glow-pulse path, .condition-effect-glow-pulse svg {
+	animation: glow-pulse-animation 2s infinite;
+	overflow: visible;
+}
+
+@keyframes glow-pulse-animation {
+	0% {
+		filter: drop-shadow(0 0 1px currentColor);
+	}
+	50% {
+		filter: drop-shadow(0 0 4px currentColor);
+	}
+	100% {
+		filter: drop-shadow(0 0 1px currentColor);
+	}
+}
+
+/* For breathing effect */
+.condition-effect-breathing {
+	animation: breathing-animation 3s ease-in-out infinite;
+}
+
+@keyframes breathing-animation {
+	0% {
+		opacity: 0.5;
+	}
+	50% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0.5;
+	}
 }

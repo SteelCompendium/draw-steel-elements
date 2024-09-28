@@ -1,10 +1,18 @@
 import {App, MarkdownPostProcessorContext, setIcon} from "obsidian";
 import {StaminaEditModal} from "../views/StaminaEditModal";
 import {ConditionManager} from "../utils/Conditions";
-import {ConditionSelectModal} from "../views/ConditionSelectModal";
+import {AddConditionsModal} from "../views/ConditionSelectModal";
 import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
 import {CodeBlocks} from "../utils/CodeBlocks";
-import {Creature, CreatureInstance, EncounterData, EnemyGroup, Hero, parseEncounterData} from "./EncounterData";
+import {
+	Condition,
+	Creature,
+	CreatureInstance,
+	EncounterData,
+	EnemyGroup,
+	Hero,
+	parseEncounterData
+} from "./EncounterData";
 
 export class InitiativeProcessor {
 	private app: App;
@@ -383,15 +391,36 @@ export class InitiativeProcessor {
 	): void {
 		const conditions = character.conditions || [];
 
-		conditions.forEach(conditionKey => {
+		conditions.forEach(conditionEntry => {
+			let conditionKey: string;
+			let conditionData: Condition | null = null;
+			if (typeof conditionEntry === 'string') {
+				conditionKey = conditionEntry;
+			} else if (typeof conditionEntry === 'object' && conditionEntry.key) {
+				conditionKey = conditionEntry.key;
+				conditionData = conditionEntry;
+			} else {
+				return;
+			}
+
 			const condition = this.conditionManager.getAnyConditionByKey(conditionKey);
 			if (condition) {
-				const iconEl = container.createEl('div', {cls: 'condition-icon'});
+				const iconEl = container.createEl('div', { cls: 'condition-icon' });
 				setIcon(iconEl, condition.iconName);
 				iconEl.title = condition.displayName;
 
+				// Apply color and effect customizations
+				if (conditionData) {
+					if (conditionData.color) {
+						iconEl.style.color = conditionData.color;
+					}
+					if (conditionData.effect) {
+						iconEl.classList.add(`condition-effect-${conditionData.effect}`);
+					}
+				}
+
 				iconEl.addEventListener('click', () => {
-					character.conditions = conditions.filter(key => key !== conditionKey);
+					character.conditions = conditions.filter(entry => entry !== conditionEntry);
 					container.empty();
 					this.buildConditionIcons(container, character, data, ctx);
 					CodeBlocks.updateCodeBlock(this.app, data, ctx);
@@ -399,12 +428,17 @@ export class InitiativeProcessor {
 			}
 		});
 
-		// Add Condition Button
-		const addConditionEl = container.createEl('div', {cls: 'add-condition-icon'});
+		const addConditionEl = container.createEl('div', { cls: 'add-condition-icon' });
 		setIcon(addConditionEl, 'plus-circle');
 		addConditionEl.title = 'Add Condition';
 		addConditionEl.addEventListener('click', () => {
-			this.openAddConditionModal(character, data, ctx, container);
+			const addConditionsModal = new AddConditionsModal(this.app, character, this.conditionManager, (newConditions) => {
+				character.conditions = (character.conditions || []).concat(newConditions);
+				container.empty();
+				this.buildConditionIcons(container, character, data, ctx);
+				CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			});
+			addConditionsModal.open();
 		});
 	}
 
