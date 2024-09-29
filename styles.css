@@ -576,6 +576,10 @@ code.dsa {
 	background-color: var(--code-background);
 }
 
+.vp-text {
+	user-select: none;
+}
+
 /* Enemy Group Container */
 
 .enemy-group-container {

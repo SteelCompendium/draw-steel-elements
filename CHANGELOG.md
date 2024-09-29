@@ -1,5 +1,9 @@
 # Changelog
 
+## Next
+
+- Prevents VP text from highlighting when changing
+
 ## 1.3.0
 
 - Add ability to reset the encounter
