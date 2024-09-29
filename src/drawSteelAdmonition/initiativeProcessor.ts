@@ -71,7 +71,7 @@ export class InitiativeProcessor {
 
 		// Reset Encounter Button
 		const resetEncounterButton = topActionBar.createEl("button", {
-			text: "Reset Encounter",
+			text: "Reset Encounter State",
 			cls: "reset-encounter-button",
 		});
 		resetEncounterButton.addEventListener("click", () => {
