@@ -11,8 +11,9 @@ import {
 	EncounterData,
 	EnemyGroup,
 	Hero,
-	parseEncounterData
+	parseEncounterData, resetEncounter
 } from "./EncounterData";
+import {ResetEncounterModal} from "../views/ResetEncounterModal";
 
 export class InitiativeProcessor {
 	private app: App;
@@ -39,9 +40,11 @@ export class InitiativeProcessor {
 	}
 
 	private buildUI(container: HTMLElement, data: EncounterData, ctx: MarkdownPostProcessorContext): void {
+		const topActionBar = container.createEl('div', {cls: 'top-action-bar'});
+
 		// Reset Round Button
-		const resetButton = container.createEl('button', {text: 'Reset Round', cls: 'reset-round-button'});
-		resetButton.addEventListener('click', () => {
+		const resetRoundButton = topActionBar.createEl('button', {text: 'Reset Round', cls: 'reset-round-button'});
+		resetRoundButton.addEventListener('click', () => {
 			// Reset has_taken_turn for heroes
 			data.heroes.forEach(hero => {
 				hero.has_taken_turn = false;
@@ -58,6 +61,15 @@ export class InitiativeProcessor {
 
 			// Update the codeblock
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+		});
+
+		// Reset Encounter Button
+		const resetEncounterButton = topActionBar.createEl('button', {text: 'Reset Encounter', cls: 'reset-encounter-button'});
+		resetEncounterButton.addEventListener('click', () => {
+			new ResetEncounterModal(this.app, () => {
+				resetEncounter(data);
+				CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			}).open();
 		});
 
 		// Heroes UI

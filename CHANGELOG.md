@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- Add ability to reset the encounter
+
 ## 1.2.0
 
 - Initiative Tracker

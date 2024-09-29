@@ -172,6 +172,11 @@ Once your encounter is defined, the Initiative Tracker provides an interactive U
 
 Click the "Reset Round" button to clear all turn indicators and start a new round.
 
+### Reset Encounter
+
+Click the "Reset Encounter" button to clear all "state" data from the tracker.  All state will be lost including 
+current stamina, conditions, turn tracker, and villain power.  **Warning: this is a destructive operation**
+
 ### Stamina Management
 
 ![initiative-tracker-stamina-modal.png](Media/initiative-tracker-stamina-modal.png)

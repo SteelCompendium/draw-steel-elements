@@ -481,10 +481,17 @@ code.dsa {
 	color: var(--code-background);
 }
 
-/* Reset Round Button */
+/* Top action bar */
 
-.reset-round-button {
+.top-action-bar {
 	margin-bottom: 10px;
+	display: flex;
+	justify-content: flex-start;
+	align-items: center;
+}
+
+.top-action-bar button {
+	margin-right: 1em;
 }
 
 /* Character Rows */
