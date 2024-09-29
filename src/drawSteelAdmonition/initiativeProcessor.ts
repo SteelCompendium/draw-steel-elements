@@ -1,9 +1,9 @@
-import {App, MarkdownPostProcessorContext, setIcon} from "obsidian";
-import {StaminaEditModal} from "../views/StaminaEditModal";
-import {ConditionManager} from "../utils/Conditions";
-import {AddConditionsModal} from "../views/ConditionSelectModal";
-import {DEFAULT_IMAGE_PATH, Images} from "../utils/Images";
-import {CodeBlocks} from "../utils/CodeBlocks";
+import { App, MarkdownPostProcessorContext, setIcon } from "obsidian";
+import { StaminaEditModal } from "../views/StaminaEditModal";
+import { ConditionManager } from "../utils/Conditions";
+import { AddConditionsModal } from "../views/ConditionSelectModal";
+import { DEFAULT_IMAGE_PATH, Images } from "../utils/Images";
+import { CodeBlocks } from "../utils/CodeBlocks";
 import {
 	Condition,
 	Creature,
@@ -11,9 +11,11 @@ import {
 	EncounterData,
 	EnemyGroup,
 	Hero,
-	parseEncounterData, resetEncounter
+	parseEncounterData,
+	resetEncounter,
 } from "./EncounterData";
-import {ResetEncounterModal} from "../views/ResetEncounterModal";
+import { ResetEncounterModal } from "../views/ResetEncounterModal";
+import {MinionStaminaPoolModal} from "../views/MinionStaminaPoolModal";
 
 export class InitiativeProcessor {
 	private app: App;
@@ -25,33 +27,37 @@ export class InitiativeProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
-		const container = el.createEl('div', {cls: "ds-init-container"});
+		const container = el.createEl("div", { cls: "ds-init-container" });
 
 		try {
 			const data = parseEncounterData(source);
 			this.buildUI(container, data, ctx);
 		} catch (error) {
 			// Display error message to the user
-			let userMessage = "The Draw Steel Elements plugin loaded the Initiative Tracker properly, but " +
-				"failed to process the input config.  Please correct the following error:\n\n"
+			let userMessage =
+				"The Draw Steel Elements plugin loaded the Initiative Tracker properly, but " +
+				"failed to process the input config.  Please correct the following error:\n\n";
 			userMessage += error.message;
-			container.createEl('div', {text: userMessage, cls: 'error-message ds-container'});
+			container.createEl("div", { text: userMessage, cls: "error-message ds-container" });
 		}
 	}
 
 	private buildUI(container: HTMLElement, data: EncounterData, ctx: MarkdownPostProcessorContext): void {
-		const topActionBar = container.createEl('div', {cls: 'top-action-bar'});
+		const topActionBar = container.createEl("div", { cls: "top-action-bar" });
 
 		// Reset Round Button
-		const resetRoundButton = topActionBar.createEl('button', {text: 'Reset Round', cls: 'reset-round-button'});
-		resetRoundButton.addEventListener('click', () => {
+		const resetRoundButton = topActionBar.createEl("button", {
+			text: "Reset Round",
+			cls: "reset-round-button",
+		});
+		resetRoundButton.addEventListener("click", () => {
 			// Reset has_taken_turn for heroes
-			data.heroes.forEach(hero => {
+			data.heroes.forEach((hero) => {
 				hero.has_taken_turn = false;
 			});
 
 			// Reset has_taken_turn for enemy groups
-			data.enemy_groups.forEach(group => {
+			data.enemy_groups.forEach((group) => {
 				group.has_taken_turn = false;
 			});
 
@@ -64,8 +70,11 @@ export class InitiativeProcessor {
 		});
 
 		// Reset Encounter Button
-		const resetEncounterButton = topActionBar.createEl('button', {text: 'Reset Encounter', cls: 'reset-encounter-button'});
-		resetEncounterButton.addEventListener('click', () => {
+		const resetEncounterButton = topActionBar.createEl("button", {
+			text: "Reset Encounter",
+			cls: "reset-encounter-button",
+		});
+		resetEncounterButton.addEventListener("click", () => {
 			new ResetEncounterModal(this.app, () => {
 				resetEncounter(data);
 				CodeBlocks.updateCodeBlock(this.app, data, ctx);
@@ -73,42 +82,42 @@ export class InitiativeProcessor {
 		});
 
 		// Heroes UI
-		const heroesContainer = container.createEl('div', {cls: 'heroes-container'});
-		heroesContainer.createEl('h3', {text: 'Heroes'});
+		const heroesContainer = container.createEl("div", { cls: "heroes-container" });
+		heroesContainer.createEl("h3", { text: "Heroes" });
 
 		data.heroes.forEach((hero) => {
-			const heroContEl = heroesContainer.createEl('div', {cls: 'hero-container'});
+			const heroContEl = heroesContainer.createEl("div", { cls: "hero-container" });
 			this.buildCharacterRow(heroContEl, hero, data, ctx);
 		});
 
 		// Enemies UI
-		const enemiesContainer = container.createEl('div', {cls: 'enemies-container'});
-		const enemyHeader = enemiesContainer.createEl('div', {cls: 'enemies-header'});
-		enemyHeader.createEl('h3', {text: 'Enemy Groups'});
+		const enemiesContainer = container.createEl("div", { cls: "enemies-container" });
+		const enemyHeader = enemiesContainer.createEl("div", { cls: "enemies-header" });
+		enemyHeader.createEl("h3", { text: "Enemy Groups" });
 
 		// Villain Power
-		const vpContainer = enemyHeader.createEl('div', {cls: 'vp-container'});
-		const vpModifiers = vpContainer.createEl('div', {cls: 'vp-modifiers'});
-		let vpUp = vpModifiers.createEl('div', {cls: 'vp-modifier'});
-		let vpDown = vpModifiers.createEl('div', {cls: 'vp-modifier'});
-		vpContainer.createEl('div', {cls: 'vp-text', text: "VP: " + data.villain_power.value});
+		const vpContainer = enemyHeader.createEl("div", { cls: "vp-container" });
+		const vpModifiers = vpContainer.createEl("div", { cls: "vp-modifiers" });
+		let vpUp = vpModifiers.createEl("div", { cls: "vp-modifier" });
+		let vpDown = vpModifiers.createEl("div", { cls: "vp-modifier" });
+		vpContainer.createEl("div", { cls: "vp-text", text: "VP: " + data.villain_power.value });
 
-		setIcon(vpUp, 'chevron-up');
-		setIcon(vpDown, 'chevron-down');
+		setIcon(vpUp, "chevron-up");
+		setIcon(vpDown, "chevron-down");
 
-		vpUp.addEventListener('click', () => {
+		vpUp.addEventListener("click", () => {
 			data.villain_power.value += 1;
 			vpContainer.setText("VP: " + data.villain_power.value);
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 		});
-		vpDown.addEventListener('click', () => {
+		vpDown.addEventListener("click", () => {
 			data.villain_power.value -= 1;
 			vpContainer.setText("VP: " + data.villain_power.value);
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 		});
 
 		data.enemy_groups.forEach((group) => {
-			const groupContEl = enemiesContainer.createEl('div', {cls: 'enemy-group-container'});
+			const groupContEl = enemiesContainer.createEl("div", { cls: "enemy-group-container" });
 			this.buildEnemyGroupRow(groupContEl, group, data, ctx);
 		});
 	}
@@ -120,15 +129,15 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext
 	): void {
 		// Left icons
-		const icon = container.createEl('div', {cls: 'character-icon'});
+		const icon = container.createEl("div", { cls: "character-icon" });
 
 		// Turn Indicator
-		const turnIndicatorEl = icon.createEl('div', {cls: 'turn-indicator'});
-		turnIndicatorEl.title = "Toggle to mark turn taken"
+		const turnIndicatorEl = icon.createEl("div", { cls: "turn-indicator" });
+		turnIndicatorEl.title = "Toggle to mark turn taken";
 		this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn ?? false);
 
 		// Add click handler to toggle has_taken_turn
-		turnIndicatorEl.addEventListener('click', () => {
+		turnIndicatorEl.addEventListener("click", () => {
 			if (this.isHero(character)) {
 				character.has_taken_turn = !(character.has_taken_turn ?? false);
 				this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn);
@@ -136,39 +145,41 @@ export class InitiativeProcessor {
 			}
 		});
 
-		const rowEl = container.createEl('div', {cls: 'character-row'});
+		const rowEl = container.createEl("div", { cls: "character-row" });
 
 		// Character Image
-		const imageEl = rowEl.createEl('div', {cls: 'character-image'});
+		const imageEl = rowEl.createEl("div", { cls: "character-image" });
 		const imgSrcRaw = character.image ?? null;
 
-		Images.resolveImageSource(this.app, imgSrcRaw).then((imgSrc) => {
-			imageEl.createEl('img', {attr: {src: imgSrc, alt: character.name}});
-		}).catch(() => {
-			// Use default image
-			imageEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: character.name}});
-		});
+		Images.resolveImageSource(this.app, imgSrcRaw)
+			.then((imgSrc) => {
+				imageEl.createEl("img", { attr: { src: imgSrc, alt: character.name } });
+			})
+			.catch(() => {
+				// Use default image
+				imageEl.createEl("img", { attr: { src: DEFAULT_IMAGE_PATH, alt: character.name } });
+			});
 
 		// Middle: Character Info
-		const infoEl = rowEl.createEl('div', {cls: 'character-info'});
+		const infoEl = rowEl.createEl("div", { cls: "character-info" });
 
 		// Top: Character Name
 		let displayName = character.name;
-		infoEl.createEl('div', {cls: 'character-name', text: displayName});
+		infoEl.createEl("div", { cls: "character-name", text: displayName });
 
 		// Bottom: Conditions
-		const conditionsEl = infoEl.createEl('div', {cls: 'character-conditions'});
+		const conditionsEl = infoEl.createEl("div", { cls: "character-conditions" });
 		this.buildConditionIcons(conditionsEl, character, data, ctx);
 
 		// Right: Health Info and Turn Indicator Container
-		const rightContainer = rowEl.createEl('div', {cls: 'character-right'});
+		const rightContainer = rowEl.createEl("div", { cls: "character-right" });
 
 		// Health Info
-		const healthEl = rightContainer.createEl('div', {cls: 'character-health'});
-		const staminaEl = healthEl.createEl('div', {cls: 'character-stamina'});
+		const healthEl = rightContainer.createEl("div", { cls: "character-health" });
+		const staminaEl = healthEl.createEl("div", { cls: "character-stamina" });
 		this.updateStaminaDisplay(staminaEl, character);
 
-		staminaEl.addEventListener('click', () => {
+		staminaEl.addEventListener("click", () => {
 			const modal = new StaminaEditModal(this.app, character, null, data, ctx, () => {
 				this.updateStaminaDisplay(staminaEl, character);
 				CodeBlocks.updateCodeBlock(this.app, data, ctx);
@@ -184,27 +195,27 @@ export class InitiativeProcessor {
 		ctx: MarkdownPostProcessorContext
 	): void {
 		// Left icons
-		const icon = container.createEl('div', {cls: 'enemy-group-icon'});
+		const icon = container.createEl("div", { cls: "enemy-group-icon" });
 
 		// Turn Indicator
-		const turnIndicatorEl = icon.createEl('div', {cls: 'turn-indicator'});
-		turnIndicatorEl.title = "Toggle to mark turn taken"
+		const turnIndicatorEl = icon.createEl("div", { cls: "turn-indicator" });
+		turnIndicatorEl.title = "Toggle to mark turn taken";
 		this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn ?? false);
 
-		turnIndicatorEl.addEventListener('click', () => {
+		turnIndicatorEl.addEventListener("click", () => {
 			group.has_taken_turn = !(group.has_taken_turn ?? false);
 			this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn);
 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
 		});
 
-		const groupEl = container.createEl('div', {cls: 'enemy-group'});
+		const groupEl = container.createEl("div", { cls: "enemy-group" });
 
 		// Group Header with Name and Turn Indicator
-		const groupHeader = groupEl.createEl('div', {cls: 'group-header'});
-		groupHeader.createEl('h4', {text: group.name});
+		const groupHeader = groupEl.createEl("div", { cls: "group-header" });
+		groupHeader.createEl("h4", { text: group.name });
 
 		// Detailed Creature Row Container
-		const detailRowContainer = groupEl.createEl('div', {cls: 'creature-detail-row'});
+		const detailRowContainer = groupEl.createEl("div", { cls: "creature-detail-row" });
 
 		// Determine the selected creature instance
 		let selectedInstance: { creature: Creature; instance: CreatureInstance } | null = null;
@@ -213,7 +224,7 @@ export class InitiativeProcessor {
 			for (let creatureIndex = 0; creatureIndex < group.creatures.length; creatureIndex++) {
 				const creature = group.creatures[creatureIndex];
 				if (creature.instances) {
-					const instance = creature.instances.find(inst => {
+					const instance = creature.instances.find((inst) => {
 						const instanceKey = `${creatureIndex}-${inst.id}`;
 						return instanceKey === group.selectedInstanceKey;
 					});
@@ -235,7 +246,14 @@ export class InitiativeProcessor {
 		}
 
 		if (selectedInstance) {
-			this.buildDetailedCreatureRow(detailRowContainer, selectedInstance.creature, selectedInstance.instance, data, ctx);
+			this.buildDetailedCreatureRow(
+				detailRowContainer,
+				selectedInstance.creature,
+				selectedInstance.instance,
+				data,
+				ctx,
+				group
+			);
 		}
 
 		// If the enemy group contains a single creature, no need for a grid
@@ -244,48 +262,48 @@ export class InitiativeProcessor {
 		}
 
 		// Grid of Creature Instances
-		const instancesGrid = groupEl.createEl('div', {cls: 'creature-instances-grid'});
+		const instancesGrid = groupEl.createEl("div", { cls: "creature-instances-grid" });
 
 		// Create cells for all instances of all creatures in the group
 		group.creatures.forEach((creature, creatureIndex) => {
 			creature.instances?.forEach((instance) => {
-				const cellEl = instancesGrid.createEl('div', {cls: 'creature-instance-cell'});
+				const cellEl = instancesGrid.createEl("div", { cls: "creature-instance-cell" });
 
 				const instanceKey = `${creatureIndex}-${instance.id}`;
 
 				// Handle selection highlighting
 				if (group.selectedInstanceKey === instanceKey) {
-					cellEl.addClass('selected');
+					cellEl.addClass("selected");
 				}
 
 				// Display creature image in the cell
-				const imgEl = cellEl.createEl('div', {cls: 'instance-image'});
+				const imgEl = cellEl.createEl("div", { cls: "instance-image" });
 				const imgSrcRaw = creature.image ?? null;
 				Images.resolveImageSource(this.app, imgSrcRaw)
 					.then((imgSrc) => {
-						imgEl.createEl('img', {attr: {src: imgSrc, alt: creature.name}});
+						imgEl.createEl("img", { attr: { src: imgSrc, alt: creature.name } });
 					})
 					.catch(() => {
 						// Use default image
-						imgEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: creature.name}});
+						imgEl.createEl("img", { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
 					});
 
 				// Display health status below the image
-				const staminaEl = cellEl.createEl('div', {cls: 'instance-stamina'});
-				this.updateStaminaDisplay(staminaEl, instance, creature);
+				const staminaEl = cellEl.createEl("div", { cls: "instance-stamina" });
+				this.updateStaminaDisplay(staminaEl, instance, creature, group);
 
 				// Add click event to update detailed view
-				cellEl.addEventListener('click', () => {
+				cellEl.addEventListener("click", () => {
 					// Remove 'selected' class from all cells
-					instancesGrid.querySelectorAll('.creature-instance-cell').forEach((cell) => {
-						cell.removeClass('selected');
+					instancesGrid.querySelectorAll(".creature-instance-cell").forEach((cell) => {
+						cell.removeClass("selected");
 					});
 					// Add 'selected' class to the clicked cell
-					cellEl.addClass('selected');
+					cellEl.addClass("selected");
 
 					// Update the detailed creature row
 					detailRowContainer.empty();
-					this.buildDetailedCreatureRow(detailRowContainer, creature, instance, data, ctx);
+					this.buildDetailedCreatureRow(detailRowContainer, creature, instance, data, ctx, group);
 
 					// Persist the selected instance key
 					group.selectedInstanceKey = instanceKey;
@@ -293,8 +311,17 @@ export class InitiativeProcessor {
 				});
 
 				// Double-click to edit STAMINA
-				cellEl.addEventListener('dblclick', () => {
-					this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
+				cellEl.addEventListener("dblclick", () => {
+					if (group.is_squad && creature.squad_role === "minion") {
+						const modal = new MinionStaminaPoolModal(this.app, group, creature, data, ctx, () => {
+							container.empty();
+							this.buildUI(container, data, ctx);
+							CodeBlocks.updateCodeBlock(this.app, data, ctx);
+						});
+						modal.open();
+					} else {
+						this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
+					}
 				});
 			});
 		});
@@ -305,39 +332,56 @@ export class InitiativeProcessor {
 		creature: Creature,
 		instance: CreatureInstance,
 		data: EncounterData,
-		ctx: MarkdownPostProcessorContext
+		ctx: MarkdownPostProcessorContext,
+		group: EnemyGroup
 	): void {
-		container.addClass('character-row');
+		container.addClass("character-row");
 
 		// Left: Creature Image
-		const imageEl = container.createEl('div', {cls: 'character-image'});
+		const imageEl = container.createEl("div", { cls: "character-image" });
 		const imgSrcRaw = creature.image ?? null;
 		Images.resolveImageSource(this.app, imgSrcRaw)
 			.then((imgSrc) => {
-				imageEl.createEl('img', {attr: {src: imgSrc, alt: creature.name}});
+				imageEl.createEl("img", { attr: { src: imgSrc, alt: creature.name } });
 			})
 			.catch(() => {
 				// Use default image
-				imageEl.createEl('img', {attr: {src: DEFAULT_IMAGE_PATH, alt: creature.name}});
+				imageEl.createEl("img", { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
 			});
 
 		// Middle: Creature Info
-		const infoEl = container.createEl('div', {cls: 'character-info'});
+		const infoEl = container.createEl("div", { cls: "character-info" });
 
 		// Top: Creature Name (include instance ID)
-		infoEl.createEl('div', {cls: 'character-name', text: `${creature.name} #${instance.id}`});
+		infoEl.createEl("div", { cls: "character-name", text: `${creature.name} #${instance.id}` });
 
 		// Bottom: Conditions
-		const conditionsEl = infoEl.createEl('div', {cls: 'character-conditions'});
+		const conditionsEl = infoEl.createEl("div", { cls: "character-conditions" });
 		this.buildConditionIcons(conditionsEl, instance, data, ctx);
 
 		// Right: Health Info
-		const healthEl = container.createEl('div', {cls: 'character-health'});
-		const staminaEl = healthEl.createEl('div', {cls: 'character-stamina'});
-		this.updateStaminaDisplay(staminaEl, instance, creature);
-		staminaEl.addEventListener('click', () => {
-			this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
-		});
+		const healthEl = container.createEl("div", { cls: "character-health" });
+		const staminaEl = healthEl.createEl("div", { cls: "character-stamina" });
+
+		if (group.is_squad && creature.squad_role === "minion") {
+			// For minions in a squad, display the pool health
+			this.updateStaminaDisplay(staminaEl, instance, creature, group);
+			// Add event listener to edit the minion pool stamina
+			staminaEl.addEventListener("click", () => {
+				const modal = new MinionStaminaPoolModal(this.app, group, creature, data, ctx, () => {
+					container.empty();
+					this.buildDetailedCreatureRow(container, creature, instance, data, ctx, group);
+					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+				});
+				modal.open();
+			});
+		} else {
+			// For normal creatures and captains
+			this.updateStaminaDisplay(staminaEl, instance, creature, group);
+			staminaEl.addEventListener("click", () => {
+				this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
+			});
+		}
 	}
 
 	private editStaminaModal(
@@ -365,33 +409,46 @@ export class InitiativeProcessor {
 	private updateTurnIndicator(el: HTMLElement, hasTakenTurn: boolean): void {
 		el.empty();
 		if (hasTakenTurn) {
-			el.addClass('taken-turn');
-			setIcon(el, "check")
+			el.addClass("taken-turn");
+			setIcon(el, "check");
 		} else {
-			el.removeClass('taken-turn');
-			setIcon(el, "dot")
+			el.removeClass("taken-turn");
+			setIcon(el, "dot");
 		}
 	}
 
-	private updateStaminaDisplay(staminaEl: HTMLElement, character: Hero | CreatureInstance, creature?: Creature): void {
-		const currentStamina = character.current_stamina ?? 0;
-		const tempStamina = character.temp_stamina ?? 0;
-		const maxStamina = this.isHero(character) ? (character as Hero).max_stamina : creature?.max_stamina ?? 0;
-
-		let displayText = `${currentStamina}`;
-		if (tempStamina > 0) {
-			displayText += `(+${tempStamina})`;
-		}
-		displayText += `/${maxStamina}`;
-
-		staminaEl.textContent = displayText;
-
-		if (currentStamina < 0) {
-			staminaEl.style.color = 'red';
-		} else if (tempStamina > 0) {
-			staminaEl.style.color = 'green';
+	private updateStaminaDisplay(
+		staminaEl: HTMLElement,
+		character: Hero | CreatureInstance,
+		creature?: Creature,
+		group?: EnemyGroup
+	): void {
+		if (group?.is_squad && creature?.squad_role === "minion") {
+			// For minions in squads, display the minion stamina pool
+			const currentStamina = group.minion_stamina_pool ?? 0;
+			staminaEl.textContent = `Pool: ${currentStamina}`;
 		} else {
-			staminaEl.style.color = '';
+			const currentStamina = character.current_stamina ?? 0;
+			const tempStamina = character.temp_stamina ?? 0;
+			const maxStamina = this.isHero(character)
+				? (character as Hero).max_stamina
+				: creature?.max_stamina ?? 0;
+
+			let displayText = `${currentStamina}`;
+			if (tempStamina > 0) {
+				displayText += `(+${tempStamina})`;
+			}
+			displayText += `/${maxStamina}`;
+
+			staminaEl.textContent = displayText;
+
+			if (currentStamina < 0) {
+				staminaEl.style.color = "red";
+			} else if (tempStamina > 0) {
+				staminaEl.style.color = "green";
+			} else {
+				staminaEl.style.color = "";
+			}
 		}
 	}
 
@@ -403,12 +460,12 @@ export class InitiativeProcessor {
 	): void {
 		const conditions = character.conditions || [];
 
-		conditions.forEach(conditionEntry => {
+		conditions.forEach((conditionEntry) => {
 			let conditionKey: string;
 			let conditionData: Condition | null = null;
-			if (typeof conditionEntry === 'string') {
+			if (typeof conditionEntry === "string") {
 				conditionKey = conditionEntry;
-			} else if (typeof conditionEntry === 'object' && conditionEntry.key) {
+			} else if (typeof conditionEntry === "object" && conditionEntry.key) {
 				conditionKey = conditionEntry.key;
 				conditionData = conditionEntry;
 			} else {
@@ -417,7 +474,7 @@ export class InitiativeProcessor {
 
 			const condition = this.conditionManager.getAnyConditionByKey(conditionKey);
 			if (condition) {
-				const iconEl = container.createEl('div', { cls: 'condition-icon' });
+				const iconEl = container.createEl("div", { cls: "condition-icon" });
 				setIcon(iconEl, condition.iconName);
 				iconEl.title = condition.displayName;
 
@@ -431,8 +488,8 @@ export class InitiativeProcessor {
 					}
 				}
 
-				iconEl.addEventListener('click', () => {
-					character.conditions = conditions.filter(entry => entry !== conditionEntry);
+				iconEl.addEventListener("click", () => {
+					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
 					container.empty();
 					this.buildConditionIcons(container, character, data, ctx);
 					CodeBlocks.updateCodeBlock(this.app, data, ctx);
@@ -440,32 +497,23 @@ export class InitiativeProcessor {
 			}
 		});
 
-		const addConditionEl = container.createEl('div', { cls: 'add-condition-icon' });
-		setIcon(addConditionEl, 'plus-circle');
-		addConditionEl.title = 'Add Condition';
-		addConditionEl.addEventListener('click', () => {
-			const addConditionsModal = new AddConditionsModal(this.app, character, this.conditionManager, (newConditions) => {
-				character.conditions = (character.conditions || []).concat(newConditions);
-				container.empty();
-				this.buildConditionIcons(container, character, data, ctx);
-				CodeBlocks.updateCodeBlock(this.app, data, ctx);
-			});
+		const addConditionEl = container.createEl("div", { cls: "add-condition-icon" });
+		setIcon(addConditionEl, "plus-circle");
+		addConditionEl.title = "Add Condition";
+		addConditionEl.addEventListener("click", () => {
+			const addConditionsModal = new AddConditionsModal(
+				this.app,
+				character,
+				this.conditionManager,
+				(newConditions) => {
+					character.conditions = (character.conditions || []).concat(newConditions);
+					container.empty();
+					this.buildConditionIcons(container, character, data, ctx);
+					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+				}
+			);
 			addConditionsModal.open();
 		});
-	}
-
-	private openAddConditionModal(
-		character: Hero | CreatureInstance,
-		data: EncounterData,
-		ctx: MarkdownPostProcessorContext,
-		container: HTMLElement
-	): void {
-		let callback = () => {
-			// Callback after condition is added, rebuild the condition icons
-			container.empty();
-			this.buildConditionIcons(container, character, data, ctx);
-		};
-		new ConditionSelectModal(this.app, this.conditionManager, character, data, ctx, callback).open();
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {

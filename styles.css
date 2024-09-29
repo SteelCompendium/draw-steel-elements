@@ -954,6 +954,236 @@ button.action-button {
 	background-color: var(--interactive-normal);
 }
 
+/* ============================ */
+/*  Minion Stamina Pool Modal   */
+/* ============================ */
+
+.stamina-header {
+	text-align: center;
+}
+
+/* Stamina Pool Bar */
+
+.stamina-bar-container {
+	width: 100%;
+	background-color: var(--code-background);
+	border: 1px solid var(--text-normal);
+	border-radius: 5px;
+	margin-bottom: 10px;
+	position: relative;
+	height: 20px;
+}
+
+.stamina-bar {
+	width: 100%;
+	height: 100%;
+	position: relative;
+	display: flex;
+}
+
+.stamina-bar-fill {
+	position: relative;
+	height: calc(100% - 2px);
+	top: 1px;
+	left: 1px;
+	background-color: limegreen; /* Default color */
+	width: 100%; /* Will be updated dynamically */
+	border-radius: 3px;
+}
+
+.stamina-bar-tick {
+	position: absolute;
+	top: 0;
+	height: 100%;
+	width: 1px;
+	background-color: var(--text-normal);
+}
+
+.stamina-bar-tick::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: -3px;
+	width: 7px;
+	height: 7px;
+	background-color: var(--text-normal);
+	border-radius: 50%;
+	transform: translateY(-50%);
+}
+
+/* Stamina Modifiers */
+
+.stamina-mod-container {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 10px;
+}
+
+.stamina-mod-container .stamina-adjust-btn {
+	width: 30px;
+	height: 30px;
+	display: flex;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.stamina-mod-container .stamina-adjust-btn svg {
+	height: 100%;
+}
+
+.stamina-mod-container .stamina-value-display {
+	width: 4em;
+	text-align: center;
+	margin: 0 5px;
+}
+
+.stamina-mod-container .max-stamina-display {
+	margin-left: 5px;
+	margin-right: 5px;
+}
+
+/* Apply Damage Section */
+
+.apply-container {
+	margin-bottom: 10px;
+}
+
+.apply-row {
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+	margin-top: 0.5em;
+}
+
+.apply-row span {
+	margin: 0 5px;
+}
+
+.apply-input {
+	width: 60px;
+}
+
+/* Apply Damage Button */
+
+.apply-btn {
+	display: flex;
+	width: 100%;
+	margin-top: 0.5em;
+	justify-content: center;
+}
+
+.apply-btn .btn-icon {
+	margin-right: 0.5em;
+}
+
+.apply-btn .btn-text {
+	line-height: 24px;
+}
+
+/* Info Text */
+
+.info-text {
+	text-align: center;
+	font-size: var(--font-ui-small);
+	margin-bottom: 10px;
+}
+
+/* Minion List */
+
+.minion-list-container {
+	max-height: 200px;
+	overflow-y: auto;
+	margin-bottom: 10px;
+	border: 1px solid var(--color-base-30);
+	border-radius: 5px;
+	padding: 5px;
+}
+
+.minion-row {
+	display: flex;
+	align-items: center;
+	margin-bottom: 5px;
+}
+
+.minion-checkbox {
+	margin-right: 10px;
+}
+
+.minion-name {
+	margin-right: 10px;
+	flex-grow: 1;
+}
+
+.minion-conditions {
+	display: flex;
+	align-items: center;
+}
+
+/* Condition Icons */
+
+.condition-icon {
+	width: 20px;
+	height: 20px;
+	margin-right: 5px;
+	cursor: pointer;
+}
+
+.condition-icon svg {
+	width: 100%;
+	height: 100%;
+}
+
+/* Add Condition Icon */
+
+.add-condition-icon {
+	width: 20px;
+	height: 20px;
+	cursor: pointer;
+}
+
+.add-condition-icon svg {
+	width: 100%;
+	height: 100%;
+}
+
+/* Action Button */
+
+.action-button-container {
+	text-align: center;
+	margin-top: 20px;
+	display: flex;
+	justify-content: space-between;
+}
+
+button.action-button {
+	padding: 10px 20px;
+	font-size: 16px;
+	background-color: var(--interactive-accent);
+}
+
+.action-button.disabled {
+	opacity: 0.5;
+	pointer-events: none;
+	background-color: var(--interactive-normal);
+}
+
+/* Reset Button */
+
+.reset-button {
+	display: flex;
+	align-items: center;
+}
+
+.reset-button .btn-icon {
+	margin-right: 0.5em;
+}
+
+.reset-button .btn-text {
+	line-height: 24px;
+}
+
+
 /* ===================== */
 /*    Condition Modal    */
 /* ===================== */
