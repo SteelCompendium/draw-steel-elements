@@ -1,8 +1,11 @@
 # Changelog
 
-## Next
+## 1.4.0
 
-- Prevents VP text from highlighting when changing
+- Initiative Tracker
+  - Adds basic support for tracking minions!
+  - [BUGFIX] Prevents VP text from highlighting when changing
+  - [BUGFIX] Allows click-to-remove conditions when blinking
 
 ## 1.3.0
 
