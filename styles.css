@@ -1098,6 +1098,7 @@ button.action-button {
 	text-align: center;
 	font-size: var(--font-ui-large);
 	margin: 1em 0;
+	white-space: pre-line;
 }
 
 /* Minion List */
@@ -1176,6 +1177,15 @@ button.action-button {
 	opacity: 0.5;
 	pointer-events: none;
 	background-color: var(--interactive-normal);
+}
+
+.minion-stamina-modal .warning-icon {
+	flex-grow: 1;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	color: orange;
+	margin-right: 1em;
 }
 
 /* Reset Button */

@@ -2,7 +2,7 @@ import { App, Modal, MarkdownPostProcessorContext, setIcon } from "obsidian";
 import { Creature, CreatureInstance, EncounterData, EnemyGroup } from "../drawSteelAdmonition/EncounterData";
 import { ConditionManager } from "../utils/Conditions";
 import { CodeBlocks } from "../utils/CodeBlocks";
-import {Condition} from "resolve.exports";
+import { Condition } from "resolve.exports";
 
 export class MinionStaminaPoolModal extends Modal {
 	private group: EnemyGroup;
@@ -65,10 +65,11 @@ export class MinionStaminaPoolModal extends Modal {
 		const decrementButton = staminaModContainer.createEl("div", { cls: "stamina-adjust-btn" });
 		setIcon(decrementButton, "minus-circle");
 		decrementButton.addEventListener("click", () => {
-			this.pendingStaminaChange -= Math.min(1, (poolCurrentStamina + this.pendingStaminaChange));
+			this.pendingStaminaChange -= Math.min(1, poolCurrentStamina + this.pendingStaminaChange);
 			this.updateStaminaBar(staminaBarFill);
-			this.updateActionButton(actionButton);
 			this.updateInfoText(infoText);
+			this.updateCheckboxes();
+			this.updateActionButton(actionButton, warningIcon);
 		});
 
 		// Input to set the stamina directly
@@ -82,8 +83,9 @@ export class MinionStaminaPoolModal extends Modal {
 			if (!isNaN(newStaminaValue)) {
 				this.pendingStaminaChange = newStaminaValue - poolCurrentStamina;
 				this.updateStaminaBar(staminaBarFill);
-				this.updateActionButton(actionButton);
 				this.updateInfoText(infoText);
+				this.updateCheckboxes();
+				this.updateActionButton(actionButton, warningIcon);
 			}
 		});
 
@@ -97,10 +99,11 @@ export class MinionStaminaPoolModal extends Modal {
 		const incrementButton = staminaModContainer.createEl("div", { cls: "stamina-adjust-btn" });
 		setIcon(incrementButton, "plus-circle");
 		incrementButton.addEventListener("click", () => {
-			this.pendingStaminaChange += Math.min(1, (poolMaxStamina - poolCurrentStamina - this.pendingStaminaChange));
+			this.pendingStaminaChange += Math.min(1, poolMaxStamina - poolCurrentStamina - this.pendingStaminaChange);
 			this.updateStaminaBar(staminaBarFill);
-			this.updateActionButton(actionButton);
 			this.updateInfoText(infoText);
+			this.updateCheckboxes();
+			this.updateActionButton(actionButton, warningIcon);
 		});
 
 		// Third Row: Apply Damage
@@ -111,7 +114,7 @@ export class MinionStaminaPoolModal extends Modal {
 		const damageInput = applyRow.createEl("input", {
 			type: "number",
 			cls: "apply-input",
-			attr: {"size": 3}
+			attr: { size: 3 },
 		}) as HTMLInputElement;
 		damageInput.value = "0";
 
@@ -120,11 +123,11 @@ export class MinionStaminaPoolModal extends Modal {
 		const minionCountInput = applyRow.createEl("input", {
 			type: "number",
 			cls: "apply-input",
-			attr: {"size": 3}
+			attr: { size: 3 },
 		}) as HTMLInputElement;
-		minionCountInput.value = 1;
-		minionCountInput.max = this.creature.instances?.length;
-		minionCountInput.min = 0;
+		minionCountInput.value = "1";
+		minionCountInput.max = this.creature.instances?.length.toString();
+		minionCountInput.min = "0";
 
 		applyRow.createEl("span", { text: "minions" });
 
@@ -139,12 +142,13 @@ export class MinionStaminaPoolModal extends Modal {
 				const totalDamage = damage * minions;
 				this.pendingStaminaChange -= totalDamage;
 				this.updateStaminaBar(staminaBarFill);
-				this.updateActionButton(actionButton);
 				this.updateInfoText(infoText);
+				this.updateCheckboxes();
+				this.updateActionButton(actionButton, warningIcon);
 			}
 		});
 
-		const divider = minionsStaminaModal.createEl('div', { cls: 'horizontal-divider' });
+		const divider = minionsStaminaModal.createEl("div", { cls: "horizontal-divider" });
 
 		// Minion List
 		const minionListContainer = minionsStaminaModal.createEl("div", { cls: "minion-list-container" });
@@ -161,11 +165,24 @@ export class MinionStaminaPoolModal extends Modal {
 
 			const checkbox = minionRow.createEl("input", { type: "checkbox", cls: "minion-checkbox" }) as HTMLInputElement;
 			checkbox.addEventListener("change", () => {
-				this.updateActionButton(actionButton);
+				this.updateCheckboxes();
+				this.updateActionButton(actionButton, warningIcon);
 			});
 			this.minionCheckboxes.push({ instance, checkbox });
 
-			minionRow.createEl("span", { text: `${this.creature.name} #${instance.id}`, cls: "minion-name" });
+			const minionName = minionRow.createEl("span", {
+				text: `${this.creature.name} #${instance.id}`,
+				cls: "minion-name",
+			});
+
+			// Toggle checkbox when clicking on minion's name
+			minionName.addEventListener("click", () => {
+				if (!checkbox.disabled) {
+					checkbox.checked = !checkbox.checked;
+					this.updateCheckboxes();
+					this.updateActionButton(actionButton, warningIcon);
+				}
+			});
 
 			// Icons for conditions
 			const conditionsEl = minionRow.createEl("div", { cls: "minion-conditions" });
@@ -182,20 +199,26 @@ export class MinionStaminaPoolModal extends Modal {
 		resetButton.addEventListener("click", () => {
 			this.pendingStaminaChange = 0;
 			damageInput.value = "0";
-			minionCountInput.value = "0";
+			minionCountInput.value = "1";
 			staminaValueDisplay.value = poolCurrentStamina.toString();
 			this.updateStaminaBar(staminaBarFill);
-			this.updateActionButton(actionButton);
 			this.updateInfoText(infoText);
-			// Uncheck all checkboxes
+			// Uncheck all checkboxes and enable them
 			this.minionCheckboxes.forEach((item) => {
 				item.checkbox.checked = false;
-				item.checkbox.disabled = false;
+				item.checkbox.disabled = true;
 			});
+			this.updateCheckboxes();
+			this.updateActionButton(actionButton, warningIcon);
 		});
 
+		// Warning Icon for Healing
+		const warningIcon = actionButtonContainer.createEl("div", { cls: "warning-icon" });
+		setIcon(warningIcon, "alert-circle");
+		warningIcon.style.display = "none";
+
 		const actionButton = actionButtonContainer.createEl("button", { cls: "action-button" });
-		this.updateActionButton(actionButton);
+		this.updateActionButton(actionButton, warningIcon);
 		actionButton.addEventListener("click", () => {
 			const newStamina = poolCurrentStamina + this.pendingStaminaChange;
 			const maxStamina = this.creature.instances.filter((inst) => !inst.isDead).length * minionMaxStamina;
@@ -215,6 +238,9 @@ export class MinionStaminaPoolModal extends Modal {
 			this.updateCallback();
 			this.close();
 		});
+
+		// Initialize checkboxes
+		this.updateCheckboxes();
 	}
 
 	private updateStaminaBar(staminaBarFill: HTMLElement) {
@@ -245,10 +271,10 @@ export class MinionStaminaPoolModal extends Modal {
 		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / minionMaxStamina);
 		const minionsToKill = finalMinionsKilled - initialMinionsKilled;
 
-		infoText.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). Select ${minionsToKill} minion(s) to kill.`;
+		infoText.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). \nSelect ${minionsToKill} minion(s) to kill.`;
 	}
 
-	private updateActionButton(actionButton: HTMLElement) {
+	private updateActionButton(actionButton: HTMLElement, warningIcon: HTMLElement) {
 		const staminaChange = this.pendingStaminaChange;
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
@@ -290,6 +316,55 @@ export class MinionStaminaPoolModal extends Modal {
 			actionButton.setAttribute("title", `Select ${minionsToKill} minion(s) to kill`);
 		} else {
 			actionButton.removeAttribute("title");
+		}
+
+		// Show warning icon if healing
+		if (staminaChange > 0) {
+			warningIcon.style.display = "flex";
+			warningIcon.setAttribute("title", "Typically minions are unable to regain stamina");
+		} else {
+			warningIcon.style.display = "none";
+		}
+	}
+
+	private updateCheckboxes() {
+		const minionMaxStamina = this.creature.max_stamina;
+		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
+		const poolMaxStamina = aliveMinions * minionMaxStamina;
+		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
+		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
+
+		// Calculate how many minions should die based on the damage
+		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / minionMaxStamina);
+		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / minionMaxStamina);
+		const minionsToKill = finalMinionsKilled - initialMinionsKilled;
+
+		// If minion pool stamina reaches 0, auto-select all checkboxes
+		if (newStamina <= 0) {
+			this.minionCheckboxes.forEach((item) => {
+				item.checkbox.checked = true;
+				item.checkbox.disabled = true;
+			});
+			return;
+		}
+
+		// If no minions need to be killed, disable all checkboxes
+		if (minionsToKill <= 0) {
+			this.minionCheckboxes.forEach((item) => {
+				item.checkbox.checked = false;
+				item.checkbox.disabled = true;
+			});
+		} else {
+			// Enable checkboxes up to minionsToKill
+			const selectedCount = this.minionCheckboxes.filter((item) => item.checkbox.checked).length;
+
+			this.minionCheckboxes.forEach((item) => {
+				if (item.checkbox.checked) {
+					item.checkbox.disabled = false;
+				} else {
+					item.checkbox.disabled = selectedCount >= minionsToKill;
+				}
+			});
 		}
 	}
 
