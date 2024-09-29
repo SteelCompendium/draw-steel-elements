@@ -978,40 +978,42 @@ button.action-button {
 	width: 100%;
 	height: 100%;
 	position: relative;
-	display: flex;
+	overflow: hidden;
 }
 
-.minion-stamina-modal .stamina-bar-fill {
+.minion-stamina-modal .stamina-bar-fill-left {
 	position: relative;
 	height: calc(100% - 2px);
 	top: 1px;
 	left: 1px;
-	background-color: limegreen; /* Default color */
-	width: 100%; /* Will be updated dynamically */
-	border-radius: 3px;
+	background-color: limegreen;
+	width: 0%; /* Will be updated dynamically */
+	border-radius: 3px 0 0 3px;
+	z-index: 1;
+}
+
+.minion-stamina-modal .stamina-bar-fill-right {
+	position: relative;
+	height: calc(100% - 2px);
+	top: 1px;
+	background-color: deepskyblue;
+	width: 0%; /* Will be updated dynamically */
+	border-radius: 0 3px 3px 0;
+	z-index: 2;
 }
 
 .minion-stamina-modal .stamina-bar-tick {
 	position: absolute;
 	bottom: 0;
 	height: 50%;
-	width: 3px;
+	width: 2px;
 	background-color: var(--code-background);
 	border-right: 1px solid var(--text-normal);
+	z-index: 3;
 }
 
 .minion-stamina-modal .stamina-bar-tick::after {
-	/* TODO - i didnt like this bubble for now... */
 	display: none;
-	content: "";
-	position: absolute;
-	top: 0;
-	left: -3px;
-	width: 7px;
-	height: 7px;
-	background-color: var(--text-normal);
-	border-radius: 50%;
-	transform: translateY(-50%);
 }
 
 /* Stamina Modifiers */
@@ -1108,17 +1110,31 @@ button.action-button {
 	overflow-y: auto;
 	margin-bottom: 10px;
 	border-radius: 5px;
-	padding: 5px;
 }
 
 .minion-stamina-modal .minion-row {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
-	margin-bottom: 5px;
+	padding: 0.25em 0;
+	justify-items: center;
+	justify-content: start;
+	width: 50%;
+}
+
+.minion-stamina-modal .minion-row:hover {
+	background-color: var(--code-background);
 }
 
 .minion-stamina-modal .minion-checkbox {
 	margin-right: 10px;
+}
+
+.minion-stamina-modal .minion-checkbox[disabled] + span {
+	color: var(--text-faint);
+}
+
+.minion-stamina-modal .minion-checkbox:checked + span {
+	color: crimson;
 }
 
 .minion-stamina-modal .minion-name {

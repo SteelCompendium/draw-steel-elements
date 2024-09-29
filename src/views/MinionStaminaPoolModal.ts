@@ -46,7 +46,10 @@ export class MinionStaminaPoolModal extends Modal {
 		// First Row: STAMINA Pool Bar
 		const staminaBarContainer = minionsStaminaModal.createEl("div", { cls: "stamina-bar-container" });
 		const staminaBar = staminaBarContainer.createEl("div", { cls: "stamina-bar" });
-		const staminaBarFill = staminaBar.createEl("div", { cls: "stamina-bar-fill" });
+
+		// Create two fill elements for the stamina bar
+		const staminaBarFillLeft = staminaBar.createEl("div", { cls: "stamina-bar-fill stamina-bar-fill-left" });
+		const staminaBarFillRight = staminaBar.createEl("div", { cls: "stamina-bar-fill stamina-bar-fill-right" });
 
 		// Add tick marks at each minion death point
 		for (let i = 1; i < aliveMinions; i++) {
@@ -56,7 +59,7 @@ export class MinionStaminaPoolModal extends Modal {
 		}
 
 		// Update the STAMINA bar display
-		this.updateStaminaBar(staminaBarFill);
+		this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 
 		// Second Row: Stamina Modifiers
 		const staminaModContainer = minionsStaminaModal.createEl("div", { cls: "stamina-mod-container" });
@@ -66,7 +69,7 @@ export class MinionStaminaPoolModal extends Modal {
 		setIcon(decrementButton, "minus-circle");
 		decrementButton.addEventListener("click", () => {
 			this.pendingStaminaChange -= Math.min(1, poolCurrentStamina + this.pendingStaminaChange);
-			this.updateStaminaBar(staminaBarFill);
+			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 			this.updateInfoText(infoText);
 			this.updateCheckboxes();
 			this.updateActionButton(actionButton, warningIcon);
@@ -82,7 +85,7 @@ export class MinionStaminaPoolModal extends Modal {
 			const newStaminaValue = parseInt(staminaValueDisplay.value);
 			if (!isNaN(newStaminaValue)) {
 				this.pendingStaminaChange = newStaminaValue - poolCurrentStamina;
-				this.updateStaminaBar(staminaBarFill);
+				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 				this.updateInfoText(infoText);
 				this.updateCheckboxes();
 				this.updateActionButton(actionButton, warningIcon);
@@ -100,7 +103,7 @@ export class MinionStaminaPoolModal extends Modal {
 		setIcon(incrementButton, "plus-circle");
 		incrementButton.addEventListener("click", () => {
 			this.pendingStaminaChange += Math.min(1, poolMaxStamina - poolCurrentStamina - this.pendingStaminaChange);
-			this.updateStaminaBar(staminaBarFill);
+			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 			this.updateInfoText(infoText);
 			this.updateCheckboxes();
 			this.updateActionButton(actionButton, warningIcon);
@@ -141,7 +144,7 @@ export class MinionStaminaPoolModal extends Modal {
 			if (!isNaN(damage) && !isNaN(minions)) {
 				const totalDamage = damage * minions;
 				this.pendingStaminaChange -= totalDamage;
-				this.updateStaminaBar(staminaBarFill);
+				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 				this.updateInfoText(infoText);
 				this.updateCheckboxes();
 				this.updateActionButton(actionButton, warningIcon);
@@ -201,7 +204,7 @@ export class MinionStaminaPoolModal extends Modal {
 			damageInput.value = "0";
 			minionCountInput.value = "1";
 			staminaValueDisplay.value = poolCurrentStamina.toString();
-			this.updateStaminaBar(staminaBarFill);
+			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 			this.updateInfoText(infoText);
 			// Uncheck all checkboxes and enable them
 			this.minionCheckboxes.forEach((item) => {
@@ -231,8 +234,8 @@ export class MinionStaminaPoolModal extends Modal {
 				item.instance.isDead = true;
 			});
 
-			// Update the creature.amount
-			this.creature.amount = this.creature.instances.filter((inst) => !inst.isDead).length;
+			// Update the creature.amount. EDIT: I dont think I want this...
+			// this.creature.amount = this.creature.instances.filter((inst) => !inst.isDead).length;
 
 			// Update the data and call the updateCallback
 			this.updateCallback();
@@ -243,14 +246,46 @@ export class MinionStaminaPoolModal extends Modal {
 		this.updateCheckboxes();
 	}
 
-	private updateStaminaBar(staminaBarFill: HTMLElement) {
+	private updateStaminaBar(staminaBarFillLeft: HTMLElement, staminaBarFillRight: HTMLElement) {
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 		const newStamina = Math.min(poolMaxStamina, Math.max(0, poolCurrentStamina + this.pendingStaminaChange));
-		const percentage = (newStamina / poolMaxStamina) * 100;
-		staminaBarFill.style.width = `${percentage}%`;
+
+		const currentStaminaPercentage = (poolCurrentStamina / poolMaxStamina) * 100;
+		const newStaminaPercentage = (newStamina / poolMaxStamina) * 100;
+		const pendingChangePercentage = ((newStamina - poolCurrentStamina) / poolMaxStamina) * 100;
+
+		if (this.pendingStaminaChange > 0) {
+			// Healing
+			staminaBarFillLeft.style.width = `${currentStaminaPercentage}%`;
+			staminaBarFillLeft.style.left = '1px'; // Adjust for border
+			staminaBarFillLeft.style.backgroundColor = 'limegreen';
+
+			staminaBarFillRight.style.width = `${pendingChangePercentage}%`;
+			// staminaBarFillRight.style.left = `calc(${currentStaminaPercentage}% + 1px)`; // Adjust for border
+			staminaBarFillRight.style.backgroundColor = 'deepskyblue';
+			staminaBarFillRight.style.borderRadius = '0 3px 3px 0';
+		} else if (this.pendingStaminaChange < 0) {
+			// Damage
+			staminaBarFillLeft.style.width = `${newStaminaPercentage}%`;
+			staminaBarFillLeft.style.left = '1px'; // Adjust for border
+			staminaBarFillLeft.style.backgroundColor = 'limegreen';
+			staminaBarFillLeft.style.borderRadius = '3px 0 0 3px';
+			staminaBarFillRight.style.width = `${(this.pendingStaminaChange / poolMaxStamina) * -100}%`;
+			staminaBarFillRight.style.backgroundColor = 'crimson';
+			staminaBarFillRight.style.borderRadius = '3px 0 0 3px';
+		} else {
+			// No change
+			staminaBarFillLeft.style.width = `${currentStaminaPercentage}%`;
+			staminaBarFillLeft.style.left = '1px'; // Adjust for border
+			staminaBarFillLeft.style.backgroundColor = 'limegreen';
+			staminaBarFillLeft.style.borderRadius = '3px 3px 3px 3px';
+
+			staminaBarFillRight.style.width = `0%`;
+		}
+
 		// Update the stamina display value
 		const staminaValueDisplay = this.contentEl.querySelector(".stamina-value-display") as HTMLInputElement;
 		if (staminaValueDisplay) {

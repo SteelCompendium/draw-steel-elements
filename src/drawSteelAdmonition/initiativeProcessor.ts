@@ -424,9 +424,15 @@ export class InitiativeProcessor {
 		group?: EnemyGroup
 	): void {
 		if (group?.is_squad && creature?.squad_role === "minion") {
-			// For minions in squads, display the minion stamina pool
-			const currentStamina = group.minion_stamina_pool ?? 0;
-			staminaEl.textContent = `Pool: ${currentStamina}`;
+			// For minions in squads, display the minion stamina pool or DEAD
+			if ((character as CreatureInstance).isDead) {
+				staminaEl.textContent = `DEAD`;
+				staminaEl.style.color = 'crimson';
+			} else {
+				const currentStamina = group.minion_stamina_pool ?? 0;
+				staminaEl.textContent = `${currentStamina}/${creature.max_stamina * creature.amount} (${creature.max_stamina})`;
+				staminaEl.style.color = 'var(--text-normal)';
+			}
 		} else {
 			const currentStamina = character.current_stamina ?? 0;
 			const tempStamina = character.temp_stamina ?? 0;
