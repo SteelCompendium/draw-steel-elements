@@ -1349,7 +1349,7 @@ button.action-button {
 
 @keyframes blink-animation {
 	to {
-		visibility: hidden;
+		opacity: 0;
 	}
 }
 
