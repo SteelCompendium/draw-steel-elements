@@ -958,13 +958,13 @@ button.action-button {
 /*  Minion Stamina Pool Modal   */
 /* ============================ */
 
-.stamina-header {
+.minion-stamina-modal .stamina-header {
 	text-align: center;
 }
 
 /* Stamina Pool Bar */
 
-.stamina-bar-container {
+.minion-stamina-modal .stamina-bar-container {
 	width: 100%;
 	background-color: var(--code-background);
 	border: 1px solid var(--text-normal);
@@ -974,14 +974,14 @@ button.action-button {
 	height: 20px;
 }
 
-.stamina-bar {
+.minion-stamina-modal .stamina-bar {
 	width: 100%;
 	height: 100%;
 	position: relative;
 	display: flex;
 }
 
-.stamina-bar-fill {
+.minion-stamina-modal .stamina-bar-fill {
 	position: relative;
 	height: calc(100% - 2px);
 	top: 1px;
@@ -991,15 +991,18 @@ button.action-button {
 	border-radius: 3px;
 }
 
-.stamina-bar-tick {
+.minion-stamina-modal .stamina-bar-tick {
 	position: absolute;
-	top: 0;
-	height: 100%;
-	width: 1px;
-	background-color: var(--text-normal);
+	bottom: 0;
+	height: 50%;
+	width: 3px;
+	background-color: var(--code-background);
+	border-right: 1px solid var(--text-normal);
 }
 
-.stamina-bar-tick::after {
+.minion-stamina-modal .stamina-bar-tick::after {
+	/* TODO - i didnt like this bubble for now... */
+	display: none;
 	content: "";
 	position: absolute;
 	top: 0;
@@ -1013,14 +1016,14 @@ button.action-button {
 
 /* Stamina Modifiers */
 
-.stamina-mod-container {
+.minion-stamina-modal .stamina-mod-container {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	margin-bottom: 10px;
 }
 
-.stamina-mod-container .stamina-adjust-btn {
+.minion-stamina-modal .stamina-mod-container .stamina-adjust-btn {
 	width: 30px;
 	height: 30px;
 	display: flex;
@@ -1028,141 +1031,148 @@ button.action-button {
 	cursor: pointer;
 }
 
-.stamina-mod-container .stamina-adjust-btn svg {
+.minion-stamina-modal .stamina-mod-container .stamina-adjust-btn svg {
 	height: 100%;
 }
 
-.stamina-mod-container .stamina-value-display {
+.minion-stamina-modal .stamina-mod-container .stamina-value-display {
 	width: 4em;
 	text-align: center;
 	margin: 0 5px;
 }
 
-.stamina-mod-container .max-stamina-display {
+.minion-stamina-modal .stamina-mod-container .max-stamina-display {
 	margin-left: 5px;
 	margin-right: 5px;
 }
 
 /* Apply Damage Section */
 
-.apply-container {
+.minion-stamina-modal .apply-container {
 	margin-bottom: 10px;
 }
 
-.apply-row {
+.minion-stamina-modal .apply-row {
 	display: flex;
-	justify-content: space-around;
+	justify-content: center;
 	align-items: center;
 	margin-top: 0.5em;
 }
 
-.apply-row span {
+.minion-stamina-modal .apply-row span {
 	margin: 0 5px;
+	text-align: center;
 }
 
-.apply-input {
+.minion-stamina-modal .apply-row input {
+	width: 3em;
+}
+
+.minion-stamina-modal .apply-input {
 	width: 60px;
 }
 
 /* Apply Damage Button */
 
-.apply-btn {
+.minion-stamina-modal .apply-btn {
 	display: flex;
 	width: 100%;
 	margin-top: 0.5em;
 	justify-content: center;
+	max-width: fit-content;
 }
 
-.apply-btn .btn-icon {
+.minion-stamina-modal .apply-btn .btn-icon {
 	margin-right: 0.5em;
+	width: 1em;
+	height: 1em;
 }
 
-.apply-btn .btn-text {
+.minion-stamina-modal .apply-btn .btn-text {
 	line-height: 24px;
 }
 
 /* Info Text */
 
-.info-text {
+.minion-stamina-modal .info-text {
 	text-align: center;
-	font-size: var(--font-ui-small);
-	margin-bottom: 10px;
+	font-size: var(--font-ui-large);
+	margin: 1em 0;
 }
 
 /* Minion List */
 
-.minion-list-container {
+.minion-stamina-modal .minion-list-container {
 	max-height: 200px;
 	overflow-y: auto;
 	margin-bottom: 10px;
-	border: 1px solid var(--color-base-30);
 	border-radius: 5px;
 	padding: 5px;
 }
 
-.minion-row {
+.minion-stamina-modal .minion-row {
 	display: flex;
 	align-items: center;
 	margin-bottom: 5px;
 }
 
-.minion-checkbox {
+.minion-stamina-modal .minion-checkbox {
 	margin-right: 10px;
 }
 
-.minion-name {
+.minion-stamina-modal .minion-name {
 	margin-right: 10px;
 	flex-grow: 1;
 }
 
-.minion-conditions {
+.minion-stamina-modal .minion-conditions {
 	display: flex;
 	align-items: center;
 }
 
 /* Condition Icons */
 
-.condition-icon {
+.minion-stamina-modal .condition-icon {
 	width: 20px;
 	height: 20px;
 	margin-right: 5px;
 	cursor: pointer;
 }
 
-.condition-icon svg {
+.minion-stamina-modal .condition-icon svg {
 	width: 100%;
 	height: 100%;
 }
 
 /* Add Condition Icon */
 
-.add-condition-icon {
+.minion-stamina-modal .add-condition-icon {
 	width: 20px;
 	height: 20px;
 	cursor: pointer;
 }
 
-.add-condition-icon svg {
+.minion-stamina-modal .add-condition-icon svg {
 	width: 100%;
 	height: 100%;
 }
 
 /* Action Button */
 
-.action-button-container {
+.minion-stamina-modal .action-button-container {
 	text-align: center;
 	margin-top: 20px;
 	display: flex;
 	justify-content: space-between;
 }
 
-button.action-button {
+.minion-stamina-modal button.action-button {
 	padding: 10px 20px;
 	font-size: 16px;
 	background-color: var(--interactive-accent);
 }
 
-.action-button.disabled {
+.minion-stamina-modal .action-button.disabled {
 	opacity: 0.5;
 	pointer-events: none;
 	background-color: var(--interactive-normal);
@@ -1170,19 +1180,18 @@ button.action-button {
 
 /* Reset Button */
 
-.reset-button {
+.minion-stamina-modal .reset-button {
 	display: flex;
 	align-items: center;
 }
 
-.reset-button .btn-icon {
+.minion-stamina-modal .reset-button .btn-icon {
 	margin-right: 0.5em;
 }
 
-.reset-button .btn-text {
+.minion-stamina-modal .reset-button .btn-text {
 	line-height: 24px;
 }
-
 
 /* ===================== */
 /*    Condition Modal    */

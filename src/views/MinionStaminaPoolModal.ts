@@ -1,8 +1,8 @@
 import { App, Modal, MarkdownPostProcessorContext, setIcon } from "obsidian";
 import { Creature, CreatureInstance, EncounterData, EnemyGroup } from "../drawSteelAdmonition/EncounterData";
 import { ConditionManager } from "../utils/Conditions";
-import { AddConditionsModal } from "../views/ConditionSelectModal";
 import { CodeBlocks } from "../utils/CodeBlocks";
+import {Condition} from "resolve.exports";
 
 export class MinionStaminaPoolModal extends Modal {
 	private group: EnemyGroup;
@@ -33,10 +33,10 @@ export class MinionStaminaPoolModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-
 		contentEl.empty();
+		const minionsStaminaModal = contentEl.createEl("div", { cls: "minion-stamina-modal" });
 
-		contentEl.createEl("h2", { text: `${this.group.name} - Minion Stamina Pool`, cls: "stamina-header" });
+		minionsStaminaModal.createEl("h2", { text: `${this.group.name} - Minion Stamina Pool`, cls: "stamina-header" });
 
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
@@ -44,7 +44,7 @@ export class MinionStaminaPoolModal extends Modal {
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 
 		// First Row: STAMINA Pool Bar
-		const staminaBarContainer = contentEl.createEl("div", { cls: "stamina-bar-container" });
+		const staminaBarContainer = minionsStaminaModal.createEl("div", { cls: "stamina-bar-container" });
 		const staminaBar = staminaBarContainer.createEl("div", { cls: "stamina-bar" });
 		const staminaBarFill = staminaBar.createEl("div", { cls: "stamina-bar-fill" });
 
@@ -59,13 +59,13 @@ export class MinionStaminaPoolModal extends Modal {
 		this.updateStaminaBar(staminaBarFill);
 
 		// Second Row: Stamina Modifiers
-		const staminaModContainer = contentEl.createEl("div", { cls: "stamina-mod-container" });
+		const staminaModContainer = minionsStaminaModal.createEl("div", { cls: "stamina-mod-container" });
 
 		// Decrement Button
 		const decrementButton = staminaModContainer.createEl("div", { cls: "stamina-adjust-btn" });
 		setIcon(decrementButton, "minus-circle");
 		decrementButton.addEventListener("click", () => {
-			this.pendingStaminaChange -= 1;
+			this.pendingStaminaChange -= Math.min(1, (poolCurrentStamina + this.pendingStaminaChange));
 			this.updateStaminaBar(staminaBarFill);
 			this.updateActionButton(actionButton);
 			this.updateInfoText(infoText);
@@ -97,20 +97,21 @@ export class MinionStaminaPoolModal extends Modal {
 		const incrementButton = staminaModContainer.createEl("div", { cls: "stamina-adjust-btn" });
 		setIcon(incrementButton, "plus-circle");
 		incrementButton.addEventListener("click", () => {
-			this.pendingStaminaChange += 1;
+			this.pendingStaminaChange += Math.min(1, (poolMaxStamina - poolCurrentStamina - this.pendingStaminaChange));
 			this.updateStaminaBar(staminaBarFill);
 			this.updateActionButton(actionButton);
 			this.updateInfoText(infoText);
 		});
 
 		// Third Row: Apply Damage
-		const applyContainer = contentEl.createEl("div", { cls: "apply-container" });
+		const applyContainer = minionsStaminaModal.createEl("div", { cls: "apply-container" });
 		const applyRow = applyContainer.createEl("div", { cls: "apply-row" });
 		applyRow.createEl("span", { text: "Apply" });
 
 		const damageInput = applyRow.createEl("input", {
 			type: "number",
 			cls: "apply-input",
+			attr: {"size": 3}
 		}) as HTMLInputElement;
 		damageInput.value = "0";
 
@@ -119,13 +120,16 @@ export class MinionStaminaPoolModal extends Modal {
 		const minionCountInput = applyRow.createEl("input", {
 			type: "number",
 			cls: "apply-input",
+			attr: {"size": 3}
 		}) as HTMLInputElement;
-		minionCountInput.value = "0";
+		minionCountInput.value = 1;
+		minionCountInput.max = this.creature.instances?.length;
+		minionCountInput.min = 0;
 
 		applyRow.createEl("span", { text: "minions" });
 
 		// Apply Damage Button
-		const applyDamageButton = applyContainer.createEl("button", { cls: "apply-btn" });
+		const applyDamageButton = applyRow.createEl("button", { cls: "apply-btn" });
 		setIcon(applyDamageButton.createEl("div", { cls: "btn-icon" }), "sword");
 		applyDamageButton.createEl("div", { cls: "btn-text", text: "Apply Damage" });
 		applyDamageButton.addEventListener("click", () => {
@@ -140,12 +144,14 @@ export class MinionStaminaPoolModal extends Modal {
 			}
 		});
 
-		// Info Text
-		const infoText = contentEl.createEl("div", { cls: "info-text" });
-		this.updateInfoText(infoText);
+		const divider = minionsStaminaModal.createEl('div', { cls: 'horizontal-divider' });
 
 		// Minion List
-		const minionListContainer = contentEl.createEl("div", { cls: "minion-list-container" });
+		const minionListContainer = minionsStaminaModal.createEl("div", { cls: "minion-list-container" });
+
+		// Info Text
+		const infoText = minionListContainer.createEl("div", { cls: "info-text" });
+		this.updateInfoText(infoText);
 
 		// List the minions
 		this.creature.instances.forEach((instance) => {
@@ -167,7 +173,7 @@ export class MinionStaminaPoolModal extends Modal {
 		});
 
 		// Bottom: Action Button and Reset Button
-		const actionButtonContainer = contentEl.createEl("div", { cls: "action-button-container" });
+		const actionButtonContainer = minionsStaminaModal.createEl("div", { cls: "action-button-container" });
 
 		// Reset Button
 		const resetButton = actionButtonContainer.createEl("button", { cls: "reset-button" });
@@ -239,7 +245,7 @@ export class MinionStaminaPoolModal extends Modal {
 		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / minionMaxStamina);
 		const minionsToKill = finalMinionsKilled - initialMinionsKilled;
 
-		infoText.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). Please select ${minionsToKill} minion(s) to kill.`;
+		infoText.textContent = `${totalPendingDamage} damage will kill ${minionsToKill} minion(s). Select ${minionsToKill} minion(s) to kill.`;
 	}
 
 	private updateActionButton(actionButton: HTMLElement) {
@@ -334,22 +340,23 @@ export class MinionStaminaPoolModal extends Modal {
 			}
 		});
 
-		const addConditionEl = container.createEl("div", { cls: "add-condition-icon" });
-		setIcon(addConditionEl, "plus-circle");
-		addConditionEl.title = "Add Condition";
-		addConditionEl.addEventListener("click", () => {
-			const addConditionsModal = new AddConditionsModal(
-				this.app,
-				character,
-				conditionManager,
-				(newConditions) => {
-					character.conditions = (character.conditions || []).concat(newConditions);
-					container.empty();
-					this.buildConditionIcons(container, character, data, ctx);
-					CodeBlocks.updateCodeBlock(this.app, data, ctx);
-				}
-			);
-			addConditionsModal.open();
-		});
+		// TODO - Saving the condition changes seems to prevent the damage from saving.  Commenting out for now
+		// const addConditionEl = container.createEl("div", { cls: "add-condition-icon" });
+		// setIcon(addConditionEl, "plus-circle");
+		// addConditionEl.title = "Add Condition";
+		// addConditionEl.addEventListener("click", () => {
+		// 	const addConditionsModal = new AddConditionsModal(
+		// 		this.app,
+		// 		character,
+		// 		conditionManager,
+		// 		(newConditions) => {
+		// 			character.conditions = (character.conditions || []).concat(newConditions);
+		// 			container.empty();
+		// 			this.buildConditionIcons(container, character, data, ctx);
+		// 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+		// 		}
+		// 	);
+		// 	addConditionsModal.open();
+		// });
 	}
 }
