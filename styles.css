@@ -1603,7 +1603,13 @@ button.action-button {
 		border-radius: .25em;
 		margin-top: -1px;
 		padding: 1em;
+		display: none;
 	}
+
+	.ds-nt-action-container.active {
+		display: block;
+	}
+
 
 	.ds-nt-argument-body {
 		display: flex;

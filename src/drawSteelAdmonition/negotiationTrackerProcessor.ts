@@ -1,331 +1,361 @@
-import {MarkdownPostProcessorContext, parseYaml, setTooltip} from "obsidian";
+import {App, MarkdownPostProcessorContext, setTooltip, stringifyYaml, TFile} from "obsidian";
+import {NegotiationData, parseNegotiationData} from "../model/NegotiationData";
 import {PowerRollProcessor} from "./powerRollProcessor";
-import {PowerRollTiers} from "../model/powerRoll";
 
 export class NegotiationTrackerProcessor {
+	private app: App;
+	private data: NegotiationData;
+	private ctx: MarkdownPostProcessorContext;
+
+	constructor(app: App) {
+		this.app = app;
+	}
+
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		const yaml = parseYaml(source);
+		this.ctx = ctx;
+		this.data = parseNegotiationData(source);
 
-		const container = el.createEl('div', {cls: "ds-nt-container"});
+		const container = el.createEl('div', { cls: "ds-nt-container" });
 
-		const name = yaml["name"];
+		const name = this.data.name;
 		if (name) {
-			const nameContainer = container.createEl("div", {cls: "ds-nt-name-line"});
-			nameContainer.createEl("span", {cls: "ds-nt-name-value", text: "Negotiation: " + name.trim()});
+			const nameContainer = container.createEl("div", { cls: "ds-nt-name-line" });
+			nameContainer.createEl("span", { cls: "ds-nt-name-value", text: "Negotiation: " + name.trim() });
 		}
 
-		const trackers = container.createEl("div", {cls: "ds-nt-trackers"});
-		NegotiationTrackerProcessor.addPatience(trackers, yaml);
-		NegotiationTrackerProcessor.addInterest(trackers, yaml);
-		NegotiationTrackerProcessor.addActions(yaml, trackers, container);
+		const trackers = container.createEl("div", { cls: "ds-nt-trackers" });
+		this.addPatience(trackers);
+		this.addInterest(trackers);
+		this.addActions(trackers, container);
 
-		const details = container.createEl("div", {cls: "ds-nt-details"});
-		NegotiationTrackerProcessor.addMotivations(yaml, details, container);
-		NegotiationTrackerProcessor.addPitfalls(yaml, details);
+		const details = container.createEl("div", { cls: "ds-nt-details" });
+		this.addMotivations(details);
+		this.addPitfalls(details);
 	}
 
-	private static addPatience(trackers: any, yaml: any) {
-		const patienceCont = trackers.createEl("div", {cls: "ds-nt-patience-container"});
-		patienceCont.createEl("div", {cls: "ds-nt-patience-label", text: "Patience"});
+	// Add Patience Tracker
+	private addPatience(trackers: HTMLElement) {
+		const patienceCont = trackers.createEl("div", { cls: "ds-nt-patience-container" });
+		patienceCont.createEl("div", { cls: "ds-nt-patience-label", text: "Patience" });
 
-		const bubbleCont = patienceCont.createEl("div", {cls: "ds-nt-patience-bubble-container"});
-		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-0", text: "0"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(0, trackers));
-		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-1", text: "1"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(1, trackers));
-		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-2", text: "2"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(2, trackers));
-		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-3", text: "3"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(3, trackers));
-		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-4", text: "4"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(4, trackers));
-		bubbleCont.createEl("div", {cls: "ds-nt-patience-bubble ds-nt-patience-bubble-5", text: "5"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setPatience(5, trackers));
+		const bubbleCont = patienceCont.createEl("div", { cls: "ds-nt-patience-bubble-container" });
+		for (let i = 0; i <= 5; i++) {
+			const bubble = bubbleCont.createEl("div", {
+				cls: `ds-nt-patience-bubble ds-nt-patience-bubble-${i}`,
+				text: `${i}`
+			});
+			bubble.addEventListener("click", () => this.setPatience(i, trackers));
+		}
 
-		const initialPatience = yaml["initial_patience"];
-		if (initialPatience) {
-			NegotiationTrackerProcessor.setPatience(initialPatience, trackers)
+		// Initialize Patience Display
+		if (this.data.current_patience != null) {
+			this.setPatience(this.data.current_patience, trackers);
 		}
 	}
 
-	private static addInterest(trackers: any, yaml: any) {
-		const interestCont = trackers.createEl("div", {cls: "ds-nt-interest-container"});
-		interestCont.createEl("div", {cls: "ds-nt-interest-header", text: "Interest"});
+	// Set Patience Level
+	private setPatience(newPatience: number, container: HTMLElement) {
+		for (let i = 0; i <= 5; i++) {
+			const bubble = container.querySelector(`.ds-nt-patience-bubble-${i}`) as HTMLElement;
+			if (i > newPatience) {
+				bubble.classList.remove("ds-nt-patience-selected");
+			} else {
+				bubble.classList.add("ds-nt-patience-selected");
+			}
+		}
+		// Update Data and Save
+		this.data.current_patience = newPatience;
+		this.updateCodeBlock();
+	}
 
-		const offerCont = interestCont.createEl("div", {cls: "ds-nt-interest-offer-container"});
+	// Add Interest Tracker
+	private addInterest(trackers: HTMLElement) {
+		const interestCont = trackers.createEl("div", { cls: "ds-nt-interest-container" });
+		interestCont.createEl("div", { cls: "ds-nt-interest-header", text: "Interest" });
 
-		const i5Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-5-line"});
-		i5Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-5-label", text: "5"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(5, trackers));
-		i5Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-5-offer", text: yaml["i5"]});
+		const offerCont = interestCont.createEl("div", { cls: "ds-nt-interest-offer-container" });
 
-		const i4Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-4-line"});
-		i4Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-4-label", text: "4"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(4, trackers));
-		i4Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-4-offer", text: yaml["i4"]});
+		for (let i = 5; i >= 0; i--) {
+			const iLine = offerCont.createEl("div", { cls: `ds-nt-interest-line ds-nt-interest-${i}-line` });
+			const label = iLine.createEl("div", { cls: `ds-nt-interest-label ds-nt-interest-${i}-label`, text: `${i}` });
+			label.addEventListener("click", () => this.setInterest(i, trackers));
 
-		const i3Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-3-line"});
-		i3Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-3-label", text: "3"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(3, trackers));
-		i3Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-3-offer", text: yaml["i3"]});
+			const offerText = this.data[`i${i}`] ?? `Offer at Interest ${i}`;
+			iLine.createEl("div", { cls: `ds-nt-interest-offer ds-nt-interest-${i}-offer`, text: offerText });
+		}
 
-		const i2Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-2-line"});
-		i2Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-2-label", text: "2"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(2, trackers));
-		i2Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-2-offer", text: yaml["i2"]});
-
-		const i1Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-1-line"});
-		i1Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-1-label", text: "1"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(1, trackers));
-		i1Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-1-offer", text: yaml["i1"]});
-
-		const i0Line = offerCont.createEl("div", {cls: "ds-nt-interest-line ds-nt-interest-0-line"});
-		i0Line.createEl("div", {cls: "ds-nt-interest-label ds-nt-interest-0-label", text: "0"})
-			.addEventListener("click", evt => NegotiationTrackerProcessor.setInterest(0, trackers));
-		i0Line.createEl("div", {cls: "ds-nt-interest-offer ds-nt-interest-0-offer", text: yaml["i0"]});
-
-		const initialInterest = yaml["initial_interest"];
-		if (initialInterest) {
-			NegotiationTrackerProcessor.setInterest(initialInterest, trackers)
+		// Initialize Interest Display
+		if (this.data.current_interest != null) {
+			this.setInterest(this.data.current_interest, trackers);
 		}
 	}
 
-	private static addActions(yaml: any, trackers: any, root: HTMLElement) {
-		const actionsContainer = trackers.createEl("div", {cls: "ds-nt-actions-container"});
+	// Set Interest Level
+	private setInterest(newInterest: number, container: HTMLElement) {
+		for (let i = 0; i <= 5; i++) {
+			const line = container.querySelector(`.ds-nt-interest-${i}-line`) as HTMLElement;
+			const offer = line.querySelector(`.ds-nt-interest-offer`) as HTMLElement;
+			if (i > newInterest) {
+				line.classList.remove("ds-nt-interest-selected");
+			} else {
+				line.classList.add("ds-nt-interest-selected");
+			}
+			if (i < newInterest) {
+				offer.classList.add("ds-nt-interest-faded");
+			} else {
+				offer.classList.remove("ds-nt-interest-faded");
+			}
+		}
+		// Update Data and Save
+		this.data.current_interest = newInterest;
+		this.updateCodeBlock();
+	}
 
-		const actionTab = actionsContainer.createEl("div", {cls: "ds-nt-action-tabs"});
-		actionTab.createEl("div", {cls: "ds-nt-action-tab ds-nt-argument-tab", text: "Make an Argument"});
-		actionTab.createEl("div", {cls: "ds-nt-action-tab ds-nt-learn-more-tab", text: "Learn Motivation/Pitfall"});
+	// Add Actions with Tabs
+	private addActions(trackers: HTMLElement, root: HTMLElement) {
+		const actionsContainer = trackers.createEl("div", { cls: "ds-nt-actions-container" });
 
-		const argumentContainer = actionsContainer.createEl("div", {cls: "ds-nt-action-container ds-nt-argument-container"});
+		// Create Tabs
+		const actionTab = actionsContainer.createEl("div", { cls: "ds-nt-action-tabs" });
+		const argumentTab = actionTab.createEl("div", { cls: "ds-nt-action-tab ds-nt-argument-tab active", text: "Make an Argument" });
+		const learnMoreTab = actionTab.createEl("div", { cls: "ds-nt-action-tab ds-nt-learn-more-tab", text: "Learn Motivation/Pitfall" });
 
-		const argumentBody = argumentContainer.createEl("div", {cls: "ds-nt-argument-body"});
+		// Create Content Containers
+		const argumentContainer = actionsContainer.createEl("div", { cls: "ds-nt-action-container ds-nt-argument-container active" });
+		const learnMoreContainer = actionsContainer.createEl("div", { cls: "ds-nt-action-container ds-nt-learn-more-container" });
 
-		const argModifiers = argumentBody.createEl("div", {cls: "ds-nt-argument-modifiers"});
+		// Tab Switching Functionality
+		argumentTab.addEventListener('click', () => {
+			argumentTab.classList.add('active');
+			learnMoreTab.classList.remove('active');
+			argumentContainer.classList.add('active');
+			learnMoreContainer.classList.remove('active');
+		});
+
+		learnMoreTab.addEventListener('click', () => {
+			learnMoreTab.classList.add('active');
+			argumentTab.classList.remove('active');
+			learnMoreContainer.classList.add('active');
+			argumentContainer.classList.remove('active');
+		});
+
+		// Populate Content for Each Tab
+		this.populateArgumentTab(argumentContainer, root);
+		this.populateLearnMoreTab(learnMoreContainer);
+	}
+
+	// Populate Argument Tab
+	private populateArgumentTab(argumentContainer: HTMLElement, root: HTMLElement) {
+		const argumentBody = argumentContainer.createEl("div", { cls: "ds-nt-argument-body" });
+		const argModifiers = argumentBody.createEl("div", { cls: "ds-nt-argument-modifiers" });
 
 		// Motivations
-		const motivations = yaml["motivations"];
-		if (motivations) {
+		if (this.data.motivations.length > 0) {
 			const motHeader = argModifiers.createEl("div", {
 				cls: "ds-nt-argument-modifier-motivation-header",
 				text: "Appeals to Motivation"
 			});
 			setTooltip(motHeader, "If the Heroes appeal to a Motivation (w/o a Pitfall): Difficulty of the Argument Test is Easy.");
-			motivations.forEach(mot => {
-				const motLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-motivation-line"});
+
+			this.data.motivations.forEach(mot => {
+				const motLine = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-motivation-line" });
 				const motCB = motLine.createEl("input", {
 					cls: "ds-nt-argument-modifier-motivation-checkbox",
 					type: "checkbox"
+				}) as HTMLInputElement;
+				const motLabel = motLine.createEl("label", { cls: "ds-nt-argument-modifier-motivation-label", text: mot.name });
+				motLabel.setAttribute('data-motivation-name', mot.name); // Set data attribute
+				motCB.checked = mot.isMentioned ?? false;
+				motCB.addEventListener("change", () => {
+					mot.isMentioned = motCB.checked;
+					this.updateArgument(root);
+					this.updateCodeBlock();
 				});
-				motLine.createEl("label", {cls: "ds-nt-argument-modifier-motivation-label", text: mot["name"].trim()});
-				motCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 			});
 		}
 
 		// Reused Motivation
-		const reuseMotivationLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line"});
-		setTooltip(reuseMotivationLine, "If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.");
-		const reuseMotivationLabel = reuseMotivationLine.createEl("label", {cls: "ds-nt-argument-modifier-reuse-motivation-label"});
+		const reuseMotivationLine = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line" });
+		reuseMotivationLine.title = "If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.";
+		const reuseMotivationLabel = reuseMotivationLine.createEl("label", { cls: "ds-nt-argument-modifier-reuse-motivation-label" });
 		const reuseMotivationCheckbox = reuseMotivationLabel.createEl("input", {
 			cls: "ds-nt-argument-modifier-reuse-motivation-checkbox",
 			type: "checkbox"
-		})
+		}) as HTMLInputElement;
 		reuseMotivationLabel.createEl("span", {
 			cls: "ds-nt-argument-modifier-reuse-motivation-text",
 			text: "Reused Motivation"
 		});
-		reuseMotivationCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
+		reuseMotivationCheckbox.addEventListener("change", () => {
+			this.updateArgument(root);
+			this.updateCodeBlock();
+		});
 
 		// Pitfalls
-		const pitfalls = yaml["pitfalls"];
-		if (pitfalls) {
+		if (this.data.pitfalls.length > 0) {
 			const pitHeader = argModifiers.createEl("div", {
 				cls: "ds-nt-argument-modifier-pitfall-header",
 				text: "Mentions Pitfall"
 			});
-			setTooltip(pitHeader, "If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.");
-			pitfalls.forEach(pit => {
-				const pitLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-line"});
+			pitHeader.title = "If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.";
+
+			this.data.pitfalls.forEach(pit => {
+				const pitLine = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-pitfall-line" });
 				const pitCB = pitLine.createEl("input", {
 					cls: "ds-nt-argument-modifier-pitfall-checkbox",
 					type: "checkbox"
+				}) as HTMLInputElement;
+				pitLine.createEl("label", { cls: "ds-nt-argument-modifier-pitfall-label", text: pit.name });
+				pitCB.checked = pit.isMentioned ?? false;
+				pitCB.addEventListener("change", () => {
+					pit.isMentioned = pitCB.checked;
+					this.updateArgument(root);
+					this.updateCodeBlock();
 				});
-				pitLine.createEl("label", {cls: "ds-nt-argument-modifier-pitfall-label", text: pit["name"].trim()});
-				pitCB.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
 			});
 		}
 
 		// Lie used
-		const lieLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line"});
-		setTooltip(lieLine, "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.");
-		const lieCheckbox = lieLine.createEl("input", {cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox"})
-		lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie"});
-		lieCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
+		const lieLine = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line" });
+		lieLine.title =  "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.";
+		const lieCheckbox = lieLine.createEl("input", { cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox" }) as HTMLInputElement;
+		lieLine.createEl("label", { cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie" });
+		lieCheckbox.addEventListener("change", () => {
+			this.updateArgument(root);
+			this.updateCodeBlock();
+		});
 
 		// Same Argument
-		const sameArgLine = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line"});
-		setTooltip(sameArgLine, "If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.");
-		const sameArgLabel = sameArgLine.createEl("label", {cls: "ds-nt-argument-modifier-same-arg-label"});
+		const sameArgLine = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line" });
+		sameArgLine.title = "If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.";
+		const sameArgLabel = sameArgLine.createEl("label", { cls: "ds-nt-argument-modifier-same-arg-label" });
 		const sameArgCheckbox = sameArgLabel.createEl("input", {
 			cls: "ds-nt-argument-modifier-same-arg-checkbox",
 			type: "checkbox"
-		})
-		sameArgLabel.createEl("span", {cls: "ds-nt-argument-modifier-same-arg-text", text: "Same Argument"})
-		sameArgCheckbox.addEventListener("change", evt => NegotiationTrackerProcessor.updateArgument(root));
+		}) as HTMLInputElement;
+		sameArgLabel.createEl("span", { cls: "ds-nt-argument-modifier-same-arg-text", text: "Same Argument" });
+		sameArgCheckbox.addEventListener("change", () => {
+			this.updateArgument(root);
+			this.updateCodeBlock();
+		});
 
-		// Power Roll
-		const argPowerRoll = argumentBody.createEl("div", {cls: "ds-nt-argument-power-roll"});
+		// Power Roll Display
+		const argPowerRoll = argumentBody.createEl("div", { cls: "ds-nt-argument-power-roll" });
 
-		const typeContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-roll-line"});
-		typeContainer.createEl("span", {cls: "pr-roll-value", text: "Power Roll + Reason, Intuition, or Presence"});
+		const typeContainer = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-roll-line" });
+		typeContainer.createEl("span", { cls: "pr-roll-value", text: "Power Roll + Reason, Intuition, or Presence" });
 
-		const t1Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
+		const t1Container = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-tier-1-line" });
 		PowerRollProcessor.tier1Key(t1Container);
-		t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: ""});
+		t1Container.createEl("span", { cls: "pr-tier-value pr-tier-1-value", text: "" });
 
-		const t2Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
+		const t2Container = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-tier-2-line" });
 		PowerRollProcessor.tier2Key(t2Container);
-		t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: ""});
+		t2Container.createEl("span", { cls: "pr-tier-value pr-tier-2-value", text: "" });
 
-		const t3Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
+		const t3Container = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-tier-3-line" });
 		PowerRollProcessor.tier3Key(t3Container);
-		t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: ""});
+		t3Container.createEl("span", { cls: "pr-tier-value pr-tier-3-value", text: "" });
 
-		const critContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
+		const critContainer = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-crit-line" });
 		PowerRollProcessor.critKey(critContainer);
-		critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: ""});
-
-		// TODO
-		// Footer
-		argumentContainer.createEl("div", {cls: "ds-nt-argument-footer", text: ""});
+		critContainer.createEl("span", { cls: "pr-tier-value pr-crit-value", text: "" });
 
 		// Update the argument for initial state
-		NegotiationTrackerProcessor.updateArgument(root)
+		this.updateArgument(root);
 	}
 
-	private static addMotivations(yaml: any, details: any, root: HTMLElement) {
-		const motivations = yaml["motivations"];
-		if (motivations) {
-			const motivationsCont = details.createEl("div", {cls: "ds-nt-motivations"});
-			motivationsCont.createEl("div", {cls: "ds-nt-details-header ds-nt-motivation-header", text: "Motivations"});
-			const motivationList = details.createEl("div", {cls: "ds-nt-motivation-list"});
+	// Populate Learn More Tab
+	private populateLearnMoreTab(learnMoreContainer: HTMLElement) {
+		const learnMoreBody = learnMoreContainer.createEl("div", { cls: "ds-nt-learn-more-body" });
+		// Add content for learning motivations and pitfalls
+		learnMoreBody.createEl("p", { text: "Content for learning motivations and pitfalls goes here." });
+	}
 
-			motivations.forEach(mot => {
-				const label = motivationList.createEl("label", {cls: "ds-nt-details-label ds-nt-motivation-label"})
-				setTooltip(label, "Check Motivations that have already been appealed to.");
-				label.addEventListener("click", evt => NegotiationTrackerProcessor.updateArgument(root));
-				label.createEl("input", {cls: "ds-nt-details-checkbox ds-nt-motivation-checkbox", type: "checkbox"});
-				label.createEl("span", {cls: "ds-nt-details-name ds-nt-motivation-name", text: mot["name"].trim() + ": "});
-				label.createEl("span", {cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot["reason"].trim()});
+	// Add Motivations
+	private addMotivations(details: HTMLElement) {
+		if (this.data.motivations.length > 0) {
+			const motivationsCont = details.createEl("div", { cls: "ds-nt-motivations" });
+			motivationsCont.createEl("div", { cls: "ds-nt-details-header ds-nt-motivation-header", text: "Motivations" });
+			const motivationList = motivationsCont.createEl("div", { cls: "ds-nt-motivation-list" });
+
+			this.data.motivations.forEach(mot => {
+				const label = motivationList.createEl("label", { cls: "ds-nt-details-label ds-nt-motivation-label" });
+				label.title = "Check Motivations that have already been appealed to.";
+				const checkbox = label.createEl("input", { cls: "ds-nt-details-checkbox ds-nt-motivation-checkbox", type: "checkbox" }) as HTMLInputElement;
+				checkbox.checked = mot.isMentioned ?? false;
+				label.createEl("span", { cls: "ds-nt-details-name ds-nt-motivation-name", text: mot.name + ": " });
+				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot.reason });
+				checkbox.addEventListener("change", () => {
+					mot.isMentioned = checkbox.checked;
+					this.updateArgument(details);
+					this.updateCodeBlock();
+				});
 			});
 		}
 	}
 
-	private static addPitfalls(yaml: any, details: any) {
-		const pitfalls = yaml["pitfalls"];
-		if (pitfalls) {
-			const pitfallsCont = details.createEl("div", {cls: "ds-nt-pitfalls"});
-			pitfallsCont.createEl("div", {cls: "ds-nt-details-header ds-nt-pitfall-header", text: "Pitfalls"});
-			const pitfallList = details.createEl("div", {cls: "ds-nt-pitfall-list"});
+	// Add Pitfalls
+	private addPitfalls(details: HTMLElement) {
+		if (this.data.pitfalls.length > 0) {
+			const pitfallsCont = details.createEl("div", { cls: "ds-nt-pitfalls" });
+			pitfallsCont.createEl("div", { cls: "ds-nt-details-header ds-nt-pitfall-header", text: "Pitfalls" });
+			const pitfallList = pitfallsCont.createEl("div", { cls: "ds-nt-pitfall-list" });
 
-			pitfalls.forEach(pit => {
-				const label = pitfallList.createEl("label", {cls: "ds-nt-details-label ds-nt-pitfall-label"});
-				// label.createEl("input", {cls: "ds-nt-details-checkbox ds-nt-pitfall-checkbox", type: "checkbox"});
-				label.createEl("span", {cls: "ds-nt-details-name ds-nt-pitfall-name", text: pit["name"].trim() + ": "});
-				label.createEl("span", {cls: "ds-nt-details-reason ds-nt-pitfall-reason", text: pit["reason"].trim()});
+			this.data.pitfalls.forEach(pit => {
+				const label = pitfallList.createEl("label", { cls: "ds-nt-details-label ds-nt-pitfall-label" });
+				// Uncomment if you want checkboxes for pitfalls
+				// const checkbox = label.createEl("input", { cls: "ds-nt-details-checkbox ds-nt-pitfall-checkbox", type: "checkbox" }) as HTMLInputElement;
+				label.createEl("span", { cls: "ds-nt-details-name ds-nt-pitfall-name", text: pit.name + ": " });
+				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-pitfall-reason", text: pit.reason });
 			});
 		}
 	}
 
-	// Updates the interest display to reflect the new interest level
-	private static setPatience(newPatience: number, container: HTMLElement) {
-		for (let i = 0; i <= 5; i++) {
-			const bubble = container.find(".ds-nt-patience-bubble-" + i) as HTMLInputElement;
-			if (i > newPatience) {
-				bubble.removeClass("ds-nt-patience-selected");
-			} else {
-				bubble.addClass("ds-nt-patience-selected");
-			}
-		}
-	}
+	// Update Argument Based on Current State
+	private updateArgument(parent: HTMLElement) {
+		const lieCheckbox = parent.querySelector(".ds-nt-argument-modifier-lie-checkbox") as HTMLInputElement;
+		const sameArgumentCheckbox = parent.querySelector(".ds-nt-argument-modifier-same-arg-checkbox") as HTMLInputElement;
+		const reuseMotivationCheckbox = parent.querySelector(".ds-nt-argument-modifier-reuse-motivation-checkbox") as HTMLInputElement;
 
-	// Updates the interest display to reflect the new interest level
-	private static setInterest(newInterest: number, container: HTMLElement) {
-		for (let i = 0; i <= 5; i++) {
-			const line = container.find(".ds-nt-interest-" + i + "-line") as HTMLInputElement;
-			const offer = (line.find(".ds-nt-interest-offer") as HTMLElement)
-			if (i > newInterest) {
-				line.removeClass("ds-nt-interest-selected");
-			} else {
-				line.addClass("ds-nt-interest-selected");
-			}
-			if (i < newInterest) {
-				offer.addClass("ds-nt-interest-faded");
-			} else {
-				offer.removeClass("ds-nt-interest-faded");
-			}
-		}
-	}
+		const usedMotivation = this.data.motivations.some(mot => mot.isMentioned);
+		const usedPitfall = this.data.pitfalls.some(pit => pit.isMentioned);
 
-	// Updates an argument (options and results) based on the current state of the argument options
-	private static updateArgument(parent: HTMLElement) {
-		let lieCheckbox = parent.findAll(".ds-nt-argument-modifier-lie-checkbox")[0] as HTMLInputElement;
-		let sameArgumentCheckbox = parent.findAll(".ds-nt-argument-modifier-same-arg-checkbox")[0] as HTMLInputElement;
-		let reuseMotivationCheckbox = parent.findAll(".ds-nt-argument-modifier-reuse-motivation-checkbox")[0] as HTMLInputElement;
-
-		let usedMotivation = false;
-		for (let motivationEle of parent.findAll(".ds-nt-argument-modifier-motivation-checkbox")) {
-			// TODO - if the matching Motivation Detail is checked (previously used) the reusedMotivation checkbox should auto-check
-			if ((motivationEle as HTMLInputElement).checked) {
-				usedMotivation = true;
-			}
-		}
-		let usedPitfall = false;
-		for (let pitfallEle of parent.findAll(".ds-nt-argument-modifier-pitfall-checkbox")) {
-			if ((pitfallEle as HTMLInputElement).checked) {
-				usedPitfall = true;
-			}
-		}
-
-		// enable "Reused Motivation" checkbox only if motivation used
+		// Enable/Disable Reuse Motivation Checkbox
 		reuseMotivationCheckbox.disabled = !usedMotivation;
-		// enable "Same Argument" checkbox only if motivation not used
+
+		// Enable/Disable Same Argument Checkbox
 		sameArgumentCheckbox.disabled = usedMotivation;
 
-		let caughtLying = lieCheckbox.checked;
-		let reusedMotivation = reuseMotivationCheckbox.checked && !reuseMotivationCheckbox.disabled;
-		let sameArgument = sameArgumentCheckbox.checked;
+		const caughtLying = lieCheckbox.checked;
+		const reusedMotivation = reuseMotivationCheckbox.checked && !reuseMotivationCheckbox.disabled;
+		const sameArgument = sameArgumentCheckbox.checked;
 
-		const prTiers = NegotiationTrackerProcessor.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
+		const prTiers = this.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
 
-		(parent.findAll(".pr-tier-1-value")[0] as HTMLInputElement).setText(prTiers.t1);
-		(parent.findAll(".pr-tier-2-value")[0] as HTMLInputElement).setText(prTiers.t2);
-		(parent.findAll(".pr-tier-3-value")[0] as HTMLInputElement).setText(prTiers.t3);
-		(parent.findAll(".pr-crit-value")[0] as HTMLInputElement).setText(prTiers.crit);
+		(parent.querySelector(".pr-tier-1-value") as HTMLElement).setText(prTiers.t1);
+		(parent.querySelector(".pr-tier-2-value") as HTMLElement).setText(prTiers.t2);
+		(parent.querySelector(".pr-tier-3-value") as HTMLElement).setText(prTiers.t3);
+		(parent.querySelector(".pr-crit-value") as HTMLElement).setText(prTiers.crit);
 
-		const motivationDetailLabels = parent.findAll(".ds-nt-motivation-label");
-		// For all the Argument Motivations...
-		parent.findAll(".ds-nt-argument-modifier-motivation-label").forEach(argMot => {
-			const argMotivationName= argMot.getText();
-			// Remove any previous markings
-			argMot.removeClass("ds-nt-arg-motivation-used");
-
-			// Iterate over all the Motivation Details...
-			motivationDetailLabels.forEach(label => {
-				const motivationDetailName = label.find(".ds-nt-motivation-name")?.getText();
-				// ...to see if the names match and if the Motivation Detail is checked - then mark the Arg Motivation
-				if (motivationDetailName?.contains(argMotivationName)) {
-					if ((label.find(".ds-nt-motivation-checkbox") as HTMLInputElement).checked) {
-						argMot.addClass("ds-nt-arg-motivation-used");
-						setTooltip(argMot, "This Motivation was used in a previous Argument.");
-					}
+		// Update Motivation Labels to Indicate Previous Use
+		const argMotLabels = parent.querySelectorAll(".ds-nt-argument-modifier-motivation-label");
+		argMotLabels.forEach(argMotLabel => {
+			const motName = argMotLabel.getAttribute('data-motivation-name');
+			const mot = this.data.motivations.find(m => m.name === motName);
+			if (mot) {
+				argMotLabel.classList.toggle("ds-nt-arg-motivation-used", mot.isMentioned ?? false);
+				if (mot.isMentioned) {
+					setTooltip(argMotLabel as HTMLElement, "This Motivation was used in a previous Argument.");
+				} else {
+					setTooltip(argMotLabel as HTMLElement, "");
 				}
-			});
+			}
 		});
 	}
 
-	// Returns the PowerRollTiers for an Argument
-	private static recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean, reusedMotivation: boolean, sameArgument: boolean): PowerRollTiers {
+	// Recalculate Argument Results
+	private recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean, reusedMotivation: boolean, sameArgument: boolean): PowerRollTiers {
 		let result = this.baselineArgument(usedMotivation, usedPitfall, reusedMotivation, sameArgument);
 
 		// Modify if caught lying
@@ -339,8 +369,8 @@ export class NegotiationTrackerProcessor {
 		return result.toPowerRollTiers();
 	}
 
-	// Returns the Negotiation Result given the type of argument being made.  Does NOT account for modifiers
-	private static baselineArgument(usedMotivation: boolean, usedPitfall: boolean, reusedMotivation: boolean, sameArgument: boolean): NegotiationResult {
+	// Baseline Argument Results
+	private baselineArgument(usedMotivation: boolean, usedPitfall: boolean, reusedMotivation: boolean, sameArgument: boolean): NegotiationResult {
 		// Used pitfall
 		if (usedPitfall) {
 			return new NegotiationResult(
@@ -351,14 +381,8 @@ export class NegotiationTrackerProcessor {
 			);
 		}
 
-		// Used same motivation a second time, no pitfall
+		// Reused Motivation
 		if (reusedMotivation) {
-			if (usedMotivation) {
-				console.log("[WARN|draw-steel-elements] Argument made with 'reusedMotivation', but 'usedMotivation' is false");
-			}
-			if (sameArgument) {
-				console.log("[WARN|draw-steel-elements] Argument made with 'reusedMotivation', but 'sameArgument' is true - invalid state.");
-			}
 			return new NegotiationResult(
 				new NegotiationTierResult(0, -1),
 				new NegotiationTierResult(0, -1),
@@ -367,11 +391,8 @@ export class NegotiationTrackerProcessor {
 			);
 		}
 
-		// Used motivation without pitfall
+		// Used Motivation
 		if (usedMotivation) {
-			if (sameArgument) {
-				console.log("[WARN|draw-steel-elements] Argument 'usedMotivation', but 'sameArgument' is true - invalid state.");
-			}
 			return new NegotiationResult(
 				new NegotiationTierResult(0, -1),
 				new NegotiationTierResult(+1, -1),
@@ -380,7 +401,7 @@ export class NegotiationTrackerProcessor {
 			);
 		}
 
-		// No motivation/pitfall, but used same argument twice
+		// Same Argument without Motivation
 		if (sameArgument) {
 			return new NegotiationResult(
 				new NegotiationTierResult(-1, -1),
@@ -390,7 +411,7 @@ export class NegotiationTrackerProcessor {
 			);
 		}
 
-		// No motivation/pitfall, normal argument
+		// Normal Argument
 		return new NegotiationResult(
 			new NegotiationTierResult(-1, -1),
 			new NegotiationTierResult(0, -1),
@@ -398,9 +419,51 @@ export class NegotiationTrackerProcessor {
 			new NegotiationTierResult(+1, 0),
 		);
 	}
+
+	// Update the Code Block in the Markdown File
+	private async updateCodeBlock(): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
+		if (!(file instanceof TFile)) return;
+
+		const content = await this.app.vault.read(file);
+		const lines = content.split('\n');
+
+		const section = this.ctx.getSectionInfo(this.ctx.el);
+		if (!section) return;
+
+		const { lineStart, lineEnd } = section;
+
+		// Reconstruct the code block with the updated data
+		const newCodeBlockContent = [];
+		newCodeBlockContent.push('```ds-nt');
+		newCodeBlockContent.push(stringifyYaml(this.data).trim());
+		newCodeBlockContent.push('```');
+
+		// Replace the old code block with the new one
+		lines.splice(lineStart, lineEnd - lineStart + 1, ...newCodeBlockContent);
+
+		const newContent = lines.join('\n');
+
+		// Write the updated content back to the file
+		await this.app.vault.modify(file, newContent);
+	}
 }
 
-// Represents the full result of a negotiation power roll
+// Helper Classes
+export class PowerRollTiers {
+	public t1: string;
+	public t2: string;
+	public t3: string;
+	public crit: string;
+
+	constructor(t1: string, t2: string, t3: string, crit: string) {
+		this.t1 = t1;
+		this.t2 = t2;
+		this.t3 = t3;
+		this.crit = crit;
+	}
+}
+
 export class NegotiationResult {
 	public t1: NegotiationTierResult;
 	public t2: NegotiationTierResult;
@@ -420,41 +483,40 @@ export class NegotiationResult {
 			this.t2.toString(),
 			this.t3.toString(),
 			this.crit.toString(),
-		)
+		);
 	}
 }
 
-// Represents the result of a single negotiation power roll's tier
 export class NegotiationTierResult {
 	public interest: number;
 	public patience: number;
 	public other: string;
 
-	constructor(interest: number, patience: number, other: string | void) {
+	constructor(interest: number, patience: number, other?: string) {
 		this.interest = interest;
 		this.patience = patience;
 		this.other = other ?? "";
 	}
 
 	public toString = (): string => {
-		let result = ""
+		let result = "";
 		if (this.interest != 0) {
-			result += this.interest + " Interest"
+			result += `${this.interest > 0 ? '+' : ''}${this.interest} Interest`;
 		}
 		if (this.patience != 0) {
 			if (result != "") {
-				result += ", "
+				result += ", ";
 			}
-			result += this.patience + " Patience"
+			result += `${this.patience > 0 ? '+' : ''}${this.patience} Patience`;
 		}
 		if (this.other != "") {
 			if (result != "") {
-				result += ", "
+				result += ", ";
 			}
-			result += this.other
+			result += this.other;
 		}
 		if (result == "") {
-			result = "No effect"
+			result = "No effect";
 		}
 		return result;
 	}
