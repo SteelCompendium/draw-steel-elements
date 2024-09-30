@@ -31,4 +31,3 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 	onunload() {
 	}
 }
-
