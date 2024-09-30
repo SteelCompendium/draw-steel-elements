@@ -1,6 +1,9 @@
-import {App, MarkdownPostProcessorContext, setTooltip, stringifyYaml, TFile} from "obsidian";
+import {App, MarkdownPostProcessorContext, setTooltip} from "obsidian";
 import {NegotiationData, parseNegotiationData} from "../model/NegotiationData";
 import {PowerRollProcessor} from "./powerRollProcessor";
+import {ArgumentPowerRoll} from "../model/Arguments";
+import {CodeBlocks} from "../utils/CodeBlocks";
+import {PowerRollTiers} from "../model/powerRoll";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
@@ -76,7 +79,7 @@ export class NegotiationTrackerProcessor {
 		}
 		// Update Data and Save
 		this.data.current_patience = newPatience;
-		this.updateCodeBlock();
+		CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 	}
 
 	// Add Interest Tracker
@@ -119,7 +122,7 @@ export class NegotiationTrackerProcessor {
 		}
 		// Update Data and Save
 		this.data.current_interest = newInterest;
-		this.updateCodeBlock();
+		CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 	}
 
 	// Add Actions with Tabs
@@ -189,7 +192,7 @@ export class NegotiationTrackerProcessor {
 						}
 					}
 					this.updateArgument(root);
-					this.updateCodeBlock();
+					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 				});
 			});
 		}
@@ -210,7 +213,7 @@ export class NegotiationTrackerProcessor {
 		reuseMotivationCheckbox.addEventListener("change", () => {
 			this.data.currentArgument.reuseMotivationUsed = reuseMotivationCheckbox.checked;
 			this.updateArgument(root);
-			this.updateCodeBlock();
+			CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 		});
 
 		// Pitfalls
@@ -241,7 +244,7 @@ export class NegotiationTrackerProcessor {
 						}
 					}
 					this.updateArgument(root);
-					this.updateCodeBlock();
+					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 				});
 			});
 		}
@@ -255,7 +258,7 @@ export class NegotiationTrackerProcessor {
 		lieCheckbox.addEventListener("change", () => {
 			this.data.currentArgument.lieUsed = lieCheckbox.checked;
 			this.updateArgument(root);
-			this.updateCodeBlock();
+			CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 		});
 
 		// Same Argument
@@ -271,7 +274,7 @@ export class NegotiationTrackerProcessor {
 		sameArgCheckbox.addEventListener("change", () => {
 			this.data.currentArgument.sameArgumentUsed = sameArgCheckbox.checked;
 			this.updateArgument(root);
-			this.updateCodeBlock();
+			CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 		});
 
 		// Power Roll Display
@@ -325,7 +328,7 @@ export class NegotiationTrackerProcessor {
 			};
 
 			// Update the code block
-			this.updateCodeBlock();
+			CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 
 			// Re-render the argument tab to reset the checkboxes
 			argumentContainer.empty();
@@ -366,7 +369,7 @@ export class NegotiationTrackerProcessor {
 				checkbox.addEventListener("change", () => {
 					mot.isMentioned = checkbox.checked;
 					this.updateArgument(details);
-					this.updateCodeBlock();
+					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 				});
 			});
 		}
@@ -414,7 +417,9 @@ export class NegotiationTrackerProcessor {
 		const reusedMotivation = this.data.currentArgument.reuseMotivationUsed;
 		const sameArgument = this.data.currentArgument.sameArgumentUsed;
 
-		const prTiers = this.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
+		const prTiers = ArgumentPowerRoll
+			.build(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument)
+			.toPowerRollTiers();
 
 		(parent.querySelector(".pr-tier-1-value") as HTMLElement).setText(prTiers.t1);
 		(parent.querySelector(".pr-tier-2-value") as HTMLElement).setText(prTiers.t2);
@@ -435,172 +440,5 @@ export class NegotiationTrackerProcessor {
 				}
 			}
 		});
-	}
-
-	// Recalculate Argument Results
-	private recalculateArgument(usedMotivation: boolean, usedPitfall: boolean, caughtLying: boolean, reusedMotivation: boolean, sameArgument: boolean): PowerRollTiers {
-		let result = this.baselineArgument(usedMotivation, usedPitfall, reusedMotivation, sameArgument);
-
-		// Modify if caught lying
-		if (caughtLying) {
-			if (result.t1.interest <= 0) result.t1.interest -= 1;
-			if (result.t2.interest <= 0) result.t2.interest -= 1;
-			if (result.t3.interest <= 0) result.t3.interest -= 1;
-			if (result.crit.interest <= 0) result.crit.interest -= 1;
-		}
-
-		return result.toPowerRollTiers();
-	}
-
-	// Baseline Argument Results
-	private baselineArgument(usedMotivation: boolean, usedPitfall: boolean, reusedMotivation: boolean, sameArgument: boolean): NegotiationResult {
-		// Used pitfall
-		if (usedPitfall) {
-			return new NegotiationResult(
-				new NegotiationTierResult(-1, -1),
-				new NegotiationTierResult(-1, -1),
-				new NegotiationTierResult(-1, -1),
-				new NegotiationTierResult(-1, -1),
-			);
-		}
-
-		// Reused Motivation
-		if (reusedMotivation) {
-			return new NegotiationResult(
-				new NegotiationTierResult(0, -1),
-				new NegotiationTierResult(0, -1),
-				new NegotiationTierResult(0, -1),
-				new NegotiationTierResult(0, -1),
-			);
-		}
-
-		// Used Motivation
-		if (usedMotivation) {
-			return new NegotiationResult(
-				new NegotiationTierResult(0, -1),
-				new NegotiationTierResult(+1, -1),
-				new NegotiationTierResult(+1, 0),
-				new NegotiationTierResult(+1, 0),
-			);
-		}
-
-		// Same Argument without Motivation
-		if (sameArgument) {
-			return new NegotiationResult(
-				new NegotiationTierResult(-1, -1),
-				new NegotiationTierResult(-1, -1),
-				new NegotiationTierResult(-1, -1),
-				new NegotiationTierResult(-1, -1)
-			);
-		}
-
-		// Normal Argument
-		return new NegotiationResult(
-			new NegotiationTierResult(-1, -1),
-			new NegotiationTierResult(0, -1),
-			new NegotiationTierResult(+1, -1),
-			new NegotiationTierResult(+1, 0),
-		);
-	}
-
-	// Update the Code Block in the Markdown File
-	private async updateCodeBlock(): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(this.ctx.sourcePath);
-		if (!(file instanceof TFile)) return;
-
-		const content = await this.app.vault.read(file);
-		const lines = content.split('\n');
-
-		const section = this.ctx.getSectionInfo(this.ctx.el);
-		if (!section) return;
-
-		const { lineStart, lineEnd } = section;
-
-		// Reconstruct the code block with the updated data
-		const newCodeBlockContent = [];
-		newCodeBlockContent.push('```ds-nt');
-		newCodeBlockContent.push(stringifyYaml(this.data).trim());
-		newCodeBlockContent.push('```');
-
-		// Replace the old code block with the new one
-		lines.splice(lineStart, lineEnd - lineStart + 1, ...newCodeBlockContent);
-
-		const newContent = lines.join('\n');
-
-		// Write the updated content back to the file
-		await this.app.vault.modify(file, newContent);
-	}
-}
-
-// Helper Classes
-export class PowerRollTiers {
-	public t1: string;
-	public t2: string;
-	public t3: string;
-	public crit: string;
-
-	constructor(t1: string, t2: string, t3: string, crit: string) {
-		this.t1 = t1;
-		this.t2 = t2;
-		this.t3 = t3;
-		this.crit = crit;
-	}
-}
-
-export class NegotiationResult {
-	public t1: NegotiationTierResult;
-	public t2: NegotiationTierResult;
-	public t3: NegotiationTierResult;
-	public crit: NegotiationTierResult;
-
-	constructor(t1: NegotiationTierResult, t2: NegotiationTierResult, t3: NegotiationTierResult, crit: NegotiationTierResult) {
-		this.t1 = t1;
-		this.t2 = t2;
-		this.t3 = t3;
-		this.crit = crit;
-	}
-
-	toPowerRollTiers() {
-		return new PowerRollTiers(
-			this.t1.toString(),
-			this.t2.toString(),
-			this.t3.toString(),
-			this.crit.toString(),
-		);
-	}
-}
-
-export class NegotiationTierResult {
-	public interest: number;
-	public patience: number;
-	public other: string;
-
-	constructor(interest: number, patience: number, other?: string) {
-		this.interest = interest;
-		this.patience = patience;
-		this.other = other ?? "";
-	}
-
-	public toString = (): string => {
-		let result = "";
-		if (this.interest != 0) {
-			result += `${this.interest > 0 ? '+' : ''}${this.interest} Interest`;
-		}
-		if (this.patience != 0) {
-			if (result != "") {
-				result += ", ";
-			}
-			result += `${this.patience > 0 ? '+' : ''}${this.patience} Patience`;
-		}
-		if (this.other != "") {
-			if (result != "") {
-				result += ", ";
-			}
-			result += this.other;
-		}
-		if (result == "") {
-			result = "No effect";
-		}
-		return result;
 	}
 }
