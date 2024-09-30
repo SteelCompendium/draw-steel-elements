@@ -3,7 +3,6 @@ import {NegotiationData, parseNegotiationData} from "../model/NegotiationData";
 import {PowerRollProcessor} from "./powerRollProcessor";
 import {ArgumentPowerRoll} from "../model/Arguments";
 import {CodeBlocks} from "../utils/CodeBlocks";
-import {PowerRollTiers} from "../model/powerRoll";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
@@ -37,10 +36,10 @@ export class NegotiationTrackerProcessor {
 			nameContainer.createEl("span", { cls: "ds-nt-name-value", text: "Negotiation: " + name.trim() });
 		}
 
-		const trackers = container.createEl("div", { cls: "ds-nt-trackers" });
-		this.addPatience(trackers);
-		this.addInterest(trackers);
-		this.addActions(trackers, container);
+		const trackerContainer = container.createEl("div", { cls: "ds-nt-tracker-container" });
+		this.addPatience(trackerContainer);
+		this.addInterest(trackerContainer);
+		this.addActions(trackerContainer, container);
 
 		const details = container.createEl("div", { cls: "ds-nt-details" });
 		this.addMotivations(details);
@@ -48,8 +47,8 @@ export class NegotiationTrackerProcessor {
 	}
 
 	// Add Patience Tracker
-	private addPatience(trackers: HTMLElement) {
-		const patienceCont = trackers.createEl("div", { cls: "ds-nt-patience-container" });
+	private addPatience(parent: HTMLElement) {
+		const patienceCont = parent.createEl("div", { cls: "ds-nt-patience-container" });
 		patienceCont.createEl("div", { cls: "ds-nt-patience-label", text: "Patience" });
 
 		const bubbleCont = patienceCont.createEl("div", { cls: "ds-nt-patience-bubble-container" });
@@ -58,12 +57,12 @@ export class NegotiationTrackerProcessor {
 				cls: `ds-nt-patience-bubble ds-nt-patience-bubble-${i}`,
 				text: `${i}`
 			});
-			bubble.addEventListener("click", () => this.setPatience(i, trackers));
+			bubble.addEventListener("click", () => this.setPatience(i, parent));
 		}
 
 		// Initialize Patience Display
 		if (this.data.current_patience != null) {
-			this.setPatience(this.data.current_patience, trackers);
+			this.setPatience(this.data.current_patience, parent);
 		}
 	}
 
@@ -83,8 +82,8 @@ export class NegotiationTrackerProcessor {
 	}
 
 	// Add Interest Tracker
-	private addInterest(trackers: HTMLElement) {
-		const interestCont = trackers.createEl("div", { cls: "ds-nt-interest-container" });
+	private addInterest(parent: HTMLElement) {
+		const interestCont = parent.createEl("div", { cls: "ds-nt-interest-container" });
 		interestCont.createEl("div", { cls: "ds-nt-interest-header", text: "Interest" });
 
 		const offerCont = interestCont.createEl("div", { cls: "ds-nt-interest-offer-container" });
@@ -92,7 +91,7 @@ export class NegotiationTrackerProcessor {
 		for (let i = 5; i >= 0; i--) {
 			const iLine = offerCont.createEl("div", { cls: `ds-nt-interest-line ds-nt-interest-${i}-line` });
 			const label = iLine.createEl("div", { cls: `ds-nt-interest-label ds-nt-interest-${i}-label`, text: `${i}` });
-			label.addEventListener("click", () => this.setInterest(i, trackers));
+			label.addEventListener("click", () => this.setInterest(i, parent));
 
 			const offerText = this.data[`i${i}`] ?? `Offer at Interest ${i}`;
 			iLine.createEl("div", { cls: `ds-nt-interest-offer ds-nt-interest-${i}-offer`, text: offerText });
@@ -100,7 +99,7 @@ export class NegotiationTrackerProcessor {
 
 		// Initialize Interest Display
 		if (this.data.current_interest != null) {
-			this.setInterest(this.data.current_interest, trackers);
+			this.setInterest(this.data.current_interest, parent);
 		}
 	}
 
@@ -126,8 +125,8 @@ export class NegotiationTrackerProcessor {
 	}
 
 	// Add Actions with Tabs
-	private addActions(trackers: HTMLElement, root: HTMLElement) {
-		const actionsContainer = trackers.createEl("div", { cls: "ds-nt-actions-container" });
+	private addActions(parent: HTMLElement, root: HTMLElement) {
+		const actionsContainer = parent.createEl("div", { cls: "ds-nt-actions-container" });
 
 		// Create Tabs
 		const actionTab = actionsContainer.createEl("div", { cls: "ds-nt-action-tabs" });

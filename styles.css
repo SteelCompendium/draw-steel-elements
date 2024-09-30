@@ -1588,6 +1588,7 @@ button.action-button {
 		padding: .5em;
 		width: 40%;
 		text-align: center;
+		cursor: pointer
 	}
 
 	.ds-nt-argument-tab {
