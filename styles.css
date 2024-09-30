@@ -1416,3 +1416,265 @@ button.action-button {
 		opacity: 0.5;
 	}
 }
+
+
+/* ==================== */
+/* Negotiation Tracker  */
+/* ==================== */
+
+.ds-nt-container {
+	position: relative;
+	background: var(--code-background);
+	margin-top: .5em;
+	margin-bottom: .5em;
+	padding: 1em;
+	font-family: Bitter;
+	letter-spacing: 0.03em;
+}
+
+/* top-left border fade */
+
+.ds-nt-container::before,
+.ds-nt-container::after {
+	content: '';
+	position: absolute;
+	background: linear-gradient(to right, transparent, var(--text-normal));
+	height: 1px; /* Border thickness */
+	width: 100%;
+}
+
+.ds-nt-container::before {
+	top: 0;
+	left: 0;
+	background: linear-gradient(to right, var(--text-normal), transparent);
+	width: 12em;
+}
+
+.ds-nt-container::after {
+	top: 0;
+	left: 0;
+	height: 12em;
+	background: linear-gradient(to bottom, var(--text-normal), transparent);
+	width: 1px; /* Border thickness */
+}
+
+.ds-nt-container {
+
+	.ds-nt-name-value {
+		font-weight: bold;
+	}
+
+	.ds-nt-sidebar {
+
+	}
+
+	.ds-nt-trackers {
+
+	}
+
+	/*.ds-nt-button-selected {*/
+	/*	background-color: var(--background-modifier-border-focus);*/
+	/*}*/
+
+	.ds-nt-patience-container {
+		display: flex;
+		/*justify-content: space-between;*/
+		margin-top: 1em;
+		margin-bottom: 1em;
+	}
+
+	.ds-nt-patience-bubble-container {
+		display: flex;
+		justify-content: space-between;
+		width: 100%;
+		position: relative;
+		margin-left: 1em;
+		margin-right: 1em;
+	}
+
+	.ds-nt-patience-bubble-container:before {
+		content: "";
+		position: absolute;
+		width: 100%;
+		transform: translateY(-50%);
+		height: 5px;
+		background-color: var(--color-base-35);
+		top: 50%;
+	}
+
+	.ds-nt-patience-label {
+		font-weight: bold;
+		display: flex;
+		align-items: center;
+	}
+
+	.ds-nt-patience-bubble {
+		background-color: var(--code-background);
+		border: 1px solid var(--text-normal);
+		border-radius: 50%;
+		height: 2em;
+		width: 2em;
+		text-align: center;
+		line-height: 2em;
+		z-index: 1;
+		cursor: pointer;
+	}
+
+	.ds-nt-interest-offer-container {
+		position: relative;
+	}
+
+	.ds-nt-interest-offer-container:before {
+		content: "";
+		position: absolute;
+		height: calc(100% - 2em);
+		margin-top: 1em;
+		transform: translateX(-50%);
+		width: 5px;
+		background-color: var(--color-base-35);
+		left: 1.5em;
+	}
+
+	.ds-nt-interest-header {
+		font-weight: bold;
+	}
+
+	.ds-nt-interest-line {
+		display: flex;
+		position: relative;
+		z-index: 1;
+	}
+
+	.ds-nt-interest-line.ds-nt-interest-selected .ds-nt-interest-label,
+	.ds-nt-patience-container .ds-nt-patience-selected {
+		background-color: var(--background-modifier-border-focus);
+	}
+
+	.ds-nt-interest-line .ds-nt-interest-faded {
+		color: var(--text-faint);
+	}
+
+	.ds-nt-interest-label {
+		background-color: var(--code-background);
+		border: 1px solid var(--text-normal);
+		margin: 0.5em;
+		border-radius: 50%;
+		width: 2em;
+		height: 2em;
+		line-height: 2em;
+		text-align: center;
+		cursor: pointer;
+	}
+
+	.ds-nt-interest-offer {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.ds-nt-actions-container {
+		margin-top: 1em;
+		margin-bottom: 1em;
+	}
+
+	.ds-nt-action-tabs {
+		display: flex;
+		justify-content: space-around;
+	}
+
+	.ds-nt-action-tab {
+		border: 1px solid var(--text-normal);
+		border-radius: .25em .25em 0 0;
+		padding: .5em;
+		width: 40%;
+		text-align: center;
+	}
+
+	.ds-nt-argument-tab {
+		border-bottom: 1px solid var(--code-background);
+	}
+
+	.ds-nt-learn-more-tab {
+
+	}
+
+	.ds-nt-action-container {
+		border: 1px solid var(--text-normal);
+		border-radius: .25em;
+		margin-top: -1px;
+		padding: 1em;
+	}
+
+	.ds-nt-argument-body {
+		display: flex;
+		justify-content: space-between;
+		padding-left: 2em;
+		padding-right: 2em;
+	}
+
+	.ds-nt-argument-modifier-motivation-header,
+	.ds-nt-argument-modifier-pitfall-header {
+		font-weight: bold;
+	}
+
+	.ds-nt-argument-modifier-motivation-line,
+	.ds-nt-argument-modifier-pitfall-line {
+		margin-left: 2em;
+	}
+
+	/* disabled checkboxes */
+
+	.ds-nt-argument-body input[type=checkbox]:disabled,
+		/* labels with disabled inputs */
+	.ds-nt-argument-body label:has(input:disabled) {
+		color: var(--text-faint);
+	}
+
+	/* Make sure hover effects on disabled checkboxes dont show */
+
+	.ds-nt-argument-body input[type=checkbox]:disabled {
+		border: 1px solid var(--checkbox-border-color);
+	}
+
+	.ds-nt-argument-body input[type=checkbox]:disabled:checked {
+		background-color: var(--checkbox-border-color);
+	}
+
+	.ds-nt-arg-motivation-used {
+		text-decoration: line-through;
+	}
+
+	.ds-nt-argument-power-roll .pr-roll-line {
+		font-weight: bold;
+	}
+
+	.ds-nt-argument-power-roll .pr-tier-line {
+		margin-left: 1em;
+	}
+
+	.ds-nt-argument-footer {
+		text-align: center;
+		font-style: italic;
+	}
+
+	.ds-nt-details-label {
+		display: block;
+		margin-left: 2em;
+	}
+
+	.ds-nt-details-header {
+		font-weight: bold;
+		margin-top: 1em;
+		margin-bottom: 1em;
+	}
+
+	.ds-nt-details-name {
+		font-weight: bold;
+	}
+
+	/* labels with disabled inputs */
+
+	.ds-nt-motivation-label:has(input:checked) {
+		text-decoration: line-through;
+	}
+}
