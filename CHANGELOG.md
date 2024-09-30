@@ -1,12 +1,50 @@
 # Changelog
 
-## 0.0.7 (unreleased)
+## 1.4.0
+
+- Initiative Tracker
+  - Adds basic support for tracking minions!
+  - [BUGFIX] Prevents VP text from highlighting when changing
+  - [BUGFIX] Allows click-to-remove conditions when blinking
+
+## 1.3.0
+
+- Add ability to reset the encounter
+
+## 1.2.0
+
+- Initiative Tracker
+  - Overhauls the condition modal and adds support for customizing the condition appearance 
+
+## 1.1.2
+
+- [BUGFIX] Allow enemies to use recoveries
+
+## 1.1.1
+
+- [BUGFIX] Corrects bugs allowing for non-integer stamina
+
+## 1.1.0
+
+- Adds the Initiative Tracker Element!
+
+## 1.0.2
+
+- Corrects sizing issue on power roll tiers
+
+## 1.0.1
+
+- Cleanup bulleted lists
+
+## 1.0.0
 
 - Adds `horizontal-rule` element
 - Adds a ton of new fields to `power-roll` element (See readme)
 - [PSEUDO-BREAKING] No longer supports inline-codeblocks for `horizontal-rule`
   - This was unreleased, but for those who built manually...
   - Use a regular multi-line codeblock for functionality
+- Adds support for rendering markdown in Power Roll values
+- Much more!
 
 ## 0.0.6
 

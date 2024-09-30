@@ -1,6 +1,15 @@
-import {MarkdownPostProcessorContext, parseYaml} from "obsidian";
+import {App, Component, MarkdownPostProcessorContext, MarkdownRenderer, parseYaml} from "obsidian";
 
 export class PowerRollProcessor {
+	app: App;
+	plugin: Component;
+
+	constructor(app: App, plugin: Component) {
+		this.app = app;
+		this.plugin = plugin;
+	}
+
+	// Helper to make one-liners
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
 		const yaml = parseYaml(source);
 		const indent = yaml["indent"]
@@ -15,18 +24,18 @@ export class PowerRollProcessor {
 		const typeContainer = container.createEl("div", {cls: "pr-name-line"});
 		const name = yaml["name"];
 		if (name) {
-			typeContainer.createEl("span", {cls: "pr-name-value ds-multiline", text: name.trim()});
+			this.render(ctx, name, typeContainer.createEl("span", {cls: "pr-name-value ds-multiline"}))
 		}
 
 		const cost = yaml["cost"];
 		if (cost) {
-			typeContainer.createEl("span", {cls: "pr-cost-value", text: "(" + cost.trim() + ")"});
+			this.render(ctx, "(" + String(cost).trim() + ")", typeContainer.createEl("span", {cls: "pr-cost-value"}));
 		}
 
 		const flavor = yaml["flavor"];
 		if (flavor) {
-			const typeContainer = container.createEl("div", {cls: "pr-detail-line pr-flavor-line"});
-			typeContainer.createEl("span", {cls: "pr-flavor-value ds-multiline", text: flavor.trim()});
+			const flavorContainer = container.createEl("div", {cls: "pr-detail-line pr-flavor-line"});
+			this.render(ctx, flavor, flavorContainer.createEl("span", {cls: "pr-flavor-value ds-multiline"}));
 		}
 
 		const keywords = yaml["keywords"];
@@ -36,12 +45,12 @@ export class PowerRollProcessor {
 			const keywordCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-keyword-cell"});
 			if (keywords) {
 				keywordCell.createEl("span", {cls: "pr-detail-key pr-keyword-key", text: "Keywords: "});
-				keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value ds-multiline", text: keywords.trim()});
+				this.render(ctx, keywords, keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value ds-multiline"}));
 			}
 			const typeCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-type-cell"});
 			if (type) {
 				typeCell.createEl("span", {cls: "pr-detail-key pr-type-key", text: "Type: "});
-				typeCell.createEl("span", {cls: "pr-detail-value pr-type-value ds-multiline", text: type.trim()});
+				this.render(ctx, type, typeCell.createEl("span", {cls: "pr-detail-value pr-type-value ds-multiline"}));
 			}
 		}
 
@@ -52,12 +61,12 @@ export class PowerRollProcessor {
 			const distanceCell = row2.createEl("div", {cls: "pr-detail-table-cell pr-distance-cell"});
 			if (distance) {
 				distanceCell.createEl("span", {cls: "pr-detail-key pr-distance-key", text: "Distance: "});
-				distanceCell.createEl("span", {cls: "pr-detail-value pr-distance-value ds-multiline", text: distance.trim()});
+				this.render(ctx, distance, distanceCell.createEl("span", {cls: "pr-detail-value pr-distance-value ds-multiline"}));
 			}
 			const targetCell = row2.createEl("div", {cls: "pr-detail-table-cell pr-target-cell"});
 			if (target) {
 				targetCell.createEl("span", {cls: "pr-detail-key pr-target-key", text: "Target: "});
-				targetCell.createEl("span", {cls: "pr-detail-value pr-target-value ds-multiline", text: target.trim()});
+				this.render(ctx, target, targetCell.createEl("span", {cls: "pr-detail-value pr-target-value ds-multiline"}));
 			}
 		}
 
@@ -65,48 +74,48 @@ export class PowerRollProcessor {
 		if (trigger) {
 			const triggerContainer = container.createEl("div", {cls: "pr-detail-line pr-trigger-line"});
 			triggerContainer.createEl("span", {cls: "pr-detail-key pr-trigger-key", text: "Trigger: "});
-			triggerContainer.createEl("span", {cls: "pr-detail-value pr-trigger-value ds-multiline", text: trigger.trim()})
+			this.render(ctx, trigger, triggerContainer.createEl("span", {cls: "pr-detail-value pr-trigger-value ds-multiline"}));
 		}
 
 		const roll = yaml["roll"];
 		if (roll) {
 			const typeContainer = container.createEl("div", {cls: "pr-detail-line pr-roll-line"});
-			typeContainer.createEl("span", {cls: "pr-roll-value ds-multiline", text: roll.trim()});
+			this.render(ctx, roll, typeContainer.createEl("span", {cls: "pr-roll-value ds-multiline"}));
 		}
 
 		const t1 = yaml["t1"] ?? yaml["tier 1"] ?? yaml["11 or lower"];
 		if (t1) {
 			const t1Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
 			PowerRollProcessor.tier1Key(t1Container);
-			t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value ds-multiline", text: t1.trim()});
+			this.render(ctx, t1, t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value ds-multiline"}));
 		}
 
 		const t2 = yaml["t2"] ?? yaml["tier 2"] ?? yaml["12-16"];
 		if (t2) {
 			const t2Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
 			PowerRollProcessor.tier2Key(t2Container);
-			t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value ds-multiline", text: t2.trim()});
+			this.render(ctx, t2, t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value ds-multiline"}));
 		}
 
 		const t3 = yaml["t3"] ?? yaml["tier 3"] ?? yaml["17+"];
 		if (t3) {
 			const t3Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
 			PowerRollProcessor.tier3Key(t3Container);
-			t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value ds-multiline", text: t3.trim()});
+			this.render(ctx, t3, t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value ds-multiline"}));
 		}
 
 		const crit = yaml["critical"] ?? yaml["crit"] ?? yaml["nat 19-20"];
 		if (crit) {
 			const critContainer = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
 			PowerRollProcessor.critKey(critContainer);
-			critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value ds-multiline", text: crit.trim()});
+			this.render(ctx, crit, critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value ds-multiline"}));
 		}
 
 		const effect = yaml["effect"];
 		if (effect) {
 			const effectContainer = container.createEl("div", {cls: "pr-detail-line pr-effect-line"});
 			effectContainer.createEl("span", {cls: "pr-detail-key pr-effect-key", text: "Effect: "});
-			effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline", text: effect.trim()})
+			this.render(ctx, effect, effectContainer.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline"}));
 		}
 
 		const fields = yaml["custom_fields"] ?? yaml["fields"];
@@ -116,7 +125,7 @@ export class PowerRollProcessor {
 				fields.forEach(field => {
 					const fieldLine = fieldsContainer.createEl("div", {cls: "pr-field-line"});
 					fieldLine.createEl("span", {cls: "pr-field-key", text: field["name"].trim() + ": "});
-					fieldLine.createEl("span", {cls: "pr-field-value ds-multiline", text: field["value"].trim()})
+					this.render(ctx, field["value"], fieldLine.createEl("span", {cls: "pr-field-value ds-multiline"}));
 				});
 			}
 		}
@@ -125,26 +134,31 @@ export class PowerRollProcessor {
 		if (spend) {
 			const spendLine = container.createEl("div", {cls: "pr-detail-line pr-spend-line"});
 			spendLine.createEl("span", {cls: "pr-detail-key pr-spend-key", text: "Spend " + String(spend["cost"]).trim() + ": "});
-			spendLine.createEl("span", {cls: "pr-detail-value pr-spend-value ds-multiline", text: spend["value"].trim()})
+			this.render(ctx, spend["value"], spendLine.createEl("span", {cls: "pr-detail-value pr-spend-value ds-multiline"}));
 		}
 
 		const persistent = yaml["persistent"];
 		if (persistent) {
 			const persistentLine = container.createEl("div", {cls: "pr-detail-line pr-persistent-line"});
 			persistentLine.createEl("span", {cls: "pr-detail-key pr-persistent-key", text: "Persistent " + String(persistent["cost"]).trim() + ": "});
-			persistentLine.createEl("span", {cls: "pr-detail-value pr-persistent-value ds-multiline", text: persistent["value"].trim()})
+			this.render(ctx, persistent["value"], persistentLine.createEl("span", {cls: "pr-detail-value pr-persistent-value ds-multiline"}));
 		}
 
 		const notes = yaml["notes"] ?? yaml["note"];
 		if (notes) {
 			if (Array.isArray(notes)) {
 				const notesContainer = container.createEl("ul", {cls: "pr-note-list"});
-				notes.forEach(note => notesContainer.createEl("li", {cls: "pr-note-item", text: note.trim()}));
+				notes.forEach(note => this.render(ctx, note, notesContainer.createEl("li", {cls: "pr-note-item"})));
 			} else {
 				const noteContainer = container.createEl("div", {cls: "pr-detail-line pr-note-line"});
-				noteContainer.createEl("span", {cls: "pr-note ds-multiline", text: notes.trim()});
+				this.render(ctx, notes, noteContainer.createEl("span", {cls: "pr-note ds-multiline"}));
 			}
 		}
+	}
+
+	private render(ctx, markdown: string, el: HTMLElement) {
+		el.addClass("ds-pr-inline-p")
+		MarkdownRenderer.render(this.app, markdown.trim(), el, ctx.sourcePath, this.plugin);
 	}
 
 	public static tier1Key(parentElement: HTMLElement) {
