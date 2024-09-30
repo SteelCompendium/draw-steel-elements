@@ -15,6 +15,17 @@ export class NegotiationTrackerProcessor {
 		this.ctx = ctx;
 		this.data = parseNegotiationData(source);
 
+		// Initialize currentArgument if not present
+		if (!this.data.currentArgument) {
+			this.data.currentArgument = {
+				motivationsUsed: [],
+				pitfallsUsed: [],
+				lieUsed: false,
+				sameArgumentUsed: false,
+				reuseMotivationUsed: false,
+			};
+		}
+
 		const container = el.createEl('div', { cls: "ds-nt-container" });
 
 		const name = this.data.name;
@@ -165,9 +176,18 @@ export class NegotiationTrackerProcessor {
 				}) as HTMLInputElement;
 				const motLabel = motLine.createEl("label", { cls: "ds-nt-argument-modifier-motivation-label", text: mot.name });
 				motLabel.setAttribute('data-motivation-name', mot.name); // Set data attribute
-				motCB.checked = mot.isMentioned ?? false;
+				motCB.checked = this.data.currentArgument.motivationsUsed.includes(mot.name);
 				motCB.addEventListener("change", () => {
-					mot.isMentioned = motCB.checked;
+					if (motCB.checked) {
+						if (!this.data.currentArgument.motivationsUsed.includes(mot.name)) {
+							this.data.currentArgument.motivationsUsed.push(mot.name);
+						}
+					} else {
+						const index = this.data.currentArgument.motivationsUsed.indexOf(mot.name);
+						if (index > -1) {
+							this.data.currentArgument.motivationsUsed.splice(index, 1);
+						}
+					}
 					this.updateArgument(root);
 					this.updateCodeBlock();
 				});
@@ -186,7 +206,9 @@ export class NegotiationTrackerProcessor {
 			cls: "ds-nt-argument-modifier-reuse-motivation-text",
 			text: "Reused Motivation"
 		});
+		reuseMotivationCheckbox.checked = this.data.currentArgument.reuseMotivationUsed;
 		reuseMotivationCheckbox.addEventListener("change", () => {
+			this.data.currentArgument.reuseMotivationUsed = reuseMotivationCheckbox.checked;
 			this.updateArgument(root);
 			this.updateCodeBlock();
 		});
@@ -206,9 +228,18 @@ export class NegotiationTrackerProcessor {
 					type: "checkbox"
 				}) as HTMLInputElement;
 				pitLine.createEl("label", { cls: "ds-nt-argument-modifier-pitfall-label", text: pit.name });
-				pitCB.checked = pit.isMentioned ?? false;
+				pitCB.checked = this.data.currentArgument.pitfallsUsed.includes(pit.name);
 				pitCB.addEventListener("change", () => {
-					pit.isMentioned = pitCB.checked;
+					if (pitCB.checked) {
+						if (!this.data.currentArgument.pitfallsUsed.includes(pit.name)) {
+							this.data.currentArgument.pitfallsUsed.push(pit.name);
+						}
+					} else {
+						const index = this.data.currentArgument.pitfallsUsed.indexOf(pit.name);
+						if (index > -1) {
+							this.data.currentArgument.pitfallsUsed.splice(index, 1);
+						}
+					}
 					this.updateArgument(root);
 					this.updateCodeBlock();
 				});
@@ -220,7 +251,9 @@ export class NegotiationTrackerProcessor {
 		lieLine.title =  "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.";
 		const lieCheckbox = lieLine.createEl("input", { cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox" }) as HTMLInputElement;
 		lieLine.createEl("label", { cls: "ds-nt-argument-modifier-lie-label", text: "Caught in a lie" });
+		lieCheckbox.checked = this.data.currentArgument.lieUsed;
 		lieCheckbox.addEventListener("change", () => {
+			this.data.currentArgument.lieUsed = lieCheckbox.checked;
 			this.updateArgument(root);
 			this.updateCodeBlock();
 		});
@@ -234,7 +267,9 @@ export class NegotiationTrackerProcessor {
 			type: "checkbox"
 		}) as HTMLInputElement;
 		sameArgLabel.createEl("span", { cls: "ds-nt-argument-modifier-same-arg-text", text: "Same Argument" });
+		sameArgCheckbox.checked = this.data.currentArgument.sameArgumentUsed;
 		sameArgCheckbox.addEventListener("change", () => {
+			this.data.currentArgument.sameArgumentUsed = sameArgCheckbox.checked;
 			this.updateArgument(root);
 			this.updateCodeBlock();
 		});
@@ -260,6 +295,48 @@ export class NegotiationTrackerProcessor {
 		const critContainer = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-crit-line" });
 		PowerRollProcessor.critKey(critContainer);
 		critContainer.createEl("span", { cls: "pr-tier-value pr-crit-value", text: "" });
+
+		// Complete Argument Button
+		const completeButton = argumentContainer.createEl('button', { cls: 'ds-nt-complete-argument-button', text: 'Complete Argument' });
+		completeButton.addEventListener('click', () => {
+			// Update mot.isMentioned for motivations used in the current argument
+			this.data.currentArgument.motivationsUsed.forEach(motName => {
+				const mot = this.data.motivations.find(m => m.name === motName);
+				if (mot) {
+					mot.isMentioned = true;
+				}
+			});
+
+			// Update pit.isMentioned for pitfalls used in the current argument, if needed
+			this.data.currentArgument.pitfallsUsed.forEach(pitName => {
+				const pit = this.data.pitfalls.find(p => pit.name === pitName);
+				if (pit) {
+					pit.isMentioned = true;
+				}
+			});
+
+			// Reset currentArgument
+			this.data.currentArgument = {
+				motivationsUsed: [],
+				pitfallsUsed: [],
+				lieUsed: false,
+				sameArgumentUsed: false,
+				reuseMotivationUsed: false,
+			};
+
+			// Update the code block
+			this.updateCodeBlock();
+
+			// Re-render the argument tab to reset the checkboxes
+			argumentContainer.empty();
+			this.populateArgumentTab(argumentContainer, root);
+
+			// Optionally, re-render motivations and pitfalls sections if needed
+			const details = root.querySelector('.ds-nt-details') as HTMLElement;
+			details.empty();
+			this.addMotivations(details);
+			this.addPitfalls(details);
+		});
 
 		// Update the argument for initial state
 		this.updateArgument(root);
@@ -318,18 +395,24 @@ export class NegotiationTrackerProcessor {
 		const sameArgumentCheckbox = parent.querySelector(".ds-nt-argument-modifier-same-arg-checkbox") as HTMLInputElement;
 		const reuseMotivationCheckbox = parent.querySelector(".ds-nt-argument-modifier-reuse-motivation-checkbox") as HTMLInputElement;
 
-		const usedMotivation = this.data.motivations.some(mot => mot.isMentioned);
-		const usedPitfall = this.data.pitfalls.some(pit => pit.isMentioned);
+		const usedMotivation = this.data.currentArgument.motivationsUsed.length > 0;
+		const usedPitfall = this.data.currentArgument.pitfallsUsed.length > 0;
+
+		// Determine if any of the motivations used in the current argument have been used before
+		const anyMotivationReused = this.data.currentArgument.motivationsUsed.some(motName => {
+			const mot = this.data.motivations.find(m => m.name === motName);
+			return mot && mot.isMentioned;
+		});
 
 		// Enable/Disable Reuse Motivation Checkbox
-		reuseMotivationCheckbox.disabled = !usedMotivation;
+		reuseMotivationCheckbox.disabled = !anyMotivationReused;
 
 		// Enable/Disable Same Argument Checkbox
 		sameArgumentCheckbox.disabled = usedMotivation;
 
-		const caughtLying = lieCheckbox.checked;
-		const reusedMotivation = reuseMotivationCheckbox.checked && !reuseMotivationCheckbox.disabled;
-		const sameArgument = sameArgumentCheckbox.checked;
+		const caughtLying = this.data.currentArgument.lieUsed;
+		const reusedMotivation = this.data.currentArgument.reuseMotivationUsed;
+		const sameArgument = this.data.currentArgument.sameArgumentUsed;
 
 		const prTiers = this.recalculateArgument(usedMotivation, usedPitfall, caughtLying, reusedMotivation, sameArgument);
 

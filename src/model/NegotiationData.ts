@@ -1,4 +1,4 @@
-import {parseYaml} from "obsidian";
+import { parseYaml } from "obsidian";
 
 export interface NegotiationData {
 	name?: string;
@@ -8,8 +8,17 @@ export interface NegotiationData {
 	current_interest?: number;
 	motivations?: Motivation[];
 	pitfalls?: Pitfall[];
+	currentArgument?: CurrentArgument;
 
 	[key: string]: any;
+}
+
+export interface CurrentArgument {
+	motivationsUsed: string[];
+	pitfallsUsed: string[];
+	lieUsed: boolean;
+	sameArgumentUsed: boolean;
+	reuseMotivationUsed: boolean;
 }
 
 interface Motivation {
@@ -44,5 +53,13 @@ export function parseNegotiationData(source: string): NegotiationData {
 		reason: pit.reason?.trim() ?? '',
 		isMentioned: pit.isMentioned ?? false
 	})) ?? [];
+	// Initialize currentArgument if not present
+	data.currentArgument = data.currentArgument ?? {
+		motivationsUsed: [],
+		pitfallsUsed: [],
+		lieUsed: false,
+		sameArgumentUsed: false,
+		reuseMotivationUsed: false,
+	};
 	return data;
 }
