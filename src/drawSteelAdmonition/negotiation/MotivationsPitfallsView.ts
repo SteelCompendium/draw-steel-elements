@@ -34,8 +34,6 @@ export class MotivationsPitfallsView {
 				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot.reason });
 				checkbox.addEventListener("change", () => {
 					mot.hasBeenAppealedTo = checkbox.checked;
-					//  TODO
-					// this.updateArgument(parent);
 					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 				});
 			});
