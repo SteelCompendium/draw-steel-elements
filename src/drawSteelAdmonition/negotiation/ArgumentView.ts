@@ -1,9 +1,14 @@
 import {App, MarkdownPostProcessorContext, setTooltip} from "obsidian";
-import {NegotiationData} from "../../model/NegotiationData";
+import {
+    argumentReusesMotivation,
+    argumentUsesMotivation,
+    argumentUsesPitfall,
+    NegotiationData
+} from "../../model/NegotiationData";
 import {CodeBlocks} from "../../utils/CodeBlocks";
 import {PowerRollProcessor} from "../powerRollProcessor";
-import {ArgumentPowerRoll} from "../../model/Arguments";
 import {PowerRollTiers} from "../../model/powerRoll";
+import {ArgumentPowerRoll} from "../../model/ArgumentPowerRolls";
 
 export class ArgumentView {
     private app: App;
@@ -31,8 +36,8 @@ export class ArgumentView {
 
         // Power Roll Display
         let argumentPowerRoll = ArgumentPowerRoll.build(
-            this.argumentUsesMotivation(),
-            this.argumentUsesPitfall(),
+            argumentUsesMotivation(this.data.currentArgument),
+            argumentUsesPitfall(this.data.currentArgument),
             this.data.currentArgument.lieUsed,
             this.data.currentArgument.reusedMotivation,
             this.data.currentArgument.sameArgumentUsed);
@@ -83,7 +88,7 @@ export class ArgumentView {
                             // "reused motivation" button and we want to preserve that state.  We can ONLY set the
                             // "reusedMotivation" value to true (if we know its reused) or false (if motivation is no
                             // long appealed to)
-                            this.data.currentArgument.reusedMotivation = this.argumentReusesMotivation();
+                            this.data.currentArgument.reusedMotivation = argumentReusesMotivation(this.data);
                         }
                     }
 
@@ -104,7 +109,7 @@ export class ArgumentView {
             cls: "ds-nt-argument-modifier-reuse-motivation-text",
             text: "Reused Motivation"
         });
-        reuseMotivationCheckbox.disabled = !this.argumentReusesMotivation();
+        reuseMotivationCheckbox.disabled = !argumentReusesMotivation(this.data);
         reuseMotivationCheckbox.checked = this.data.currentArgument.reusedMotivation;
         reuseMotivationCheckbox.addEventListener("change", () => {
             this.data.currentArgument.reusedMotivation = reuseMotivationCheckbox.checked;
@@ -166,7 +171,7 @@ export class ArgumentView {
             type: "checkbox"
         }) as HTMLInputElement;
         sameArgLabel.createEl("span", {cls: "ds-nt-argument-modifier-same-arg-text", text: "Same Argument"});
-        sameArgCheckbox.disabled = this.argumentUsesMotivation();
+        sameArgCheckbox.disabled = argumentUsesMotivation(this.data.currentArgument);
         sameArgCheckbox.checked = this.data.currentArgument.sameArgumentUsed;
         sameArgCheckbox.addEventListener("change", () => {
             this.data.currentArgument.sameArgumentUsed = sameArgCheckbox.checked;
@@ -217,21 +222,5 @@ export class ArgumentView {
         };
 
         CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
-    }
-
-    private argumentUsesMotivation() {
-        return this.data.currentArgument.motivationsUsed.length > 0;
-    }
-
-    private argumentUsesPitfall() {
-        return this.data.currentArgument.pitfallsUsed.length > 0;
-    }
-
-    // Determine if any of the motivations used in the current argument have been used before
-    private argumentReusesMotivation() {
-        return this.data.currentArgument.motivationsUsed.some(motName => {
-            const mot = this.data.motivations.find(m => m.name === motName);
-            return mot && mot.hasBeenAppealedTo;
-        });
     }
 }
