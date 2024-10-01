@@ -84,3 +84,34 @@ export class NegotiationTrackerProcessor {
 		new LearnMoreView(this.app, this.data, this.ctx).build(learnMoreContainer, root);
 	}
 }
+
+/*
+name: Convincing [[Frodo]] to remember the taste of strawberries
+initial_interest: 3
+initial_patience: 3
+motivations:
+  - name: Higher Authority
+    reason: Its Frodo's duty to destroy the ring
+    hasBeenAppealedTo: false
+  - name: Peace
+    reason: Shire is life
+    hasBeenAppealedTo: true
+pitfalls:
+  - name: Power
+    reason: This ring is OP. No, you can't have it. Back off.
+i5: Remembers the taste of strawberries and creme!
+i4: Remembers the taste of strawberries
+i3: Remembers the taste of strawberries, but only the unripe ones
+i2: Doesn't remember the taste of strawberries, but remembers the smell
+i1: Doesn't remember the taste of strawberries
+i0: As above, and is convinced youre after the ring.  Draw Steel!
+current_patience: 1
+current_interest: 2
+currentArgument:
+  motivationsUsed:
+    - Peace
+  pitfallsUsed: []
+  lieUsed: false
+  sameArgumentUsed: false
+  reusedMotivation: false
+* */
