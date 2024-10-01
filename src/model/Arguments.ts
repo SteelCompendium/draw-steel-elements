@@ -1,4 +1,4 @@
-import {PowerRollTiers} from "../drawSteelAdmonition/negotiationTrackerProcessor";
+import {PowerRollTiers} from "./powerRoll";
 
 export class ArgumentPowerRoll {
 	public t1: ArgumentResult;

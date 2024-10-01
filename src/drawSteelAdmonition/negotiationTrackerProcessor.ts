@@ -24,7 +24,7 @@ export class NegotiationTrackerProcessor {
 				pitfallsUsed: [],
 				lieUsed: false,
 				sameArgumentUsed: false,
-				reuseMotivationUsed: false,
+				reusedMotivation: false,
 			};
 		}
 
@@ -184,12 +184,16 @@ export class NegotiationTrackerProcessor {
 						if (!this.data.currentArgument.motivationsUsed.includes(mot.name)) {
 							this.data.currentArgument.motivationsUsed.push(mot.name);
 						}
+						if (mot.hasBeenAppealedTo) {
+							this.data.currentArgument.reusedMotivation = true;
+						}
 					} else {
 						const index = this.data.currentArgument.motivationsUsed.indexOf(mot.name);
 						if (index > -1) {
 							this.data.currentArgument.motivationsUsed.splice(index, 1);
 						}
 					}
+
 					this.updateArgument(root);
 					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 				});
@@ -208,9 +212,9 @@ export class NegotiationTrackerProcessor {
 			cls: "ds-nt-argument-modifier-reuse-motivation-text",
 			text: "Reused Motivation"
 		});
-		reuseMotivationCheckbox.checked = this.data.currentArgument.reuseMotivationUsed;
+		reuseMotivationCheckbox.checked = this.data.currentArgument.reusedMotivation;
 		reuseMotivationCheckbox.addEventListener("change", () => {
-			this.data.currentArgument.reuseMotivationUsed = reuseMotivationCheckbox.checked;
+			this.data.currentArgument.reusedMotivation = reuseMotivationCheckbox.checked;
 			this.updateArgument(root);
 			CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 		});
@@ -301,19 +305,11 @@ export class NegotiationTrackerProcessor {
 		// Complete Argument Button
 		const completeButton = argumentContainer.createEl('button', { cls: 'ds-nt-complete-argument-button', text: 'Complete Argument' });
 		completeButton.addEventListener('click', () => {
-			// Update mot.isMentioned for motivations used in the current argument
+			// Update mot.hasBeenAppealedTo for motivations used in the current argument
 			this.data.currentArgument.motivationsUsed.forEach(motName => {
 				const mot = this.data.motivations.find(m => m.name === motName);
 				if (mot) {
-					mot.isMentioned = true;
-				}
-			});
-
-			// Update pit.isMentioned for pitfalls used in the current argument, if needed
-			this.data.currentArgument.pitfallsUsed.forEach(pitName => {
-				const pit = this.data.pitfalls.find(p => pit.name === pitName);
-				if (pit) {
-					pit.isMentioned = true;
+					mot.hasBeenAppealedTo = true;
 				}
 			});
 
@@ -323,7 +319,7 @@ export class NegotiationTrackerProcessor {
 				pitfallsUsed: [],
 				lieUsed: false,
 				sameArgumentUsed: false,
-				reuseMotivationUsed: false,
+				reusedMotivation: false,
 			};
 
 			// Update the code block
@@ -362,11 +358,11 @@ export class NegotiationTrackerProcessor {
 				const label = motivationList.createEl("label", { cls: "ds-nt-details-label ds-nt-motivation-label" });
 				label.title = "Check Motivations that have already been appealed to.";
 				const checkbox = label.createEl("input", { cls: "ds-nt-details-checkbox ds-nt-motivation-checkbox", type: "checkbox" }) as HTMLInputElement;
-				checkbox.checked = mot.isMentioned ?? false;
+				checkbox.checked = mot.hasBeenAppealedTo ?? false;
 				label.createEl("span", { cls: "ds-nt-details-name ds-nt-motivation-name", text: mot.name + ": " });
 				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot.reason });
 				checkbox.addEventListener("change", () => {
-					mot.isMentioned = checkbox.checked;
+					mot.hasBeenAppealedTo = checkbox.checked;
 					this.updateArgument(details);
 					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
 				});
@@ -383,8 +379,6 @@ export class NegotiationTrackerProcessor {
 
 			this.data.pitfalls.forEach(pit => {
 				const label = pitfallList.createEl("label", { cls: "ds-nt-details-label ds-nt-pitfall-label" });
-				// Uncomment if you want checkboxes for pitfalls
-				// const checkbox = label.createEl("input", { cls: "ds-nt-details-checkbox ds-nt-pitfall-checkbox", type: "checkbox" }) as HTMLInputElement;
 				label.createEl("span", { cls: "ds-nt-details-name ds-nt-pitfall-name", text: pit.name + ": " });
 				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-pitfall-reason", text: pit.reason });
 			});
@@ -403,17 +397,20 @@ export class NegotiationTrackerProcessor {
 		// Determine if any of the motivations used in the current argument have been used before
 		const anyMotivationReused = this.data.currentArgument.motivationsUsed.some(motName => {
 			const mot = this.data.motivations.find(m => m.name === motName);
-			return mot && mot.isMentioned;
+			return mot && mot.hasBeenAppealedTo;
 		});
 
 		// Enable/Disable Reuse Motivation Checkbox
 		reuseMotivationCheckbox.disabled = !anyMotivationReused;
+		if (reuseMotivationCheckbox.disabled) {
+			reuseMotivationCheckbox.checked = false;
+		}
 
 		// Enable/Disable Same Argument Checkbox
 		sameArgumentCheckbox.disabled = usedMotivation;
 
 		const caughtLying = this.data.currentArgument.lieUsed;
-		const reusedMotivation = this.data.currentArgument.reuseMotivationUsed;
+		const reusedMotivation = this.data.currentArgument.reusedMotivation;
 		const sameArgument = this.data.currentArgument.sameArgumentUsed;
 
 		const prTiers = ArgumentPowerRoll
@@ -431,8 +428,8 @@ export class NegotiationTrackerProcessor {
 			const motName = argMotLabel.getAttribute('data-motivation-name');
 			const mot = this.data.motivations.find(m => m.name === motName);
 			if (mot) {
-				argMotLabel.classList.toggle("ds-nt-arg-motivation-used", mot.isMentioned ?? false);
-				if (mot.isMentioned) {
+				argMotLabel.classList.toggle("ds-nt-arg-motivation-used", mot.hasBeenAppealedTo ?? false);
+				if (mot.hasBeenAppealedTo) {
 					setTooltip(argMotLabel as HTMLElement, "This Motivation was used in a previous Argument.");
 				} else {
 					setTooltip(argMotLabel as HTMLElement, "");
