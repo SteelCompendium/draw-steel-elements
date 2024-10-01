@@ -79,7 +79,7 @@ export class ArgumentView {
                         if (index > -1) {
                             this.data.currentArgument.motivationsUsed.splice(index, 1);
                             // Make sure to only update this status if we are deleting a motivation.  When a motivation
-                            // is added and it appleals to a previously used motivation, the user MAY deselect the
+                            // is added and it appeals to a previously used motivation, the user MAY deselect the
                             // "reused motivation" button and we want to preserve that state.  We can ONLY set the
                             // "reusedMotivation" value to true (if we know its reused) or false (if motivation is no
                             // long appealed to)
@@ -105,7 +105,7 @@ export class ArgumentView {
             text: "Reused Motivation"
         });
         reuseMotivationCheckbox.disabled = !this.data.argumentReusesMotivation();
-        reuseMotivationCheckbox.checked = this.data.currentArgument.reusedMotivation;
+        reuseMotivationCheckbox.checked = !reuseMotivationCheckbox.disabled && this.data.currentArgument.reusedMotivation;
         reuseMotivationCheckbox.addEventListener("change", () => {
             this.data.currentArgument.reusedMotivation = reuseMotivationCheckbox.checked;
             CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);

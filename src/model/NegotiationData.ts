@@ -33,6 +33,35 @@ export class NegotiationData {
         this.i0 = data.i0 ?? "Interest 0 result";
     }
 
+    setMotivationUsed(motivationName: string, used: boolean) {
+        const mot = this.motivations.find(m => m.name === motivationName);
+        mot.hasBeenAppealedTo = used;
+
+        // if a motivation is getting marked as "used previously" and the current argument also uses that motivation,
+        // then mark the current argument as reusing the motivation
+        if (used && this.currentArgument.motivationsUsed.contains(motivationName)) {
+            this.currentArgument.reusedMotivation = true;
+        }
+
+        // if motivation is getting marked as "not previously used" and the current argument also uses that motivation,
+        // then we can set resuedMotivation to false ONLY if all the other motivations in the current argument have
+        // not been used previously.  If the current argument uses 2 motivations that are both previously used, then
+        // we have to leave the reusedMotivations flag alone.
+        if (!used && this.currentArgument.motivationsUsed.contains(motivationName)) {
+            let canSetReusedMotivationFlag = true;
+            this.currentArgument.motivationsUsed.forEach(currentMotivation => {
+                let globalMotivation = this.motivations.find(m => m.name === currentMotivation);
+                if (globalMotivation && globalMotivation.hasBeenAppealedTo) {
+                    // dont touch the reusedMotivaton flag
+                    canSetReusedMotivationFlag = false;
+                }
+            })
+            if (canSetReusedMotivationFlag) {
+                this.currentArgument.reusedMotivation = false;
+            }
+        }
+    }
+
     /**
      * Determines if any of the motivations used in the current argument have been reused.
      * @returns {boolean} True if any motivation has been reused; otherwise, false.
