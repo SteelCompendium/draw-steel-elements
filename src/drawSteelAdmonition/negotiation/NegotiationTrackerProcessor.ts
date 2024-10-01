@@ -1,9 +1,10 @@
-import {App, MarkdownPostProcessorContext} from "obsidian";
+import {App, MarkdownPostProcessorContext, Menu, Notice, setIcon} from "obsidian";
 import {NegotiationData, parseNegotiationData} from "../../model/NegotiationData";
 import {PatienceInterestView} from "./PatienceInterestView";
 import {MotivationsPitfallsView} from "./MotivationsPitfallsView";
 import {ArgumentView} from "./ArgumentView";
 import {LearnMoreView} from "./LearnMoreView";
+import {CodeBlocks} from "../../utils/CodeBlocks";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
@@ -31,11 +32,28 @@ export class NegotiationTrackerProcessor {
 
 		const container = el.createEl('div', {cls: "ds-nt-container"});
 
+		const nameContainer = container.createEl("div", {cls: "ds-nt-name-line"});
+
 		const name = this.data.name;
-		if (name) {
-			const nameContainer = container.createEl("div", {cls: "ds-nt-name-line"});
-			nameContainer.createEl("span", {cls: "ds-nt-name-value", text: "Negotiation: " + name.trim()});
-		}
+		const title = name ? "Negotiation: " + name.trim() : "Negotiation";
+		nameContainer.createEl("span", {cls: "ds-nt-name-value", text: "Negotiation: " + name.trim()});
+
+		const menu = nameContainer.createEl("div", {cls: "ds-nt-settings-menu"});
+		setIcon(menu, "more-vertical");
+		menu.addEventListener('click', (event) => {
+			const menu = new Menu();
+			menu.addItem((item) =>
+				item
+					.setTitle("Reset Negotiation")
+					.setIcon("rotate-ccw")
+					.onClick(() => {
+						new Notice("Negotiation reset to initial state");
+                        this.data.resetData();
+                        CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+					})
+			);
+			menu.showAtMouseEvent(event);
+		});
 
 		const trackerContainer = container.createEl("div", {cls: "ds-nt-tracker-container"});
 		new PatienceInterestView(this.app, this.data, this.ctx).build(trackerContainer);

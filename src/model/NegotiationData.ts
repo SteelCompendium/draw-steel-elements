@@ -72,6 +72,13 @@ export class NegotiationData {
             return mot?.hasBeenAppealedTo ?? false;
         });
     }
+
+    resetData() {
+        this.current_patience = this.initial_patience;
+        this.current_interest = this.initial_interest;
+        this.motivations.forEach(m => m.hasBeenAppealedTo = false);
+        this.currentArgument.resetData();
+    }
 }
 
 export class CurrentArgument {
@@ -103,6 +110,14 @@ export class CurrentArgument {
      */
     usesPitfall(): boolean {
         return this.pitfallsUsed.length > 0;
+    }
+
+    resetData() {
+        this.motivationsUsed = [];
+        this.pitfallsUsed = [];
+        this.lieUsed = false;
+        this.sameArgumentUsed = false;
+        this.reusedMotivation = false;
     }
 }
 

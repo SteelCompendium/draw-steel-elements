@@ -1459,6 +1459,11 @@ button.action-button {
 }
 
 .ds-nt-container {
+	.ds-nt-name-line, .ds-nt-name-line div {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
 
 	.ds-nt-name-value {
 		font-weight: bold;

@@ -208,14 +208,7 @@ export class ArgumentView {
         });
 
         // Reset currentArgument
-        this.data.currentArgument = {
-            motivationsUsed: [],
-            pitfallsUsed: [],
-            lieUsed: false,
-            sameArgumentUsed: false,
-            reusedMotivation: false,
-        };
-
+        this.data.currentArgument.resetData();
         CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
     }
 }
