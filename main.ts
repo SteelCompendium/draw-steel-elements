@@ -2,7 +2,7 @@ import {Plugin} from 'obsidian';
 import {PowerRollProcessor} from "./src/drawSteelAdmonition/powerRollProcessor";
 import {HorizontalRuleProcessor} from "./src/drawSteelAdmonition/horizontalRuleProcessor";
 import {InitiativeProcessor} from "./src/drawSteelAdmonition/initiativeProcessor";
-import {NegotiationTrackerProcessor} from "./src/drawSteelAdmonition/negotiationTrackerProcessor";
+import {NegotiationTrackerProcessor} from "./src/drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
 	async onload() {

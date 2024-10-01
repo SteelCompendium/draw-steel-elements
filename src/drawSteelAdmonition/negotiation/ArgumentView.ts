@@ -3,6 +3,7 @@ import {NegotiationData} from "../../model/NegotiationData";
 import {CodeBlocks} from "../../utils/CodeBlocks";
 import {PowerRollProcessor} from "../powerRollProcessor";
 import {ArgumentPowerRoll} from "../../model/Arguments";
+import {MotivationsPitfallsView} from "./MotivationsPitfallsView";
 
 export class ArgumentView {
 	private app: App;
@@ -195,7 +196,7 @@ export class ArgumentView {
 			// Optionally, re-render motivations and pitfalls sections if needed
 			const details = root.querySelector('.ds-nt-details') as HTMLElement;
 			details.empty();
-			new MotivationsPitfalls(this.app, this.data, this.ctx).build(details);
+			new MotivationsPitfallsView(this.app, this.data, this.ctx).build(details);
 		});
 
 		// Update the argument for initial state

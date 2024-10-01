@@ -2,7 +2,7 @@ import {App, MarkdownPostProcessorContext} from "obsidian";
 import {NegotiationData} from "../../model/NegotiationData";
 import {CodeBlocks} from "../../utils/CodeBlocks";
 
-export class PatienceInterest {
+export class PatienceInterestView {
 	private app: App;
 	private data: NegotiationData;
 	private ctx: MarkdownPostProcessorContext;

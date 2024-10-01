@@ -1,9 +1,9 @@
 import {App, MarkdownPostProcessorContext} from "obsidian";
-import {NegotiationData, parseNegotiationData} from "../model/NegotiationData";
-import {PatienceInterest} from "./negotiation/patienceInterest";
-import {MotivationsPitfalls} from "./negotiation/motivationsPitfalls";
-import {ArgumentView} from "./negotiation/ArgumentView";
-import {LearnMoreView} from "./negotiation/LearnMoreView";
+import {NegotiationData, parseNegotiationData} from "../../model/NegotiationData";
+import {PatienceInterestView} from "./PatienceInterestView";
+import {MotivationsPitfallsView} from "./MotivationsPitfallsView";
+import {ArgumentView} from "./ArgumentView";
+import {LearnMoreView} from "./LearnMoreView";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
@@ -38,11 +38,11 @@ export class NegotiationTrackerProcessor {
 		}
 
 		const trackerContainer = container.createEl("div", {cls: "ds-nt-tracker-container"});
-		new PatienceInterest(this.app, this.data, this.ctx).build(trackerContainer);
+		new PatienceInterestView(this.app, this.data, this.ctx).build(trackerContainer);
 		this.addActions(trackerContainer, container);
 
 		const details = container.createEl("div", {cls: "ds-nt-details"});
-		new MotivationsPitfalls(this.app, this.data, this.ctx).build(details);
+		new MotivationsPitfallsView(this.app, this.data, this.ctx).build(details);
 	}
 
 	// Add Actions with Tabs
