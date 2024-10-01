@@ -3,6 +3,8 @@ import {NegotiationData, parseNegotiationData} from "../model/NegotiationData";
 import {PowerRollProcessor} from "./powerRollProcessor";
 import {ArgumentPowerRoll} from "../model/Arguments";
 import {CodeBlocks} from "../utils/CodeBlocks";
+import {PatienceInterest} from "./negotiation/patienceInterest";
+import {MotivationsPitfalls} from "./negotiation/motivationsPitfalls";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
@@ -37,91 +39,11 @@ export class NegotiationTrackerProcessor {
 		}
 
 		const trackerContainer = container.createEl("div", { cls: "ds-nt-tracker-container" });
-		this.addPatience(trackerContainer);
-		this.addInterest(trackerContainer);
+		new PatienceInterest(this.app, this.data, this.ctx).build(trackerContainer);
 		this.addActions(trackerContainer, container);
 
 		const details = container.createEl("div", { cls: "ds-nt-details" });
-		this.addMotivations(details);
-		this.addPitfalls(details);
-	}
-
-	// Add Patience Tracker
-	private addPatience(parent: HTMLElement) {
-		const patienceCont = parent.createEl("div", { cls: "ds-nt-patience-container" });
-		patienceCont.createEl("div", { cls: "ds-nt-patience-label", text: "Patience" });
-
-		const bubbleCont = patienceCont.createEl("div", { cls: "ds-nt-patience-bubble-container" });
-		for (let i = 0; i <= 5; i++) {
-			const bubble = bubbleCont.createEl("div", {
-				cls: `ds-nt-patience-bubble ds-nt-patience-bubble-${i}`,
-				text: `${i}`
-			});
-			bubble.addEventListener("click", () => this.setPatience(i, parent));
-		}
-
-		// Initialize Patience Display
-		if (this.data.current_patience != null) {
-			this.setPatience(this.data.current_patience, parent);
-		}
-	}
-
-	// Set Patience Level
-	private setPatience(newPatience: number, container: HTMLElement) {
-		for (let i = 0; i <= 5; i++) {
-			const bubble = container.querySelector(`.ds-nt-patience-bubble-${i}`) as HTMLElement;
-			if (i > newPatience) {
-				bubble.classList.remove("ds-nt-patience-selected");
-			} else {
-				bubble.classList.add("ds-nt-patience-selected");
-			}
-		}
-		// Update Data and Save
-		this.data.current_patience = newPatience;
-		CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
-	}
-
-	// Add Interest Tracker
-	private addInterest(parent: HTMLElement) {
-		const interestCont = parent.createEl("div", { cls: "ds-nt-interest-container" });
-		interestCont.createEl("div", { cls: "ds-nt-interest-header", text: "Interest" });
-
-		const offerCont = interestCont.createEl("div", { cls: "ds-nt-interest-offer-container" });
-
-		for (let i = 5; i >= 0; i--) {
-			const iLine = offerCont.createEl("div", { cls: `ds-nt-interest-line ds-nt-interest-${i}-line` });
-			const label = iLine.createEl("div", { cls: `ds-nt-interest-label ds-nt-interest-${i}-label`, text: `${i}` });
-			label.addEventListener("click", () => this.setInterest(i, parent));
-
-			const offerText = this.data[`i${i}`] ?? `Offer at Interest ${i}`;
-			iLine.createEl("div", { cls: `ds-nt-interest-offer ds-nt-interest-${i}-offer`, text: offerText });
-		}
-
-		// Initialize Interest Display
-		if (this.data.current_interest != null) {
-			this.setInterest(this.data.current_interest, parent);
-		}
-	}
-
-	// Set Interest Level
-	private setInterest(newInterest: number, container: HTMLElement) {
-		for (let i = 0; i <= 5; i++) {
-			const line = container.querySelector(`.ds-nt-interest-${i}-line`) as HTMLElement;
-			const offer = line.querySelector(`.ds-nt-interest-offer`) as HTMLElement;
-			if (i > newInterest) {
-				line.classList.remove("ds-nt-interest-selected");
-			} else {
-				line.classList.add("ds-nt-interest-selected");
-			}
-			if (i < newInterest) {
-				offer.classList.add("ds-nt-interest-faded");
-			} else {
-				offer.classList.remove("ds-nt-interest-faded");
-			}
-		}
-		// Update Data and Save
-		this.data.current_interest = newInterest;
-		CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+		new MotivationsPitfalls(this.app, this.data, this.ctx).build(details);
 	}
 
 	// Add Actions with Tabs
@@ -332,8 +254,7 @@ export class NegotiationTrackerProcessor {
 			// Optionally, re-render motivations and pitfalls sections if needed
 			const details = root.querySelector('.ds-nt-details') as HTMLElement;
 			details.empty();
-			this.addMotivations(details);
-			this.addPitfalls(details);
+			new MotivationsPitfalls(this.app, this.data, this.ctx).build(details);
 		});
 
 		// Update the argument for initial state
@@ -345,44 +266,6 @@ export class NegotiationTrackerProcessor {
 		const learnMoreBody = learnMoreContainer.createEl("div", { cls: "ds-nt-learn-more-body" });
 		// Add content for learning motivations and pitfalls
 		learnMoreBody.createEl("p", { text: "Content for learning motivations and pitfalls goes here." });
-	}
-
-	// Add Motivations
-	private addMotivations(details: HTMLElement) {
-		if (this.data.motivations.length > 0) {
-			const motivationsCont = details.createEl("div", { cls: "ds-nt-motivations" });
-			motivationsCont.createEl("div", { cls: "ds-nt-details-header ds-nt-motivation-header", text: "Motivations" });
-			const motivationList = motivationsCont.createEl("div", { cls: "ds-nt-motivation-list" });
-
-			this.data.motivations.forEach(mot => {
-				const label = motivationList.createEl("label", { cls: "ds-nt-details-label ds-nt-motivation-label" });
-				label.title = "Check Motivations that have already been appealed to.";
-				const checkbox = label.createEl("input", { cls: "ds-nt-details-checkbox ds-nt-motivation-checkbox", type: "checkbox" }) as HTMLInputElement;
-				checkbox.checked = mot.hasBeenAppealedTo ?? false;
-				label.createEl("span", { cls: "ds-nt-details-name ds-nt-motivation-name", text: mot.name + ": " });
-				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot.reason });
-				checkbox.addEventListener("change", () => {
-					mot.hasBeenAppealedTo = checkbox.checked;
-					this.updateArgument(details);
-					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
-				});
-			});
-		}
-	}
-
-	// Add Pitfalls
-	private addPitfalls(details: HTMLElement) {
-		if (this.data.pitfalls.length > 0) {
-			const pitfallsCont = details.createEl("div", { cls: "ds-nt-pitfalls" });
-			pitfallsCont.createEl("div", { cls: "ds-nt-details-header ds-nt-pitfall-header", text: "Pitfalls" });
-			const pitfallList = pitfallsCont.createEl("div", { cls: "ds-nt-pitfall-list" });
-
-			this.data.pitfalls.forEach(pit => {
-				const label = pitfallList.createEl("label", { cls: "ds-nt-details-label ds-nt-pitfall-label" });
-				label.createEl("span", { cls: "ds-nt-details-name ds-nt-pitfall-name", text: pit.name + ": " });
-				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-pitfall-reason", text: pit.reason });
-			});
-		}
 	}
 
 	// Update Argument Based on Current State

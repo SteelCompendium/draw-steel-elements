@@ -1,4 +1,4 @@
-import { parseYaml } from "obsidian";
+import {parseYaml} from "obsidian";
 
 export interface NegotiationData {
 	name?: string;
@@ -30,6 +30,15 @@ export interface Motivation {
 export interface Pitfall {
 	name: string;
 	reason: string;
+}
+
+export function getMotivationByName(name: string, motivations: Motivation[]): Motivation | void {
+	motivations.forEach((m: Motivation) => {
+		if (m.name === name) {
+			return m;
+		}
+	});
+	return;
 }
 
 export function parseNegotiationData(source: string): NegotiationData {
