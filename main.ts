@@ -2,6 +2,7 @@ import {Plugin} from 'obsidian';
 import {PowerRollProcessor} from "./src/drawSteelAdmonition/powerRollProcessor";
 import {HorizontalRuleProcessor} from "./src/drawSteelAdmonition/horizontalRuleProcessor";
 import {InitiativeProcessor} from "./src/drawSteelAdmonition/initiativeProcessor";
+import {NegotiationTrackerProcessor} from "./src/drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
 	async onload() {
@@ -21,9 +22,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		const initHandler = (source, el, ctx) => initProcessor.postProcess(source, el, ctx);
 		this.registerMarkdownCodeBlockProcessor("ds-init", initHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-initiative", initHandler);
+
+		let ntProcessor = new NegotiationTrackerProcessor(this.app);
+		const ntHandler = (source, el, ctx) => ntProcessor.postProcess(source, el, ctx);
+		this.registerMarkdownCodeBlockProcessor("ds-nt", ntHandler);
+		this.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntHandler);
 	}
 
 	onunload() {
 	}
 }
-

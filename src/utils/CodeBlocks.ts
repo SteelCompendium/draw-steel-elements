@@ -1,8 +1,17 @@
 import { App, MarkdownPostProcessorContext, TFile, stringifyYaml } from "obsidian";
 import {EncounterData} from "../drawSteelAdmonition/EncounterData";
+import {NegotiationData} from "../model/NegotiationData";
 
 export class CodeBlocks {
-	static async updateCodeBlock(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
+	static async updateInitiativeTracker(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
+		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-initiative");
+	}
+
+	static async updateNegotiationTracker(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext): Promise<void> {
+		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-negotiation-tracker");
+	}
+
+	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		const file = app.vault.getAbstractFileByPath(ctx.sourcePath);
 		if (!(file instanceof TFile)) return;
 
@@ -17,7 +26,7 @@ export class CodeBlocks {
 		// Reconstruct the code block with the updated data
 		const newCodeBlockContent = [];
 		// TODO - the language should be extracted from the original
-		newCodeBlockContent.push('```' + "ds-initiative");
+		newCodeBlockContent.push('```' + language);
 		newCodeBlockContent.push(stringifyYaml(data).trim());
 		newCodeBlockContent.push('```');
 

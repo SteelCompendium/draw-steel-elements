@@ -66,7 +66,7 @@ export class InitiativeProcessor {
 			this.buildUI(container, data, ctx);
 
 			// Update the codeblock
-			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 		});
 
 		// Reset Encounter Button
@@ -77,7 +77,7 @@ export class InitiativeProcessor {
 		resetEncounterButton.addEventListener("click", () => {
 			new ResetEncounterModal(this.app, () => {
 				resetEncounter(data);
-				CodeBlocks.updateCodeBlock(this.app, data, ctx);
+				CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 			}).open();
 		});
 
@@ -108,12 +108,12 @@ export class InitiativeProcessor {
 		vpUp.addEventListener("click", () => {
 			data.villain_power.value += 1;
 			vpContainer.setText("VP: " + data.villain_power.value);
-			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 		});
 		vpDown.addEventListener("click", () => {
 			data.villain_power.value -= 1;
 			vpContainer.setText("VP: " + data.villain_power.value);
-			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 		});
 
 		data.enemy_groups.forEach((group) => {
@@ -141,7 +141,7 @@ export class InitiativeProcessor {
 			if (this.isHero(character)) {
 				character.has_taken_turn = !(character.has_taken_turn ?? false);
 				this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn);
-				CodeBlocks.updateCodeBlock(this.app, data, ctx);
+				CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 			}
 		});
 
@@ -182,7 +182,7 @@ export class InitiativeProcessor {
 		staminaEl.addEventListener("click", () => {
 			const modal = new StaminaEditModal(this.app, character, null, data, ctx, () => {
 				this.updateStaminaDisplay(staminaEl, character);
-				CodeBlocks.updateCodeBlock(this.app, data, ctx);
+				CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 			});
 			modal.open();
 		});
@@ -205,7 +205,7 @@ export class InitiativeProcessor {
 		turnIndicatorEl.addEventListener("click", () => {
 			group.has_taken_turn = !(group.has_taken_turn ?? false);
 			this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn);
-			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 		});
 
 		const groupEl = container.createEl("div", { cls: "enemy-group" });
@@ -307,7 +307,7 @@ export class InitiativeProcessor {
 
 					// Persist the selected instance key
 					group.selectedInstanceKey = instanceKey;
-					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+					CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 				});
 
 				// Double-click to edit STAMINA
@@ -316,7 +316,7 @@ export class InitiativeProcessor {
 						const modal = new MinionStaminaPoolModal(this.app, group, creature, data, ctx, () => {
 							container.empty();
 							this.buildUI(container, data, ctx);
-							CodeBlocks.updateCodeBlock(this.app, data, ctx);
+							CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 						});
 						modal.open();
 					} else {
@@ -371,7 +371,7 @@ export class InitiativeProcessor {
 				const modal = new MinionStaminaPoolModal(this.app, group, creature, data, ctx, () => {
 					container.empty();
 					this.buildDetailedCreatureRow(container, creature, instance, data, ctx, group);
-					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+					CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 				});
 				modal.open();
 			});
@@ -394,7 +394,7 @@ export class InitiativeProcessor {
 	) {
 		return new StaminaEditModal(this.app, instance, creature, data, ctx, () => {
 			this.updateStaminaDisplay(staminaEl, instance, creature);
-			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 
 			// Update the STAMINA in the grid cell as well
 			const gridCell = container.parentElement?.querySelector(
@@ -498,7 +498,7 @@ export class InitiativeProcessor {
 					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
 					container.empty();
 					this.buildConditionIcons(container, character, data, ctx);
-					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+					CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 				});
 			}
 		});
@@ -515,7 +515,7 @@ export class InitiativeProcessor {
 					character.conditions = (character.conditions || []).concat(newConditions);
 					container.empty();
 					this.buildConditionIcons(container, character, data, ctx);
-					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+					CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 				}
 			);
 			addConditionsModal.open();
