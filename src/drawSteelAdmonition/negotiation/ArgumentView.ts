@@ -12,6 +12,7 @@ export class ArgumentView {
     private ctx: MarkdownPostProcessorContext;
 
     private selectedPowerRollTier: ArgumentResult = null; // To track selected power roll tier
+    private completeButton: HTMLButtonElement; // Used for selecting power roll
 
     constructor(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext) {
         this.app = app;
@@ -45,9 +46,10 @@ export class ArgumentView {
 
         // Complete Argument Button
         const footer = argumentContainer.createEl('div', { cls: 'ds-nt-argument-footer' });
-        const completeButton = footer.createEl('button', { cls: 'ds-nt-complete-argument-button' });
-        labeledIcon("messages-square", "Complete Argument", completeButton);
-        completeButton.addEventListener('click', () => this.completeArgument());
+        this.completeButton = footer.createEl('button', { cls: 'ds-nt-complete-argument-button' }) as HTMLButtonElement;
+        labeledIcon("messages-square", "Complete Argument", this.completeButton);
+        this.completeButton.disabled = true; // Disable the button initially
+        this.completeButton.addEventListener('click', () => this.completeArgument());
     }
 
     private buildMotivationView(argModifiers: any) {
@@ -270,8 +272,17 @@ export class ArgumentView {
                         c.container.classList.remove('active');
                     }
                 });
+
+                // Update the state of the complete button
+                this.updateCompleteButtonState();
             });
         });
+    }
+
+    private updateCompleteButtonState() {
+        if (this.completeButton) {
+            this.completeButton.disabled = this.selectedPowerRollTier == null;
+        }
     }
 
     private completeArgument() {
@@ -289,7 +300,11 @@ export class ArgumentView {
             this.data.current_patience += this.selectedPowerRollTier.patience;
         }
 
-        // Reset
+        // Reset selectedPowerRollTier
+        this.selectedPowerRollTier = null;
+        this.updateCompleteButtonState();
+
+        // Reset current argument
         this.data.currentArgument.resetData();
 
         CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
