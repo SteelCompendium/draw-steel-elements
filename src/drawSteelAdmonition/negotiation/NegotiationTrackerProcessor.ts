@@ -99,7 +99,7 @@ export class NegotiationTrackerProcessor {
 
 		// Populate Content for Each Tab
 		new ArgumentView(this.app, this.data, this.ctx).build(argumentContainer, root);
-		new LearnMoreView(this.app, this.data, this.ctx).build(learnMoreContainer, root);
+		new LearnMoreView(this.app, this.data, this.ctx).build(learnMoreContainer);
 	}
 }
 
