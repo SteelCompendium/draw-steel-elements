@@ -6,6 +6,23 @@
 	white-space: pre-line;
 }
 
+.ds-labeled-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	.icon {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-right: .5em;
+	}
+
+	.text {
+
+	}
+}
+
 /* Top-left border fade for containers */
 
 .ds-container::before,
@@ -1665,8 +1682,9 @@ button.action-button {
 	}
 
 	.ds-nt-argument-footer {
-		text-align: center;
-		font-style: italic;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
 	}
 
 	.ds-nt-details-label {
@@ -1688,5 +1706,12 @@ button.action-button {
 
 	.ds-nt-motivation-label:has(input:checked) {
 		text-decoration: line-through;
+	}
+
+	.btn-icon {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-right: 1em;
 	}
 }

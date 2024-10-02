@@ -1,9 +1,10 @@
-import {App, MarkdownPostProcessorContext, setTooltip} from "obsidian";
+import {App, MarkdownPostProcessorContext, setIcon, setTooltip} from "obsidian";
 import {NegotiationData} from "../../model/NegotiationData";
 import {CodeBlocks} from "../../utils/CodeBlocks";
 import {PowerRollProcessor} from "../powerRollProcessor";
 import {PowerRollTiers} from "../../model/powerRoll";
 import {ArgumentPowerRoll} from "../../model/ArgumentPowerRolls";
+import {labeledIcon} from "../../utils/common";
 
 export class ArgumentView {
     private app: App;
@@ -39,7 +40,9 @@ export class ArgumentView {
         this.buildPowerRoll(argumentBody, argumentPowerRoll.toPowerRollTiers());
 
         // Complete Argument Button
-        const completeButton = argumentContainer.createEl('button', { cls: 'ds-nt-complete-argument-button', text: 'Complete Argument' });
+        const footer = argumentContainer.createEl('div', { cls: 'ds-nt-argument-footer'});
+        const completeButton = footer.createEl('button', { cls: 'ds-nt-complete-argument-button' });
+        labeledIcon("messages-square", "Complete Argument", completeButton);
         completeButton.addEventListener('click', () => this.completeArgument());
     }
 

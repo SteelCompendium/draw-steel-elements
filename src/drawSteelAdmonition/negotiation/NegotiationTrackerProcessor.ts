@@ -5,6 +5,7 @@ import {MotivationsPitfallsView} from "./MotivationsPitfallsView";
 import {ArgumentView} from "./ArgumentView";
 import {LearnMoreView} from "./LearnMoreView";
 import {CodeBlocks} from "../../utils/CodeBlocks";
+import {labeledIcon} from "../../utils/common";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
@@ -69,14 +70,10 @@ export class NegotiationTrackerProcessor {
 
 		// Create Tabs
 		const actionTab = actionsContainer.createEl("div", {cls: "ds-nt-action-tabs"});
-		const argumentTab = actionTab.createEl("div", {
-			cls: "ds-nt-action-tab ds-nt-argument-tab active",
-			text: "Make an Argument"
-		});
-		const learnMoreTab = actionTab.createEl("div", {
-			cls: "ds-nt-action-tab ds-nt-learn-more-tab",
-			text: "Learn Motivation/Pitfall"
-		});
+		const argumentTab = actionTab.createEl("div", {cls: "ds-nt-action-tab ds-nt-argument-tab active"});
+		labeledIcon("message-circle", "Make an Argument", argumentTab);
+		const learnMoreTab = actionTab.createEl("div", {cls: "ds-nt-action-tab ds-nt-learn-more-tab"});
+		labeledIcon("help-circle", "Learn Motivation/Pitfall", learnMoreTab);
 
 		// Create Content Containers
 		const argumentContainer = actionsContainer.createEl("div", {cls: "ds-nt-action-container ds-nt-argument-container active"});
