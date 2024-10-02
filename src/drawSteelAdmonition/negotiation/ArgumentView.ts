@@ -47,6 +47,7 @@ export class ArgumentView {
         // Complete Argument Button
         const footer = argumentContainer.createEl('div', { cls: 'ds-nt-argument-footer' });
         this.completeButton = footer.createEl('button', { cls: 'ds-nt-complete-argument-button' }) as HTMLButtonElement;
+        this.completeButton.title = "Resolve the Argument using the current state of motivations, pitfalls, etc. \nRequires Power Roll tier to be selected.";
         labeledIcon("messages-square", "Complete Argument", this.completeButton);
         this.completeButton.disabled = true; // Disable the button initially
         this.completeButton.addEventListener('click', () => this.completeArgument());
@@ -262,11 +263,15 @@ export class ArgumentView {
         // Add event listeners
         containers.forEach(item => {
             item.container.addEventListener('click', () => {
-                this.selectedPowerRollTier = item.result;
+                if (this.selectedPowerRollTier === item.result) {
+                    this.selectedPowerRollTier = null;
+                }  else {
+                    this.selectedPowerRollTier = item.result;
+                }
 
                 // Update classes to reflect active state
                 containers.forEach(c => {
-                    if (c.container === item.container) {
+                    if (c.container === item.container && this.selectedPowerRollTier === item.result) {
                         c.container.classList.add('active');
                     } else {
                         c.container.classList.remove('active');
