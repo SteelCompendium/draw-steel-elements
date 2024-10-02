@@ -51,7 +51,7 @@ export class ArgumentView {
     }
 
     private buildMotivationView(argModifiers: any) {
-        const motContainer = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-motivations"});
+        const motContainer = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-motivations" });
 
         if (this.data.motivations.length > 0) {
             const motHeader = motContainer.createEl("div", {
@@ -61,20 +61,28 @@ export class ArgumentView {
             setTooltip(motHeader, "If the Heroes appeal to a Motivation (w/o a Pitfall): Difficulty of the Argument Test is Easy.");
 
             this.data.motivations.forEach(mot => {
-                const motLine = motContainer.createEl("div", {cls: "ds-nt-argument-modifier-motivation-line"});
-                const motCB = motLine.createEl("input", {
-                    cls: "ds-nt-argument-modifier-motivation-checkbox",
-                    type: "checkbox"
-                }) as HTMLInputElement;
-                const motLabel = motLine.createEl("label", {cls: "ds-nt-argument-modifier-motivation-label", text: mot.name});
-                motLabel.setAttribute('data-motivation-name', mot.name);
+                const motLine = motContainer.createEl("div", { cls: "ds-nt-argument-modifier-motivation-line" });
+
+                // Create label and wrap checkbox and text within it
+                const motLabel = motLine.createEl("label", { cls: "ds-nt-argument-modifier-motivation-label" });
                 motLabel.classList.toggle("ds-nt-arg-motivation-used", mot.hasBeenAppealedTo ?? false);
+
                 if (mot.hasBeenAppealedTo) {
                     setTooltip(motLabel, "This Motivation was used in a previous Argument.");
                 } else {
                     setTooltip(motLabel, "");
                 }
+
+                const motCB = motLabel.createEl("input", {
+                    cls: "ds-nt-argument-modifier-motivation-checkbox",
+                    type: "checkbox"
+                }) as HTMLInputElement;
+
                 motCB.checked = this.data.currentArgument.motivationsUsed.includes(mot.name);
+
+                // Add the text inside the label
+                motLabel.createSpan({ text: mot.name });
+
                 motCB.addEventListener("change", () => {
                     if (motCB.checked) {
                         if (!this.data.currentArgument.motivationsUsed.includes(mot.name)) {
@@ -103,7 +111,7 @@ export class ArgumentView {
     }
 
     private buildPitfallsView(argModifiers: any) {
-        const pitContainer = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-pitfalls"});
+        const pitContainer = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-pitfalls" });
         if (this.data.pitfalls.length > 0) {
             const pitHeader = pitContainer.createEl("div", {
                 cls: "ds-nt-argument-modifier-pitfall-header",
@@ -112,13 +120,21 @@ export class ArgumentView {
             pitHeader.title = "If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.";
 
             this.data.pitfalls.forEach(pit => {
-                const pitLine = pitContainer.createEl("div", {cls: "ds-nt-argument-modifier-pitfall-line"});
-                const pitCB = pitLine.createEl("input", {
+                const pitLine = pitContainer.createEl("div", { cls: "ds-nt-argument-modifier-pitfall-line" });
+
+                // Create label and wrap checkbox and text within it
+                const pitLabel = pitLine.createEl("label", { cls: "ds-nt-argument-modifier-pitfall-label" });
+
+                const pitCB = pitLabel.createEl("input", {
                     cls: "ds-nt-argument-modifier-pitfall-checkbox",
                     type: "checkbox"
                 }) as HTMLInputElement;
-                pitLine.createEl("label", {cls: "ds-nt-argument-modifier-pitfall-label", text: pit.name});
+
                 pitCB.checked = this.data.currentArgument.pitfallsUsed.includes(pit.name);
+
+                // Add the text inside the label
+                pitLabel.createSpan({ text: pit.name });
+
                 pitCB.addEventListener("change", () => {
                     if (pitCB.checked) {
                         if (!this.data.currentArgument.pitfallsUsed.includes(pit.name)) {
@@ -137,49 +153,74 @@ export class ArgumentView {
     }
 
     private buildOtherModsView(argModifiers: any) {
-        const otherContainer = argModifiers.createEl("div", {cls: "ds-nt-argument-modifier-other"});
+        const otherContainer = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-other" });
 
         // Reused Motivation
-        const reuseMotivationLine = otherContainer.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line"});
+        const reuseMotivationLine = otherContainer.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line" });
         reuseMotivationLine.title = "If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.";
-        const reuseMotivationLabel = reuseMotivationLine.createEl("label", {cls: "ds-nt-argument-modifier-reuse-motivation-label"});
+
+        // Create label and wrap checkbox and text within it
+        const reuseMotivationLabel = reuseMotivationLine.createEl("label", { cls: "ds-nt-argument-modifier-reuse-motivation-label" });
+
         const reuseMotivationCheckbox = reuseMotivationLabel.createEl("input", {
             cls: "ds-nt-argument-modifier-reuse-motivation-checkbox",
             type: "checkbox"
         }) as HTMLInputElement;
-        reuseMotivationLabel.createEl("span", {
+
+        reuseMotivationCheckbox.disabled = !this.data.argumentReusesMotivation();
+        reuseMotivationCheckbox.checked = !reuseMotivationCheckbox.disabled && this.data.currentArgument.reusedMotivation;
+
+        reuseMotivationLabel.createSpan({
             cls: "ds-nt-argument-modifier-reuse-motivation-text",
             text: "Reuses a Motivation that has already been appealed to"
         });
-        reuseMotivationCheckbox.disabled = !this.data.argumentReusesMotivation();
-        reuseMotivationCheckbox.checked = !reuseMotivationCheckbox.disabled && this.data.currentArgument.reusedMotivation;
+
         reuseMotivationCheckbox.addEventListener("change", () => {
             this.data.currentArgument.reusedMotivation = reuseMotivationCheckbox.checked;
             CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
         });
 
         // Lie used
-        const lieLine = otherContainer.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line"});
+        const lieLine = otherContainer.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line" });
         lieLine.title = "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.";
-        const lieCheckbox = lieLine.createEl("input", {cls: "ds-nt-argument-modifier-lie-checkbox", type: "checkbox"}) as HTMLInputElement;
-        lieLine.createEl("label", {cls: "ds-nt-argument-modifier-lie-label", text: "NPC caught a lie and is offended"});
+
+        // Create label and wrap checkbox and text within it
+        const lieLabel = lieLine.createEl("label", { cls: "ds-nt-argument-modifier-lie-label" });
+
+        const lieCheckbox = lieLabel.createEl("input", {
+            cls: "ds-nt-argument-modifier-lie-checkbox",
+            type: "checkbox"
+        }) as HTMLInputElement;
+
         lieCheckbox.checked = this.data.currentArgument.lieUsed;
+
+        lieLabel.createSpan({ text: "NPC caught a lie and is offended" });
+
         lieCheckbox.addEventListener("change", () => {
             this.data.currentArgument.lieUsed = lieCheckbox.checked;
             CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
         });
 
         // Same Argument
-        const sameArgLine = otherContainer.createEl("div", {cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line"});
+        const sameArgLine = otherContainer.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line" });
         sameArgLine.title = "If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.";
-        const sameArgLabel = sameArgLine.createEl("label", {cls: "ds-nt-argument-modifier-same-arg-label"});
+
+        // Create label and wrap checkbox and text within it
+        const sameArgLabel = sameArgLine.createEl("label", { cls: "ds-nt-argument-modifier-same-arg-label" });
+
         const sameArgCheckbox = sameArgLabel.createEl("input", {
             cls: "ds-nt-argument-modifier-same-arg-checkbox",
             type: "checkbox"
         }) as HTMLInputElement;
-        sameArgLabel.createEl("span", {cls: "ds-nt-argument-modifier-same-arg-text", text: "Argument has already been made (w/o Motivation)"});
+
         sameArgCheckbox.disabled = this.data.currentArgument.usesMotivation();
         sameArgCheckbox.checked = this.data.currentArgument.sameArgumentUsed;
+
+        sameArgLabel.createSpan({
+            cls: "ds-nt-argument-modifier-same-arg-text",
+            text: "Argument has already been made (w/o Motivation)"
+        });
+
         sameArgCheckbox.addEventListener("change", () => {
             this.data.currentArgument.sameArgumentUsed = sameArgCheckbox.checked;
             CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
