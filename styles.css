@@ -1687,6 +1687,10 @@ button.action-button {
 		margin-left: 1em;
 	}
 
+	.ds-nt-argument-power-roll .pr-tier-line.active {
+		border: 1px solid blue;
+	}
+
 	.ds-nt-argument-footer {
 		display: flex;
 		align-items: center;

@@ -1,15 +1,17 @@
-import {App, MarkdownPostProcessorContext, setIcon, setTooltip} from "obsidian";
-import {NegotiationData} from "../../model/NegotiationData";
-import {CodeBlocks} from "../../utils/CodeBlocks";
-import {PowerRollProcessor} from "../powerRollProcessor";
-import {PowerRollTiers} from "../../model/powerRoll";
-import {ArgumentPowerRoll} from "../../model/ArgumentPowerRolls";
-import {labeledIcon} from "../../utils/common";
+import { App, MarkdownPostProcessorContext, setIcon, setTooltip } from "obsidian";
+import { NegotiationData } from "../../model/NegotiationData";
+import { CodeBlocks } from "../../utils/CodeBlocks";
+import { PowerRollProcessor } from "../powerRollProcessor";
+import { ArgumentPowerRoll } from "../../model/ArgumentPowerRolls";
+import { ArgumentResult } from "../../model/ArgumentResult";
+import { labeledIcon } from "../../utils/common";
 
 export class ArgumentView {
     private app: App;
     private data: NegotiationData;
     private ctx: MarkdownPostProcessorContext;
+
+    private selectedPowerRollTier: ArgumentResult = null; // To track selected power roll tier
 
     constructor(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext) {
         this.app = app;
@@ -27,22 +29,22 @@ export class ArgumentView {
 
         // Argument modifiers
         this.buildMotivationView(argModifiers);
-        // argModifiers.createEl('div', { cls: 'vertical-divider', text: ' ' });
         this.buildPitfallsView(argModifiers);
 
         this.buildOtherModsView(argumentBody);
 
         // Power Roll Display
-        let argumentPowerRoll = ArgumentPowerRoll.build(
+        const argumentPowerRoll = ArgumentPowerRoll.build(
             this.data.currentArgument.usesMotivation(),
             this.data.currentArgument.usesPitfall(),
             this.data.currentArgument.lieUsed,
             this.data.currentArgument.reusedMotivation,
-            this.data.currentArgument.sameArgumentUsed);
-        this.buildPowerRoll(argumentBody, argumentPowerRoll.toPowerRollTiers());
+            this.data.currentArgument.sameArgumentUsed
+        );
+        this.buildPowerRoll(argumentBody, argumentPowerRoll);
 
         // Complete Argument Button
-        const footer = argumentContainer.createEl('div', { cls: 'ds-nt-argument-footer'});
+        const footer = argumentContainer.createEl('div', { cls: 'ds-nt-argument-footer' });
         const completeButton = footer.createEl('button', { cls: 'ds-nt-complete-argument-button' });
         labeledIcon("messages-square", "Complete Argument", completeButton);
         completeButton.addEventListener('click', () => this.completeArgument());
@@ -184,28 +186,51 @@ export class ArgumentView {
         });
     }
 
-    private buildPowerRoll(argumentBody: HTMLDivElement, prTiers: PowerRollTiers) {
-        const argPowerRoll = argumentBody.createEl("div", {cls: "ds-nt-argument-power-roll"});
+    private buildPowerRoll(argumentBody: HTMLDivElement, argumentPowerRoll: ArgumentPowerRoll) {
+        const argPowerRoll = argumentBody.createEl("div", { cls: "ds-nt-argument-power-roll" });
 
-        const typeContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-roll-line"});
-        typeContainer.createEl("span", {cls: "pr-roll-value", text: "Power Roll + Reason, Intuition, or Presence"});
+        const typeContainer = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-roll-line" });
+        typeContainer.createEl("span", { cls: "pr-roll-value", text: "Power Roll + Reason, Intuition, or Presence" });
 
-        const t1Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
+        const t1Container = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-tier-1-line" });
         PowerRollProcessor.tier1Key(t1Container);
-        const t1Value = t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: prTiers.t1});
+        t1Container.createEl("span", { cls: "pr-tier-value pr-tier-1-value", text: argumentPowerRoll.t1.toString() });
 
-        const t2Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
+        const t2Container = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-tier-2-line" });
         PowerRollProcessor.tier2Key(t2Container);
-        const t2Value = t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: prTiers.t2});
+        t2Container.createEl("span", { cls: "pr-tier-value pr-tier-2-value", text: argumentPowerRoll.t2.toString() });
 
-        const t3Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
+        const t3Container = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-tier-3-line" });
         PowerRollProcessor.tier3Key(t3Container);
-        const t3Value = t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: prTiers.t3});
+        t3Container.createEl("span", { cls: "pr-tier-value pr-tier-3-value", text: argumentPowerRoll.t3.toString() });
 
-        const critContainer = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
+        const critContainer = argPowerRoll.createEl("div", { cls: "pr-detail-line pr-tier-line pr-crit-line" });
         PowerRollProcessor.critKey(critContainer);
-        const critValue = critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value", text: prTiers.crit});
-        return {t1Value, t2Value, t3Value, critValue};
+        critContainer.createEl("span", { cls: "pr-tier-value pr-crit-value", text: argumentPowerRoll.crit.toString() });
+
+        // Array of containers and their corresponding results
+        const containers = [
+            { container: t1Container, result: argumentPowerRoll.t1 },
+            { container: t2Container, result: argumentPowerRoll.t2 },
+            { container: t3Container, result: argumentPowerRoll.t3 },
+            { container: critContainer, result: argumentPowerRoll.crit }
+        ];
+
+        // Add event listeners
+        containers.forEach(item => {
+            item.container.addEventListener('click', () => {
+                this.selectedPowerRollTier = item.result;
+
+                // Update classes to reflect active state
+                containers.forEach(c => {
+                    if (c.container === item.container) {
+                        c.container.classList.add('active');
+                    } else {
+                        c.container.classList.remove('active');
+                    }
+                });
+            });
+        });
     }
 
     private completeArgument() {
@@ -217,8 +242,15 @@ export class ArgumentView {
             }
         });
 
-        // Reset currentArgument
+        // Update current_interest and current_patience based on selected tier
+        if (this.selectedPowerRollTier) {
+            this.data.current_interest += this.selectedPowerRollTier.interest;
+            this.data.current_patience += this.selectedPowerRollTier.patience;
+        }
+
+        // Reset
         this.data.currentArgument.resetData();
+
         CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
     }
 }
