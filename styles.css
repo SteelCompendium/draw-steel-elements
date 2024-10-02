@@ -1629,8 +1629,14 @@ button.action-button {
 
 
 	.ds-nt-argument-body {
+	}
+
+	.ds-nt-argument-modifiers {
 		display: flex;
-		justify-content: space-around;
+	}
+
+	.ds-nt-argument-modifiers > div {
+		width: 50%;
 	}
 
 	.ds-nt-argument-modifier-motivation-header,
@@ -1641,6 +1647,10 @@ button.action-button {
 	.ds-nt-argument-modifier-motivation-line,
 	.ds-nt-argument-modifier-pitfall-line {
 		margin-left: 2em;
+	}
+
+	.ds-nt-argument-modifier-other {
+		margin-top: 1em;
 	}
 
 	/* disabled checkboxes */
@@ -1663,6 +1673,10 @@ button.action-button {
 
 	.ds-nt-arg-motivation-used {
 		text-decoration: line-through;
+	}
+
+	.ds-nt-argument-power-roll {
+		margin-top: 1em;
 	}
 
 	.ds-nt-argument-power-roll .pr-roll-line {
