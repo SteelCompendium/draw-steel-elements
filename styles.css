@@ -75,7 +75,6 @@
 	margin-top: 0.5em;
 	margin-bottom: 0.5em;
 	padding: 1em;
-	font-family: Bitter;
 	letter-spacing: 0.03em;
 }
 
@@ -1445,7 +1444,6 @@ button.action-button {
 	margin-top: .5em;
 	margin-bottom: .5em;
 	padding: 1em;
-	font-family: Bitter;
 	letter-spacing: 0.03em;
 }
 
@@ -1613,12 +1611,8 @@ button.action-button {
 		cursor: pointer
 	}
 
-	.ds-nt-argument-tab {
+	.ds-nt-action-tab.active {
 		border-bottom: 1px solid var(--code-background);
-	}
-
-	.ds-nt-learn-more-tab {
-
 	}
 
 	.ds-nt-action-container {
@@ -1636,9 +1630,7 @@ button.action-button {
 
 	.ds-nt-argument-body {
 		display: flex;
-		justify-content: space-between;
-		padding-left: 2em;
-		padding-right: 2em;
+		justify-content: space-around;
 	}
 
 	.ds-nt-argument-modifier-motivation-header,
