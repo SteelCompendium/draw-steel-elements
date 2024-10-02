@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0
+
+- Adds basic support for Negotiation Tracking!
+
 ## 1.4.0
 
 - Initiative Tracker
