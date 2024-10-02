@@ -90,6 +90,11 @@ export class PatienceInterestView {
 			} else {
 				offer.classList.remove("ds-nt-interest-faded");
 			}
+			if (i === newInterest) {
+				line.classList.add("ds-nt-interest-current");
+			} else {
+				line.classList.remove("ds-nt-interest-current");
+			}
 		}
 		// Update Data and Save
 		this.data.current_interest = newInterest;

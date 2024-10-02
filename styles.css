@@ -1574,12 +1574,17 @@ button.action-button {
 		color: var(--text-faint);
 	}
 
+	.ds-nt-interest-line.ds-nt-interest-current .ds-nt-interest-label {
+		box-shadow: 0 0 20px var(--color-accent);
+	}
+
 	.ds-nt-interest-label {
 		background-color: var(--code-background);
 		border: 1px solid var(--text-normal);
 		margin: 0.5em;
 		border-radius: 50%;
 		width: 2em;
+		min-width: 2em;
 		height: 2em;
 		line-height: 2em;
 		text-align: center;
