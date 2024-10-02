@@ -20,8 +20,10 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 
 		const initProcessor = new InitiativeProcessor(this.app);
 		const initHandler = (source, el, ctx) => initProcessor.postProcess(source, el, ctx);
+		this.registerMarkdownCodeBlockProcessor("ds-it", initHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-init", initHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-initiative", initHandler);
+		this.registerMarkdownCodeBlockProcessor("ds-initiative-tracker", initHandler);
 
 		let ntProcessor = new NegotiationTrackerProcessor(this.app);
 		const ntHandler = (source, el, ctx) => ntProcessor.postProcess(source, el, ctx);

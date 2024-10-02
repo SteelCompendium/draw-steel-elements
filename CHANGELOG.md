@@ -1,5 +1,9 @@
 # Changelog
 
+## Next
+
+- initiative tracker can be triggered with `ds-it` and `ds-initiative-tracker` now
+
 ## 1.5.0
 
 - Adds basic support for Negotiation Tracking!
