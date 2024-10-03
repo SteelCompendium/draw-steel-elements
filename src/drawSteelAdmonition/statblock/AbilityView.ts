@@ -1,12 +1,12 @@
-import {App} from "obsidian";
+import {Plugin} from "obsidian";
 import {Ability} from "../../model/StatblockData";
 
 export class AbilityView {
-    private app: App;
+    private plugin: Plugin;
     private ability: Ability;
 
-    constructor(app: App, ability: Ability) {
-        this.app = app;
+    constructor(plugin: Plugin, ability: Ability) {
+        this.plugin = plugin;
         this.ability = ability;
     }
 

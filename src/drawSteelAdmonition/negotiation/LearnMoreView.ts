@@ -2,6 +2,7 @@ import {App, MarkdownPostProcessorContext, setTooltip} from "obsidian";
 import {NegotiationData} from "../../model/NegotiationData";
 import {PowerRollTiers} from "../../model/powerRoll";
 import {PowerRollProcessor} from "../powerRollProcessor";
+import {AbilityView} from "../AbilityView";
 
 export class LearnMoreView {
 	private app: App;
@@ -34,13 +35,13 @@ export class LearnMoreView {
 		typeContainer.createEl("span", {cls: "pr-roll-value", text: "Power Roll + Reason, Intuition, or Presence"});
 
 		const t1Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
-		PowerRollProcessor.tier1Key(t1Container);
+		AbilityView.tier1Key(t1Container);
 		t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: LearnMoreView.learnMorePowerRoll.t1});
 		const t2Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
-		PowerRollProcessor.tier2Key(t2Container);
+		AbilityView.tier2Key(t2Container);
 		t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: LearnMoreView.learnMorePowerRoll.t2});
 		const t3Container = argPowerRoll.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
-		PowerRollProcessor.tier3Key(t3Container);
+		AbilityView.tier3Key(t3Container);
 		t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: LearnMoreView.learnMorePowerRoll.t3});
 	}
 }

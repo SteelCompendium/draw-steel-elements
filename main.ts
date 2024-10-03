@@ -9,7 +9,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 	async onload() {
 		console.log("Loading Draw Steel Elements Plugin.")
 
-		const powerRollProcessor = new PowerRollProcessor(this.app, this);
+		const powerRollProcessor = new PowerRollProcessor(this);
 		const powerRollHandler = (source, el, ctx) => powerRollProcessor.postProcess(source, el, ctx);
 		this.registerMarkdownCodeBlockProcessor("ds-pr", powerRollHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-power-roll", powerRollHandler);

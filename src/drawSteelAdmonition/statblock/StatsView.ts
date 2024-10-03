@@ -1,5 +1,3 @@
-// StatsView.ts
-
 import {App, MarkdownPostProcessorContext} from "obsidian";
 import {StatblockData} from "../../model/StatblockData";
 

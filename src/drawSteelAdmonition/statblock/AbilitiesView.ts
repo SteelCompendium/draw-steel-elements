@@ -1,14 +1,14 @@
-import { App, MarkdownPostProcessorContext } from "obsidian";
+import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import { StatblockData, Ability } from "../../model/StatblockData";
 import { AbilityView } from "./AbilityView";
 
 export class AbilitiesView {
-    private app: App;
+    private plugin: Plugin;
     private data: StatblockData;
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(app: App, data: StatblockData, ctx: MarkdownPostProcessorContext) {
-        this.app = app;
+    constructor(plugin: Plugin, data: StatblockData, ctx: MarkdownPostProcessorContext) {
+        this.plugin = plugin;
         this.data = data;
         this.ctx = ctx;
     }
@@ -24,7 +24,7 @@ export class AbilitiesView {
         // const abilities = this.data.abilities.filter(ability => !ability.type?.startsWith("Villain Action"));
 
         this.data.abilities.forEach((ability: Ability) => {
-            new AbilityView(this.app, ability).build(abilitiesContainer);
+            new AbilityView(this.plugin, ability).build(abilitiesContainer);
         });
     }
 }
