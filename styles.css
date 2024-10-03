@@ -51,6 +51,53 @@
 }
 
 /* ==================== */
+/*   Ability            */
+/* ==================== */
+
+.ds-ability-container {
+	.pr-name-value,
+	.pr-cost-value {
+		font-weight: bold;
+		margin-left: 0.5em;
+	}
+
+	.pr-roll-value,
+	.pr-tier-key {
+		font-weight: bold;
+	}
+
+	.pr-flavor-value,
+	.pr-note-list,
+	.pr-note-line {
+		font-style: italic;
+	}
+
+	.pr-note-list {
+		margin-bottom: 0;
+	}
+
+	.pr-detail-line,
+	.pr-field-line {
+		margin: 0.5em;
+		margin-bottom: 0.75em;
+	}
+
+	.pr-detail-table-row {
+		display: flex;
+		margin-left: 0.5em;
+	}
+
+	.pr-detail-table-cell {
+		width: 50%;
+	}
+
+	.pr-detail-key,
+	.pr-field-key {
+		font-weight: bold;
+	}
+}
+
+/* ==================== */
 /*   Power Roll Styles   */
 /* ==================== */
 
@@ -106,51 +153,28 @@
 
 /* Indentation levels for power roll container */
 
-.pr-container.indent-1 {
+.pr-container:has(> .indent-1)  {
 	margin-left: calc(var(--list-indent) * 1);
 }
 
-.pr-container.indent-2 {
+.pr-container:has(> .indent-2) {
 	margin-left: calc(var(--list-indent) * 2);
 }
 
-.pr-container.indent-3 {
+.pr-container:has(> .indent-3) {
 	margin-left: calc(var(--list-indent) * 3);
 }
 
-.pr-container.indent-4 {
+.pr-container:has(> .indent-4) {
 	margin-left: calc(var(--list-indent) * 4);
 }
 
-.pr-container.indent-5 {
+.pr-container:has(> .indent-5) {
 	margin-left: calc(var(--list-indent) * 5);
 }
 
-.pr-container.indent-6 {
+.pr-container:has(> .indent-6) {
 	margin-left: calc(var(--list-indent) * 6);
-}
-
-/* Styling for power roll elements */
-
-.pr-container .pr-name-value,
-.pr-container .pr-cost-value {
-	font-weight: bold;
-	margin-left: 0.5em;
-}
-
-.pr-container .pr-roll-value,
-.pr-container .pr-tier-key {
-	font-weight: bold;
-}
-
-.pr-container .pr-flavor-value,
-.pr-container .pr-note-list,
-.pr-container .pr-note-line {
-	font-style: italic;
-}
-
-.pr-container .pr-note-list {
-	margin-bottom: 0;
 }
 
 /* DSA tag styling */
@@ -166,28 +190,6 @@ code.dsa {
 	text-decoration: var(--tag-decoration);
 	padding: var(--tag-padding-y) var(--tag-padding-x);
 	line-height: 1;
-}
-
-/* Detail and field lines */
-
-.pr-detail-line,
-.pr-field-line {
-	margin: 0.5em;
-	margin-bottom: 0.75em;
-}
-
-.pr-detail-table-row {
-	display: flex;
-	margin-left: 0.5em;
-}
-
-.pr-detail-table-cell {
-	width: 50%;
-}
-
-.pr-detail-key,
-.pr-field-key {
-	font-weight: bold;
 }
 
 /* =========================== */
@@ -1761,7 +1763,7 @@ button.action-button {
 	}
 
 	/* General purpose separator */
-	.ds-sb-ability,
+	.ds-ability-container,
 	.ds-sb-traits {
 		margin-top: 1em;
 	}
