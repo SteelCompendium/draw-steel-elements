@@ -58,7 +58,6 @@
 	.pr-name-value,
 	.pr-cost-value {
 		font-weight: bold;
-		margin-left: 0.5em;
 	}
 
 	.pr-roll-value,
@@ -78,13 +77,12 @@
 
 	.pr-detail-line,
 	.pr-field-line {
-		margin: 0.5em;
+		margin-top: 0.5em;
 		margin-bottom: 0.75em;
 	}
 
 	.pr-detail-table-row {
 		display: flex;
-		margin-left: 0.5em;
 	}
 
 	.pr-detail-table-cell {
@@ -1745,6 +1743,9 @@ button.action-button {
 }
 
 .ds-sb-container {
+	background-color: var(--code-background);
+	padding: 1em;
+
 	/* General space-between (left-right) line */
 	.ds-sb-title-line,
 	.ds-sb-info-line,
@@ -1768,12 +1769,18 @@ button.action-button {
 		margin-top: 1em;
 	}
 
-	.ds-sb-ability-table-line {
-		display: flex;
-		align-items: flex-start;
+	.ds-hr-container {
+		margin: 1em 0 0.5em 0;
 	}
 
-	.ds-sb-ability-table-cell {
-		width: 50%;
+	.ds-sb-title-line {
+		font-variant: small-caps;
+		font-size: var(--font-ui-large);
+	}
+
+	.pr-name-value {
+		text-decoration: underline;
+		font-variant: small-caps;
+		font-size: var(--font-ui-large);
 	}
 }

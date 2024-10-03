@@ -25,7 +25,7 @@ export class HeaderView {
         const nameEl = firstLine.createEl("div", { cls: "ds-sb-header-left", text: this.data.name ?? "Unnamed Creature" });
 
         // Right side: Level and Roles
-        const level = this.data.level !== undefined ? `LEVEL ${this.data.level}` : "LEVEL N/A";
+        const level = this.data.level !== undefined ? `Level ${this.data.level}` : "Level N/A";
         const roles = this.data.roles?.join(", ") ?? "No Role";
         const levelRolesText = `${level} ${roles}`;
         const levelRolesEl = firstLine.createEl("div", { cls: "ds-sb-header-right", text: levelRolesText });

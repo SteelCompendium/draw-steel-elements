@@ -4,6 +4,8 @@ import {HeaderView} from "./HeaderView";
 import {StatsView} from "./StatsView";
 import {AbilitiesView} from "./AbilitiesView";
 import {TraitsView} from "./TraitsView";
+import {HorizontalRuleProcessor} from "../horizontalRuleProcessor";
+import {Ability} from "../../model/Ability";
 
 export class StatblockProcessor {
     private plugin: Plugin;
@@ -23,7 +25,20 @@ export class StatblockProcessor {
         // Build the views
         new HeaderView(this.plugin, this.data, this.ctx).build(container);
         new StatsView(this.plugin, this.data, this.ctx).build(container);
+
+        HorizontalRuleProcessor.build(container);
         new TraitsView(this.plugin, this.data, this.ctx).build(container);
-        new AbilitiesView(this.plugin, this.data, this.ctx).build(container);
+
+        let abilities = [];
+        let villainPowers = [];
+        this.data.abilities.forEach(a => {
+            !a.type?.startsWith("Villain Action") ? abilities.push(a) : villainPowers.push(a);
+        })
+
+        HorizontalRuleProcessor.build(container);
+        new AbilitiesView(this.plugin, abilities, this.ctx).build(container);
+
+        HorizontalRuleProcessor.build(container);
+        new AbilitiesView(this.plugin, villainPowers, this.ctx).build(container);
     }
 }
