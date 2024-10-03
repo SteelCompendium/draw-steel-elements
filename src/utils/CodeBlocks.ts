@@ -11,6 +11,10 @@ export class CodeBlocks {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-negotiation-tracker");
 	}
 
+	static async updateStatblock(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext): Promise<void> {
+		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-statblock");
+	}
+
 	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		const file = app.vault.getAbstractFileByPath(ctx.sourcePath);
 		if (!(file instanceof TFile)) return;

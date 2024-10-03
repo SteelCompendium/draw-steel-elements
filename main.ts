@@ -3,6 +3,7 @@ import {PowerRollProcessor} from "./src/drawSteelAdmonition/powerRollProcessor";
 import {HorizontalRuleProcessor} from "./src/drawSteelAdmonition/horizontalRuleProcessor";
 import {InitiativeProcessor} from "./src/drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "./src/drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
+import {StatblockProcessor} from "./src/drawSteelAdmonition/statblock/StatblockProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
 	async onload() {
@@ -29,6 +30,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		const ntHandler = (source, el, ctx) => ntProcessor.postProcess(source, el, ctx);
 		this.registerMarkdownCodeBlockProcessor("ds-nt", ntHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntHandler);
+
+		let sbProcessor = new StatblockProcessor(this.app);
+		const sbHandler = (source, el, ctx) => sbProcessor.postProcess(source, el, ctx);
+		this.registerMarkdownCodeBlockProcessor("ds-sb", sbHandler);
+		this.registerMarkdownCodeBlockProcessor("ds-statblock", sbHandler);
 	}
 
 	onunload() {

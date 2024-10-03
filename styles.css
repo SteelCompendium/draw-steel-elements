@@ -1741,3 +1741,37 @@ button.action-button {
 		margin-right: 1em;
 	}
 }
+
+.ds-sb-container {
+	/* General space-between (left-right) line */
+	.ds-sb-title-line,
+	.ds-sb-info-line,
+	.ds-sb-stats-line {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	/* General purpose center-aligned line.  Used for titles */
+	.ds-sb-ability-title,
+	.ds-sb-trait-title {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+
+	/* General purpose separator */
+	.ds-sb-ability,
+	.ds-sb-traits {
+		margin-top: 1em;
+	}
+
+	.ds-sb-ability-table-line {
+		display: flex;
+		align-items: flex-start;
+	}
+
+	.ds-sb-ability-table-cell {
+		width: 50%;
+	}
+}

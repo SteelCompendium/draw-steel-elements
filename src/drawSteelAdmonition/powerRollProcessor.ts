@@ -9,7 +9,6 @@ export class PowerRollProcessor {
 		this.plugin = plugin;
 	}
 
-	// Helper to make one-liners
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
 		const yaml = parseYaml(source);
 		const indent = yaml["indent"]
