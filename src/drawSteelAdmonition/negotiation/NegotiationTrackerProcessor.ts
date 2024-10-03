@@ -31,7 +31,7 @@ export class NegotiationTrackerProcessor {
 			};
 		}
 
-		const container = el.createEl('div', {cls: "ds-nt-container"});
+		const container = el.createEl('div', {cls: "ds-nt-container ds-container"});
 
 		const nameContainer = container.createEl("div", {cls: "ds-nt-name-line"});
 

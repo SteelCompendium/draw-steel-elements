@@ -10,7 +10,7 @@ export class PowerRollProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		const container = el.createEl("div", { cls: "pr-container" });
+		const container = el.createEl("div", { cls: "pr-container ds-container" });
 		new AbilityView(this.plugin, parseAbilityData(source), ctx).build(container);
 	}
 }

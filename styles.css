@@ -24,6 +24,9 @@
 }
 
 /* Top-left border fade for containers */
+.ds-container {
+	position: relative;
+}
 
 .ds-container::before,
 .ds-container::after {
@@ -121,32 +124,6 @@
 	margin-bottom: 0.5em;
 	padding: 1em;
 	letter-spacing: 0.03em;
-}
-
-/* Top-left border fade for power roll container */
-
-.pr-container::before,
-.pr-container::after {
-	content: '';
-	position: absolute;
-	background: linear-gradient(to right, transparent, var(--text-normal));
-	height: 1px; /* Border thickness */
-	width: 100%;
-}
-
-.pr-container::before {
-	top: 0;
-	left: 0;
-	background: linear-gradient(to right, var(--text-normal), transparent);
-	width: 12em;
-}
-
-.pr-container::after {
-	top: 0;
-	left: 0;
-	height: 12em;
-	background: linear-gradient(to bottom, var(--text-normal), transparent);
-	width: 1px; /* Border thickness */
 }
 
 /* Indentation levels for power roll container */
@@ -1447,32 +1424,6 @@ button.action-button {
 	letter-spacing: 0.03em;
 }
 
-/* top-left border fade */
-
-.ds-nt-container::before,
-.ds-nt-container::after {
-	content: '';
-	position: absolute;
-	background: linear-gradient(to right, transparent, var(--text-normal));
-	height: 1px; /* Border thickness */
-	width: 100%;
-}
-
-.ds-nt-container::before {
-	top: 0;
-	left: 0;
-	background: linear-gradient(to right, var(--text-normal), transparent);
-	width: 12em;
-}
-
-.ds-nt-container::after {
-	top: 0;
-	left: 0;
-	height: 12em;
-	background: linear-gradient(to bottom, var(--text-normal), transparent);
-	width: 1px; /* Border thickness */
-}
-
 .ds-nt-container {
 	.ds-nt-name-line, .ds-nt-name-line div {
 		display: flex;
@@ -1755,18 +1706,19 @@ button.action-button {
 		align-items: center;
 	}
 
-	/* General purpose center-aligned line.  Used for titles */
-	.ds-sb-ability-title,
-	.ds-sb-trait-title {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-	}
-
 	/* General purpose separator */
 	.ds-ability-container,
-	.ds-sb-traits {
+	.ds-sb-traits,
+	.ds-sb-characteristics-line {
 		margin-top: 1em;
+	}
+
+	.ds-ability-container:hover,
+	.ds-sb-traits:hover,
+	.ds-sb-characteristics-line:hover,
+	.ds-sb-stats-left:hover,
+	.ds-sb-stats-right:hover {
+		background-color: var(--color-base-25);
 	}
 
 	.ds-hr-container {
@@ -1776,11 +1728,24 @@ button.action-button {
 	.ds-sb-title-line {
 		font-variant: small-caps;
 		font-size: var(--font-ui-large);
+		font-weight: bold;
 	}
 
-	.pr-name-value {
+	.ds-sb-characteristics-line {
+		font-weight: bold;
+	}
+
+	.pr-name-value,
+	.ds-sb-trait-title {
 		text-decoration: underline;
 		font-variant: small-caps;
 		font-size: var(--font-ui-large);
+		font-weight: bold;
 	}
+
+	/*.pr-detail-line:hover,*/
+	/*.pr-detail-table-cell:hover,*/
+	/*.ds-sb-trait-effect:hover {*/
+	/*	background-color: var(--color-base-30);*/
+	/*}*/
 }
