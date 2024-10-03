@@ -1,6 +1,7 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockData, Ability } from "../../model/StatblockData";
-import { AbilityView } from "./AbilityView";
+import {AbilityView} from "../AbilityView";
+import {StatblockData} from "../../model/StatblockData";
+import {Ability} from "../../model/Ability";
 
 export class AbilitiesView {
     private plugin: Plugin;
@@ -24,7 +25,7 @@ export class AbilitiesView {
         // const abilities = this.data.abilities.filter(ability => !ability.type?.startsWith("Villain Action"));
 
         this.data.abilities.forEach((ability: Ability) => {
-            new AbilityView(this.plugin, ability).build(abilitiesContainer);
+            new AbilityView(this.plugin, ability, this.ctx).build(abilitiesContainer);
         });
     }
 }

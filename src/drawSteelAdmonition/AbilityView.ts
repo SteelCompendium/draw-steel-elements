@@ -1,4 +1,4 @@
-import {Plugin, Component, MarkdownPostProcessorContext, MarkdownRenderer} from "obsidian";
+import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
 import {Ability} from "../model/Ability";
 
 export class AbilityView {
@@ -36,7 +36,8 @@ export class AbilityView {
             const keywordCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-keyword-cell"});
             if (this.data.keywords) {
                 keywordCell.createEl("span", {cls: "pr-detail-key pr-keyword-key", text: "Keywords: "});
-                this.renderMD(this.ctx, this.data.keywords, keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value ds-multiline"}));
+                const keywordsText = this.data.keywords.length > 0 ? this.data.keywords.join(", ") : "";
+                this.renderMD(this.ctx, keywordsText, keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value ds-multiline"}));
             }
             const typeCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-type-cell"});
             if (this.data.type) {

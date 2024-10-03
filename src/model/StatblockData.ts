@@ -1,4 +1,5 @@
 import { parseYaml } from "obsidian";
+import {Ability} from "./Ability";
 
 export class StatblockData {
     name?: string;
@@ -59,57 +60,6 @@ export class Trait {
         this.name = data.name?.trim() ?? '';
         this.type = data.type?.trim();
         this.effect = data.effect?.trim() ?? '';
-    }
-}
-
-export class Ability {
-    name: string;
-    cost?: string;
-    type?: string;
-    roll?: string;
-    keywords: string[];
-    distance?: string;
-    target?: string;
-    tier1?: string;
-    tier2?: string;
-    tier3?: string;
-    crit?: string;
-    effect?: string;
-    additionalEffects?: AdditionalEffect[];
-    trigger?: string;
-
-    constructor(data: Partial<Ability>) {
-        this.name = data.name?.trim() ?? '';
-        this.cost = data.cost;
-        this.type = data.type;
-        this.roll = data.roll;
-        if (data.keywords) {
-            this.keywords = Array.isArray(data.keywords) ? data.keywords : [data.keywords];
-        } else {
-            this.keywords = [];
-        }
-        this.distance = data.distance;
-        this.target = data.target;
-
-        // Normalize tier properties
-        this.tier1 = data.tier_1 ?? data.t1;
-        this.tier2 = data.tier_2 ?? data.t2;
-        this.tier3 = data.tier_3 ?? data.t3;
-
-        this.crit = data.crit;
-        this.effect = data.effect;
-        this.additionalEffects = data.additional_effects?.map(ae => new AdditionalEffect(ae)) ?? [];
-        this.trigger = data.trigger;
-    }
-}
-
-export class AdditionalEffect {
-    cost: string;
-    effect: string;
-
-    constructor(data: Partial<AdditionalEffect>) {
-        this.cost = data.cost ?? '';
-        this.effect = data.effect ?? '';
     }
 }
 

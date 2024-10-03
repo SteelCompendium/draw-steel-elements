@@ -1,13 +1,13 @@
-import {App, MarkdownPostProcessorContext} from "obsidian";
+import {Plugin, MarkdownPostProcessorContext} from "obsidian";
 import {StatblockData} from "../../model/StatblockData";
 
 export class StatsView {
-    private app: App;
+    private plugin: Plugin;
     private data: StatblockData;
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(app: App, data: StatblockData, ctx: MarkdownPostProcessorContext) {
-        this.app = app;
+    constructor(plugin: Plugin, data: StatblockData, ctx: MarkdownPostProcessorContext) {
+        this.plugin = plugin;
         this.data = data;
         this.ctx = ctx;
     }

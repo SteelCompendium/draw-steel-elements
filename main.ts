@@ -31,7 +31,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor("ds-nt", ntHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntHandler);
 
-		let sbProcessor = new StatblockProcessor(this.app);
+		let sbProcessor = new StatblockProcessor(this);
 		const sbHandler = (source, el, ctx) => sbProcessor.postProcess(source, el, ctx);
 		this.registerMarkdownCodeBlockProcessor("ds-sb", sbHandler);
 		this.registerMarkdownCodeBlockProcessor("ds-statblock", sbHandler);
