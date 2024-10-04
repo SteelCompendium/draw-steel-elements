@@ -20,9 +20,6 @@ export class AbilitiesView {
 
         const abilitiesContainer = container.createEl("div", { cls: "ds-sb-abilities" });
 
-        // TODO - Do I need to handle villain powers differently?
-        // const abilities = abilities.filter(ability => !ability.type?.startsWith("Villain Action"));
-
         this.abilities.forEach((ability: Ability) => {
             new AbilityView(this.plugin, ability, this.ctx).build(abilitiesContainer);
         });
