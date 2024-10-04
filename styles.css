@@ -1708,7 +1708,8 @@ button.action-button {
 	.ds-ability-container,
 	.ds-sb-traits,
 	.ds-sb-characteristics-line {
-		margin-top: 1rem;
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
 	}
 
 	/* Hover effect on each "container" */
