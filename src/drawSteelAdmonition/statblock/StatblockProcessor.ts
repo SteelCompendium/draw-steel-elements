@@ -25,8 +25,10 @@ export class StatblockProcessor {
         new HeaderView(this.plugin, this.data, this.ctx).build(container);
         new StatsView(this.plugin, this.data, this.ctx).build(container);
 
-        HorizontalRuleProcessor.build(container);
-        new TraitsView(this.plugin, this.data, this.ctx).build(container);
+		if (this.data.traits.length > 0) {
+			HorizontalRuleProcessor.build(container);
+			new TraitsView(this.plugin, this.data, this.ctx).build(container);
+		}
 
         let abilities = [];
         let villainPowers = [];
@@ -34,10 +36,14 @@ export class StatblockProcessor {
             !a.type?.startsWith("Villain Action") ? abilities.push(a) : villainPowers.push(a);
         })
 
-        HorizontalRuleProcessor.build(container);
-        new AbilitiesView(this.plugin, abilities, this.ctx).build(container);
+		if (abilities.length > 0) {
+			HorizontalRuleProcessor.build(container);
+			new AbilitiesView(this.plugin, abilities, this.ctx).build(container);
+		}
 
-        HorizontalRuleProcessor.build(container);
-        new AbilitiesView(this.plugin, villainPowers, this.ctx).build(container);
+		if (villainPowers > 0) {
+			HorizontalRuleProcessor.build(container);
+			new AbilitiesView(this.plugin, villainPowers, this.ctx).build(container);
+		}
     }
 }
