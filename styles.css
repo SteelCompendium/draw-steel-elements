@@ -1410,7 +1410,6 @@ button.action-button {
 	}
 }
 
-
 /* ==================== */
 /* Negotiation Tracker  */
 /* ==================== */
@@ -1695,7 +1694,6 @@ button.action-button {
 
 .ds-sb-container {
 	background-color: var(--code-background);
-	padding: 1em;
 
 	/* General space-between (left-right) line */
 	.ds-sb-title-line,
@@ -1710,9 +1708,10 @@ button.action-button {
 	.ds-ability-container,
 	.ds-sb-traits,
 	.ds-sb-characteristics-line {
-		margin-top: 1em;
+		margin-top: 1rem;
 	}
 
+	/* Hover effect on each "container" */
 	.ds-ability-container:hover,
 	.ds-sb-traits:hover,
 	.ds-sb-characteristics-line:hover,
@@ -1721,14 +1720,34 @@ button.action-button {
 		background-color: var(--color-base-25);
 	}
 
+	/*
+	Each line needs to have padding.
+	Ideally this would be at the root container, but line backgrounds need 100% width
+	 */
+	.ds-sb-title-line,
+	.ds-sb-info-line,
+	.ds-sb-stats-line,
+	.ds-sb-trait,
+	.ds-ability-container,
 	.ds-hr-container {
-		margin: 1em 0 0.5em 0;
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.ds-sb-title-line {
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+	}
+
+	.ds-hr-container {
+		margin: 1rem 0 0.5em 0;
 	}
 
 	.ds-sb-title-line {
 		font-variant: small-caps;
 		font-size: var(--font-ui-large);
 		font-weight: bold;
+		background-color: var(--color-base-25);
 	}
 
 	.ds-sb-characteristics-line {

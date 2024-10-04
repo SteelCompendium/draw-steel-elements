@@ -40,7 +40,7 @@ export class StatblockProcessor {
 			new AbilitiesView(this.plugin, abilities, this.ctx).build(container);
 		}
 
-		if (villainPowers > 0) {
+		if (villainPowers.length > 0) {
 			HorizontalRuleProcessor.build(container);
 			new AbilitiesView(this.plugin, villainPowers, this.ctx).build(container);
 		}
