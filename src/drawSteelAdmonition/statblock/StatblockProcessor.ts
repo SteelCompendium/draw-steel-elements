@@ -21,7 +21,6 @@ export class StatblockProcessor {
 
         const container = el.createEl('div', {cls: "ds-sb-container ds-container"});
 
-        // Build the views
         new HeaderView(this.plugin, this.data, this.ctx).build(container);
         new StatsView(this.plugin, this.data, this.ctx).build(container);
 
@@ -47,3 +46,4 @@ export class StatblockProcessor {
 		}
     }
 }
+
