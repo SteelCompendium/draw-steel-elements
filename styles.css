@@ -1449,8 +1449,8 @@ button.action-button {
 	.ds-nt-patience-container {
 		display: flex;
 		/*justify-content: space-between;*/
-		margin-top: 1em;
-		margin-bottom: 1em;
+		margin-top: .5em;
+		margin-bottom: .5em;
 	}
 
 	.ds-nt-patience-bubble-container {
@@ -1605,7 +1605,7 @@ button.action-button {
 	}
 
 	.ds-nt-argument-modifier-other {
-		margin-top: 1em;
+		margin-top: 0.3em;
 	}
 
 	/* disabled checkboxes */
@@ -1631,7 +1631,7 @@ button.action-button {
 	}
 
 	.ds-nt-argument-power-roll {
-		margin-top: 1em;
+		margin-top: .3em;
 	}
 
 	.ds-nt-argument-power-roll .pr-roll-line {
@@ -1640,7 +1640,7 @@ button.action-button {
 
 	.ds-nt-argument-power-roll .pr-detail-line {
 		margin: 0;
-		padding: 0.5em;
+		padding: 0.3em;
 		user-select: none;
 	}
 
