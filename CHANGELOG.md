@@ -1,8 +1,9 @@
 # Changelog
 
-## Next
+## 1.6.0
 
-- initiative tracker can be triggered with `ds-it` and `ds-initiative-tracker` now
+- Adds the statblock element! See the [statblock](./docs/statblock.md) documentation for details!
+- Initiative tracker can be triggered with `ds-it` and `ds-initiative-tracker` now
 
 ## 1.5.0
 
