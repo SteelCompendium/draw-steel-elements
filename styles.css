@@ -1716,8 +1716,8 @@ button.action-button {
 	.ds-ability-container:hover,
 	.ds-sb-traits:hover,
 	.ds-sb-characteristics-line:hover,
-	.ds-sb-stats-left:hover,
-	.ds-sb-stats-right:hover {
+	.ds-sb-info-line:hover,
+	.ds-sb-stats-line:hover {
 		background-color: var(--color-base-25);
 	}
 
