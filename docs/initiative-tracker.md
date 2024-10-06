@@ -192,7 +192,7 @@ The Stamina Pool modal for Minions allows you to manage the combined stamina of 
 
 When the Stamina Pool of minions gets reduced to thresholds that would kill a minion, the modal will allow the user to select which minion to kill.  The modal has some guardrails in place to help ensure the Director is following minion rules, but its not perfect and there is some flexibility. 
 
-![minion-stamina-pool-modal](minion-stamina-pool-modal.png)
+![minion-stamina-pool-modal](Media/minion-stamina-pool-modal.png)
 
 ### Villain Power
 

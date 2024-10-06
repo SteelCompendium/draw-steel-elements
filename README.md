@@ -20,6 +20,18 @@ The [Initiative Tracker Element](./docs/initiative-tracker.md) is used to manage
 
 ![Initiative Tracker.png](./docs/Media/initiative-tracker.png)
 
+### Negotiation Tracker Element
+
+The [Negotiation Tracker Element](./docs/negotiation-tracker.md) is used to manage and run negotiations.
+
+![Initiative Tracker.png](./docs/Media/negotiation.png)
+
+### Statblock Element
+
+The [Statblock Element](./docs/statblock.md) is used to display statblocks.
+
+![Statblock.png](./docs/Media/statblock.png)
+
 ### Horizontal Rule Element
 
 The [Horizontal Rule Element](./docs/horizontal-rule.md) is used as an alternative `<hr>` mimicking the Draw Steel design 

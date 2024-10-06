@@ -5,7 +5,7 @@ The Statblock codeblock is a tool designed to parse and display statblocks withi
 It allows you to define creatures or characters with various attributes, abilities, traits, and more using YAML syntax, 
 and then renders this information in an organized layout for easy reference during gameplay or writing.
 
-![statblock-side-by-side.png](statblock-side-by-side.png)
+![statblock-side-by-side.png](Media/statblock-side-by-side.png)
 
 ## Usage
 
@@ -107,6 +107,8 @@ abilities:
   effect: The bandit chief shifts twice their speed. During or after this movement, they can attack up to four targets with Whip & Magic Longsword. Any ally of the bandit chief adjacent to a target can make a free strike against that target.
 ~~~
 ```
+
+![statblock.png](Media/statblock.png)
 
 ## Field Definitions
 
