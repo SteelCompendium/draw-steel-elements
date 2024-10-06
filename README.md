@@ -6,6 +6,8 @@ Some helper elements for the MCDM Draw Steel TTRPG
 
 You can see [Element Documentation Here](https://steelcompendium.github.io/draw-steel-elements/power-roll/) or see below.
 
+![sample](./docs/Media/sample.png)
+
 ## Elements
 
 ### Power Roll Element

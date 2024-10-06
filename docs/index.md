@@ -6,6 +6,8 @@ _The Draw Steel Elements Obsidian Plugin is an independent product published und
 
 **IMPORTANT: This plugin does NOT (yet) work in "Live Preview" mode.**
 
+![sample.png](Media/sample.png)
+
 ## Elements
 
 ### Power Roll Element
