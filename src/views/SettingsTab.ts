@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import DrawSteelAdmonitionPlugin from "../../main";
+import {CompendiumDownloader} from "../utils/CompendiumDownloader";
 
 export class MyPluginSettingTab extends PluginSettingTab {
 	plugin: DrawSteelAdmonitionPlugin;
@@ -43,5 +44,11 @@ export class MyPluginSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		const downloadButton = containerEl.createEl('button', { cls: 'settings-action-button', text: 'Download Compendium' });
+		downloadButton.addEventListener("click", () => {
+			return new CompendiumDownloader(this.app, this.plugin.githubOwner, this.plugin.githubRepo, undefined)
+				.downloadAndExtractRelease(this.plugin.settings.compendiumReleaseTag, this.plugin.settings.compendiumDestinationDirectory);
+		});
 	}
 }

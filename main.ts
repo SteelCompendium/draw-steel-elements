@@ -11,8 +11,8 @@ import {CompendiumDownloader} from "./src/utils/CompendiumDownloader";
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
 
-    private readonly githubOwner = "steelCompendium";
-    private readonly githubRepo = "data-md-dse";
+	readonly githubOwner = "steelCompendium";
+	readonly githubRepo = "data-md-dse";
 
     async onload() {
         console.log("Loading Draw Steel Elements Plugin.")
