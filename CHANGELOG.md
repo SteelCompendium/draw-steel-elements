@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0
+
+- Adds ability to [download the Draw Steel Compendium](./docs/compendium-downloader.md)
+
 ## 1.6.0
 
 - Adds the statblock element! See the [statblock](./docs/statblock.md) documentation for details!
