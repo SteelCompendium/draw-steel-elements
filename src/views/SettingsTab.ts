@@ -13,7 +13,8 @@ export class MyPluginSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 
 		containerEl.empty();
-		containerEl.createEl('h2', { text: 'GitHub Release Importer Settings' });
+		containerEl.createEl('h3', { text: 'Draw Steel Compendium Downloader' });
+		containerEl.createEl('p', { text: 'Important: The Compendium will download to a specific directory in your vault and delete any files in that directory' });
 
 		new Setting(containerEl)
 			.setName('Release Tag (Optional)')
@@ -32,7 +33,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Destination Directory')
-			.setDesc('Directory within your vault to extract the contents to.')
+			.setDesc('Directory within your vault to extract the Compendium contents to.  THIS DIRECTORY WILL BE WIPED CLEAN!')
 			.addText(text =>
 				text
 					.setPlaceholder('ImportedContent')
