@@ -28,6 +28,8 @@
 		"obsidian": "latest",
 		"ts-jest": "^29.1.4",
 		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"typescript": "4.7.4",
+		"jszip": "^3.10.1",
+		"jszip-utils": "^0.1.0"
 	}
 }
