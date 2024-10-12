@@ -6,6 +6,11 @@ The Compendium Downloader feature will download the Markdown of the
 **IMPORTANT: The directory will get wiped clean every time the compendium is downloaded.  Any files in the 
 specified directory will be erased.  Do not edit these files and don't put any notes in the compendium directory.**
 
+**Also Important:** The rules are still actively in development and are subject to change. If you create links to 
+files in the Compendium, they are **not** guaranteed to exist in a future release.  I will not be maintaining backwards
+compatibility.  If you want to ensure the files don't change, set the Release Tag to a specific 
+[Release](https://github.com/SteelCompendium/data-md-dse/releases).
+
 ![compendium](Media/compendium.png)
 
 ## Quick Start
