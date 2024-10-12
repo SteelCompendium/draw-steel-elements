@@ -37,3 +37,9 @@ The [Statblock Element](statblock.md) is used to display statblocks.
 ### Horizontal Rule Element
 
 The [Horizontal Rule Element](horizontal-rule.md) is used as an alternative `<hr>` mimicking the Draw Steel design 
+
+## Compendium Downloader
+
+The [Compendium Downloader](compendium-downloader.md) is able to manage a local copy of the 
+[Draw Steel Compendium](https://steelcompendium.io/compendium) in your Obsidian Vault.   
+
