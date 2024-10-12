@@ -63,7 +63,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 
     async downloadAndExtractRelease() {
         return new CompendiumDownloader(this.app, this.githubOwner, this.githubRepo, undefined)
-            .downloadAndExtractRelease(this.settings.releaseTag, this.settings.destinationDirectory);
+            .downloadAndExtractRelease(this.settings.compendiumReleaseTag, this.settings.compendiumDestinationDirectory);
     }
 
     async loadSettings() {

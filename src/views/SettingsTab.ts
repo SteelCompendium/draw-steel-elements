@@ -23,9 +23,9 @@ export class MyPluginSettingTab extends PluginSettingTab {
 			.addText(text =>
 				text
 					.setPlaceholder('v1.0.0')
-					.setValue(this.plugin.settings.releaseTag)
+					.setValue(this.plugin.settings.compendiumReleaseTag)
 					.onChange(async value => {
-						this.plugin.settings.releaseTag = value;
+						this.plugin.settings.compendiumReleaseTag = value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -36,9 +36,9 @@ export class MyPluginSettingTab extends PluginSettingTab {
 			.addText(text =>
 				text
 					.setPlaceholder('ImportedContent')
-					.setValue(this.plugin.settings.destinationDirectory)
+					.setValue(this.plugin.settings.compendiumDestinationDirectory)
 					.onChange(async value => {
-						this.plugin.settings.destinationDirectory = value;
+						this.plugin.settings.compendiumDestinationDirectory = value;
 						await this.plugin.saveSettings();
 					})
 			);
