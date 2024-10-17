@@ -10,11 +10,11 @@ _The Draw Steel Elements Obsidian Plugin is an independent product published und
 
 ## Elements
 
-### Power Roll Element
+### Ability Element
 
-The [Power Roll Element](power-roll.md) is used to quickly format Tests, Abilities, Resistance Rolls, and other Power Rolls.
+The [Ability Element](ability) is used to quickly format Tests, Abilities, Resistance Rolls, and Power Rolls.
 
-![power roll.png](Media/power-roll-simple.png)
+![ability.png](Media/ability-simple.png)
 
 ### Initiative Tracker Element
 

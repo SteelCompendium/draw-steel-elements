@@ -12,9 +12,9 @@ You can see [Element Documentation Here](https://steelcompendium.github.io/draw-
 
 ### Power Roll Element
 
-The [Power Roll Element](./docs/power-roll.md) is used to quickly format Tests, Abilities, Resistance Rolls, and other Power Rolls.
+The [Power Roll Element](./docs/ability) is used to quickly format Tests, Abilities, Resistance Rolls, and other Power Rolls.
 
-![power roll.png](./docs/Media/power-roll-simple.png)
+![power roll.png](./docs/Media/ability-simple.png)
 
 ### Initiative Tracker Element
 
