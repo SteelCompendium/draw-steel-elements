@@ -109,18 +109,18 @@ button.settings-action-button {
 		font-weight: bold;
 	}
 
-	.ability-ability-inline-p,
-	.ability-ability-inline-p p {
+	.ability-inline-p,
+	.ability-inline-p p {
 		display: inline;
 	}
 
-	.ability-ability-inline-p p,
-	.ability-ability-inline-p ul {
+	.ability-inline-p p,
+	.ability-inline-p ul {
 		margin-block-start: 0;
 		margin-block-end: 0;
 	}
 
-	.ability-ability-inline-p ul {
+	.ability-inline-p ul {
 		display: grid;
 	}
 }
