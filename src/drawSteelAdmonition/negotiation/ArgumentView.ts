@@ -5,6 +5,7 @@ import { AbilityProcessor } from "../ability/abilityProcessor";
 import {ArgumentPowerRoll, ArgumentResult} from "../../model/ArgumentPowerRolls";
 import { labeledIcon } from "../../utils/common";
 import {AbilityView} from "../ability/AbilityView";
+import {PowerRollEffectView} from "../ability/PowerRollEffectView";
 
 export class ArgumentView {
     private app: App;
@@ -237,19 +238,19 @@ export class ArgumentView {
         typeContainer.createEl("span", { cls: "ability-roll-value", text: "Power Roll + Reason, Intuition, or Presence" });
 
         const t1Container = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-tier-1-line" });
-        AbilityView.tier1Key(t1Container);
+        PowerRollEffectView.tier1Key(t1Container);
         t1Container.createEl("span", { cls: "pr-tier-value pr-tier-1-value", text: argumentPowerRoll.t1.toString() });
 
         const t2Container = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-tier-2-line" });
-        AbilityView.tier2Key(t2Container);
+        PowerRollEffectView.tier2Key(t2Container);
         t2Container.createEl("span", { cls: "pr-tier-value pr-tier-2-value", text: argumentPowerRoll.t2.toString() });
 
         const t3Container = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-tier-3-line" });
-        AbilityView.tier3Key(t3Container);
+        PowerRollEffectView.tier3Key(t3Container);
         t3Container.createEl("span", { cls: "pr-tier-value pr-tier-3-value", text: argumentPowerRoll.t3.toString() });
 
         const critContainer = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-crit-line" });
-        AbilityView.critKey(critContainer);
+        PowerRollEffectView.critKey(critContainer);
         critContainer.createEl("span", { cls: "pr-tier-value pr-crit-value", text: argumentPowerRoll.crit.toString() });
 
         // Array of containers and their corresponding results
