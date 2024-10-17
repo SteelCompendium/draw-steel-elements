@@ -6,7 +6,7 @@ export class Ability {
     name?: string;
     cost?: string;
     flavor?: string;
-    keywords: string[];
+    keywords?: string[];
     type?: string;
     distance?: string;
     target?: string;

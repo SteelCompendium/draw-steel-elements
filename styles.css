@@ -32,7 +32,7 @@
 .ds-container::after {
 	content: '';
 	position: absolute;
-	background: linear-gradient(to right, transparent, var(--text-normal));
+	background: linear-gradient(to right, transparent, var(--icon-color));
 	height: 1px; /* Border thickness */
 	width: 100%;
 }
@@ -40,7 +40,7 @@
 .ds-container::before {
 	top: 0;
 	left: 0;
-	background: linear-gradient(to right, var(--text-normal), transparent);
+	background: linear-gradient(to right, var(--icon-color), transparent);
 	width: 12em;
 }
 
@@ -49,7 +49,7 @@
 	left: 0;
 	height: 100%;
 	max-height: 12em;
-	background: linear-gradient(to bottom, var(--text-normal), transparent);
+	background: linear-gradient(to bottom, var(--icon-color), transparent);
 	width: 1px; /* Border thickness */
 }
 
@@ -391,30 +391,30 @@ code.dsa {
 .ds-hr-right-line {
 	flex-grow: 1;
 	height: 2px;
-	background-color: var(--text-normal);
+	background-color: var(--icon-color);
 	top: 50%; /* Center it vertically */
 	left: 0;
 	right: 0;
 }
 
 .ds-hr-left-line {
-	background: linear-gradient(to left, var(--text-normal) 0%, var(--background-primary) 100%);
+	background: linear-gradient(to left, var(--icon-color) 0%, transparent 100%);
 }
 
 .ds-hr-right-line {
-	background: linear-gradient(to right, var(--text-normal) 0%, var(--background-primary) 100%);
+	background: linear-gradient(to right, var(--icon-color) 0%, transparent 100%);
 }
 
 .ds-hr-center {
 	width: 14px;
 	height: 14px;
-	background-color: var(--text-normal);
+	background-color: var(--icon-color);
 	transform: translateZ(1px) translateY(1px) rotate(45deg); /* Rotate to make a diamond */
 	position: relative;
 	z-index: 1; /* Ensure the diamond is above the lines */
 	margin: 0 auto; /* Center the diamond */
-	border-bottom: 2px solid var(--text-normal);
-	border-right: 2px solid var(--text-normal);
+	border-bottom: 2px solid var(--icon-color);
+	border-right: 2px solid var(--icon-color);
 	box-shadow: inset 0 0 0 3px var(--background-primary);
 }
 
@@ -518,7 +518,7 @@ code.dsa {
 .enemy-group::after {
 	content: '';
 	position: absolute;
-	background: linear-gradient(to right, transparent, var(--text-normal));
+	background: linear-gradient(to right, transparent, var(--icon-color));
 	height: 1px; /* Border thickness */
 	width: 100%;
 }
@@ -527,7 +527,7 @@ code.dsa {
 .enemy-group::before {
 	top: 0;
 	left: 0;
-	background: linear-gradient(to right, var(--text-normal), transparent);
+	background: linear-gradient(to right, var(--icon-color), transparent);
 	width: 12em;
 }
 
@@ -537,7 +537,7 @@ code.dsa {
 	left: 0;
 	height: 100%;
 	max-height: 12em;
-	background: linear-gradient(to bottom, var(--text-normal), transparent);
+	background: linear-gradient(to bottom, var(--icon-color), transparent);
 	width: 1px; /* Border thickness */
 }
 
@@ -700,7 +700,7 @@ code.dsa {
 .enemy-group-icon {
 	height: 1.5em;
 	width: 1.5em;
-	border: 1px solid var(--text-normal);
+	border: 1px solid var(--icon-color);
 	border-right: 0;
 	border-radius: 5px 0 0 5px;
 }
