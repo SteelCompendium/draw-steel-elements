@@ -1,12 +1,12 @@
 import {MarkdownPostProcessorContext, Plugin} from "obsidian";
 import {PowerRollEffectView} from "../views/PowerRollEffectView";
-import {Is} from "@sinclair/typebox/value/is";
-import Object = Is.Object;
-import Object = Is.Object;
 import {MundaneEffectView} from "../views/MundaneEffectView";
 
 export abstract class Effect {
     static parseAll(data: any): Effect[] {
+        if (!data) {
+            return [];
+        }
         if (!Array.isArray(data)) {
             throw new Error("Expected effects to be an array");
         }
@@ -56,23 +56,23 @@ export class PowerRollEffect extends Effect {
 export class MundaneEffect extends Effect {
     name?: string;
     cost?: string;
-    value?: string;
+    effect?: string;
 
     static parseKeyValue(data: any) {
         const key = Object.keys(data)[0];
-        const value = Object.values(data)[0];
-        return new MundaneEffect(key, undefined, value);
+        const effect = Object.values(data)[0];
+        return new MundaneEffect(key, undefined, effect);
     }
 
     static parse(data: any) {
-        return new MundaneEffect(data.name, data.cost, data.value);
+        return new MundaneEffect(data.name, data.cost, data.effect);
     }
 
-    constructor(name: string, cost: string, value: string) {
+    constructor(name: string, cost: string, effect: string) {
         super();
         this.name = name;
         this.cost = cost;
-        this.value = value;
+        this.effect = effect;
     }
 
     effectType() {

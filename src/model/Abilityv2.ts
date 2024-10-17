@@ -13,6 +13,16 @@ export class Abilityv2 {
     trigger?: string;
     effects: Effect[];
 
+    public static parse(source: string) {
+        let data: any;
+        try {
+            data = parseYaml(source);
+        } catch (error: any) {
+            throw new Error("Invalid YAML format: " + error.message);
+        }
+        return new Abilityv2(data);
+    }
+
     constructor(data: any) {
         this.indent = typeof data.indent === 'string' ? parseInt(data.indent) : data.indent;
         this.name = data.name;
@@ -27,14 +37,4 @@ export class Abilityv2 {
         this.trigger = data.trigger;
         this.effects = Effect.parseAll(data.effects);
     }
-}
-
-export function parseAbilityData(source: string): Abilityv2 {
-    let data: any;
-    try {
-        data = parseYaml(source);
-    } catch (error: any) {
-        throw new Error("Invalid YAML format: " + error.message);
-    }
-    return new Abilityv2(data);
 }

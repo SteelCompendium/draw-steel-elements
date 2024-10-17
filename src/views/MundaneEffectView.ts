@@ -1,5 +1,5 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
-import {MundaneEffect, PowerRollEffect} from "../model/Effect";
+import {MundaneEffect} from "../model/Effect";
 
 export class MundaneEffectView {
     private plugin: Plugin;
@@ -14,9 +14,10 @@ export class MundaneEffectView {
 
     public build(parent: HTMLElement) {
         const container = parent.createEl("div", {cls: "ds-effect-container"});
-        const text = "Spend " + this.data.cost.trim() + ": ";
+        const cost = this.data.cost ? " (" + this.data.cost?.trim() + ")" : "";
+        const text = this.data.name + cost + ": ";
         container.createEl("span", {cls: "pr-detail-key pr-effect-key", text: text});
-        this.renderMD(this.ctx, this.data.value, container.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline"}));
+        this.renderMD(this.ctx, this.data.effect, container.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline"}));
     }
 
     // TODO - this doesnt belong here?
