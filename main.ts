@@ -38,26 +38,22 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
 
         const hrProcessor = new HorizontalRuleProcessor();
-        const hrHandler = (source, el, ctx) => hrProcessor.postProcess(source, el, ctx);
-        this.registerMarkdownCodeBlockProcessor("ds-hr", hrHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrHandler);
+        this.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 
         const initProcessor = new InitiativeProcessor(this.app);
-        const initHandler = (source, el, ctx) => initProcessor.postProcess(source, el, ctx);
-        this.registerMarkdownCodeBlockProcessor("ds-it", initHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-init", initHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-initiative", initHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-initiative-tracker", initHandler);
+        this.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-init", initProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-initiative-tracker", initProcessor.handler);
 
         let ntProcessor = new NegotiationTrackerProcessor(this.app);
-        const ntHandler = (source, el, ctx) => ntProcessor.postProcess(source, el, ctx);
-        this.registerMarkdownCodeBlockProcessor("ds-nt", ntHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntHandler);
+        this.registerMarkdownCodeBlockProcessor("ds-nt", ntProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntProcessor.handler);
 
         let sbProcessor = new StatblockProcessor(this);
-        const sbHandler = (source, el, ctx) => sbProcessor.postProcess(source, el, ctx);
-        this.registerMarkdownCodeBlockProcessor("ds-sb", sbHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-statblock", sbHandler);
+        this.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
     }
 
     async downloadAndExtractRelease() {

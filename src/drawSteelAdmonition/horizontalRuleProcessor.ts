@@ -1,6 +1,8 @@
 import {MarkdownPostProcessorContext} from "obsidian";
 
 export class HorizontalRuleProcessor {
+	readonly handler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => this.postProcess(source, el, ctx);
+
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
 		HorizontalRuleProcessor.build(el);
 	}

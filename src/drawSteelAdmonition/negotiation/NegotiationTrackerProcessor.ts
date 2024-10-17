@@ -9,6 +9,7 @@ import {labeledIcon} from "../../utils/common";
 
 export class NegotiationTrackerProcessor {
 	private app: App;
+	readonly handler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => this.postProcess(source, el, ctx);
 	private data: NegotiationData;
 	private ctx: MarkdownPostProcessorContext;
 

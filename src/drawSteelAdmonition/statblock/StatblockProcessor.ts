@@ -8,6 +8,7 @@ import {HorizontalRuleProcessor} from "../horizontalRuleProcessor";
 
 export class StatblockProcessor {
     private plugin: Plugin;
+	readonly handler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => this.postProcess(source, el, ctx);
 
     constructor(plugin: Plugin) {
         this.plugin = plugin;

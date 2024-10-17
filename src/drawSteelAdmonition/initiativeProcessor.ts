@@ -19,6 +19,7 @@ import {MinionStaminaPoolModal} from "../views/MinionStaminaPoolModal";
 
 export class InitiativeProcessor {
 	private app: App;
+	readonly handler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => this.postProcess(source, el, ctx);
 	private conditionManager: ConditionManager;
 
 	constructor(app: App) {
