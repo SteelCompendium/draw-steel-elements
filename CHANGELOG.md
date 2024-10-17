@@ -1,5 +1,9 @@
 # Changelog
 
+## Next
+
+- Adds better error handling on Ability, Negotiation, and Statblock Elements
+
 ## 2.0.0
 
 - [BREAKING] The Power Roll Element has been replaced by the Ability Element

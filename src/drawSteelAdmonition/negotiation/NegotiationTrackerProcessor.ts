@@ -17,9 +17,23 @@ export class NegotiationTrackerProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		this.ctx = ctx;
-		this.data = parseNegotiationData(source);
+		const container = el.createEl('div', {cls: "ds-nt-container ds-container"});
 
+		try {
+			this.ctx = ctx;
+			this.data = parseNegotiationData(source);
+			this.buildUI(container);
+		} catch (error) {
+			// Display error message to the user
+			let userMessage =
+				"The Draw Steel Elements plugin loaded the Negotiation Tracker Element properly, but " +
+				"failed to process the input config.  Please correct the following error:\n\n";
+			userMessage += error.message;
+			container.createEl("div", {text: userMessage, cls: "error-message"});
+		}
+	}
+
+	private buildUI(container: HTMLElement): void {
 		// Initialize currentArgument if not present
 		if (!this.data.currentArgument) {
 			this.data.currentArgument = {
@@ -30,8 +44,6 @@ export class NegotiationTrackerProcessor {
 				reusedMotivation: false,
 			};
 		}
-
-		const container = el.createEl('div', {cls: "ds-nt-container ds-container"});
 
 		const nameContainer = container.createEl("div", {cls: "ds-nt-name-line"});
 
