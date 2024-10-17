@@ -1,7 +1,11 @@
 # Changelog
 
-## 1.7.0
+## 2.0.0
 
+- [BREAKING] The Power Roll Element has been replaced by the Ability Element
+  - Instead of having a flat structure for the yaml, the `effects` field will list effects, power rolls, etc in an ordered manner
+  - As a side effect, the Statblock Element inherits these changes as well
+  - For details on the new structure, see the [Ability Documentation](./docs/Abilities.md) 
 - Adds ability to [download the Draw Steel Compendium](./docs/compendium-downloader.md)
 
 ## 1.6.0
