@@ -5,7 +5,7 @@ export class Ability {
     name?: string;
     cost?: string;
     flavor?: string;
-    keywords: string[];
+    keywords?: string[];
     type?: string;
     distance?: string;
     target?: string;
@@ -28,8 +28,6 @@ export class Ability {
         this.flavor = data.flavor;
         if (data.keywords) {
             this.keywords = Array.isArray(data.keywords) ? data.keywords : [data.keywords];
-        } else {
-            this.keywords = [];
         }
         this.type = data.type;
         this.distance = data.distance;
