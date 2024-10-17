@@ -1,6 +1,6 @@
 import { parseYaml } from "obsidian";
 
-export class Ability {
+export class AbilityOld {
     indent?: number;
     name?: string;
     cost?: string;
