@@ -1,6 +1,6 @@
 import {Plugin, MarkdownPostProcessorContext} from "obsidian";
 import {AbilityView} from "./AbilityView";
-import {Abilityv2} from "../model/Abilityv2";
+import {Ability} from "../model/Ability";
 
 export class PowerRollProcessor {
 	plugin: Plugin;
@@ -11,6 +11,6 @@ export class PowerRollProcessor {
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
 		const container = el.createEl("div", { cls: "pr-container ds-container" });
-		new AbilityView(this.plugin, Abilityv2.parse(source), ctx).build(container);
+		new AbilityView(this.plugin, Ability.parse(source), ctx).build(container);
 	}
 }

@@ -15,7 +15,7 @@ export class StatblockData {
     freeStrike?: number;
     characteristics: Characteristics;
     traits: Trait[];
-    abilities: Ability[];
+    abilities: AbilityOld[];
 
     constructor(data: Partial<StatblockData>) {
         this.name = data.name;
@@ -31,7 +31,7 @@ export class StatblockData {
         this.freeStrike = data.free_strike ?? data.freeStrike;
         this.characteristics = data.characteristics ? new Characteristics(data.characteristics) : new Characteristics({});
         this.traits = data.traits?.map(t => new Trait(t)) ?? [];
-        this.abilities = data.abilities?.map(a => new Ability(a)) ?? [];
+        this.abilities = data.abilities?.map(a => new AbilityOld(a)) ?? [];
     }
 }
 

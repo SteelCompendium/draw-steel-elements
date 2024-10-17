@@ -15,7 +15,8 @@ export class MundaneEffectView {
     public build(parent: HTMLElement) {
         const container = parent.createEl("div", {cls: "ds-effect-container"});
         const cost = this.data.cost ? " (" + this.data.cost?.trim() + ")" : "";
-        const text = this.data.name + cost + ": ";
+        let text = this.data.name ? this.data.name + cost : cost;
+		text = text ? text + ": " : "";
         container.createEl("span", {cls: "pr-detail-key pr-effect-key", text: text});
         this.renderMD(this.ctx, this.data.effect, container.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline"}));
     }

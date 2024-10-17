@@ -1,13 +1,13 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import {AbilityView} from "../AbilityView";
-import {Ability} from "../../model/Ability";
+import {AbilityOld} from "../../model/AbilityOld";
 
 export class AbilitiesView {
     private plugin: Plugin;
-    private abilities: Ability[];
+    private abilities: AbilityOld[];
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(plugin: Plugin, abilities: Ability[], ctx: MarkdownPostProcessorContext) {
+    constructor(plugin: Plugin, abilities: AbilityOld[], ctx: MarkdownPostProcessorContext) {
         this.plugin = plugin;
         this.abilities = abilities;
         this.ctx = ctx;
@@ -20,7 +20,7 @@ export class AbilitiesView {
 
         const abilitiesContainer = container.createEl("div", { cls: "ds-sb-abilities" });
 
-        this.abilities.forEach((ability: Ability) => {
+        this.abilities.forEach((ability: AbilityOld) => {
             new AbilityView(this.plugin, ability, this.ctx).build(abilitiesContainer);
         });
     }

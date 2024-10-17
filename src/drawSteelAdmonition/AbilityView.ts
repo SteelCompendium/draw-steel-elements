@@ -1,13 +1,13 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
+import {AbilityOld} from "../model/AbilityOld";
 import {Ability} from "../model/Ability";
-import {Abilityv2} from "../model/Abilityv2";
 
 export class AbilityView {
     private plugin: Plugin;
-    private data: Abilityv2;
+    private data: Ability;
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(plugin: Plugin, data: Abilityv2, ctx: MarkdownPostProcessorContext) {
+    constructor(plugin: Plugin, data: Ability, ctx: MarkdownPostProcessorContext) {
         this.plugin = plugin;
         this.data = data;
         this.ctx = ctx;
@@ -70,7 +70,7 @@ export class AbilityView {
         }
 
 
-        const effectsContainer = container.createEl("div", {cls: "effects-container"});
+        const effectsContainer = container.createEl("div", {cls: "ds-effects-container"});
         if (this.data.effects) {
             for (let effect of this.data.effects) {
                 effect.asView(effectsContainer, this.plugin, this.ctx);
