@@ -1,5 +1,4 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
-import {AbilityOld} from "../model/AbilityOld";
 import {Ability} from "../model/Ability";
 
 export class AbilityView {
