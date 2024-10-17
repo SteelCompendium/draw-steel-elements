@@ -1,5 +1,4 @@
 import {Plugin} from 'obsidian';
-import {PowerRollProcessor} from "./src/drawSteelAdmonition/powerRollProcessor";
 import {HorizontalRuleProcessor} from "./src/drawSteelAdmonition/horizontalRuleProcessor";
 import {InitiativeProcessor} from "./src/drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "./src/drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
@@ -7,6 +6,7 @@ import {StatblockProcessor} from "./src/drawSteelAdmonition/statblock/StatblockP
 import {MyPluginSettingTab} from "./src/views/SettingsTab";
 import {DEFAULT_SETTINGS, DSESettings} from "./src/model/Settings";
 import {CompendiumDownloader} from "./src/utils/CompendiumDownloader";
+import {AbilityProcessor} from "./src/drawSteelAdmonition/ability/AbilityProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
@@ -33,10 +33,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     }
 
     private registerElements() {
-        const powerRollProcessor = new PowerRollProcessor(this);
-        const powerRollHandler = (source, el, ctx) => powerRollProcessor.postProcess(source, el, ctx);
-        this.registerMarkdownCodeBlockProcessor("ds-pr", powerRollHandler);
-        this.registerMarkdownCodeBlockProcessor("ds-power-roll", powerRollHandler);
+        const abilityProcessor = new AbilityProcessor(this);
+        this.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
+        this.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
 
         const hrProcessor = new HorizontalRuleProcessor();
         const hrHandler = (source, el, ctx) => hrProcessor.postProcess(source, el, ctx);

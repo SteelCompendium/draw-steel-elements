@@ -70,66 +70,66 @@ button.settings-action-button {
 /* ==================== */
 
 .ds-ability-container {
-	.pr-name-value,
-	.pr-cost-value {
+	.ability-name-value,
+	.ability-cost-value {
 		font-weight: bold;
 	}
 
-	.pr-roll-value,
-	.pr-tier-key {
+	.ability-roll-value,
+	.ability-tier-key {
 		font-weight: bold;
 	}
 
-	.pr-flavor-value,
-	.pr-note-list,
-	.pr-note-line {
+	.ability-flavor-value,
+	.ability-note-list,
+	.ability-note-line {
 		font-style: italic;
 	}
 
-	.pr-note-list {
+	.ability-note-list {
 		margin-bottom: 0;
 	}
 
-	.pr-detail-line,
-	.pr-field-line {
+	.ability-detail-line,
+	.ability-field-line {
 		margin-top: 0.5em;
 		margin-bottom: 0.75em;
 	}
 
-	.pr-detail-table-row {
+	.ability-detail-table-row {
 		display: flex;
 	}
 
-	.pr-detail-table-cell {
+	.ability-detail-table-cell {
 		width: 50%;
 	}
 
-	.pr-detail-key,
-	.pr-field-key {
+	.ability-detail-key,
+	.ability-field-key {
 		font-weight: bold;
+	}
+
+	.ability-ability-inline-p,
+	.ability-ability-inline-p p {
+		display: inline;
+	}
+
+	.ability-ability-inline-p p,
+	.ability-ability-inline-p ul {
+		margin-block-start: 0;
+		margin-block-end: 0;
+	}
+
+	.ability-ability-inline-p ul {
+		display: grid;
 	}
 }
 
-/* ==================== */
-/*   Power Roll Styles   */
-/* ==================== */
+/* ========================== */
+/*   Ability Element Styles   */
+/* ========================== */
 
-.ds-pr-inline-p,
-.ds-pr-inline-p p {
-	display: inline;
-}
-
-.ds-pr-inline-p p,
-.ds-pr-inline-p ul {
-	margin-block-start: 0;
-	margin-block-end: 0;
-}
-
-.ds-pr-inline-p ul {
-	display: grid;
-}
-
-.pr-container {
+.ds-ability-ele-container {
 	position: relative;
 	background: var(--code-background);
 	margin-top: 0.5em;
@@ -140,31 +140,31 @@ button.settings-action-button {
 
 /* Indentation levels for power roll container */
 
-.pr-container:has(> .indent-1)  {
+.ds-ability-ele-container:has(> .indent-1)  {
 	margin-left: calc(var(--list-indent) * 1);
 }
 
-.pr-container:has(> .indent-2) {
+.ds-ability-ele-container:has(> .indent-2) {
 	margin-left: calc(var(--list-indent) * 2);
 }
 
-.pr-container:has(> .indent-3) {
+.ds-ability-ele-container:has(> .indent-3) {
 	margin-left: calc(var(--list-indent) * 3);
 }
 
-.pr-container:has(> .indent-4) {
+.ds-ability-ele-container:has(> .indent-4) {
 	margin-left: calc(var(--list-indent) * 4);
 }
 
-.pr-container:has(> .indent-5) {
+.ds-ability-ele-container:has(> .indent-5) {
 	margin-left: calc(var(--list-indent) * 5);
 }
 
-.pr-container:has(> .indent-6) {
+.ds-ability-ele-container:has(> .indent-6) {
 	margin-left: calc(var(--list-indent) * 6);
 }
 
-/* DSA tag styling */
+/* DSA tag styling (what is this for?) */
 
 span.dsa,
 code.dsa {
@@ -1650,7 +1650,7 @@ button.action-button {
 		font-weight: bold;
 	}
 
-	.ds-nt-argument-power-roll .pr-detail-line {
+	.ds-nt-argument-power-roll .ability-detail-line {
 		margin: 0;
 		padding: 0.3em;
 		user-select: none;
@@ -1767,7 +1767,7 @@ button.action-button {
 		font-weight: bold;
 	}
 
-	.pr-name-value,
+	.ability-name-value,
 	.ds-sb-trait-title {
 		text-decoration: underline;
 		font-variant: small-caps;
@@ -1775,8 +1775,8 @@ button.action-button {
 		font-weight: bold;
 	}
 
-	/*.pr-detail-line:hover,*/
-	/*.pr-detail-table-cell:hover,*/
+	/*.ability-detail-line:hover,*/
+	/*.ability-detail-table-cell:hover,*/
 	/*.ds-sb-trait-effect:hover {*/
 	/*	background-color: var(--color-base-30);*/
 	/*}*/

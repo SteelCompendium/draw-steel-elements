@@ -1,5 +1,5 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
-import {PowerRollEffect} from "../model/Effect";
+import {PowerRollEffect} from "../../model/Effect";
 
 export class PowerRollEffectView {
     private plugin: Plugin;
@@ -15,30 +15,30 @@ export class PowerRollEffectView {
     public build(parent: HTMLElement) {
         const container = parent.createEl("div", {cls: "ds-pr-effect-container"});
         if (this.data.roll) {
-            const typeContainer = container.createEl("div", {cls: "pr-detail-line pr-roll-line"});
-            this.renderMD(this.ctx, this.data.roll, typeContainer.createEl("span", {cls: "pr-roll-value ds-multiline"}));
+            const typeContainer = container.createEl("div", {cls: "ability-detail-line pr-roll-line"});
+            this.renderMD(this.ctx, this.data.roll, typeContainer.createEl("span", {cls: "ability-roll-value ds-multiline"}));
         }
 
         if (this.data.t1) {
-            const t1Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-1-line"});
+            const t1Container = container.createEl("div", {cls: "ability-detail-line pr-tier-line pr-tier-1-line"});
             PowerRollEffectView.tier1Key(t1Container);
             this.renderMD(this.ctx, this.data.t1, t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value ds-multiline"}));
         }
 
         if (this.data.t2) {
-            const t2Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-2-line"});
+            const t2Container = container.createEl("div", {cls: "ability-detail-line pr-tier-line pr-tier-2-line"});
             PowerRollEffectView.tier2Key(t2Container);
             this.renderMD(this.ctx, this.data.t2, t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value ds-multiline"}));
         }
 
         if (this.data.t3) {
-            const t3Container = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-tier-3-line"});
+            const t3Container = container.createEl("div", {cls: "ability-detail-line pr-tier-line pr-tier-3-line"});
             PowerRollEffectView.tier3Key(t3Container);
             this.renderMD(this.ctx, this.data.t3, t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value ds-multiline"}));
         }
 
         if (this.data.crit) {
-            const critContainer = container.createEl("div", {cls: "pr-detail-line pr-tier-line pr-crit-line"});
+            const critContainer = container.createEl("div", {cls: "ability-detail-line pr-tier-line pr-crit-line"});
             PowerRollEffectView.critKey(critContainer);
             this.renderMD(this.ctx, this.data.crit, critContainer.createEl("span", {cls: "pr-tier-value pr-crit-value ds-multiline"}));
         }
@@ -46,7 +46,7 @@ export class PowerRollEffectView {
 
     // TODO - this doesnt belong here?
     private renderMD(ctx: MarkdownPostProcessorContext, markdown: string, el: HTMLElement) {
-        el.addClass("ds-pr-inline-p");
+        el.addClass("ability-ability-inline-p");
         MarkdownRenderer.render(this.plugin.app, markdown, el, ctx.sourcePath, this.plugin as Component);
     }
 

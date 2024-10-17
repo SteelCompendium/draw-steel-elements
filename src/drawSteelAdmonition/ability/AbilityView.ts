@@ -1,5 +1,5 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
-import {Ability} from "../model/Ability";
+import {Ability} from "../../model/Ability";
 
 export class AbilityView {
     private plugin: Plugin;
@@ -21,50 +21,50 @@ export class AbilityView {
 
         const typeContainer = container.createEl("div", {cls: "pr-name-line"});
         if (this.data.name) {
-            this.renderMD(this.ctx, this.data.name, typeContainer.createEl("span", {cls: "pr-name-value ds-multiline"}));
+            this.renderMD(this.ctx, this.data.name, typeContainer.createEl("span", {cls: "ability-name-value ds-multiline"}));
         }
 
         if (this.data.cost) {
-            this.renderMD(this.ctx, " (" + String(this.data.cost).trim() + ")", typeContainer.createEl("span", {cls: "pr-cost-value"}));
+            this.renderMD(this.ctx, " (" + String(this.data.cost).trim() + ")", typeContainer.createEl("span", {cls: "ability-cost-value"}));
         }
 
         if (this.data.flavor) {
-            const flavorContainer = container.createEl("div", {cls: "pr-detail-line pr-flavor-line"});
-            this.renderMD(this.ctx, this.data.flavor, flavorContainer.createEl("span", {cls: "pr-flavor-value ds-multiline"}));
+            const flavorContainer = container.createEl("div", {cls: "ability-detail-line pr-flavor-line"});
+            this.renderMD(this.ctx, this.data.flavor, flavorContainer.createEl("span", {cls: "ability-flavor-value ds-multiline"}));
         }
 
         if (this.data.keywords || this.data.type) {
-            const row1 = container.createEl("div", {cls: "pr-detail-table-row"});
-            const keywordCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-keyword-cell"});
+            const row1 = container.createEl("div", {cls: "ability-detail-table-row"});
+            const keywordCell = row1.createEl("div", {cls: "ability-detail-table-cell pr-keyword-cell"});
             if (this.data.keywords) {
-                keywordCell.createEl("span", {cls: "pr-detail-key pr-keyword-key", text: "Keywords: "});
+                keywordCell.createEl("span", {cls: "ability-detail-key pr-keyword-key", text: "Keywords: "});
                 const keywordsText = this.data.keywords.length > 0 ? this.data.keywords.join(", ") : "";
                 this.renderMD(this.ctx, keywordsText, keywordCell.createEl("span", {cls: "pr-detail-value pr-keyword-value ds-multiline"}));
             }
-            const typeCell = row1.createEl("div", {cls: "pr-detail-table-cell pr-type-cell"});
+            const typeCell = row1.createEl("div", {cls: "ability-detail-table-cell pr-type-cell"});
             if (this.data.type) {
-                typeCell.createEl("span", {cls: "pr-detail-key pr-type-key", text: "Type: "});
+                typeCell.createEl("span", {cls: "ability-detail-key pr-type-key", text: "Type: "});
                 this.renderMD(this.ctx, this.data.type, typeCell.createEl("span", {cls: "pr-detail-value pr-type-value ds-multiline"}));
             }
         }
 
         if (this.data.distance || this.data.target) {
-            const row2 = container.createEl("div", {cls: "pr-detail-table-row"});
-            const distanceCell = row2.createEl("div", {cls: "pr-detail-table-cell pr-distance-cell"});
+            const row2 = container.createEl("div", {cls: "ability-detail-table-row"});
+            const distanceCell = row2.createEl("div", {cls: "ability-detail-table-cell pr-distance-cell"});
             if (this.data.distance) {
-                distanceCell.createEl("span", {cls: "pr-detail-key pr-distance-key", text: "Distance: "});
+                distanceCell.createEl("span", {cls: "ability-detail-key pr-distance-key", text: "Distance: "});
                 this.renderMD(this.ctx, this.data.distance, distanceCell.createEl("span", {cls: "pr-detail-value pr-distance-value ds-multiline"}));
             }
-            const targetCell = row2.createEl("div", {cls: "pr-detail-table-cell pr-target-cell"});
+            const targetCell = row2.createEl("div", {cls: "ability-detail-table-cell pr-target-cell"});
             if (this.data.target) {
-                targetCell.createEl("span", {cls: "pr-detail-key pr-target-key", text: "Target: "});
+                targetCell.createEl("span", {cls: "ability-detail-key pr-target-key", text: "Target: "});
                 this.renderMD(this.ctx, this.data.target, targetCell.createEl("span", {cls: "pr-detail-value pr-target-value ds-multiline"}));
             }
         }
 
         if (this.data.trigger) {
-            const triggerContainer = container.createEl("div", {cls: "pr-detail-line pr-trigger-line"});
-            triggerContainer.createEl("span", {cls: "pr-detail-key pr-trigger-key", text: "Trigger: "});
+            const triggerContainer = container.createEl("div", {cls: "ability-detail-line pr-trigger-line"});
+            triggerContainer.createEl("span", {cls: "ability-detail-key pr-trigger-key", text: "Trigger: "});
             this.renderMD(this.ctx, this.data.trigger, triggerContainer.createEl("span", {cls: "pr-detail-value pr-trigger-value ds-multiline"}));
         }
 
@@ -79,7 +79,7 @@ export class AbilityView {
 
     // This will parse a string and render it as markdown
     private renderMD(ctx: MarkdownPostProcessorContext, markdown: string, el: HTMLElement) {
-        el.addClass("ds-pr-inline-p");
+        el.addClass("ability-ability-inline-p");
         MarkdownRenderer.render(this.plugin.app, markdown, el, ctx.sourcePath, this.plugin as Component);
     }
 }
