@@ -1765,6 +1765,7 @@ button.action-button {
 
 	.ds-sb-characteristics-line {
 		font-weight: bold;
+		text-align: center;
 	}
 
 	.ability-name-value,
