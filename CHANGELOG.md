@@ -1,8 +1,14 @@
 # Changelog
 
-## Next
+## 2.1.1
+
+- [BUGFIX] Correctly displays weaknesses
+
+## 2.1.0
 
 - Adds better error handling on Ability, Negotiation, and Statblock Elements
+- Cleanup
+- [BUGFIX] Properly handles tiered results in some views
 
 ## 2.0.0
 

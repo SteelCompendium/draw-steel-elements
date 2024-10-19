@@ -15,12 +15,17 @@ export class StatsView {
     public build(parent: HTMLElement) {
         const statsContainer = parent.createEl("div", {cls: "ds-sb-stats"});
 
-        // Stamina and immunities
+        // Stamina
         const firstLine = statsContainer.createEl("div", {cls: "ds-sb-stats-line"});
         const leftEl2 = firstLine.createEl("div",
             {cls: "ds-sb-stats-left", text: `Stamina ${this.data.stamina ?? "N/A"}`});
-        const rightEl2 = firstLine.createEl("div",
-            {cls: "ds-sb-stats-right", text: `Immunity ${this.data.immunities?.join(", ") ?? "None"}`});
+
+		// immunities and weaknesses
+
+		const immuText = this.data.immunities?.length > 0 ? `Immunity: ${this.data.immunities?.join(", ")}` : "";
+		const weakText = this.data.weaknesses?.length > 0 ? `Weakness: ${this.data.weaknesses?.join(", ")}` : "";
+		const immuWeakText = `${immuText} ${weakText}`;
+        const rightEl2 = firstLine.createEl("div", {cls: "ds-sb-stats-right", text: immuWeakText});
 
         // Speed, size, and stability
         const secondLine = statsContainer.createEl("div", {cls: "ds-sb-stats-line"});
