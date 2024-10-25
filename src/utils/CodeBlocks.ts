@@ -20,6 +20,10 @@ export class CodeBlocks {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-stamina");
 	}
 
+	static async updateCounter(app: App, data: StaminaBar, ctx: MarkdownPostProcessorContext): Promise<void> {
+		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-counter");
+	}
+
 	// TODO - can extract language out from ctx
 	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		let file: TFile | null = null;

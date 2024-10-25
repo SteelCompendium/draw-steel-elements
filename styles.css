@@ -140,7 +140,7 @@ button.settings-action-button {
 
 /* Indentation levels for power roll container */
 
-.ds-ability-ele-container:has(> .indent-1)  {
+.ds-ability-ele-container:has(> .indent-1) {
 	margin-left: calc(var(--list-indent) * 1);
 }
 
@@ -1711,6 +1711,7 @@ button.action-button {
 	background-color: var(--code-background);
 
 	/* General space-between (left-right) line */
+
 	.ds-sb-title-line,
 	.ds-sb-info-line,
 	.ds-sb-stats-line {
@@ -1720,6 +1721,7 @@ button.action-button {
 	}
 
 	/* General purpose separator */
+
 	.ds-ability-container,
 	.ds-sb-traits,
 	.ds-sb-characteristics-line {
@@ -1728,6 +1730,7 @@ button.action-button {
 	}
 
 	/* Hover effect on each "container" */
+
 	.ds-ability-container:hover,
 	.ds-sb-traits:hover,
 	.ds-sb-characteristics-line:hover,
@@ -1740,6 +1743,7 @@ button.action-button {
 	Each line needs to have padding.
 	Ideally this would be at the root container, but line backgrounds need 100% width
 	 */
+
 	.ds-sb-title-line,
 	.ds-sb-info-line,
 	.ds-sb-stats-line,
@@ -1784,4 +1788,62 @@ button.action-button {
 	/*.ds-sb-trait-effect:hover {*/
 	/*	background-color: var(--color-base-30);*/
 	/*}*/
+}
+
+/* ==================== */
+/* Counter			    */
+/* ==================== */
+
+.ds-counter-container {
+	display: flex;
+	align-items: center;
+	justify-content: space-evenly;
+	width: 100%;
+
+	.ds-counter-display-container {
+		text-align: center;
+	}
+
+	.ds-counter-value {
+		font-size: 2em;
+		font-weight: bold;
+		line-height: 1em;
+		min-width: 1.5em;
+	}
+
+	.ds-counter-name {
+		font-size: 1em;
+		color: var(--text-muted);
+	}
+
+	.ds-counter-controls {
+		display: flex;
+		flex-direction: column;
+		padding: 1em;
+	}
+
+	.ds-counter-button {
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0.5em;
+	}
+
+	.ds-counter-button:hover {
+		background-color: var(--background-modifier-hover);
+	}
+
+	.ds-counter-input {
+		font-size: inherit;
+		text-align: center;
+		width: 100%;
+		border: none;
+		background: transparent;
+		outline: none;
+	}
+
+	.ds-counter-button[disabled] {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 }
