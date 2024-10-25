@@ -1,6 +1,5 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
 import {StaminaBar} from "../../model/StaminaBar";
-import {Creature, CreatureInstance, EncounterData} from "../EncounterData";
 import {StaminaEditModal} from "../../views/StaminaEditModal";
 import {CodeBlocks} from "../../utils/CodeBlocks";
 
@@ -32,6 +31,7 @@ export class StaminaBarView {
 
 		container.addEventListener("click", () => {
 			const modal = new StaminaEditModal(this.plugin.app, this.data, true, "", () => {
+				console.log(this.data);
 				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 				CodeBlocks.updateStaminaBar(this.plugin.app, this.data, this.ctx);
 			});

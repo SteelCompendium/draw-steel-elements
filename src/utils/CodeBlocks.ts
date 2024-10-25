@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, TFile, stringifyYaml } from "obsidian";
+import {App, MarkdownPostProcessorContext, TFile, stringifyYaml, ItemView, EditorSelection} from "obsidian";
 import {EncounterData} from "../drawSteelAdmonition/EncounterData";
 import {NegotiationData} from "../model/NegotiationData";
 import {StaminaBar} from "../model/StaminaBar";
@@ -20,10 +20,62 @@ export class CodeBlocks {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-stamina");
 	}
 
+	// TODO - can extract language out from ctx
 	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
-		const file = app.vault.getAbstractFileByPath(ctx.sourcePath);
-		if (!(file instanceof TFile)) return;
+		let file: TFile | null = null;
 
+		if (ctx.sourcePath) {
+			// For regular Markdown notes
+			file = app.vault.getAbstractFileByPath(ctx.sourcePath) as TFile;
+			if (!file || !(file instanceof TFile)) {
+				console.warn("Unable to find the file to update.");
+				return;
+			}
+			await this.updateMarkdownCodeBlock(app, file, data, ctx, language);
+		} else {
+			// Attempt to find the canvas file that contains the node with this ctx
+			await this.findCanvasNodeAndUpdate(app, ctx, data, language);
+		}
+	}
+
+	static async findCanvasNodeAndUpdate(app: App, ctx: MarkdownPostProcessorContext, data, language: string) {
+		const canvasView = app.workspace.getActiveViewOfType(ItemView);
+		if (canvasView?.getViewType() !== 'canvas') {
+			console.log("Failed to find canvas associated with markdown context.  Change NOT saved.")
+			return;
+		}
+		const canvas = (canvasView as any).canvas;
+		const selection: any = Array.from(canvas.selection);
+
+		for (let selectionKey in selection) {
+			// console.log(selection[selectionKey].text);
+			// console.log(ctx.getSectionInfo(ctx.el).text);
+			if (selection[selectionKey].text === ctx.getSectionInfo(ctx.el).text) {
+				await this.updateCanvasCard(app, canvas, selection[selectionKey], data, language);
+				return;
+			}
+		}
+
+		// No canvas file contains the node
+		console.log("Failed to find canvas associated with markdown context.  Change NOT saved.");
+		return;
+	}
+
+	static async updateCanvasCard(app: App, canvas, node, data: any, language: string) {
+		const newCodeBlockContent = [];
+		newCodeBlockContent.push('```' + language);
+		newCodeBlockContent.push(stringifyYaml(data).trim());
+		newCodeBlockContent.push('```');
+		node.setData({
+			...node.getData(),
+			text: newCodeBlockContent.join('\n')
+		});
+		canvas.getData()
+		canvas.view.requestSave();
+		return;
+	}
+
+	static async updateMarkdownCodeBlock(app: App, file: TFile, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		const content = await app.vault.read(file);
 		const lines = content.split('\n');
 
@@ -34,7 +86,6 @@ export class CodeBlocks {
 
 		// Reconstruct the code block with the updated data
 		const newCodeBlockContent = [];
-		// TODO - the language should be extracted from the original
 		newCodeBlockContent.push('```' + language);
 		newCodeBlockContent.push(stringifyYaml(data).trim());
 		newCodeBlockContent.push('```');

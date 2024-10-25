@@ -11,6 +11,7 @@ export class StaminaBarProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
+		console.log(ctx);
 		const container = el.createEl("div", { cls: "ds-stamina-bar-ele-container" });
 		try {
 			new StaminaBarView(this.plugin, StaminaBar.parseYaml(source), ctx).build(container);
