@@ -1852,7 +1852,6 @@ button.action-button {
 /* Characteristics      */
 /* ==================== */
 
-
 .ds-characteristics-container {
 	width: 100%;
 	overflow-x: auto;
@@ -1888,5 +1887,68 @@ button.action-button {
 			margin: 10px 0;
 		}
 	}
+}
 
+/* ==================== */
+/* Skills               */
+/* ==================== */
+
+.ds-skills-container {
+		width: 100%;
+
+	/* Skill group */
+	.ds-skill-group {
+		/*margin-bottom: 1em;*/
+	}
+
+	/* Skill group title */
+	.ds-skill-group-title {
+		font-size: 1.2em;
+		margin-bottom: 0.5em;
+		margin-top: 0;
+		text-transform: lowercase;
+	}
+	.ds-skill-group-title:first-letter{
+		text-transform: uppercase;
+	}
+
+	/* Skills list */
+	.ds-skill-list {
+		list-style: none;
+		padding: 0;
+	}
+
+	/* Skill item */
+	.ds-skill-item {
+		display: flex;
+		align-items: center;
+		margin-bottom: 0.3em;
+	}
+
+	/* Skill indicator */
+	.ds-skill-indicator {
+		width: 1em;
+		height: 1em;
+		margin-right: 0.5em;
+		border: 1px solid var(--text-muted);
+		display: inline-block;
+		border-radius: 0.2em;
+	}
+
+	.ds-skill-indicator.enabled {
+		background-color: var(--interactive-accent);
+	}
+
+	.ds-skill-indicator.disabled {
+		background-color: transparent;
+	}
+
+	/* Skill name */
+	.ds-skill-name {
+		cursor: default;
+		text-transform: lowercase;
+	}
+	.ds-skill-name:first-letter{
+		text-transform: uppercase;
+	}
 }
