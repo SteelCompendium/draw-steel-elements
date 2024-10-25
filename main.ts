@@ -7,6 +7,7 @@ import {MyPluginSettingTab} from "./src/views/SettingsTab";
 import {DEFAULT_SETTINGS, DSESettings} from "./src/model/Settings";
 import {CompendiumDownloader} from "./src/utils/CompendiumDownloader";
 import {AbilityProcessor} from "./src/drawSteelAdmonition/ability/AbilityProcessor";
+import {StaminaBarProcessor} from "./src/drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
@@ -51,9 +52,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.registerMarkdownCodeBlockProcessor("ds-nt", ntProcessor.handler);
         this.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntProcessor.handler);
 
-        let sbProcessor = new StatblockProcessor(this);
-        this.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
-        this.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
+		let sbProcessor = new StatblockProcessor(this);
+		this.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
+		this.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
+
+		let stamProcessor = new StaminaBarProcessor(this);
+		this.registerMarkdownCodeBlockProcessor("ds-stam", stamProcessor.handler);
+		this.registerMarkdownCodeBlockProcessor("ds-stamina", stamProcessor.handler);
     }
 
     async downloadAndExtractRelease() {

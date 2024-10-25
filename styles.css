@@ -814,6 +814,9 @@ code.dsa {
 	text-shadow: 0.5px 0.5px 4px var(--text-normal);
 	font-weight: bold;
 	box-shadow: 1px 0px 0px 0px var(--text-normal);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .stamina-bar-fill-left {
@@ -823,7 +826,7 @@ code.dsa {
 	left: 1px;
 	background-color: limegreen; /* Default color */
 	width: 50%; /* Will be updated dynamically */
-	border-radius: 3px 0 0 3px;
+	border-radius: 3px 3px 3px 3px;
 }
 
 .stamina-bar-fill-right {

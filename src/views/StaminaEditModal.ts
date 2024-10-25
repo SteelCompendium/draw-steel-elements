@@ -1,11 +1,10 @@
-import { App, Modal, MarkdownPostProcessorContext, setIcon } from "obsidian";
-import {Creature, CreatureInstance, EncounterData, Hero} from "../drawSteelAdmonition/EncounterData";
+import { App, Modal, setIcon } from "obsidian";
+import {StaminaBar} from "../model/StaminaBar";
 
 export class StaminaEditModal extends Modal {
-	private character: Hero | CreatureInstance;
-	private creature?: Creature; // For CreatureInstance
-	private data: EncounterData;
-	private ctx: MarkdownPostProcessorContext;
+	private staminaBar: StaminaBar;
+	private isHero: boolean;
+	private name: string;
 	private updateCallback: () => void;
 
 	// New properties for pending STAMINA and Temp STAMINA changes
@@ -14,17 +13,15 @@ export class StaminaEditModal extends Modal {
 
 	constructor(
 		app: App,
-		character: Hero | CreatureInstance,
-		creature: Creature | null,
-		data: EncounterData,
-		ctx: MarkdownPostProcessorContext,
+		staminaBar: StaminaBar,
+		isHero: boolean,
+		name: string,
 		updateCallback: () => void
 	) {
 		super(app);
-		this.character = character;
-		this.creature = creature;
-		this.data = data;
-		this.ctx = ctx;
+		this.staminaBar = staminaBar;
+		this.isHero = isHero;
+		this.name = name;
 		this.updateCallback = updateCallback;
 	}
 
@@ -34,23 +31,18 @@ export class StaminaEditModal extends Modal {
 		contentEl.empty();
 
 		// Character Info
-		const name = this.isHero(this.character)
-			? this.character.name
-			: this.creature.name + " #" + this.character.id;
-		contentEl.createEl('h2', { text: `${name} Stamina`, cls: 'stamina-header' });
+		contentEl.createEl('h2', { text: `${this.name} Stamina`, cls: 'stamina-header' });
 
 		// Adjust maxStamina and negativeStaminaLimit based on character type
-		const maxStamina = this.isHero(this.character)
-			? this.character.max_stamina
-			: this.creature?.max_stamina ?? 0;
-		const currentStamina = this.character.current_stamina ?? maxStamina;
-		const currentTempStamina = this.character.temp_stamina ?? 0;
-		const negativeStaminaLimit = this.isHero(this.character) ? Math.ceil(-0.5 * maxStamina) : 0;
+		const maxStamina = this.staminaBar.max_stamina;
+		const currentStamina = this.staminaBar.current_stamina ?? maxStamina;
+		const currentTempStamina = this.staminaBar.temp_stamina ?? 0;
+		const negativeStaminaLimit = this.isHero ? Math.ceil(-0.5 * maxStamina) : 0;
 
 		// First Row: STAMINA Bar
 		const staminaBarContainer = contentEl.createEl('div', { cls: 'stamina-bar-container' });
-		if (this.isHero(this.character)) {
-			const staminaBarOverlay = staminaBarContainer.createEl('div', { cls: 'stamina-bar-overlay', text: "Dying" });
+		if (this.isHero) {
+			staminaBarContainer.createEl('div', { cls: 'stamina-bar-overlay', text: "Dying" });
 		}
 		const staminaBar = staminaBarContainer.createEl('div', { cls: 'stamina-bar' });
 		const staminaBarFillLeft = staminaBar.createEl('div', { cls: 'stamina-bar-fill-left' });
@@ -87,7 +79,7 @@ export class StaminaEditModal extends Modal {
 				let remainingDamage = adjustment - tempStaminaUsed;
 				this.pendingStaminaChange -= Math.min(remainingDamage, this.amountToDeath(currentStamina, negativeStaminaLimit));
 
-				this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+				this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 				tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
 				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 				this.updateActionButton(actionButton);
@@ -101,7 +93,7 @@ export class StaminaEditModal extends Modal {
 			const adjustment = parseInt(applyInput.value);
 			if (!isNaN(adjustment)) {
 				this.pendingStaminaChange += Math.min(adjustment, this.amountToMaxStamina(currentStamina, maxStamina));
-				this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+				this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 				this.updateActionButton(actionButton);
 			}
@@ -118,7 +110,7 @@ export class StaminaEditModal extends Modal {
 		setIcon(decrementButton, "minus-circle");
 		decrementButton.addEventListener('click', () => {
 			this.pendingStaminaChange -= Math.min(1, this.amountToDeath(currentStamina, negativeStaminaLimit));
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 			this.updateActionButton(actionButton);
 		});
@@ -140,14 +132,14 @@ export class StaminaEditModal extends Modal {
 		});
 
 		// Display Max STAMINA
-		const maxStaminaDisplay = staminaNumericContainer.createEl('span', { text: `/ ${maxStamina}`, cls: 'max-stamina-display' });
+		staminaNumericContainer.createEl('span', { text: `/ ${maxStamina}`, cls: 'max-stamina-display' });
 
 		// Increment Button
 		const incrementButton = staminaNumericContainer.createEl('div', { cls: 'stamina-adjust-btn' });
 		setIcon(incrementButton, "plus-circle");
 		incrementButton.addEventListener('click', () => {
 			this.pendingStaminaChange += Math.min(1, this.amountToMaxStamina(currentStamina, maxStamina));
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 			this.updateActionButton(actionButton);
 		});
@@ -210,7 +202,7 @@ export class StaminaEditModal extends Modal {
 			this.pendingStaminaChange = negativeStaminaLimit - currentStamina;
 			this.pendingTempStaminaChange = -currentTempStamina; // Remove all temp STAMINA
 			tempStaminaInput.value = '0';
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 			this.updateActionButton(actionButton);
 		});
@@ -222,7 +214,7 @@ export class StaminaEditModal extends Modal {
 			this.pendingStaminaChange = maxStamina - currentStamina;
 			this.pendingTempStaminaChange = -currentTempStamina; // Reset temp stamina to 0
 			tempStaminaInput.value = '0';
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 			this.updateActionButton(actionButton);
 		});
@@ -234,7 +226,7 @@ export class StaminaEditModal extends Modal {
 			const adjustment = Math.min(Math.floor(maxStamina / 3), maxStamina);
 			if (!isNaN(adjustment)) {
 				this.pendingStaminaChange += adjustment;
-				this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+				this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 				this.updateActionButton(actionButton);
 			}
@@ -250,7 +242,7 @@ export class StaminaEditModal extends Modal {
 		resetButton.addEventListener('click', () => {
 			this.pendingStaminaChange = 0;
 			this.pendingTempStaminaChange = 0;
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina, maxStamina, currentTempStamina);
+			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
 			tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
 			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
 			this.updateActionButton(actionButton);
@@ -260,10 +252,10 @@ export class StaminaEditModal extends Modal {
 		this.updateActionButton(actionButton);
 		actionButton.addEventListener('click', () => {
 			const newCurrentStamina = this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
-			this.character.current_stamina = newCurrentStamina;
+			this.staminaBar.current_stamina = newCurrentStamina;
 
 			const newTempStamina = currentTempStamina + this.pendingTempStaminaChange;
-			this.character.temp_stamina = newTempStamina;
+			this.staminaBar.temp_stamina = newTempStamina;
 
 			this.updateCallback();
 			this.close();
@@ -273,51 +265,49 @@ export class StaminaEditModal extends Modal {
 		queueMicrotask(() => { applyInput.focus(); });
 	}
 
-	private isHero(character: Hero | CreatureInstance): character is Hero {
-		return character.isHero;
-	}
-
 	private clampStamina(stamina: number, negativeStaminaLimit: number, maxPossibleStamina: number): number {
 		stamina = Math.min(stamina, maxPossibleStamina); // Cannot exceed max STAMINA
 		stamina = Math.max(stamina, negativeStaminaLimit); // Cannot go below negative STAMINA limit
 		return stamina;
 	}
 
-	private amountToMaxStamina(currentStamina, maxStamina) {
+	private amountToMaxStamina(currentStamina: number, maxStamina: number) {
 		return maxStamina - currentStamina - this.pendingStaminaChange;
 	}
 
-	private amountToDeath(currentStamina, negativeStaminaLimit) {
+	private amountToDeath(currentStamina: number, negativeStaminaLimit: number) {
 		return (negativeStaminaLimit * -1) + currentStamina + this.pendingStaminaChange;
 	}
 
 	private updateStaminaBar(staminaBarFillLeft: HTMLElement, staminaBarFillRight: HTMLElement, negativeStaminaLimit: number, maxStamina: number) {
 		const dyingLength = negativeStaminaLimit * -1;
 		const barLength = maxStamina + dyingLength;
+		const adjustedCurrentStamina = this.staminaBar.current_stamina + dyingLength;
+
 		if (this.pendingStaminaChange > 0) {
 			// Healing
-			staminaBarFillLeft.style.width = `${((this.character.current_stamina + dyingLength) / barLength) * 100}%`;
+			staminaBarFillLeft.style.width = `${((adjustedCurrentStamina) / barLength) * 100}%`;
 			staminaBarFillLeft.style.backgroundColor = 'limegreen';
 			staminaBarFillRight.style.width = `${((this.pendingStaminaChange) / barLength) * 100}%`;
 			staminaBarFillRight.style.backgroundColor = 'deepskyblue';
 			staminaBarFillRight.style.borderRadius = '0 3px 3px 0';
 		} else if (this.pendingStaminaChange < 0) {
 			// Damage
-			staminaBarFillLeft.style.width = `${((this.character.current_stamina + this.pendingStaminaChange + dyingLength) / barLength) * 100}%`;
+			staminaBarFillLeft.style.width = `${((adjustedCurrentStamina + this.pendingStaminaChange) / barLength) * 100}%`;
 			staminaBarFillLeft.style.backgroundColor = 'limegreen';
 			staminaBarFillRight.style.width = `${(this.pendingStaminaChange / barLength) * -100}%`;
 			staminaBarFillRight.style.backgroundColor = 'crimson';
 			staminaBarFillRight.style.borderRadius = '3px 0 0 3px';
 		} else {
 			// No change
-			staminaBarFillLeft.style.width = `${((this.character.current_stamina + dyingLength) / barLength) * 100}%`;
+			staminaBarFillLeft.style.width = `${(adjustedCurrentStamina / barLength) * 100}%`;
 			staminaBarFillLeft.style.backgroundColor = 'limegreen';
 			staminaBarFillRight.style.width = `0%`;
 			staminaBarFillRight.style.backgroundColor = 'deepskyblue';
 		}
 	}
 
-	private updateStaminaDisplay(staminaValueDisplay: HTMLInputElement, currentStamina: number, maxStamina: number, currentTempStamina: number) {
+	private updateStaminaDisplay(staminaValueDisplay: HTMLInputElement, currentStamina: number) {
 		const newStaminaValue = currentStamina + this.pendingStaminaChange;
 		staminaValueDisplay.value = newStaminaValue.toString();
 	}

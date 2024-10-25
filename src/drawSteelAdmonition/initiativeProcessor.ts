@@ -16,6 +16,7 @@ import {
 } from "./EncounterData";
 import { ResetEncounterModal } from "../views/ResetEncounterModal";
 import {MinionStaminaPoolModal} from "../views/MinionStaminaPoolModal";
+import {StaminaBar} from "../model/StaminaBar";
 
 export class InitiativeProcessor {
 	private app: App;
@@ -181,7 +182,9 @@ export class InitiativeProcessor {
 		this.updateStaminaDisplay(staminaEl, character);
 
 		staminaEl.addEventListener("click", () => {
-			const modal = new StaminaEditModal(this.app, character, null, data, ctx, () => {
+			let staminaBar = StaminaBar.fromHero(character);
+			const modal = new StaminaEditModal(this.app, staminaBar, true, character.name, () => {
+				staminaBar.updateHero(character);
 				this.updateStaminaDisplay(staminaEl, character);
 				CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 			});
@@ -321,7 +324,7 @@ export class InitiativeProcessor {
 						});
 						modal.open();
 					} else {
-						this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
+						this.editCreatureStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
 					}
 				});
 			});
@@ -380,12 +383,12 @@ export class InitiativeProcessor {
 			// For normal creatures and captains
 			this.updateStaminaDisplay(staminaEl, instance, creature, group);
 			staminaEl.addEventListener("click", () => {
-				this.editStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
+				this.editCreatureStaminaModal(instance, creature, data, ctx, staminaEl, container).open();
 			});
 		}
 	}
 
-	private editStaminaModal(
+	private editCreatureStaminaModal(
 		instance: CreatureInstance,
 		creature: Creature,
 		data: EncounterData,
@@ -393,7 +396,9 @@ export class InitiativeProcessor {
 		staminaEl: HTMLElement,
 		container: HTMLElement
 	) {
-		return new StaminaEditModal(this.app, instance, creature, data, ctx, () => {
+		const staminaBar = StaminaBar.fromCreature(instance, creature);
+		return new StaminaEditModal(this.app, staminaBar, false, creature.name, () => {
+			staminaBar.updateCreature(instance);
 			this.updateStaminaDisplay(staminaEl, instance, creature);
 			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 
@@ -524,6 +529,6 @@ export class InitiativeProcessor {
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {
-		return character.isHero;
+		return "isHero" in character ? character.isHero : false;
 	}
 }

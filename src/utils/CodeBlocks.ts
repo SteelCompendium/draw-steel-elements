@@ -1,6 +1,7 @@
 import { App, MarkdownPostProcessorContext, TFile, stringifyYaml } from "obsidian";
 import {EncounterData} from "../drawSteelAdmonition/EncounterData";
 import {NegotiationData} from "../model/NegotiationData";
+import {StaminaBar} from "../model/StaminaBar";
 
 export class CodeBlocks {
 	static async updateInitiativeTracker(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
@@ -13,6 +14,10 @@ export class CodeBlocks {
 
 	static async updateStatblock(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext): Promise<void> {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-statblock");
+	}
+
+	static async updateStaminaBar(app: App, data: StaminaBar, ctx: MarkdownPostProcessorContext): Promise<void> {
+		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-stamina");
 	}
 
 	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
