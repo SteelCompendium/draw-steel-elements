@@ -11,6 +11,7 @@ define your skills using YAML syntax inside the code block.
 
 ### Example skills:
 
+```
 ~~~ds-skills
 skills:
   - Heal
@@ -19,8 +20,9 @@ custom_skills:
   - name: Dance
     has_skill: true
     skill_group: Interpersonal
-    description: Moving and groovin' to the beat. 
+    description: Moving and groovin' to the beat.
 ~~~
+```
 
 This code block will render the character's skills and custom skills in a formatted display.
 
