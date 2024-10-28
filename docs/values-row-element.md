@@ -24,6 +24,8 @@ name_height: 1
 
 This code block will render the key-value pairs in a formatted display.
 
+![values row](Media/values-row.png)
+
 ## Field Definitions
 
 Below is a detailed description of each field used in the key-value pairs, including their types, default values, and 
