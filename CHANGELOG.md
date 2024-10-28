@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.2
+
+- Compendium Downloader yields to avoid hanging the main thread
+
 ## 2.1.1
 
 - [BUGFIX] Correctly displays weaknesses

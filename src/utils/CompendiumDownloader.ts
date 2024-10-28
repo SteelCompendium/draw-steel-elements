@@ -102,29 +102,39 @@ export class CompendiumDownloader {
 
 	private async extractAndSaveZip(zip: JSZip, destinationDirectory: string) {
 		const vault = this.app.vault;
+		const files = Object.entries(zip.files);
+		const batchSize = 20; // Adjust this number based on performance
 
-		for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-			if (zipEntry.dir) {
-				// Directories are handled implicitly in Obsidian
-				continue;
-			} else {
-				// Read file content and write to vault
-				const fileData = await zipEntry.async('uint8array');
-				const filePath = `${destinationDirectory}/${relativePath}`;
+		for (let i = 0; i < files.length; i += batchSize) {
+			console.log("Extracting batch " + i + "(+20) of " + files.length);
+			const batch = files.slice(i, i + batchSize);
 
-				// Ensure the directory exists
-				const pathParts = filePath.split('/').slice(0, -1);
-				let currentPath = '';
-				for (const part of pathParts) {
-					currentPath = currentPath ? `${currentPath}/${part}` : part;
-					if (!vault.getAbstractFileByPath(currentPath)) {
-						await vault.createFolder(currentPath);
+			await Promise.all(batch.map(async ([relativePath, zipEntry]) => {
+				if (zipEntry.dir) {
+					// Directories are handled implicitly in Obsidian
+					return;
+				} else {
+					// Read file content and write to vault
+					const fileData = await zipEntry.async('uint8array');
+					const filePath = `${destinationDirectory}/${relativePath}`;
+
+					// Ensure the directory exists
+					const pathParts = filePath.split('/').slice(0, -1);
+					let currentPath = '';
+					for (const part of pathParts) {
+						currentPath = currentPath ? `${currentPath}/${part}` : part;
+						if (!vault.getAbstractFileByPath(currentPath)) {
+							await vault.createFolder(currentPath);
+						}
 					}
-				}
 
-				// Write the file to the vault
-				await vault.createBinary(filePath, fileData);
-			}
+					// Write the file to the vault
+					await vault.createBinary(filePath, fileData);
+				}
+			}));
+
+			// Yield control back to the UI thread
+			await new Promise(resolve => setTimeout(resolve, 0));
 		}
 	}
 }
