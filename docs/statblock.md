@@ -58,7 +58,7 @@ abilities:
   crit: 12 damage; pull 3; another action
   effect: A target who is adjacent to the bandit chief after the attack is resolved takes 9 corruption damage.
   additional_effects:
-    - cost: 2 VP
+    - cost: 2 Malice
       effect: This ability targets three enemies or objects.
 - name: Kneel, Peasant!
   type: Maneuver
@@ -72,7 +72,7 @@ abilities:
   t2: Push 2; prone
   t3: Push 3; prone
   additional_effects:
-    - cost: 2 VP
+    - cost: 2 Malice
       effect: This ability targets each enemy adjacent to the bandit chief.
 - name: Bloodstones 
   type: Triggered Action
@@ -84,21 +84,21 @@ abilities:
   effect: The bandit chief takes 4 corruption damage and increases the result of the power roll by one tier.
 - name: Shoot!
   type: Villain Action
-  cost: 1 VP
+  cost: 1 Malice
   keywords: Area
   distance: 10 burst 
   target: Each ally
   effect: Each target can make a ranged free strike.
 - name: Form Up! 
   type: Villain Action
-  cost: 2 VP
+  cost: 2 Malice
   effect: Each target shifts up to their speed. Until the end of the encounter, any enemy takes a bane on attacks against the bandit chief or any of the bandit chief’s allies if they are adjacent to that target.
   keywords: Area
   distance: 10 burst 
   target: Each ally
 - name: Lead From the Front 
   type: Villain Action
-  cost: 3 VP
+  cost: 3 Malice
   keywords: 
     - Attack 
     - Weapon

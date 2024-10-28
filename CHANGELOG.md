@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.0
+
+- Updates Initiative Element to use `Malice` instead of `VP`
+  - Using `villain_power` in the codeblock should still work for now, but it will automatically get rewritten by the element
+  - `villain_power` will be removed in `v3`
+
 ## 2.1.2
 
 - Compendium Downloader yields to avoid hanging the main thread

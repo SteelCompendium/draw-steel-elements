@@ -38,7 +38,7 @@ export interface EnemyGroup {
 	minion_stamina_pool?: number;
 }
 
-export interface VillainPower {
+export interface Malice {
 	value: number;
 }
 
@@ -51,7 +51,7 @@ export interface Condition {
 export interface EncounterData {
 	heroes: Hero[];
 	enemy_groups: EnemyGroup[];
-	villain_power: VillainPower;
+	malice: Malice;
 }
 
 export function resetEncounter(data: EncounterData) {
@@ -71,7 +71,7 @@ export function resetEncounter(data: EncounterData) {
 			creatureType.instances = undefined;
 		});
 	});
-	data.villain_power.value = 0;
+	data.malice.value = 0;
 }
 
 export function parseEncounterData(source: string): EncounterData {
@@ -288,10 +288,9 @@ export function parseEncounterData(source: string): EncounterData {
 		});
 	});
 
-	// Initialize villain power
-	data.villain_power = data.villain_power ?? { value: 0 };
-	if (typeof data.villain_power.value !== "number") {
-		throw new Error("Invalid data: 'villain_power.value' must be a number.");
+	data.malice = data.malice ?? (data.villain_power ?? { value: 0 });
+	if (typeof data.malice.value !== "number") {
+		throw new Error("Invalid data: 'malice.value' must be a number.");
 	}
 
 	return data;

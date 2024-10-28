@@ -98,23 +98,23 @@ export class InitiativeProcessor {
 		enemyHeader.createEl("h3", { text: "Enemy Groups" });
 
 		// Villain Power
-		const vpContainer = enemyHeader.createEl("div", { cls: "vp-container" });
-		const vpModifiers = vpContainer.createEl("div", { cls: "vp-modifiers" });
-		let vpUp = vpModifiers.createEl("div", { cls: "vp-modifier" });
-		let vpDown = vpModifiers.createEl("div", { cls: "vp-modifier" });
-		vpContainer.createEl("div", { cls: "vp-text", text: "VP: " + data.villain_power.value });
+		const maliceContainer = enemyHeader.createEl("div", { cls: "malice-container" });
+		const maliceModifiers = maliceContainer.createEl("div", { cls: "malice-modifiers" });
+		let maliceUp = maliceModifiers.createEl("div", { cls: "malice-modifier" });
+		let maliceDown = maliceModifiers.createEl("div", { cls: "malice-modifier" });
+		maliceContainer.createEl("div", { cls: "malice-text", text: "Malice: " + data.malice.value });
 
-		setIcon(vpUp, "chevron-up");
-		setIcon(vpDown, "chevron-down");
+		setIcon(maliceUp, "chevron-up");
+		setIcon(maliceDown, "chevron-down");
 
-		vpUp.addEventListener("click", () => {
-			data.villain_power.value += 1;
-			vpContainer.setText("VP: " + data.villain_power.value);
+		maliceUp.addEventListener("click", () => {
+			data.malice.value += 1;
+			maliceContainer.setText("Malice: " + data.malice.value);
 			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 		});
-		vpDown.addEventListener("click", () => {
-			data.villain_power.value -= 1;
-			vpContainer.setText("VP: " + data.villain_power.value);
+		maliceDown.addEventListener("click", () => {
+			data.malice.value -= 1;
+			maliceContainer.setText("Malice: " + data.malice.value);
 			CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
 		});
 

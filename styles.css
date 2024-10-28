@@ -551,37 +551,37 @@ code.dsa {
 
 /* Villain Power Styling */
 
-.vp-container {
+.malice-container {
 	font-weight: bold;
 	color: red;
 	display: flex;
 	align-items: center;
 }
 
-.vp-container .vp-modifiers {
+.malice-container .malice-modifiers {
 	visibility: hidden;
 	margin-right: 0.5em;
 }
 
-.vp-container:hover .vp-modifiers {
+.malice-container:hover .malice-modifiers {
 	visibility: visible;
 }
 
-.vp-modifiers svg {
+.malice-modifiers svg {
 	height: 100%;
 	width: 100%;
 }
 
-.vp-modifier {
+.malice-modifier {
 	cursor: pointer;
 	height: 24px;
 }
 
-.vp-modifier:hover {
+.malice-modifier:hover {
 	background-color: var(--code-background);
 }
 
-.vp-text {
+.malice-text {
 	user-select: none;
 }
 
