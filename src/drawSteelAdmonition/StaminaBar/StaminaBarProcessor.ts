@@ -15,7 +15,6 @@ export class StaminaBarProcessor {
 		try {
 			new StaminaBarView(this.plugin, StaminaBar.parseYaml(source), ctx).build(container);
 		} catch (error) {
-			// Display error message to the user
 			let userMessage =
 				"The Draw Steel Elements plugin loaded the StaminaBar Element properly, but " +
 				"failed to process the input config.  Please correct the following error:\n\n";

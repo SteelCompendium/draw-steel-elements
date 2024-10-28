@@ -1,5 +1,3 @@
-// SkillsView.ts
-
 import { Component, MarkdownPostProcessorContext, Plugin } from "obsidian";
 import { Skills, CustomSkill } from "../../model/Skills";
 import { SKILL_DATA } from "../../utils/SkillsData";

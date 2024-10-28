@@ -16,7 +16,6 @@ export class ValuesRowProcessor {
 		try {
 			new ValuesRowView(this.plugin, KeyValuePairs.parseYaml(source), ctx).build(container);
 		} catch (error) {
-			// Display error message to the user
 			let userMessage =
 				"The Draw Steel Elements plugin loaded the ValuesRow Element properly, but " +
 				"failed to process the input config.  Please correct the following error:\n\n";
