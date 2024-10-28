@@ -11,7 +11,6 @@ export class CounterProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		console.log(ctx);
 		const container = el.createEl("div", { cls: "ds-counter-ele-container" });
 		try {
 			new CounterView(this.plugin, Counter.parseYaml(source), ctx).build(container);

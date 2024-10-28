@@ -11,7 +11,6 @@ export class CharacteristicsProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		console.log(ctx);
 		const container = el.createEl("div", { cls: "ds-characteristics-ele-container" });
 		try {
 			new CharacteristicsView(this.plugin, Characteristics.parseYaml(source), ctx).build(container);

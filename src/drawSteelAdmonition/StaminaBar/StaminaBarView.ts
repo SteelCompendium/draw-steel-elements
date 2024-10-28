@@ -31,7 +31,6 @@ export class StaminaBarView {
 
 		container.addEventListener("click", () => {
 			const modal = new StaminaEditModal(this.plugin.app, this.data, true, "", () => {
-				console.log(this.data);
 				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight);
 				CodeBlocks.updateStaminaBar(this.plugin.app, this.data, this.ctx);
 			});

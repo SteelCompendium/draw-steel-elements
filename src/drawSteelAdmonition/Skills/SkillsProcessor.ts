@@ -11,7 +11,6 @@ export class SkillsProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		console.log(ctx);
 		const container = el.createEl("div", { cls: "ds-skills-ele-container" });
 		try {
 			new SkillsView(this.plugin, Skills.parseYaml(source), ctx).build(container);

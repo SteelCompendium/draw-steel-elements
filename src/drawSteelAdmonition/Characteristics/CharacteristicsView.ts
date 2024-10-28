@@ -34,14 +34,14 @@ export class CharacteristicsView {
 			// Value display
 			const valueDisplay = cell.createEl("div", {
 				cls: "ds-characteristics-value",
-				text: char.value.toString(),
+				text: char.value ?? "",
 			});
 			valueDisplay.style.fontSize = `${this.data.value_height}em`;
 
 			// Name display
 			const nameDisplay = cell.createEl("div", {
 				cls: "ds-characteristics-name",
-				text: char.name,
+				text: char.name ?? "",
 			});
 			nameDisplay.style.fontSize = `${this.data.name_height}em`;
 		});

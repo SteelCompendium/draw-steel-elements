@@ -1852,38 +1852,45 @@ button.action-button {
 /* Characteristics      */
 /* ==================== */
 
-.ds-characteristics-container {
+.ds-characteristics-container,
+.ds-values-row-container {
 	width: 100%;
 	overflow-x: auto;
 
-	.ds-characteristics-row {
+	.ds-characteristics-row,
+	.ds-values-row-row {
 		display: flex;
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: flex-start;
 	}
 
-	.ds-characteristics-cell {
+	.ds-characteristics-cell,
+	.ds-values-row-cell {
 		flex: 1;
 		text-align: center;
 		margin: 0 5px;
 	}
 
-	.ds-characteristics-value {
+	.ds-characteristics-value,
+	.ds-values-row-value {
 		font-weight: bold;
 	}
 
-	.ds-characteristics-name {
+	.ds-characteristics-name,
+	.ds-values-row-name {
 		color: var(--text-muted);
 	}
 
 	@media (max-width: 600px) {
-		.ds-characteristics-row {
+		.ds-characteristics-row,
+		.ds-values-row-row {
 			flex-direction: column;
 			align-items: center;
 		}
 
-		.ds-characteristics-cell {
+		.ds-characteristics-cell,
+		.ds-values-row-cell {
 			margin: 10px 0;
 		}
 	}

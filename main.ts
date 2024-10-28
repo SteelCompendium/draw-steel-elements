@@ -11,6 +11,7 @@ import {StaminaBarProcessor} from "./src/drawSteelAdmonition/StaminaBar/StaminaB
 import {CounterProcessor} from "./src/drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "./src/drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {SkillsProcessor} from "./src/drawSteelAdmonition/Skills/SkillsProcessor";
+import {ValuesRowProcessor} from "./src/drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
@@ -73,6 +74,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 
 		let skillProcessor = new SkillsProcessor(this);
 		this.registerMarkdownCodeBlockProcessor("ds-skills", skillProcessor.handler);
+
+		let valRowProcessor = new ValuesRowProcessor(this);
+		this.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);
+		this.registerMarkdownCodeBlockProcessor("ds-value-row", valRowProcessor.handler);
+		this.registerMarkdownCodeBlockProcessor("ds-values-row", valRowProcessor.handler);
     }
 
     async downloadAndExtractRelease() {
