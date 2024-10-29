@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.0
+
+- Adds support for Canvas Character Sheets
+  - Stamina Bar Element
+  - Characteristics Element
+  - Counter Element
+  - Skills Element
+  - Values Row Element
+
 ## 2.2.0
 
 - Updates Initiative Element to use `Malice` instead of `VP`
