@@ -63,6 +63,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		let stamProcessor = new StaminaBarProcessor(this);
 		this.registerMarkdownCodeBlockProcessor("ds-stam", stamProcessor.handler);
 		this.registerMarkdownCodeBlockProcessor("ds-stamina", stamProcessor.handler);
+		this.registerMarkdownCodeBlockProcessor("ds-stamina-bar", stamProcessor.handler);
 
 		let counterProcessor = new CounterProcessor(this);
 		this.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);
