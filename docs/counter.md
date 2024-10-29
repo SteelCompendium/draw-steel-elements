@@ -22,7 +22,7 @@ min_value: 0
 
 This code block will render the counter with interactive buttons to increment or decrement the value
 
-[counter](Media/counter.png)
+![counter](Media/counter.png)
 
 ## Field Definitions
 

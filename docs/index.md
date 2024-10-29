@@ -38,6 +38,12 @@ The [Statblock Element](statblock.md) is used to display statblocks.
 
 The [Horizontal Rule Element](horizontal-rule.md) is used as an alternative `<hr>` mimicking the Draw Steel design 
 
+## Canvas Character Sheets
+
+Various Elements are provided to support building [Character Sheets in Canvas](canvas-character-sheet.md)
+
+![canvas character sheet](Media/canvas-character-sheet.png)
+
 ## Compendium Downloader
 
 The [Compendium Downloader](compendium-downloader.md) is able to manage a local copy of the 
