@@ -1,6 +1,5 @@
 import {App, Notice, request, requestUrl, RequestUrlParam} from "obsidian";
 import JSZip from "jszip";
-import * as console from "console";
 
 export class CompendiumDownloader {
 	private app: App;
@@ -106,7 +105,7 @@ export class CompendiumDownloader {
 		const batchSize = 20; // Adjust this number based on performance
 
 		for (let i = 0; i < files.length; i += batchSize) {
-			console.log("Extracting batch " + i + "(+20) of " + files.length);
+			// console.log("Extracting batch " + i + "(+20) of " + files.length);
 			const batch = files.slice(i, i + batchSize);
 
 			await Promise.all(batch.map(async ([relativePath, zipEntry]) => {
@@ -124,7 +123,14 @@ export class CompendiumDownloader {
 					for (const part of pathParts) {
 						currentPath = currentPath ? `${currentPath}/${part}` : part;
 						if (!vault.getAbstractFileByPath(currentPath)) {
-							await vault.createFolder(currentPath);
+							try {
+								await vault.createFolder(currentPath);
+							} catch (error) {
+								if (!error.message.includes('Folder already exists')) {
+									throw error; // Rethrow if it's a different error
+								}
+								// Folder already exists, so we can safely ignore this error
+							}
 						}
 					}
 
