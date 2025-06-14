@@ -1,5 +1,6 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockData, Trait } from "../../model/StatblockData";
+import { StatblockData } from "../../model/StatblockData";
+import { Trait } from "src/model/Trait";
 
 export class TraitsView {
     private plugin: Plugin;
@@ -29,7 +30,7 @@ export class TraitsView {
             // Effects
             if (trait.effects) {
                 for (const effect of trait.effects) {
-                    effect.asView(traitsContainer, this.plugin, this.ctx);
+                    effect.asView(traitEl, this.plugin, this.ctx);
                 }
             }
         });
