@@ -13,7 +13,6 @@ export class MundaneEffectView {
     }
 
     public build(parent: HTMLElement) {
-        console.log("MundaneEffectView.build", this.data);
         const container = parent.createEl("div", { cls: "ds-effect-container" });
         const cost = this.data.cost ? " (" + this.data.cost?.trim() + ")" : "";
         let text = this.data.name ? this.data.name + cost : cost;

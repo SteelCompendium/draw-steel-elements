@@ -20,7 +20,13 @@ export class Ability {
         } catch (error: any) {
             throw new Error("Invalid YAML format: " + error.message);
         }
-        return new Ability(data);
+        return Ability.parseData(data);
+    }
+
+    public static parseData(data: any) {
+        const a = new Ability(data);
+        a.effects = Effect.parseAll(data.effects);
+        return a;
     }
 
     constructor(data: any) {
@@ -35,6 +41,6 @@ export class Ability {
         this.distance = data.distance;
         this.target = data.target;
         this.trigger = data.trigger;
-        this.effects = Effect.parseAll(data.effects);
+        this.effects = data.effects;
     }
 }
