@@ -1,6 +1,6 @@
 # Changelog
 
-## unreleased
+## 2.4.0
 
 - [IMPORTANT] Schema changes!
   - Statblock `traits` have an `effects` array instead of an `effect` string
