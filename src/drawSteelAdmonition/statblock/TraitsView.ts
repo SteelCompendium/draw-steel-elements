@@ -26,8 +26,13 @@ export class TraitsView {
             const titleText = trait.type ? `${trait.name} (${trait.type})` : trait.name;
             traitEl.createEl("div", { cls: "ds-sb-trait-title", text: titleText });
 
-            // Effect Line
-            traitEl.createEl("div", { cls: "ds-sb-trait-effect", text: trait.effect });
+            // Effects
+            const effectsContainer = traitEl.createEl("div", { cls: "ds-effects-container" });
+            if (trait.effects) {
+                for (const effect of trait.effects) {
+                    effect.asView(effectsContainer, this.plugin, this.ctx);
+                }
+            }
         });
     }
 }
