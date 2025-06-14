@@ -27,10 +27,9 @@ export class TraitsView {
             traitEl.createEl("div", { cls: "ds-sb-trait-title", text: titleText });
 
             // Effects
-            const effectsContainer = traitEl.createEl("div", { cls: "ds-effects-container" });
             if (trait.effects) {
                 for (const effect of trait.effects) {
-                    effect.asView(effectsContainer, this.plugin, this.ctx);
+                    effect.asView(traitsContainer, this.plugin, this.ctx);
                 }
             }
         });

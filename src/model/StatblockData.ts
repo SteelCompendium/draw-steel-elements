@@ -64,13 +64,21 @@ export class Trait {
     constructor(data: { name?: string, type?: string, effects?: any, effect?: any }) {
         this.name = data.name?.trim() ?? '';
         this.type = data.type?.trim();
+        this.effects = data.effects ?? [];
+    }
+
+    static parse(data: { name?: string, type?: string, effects?: any, effect?: any }) {
+        const d: any = {};
+        d.name = data.name?.trim() ?? '';
+        d.type = data.type?.trim();
         if (data.effects) {
-            this.effects = Effect.parseAll(data.effects);
+            d.effects = Effect.parseAll(data.effects);
         } else if (data.effect) {
-            this.effects = Effect.parseAll([data.effect]);
+            d.effects = Effect.parseAll([data.effect]);
         } else {
-            this.effects = [];
+            d.effects = [];
         }
+        return new Trait(d);
     }
 }
 
@@ -110,7 +118,7 @@ export function parseStatblockData(source: string): StatblockData {
 
     // Handle traits
     if ('traits' in data) {
-        statblockData.traits = data.traits.map((t: any) => new Trait(t));
+        statblockData.traits = data.traits.map((t: any) => Trait.parse(t));
     }
 
     // Handle abilities
