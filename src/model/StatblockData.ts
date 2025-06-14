@@ -67,7 +67,7 @@ export class Trait {
             this.effects = data.effects.map((e: any) => String(e).trim());
         } else if (data.effects) {
             this.effects = [String(data.effects).trim()];
-        // TODO - this is a hack to support the old format
+            // TODO - this is a hack to support the old format
         } else if (data.effect) {
             this.effects = [String(data.effect).trim()];
         } else {
@@ -84,7 +84,7 @@ export function parseStatblockData(source: string): StatblockData {
         throw new Error("Invalid YAML format: " + error.message);
     }
 
-    let statblockData: Partial<StatblockData> = {};
+    const statblockData: Partial<StatblockData> = {};
 
     // Directly assign known properties
     statblockData.name = data.name;
@@ -125,7 +125,7 @@ export function parseStatblockData(source: string): StatblockData {
 
 function parseCharacteristic(attrValue: string): number | undefined {
     if (typeof attrValue === 'string') {
-        let value = parseInt(attrValue.replace('+', ''));
+        const value = parseInt(attrValue.replace('+', ''));
         if (!isNaN(value)) {
             return value;
         } else {

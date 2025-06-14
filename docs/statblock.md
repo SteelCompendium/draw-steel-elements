@@ -39,7 +39,8 @@ intuition: +2
 presence: +2
 traits:
 - name: End Effect 
-  effect: At the end of their turn, the bandit chief can take 5 damage to end one EoE effect affecting them. This damage can’t be reduced in any way.
+  effects: 
+    - At the end of their turn, the bandit chief can take 5 damage to end one EoE effect affecting them. This damage can’t be reduced in any way.
 abilities:
 - name: Whip & Magic Longsword
   cost: Signature
@@ -134,6 +135,7 @@ Below is a detailed description of each field used in the statblock, including t
 | `reason`      | `integer`            | The creature's reason value.                                                       | No       | `0`           |
 | `intuition`   | `integer`            | The creature's intuition value.                                                    | No       | `0`           |
 | `presence`    | `integer`            | The creature's presence value.                                                     | No       | `0`           |
+| `with_captain`| `string`             | Effect when a captain is present.                                                  | No       | N/A           |
 | `traits`      | `array` of `Trait`   | Traits of the creature.  See Traits below                                          | No       | `[]`          |
 | `abilities`   | `array` of `Ability` | Abilities of the creature.  See [abilities](./Abilities.md)                        | No       | `[]`          |
 
@@ -149,7 +151,7 @@ Each trait in the `traits` array consists of the following fields:
 | -------- | -------- | ------------------------------------------------------------------------- | -------- | ------------- |
 | `name`   | `string` | The name of the trait.                                                    | **Yes**  | N/A           |
 | `type`   | `string` | The action-type of the trait (e.g., "Maneuver", "Free Triggered Action"). | No       | ``            |
-| `effect` | `string` | A description of the trait's effect.                                      | **Yes**  | N/A           |
+| `effects` | `array of string` | A description of the trait's effect.                                      | **Yes**  | `[]`           |
 
 ### Abilities
 
