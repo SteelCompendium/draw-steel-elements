@@ -75,7 +75,7 @@ export function parseStatblockData(source: string): StatblockData {
     statblockData.stamina = data.stamina;
     statblockData.immunities = data.immunities ?? [];
     statblockData.weaknesses = data.weaknesses ?? [];
-    statblockData.speed = data.speed;
+    statblockData.speed = "" + data.speed;
     statblockData.size = data.size;
     statblockData.stability = data.stability;
     statblockData.freeStrike = data.free_strike ?? data.freeStrike;

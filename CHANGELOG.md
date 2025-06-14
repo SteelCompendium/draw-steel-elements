@@ -1,5 +1,16 @@
 # Changelog
 
+## unreleased
+
+- [IMPORTANT] Schema changes!
+  - Statblock `traits` have an `effects` array instead of an `effect` string
+    - This will handle statblocks such as creatures with the `solo` role with a `Solo Monster` trait (`Solo Turns` and `End Effect`)
+    - (The `effect` field should continue to work in this release, but it is deprecated and will be removed in a later release)
+  - Statblock `speed` field changed from a `number` type to a `string` type
+    - This is to account for speed modifier tags like `speed: 5 (climb)`
+  - Statblock added a new `withCaptain` field
+  - 
+
 ## 2.3.0
 
 - Adds support for Canvas Character Sheets
