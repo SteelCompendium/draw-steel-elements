@@ -1,5 +1,5 @@
 import { parseYaml } from "obsidian";
-import {Effect} from "./Effect";
+import { Effect } from "./Effect";
 
 export class Ability {
     indent?: number;

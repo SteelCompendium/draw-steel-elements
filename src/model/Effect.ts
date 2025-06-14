@@ -1,6 +1,6 @@
-import {MarkdownPostProcessorContext, Plugin} from "obsidian";
-import {PowerRollEffectView} from "../drawSteelAdmonition/ability/PowerRollEffectView";
-import {MundaneEffectView} from "../drawSteelAdmonition/ability/MundaneEffectView";
+import { MarkdownPostProcessorContext, Plugin } from "obsidian";
+import { PowerRollEffectView } from "../drawSteelAdmonition/ability/PowerRollEffectView";
+import { MundaneEffectView } from "../drawSteelAdmonition/ability/MundaneEffectView";
 
 export abstract class Effect {
 	static parseAll(data: any): Effect[] {
@@ -16,6 +16,8 @@ export abstract class Effect {
 				effects.push(new PowerRollEffect(entry));
 			} else if (entry.name && entry.effect) {
 				effects.push(MundaneEffect.parse(entry));
+			} else if (entry.cost && entry.effect) {
+				effects.push(MundaneEffect.parse(entry));
 			} else if (typeof entry === "string") {
 				effects.push(MundaneEffect.nameless(entry));
 			} else {
@@ -27,7 +29,7 @@ export abstract class Effect {
 
 	abstract effectType(): string;
 
-	abstract asView(parent: HTMLElement, plugin: Plugin, ctx: MarkdownPostProcessorContext);
+	abstract asView(parent: HTMLElement, plugin: Plugin, ctx: MarkdownPostProcessorContext): void;
 }
 
 export class PowerRollEffect extends Effect {
@@ -50,7 +52,7 @@ export class PowerRollEffect extends Effect {
 		return "PowerRollEffect";
 	}
 
-	asView(parent: HTMLElement, plugin: Plugin, ctx: MarkdownPostProcessorContext) {
+	asView(parent: HTMLElement, plugin: Plugin, ctx: MarkdownPostProcessorContext): void {
 		new PowerRollEffectView(plugin, this, ctx).build(parent);
 	}
 }
@@ -62,7 +64,7 @@ export class MundaneEffect extends Effect {
 
 	static parseKeyValue(data: any) {
 		const key: string = Object.keys(data)[0];
-		const effect: string = Object.values(data)[0];
+		const effect: string = data[key];
 		return new MundaneEffect(key, undefined, effect);
 	}
 
@@ -85,7 +87,7 @@ export class MundaneEffect extends Effect {
 		return "MundaneEffect";
 	}
 
-	asView(parent: HTMLElement, plugin: Plugin, ctx: MarkdownPostProcessorContext) {
+	asView(parent: HTMLElement, plugin: Plugin, ctx: MarkdownPostProcessorContext): void {
 		new MundaneEffectView(plugin, this, ctx).build(parent);
 	}
 }
