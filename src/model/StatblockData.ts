@@ -1,5 +1,6 @@
 import { parseYaml } from "obsidian";
 import { Ability } from "./Ability";
+import { Effect } from "./Effect";
 
 export class StatblockData {
     name?: string;
@@ -58,18 +59,15 @@ export class Characteristics {
 export class Trait {
     name: string;
     type?: string;
-    effects: string[];
+    effects: Effect[];
 
     constructor(data: { name?: string, type?: string, effects?: any, effect?: any }) {
         this.name = data.name?.trim() ?? '';
         this.type = data.type?.trim();
-        if (Array.isArray(data.effects)) {
-            this.effects = data.effects.map((e: any) => String(e).trim());
-        } else if (data.effects) {
-            this.effects = [String(data.effects).trim()];
-            // TODO - this is a hack to support the old format
+        if (data.effects) {
+            this.effects = Effect.parseAll(data.effects);
         } else if (data.effect) {
-            this.effects = [String(data.effect).trim()];
+            this.effects = Effect.parseAll([data.effect]);
         } else {
             this.effects = [];
         }
