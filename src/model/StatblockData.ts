@@ -1,24 +1,25 @@
 import { parseYaml } from "obsidian";
-import {Ability} from "./Ability";
+import { Ability } from "./Ability";
 
 export class StatblockData {
     name?: string;
     level?: number;
     roles?: string[];
     ancestry?: string[];
-    ev?: number;
+    ev?: string;
     stamina?: number;
     immunities?: string[];
     weaknesses?: string[];
-    speed?: number;
+    speed?: string;
     size?: string;
     stability?: number;
     freeStrike?: number;
+    withCaptain?: string;
     characteristics: Characteristics;
     traits: Trait[];
     abilities: Ability[];
 
-    constructor(data: Partial<StatblockData>) {
+    constructor(data: Partial<StatblockData> & { free_strike?: number, with_captain?: string }) {
         this.name = data.name;
         this.level = data.level;
         this.roles = data.roles ?? [];
@@ -31,6 +32,7 @@ export class StatblockData {
         this.size = data.size;
         this.stability = data.stability;
         this.freeStrike = data.free_strike ?? data.freeStrike;
+        this.withCaptain = data.with_captain ?? data.withCaptain;
         this.characteristics = data.characteristics ? new Characteristics(data.characteristics) : new Characteristics({});
         this.traits = data.traits?.map(t => new Trait(t)) ?? [];
         this.abilities = data.abilities?.map(a => new Ability(a)) ?? [];
@@ -56,12 +58,21 @@ export class Characteristics {
 export class Trait {
     name: string;
     type?: string;
-    effect: string;
+    effects: string[];
 
-    constructor(data: Partial<Trait>) {
+    constructor(data: { name?: string, type?: string, effects?: any, effect?: any }) {
         this.name = data.name?.trim() ?? '';
         this.type = data.type?.trim();
-        this.effect = data.effect?.trim() ?? '';
+        if (Array.isArray(data.effects)) {
+            this.effects = data.effects.map((e: any) => String(e).trim());
+        } else if (data.effects) {
+            this.effects = [String(data.effects).trim()];
+        // TODO - this is a hack to support the old format
+        } else if (data.effect) {
+            this.effects = [String(data.effect).trim()];
+        } else {
+            this.effects = [];
+        }
     }
 }
 
@@ -88,6 +99,7 @@ export function parseStatblockData(source: string): StatblockData {
     statblockData.size = data.size;
     statblockData.stability = data.stability;
     statblockData.freeStrike = data.free_strike ?? data.freeStrike;
+    statblockData.withCaptain = data.with_captain;
 
     // Handle characteristics
     statblockData.characteristics = new Characteristics({
