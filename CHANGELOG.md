@@ -9,7 +9,6 @@
   - Statblock `speed` field changed from a `number` type to a `string` type
     - This is to account for speed modifier tags like `speed: 5 (climb)`
   - Statblock added a new `withCaptain` field
-  - 
 
 ## 2.3.0
 
