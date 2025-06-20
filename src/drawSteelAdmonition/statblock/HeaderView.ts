@@ -1,12 +1,12 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockData } from "../../model/StatblockData";
+import { StatblockConfig } from "../../model/StatblockConfig";
 
 export class HeaderView {
     private plugin: Plugin;
-    private data: StatblockData;
+    private data: StatblockConfig;
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(plugin: Plugin, data: StatblockData, ctx: MarkdownPostProcessorContext) {
+    constructor(plugin: Plugin, data: StatblockConfig, ctx: MarkdownPostProcessorContext) {
         this.plugin = plugin;
         this.data = data;
         this.ctx = ctx;
@@ -22,24 +22,24 @@ export class HeaderView {
         const firstLine = parent.createEl("div", { cls: "ds-sb-title-line" });
 
         // Left side: Name
-        const nameEl = firstLine.createEl("div", { cls: "ds-sb-header-left", text: this.data.name ?? "Unnamed Creature" });
+        firstLine.createEl("div", { cls: "ds-sb-header-left", text: this.data.statblock.name ?? "Unnamed Creature" });
 
         // Right side: Level and Roles
-        const level = this.data.level !== undefined ? `Level ${this.data.level}` : "Level N/A";
-        const roles = this.data.roles?.join(", ") ?? "No Role";
+        const level = this.data.statblock.level !== undefined ? `Level ${this.data.statblock.level}` : "Level N/A";
+        const roles = this.data.statblock.roles?.join(", ") ?? "No Role";
         const levelRolesText = `${level} ${roles}`;
-        const levelRolesEl = firstLine.createEl("div", { cls: "ds-sb-header-right", text: levelRolesText });
+        firstLine.createEl("div", { cls: "ds-sb-header-right", text: levelRolesText });
     }
 
     private infoLine(parent: HTMLElement) {
         const secondLine = parent.createEl("div", { cls: "ds-sb-info-line" });
 
         // Left side: Ancestry
-        const ancestryText = this.data.ancestry?.join(", ") ?? "Unknown Ancestry";
-        const ancestryEl = secondLine.createEl("div", { cls: "ds-sb-header-left", text: ancestryText });
+        const ancestryText = this.data.statblock.ancestry?.join(", ") ?? "Unknown Ancestry";
+        secondLine.createEl("div", { cls: "ds-sb-header-left", text: ancestryText });
 
         // Right side: EV
-        const evText = this.data.ev !== undefined ? `EV ${this.data.ev}` : "EV N/A";
-        const evEl = secondLine.createEl("div", { cls: "ds-sb-header-right", text: evText });
+        const evText = this.data.statblock.ev !== undefined ? `EV ${this.data.statblock.ev}` : "EV N/A";
+        secondLine.createEl("div", { cls: "ds-sb-header-right", text: evText });
     }
 }

@@ -16,6 +16,10 @@ export class AbilityConfig {
         return new AbilityConfig(ability, yaml.indent);
     }
 
+    public static allFrom(abilities: Ability[]): AbilityConfig[] {
+        return abilities.map(a => new AbilityConfig(a));
+    }
+
     // public toYaml(): string {
     //     const output = this.ability.toDTO();
     //     output.indent = this.indent;

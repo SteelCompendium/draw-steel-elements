@@ -1,7 +1,6 @@
-import {Plugin, MarkdownPostProcessorContext} from "obsidian";
-import {ValuesRowView} from "./ValuesRowView";
-import {Characteristics} from "../../model/Characteristics";
-import {KeyValuePairs} from "../../model/KeyValuePairs";
+import { Plugin, MarkdownPostProcessorContext } from "obsidian";
+import { ValuesRowView } from "./ValuesRowView";
+import { KeyValuePairs } from "../../model/KeyValuePairs";
 
 export class ValuesRowProcessor {
 	plugin: Plugin;
@@ -20,7 +19,7 @@ export class ValuesRowProcessor {
 				"The Draw Steel Elements plugin loaded the ValuesRow Element properly, but " +
 				"failed to process the input config.  Please correct the following error:\n\n";
 			userMessage += error.message;
-			container.createEl("div", {text: userMessage, cls: "error-message"});
+			container.createEl("div", { text: userMessage, cls: "error-message" });
 		}
 	}
 }

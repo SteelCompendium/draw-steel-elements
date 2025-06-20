@@ -1,5 +1,5 @@
-import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
-import {MundaneEffect} from "../../model/Effect";
+import { Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin } from "obsidian";
+import { MundaneEffect } from "steel-compendium-sdk";
 
 export class MundaneEffectView {
     private plugin: Plugin;
@@ -13,12 +13,12 @@ export class MundaneEffectView {
     }
 
     public build(parent: HTMLElement) {
-        const container = parent.createEl("div", {cls: "ds-effect-container"});
+        const container = parent.createEl("div", { cls: "ds-effect-container" });
         const cost = this.data.cost ? " (" + this.data.cost?.trim() + ")" : "";
         let text = this.data.name ? this.data.name + cost : cost;
-		text = text ? text + ": " : "";
-        container.createEl("span", {cls: "ability-detail-key pr-effect-key", text: text});
-        this.renderMD(this.ctx, this.data.effect, container.createEl("span", {cls: "pr-detail-value pr-effect-value ds-multiline"}));
+        text = text ? text + ": " : "";
+        container.createEl("span", { cls: "ability-detail-key pr-effect-key", text: text });
+        this.renderMD(this.ctx, this.data.effect, container.createEl("span", { cls: "pr-detail-value pr-effect-value ds-multiline" }));
     }
 
     // TODO - this doesnt belong here?
