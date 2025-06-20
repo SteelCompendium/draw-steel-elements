@@ -41,7 +41,7 @@ export class AbilityView {
             const keywordCell = row1.createEl("div", { cls: "ability-detail-table-cell pr-keyword-cell" });
             if (this.data.ability.keywords) {
                 keywordCell.createEl("span", { cls: "ability-detail-key pr-keyword-key", text: "Keywords: " });
-                const keywordsText = this.data.ability.keywords.length > 0 ? this.data.ability.keywords.join(", ") : "";
+                const keywordsText = this.data.ability.keywords.length > 0 ? this.data.ability.keywords?.toString() : "";
                 this.renderMD(this.ctx, keywordsText, keywordCell.createEl("span", { cls: "pr-detail-value pr-keyword-value ds-multiline" }));
             }
             const typeCell = row1.createEl("div", { cls: "ability-detail-table-cell pr-type-cell" });
