@@ -1709,10 +1709,12 @@ button.action-button {
 
 .ds-sb-container {
 	background-color: var(--code-background);
+	padding-bottom: 1rem;
 
 	/* General space-between (left-right) line */
 
 	.ds-sb-title-line,
+	.ds-sb-subtitle-line,
 	.ds-sb-info-line,
 	.ds-sb-stats-line {
 		display: flex;
@@ -1745,6 +1747,7 @@ button.action-button {
 	 */
 
 	.ds-sb-title-line,
+	.ds-sb-subtitle-line,
 	.ds-sb-info-line,
 	.ds-sb-stats-line,
 	.ds-sb-trait,
@@ -1754,25 +1757,50 @@ button.action-button {
 		padding-right: 1rem;
 	}
 
-	.ds-sb-title-line {
-		padding-top: 0.5rem;
-		padding-bottom: 0.5rem;
-	}
-
 	.ds-hr-container {
-		margin: 1rem 0 0.5em 0;
+		margin: 0.5rem 0 0.5em 0;
 	}
 
 	.ds-sb-title-line {
-		font-variant: small-caps;
 		font-size: var(--font-ui-large);
 		font-weight: bold;
 		background-color: var(--color-base-25);
+		padding-top: 0.5rem;
+	}
+	.ds-sb-subtitle-line {
+		background-color: var(--color-base-25);
+		padding-bottom: 0.5rem;
+	}
+
+	.ds-sb-stats-row {
+		display: flex;
+		justify-content: space-around;
+		align-items: center;
+		padding-bottom: 0.5rem;
+	}
+
+	.ds-sb-stats-item {
+		text-align: center;
+		width: -webkit-fill-available;
+	}
+	.ds-sb-stats-item-top {
+		font-size: calc(var(--font-ui-large) * 1.5);
+		font-weight: bold;
+	}
+	.ds-sb-stats-item-bottom {
+	}
+
+	.ds-sb-stats-line {
+		margin-top: 0.25rem;
 	}
 
 	.ds-sb-characteristics-line {
 		font-weight: bold;
 		text-align: center;
+		margin-top: 0.5rem;
+	}
+	.ds-sb-characteristics-pair {
+		width: -webkit-fill-available;
 	}
 
 	.ability-name-value,

@@ -1,5 +1,6 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import { StatblockConfig } from "../../model/StatblockConfig";
+import {HorizontalRuleProcessor} from "../horizontalRuleProcessor";
 
 export class StatsView {
     private plugin: Plugin;
@@ -15,39 +16,29 @@ export class StatsView {
     public build(parent: HTMLElement) {
         const statsContainer = parent.createEl("div", { cls: "ds-sb-stats" });
 
-        // Stamina
-        const firstLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line" });
-        firstLine.createEl("div",
-            { cls: "ds-sb-stats-left", text: `Stamina ${this.data.statblock.stamina ?? "N/A"}` });
+		this.statsRow(statsContainer);
 
         // immunities and weaknesses
+		const firstLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line" });
+		const immuText = this.data.statblock.immunities?.length ?? 0 > 0 ? `${this.data.statblock.immunities?.join(", ")}` : "-";
+		const weakText = this.data.statblock.weaknesses?.length ?? 0 > 0 ? `${this.data.statblock.weaknesses?.join(", ")}` : "-";
+		firstLine.createEl("div", { cls: "ds-sb-stats-left", text: `Immunity: ${immuText}` });
+		firstLine.createEl("div", { cls: "ds-sb-stats-right", text: `Weakness: ${weakText}` });
 
-        const immuText = this.data.statblock.immunities?.length ?? 0 > 0 ? `Immunity: ${this.data.statblock.immunities?.join(", ")}` : "";
-        const weakText = this.data.statblock.weaknesses?.length ?? 0 > 0 ? `Weakness: ${this.data.statblock.weaknesses?.join(", ")}` : "";
-        const immuWeakText = `${immuText} ${weakText}`;
-        firstLine.createEl("div", { cls: "ds-sb-stats-right", text: immuWeakText });
+		// immunities and weaknesses
+		const secondLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line" });
+		const movement = this.data.statblock.movement ?? "-";
+		const captain = this.data.statblock.withCaptain ? `With Captain: ${this.data.statblock.withCaptain}` : "";
+		secondLine.createEl("div", { cls: "ds-sb-stats-left", text: `Movement: ${movement}` });
+		secondLine.createEl("div", { cls: "ds-sb-stats-right", text: captain });
 
-        // Speed, size, and stability
-        const secondLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line" });
-        secondLine.createEl("div",
-            { cls: "ds-sb-stats-left", text: `Speed ${this.data.statblock.speed ?? "N/A"}` });
-        secondLine.createEl("div",
-            { cls: "ds-sb-stats-right", text: `Size ${this.data.statblock.size ?? "N/A"} / Stability ${this.data.statblock.stability ?? "N/A"}` });
-
-        // Free strike
-        const thirdLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line" });
-        thirdLine.createEl("div",
-            { cls: "ds-sb-stats-left", text: "" });
-        thirdLine.createEl("div",
-            { cls: "ds-sb-stats-right", text: `Free Strike ${this.data.statblock.freeStrike ?? "N/A"}` });
-
-        // characteristics
-        const fourthLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line ds-sb-characteristics-line" });
-        fourthLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Might ${this.formatCharacteristic(this.data.statblock.characteristics.might)}` });
-        fourthLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Agility ${this.formatCharacteristic(this.data.statblock.characteristics.agility)}` });
-        fourthLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Reason ${this.formatCharacteristic(this.data.statblock.characteristics.reason)}` });
-        fourthLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Intuition ${this.formatCharacteristic(this.data.statblock.characteristics.intuition)}` });
-        fourthLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Presence ${this.formatCharacteristic(this.data.statblock.characteristics.presence)}` });
+		// characteristics
+        const thirdLine = statsContainer.createEl("div", { cls: "ds-sb-stats-line ds-sb-characteristics-line" });
+        thirdLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Might ${this.formatCharacteristic(this.data.statblock.characteristics.might)}` });
+        thirdLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Agility ${this.formatCharacteristic(this.data.statblock.characteristics.agility)}` });
+        thirdLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Reason ${this.formatCharacteristic(this.data.statblock.characteristics.reason)}` });
+        thirdLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Intuition ${this.formatCharacteristic(this.data.statblock.characteristics.intuition)}` });
+        thirdLine.createEl("div", { cls: "ds-sb-characteristics-pair", text: `Presence ${this.formatCharacteristic(this.data.statblock.characteristics.presence)}` });
     }
 
     private formatCharacteristic(value?: number): string {
@@ -56,4 +47,28 @@ export class StatsView {
         }
         return value >= 0 ? `+${value}` : `${value}`;
     }
+
+	private statsRow(statsContainer: HTMLDivElement) {
+		const secondLine = statsContainer.createEl("div", { cls: "ds-sb-stats-row" });
+
+		const sizeItem = secondLine.createEl("div", { cls: "ds-sb-stats-item" });
+		sizeItem.createEl("div", { cls: "ds-sb-stats-item-top", text: `${this.data.statblock.size ?? "-"}` });
+		sizeItem.createEl("div", { cls: "ds-sb-stats-item-bottom", text: `Size` });
+
+		const speedItem = secondLine.createEl("div", { cls: "ds-sb-stats-item" });
+		speedItem.createEl("div", { cls: "ds-sb-stats-item-top", text: `${this.data.statblock.speed ?? "-"}` });
+		speedItem.createEl("div", { cls: "ds-sb-stats-item-bottom", text: `Speed` });
+
+		const staminaItem = secondLine.createEl("div", { cls: "ds-sb-stats-item" });
+		staminaItem.createEl("div", { cls: "ds-sb-stats-item-top", text: `${this.data.statblock.stamina ?? "-"}` });
+		staminaItem.createEl("div", { cls: "ds-sb-stats-item-bottom", text: `Stamina` });
+
+		const stabilityItem = secondLine.createEl("div", { cls: "ds-sb-stats-item" });
+		stabilityItem.createEl("div", { cls: "ds-sb-stats-item-top", text: `${this.data.statblock.stability ?? "-"}` });
+		stabilityItem.createEl("div", { cls: "ds-sb-stats-item-bottom", text: `Stability` });
+
+		const freeStrikeItem = secondLine.createEl("div", { cls: "ds-sb-stats-item" });
+		freeStrikeItem.createEl("div", { cls: "ds-sb-stats-item-top", text: `${this.data.statblock.freeStrike ?? "-"}` });
+		freeStrikeItem.createEl("div", { cls: "ds-sb-stats-item-bottom", text: `Free Strike` });
+	}
 }

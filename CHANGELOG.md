@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.0
+
+- Minor updates to the statblock UI
+
 ## 3.0.0
 
 - Uses the npm steel-compendium-sdk for parsing

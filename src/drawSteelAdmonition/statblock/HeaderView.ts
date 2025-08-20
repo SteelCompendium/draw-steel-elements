@@ -32,7 +32,7 @@ export class HeaderView {
     }
 
     private infoLine(parent: HTMLElement) {
-        const secondLine = parent.createEl("div", { cls: "ds-sb-info-line" });
+        const secondLine = parent.createEl("div", { cls: "ds-sb-subtitle-line" });
 
         // Left side: Ancestry
         const ancestryText = this.data.statblock.ancestry?.join(", ") ?? "Unknown Ancestry";
