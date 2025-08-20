@@ -1,8 +1,9 @@
 # Changelog
 
-## 2.4.0
+## 3.0.0
 
 - Uses the npm steel-compendium-sdk for parsing
+  - Supports latest yaml format for statblocks and abilities
 
 ## 2.3.0
 
