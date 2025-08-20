@@ -66,6 +66,8 @@ See the [changelog](CHANGELOG.md) for changes
 - `npm i` to install deps
 - `npm run dev` to build and watch
 
+<!-- ~/Documents/demo/DS Elements demo has symlink to this repo -->
+
 ### Release
 
 - Make sure the `manifest.json` has the right release version
