@@ -31,6 +31,6 @@
 		"typescript": "4.7.4",
 		"jszip": "^3.10.1",
 		"jszip-utils": "^0.1.0",
-		"steel-compendium-sdk": "file:../data-sdk-npm"
+		"steel-compendium-sdk": "0.0.35"
 	}
 }

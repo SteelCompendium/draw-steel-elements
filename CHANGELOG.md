@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.0
+
+- Uses the npm steel-compendium-sdk for parsing
+
 ## 2.3.0
 
 - Adds support for Canvas Character Sheets
