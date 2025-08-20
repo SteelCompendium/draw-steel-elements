@@ -88,7 +88,11 @@ export class AbilityView {
 
     // This will parse a string and render it as markdown
     private renderMD(ctx: MarkdownPostProcessorContext, markdown: string, el: HTMLElement) {
-        el.addClass("ability-inline-p");
-        MarkdownRenderer.render(this.plugin.app, markdown, el, ctx.sourcePath, this.plugin as Component);
+		el.addClass("ability-inline-p");
+		if (markdown === "-") {
+			MarkdownRenderer.render(this.plugin.app, "--", el, ctx.sourcePath, this.plugin as Component);
+		} else {
+			MarkdownRenderer.render(this.plugin.app, markdown, el, ctx.sourcePath, this.plugin as Component);
+		}
     }
 }
