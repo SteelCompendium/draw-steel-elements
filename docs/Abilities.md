@@ -68,6 +68,28 @@ effects:
   17+: The target falls into the hole and can’t reduce the height of the fall. 
 ```
 
+### Test Effect
+
+Same as the Power Roll Effect, but instead of making a Power Roll, the targets of the effect make a Test.
+
+| Property                      | Description                                       | Example                              |
+|-------------------------------|---------------------------------------------------|--------------------------------------|
+| `effect`                      | Effect (typically includes the test type)         | `effect: Target makes a Might test.` |
+| `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll | `t1: 2 damage`                       |
+| `tier 2`, `t2`, `12-16`       | The tier-2 (12-16) result of the Power Roll       | `t2: 3 damage`                       |
+| `tier 3`, `t3`, `17+`         | The tier-3 (17+) result of the Power Roll         | `t3: 4 damage`                       |
+| `crit`, `nat 19-20`           | The critical result of the Power Roll             | `crit: 4 damage, Extra Action`       |
+
+Example:
+
+```yaml
+effects:
+- effect: Target makes a Might test.
+  11 or lower: The target can shift up to 1 square from the edge of the hole to the nearest unoccupied space of their choice. 
+  12-16: The target falls into the hole. 
+  17+: The target falls into the hole and can’t reduce the height of the fall. 
+```
+
 ### Named Effect
 
 Named Effects are a key-value pairing.
