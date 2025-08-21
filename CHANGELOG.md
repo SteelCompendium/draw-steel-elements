@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.1
+
+- Fixes to TestEffect parsing (`data-sdk-npm` `0.0.37`)
+
 ## 3.2.0
 
 - Updates to `data-sdk-npm` `0.0.36` to support TestEffects 
