@@ -74,6 +74,8 @@ Same as the Power Roll Effect, but instead of making a Power Roll, the targets o
 
 | Property                      | Description                                       | Example                              |
 |-------------------------------|---------------------------------------------------|--------------------------------------|
+| `name`                        | Name of the effect                                | `name: Spend`                        |
+| `cost`                        | Cost of the effect                                | `cost: 1 Essence`                    |
 | `effect`                      | Effect (typically includes the test type)         | `effect: Target makes a Might test.` |
 | `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll | `t1: 2 damage`                       |
 | `tier 2`, `t2`, `12-16`       | The tier-2 (12-16) result of the Power Roll       | `t2: 3 damage`                       |
@@ -84,7 +86,8 @@ Example:
 
 ```yaml
 effects:
-- effect: Target makes a Might test.
+- name: Effect
+  effect: Target makes a Might test.
   11 or lower: The target can shift up to 1 square from the edge of the hole to the nearest unoccupied space of their choice. 
   12-16: The target falls into the hole. 
   17+: The target falls into the hole and can’t reduce the height of the fall. 
