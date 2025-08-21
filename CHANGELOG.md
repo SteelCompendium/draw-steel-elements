@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.0
+
+- Updates to `data-sdk-npm` `0.0.36` to support TestEffects 
+
 ## 3.1.0
 
 - Minor updates to the statblock UI
