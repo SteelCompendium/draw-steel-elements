@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.2
+
+- (Quietly) enabling mobile support
+
 ## 3.2.1
 
 - Fixes to TestEffect parsing (`data-sdk-npm` `0.0.37`)
