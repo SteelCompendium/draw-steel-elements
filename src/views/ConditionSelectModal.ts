@@ -1,7 +1,7 @@
 import { App, Modal, setIcon } from 'obsidian';
-import { Condition, CreatureInstance, Hero } from "../drawSteelAdmonition/EncounterData";
-import { ConditionManager, ConditionConfig } from "../utils/Conditions";
-import { CustomizeConditionModal } from "./CustomizeConditionModal";
+import { Condition, CreatureInstance, Hero } from "@drawSteelAdmonition/EncounterData";
+import { ConditionManager, ConditionConfig } from "@utils/Conditions";
+import { CustomizeConditionModal } from "@views/CustomizeConditionModal";
 
 export class AddConditionsModal extends Modal {
 	private character: Hero | CreatureInstance;

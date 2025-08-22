@@ -1,6 +1,13 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
+    "paths": {
+        "@/*": ["src/*"],
+        "@model/*": ["src/model/*"],
+        "@utils/*": ["src/utils/*"],
+        "@views/*": ["src/views/*"],
+        "@drawSteelAdmonition/*": ["src/drawSteelAdmonition/*"],
+    },
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
@@ -10,13 +17,13 @@
     "moduleResolution": "node",
     "importHelpers": true,
     "isolatedModules": true,
-	"strictNullChecks": true,
+    "strictNullChecks": true,
     "lib": [
       "DOM",
       "ES5",
       "ES6",
       "ES7"
-    ]
+    ] 
   },
   "include": [
     "**/*.ts"

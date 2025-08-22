@@ -1,7 +1,7 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
-import {StaminaBar} from "../../model/StaminaBar";
-import {StaminaEditModal} from "../../views/StaminaEditModal";
-import {CodeBlocks} from "../../utils/CodeBlocks";
+import {StaminaBar} from "@model/StaminaBar";
+import {StaminaEditModal} from "@views/StaminaEditModal";
+import {CodeBlocks} from "@utils/CodeBlocks";
 
 export class StaminaBarView {
 	private plugin: Plugin;

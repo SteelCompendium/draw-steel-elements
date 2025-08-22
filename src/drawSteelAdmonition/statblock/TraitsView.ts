@@ -1,8 +1,8 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockConfig } from "../../model/StatblockConfig";
+import { StatblockConfig } from "@model/StatblockConfig";
 import { MundaneEffect, PowerRollEffect, Trait } from "steel-compendium-sdk";
-import { PowerRollEffectView } from "../ability/PowerRollEffectView";
-import { MundaneEffectView } from "../ability/MundaneEffectView";
+import { PowerRollEffectView } from "@drawSteelAdmonition/ability/PowerRollEffectView";
+import { MundaneEffectView } from "@drawSteelAdmonition/ability/MundaneEffectView";
 
 export class TraitsView {
     private plugin: Plugin;

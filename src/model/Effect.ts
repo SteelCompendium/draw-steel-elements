@@ -1,6 +1,6 @@
 import {MarkdownPostProcessorContext, Plugin} from "obsidian";
-import {PowerRollEffectView} from "../drawSteelAdmonition/ability/PowerRollEffectView";
-import {MundaneEffectView} from "../drawSteelAdmonition/ability/MundaneEffectView";
+import {PowerRollEffectView} from "@drawSteelAdmonition/ability/PowerRollEffectView";
+import {MundaneEffectView} from "@drawSteelAdmonition/ability/MundaneEffectView";
 
 export abstract class Effect {
 	static parseAll(data: any): Effect[] {

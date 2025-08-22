@@ -1,6 +1,6 @@
 import { Component, MarkdownPostProcessorContext, Plugin } from "obsidian";
-import { Skills, CustomSkill } from "../../model/Skills";
-import { SKILL_DATA } from "../../utils/SkillsData";
+import { Skills, CustomSkill } from "@model/Skills";
+import { SKILL_DATA } from "@utils/SkillsData";
 
 export class SkillsView {
 	private plugin: Plugin;

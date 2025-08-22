@@ -1,6 +1,5 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockConfig } from "../../model/StatblockConfig";
-import {HorizontalRuleProcessor} from "../horizontalRuleProcessor";
+import { StatblockConfig } from "@model/StatblockConfig";
 
 export class StatsView {
     private plugin: Plugin;

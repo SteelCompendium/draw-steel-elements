@@ -1,5 +1,5 @@
 import {MarkdownPostProcessorContext, Plugin} from "obsidian";
-import {KeyValuePairs, KVPair} from "../../model/KeyValuePairs";
+import {KeyValuePairs, KVPair} from "@model/KeyValuePairs";
 
 export class ValuesRowView {
 	private plugin: Plugin;

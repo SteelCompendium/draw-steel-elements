@@ -1,17 +1,17 @@
 import {Plugin} from 'obsidian';
-import {HorizontalRuleProcessor} from "./src/drawSteelAdmonition/horizontalRuleProcessor";
-import {InitiativeProcessor} from "./src/drawSteelAdmonition/initiativeProcessor";
-import {NegotiationTrackerProcessor} from "./src/drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
-import {StatblockProcessor} from "./src/drawSteelAdmonition/statblock/StatblockProcessor";
-import {MyPluginSettingTab} from "./src/views/SettingsTab";
-import {DEFAULT_SETTINGS, DSESettings} from "./src/model/Settings";
-import {CompendiumDownloader} from "./src/utils/CompendiumDownloader";
-import {AbilityProcessor} from "./src/drawSteelAdmonition/ability/AbilityProcessor";
-import {StaminaBarProcessor} from "./src/drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
-import {CounterProcessor} from "./src/drawSteelAdmonition/Counter/CounterProcessor";
-import {CharacteristicsProcessor} from "./src/drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
-import {SkillsProcessor} from "./src/drawSteelAdmonition/Skills/SkillsProcessor";
-import {ValuesRowProcessor} from "./src/drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
+import {HorizontalRuleProcessor} from "@drawSteelAdmonition/horizontalRuleProcessor";
+import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
+import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
+import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
+import {MyPluginSettingTab} from "@views/SettingsTab";
+import {DEFAULT_SETTINGS, DSESettings} from "@model/Settings";
+import {CompendiumDownloader} from "@utils/CompendiumDownloader";
+import {AbilityProcessor} from "@drawSteelAdmonition/ability/AbilityProcessor";
+import {StaminaBarProcessor} from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
+import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
+import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
+import {SkillsProcessor} from "@drawSteelAdmonition/Skills/SkillsProcessor";
+import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;

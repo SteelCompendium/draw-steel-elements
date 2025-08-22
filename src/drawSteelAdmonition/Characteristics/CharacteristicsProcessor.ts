@@ -1,6 +1,6 @@
 import {Plugin, MarkdownPostProcessorContext} from "obsidian";
-import {CharacteristicsView} from "./CharacteristicsView";
-import {Characteristics} from "../../model/Characteristics";
+import {CharacteristicsView} from "@drawSteelAdmonition/Characteristics/CharacteristicsView";
+import {Characteristics} from "@model/Characteristics";
 
 export class CharacteristicsProcessor {
 	plugin: Plugin;

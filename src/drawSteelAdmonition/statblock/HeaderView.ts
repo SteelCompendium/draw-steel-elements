@@ -1,5 +1,5 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockConfig } from "../../model/StatblockConfig";
+import { StatblockConfig } from "@model/StatblockConfig";
 
 export class HeaderView {
     private plugin: Plugin;
