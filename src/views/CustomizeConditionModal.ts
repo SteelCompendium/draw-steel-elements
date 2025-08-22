@@ -1,6 +1,6 @@
 import {App, Modal, setIcon} from "obsidian";
-import {Condition} from "../drawSteelAdmonition/EncounterData";
-import {ConditionConfig} from "../utils/Conditions";
+import {Condition} from "@drawSteelAdmonition/EncounterData";
+import {ConditionConfig} from "@utils/Conditions";
 
 export class CustomizeConditionModal extends Modal {
     private conditionData: Condition;

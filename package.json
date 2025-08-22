@@ -1,6 +1,6 @@
 {
 	"name": "draw-steel-elements",
-	"version": "3.2.2-vue3",
+	"version": "3.2.2",
 	"description": "Components to support the Draw Steel TTRPG by MCDM.",
 	"main": "main.js",
 	"scripts": {

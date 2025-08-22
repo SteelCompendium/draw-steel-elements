@@ -1,9 +1,7 @@
 import {App, MarkdownPostProcessorContext, setTooltip} from "obsidian";
-import {NegotiationData} from "../../model/NegotiationData";
-import {PowerRollTiers} from "../../model/powerRoll";
-import {AbilityProcessor} from "../ability/abilityProcessor";
-import {AbilityView} from "../ability/AbilityView";
-import {PowerRollEffectView} from "../ability/PowerRollEffectView";
+import {NegotiationData} from "@model/NegotiationData";
+import {PowerRollTiers} from "@model/powerRoll";
+import {PowerRollEffectView} from "@drawSteelAdmonition/ability/PowerRollEffectView";
 
 export class LearnMoreView {
 	private app: App;

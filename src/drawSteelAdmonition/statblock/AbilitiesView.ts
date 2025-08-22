@@ -1,6 +1,6 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { AbilityView } from "../ability/AbilityView";
-import { AbilityConfig } from "../../model/AbilityConfig";
+import { AbilityView } from "@drawSteelAdmonition/ability/AbilityView";
+import { AbilityConfig } from "@model/AbilityConfig";
 
 export class AbilitiesView {
     private plugin: Plugin;

@@ -1,9 +1,9 @@
 import { App, MarkdownPostProcessorContext, setIcon } from "obsidian";
-import { StaminaEditModal } from "../views/StaminaEditModal";
-import { ConditionManager } from "../utils/Conditions";
-import { AddConditionsModal } from "../views/ConditionSelectModal";
-import { DEFAULT_IMAGE_PATH, Images } from "../utils/Images";
-import { CodeBlocks } from "../utils/CodeBlocks";
+import { StaminaEditModal } from "@views/StaminaEditModal";
+import { ConditionManager } from "@utils/Conditions";
+import { AddConditionsModal } from "@views/ConditionSelectModal";
+import { DEFAULT_IMAGE_PATH, Images } from "@utils/Images";
+import { CodeBlocks } from "@utils/CodeBlocks";
 import {
 	Condition,
 	Creature,
@@ -14,9 +14,9 @@ import {
 	parseEncounterData,
 	resetEncounter,
 } from "./EncounterData";
-import { ResetEncounterModal } from "../views/ResetEncounterModal";
-import {MinionStaminaPoolModal} from "../views/MinionStaminaPoolModal";
-import {StaminaBar} from "../model/StaminaBar";
+import { ResetEncounterModal } from "@views/ResetEncounterModal";
+import {MinionStaminaPoolModal} from "@views/MinionStaminaPoolModal";
+import {StaminaBar} from "@model/StaminaBar";
 
 export class InitiativeProcessor {
 	private app: App;

@@ -1,6 +1,6 @@
 import {Plugin, MarkdownPostProcessorContext} from "obsidian";
-import {StaminaBarView} from "./StaminaBarView";
-import {StaminaBar} from "../../model/StaminaBar";
+import {StaminaBarView} from "@drawSteelAdmonition/StaminaBar/StaminaBarView";
+import {StaminaBar} from "@model/StaminaBar";
 
 export class StaminaBarProcessor {
 	plugin: Plugin;

@@ -1,6 +1,6 @@
 import {Plugin, MarkdownPostProcessorContext} from "obsidian";
-import {CounterView} from "./CounterView";
-import {Counter} from "../../model/Counter";
+import {CounterView} from "@drawSteelAdmonition/Counter/CounterView";
+import {Counter} from "@model/Counter";
 
 export class CounterProcessor {
 	plugin: Plugin;

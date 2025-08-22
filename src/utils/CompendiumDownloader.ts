@@ -1,5 +1,5 @@
 import {App, Notice, request, requestUrl, RequestUrlParam} from "obsidian";
-import JSZip from "jszip";
+import * as JSZip from "jszip";
 
 export class CompendiumDownloader {
 	private app: App;

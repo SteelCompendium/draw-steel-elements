@@ -1,5 +1,5 @@
 import { App, Modal, setIcon } from "obsidian";
-import {StaminaBar} from "../model/StaminaBar";
+import {StaminaBar} from "@model/StaminaBar";
 
 export class StaminaEditModal extends Modal {
 	private staminaBar: StaminaBar;
