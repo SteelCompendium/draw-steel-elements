@@ -1,3 +1,7 @@
+// QUESTION: Is this file replaced by the equivalent from the steel-compendium-sdk?
+// If so, should it be deleted? I found no references to any classes defined here
+// outside of this file.
+
 import {MarkdownPostProcessorContext, Plugin} from "obsidian";
 import {PowerRollEffectView} from "@drawSteelAdmonition/ability/PowerRollEffectView";
 import {MundaneEffectView} from "@drawSteelAdmonition/ability/MundaneEffectView";

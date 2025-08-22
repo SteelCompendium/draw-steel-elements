@@ -37,18 +37,12 @@ export class NegotiationTrackerProcessor {
 	private buildUI(container: HTMLElement): void {
 		// Initialize currentArgument if not present
 		if (!this.data.currentArgument) {
-			this.data.currentArgument = {
-				motivationsUsed: [],
-				pitfallsUsed: [],
-				lieUsed: false,
-				sameArgumentUsed: false,
-				reusedMotivation: false,
-			};
+			this.data.currentArgument = new CurrentArgument({});
 		}
 
 		const nameContainer = container.createEl("div", {cls: "ds-nt-name-line"});
 
-		const name = this.data.name;
+		const name = this.data.name ?? "";
 		const title = name ? "Negotiation: " + name.trim() : "Negotiation";
 		nameContainer.createEl("span", {cls: "ds-nt-name-value", text: "Negotiation: " + name.trim()});
 

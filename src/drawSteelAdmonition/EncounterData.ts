@@ -8,7 +8,7 @@ export interface Hero {
 	image?: string;
 	isHero: boolean;
 	has_taken_turn?: boolean;
-	conditions?: (string | Condition)[];
+	conditions: (string | Condition)[];
 }
 
 export interface CreatureInstance {
@@ -59,7 +59,7 @@ export function resetEncounter(data: EncounterData) {
 		hero.current_stamina = undefined;
 		hero.temp_stamina = undefined;
 		hero.has_taken_turn = undefined;
-		hero.conditions = undefined;
+		hero.conditions = Array<Condition | string>();
 	});
 	data.enemy_groups.forEach((group) => {
 		group.has_taken_turn = undefined;
@@ -109,6 +109,8 @@ export function parseEncounterData(source: string): EncounterData {
 		}
 
 		// Update conditions handling
+		// REVIEW: Wouldn't it here be better to turn the string into a Condition
+		// where only the key is set?
 		hero.conditions =
 			hero.conditions?.map((cond) => {
 				if (typeof cond === "string") {
@@ -225,6 +227,8 @@ export function parseEncounterData(source: string): EncounterData {
 						}
 						// For minions, we don't need to set current_stamina or temp_stamina
 						// Update conditions handling
+						// REVIEW: Wouldn't it here be better to turn the string into a Condition
+						// where only the key is set?
 						instance.conditions =
 							instance.conditions?.map((cond) => {
 								if (typeof cond === "string") {
@@ -266,6 +270,8 @@ export function parseEncounterData(source: string): EncounterData {
 						instance.current_stamina = instance.current_stamina ?? creature.max_stamina;
 						instance.temp_stamina = instance.temp_stamina ?? 0;
 						// Update conditions handling
+						// REVIEW: Wouldn't it here be better to turn the string into a Condition
+						// where only the key is set?
 						instance.conditions =
 							instance.conditions?.map((cond) => {
 								if (typeof cond === "string") {
@@ -288,6 +294,10 @@ export function parseEncounterData(source: string): EncounterData {
 		});
 	});
 
+	// REVIEW: I see in teh changelog for version 2.2.0 that villain-power should
+	// be removed in v3. should the fallback for villain power be removed here?
+	// If not we should make villain_power an "official" property of EncounterData
+	// as an alias for example
 	data.malice = data.malice ?? (data.villain_power ?? { value: 0 });
 	if (typeof data.malice.value !== "number") {
 		throw new Error("Invalid data: 'malice.value' must be a number.");

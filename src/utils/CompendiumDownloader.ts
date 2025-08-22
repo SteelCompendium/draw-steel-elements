@@ -59,6 +59,7 @@ export class CompendiumDownloader {
 				},
 				contentType: 'application/octet-stream',
 				// Set 'arraybuffer' as the response type
+				// REVIEW: responseType doesn't seem like it's a property of RequestUrlParam
 				responseType: 'arraybuffer',
 			};
 
@@ -135,7 +136,10 @@ export class CompendiumDownloader {
 					}
 
 					// Write the file to the vault
-					await vault.createBinary(filePath, fileData);
+					// convert Uint8Array to ArrayBuffer to avoid type error
+					const arrayBuffer = new ArrayBuffer(fileData.length);
+					new Uint8Array(arrayBuffer).set(fileData);
+					await vault.createBinary(filePath, arrayBuffer);
 				}
 			}));
 

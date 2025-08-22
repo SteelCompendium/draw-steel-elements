@@ -1,8 +1,7 @@
 import { App, Modal, MarkdownPostProcessorContext, setIcon } from "obsidian";
-import { Creature, CreatureInstance, EncounterData, EnemyGroup } from "../drawSteelAdmonition/EncounterData";
-import { ConditionManager } from "../utils/Conditions";
-import { CodeBlocks } from "../utils/CodeBlocks";
-import { Condition } from "resolve.exports";
+import { Creature, CreatureInstance, EncounterData, EnemyGroup, Condition } from "@drawSteelAdmonition/EncounterData";
+import { ConditionManager } from "@utils/Conditions";
+import { CodeBlocks } from "@utils/CodeBlocks";
 
 export class MinionStaminaPoolModal extends Modal {
 	private group: EnemyGroup;
@@ -39,7 +38,8 @@ export class MinionStaminaPoolModal extends Modal {
 		minionsStaminaModal.createEl("h2", { text: `${this.group.name} - Minion Stamina Pool`, cls: "stamina-header" });
 
 		const minionMaxStamina = this.creature.max_stamina;
-		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
+		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
+		// QUESTION: should this default to 0 or 1?
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 
@@ -129,7 +129,7 @@ export class MinionStaminaPoolModal extends Modal {
 			attr: { size: 3 },
 		}) as HTMLInputElement;
 		minionCountInput.value = "1";
-		minionCountInput.max = this.creature.instances?.length.toString();
+		minionCountInput.max = this.creature.instances?.length.toString() ?? "";
 		minionCountInput.min = "0";
 
 		applyRow.createEl("span", { text: "minions" });
@@ -161,7 +161,7 @@ export class MinionStaminaPoolModal extends Modal {
 		this.updateInfoText(infoText);
 
 		// List the minions
-		this.creature.instances.forEach((instance) => {
+		this.creature.instances?.forEach((instance) => {
 			if (instance.isDead) return; // Skip dead minions
 
 			const minionRow = minionListContainer.createEl("div", { cls: "minion-row" });
@@ -224,7 +224,7 @@ export class MinionStaminaPoolModal extends Modal {
 		this.updateActionButton(actionButton, warningIcon);
 		actionButton.addEventListener("click", () => {
 			const newStamina = poolCurrentStamina + this.pendingStaminaChange;
-			const maxStamina = this.creature.instances.filter((inst) => !inst.isDead).length * minionMaxStamina;
+			const maxStamina = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0 * minionMaxStamina;
 			this.group.minion_stamina_pool = Math.min(maxStamina, Math.max(0, newStamina));
 
 			// Update the minion instances based on the selected checkboxes
@@ -248,7 +248,7 @@ export class MinionStaminaPoolModal extends Modal {
 
 	private updateStaminaBar(staminaBarFillLeft: HTMLElement, staminaBarFillRight: HTMLElement) {
 		const minionMaxStamina = this.creature.max_stamina;
-		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
+		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 		const newStamina = Math.min(poolMaxStamina, Math.max(0, poolCurrentStamina + this.pendingStaminaChange));
@@ -296,7 +296,7 @@ export class MinionStaminaPoolModal extends Modal {
 	private updateInfoText(infoText: HTMLElement) {
 		const totalPendingDamage = -this.pendingStaminaChange; // pendingStaminaChange is negative when taking damage
 		const minionMaxStamina = this.creature.max_stamina;
-		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
+		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
@@ -312,7 +312,7 @@ export class MinionStaminaPoolModal extends Modal {
 	private updateActionButton(actionButton: HTMLElement, warningIcon: HTMLElement) {
 		const staminaChange = this.pendingStaminaChange;
 		const minionMaxStamina = this.creature.max_stamina;
-		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
+		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
@@ -364,7 +364,7 @@ export class MinionStaminaPoolModal extends Modal {
 
 	private updateCheckboxes() {
 		const minionMaxStamina = this.creature.max_stamina;
-		const aliveMinions = this.creature.instances.filter((inst) => !inst.isDead).length;
+		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
@@ -445,7 +445,7 @@ export class MinionStaminaPoolModal extends Modal {
 					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
 					container.empty();
 					this.buildConditionIcons(container, character, data, ctx);
-					CodeBlocks.updateCodeBlock(this.app, data, ctx);
+					CodeBlocks.updateCodeBlock(this.app, data, ctx, "");
 				});
 			}
 		});
