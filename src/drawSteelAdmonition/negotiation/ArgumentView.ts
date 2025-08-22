@@ -3,7 +3,7 @@ import { NegotiationData } from "@model/NegotiationData";
 import { CodeBlocks } from "@utils/CodeBlocks";
 import {ArgumentPowerRoll, ArgumentResult} from "@model/ArgumentPowerRolls";
 import { labeledIcon } from "@utils/common";
-import {PowerRollEffectView} from "../ability/PowerRollEffectView";
+import {PowerRollEffectView} from "@drawSteelAdmonition/ability/PowerRollEffectView";
 
 export class ArgumentView {
     private app: App;
