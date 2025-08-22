@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
-import DrawSteelAdmonitionPlugin from "../../main";
-import {CompendiumDownloader} from "../utils/CompendiumDownloader";
+import DrawSteelAdmonitionPlugin from "main";
+import {CompendiumDownloader} from "@utils/CompendiumDownloader";
 
 export class MyPluginSettingTab extends PluginSettingTab {
 	plugin: DrawSteelAdmonitionPlugin;

@@ -1,11 +1,11 @@
 import {App, MarkdownPostProcessorContext, Menu, Notice, setIcon} from "obsidian";
-import {NegotiationData, parseNegotiationData} from "../../model/NegotiationData";
-import {PatienceInterestView} from "./PatienceInterestView";
-import {MotivationsPitfallsView} from "./MotivationsPitfallsView";
-import {ArgumentView} from "./ArgumentView";
-import {LearnMoreView} from "./LearnMoreView";
-import {CodeBlocks} from "../../utils/CodeBlocks";
-import {labeledIcon} from "../../utils/common";
+import {CurrentArgument, NegotiationData, parseNegotiationData} from "@model/NegotiationData";
+import {PatienceInterestView} from "@drawSteelAdmonition/negotiation/PatienceInterestView";
+import {MotivationsPitfallsView} from "@drawSteelAdmonition/negotiation/MotivationsPitfallsView";
+import {ArgumentView} from "@drawSteelAdmonition/negotiation/ArgumentView";
+import {LearnMoreView} from "@drawSteelAdmonition/negotiation/LearnMoreView";
+import {CodeBlocks} from "@utils/CodeBlocks";
+import {labeledIcon} from "@utils/common";
 
 export class NegotiationTrackerProcessor {
 	private app: App;

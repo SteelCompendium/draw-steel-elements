@@ -1,7 +1,7 @@
 import {App, MarkdownPostProcessorContext, TFile, stringifyYaml, ItemView, EditorSelection} from "obsidian";
-import {EncounterData} from "../drawSteelAdmonition/EncounterData";
-import {NegotiationData} from "../model/NegotiationData";
-import {StaminaBar} from "../model/StaminaBar";
+import {EncounterData} from "@drawSteelAdmonition/EncounterData";
+import {NegotiationData} from "@model/NegotiationData";
+import {StaminaBar} from "@model/StaminaBar";
 
 export class CodeBlocks {
 	static async updateInitiativeTracker(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {

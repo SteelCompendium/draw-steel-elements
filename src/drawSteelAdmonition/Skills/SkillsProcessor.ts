@@ -1,6 +1,6 @@
 import {Plugin, MarkdownPostProcessorContext} from "obsidian";
-import {SkillsView} from "./SkillsView";
-import {Skills} from "../../model/Skills";
+import {SkillsView} from "@drawSteelAdmonition/Skills/SkillsView";
+import {Skills} from "@model/Skills";
 
 export class SkillsProcessor {
 	plugin: Plugin;

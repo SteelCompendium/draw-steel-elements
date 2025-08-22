@@ -1,8 +1,8 @@
 import { Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin } from "obsidian";
-import { AbilityConfig } from "../../model/AbilityConfig";
+import { AbilityConfig } from "@model/AbilityConfig";
 import { MundaneEffect, PowerRollEffect } from "steel-compendium-sdk";
-import { PowerRollEffectView } from "./PowerRollEffectView";
-import { MundaneEffectView } from "./MundaneEffectView";
+import { PowerRollEffectView } from "@drawSteelAdmonition/ability/PowerRollEffectView";
+import { MundaneEffectView } from "@drawSteelAdmonition/ability/MundaneEffectView";
 
 export class AbilityView {
     private plugin: Plugin;

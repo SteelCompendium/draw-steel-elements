@@ -1,10 +1,10 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockConfig } from "../../model/StatblockConfig";
-import { HeaderView } from "./HeaderView";
-import { StatsView } from "./StatsView";
-import { AbilitiesView } from "./AbilitiesView";
-import { TraitsView } from "./TraitsView";
-import { HorizontalRuleProcessor } from "../horizontalRuleProcessor";
+import { StatblockConfig } from "@model/StatblockConfig";
+import { HeaderView } from "@drawSteelAdmonition/statblock/HeaderView";
+import { StatsView } from "@drawSteelAdmonition/statblock/StatsView";
+import { AbilitiesView } from "@drawSteelAdmonition/statblock/AbilitiesView";
+import { TraitsView } from "@drawSteelAdmonition/statblock/TraitsView";
+import { HorizontalRuleProcessor } from "@drawSteelAdmonition/horizontalRuleProcessor";
 import { AbilityConfig } from "src/model/AbilityConfig";
 import { Ability } from "steel-compendium-sdk";
 

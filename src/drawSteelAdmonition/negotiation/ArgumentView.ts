@@ -1,10 +1,8 @@
 import { App, MarkdownPostProcessorContext, setIcon, setTooltip } from "obsidian";
-import { NegotiationData } from "../../model/NegotiationData";
-import { CodeBlocks } from "../../utils/CodeBlocks";
-import { AbilityProcessor } from "../ability/abilityProcessor";
-import {ArgumentPowerRoll, ArgumentResult} from "../../model/ArgumentPowerRolls";
-import { labeledIcon } from "../../utils/common";
-import {AbilityView} from "../ability/AbilityView";
+import { NegotiationData } from "@model/NegotiationData";
+import { CodeBlocks } from "@utils/CodeBlocks";
+import {ArgumentPowerRoll, ArgumentResult} from "@model/ArgumentPowerRolls";
+import { labeledIcon } from "@utils/common";
 import {PowerRollEffectView} from "../ability/PowerRollEffectView";
 
 export class ArgumentView {

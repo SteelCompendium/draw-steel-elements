@@ -1,5 +1,5 @@
 import { Component, MarkdownPostProcessorContext, Plugin } from "obsidian";
-import { Characteristics } from "../../model/Characteristics";
+import { Characteristics } from "@model/Characteristics";
 
 export class CharacteristicsView {
 	private plugin: Plugin;

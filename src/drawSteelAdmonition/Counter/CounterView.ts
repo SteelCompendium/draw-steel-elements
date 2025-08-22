@@ -1,6 +1,6 @@
 import { Component, MarkdownPostProcessorContext, Plugin, setIcon } from "obsidian";
-import { Counter } from "../../model/Counter";
-import { CodeBlocks } from "../../utils/CodeBlocks";
+import { Counter } from "@model/Counter";
+import { CodeBlocks } from "@utils/CodeBlocks";
 
 export class CounterView {
 	private plugin: Plugin;

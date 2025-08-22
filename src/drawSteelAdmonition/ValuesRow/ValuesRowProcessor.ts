@@ -1,6 +1,6 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { ValuesRowView } from "./ValuesRowView";
-import { KeyValuePairs } from "../../model/KeyValuePairs";
+import { ValuesRowView } from "@drawSteelAdmonition/ValuesRow/ValuesRowView";
+import { KeyValuePairs } from "@model/KeyValuePairs";
 
 export class ValuesRowProcessor {
 	plugin: Plugin;
