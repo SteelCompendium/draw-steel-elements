@@ -51,6 +51,7 @@ export interface Condition {
 export interface EncounterData {
 	heroes: Hero[];
 	enemy_groups: EnemyGroup[];
+	// REVIEW: should we make this into a number since Malice is only {value: number}?
 	malice: Malice;
 }
 
@@ -108,18 +109,19 @@ export function parseEncounterData(source: string): EncounterData {
 			throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_stamina' field.`);
 		}
 
-		// Update conditions handling
-		// REVIEW: Wouldn't it here be better to turn the string into a Condition
-		// where only the key is set?
 		hero.conditions =
 			hero.conditions?.map((cond) => {
 				if (typeof cond === "string") {
-					return cond; // Keep as is for backward compatibility
+					return {
+						key: cond,
+						color: undefined,
+						effect: undefined
+					}
 				} else if (typeof cond === "object" && cond.key) {
 					return {
 						key: cond.key,
-						color: cond.color ?? null,
-						effect: cond.effect ?? null,
+						color: cond.color ?? undefined,
+						effect: cond.effect ?? undefined,
 					};
 				} else {
 					throw new Error(`Invalid condition format for hero '${hero.name}'.`);
@@ -227,17 +229,19 @@ export function parseEncounterData(source: string): EncounterData {
 						}
 						// For minions, we don't need to set current_stamina or temp_stamina
 						// Update conditions handling
-						// REVIEW: Wouldn't it here be better to turn the string into a Condition
-						// where only the key is set?
 						instance.conditions =
 							instance.conditions?.map((cond) => {
 								if (typeof cond === "string") {
-									return cond; // Keep as is for backward compatibility
+									return {
+										key: cond,
+										color: undefined,
+										effect: undefined
+									}
 								} else if (typeof cond === "object" && cond.key) {
 									return {
 										key: cond.key,
-										color: cond.color ?? null,
-										effect: cond.effect ?? null,
+										color: cond.color ?? undefined,
+										effect: cond.effect ?? undefined,
 									};
 								} else {
 									throw new Error(
@@ -270,17 +274,19 @@ export function parseEncounterData(source: string): EncounterData {
 						instance.current_stamina = instance.current_stamina ?? creature.max_stamina;
 						instance.temp_stamina = instance.temp_stamina ?? 0;
 						// Update conditions handling
-						// REVIEW: Wouldn't it here be better to turn the string into a Condition
-						// where only the key is set?
 						instance.conditions =
 							instance.conditions?.map((cond) => {
 								if (typeof cond === "string") {
-									return cond; // Keep as is for backward compatibility
+									return {
+										key: cond,
+										color: undefined,
+										effect: undefined
+									}
 								} else if (typeof cond === "object" && cond.key) {
 									return {
 										key: cond.key,
-										color: cond.color ?? null,
-										effect: cond.effect ?? null,
+										color: cond.color ?? undefined,
+										effect: cond.effect ?? undefined,
 									};
 								} else {
 									throw new Error(
@@ -294,11 +300,7 @@ export function parseEncounterData(source: string): EncounterData {
 		});
 	});
 
-	// REVIEW: I see in teh changelog for version 2.2.0 that villain-power should
-	// be removed in v3. should the fallback for villain power be removed here?
-	// If not we should make villain_power an "official" property of EncounterData
-	// as an alias for example
-	data.malice = data.malice ?? (data.villain_power ?? { value: 0 });
+	data.malice = data.malice ?? { value: 0 };
 	if (typeof data.malice.value !== "number") {
 		throw new Error("Invalid data: 'malice.value' must be a number.");
 	}

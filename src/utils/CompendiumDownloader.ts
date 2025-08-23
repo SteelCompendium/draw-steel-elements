@@ -57,10 +57,7 @@ export class CompendiumDownloader {
 					Accept: 'application/octet-stream',
 					...(this.githubToken && {Authorization: `token ${this.githubToken}`}),
 				},
-				contentType: 'application/octet-stream',
-				// Set 'arraybuffer' as the response type
-				// REVIEW: responseType doesn't seem like it's a property of RequestUrlParam
-				responseType: 'arraybuffer',
+				contentType: 'application/octet-stream'
 			};
 
 			new Notice('Draw Steel Elements: Downloading compendium...');

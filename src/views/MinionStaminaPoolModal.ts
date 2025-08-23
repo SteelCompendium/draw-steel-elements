@@ -39,7 +39,6 @@ export class MinionStaminaPoolModal extends Modal {
 
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
-		// QUESTION: should this default to 0 or 1?
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
 		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
 

@@ -65,9 +65,6 @@ export class PatienceInterestView {
 			const label = iLine.createEl("div", { cls: `ds-nt-interest-label ds-nt-interest-${i}-label`, text: `${i}` });
 			label.addEventListener("click", () => this.setInterest(i, parent));
 
-			// REVIEW: wouldn't it be better to set up these i-properties as an array or something?
-			// It would definitely make iterating through them easier.
-			// see: @model/NegotiationData line 12-17
 			const offerText = this.data[`i${i}`] ?? `Offer at Interest ${i}`;
 			iLine.createEl("div", { cls: `ds-nt-interest-offer ds-nt-interest-${i}-offer`, text: offerText });
 		}

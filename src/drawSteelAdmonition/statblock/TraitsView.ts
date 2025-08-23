@@ -26,16 +26,7 @@ export class TraitsView {
             const traitEl = traitsContainer.createEl("div", { cls: "ds-sb-trait" });
 
             // Title Line: "name (type)"
-			// REVIEW: type doesn't seem to exist on type Trait. Is this a missmatch between
-			// versions? currently I'm running steel_compendium_sdk 0.0.37 which is the newest on npm
-            const titleText = trait.type ? `${trait.name} (${trait.type})` : trait.name;
-            traitEl.createEl("div", { cls: "ds-sb-trait-title", text: titleText });
-
-            // Effect Line
-            // trait.effects.effects.forEach((effect: Effect) => {
-            //     if (effect instanceof PowerRollEffect) {
-            //         traitEl.createEl("div", { cls: "ds-sb-trait-effect", text: `${effect.name ?? ""}: ${effect.}` });
-            //     });
+            traitEl.createEl("div", { cls: "ds-sb-trait-title", text: trait.name });
 
             const effectsContainer = traitEl.createEl("div", { cls: "ds-effects-container" });
             if (trait.effects.effects) {
