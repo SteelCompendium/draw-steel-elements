@@ -1,5 +1,5 @@
 import {Plugin} from 'obsidian';
-import {HorizontalRuleProcessor} from "@drawSteelAdmonition/horizontalRuleProcessor";
+import {HorizontalRuleProcessor} from "@drawSteelComponents/HorizontalRule/HorizontalRuleProcessor";
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
@@ -12,6 +12,8 @@ import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {SkillsProcessor} from "@drawSteelAdmonition/Skills/SkillsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
+import "./styles-source.css";
+
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
@@ -42,7 +44,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
         this.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
 
-        const hrProcessor = new HorizontalRuleProcessor();
+        const hrProcessor = new HorizontalRuleProcessor(this);
         this.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
         this.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 

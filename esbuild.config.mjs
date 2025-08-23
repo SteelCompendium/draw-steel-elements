@@ -1,6 +1,9 @@
+// esbuild.config.mjs
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import vue from "unplugin-vue/esbuild";
+import { promises as fs } from "fs";
 
 const banner =
 `/*
@@ -11,38 +14,61 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 
+const copyToStylesPlugin = {
+  name: "copy-vue-css-to-styles",
+  setup(build) {
+    build.onEnd(async () => {
+      try {
+        await fs.copyFile("main.css", "styles.css");
+        console.log("🔧 copied main.css -> styles.css");
+      } catch { /* ignore if no CSS yet */ }
+    });
+  }
+};
+
 const context = await esbuild.context({
-	banner: {
-		js: banner,
-	},
-	entryPoints: ["main.ts"],
-	bundle: true,
-	external: [
-		"obsidian",
-		"electron",
-		"@codemirror/autocomplete",
-		"@codemirror/collab",
-		"@codemirror/commands",
-		"@codemirror/language",
-		"@codemirror/lint",
-		"@codemirror/search",
-		"@codemirror/state",
-		"@codemirror/view",
-		"@lezer/common",
-		"@lezer/highlight",
-		"@lezer/lr",
-		...builtins],
-	format: "cjs",
-	target: "es2018",
-	logLevel: "info",
-	sourcemap: prod ? false : "inline",
-	treeShaking: true,
-	outfile: "main.js",
+  banner: { js: banner },
+  entryPoints: ["main.ts"],
+  bundle: true,
+  external: [
+    "obsidian",
+    "electron",
+    "@codemirror/autocomplete",
+    "@codemirror/collab",
+    "@codemirror/commands",
+    "@codemirror/language",
+    "@codemirror/lint",
+    "@codemirror/search",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+    ...builtins
+  ],
+  format: "cjs",
+  target: "es2018",
+  logLevel: "info",
+  sourcemap: prod ? false : true,
+  treeShaking: true,
+  outfile: "main.js",
+  tsconfig: "tsconfig.json",
+  minify: prod,
+  plugins: [
+    vue({ sourceMap: false }),
+	copyToStylesPlugin
+  ],
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(prod ? 'production' : 'development'),
+    __VUE_OPTIONS_API__: 'false',                     // no options api, composition api is preferred
+    __VUE_PROD_DEVTOOLS__: 'false',                   // no devtools in production
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false'  // no extra hydration info
+  }
 });
 
 if (prod) {
-	await context.rebuild();
-	process.exit(0);
+  await context.rebuild();
+  process.exit(0);
 } else {
-	await context.watch();
+  await context.watch();
 }
