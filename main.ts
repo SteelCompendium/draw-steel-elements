@@ -1,5 +1,5 @@
 import {Plugin} from 'obsidian';
-import {HorizontalRuleProcessor} from "@drawSteelAdmonition/horizontalRuleProcessor";
+import {HorizontalRuleProcessor} from "@drawSteelComponents/HorizontalRule/HorizontalRuleProcessor";
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
@@ -11,7 +11,10 @@ import {StaminaBarProcessor} from "@drawSteelAdmonition/StaminaBar/StaminaBarPro
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {SkillsProcessor} from "@drawSteelAdmonition/Skills/SkillsProcessor";
+import {SkillListProcessor} from "@/drawSteelComponents/SkillList/SkillListProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
+import "./styles-source.css";
+
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
@@ -42,7 +45,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
         this.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
 
-        const hrProcessor = new HorizontalRuleProcessor();
+        const hrProcessor = new HorizontalRuleProcessor(this);
         this.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
         this.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 
@@ -73,8 +76,10 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);
 		this.registerMarkdownCodeBlockProcessor("ds-characteristics", charProcessor.handler);
 
-		let skillProcessor = new SkillsProcessor(this);
-		this.registerMarkdownCodeBlockProcessor("ds-skills", skillProcessor.handler);
+		let skillsProcessor = new SkillsProcessor(this);
+		this.registerMarkdownCodeBlockProcessor("ds-skills", skillsProcessor.handler);
+		let skillListProcessor = new SkillListProcessor(this);
+		this.registerMarkdownCodeBlockProcessor("ds-skill-list", skillListProcessor.handler);
 
 		let valRowProcessor = new ValuesRowProcessor(this);
 		this.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);

@@ -21,3 +21,9 @@ data.json
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
+
+# Vue
+# Generated during build from .vue files' style tags
+main.css 
+# Generated during build from main.css and styles-source.css
+styles.css
