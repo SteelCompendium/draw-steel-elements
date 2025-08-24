@@ -1,9 +1,11 @@
+export interface SkillData { [groupName: string]: SkillInfo[] }
+
 export interface SkillInfo {
 	name: string;
 	use: string;
 }
 
-export const SKILL_DATA: { [groupName: string]: SkillInfo[] } = {
+export const SKILL_DATA: SkillData = {
 	"crafting": [
 		{ name: "alchemy", use: "Make bombs and potions" },
 		{ name: "architecture", use: "Create buildings and vehicles" },
