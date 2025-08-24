@@ -10,7 +10,7 @@ export class ArgumentView {
     private data: NegotiationData;
     private ctx: MarkdownPostProcessorContext;
 
-    private selectedPowerRollTier: ArgumentResult = null; // To track selected power roll tier
+    private selectedPowerRollTier: ArgumentResult | null = null; // To track selected power roll tier
     private completeButton: HTMLButtonElement; // Used for selecting power roll
 
     constructor(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext) {

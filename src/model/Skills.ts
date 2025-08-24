@@ -18,7 +18,7 @@ export class Skills {
 		const skills = data.skills ? data.skills : [];
 		let custom_skills: CustomSkill[] = [];
 		if (data.custom_skills && Array.isArray(data.custom_skills)) {
-			data.custom_skills.forEach(cs => custom_skills.push(CustomSkill.parse(cs)));
+			data.custom_skills.forEach((cs: any) => custom_skills.push(CustomSkill.parse(cs)));
 		}
 		return new Skills(skills, custom_skills);
 	}

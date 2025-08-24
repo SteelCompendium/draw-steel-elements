@@ -3,9 +3,9 @@ import {parseYaml} from "obsidian";
 export class NegotiationData {
     name?: string;
     initial_patience?: number;
-    current_patience?: number;
+    current_patience: number;
     initial_interest?: number;
-    current_interest?: number;
+    current_interest: number;
     motivations: Motivation[];
     pitfalls: Pitfall[];
     currentArgument: CurrentArgument;
@@ -16,12 +16,15 @@ export class NegotiationData {
     i1: string;
     i0: string;
 
+    private static readonly default_patience: number = 5;
+    private static readonly default_interest: number = 0;
+
     constructor(data: Partial<NegotiationData>) {
         this.name = data.name;
         this.initial_patience = data.initial_patience;
-        this.current_patience = data.current_patience ?? data.initial_patience ?? 5;
+        this.current_patience = data.current_patience ?? data.initial_patience ?? NegotiationData.default_patience;
         this.initial_interest = data.initial_interest;
-        this.current_interest = data.current_interest ?? data.initial_interest ?? 0;
+        this.current_interest = data.current_interest ?? data.initial_interest ?? NegotiationData.default_interest;
         this.motivations = data.motivations?.map(mot => new Motivation(mot)) ?? [];
         this.pitfalls = data.pitfalls?.map(pit => new Pitfall(pit)) ?? [];
         this.currentArgument = data.currentArgument ? new CurrentArgument(data.currentArgument) : new CurrentArgument({});
@@ -35,7 +38,9 @@ export class NegotiationData {
 
     setMotivationUsed(motivationName: string, used: boolean) {
         const mot = this.motivations.find(m => m.name === motivationName);
-        mot.hasBeenAppealedTo = used;
+		if (mot) {
+        	mot.hasBeenAppealedTo = used;
+		}
 
         // if a motivation is getting marked as "used previously" and the current argument also uses that motivation,
         // then mark the current argument as reusing the motivation
@@ -74,8 +79,8 @@ export class NegotiationData {
     }
 
     resetData() {
-        this.current_patience = this.initial_patience;
-        this.current_interest = this.initial_interest;
+        this.current_patience = this.initial_patience ?? NegotiationData.default_patience;
+        this.current_interest = this.initial_interest ?? NegotiationData.default_interest;
         this.motivations.forEach(m => m.hasBeenAppealedTo = false);
         this.currentArgument.resetData();
     }

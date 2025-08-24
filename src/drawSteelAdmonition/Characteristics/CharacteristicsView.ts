@@ -34,7 +34,7 @@ export class CharacteristicsView {
 			// Value display
 			const valueDisplay = cell.createEl("div", {
 				cls: "ds-characteristics-value",
-				text: char.value ?? "",
+				text: char.value.toString() ?? "",
 			});
 			valueDisplay.style.fontSize = `${this.data.value_height}em`;
 

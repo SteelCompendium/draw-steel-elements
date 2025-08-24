@@ -8,7 +8,7 @@ export interface Hero {
 	image?: string;
 	isHero: boolean;
 	has_taken_turn?: boolean;
-	conditions?: (string | Condition)[];
+	conditions: (string | Condition)[];
 }
 
 export interface CreatureInstance {
@@ -51,6 +51,7 @@ export interface Condition {
 export interface EncounterData {
 	heroes: Hero[];
 	enemy_groups: EnemyGroup[];
+	// REVIEW: should we make this into a number since Malice is only {value: number}?
 	malice: Malice;
 }
 
@@ -59,7 +60,7 @@ export function resetEncounter(data: EncounterData) {
 		hero.current_stamina = undefined;
 		hero.temp_stamina = undefined;
 		hero.has_taken_turn = undefined;
-		hero.conditions = undefined;
+		hero.conditions = Array<Condition | string>();
 	});
 	data.enemy_groups.forEach((group) => {
 		group.has_taken_turn = undefined;
@@ -108,16 +109,19 @@ export function parseEncounterData(source: string): EncounterData {
 			throw new Error(`Hero '${hero.name}' is missing or has an invalid 'max_stamina' field.`);
 		}
 
-		// Update conditions handling
 		hero.conditions =
 			hero.conditions?.map((cond) => {
 				if (typeof cond === "string") {
-					return cond; // Keep as is for backward compatibility
+					return {
+						key: cond,
+						color: undefined,
+						effect: undefined
+					}
 				} else if (typeof cond === "object" && cond.key) {
 					return {
 						key: cond.key,
-						color: cond.color ?? null,
-						effect: cond.effect ?? null,
+						color: cond.color ?? undefined,
+						effect: cond.effect ?? undefined,
 					};
 				} else {
 					throw new Error(`Invalid condition format for hero '${hero.name}'.`);
@@ -228,12 +232,16 @@ export function parseEncounterData(source: string): EncounterData {
 						instance.conditions =
 							instance.conditions?.map((cond) => {
 								if (typeof cond === "string") {
-									return cond; // Keep as is for backward compatibility
+									return {
+										key: cond,
+										color: undefined,
+										effect: undefined
+									}
 								} else if (typeof cond === "object" && cond.key) {
 									return {
 										key: cond.key,
-										color: cond.color ?? null,
-										effect: cond.effect ?? null,
+										color: cond.color ?? undefined,
+										effect: cond.effect ?? undefined,
 									};
 								} else {
 									throw new Error(
@@ -269,12 +277,16 @@ export function parseEncounterData(source: string): EncounterData {
 						instance.conditions =
 							instance.conditions?.map((cond) => {
 								if (typeof cond === "string") {
-									return cond; // Keep as is for backward compatibility
+									return {
+										key: cond,
+										color: undefined,
+										effect: undefined
+									}
 								} else if (typeof cond === "object" && cond.key) {
 									return {
 										key: cond.key,
-										color: cond.color ?? null,
-										effect: cond.effect ?? null,
+										color: cond.color ?? undefined,
+										effect: cond.effect ?? undefined,
 									};
 								} else {
 									throw new Error(
@@ -288,7 +300,7 @@ export function parseEncounterData(source: string): EncounterData {
 		});
 	});
 
-	data.malice = data.malice ?? (data.villain_power ?? { value: 0 });
+	data.malice = data.malice ?? { value: 0 };
 	if (typeof data.malice.value !== "number") {
 		throw new Error("Invalid data: 'malice.value' must be a number.");
 	}

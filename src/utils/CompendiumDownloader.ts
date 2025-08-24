@@ -57,9 +57,7 @@ export class CompendiumDownloader {
 					Accept: 'application/octet-stream',
 					...(this.githubToken && {Authorization: `token ${this.githubToken}`}),
 				},
-				contentType: 'application/octet-stream',
-				// Set 'arraybuffer' as the response type
-				responseType: 'arraybuffer',
+				contentType: 'application/octet-stream'
 			};
 
 			new Notice('Draw Steel Elements: Downloading compendium...');
@@ -135,7 +133,10 @@ export class CompendiumDownloader {
 					}
 
 					// Write the file to the vault
-					await vault.createBinary(filePath, fileData);
+					// convert Uint8Array to ArrayBuffer to avoid type error
+					const arrayBuffer = new ArrayBuffer(fileData.length);
+					new Uint8Array(arrayBuffer).set(fileData);
+					await vault.createBinary(filePath, arrayBuffer);
 				}
 			}));
 

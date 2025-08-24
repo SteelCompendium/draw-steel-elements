@@ -153,7 +153,7 @@ export class InitiativeProcessor {
 		const imageEl = rowEl.createEl("div", { cls: "character-image" });
 		const imgSrcRaw = character.image ?? null;
 
-		Images.resolveImageSource(this.app, imgSrcRaw)
+		Images.resolveImageSource(this.app, imgSrcRaw ?? "")
 			.then((imgSrc) => {
 				imageEl.createEl("img", { attr: { src: imgSrc, alt: character.name } });
 			})
@@ -283,7 +283,7 @@ export class InitiativeProcessor {
 				// Display creature image in the cell
 				const imgEl = cellEl.createEl("div", { cls: "instance-image" });
 				const imgSrcRaw = creature.image ?? null;
-				Images.resolveImageSource(this.app, imgSrcRaw)
+				Images.resolveImageSource(this.app, imgSrcRaw ?? "")
 					.then((imgSrc) => {
 						imgEl.createEl("img", { attr: { src: imgSrc, alt: creature.name } });
 					})
@@ -344,7 +344,7 @@ export class InitiativeProcessor {
 		// Left: Creature Image
 		const imageEl = container.createEl("div", { cls: "character-image" });
 		const imgSrcRaw = creature.image ?? null;
-		Images.resolveImageSource(this.app, imgSrcRaw)
+		Images.resolveImageSource(this.app, imgSrcRaw ?? "")
 			.then((imgSrc) => {
 				imageEl.createEl("img", { attr: { src: imgSrc, alt: creature.name } });
 			})
