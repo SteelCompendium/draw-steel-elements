@@ -25,7 +25,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
 			.addText(text =>
 				text
 					.setPlaceholder('v1.0.0')
-					.setValue(this.plugin.settings.compendiumReleaseTag)
+					.setValue(this.plugin.settings.compendiumReleaseTag ?? "")
 					.onChange(async value => {
 						this.plugin.settings.compendiumReleaseTag = value;
 						await this.plugin.saveSettings();

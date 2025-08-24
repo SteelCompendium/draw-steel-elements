@@ -27,11 +27,11 @@ export class StaminaBar {
 
 	// TODO - should this be in Hero and CreatureInstance instead?  probably, but those are interfaces
 	public static fromHero(hero: Hero) {
-		return new StaminaBar(hero.max_stamina, hero.current_stamina, hero.temp_stamina, 1);
+		return new StaminaBar(hero.max_stamina, hero.current_stamina ?? 0, hero.temp_stamina ?? 0, 1);
 	}
 
 	public static fromCreature(being: CreatureInstance, creature: Creature) {
-		return new StaminaBar(creature.max_stamina, being.current_stamina, being.temp_stamina, 1);
+		return new StaminaBar(creature.max_stamina, being.current_stamina ?? 0, being.temp_stamina ?? 0, 1);
 	}
 
 	constructor(max_stamina: number, current_stamina: number, temp_stamina: number, height: number) {

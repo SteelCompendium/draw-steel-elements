@@ -1,7 +1,8 @@
-import {App, MarkdownPostProcessorContext, TFile, stringifyYaml, ItemView, EditorSelection} from "obsidian";
+import {App, MarkdownPostProcessorContext, TFile, stringifyYaml, ItemView} from "obsidian";
 import {EncounterData} from "@drawSteelAdmonition/EncounterData";
 import {NegotiationData} from "@model/NegotiationData";
 import {StaminaBar} from "@model/StaminaBar";
+import {Counter} from "@model/Counter";
 
 export class CodeBlocks {
 	static async updateInitiativeTracker(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
@@ -20,7 +21,7 @@ export class CodeBlocks {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-stamina");
 	}
 
-	static async updateCounter(app: App, data: StaminaBar, ctx: MarkdownPostProcessorContext): Promise<void> {
+	static async updateCounter(app: App, data: Counter, ctx: MarkdownPostProcessorContext): Promise<void> {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-counter");
 	}
 
@@ -42,7 +43,7 @@ export class CodeBlocks {
 		}
 	}
 
-	static async findCanvasNodeAndUpdate(app: App, ctx: MarkdownPostProcessorContext, data, language: string) {
+	static async findCanvasNodeAndUpdate(app: App, ctx: MarkdownPostProcessorContext, data: any, language: string) {
 		const canvasView = app.workspace.getActiveViewOfType(ItemView);
 		if (canvasView?.getViewType() !== 'canvas') {
 			console.log("Failed to find canvas associated with markdown context.  Change NOT saved.")
@@ -54,7 +55,7 @@ export class CodeBlocks {
 		for (let selectionKey in selection) {
 			// console.log(selection[selectionKey].text);
 			// console.log(ctx.getSectionInfo(ctx.el).text);
-			if (selection[selectionKey].text === ctx.getSectionInfo(ctx.el).text) {
+			if (selection[selectionKey].text === ctx.getSectionInfo(ctx.el)?.text) {
 				await this.updateCanvasCard(app, canvas, selection[selectionKey], data, language);
 				return;
 			}
@@ -65,7 +66,7 @@ export class CodeBlocks {
 		return;
 	}
 
-	static async updateCanvasCard(app: App, canvas, node, data: any, language: string) {
+	static async updateCanvasCard(app: App, canvas: any, node: any, data: any, language: string) {
 		const newCodeBlockContent = [];
 		newCodeBlockContent.push('```' + language);
 		newCodeBlockContent.push(stringifyYaml(data).trim());
@@ -79,6 +80,9 @@ export class CodeBlocks {
 		return;
 	}
 
+	// TODO: Figure out the correct implementation of MarkdownPostProcessorContext
+	// to use there as it doesn't have an el property, or otherwise figure out
+	// how to ensure ctx.el doesn't complain during a npx tsc -noEmit -skipLibCheck
 	static async updateMarkdownCodeBlock(app: App, file: TFile, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		const content = await app.vault.read(file);
 		const lines = content.split('\n');

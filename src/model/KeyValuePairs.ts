@@ -54,7 +54,7 @@ export class KVPair {
 
 	static parseKeyValue(data: any) {
 		const key: string = Object.keys(data)[0];
-		const value: string = Object.values(data)[0];
+		const value: string = Object.values(data)[0] as string;
 		return new KVPair(key, value);
 	}
 
