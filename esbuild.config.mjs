@@ -20,7 +20,6 @@ const copyToStylesPlugin = {
     build.onEnd(async () => {
       try {
         await fs.copyFile("main.css", "styles.css");
-        console.log("🔧 copied main.css -> styles.css");
       } catch { /* ignore if no CSS yet */ }
     });
   }
