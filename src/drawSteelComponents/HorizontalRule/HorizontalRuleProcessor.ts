@@ -22,7 +22,7 @@ export class HorizontalRuleProcessor {
 		} catch (error) {
 			// Display error message to the user
 			let userMessage =
-				"The Draw Steel Elements plugin failed to load the Vue Horizontal Rule. " +
+				"The Draw Steel Elements plugin failed to load the Horizontal Rule. " +
 				"Please correct the following error:\n\n";
 			userMessage += error.message;
 			vueWrapper.createEl("div", { text: userMessage, cls: "error-message" });

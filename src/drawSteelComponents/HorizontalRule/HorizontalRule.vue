@@ -10,7 +10,7 @@
 // No props or reactive data needed for this simple component
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .container {
 	display: flex;
 	align-items: center;
