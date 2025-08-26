@@ -18,6 +18,9 @@
     "moduleResolution": "node",
     "importHelpers": true,
     "isolatedModules": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
     "strictNullChecks": true,
     "lib": [
       "DOM",

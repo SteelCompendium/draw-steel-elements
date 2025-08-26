@@ -17,7 +17,10 @@
 		"node": ">=22.15"
 	},
 	"dependencies": {
-		"vue": "^3.5.19"
+		"ajv": "^8.17.1",
+		"ajv-errors": "^3.0.0",
+		"ajv-keywords": "^5.1.0",
+		"vue": "^3.5.20"
 	},
 	"devDependencies": {
 		"@codemirror/language": "^6.11.3",
@@ -25,9 +28,9 @@
 		"@types/jest": "^30.0.0",
 		"@types/node": "^24.3.0",
 		"@types/uuid": "^10.0.0",
-		"@typescript-eslint/eslint-plugin": "8.40.0",
-		"@typescript-eslint/parser": "8.40.0",
-		"@vue/compiler-sfc": "3.5.19",
+		"@typescript-eslint/eslint-plugin": "8.41.0",
+		"@typescript-eslint/parser": "8.41.0",
+		"@vue/compiler-sfc": "3.5.20",
 		"builtin-modules": "5.0.0",
 		"css": "^3.0.0",
 		"esbuild": "0.25.9",

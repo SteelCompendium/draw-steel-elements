@@ -25,6 +25,28 @@ const copyToStylesPlugin = {
   }
 };
 
+const yamlLoaderPlugin = {
+  name: "yaml-loader",
+  setup(build) {
+    build.onLoad({ filter: /\.ya?ml$/ }, async (args) => {
+      try {
+        const text = await fs.readFile(args.path, 'utf8');
+        return {
+          contents: `export default ${JSON.stringify(text)};`,
+          loader: 'js',
+        };
+      } catch (error) {
+        return {
+          errors: [{
+            text: `Failed to load YAML file: ${error.message}`,
+            location: { file: args.path }
+          }]
+        };
+      }
+    });
+  }
+};
+
 const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["main.ts"],
@@ -55,7 +77,8 @@ const context = await esbuild.context({
   minify: prod,
   plugins: [
     vue({ sourceMap: false }),
-	copyToStylesPlugin
+	copyToStylesPlugin,
+	yamlLoaderPlugin
   ],
   define: {
     'process.env.NODE_ENV': JSON.stringify(prod ? 'production' : 'development'),

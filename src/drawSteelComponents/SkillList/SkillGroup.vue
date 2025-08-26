@@ -25,9 +25,7 @@ const props = defineProps<{
     activeSkills?: string[]
 }>()
 
-
 const isHeadingCollapsed = ref(false)
-
 
 const hasSkill = (skillName: string) => {
     // Check if the skill is in the skills array (case-insensitive)

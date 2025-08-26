@@ -1,0 +1,128 @@
+# JSON Schema in YAML format for Draw Steel Character Skills
+$schema: "http://json-schema.org/draft-07/schema#"
+$id: "https://steelcompendium.io/schemas/skills-1.0.0"
+title: "Draw Steel Character Skills"
+description: "Schema for validating Draw Steel character skills data"
+
+type: object
+properties:
+    only_show_selected:
+        type: boolean
+        description: Whether to only show skills the character has selected
+        default: false
+        errorMessage: "only_show_selected must be true or false"
+
+    skills:
+        type: array
+        description: Array of skill names the character possesses
+        items:
+            type: string
+            transform:
+                - trim
+                - toLowerCase
+            enum:
+            # Crafting Skills
+            - alchemy
+            - architecture
+            - blacksmithing
+            - fletching
+            - forgery
+            - jewelry
+            - mechanics
+            - tailoring
+            # Exploration Skills  
+            - climb
+            - drive
+            - endurance
+            - gymnastics
+            - heal
+            - jump
+            - lift
+            - navigate
+            - ride
+            - swim
+            # Interpersonal Skills
+            - brag
+            - empathize
+            - flirt
+            - gamble
+            - handle animals
+            - interrogate
+            - intimidate
+            - lead
+            - lie
+            - music
+            - perform
+            - persuade
+            - read person
+            # Intrigue Skills
+            - alertness
+            - conceal object
+            - disguise
+            - eavesdrop
+            - escape artist
+            - hide
+            - pick lock
+            - pick pocket
+            - sabotage
+            - search
+            - sneak
+            - track
+            # Lore Skills
+            - culture
+            - criminal underworld
+            - history
+            - magic
+            - monsters
+            - nature
+            - psionics
+            - religion
+            - rumors
+            - society
+            - timescape
+            errorMessage: "Invalid skill ${0}. Must be one of the official Draw Steel skills (e.g., climb, jump, alchemy, etc.)\nIf you want a custom skill, use the custom_skills property."
+        uniqueItems: true
+        errorMessage:
+            type: "Skills must be an array of skill names"
+            uniqueItems: "Each skill can only be listed once"
+
+    custom_skills:
+        type: array
+        description: Array of custom skills the character possesses
+        errorMessage: "Custom skills must be an array of skill objects"
+        items:
+            type: object
+            required:
+                - name
+            errorMessage:
+                type: "Each custom skill must be an object"
+                required: "Custom skill must have a name"
+            properties:
+                name:
+                    type: string
+                    description: Name of the custom skill
+                    errorMessage: "Custom skill name is required and must be a string"
+                has_skill:
+                    type: boolean
+                    description: Whether the character has this skill
+                    default: true
+                skill_group:
+                    type: string
+                    description: Which skill group this custom skill belongs to
+                    transform:
+                        - trim
+                        - toLowerCase
+                    enum:
+                        - crafting
+                        - exploration
+                        - interpersonal
+                        - intrigue
+                        - lore
+                    errorMessage: "Invalid skill group '${0}'. Must be one of: crafting, exploration, interpersonal, intrigue, or lore"
+                description:
+                    type: string
+                    description: Description of what this skill does
+            additionalProperties: false
+
+additionalProperties: false
+...

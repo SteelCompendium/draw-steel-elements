@@ -1,7 +1,7 @@
 <template>
     <div class="container">
         <skill-group
-            v-for="(skillInfo, groupName) in SKILL_DATA"
+            v-for="(skillInfo, groupName) in fullSkillData"
             :key="groupName.toString()"
             :group-name="groupName.toString()"
             :skill-info="skillInfo"
@@ -30,7 +30,6 @@ for (let customSkill of props.skills?.custom_skills ?? []) {
         activeSkills.value.push(customSkill.name)
     }
 }
-
 </script>
 
 <style scoped>

@@ -1,17 +1,29 @@
 import {parseYaml} from "obsidian";
+import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
+import skillsSchemaYaml from "@model/schemas/SkillsSchema.yaml";
 
 export class Skills {
 	skills: string[];
 	custom_skills: CustomSkill[];
+	only_show_selected: boolean;
 
 	public static parseYaml(source: string) {
-		let data: any;
 		try {
-			data = parseYaml(source);
+			// Validate YAML content against YAML schema loaded from file
+			const validation = validateYamlWithYamlSchema(source, skillsSchemaYaml);
+			if (!validation.valid) {
+				const errorMessages = validation.errors.map((error: ValidationError) => 
+					`${error.path}: ${error.message}`
+				).join(', ');
+				throw new Error("Schema validation failed: " + errorMessages);
+			}
+
+			// Parse the YAML after validation
+			const data = parseYaml(source);
+			return Skills.parse(data);
 		} catch (error: any) {
 			throw new Error("Invalid YAML format: " + error.message);
 		}
-		return Skills.parse(data);
 	}
 
 	public static parse(data: any): Skills {
@@ -20,12 +32,13 @@ export class Skills {
 		if (data.custom_skills && Array.isArray(data.custom_skills)) {
 			data.custom_skills.forEach((cs: any) => custom_skills.push(CustomSkill.parse(cs)));
 		}
-		return new Skills(skills, custom_skills);
+		return new Skills(skills, custom_skills, data.only_show_selected);
 	}
 
-	constructor(skills: string[], custom_skills: CustomSkill[]) {
+	constructor(skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean) {
 		this.skills = skills;
 		this.custom_skills = custom_skills;
+		this.only_show_selected = only_show_selected ?? false
 	}
 }
 
