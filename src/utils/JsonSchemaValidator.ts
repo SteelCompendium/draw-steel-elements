@@ -53,10 +53,31 @@ export function validateJsonSchema(data: any, schema: object): ValidationResult 
 }
 
 /**
- * Validates data against a YAML schema
- * Parses YAML schema first, then validates data against it
+ * Validates YAML data against a YAML schema
+ * Parses both the YAML data and YAML schema first, then validates
  */
-export function validateYamlAsJsonSchema(data: any, yamlSchema: string): ValidationResult {
+export function validateYamlWithYamlSchema(yamlData: any, yamlSchema: string): ValidationResult {
+    try {
+        const schema = parseYaml(yamlSchema);
+        const data = parseYaml(yamlData);
+        return validateJsonSchema(data, schema);
+    } catch (error: any) {
+        return {
+            valid: false,
+            errors: [{
+                message: `YAML parsing error: ${error.message}`,
+                path: 'schema',
+                value: error.message.includes('schema') ? yamlSchema : yamlData
+            }]
+        };
+    }
+}
+
+/**
+ * Validates JSON data against a YAML schema
+ * Parses the YAML schema first, then validates JSON data against it
+ */
+export function validateJsonWithYamlSchema(data: any, yamlSchema: string): ValidationResult {
     try {
         const schema = parseYaml(yamlSchema);
         return validateJsonSchema(data, schema);
@@ -69,5 +90,100 @@ export function validateYamlAsJsonSchema(data: any, yamlSchema: string): Validat
                 value: yamlSchema
             }]
         };
+    }
+}
+
+/**
+ * Validates JSON data against a JSON schema
+ * Parses both the JSON data and JSON schema first, then validates
+ */
+export function validateJsonWithJsonSchema(jsonData: string, jsonSchema: string): ValidationResult {
+    try {
+        const schema = JSON.parse(jsonSchema);
+        const data = JSON.parse(jsonData);
+        return validateJsonSchema(data, schema);
+    } catch (error: any) {
+        return {
+            valid: false,
+            errors: [{
+                message: `JSON parsing error: ${error.message}`,
+                path: 'schema',
+                value: error.message.includes('schema') ? jsonSchema : jsonData
+            }]
+        };
+    }
+}
+
+/**
+ * Validates YAML data against a JSON schema
+ * Parses YAML data and JSON schema first, then validates
+ */
+export function validateYamlWithJsonSchema(yamlData: string, jsonSchema: string): ValidationResult {
+    try {
+        const schema = JSON.parse(jsonSchema);
+        const data = parseYaml(yamlData);
+        return validateJsonSchema(data, schema);
+    } catch (error: any) {
+        return {
+            valid: false,
+            errors: [{
+                message: `Parsing error: ${error.message}`,
+                path: 'schema',
+                value: error.message.includes('JSON') ? jsonSchema : yamlData
+            }]
+        };
+    }
+}
+
+/**
+ * Universal validation function that automatically detects data and schema formats
+ * Supports any combination of YAML/JSON data with YAML/JSON schemas
+ */
+export function validateDataWithSchema(data: string | object, schema: string | object): ValidationResult {
+    try {
+        // Handle already parsed objects
+        if (typeof data === 'object' && typeof schema === 'object') {
+            return validateJsonSchema(data, schema);
+        }
+        
+        // Parse schema if it's a string
+        let parsedSchema: object;
+        if (typeof schema === 'string') {
+            parsedSchema = isJsonString(schema) ? JSON.parse(schema) : parseYaml(schema);
+        } else {
+            parsedSchema = schema;
+        }
+        
+        // Parse data if it's a string  
+        let parsedData: any;
+        if (typeof data === 'string') {
+            parsedData = isJsonString(data) ? JSON.parse(data) : parseYaml(data);
+        } else {
+            parsedData = data;
+        }
+        
+        return validateJsonSchema(parsedData, parsedSchema);
+        
+    } catch (error: any) {
+        return {
+            valid: false,
+            errors: [{
+                message: `Auto-parsing error: ${error.message}`,
+                path: 'auto-detect',
+                value: error.message
+            }]
+        };
+    }
+}
+
+/**
+ * Helper function to detect if a string is valid JSON
+ */
+function isJsonString(str: string): boolean {
+    try {
+        JSON.parse(str);
+        return true;
+    } catch {
+        return false;
     }
 }

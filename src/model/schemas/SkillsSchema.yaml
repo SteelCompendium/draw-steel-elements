@@ -82,9 +82,7 @@ properties:
             - timescape
             errorMessage: "Invalid skill ${0}. Must be one of the official Draw Steel skills (e.g., climb, jump, alchemy, etc.)\nIf you want a custom skill, use the custom_skills property."
         uniqueItems: true
-        errorMessage:
-            type: "Skills must be an array of skill names"
-            uniqueItems: "Each skill can only be listed once"
+        errorMessage: "Skills must be an array of unique skill names"
 
     custom_skills:
         type: array
@@ -94,9 +92,7 @@ properties:
             type: object
             required:
                 - name
-            errorMessage:
-                type: "Each custom skill must be an object"
-                required: "Custom skill must have a name"
+            errorMessage: "Each custom skill must be an object with a name property"
             properties:
                 name:
                     type: string
