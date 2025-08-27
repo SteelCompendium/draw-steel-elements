@@ -5,7 +5,8 @@
             :key="groupName.toString()"
             :group-name="groupName.toString()"
             :skill-info="skillInfo"
-            :activeSkills="activeSkills">
+            :activeSkills="activeSkills"
+			:only-show-selected="model?.only_show_selected">
         </skill-group>
     </component-wrapper>
 </template>

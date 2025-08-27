@@ -1,15 +1,33 @@
 <template>
   <div class="container">
-        <collapsible-heading :header-level="3" :enabled="!isHeadingCollapsed" @toggle="handleToggle">
-            {{ toProperCase(props.groupName) }}
-        </collapsible-heading>
-        <ul class="skill-list" v-if="props.skillInfo && !isHeadingCollapsed">
-            <li class="skill-item" v-for="skill in props.skillInfo" :key="skill.name">
-                <toggle-indicator :enabled="hasSkill(skill.name)"></toggle-indicator>
-                <span :title="skill.use">{{ toProperCase(skill.name) }}</span>
-            </li>
-        </ul>
-  </div>
+		<span v-if="!onlyShowSelected">
+			<collapsible-heading :header-level="3" :enabled="!isHeadingCollapsed" @toggle="handleToggle">
+				{{ toProperCase(props.groupName) }}
+			</collapsible-heading>
+			<ul class="skill-list" v-if="props.skillInfo && !isHeadingCollapsed">
+				<li class="skill-item" v-for="skill in props.skillInfo" :key="skill.name">
+					<toggle-indicator :enabled="hasSkill(skill.name)"/>
+					<span :title="skill.use">
+						{{ toProperCase(skill.name) }}
+					</span>
+				</li>
+			</ul>
+		</span>
+
+		<span v-if="onlyShowSelected">
+			<h3>{{ toProperCase(props.groupName) }}</h3>
+			<ul class="skill-list" v-if="props.skillInfo && !isHeadingCollapsed">
+				<template v-for="skill in props.skillInfo" :key="skill.name">
+					<li class="skill-item" v-if="hasSkill(skill.name)">
+						<toggle-indicator :enabled="hasSkill(skill.name)"/>
+						<span :title="skill.use">
+							{{ toProperCase(skill.name) }}
+						</span>
+					</li>
+				</template>
+			</ul>
+		</span>
+  	</div>
 </template>
 
 <script setup lang="ts">
@@ -22,7 +40,8 @@ import { ref } from "vue";
 const props = defineProps<{
     groupName?: string,
     skillInfo?: SkillInfo[],
-    activeSkills?: string[]
+    activeSkills?: string[],
+	onlyShowSelected?: boolean,
 }>()
 
 const isHeadingCollapsed = ref(false)
