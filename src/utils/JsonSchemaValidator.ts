@@ -1,7 +1,10 @@
-import Ajv from 'ajv';
+import Ajv2019 from 'ajv/dist/2019';
 import addKeywords from 'ajv-keywords';
 import addErrors from 'ajv-errors';
 import { parseYaml } from 'obsidian';
+
+// Type alias for convenience
+type AjvInstance = InstanceType<typeof Ajv2019>;
 
 export interface ValidationError {
     message: string;
@@ -14,14 +17,67 @@ export interface ValidationResult {
     errors: ValidationError[];
 }
 
+// Singleton AJV instance with all schemas registered
+let globalAjv: AjvInstance | null = null;
+let registeredSchemas: Array<{ id: string, schema: object | string }> = [];
+
+/**
+ * Initialize the global AJV instance with all schemas
+ * This should be called once during plugin startup
+ */
+export function initializeSchemaRegistry(schemas: Array<{ id: string, schema: object | string }>): void {
+    registeredSchemas = [...schemas]; // Store schemas for later use
+    console.log("Stored", registeredSchemas.length, "dependency schemas for registration");
+}
+
+/**
+ * Create a fresh AJV instance with all registered schemas
+ */
+function createFreshAjvInstance(): AjvInstance {
+    const ajv = new Ajv2019({ 
+        allErrors: true,
+        strict: false // Allow modern features
+    });
+    addKeywords(ajv);
+    addErrors(ajv);
+    
+    // Register dependency schemas
+    for (const { id, schema } of registeredSchemas) {
+        try {
+            const parsedSchema = typeof schema === 'string' ? parseYaml(schema) : schema;
+            ajv.addSchema(parsedSchema, id);
+        } catch (error: any) {
+            console.warn(`Failed to register schema ${id}:`, error.message);
+        }
+    }
+    
+    return ajv;
+}
+
+/**
+ * Get the global AJV instance (creates a basic one if not initialized)
+ */
+function getAjvInstance(): AjvInstance {
+    if (!globalAjv) {
+        globalAjv = createFreshAjvInstance();
+    }
+    return globalAjv;
+}
+
+/**
+ * Reset the schema registry (useful for testing or plugin reload)
+ */
+export function resetSchemaRegistry(): void {
+    globalAjv = null;
+    registeredSchemas = [];
+}
+
 /**
  * Generic JSON Schema validator using AJV with keywords support
- * Can be used with any JSON schema for validation
+ * Creates a fresh AJV instance for each validation to avoid conflicts
  */
 export function validateJsonSchema(data: any, schema: object): ValidationResult {
-    const ajv = new Ajv({ allErrors: true });
-    addKeywords(ajv); // Add support for additional keywords like 'transform'
-    addErrors(ajv);   // Add support for custom error messages
+    const ajv = createFreshAjvInstance();
     
     const validate = ajv.compile(schema);
     
@@ -34,7 +90,7 @@ export function validateJsonSchema(data: any, schema: object): ValidationResult 
     const errors: ValidationError[] = [];
     
     if (validate.errors) {
-        validate.errors.forEach(error => {
+        validate.errors.forEach((error: any) => {
             const path = error.instancePath || error.schemaPath || 'root';
             const message = error.message || 'Unknown validation error';
             
@@ -186,4 +242,17 @@ function isJsonString(str: string): boolean {
     } catch {
         return false;
     }
+}
+
+/**
+ * Creates schema registration entries for common schemas
+ * Call this once during plugin startup to register all schemas
+ */
+export function createSchemaRegistry() {
+    return {
+        componentWrapper: {
+            id: "https://steelcompendium.io/schemas/component-wrapper-1.0.0",
+            // This will be populated in main.ts with the actual schema
+        }
+    };
 }

@@ -29,20 +29,27 @@ export function genericPostProcess(
         user_message_name: string
         ): void | Promise<any> {
     // Create a wrapper for the Vue component
-    const vueWrapper = el.createEl("div", { cls: "vue-wrapper" });
+    const vueWrapper = el.createEl("div", { cls: "ds-vue-wrapper" });
     try {
-        // Create and mount Vue app directly
-        const app = createApp(component, {
-                        skills: model.parseYaml(source)
+		// Create and mount Vue app directly
+		let app: any;
+		if (model) {
+			app = createApp(component, {
+                        model: model.parseYaml(source)
                     });
                     app.mount(vueWrapper);
+		}
+		else {
+			app = createApp(component);
+                    app.mount(vueWrapper);
+		}     
         
         // Store app instance for cleanup if needed
         (vueWrapper as any)._vueApp = app;
     } catch (error) {
         // Display error message to the user
         let userMessage =
-            `The Draw Steel Elements plugin failed to load the ${user_message_name}.` +
+            `The Draw Steel Elements plugin failed to load the ${user_message_name}.\n` +
             `Please correct the following error:\n\n`;
         userMessage += error.message;
         vueWrapper.createEl("div", { text: userMessage, cls: "error-message" });

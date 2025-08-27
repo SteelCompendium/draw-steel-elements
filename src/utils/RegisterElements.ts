@@ -1,6 +1,5 @@
 import {Plugin} from 'obsidian';
 
-import {HorizontalRuleProcessor} from "@drawSteelComponents/HorizontalRule/HorizontalRuleProcessor";
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
@@ -12,9 +11,10 @@ import {SkillsProcessor} from "@drawSteelAdmonition/Skills/SkillsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import { genericComponentProcessor } from "./ComponentProcessor";
 
-import SkillList from "@/drawSteelComponents/SkillList/SkillList.vue";
+import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
+import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 
-import { Skills } from "@/model/Skills";
+import { Skills } from "@model/Skills";
 
 export function registerElements (plugin: Plugin) {
 
@@ -22,7 +22,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
 
-	const hrProcessor = new HorizontalRuleProcessor(plugin);
+	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, undefined, "Horizontal Rule");
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 

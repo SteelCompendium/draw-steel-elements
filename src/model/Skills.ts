@@ -1,16 +1,18 @@
 import {parseYaml} from "obsidian";
-import { validateDataWithSchema, ValidationError } from "@utils/JsonSchemaValidator";
+import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
 import skillsSchemaYaml from "@model/schemas/SkillsSchema.yaml";
 
 export class Skills {
 	skills: string[];
 	custom_skills: CustomSkill[];
 	only_show_selected: boolean;
+	collapsible: boolean;
+	collapse_default: boolean;
 
 	public static parseYaml(source: string) {
 		try {
-			// Validate YAML content against YAML schema loaded from file
-			const validation = validateDataWithSchema(source, skillsSchemaYaml);
+			// Validate YAML content against YAML schema (all dependencies pre-registered)
+			const validation = validateYamlWithYamlSchema(source, skillsSchemaYaml);
 			if (!validation.valid) {
 				const errorMessages = validation.errors.map((error: ValidationError) => 
 					`${error.path}: ${error.message}`
@@ -32,13 +34,15 @@ export class Skills {
 		if (data.custom_skills && Array.isArray(data.custom_skills)) {
 			data.custom_skills.forEach((cs: any) => custom_skills.push(CustomSkill.parse(cs)));
 		}
-		return new Skills(skills, custom_skills, data.only_show_selected);
+		return new Skills(skills, custom_skills, data.only_show_selected, data.collapsible, data.collapse_default);
 	}
 
-	constructor(skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean) {
+	constructor(skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean, collapsible: boolean, collapse_default: boolean) {
 		this.skills = skills;
 		this.custom_skills = custom_skills;
-		this.only_show_selected = only_show_selected ?? false
+		this.only_show_selected = only_show_selected ?? false;
+		this.collapsible = collapsible ?? false;
+		this.collapse_default = collapse_default ?? false;
 	}
 }
 

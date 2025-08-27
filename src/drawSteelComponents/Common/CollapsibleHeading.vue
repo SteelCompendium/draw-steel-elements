@@ -1,5 +1,5 @@
 <template>
-	<component :is="`h${headerLevel}`" >
+	<component :is="`h${headerLevel}`" class="heading">
 		<right-arrow-toggle-indicator :enabled="enabled" @toggle="handleToggle"/>
 		<slot></slot>
 	</component>
@@ -41,3 +41,10 @@ const handleToggle = () => {
 	emit('toggle', !props.enabled)
 }
 </script>
+
+<style scoped>
+.markdown-source-view.is-live-preview .heading > .heading-collapse-indicator {
+	position: absolute;
+	left: 5px;
+}
+</style>

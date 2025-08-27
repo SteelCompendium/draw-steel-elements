@@ -1987,3 +1987,7 @@ button.action-button {
 		text-transform: uppercase;
 	}
 }
+
+.markdown-source-view.is-live-preview .ds-vue-wrapper {
+  margin-left: 20px;
+}

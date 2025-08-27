@@ -1,5 +1,5 @@
 <template>
-  <div class="container">
+  <div class="h-rule-container">
     <div class="line line-left"></div>
     <div class="line-center"></div>
     <div class="line line-right"></div>
@@ -11,7 +11,7 @@
 </script>
 
 <style scoped>
-.container {
+.h-rule-container {
 	display: flex;
 	align-items: center;
 	position: relative;

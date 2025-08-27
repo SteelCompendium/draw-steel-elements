@@ -1,5 +1,5 @@
 <template>
-    <div class="container">
+    <component-wrapper component-name="Skill List" :collapsible="model?.collapsible" :collapse_default="model?.collapse_default">
         <skill-group
             v-for="(skillInfo, groupName) in fullSkillData"
             :key="groupName.toString()"
@@ -7,7 +7,7 @@
             :skill-info="skillInfo"
             :activeSkills="activeSkills">
         </skill-group>
-    </div>
+    </component-wrapper>
 </template>
 
 <script setup lang="ts">
@@ -15,15 +15,16 @@ import SkillGroup from "@drawSteelComponents/SkillList/SkillGroup.vue";
 import { SKILL_DATA } from "@utils/SkillsData"
 import { Skills } from "@model/Skills";
 import { ref } from "vue";
+import ComponentWrapper from "@drawSteelComponents/Common/ComponentWrapper.vue";
 
 const props = defineProps<{
-    skills?: Skills,
+    model?: Skills,
 }>()
 
-let activeSkills = ref(props.skills?.skills ? [...props.skills.skills] : []);
+let activeSkills = ref(props.model?.skills ? [...props.model.skills] : []);
 let fullSkillData = ref(structuredClone(SKILL_DATA));
 
-for (let customSkill of props.skills?.custom_skills ?? []) {
+for (let customSkill of props.model?.custom_skills ?? []) {
     let skillGroup = fullSkillData.value[customSkill.skill_group?.toLowerCase() ?? "ungrouped skills"]
     skillGroup.push({name: customSkill.name, use: customSkill.description ?? ""})
     if (customSkill.has_skill) {
@@ -33,7 +34,4 @@ for (let customSkill of props.skills?.custom_skills ?? []) {
 </script>
 
 <style scoped>
-.container {
-    width: 100%;
-}
 </style>
