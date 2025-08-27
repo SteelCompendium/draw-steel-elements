@@ -21,7 +21,6 @@ const props = defineProps({
 	enabled: {
 		type: Boolean,
 		required: false,
-		default: true
 	}
 })
 

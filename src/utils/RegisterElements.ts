@@ -1,0 +1,65 @@
+import {Plugin} from 'obsidian';
+
+import {HorizontalRuleProcessor} from "@drawSteelComponents/HorizontalRule/HorizontalRuleProcessor";
+import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
+import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
+import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
+import {AbilityProcessor} from "@drawSteelAdmonition/ability/AbilityProcessor";
+import {StaminaBarProcessor} from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
+import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
+import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
+import {SkillsProcessor} from "@drawSteelAdmonition/Skills/SkillsProcessor";
+import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
+import { genericComponentProcessor } from "./ComponentProcessor";
+
+import SkillList from "@/drawSteelComponents/SkillList/SkillList.vue";
+
+import { Skills } from "@/model/Skills";
+
+export function registerElements (plugin: Plugin) {
+
+	const abilityProcessor = new AbilityProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
+
+	const hrProcessor = new HorizontalRuleProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
+
+	const initProcessor = new InitiativeProcessor(plugin.app);
+	plugin.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-init", initProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-initiative-tracker", initProcessor.handler);
+
+	let ntProcessor = new NegotiationTrackerProcessor(plugin.app);
+	plugin.registerMarkdownCodeBlockProcessor("ds-nt", ntProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntProcessor.handler);
+
+	let sbProcessor = new StatblockProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
+
+	let stamProcessor = new StaminaBarProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-stam", stamProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", stamProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", stamProcessor.handler);
+
+	let counterProcessor = new CounterProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-counter", counterProcessor.handler);
+
+	let charProcessor = new CharacteristicsProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-characteristics", charProcessor.handler);
+
+	let skillsProcessor = new SkillsProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-skills", skillsProcessor.handler);
+	let skillListProcessor = new genericComponentProcessor(plugin, SkillList, Skills, "Skill List");
+	plugin.registerMarkdownCodeBlockProcessor("ds-skills-new", skillListProcessor.handler);
+
+	let valRowProcessor = new ValuesRowProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-value-row", valRowProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-values-row", valRowProcessor.handler);
+}
