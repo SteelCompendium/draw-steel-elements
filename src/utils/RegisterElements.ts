@@ -53,10 +53,8 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-characteristics", charProcessor.handler);
 
-	let skillsProcessor = new SkillsProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-skills", skillsProcessor.handler);
 	let skillListProcessor = new genericComponentProcessor(plugin, SkillList, Skills, "Skill List");
-	plugin.registerMarkdownCodeBlockProcessor("ds-skills-new", skillListProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-skills", skillListProcessor.handler);
 
 	let valRowProcessor = new ValuesRowProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);
