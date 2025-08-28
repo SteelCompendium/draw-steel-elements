@@ -34,10 +34,11 @@ The Skills Element supports [Common Element Fields](common-element-fields).
 
 Below is a detailed description of each field used in the skills element, including their types, default values, and whether they are required.
 
-| Field           | Type                     | Description                                                             | Required | Default Value |
-|-----------------|--------------------------|-------------------------------------------------------------------------|----------|---------------|
-| `skills`        | `array` of `string`      | A list of standard skills the character possesses.                      | No       | `[]`          |
-| `custom_skills` | `array` of `CustomSkill` | A list of custom skills defined by the user. See **CustomSkill** below. | No       | `[]`          |
+| Field                | Type                     | Description                                                                  | Required | Default Value |
+|----------------------|--------------------------|------------------------------------------------------------------------------|----------|---------------|
+| `skills`             | `array` of `string`      | A list of standard skills the character possesses.                           | No       | `[]`          |
+| `custom_skills`      | `array` of `CustomSkill` | A list of custom skills defined by the user. See **CustomSkill** below.      | No       | `[]`          |
+| `only_show_selected` | `boolean`                | If `true`, will hide skills that are not selected (Group headers still show) | No       | `false`       |
 
 ### Notes:
 
