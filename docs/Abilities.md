@@ -6,18 +6,19 @@ Yaml is incredibly sensitive, be sure to format exactly.
 
 ## Field Definition
 
-| Property                      | Description                                              | Example                             |
-|-------------------------------|----------------------------------------------------------|-------------------------------------|
-| `name`                        | The "Title" or "Description" of the ability.             | `name: Might Resistance Roll`       |
-| `flavor`                      | The flavor text of the ability.                          | `flavor: Be strong`                 |
-| `cost`                        | The cost to use the ability                              | `cost: 3 Piety`                     |
-| `keywords`                    | Keywords of the ability                                  | `keywords: Area, Magic`             |
-| `type`                        | Type of the ability                                      | `type: Action`                      |
-| `distance`                    | Distance of the ability                                  | `distance: 2 burst`                 |
-| `target`                      | Target of the ability                                    | `target: All enemies`               |
-| `trigger`                     | The Trigger for a Triggered Action                       | `trigger: You are damaged`          |
-| `effects`                     | List of effects, power-rolls, and features               | See the [Effects section](#Effects) |
-| `indent`                      | Left-margin indentation for the block (for nested lists) | `indent: 2`                               |
+| Property   | Description                                              | Example                             |
+|------------|----------------------------------------------------------|-------------------------------------|
+| `name`     | The "Title" or "Description" of the ability.             | `name: Might Resistance Roll`       |
+| `icon`     | Icon for the ability.                                    | `icon: ☠️`                          |
+| `flavor`   | The flavor text of the ability.                          | `flavor: Be strong`                 |
+| `cost`     | The cost to use the ability                              | `cost: 3 Piety`                     |
+| `keywords` | Keywords of the ability                                  | `keywords: Area, Magic`             |
+| `type`     | Type of the ability                                      | `type: Action`                      |
+| `distance` | Distance of the ability                                  | `distance: 2 burst`                 |
+| `target`   | Target of the ability                                    | `target: All enemies`               |
+| `trigger`  | The Trigger for a Triggered Action                       | `trigger: You are damaged`          |
+| `effects`  | List of effects, power-rolls, and features               | See the [Effects section](#Effects) |
+| `indent`   | Left-margin indentation for the block (for nested lists) | `indent: 2`                         |
 
 Example
 
@@ -50,13 +51,13 @@ Abilities can have many effects and the order is important.  An effect can take 
 
 Power Roll Effects have a roll and the tier results.
 
-| Property                      | Description                                              | Example                             |
-|-------------------------------|----------------------------------------------------------|-------------------------------------|
-| `roll`                        | Power Roll                                               | `roll: Power Roll + Might or Presence`    |
-| `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll        | `t1: 2 damage`                            |
-| `tier 2`, `t2`, `12-16`       | The tier-2 (12-16) result of the Power Roll              | `t2: 3 damage`                            |
-| `tier 3`, `t3`, `17+`         | The tier-3 (17+) result of the Power Roll                | `t3: 4 damage`                            |
-| `crit`, `nat 19-20`           | The critical result of the Power Roll                    | `crit: 4 damage, Extra Action`            |
+| Property                      | Description                                       | Example                                |
+|-------------------------------|---------------------------------------------------|----------------------------------------|
+| `roll`                        | Power Roll                                        | `roll: Power Roll + Might or Presence` |
+| `tier 1`, `t1`, `11 or lower` | The tier-1 (11 or lower) result of the Power Roll | `t1: 2 damage`                         |
+| `tier 2`, `t2`, `12-16`       | The tier-2 (12-16) result of the Power Roll       | `t2: 3 damage`                         |
+| `tier 3`, `t3`, `17+`         | The tier-3 (17+) result of the Power Roll         | `t3: 4 damage`                         |
+| `crit`, `nat 19-20`           | The critical result of the Power Roll             | `crit: 4 damage, Extra Action`         |
 
 Example:
 

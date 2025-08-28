@@ -17,94 +17,123 @@ Example statblock
 ```
 ~~~ds-statblock
 name: Human Bandit Chief
-level: 3 
-roles: 
-  - Boss
-ancestry: 
+level: 3
+roles:
+  - Leader
+ancestry:
   - Human
-  - Humanoid 
-ev: 54
-stamina: 120 
-immunities: 
-  - Magic 2
-  - Psionic 2
-speed: 5 
+  - Humanoid
+ev: "20"
+stamina: "120"
+immunities:
+  - Corruption 4
+  - psychic 4
+speed: 5
 size: 1M
 stability: 2
 free_strike: 5
-might: +2 
-agility: +2 
-reason: -1 
-intuition: +2 
-presence: +2
+might: 2
+agility: 3
+reason: 2
+intuition: 3
+presence: 2
 traits:
-- name: End Effect 
-  effect: At the end of their turn, the bandit chief can take 5 damage to end one EoE effect affecting them. This damage can’t be reduced in any way.
+  - name: End Effect
+    effects:
+      - effect: At the end of each of their turns, the bandit chief can take 5 damage to
+          end one effect on them that can be ended by a saving throw. This
+          damage can't be reduced in any way.
+  - name: Supernatural Insight
+    effects:
+      - effect: The bandit chief ignores concealment if it's granted by a supernatural
+          effect
 abilities:
-- name: Whip & Magic Longsword
-  cost: Signature
-  type: Action
-  roll: 2d10 + 2
-  keywords:
-    - Attack
-    - Magic
-    - Melee
-    - Weapon
-  distance: Reach 1
-  target: Two enemies or objects
-  tier 1: 5 damage; [[Director Reference#Pull X|pull]] 1
-  tier 2: 9 damage; pull 2
-  tier 3: 12 damage; pull 3
-  crit: 12 damage; pull 3; another action
-  effect: A target who is adjacent to the bandit chief after the attack is resolved takes 9 corruption damage.
-  additional_effects:
-    - cost: 2 Malice
-      effect: This ability targets three enemies or objects.
-- name: Kneel, Peasant!
-  type: Maneuver
-  keywords:
-  - Attack
-  - Melee
-  - Weapon
-  distance: Reach 1 
-  target: One enemy or object
-  t1: Push 1
-  t2: Push 2; prone
-  t3: Push 3; prone
-  additional_effects:
-    - cost: 2 Malice
-      effect: This ability targets each enemy adjacent to the bandit chief.
-- name: Bloodstones 
-  type: Triggered Action
-  keywords:
-    - Magic
-  distance: Self 
-  target: Self
-  trigger: The bandit chief makes a power roll for an attack.
-  effect: The bandit chief takes 4 corruption damage and increases the result of the power roll by one tier.
-- name: Shoot!
-  type: Villain Action
-  cost: 1 Malice
-  keywords: Area
-  distance: 10 burst 
-  target: Each ally
-  effect: Each target can make a ranged free strike.
-- name: Form Up! 
-  type: Villain Action
-  cost: 2 Malice
-  effect: Each target shifts up to their speed. Until the end of the encounter, any enemy takes a bane on attacks against the bandit chief or any of the bandit chief’s allies if they are adjacent to that target.
-  keywords: Area
-  distance: 10 burst 
-  target: Each ally
-- name: Lead From the Front 
-  type: Villain Action
-  cost: 3 Malice
-  keywords: 
-    - Attack 
-    - Weapon
-  distance: Self 
-  target: Self
-  effect: The bandit chief shifts twice their speed. During or after this movement, they can attack up to four targets with Whip & Magic Longsword. Any ally of the bandit chief adjacent to a target can make a free strike against that target.
+  - name: Whip and Magic Longsword
+    icon: 🗡
+    cost: Signature Ability
+    keywords:
+      - Magic
+      - Melee
+      - Strike
+      - Weapon
+    type: Main action
+    distance: Melee 2
+    target: Two enemies or objects
+    effects:
+      - roll: Power Roll + 2
+        t1: 8 damage; pull 1
+        t2: 12 damage; pull 2
+        t3: 15 damage; pull 3
+      - effect: Any target who is adjacent to the bandit chief after the power roll is
+          resolved takes 3 corruption damage.
+        name: Effect
+      - effect: This ability targets one additional target.
+        cost: 2 Malice
+  - name: Kneel, Peasant!
+    icon: 🗡
+    keywords:
+      - Melee
+    type: Maneuver
+    distance: Melee 1
+    target: One enemy
+    effects:
+      - cost: ≤11
+        effect: Push 1; M < 1 prone
+        t2: Push 2; M < 2 prone
+        t3: Push 4; M < 3 prone
+      - effect: The ability takes the Area keyword, loses the Melee keyword, and is a 1
+          burst that targets each enemy in the area.
+        cost: 2 Malice
+  - name: Bloodstones
+    icon: ❗️
+    keywords:
+      - Magic
+    type: Triggered action
+    distance: Self
+    target: Self
+    trigger: The bandit chief makes a power roll.
+    effects:
+      - effect: The bandit chief takes 5 corruption damage and increases the outcome of
+          the power roll by one tier. This damage can't be reduced in any way.
+        name: Effect
+  - name: Shoot!
+    icon: ☠️
+    cost: Villain Action 1
+    keywords:
+      - Area
+    type: "-"
+    distance: 10 burst
+    target: Each artillery ally in the area
+    effects:
+      - effect: Each target makes a ranged free strike.
+        name: Effect
+  - name: Form Up!
+    icon: ☠️
+    cost: Villain Action 2
+    keywords:
+      - Area
+    type: "-"
+    distance: 10 burst
+    target: Each ally in the area
+    effects:
+      - effect: Each target shifts up to their speed. Additionally, until the end of the
+          encounter, while the bandit chief or any ally is adjacent to a target,
+          they have damage immunity 2.
+        name: Effect
+  - name: Lead From the Front
+    icon: ☠️
+    cost: Villain Action 3
+    keywords:
+      - "-"
+    type: "-"
+    distance: Self
+    target: Self
+    effects:
+      - effect: The bandit chief shifts up to 10 squares regardless of their speed.
+          During or after this movement, they can use their Whip and Magic
+          Longsword against up to four targets. Additionally, one ally adjacent
+          to each target can make a free strike against that target.
+        name: Effect
 ~~~
 ```
 
@@ -117,7 +146,7 @@ Below is a detailed description of each field used in the statblock, including t
 ### Header Fields
 
 | Field         | Type                 | Description                                                                        | Required | Default Value |
-| ------------- | -------------------- | ---------------------------------------------------------------------------------- | -------- | ------------- |
+|---------------|----------------------|------------------------------------------------------------------------------------|----------|---------------|
 | `name`        | `string`             | The name of the creature.                                                          | **Yes**  | N/A           |
 | `level`       | `integer`            | The creature's level.                                                              | No       | `0`           |
 | `roles`       | `array` of `string`  | A list of roles assigned to the creature (e.g., "Boss", "Minion").                 | No       | `[]`          |
@@ -145,11 +174,11 @@ Below is a detailed description of each field used in the statblock, including t
 
 Each trait in the `traits` array consists of the following fields:
 
-| Field    | Type     | Description                                                               | Required | Default Value |
-| -------- | -------- | ------------------------------------------------------------------------- | -------- | ------------- |
-| `name`   | `string` | The name of the trait.                                                    | **Yes**  | N/A           |
-| `type`   | `string` | The action-type of the trait (e.g., "Maneuver", "Free Triggered Action"). | No       | ``            |
-| `effect` | `string` | A description of the trait's effect.                                      | **Yes**  | N/A           |
+| Field     | Type                | Description                                       | Required | Default Value |
+|-----------|---------------------|---------------------------------------------------|----------|---------------|
+| `name`    | `string`            | The name of the trait.                            | **Yes**  | N/A           |
+| `icon`    | `string`            | Icon for the trait.                               | No       | ``            |
+| `effects` | `array` of `Effect` | See the [Effects section](./Abilities.md#Effects) | **No**   | `[]`          |
 
 ### Abilities
 
