@@ -120,6 +120,10 @@ allOf:
                     description:
                         type: string
                         description: Description of what this skill does
-                unevaluatedProperties: false
-unevaluatedProperties: false
+                unevaluatedProperties:
+                    const: false
+                    errorMessage: "Custom skill objects must not have extra properties. Allowed: name, has_skill, skill_group, description."
+unevaluatedProperties:
+    const: false
+    errorMessage: "Skills object must not have extra properties. Allowed: only_show_selected, skills, custom_skills."
 ...
