@@ -17,7 +17,7 @@ Yaml is incredibly sensitive, be sure to format exactly.
 | `distance` | Distance of the ability                                  | `distance: 2 burst`                 |
 | `target`   | Target of the ability                                    | `target: All enemies`               |
 | `trigger`  | The Trigger for a Triggered Action                       | `trigger: You are damaged`          |
-| `effects`  | List of effects, power-rolls, and features               | See the [Effects section](#Effects) |
+| `effects`  | List of effects, power-rolls, and features               | See the [Effects section](#effects) |
 | `indent`   | Left-margin indentation for the block (for nested lists) | `indent: 2`                         |
 
 Example

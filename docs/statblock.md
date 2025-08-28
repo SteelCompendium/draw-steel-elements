@@ -178,7 +178,7 @@ Each trait in the `traits` array consists of the following fields:
 |-----------|---------------------|---------------------------------------------------|----------|---------------|
 | `name`    | `string`            | The name of the trait.                            | **Yes**  | N/A           |
 | `icon`    | `string`            | Icon for the trait.                               | No       | ``            |
-| `effects` | `array` of `Effect` | See the [Effects section](./Abilities.md#Effects) | **No**   | `[]`          |
+| `effects` | `array` of `Effect` | See the [Effects section](./Abilities.md#effects) | **No**   | `[]`          |
 
 ### Abilities
 
