@@ -7,14 +7,13 @@ import {AbilityProcessor} from "@drawSteelAdmonition/ability/AbilityProcessor";
 import {StaminaBarProcessor} from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
-import {SkillsProcessor} from "@drawSteelAdmonition/Skills/SkillsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import { genericComponentProcessor } from "./ComponentProcessor";
 
 import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 
-import { Skills } from "@model/Skills";
+import { Skills as SkillsModel } from "@model/Skills";
 
 export function registerElements (plugin: Plugin) {
 
@@ -53,7 +52,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-characteristics", charProcessor.handler);
 
-	let skillListProcessor = new genericComponentProcessor(plugin, SkillList, Skills, "Skill List");
+	let skillListProcessor = new genericComponentProcessor(plugin, SkillList, SkillsModel, "Skill List");
 	plugin.registerMarkdownCodeBlockProcessor("ds-skills", skillListProcessor.handler);
 
 	let valRowProcessor = new ValuesRowProcessor(plugin);

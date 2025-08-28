@@ -85,7 +85,6 @@ allOf:
                 errorMessage: |
                     Invalid skill ${0}. 
                     Must be one of the official Draw Steel skills (e.g., climb, jump, alchemy, etc.)
-
                     If you want a custom skill, use the custom_skills property.
             uniqueItems: true
             errorMessage: Skills must be an array of unique skill names

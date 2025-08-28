@@ -1,13 +1,12 @@
-import {parseYaml} from "obsidian";
+import { parseYaml } from "obsidian";
 import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
+import { ComponentWrapper } from "@model/ComponentWrapper";
 import skillsSchemaYaml from "@model/schemas/SkillsSchema.yaml";
 
-export class Skills {
+export class Skills extends ComponentWrapper{
 	skills: string[];
 	custom_skills: CustomSkill[];
 	only_show_selected: boolean;
-	collapsible: boolean;
-	collapse_default: boolean;
 
 	public static parseYaml(source: string) {
 		try {
@@ -34,15 +33,14 @@ export class Skills {
 		if (data.custom_skills && Array.isArray(data.custom_skills)) {
 			data.custom_skills.forEach((cs: any) => custom_skills.push(CustomSkill.parse(cs)));
 		}
-		return new Skills(skills, custom_skills, data.only_show_selected, data.collapsible, data.collapse_default);
+		return new Skills(data.collapsible, data.collapse_default, skills, custom_skills, data.only_show_selected);
 	}
 
-	constructor(skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean, collapsible: boolean, collapse_default: boolean) {
+	constructor( collapsible: boolean, collapse_default: boolean, skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean) {
+        super(collapsible, collapse_default);
 		this.skills = skills;
 		this.custom_skills = custom_skills;
 		this.only_show_selected = only_show_selected ?? false;
-		this.collapsible = collapsible ?? false;
-		this.collapse_default = collapse_default ?? false;
 	}
 }
 
