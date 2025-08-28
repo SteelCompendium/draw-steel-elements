@@ -53,7 +53,6 @@ const hasSkill = (skillName: string) => {
 
 const handleToggle = () => {
     isHeadingCollapsed.value = !isHeadingCollapsed.value
-    console.log("clicked", isHeadingCollapsed.value)
 }
 </script>
 

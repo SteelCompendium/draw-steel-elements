@@ -1,0 +1,45 @@
+# JSON Schema in YAML format for Draw Steel Character Skills
+$schema: https://json-schema.org/draft/2019-09/schema
+$id: https://steelcompendium.io/schemas/stamina-bar-1.0.0
+title: Draw Steel Stamina Bar
+description: Schema for validating Draw Steel stamina bar data
+
+type: object
+allOf:
+  - $ref: https://steelcompendium.io/schemas/component-wrapper-1.0.0
+  - properties:
+      - max_stamina:
+            type: integer
+            description: The amount of stamina that constitutes a full bar.
+            errorMessage: max_stamina must be a whole, positive number.
+            minimum: 0
+      - current_stamina:
+            type: integer
+            description: |
+                The amount the bar should be filled relative to max_stamina.
+                Clamped to be equal to or less than max_stamina.
+            errorMessage: current_stamina must be a whole number.
+      - temp_stamina:
+            type: integer
+            description: |
+                An amount of extra stamina in addition to current_stamina.
+                If the take-damage feature is used, temp_stamina will be used first.
+            errorMessage: temp_stamina must be a whole number.
+      - height:
+            type: number
+            description: |
+                A multiplier for the thickness of the stamina bar.
+                Only used with default style.
+      - style:
+            type: string
+            transform:
+              - trim
+              - toLowerCase
+            enum:
+              - default
+              - sheet
+            default: default
+            description: |
+                Selects what style of stamina bar to use.
+                "Default" is the classic green bar.
+                "Sheet" aims to mimic the style of the official character sheet.

@@ -12,8 +12,10 @@ import { genericComponentProcessor } from "./ComponentProcessor";
 
 import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
+import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
 
 import { Skills as SkillsModel } from "@model/Skills";
+import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
 
 export function registerElements (plugin: Plugin) {
 
@@ -21,7 +23,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
 
-	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, undefined, "Horizontal Rule");
+	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, undefined, "Horizontal Rule", true);
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 
@@ -43,6 +45,8 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-stam", stamProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", stamProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", stamProcessor.handler);
+    let staminaBarProcessor = new genericComponentProcessor(plugin, StaminaBar, StaminaBarModel, "Stamina Bar", true);
+    plugin.registerMarkdownCodeBlockProcessor("ds-stamina-new", staminaBarProcessor.handler);
 
 	let counterProcessor = new CounterProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);

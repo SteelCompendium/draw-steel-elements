@@ -36,7 +36,7 @@ export class Skills extends ComponentWrapper{
 		return new Skills(data.collapsible, data.collapse_default, skills, custom_skills, data.only_show_selected);
 	}
 
-	constructor( collapsible: boolean, collapse_default: boolean, skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean) {
+	constructor(collapsible: boolean, collapse_default: boolean, skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean) {
         super(collapsible, collapse_default);
 		this.skills = skills;
 		this.custom_skills = custom_skills;

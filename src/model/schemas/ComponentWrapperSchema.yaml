@@ -9,7 +9,7 @@ properties:
     collapsible:
         type: boolean
         description: Whether the component can be collapsed or not
-        default: false
+        default: true
         errorMessage: "collapsible must be true or false"
     collapse_default:
         type: boolean
