@@ -1,6 +1,6 @@
 {
 	"name": "draw-steel-elements",
-	"version": "3.2.2",
+	"version": "3.3.0",
 	"description": "Components to support the Draw Steel TTRPG by MCDM.",
 	"main": "main.js",
 	"scripts": {
@@ -11,7 +11,7 @@
 		"tsc": "vue-tsc --noEmit"
 	},
 	"keywords": [],
-	"author": "",
+	"author": "Steel Compendium",
 	"license": "MIT",
 	"engines": {
 		"node": ">=22.15"

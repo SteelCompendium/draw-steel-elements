@@ -22,7 +22,7 @@ export class ComponentWrapper {
     }
 
     constructor(collapsible: boolean, collapse_default: boolean) {
-        this.collapsible = collapsible;
-        this.collapse_default = collapse_default;
+        this.collapsible = collapsible ?? true;
+        this.collapse_default = collapse_default ?? false;
     }
 }

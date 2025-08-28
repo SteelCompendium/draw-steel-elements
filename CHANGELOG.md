@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.3.0
+
+- Skill Element updated to support `only_show_selected` to hide unselected skills from the Element
+- Begins migrating to Vue
+  - Boilerplate implemented
+  - Updates Skill Element to use Vue
+- New fields for Vue Elements (Currently only Skill Element)
+  - `collapsible` (boolean) if `true` allows the Element to collapse
+  - `collapse_default` (boolean) if `true` will set the default state of the Element to collapsed when rendered.
+  - See the docs for Common Element Fields for details
+    
 ## 3.2.2
 
 - (Quietly) enabling mobile support
