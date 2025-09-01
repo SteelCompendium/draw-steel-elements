@@ -41,12 +41,10 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
 
-	let stamProcessor = new StaminaBarProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-stam", stamProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", stamProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", stamProcessor.handler);
-    let staminaBarProcessor = new genericComponentProcessor(plugin, StaminaBar, StaminaBarModel, "Stamina Bar", true);
-    plugin.registerMarkdownCodeBlockProcessor("ds-stamina-new", staminaBarProcessor.handler);
+	let staminaBarProcessor = new genericComponentProcessor(plugin, StaminaBar, StaminaBarModel, "Stamina Bar", true);
+	plugin.registerMarkdownCodeBlockProcessor("ds-stam", staminaBarProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", staminaBarProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", staminaBarProcessor.handler);
 
 	let counterProcessor = new CounterProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);

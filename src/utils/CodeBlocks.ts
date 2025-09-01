@@ -21,10 +21,6 @@ export class CodeBlocks {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-stamina");
 	}
 
-    static async updateStaminaBarVue(app: App, data: StaminaBar, ctx: MarkdownPostProcessorContext): Promise<void> {
-		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-stamina-new");
-	}
-
 	static async updateCounter(app: App, data: Counter, ctx: MarkdownPostProcessorContext): Promise<void> {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-counter");
 	}

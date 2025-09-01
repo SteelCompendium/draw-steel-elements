@@ -20,10 +20,6 @@
                 </div>
             </span> 
             <span class="ds-temp-stamina-container">
-                <!-- <span class="temp-stamina-spacer"
-                    :style="{
-                        width: `${overlayWidth}%`,
-                    }"/> -->
                 <div class="temp-stamina-indicator"
                     :style="{
                         width: `calc(${calculatePercentFromStamina(model?.temp_stamina ?? 0, true)}% - 1px)`,
@@ -115,7 +111,7 @@ const handleClick = () => {
         { model: props.model },
         "Stamina",
         (result) => {
-            CodeBlocks.updateStaminaBarVue(obsidianApp!, result, obsidianContext!);
+            CodeBlocks.updateStaminaBar(obsidianApp!, result, obsidianContext!);
         }
     ).open();
 }
