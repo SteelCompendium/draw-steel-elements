@@ -45,7 +45,7 @@
                 </div>
                 <div class="stamina-overlay">
                     <span class="background-pill">
-                        ({{model?.current_stamina ?? 0}}/{{model?.max_stamina ?? 0}})
+                        ({{model?.current_stamina ?? 0}}/{{model?.max_stamina ?? 0}}{{model?.temp_stamina??0 > 0 ? ' + ' + model?.temp_stamina.toString() : ''}})
                     </span>
                 </div>
             </span>
