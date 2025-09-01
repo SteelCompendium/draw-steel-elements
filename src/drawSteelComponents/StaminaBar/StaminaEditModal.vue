@@ -1,6 +1,6 @@
 <template>
     <modal :ok_button_disabled="!state.model_has_changes"
-            ok_button_text="Apply"
+            :ok_button_text="okButtonText"
             cancel_button_text="Reset"
             cancel_button_icon="undo"
             @close="closeButtonPressed"
@@ -45,8 +45,22 @@ import Modal from '@drawSteelComponents/Common/Modal.vue';
 import DsButton from "@drawSteelComponents/Common/DsButton.vue"
 import StaminaBar from '@drawSteelComponents/StaminaBar/StaminaBar.vue';
 import StaminaAdjustor from '@drawSteelComponents/StaminaBar/StaminaAdjustor.vue'
+import { computed, reactive, watch } from 'vue';
 import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar'; 
-import { computed, reactive } from 'vue';
+
+function deepCloneStaminaBar(obj: StaminaBarModel | undefined): StaminaBarModel | undefined {
+    if (!obj) return undefined;
+    // Use the constructor to rehydrate
+    return new StaminaBarModel(
+        (obj as any).collapsible ?? false,
+        (obj as any).collapse_default ?? false,
+        obj.max_stamina,
+        obj.current_stamina,
+        obj.temp_stamina,
+        obj.height,
+        obj.style ?? 'default'
+    );
+}
 
 const props = defineProps<{
     model: StaminaBarModel | undefined
@@ -55,12 +69,41 @@ const props = defineProps<{
 const emit = defineEmits(['close', 'result']);
 
 const state = reactive({
-    model: props.model,
+    model: deepCloneStaminaBar(props.model),
     max_stamina: props.model?.max_stamina ?? 0,
     current_stamina: props.model?.current_stamina ?? 0,
     temp_stamina: props.model?.temp_stamina ?? 0,
     model_has_changes: false,
 });
+
+const okButtonText = computed(() => {
+    let staminaText = ""
+    let tempText = ""
+
+    const staminaDiff = state.current_stamina - (props.model?.current_stamina ?? 0)
+    const tempDiff = state.temp_stamina - (props.model?.temp_stamina ?? 0)
+
+    if (staminaDiff > 0) {
+        staminaText = `Gain ${staminaDiff} Stamina`
+    }
+    if (staminaDiff < 0) {
+        staminaText = `Lose ${-staminaDiff} Stamina`
+    }
+    if (tempDiff > 0) {
+        tempText = `Gain ${tempDiff} Temp Stamina`
+    }
+    if (tempDiff < 0) {
+        tempText = `Lose ${-tempDiff} TempStamina`
+    }
+
+    if (!staminaText && !tempText) {
+        return 'No Stamina Change'
+    }
+    if (staminaText && tempText) {
+        return `${staminaText} and ${tempText}`;
+    }
+    return `${staminaText}${tempText}`;
+})
 
 const updateModel = () => {
     if (!state.model) return;
@@ -139,6 +182,14 @@ const okButtonPressed = () => {
 const closeButtonPressed = () => {
     emit('close');
 }
+
+watch(() => props.model, (newModel: StaminaBarModel | undefined) => {
+    state.model = deepCloneStaminaBar(newModel);
+    state.max_stamina = newModel?.max_stamina ?? 0;
+    state.current_stamina = newModel?.current_stamina ?? 0;
+    state.temp_stamina = newModel?.temp_stamina ?? 0;
+    state.model_has_changes = false;
+});
 </script>
 
 <style scoped>
