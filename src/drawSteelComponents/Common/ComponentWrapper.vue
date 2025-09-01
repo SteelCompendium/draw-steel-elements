@@ -36,8 +36,8 @@ const props = defineProps({
 	},
 })
 
-const collapsible_modified = props.model?.collapsible ? props.model.collapsible : props.collapsible
-const collapse_default_modified = props.model?.collapse_default ? props.model.collapse_default : props.collapse_default
+const collapsible_modified = props.collapsible ?? props.model?.collapsible ?? false
+const collapse_default_modified = props.collapse_default ??props.model?.collapse_default ?? false
 
 const emit = defineEmits<{
 	toggle: [enabled: boolean]

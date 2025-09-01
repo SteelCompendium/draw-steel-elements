@@ -18,11 +18,12 @@ export class genericComponentProcessor {
     }
 
     public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-        genericPostProcess(source, el, ctx, this.component, this.model, this.component_name, this.edit_mode_safe);
+        genericPostProcess(this.plugin, source, el, ctx, this.component, this.model, this.component_name, this.edit_mode_safe);
     }
 }
 
 export function genericPostProcess(
+        plugin: Plugin,
         source: string, 
         el: HTMLElement, 
         ctx: MarkdownPostProcessorContext, 
@@ -41,15 +42,22 @@ export function genericPostProcess(
     try {
 		// Create and mount Vue app directly
 		let app: any;
+        console.log(ctx)
 		if (model) {
-			app = createApp(component, {
-                        model: model.parseYaml(source)
-                    });
-                    app.mount(vueWrapper);
+            app = createApp(component, {
+                    model: model.parseYaml(source)
+                });
+            app.provide('obsidianPlugin', plugin);
+            app.provide('obsidianApp', plugin.app);
+            app.provide('obsidianContext', ctx);
+            app.mount(vueWrapper);
 		}
 		else {
-			app = createApp(component);
-                    app.mount(vueWrapper);
+            app = createApp(component);
+            app.provide('obsidianPlugin', plugin);
+            app.provide('obsidianApp', plugin.app);
+            app.provide('obsidianContext', ctx);
+            app.mount(vueWrapper);
 		}     
         
         // Store app instance for cleanup if needed
