@@ -2,6 +2,7 @@
     <span class="stamina-adjustor-container">
         <ds-button icon="minus-circle" :icon_button="true" @click="emit('sub-stamina')"></ds-button>
         <input type="text" :value="state.inputValue" @input="validateInput($event)" @change="updateValue"></input>
+        <tooltip-hover tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' class="tooltip-wrapper"/>
         <span class="max-stamina" v-if="!hide_max_stamina">/ {{ max_stamina }}</span>
         <ds-button class="plus-button" icon="plus-circle" :icon_button="true" @click="emit('add-stamina')"></ds-button>
     </span>
@@ -9,6 +10,7 @@
 
 <script setup lang="ts">
 import DsButton from '@drawSteelComponents/Common/DsButton.vue'
+import TooltipHover from '@drawSteelComponents/Common/TooltipHover.vue'
 import { reactive, watch } from 'vue';
 
 const props = withDefaults(defineProps<{
@@ -92,5 +94,9 @@ input {
 
 .plus-button {
     margin-left: 1em;
+}
+
+.tooltip-wrapper {
+    margin: -2em 14px 0 -14px;
 }
 </style>
