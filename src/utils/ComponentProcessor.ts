@@ -42,7 +42,6 @@ export function genericPostProcess(
     try {
 		// Create and mount Vue app directly
 		let app: any;
-        console.log(ctx)
 		if (model) {
             app = createApp(component, {
                     model: model.parseYaml(source)

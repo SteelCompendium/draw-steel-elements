@@ -80,9 +80,7 @@ const barColor = computed(() => {
     if (current_stamina <= 0) {
         return 'var(--stamina-bar-color-dying)';
     }
-    else if (current_stamina < Math.floor((props.model?.max_stamina ?? 0) / 2)) {
-        console.log("winded", current_stamina, props.model?.max_stamina, );
-        
+    else if (current_stamina < Math.floor((props.model?.max_stamina ?? 0) / 2)) { 
         return 'var(--stamina-bar-color-winded)';
     }
     return 'var(--stamina-bar-color)';
@@ -97,8 +95,6 @@ const staminaBarContainerClasses = computed(() => [
 		'clickable': !props.disable_click,
 	}
 ])
-
-console.log(props.model);
 
 const calculatePercentFromStamina = (stamina: number, ignore_dying: boolean = false) => {
     const dying_stamina = Math.floor((props.model?.max_stamina ?? 0) / 2);

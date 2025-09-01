@@ -15,6 +15,8 @@
                         :current_stamina="state.current_stamina"
                         @add-stamina="addStamina"
                         @sub-stamina="subStamina"
+                        @set-stamina="setStamina"
+                        @mod-stamina="modStamina"
                     />
                     <span class="temp-stamina-container">
                         Temporary Stamina
@@ -23,6 +25,8 @@
                             :hide_max_stamina="true"
                             @add-stamina="addTempStamina"
                             @sub-stamina="subTempStamina"
+                            @set-stamina="setTempStamina"
+                            @mod-stamina="modTempStamina"
                         />
                     </span>
                 </div>
@@ -68,29 +72,37 @@ const updateModel = () => {
     }
 }
 
-const addStamina = () => {
-    state.current_stamina++;
+const setStamina = (value: number) => {
+    state.current_stamina = value
+    updateModel();
+}
+
+const modStamina = (value: number) => {
+    state.current_stamina += value;
     if (state.current_stamina > state.max_stamina) {
         state.current_stamina = state.max_stamina;
     }
     updateModel();
 }
 
+const addStamina = () => {
+    modStamina(1);
+}
+
 const subStamina = () => {
-    state.current_stamina--;
+    modStamina(-1);
     // I'm choosing to not have a minimum as it isn't gamebreaking and some
     // times it's fun to see how much you got overkilled/how much the monster
     // got overkilled.
+}
+
+const setTempStamina = (value: number) => {
+    state.temp_stamina = value
     updateModel();
 }
 
-const addTempStamina = () => {
-    state.temp_stamina++;
-    updateModel();
-}
-
-const subTempStamina = () => {
-    state.temp_stamina--;
+const modTempStamina = (value: number) => {
+    state.temp_stamina += value;
     if (state.temp_stamina < 0) {
         state.current_stamina += state.temp_stamina;
         state.temp_stamina = 0;
@@ -98,19 +110,24 @@ const subTempStamina = () => {
     updateModel();
 }
 
+const addTempStamina = () => {
+    modTempStamina(1);
+}
+
+const subTempStamina = () => {
+    modTempStamina(-1);
+}
+
 const kill = () => {
-    state.current_stamina = Math.floor(-state.max_stamina/2)
-    state.temp_stamina = 0
-    updateModel()
+    setStamina(Math.floor(-state.max_stamina/2))
+    setTempStamina(0)
 }
 
 const fullHeal = () => {
-    state.current_stamina = state.max_stamina
-    updateModel()
+    setStamina(state.max_stamina)
 }
 const spendRecovery = () => {
-    state.current_stamina += Math.floor(state.max_stamina/3)
-    updateModel()
+    modStamina(Math.floor(state.max_stamina/3))
 }
 
 // Save and close
