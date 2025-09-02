@@ -47,7 +47,6 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         ];
         
         initializeSchemaRegistry(dependencySchemas);
-        console.log("Initialized schema registry with", dependencySchemas.length, "dependency schemas");
     }
 
     onunload() {

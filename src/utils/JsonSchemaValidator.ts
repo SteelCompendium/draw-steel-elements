@@ -27,7 +27,6 @@ let registeredSchemas: Array<{ id: string, schema: object | string }> = [];
  */
 export function initializeSchemaRegistry(schemas: Array<{ id: string, schema: object | string }>): void {
     registeredSchemas = [...schemas]; // Store schemas for later use
-    console.log("Stored", registeredSchemas.length, "dependency schemas for registration");
 }
 
 /**

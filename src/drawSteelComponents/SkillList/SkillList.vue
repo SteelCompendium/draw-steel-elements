@@ -1,5 +1,5 @@
 <template>
-    <component-wrapper component-name="Skill List" :collapsible="model?.collapsible" :collapse_default="model?.collapse_default">
+    <component-wrapper component-name="Skill List" :model="model">
         <skill-group
             v-for="(skillInfo, groupName) in fullSkillData"
             :key="groupName.toString()"
@@ -12,11 +12,11 @@
 </template>
 
 <script setup lang="ts">
+import ComponentWrapper from "@drawSteelComponents/Common/ComponentWrapper.vue";
 import SkillGroup from "@drawSteelComponents/SkillList/SkillGroup.vue";
 import { SKILL_DATA } from "@utils/SkillsData"
 import { Skills } from "@model/Skills";
 import { ref } from "vue";
-import ComponentWrapper from "@drawSteelComponents/Common/ComponentWrapper.vue";
 
 const props = defineProps<{
     model?: Skills,

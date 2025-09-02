@@ -1988,6 +1988,18 @@ button.action-button {
 	}
 }
 
+
+/*
+Post Vue Globals
+*/
+
 .markdown-source-view.is-live-preview .ds-vue-wrapper {
   margin-left: 20px;
+}
+
+:root {
+  --stamina-bar-color: limegreen;
+  --stamina-bar-color-winded: yellow;
+  --stamina-bar-color-dying: red;
+  /* --stamina-bar-color: var(--text-accent) */
 }

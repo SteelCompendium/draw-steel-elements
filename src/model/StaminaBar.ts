@@ -1,11 +1,13 @@
 import {parseYaml} from "obsidian";
 import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
+import { ComponentWrapper } from "@model/ComponentWrapper";
 
-export class StaminaBar {
+export class StaminaBar extends ComponentWrapper{
 	max_stamina: number;
 	current_stamina: number;
 	temp_stamina: number;
 	height: number;
+    style: string;
 
 	public static parseYaml(source: string) {
 		let data: any;
@@ -19,26 +21,31 @@ export class StaminaBar {
 
 	public static parse(data: any): StaminaBar {
 		return new StaminaBar(
+            data.collapsible,
+            data.collapse_default,
 			data.max_stamina,
-			data.current_stamina ? data.current_stamina : data.max_stamina,
+			data.current_stamina ? data.current_stamina : 0,
 			data.temp_stamina ? data.temp_stamina : 0,
-			data.height ? data.height : 1);
+			data.height ? data.height : 1,
+            data.style);       
 	}
 
 	// TODO - should this be in Hero and CreatureInstance instead?  probably, but those are interfaces
 	public static fromHero(hero: Hero) {
-		return new StaminaBar(hero.max_stamina, hero.current_stamina ?? 0, hero.temp_stamina ?? 0, 1);
+		return new StaminaBar(false, false, hero.max_stamina, hero.current_stamina ?? 0, hero.temp_stamina ?? 0, 1);
 	}
 
 	public static fromCreature(being: CreatureInstance, creature: Creature) {
-		return new StaminaBar(creature.max_stamina, being.current_stamina ?? 0, being.temp_stamina ?? 0, 1);
+		return new StaminaBar(false, false, creature.max_stamina, being.current_stamina ?? 0, being.temp_stamina ?? 0, 1);
 	}
 
-	constructor(max_stamina: number, current_stamina: number, temp_stamina: number, height: number) {
+	constructor(collapsible: boolean, collapse_default: boolean, max_stamina: number, current_stamina: number, temp_stamina: number, height: number, style: string = "default") {
+        super(collapsible, collapse_default);
 		this.max_stamina = max_stamina;
 		this.current_stamina = current_stamina;
 		this.temp_stamina = temp_stamina;
 		this.height = height;
+        this.style = style
 	}
 
 	public updateHero(hero: Hero) {

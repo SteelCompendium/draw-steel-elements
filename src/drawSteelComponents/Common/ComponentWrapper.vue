@@ -1,6 +1,6 @@
 <template>
 	<div class="component-wrapper">
-		<component-hide-indicator :enabled="collapse_default ?? false" @toggle="handleToggle" v-if="collapsible"/>
+		<component-hide-indicator :enabled="collapse_default_modified ?? false" @toggle="handleToggle" v-if="collapsible_modified"/>
 		<div v-if="!state.collapsed">
 			<slot></slot>
 		</div>
@@ -14,9 +14,14 @@
 <script setup lang="ts">
 import ComponentHideIndicator from "@drawSteelComponents/Common/ComponentHideIndicator.vue";
 import VerticalRule from "@drawSteelComponents/VerticalRule.vue";
+import { ComponentWrapper } from "@model/ComponentWrapper";
 import { reactive } from 'vue';
 
 const props = defineProps({
+    model: {
+        type: ComponentWrapper,
+        required: false
+    },
 	componentName: {
 		type: String,
 		required: true
@@ -31,12 +36,15 @@ const props = defineProps({
 	},
 })
 
+const collapsible_modified = props.collapsible ?? props.model?.collapsible ?? false
+const collapse_default_modified = props.collapse_default ??props.model?.collapse_default ?? false
+
 const emit = defineEmits<{
 	toggle: [enabled: boolean]
 }>()
 
 const state = reactive({
-	collapsed: props.collapse_default
+	collapsed: collapse_default_modified
 })
 
 const handleToggle = () => {

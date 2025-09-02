@@ -37,7 +37,6 @@ onMounted(() => {
 
 let setIconSVG = () => {
 	if (iconContainer.value) {
-		console.log(state.enabled)
 		setIcon(iconContainer.value, state.enabled ? "eye" : "eye-off");
 	}
 }
