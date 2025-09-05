@@ -1,11 +1,11 @@
 # Changelog
 
-## 3.4.1
+## 3.4.2
 
 - Visual updates to the StaminaBar for the information icon
 - Docs updates
 
-## 3.4.0
+## 3.4.1
 
 - Stamina Element Updates
   - Migrated to use Vue
