@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.1
+
+- Visual updates to the StaminaBar for the information icon
+- Docs updates
+
 ## 3.4.0
 
 - Stamina Element Updates
