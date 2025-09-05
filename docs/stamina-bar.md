@@ -31,6 +31,8 @@ Clicking on the bar allows you to adjust the stamina values directly.
 
 ## Field Definitions
 
+The Skills Element supports [Common Element Fields](common-element-fields).
+
 Below is a detailed description of each field used in the stamina bar element, including their types, 
 default values, and whether they are required.
 

@@ -1,6 +1,8 @@
 import {parseYaml} from "obsidian";
 import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
 import { ComponentWrapper } from "@model/ComponentWrapper";
+import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
+import staminaBarSchemaYaml from "@model/schemas/StaminaBarSchema.yaml";
 
 export class StaminaBar extends ComponentWrapper{
 	max_stamina: number;
@@ -10,13 +12,22 @@ export class StaminaBar extends ComponentWrapper{
     style: string;
 
 	public static parseYaml(source: string) {
-		let data: any;
 		try {
-			data = parseYaml(source);
+			// Validate YAML content against YAML schema (all dependencies pre-registered)
+			const validation = validateYamlWithYamlSchema(source, staminaBarSchemaYaml);
+			if (!validation.valid) {
+				const errorMessages = validation.errors.map((error: ValidationError) => 
+					`${error.path}: ${error.message}`
+				).join(', ');
+				throw new Error("Schema validation failed: " + errorMessages);
+			}
+
+			// Parse the YAML after validation
+			const data = parseYaml(source);
+			return StaminaBar.parse(data);
 		} catch (error: any) {
 			throw new Error("Invalid YAML format: " + error.message);
 		}
-		return StaminaBar.parse(data);
 	}
 
 	public static parse(data: any): StaminaBar {

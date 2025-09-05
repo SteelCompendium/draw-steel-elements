@@ -23,7 +23,7 @@ onMounted(() => {
 .icon {
     height: 0;
     width: 0;
-    color: var(--interactive-accent)
+    color: var(--background-modifier-border-focus)
 }
 
 .icon :deep(svg)  {
