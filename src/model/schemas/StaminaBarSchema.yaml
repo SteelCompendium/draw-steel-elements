@@ -48,3 +48,8 @@ allOf:
                   Selects what style of stamina bar to use.
                   "Default" is the classic green bar.
                   "Sheet" aims to mimic the style of the official character sheet.
+unevaluatedProperties:
+    const: false
+    errorMessage: |
+        Stamina Bar object must not have extra properties.
+        Allowed: max_stamina, current_stamina, temp_stamina, height, style.
