@@ -14,5 +14,6 @@ prep_release version:
     set -euo pipefail
     jq -r '.version="{{version}}"' "manifest.json" > .tmp && mv .tmp "manifest.json"
     jq -r '.version="{{version}}"' "package.json" > .tmp && mv .tmp "package.json"
+    echo "Kill this process and create a new Github release with main.js, manifest.json, and styles.css"
     npm run dev
 
