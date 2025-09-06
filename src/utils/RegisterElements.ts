@@ -35,6 +35,7 @@ export function registerElements (plugin: Plugin) {
 
 	let ntProcessor = new NegotiationTrackerProcessor(plugin.app);
 	plugin.registerMarkdownCodeBlockProcessor("ds-nt", ntProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-negotiation", ntProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntProcessor.handler);
 
 	let sbProcessor = new StatblockProcessor(plugin);
