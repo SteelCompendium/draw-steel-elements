@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.3
+
+- Correctly supports `ds-negotiation` language
+
 ## 3.4.2
 
 - Visual updates to the StaminaBar for the information icon

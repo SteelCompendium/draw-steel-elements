@@ -1,49 +1,49 @@
 {
-	"name": "draw-steel-elements",
-	"version": "3.4.0",
-	"description": "Components to support the Draw Steel TTRPG by MCDM.",
-	"main": "main.js",
-	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "vue-tsc --noEmit && node esbuild.config.mjs production",
-		"test": "jest",
-		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"tsc": "vue-tsc --noEmit"
-	},
-	"keywords": [],
-	"author": "Steel Compendium",
-	"license": "MIT",
-	"engines": {
-		"node": ">=22.15"
-	},
-	"dependencies": {
-		"ajv": "^8.17.1",
-		"ajv-errors": "^3.0.0",
-		"ajv-keywords": "^5.1.0",
-		"vue": "^3.5.20"
-	},
-	"devDependencies": {
-		"@codemirror/language": "^6.11.3",
-		"@types/css": "^0.0.38",
-		"@types/jest": "^30.0.0",
-		"@types/node": "^24.3.0",
-		"@types/uuid": "^10.0.0",
-		"@typescript-eslint/eslint-plugin": "8.41.0",
-		"@typescript-eslint/parser": "8.41.0",
-		"@vue/compiler-sfc": "3.5.20",
-		"builtin-modules": "5.0.0",
-		"css": "^3.0.0",
-		"esbuild": "0.25.9",
-		"identity-obj-proxy": "^3.0.0",
-		"jest": "^30.0.5",
-		"jszip": "^3.10.1",
-		"jszip-utils": "^0.1.0",
-		"obsidian": "1.8.7",
-		"steel-compendium-sdk": "0.0.37",
-		"ts-jest": "^29.4.1",
-		"tslib": "2.8.1",
-		"typescript": "5.9.2",
-		"unplugin-vue": "^7.0.1",
-		"vue-tsc": "^3.0.6"
-	}
+  "name": "draw-steel-elements",
+  "version": "3.4.3",
+  "description": "Components to support the Draw Steel TTRPG by MCDM.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "vue-tsc --noEmit && node esbuild.config.mjs production",
+    "test": "jest",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "tsc": "vue-tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "Steel Compendium",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-errors": "^3.0.0",
+    "ajv-keywords": "^5.1.0",
+    "vue": "^3.5.20"
+  },
+  "devDependencies": {
+    "@codemirror/language": "^6.11.3",
+    "@types/css": "^0.0.38",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.3.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "8.41.0",
+    "@typescript-eslint/parser": "8.41.0",
+    "@vue/compiler-sfc": "3.5.20",
+    "builtin-modules": "5.0.0",
+    "css": "^3.0.0",
+    "esbuild": "0.25.9",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^30.0.5",
+    "jszip": "^3.10.1",
+    "jszip-utils": "^0.1.0",
+    "obsidian": "1.8.7",
+    "steel-compendium-sdk": "0.0.37",
+    "ts-jest": "^29.4.1",
+    "tslib": "2.8.1",
+    "typescript": "5.9.2",
+    "unplugin-vue": "^7.0.1",
+    "vue-tsc": "^3.0.6"
+  }
 }
