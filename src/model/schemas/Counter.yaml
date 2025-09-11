@@ -11,10 +11,10 @@ allOf:
     properties:
       name_top:
         type: string
-        description: The name that should be shown on top of the counter (e.g., "Stamina", "Heroic Resource").
+        description: The name shown above the counter (e.g., "Stamina", "Heroic Resource").
       name_bottom:
         type: string
-        description: The name that should be shown below the counter (e.g., "Focus", "Drama).
+        description: The name shown below the counter (e.g., "Focus", "Drama).
       current_value: 
         type: integer
         description: The current value of the counter.
@@ -26,13 +26,19 @@ allOf:
         description: The minimum value the counter can reach.
       value_height: 
         type: integer
-        description: Adjusts the size of the counter value text in the rendered output.
-      name_height: 
+        description: Adjusts the size of the counter value text in the rendered output as a multiplier.
+      name_top_height: 
         type: integer
-        description: Adjusts the size of the counter name text in the rendered output.
+        description: Adjusts the size of the counter name_top text in the rendered output as a multiplier.
+      name_bottom_height: 
+        type: integer
+        description: Adjusts the size of the counter name_bottom text in the rendered output as a multiplier.
       hide_buttons:
         type: string
         description: \"true\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button.
+        transform:
+        - trim
+        - toLowerCase
         enum:
           - true
           - plus
@@ -42,6 +48,9 @@ allOf:
       style:
         type: string
         description: The style the counter should use.
+        transform:
+        - trim
+        - toLowerCase
         enum:
           - horizontal
           - vertical

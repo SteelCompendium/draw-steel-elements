@@ -1,44 +1,53 @@
 <template>
     <span class="counter-wrapper">
-        <span class="counter-container vertical" v-if="!model.style || model.style == 'vertical' || model.style == 'default'">
+        <span class="counter-container vertical"
+            v-if="!model.style || model.style == 'vertical' || model.style == 'default'">
             <span class="counter-inner-container vertical">
-                <span class="name-top" :style="`font-size=${model.name_top_height}`">{{ model.name_top }}</span>
+                <span class="name-top" :style="`font-size:calc(var(--font-text-size)*${model.name_top_height})`">
+                    {{ model.name_top }}
+                </span>
                 <span class="input-container vertical">
                     <input type="text" :value="state.inputValue"
-                        :style="`width:${state.inputValue.length + 0.5}ch; font-size=${model.value_height}`"
+                        :style="`width:${state.inputValue.length + 0.5}ch; font-size:${model.value_height}`"
                         @input="validateInput($event)" @change="updateValue" />
                     <tooltip-hover class="tooltip-wrapper vertical"
                         tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
                 </span>
-                <span class="name-bottom" :style="`font-size=${model.name_bottom_height}`">{{ model.name_bottom }}</span>
+                <span class="name-bottom" :style="`font-size:calc(var(--font-text-size)*${model.name_bottom_height})`">
+                    {{ model.name_bottom }}
+                </span>
             </span>
-            <span class="button-container vertical">
-                <ds-button class="plus-button" icon="chevron-up" variant="simplified" @click="updateValue('+1')"
-                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
-                <ds-button icon="chevron-down" variant="simplified" @click="updateValue('-1')"
-                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'" />
+            <span class="button-wrapper vertical">
+                <span class="button-container vertical">
+                    <ds-button class="plus-button" icon="chevron-up" variant="simplified" @click="updateValue('+1')"
+                        v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
+                    <ds-button icon="chevron-down" variant="simplified" @click="updateValue('-1')"
+                        v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'" />
+                </span>
             </span>
         </span>
 
         <span class="counter-container" v-else-if="model.style == 'horizontal'">
-            <span class="name-top">{{ model.name_top }}</span>
+            <span class="name-top" :style="`font-size:calc(var(--font-text-size)*${model.name_top_height})`">
+                {{ model.name_top }}
+            </span>
             <span class="counter-inner-container">
-                <ds-button icon="minus-circle" variant="icon" :style="`font-size=${model.name_top_height}`"
-                    @click="updateValue('-1')" v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
+                <ds-button icon="minus-circle" variant="icon" @click="updateValue('-1')"
+                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
                 <span class="input-container">
-                    <input type="text" :value="state.inputValue" :style="`font-size=${model.value_height}`"
-                        @input="validateInput($event)" @change="updateValue" />
+                    <input type="text" :value="state.inputValue" @input="validateInput($event)" @change="updateValue" />
                     <tooltip-hover class="tooltip-wrapper"
                         tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
                 </span>
                 <span class="max-value" v-if="model?.max_value">
                     / {{ model.max_value }}
                 </span>
-                <ds-button class="plus-button" icon="plus-circle" variant="icon"
-                    :style="`font-size=${model.name_bottom_height}`" @click="updateValue('+1')"
-                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'"></ds-button>
+                <ds-button class="plus-button" icon="plus-circle" variant="icon" @click="updateValue('+1')"
+                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'" />
             </span>
-            <span class="name-bottom">{{ model.name_bottom }}</span>
+            <span class="name-bottom" :style="`font-size:calc(var(--font-text-size)*${model.name_bottom_height})`">
+                {{ model.name_bottom }}
+            </span>
         </span>
 
         <span v-else>
@@ -154,6 +163,10 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     margin-top: 0.5em;
 }
 
+.button-wrapper.vertical {
+    width: 0;
+}
+
 .button-container.vertical {
     display: flex;
     flex-direction: column;
@@ -209,6 +222,7 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
 }
 
 .tooltip-wrapper.vertical {
+    padding-left: 0.25em;
     margin-top: 0.5em
 }
 
