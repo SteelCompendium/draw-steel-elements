@@ -2,9 +2,9 @@ import {Plugin} from 'obsidian';
 import {MyPluginSettingTab} from "@views/SettingsTab";
 import {DEFAULT_SETTINGS, DSESettings} from "@model/Settings";
 import {CompendiumDownloader} from "@utils/CompendiumDownloader";
-import { registerElements } from '@/utils/RegisterElements';
+import { registerElements } from '@utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
-import componentWrapperSchemaYaml from '@model/schemas/ComponentWrapperSchema.yaml';
+import componentWrapperSchemaYaml from '@model/schemas/CommonElementFieldsSchema.yaml';
 import "./styles-source.css";
 
 
@@ -39,7 +39,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     private initializeSchemas() {
         const dependencySchemas = [
             {
-                id: "https://steelcompendium.io/schemas/component-wrapper-1.0.0",
+                id: "https://steelcompendium.io/schemas/common-element-fields-1.0.0",
                 schema: componentWrapperSchemaYaml
             }
             // Add more dependency schemas here as needed

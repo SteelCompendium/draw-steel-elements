@@ -250,7 +250,7 @@ function isJsonString(str: string): boolean {
 export function createSchemaRegistry() {
     return {
         componentWrapper: {
-            id: "https://steelcompendium.io/schemas/component-wrapper-1.0.0",
+            id: "https://steelcompendium.io/schemas/common-element-fields-1.0.0",
             // This will be populated in main.ts with the actual schema
         }
     };

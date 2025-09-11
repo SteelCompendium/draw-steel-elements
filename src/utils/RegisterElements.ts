@@ -13,9 +13,11 @@ import { genericComponentProcessor } from "./ComponentProcessor";
 import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
+import Counter from '@drawSteelComponents/Common/Counter.vue';
 
 import { Skills as SkillsModel } from "@model/Skills";
-import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
+import { StaminaBar as StaminaBarModel } from '@model/StaminaBar';
+import { Counter as CounterModel } from '@model/Counter';
 
 export function registerElements (plugin: Plugin) {
 
@@ -49,6 +51,8 @@ export function registerElements (plugin: Plugin) {
 	let counterProcessor = new CounterProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-counter", counterProcessor.handler);
+    let counterProcessorVue = new genericComponentProcessor(plugin, Counter, CounterModel, "Counter", true);
+    plugin.registerMarkdownCodeBlockProcessor("ds-counter-new", counterProcessorVue.handler);
 
 	let charProcessor = new CharacteristicsProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);

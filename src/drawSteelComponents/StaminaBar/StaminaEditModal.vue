@@ -10,23 +10,20 @@
         <div class="modifiers-container">
             <div class="stamina-container">
                 <div class="stamina-adjust">
-                    <stamina-adjustor
-                        :max_stamina="state.max_stamina"
-                        :current_stamina="state.current_stamina"
-                        @add-stamina="addStamina"
-                        @sub-stamina="subStamina"
-                        @set-stamina="setStamina"
-                        @mod-stamina="modStamina"
+                    <counter
+                        :model="staminaModel"
+                        @add-value="addStamina"
+                        @sub-value="subStamina"
+                        @set-value="setStamina"
+                        @mod-value="modStamina"
                     />
                     <span class="temp-stamina-container">
-                        Temporary Stamina
-                        <stamina-adjustor
-                            :current_stamina="state.temp_stamina"
-                            :hide_max_stamina="true"
-                            @add-stamina="addTempStamina"
-                            @sub-stamina="subTempStamina"
-                            @set-stamina="setTempStamina"
-                            @mod-stamina="modTempStamina"
+                        <counter
+                            :model="tempStaminaModel"
+                            @add-value="addTempStamina"
+                            @sub-value="subTempStamina"
+                            @set-value="setTempStamina"
+                            @mod-value="modTempStamina"
                         />
                     </span>
                 </div>
@@ -45,8 +42,10 @@ import Modal from '@drawSteelComponents/Common/Modal.vue';
 import DsButton from "@drawSteelComponents/Common/DsButton.vue"
 import StaminaBar from '@drawSteelComponents/StaminaBar/StaminaBar.vue';
 import StaminaAdjustor from '@drawSteelComponents/StaminaBar/StaminaAdjustor.vue'
-import { computed, reactive, watch } from 'vue';
-import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar'; 
+import Counter from '@drawSteelComponents/Common/Counter.vue';
+import { computed, reactive, watch, ref } from 'vue';
+import { StaminaBar as StaminaBarModel } from '@model/StaminaBar'; 
+import { Counter as CounterModel } from '@model/Counter'
 
 function deepCloneStaminaBar(obj: StaminaBarModel | undefined): StaminaBarModel | undefined {
     if (!obj) return undefined;
@@ -75,6 +74,18 @@ const state = reactive({
     temp_stamina: props.model?.temp_stamina ?? 0,
     model_has_changes: false,
 });
+
+const staminaModel = computed(() => ({
+    current_value: state.model?.current_stamina ?? 0,
+    max_value: state.model?.max_stamina ?? 0,
+    min_value: -((state.model?.max_stamina ?? 0) / 2),
+} as CounterModel))
+
+const tempStaminaModel = computed(() => ({
+    name_top: "Temporary Stamina",
+    current_value: state.model?.temp_stamina ?? 0,
+    min_value: 0,
+} as CounterModel))
 
 const okButtonText = computed(() => {
     let staminaText = ""

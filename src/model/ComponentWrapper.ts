@@ -2,8 +2,8 @@ import {parseYaml} from "obsidian";
 import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
 
 export class ComponentWrapper {
-    collapsible: boolean;
-    collapse_default: boolean;
+    collapsible?: boolean;
+    collapse_default?: boolean;
 
     public static parseYaml(source: string) {
         let data: any;

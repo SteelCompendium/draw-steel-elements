@@ -1,0 +1,18 @@
+# JSON Schema in YAML format for Draw Steel Character Skills
+$schema: "https://json-schema.org/draft/2019-09/schema"
+$id: "https://steelcompendium.io/schemas/common-element-fields-1.0.0"
+title: "Draw Steel Common Component Fields"
+description: "Schema for validating Draw Steel base component wrapper data"
+
+type: object
+properties:
+  collapsible:
+    type: boolean
+    description: Whether the component can be collapsed or not
+    default: true
+    errorMessage: "collapsible must be true or false"
+  collapse_default:
+    type: boolean
+    description: Whether the component is collapsed or not at first render
+    default: false
+    errorMessage: "collapse_default must be true or false"
