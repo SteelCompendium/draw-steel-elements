@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.4.0
+
+- Stamina Element Updates
+  - Migrated to use Vue
+  - Updated visual appearance
+  - Updated the modal to be more minimal
+  - Temp stamina bar separated
+
 ## 3.3.0
 
 - Skill Element updated to support `only_show_selected` to hide unselected skills from the Element
