@@ -30,6 +30,15 @@ allOf:
       name_height: 
         type: integer
         description: Adjusts the size of the counter name text in the rendered output.
+      hide_buttons:
+        type: string
+        description: \"true\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button.
+        enum:
+          - true
+          - plus
+          - minus
+        default: false
+        errorMessage: hide_buttons must be either "true", "plus" or "minus"
       style:
         type: string
         description: The style the counter should use.

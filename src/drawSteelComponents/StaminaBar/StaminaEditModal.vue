@@ -79,12 +79,14 @@ const staminaModel = computed(() => ({
     current_value: state.model?.current_stamina ?? 0,
     max_value: state.model?.max_stamina ?? 0,
     min_value: -((state.model?.max_stamina ?? 0) / 2),
+    style: 'horizontal',
 } as CounterModel))
 
 const tempStaminaModel = computed(() => ({
     name_top: "Temporary Stamina",
     current_value: state.model?.temp_stamina ?? 0,
     min_value: 0,
+    style: 'horizontal',
 } as CounterModel))
 
 const okButtonText = computed(() => {
@@ -228,7 +230,7 @@ watch(() => props.model, (newModel: StaminaBarModel | undefined) => {
     font-size: var(--font-ui-small);
     row-gap: 0.5em;
     margin-top: 1em;
-    padding: 0.5em 0;
+    padding: 0.5em 1em;
 }
 
 .quick-access-container {

@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, useSlots } from "vue";
 import { setIcon } from "obsidian";
 
 const props = withDefaults(defineProps<{
@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits(["click"])
+const slots = useSlots()
 
 const iconElement = ref<HTMLElement | null>(null);
 
@@ -34,7 +35,7 @@ const buttonClasses = computed(() => [
 const iconClasses = computed(() => [
     'icon',
 	{
-        'pre-text-icon':  props.variant != 'icon',
+        'pre-text-icon': slots.default,
     }
 ])
 
@@ -48,6 +49,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+button {
+    cursor: pointer;
+}
+
 .icon {
     height: var(--icon-size);
     width: var(--icon-size);
@@ -80,5 +85,12 @@ onMounted(() => {
     background-color: transparent;
     box-shadow: none;
     padding: 0;
+}
+
+.simplified-button {
+    display: flex;
+    padding: 0.5em;
+    background: none;
+    border: none;
 }
 </style>

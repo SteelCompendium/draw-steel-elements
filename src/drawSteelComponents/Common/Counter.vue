@@ -1,35 +1,48 @@
 <template>
-    <span class="counter-container" v-if="!model.style || model.style == 'horizontal' || model.style == 'default'">
-        <span class="name-top">{{model.name_top}}</span>
+    <span class="counter-container" v-if="!model.style || model.style == 'vertical' || model.style == 'default'">
+        <span class="name-top" :style="`font-size=${model.name_top_height}`">{{ model.name_top }}</span>
         <span class="counter-inner-container">
-            <ds-button icon="minus-circle" variant="icon" @click="updateValue('-1')"></ds-button>
+            <span class="input-container vertical">
+                <input type="text" :value="state.inputValue"
+                    :style="`width:${state.inputValue.length + 0.5}ch; font-size=${model.value_height}`"
+                    @input="validateInput($event)" @change="updateValue" />
+                <tooltip-hover class="tooltip-wrapper vertical"
+                    tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
+            </span>
+            <span class="button-container vertical">
+                <ds-button class="plus-button" icon="chevron-up" variant="simplified" @click="updateValue('+1')"
+                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
+                <ds-button icon="chevron-down" variant="simplified" @click="updateValue('-1')"
+                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'" />
+            </span>
+        </span>
+        <span class="name-bottom" :style="`font-size=${model.name_bottom_height}`">{{ model.name_bottom }}</span>
+    </span>
+
+    <span class="counter-container" v-else-if="model.style == 'horizontal'">
+        <span class="name-top">{{ model.name_top }}</span>
+        <span class="counter-inner-container">
+            <ds-button icon="minus-circle" variant="icon" :style="`font-size=${model.name_top_height}`"
+                @click="updateValue('-1')" v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
             <span class="input-container">
-                <input type="text" :value="state.inputValue" @input="validateInput($event)" @change="updateValue" />
-                <tooltip-hover class="tooltip-wrapper" tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
+                <input type="text" :value="state.inputValue" :style="`font-size=${model.value_height}`"
+                    @input="validateInput($event)" @change="updateValue" />
+                <tooltip-hover class="tooltip-wrapper"
+                    tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
             </span>
             <span class="max-value" v-if="model?.max_value">
                 / {{ model.max_value }}
             </span>
-            <ds-button class="plus-button" icon="plus-circle" variant="icon" @click="updateValue('+1')"></ds-button>
+            <ds-button class="plus-button" icon="plus-circle" variant="icon"
+                :style="`font-size=${model.name_bottom_height}`" @click="updateValue('+1')"
+                v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'"></ds-button>
         </span>
-        <span class="name-bottom">{{model.name_bottom}}</span>
+        <span class="name-bottom">{{ model.name_bottom }}</span>
     </span>
-    <span class="counter-container vertical" v-else-if="model.style == 'vertical'">
-        <span class="name-top">{{model.name_top}}</span>
-        <span class="counter-inner-container">
-            <ds-button icon="minus-circle" variant="icon" @click="updateValue('-1')"></ds-button>
-            <span class="input-container">
-                <input type="text" :value="state.inputValue" @input="validateInput($event)" @change="updateValue" />
-                <tooltip-hover class="tooltip-wrapper" tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
-            </span>
-            <span class="max-value" v-if="model?.max_value">
-                / {{ model.max_value }}
-            </span>
-            <ds-button class="plus-button" icon="plus-circle" variant="icon" @click="updateValue('+1')"></ds-button>
-        </span>
-        <span class="name-bottom">{{model.name_bottom}}</span>
+
+    <span v-else>
+        Unknown style "{{ model.style }}"
     </span>
-    <span v-else>Unknown style "{{model.style}}"</span>
 </template>
 
 <script setup lang="ts">
@@ -47,6 +60,10 @@ const emit = defineEmits(['mod-value', 'set-value'])
 const state = reactive({
     inputValue: (props.model?.current_value ?? 0).toString()
 })
+
+if (!['default', 'horizontal', 'vertical', undefined].includes(props.model.style)) {
+    throw new Error(`Invalid style on Counter: ${props.model.style}`);
+}
 
 const validateInput = (event: Event) => {
     const target = event.target as HTMLInputElement;
@@ -70,8 +87,8 @@ const updateValue = (input: string | Event) => {
         value = input;
     }
 
-    let modifier:string = "";
-    let number:number = 0;
+    let modifier: string = "";
+    let number: number = 0;
 
     if (value.length > 0 && isNaN(Number(value[0]))) {
         modifier = value[0];
@@ -80,7 +97,7 @@ const updateValue = (input: string | Event) => {
         number = Number(value);
     }
 
-    if(modifier === '') {
+    if (modifier === '') {
         state.inputValue = number.toString()
         emit('set-value', number);
         return;
@@ -129,6 +146,14 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     margin-top: 0.5em;
 }
 
+.button-container.vertical {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    align-items: center;
+    justify-content: center;
+}
+
 .counter-inner-container {
     display: flex;
     align-items: center;
@@ -145,17 +170,35 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     line-height: 0;
 }
 
-.input-container > input {
+.input-container.vertical {
+    margin-left: 0;
+}
+
+.input-container>input {
     height: 2em;
     width: 6ch;
     font-size: 15px;
     text-align: center;
 }
 
+.input-container.vertical>input {
+    border: none;
+    background: none;
+    font-size: 32px;
+    padding: 0;
+    text-align: end;
+    padding-right: 0.5ch;
+}
+
 .tooltip-wrapper {
     --horizontal-margin: 13px;
     margin-left: calc(-1 * var(--horizontal-margin));
     margin-right: var(--horizontal-margin);
+    cursor: help;
+}
+
+.tooltip-wrapper.vertical {
+    margin-top: 0.5em
 }
 
 .max-value {
