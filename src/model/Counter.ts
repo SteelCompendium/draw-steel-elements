@@ -77,15 +77,15 @@ export class Counter extends ComponentWrapper {
         style: StyleType,
     ) {
         super(collapsible, collapse_default);
-        this.max_value = max_value;
-        this.current_value = current_value;
-        this.min_value = min_value;
+        this.current_value = current_value ?? 0;
+        this.min_value = min_value ?? undefined;
+        this.max_value = max_value ?? undefined;
         this.name_top = name_top;
         this.name_bottom = name_bottom;
-        this.value_height = value_height;
-        this.name_top_height = name_top_height;
-        this.name_bottom_height = name_bottom_height;
-        this.hide_buttons = hide_buttons;
-        this.style = style;
+        this.value_height = value_height ?? 0;
+        this.name_top_height = name_top_height ?? 0;
+        this.name_bottom_height = name_bottom_height ?? 0;
+        this.hide_buttons = hide_buttons ?? 'false';
+        this.style = style ?? 'default';
     }
 }

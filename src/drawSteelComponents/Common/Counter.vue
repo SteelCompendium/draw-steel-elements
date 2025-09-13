@@ -173,6 +173,7 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     margin: 0;
     align-items: center;
     justify-content: center;
+    margin-left: 1ch;
 }
 
 .counter-inner-container {
