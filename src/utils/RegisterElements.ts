@@ -3,7 +3,7 @@ import {Plugin} from 'obsidian';
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
-import {AbilityProcessor} from "@drawSteelAdmonition/ability/AbilityProcessor";
+import {FeatureProcessor} from "@drawSteelAdmonition/ability/FeatureProcessor";
 import {StaminaBarProcessor} from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
@@ -19,9 +19,10 @@ import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
 
 export function registerElements (plugin: Plugin) {
 
-	const abilityProcessor = new AbilityProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-ab", abilityProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-ability", abilityProcessor.handler);
+	const abilityProcessor = new FeatureProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-ft", abilityProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-feat", abilityProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-feature", abilityProcessor.handler);
 
 	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, undefined, "Horizontal Rule", true);
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
