@@ -8,3 +8,12 @@ switch_to_pr pr_num:
     git fetch origin
     git switch pr/{{pr_num}} 2>/dev/null || git switch -c pr/{{pr_num}} origin/pr/{{pr_num}};
     git reset --hard origin/pr/{{pr_num}}
+
+prep_release version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    jq -r '.version="{{version}}"' "manifest.json" > .tmp && mv .tmp "manifest.json"
+    jq -r '.version="{{version}}"' "package.json" > .tmp && mv .tmp "package.json"
+    echo "Kill this process and create a new Github release with main.js, manifest.json, and styles.css"
+    npm run dev
+

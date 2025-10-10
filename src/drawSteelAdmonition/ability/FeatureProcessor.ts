@@ -1,8 +1,8 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { AbilityView } from "@drawSteelAdmonition/ability/AbilityView";
-import { AbilityConfig } from "@model/AbilityConfig";
+import { FeatureView } from "@drawSteelAdmonition/ability/FeatureView";
+import { FeatureConfig } from "@model/FeatureConfig";
 
-export class AbilityProcessor {
+export class FeatureProcessor {
 	plugin: Plugin;
 	readonly handler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => this.postProcess(source, el, ctx);
 
@@ -11,13 +11,13 @@ export class AbilityProcessor {
 	}
 
 	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void | Promise<any> {
-		const container = el.createEl("div", { cls: "ds-ability-ele-container ds-container" });
+		const container = el.createEl("div", { cls: "ds-feature-ele-container ds-container" });
 		try {
-			new AbilityView(this.plugin, AbilityConfig.readYaml(source), ctx).build(container);
+			new FeatureView(this.plugin, FeatureConfig.readYaml(source), ctx).build(container);
 		} catch (error) {
 			// Display error message to the user
 			let userMessage =
-				"The Draw Steel Elements plugin loaded the Ability Element properly, but " +
+				"The Draw Steel Elements plugin loaded the Feature Element properly, but " +
 				"failed to process the input config.  Please correct the following error:\n\n";
 			userMessage += error.message;
 			container.createEl("div", { text: userMessage, cls: "error-message" });

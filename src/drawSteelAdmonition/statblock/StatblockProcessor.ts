@@ -2,11 +2,9 @@ import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import { StatblockConfig } from "@model/StatblockConfig";
 import { HeaderView } from "@drawSteelAdmonition/statblock/HeaderView";
 import { StatsView } from "@drawSteelAdmonition/statblock/StatsView";
-import { AbilitiesView } from "@drawSteelAdmonition/statblock/AbilitiesView";
-import { TraitsView } from "@drawSteelAdmonition/statblock/TraitsView";
+import { FeaturesView } from "@drawSteelAdmonition/statblock/FeaturesView";
 import { HorizontalRuleProcessor } from "@drawSteelAdmonition/horizontalRuleProcessor";
-import { AbilityConfig } from "src/model/AbilityConfig";
-import { Ability } from "steel-compendium-sdk";
+import { FeatureConfig } from "@model/FeatureConfig";
 
 export class StatblockProcessor {
 	private plugin: Plugin;
@@ -34,27 +32,11 @@ export class StatblockProcessor {
 	private buildUI(container: HTMLElement, data: StatblockConfig, ctx: MarkdownPostProcessorContext): void {
 		new HeaderView(this.plugin, data, ctx).build(container);
 		new StatsView(this.plugin, data, ctx).build(container);
-
-		if (data.statblock.traits.length > 0) {
-			HorizontalRuleProcessor.build(container);
-			new TraitsView(this.plugin, data, ctx).build(container);
-		}
-
-		const abilities: Ability[] = [];
-		const villainPowers: Ability[] = [];
-		data.statblock.abilities.forEach(a => {
-			!a.type?.startsWith("Villain Action") ? abilities.push(a) : villainPowers.push(a);
-		})
-
-		if (abilities.length > 0) {
-			HorizontalRuleProcessor.build(container);
-			new AbilitiesView(this.plugin, AbilityConfig.allFrom(abilities), ctx).build(container);
-		}
-
-		if (villainPowers.length > 0) {
-			HorizontalRuleProcessor.build(container);
-			new AbilitiesView(this.plugin, AbilityConfig.allFrom(villainPowers), ctx).build(container);
-		}
+        if (data.statblock.features?.length > 0) {
+            HorizontalRuleProcessor.build(container);
+            const featureConfigs = data.statblock.features.map(f => new FeatureConfig(f));
+            new FeaturesView(this.plugin, featureConfigs, ctx).build(container)
+        }
 	}
 }
 

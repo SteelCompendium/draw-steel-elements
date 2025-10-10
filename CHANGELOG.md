@@ -1,6 +1,22 @@
 # Changelog
 
-## 3.4.0
+## 4.0.0
+
+- [BREAKING] Updates to sdk 2.1.5 (up from v0) to support new schema
+  - There are a LOT of changes, please read the [changelog](https://github.com/SteelCompendium/data-sdk-npm/blob/main/CHANGELOG.md)
+- Due to changes in the schema, be sure to redownload the compendium 
+  - IMPORTANT: this will delete the old compendium!  Be sure none of your homebrew is in that directory!
+
+## 3.4.3
+
+- Correctly supports `ds-negotiation` language
+
+## 3.4.2
+
+- Visual updates to the StaminaBar for the information icon
+- Docs updates
+
+## 3.4.1
 
 - Stamina Element Updates
   - Migrated to use Vue
