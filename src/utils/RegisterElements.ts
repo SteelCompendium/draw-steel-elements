@@ -14,10 +14,12 @@ import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
 import Counter from '@drawSteelComponents/Common/Counter.vue';
+import DsGlyph from '@drawSteelComponents/Common/DsGlyph.vue';
 
 import { Skills as SkillsModel } from "@model/Skills";
 import { StaminaBar as StaminaBarModel } from '@model/StaminaBar';
 import { Counter as CounterModel } from '@model/Counter';
+import { DsGlyph as DsGlyphModel } from '@model/DsGlyph';
 
 export function registerElements (plugin: Plugin) {
 
@@ -65,4 +67,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-value-row", valRowProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-values-row", valRowProcessor.handler);
+
+	let glyphProcessor = new genericComponentProcessor(plugin, DsGlyph, DsGlyphModel, "Glyph");
+	plugin.registerMarkdownCodeBlockProcessor("ds-glyph", glyphProcessor.handler);
 }
