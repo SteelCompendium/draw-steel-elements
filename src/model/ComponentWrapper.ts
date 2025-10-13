@@ -1,5 +1,4 @@
 import {parseYaml} from "obsidian";
-import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
 
 export class ComponentWrapper {
     collapsible?: boolean;

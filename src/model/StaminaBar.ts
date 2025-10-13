@@ -1,7 +1,7 @@
 import {parseYaml} from "obsidian";
 import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
 import { ComponentWrapper } from "@model/ComponentWrapper";
-import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
+import { validateJsonSchema, ValidationError } from "@utils/JsonSchemaValidator";
 import staminaBarSchemaYaml from "@model/schemas/StaminaBarSchema.yaml";
 
 export class StaminaBar extends ComponentWrapper{
@@ -14,7 +14,7 @@ export class StaminaBar extends ComponentWrapper{
 	public static parseYaml(source: string) {
 		try {
 			// Validate YAML content against YAML schema (all dependencies pre-registered)
-			const validation = validateYamlWithYamlSchema(source, staminaBarSchemaYaml);
+			const validation = validateJsonSchema(source, staminaBarSchemaYaml);
 			if (!validation.valid) {
 				const errorMessages = validation.errors.map((error: ValidationError) => 
 					`${error.path}: ${error.message}`

@@ -2,6 +2,7 @@ import Ajv2019 from 'ajv/dist/2019';
 import addKeywords from 'ajv-keywords';
 import addErrors from 'ajv-errors';
 import { parseYaml } from 'obsidian';
+import draft7MetaSchema from 'ajv/dist/refs/json-schema-draft-07.json';
 
 // Type alias for convenience
 type AjvInstance = InstanceType<typeof Ajv2019>;
@@ -39,6 +40,9 @@ function createFreshAjvInstance(): AjvInstance {
     });
     addKeywords(ajv);
     addErrors(ajv);
+    
+    // Add draft-07 meta-schema support for compatibility with schemas using $schema: http://json-schema.org/draft-07/schema#
+    ajv.addMetaSchema(draft7MetaSchema);
     
     // Register dependency schemas
     for (const { id, schema } of registeredSchemas) {
@@ -194,7 +198,7 @@ export function validateYamlWithJsonSchema(yamlData: string, jsonSchema: string)
  * Universal validation function that automatically detects data and schema formats
  * Supports any combination of YAML/JSON data with YAML/JSON schemas
  */
-export function validateDataWithSchema(data: string | object, schema: string | object): ValidationResult {
+export function validateDataWithSchema(data: string | object, schema: string | JSONSchema | object): ValidationResult {
     try {
         // Handle already parsed objects
         if (typeof data === 'object' && typeof schema === 'object') {
@@ -241,17 +245,4 @@ function isJsonString(str: string): boolean {
     } catch {
         return false;
     }
-}
-
-/**
- * Creates schema registration entries for common schemas
- * Call this once during plugin startup to register all schemas
- */
-export function createSchemaRegistry() {
-    return {
-        componentWrapper: {
-            id: "https://steelcompendium.io/schemas/common-element-fields-1.0.0",
-            // This will be populated in main.ts with the actual schema
-        }
-    };
 }

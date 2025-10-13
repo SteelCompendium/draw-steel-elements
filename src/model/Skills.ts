@@ -1,5 +1,5 @@
 import { parseYaml } from "obsidian";
-import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
+import { validateJsonSchema, ValidationError } from "@utils/JsonSchemaValidator";
 import { ComponentWrapper } from "@model/ComponentWrapper";
 import skillsSchemaYaml from "@model/schemas/SkillsSchema.yaml";
 
@@ -11,7 +11,7 @@ export class Skills extends ComponentWrapper{
 	public static parseYaml(source: string) {
 		try {
 			// Validate YAML content against YAML schema (all dependencies pre-registered)
-			const validation = validateYamlWithYamlSchema(source, skillsSchemaYaml);
+			const validation = validateJsonSchema(source, skillsSchemaYaml);
 			if (!validation.valid) {
 				const errorMessages = validation.errors.map((error: ValidationError) => 
 					`${error.path}: ${error.message}`
