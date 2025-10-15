@@ -185,6 +185,6 @@ const glyph_text = computed(() => {
 
 <style lang="css" scoped>
 span {
-    font-family: "Draw Steel Glyphs222";
+    font-family: "Draw Steel Glyphs";
 }
 </style>
