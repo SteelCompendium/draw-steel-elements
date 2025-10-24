@@ -132,7 +132,6 @@ const updateValue = (input: string | Event) => {
 }
 
 watch(() => props.model?.current_value, (newVal: number | undefined) => {
-    console.log("model changed")
     state.inputValue = String(newVal ?? 0);
 });
 

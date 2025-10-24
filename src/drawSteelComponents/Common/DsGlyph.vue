@@ -1,22 +1,37 @@
 <template>
+    <span ref="defaultSlot" style="display: none;">
+        <slot name="default"></slot>
+    </span>
     <span>{{glyph_text}}</span>
 </template>
 
 <script setup lang="ts">
 import type { GlyphVariant } from "@drawSteelComponents/Common/types";
-import type { DsGlyph as DsGlyphModel } from "@model/DsGlyph";
-import { computed } from "vue";
+import type { DsGlyph } from "@model/DsGlyph";
+import { computed, ref, useSlots } from "vue";
 
 const props = defineProps<{
     variant?: GlyphVariant,
-    model?: DsGlyphModel
+    model?: DsGlyph
 }>()
-
-console.log("ds-glyph loaded")
+const defaultSlot = ref(); 
 
 // Get variant from either direct prop or model prop
 const actualVariant = computed(() => {
-    return props.variant || props.model?.variant;
+    if (props.variant) {
+        return props.variant;
+    }
+    if (props.model?.variant) {
+        return props.model?.variant;
+    }
+    
+    // Use slot content as variant
+    if (defaultSlot.value?.textContent) {
+        const slotText = defaultSlot.value.textContent.trim();
+        return slotText;
+    }
+    
+    return null;
 });
 
 const glyph_text = computed(() => {

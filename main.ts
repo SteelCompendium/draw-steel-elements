@@ -38,14 +38,20 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      * This registers only dependency schemas that other schemas reference
      */
     private initializeSchemas() {
+        // Create a modified copy of featureSchema with additionalProperties: true
+        const adjustedFeatureSchema = {
+            ...featureSchema,
+            additionalProperties: true
+        };
+        
         const dependencySchemas = [
             {
                 id: commonElementFieldsSchema.$id ?? "",
                 schema: commonElementFieldsSchema
             },
             {
-                id: featureSchema.$id ?? "",
-                schema: featureSchema
+                id: adjustedFeatureSchema.$id ?? "",
+                schema: adjustedFeatureSchema
             }
             // Add more dependency schemas here as needed
             // Note: Don't register main schemas that are being validated directly

@@ -1,12 +1,12 @@
 # JSON Schema in YAML format for Draw Steel Character Skills
 $schema: https://json-schema.org/draft/2019-09/schema
-$id: https://steelcompendium.io/schemas/skills-1.0.0
+$id: dse.skills.schema.json-1.0.0
 title: Draw Steel Character Skills
 description: Schema for validating Draw Steel character skills data
 
 type: object
 allOf:
-- $ref: https://steelcompendium.io/schemas/common-element-fields-1.0.0
+- $ref: dse.common-component-fields.schema.json-1.0.0
 - type: object
   properties:
     only_show_selected:
@@ -124,8 +124,8 @@ allOf:
           errorMessage: |
               Custom skill objects must not have extra properties.
               Allowed: name, has_skill, skill_group, description.
-unevaluatedProperties:
-  const: false
-  errorMessage: |
+unevaluatedProperties: false
+errorMessage:
+  unevaluatedProperties: |
       Skills object must not have extra properties.
       Allowed: only_show_selected, skills, custom_skills.

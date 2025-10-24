@@ -1,8 +1,8 @@
 # JSON Schema in YAML format for Draw Steel Character Skills
 $schema: "https://json-schema.org/draft/2019-09/schema"
-$id: "https://steelcompendium.io/schemas/common-element-fields-1.0.0"
+$id: dse.common-component-fields.schema.json-1.0.0
 title: "Draw Steel Common Component Fields"
-description: "Schema for validating Draw Steel base component wrapper data"
+description: "Schema for validating Draw Steel common component fields data"
 
 type: object
 properties:

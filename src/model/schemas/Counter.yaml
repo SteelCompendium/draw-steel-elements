@@ -1,12 +1,12 @@
 # JSON Schema in YAML format for Draw Steel Character Skills
 $schema: https://json-schema.org/draft/2019-09/schema
-$id: https://steelcompendium.io/schemas/counter-1.0.0
-title: Draw Steel Character Skills
+$id: dse.counter.schema.json-1.0.0
+title: Draw Steel Counter
 description: Schema for validating Draw Steel character skills data
 
 type: object
 allOf:
-  - $ref: https://steelcompendium.io/schemas/common-element-fields-1.0.0
+  - $ref: dse.common-component-fields.schema.json-1.0.0
   - type: object
     properties:
       name_top:

@@ -1,0 +1,9 @@
+# JSON Schema in YAML format for Draw Steel Character Skills
+$schema: https://json-schema.org/draft/2019-09/schema
+$id: dse.feature.schema.json-1.0.0
+title: Draw Steel Feature
+description: Schema for validating Draw Steel feature data
+
+allOf:
+  - $ref: dse.common-component-fields.schema.json-1.0.0
+  - $ref: feature.schema.json-2.0.0

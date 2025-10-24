@@ -13,7 +13,7 @@
 
 <script setup lang="ts">
 import ComponentHideIndicator from "@drawSteelComponents/Common/ComponentHideIndicator.vue";
-import VerticalRule from "@drawSteelComponents/VerticalRule.vue";
+import VerticalRule from "@/drawSteelComponents/Common/VerticalRule.vue";
 import { ComponentWrapper } from "@model/ComponentWrapper";
 import { reactive } from 'vue';
 

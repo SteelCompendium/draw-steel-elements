@@ -1,0 +1,17 @@
+# JSON Schema in YAML format for Draw Steel Horizontal Rule
+$schema: https://json-schema.org/draft/2019-09/schema
+$id: dse.horizontal-rule.schema.json-1.0.0
+title: Draw Steel Horizontal Rule
+description: Schema for validating Draw Steel horizontal rule data
+
+type: object
+properties:
+  variant:
+    type: string
+    description: The visual variant of the horizontal rule
+    enum:
+      - default
+      - no-diamond
+      - flat
+      - flat-one-sided
+additionalProperties: false
