@@ -10,11 +10,11 @@ _The Draw Steel Elements Obsidian Plugin is an independent product published und
 
 ## Elements
 
-### Ability Element
+### Feature Element
 
-The [Ability Element](ability) is used to quickly format Tests, Abilities, Resistance Rolls, and Power Rolls.
+The [Features Element](Features.md) is used to quickly format Features and Traits
 
-![ability.png](Media/ability-simple.png)
+![feature.png](Media/feature.png)
 
 ### Initiative Tracker Element
 

@@ -3,6 +3,7 @@
 ## unreleased
 
 - Corrects an issue with rendering `0` in the values-row element
+- Documentation cleanup
 
 ## 4.0.0
 
