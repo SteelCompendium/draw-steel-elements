@@ -16,7 +16,7 @@ note, and then define your key-value pairs using YAML syntax inside the code blo
 values:
   - Size: 1
   - Speed: 8
-  - Stability: 2
+  - Stability: 0
 value_height: 3
 name_height: 1
 ~~~

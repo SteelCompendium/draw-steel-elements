@@ -1,5 +1,9 @@
 # Changelog
 
+## unreleased
+
+- Corrects an issue with rendering `0` in the values-row element
+
 ## 4.0.0
 
 - [BREAKING] Updates to sdk 2.1.5 (up from v0) to support new schema
