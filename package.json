@@ -20,31 +20,31 @@
 		"ajv": "^8.17.1",
 		"ajv-errors": "^3.0.0",
 		"ajv-keywords": "^5.1.0",
-		"vue": "^3.5.22"
+		"vue": "^3.5.25"
 	},
 	"devDependencies": {
 		"@codemirror/language": "^6.11.3",
 		"@types/css": "^0.0.38",
 		"@types/jest": "^30.0.0",
-		"@types/node": "^24.7.2",
+		"@types/node": "^25.0.1",
 		"@types/uuid": "^11.0.0",
-		"@typescript-eslint/eslint-plugin": "8.46.0",
-		"@typescript-eslint/parser": "8.46.0",
-		"@vue/compiler-sfc": "3.5.22",
+		"@typescript-eslint/eslint-plugin": "8.49.0",
+		"@typescript-eslint/parser": "8.49.0",
+		"@vue/compiler-sfc": "3.5.25",
 		"builtin-modules": "5.0.0",
 		"css": "^3.0.0",
-		"esbuild": "0.25.10",
+		"esbuild": "0.27.1",
 		"identity-obj-proxy": "^3.0.0",
 		"jest": "^30.2.0",
 		"jszip": "^3.10.1",
 		"jszip-utils": "^0.1.0",
-		"obsidian": "1.10.0",
+		"obsidian": "1.11.0",
 		"sass": "^1.96.0",
 		"steel-compendium-sdk": "^2.1.5",
-		"ts-jest": "^29.4.5",
+		"ts-jest": "^29.4.6",
 		"tslib": "2.8.1",
 		"typescript": "5.9.3",
-		"unplugin-vue": "^7.0.2",
-		"vue-tsc": "^3.1.1"
+		"unplugin-vue": "^7.1.0",
+		"vue-tsc": "^3.1.8"
 	}
 }
