@@ -6,8 +6,7 @@ import featureSchemaYaml from "@model/schemas/FeatureSchema.yaml";
 export class Feature extends ComponentWrapper {
 	name?: string;          // implemented
 	icon?: string;          // implemented
-	type: string;           // can be ignored for now
-	feature_type: string;   // can be ignored for now
+	feature_type: string;
 	usage?: string;         // implemented
 	cost?: string;          // implemented
 	ability_type?: string;  // implemented
@@ -49,7 +48,6 @@ export class Feature extends ComponentWrapper {
 			data.collapse_default,
 			data.name,
 			data.icon,
-			data.type,
 			data.feature_type,
 			data.usage,
 			data.cost,
@@ -69,7 +67,6 @@ export class Feature extends ComponentWrapper {
 		collapse_default: boolean,
 		name: string | undefined,
 		icon: string | undefined,
-		type: string,
 		feature_type: string,
 		usage: string | undefined,
 		cost: string | undefined,
@@ -85,7 +82,6 @@ export class Feature extends ComponentWrapper {
 		super(collapsible, collapse_default);
 		this.name = name;
 		this.icon = icon;
-		this.type = "feature";
 		this.feature_type = feature_type;
 		this.usage = usage;
 		this.cost = cost;

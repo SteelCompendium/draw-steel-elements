@@ -51,7 +51,7 @@ const props = defineProps<{
 }>();
 </script>
 
-<style lang="css" scoped>
+<style lang="scss" scoped>
 .feature-container {
     display: flex;
     flex-direction: row;
@@ -61,59 +61,53 @@ const props = defineProps<{
     padding: 1em;
     background: var(--code-background);
     letter-spacing: 0.03em;
-}
 
-/* Indentation levels for power roll container */
+    /* Indentation levels for nested containers */
+    &:has(> .indent-1) {
+        margin-left: calc(var(--list-indent) * 1);
+    }
+    &:has(> .indent-2) {
+        margin-left: calc(var(--list-indent) * 2);
+    }
+    &:has(> .indent-3) {
+        margin-left: calc(var(--list-indent) * 3);
+    }
+    &:has(> .indent-4) {
+        margin-left: calc(var(--list-indent) * 4);
+    }
+    &:has(> .indent-5) {
+        margin-left: calc(var(--list-indent) * 5);
+    }
+    &:has(> .indent-6) {
+        margin-left: calc(var(--list-indent) * 6);
+    }
 
-.feature-container:has(> .indent-1) {
-    margin-left: calc(var(--list-indent) * 1);
-}
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        background: linear-gradient(to right, transparent, var(--icon-color));
+        height: 1px;
+        /* Border thickness */
+        width: 100%;
+    }
 
-.feature-container:has(> .indent-2) {
-    margin-left: calc(var(--list-indent) * 2);
-}
+    &::before {
+        top: 0.5em;
+        left: 0;
+        background: linear-gradient(to right, var(--icon-color), transparent);
+        width: 12em;
+    }
 
-.feature-container:has(> .indent-3) {
-    margin-left: calc(var(--list-indent) * 3);
-}
-
-.feature-container:has(> .indent-4) {
-    margin-left: calc(var(--list-indent) * 4);
-}
-
-.feature-container:has(> .indent-5) {
-    margin-left: calc(var(--list-indent) * 5);
-}
-
-.feature-container:has(> .indent-6) {
-    margin-left: calc(var(--list-indent) * 6);
-}
-
-.feature-container::before,
-.feature-container::after {
-    content: "";
-    position: absolute;
-    background: linear-gradient(to right, transparent, var(--icon-color));
-    height: 1px;
-    /* Border thickness */
-    width: 100%;
-}
-
-.feature-container::before {
-    top: 0.5em;
-    left: 0;
-    background: linear-gradient(to right, var(--icon-color), transparent);
-    width: 12em;
-}
-
-.feature-container::after {
-    top: 0.5em;
-    left: 0;
-    height: 100%;
-    max-height: 12em;
-    background: linear-gradient(to bottom, var(--icon-color), transparent);
-    width: 1px;
-    /* Border thickness */
+    &::after {
+        top: 0.5em;
+        left: 0;
+        height: 100%;
+        max-height: 12em;
+        background: linear-gradient(to bottom, var(--icon-color), transparent);
+        width: 1px;
+        /* Border thickness */
+    }
 }
 
 .icon {
