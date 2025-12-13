@@ -1,4 +1,4 @@
-import {PowerRollTiers} from "@model/powerRoll";
+import {PowerRollTiers} from "@/model/PowerRollTiers";
 
 export class ArgumentPowerRoll {
 	public t1: ArgumentResult;

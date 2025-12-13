@@ -1,21 +1,22 @@
 import { parseYaml } from "obsidian";
 import { validateDataWithSchema, ValidationError } from "@utils/JsonSchemaValidator";
 import { ComponentWrapper } from "@model/ComponentWrapper";
+import { Effect } from "@model/Effect";
 import featureSchemaYaml from "@model/schemas/FeatureSchema.yaml";
 
 export class Feature extends ComponentWrapper {
 	name?: string;          // implemented
 	icon?: string;          // implemented
-	feature_type: string;
+	feature_type: string | undefined;   // implemented for "ability" and parially for "trait
 	usage?: string;         // implemented
 	cost?: string;          // implemented
 	ability_type?: string;  // implemented
 	keywords?: string[];    // implemented
 	distance?: string;      // implemented
 	target?: string;        // implemented
-	trigger?: string;
-	effects: Effect[];
-	flavor?: string;        
+	trigger?: string;       // implemented
+	effects: Effect[];      // implemented
+	flavor?: string;        // implemented
 	metadata?: Record<string, any>;
 
 	public static parseYaml(source: string) {
@@ -67,7 +68,7 @@ export class Feature extends ComponentWrapper {
 		collapse_default: boolean,
 		name: string | undefined,
 		icon: string | undefined,
-		feature_type: string,
+		feature_type: string = "ability",
 		usage: string | undefined,
 		cost: string | undefined,
 		ability_type: string | undefined,
@@ -93,85 +94,5 @@ export class Feature extends ComponentWrapper {
 		this.effects = effects;
 		this.flavor = flavor;
 		this.metadata = metadata;
-	}
-}
-
-export class Effect {
-	name?: string;
-	cost?: string;
-	effect?: string;
-	roll?: string;
-	features?: Feature[];
-	tier1?: string;
-	tier2?: string;
-	tier3?: string;
-	t1?: string;
-	t2?: string;
-	t3?: string;
-	crit?: string;
-	"11 or lower"?: string;
-	"12-16"?: string;
-	"17+"?: string;
-	"nat 19-20"?: string;
-
-	static parse(data: any): Effect {
-		const features: Feature[] | undefined = data.features && Array.isArray(data.features)
-			? data.features.map((f: any) => Feature.parse(f))
-			: undefined;
-
-		return new Effect(
-			data.name,
-			data.cost,
-			data.effect,
-			data.roll,
-			features,
-			data.tier1,
-			data.tier2,
-			data.tier3,
-			data.t1,
-			data.t2,
-			data.t3,
-			data.crit,
-			data["11 or lower"],
-			data["12-16"],
-			data["17+"],
-			data["nat 19-20"]
-		);
-	}
-
-	constructor(
-		name: string | undefined,
-		cost: string | undefined,
-		effect: string | undefined,
-		roll: string | undefined,
-		features: Feature[] | undefined,
-		tier1: string | undefined,
-		tier2: string | undefined,
-		tier3: string | undefined,
-		t1: string | undefined,
-		t2: string | undefined,
-		t3: string | undefined,
-		crit: string | undefined,
-		lower11: string | undefined,
-		range1216: string | undefined,
-		plus17: string | undefined,
-		nat1920: string | undefined
-	) {
-		this.name = name;
-		this.cost = cost;
-		this.effect = effect;
-		this.roll = roll;
-		this.features = features;
-		this.tier1 = tier1;
-		this.tier2 = tier2;
-		this.tier3 = tier3;
-		this.t1 = t1;
-		this.t2 = t2;
-		this.t3 = t3;
-		this.crit = crit;
-		this["11 or lower"] = lower11;
-		this["12-16"] = range1216;
-		this["17+"] = plus17;
-		this["nat 19-20"] = nat1920;
 	}
 }

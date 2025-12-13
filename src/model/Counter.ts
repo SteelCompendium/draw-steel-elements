@@ -1,6 +1,6 @@
 import { parseYaml } from "obsidian";
 import {
-    validateYamlWithYamlSchema,
+    validateDataWithSchema,
     ValidationError,
 } from "@utils/JsonSchemaValidator";
 import { ComponentWrapper } from "@model/ComponentWrapper";
@@ -23,7 +23,7 @@ export class Counter extends ComponentWrapper {
     public static parseYaml(source: string) {
         try {
             // Validate YAML content against YAML schema (all dependencies pre-registered)
-            const validation = validateYamlWithYamlSchema(
+            const validation = validateDataWithSchema(
                 source,
                 counterSchemaYaml
             );

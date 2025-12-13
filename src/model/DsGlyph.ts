@@ -3,6 +3,7 @@ import type { GlyphVariant } from "@drawSteelComponents/Common/types";
 
 export class DsGlyph {
     variant: GlyphVariant;
+    class: string = 'ds-glyph';
 
     public static parseYaml(source: string): DsGlyph {
         let data: any;

@@ -1,13 +1,18 @@
-export class PowerRollTiers {
-	public t1: string;
-	public t2: string;
-	public t3: string;
-	public crit: string;
+export class PowerRoll {
+    roll?: string;
+    tier1?: string;
+    tier2?: string;
+    tier3?: string;
 
-	constructor(t1: string, t2: string, t3: string, crit: string) {
-		this.t1 = t1;
-		this.t2 = t2;
-		this.t3 = t3;
-		this.crit = crit;
-	}
+    constructor(
+        roll: string | undefined,
+        tier1: string | undefined,
+		tier2: string | undefined,
+		tier3: string | undefined,
+    ) {
+        this.roll = roll;
+        this.tier1 = tier1;
+		this.tier2 = tier2;
+		this.tier3 = tier3;
+    }
 }

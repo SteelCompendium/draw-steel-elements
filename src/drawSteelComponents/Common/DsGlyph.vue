@@ -2,7 +2,7 @@
     <span ref="defaultSlot" style="display: none;">
         <slot name="default"></slot>
     </span>
-    <span>{{glyph_text}}</span>
+    <span class="glyph-text" :style="{ fontSize: fontSize }">{{ glyph_text }}</span>
 </template>
 
 <script setup lang="ts">
@@ -12,9 +12,10 @@ import { computed, ref, useSlots } from "vue";
 
 const props = defineProps<{
     variant?: GlyphVariant,
-    model?: DsGlyph
+    model?: DsGlyph,
+    fontSize?: string
 }>()
-const defaultSlot = ref(); 
+const defaultSlot = ref();
 
 // Get variant from either direct prop or model prop
 const actualVariant = computed(() => {
@@ -24,20 +25,20 @@ const actualVariant = computed(() => {
     if (props.model?.variant) {
         return props.model?.variant;
     }
-    
+
     // Use slot content as variant
     if (defaultSlot.value?.textContent) {
         const slotText = defaultSlot.value.textContent.trim();
         return slotText;
     }
-    
+
     return null;
 });
 
 const glyph_text = computed(() => {
     const variant = actualVariant.value;
     if (!variant) return '';
-    
+
     switch (variant.toString()) {
         case 'area':
             return 'e';
@@ -72,17 +73,17 @@ const glyph_text = computed(() => {
         case 'targets':
             return 'X';
         case 'tier 1':
-            return '!¼Áá';
         case 'tier1':
         case 't1':
+            return '!'; // !¼Áá can all be used for this
         case 'tier 2':
-            return '@½Éé';
         case 'tier2':
         case 't2':
+            return '@'; // @½Éé can all be used for this
         case 'tier 3':
-            return '#¾Íí';
         case 'tier3':
         case 't3':
+            return '#'; // #¾Íí can all be used for this
         case 'note1':
             return 'n';
         case 'note2':
@@ -124,7 +125,7 @@ const glyph_text = computed(() => {
         case 'reason':
         case 'r-rounded':
         case 'reason-rounded':
-            return 'R'; 
+            return 'R';
         case 'a-block':
         case 'agility-block':
             return 'a';
@@ -201,5 +202,9 @@ const glyph_text = computed(() => {
 <style lang="css" scoped>
 span {
     font-family: "Draw Steel Glyphs";
+}
+
+.glyph-text {
+    margin-right: -1px;
 }
 </style>
