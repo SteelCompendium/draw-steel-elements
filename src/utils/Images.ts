@@ -1,7 +1,5 @@
 import {App, TFile} from "obsidian";
 
-export const DEFAULT_IMAGE_PATH = 'Media/token_1.png';
-
 export class Images {
 	static async resolveImageSource(app: App, imgSrcRaw: string): Promise<string> {
 		// Check if it's an Obsidian link
@@ -29,4 +27,9 @@ export class Images {
 			throw new Error('Image file not found in vault.');
 		}
 	}
+
+    static async resolveImageSourceOrDefault(app: App, imgSrcRaw: string, defaultImgSrc: string): Promise<string> {
+        return Images.resolveImageSource(app, imgSrcRaw ?? defaultImgSrc)
+            .catch(() => Images.resolveImageSource(app, defaultImgSrc))
+    }
 }

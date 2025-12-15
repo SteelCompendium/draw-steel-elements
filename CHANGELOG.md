@@ -1,9 +1,10 @@
 # Changelog
 
-## unreleased
+## 4.1.0
 
 - Corrects an issue with rendering `0` in the values-row element
 - Documentation cleanup
+- Adds support for a default image in the initiative tracker
 
 ## 4.0.0
 

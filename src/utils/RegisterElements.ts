@@ -28,7 +28,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 
-	const initProcessor = new InitiativeProcessor(plugin.app);
+	const initProcessor = new InitiativeProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-init", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);
