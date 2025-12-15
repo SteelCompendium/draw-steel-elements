@@ -1,7 +1,7 @@
 {
   "id": "draw-steel-elements",
   "name": "Draw Steel Elements",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "minAppVersion": "0.15.0",
   "description": "Components to support the Draw Steel TTRPG by MCDM.",
   "author": "Steel Compendium",

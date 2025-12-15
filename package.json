@@ -1,11 +1,12 @@
 {
   "name": "draw-steel-elements",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Components to support the Draw Steel TTRPG by MCDM.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "vue-tsc --noEmit && node esbuild.config.mjs production",
+    "build-no-check": "node esbuild.config.mjs production",
     "test": "jest",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "tsc": "vue-tsc --noEmit"
