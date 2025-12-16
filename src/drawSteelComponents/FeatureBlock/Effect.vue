@@ -1,13 +1,8 @@
 <template>
     <div class="effect-container">
         <span v-if="model?.name">
-            <b class="bold">{{ model?.name }}</b>
+            <b class="bold">{{ model?.name }}:&nbsp;</b>
         </span>
-        <span v-if="model?.name && model.cost">&nbsp;</span>
-        <span v-if="model?.cost">
-            <b class="bold">({{ model?.cost }})</b>
-        </span>
-        <span class="bold" v-if="model?.name || model?.cost">:&nbsp;</span>
         <conditional-span>{{ model?.effect }}</conditional-span>
         <power-roll class="power-roll" :model="model?.powerRoll" v-if="model?.powerRoll"></power-roll>
     </div>

@@ -3,7 +3,6 @@ import { PowerRoll } from "@model/PowerRoll";
 
 export class Effect {
     name?: string; //implemented
-    cost?: string; //implemented
     effect?: string; //implemented
     features?: Feature[];
     powerRoll?: PowerRoll; //implemented
@@ -39,8 +38,21 @@ export class Effect {
         tier2: string | undefined,
         tier3: string | undefined,
     ) {
-        this.name = name;
-        this.cost = cost;
+        this.name = name || "";
+        if (name && cost) {
+            this.name += " "
+        }
+        if (cost) {
+            this.name += `(${cost})`;
+        }
+        if (!name && !cost) {
+            if (!roll && !tier1 && !tier2 && !tier3) {
+                this.name = "Effect"
+            }
+            else {
+                this.name = "";
+            }
+        }
         this.effect = effect;
         this.features = features;
         this.powerRoll = new PowerRoll(roll, tier1, tier2, tier3);
