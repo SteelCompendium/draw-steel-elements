@@ -71,40 +71,42 @@ const containerClasses = computed(() => ({
 
 <style lang="scss" scoped>
 .feature-container {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    min-height: 4em;
+    margin-top: 0.5em;
+    padding: 1em;
+    background: var(--code-background);
+    letter-spacing: 0.03em;
+
+    /* Indentation levels for nested containers */
+    &:has(> .indent-1) {
+        margin-left: calc(var(--list-indent) * 1);
+    }
+
+    &:has(> .indent-2) {
+        margin-left: calc(var(--list-indent) * 2);
+    }
+
+    &:has(> .indent-3) {
+        margin-left: calc(var(--list-indent) * 3);
+    }
+
+    &:has(> .indent-4) {
+        margin-left: calc(var(--list-indent) * 4);
+    }
+
+    &:has(> .indent-5) {
+        margin-left: calc(var(--list-indent) * 5);
+    }
+
+    &:has(> .indent-6) {
+        margin-left: calc(var(--list-indent) * 6);
+    }
+
     &-ability {
-        display: flex;
-        flex-direction: row;
-        width: 100%;
-        min-height: 4em;
-        margin-top: 0.5em;
-        padding: 1em;
-        background: var(--code-background);
-        letter-spacing: 0.03em;
-
-        /* Indentation levels for nested containers */
-        &:has(> .indent-1) {
-            margin-left: calc(var(--list-indent) * 1);
-        }
-
-        &:has(> .indent-2) {
-            margin-left: calc(var(--list-indent) * 2);
-        }
-
-        &:has(> .indent-3) {
-            margin-left: calc(var(--list-indent) * 3);
-        }
-
-        &:has(> .indent-4) {
-            margin-left: calc(var(--list-indent) * 4);
-        }
-
-        &:has(> .indent-5) {
-            margin-left: calc(var(--list-indent) * 5);
-        }
-
-        &:has(> .indent-6) {
-            margin-left: calc(var(--list-indent) * 6);
-        }
 
         &::before,
         &::after {
@@ -117,14 +119,14 @@ const containerClasses = computed(() => ({
         }
 
         &::before {
-            top: 0.5em;
+            top: 0;
             left: 0;
             background: linear-gradient(to right, var(--icon-color), transparent);
             width: 12em;
         }
 
         &::after {
-            top: 0.5em;
+            top: 0;
             left: 0;
             height: 100%;
             max-height: 12em;

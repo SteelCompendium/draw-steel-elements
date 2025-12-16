@@ -1,10 +1,10 @@
 import type { Feature } from "@model/Feature";
-import { PowerRoll } from "@model/PowerRoll";
+import { PowerRoll } from "@/model/powerRoll";
 
 export class Effect {
     name?: string; //implemented
     effect?: string; //implemented
-    features?: Feature[];
+    features?: Feature[]; //implemented
     powerRoll?: PowerRoll; //implemented
 
     static parse(data: any): Effect {

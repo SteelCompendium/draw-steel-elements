@@ -5,6 +5,11 @@
         </span>
         <conditional-span>{{ model?.effect }}</conditional-span>
         <power-roll class="power-roll" :model="model?.powerRoll" v-if="model?.powerRoll"></power-roll>
+        <feature-block 
+            v-for="(feature, index) in model?.features" 
+            :key="index" 
+            :model="feature"
+        />
     </div>
 </template>
 
@@ -12,6 +17,7 @@
 import { Effect } from '@/model/Effect';
 import ConditionalSpan from '@drawSteelComponents/Common/ConditionalSpan.vue';
 import PowerRoll from '@drawSteelComponents/FeatureBlock/PowerRoll.vue';
+import FeatureBlock from '@drawSteelComponents/FeatureBlock/FeatureBlock.vue';
 
 const props = defineProps<{
     model?: Effect,

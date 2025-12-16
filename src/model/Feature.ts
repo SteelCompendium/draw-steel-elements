@@ -7,7 +7,8 @@ import featureSchemaYaml from "@model/schemas/FeatureSchema.yaml";
 export class Feature extends ComponentWrapper {
 	name?: string;          // implemented
 	icon?: string;          // implemented
-	feature_type: string | undefined;   // implemented for "ability" and parially for "trait
+	feature_type: string | undefined;   // implemented for "ability" and parially for "trait".
+                                        // Further additions may be wanted, but it works for now.
 	usage?: string;         // implemented
 	cost?: string;          // implemented
 	ability_type?: string;  // implemented
@@ -17,7 +18,7 @@ export class Feature extends ComponentWrapper {
 	trigger?: string;       // implemented
 	effects: Effect[];      // implemented
 	flavor?: string;        // implemented
-	metadata?: Record<string, any>;
+	metadata?: Record<string, any>; // implemented
 
 	public static parseYaml(source: string) {
 		try {
