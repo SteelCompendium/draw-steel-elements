@@ -87,7 +87,6 @@ Features can have many effects and the order is important.
 | `tier1`    | string    | The tier-1 (11 or lower) result of the Power Roll |
 | `tier2`    | string    | The tier-2 (12-16) result of the Power Roll       |
 | `tier3`    | string    | The tier-3 (17+) result of the Power Roll         |
-| `crit`     | string    | The crit (nat 19-20) result of the Power Roll     |
 | `features` | Feature[] | A list of Features granted from the effect.       |
 
 Example Test effect:
