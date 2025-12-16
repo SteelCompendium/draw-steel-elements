@@ -21,6 +21,7 @@ import { Skills as SkillsModel } from "@model/Skills";
 import { StaminaBar as StaminaBarModel } from '@model/StaminaBar';
 import { Counter as CounterModel } from '@model/Counter';
 import { DsGlyph as DsGlyphModel } from '@model/DsGlyph';
+import DrawSteelAdmonitionPlugin from 'main';
 
 export function registerElements (plugin: Plugin) {
 
@@ -35,7 +36,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 
-	const initProcessor = new InitiativeProcessor(plugin.app);
+	const initProcessor = new InitiativeProcessor(plugin as DrawSteelAdmonitionPlugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-init", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);

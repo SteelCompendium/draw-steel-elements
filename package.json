@@ -1,22 +1,23 @@
 {
-	"name": "draw-steel-elements",
-	"version": "4.0.1",
-	"description": "Components to support the Draw Steel TTRPG by MCDM.",
-	"main": "main.js",
-	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "vue-tsc --noEmit && node esbuild.config.mjs production",
-		"test": "jest",
-		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"tsc": "vue-tsc --noEmit"
-	},
-	"keywords": [],
-	"author": "Steel Compendium",
-	"license": "MIT",
-	"engines": {
-		"node": ">=22.15"
-	},
-	"dependencies": {
+  "name": "draw-steel-elements",
+  "version": "4.1.0",
+  "description": "Components to support the Draw Steel TTRPG by MCDM.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "vue-tsc --noEmit && node esbuild.config.mjs production",
+    "build-no-check": "node esbuild.config.mjs production",
+    "test": "jest",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "tsc": "vue-tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "Steel Compendium",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15"
+  },
+  "dependencies": {
 		"ajv": "^8.17.1",
 		"ajv-errors": "^3.0.0",
 		"ajv-keywords": "^5.1.0",
@@ -26,10 +27,10 @@
 		"@codemirror/language": "^6.11.3",
 		"@types/css": "^0.0.38",
 		"@types/jest": "^30.0.0",
-		"@types/node": "^25.0.1",
+		"@types/node": "^25.0.2",
 		"@types/uuid": "^11.0.0",
-		"@typescript-eslint/eslint-plugin": "8.49.0",
-		"@typescript-eslint/parser": "8.49.0",
+		"@typescript-eslint/eslint-plugin": "8.50.0",
+		"@typescript-eslint/parser": "8.50.0",
 		"@vue/compiler-sfc": "3.5.25",
 		"builtin-modules": "5.0.0",
 		"css": "^3.0.0",
