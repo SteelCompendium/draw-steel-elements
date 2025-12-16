@@ -76,7 +76,12 @@ const context = await esbuild.context({
   tsconfig: "tsconfig.json",
   minify: prod,
   plugins: [
-    vue({ sourceMap: false }),
+    vue({ 
+      sourceMap: false,
+      style: {
+        preprocessLang: 'scss'
+      }
+    }),
 	copyToStylesPlugin,
 	yamlLoaderPlugin
   ],

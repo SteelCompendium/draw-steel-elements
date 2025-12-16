@@ -6,24 +6,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, useSlots } from "vue";
 import { setIcon } from "obsidian";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     icon?: string,
-    icon_button?: boolean,
+    variant?: 'default' | 'icon' | 'simplified',
     disabled?: boolean
-}>();
+}>(), {
+    variant: 'default'
+});
 
 const emit = defineEmits(["click"])
+const slots = useSlots()
 
 const iconElement = ref<HTMLElement | null>(null);
 
 const buttonClasses = computed(() => [
 	{
-        'text-button': !props.icon_button,
-        'icon-button': props.icon_button,
-        'has-icon': !props.icon_button && props.icon,
+        'text-button': props.variant == 'default',
+        'icon-button': props.variant == 'icon',
+        'simplified-button': props.variant == 'simplified',
+        'has-icon': props.variant != 'icon' && props.icon,
         'disabled': props.disabled
     }
 ])
@@ -31,7 +35,7 @@ const buttonClasses = computed(() => [
 const iconClasses = computed(() => [
     'icon',
 	{
-        'pre-text-icon': !props.icon_button,
+        'pre-text-icon': slots.default,
     }
 ])
 
@@ -45,6 +49,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+button {
+    cursor: pointer;
+}
+
 .icon {
     height: var(--icon-size);
     width: var(--icon-size);
@@ -77,5 +85,12 @@ onMounted(() => {
     background-color: transparent;
     box-shadow: none;
     padding: 0;
+}
+
+.simplified-button {
+    display: flex;
+    padding: 0.5em;
+    background: none;
+    border: none;
 }
 </style>
