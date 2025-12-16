@@ -11,7 +11,6 @@ export class FeatureConfig {
     }
 
     public static readYaml(text: string) {
-
         const feature: Feature = Feature.read(new YamlReader(Feature.modelDTOAdapter), text);
         const yaml = parseYaml(text);
         return new FeatureConfig(feature, yaml.indent);

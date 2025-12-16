@@ -1,0 +1,64 @@
+# JSON Schema in YAML format for Draw Steel Character Skills
+$schema: https://json-schema.org/draft/2019-09/schema
+$id: https://steelcompendium.io/schemas/counter-1.0.0
+title: Draw Steel Character Skills
+description: Schema for validating Draw Steel character skills data
+
+type: object
+allOf:
+  - $ref: https://steelcompendium.io/schemas/common-element-fields-1.0.0
+  - type: object
+    properties:
+      name_top:
+        type: string
+        description: The name shown above the counter (e.g., "Stamina", "Heroic Resource").
+      name_bottom:
+        type: string
+        description: The name shown below the counter (e.g., "Focus", "Drama).
+      current_value: 
+        type: integer
+        description: The current value of the counter.
+      max_value: 
+        type: integer
+        description: The maximum value the counter can reach.
+      min_value: 
+        type: integer
+        description: The minimum value the counter can reach.
+      value_height: 
+        type: integer
+        description: Adjusts the size of the counter value text in the rendered output as a multiplier.
+      name_top_height: 
+        type: integer
+        description: Adjusts the size of the counter name_top text in the rendered output as a multiplier.
+      name_bottom_height: 
+        type: integer
+        description: Adjusts the size of the counter name_bottom text in the rendered output as a multiplier.
+      hide_buttons:
+        type: string
+        description: \"true\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button.
+        transform:
+        - trim
+        - toLowerCase
+        enum:
+          - true
+          - plus
+          - minus
+        default: false
+        errorMessage: hide_buttons must be either "true", "plus" or "minus"
+      style:
+        type: string
+        description: The style the counter should use.
+        transform:
+        - trim
+        - toLowerCase
+        enum:
+          - horizontal
+          - vertical
+        default: horizontal
+        errorMessage: style must be either "horizontal" or "vertical"
+        
+unevaluatedProperties:
+    const: false
+    errorMessage: |
+        Counter object contains invalid property '${0#}'. 
+        Allowed properties: name_top, name_bottom, current_value, max_value, min_value, value_height, name_height, style.

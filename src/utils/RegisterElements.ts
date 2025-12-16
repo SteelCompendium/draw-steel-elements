@@ -13,9 +13,14 @@ import { genericComponentProcessor } from "./ComponentProcessor";
 import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
+import Counter from '@drawSteelComponents/Common/Counter.vue';
+import DsGlyph from '@drawSteelComponents/Common/DsGlyph.vue';
 
 import { Skills as SkillsModel } from "@model/Skills";
-import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
+import { StaminaBar as StaminaBarModel } from '@model/StaminaBar';
+import { Counter as CounterModel } from '@model/Counter';
+import { DsGlyph as DsGlyphModel } from '@model/DsGlyph';
+import DrawSteelAdmonitionPlugin from 'main';
 
 export function registerElements (plugin: Plugin) {
 
@@ -28,7 +33,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
 
-	const initProcessor = new InitiativeProcessor(plugin);
+	const initProcessor = new InitiativeProcessor(plugin as DrawSteelAdmonitionPlugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-init", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);
@@ -48,7 +53,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", staminaBarProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", staminaBarProcessor.handler);
 
-	let counterProcessor = new CounterProcessor(plugin);
+	let counterProcessor = new genericComponentProcessor(plugin, Counter, CounterModel, "Counter", true);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-counter", counterProcessor.handler);
 
@@ -63,4 +68,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-value-row", valRowProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-values-row", valRowProcessor.handler);
+
+	let glyphProcessor = new genericComponentProcessor(plugin, DsGlyph, DsGlyphModel, "Glyph");
+	plugin.registerMarkdownCodeBlockProcessor("ds-glyph", glyphProcessor.handler);
 }

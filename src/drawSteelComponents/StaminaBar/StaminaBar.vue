@@ -52,11 +52,11 @@
 <script setup lang="ts">
 import ComponentWrapper from "@drawSteelComponents/Common/ComponentWrapper.vue";
 import StaminaEditModal from "@drawSteelComponents/StaminaBar/StaminaEditModal.vue";
-import { ModalProcessor } from "@/utils/ModalProcessor";
-import { StaminaBar } from '@/model/StaminaBar'; 
+import { ModalProcessor } from "@utils/ModalProcessor";
+import { StaminaBar } from '@model/StaminaBar'; 
 import { computed, inject, reactive } from "vue";
 import { App, MarkdownPostProcessorContext } from "obsidian";
-import { CodeBlocks } from "@/utils/CodeBlocks";
+import { CodeBlocks } from "@utils/CodeBlocks";
 
 const props = defineProps<{
     model?: StaminaBar,

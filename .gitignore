@@ -27,3 +27,4 @@ data.json
 main.css 
 # Generated during build from main.css and styles-source.css
 styles.css
+*.stackdump
