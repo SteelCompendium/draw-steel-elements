@@ -28,7 +28,7 @@ export function registerElements (plugin: Plugin) {
     const FeatureProcessor = new genericComponentProcessor(plugin, FeatureBlock, FeatureModel, "Feature Block", true);
     plugin.registerMarkdownCodeBlockProcessor("ds-ft", FeatureProcessor.handler);
     plugin.registerMarkdownCodeBlockProcessor("ds-feat", FeatureProcessor.handler);
-    plugin.registerMarkdownCodeBlockProcessor("ds-feature", FeatureProcessor.handler);  
+    plugin.registerMarkdownCodeBlockProcessor("ds-feature", FeatureProcessor.handler);
 
 	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, HorizontalRuleModel, "Horizontal Rule", true);
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);

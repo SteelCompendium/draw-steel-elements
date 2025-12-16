@@ -1,5 +1,5 @@
 import type { Feature } from "@model/Feature";
-import { PowerRoll } from "@/model/powerRoll";
+import { PowerRoll } from "@model/PowerRoll";
 
 export class Effect {
     name?: string; //implemented
