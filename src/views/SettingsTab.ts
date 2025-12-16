@@ -50,5 +50,20 @@ export class MyPluginSettingTab extends PluginSettingTab {
 			return new CompendiumDownloader(this.app, this.plugin.githubOwner, this.plugin.githubRepo, undefined)
 				.downloadAndExtractRelease(this.plugin.settings.compendiumReleaseTag, this.plugin.settings.compendiumDestinationDirectory);
 		});
+
+		containerEl.createEl('h3', { text: 'Initiative Tracker' });
+
+		new Setting(containerEl)
+			.setName('Default Creature Image Path')
+			.setDesc('Default image to use for creatures in the initiative tracker if not specified')
+			.addText(text =>
+				text
+					.setPlaceholder('path/to/image.png')
+					.setValue(this.plugin.settings.defaultImagePath)
+					.onChange(async value => {
+						this.plugin.settings.defaultImagePath = value;
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }

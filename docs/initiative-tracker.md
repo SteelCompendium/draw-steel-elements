@@ -39,6 +39,8 @@ In the above example, there are two Heroes and one Enemy Group (Initiative Group
 
 To use the Initiative Tracker, you need to include a code block with the `ds-initiative` language identifier in your Obsidian note. Inside this code block, you define your encounter data in YAML format.
 
+In the plugin settings, you can configure a default image to use if none is provided.
+
 ### Code Block Structure
 
 ```

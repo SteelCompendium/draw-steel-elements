@@ -2,7 +2,7 @@ import { App, MarkdownPostProcessorContext, setIcon } from "obsidian";
 import { StaminaEditModal } from "@views/StaminaEditModal";
 import { ConditionManager } from "@utils/Conditions";
 import { AddConditionsModal } from "@views/ConditionSelectModal";
-import { DEFAULT_IMAGE_PATH, Images } from "@utils/Images";
+import { Images } from "@utils/Images";
 import { CodeBlocks } from "@utils/CodeBlocks";
 import {
 	Condition,
@@ -17,14 +17,17 @@ import {
 import { ResetEncounterModal } from "@views/ResetEncounterModal";
 import {MinionStaminaPoolModal} from "@views/MinionStaminaPoolModal";
 import {StaminaBar} from "@model/StaminaBar";
+import DrawSteelAdmonitionPlugin from "main";
 
 export class InitiativeProcessor {
 	private app: App;
+	private plugin: DrawSteelAdmonitionPlugin;
 	readonly handler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => this.postProcess(source, el, ctx);
 	private conditionManager: ConditionManager;
 
-	constructor(app: App) {
-		this.app = app;
+	constructor(plugin: DrawSteelAdmonitionPlugin) {
+		this.plugin = plugin;
+		this.app = plugin.app;
 		this.conditionManager = new ConditionManager();
 	}
 
@@ -153,13 +156,9 @@ export class InitiativeProcessor {
 		const imageEl = rowEl.createEl("div", { cls: "character-image" });
 		const imgSrcRaw = character.image ?? null;
 
-		Images.resolveImageSource(this.app, imgSrcRaw ?? "")
+		Images.resolveImageSourceOrDefault(this.app, imgSrcRaw, this.plugin.settings.defaultImagePath)
 			.then((imgSrc) => {
 				imageEl.createEl("img", { attr: { src: imgSrc, alt: character.name } });
-			})
-			.catch(() => {
-				// Use default image
-				imageEl.createEl("img", { attr: { src: DEFAULT_IMAGE_PATH, alt: character.name } });
 			});
 
 		// Middle: Character Info
@@ -283,14 +282,10 @@ export class InitiativeProcessor {
 				// Display creature image in the cell
 				const imgEl = cellEl.createEl("div", { cls: "instance-image" });
 				const imgSrcRaw = creature.image ?? null;
-				Images.resolveImageSource(this.app, imgSrcRaw ?? "")
+				Images.resolveImageSourceOrDefault(this.app, imgSrcRaw, this.plugin.settings.defaultImagePath)
 					.then((imgSrc) => {
 						imgEl.createEl("img", { attr: { src: imgSrc, alt: creature.name } });
 					})
-					.catch(() => {
-						// Use default image
-						imgEl.createEl("img", { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
-					});
 
 				// Display health status below the image
 				const staminaEl = cellEl.createEl("div", { cls: "instance-stamina" });
@@ -344,13 +339,9 @@ export class InitiativeProcessor {
 		// Left: Creature Image
 		const imageEl = container.createEl("div", { cls: "character-image" });
 		const imgSrcRaw = creature.image ?? null;
-		Images.resolveImageSource(this.app, imgSrcRaw ?? "")
+		Images.resolveImageSourceOrDefault(this.app, imgSrcRaw, this.plugin.settings.defaultImagePath)
 			.then((imgSrc) => {
 				imageEl.createEl("img", { attr: { src: imgSrc, alt: creature.name } });
-			})
-			.catch(() => {
-				// Use default image
-				imageEl.createEl("img", { attr: { src: DEFAULT_IMAGE_PATH, alt: creature.name } });
 			});
 
 		// Middle: Creature Info

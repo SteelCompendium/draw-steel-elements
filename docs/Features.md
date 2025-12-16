@@ -1,6 +1,6 @@
-# Features
+# Feature Element
 
-Features can take many forms which results in a more fluid yaml when it comes to effects.
+The Feature Element can take many forms which results in a more fluid yaml when it comes to effects.
 
 Yaml is incredibly sensitive, be sure to format exactly.
 
@@ -26,7 +26,8 @@ Yaml is incredibly sensitive, be sure to format exactly.
 
 Example
 
-```yaml
+```markdown
+~~~ds-feature
 type: feature
 feature_type: ability
 name: Magma Titan
@@ -68,7 +69,10 @@ effects:
   - name: Persistent 2
     effect: The effect lasts until the start of your next turn. Additionally, at the
       start of your turn, the target can spend 2 Recoveries.
+~~~
 ```
+
+![feature.png](Media/feature.png)
 
 ## Effects
 
@@ -112,3 +116,20 @@ Example Effect without name, cost, etc:
 effects:
 - effect: Until the end of their next turn, the target halves incoming damage, deals an additional 4 damage on strikes, and their speed is doubled.
 ```
+
+## Custom Power Rolls
+
+You can use Feature Elements to make custom power rolls:
+
+```markdown
+~~~ds-feature
+name: A simple power roll
+effects:
+  - roll: 2d10 + 5
+    tier1: 2 damage
+    tier2: 4 damage
+    tier3: 7 damage
+~~~
+```
+
+![simple power roll](Media/simple_feature_power_roll.png)
