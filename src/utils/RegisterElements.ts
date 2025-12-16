@@ -25,12 +25,10 @@ import DrawSteelAdmonitionPlugin from 'main';
 
 export function registerElements (plugin: Plugin) {
 
-	const abilityProcessor = new FeatureProcessorOld(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-ft", abilityProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-feat", abilityProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-feature", abilityProcessor.handler);
     const FeatureProcessor = new genericComponentProcessor(plugin, FeatureBlock, FeatureModel, "Feature Block", true);
-    plugin.registerMarkdownCodeBlockProcessor("ds-feature-new", FeatureProcessor.handler);
+    plugin.registerMarkdownCodeBlockProcessor("ds-ft", FeatureProcessor.handler);
+    plugin.registerMarkdownCodeBlockProcessor("ds-feat", FeatureProcessor.handler);
+    plugin.registerMarkdownCodeBlockProcessor("ds-feature", FeatureProcessor.handler);  
 
 	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, HorizontalRuleModel, "Horizontal Rule", true);
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
