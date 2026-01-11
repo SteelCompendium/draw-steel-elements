@@ -13,7 +13,7 @@ then define your counter using YAML syntax inside the code block.
 
 ```
 ~~~ds-counter
-name: Health
+name_bottom: Health
 current_value: 10
 max_value: 20
 min_value: 0
@@ -30,8 +30,9 @@ Below is a detailed description of each field used in the counter element, inclu
 
 | Field                | Type      | Description                                                                                                                                    | Required | Default Value |
 | -------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
-| `name-top`           | `string`  | The name shown above the counter (e.g., "Stamina", "Heroic Resource").                                                                         | No       | N/A           |
-| `name-bottom`        | `string`  | The name shown below the counter (e.g., "Focus", "Drama).                                                                                      | No       | N/A           |
+| `name_top`           | `string`  | The name shown above the counter (e.g., "Stamina", "Heroic Resource").                                                                         | No       | ""            |
+| `name_bottom`        | `string`  | The name shown below the counter (e.g., "Focus", "Drama).                                                                                      | No       | ""            |
+| `name`               | `string`  | Alias for name_bottom for backwards compatibility. If name_bottom exists name will be ignored.                                                 | No       | ""            |
 | `current_value`      | `integer` | The current value of the counter.                                                                                                              | No       | `0`           |
 | `max_value`          | `integer` | The maximum value the counter can reach.                                                                                                       | No       | `undefined`   |
 | `min_value`          | `integer` | The minimum value the counter can reach.                                                                                                       | No       | `undefined`   |

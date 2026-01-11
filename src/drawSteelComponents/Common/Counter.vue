@@ -8,7 +8,7 @@
                 </span>
                 <span class="input-container vertical">
                     <input type="text" :value="state.inputValue"
-                        :style="`width:${state.inputValue.length + 0.5}ch; font-size:${model.value_height}`"
+                        :style="`width:${state.inputValue.length + 0.5}ch; font-size:calc(var(--font-text-size)*${model.value_height}*2)`"
                         @input="validateInput($event)" @change="updateValue" />
                     <tooltip-hover class="tooltip-wrapper vertical"
                         tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
@@ -35,7 +35,9 @@
                 <ds-button icon="minus-circle" variant="icon" @click="updateValue('-1')"
                     v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
                 <span class="input-container">
-                    <input type="text" :value="state.inputValue" @input="validateInput($event)" @change="updateValue" />
+                    <input type="text" :value="state.inputValue"
+                        :style="`font-size:calc(var(--font-text-size)*${model.value_height}*2)`"
+                        @input="validateInput($event)" @change="updateValue" />
                     <tooltip-hover class="tooltip-wrapper"
                         tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
                 </span>

@@ -15,6 +15,9 @@ allOf:
       name_bottom:
         type: string
         description: The name shown below the counter (e.g., "Focus", "Drama).
+      name:
+        type: string
+        description: Alias for name_bottom for backwards compatibility. If name_bottom exists name will be ignored.
       current_value: 
         type: integer
         description: The current value of the counter.
@@ -33,6 +36,9 @@ allOf:
       name_bottom_height: 
         type: integer
         description: Adjusts the size of the counter name_bottom text in the rendered output as a multiplier.
+      name_height: 
+        type: integer
+        description: Alias for name_bottom_height for backwards compatibility. If name_bottom_height exists name_height will be ignored.
       hide_buttons:
         type: string
         description: \"true\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button.
@@ -52,10 +58,11 @@ allOf:
         - trim
         - toLowerCase
         enum:
+          - default # Alias for horizontal
           - horizontal
           - vertical
         default: horizontal
-        errorMessage: style must be either "horizontal" or "vertical"
+        errorMessage: style must be either "default", "horizontal" or "vertical"
         
 unevaluatedProperties:
     const: false
