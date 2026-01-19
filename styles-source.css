@@ -66,7 +66,36 @@ button.settings-action-button {
 }
 
 /* ==================== */
-/*   Features           */
+/*   Features List      */
+/* ==================== */
+
+.ds-features {
+    .ds-feature-container {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+
+    /* Hover effect on each "container" */
+
+    .ds-feature-container:hover {
+        background-color: var(--color-base-25);
+    }
+
+    /*
+    Each line needs to have padding.
+    Ideally this would be at the root container, but line backgrounds need 100% width
+     */
+
+    .ds-feature-name-value {
+        text-decoration: underline;
+        font-variant: small-caps;
+        font-size: var(--font-ui-large);
+        font-weight: bold;
+    }
+}
+
+/* ==================== */
+/*   Feature            */
 /* ==================== */
 
 .ds-feature-container {
@@ -1735,7 +1764,6 @@ button.action-button {
 
 	/* General purpose separator */
 
-	.ds-feature-container,
 	.ds-sb-characteristics-line {
 		padding-top: 0.5rem;
 		padding-bottom: 0.5rem;
@@ -1743,7 +1771,6 @@ button.action-button {
 
 	/* Hover effect on each "container" */
 
-	.ds-feature-container:hover,
 	.ds-sb-characteristics-line:hover,
 	.ds-sb-info-line:hover,
 	.ds-sb-stats-line:hover {
@@ -1811,13 +1838,6 @@ button.action-button {
 		width: -webkit-fill-available;
 	}
 
-	.ds-feature-name-value {
-		text-decoration: underline;
-		font-variant: small-caps;
-		font-size: var(--font-ui-large);
-		font-weight: bold;
-	}
-
 	/*.ds-feature-detail-line:hover,*/
 	/*.ds-feature-detail-table-cell:hover,*/
 	/*.ds-sb-trait-effect:hover {*/
@@ -1833,7 +1853,7 @@ button.action-button {
 	background-color: var(--code-background);
 	padding-bottom: 1rem;
 
-	.ds-fb-header, .ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-sb-features {
+	.ds-fb-header, .ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-feature-container {
 		padding-left: 1rem;
 		padding-right: 1rem;
 	}

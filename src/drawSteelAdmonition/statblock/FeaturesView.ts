@@ -19,6 +19,7 @@ export class FeaturesView {
         }
 
         const featuresContainer = container.createEl("div", { cls: "ds-sb-features" });
+        featuresContainer.addClass("ds-features");
         this.features.forEach((feature: FeatureConfig) => {
             new FeatureView(this.plugin, feature, this.ctx).build(featuresContainer);
         });
