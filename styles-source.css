@@ -1826,6 +1826,45 @@ button.action-button {
 }
 
 /* ==================== */
+/* Featureblock         */
+/* ==================== */
+
+.ds-fb-container {
+	background-color: var(--code-background);
+	padding-bottom: 1rem;
+
+	.ds-fb-header, .ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-sb-features {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.ds-fb-header {
+		background-color: var(--color-base-25);
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.ds-fb-title {
+		font-size: var(--font-ui-large);
+		font-weight: bold;
+		margin: 0;
+	}
+
+	.ds-fb-flavor {
+		font-style: italic;
+		margin-bottom: 0.5rem;
+	}
+
+	.ds-fb-stats {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		margin-bottom: 0.5rem;
+	}
+}
+
+/* ==================== */
 /* Counter			    */
 /* ==================== */
 
