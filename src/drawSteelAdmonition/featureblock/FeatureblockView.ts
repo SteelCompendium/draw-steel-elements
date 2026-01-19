@@ -31,7 +31,7 @@ export class FeatureblockView {
         const type = this.data.featureblock.featureblock_type ?? "";
         new HeaderView(this.plugin,
             this.ctx,
-            this.data.featureblock.name ?? "Unnamed Featureblock",
+            this.data.featureblock.name ?? "",
             `${level} ${type}`,
             "",
             this.data.featureblock.ev !== undefined ? `EV ${this.data.featureblock.ev}` : ""
