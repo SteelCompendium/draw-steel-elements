@@ -1,5 +1,5 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { FeatureView } from "@drawSteelAdmonition/ability/FeatureView";
+import { FeatureView } from "@drawSteelAdmonition/Features/FeatureView";
 import { FeatureConfig } from "@model/FeatureConfig";
 
 export class FeatureProcessor {

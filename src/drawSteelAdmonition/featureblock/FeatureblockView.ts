@@ -1,7 +1,7 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
 import {FeatureblockConfig} from "@model/FeatureblockConfig";
 import {FeatureConfig} from "@model/FeatureConfig";
-import {FeaturesView} from "@drawSteelAdmonition/statblock/FeaturesView";
+import {FeaturesView} from "@drawSteelAdmonition/Features/FeaturesView";
 import {HorizontalRuleProcessor} from "@drawSteelAdmonition/horizontalRuleProcessor";
 
 export class FeatureblockView {

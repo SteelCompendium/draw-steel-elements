@@ -1,7 +1,7 @@
 import { Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin } from "obsidian";
 import { Effect } from "steel-compendium-sdk";
 import {FeatureConfig} from "@model/FeatureConfig";
-import {FeaturesView} from "@drawSteelAdmonition/statblock/FeaturesView";
+import {FeaturesView} from "@drawSteelAdmonition/Features/FeaturesView";
 
 export class EffectView {
     private plugin: Plugin;

@@ -3,7 +3,7 @@ import {Plugin} from 'obsidian';
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
-import { FeatureProcessor } from "@drawSteelAdmonition/ability/FeatureProcessor";
+import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
 import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
 import { StaminaBarProcessor } from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";

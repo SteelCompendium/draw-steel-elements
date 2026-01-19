@@ -1,6 +1,6 @@
 import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from "obsidian";
 import {FeatureConfig} from "@model/FeatureConfig";
-import {EffectView} from "@drawSteelAdmonition/ability/EffectView";
+import {EffectView} from "@drawSteelAdmonition/Features/EffectView";
 
 export class FeatureView {
     private plugin: Plugin;
