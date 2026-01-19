@@ -1747,6 +1747,48 @@ button.action-button {
 	}
 }
 
+/* ==================== */
+/* HeaderView           */
+/* ==================== */
+
+.ds-header-container {
+    .ds-header-title-line,
+    .ds-header-subtitle-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .ds-header-title-line {
+        font-size: var(--font-ui-large);
+        font-weight: bold;
+        background-color: var(--color-base-25);
+        padding-top: 0.5rem;
+    }
+    .ds-header-subtitle-line {
+        background-color: var(--color-base-25);
+        padding-bottom: 0.5rem;
+    }
+}
+
+/* ==================== */
+/* BoldKeyWithValue     */
+/* ==================== */
+
+.ds-bkv-container {
+    display: inline-block;
+
+    .ds-bkv-key {
+        font-weight: bold;
+    }
+}
+
+/* ==================== */
+/* Statblock            */
+/* ==================== */
+
 .ds-sb-container {
 	background-color: var(--code-background);
 	padding-bottom: 1rem;
@@ -1853,23 +1895,11 @@ button.action-button {
 	background-color: var(--code-background);
 	padding-bottom: 1rem;
 
-	.ds-fb-header, .ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-feature-container {
+	.ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-feature-container {
 		padding-left: 1rem;
 		padding-right: 1rem;
 	}
 
-	.ds-fb-header {
-		background-color: var(--color-base-25);
-		padding-top: 0.5rem;
-		padding-bottom: 0.5rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.ds-fb-title {
-		font-size: var(--font-ui-large);
-		font-weight: bold;
-		margin: 0;
-	}
 
 	.ds-fb-flavor {
 		font-style: italic;
@@ -1878,9 +1908,30 @@ button.action-button {
 
 	.ds-fb-stats {
 		list-style: none;
-		padding: 0;
 		margin: 0;
 		margin-bottom: 0.5rem;
+
+        .ds-fb-stats-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.5rem;
+        }
+
+        .ds-fb-stats-item {
+            text-align: center;
+            width: -webkit-fill-available;
+        }
+        .ds-fb-stats-item-top {
+            font-size: calc(var(--font-ui-large) * 1.5);
+            font-weight: bold;
+        }
+        .ds-fb-stats-item-bottom {
+        }
+
+        .ds-fb-stats-line {
+            margin-top: 0.25rem;
+        }
 	}
 }
 

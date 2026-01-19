@@ -3,6 +3,8 @@ import {FeatureblockConfig} from "@model/FeatureblockConfig";
 import {FeatureConfig} from "@model/FeatureConfig";
 import {FeaturesView} from "@drawSteelAdmonition/Features/FeaturesView";
 import {HorizontalRuleProcessor} from "@drawSteelAdmonition/Common/horizontalRuleProcessor";
+import {HeaderView} from "@drawSteelAdmonition/Common/HeaderView";
+import {FeatureblockStatsView} from "@drawSteelAdmonition/featureblock/FeatureblockStatsView";
 
 export class FeatureblockView {
     private plugin: Plugin;
@@ -25,16 +27,15 @@ export class FeatureblockView {
     private renderHeader(parent: HTMLElement) {
         const header = parent.createEl("div", {cls: "ds-fb-header"});
 
-        let title = this.data.featureblock.name;
-        const meta: string[] = [];
-        if (this.data.featureblock.level !== undefined) meta.push(`Level ${this.data.featureblock.level}`);
-        if (this.data.featureblock.featureblock_type) meta.push(this.data.featureblock.featureblock_type);
-
-        if (meta.length > 0) {
-            title += ` (${meta.join(" ")})`;
-        }
-
-        header.createEl("div", {text: title, cls: "ds-fb-title"});
+        const level = this.data.featureblock.level !== undefined ? `Level ${this.data.featureblock.level}` : "";
+        const type = this.data.featureblock.featureblock_type ?? "";
+        new HeaderView(this.plugin,
+            this.ctx,
+            this.data.featureblock.name ?? "Unnamed Featureblock",
+            `${level} ${type}`,
+            "",
+            this.data.featureblock.ev !== undefined ? `EV ${this.data.featureblock.ev}` : ""
+        ).build(header);
     }
 
     private renderFlavor(parent: HTMLElement) {
@@ -45,23 +46,7 @@ export class FeatureblockView {
     }
 
     private renderStats(parent: HTMLElement) {
-        const stats = [];
-        if (this.data.featureblock.ev) stats.push({name: "EV", value: this.data.featureblock.ev});
-        if (this.data.featureblock.stamina) stats.push({name: "Stamina", value: this.data.featureblock.stamina});
-        if (this.data.featureblock.size) stats.push({name: "Size", value: this.data.featureblock.size});
-
-        if (this.data.featureblock.stats) {
-            this.data.featureblock.stats.forEach(s => stats.push(s));
-        }
-
-        if (stats.length > 0) {
-            const statsContainer = parent.createEl("ul", {cls: "ds-fb-stats"});
-            stats.forEach(stat => {
-                const li = statsContainer.createEl("li");
-                const strong = li.createEl("strong", {text: stat.name + ":"});
-                li.appendChild(document.createTextNode(" " + stat.value));
-            });
-        }
+        new FeatureblockStatsView(this.plugin, this.data, this.ctx).build(parent);
     }
 
     private renderFeatures(parent: HTMLElement) {

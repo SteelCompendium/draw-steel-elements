@@ -1,45 +1,32 @@
-import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { StatblockConfig } from "@model/StatblockConfig";
+import {MarkdownPostProcessorContext, Plugin} from "obsidian";
 
 export class HeaderView {
     private plugin: Plugin;
-    private data: StatblockConfig;
+    private titleLeft: string;
+    private titleRight: string;
+    private infoLeft: string;
+    private infoRight: string;
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(plugin: Plugin, data: StatblockConfig, ctx: MarkdownPostProcessorContext) {
+    constructor(plugin: Plugin, ctx: MarkdownPostProcessorContext,
+                titleLeft: string, titleRight: string, infoLeft: string, infoRight: string) {
         this.plugin = plugin;
-        this.data = data;
+        this.titleLeft = titleLeft;
+        this.titleRight = titleRight;
+        this.infoLeft = infoLeft;
+        this.infoRight = infoRight;
         this.ctx = ctx;
     }
 
     public build(parent: HTMLElement) {
-        const headerContainer = parent.createEl("div", { cls: "ds-sb-header" });
-        this.titleLine(headerContainer);
-        this.infoLine(headerContainer);
-    }
+        const headerContainer = parent.createEl("div", {cls: "ds-header-container"});
 
-    private titleLine(parent: HTMLElement) {
-        const firstLine = parent.createEl("div", { cls: "ds-sb-title-line" });
+        const firstLine = headerContainer.createEl("div", {cls: "ds-header-title-line"});
+        firstLine.createEl("div", {cls: "ds-header-title-left", text: this.titleLeft});
+        firstLine.createEl("div", {cls: "ds-header-title-right", text: this.titleRight});
 
-        // Left side: Name
-        firstLine.createEl("div", { cls: "ds-sb-header-left", text: this.data.statblock.name ?? "Unnamed Creature" });
-
-        // Right side: Level and Roles
-        const level = this.data.statblock.level !== undefined ? `Level ${this.data.statblock.level}` : "Level N/A";
-        const roles = this.data.statblock.roles?.join(", ") ?? "No Role";
-        const levelRolesText = `${level} ${roles}`;
-        firstLine.createEl("div", { cls: "ds-sb-header-right", text: levelRolesText });
-    }
-
-    private infoLine(parent: HTMLElement) {
-        const secondLine = parent.createEl("div", { cls: "ds-sb-subtitle-line" });
-
-        // Left side: Ancestry
-        const ancestryText = this.data.statblock.ancestry?.join(", ") ?? "Unknown Ancestry";
-        secondLine.createEl("div", { cls: "ds-sb-header-left", text: ancestryText });
-
-        // Right side: EV
-        const evText = this.data.statblock.ev !== undefined ? `EV ${this.data.statblock.ev}` : "EV N/A";
-        secondLine.createEl("div", { cls: "ds-sb-header-right", text: evText });
+        const secondLine = headerContainer.createEl("div", {cls: "ds-header-subtitle-line"});
+        secondLine.createEl("div", {cls: "ds-sb-header-left", text: this.infoLeft});
+        secondLine.createEl("div", {cls: "ds-sb-header-right", text: this.infoRight});
     }
 }
