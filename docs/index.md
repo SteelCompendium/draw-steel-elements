@@ -20,6 +20,8 @@ The [Features Element](Features.md) is used to quickly format Features and Trait
 
 The [Featureblock Element](featureblock.md) is used to display groups of features (e.g. Malice, Dynamic Terrain)
 
+![featureblock example](./Media/featureblocks.png)
+
 ### Initiative Tracker Element
 
 The [Initiative Tracker Element](initiative-tracker.md) is used to manage and run encounters.
