@@ -2,7 +2,7 @@ import {Component, MarkdownPostProcessorContext, MarkdownRenderer, Plugin} from 
 import {FeatureblockConfig} from "@model/FeatureblockConfig";
 import {FeatureConfig} from "@model/FeatureConfig";
 import {FeaturesView} from "@drawSteelAdmonition/Features/FeaturesView";
-import {HorizontalRuleProcessor} from "@drawSteelAdmonition/horizontalRuleProcessor";
+import {HorizontalRuleProcessor} from "@drawSteelAdmonition/Common/horizontalRuleProcessor";
 
 export class FeatureblockView {
     private plugin: Plugin;

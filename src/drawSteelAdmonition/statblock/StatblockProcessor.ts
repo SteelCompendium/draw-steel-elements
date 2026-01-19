@@ -1,9 +1,9 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import { StatblockConfig } from "@model/StatblockConfig";
-import { HeaderView } from "@drawSteelAdmonition/statblock/HeaderView";
+import { HeaderView } from "@drawSteelAdmonition/Common/HeaderView";
 import { StatsView } from "@drawSteelAdmonition/statblock/StatsView";
 import { FeaturesView } from "@drawSteelAdmonition/Features/FeaturesView";
-import { HorizontalRuleProcessor } from "@drawSteelAdmonition/horizontalRuleProcessor";
+import { HorizontalRuleProcessor } from "@drawSteelAdmonition/Common/horizontalRuleProcessor";
 import { FeatureConfig } from "@model/FeatureConfig";
 
 export class StatblockProcessor {
