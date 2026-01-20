@@ -1,6 +1,6 @@
 import { parseYaml } from "obsidian";
 import {
-    validateYamlWithYamlSchema,
+    validateDataWithSchema,
     ValidationError,
 } from "@utils/JsonSchemaValidator";
 import { ComponentWrapper } from "@model/ComponentWrapper";
@@ -23,7 +23,7 @@ export class Counter extends ComponentWrapper {
     public static parseYaml(source: string) {
         try {
             // Validate YAML content against YAML schema (all dependencies pre-registered)
-            const validation = validateYamlWithYamlSchema(
+            const validation = validateDataWithSchema(
                 source,
                 counterSchemaYaml
             );
@@ -55,8 +55,8 @@ export class Counter extends ComponentWrapper {
             max_value: data.max_value,
             min_value: data.min_value,
             name_top_height: data.name_top_height,
-            name_bottom_height: data.name_bottom_height ?? data.name_height,
-            value_height: data.value_height,
+            name_bottom_height: data.name_bottom_height ?? data.name_height ?? 1,
+            value_height: data.value_height ?? 3,
             hide_buttons: data.hide_buttons,
             style: data.style,
         } as Counter;
@@ -82,9 +82,9 @@ export class Counter extends ComponentWrapper {
         this.max_value = max_value ?? undefined;
         this.name_top = name_top;
         this.name_bottom = name_bottom;
-        this.value_height = value_height ?? 0;
-        this.name_top_height = name_top_height ?? 0;
-        this.name_bottom_height = name_bottom_height ?? 0;
+        this.value_height = value_height ?? 3;
+        this.name_top_height = name_top_height ?? 1;
+        this.name_bottom_height = name_bottom_height ?? 1;
         this.hide_buttons = hide_buttons ?? 'false';
         this.style = style ?? 'default';
     }
