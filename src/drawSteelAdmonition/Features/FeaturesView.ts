@@ -1,5 +1,5 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
-import { FeatureView } from "@drawSteelAdmonition/ability/FeatureView";
+import { FeatureView } from "@drawSteelAdmonition/Features/FeatureView";
 import { FeatureConfig } from "@model/FeatureConfig";
 
 export class FeaturesView {
@@ -19,6 +19,7 @@ export class FeaturesView {
         }
 
         const featuresContainer = container.createEl("div", { cls: "ds-sb-features" });
+        featuresContainer.addClass("ds-features");
         this.features.forEach((feature: FeatureConfig) => {
             new FeatureView(this.plugin, feature, this.ctx).build(featuresContainer);
         });

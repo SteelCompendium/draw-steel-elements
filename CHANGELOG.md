@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.0.0
+
+- Support for Featureblocks!
+- [BREAKING] Statblock CSS changed slightly
+  - While this is incredibly minor, it is technically breaking
+
 ## 4.1.0
 
 - Corrects an issue with rendering `0` in the values-row element

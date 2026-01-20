@@ -64,7 +64,36 @@ button.settings-action-button {
 }
 
 /* ==================== */
-/*   Features           */
+/*   Features List      */
+/* ==================== */
+
+.ds-features {
+    .ds-feature-container {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+
+    /* Hover effect on each "container" */
+
+    .ds-feature-container:hover {
+        background-color: var(--color-base-25);
+    }
+
+    /*
+    Each line needs to have padding.
+    Ideally this would be at the root container, but line backgrounds need 100% width
+     */
+
+    .ds-feature-name-value {
+        text-decoration: underline;
+        font-variant: small-caps;
+        font-size: var(--font-ui-large);
+        font-weight: bold;
+    }
+}
+
+/* ==================== */
+/*   Feature            */
 /* ==================== */
 
 .ds-feature-container {
@@ -1721,111 +1750,192 @@ button.action-button {
     }
 }
 
-.ds-sb-container {
-    background-color: var(--code-background);
-    padding-bottom: 1rem;
+/* ==================== */
+/* HeaderView           */
+/* ==================== */
 
-    /* General space-between (left-right) line */
-
-    .ds-sb-title-line,
-    .ds-sb-subtitle-line,
-    .ds-sb-info-line,
-    .ds-sb-stats-line {
+.ds-header-container {
+    .ds-header-title-line,
+    .ds-header-subtitle-line {
         display: flex;
         justify-content: space-between;
         align-items: center;
-    }
-
-    /* General purpose separator */
-
-    .ds-feature-container,
-    .ds-sb-characteristics-line {
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
-    }
-
-    /* Hover effect on each "container" */
-
-    .ds-feature-container:hover,
-    .ds-sb-characteristics-line:hover,
-    .ds-sb-info-line:hover,
-    .ds-sb-stats-line:hover {
-        background-color: var(--color-base-25);
-    }
-
-    /*
-	Each line needs to have padding.
-	Ideally this would be at the root container, but line backgrounds need 100% width
-	 */
-
-    .ds-sb-title-line,
-    .ds-sb-subtitle-line,
-    .ds-sb-info-line,
-    .ds-sb-stats-line,
-    .ds-feature-container,
-    .ds-hr-container {
         padding-left: 1rem;
         padding-right: 1rem;
     }
 
-    .ds-hr-container {
-        margin: 0.5rem 0 0.5em 0;
-    }
-
-    .ds-sb-title-line {
+    .ds-header-title-line {
         font-size: var(--font-ui-large);
         font-weight: bold;
         background-color: var(--color-base-25);
         padding-top: 0.5rem;
     }
-    .ds-sb-subtitle-line {
+    .ds-header-subtitle-line {
         background-color: var(--color-base-25);
         padding-bottom: 0.5rem;
     }
+}
 
-    .ds-sb-stats-row {
-        display: flex;
-        justify-content: space-around;
-        align-items: center;
-        padding-bottom: 0.5rem;
-    }
+/* ==================== */
+/* BoldKeyWithValue     */
+/* ==================== */
 
-    .ds-sb-stats-item {
-        text-align: center;
-        width: -webkit-fill-available;
-    }
-    .ds-sb-stats-item-top {
-        font-size: calc(var(--font-ui-large) * 1.5);
+.ds-bkv-container {
+    display: inline-block;
+
+    .ds-bkv-key {
         font-weight: bold;
     }
-    .ds-sb-stats-item-bottom {
-    }
+}
 
-    .ds-sb-stats-line {
-        margin-top: 0.25rem;
-    }
+/* ==================== */
+/* Statblock            */
+/* ==================== */
 
-    .ds-sb-characteristics-line {
-        font-weight: bold;
-        text-align: center;
-        margin-top: 0.5rem;
-    }
-    .ds-sb-characteristics-pair {
-        width: -webkit-fill-available;
-    }
+.ds-sb-container {
+	background-color: var(--code-background);
+	padding-bottom: 1rem;
 
-    .ds-feature-name-value {
-        text-decoration: underline;
-        font-variant: small-caps;
-        font-size: var(--font-ui-large);
-        font-weight: bold;
-    }
+	/* General space-between (left-right) line */
 
-    /*.ds-feature-detail-line:hover,*/
-    /*.ds-feature-detail-table-cell:hover,*/
-    /*.ds-sb-trait-effect:hover {*/
-    /*	background-color: var(--color-base-30);*/
-    /*}*/
+	.ds-sb-title-line,
+	.ds-sb-subtitle-line,
+	.ds-sb-info-line,
+	.ds-sb-stats-line {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	/* General purpose separator */
+
+	.ds-sb-characteristics-line {
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+	}
+
+	/* Hover effect on each "container" */
+
+	.ds-sb-characteristics-line:hover,
+	.ds-sb-info-line:hover,
+	.ds-sb-stats-line:hover {
+		background-color: var(--color-base-25);
+	}
+
+	/*
+	Each line needs to have padding.
+	Ideally this would be at the root container, but line backgrounds need 100% width
+	 */
+
+	.ds-sb-title-line,
+	.ds-sb-subtitle-line,
+	.ds-sb-info-line,
+	.ds-sb-stats-line,
+	.ds-feature-container,
+	.ds-hr-container {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.ds-hr-container {
+		margin: 0.5rem 0 0.5em 0;
+	}
+
+	.ds-sb-title-line {
+		font-size: var(--font-ui-large);
+		font-weight: bold;
+		background-color: var(--color-base-25);
+		padding-top: 0.5rem;
+	}
+	.ds-sb-subtitle-line {
+		background-color: var(--color-base-25);
+		padding-bottom: 0.5rem;
+	}
+
+	.ds-sb-stats-row {
+		display: flex;
+		justify-content: space-around;
+		align-items: center;
+		padding-bottom: 0.5rem;
+	}
+
+	.ds-sb-stats-item {
+		text-align: center;
+		width: -webkit-fill-available;
+	}
+	.ds-sb-stats-item-top {
+		font-size: calc(var(--font-ui-large) * 1.5);
+		font-weight: bold;
+	}
+	.ds-sb-stats-item-bottom {
+	}
+
+	.ds-sb-stats-line {
+		margin-top: 0.25rem;
+	}
+
+	.ds-sb-characteristics-line {
+		font-weight: bold;
+		text-align: center;
+		margin-top: 0.5rem;
+	}
+	.ds-sb-characteristics-pair {
+		width: -webkit-fill-available;
+	}
+
+	/*.ds-feature-detail-line:hover,*/
+	/*.ds-feature-detail-table-cell:hover,*/
+	/*.ds-sb-trait-effect:hover {*/
+	/*	background-color: var(--color-base-30);*/
+	/*}*/
+}
+
+/* ==================== */
+/* Featureblock         */
+/* ==================== */
+
+.ds-fb-container {
+	background-color: var(--code-background);
+	padding-bottom: 1rem;
+
+	.ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-feature-container {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+
+	.ds-fb-flavor {
+		font-style: italic;
+		margin-bottom: 0.5rem;
+	}
+
+	.ds-fb-stats {
+		list-style: none;
+		margin: 0;
+		margin-bottom: 0.5rem;
+
+        .ds-fb-stats-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.5rem;
+        }
+
+        .ds-fb-stats-item {
+            text-align: center;
+            width: -webkit-fill-available;
+        }
+        .ds-fb-stats-item-top {
+            font-size: calc(var(--font-ui-large) * 1.5);
+            font-weight: bold;
+        }
+        .ds-fb-stats-item-bottom {
+        }
+
+        .ds-fb-stats-line {
+            margin-top: 0.25rem;
+        }
+	}
 }
 
 /* ==================== */

@@ -3,8 +3,9 @@ import {Plugin} from 'obsidian';
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
-import {FeatureProcessor} from "@drawSteelAdmonition/ability/FeatureProcessor";
-import {StaminaBarProcessor} from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
+import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
+import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
+import { StaminaBarProcessor } from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
@@ -28,6 +29,10 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-ft", abilityProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-feat", abilityProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-feature", abilityProcessor.handler);
+
+	const fbProcessor = new FeatureblockProcessor(plugin);
+	plugin.registerMarkdownCodeBlockProcessor("ds-fb", fbProcessor.handler);
+	plugin.registerMarkdownCodeBlockProcessor("ds-featureblock", fbProcessor.handler);
 
 	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, undefined, "Horizontal Rule", true);
 	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
