@@ -147,12 +147,6 @@ export function parseEncounterData(source: string): EncounterData {
 		group.is_squad = group.is_squad ?? false;
 
 		if (group.is_squad) {
-			// Squad-specific validation
-			if (group.creatures.length > 2) {
-				throw new Error(
-					`Squad '${group.name}' can have at most two creatures (minions and an optional captain).`
-				);
-			}
 			let minionCount = 0;
 			let captainCount = 0;
 			group.creatures.forEach((creature) => {
@@ -173,9 +167,6 @@ export function parseEncounterData(source: string): EncounterData {
 			});
 			if (minionCount === 0) {
 				throw new Error(`Squad '${group.name}' must have at least one minion creature.`);
-			}
-			if (minionCount > 1) {
-				throw new Error(`Squad '${group.name}' can have only one minion creature type.`);
 			}
 			if (captainCount > 1) {
 				throw new Error(`Squad '${group.name}' can have at most one captain creature.`);
