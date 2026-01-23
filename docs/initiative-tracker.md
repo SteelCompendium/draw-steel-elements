@@ -28,7 +28,7 @@ enemy_groups:
         max_stamina: 150
         amount: 1
         image: "images/troll.png"
-villain_power:
+malice:
   value: 5
 ~~~
 ```
@@ -54,7 +54,7 @@ enemy_groups:
       - name: "Orc Warrior"
         max_stamina: 50
         amount: 3
-villain_power:
+malice:
   value: 2
 ~~~
 ```
@@ -65,7 +65,7 @@ The encounter data consists of three main sections:
 
 1. **Heroes**: Player characters participating in the encounter.
 2. **Enemy Groups**: Groups of enemies, each containing one or more types of creatures.
-3. **Villain Power**: The current villain power level.
+3. **Malice**: The current villain power level.
 
 ### Heroes
 
@@ -154,7 +154,7 @@ To define a minion group, set the `is_squad` field to `true` in the enemy group 
 
 Additionally, you can add another `creature` object to the Enemy group (squad) and set its `squad_role` to `captain`.  This has no effect right now, but may change in the future.
 
-### Villain Power
+### Malice
 
 #### Fields
 
@@ -163,7 +163,7 @@ Additionally, you can add another `creature` object to the Enemy group (squad) a
 #### Example
 
 ```yaml
-villain_power:   
+malice:   
   value: 3
 ```
 
@@ -196,7 +196,7 @@ When the Stamina Pool of minions gets reduced to thresholds that would kill a mi
 
 ![minion-stamina-pool-modal](Media/minion-stamina-pool-modal.png)
 
-### Villain Power
+### Malice
 
 **Adjusting**: Use the up and down arrows next to the villain power display to increase or decrease the value.
 
