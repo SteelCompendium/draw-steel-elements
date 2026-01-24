@@ -44,7 +44,7 @@ allOf:
         description: Alias for name_bottom_height for backwards compatibility. If name_bottom_height exists name_height will be ignored.
       hide_buttons:
         type: string
-        description: \"true\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button.
+        description: \"both\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button, \"neither\" will hide neither.
         transform:
         - trim
         - toLowerCase
@@ -54,7 +54,7 @@ allOf:
           - plus
           - minus
         default: false
-        errorMessage: hide_buttons must be either "true", "plus" or "minus"
+        errorMessage: hide_buttons must be either \"both\", \"neither\", \"plus\" or \minus\"
       style:
         type: string
         description: The style the counter should use.
@@ -62,10 +62,10 @@ allOf:
         - trim
         - toLowerCase
         enum:
-          - default # Alias for horizontal
+          - default # Alias for vertical
           - horizontal
           - vertical
-        default: horizontal
+        default: vertical
         errorMessage: style must be either "default", "horizontal" or "vertical"
         
 unevaluatedProperties:

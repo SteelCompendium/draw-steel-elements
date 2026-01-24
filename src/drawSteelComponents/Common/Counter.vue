@@ -38,22 +38,24 @@
             <span class="button-wrapper vertical">
                 <span class="button-container vertical">
                     <ds-button
-                        :class="['plus-button', { hidden: model.hide_buttons == 'plus' }]"
+                        :class="[
+                            'plus-button',
+                            { hidden: model.hide_buttons == 'plus' },
+                        ]"
                         icon="chevron-up"
                         variant="simplified"
                         @click="updateValue('+1')"
-                        v-if="
-                            model.hide_buttons != 'both'
-                        "
+                        v-if="model.hide_buttons != 'both'"
                     />
                     <ds-button
-                        :class="['minus-button', { hidden: model.hide_buttons == 'minus' }]"
+                        :class="[
+                            'minus-button',
+                            { hidden: model.hide_buttons == 'minus' },
+                        ]"
                         icon="chevron-down"
                         variant="simplified"
                         @click="updateValue('-1')"
-                        v-if="
-                            model.hide_buttons != 'both'
-                        "
+                        v-if="model.hide_buttons != 'both'"
                     />
                 </span>
             </span>
@@ -81,9 +83,10 @@
                         type="text"
                         :value="state.inputValue"
                         :style="
-                                `font-size:calc(var(--font-text-size)*${model.value_height});` + 
-                                `height:calc(var(--font-text-size)*${model.value_height + 0.5});` +
-                                `width:calc(var(--font-text-size)*${(model.value_height + 0.5) * 2});`"
+                            `font-size:calc(var(--font-text-size)*${model.value_height});` +
+                            `height:calc(var(--font-text-size)*${model.value_height + 0.5});` +
+                            `width:calc(var(--font-text-size)*${(model.value_height + 0.5) * 2});`
+                        "
                         @input="validateInput($event)"
                         @change="updateValue"
                     />
@@ -92,8 +95,8 @@
                         tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.'
                     />
                 </span>
-                <span 
-                    class="max-value" 
+                <span
+                    class="max-value"
                     :style="`font-size:calc(var(--font-text-size)*${model.max_value_height})`"
                     v-if="model?.max_value"
                 >
@@ -147,8 +150,6 @@ if (
     throw new Error(`Invalid style on Counter: ${props.model.style}`);
 }
 
-console.log(props.model);
-
 const validateInput = (event: Event) => {
     const target = event.target as HTMLInputElement;
     const value = target.value;
@@ -161,7 +162,6 @@ const validateInput = (event: Event) => {
 };
 
 const updateValue = (input: string | Event) => {
-    console.log("here")
     let value = "";
 
     if (input instanceof Event) {
@@ -187,12 +187,12 @@ const updateValue = (input: string | Event) => {
     if (modifier === "-") {
         number = Number(state.currentValue) - number;
     }
-    
+
     if (props.model.max_value && number > props.model.max_value) {
-        number = props.model.max_value
+        number = props.model.max_value;
     }
     if (props.model.min_value && number < props.model.min_value) {
-        number = props.model.min_value
+        number = props.model.min_value;
     }
     state.currentValue = number.toString();
     state.inputValue = number.toString();
@@ -203,7 +203,6 @@ const updateValue = (input: string | Event) => {
 watch(
     () => props.model?.current_value,
     (newVal: number | undefined) => {
-        console.log("model changed");
         state.inputValue = String(newVal ?? 0);
     },
 );
@@ -272,12 +271,14 @@ watch(
             background: none;
             font-size: 32px;
             padding: 0;
+            font-weight: bold;
         }
     }
 
     && > input {
         font-size: 15px;
-        text-align: center;
+        text-align: end;
+        font-weight: bold;
     }
 }
 
