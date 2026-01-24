@@ -17,15 +17,11 @@
                 </span>
                 <span class="input-container vertical">
                     <input
-                        type="text"
+                        type="number"
                         :value="state.inputValue"
                         :style="`width:${state.inputValue.length + 0.5}ch; font-size:calc(var(--font-text-size)*${model.value_height})`"
                         @input="validateInput($event)"
                         @change="updateValue"
-                    />
-                    <tooltip-hover
-                        class="tooltip-wrapper vertical"
-                        tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.'
                     />
                 </span>
                 <span
@@ -80,7 +76,7 @@
                 />
                 <span class="input-container">
                     <input
-                        type="text"
+                        type="number"
                         :value="state.inputValue"
                         :style="
                             `font-size:calc(var(--font-text-size)*${model.value_height});` +
@@ -89,10 +85,6 @@
                         "
                         @input="validateInput($event)"
                         @change="updateValue"
-                    />
-                    <tooltip-hover
-                        class="tooltip-wrapper"
-                        tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.'
                     />
                 </span>
                 <span
@@ -171,22 +163,7 @@ const updateValue = (input: string | Event) => {
         value = input;
     }
 
-    let modifier: string = "";
-    let number: number = 0;
-
-    if (value.length > 0 && isNaN(Number(value[0]))) {
-        modifier = value[0];
-        number = Number(value.slice(1));
-    } else {
-        number = Number(value);
-    }
-
-    if (modifier === "+") {
-        number = Number(state.currentValue) + number;
-    }
-    if (modifier === "-") {
-        number = Number(state.currentValue) - number;
-    }
+    let number: number = Number(value);
 
     if (props.model.max_value && number > props.model.max_value) {
         number = props.model.max_value;
@@ -194,6 +171,7 @@ const updateValue = (input: string | Event) => {
     if (props.model.min_value && number < props.model.min_value) {
         number = props.model.min_value;
     }
+
     state.currentValue = number.toString();
     state.inputValue = number.toString();
     emit("set-value", number);
