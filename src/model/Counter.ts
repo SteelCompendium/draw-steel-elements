@@ -6,7 +6,7 @@ import {
 import { ComponentWrapper } from "@model/ComponentWrapper";
 import counterSchemaYaml from "@model/schemas/Counter.yaml";
 
-type HideButtonsType = "false" | "true" | "plus" | "minus" | undefined;
+type HideButtonsType = "both" | "neither" | "plus" | "minus" | undefined;
 type StyleType = "default" | "horizontal" | "vertical" | undefined;
 export class Counter extends ComponentWrapper {
     name_top: string;
@@ -17,6 +17,7 @@ export class Counter extends ComponentWrapper {
     name_top_height: number;
     name_bottom_height: number;
     value_height: number;
+    max_value_height: number;
     hide_buttons: HideButtonsType;
     style: StyleType;
 
@@ -57,6 +58,7 @@ export class Counter extends ComponentWrapper {
             name_top_height: data.name_top_height,
             name_bottom_height: data.name_bottom_height ?? data.name_height ?? 1,
             value_height: data.value_height ?? 3,
+            max_value_height: data.max_value_height ?? data.value_height,
             hide_buttons: data.hide_buttons,
             style: data.style,
         } as Counter;
@@ -83,9 +85,10 @@ export class Counter extends ComponentWrapper {
         this.name_top = name_top;
         this.name_bottom = name_bottom;
         this.value_height = value_height ?? 3;
+        this.max_value_height = this.max_value_height ?? this.value_height;
         this.name_top_height = name_top_height ?? 1;
         this.name_bottom_height = name_bottom_height ?? 1;
-        this.hide_buttons = hide_buttons ?? 'false';
+        this.hide_buttons = hide_buttons ?? 'neither';
         this.style = style ?? 'default';
     }
 }

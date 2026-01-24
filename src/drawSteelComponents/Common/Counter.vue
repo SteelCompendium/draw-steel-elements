@@ -38,22 +38,21 @@
             <span class="button-wrapper vertical">
                 <span class="button-container vertical">
                     <ds-button
-                        class="plus-button"
+                        :class="['plus-button', { hidden: model.hide_buttons == 'plus' }]"
                         icon="chevron-up"
                         variant="simplified"
                         @click="updateValue('+1')"
                         v-if="
-                            model.hide_buttons != 'true' &&
-                            model.hide_buttons != 'plus'
+                            model.hide_buttons != 'both'
                         "
                     />
                     <ds-button
+                        :class="['minus-button', { hidden: model.hide_buttons == 'minus' }]"
                         icon="chevron-down"
                         variant="simplified"
                         @click="updateValue('-1')"
                         v-if="
-                            model.hide_buttons != 'true' &&
-                            model.hide_buttons != 'minus'
+                            model.hide_buttons != 'both'
                         "
                     />
                 </span>
@@ -73,7 +72,7 @@
                     variant="icon"
                     @click="updateValue('-1')"
                     v-if="
-                        model.hide_buttons != 'true' &&
+                        model.hide_buttons != 'both' &&
                         model.hide_buttons != 'plus'
                     "
                 />
@@ -81,7 +80,10 @@
                     <input
                         type="text"
                         :value="state.inputValue"
-                        :style="`font-size:calc(var(--font-text-size)*${model.value_height})`"
+                        :style="
+                                `font-size:calc(var(--font-text-size)*${model.value_height});` + 
+                                `height:calc(var(--font-text-size)*${model.value_height + 0.5});` +
+                                `width:calc(var(--font-text-size)*${(model.value_height + 0.5) * 2});`"
                         @input="validateInput($event)"
                         @change="updateValue"
                     />
@@ -90,7 +92,11 @@
                         tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.'
                     />
                 </span>
-                <span class="max-value" v-if="model?.max_value">
+                <span 
+                    class="max-value" 
+                    :style="`font-size:calc(var(--font-text-size)*${model.max_value_height})`"
+                    v-if="model?.max_value"
+                >
                     / {{ model.max_value }}
                 </span>
                 <ds-button
@@ -99,7 +105,7 @@
                     variant="icon"
                     @click="updateValue('+1')"
                     v-if="
-                        model.hide_buttons != 'true' &&
+                        model.hide_buttons != 'both' &&
                         model.hide_buttons != 'minus'
                     "
                 />
@@ -130,6 +136,7 @@ const emit = defineEmits(["mod-value", "set-value"]);
 
 const state = reactive({
     inputValue: (props.model?.current_value ?? 0).toString(),
+    currentValue: (props.model?.current_value ?? 0).toString(),
 });
 
 if (
@@ -154,6 +161,7 @@ const validateInput = (event: Event) => {
 };
 
 const updateValue = (input: string | Event) => {
+    console.log("here")
     let value = "";
 
     if (input instanceof Event) {
@@ -173,33 +181,23 @@ const updateValue = (input: string | Event) => {
         number = Number(value);
     }
 
-    if (modifier === "") {
-        state.inputValue = number.toString();
-        emit("set-value", number);
-        return;
-    }
     if (modifier === "+") {
-        state.inputValue = (Number(state.inputValue) + number).toString();
-        if (
-            props.model.max_value &&
-            Number(state.inputValue) > props.model.max_value
-        ) {
-            state.inputValue = props.model.max_value.toString();
-        }
-        emit("mod-value", number);
-        return;
+        number = Number(state.currentValue) + number;
     }
     if (modifier === "-") {
-        state.inputValue = (Number(state.inputValue) - number).toString();
-        if (
-            props.model.max_value &&
-            Number(state.inputValue) < props.model.min_value
-        ) {
-            state.inputValue = props.model.min_value.toString();
-        }
-        emit("mod-value", -number);
-        return;
+        number = Number(state.currentValue) - number;
     }
+    
+    if (props.model.max_value && number > props.model.max_value) {
+        number = props.model.max_value
+    }
+    if (props.model.min_value && number < props.model.min_value) {
+        number = props.model.min_value
+    }
+    state.currentValue = number.toString();
+    state.inputValue = number.toString();
+    emit("set-value", number);
+    return;
 };
 
 watch(
@@ -212,6 +210,10 @@ watch(
 </script>
 
 <style scoped lang="scss">
+.hidden {
+    visibility: hidden;
+}
+
 .counter-wrapper {
     width: 100%;
     display: flex;
@@ -274,8 +276,6 @@ watch(
     }
 
     && > input {
-        height: 2em;
-        width: 6ch;
         font-size: 15px;
         text-align: center;
     }

@@ -28,16 +28,19 @@ allOf:
         type: integer
         description: The minimum value the counter can reach.
       value_height: 
-        type: integer
+        type: number
         description: Adjusts the size of the counter value text in the rendered output as a multiplier.
+      max_value_height: 
+        type: number
+        description: Adjusts the size of the counter max_value text in the rendered output as a multiplier.
       name_top_height: 
-        type: integer
+        type: number
         description: Adjusts the size of the counter name_top text in the rendered output as a multiplier.
       name_bottom_height: 
-        type: integer
+        type: number
         description: Adjusts the size of the counter name_bottom text in the rendered output as a multiplier.
       name_height: 
-        type: integer
+        type: number
         description: Alias for name_bottom_height for backwards compatibility. If name_bottom_height exists name_height will be ignored.
       hide_buttons:
         type: string
@@ -46,7 +49,8 @@ allOf:
         - trim
         - toLowerCase
         enum:
-          - true
+          - both
+          - neither
           - plus
           - minus
         default: false
