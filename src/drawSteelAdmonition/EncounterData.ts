@@ -1,4 +1,6 @@
-import { parseYaml } from "obsidian";
+import { App, parseYaml } from "obsidian";
+import { DSESettings } from "@model/Settings";
+import { ReferenceResolver } from "@utils/ReferenceResolver";
 
 export interface Hero {
 	name: string;
@@ -9,6 +11,7 @@ export interface Hero {
 	isHero: boolean;
 	has_taken_turn?: boolean;
 	conditions: (string | Condition)[];
+	statblock?: any; // To allow property fallback
 }
 
 export interface CreatureInstance {
@@ -27,6 +30,7 @@ export interface Creature {
 	image?: string;
 	isHero: boolean;
 	squad_role?: "minion" | "captain";
+	statblock?: any; // To allow property fallback
 }
 
 export interface EnemyGroup {
@@ -75,15 +79,19 @@ export function resetEncounter(data: EncounterData) {
 	data.malice.value = 0;
 }
 
-export function parseEncounterData(source: string): EncounterData {
+export async function parseEncounterData(source: string, app: App, settings: DSESettings): Promise<EncounterData> {
 	let data: EncounterData;
 
 	// Try parsing the YAML input
 	try {
 		data = parseYaml(source) as EncounterData;
+		// We do NOT resolve all references recursively to preserve the strings in the object
+		// Instead we resolve specific fields manually below
 	} catch (error) {
 		throw new Error("Invalid YAML format: " + error.message);
 	}
+
+	const resolver = new ReferenceResolver(app, settings);
 
 	// Validate that data is an object
 	if (typeof data !== "object" || data === null) {
@@ -101,7 +109,20 @@ export function parseEncounterData(source: string): EncounterData {
 	}
 
 	// Initialize heroes
-	data.heroes.forEach((hero, index) => {
+	for (const [index, hero] of data.heroes.entries()) {
+        if (typeof hero.statblock === 'string' && hero.statblock.startsWith('@')) {
+            try {
+                const resolved = await resolver.resolvePath(hero.statblock.substring(1));
+                if (resolved) {
+                    if (!hero.name && resolved.name) hero.name = resolved.name;
+                    if (!hero.max_stamina && resolved.stamina) hero.max_stamina = +resolved.stamina;
+                    if (!hero.image && resolved.image) hero.image = resolved.image;
+                }
+            } catch (e) {
+                console.warn(`Draw Steel Elements: Failed to resolve statblock for hero at index ${heroIndex}`, e);
+            }
+        }
+
 		if (!hero.name) {
 			throw new Error(`Hero at index ${index} is missing the 'name' field.`);
 		}
@@ -132,10 +153,10 @@ export function parseEncounterData(source: string): EncounterData {
 		hero.has_taken_turn = hero.has_taken_turn ?? false;
 		hero.current_stamina = hero.current_stamina ?? hero.max_stamina;
 		hero.temp_stamina = hero.temp_stamina ?? 0;
-	});
+	}
 
 	// Initialize enemy groups and creatures
-	data.enemy_groups.forEach((group, groupIndex) => {
+	for (const [groupIndex, group] of data.enemy_groups.entries()) {
 		if (!group.name) {
 			throw new Error(`Enemy group at index ${groupIndex} is missing the 'name' field.`);
 		}
@@ -182,7 +203,20 @@ export function parseEncounterData(source: string): EncounterData {
 			}
 		}
 
-		group.creatures.forEach((creature, creatureIndex) => {
+		for (const [creatureIndex, creature] of group.creatures.entries()) {
+			if (typeof creature.statblock === 'string' && creature.statblock.startsWith('@')) {
+				try {
+					const resolved = await resolver.resolvePath(creature.statblock.substring(1));
+					if (resolved) {
+						if (!creature.name && resolved.name) creature.name = resolved.name;
+                        if (!creature.max_stamina && resolved.stamina) creature.max_stamina = +resolved.stamina;
+						if (!creature.image && resolved.image) creature.image = resolved.image;
+					}
+				} catch (e) {
+					console.warn(`Draw Steel Elements: Failed to resolve statblock for creature at index ${creatureIndex}`, e);
+				}
+		   }
+
 			if (!creature.name) {
 				throw new Error(
 					`Creature at index ${creatureIndex} in group '${group.name}' is missing the 'name' field.`
@@ -297,8 +331,8 @@ export function parseEncounterData(source: string): EncounterData {
 					});
 				}
 			}
-		});
-	});
+		}
+	}
 
 	data.malice = data.malice ?? { value: 0 };
 	if (typeof data.malice.value !== "number") {

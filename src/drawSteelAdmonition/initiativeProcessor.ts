@@ -31,11 +31,11 @@ export class InitiativeProcessor {
 		this.conditionManager = new ConditionManager();
 	}
 
-	public postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
+	public async postProcess(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<void> {
 		const container = el.createEl("div", { cls: "ds-init-container" });
 
 		try {
-			const data = parseEncounterData(source);
+			const data = await parseEncounterData(source, this.app, this.plugin.settings);
 			this.buildUI(container, data, ctx);
 		} catch (error) {
 			// Display error message to the user
