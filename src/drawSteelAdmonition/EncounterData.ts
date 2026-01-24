@@ -110,9 +110,9 @@ export async function parseEncounterData(source: string, app: App, settings: DSE
 
 	// Initialize heroes
 	for (const [index, hero] of data.heroes.entries()) {
-        if (typeof hero.statblock === 'string' && hero.statblock.startsWith('@')) {
+        if (typeof hero.statblock === 'string') {
             try {
-                const resolved = await resolver.resolvePath(hero.statblock.substring(1));
+                const resolved = await resolver.resolveReferences(hero.statblock);
                 if (resolved) {
                     if (!hero.name && resolved.name) hero.name = resolved.name;
                     if (!hero.max_stamina && resolved.stamina) hero.max_stamina = +resolved.stamina;
@@ -204,9 +204,9 @@ export async function parseEncounterData(source: string, app: App, settings: DSE
 		}
 
 		for (const [creatureIndex, creature] of group.creatures.entries()) {
-			if (typeof creature.statblock === 'string' && creature.statblock.startsWith('@')) {
+			if (typeof creature.statblock === 'string') {
 				try {
-					const resolved = await resolver.resolvePath(creature.statblock.substring(1));
+					const resolved = await resolver.resolveReferences(creature.statblock);
 					if (resolved) {
 						if (!creature.name && resolved.name) creature.name = resolved.name;
                         if (!creature.max_stamina && resolved.stamina) creature.max_stamina = +resolved.stamina;
