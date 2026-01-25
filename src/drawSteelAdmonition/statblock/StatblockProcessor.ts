@@ -19,6 +19,14 @@ export class StatblockProcessor {
 		try {
 			const data = StatblockConfig.readYaml(source);
 			this.buildUI(container, data, ctx);
+            // Avoid clicks in reading mode from opening edit view
+            const stop = (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+            // container.addEventListener("dblclick", stop, { capture: true });
+            container.addEventListener("mousedown", stop, {capture: true});
+            container.addEventListener("pointerdown", stop, {capture: true});
 		} catch (error) {
 			// Display error message to the user
 			let userMessage =

@@ -14,6 +14,14 @@ export class FeatureProcessor {
 		const container = el.createEl("div", { cls: "ds-feature-ele-container ds-container" });
 		try {
 			new FeatureView(this.plugin, FeatureConfig.readYaml(source), ctx).build(container);
+            // Avoid clicks in reading mode from opening edit view
+            const stop = (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+            // container.addEventListener("dblclick", stop, { capture: true });
+            container.addEventListener("mousedown", stop, {capture: true});
+            container.addEventListener("pointerdown", stop, {capture: true});
 		} catch (error) {
 			// Display error message to the user
 			let userMessage =

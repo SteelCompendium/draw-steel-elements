@@ -14,6 +14,14 @@ export class StaminaBarProcessor {
 		const container = el.createEl("div", { cls: "ds-stamina-bar-ele-container" });
 		try {
 			new StaminaBarView(this.plugin, StaminaBar.parseYaml(source), ctx).build(container);
+            // Avoid clicks in reading mode from opening edit view
+            const stop = (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+            // container.addEventListener("dblclick", stop, { capture: true });
+            container.addEventListener("mousedown", stop, {capture: true});
+            container.addEventListener("pointerdown", stop, {capture: true});
 		} catch (error) {
 			let userMessage =
 				"The Draw Steel Elements plugin loaded the StaminaBar Element properly, but " +

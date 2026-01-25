@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.1
+
+- Corrects issue where double-clicking on an Element in reading mode will open edit mode
+
 ## 5.1.0
 
 - Adds support for referencing statblocks within the initiative tracker (see docs for details)
