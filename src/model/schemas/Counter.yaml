@@ -53,7 +53,7 @@ allOf:
           - neither
           - plus
           - minus
-        default: false
+        default: neither
         errorMessage: hide_buttons must be either \"both\", \"neither\", \"plus\" or \minus\"
       style:
         type: string

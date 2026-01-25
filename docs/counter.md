@@ -11,6 +11,8 @@ then define your counter using YAML syntax inside the code block.
 
 ### Example counter:
 
+Default (Vertical) Style
+
 ```
 ~~~ds-counter
 name_top: Stamina
@@ -21,6 +23,8 @@ min_value: 0
 name_bottom_height: 0.75
 ~~~
 ```
+
+Horizontal Style
 
 ```
 ~~~ds-counter
@@ -35,9 +39,20 @@ style: horizontal
 ```
 
 These code blocks will render the following counters with interactive buttons to increment or decrement the value
-
+<span style="display:flex; flex-direction:row; column-gap:20px">
+<span style="display:flex; flex-direction:column">
+Default (Vertical) Style
+<span style="height:126px">
 ![counter](Media/counter.png)
+</span>
+</span>
+<span style="display:flex; flex-direction:column">
+Horizontal Style
+<span style="height:126px">
 ![counter-horizontal](Media/counter-horizontal.png)
+</span>
+</span>
+</span>
 
 ## Field Definitions
 
@@ -56,8 +71,8 @@ Below is a detailed description of each field used in the counter element, inclu
 | `name_top_height`    | `float`   | Adjusts the size of the counter name_top text in the rendered output as a multiplier.                                                                                        | No       | `1`                              |
 | `name_bottom_height` | `float`   | Adjusts the size of the counter name_bottom text in the rendered output as a multiplier.                                                                                     | No       | `1`                              |
 | `name_height`        | `float`   | Alias for `name_top_height` and `name_bottom_height` for backwards compatibility. `name_bottom_height` and `name_bottom_height` will override their associated value if set. | No       | ""                               |
-| `hide_buttons`       | `string`  | Hides 0, 1 or both buttons depending on the value. "both" will hide both buttons, "neither" will hide neither, "plus" and "minus" will hide the corresponding button.        | No       | `false`                          |
-| `style`              | `string`  | Selects the style of Counter. "default", "horizontal" and "vertical" are accepted values.                                                                                    | No       | `default`                        |
+| `hide_buttons`       | `string`  | Hides 0, 1 or both buttons depending on the value. "both" will hide both buttons, "neither" will hide neither, "plus" and "minus" will hide the corresponding button.        | No       | `"neither"`                      |
+| `style`              | `string`  | Selects the style of Counter. "default", "horizontal" and "vertical" are accepted values.                                                                                    | No       | `"default"`                      |
 
 ### Notes:
 
@@ -65,4 +80,4 @@ Below is a detailed description of each field used in the counter element, inclu
 - If `max_value` is defined, the counter cannot increment beyond this value.
 - If `min_value` is defined, the counter cannot decrement below this value.
 - `value_height`, `name_top_height` and `name_bottom_height` are optional parameters to adjust the visual presentation of the counter in the rendered output. They are useful for customizing the display according to your preferences.
-- You can click on the counter value to edit it directly. Appending a `+` or a `-` to the front of the number will modify the existing value instead of replacing it.
+- You can click on the counter value to edit it directly.
