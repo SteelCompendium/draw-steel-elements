@@ -1,0 +1,1164 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://steelCompendium.io/statblock/">
+      
+      
+        <link rel="prev" href="../stamina-bar/">
+      
+      
+        <link rel="next" href="../values-row-element/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../Media/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Statblock Element - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Serif+4:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Serif 4";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#statblock-element" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-header__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Steel Compendium: Draw Steel Elements Obsidian Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Statblock Element
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-nav__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    Steel Compendium: Draw Steel Elements Obsidian Plugin
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Draw Steel Elements Plugin for Obsidian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../canvas-character-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build a Character Sheet in Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../characteristics-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Characteristics Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-element-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Element Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-downloader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compendium Downloader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../counter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Counter Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../featureblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Featureblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../horizontal-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Horizontal Rule Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../initiative-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initiative Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../negotiation-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Negotiation Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skills-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skills Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stamina-bar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stamina Bar Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statblock Element
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Definitions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Definitions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../values-row-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Values Row Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Definitions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Definitions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="statblock-element">Statblock Element<a class="headerlink" href="#statblock-element" title="Permanent link">&para;</a></h1>
+<p>The Statblock codeblock is a tool designed to parse and display statblocks within Obsidian. 
+It allows you to define creatures or characters with various characteristics, stats, features, and more using YAML syntax, 
+and then renders this information in an organized layout for easy reference during gameplay or writing.</p>
+<p><img alt="statblock-side-by-side.png" src="../Media/statblock-side-by-side.png" /></p>
+<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
+<p>To use the Statblock Processor, insert a code block with the language identifier <code>ds-statblock</code> in your Obsidian note, 
+and then define your statblock using YAML syntax inside the code block.</p>
+<p>Example statblock</p>
+<div class="highlight"><pre><span></span><code>~~~ds-statblock
+type: statblock
+name: Human Bandit Chief
+level: 3
+roles:
+  - Leader
+ancestry:
+  - Human
+  - Humanoid
+ev: &quot;20&quot;
+stamina: &quot;120&quot;
+immunities:
+  - Corruption 4
+  - psychic 4
+speed: 5
+size: 1M
+stability: 2
+free_strike: 5
+might: 2
+agility: 3
+reason: 2
+intuition: 3
+presence: 2
+features:
+  - type: feature
+    feature_type: ability
+    name: Whip and Magic Longsword
+    icon: 🗡
+    ability_type: Signature Ability
+    keywords:
+      - Magic
+      - Melee
+      - Strike
+      - Weapon
+    usage: Main action
+    distance: Melee 2
+    target: Two enemies or objects
+    effects:
+      - roll: Power Roll + 2
+        tier1: 8 damage; pull 1
+        tier2: 12 damage; pull 2
+        tier3: 15 damage; pull 3
+      - name: Effect
+        effect: Any target who is adjacent to the bandit chief after the power roll is
+          resolved takes 3 corruption damage.
+      - cost: 2 Malice
+        effect: This ability targets one additional target.
+  - type: feature
+    feature_type: ability
+    name: Kneel, Peasant!
+    icon: 🗡
+    keywords:
+      - Melee
+    usage: Maneuver
+    distance: Melee 1
+    target: One enemy
+    effects:
+      - roll: Power Roll + 2
+        tier1: Push 1; M &lt; 1 prone
+        tier2: Push 2; M &lt; 2 prone
+        tier3: Push 4; M &lt; 3 prone
+      - cost: 2 Malice
+        effect: The ability takes the Area keyword, loses the Melee keyword, and is a 1
+          burst that targets each enemy in the area.
+  - type: feature
+    feature_type: ability
+    name: Bloodstones
+    icon: ❗️
+    keywords:
+      - Magic
+    usage: Triggered action
+    distance: Self
+    target: Self
+    trigger: The bandit chief makes a power roll.
+    effects:
+      - name: Effect
+        effect: The bandit chief takes 5 corruption damage and increases the outcome of
+          the power roll by one tier. This damage can&#39;t be reduced in any way.
+  - type: feature
+    feature_type: trait
+    name: End Effect
+    icon: ⭐️
+    effects:
+      - effect: At the end of each of their turns, the bandit chief can take 5 damage to
+          end one effect on them that can be ended by a saving throw. This
+          damage can&#39;t be reduced in any way.
+  - type: feature
+    feature_type: trait
+    name: Supernatural Insight
+    icon: ⭐️
+    effects:
+      - effect: The bandit chief ignores concealment if it&#39;s granted by a supernatural
+          effect.
+  - type: feature
+    feature_type: ability
+    name: Shoot!
+    icon: ☠️
+    ability_type: Villain Action 1
+    keywords:
+      - Area
+    usage: &quot;-&quot;
+    distance: 10 burst
+    target: Each artillery ally in the area
+    effects:
+      - name: Effect
+        effect: Each target makes a ranged free strike.
+  - type: feature
+    feature_type: ability
+    name: Form Up!
+    icon: ☠️
+    ability_type: Villain Action 2
+    keywords:
+      - Area
+    usage: &quot;-&quot;
+    distance: 10 burst
+    target: Each ally in the area
+    effects:
+      - name: Effect
+        effect: Each target shifts up to their speed. Additionally, until the end of the
+          encounter, while the bandit chief or any ally is adjacent to a target,
+          they have damage immunity 2.
+  - type: feature
+    feature_type: ability
+    name: Lead From the Front
+    icon: ☠️
+    ability_type: Villain Action 3
+    keywords:
+      - &quot;-&quot;
+    usage: &quot;-&quot;
+    distance: Self
+    target: Self
+    effects:
+      - name: Effect
+        effect: The bandit chief shifts up to 10 squares regardless of their speed.
+          During or after this movement, they can use their Whip and Magic
+          Longsword against up to four targets. Additionally, one ally adjacent
+          to each target can make a free strike against that target.
+~~~
+</code></pre></div>
+<p><img alt="statblock.png" src="../Media/statblock.png" /></p>
+<h2 id="field-definitions">Field Definitions<a class="headerlink" href="#field-definitions" title="Permanent link">&para;</a></h2>
+<p>Below is a detailed description of each field used in the statblock, including their types, default values, and whether they are required.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>-</td>
+<td>The name of the creature.</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>"statblock"</td>
+<td>Static string "statblock"</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td>integer</td>
+<td>No</td>
+<td>0</td>
+<td>The creature's level.</td>
+</tr>
+<tr>
+<td><code>roles</code></td>
+<td>string[]</td>
+<td>Yes</td>
+<td>[]</td>
+<td>Roles assigned to the creature (e.g., Boss, Minion).</td>
+</tr>
+<tr>
+<td><code>ancestry</code></td>
+<td>string[]</td>
+<td>Yes</td>
+<td>[]</td>
+<td>Ancestries or types the creature belongs to (e.g., Human, Humanoid).</td>
+</tr>
+<tr>
+<td><code>ev</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>"0"</td>
+<td>Encounter Value (EV) of the creature.</td>
+</tr>
+<tr>
+<td><code>stamina</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>0</td>
+<td>The creature's max stamina.</td>
+</tr>
+<tr>
+<td><code>immunities</code></td>
+<td>string[]</td>
+<td>No</td>
+<td>[]</td>
+<td>List of immunities (e.g., Magic 2, Psionic 2).</td>
+</tr>
+<tr>
+<td><code>weaknesses</code></td>
+<td>string[]</td>
+<td>No</td>
+<td>[]</td>
+<td>List of weaknesses (e.g., acid 3, holy 1).</td>
+</tr>
+<tr>
+<td><code>speed</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>""</td>
+<td>Movement speed of the creature (e.g., 5).</td>
+</tr>
+<tr>
+<td><code>movement</code></td>
+<td>string</td>
+<td>No</td>
+<td>""</td>
+<td>Movement types of the creature (e.g. 'run, fly')</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>""</td>
+<td>Size category (e.g., 1M for medium).</td>
+</tr>
+<tr>
+<td><code>stability</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>Stability value of the creature.</td>
+</tr>
+<tr>
+<td><code>free_strike</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>The free strike value.</td>
+</tr>
+<tr>
+<td><code>might</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>Might modifier.</td>
+</tr>
+<tr>
+<td><code>agility</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>Agility modifier.</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>Reason modifier.</td>
+</tr>
+<tr>
+<td><code>intuition</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>Intuition modifier.</td>
+</tr>
+<tr>
+<td><code>presence</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>0</td>
+<td>Presence modifier.</td>
+</tr>
+<tr>
+<td><code>with_captain</code></td>
+<td>string</td>
+<td>No</td>
+<td>-</td>
+<td>Effect when a captain is present.</td>
+</tr>
+<tr>
+<td><code>features</code></td>
+<td>Feature[]</td>
+<td>No</td>
+<td>[]</td>
+<td>List of features (see Feature schema).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>Attribute values can be positive or negative integers. You can include a <code>+</code> sign for positive values (e.g., <code>+2</code>), but it's optional.</li>
+</ul>
+<h3 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h3>
+<p>See the <a href="../Features/">features</a> documentation for field definitions</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The Draw Steel Compendium is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../javascripts/tablesort.js"></script>
+      
+    
+  </body>
+</html>
