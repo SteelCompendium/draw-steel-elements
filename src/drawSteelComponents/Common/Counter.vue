@@ -40,7 +40,7 @@
                         ]"
                         icon="chevron-up"
                         variant="simplified"
-                        @click="updateValue('+1')"
+                        @click="updateValue((state.currentValue+1).toString())"
                         v-if="model.hide_buttons != 'both'"
                     />
                     <ds-button
@@ -50,7 +50,7 @@
                         ]"
                         icon="chevron-down"
                         variant="simplified"
-                        @click="updateValue('-1')"
+                        @click="updateValue((state.currentValue-1).toString())"
                         v-if="model.hide_buttons != 'both'"
                     />
                 </span>
@@ -68,7 +68,7 @@
                 <ds-button
                     icon="minus-circle"
                     variant="icon"
-                    @click="updateValue('-1')"
+                    @click="updateValue((state.currentValue-1).toString())"
                     v-if="
                         model.hide_buttons != 'both' &&
                         model.hide_buttons != 'plus'
@@ -98,7 +98,7 @@
                     class="plus-button"
                     icon="plus-circle"
                     variant="icon"
-                    @click="updateValue('+1')"
+                    @click="updateValue((state.currentValue+1).toString())"
                     v-if="
                         model.hide_buttons != 'both' &&
                         model.hide_buttons != 'minus'
@@ -131,7 +131,7 @@ const emit = defineEmits(["mod-value", "set-value"]);
 
 const state = reactive({
     inputValue: (props.model?.current_value ?? 0).toString(),
-    currentValue: (props.model?.current_value ?? 0).toString(),
+    currentValue: Number(props.model?.current_value),
 });
 
 if (
@@ -153,14 +153,14 @@ const validateInput = (event: Event) => {
     }
 };
 
-const updateValue = (input: string | Event) => {
+const updateValue = (input: string | Event | number) => {
     let value = "";
 
     if (input instanceof Event) {
         const target = input.target as HTMLInputElement;
         value = target.value;
     } else {
-        value = input;
+        value = input.toString();
     }
 
     let number: number = Number(value);
@@ -172,8 +172,9 @@ const updateValue = (input: string | Event) => {
         number = props.model.min_value;
     }
 
-    state.currentValue = number.toString();
+    state.currentValue = number;
     state.inputValue = number.toString();
+    console.log(state.currentValue)
     emit("set-value", number);
     return;
 };
@@ -250,6 +251,7 @@ watch(
             font-size: 32px;
             padding: 0;
             font-weight: bold;
+            text-align: center;
         }
     }
 
