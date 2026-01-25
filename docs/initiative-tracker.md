@@ -73,6 +73,7 @@ The encounter data consists of three main sections:
 
 - `name` (string, required): The name of the hero.
 - `max_stamina` (number, required): The maximum health points (stamina) of the hero.
+- `statblock` (string or object, optional): A reference to a statblock file or an inline statblock object. If provided, `name`, `max_stamina`, and `image` will be populated from the referenced statblock if they are not explicitly set.
 - `current_stamina` (number, optional): The current health points of the hero. Defaults to `max_stamina` if not provided.
 - `temp_stamina` (number, optional): Temporary health points (stamina). Defaults to `0`.
 - `image` (string, optional): Path to the hero's image.
@@ -111,6 +112,7 @@ Each creature in the creatures list has the following fields:
 
 - `name` (string, required): The name of the creature.
 - `max_stamina` (number, required): The maximum health points of the creature.
+- `statblock` (string or object, optional): A reference to a statblock file or an inline statblock object. If provided, `name`, `max_stamina`, and `image` will be populated from the referenced statblock if they are not explicitly set.
 - `amount` (number, required): The number of instances of this creature.
 - `instances` (list of CreatureInstance, managed): List of creature instances. Managed by the tracker.
 - `image` (string, optional): Path to the creature's image.
@@ -145,6 +147,36 @@ enemy_groups:
 ```
 
 In this example, "Goblin Gang" is a regular enemy group, while "Undead Horde" is a minion group consisting of 10 Skeletons.
+
+### Referencing Statblocks
+
+You can reference existing statblocks to populate creature or hero data (Name, Max Stamina, and Image). This is done using the `statblock` field.
+
+The reference supports multiple formats:
+
+1. **Full Path from vault root**: `Homebrew/monsters/MonsterName.md` (with or without `.md`)
+2. **Relative to Compendium root**: `Bestiary/Monsters/MonsterName` (with or without `.md`)
+3. **File Name**: `MonsterName` (with or without `.md`) looks for `MonsterName.md` anywhere in the vault 
+4. **Link**: `[[MonsterName]]` will use the first found link matching the name.  
+ 
+**Important:** if using File Name or Link and there are multiple files with the same name, the chosen one is not guaranteed. To ensure the correct file, specify the full path 
+
+When a statblock is referenced, the plugin will look for the first Draw Steel Element code block (`ds-statblock` or similar) in that file and use its data.
+
+**Example using references:**
+
+```yaml
+...
+enemy_groups:
+  - name: "Dragon Encounter"
+    creatures:
+      - statblock: "Thorn Dragon"
+        amount: 1
+      - statblock: "Bestiary/Monsters/Kobold"
+        amount: 5
+```
+
+In this case, the `Thorn Dragon`'s name, max stamina (or stamina), and image will be automatically loaded. You can still override these values by explicitly providing them in the YAML.
 
 ### Minions and Captains
 

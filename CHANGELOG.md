@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.1.0
+
+- Adds support for referencing statblocks within the initiative tracker (see docs for details)
+
 ## 5.0.0
 
 - Support for Featureblocks!
