@@ -1,9 +1,9 @@
 import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import { StatblockConfig } from "@model/StatblockConfig";
-import { HeaderView } from "@drawSteelAdmonition/statblock/HeaderView";
+import { HeaderView } from "@drawSteelAdmonition/Common/HeaderView";
 import { StatsView } from "@drawSteelAdmonition/statblock/StatsView";
-import { FeaturesView } from "@drawSteelAdmonition/statblock/FeaturesView";
-import { HorizontalRuleProcessor } from "@drawSteelAdmonition/horizontalRuleProcessor";
+import { FeaturesView } from "@drawSteelAdmonition/Features/FeaturesView";
+import { HorizontalRuleProcessor } from "@drawSteelAdmonition/Common/horizontalRuleProcessor";
 import { FeatureConfig } from "@model/FeatureConfig";
 
 export class StatblockProcessor {
@@ -30,7 +30,16 @@ export class StatblockProcessor {
 	}
 
 	private buildUI(container: HTMLElement, data: StatblockConfig, ctx: MarkdownPostProcessorContext): void {
-		new HeaderView(this.plugin, data, ctx).build(container);
+        const level = data.statblock.level !== undefined ? `Level ${data.statblock.level}` : "Level N/A";
+        const roles = data.statblock.roles?.join(", ") ?? "No Role";
+        new HeaderView(this.plugin,
+            ctx,
+            data.statblock.name ?? "Unnamed Creature",
+            `${level} ${roles}`,
+            data.statblock.ancestry?.join(", ") ?? "Unknown Ancestry",
+            data.statblock.ev !== undefined ? `EV ${data.statblock.ev}` : "EV N/A"
+            ).build(container);
+
 		new StatsView(this.plugin, data, ctx).build(container);
         if (data.statblock.features?.length > 0) {
             HorizontalRuleProcessor.build(container);

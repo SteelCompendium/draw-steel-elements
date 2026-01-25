@@ -1,78 +1,144 @@
 <template>
     <span class="counter-wrapper">
-        <span class="counter-container vertical"
-            v-if="!model.style || model.style == 'vertical' || model.style == 'default'">
+        <span
+            class="counter-container vertical"
+            v-if="
+                !model.style ||
+                model.style == 'vertical' ||
+                model.style == 'default'
+            "
+        >
             <span class="counter-inner-container vertical">
-                <span class="name-top" :style="`font-size:calc(var(--font-text-size)*${model.name_top_height})`">
+                <span
+                    class="name-top"
+                    :style="`font-size:calc(var(--font-text-size)*${model.name_top_height})`"
+                >
                     {{ model.name_top }}
                 </span>
                 <span class="input-container vertical">
-                    <input type="text" :value="state.inputValue"
-                        :style="`width:${state.inputValue.length + 0.5}ch; font-size:${model.value_height}`"
-                        @input="validateInput($event)" @change="updateValue" />
-                    <tooltip-hover class="tooltip-wrapper vertical"
-                        tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
+                    <input
+                        type="number"
+                        :value="state.inputValue"
+                        :style="`width:${state.inputValue.length + 0.5}ch; font-size:calc(var(--font-text-size)*${model.value_height})`"
+                        @input="validateInput($event)"
+                        @change="updateValue"
+                    />
                 </span>
-                <span class="name-bottom" :style="`font-size:calc(var(--font-text-size)*${model.name_bottom_height})`">
+                <span
+                    class="name-bottom"
+                    :style="`font-size:calc(var(--font-text-size)*${model.name_bottom_height})`"
+                >
                     {{ model.name_bottom }}
                 </span>
             </span>
             <span class="button-wrapper vertical">
                 <span class="button-container vertical">
-                    <ds-button class="plus-button" icon="chevron-up" variant="simplified" @click="updateValue('+1')"
-                        v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
-                    <ds-button icon="chevron-down" variant="simplified" @click="updateValue('-1')"
-                        v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'" />
+                    <ds-button
+                        :class="[
+                            'plus-button',
+                            { hidden: model.hide_buttons == 'plus' },
+                        ]"
+                        icon="chevron-up"
+                        variant="simplified"
+                        @click="updateValue('+1')"
+                        v-if="model.hide_buttons != 'both'"
+                    />
+                    <ds-button
+                        :class="[
+                            'minus-button',
+                            { hidden: model.hide_buttons == 'minus' },
+                        ]"
+                        icon="chevron-down"
+                        variant="simplified"
+                        @click="updateValue('-1')"
+                        v-if="model.hide_buttons != 'both'"
+                    />
                 </span>
             </span>
         </span>
 
         <span class="counter-container" v-else-if="model.style == 'horizontal'">
-            <span class="name-top" :style="`font-size:calc(var(--font-text-size)*${model.name_top_height})`">
+            <span
+                class="name-top"
+                :style="`font-size:calc(var(--font-text-size)*${model.name_top_height})`"
+            >
                 {{ model.name_top }}
             </span>
             <span class="counter-inner-container">
-                <ds-button icon="minus-circle" variant="icon" @click="updateValue('-1')"
-                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'plus'" />
+                <ds-button
+                    icon="minus-circle"
+                    variant="icon"
+                    @click="updateValue('-1')"
+                    v-if="
+                        model.hide_buttons != 'both' &&
+                        model.hide_buttons != 'plus'
+                    "
+                />
                 <span class="input-container">
-                    <input type="text" :value="state.inputValue" @input="validateInput($event)" @change="updateValue" />
-                    <tooltip-hover class="tooltip-wrapper"
-                        tooltip-text='Writing "+" or "-" will modify the existing value instead of overwriting it.' />
+                    <input
+                        type="number"
+                        :value="state.inputValue"
+                        :style="
+                            `font-size:calc(var(--font-text-size)*${model.value_height});` +
+                            `height:calc(var(--font-text-size)*${model.value_height + 0.5});` +
+                            `width:calc(var(--font-text-size)*${(model.value_height + 0.5) * 2});`
+                        "
+                        @input="validateInput($event)"
+                        @change="updateValue"
+                    />
                 </span>
-                <span class="max-value" v-if="model?.max_value">
+                <span
+                    class="max-value"
+                    :style="`font-size:calc(var(--font-text-size)*${model.max_value_height})`"
+                    v-if="model?.max_value"
+                >
                     / {{ model.max_value }}
                 </span>
-                <ds-button class="plus-button" icon="plus-circle" variant="icon" @click="updateValue('+1')"
-                    v-if="model.hide_buttons != 'true' && model.hide_buttons != 'minus'" />
+                <ds-button
+                    class="plus-button"
+                    icon="plus-circle"
+                    variant="icon"
+                    @click="updateValue('+1')"
+                    v-if="
+                        model.hide_buttons != 'both' &&
+                        model.hide_buttons != 'minus'
+                    "
+                />
             </span>
-            <span class="name-bottom" :style="`font-size:calc(var(--font-text-size)*${model.name_bottom_height})`">
+            <span
+                class="name-bottom"
+                :style="`font-size:calc(var(--font-text-size)*${model.name_bottom_height})`"
+            >
                 {{ model.name_bottom }}
             </span>
         </span>
 
-        <span v-else>
-            Unknown style "{{ model.style }}"
-        </span>
+        <span v-else> Unknown style "{{ model.style }}" </span>
     </span>
 </template>
 
 <script setup lang="ts">
-import DsButton from '@drawSteelComponents/Common/DsButton.vue'
-import { Counter } from '@model/Counter';
-import TooltipHover from '@drawSteelComponents/Common/TooltipHover.vue'
-import { reactive, watch } from 'vue';
+import DsButton from "@drawSteelComponents/Common/DsButton.vue";
+import { Counter } from "@model/Counter";
+import TooltipHover from "@drawSteelComponents/Common/TooltipHover.vue";
+import { reactive, watch } from "vue";
 
 const props = defineProps<{
-    model: Counter
-}>()
+    model: Counter;
+}>();
 
-const emit = defineEmits(['mod-value', 'set-value'])
+const emit = defineEmits(["mod-value", "set-value"]);
 
 const state = reactive({
-    inputValue: (props.model?.current_value ?? 0).toString()
-})
+    inputValue: (props.model?.current_value ?? 0).toString(),
+    currentValue: (props.model?.current_value ?? 0).toString(),
+});
 
-if (!['default', 'horizontal', 'vertical', undefined].includes(props.model.style)) {
+if (
+    !["default", "horizontal", "vertical", undefined].includes(
+        props.model.style,
+    )
+) {
     throw new Error(`Invalid style on Counter: ${props.model.style}`);
 }
 
@@ -85,7 +151,7 @@ const validateInput = (event: Event) => {
     } else {
         target.value = state.inputValue;
     }
-}
+};
 
 const updateValue = (input: string | Event) => {
     let value = "";
@@ -93,51 +159,38 @@ const updateValue = (input: string | Event) => {
     if (input instanceof Event) {
         const target = input.target as HTMLInputElement;
         value = target.value;
-    }
-    else {
+    } else {
         value = input;
     }
 
-    let modifier: string = "";
-    let number: number = 0;
+    let number: number = Number(value);
 
-    if (value.length > 0 && isNaN(Number(value[0]))) {
-        modifier = value[0];
-        number = Number(value.slice(1));
-    } else {
-        number = Number(value);
+    if (props.model.max_value && number > props.model.max_value) {
+        number = props.model.max_value;
+    }
+    if (props.model.min_value && number < props.model.min_value) {
+        number = props.model.min_value;
     }
 
-    if (modifier === '') {
-        state.inputValue = number.toString()
-        emit('set-value', number);
-        return;
-    }
-    if (modifier === '+') {
-        state.inputValue = (Number(state.inputValue) + number).toString()
-        if (props.model.max_value && Number(state.inputValue) > props.model.max_value) {
-            state.inputValue = props.model.max_value.toString();
-        }
-        emit('mod-value', number);
-        return
-    }
-    if (modifier === '-') {
-        state.inputValue = (Number(state.inputValue) - number).toString()
-        if (props.model.max_value && Number(state.inputValue) < props.model.min_value) {
-            state.inputValue = props.model.min_value.toString();
-        }
-        emit('mod-value', -number);
-        return
-    }
-}
+    state.currentValue = number.toString();
+    state.inputValue = number.toString();
+    emit("set-value", number);
+    return;
+};
 
-watch(() => props.model?.current_value, (newVal: number | undefined) => {
-    state.inputValue = String(newVal ?? 0);
-});
-
+watch(
+    () => props.model?.current_value,
+    (newVal: number | undefined) => {
+        state.inputValue = String(newVal ?? 0);
+    },
+);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+.hidden {
+    visibility: hidden;
+}
+
 .counter-wrapper {
     width: 100%;
     display: flex;
@@ -148,18 +201,10 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     display: flex;
     flex-direction: column;
     align-items: center;
-}
 
-.counter-container.vertical {
-    flex-direction: row;
-}
-
-.name-top {
-    margin-bottom: 0.5em;
-}
-
-.name-bottom {
-    margin-top: 0.5em;
+    &&.vertical {
+        flex-direction: row;
+    }
 }
 
 .button-wrapper.vertical {
@@ -179,11 +224,11 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     display: flex;
     align-items: center;
     justify-content: center;
-}
 
-.counter-inner-container.vertical {
-    flex-direction: column;
-    margin-right: 1ch;
+    &&.vertical {
+        flex-direction: column;
+        margin-right: 1ch;
+    }
 }
 
 .input-container {
@@ -194,24 +239,25 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     margin-left: 1ch;
     font-size: 15px;
     line-height: 0;
-}
 
-.input-container.vertical {
-    margin: 0;
-}
+    &&.vertical {
+        margin: 0;
 
-.input-container>input {
-    height: 2em;
-    width: 6ch;
-    font-size: 15px;
-    text-align: center;
-}
+        && > input {
+            height: fit-content;
+            border: none;
+            background: none;
+            font-size: 32px;
+            padding: 0;
+            font-weight: bold;
+        }
+    }
 
-.input-container.vertical>input {
-    border: none;
-    background: none;
-    font-size: 32px;
-    padding: 0;
+    && > input {
+        font-size: 15px;
+        text-align: end;
+        font-weight: bold;
+    }
 }
 
 .tooltip-wrapper {
@@ -219,11 +265,11 @@ watch(() => props.model?.current_value, (newVal: number | undefined) => {
     margin-left: calc(-1 * var(--horizontal-margin));
     margin-right: var(--horizontal-margin);
     cursor: help;
-}
 
-.tooltip-wrapper.vertical {
-    padding-left: 0.25em;
-    margin-top: 0.5em
+    &&.vertical {
+        padding-left: 0.25em;
+        margin-top: 0.5em;
+    }
 }
 
 .max-value {
