@@ -171,41 +171,32 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
         group.has_taken_turn = group.has_taken_turn ?? false;
         group.is_squad = group.is_squad ?? false;
 
-        if (group.is_squad) {
-            // Squad-specific validation
-            if (group.creatures.length > 2) {
-                throw new Error(
-                    `Squad '${group.name}' can have at most two creatures (minions and an optional captain).`
-                );
-            }
-            let minionCount = 0;
-            let captainCount = 0;
-            group.creatures.forEach((creature) => {
-                if (!creature.squad_role) {
-                    throw new Error(
-                        `Creature '${creature.name}' in squad '${group.name}' must have a 'squad_role' of 'minion' or 'captain'.`
-                    );
-                }
-                if (creature.squad_role === "minion") {
-                    minionCount += 1;
-                } else if (creature.squad_role === "captain") {
-                    captainCount += 1;
-                } else {
-                    throw new Error(
-                        `Creature '${creature.name}' in squad '${group.name}' has an invalid 'squad_role' value.`
-                    );
-                }
-            });
-            if (minionCount === 0) {
-                throw new Error(`Squad '${group.name}' must have at least one minion creature.`);
-            }
-            if (minionCount > 1) {
-                throw new Error(`Squad '${group.name}' can have only one minion creature type.`);
-            }
-            if (captainCount > 1) {
-                throw new Error(`Squad '${group.name}' can have at most one captain creature.`);
-            }
-        }
+		if (group.is_squad) {
+			let minionCount = 0;
+			let captainCount = 0;
+			group.creatures.forEach((creature) => {
+				if (!creature.squad_role) {
+					throw new Error(
+						`Creature '${creature.name}' in squad '${group.name}' must have a 'squad_role' of 'minion' or 'captain'.`
+					);
+				}
+				if (creature.squad_role === "minion") {
+					minionCount += 1;
+				} else if (creature.squad_role === "captain") {
+					captainCount += 1;
+				} else {
+					throw new Error(
+						`Creature '${creature.name}' in squad '${group.name}' has an invalid 'squad_role' value.`
+					);
+				}
+			});
+			if (minionCount === 0) {
+				throw new Error(`Squad '${group.name}' must have at least one minion creature.`);
+			}
+			if (captainCount > 1) {
+				throw new Error(`Squad '${group.name}' can have at most one captain creature.`);
+			}
+		}
 
         for (const [creatureIndex, creature] of group.creatures.entries()) {
             if (typeof creature.statblock === 'string') {
