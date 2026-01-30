@@ -24,7 +24,6 @@ export class StatblockProcessor {
                 e.preventDefault();
                 e.stopPropagation();
             };
-            // container.addEventListener("dblclick", stop, { capture: true });
             container.addEventListener("mousedown", stop, {capture: true});
             container.addEventListener("pointerdown", stop, {capture: true});
 		} catch (error) {
