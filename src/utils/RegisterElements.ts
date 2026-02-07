@@ -6,10 +6,11 @@ import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProces
 import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
 import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
 import { StaminaBarProcessor } from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
-import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import { genericComponentProcessor } from "./ComponentProcessor";
+import { GenericElementProcessor } from "@drawSteelAdmonition/ElementProcessor";
+import {CounterView} from "@drawSteelAdmonition/Counter/CounterView";
 
 import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
@@ -17,6 +18,7 @@ import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
 
 import { Skills as SkillsModel } from "@model/Skills";
 import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
+import { Counter as CounterModel } from '@model/Counter';
 
 export function registerElements (plugin: Plugin) {
 
@@ -53,7 +55,7 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", staminaBarProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", staminaBarProcessor.handler);
 
-	let counterProcessor = new CounterProcessor(plugin);
+	let counterProcessor = new GenericElementProcessor(plugin, CounterView, CounterModel, "Counter Element");
 	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-counter", counterProcessor.handler);
 

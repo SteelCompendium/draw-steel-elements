@@ -14,7 +14,72 @@ export class CounterView {
 	}
 
 	public build(parent: HTMLElement) {
-		const container = parent.createEl("div", { cls: "ds-counter-container" });
+        if (this.data.style === "horizontal") {
+            this.buildHorizontal(parent);
+            return;
+        }
+        this.buildVertical(parent);
+
+		// const container = parent.createEl("div", { cls: "ds-counter-container" });
+
+		// // Create display area for value and name
+		// const displayContainer = container.createEl("div", { cls: "ds-counter-display-container" });
+
+		// // Value display
+		// const valueDisplay = displayContainer.createEl("div", {
+		// 	cls: "ds-counter-value",
+		// 	text: this.data.current_value.toString(),
+		// });
+
+		// // Set the font size based on value_height
+		// valueDisplay.style.fontSize = `${this.data.value_height}em`;
+
+		// // Add click event to make it editable
+		// valueDisplay.addEventListener("click", () => {
+		// 	this.makeValueEditable(valueDisplay, incrementButton, decrementButton);
+		// });
+
+		// // Name display
+		// const nameDisplay = displayContainer.createEl("div", {
+		// 	cls: "ds-counter-name",
+		// 	text: this.data.name,
+		// });
+
+		// // Set the font size based on name_height
+		// nameDisplay.style.fontSize = `${this.data.name_height}em`;
+
+		// // Controls container
+		// const controlsContainer = container.createEl("div", { cls: "ds-counter-controls" });
+
+		// // Increment button
+		// const incrementButton = controlsContainer.createEl("button", { cls: "ds-counter-button" });
+		// setIcon(incrementButton, "chevron-up");
+		// incrementButton.addEventListener("click", () => {
+		// 	this.incrementValue();
+		// 	valueDisplay.textContent = this.data.current_value.toString();
+		// 	this.updateButtons(incrementButton, decrementButton);
+		// 	CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
+		// });
+
+		// // Decrement button
+		// const decrementButton = controlsContainer.createEl("button", { cls: "ds-counter-button" });
+		// setIcon(decrementButton, "chevron-down");
+		// decrementButton.addEventListener("click", () => {
+		// 	this.decrementValue();
+		// 	valueDisplay.textContent = this.data.current_value.toString();
+		// 	this.updateButtons(incrementButton, decrementButton);
+		// 	CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
+		// });
+
+		// // Initial button state
+		// this.updateButtons(incrementButton, decrementButton);
+
+		// // Style the container to position controls on the right
+		// container.addClass("ds-counter-flex");
+	}
+
+    private buildVertical(parent: HTMLElement) {
+        const container = parent.createEl("div", { cls: "ds-counter-container" });
 
 		// Create display area for value and name
 		const displayContainer = container.createEl("div", { cls: "ds-counter-display-container" });
@@ -36,11 +101,11 @@ export class CounterView {
 		// Name display
 		const nameDisplay = displayContainer.createEl("div", {
 			cls: "ds-counter-name",
-			text: this.data.name,
+			text: this.data.name_bottom,
 		});
 
 		// Set the font size based on name_height
-		nameDisplay.style.fontSize = `${this.data.name_height}em`;
+		nameDisplay.style.fontSize = `${this.data.name_bottom_height}em`;
 
 		// Controls container
 		const controlsContainer = container.createEl("div", { cls: "ds-counter-controls" });
@@ -70,7 +135,11 @@ export class CounterView {
 
 		// Style the container to position controls on the right
 		container.addClass("ds-counter-flex");
-	}
+    }
+
+    private buildHorizontal(parent: HTMLElement) {
+
+    }
 
 	private incrementValue() {
 		const { current_value, max_value } = this.data;
