@@ -31,8 +31,58 @@ const yamlLoaderPlugin = {
     build.onLoad({ filter: /\.ya?ml$/ }, async (args) => {
       try {
         const text = await fs.readFile(args.path, 'utf8');
+        // Parse YAML to JavaScript object
+        // Simple YAML-to-JSON parser for basic YAML structures
+        const yamlToJson = (yaml) => {
+          const lines = yaml.split('\n');
+          const result = {};
+          const stack = [{ obj: result, indent: -1 }];
+          
+          for (const line of lines) {
+            if (line.trim() === '' || line.trim().startsWith('#')) continue;
+            
+            const indent = line.search(/\S/);
+            const trimmed = line.trim();
+            
+            // Handle key-value pairs
+            const match = trimmed.match(/^([^:]+):\s*(.*)$/);
+            if (match) {
+              const [, key, value] = match;
+              const cleanKey = key.trim();
+              let parsedValue = value.trim();
+              
+              // Remove quotes
+              if (parsedValue.startsWith('"') && parsedValue.endsWith('"')) {
+                parsedValue = parsedValue.slice(1, -1);
+              }
+              
+              // Parse boolean/null
+              if (parsedValue === 'true') parsedValue = true;
+              else if (parsedValue === 'false') parsedValue = false;
+              else if (parsedValue === 'null') parsedValue = null;
+              else if (parsedValue === '') parsedValue = {};
+              
+              // Adjust stack based on indentation
+              while (stack.length > 1 && indent <= stack[stack.length - 1].indent) {
+                stack.pop();
+              }
+              
+              const current = stack[stack.length - 1].obj;
+              current[cleanKey] = parsedValue;
+              
+              // If value is empty or object, push to stack for nested properties
+              if (typeof parsedValue === 'object') {
+                stack.push({ obj: parsedValue, indent });
+              }
+            }
+          }
+          
+          return result;
+        };
+        
+        const parsed = yamlToJson(text);
         return {
-          contents: `export default ${JSON.stringify(text)};`,
+          contents: `export default ${JSON.stringify(parsed)};`,
           loader: 'js',
         };
       } catch (error) {
