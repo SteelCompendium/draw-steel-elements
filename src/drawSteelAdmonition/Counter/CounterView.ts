@@ -1,4 +1,5 @@
 import { Component, MarkdownPostProcessorContext, Plugin, setIcon } from "obsidian";
+import { CommonElementWrapperView } from "@drawSteelAdmonition/Common/CommonElementWrapperView";
 import { Counter } from "@model/Counter";
 import { CodeBlocks } from "@utils/CodeBlocks";
 
@@ -14,11 +15,15 @@ export class CounterView {
 	}
 
 	public build(parent: HTMLElement) {
+        console.log("here");
+        const elementWrapper = new CommonElementWrapperView(this.plugin, this.data, this.ctx)
         if (this.data.style === "horizontal") {
-            this.buildHorizontal(parent);
+            elementWrapper.build(parent, this.buildHorizontal(), "Counter")
+            // this.buildHorizontal(parent);
             return;
         }
-        this.buildVertical(parent);
+        elementWrapper.build(parent, this.buildVertical(), "Counter")
+        // this.buildVertical(parent);
 
 		// const container = parent.createEl("div", { cls: "ds-counter-container" });
 
@@ -78,8 +83,8 @@ export class CounterView {
 		// container.addClass("ds-counter-flex");
 	}
 
-    private buildVertical(parent: HTMLElement) {
-        const container = parent.createEl("div", { cls: "ds-counter-container" });
+    private buildVertical(): HTMLElement {
+        const container = createEl("div", { cls: "ds-counter-container" });
 
 		// Create display area for value and name
 		const displayContainer = container.createEl("div", { cls: "ds-counter-display-container" });
@@ -135,10 +140,12 @@ export class CounterView {
 
 		// Style the container to position controls on the right
 		container.addClass("ds-counter-flex");
+
+        return container;
     }
 
-    private buildHorizontal(parent: HTMLElement) {
-
+    private buildHorizontal() {
+        return createDiv();
     }
 
 	private incrementValue() {

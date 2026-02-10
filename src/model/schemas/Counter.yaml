@@ -26,6 +26,9 @@ allOf:
       min_value: 
         type: integer
         description: The minimum value the counter can reach.
+      auto_save:
+        type: boolean
+        description: Whether the value should be saved back to yaml.
       value_height: 
         type: number
         description: Adjusts the size of the counter value text in the rendered output as a multiplier.
