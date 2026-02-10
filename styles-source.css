@@ -63,6 +63,15 @@ button.settings-action-button {
     float: right;
 }
 
+/* ========================== */
+/*   Common Element Wrapper   */
+/* ========================== */
+
+.ds-common-element-wrapper {
+    display: flex;
+    justify-content: center;
+} 
+
 /* ==================== */
 /*   Features List      */
 /* ==================== */
@@ -1945,7 +1954,8 @@ button.action-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
+    width: fit-content;
+    cursor: default;
 
     .ds-counter-display-container {
         text-align: center;

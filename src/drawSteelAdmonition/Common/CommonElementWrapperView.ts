@@ -19,7 +19,8 @@ export class CommonElementWrapperView {
         elementBuilder: Function,
         elementName: string,
     ) {
-        const container = parent.createEl("div", { cls: "ds-element-wrapper" });
+        const container = parent.createEl("div", { cls: "ds-common-element-wrapper" });
+        container.style.cursor = "help";
 
         // Hide Indicator
         // TODO: implement
@@ -29,5 +30,20 @@ export class CommonElementWrapperView {
         } else {
             container.createEl("div", { text: elementName });
         }
+
+        // Container click handler - only triggers on container itself
+        container.addEventListener("click", (event: MouseEvent) => {
+            if (event.target === container) {
+                console.log("click")
+                this.state.isCollapsed = !this.state.isCollapsed;
+                container.empty();
+                if (!this.state.isCollapsed) {
+                    elementBuilder(container);
+                } else {
+                    container.createEl("div", { text: elementName });
+                }
+            }
+        });
+
     }
 }
