@@ -1952,11 +1952,19 @@ button.action-button {
     }
 
     .ds-counter-value {
-        font-size: 2em;
         font-weight: bold;
         line-height: 1em;
         min-width: 1.5em;
-    }
+        width: 4.5ch; /* Wide enough to fit 9999 which should be plenty*/
+        background-color: transparent;
+        border: transparent;
+        text-align: center;
+        padding: 0;
+        padding-bottom: 0.13em;
+        height: 1em;
+        cursor: text;
+        pointer-events: auto;
+    } 
 
     .ds-counter-name {
         font-size: 1em;
@@ -1966,7 +1974,7 @@ button.action-button {
     .ds-counter-controls {
         display: flex;
         flex-direction: column;
-        padding: 1em;
+        padding: 1em 0.2em;
     }
 
     .ds-counter-button {
@@ -1983,15 +1991,6 @@ button.action-button {
             opacity: 0.5;
             cursor: not-allowed;
         }
-    }
-
-    .ds-counter-input {
-        font-size: inherit;
-        text-align: center;
-        width: 100%;
-        border: none;
-        background: transparent;
-        outline: none;
     }
 }
 

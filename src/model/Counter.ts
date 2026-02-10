@@ -14,6 +14,7 @@ export class Counter extends ComponentWrapper {
     current_value: number;
     max_value?: number;
     min_value: number;
+    auto_save: boolean;
     name_top_height: number;
     name_bottom_height: number;
     value_height: number;
@@ -55,6 +56,7 @@ export class Counter extends ComponentWrapper {
             current_value: data.current_value,
             max_value: data.max_value,
             min_value: data.min_value,
+            auto_save: data.auto_save,
             name_top_height: data.name_top_height ?? data.name_height ?? 1,
             name_bottom_height:
                 data.name_bottom_height ?? data.name_height ?? 1,
@@ -71,6 +73,7 @@ export class Counter extends ComponentWrapper {
         max_value: number | undefined,
         current_value: number,
         min_value: number,
+        auto_save: boolean,
         name_top: string,
         name_bottom: string,
         value_height: number,
@@ -83,6 +86,7 @@ export class Counter extends ComponentWrapper {
         this.current_value = current_value ?? 0;
         this.min_value = min_value ?? undefined;
         this.max_value = max_value ?? undefined;
+        this.auto_save = auto_save == false;
         this.name_top = name_top;
         this.name_bottom = name_bottom;
         this.value_height = value_height ?? 3;

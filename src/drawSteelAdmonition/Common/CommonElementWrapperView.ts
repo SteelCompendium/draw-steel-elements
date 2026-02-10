@@ -1,36 +1,33 @@
-import {MarkdownPostProcessorContext, Plugin} from "obsidian";
+import { MarkdownPostProcessorContext, Plugin } from "obsidian";
 import { CommonElementWrapper } from "@model/CommonElementWrapper";
 
 export class CommonElementWrapperView {
     private plugin: Plugin;
     private data: CommonElementWrapper;
     private ctx: MarkdownPostProcessorContext;
-    private state: {isCollapsed: boolean}
+    private state: { isCollapsed: boolean };
 
-    constructor(plugin: Plugin, data: CommonElementWrapper, ctx: MarkdownPostProcessorContext) {
+    constructor(plugin: Plugin, data: any, ctx: MarkdownPostProcessorContext) {
         this.plugin = plugin;
-        this.data = data;
+        this.data = data as CommonElementWrapper;
         this.ctx = ctx;
-        this.state = {isCollapsed: data.collapse_default};
+        this.state = { isCollapsed: this.data?.collapse_default ?? false };
     }
 
-    public build(parent: HTMLElement, element: HTMLElement, elementName: string) {
+    public build(
+        parent: HTMLElement,
+        elementBuilder: Function,
+        elementName: string,
+    ) {
         const container = parent.createEl("div", { cls: "ds-element-wrapper" });
 
-        // Hide indicator
-        // todo: implement
+        // Hide Indicator
+        // TODO: implement
 
         if (!this.state.isCollapsed) {
-            container.append(element)
+            elementBuilder(container);
+        } else {
+            container.createEl("div", { text: elementName });
         }
-
-        else {
-            container.createEl("div", {text:elementName})
-        }
-
-        container.addEventListener("click", () => {
-            console.log("toggle", this.state)
-            this.state.isCollapsed != this.state.isCollapsed;
-        })
     }
 }

@@ -18,13 +18,13 @@ allOf:
         type: string
         description: Alias for name_bottom for backwards compatibility. If name_bottom exists name will be ignored.
       current_value: 
-        type: integer
+        type: number
         description: The current value of the counter.
       max_value: 
-        type: integer
+        type: number
         description: The maximum value the counter can reach.
       min_value: 
-        type: integer
+        type: number
         description: The minimum value the counter can reach.
       auto_save:
         type: boolean
