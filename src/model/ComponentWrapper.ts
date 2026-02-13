@@ -1,19 +1,9 @@
-import {parseYaml} from "obsidian";
-import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
+import { AbstractModel } from "@model/AbstractModel";
 
-export class ComponentWrapper {
-    collapsible: boolean;
-    collapse_default: boolean;
-
-    public static parseYaml(source: string) {
-        let data: any;
-        try {
-            data = parseYaml(source);
-        } catch (error: any) {
-            throw new Error("Invalid YAML format: " + error.message);
-        }
-        return ComponentWrapper.parse(data);
-    }
+export class ComponentWrapper extends AbstractModel{
+    public collapsible: boolean;
+    public collapse_default: boolean;
+    public element_name: string;
 
     public static parse(data: any): ComponentWrapper {
         return new ComponentWrapper(
@@ -22,6 +12,7 @@ export class ComponentWrapper {
     }
 
     constructor(collapsible: boolean, collapse_default: boolean) {
+        super();
         this.collapsible = collapsible ?? true;
         this.collapse_default = collapse_default ?? false;
     }

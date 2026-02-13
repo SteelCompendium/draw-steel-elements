@@ -72,6 +72,10 @@ button.settings-action-button {
     justify-content: center;
 } 
 
+.ds-common-element-wrapper-collapsible {
+    cursor: help;
+} 
+
 /* ==================== */
 /*   Features List      */
 /* ==================== */

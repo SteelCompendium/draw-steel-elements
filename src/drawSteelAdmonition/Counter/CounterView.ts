@@ -1,86 +1,88 @@
-import {
-    Component,
-    MarkdownPostProcessorContext,
-    Plugin,
-    setIcon,
-} from "obsidian";
+import { MarkdownPostProcessorContext, Plugin, setIcon } from "obsidian";
 import { CommonElementWrapperView } from "@drawSteelAdmonition/Common/CommonElementWrapperView";
 import { Counter } from "@model/Counter";
 import { CodeBlocks } from "@utils/CodeBlocks";
+import { AbstractElementView } from "@drawSteelAdmonition/Common/AbstractElementView";
 
-export class CounterView {
-    private plugin: Plugin;
-    private data: Counter;
-    private ctx: MarkdownPostProcessorContext;
-
+export abstract class CounterView extends AbstractElementView {
     constructor(
         plugin: Plugin,
         data: Counter,
         ctx: MarkdownPostProcessorContext,
     ) {
-        this.plugin = plugin;
-        this.data = data;
-        this.ctx = ctx;
+        super(plugin, data, ctx);
     }
 
-    public build(parent: HTMLElement) {
+    public async build(parent: HTMLElement): Promise<HTMLElement> {
+        let view: CounterView;
+        if (this.data?.style === "horizontal") {
+            const { CounterHorizontalView } =
+                await import("@drawSteelAdmonition/Counter/CounterHorizontalView");
+            view = new CounterHorizontalView(this.plugin, this.data, this.ctx);
+        } else {
+            const { CounterVerticalView } =
+                await import("@drawSteelAdmonition/Counter/CounterVerticalView");
+            view = new CounterVerticalView(this.plugin, this.data, this.ctx);
+        }
+        return view.build(parent);
+    }
+
+    protected buildBase(parent: HTMLElement): HTMLElement {
+        const container = parent.createEl("div", {
+            cls: "ds-counter-container",
+        });
+
         const elementWrapper = new CommonElementWrapperView(
             this.plugin,
             this.data,
             this.ctx,
+            { elementName: "Counter" },
         );
-        if (this.data?.style === "horizontal") {
-            elementWrapper.build(parent, this.buildHorizontal, "Counter");
-            // this.buildHorizontal(parent);
-            return;
-        }
-        elementWrapper.build(parent, this.buildVertical, "Counter");
+
+        elementWrapper.build(parent, [container]);
+        return container;
     }
 
-    private buildVertical = (parent: HTMLElement) => {
-        // LAYOUT
-        const container = parent.createEl("div", {
-            cls: "ds-counter-container ds-counter-flex",
-        });
+    protected incrementValue() {
+        const { current_value, max_value } = this.data;
+        if (max_value !== undefined && current_value >= max_value) {
+            return;
+        }
+        this.data.current_value += 1;
+    }
 
-        const displayContainer = container.createEl("div", {
-            cls: "ds-counter-display-container",
-        });
+    protected decrementValue() {
+        const { current_value, min_value } = this.data;
+        if (current_value <= min_value) {
+            return;
+        }
+        this.data.current_value -= 1;
+    }
 
-        const nameTopDisplay = displayContainer.createEl("div", {
-            cls: "ds-counter-name",
-            text: this.data?.name_top,
-        });
+    protected updateButtons(
+        incrementButton: HTMLElement,
+        decrementButton: HTMLElement,
+    ) {
+        const { current_value, max_value, min_value } = this.data;
+        incrementButton.toggleAttribute(
+            "disabled",
+            max_value !== undefined && current_value >= max_value,
+        );
+        decrementButton.toggleAttribute("disabled", current_value <= min_value);
+    }
 
-        const valueDisplay = displayContainer.createEl("input", {
-            cls: "ds-counter-value",
-            value: this.data?.current_value.toString(),
-            placeholder: this.data?.current_value.toString(),
-            type: "number",
-        });
-        valueDisplay.readOnly = false;
-
-        const nameBottomDisplay = displayContainer.createEl("div", {
-            cls: "ds-counter-name",
-            text: this.data?.name_bottom,
-        });
-
-        const controlsContainer = container.createEl("div", {
-            cls: "ds-counter-controls",
-        });
-
-        const incrementButton = controlsContainer.createEl("button", {
-            cls: "ds-counter-button",
-        });
-        const decrementButton = controlsContainer.createEl("button", {
-            cls: "ds-counter-button",
-        });
-
-        // EVENTS
+    protected setEventListeners(
+        valueDisplay: HTMLInputElement,
+        incrementButton: HTMLButtonElement,
+        decrementButton: HTMLButtonElement,
+    ) {
         valueDisplay.addEventListener("click", () => {
+            if (document.activeElement !== valueDisplay) {
+                valueDisplay.select();
+            }
             valueDisplay.focus();
-            valueDisplay.select();
         });
+
         valueDisplay.addEventListener("change", () => {
             let newValue = parseInt(valueDisplay.value);
             if (!isNaN(newValue)) {
@@ -112,51 +114,5 @@ export class CounterView {
             this.updateButtons(incrementButton, decrementButton);
             CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
         });
-
-        // STYLING
-        valueDisplay.style.fontSize = `${this.data.value_height}em`;
-        setIcon(incrementButton, "chevron-up");
-        setIcon(decrementButton, "chevron-down");
-
-        nameTopDisplay.style.fontSize = `${this.data.name_top_height}em`;
-        nameBottomDisplay.style.fontSize = `${this.data.name_bottom_height}em`;
-
-        // ADDITIONAL
-        this.updateButtons(incrementButton, decrementButton);
-    };
-
-    private buildHorizontal = () => {};
-
-    private incrementValue() {
-        const { current_value, max_value } = this.data;
-        if (max_value !== undefined && current_value >= max_value) {
-            return;
-        }
-        this.data.current_value += 1;
-    }
-
-    private decrementValue() {
-        const { current_value, min_value } = this.data;
-        if (current_value <= min_value) {
-            return;
-        }
-        this.data.current_value -= 1;
-    }
-
-    private updateButtons(
-        incrementButton: HTMLElement,
-        decrementButton: HTMLElement,
-    ) {
-        const { current_value, max_value, min_value } = this.data;
-        if (max_value !== undefined && current_value >= max_value) {
-            incrementButton.setAttribute("disabled", "true");
-        } else {
-            incrementButton.removeAttribute("disabled");
-        }
-        if (current_value <= min_value) {
-            decrementButton.setAttribute("disabled", "true");
-        } else {
-            decrementButton.removeAttribute("disabled");
-        }
     }
 }
