@@ -27,8 +27,8 @@ export class CounterVerticalView extends CounterView {
 
         const valueDisplay = displayContainer.createEl("input", {
             cls: "ds-counter-value",
-            value: this.data?.current_value.toString(),
-            placeholder: this.data?.current_value.toString(),
+            value: this.clampedCurrentValue().toString(),
+            placeholder: this.clampedCurrentValue().toString(),
             type: "number",
         });
         valueDisplay.readOnly = false;
@@ -61,7 +61,8 @@ export class CounterVerticalView extends CounterView {
         nameBottomDisplay.style.fontSize = `${this.data.name_bottom_height}em`;
 
         // ADDITIONAL
-        this.updateButtons(incrementButton, decrementButton);
+        this.applyValue(valueDisplay, incrementButton, decrementButton);
+
 
         return container;
     }

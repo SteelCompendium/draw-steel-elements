@@ -43,20 +43,23 @@ export abstract class CounterView extends AbstractElementView {
         return container;
     }
 
+    protected clampedCurrentValue() {
+        const { current_value, max_value, min_value } = this.data;
+        return Math.clamp(
+            current_value,
+            min_value ?? -Infinity,
+            max_value ?? Infinity,
+        );
+    }
+
     protected incrementValue() {
-        const { current_value, max_value } = this.data;
-        if (max_value !== undefined && current_value >= max_value) {
-            return;
-        }
         this.data.current_value += 1;
+        this.data.current_value = this.clampedCurrentValue();
     }
 
     protected decrementValue() {
-        const { current_value, min_value } = this.data;
-        if (current_value <= min_value) {
-            return;
-        }
         this.data.current_value -= 1;
+        this.data.current_value = this.clampedCurrentValue();
     }
 
     protected updateButtons(
@@ -69,6 +72,19 @@ export abstract class CounterView extends AbstractElementView {
             max_value !== undefined && current_value >= max_value,
         );
         decrementButton.toggleAttribute("disabled", current_value <= min_value);
+    }
+
+    protected applyValue(
+        valueDisplay: HTMLInputElement,
+        incrementButton: HTMLButtonElement,
+        decrementButton: HTMLButtonElement,
+    ) {
+        this.data.current_value = this.clampedCurrentValue();
+        valueDisplay.value = this.data.current_value.toString();
+        this.updateButtons(incrementButton, decrementButton);
+        if (this.data.auto_save) {
+            CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
+        }
     }
 
     protected setEventListeners(
@@ -86,33 +102,20 @@ export abstract class CounterView extends AbstractElementView {
         valueDisplay.addEventListener("change", () => {
             let newValue = parseInt(valueDisplay.value);
             if (!isNaN(newValue)) {
-                newValue = Math.min(newValue, this.data?.max_value ?? Infinity);
-                newValue = Math.max(newValue, this.data.min_value ?? 0);
                 this.data.current_value = newValue;
-                valueDisplay.value = newValue.toString();
-                this.updateButtons(incrementButton, decrementButton);
-                if (this.data.auto_save) {
-                    CodeBlocks.updateCounter(
-                        this.plugin.app,
-                        this.data,
-                        this.ctx,
-                    );
-                }
+                this.data.current_value = this.clampedCurrentValue();
+                this.applyValue(valueDisplay, incrementButton, decrementButton);
             }
         });
 
         incrementButton.addEventListener("click", () => {
             this.incrementValue();
-            valueDisplay.value = this.data.current_value.toString();
-            this.updateButtons(incrementButton, decrementButton);
-            CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
+            this.applyValue(valueDisplay, incrementButton, decrementButton);
         });
 
         decrementButton.addEventListener("click", () => {
             this.decrementValue();
-            valueDisplay.value = this.data.current_value.toString();
-            this.updateButtons(incrementButton, decrementButton);
-            CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
+            this.applyValue(valueDisplay, incrementButton, decrementButton);
         });
     }
 }
