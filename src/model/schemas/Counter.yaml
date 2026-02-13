@@ -1,0 +1,77 @@
+# JSON Schema in YAML format for Draw Steel Character Skills
+$schema: https://json-schema.org/draft/2019-09/schema
+$id: dse.counter.schema.json-1.0.0
+title: Draw Steel Character Skills
+description: Schema for validating Draw Steel character skills data
+type: object
+allOf:
+  - $ref: dse.common-component-fields.schema.json-1.0.0
+  - type: object
+    properties:
+      name_top:
+        type: string
+        description: The name shown above the counter (e.g., "Stamina", "Heroic Resource").
+      name_bottom:
+        type: string
+        description: The name shown below the counter (e.g., "Focus", "Drama).
+      name:
+        type: string
+        description: Alias for name_bottom for backwards compatibility. If name_bottom exists name will be ignored.
+      current_value: 
+        type: number
+        description: The current value of the counter.
+      max_value: 
+        type: number
+        description: The maximum value the counter can reach.
+      min_value: 
+        type: number
+        description: The minimum value the counter can reach.
+      auto_save:
+        type: boolean
+        description: Whether the value should be saved back to yaml.
+      value_height: 
+        type: number
+        description: Adjusts the size of the counter value text in the rendered output as a multiplier.
+      max_value_height: 
+        type: number
+        description: Adjusts the size of the counter max_value text in the rendered output as a multiplier.
+      name_top_height: 
+        type: number
+        description: Adjusts the size of the counter name_top text in the rendered output as a multiplier.
+      name_bottom_height: 
+        type: number
+        description: Adjusts the size of the counter name_bottom text in the rendered output as a multiplier.
+      name_height: 
+        type: number
+        description: Alias for name_bottom_height for backwards compatibility. If name_bottom_height exists name_height will be ignored.
+      hide_buttons:
+        type: string
+        description: \"both\" will hide both buttons, \"plus\" and \"minus\" will hide the corresponding button, \"neither\" will hide neither.
+        transform:
+        - trim
+        - toLowerCase
+        enum:
+          - both
+          - neither
+          - plus
+          - minus
+        default: neither
+        errorMessage: hide_buttons must be either \"both\", \"neither\", \"plus\" or \minus\"
+      style:
+        type: string
+        description: The style the counter should use.
+        transform:
+        - trim
+        - toLowerCase
+        enum:
+          - default # Alias for vertical
+          - horizontal
+          - vertical
+        default: vertical
+        errorMessage: style must be either "default", "horizontal" or "vertical"
+        
+unevaluatedProperties:
+    const: false
+    errorMessage: |
+        Counter object contains invalid property '${0#}'. 
+        Allowed properties: name_top, name_bottom, current_value, max_value, min_value, value_height, name_height, style.

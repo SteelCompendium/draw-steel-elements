@@ -4,8 +4,9 @@ import {DEFAULT_SETTINGS, DSESettings} from "@model/Settings";
 import {CompendiumDownloader} from "@utils/CompendiumDownloader";
 import { registerElements } from '@/utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
-import componentWrapperSchemaYaml from '@model/schemas/ComponentWrapperSchema.yaml';
 import "./styles-source.css";
+
+import commonElementFieldsSchema from '@model/schemas/CommonElementFieldsSchema.yaml';
 
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
@@ -39,9 +40,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     private initializeSchemas() {
         const dependencySchemas = [
             {
-                id: "https://steelcompendium.io/schemas/component-wrapper-1.0.0",
-                schema: componentWrapperSchemaYaml
-            }
+                id: commonElementFieldsSchema.$id ?? "",
+                schema: commonElementFieldsSchema
+            },
             // Add more dependency schemas here as needed
             // Note: Don't register main schemas that are being validated directly
         ];
