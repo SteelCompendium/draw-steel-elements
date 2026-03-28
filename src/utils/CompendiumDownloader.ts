@@ -14,7 +14,7 @@ export class CompendiumDownloader {
 		this.githubToken = githubToken;
 	}
 
-	public async downloadAndExtractRelease(releaseTag: string | undefined, destinationDirectory: string) {
+	public async downloadAndExtractRelease(releaseTag: string | undefined, destinationDirectory: string, textReplacements?: Record<string, string>) {
 		try {
 			let releaseApiUrl = `https://api.github.com/repos/${this.githubOwner}/${this.githubRepo}/releases`;
 
@@ -88,7 +88,7 @@ export class CompendiumDownloader {
 			const zip = await JSZip.loadAsync(buffer);
 
 			// Extract and save files to the vault
-			await this.extractAndSaveZip(zip, destinationDirectory);
+			await this.extractAndSaveZip(zip, destinationDirectory, textReplacements);
 
 			new Notice('Draw Steel Elements: Compendium downloaded and extracted successfully.');
 		} catch (error) {
@@ -97,7 +97,7 @@ export class CompendiumDownloader {
 		}
 	}
 
-	private async extractAndSaveZip(zip: JSZip, destinationDirectory: string) {
+	private async extractAndSaveZip(zip: JSZip, destinationDirectory: string, textReplacements?: Record<string, string>) {
 		const vault = this.app.vault;
 		const files = Object.entries(zip.files);
 		const batchSize = 20; // Adjust this number based on performance
@@ -132,11 +132,20 @@ export class CompendiumDownloader {
 						}
 					}
 
-					// Write the file to the vault
-					// convert Uint8Array to ArrayBuffer to avoid type error
-					const arrayBuffer = new ArrayBuffer(fileData.length);
-					new Uint8Array(arrayBuffer).set(fileData);
-					await vault.createBinary(filePath, arrayBuffer);
+					// Apply text replacements to markdown files
+					if (textReplacements && filePath.endsWith('.md')) {
+						let text = new TextDecoder().decode(fileData);
+						for (const [token, replacement] of Object.entries(textReplacements)) {
+							text = text.split(token).join(replacement);
+						}
+						await vault.create(filePath, text);
+					} else {
+						// Write binary file to the vault
+						// convert Uint8Array to ArrayBuffer to avoid type error
+						const arrayBuffer = new ArrayBuffer(fileData.length);
+						new Uint8Array(arrayBuffer).set(fileData);
+						await vault.createBinary(filePath, arrayBuffer);
+					}
 				}
 			}));
 

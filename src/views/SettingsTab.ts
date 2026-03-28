@@ -63,7 +63,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
 		const downloadButton = containerEl.createEl('button', { cls: 'settings-action-button', text: 'Download Compendium' });
 		downloadButton.addEventListener("click", () => {
 			return new CompendiumDownloader(this.app, this.plugin.githubOwner, this.plugin.githubRepo, undefined)
-				.downloadAndExtractRelease(this.plugin.settings.compendiumReleaseTag, this.plugin.settings.compendiumDestinationDirectory);
+				.downloadAndExtractRelease(this.plugin.settings.compendiumReleaseTag, this.plugin.settings.compendiumDestinationDirectory, this.plugin.linkReplacements);
 		});
 
 		containerEl.createEl('h3', { text: 'Initiative Tracker' });

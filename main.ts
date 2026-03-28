@@ -59,9 +59,16 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         return COMPENDIUM_REPOS[this.settings.compendiumVariant];
     }
 
+    get linkReplacements(): Record<string, string> {
+        return {
+            'REL_PATH_PREFIX': '/' + encodeURIComponent(this.settings.compendiumDestinationDirectory) + '/',
+            'REL_PATH_SUFFIX': '.md',
+        };
+    }
+
     async downloadAndExtractRelease() {
         return new CompendiumDownloader(this.app, this.githubOwner, this.githubRepo, undefined)
-            .downloadAndExtractRelease(this.settings.compendiumReleaseTag, this.settings.compendiumDestinationDirectory);
+            .downloadAndExtractRelease(this.settings.compendiumReleaseTag, this.settings.compendiumDestinationDirectory, this.linkReplacements);
     }
 
     async loadSettings() {
