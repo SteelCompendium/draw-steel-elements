@@ -2,6 +2,7 @@ import {Plugin} from 'obsidian';
 import {MyPluginSettingTab} from "@views/SettingsTab";
 import {DEFAULT_SETTINGS, DSESettings} from "@model/Settings";
 import {CompendiumDownloader} from "@utils/CompendiumDownloader";
+import {COMPENDIUM_REPOS} from "@model/Settings";
 import { registerElements } from '@/utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
 import componentWrapperSchemaYaml from '@model/schemas/ComponentWrapperSchema.yaml';
@@ -12,7 +13,6 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
 
 	readonly githubOwner = "steelCompendium";
-	readonly githubRepo = "data-md-dse";
 
     async onload() {
         console.log("Loading Draw Steel Elements Plugin.")
@@ -53,6 +53,10 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // Reset schema registry to clean up global state
         resetSchemaRegistry();
         console.log("Draw Steel Elements Plugin unloaded and schema registry reset");
+    }
+
+    get githubRepo(): string {
+        return COMPENDIUM_REPOS[this.settings.compendiumVariant];
     }
 
     async downloadAndExtractRelease() {

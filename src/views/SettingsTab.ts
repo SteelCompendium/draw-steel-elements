@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import DrawSteelAdmonitionPlugin from "main";
 import {CompendiumDownloader} from "@utils/CompendiumDownloader";
+import {CompendiumVariant} from "@model/Settings";
 
 export class MyPluginSettingTab extends PluginSettingTab {
 	plugin: DrawSteelAdmonitionPlugin;
@@ -28,6 +29,20 @@ export class MyPluginSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.compendiumReleaseTag ?? "")
 					.onChange(async value => {
 						this.plugin.settings.compendiumReleaseTag = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName('Compendium Variant')
+			.setDesc('Unlinked contains plain text. Linked contains wiki-style links between compendium entries. WARNING: The "linked" compendium is still considered experimental.')
+			.addDropdown(dropdown =>
+				dropdown
+					.addOption('unlinked', 'Unlinked')
+					.addOption('linked', 'Linked')
+					.setValue(this.plugin.settings.compendiumVariant)
+					.onChange(async (value: string) => {
+						this.plugin.settings.compendiumVariant = value as CompendiumVariant;
 						await this.plugin.saveSettings();
 					})
 			);
