@@ -7,7 +7,7 @@ tech:
   - Vue 3 (Composition API)
   - esbuild
   - Obsidian Plugin API
-updated: 2026-04-04
+updated: 2026-04-06
 ---
 
 # Draw Steel Elements
@@ -90,8 +90,10 @@ draw-steel-elements/
 |------|-----------|-----------|
 | **New to this repo** | This file | [project.md](project.md) |
 | **Developer** | [development.md](development.md) | [architecture.md](architecture.md), [conventions.md](conventions.md) |
-| **Architect** | [architecture.md](architecture.md) | [integration.md](integration.md) |
-| **DevOps / SRE** | [ci-cd.md](ci-cd.md) | [development.md](development.md) |
+| **Architect** | [architecture.md](architecture.md) | [integration.md](integration.md), [decisions/](decisions/) |
+| **PM / Scrum Master** | [project.md](project.md) | [integration.md](integration.md), [decisions/](decisions/) |
+| **DevOps / SRE** | [ci-cd.md](ci-cd.md) | [architecture.md](architecture.md) |
+| **QA / Tester** | [development.md](development.md) | [troubleshooting.md](troubleshooting.md) |
 
 ### Agent Roles
 
@@ -99,10 +101,13 @@ draw-steel-elements/
 |------------|-----------|-----------|
 | **Code review** | [conventions.md](conventions.md) | [architecture.md](architecture.md), [troubleshooting.md](troubleshooting.md) |
 | **Bug fix / debug** | [troubleshooting.md](troubleshooting.md) | [development.md](development.md), [architecture.md](architecture.md) |
-| **Feature implementation** | [architecture.md](architecture.md) | [conventions.md](conventions.md), [development.md](development.md) |
-| **PR review** | [conventions.md](conventions.md) | [architecture.md](architecture.md) |
-| **Dependency update** | [integration.md](integration.md) | [architecture.md](architecture.md) |
+| **Feature implementation** | [architecture.md](architecture.md) | [conventions.md](conventions.md), [development.md](development.md), [decisions/](decisions/) |
+| **Codebase migration** | [architecture.md](architecture.md) | [integration.md](integration.md), [conventions.md](conventions.md), [decisions/](decisions/) |
+| **PR review** | [conventions.md](conventions.md) | [architecture.md](architecture.md), [troubleshooting.md](troubleshooting.md) |
+| **Security audit** | [architecture.md](architecture.md) | [integration.md](integration.md), [ci-cd.md](ci-cd.md), [troubleshooting.md](troubleshooting.md) |
+| **Dependency update** | [integration.md](integration.md) | [architecture.md](architecture.md), [ci-cd.md](ci-cd.md) |
 | **Documentation** | This file | [project.md](project.md), [architecture.md](architecture.md) |
+| **CI/CD / DevOps** | [ci-cd.md](ci-cd.md) | [development.md](development.md), [integration.md](integration.md) |
 | **Onboarding / Q&A** | This file | [project.md](project.md), [development.md](development.md) |
 
 ## Current Status
@@ -115,7 +120,6 @@ draw-steel-elements/
 
 | File | Description |
 |------|-------------|
-| [index.md](index.md) | Overview, quick reference, and reading guide |
 | [project.md](project.md) | Product context, domain concepts, and glossary |
 | [architecture.md](architecture.md) | System components, data flow, and design decisions |
 | [development.md](development.md) | Setup, workflows, testing, and debugging |
@@ -123,3 +127,4 @@ draw-steel-elements/
 | [ci-cd.md](ci-cd.md) | CI pipeline, release process, and branch strategy |
 | [conventions.md](conventions.md) | Code style, naming, and commit conventions |
 | [troubleshooting.md](troubleshooting.md) | Known issues, common errors, and prohibitions |
+| [decisions/](decisions/) | Architecture decision records and project decision log |

@@ -1,9 +1,3 @@
----
-repo: draw-steel-elements
-type: tool
-updated: 2026-04-04
----
-
 # Conventions
 
 ## File and Directory Naming
