@@ -79,7 +79,8 @@ What actually happened? Lessons learned? Would you choose the same again?
 
 | Date | Decision | Status |
 |------|----------|--------|
-| 2024-03-01 | [Adopt Vue 3 for interactive components](2024-03-01-adopt-vue-3.md) | accepted |
+| 2026-04-06 | [Revert Vue 3 adoption](2026-04-06-revert-vue-3-adoption.md) | accepted |
+| 2024-03-01 | [Adopt Vue 3 for interactive components](2024-03-01-adopt-vue-3.md) | superseded |
 | 2024-01-15 | [Adopt steel-compendium-sdk for data parsing](2024-01-15-adopt-sdk.md) | accepted |
 | 2023-10-01 | [Replace Power Roll with Feature element](2023-10-01-power-roll-to-feature.md) | accepted |
 | 2023-06-01 | [Use esbuild as bundler](2023-06-01-esbuild-bundler.md) | accepted |
