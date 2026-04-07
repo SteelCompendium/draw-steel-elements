@@ -204,7 +204,22 @@ export function validateDataWithSchema(data: string | object, schema: string | o
         // Parse schema if it's a string
         let parsedSchema: object;
         if (typeof schema === 'string') {
-            parsedSchema = isJsonString(schema) ? JSON.parse(schema) : parseYaml(schema);
+            // Try JSON first
+            if (isJsonString(schema)) {
+                parsedSchema = JSON.parse(schema);
+            } else {
+                // Assume YAML and parse it
+                try {
+                    parsedSchema = parseYaml(schema);
+                } catch (yamlError: any) {
+                    throw new Error(`Failed to parse schema as YAML: ${yamlError.message}`);
+                }
+            }
+            
+            // Validate that we got an object
+            if (typeof parsedSchema !== 'object' || parsedSchema === null) {
+                throw new Error(`Schema must be an object, got ${typeof parsedSchema}`);
+            }
         } else {
             parsedSchema = schema;
         }
@@ -212,7 +227,15 @@ export function validateDataWithSchema(data: string | object, schema: string | o
         // Parse data if it's a string  
         let parsedData: any;
         if (typeof data === 'string') {
-            parsedData = isJsonString(data) ? JSON.parse(data) : parseYaml(data);
+            if (isJsonString(data)) {
+                parsedData = JSON.parse(data);
+            } else {
+                try {
+                    parsedData = parseYaml(data);
+                } catch (yamlError: any) {
+                    throw new Error(`Failed to parse data as YAML: ${yamlError.message}`);
+                }
+            }
         } else {
             parsedData = data;
         }

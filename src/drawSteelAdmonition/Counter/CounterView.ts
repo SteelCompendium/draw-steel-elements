@@ -1,175 +1,121 @@
-import { Component, MarkdownPostProcessorContext, Plugin, setIcon } from "obsidian";
+import { MarkdownPostProcessorContext, Plugin, setIcon } from "obsidian";
+import { CommonElementWrapperView } from "@drawSteelAdmonition/Common/CommonElementWrapperView";
 import { Counter } from "@model/Counter";
 import { CodeBlocks } from "@utils/CodeBlocks";
+import { AbstractElementView } from "@drawSteelAdmonition/Common/AbstractElementView";
 
-export class CounterView {
-	private plugin: Plugin;
-	private data: Counter;
-	private ctx: MarkdownPostProcessorContext;
+export abstract class CounterView extends AbstractElementView {
+    constructor(
+        plugin: Plugin,
+        data: Counter,
+        ctx: MarkdownPostProcessorContext,
+    ) {
+        super(plugin, data, ctx);
+    }
 
-	constructor(plugin: Plugin, data: Counter, ctx: MarkdownPostProcessorContext) {
-		this.plugin = plugin;
-		this.data = data;
-		this.ctx = ctx;
-	}
+    public async build(parent: HTMLElement): Promise<HTMLElement> {
+        let view: CounterView;
+        if (this.data?.style === "horizontal") {
+            const { CounterHorizontalView } =
+                await import("@drawSteelAdmonition/Counter/CounterHorizontalView");
+            view = new CounterHorizontalView(this.plugin, this.data, this.ctx);
+        } else {
+            const { CounterVerticalView } =
+                await import("@drawSteelAdmonition/Counter/CounterVerticalView");
+            view = new CounterVerticalView(this.plugin, this.data, this.ctx);
+        }
+        return view.build(parent);
+    }
 
-	public build(parent: HTMLElement) {
-		const container = parent.createEl("div", { cls: "ds-counter-container" });
+    protected buildBase(parent: HTMLElement): HTMLElement {
+        const container = parent.createEl("div", {
+            cls: "ds-counter-container",
+        });
 
-		// Create display area for value and name
-		const displayContainer = container.createEl("div", { cls: "ds-counter-display-container" });
+        const elementWrapper = new CommonElementWrapperView(
+            this.plugin,
+            this.data,
+            this.ctx,
+            { elementName: "Counter" },
+        );
 
-		// Value display
-		const valueDisplay = displayContainer.createEl("div", {
-			cls: "ds-counter-value",
-			text: this.data.current_value.toString(),
-		});
+        elementWrapper.build(parent, [container]);
+        return container;
+    }
 
-		// Set the font size based on value_height
-		valueDisplay.style.fontSize = `${this.data.value_height}em`;
+    protected clampedCurrentValue() {
+        const { current_value, max_value, min_value } = this.data;
+        return Math.clamp(
+            current_value,
+            min_value ?? -Infinity,
+            max_value ?? Infinity,
+        );
+    }
 
-		// Add click event to make it editable
-		valueDisplay.addEventListener("click", () => {
-			this.makeValueEditable(valueDisplay, incrementButton, decrementButton);
-		});
+    protected incrementValue() {
+        this.data.current_value += 1;
+        this.data.current_value = this.clampedCurrentValue();
+    }
 
-		// Name display
-		const nameDisplay = displayContainer.createEl("div", {
-			cls: "ds-counter-name",
-			text: this.data.name,
-		});
+    protected decrementValue() {
+        this.data.current_value -= 1;
+        this.data.current_value = this.clampedCurrentValue();
+    }
 
-		// Set the font size based on name_height
-		nameDisplay.style.fontSize = `${this.data.name_height}em`;
+    protected updateButtons(
+        incrementButton: HTMLElement,
+        decrementButton: HTMLElement,
+    ) {
+        const { current_value, max_value, min_value } = this.data;
+        incrementButton.toggleAttribute(
+            "disabled",
+            max_value !== undefined && current_value >= max_value,
+        );
+        decrementButton.toggleAttribute("disabled", current_value <= min_value);
+    }
 
-		// Controls container
-		const controlsContainer = container.createEl("div", { cls: "ds-counter-controls" });
+    protected applyValue(
+        valueDisplay: HTMLInputElement,
+        incrementButton: HTMLButtonElement,
+        decrementButton: HTMLButtonElement,
+    ) {
+        this.data.current_value = this.clampedCurrentValue();
+        valueDisplay.value = this.data.current_value.toString();
+        this.updateButtons(incrementButton, decrementButton);
+        if (this.data.auto_save) {
+            CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
+        }
+    }
 
-		// Increment button
-		const incrementButton = controlsContainer.createEl("button", { cls: "ds-counter-button" });
-		setIcon(incrementButton, "chevron-up");
-		incrementButton.addEventListener("click", () => {
-			this.incrementValue();
-			valueDisplay.textContent = this.data.current_value.toString();
-			this.updateButtons(incrementButton, decrementButton);
-			CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
-		});
+    protected setEventListeners(
+        valueDisplay: HTMLInputElement,
+        incrementButton: HTMLButtonElement,
+        decrementButton: HTMLButtonElement,
+    ) {
+        valueDisplay.addEventListener("click", () => {
+            if (document.activeElement !== valueDisplay) {
+                valueDisplay.select();
+            }
+            valueDisplay.focus();
+        });
 
-		// Decrement button
-		const decrementButton = controlsContainer.createEl("button", { cls: "ds-counter-button" });
-		setIcon(decrementButton, "chevron-down");
-		decrementButton.addEventListener("click", () => {
-			this.decrementValue();
-			valueDisplay.textContent = this.data.current_value.toString();
-			this.updateButtons(incrementButton, decrementButton);
-			CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
-		});
+        valueDisplay.addEventListener("change", () => {
+            let newValue = parseInt(valueDisplay.value);
+            if (!isNaN(newValue)) {
+                this.data.current_value = newValue;
+                this.data.current_value = this.clampedCurrentValue();
+                this.applyValue(valueDisplay, incrementButton, decrementButton);
+            }
+        });
 
-		// Initial button state
-		this.updateButtons(incrementButton, decrementButton);
+        incrementButton.addEventListener("click", () => {
+            this.incrementValue();
+            this.applyValue(valueDisplay, incrementButton, decrementButton);
+        });
 
-		// Style the container to position controls on the right
-		container.addClass("ds-counter-flex");
-	}
-
-	private incrementValue() {
-		const { current_value, max_value } = this.data;
-		if (max_value !== undefined && current_value >= max_value) {
-			return;
-		}
-		this.data.current_value += 1;
-	}
-
-	private decrementValue() {
-		const { current_value, min_value } = this.data;
-		if (current_value <= min_value) {
-			return;
-		}
-		this.data.current_value -= 1;
-	}
-
-	private updateButtons(incrementButton: HTMLElement, decrementButton: HTMLElement) {
-		const { current_value, max_value, min_value } = this.data;
-		if (max_value !== undefined && current_value >= max_value) {
-			incrementButton.setAttribute('disabled', 'true');
-		} else {
-			incrementButton.removeAttribute('disabled');
-		}
-		if (current_value <= min_value) {
-			decrementButton.setAttribute('disabled', 'true');
-		} else {
-			decrementButton.removeAttribute('disabled');
-		}
-	}
-
-	private makeValueEditable(valueDisplay: HTMLElement, incrementButton: HTMLElement, decrementButton: HTMLElement) {
-		// Create input field
-		const inputField = createEl('input', {
-			type: 'number',
-			value: this.data.current_value.toString(),
-			cls: 'ds-counter-input',
-		});
-
-		// Set the font size
-		inputField.style.fontSize = `${this.data.value_height}em`;
-		inputField.style.height = `1em`;
-
-		// Replace valueDisplay with inputField
-		valueDisplay.replaceWith(inputField);
-		inputField.focus();
-		inputField.select();
-
-		// Disable increment and decrement buttons while editing
-		incrementButton.setAttribute('disabled', 'true');
-		decrementButton.setAttribute('disabled', 'true');
-
-		const finishEditing = () => {
-			let newValue = parseInt(inputField.value);
-			if (isNaN(newValue)) {
-				newValue = this.data.current_value; // Revert if invalid
-			} else {
-				if (this.data.max_value !== undefined) {
-					newValue = Math.min(newValue, this.data.max_value);
-				}
-				newValue = Math.max(newValue, this.data.min_value);
-			}
-
-			this.data.current_value = newValue;
-
-			// Create new valueDisplay
-			const newValueDisplay = createEl('div', {
-				cls: 'ds-counter-value',
-				text: newValue.toString(),
-			});
-
-			// Set font size
-			newValueDisplay.style.fontSize = `${this.data.value_height}em`;
-
-			// Add click event
-			newValueDisplay.addEventListener("click", () => {
-				this.makeValueEditable(newValueDisplay, incrementButton, decrementButton);
-			});
-
-			// Replace inputField with newValueDisplay
-			inputField.replaceWith(newValueDisplay);
-
-			// Update buttons
-			this.updateButtons(incrementButton, decrementButton);
-
-			// Update code block
-			CodeBlocks.updateCounter(this.plugin.app, this.data, this.ctx);
-		};
-
-		inputField.addEventListener('blur', finishEditing);
-
-		inputField.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				finishEditing();
-			} else if (e.key === 'Escape') {
-				// Cancel editing
-				inputField.value = this.data.current_value.toString();
-				finishEditing();
-			}
-		});
-	}
+        decrementButton.addEventListener("click", () => {
+            this.decrementValue();
+            this.applyValue(valueDisplay, incrementButton, decrementButton);
+        });
+    }
 }
