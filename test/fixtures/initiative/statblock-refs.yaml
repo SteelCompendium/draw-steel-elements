@@ -1,0 +1,21 @@
+heroes:
+  - statblock: "Frodo Baggins"
+  - statblock: "Samwise Gamgee"
+    name: "Sam"
+enemy_groups:
+  - name: "Mordor Forces"
+    creatures:
+      - statblock: "Orc Warrior"
+        amount: 4
+  - name: "Goblin Squad"
+    is_squad: true
+    creatures:
+      - statblock: "Goblin"
+        amount: 5
+        squad_role: minion
+      - statblock: "Goblin Captain"
+        amount: 1
+        squad_role: captain
+        max_stamina: 44
+malice:
+  value: 2

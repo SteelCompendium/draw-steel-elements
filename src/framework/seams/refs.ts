@@ -15,6 +15,10 @@
 // 5-step `findFile` fallback (exact path → `+.md` → compendium-dir prefix → prefix
 // `+.md` → `metadataCache.getFirstLinkpathDest`) and first-`ds-*`-block extraction.
 //
+// Plan 06 amends F1 §3.7 with one ADDITIVE method, `resolveBarePath` — the legacy bare
+// `statblock` resolution for the initiative element. It is a direct method, NOT a
+// provider, so the resolve()/resolveDeep() chain (and every other element) is unaffected.
+//
 // Do NOT modify src/utils/ReferenceResolver.ts — it stays live for legacy elements
 // until they migrate (Plan 02 migrates no element).
 import { App, TFile, parseYaml } from 'obsidian';
@@ -55,6 +59,16 @@ export interface ReferenceService {
 	/** Deep-walk arbitrary parsed-YAML data, replacing every resolvable string with its
 	 *  ResolvedRef.data (today's ReferenceResolver.resolveReferences, generalized). */
 	resolveDeep(data: unknown, sourcePath: string): Promise<unknown>;
+	/** Plan 06 (initiative `statblock` refs) — F1 §3.7 additive amendment. Resolve a BARE
+	 *  path/name ("Thorn Dragon") exactly like the legacy statblock resolution
+	 *  (ReferenceResolver.resolveReferences string dispatch → resolvePath): strip a leading
+	 *  "@" or a "[[...]]" wrapper, run the 5-step findFile with the legacy hardcoded
+	 *  sourcePath "" (ReferenceResolver.ts:89 — global first match, NOT note-relative like
+	 *  the providers), then extract+parse the first ds-* block. Returns null when the file
+	 *  or its ds-* block is absent; throws the legacy message when the block YAML is
+	 *  malformed. Deliberately a DIRECT method, not a provider: bare strings must keep
+	 *  passing through resolve()/resolveDeep() untouched for every other element. */
+	resolveBarePath(path: string): Promise<ResolvedRef | null>;
 }
 
 // Matches `scc:` and `scc.v1:`, `scc.v2:`, … per spec v1.1 (bare "scc:" ≡ v1).
@@ -101,6 +115,24 @@ function findFile(app: App, settings: DSESettings, path: string, sourcePath: str
 	return null;
 }
 
+// Read `file` and extract+parse its first ds-* fenced block (the tail of the legacy
+// ReferenceResolver.resolvePath). Returns null when the file has no ds-* block; throws
+// the legacy message when the block's YAML is malformed. Shared by resolveByPath (the
+// providers, which turn null into the legacy "No ... code block" error) and
+// resolveBarePath (which propagates the null).
+async function readFirstDsBlock(app: App, file: TFile): Promise<{ data: unknown } | null> {
+	const content = await app.vault.read(file);
+	const match = content.match(DS_BLOCK_RE);
+
+	if (!match) return null;
+
+	try {
+		return { data: parseYaml(match[2]) };
+	} catch (e) {
+		throw new Error(`Failed to parse YAML in ${file.path}: ${(e as Error).message}`);
+	}
+}
+
 // Legacy ReferenceResolver.resolvePath: resolve `path` to a file, then extract and
 // parse the first ds-* fenced block. Shared by the at-path and wikilink providers.
 async function resolveByPath(
@@ -117,21 +149,13 @@ async function resolveByPath(
 		);
 	}
 
-	const content = await app.vault.read(file);
-	const match = content.match(DS_BLOCK_RE);
+	const block = await readFirstDsBlock(app, file);
 
-	if (!match) {
+	if (!block) {
 		throw new Error(`No Draw Steel Elements code block (ds-*) found in ${file.path}`);
 	}
 
-	let data: unknown;
-	try {
-		data = parseYaml(match[2]);
-	} catch (e) {
-		throw new Error(`Failed to parse YAML in ${file.path}: ${(e as Error).message}`);
-	}
-
-	return { data, file };
+	return { data: block.data, file };
 }
 
 function createAtPathProvider(app: App, settings: DSESettings): RefProvider {
@@ -171,7 +195,10 @@ class DseReferenceService implements ReferenceService {
 	private readonly registered: RefProvider[] = [];
 	private readonly builtins: RefProvider[];
 
-	constructor(app: App, settings: DSESettings) {
+	constructor(
+		private readonly app: App,
+		private readonly settings: DSESettings,
+	) {
 		this.builtins = [createAtPathProvider(app, settings), createWikilinkProvider(app, settings), createReservedSccProvider()];
 	}
 
@@ -200,6 +227,30 @@ class DseReferenceService implements ReferenceService {
 		const provider = this.findProvider(raw);
 		if (!provider) throw unresolvableReferenceError(raw);
 		return provider.resolve({ raw, kind: provider.kind, sourcePath });
+	}
+
+	// Plan 06 (initiative): legacy bare-path statblock resolution — see the interface doc.
+	// Reproduces ReferenceResolver.resolveReferences' string dispatch (:14-21) + resolvePath
+	// (:38-63), with two deliberate differences spec'd by Plan 06 T-2: an absent file or
+	// ds-* block returns null instead of throwing (the caller's field validation reports
+	// the gap), while malformed block YAML still throws the legacy message. sourcePath is
+	// hardcoded "" in the findFile step-5 metadata-cache lookup, byte-exact with legacy
+	// (ReferenceResolver.ts:89) — NOT the note-relative sourcePath the providers use.
+	async resolveBarePath(path: string): Promise<ResolvedRef | null> {
+		let bare = path;
+		if (bare.startsWith('@')) {
+			bare = bare.substring(1);
+		} else if (bare.startsWith('[[') && bare.endsWith(']]')) {
+			bare = bare.substring(2, bare.length - 2);
+		}
+
+		const file = findFile(this.app, this.settings, bare, '');
+		if (!file) return null;
+
+		const block = await readFirstDsBlock(this.app, file);
+		if (!block) return null;
+
+		return { data: block.data, file };
 	}
 
 	async resolveDeep(data: unknown, sourcePath: string): Promise<unknown> {
