@@ -41,12 +41,13 @@ export interface ElementDefinition<M = unknown> {
 	/** View factory; called once per mounted block instance. */
 	createView(cx: RenderContext): ElementView<M>;
 	/**
-	 * Custom reference resolution. Default (when omitted and autoResolveRefs !== false):
-	 * pipeline deep-resolves @path / [[wikilink]] / scc.vN: strings in the raw data
-	 * BEFORE parse() via ReferenceService.resolveDeep.
+	 * Custom reference resolution. If omitted AND autoResolveRefs === true, the pipeline
+	 * deep-resolves @path / [[wikilink]] / scc.vN: strings in the raw data BEFORE parse()
+	 * via ReferenceService.resolveDeep. (Default is OFF — see autoResolveRefs.)
 	 */
 	resolveRefs?(model: M, refs: ReferenceService): Promise<M>;
-	/** Set false to skip the default deep resolution (element handles refs itself). */
+	/** Opt IN (true) to whole-YAML deep ref-resolution. DEFAULT OFF (amended 2026-07-02;
+	 *  was default-ON). Elements doing field-scoped resolution use a custom resolveRefs. */
 	autoResolveRefs?: boolean;
 	/** Suppress the reading-mode click shield. Default false (shield on). */
 	noClickShield?: boolean;
