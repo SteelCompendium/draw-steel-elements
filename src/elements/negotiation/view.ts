@@ -84,20 +84,25 @@ export class NegotiationView extends ElementView<NegotiationData> {
 				item
 					.setTitle('Reset Negotiation')
 					.setIcon('rotate-ccw')
-					.onClick(() => this.resetNegotiation()),
+					.onClick(() => void this.resetNegotiation()),
 			);
 			menu.showAtMouseEvent(event);
 		});
 	}
 
 	/** Reset = the one whole-model change: mutate, rebuild through the framework default
-	 *  update() (unload owned children + onMount on the reset model), then persist. */
-	private resetNegotiation(): void {
+	 *  update() (unload owned children + onMount on the reset model), then persist.
+	 *  Rebuild/persist failures are caught and logged — never left as unhandled
+	 *  rejections. */
+	private async resetNegotiation(): Promise<void> {
 		new Notice('Negotiation reset to initial state');
 		this.model.resetData();
-		void this.update(this.model).then(() => {
-			void this.persist();
-		});
+		try {
+			await this.update(this.model);
+			await this.persist();
+		} catch (error) {
+			console.error('Draw Steel Elements: negotiation reset failed', error);
+		}
 	}
 
 	// The two-tab actions panel (Make an Argument / Learn Motivation-Pitfall). Both tab

@@ -160,9 +160,9 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
     /** F1 (Plan 02, Task 10) scaffold + D1 (migrated elements): framework v2 service
-     *  bundle + registry (populated via `registerFrameworkElementDefinitions` — Horizontal
-     *  Rule, Skills, Stamina Bar so far) + pipeline. Undefined before `onload` runs and
-     *  after `onunload` drops it. */
+     *  bundle + registry (populated via `registerFrameworkElementDefinitions` — the
+     *  single source of truth for which elements have migrated) + pipeline. Undefined
+     *  before `onload` runs and after `onunload` drops it. */
     frameworkV2?: ElementFrameworkV2;
 
 	readonly githubOwner = "steelCompendium";

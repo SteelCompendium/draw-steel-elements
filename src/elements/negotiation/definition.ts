@@ -2,7 +2,7 @@
 // NegotiationTrackerProcessor. Persisted shape; parse/serialize are Task 4's byte-compat
 // model wrappers around @model/NegotiationData.
 import type { ElementDefinition } from '@/framework/registry';
-import { NegotiationData } from '@model/NegotiationData';
+import type { NegotiationData } from '@model/NegotiationData';
 import { parse, serialize } from './model';
 import { NegotiationView } from './view';
 

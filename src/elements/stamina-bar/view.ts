@@ -44,19 +44,20 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 	private dyingOverlayEl!: HTMLElement;
 	private windedOverlayEl!: HTMLElement;
 	private pillEl!: HTMLElement;
-	/** The modal from the most recent bar click. REPLACED (not accumulated) on every open,
-	 *  so the view holds exactly one pending closer regardless of how many times the modal
-	 *  was opened (Plan 05 Task 1 kit hardening — openEditModal previously registered a
-	 *  fresh `this.register(() => modal.close())` per click). */
+	/** The currently OPEN modal from the most recent bar click, or null once it closes.
+	 *  REPLACED (not accumulated) on every open and nulled on close, so the view holds
+	 *  exactly one pending closer regardless of how many times the modal was opened
+	 *  (Plan 05 Task 1 kit hardening — openEditModal previously registered a fresh
+	 *  `this.register(() => modal.close())` per click). */
 	private activeModal: StaminaEditModal | null = null;
 
 	constructor(cx: RenderContext) {
 		super(cx);
 		// F1 §4.5: a modal opened by the view must be closed on view unload. ONE
 		// view-lifetime registration over the replaced-on-open reference above; registered
-		// here (not in onMount, which the default update() path re-runs). Closing an
-		// already-user-closed modal is a no-op: StaminaEditModal overrides no onClose, and
-		// removing a detached containerEl does nothing.
+		// here (not in onMount, which the default update() path re-runs). openEditModal
+		// nulls the reference when the modal actually closes, so this never re-fires
+		// close() on an already-user-closed modal.
 		this.register(() => this.activeModal?.close());
 	}
 
@@ -150,6 +151,16 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 			this.updateBarDisplay(this.model);
 			void this.persist();
 		});
+		// Null the reference once the modal ACTUALLY closes (user close or unload-close),
+		// so the constructor's view-lifetime closer never fires close() — and any
+		// side-effecting onClose StaminaEditModal may gain — a second time. Wraps (not
+		// replaces) the inherited onClose so future StaminaEditModal.onClose behavior
+		// still runs; identity-guarded so an older modal's close cannot null a newer one.
+		const inheritedOnClose = modal.onClose.bind(modal);
+		modal.onClose = () => {
+			inheritedOnClose();
+			if (this.activeModal === modal) this.activeModal = null;
+		};
 		// F1 §4.5 unload-close is handled by the SINGLE registration in the constructor
 		// over this replaced-on-open reference — never register() per open (accumulates).
 		this.activeModal = modal;
