@@ -1,0 +1,233 @@
+// F1 §3.7 — ReferenceService: generalizes `src/utils/ReferenceResolver.ts` into a
+// provider chain.
+//
+// F1 ships two built-in providers, porting the legacy behavior verbatim:
+//   - "at-path"  ("@Creatures/Goblin")
+//   - "wikilink" ("[[Thorn Dragon]]")
+// plus a RESERVED "scc" slot: a built-in placeholder that recognizes the `scc:` /
+// `scc.vN:` ref shape (so the pipeline's error message is the standard one, not a
+// generic "I don't understand this string"), but always fails until F2 `register()`s
+// a real scc RefProvider. Because later-registered providers are consulted BEFORE
+// built-ins (override order, F1 §3.7), F2's provider transparently takes over the
+// "scc" kind the moment it registers — no change needed here.
+//
+// Both built-in providers share `resolveByPath`, which ports `ReferenceResolver`'s
+// 5-step `findFile` fallback (exact path → `+.md` → compendium-dir prefix → prefix
+// `+.md` → `metadataCache.getFirstLinkpathDest`) and first-`ds-*`-block extraction.
+//
+// Do NOT modify src/utils/ReferenceResolver.ts — it stays live for legacy elements
+// until they migrate (Plan 02 migrates no element).
+import { App, TFile, parseYaml } from 'obsidian';
+import type { DSESettings } from '@model/Settings';
+
+export type RefKind = 'at-path' | 'wikilink' | 'scc' | (string & {});
+
+export interface RefRequest {
+	/** Raw reference text: "@Creatures/Goblin", "[[Thorn Dragon]]",
+	 *  "scc.v1:mcdm.heroes.v1/class/shadow" (bare "scc:" ≡ v1 per spec v1.1). */
+	raw: string;
+	kind: RefKind;
+	/** Referencing note's path — context for wikilink resolution. */
+	sourcePath: string;
+}
+
+export interface ResolvedRef {
+	/** Parsed YAML payload of the resolved target (today: first ds-* block of the file). */
+	data: unknown;
+	/** Vault file the data came from, when applicable. */
+	file?: TFile;
+	/** Bare SCC identity ("source/type/item") when kind === "scc". */
+	scc?: string;
+}
+
+export interface RefProvider {
+	readonly kind: RefKind;
+	/** Cheap syntactic test — first provider whose canResolve passes wins. */
+	canResolve(raw: string): boolean;
+	resolve(req: RefRequest): Promise<ResolvedRef>;
+}
+
+export interface ReferenceService {
+	/** F2 calls register(sccRefProvider). Returns unregister. Later providers are
+	 *  consulted BEFORE built-ins (override order). */
+	register(provider: RefProvider): () => void;
+	resolve(raw: string, sourcePath: string): Promise<ResolvedRef>;
+	/** Deep-walk arbitrary parsed-YAML data, replacing every resolvable string with its
+	 *  ResolvedRef.data (today's ReferenceResolver.resolveReferences, generalized). */
+	resolveDeep(data: unknown, sourcePath: string): Promise<unknown>;
+}
+
+// Matches `scc:` and `scc.v1:`, `scc.v2:`, … per spec v1.1 (bare "scc:" ≡ v1).
+const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
+
+// Matches ```ds-<something> ... ``` or ~~~ds-<something> ... ~~~ (first occurrence),
+// ported verbatim from ReferenceResolver.resolvePath.
+const DS_BLOCK_RE = /^([`~]{3,})ds-[\w-]+\s*\n([\s\S]+?)\n^\1/m;
+
+function unresolvableReferenceError(raw: string): Error {
+	return new Error(`Unresolvable reference: "${raw}" (no provider could resolve this reference)`);
+}
+
+// Legacy ReferenceResolver.findFile, 5-step fallback, generalized to take the
+// requesting note's sourcePath (used by step 5, metadataCache.getFirstLinkpathDest)
+// instead of the legacy hardcoded "".
+function findFile(app: App, settings: DSESettings, path: string, sourcePath: string): TFile | null {
+	// 1. Try exact path from root
+	let file = app.vault.getAbstractFileByPath(path);
+	if (file instanceof TFile) return file;
+
+	// 2. Try path from root with .md extension
+	if (!path.endsWith('.md')) {
+		file = app.vault.getAbstractFileByPath(path + '.md');
+		if (file instanceof TFile) return file;
+	}
+
+	// 3. Try path relative to compendium directory
+	const compendiumPath = `${settings.compendiumDestinationDirectory}/${path}`;
+	file = app.vault.getAbstractFileByPath(compendiumPath);
+	if (file instanceof TFile) return file;
+
+	// 4. Try path relative to compendium directory with .md extension
+	if (!path.endsWith('.md')) {
+		file = app.vault.getAbstractFileByPath(compendiumPath + '.md');
+		if (file instanceof TFile) return file;
+	}
+
+	// 5. Try resolving by name using Obsidian's metadata cache (e.g. "Thorn Dragon" →
+	// "Folders/Thorn Dragon.md"), relative to the referencing note.
+	file = app.metadataCache.getFirstLinkpathDest(path, sourcePath);
+	if (file instanceof TFile) return file;
+
+	return null;
+}
+
+// Legacy ReferenceResolver.resolvePath: resolve `path` to a file, then extract and
+// parse the first ds-* fenced block. Shared by the at-path and wikilink providers.
+async function resolveByPath(
+	app: App,
+	settings: DSESettings,
+	path: string,
+	sourcePath: string,
+): Promise<ResolvedRef> {
+	const file = findFile(app, settings, path, sourcePath);
+
+	if (!file) {
+		throw new Error(
+			`Reference file (${path}) not found in root, ${settings.compendiumDestinationDirectory}, or when searching the cache`,
+		);
+	}
+
+	const content = await app.vault.read(file);
+	const match = content.match(DS_BLOCK_RE);
+
+	if (!match) {
+		throw new Error(`No Draw Steel Elements code block (ds-*) found in ${file.path}`);
+	}
+
+	let data: unknown;
+	try {
+		data = parseYaml(match[2]);
+	} catch (e) {
+		throw new Error(`Failed to parse YAML in ${file.path}: ${(e as Error).message}`);
+	}
+
+	return { data, file };
+}
+
+function createAtPathProvider(app: App, settings: DSESettings): RefProvider {
+	return {
+		kind: 'at-path',
+		canResolve: (raw) => raw.startsWith('@'),
+		resolve: (req) => resolveByPath(app, settings, req.raw.substring(1), req.sourcePath),
+	};
+}
+
+function createWikilinkProvider(app: App, settings: DSESettings): RefProvider {
+	return {
+		kind: 'wikilink',
+		canResolve: (raw) => raw.startsWith('[[') && raw.endsWith(']]'),
+		resolve: (req) => resolveByPath(app, settings, req.raw.substring(2, req.raw.length - 2), req.sourcePath),
+	};
+}
+
+// Reserved slot (F1 §3.7 note for F2): recognizes the scc: / scc.vN: ref *shape* so
+// the pipeline reports the standard unresolvable-reference message instead of "this
+// string doesn't look like a reference at all" — but never actually resolves
+// anything. F2 registers a real "scc" RefProvider, which (per override order) is
+// consulted before this placeholder and supersedes it.
+function createReservedSccProvider(): RefProvider {
+	return {
+		kind: 'scc',
+		canResolve: (raw) => SCC_PREFIX_RE.test(raw),
+		resolve: async (req) => {
+			throw unresolvableReferenceError(req.raw);
+		},
+	};
+}
+
+class DseReferenceService implements ReferenceService {
+	// Registration order preserved; findProvider walks it back-to-front so the
+	// most-recently-registered provider is consulted first (override order).
+	private readonly registered: RefProvider[] = [];
+	private readonly builtins: RefProvider[];
+
+	constructor(app: App, settings: DSESettings) {
+		this.builtins = [createAtPathProvider(app, settings), createWikilinkProvider(app, settings), createReservedSccProvider()];
+	}
+
+	register(provider: RefProvider): () => void {
+		this.registered.push(provider);
+		let active = true;
+		return () => {
+			if (!active) return;
+			active = false;
+			const index = this.registered.indexOf(provider);
+			if (index >= 0) this.registered.splice(index, 1);
+		};
+	}
+
+	private findProvider(raw: string): RefProvider | undefined {
+		for (let i = this.registered.length - 1; i >= 0; i--) {
+			if (this.registered[i].canResolve(raw)) return this.registered[i];
+		}
+		for (const provider of this.builtins) {
+			if (provider.canResolve(raw)) return provider;
+		}
+		return undefined;
+	}
+
+	async resolve(raw: string, sourcePath: string): Promise<ResolvedRef> {
+		const provider = this.findProvider(raw);
+		if (!provider) throw unresolvableReferenceError(raw);
+		return provider.resolve({ raw, kind: provider.kind, sourcePath });
+	}
+
+	async resolveDeep(data: unknown, sourcePath: string): Promise<unknown> {
+		if (typeof data === 'string') {
+			const provider = this.findProvider(data);
+			if (!provider) return data;
+			const resolved = await provider.resolve({ raw: data, kind: provider.kind, sourcePath });
+			return resolved.data;
+		}
+
+		if (Array.isArray(data)) {
+			return Promise.all(data.map((item) => this.resolveDeep(item, sourcePath)));
+		}
+
+		if (typeof data === 'object' && data !== null) {
+			const entries = await Promise.all(
+				Object.entries(data as Record<string, unknown>).map(
+					async ([key, value]) => [key, await this.resolveDeep(value, sourcePath)] as const,
+				),
+			);
+			return Object.fromEntries(entries);
+		}
+
+		return data;
+	}
+}
+
+/** Construct a fresh ReferenceService bound to a vault/settings pair. */
+export function createReferenceService(app: App, settings: DSESettings): ReferenceService {
+	return new DseReferenceService(app, settings);
+}
