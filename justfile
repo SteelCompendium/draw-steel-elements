@@ -20,7 +20,7 @@ prep_release version:
 release version:
 	jq '.version = "{{version}}"' manifest.json > tmp && mv tmp manifest.json
 	jq '.version = "{{version}}"' package.json > tmp && mv tmp package.json
-	npm run build-no-check
+	npm run build
 	git add .
 	git commit --allow-empty -am "Prepares for release '{{version}}'"
 	git push

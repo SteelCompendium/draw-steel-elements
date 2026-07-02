@@ -54,7 +54,9 @@ export class KVPair {
 
 	static parseKeyValue(data: any) {
 		const key: string = Object.keys(data)[0];
-		const value: string = Object.values(data)[0].toString();
+		// `data` is untyped parsed YAML, so `Object.values` can't infer an element type
+		// beyond `unknown`; the `.toString()` call below is unchanged from before.
+		const value: string = (Object.values(data)[0] as any).toString();
 		return new KVPair(key, value);
 	}
 

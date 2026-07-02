@@ -1,5 +1,3 @@
-import {Plugin} from 'obsidian';
-
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
@@ -8,8 +6,14 @@ import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/Feature
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
+import DrawSteelAdmonitionPlugin from "main";
 
-export function registerElements (plugin: Plugin) {
+// `plugin` is typed as the concrete DrawSteelAdmonitionPlugin (not the generic Obsidian
+// `Plugin`) because InitiativeProcessor's constructor requires it; every other processor
+// here only needs `Plugin`/`App`, and DrawSteelAdmonitionPlugin extends Plugin, so this is
+// a strictly more specific — not different — type for all of them. The sole caller
+// (main.ts's `registerElements(this)`) already passes a DrawSteelAdmonitionPlugin.
+export function registerElements (plugin: DrawSteelAdmonitionPlugin) {
 
 	const abilityProcessor = new FeatureProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ft", abilityProcessor.handler);

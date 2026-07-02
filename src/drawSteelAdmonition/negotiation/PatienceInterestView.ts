@@ -60,12 +60,24 @@ export class PatienceInterestView {
 
 		const offerCont = interestCont.createEl("div", { cls: "ds-nt-interest-offer-container" });
 
+		// NegotiationData's i0..i5 fields aren't index-signature-accessible (they're
+		// individually declared, non-optional string fields); look them up via an
+		// explicit map instead of dynamic `this.data[`i${i}`]` indexing.
+		const interestOffers: Record<number, string> = {
+			0: this.data.i0,
+			1: this.data.i1,
+			2: this.data.i2,
+			3: this.data.i3,
+			4: this.data.i4,
+			5: this.data.i5,
+		};
+
 		for (let i = 5; i >= 0; i--) {
 			const iLine = offerCont.createEl("div", { cls: `ds-nt-interest-line ds-nt-interest-${i}-line` });
 			const label = iLine.createEl("div", { cls: `ds-nt-interest-label ds-nt-interest-${i}-label`, text: `${i}` });
 			label.addEventListener("click", () => this.setInterest(i, parent));
 
-			const offerText = this.data[`i${i}`] ?? `Offer at Interest ${i}`;
+			const offerText = interestOffers[i] ?? `Offer at Interest ${i}`;
 			iLine.createEl("div", { cls: `ds-nt-interest-offer ds-nt-interest-${i}-offer`, text: offerText });
 		}
 

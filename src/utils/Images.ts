@@ -28,7 +28,7 @@ export class Images {
 		}
 	}
 
-    static async resolveImageSourceOrDefault(app: App, imgSrcRaw: string, defaultImgSrc: string): Promise<string> {
+    static async resolveImageSourceOrDefault(app: App, imgSrcRaw: string | null, defaultImgSrc: string): Promise<string> {
         return Images.resolveImageSource(app, imgSrcRaw ?? defaultImgSrc)
             .catch(() => Images.resolveImageSource(app, defaultImgSrc))
     }

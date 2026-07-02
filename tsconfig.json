@@ -7,7 +7,6 @@
         "@utils/*": ["src/utils/*"],
         "@views/*": ["src/views/*"],
         "@drawSteelAdmonition/*": ["src/drawSteelAdmonition/*"],
-		"@drawSteelComponents/*": ["src/drawSteelComponents/*"],
     },
     "inlineSourceMap": true,
     "inlineSources": true,

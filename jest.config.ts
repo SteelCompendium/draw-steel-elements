@@ -5,12 +5,14 @@ import type { Config } from 'jest';
 //
 // T-10 fix: moduleNameMapper is matched in object-key insertion order, first match
 // wins (Jest docs: "the order in which the mocks are defined matters"). `.css$` MUST
-// come before the `@drawSteelComponents/(.*)$` / catch-all `@/(.*)$` prefix aliases,
-// or a CSS import under one of those prefixes would resolve via the prefix alias
-// (matched first) instead of the identity-obj-proxy stub.
+// come before the catch-all `@/(.*)$` prefix alias, or a CSS import under that prefix
+// would resolve via the prefix alias (matched first) instead of the identity-obj-proxy
+// stub.
 //
 // D1 Task 4 (Plan 03): Vue is gone — the `.vue$` -> vueStub.ts entry that lived here
-// (F3 §4.5) is removed along with the stub file.
+// (F3 §4.5) is removed along with the stub file. D1 Task 5: the `@drawSteelComponents/`
+// alias (dead — `src/drawSteelComponents/` no longer exists) is removed too, mirroring
+// tsconfig.json.
 const aliases: Record<string, string> = {
 	// The obsidian npm package is types-only; all runtime goes to the mock.
 	'^obsidian$': '<rootDir>/test/mocks/obsidian.ts',
@@ -20,14 +22,14 @@ const aliases: Record<string, string> = {
 	'^@utils/(.*)$': '<rootDir>/src/utils/$1',
 	'^@views/(.*)$': '<rootDir>/src/views/$1',
 	'^@drawSteelAdmonition/(.*)$': '<rootDir>/src/drawSteelAdmonition/$1',
-	'^@drawSteelComponents/(.*)$': '<rootDir>/src/drawSteelComponents/$1',
 	'^@/(.*)$': '<rootDir>/src/$1',
 	'^main$': '<rootDir>/main.ts',
 };
 
 const transform = {
-	// diagnostics MUST stay off: the repo's type-check is failing today (F3 TS-1,
-	// e.g. `ctx.el` in src/utils/CodeBlocks.ts). CI runs tsc separately.
+	// diagnostics stay off here: ts-jest diagnostics vs. the project's real tsc gate
+	// (`npx tsc --noEmit`, now 0 errors as of D1 Task 5) are separate concerns — CI runs
+	// tsc on its own, so jest doesn't need to duplicate it.
 	'^.+\\.ts$': [
 		'ts-jest',
 		{

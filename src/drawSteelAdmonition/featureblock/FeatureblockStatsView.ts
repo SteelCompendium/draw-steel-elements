@@ -1,5 +1,5 @@
 import {Plugin, MarkdownPostProcessorContext} from "obsidian";
-import {StatblockConfig} from "@model/StatblockConfig";
+import {FeatureblockConfig} from "@model/FeatureblockConfig";
 import {BoldKeyWithValueView} from "@drawSteelAdmonition/Common/BoldKeyWithValueView";
 
 export class FeatureblockStatsView {
@@ -7,7 +7,7 @@ export class FeatureblockStatsView {
     private data: FeatureblockConfig;
     private ctx: MarkdownPostProcessorContext;
 
-    constructor(plugin: Plugin, data: StatblockConfig, ctx: MarkdownPostProcessorContext) {
+    constructor(plugin: Plugin, data: FeatureblockConfig, ctx: MarkdownPostProcessorContext) {
         this.plugin = plugin;
         this.data = data;
         this.ctx = ctx;
@@ -32,7 +32,7 @@ export class FeatureblockStatsView {
             return;
         }
 
-        let line;
+        let line: HTMLDivElement | undefined;
         for (let i = 0; i < this.data.featureblock.stats.length; i++) {
             const kv = new BoldKeyWithValueView(this.plugin, this.data.featureblock.stats[i].name, this.data.featureblock.stats[i].value, this.ctx);
             // Every even stat should make a new line
@@ -40,7 +40,8 @@ export class FeatureblockStatsView {
                 line = statsContainer.createEl("div", {cls: "ds-fb-stats-row"});
                 kv.buildWithClasses(line, "ds-fb-stats-left");
             } else {
-                kv.buildWithClasses(line, "ds-fb-stats-right");
+                // `line` is always set here: i is odd only after an i-1 (even) iteration ran above.
+                kv.buildWithClasses(line!, "ds-fb-stats-right");
             }
         }
     }
