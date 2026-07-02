@@ -10,6 +10,8 @@ const aliases: Record<string, string> = {
 	'^@drawSteelComponents/(.*)$': '<rootDir>/src/drawSteelComponents/$1',
 	'^@/(.*)$': '<rootDir>/src/$1',
 	'^main$': '<rootDir>/main.ts',
+	// The obsidian npm package is types-only; all runtime goes to the mock.
+	'^obsidian$': '<rootDir>/test/mocks/obsidian.ts',
 	// Vue SFCs: out of scope until D1 (F3 §4.5) — stub them.
 	'\\.vue$': '<rootDir>/test/mocks/vueStub.ts',
 	// main.ts imports ./styles-source.css; identity-obj-proxy is already installed.
@@ -43,6 +45,7 @@ const config: Config = {
 			testMatch: ['<rootDir>/test/unit/**/*.test.ts'],
 			moduleNameMapper: aliases,
 			transform: transform as any,
+			setupFiles: ['<rootDir>/test/setup/polyfills.ts'],
 		},
 		{
 			displayName: 'dom',
@@ -50,6 +53,7 @@ const config: Config = {
 			testMatch: ['<rootDir>/test/dom/**/*.test.ts'],
 			moduleNameMapper: aliases,
 			transform: transform as any,
+			setupFiles: ['<rootDir>/test/setup/polyfills.ts', '<rootDir>/test/setup/dom-setup.ts'],
 		},
 	],
 };
