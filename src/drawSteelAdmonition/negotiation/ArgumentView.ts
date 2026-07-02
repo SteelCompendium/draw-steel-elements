@@ -1,29 +1,31 @@
-import { App, MarkdownPostProcessorContext, setIcon, setTooltip } from "obsidian";
+import { setTooltip } from "obsidian";
 import { NegotiationData } from "@model/NegotiationData";
-import { CodeBlocks } from "@utils/CodeBlocks";
 import {ArgumentPowerRoll, ArgumentResult} from "@model/ArgumentPowerRolls";
 import { labeledIcon } from "@utils/common";
 import {EffectView} from "@drawSteelAdmonition/Features/EffectView";
 
+// Plan 05 Task 5 (F1 §6 step 8): persistence decoupled from CodeBlocks — the owning
+// NegotiationView injects `persist`; `app`/`ctx` existed only for the legacy
+// CodeBlocks.updateNegotiationTracker call sites (now `this.persist()`). The legacy `root`
+// parameter of build()/populateArgumentTab() was never read — dropped. (`setIcon` was
+// likewise an unused legacy import.)
 export class ArgumentView {
-    private app: App;
     private data: NegotiationData;
-    private ctx: MarkdownPostProcessorContext;
+    private persist: () => void;
 
     private selectedPowerRollTier: ArgumentResult | null = null; // To track selected power roll tier
     private completeButton: HTMLButtonElement; // Used for selecting power roll
 
-    constructor(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext) {
-        this.app = app;
+    constructor(data: NegotiationData, persist: () => void) {
         this.data = data;
-        this.ctx = ctx;
+        this.persist = persist;
     }
 
-    public build(parent: HTMLElement, root: HTMLElement) {
-        this.populateArgumentTab(parent, root);
+    public build(parent: HTMLElement) {
+        this.populateArgumentTab(parent);
     }
 
-    private populateArgumentTab(argumentContainer: HTMLElement, root: HTMLElement) {
+    private populateArgumentTab(argumentContainer: HTMLElement) {
         const argumentBody = argumentContainer.createEl("div", { cls: "ds-nt-argument-body" });
         const argModifiers = argumentBody.createEl("div", { cls: "ds-nt-argument-modifiers" });
 
@@ -106,7 +108,7 @@ export class ArgumentView {
                         }
                     }
 
-                    CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+                    this.persist();
                 });
             });
         }
@@ -148,7 +150,7 @@ export class ArgumentView {
                             this.data.currentArgument.pitfallsUsed.splice(index, 1);
                         }
                     }
-                    CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+                    this.persist();
                 });
             });
         }
@@ -179,7 +181,7 @@ export class ArgumentView {
 
         reuseMotivationCheckbox.addEventListener("change", () => {
             this.data.currentArgument.reusedMotivation = reuseMotivationCheckbox.checked;
-            CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+            this.persist();
         });
 
         // Lie used
@@ -200,7 +202,7 @@ export class ArgumentView {
 
         lieCheckbox.addEventListener("change", () => {
             this.data.currentArgument.lieUsed = lieCheckbox.checked;
-            CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+            this.persist();
         });
 
         // Same Argument
@@ -225,7 +227,7 @@ export class ArgumentView {
 
         sameArgCheckbox.addEventListener("change", () => {
             this.data.currentArgument.sameArgumentUsed = sameArgCheckbox.checked;
-            CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+            this.persist();
         });
     }
 
@@ -311,6 +313,6 @@ export class ArgumentView {
         // Reset current argument
         this.data.currentArgument.resetData();
 
-        CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+        this.persist();
     }
 }

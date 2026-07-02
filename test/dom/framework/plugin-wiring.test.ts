@@ -58,14 +58,19 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar, Plan 05 Task 5: negotiation)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
 		await plugin.onload();
 
 		expect(plugin.frameworkV2).toBeDefined();
-		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills', 'stamina-bar']);
+		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual([
+			'horizontal-rule',
+			'skills',
+			'stamina-bar',
+			'negotiation',
+		]);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
 		expect(plugin.frameworkV2!.services.session).toBeDefined();
@@ -156,7 +161,12 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			expect(plugin.frameworkV2).toBeDefined();
 			// Migrated-element registration is independent of dependency-schema success —
 			// a bad schema degrades validation detail, it doesn't block registerFrameworkElementDefinitions.
-			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills', 'stamina-bar']);
+			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual([
+				'horizontal-rule',
+				'skills',
+				'stamina-bar',
+				'negotiation',
+			]);
 			// Legacy path is unaffected by the framework v2 schema failure.
 			expect((plugin as any).registeredProcessors.has('ds-ft')).toBe(true);
 

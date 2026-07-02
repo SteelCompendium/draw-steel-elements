@@ -1,5 +1,4 @@
 import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
-import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/NegotiationTrackerProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
 import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
 import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
@@ -33,10 +32,8 @@ export function registerElements (plugin: DrawSteelAdmonitionPlugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-initiative-tracker", initProcessor.handler);
 
-	let ntProcessor = new NegotiationTrackerProcessor(plugin.app);
-	plugin.registerMarkdownCodeBlockProcessor("ds-nt", ntProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-negotiation", ntProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-negotiation-tracker", ntProcessor.handler);
+	// Negotiation Tracker migrated to Framework v2 (Plan 05, F1 §6 step 8) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
 
 	let sbProcessor = new StatblockProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);

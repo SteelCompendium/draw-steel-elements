@@ -1,16 +1,15 @@
-import {App, MarkdownPostProcessorContext} from "obsidian";
 import {NegotiationData} from "@model/NegotiationData";
-import {CodeBlocks} from "@utils/CodeBlocks";
 
+// Plan 05 Task 5 (F1 §6 step 8): persistence decoupled from CodeBlocks — the owning
+// NegotiationView injects `persist`; `app`/`ctx` existed only for the
+// CodeBlocks.updateNegotiationTracker call and are gone.
 export class MotivationsPitfallsView {
-	private app: App;
 	private data: NegotiationData;
-	private ctx: MarkdownPostProcessorContext;
+	private persist: () => void;
 
-	constructor(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext) {
-		this.app = app;
+	constructor(data: NegotiationData, persist: () => void) {
 		this.data = data;
-		this.ctx = ctx;
+		this.persist = persist;
 	}
 
 	public build(parent: HTMLElement) {
@@ -34,7 +33,7 @@ export class MotivationsPitfallsView {
 				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot.reason });
 				checkbox.addEventListener("change", () => {
 					this.data.setMotivationUsed(mot.name, checkbox.checked);
-					CodeBlocks.updateNegotiationTracker(this.app, this.data, this.ctx);
+					this.persist();
 				});
 			});
 		}

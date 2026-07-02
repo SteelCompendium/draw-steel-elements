@@ -1429,8 +1429,13 @@ button.action-button {
 /* ==================== */
 /* Negotiation Tracker  */
 /* ==================== */
+/* Scoped under [data-dse-element="negotiation"] (F1 §3.5) since the Framework v2 migration
+   (Plan 05 Task 5): the pipeline stamps the attribute on the element root and the view
+   builds the legacy .ds-nt-container.ds-container structure inside it. Only the outer
+   selector changed — every nested .ds-nt-* rule is untouched. The shared .ds-container
+   base class stays global (top of this file). */
 
-.ds-nt-container {
+[data-dse-element="negotiation"] .ds-nt-container {
 	position: relative;
 	background: var(--code-background);
 	margin-top: .5em;

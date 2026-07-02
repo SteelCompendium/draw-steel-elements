@@ -1,25 +1,17 @@
-import {App, MarkdownPostProcessorContext, setTooltip} from "obsidian";
-import {NegotiationData} from "@model/NegotiationData";
 import {PowerRollTiers} from "@model/powerRoll";
 import {EffectView} from "@drawSteelAdmonition/Features/EffectView";
 
+// Plan 05 Task 5 (F1 §6 step 8): this view renders static rules text only — it never
+// persisted, and its legacy `app`/`data`/`ctx` constructor fields were never read
+// (they existed only for constructor-signature symmetry with the other sub-views).
+// All three are dropped; `setTooltip` was likewise an unused legacy import.
 export class LearnMoreView {
-	private app: App;
-	private data: NegotiationData;
-	private ctx: MarkdownPostProcessorContext;
-
 	private static learnMorePowerRoll = new PowerRollTiers(
 		"The hero learns no information regarding the NPC’s motivations or pitfalls, and the NPC realizes the hero is trying to read them and becomes annoyed. As a consequence, the NPC’s patience is reduced by 1.",
 		"The hero learns no information regarding the NPC’s motivations or pitfalls.",
 		"The hero learns one of the NPC’s motivations or pitfalls (their choice).",
 		""
 	);
-
-	constructor(app: App, data: NegotiationData, ctx: MarkdownPostProcessorContext) {
-		this.app = app;
-		this.data = data;
-		this.ctx = ctx;
-	}
 
 	public build(parent: HTMLElement) {
 		const learnMoreBody = parent.createEl("div", {cls: "ds-nt-learn-more-body"});

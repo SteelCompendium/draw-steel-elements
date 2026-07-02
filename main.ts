@@ -32,6 +32,7 @@ import { registerFrameworkElements } from '@/framework/registerFrameworkElements
 import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 import { skillsElement } from '@/elements/skills/definition';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
+import { negotiationElement } from '@/elements/negotiation/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -143,7 +144,8 @@ export function initializeElementFrameworkV2(
  * element definition into `registry`. The first entry is Horizontal Rule (F1 §6 step 1);
  * D1 Task 2 appends Skills (F1 §6 step 3, first *interactive* element); D1 Task 3 appends
  * Stamina Bar (F1 §6 step 4, first *persisted* element — and the last Vue element, so
- * after this registration no `.vue` file is imported anywhere at runtime). Later D1/F1
+ * after this registration no `.vue` file is imported anywhere at runtime); Plan 05 Task 5
+ * appends Negotiation (F1 §6 step 8, retiring NegotiationTrackerProcessor). Later D1/F1
  * migration steps append their own `registry.register(...)` call here as each element
  * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
@@ -152,6 +154,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(horizontalRuleElement);
 	registry.register(skillsElement);
 	registry.register(staminaBarElement);
+	registry.register(negotiationElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
