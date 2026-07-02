@@ -162,6 +162,7 @@ export class App {
 export class Component {
 	_loaded = false;
 	_children: Component[] = [];
+	private _registeredCallbacks: (() => any)[] = [];
 
 	load(): void {
 		this._loaded = true;
@@ -172,6 +173,9 @@ export class Component {
 		this._loaded = false;
 		this._children.slice().forEach((child) => child.unload());
 		this.onunload();
+		// Real Component.register(cb) semantics: cb runs once, on unload.
+		this._registeredCallbacks.slice().forEach((cb) => cb());
+		this._registeredCallbacks.length = 0;
 	}
 	onload(): void {}
 	onunload(): void {}
@@ -188,7 +192,9 @@ export class Component {
 		}
 		return child;
 	}
-	register(_cb: () => any): void {}
+	register(cb: () => any): void {
+		this._registeredCallbacks.push(cb);
+	}
 	registerEvent(_ref: any): void {}
 	registerDomEvent(el: any, type: string, callback: any): void {
 		el.addEventListener(type, callback);
