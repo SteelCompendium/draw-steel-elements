@@ -27,10 +27,11 @@ import * as path from 'path';
 
 // A sample of legacy aliases from RegisterElements.ts, spanning several element
 // families — proves registerElements(this) still runs unchanged alongside the new
-// registry for every element NOT YET migrated onto Framework v2. "ds-hr" and "ds-skills"
-// are deliberately excluded here (D1 Task 1 migrated Horizontal Rule, D1 Task 2 migrated
-// Skills, off this path — see their dedicated describe blocks below).
-const LEGACY_ALIASES = ['ds-ft', 'ds-stam', 'ds-featureblock', 'ds-counter', 'ds-initiative-tracker'];
+// registry for every element NOT YET migrated onto Framework v2. "ds-hr", "ds-skills",
+// and "ds-stam" are deliberately excluded here (D1 Task 1 migrated Horizontal Rule, D1
+// Task 2 migrated Skills, D1 Task 3 migrated Stamina Bar, off this path — see their
+// dedicated describe blocks below).
+const LEGACY_ALIASES = ['ds-ft', 'ds-characteristics', 'ds-featureblock', 'ds-counter', 'ds-initiative-tracker'];
 
 /**
  * `DrawSteelAdmonitionPlugin` extends the REAL `obsidian` `Plugin` (main.ts imports
@@ -57,14 +58,14 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
 		await plugin.onload();
 
 		expect(plugin.frameworkV2).toBeDefined();
-		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills']);
+		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills', 'stamina-bar']);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
 		expect(plugin.frameworkV2!.services.session).toBeDefined();
@@ -155,7 +156,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			expect(plugin.frameworkV2).toBeDefined();
 			// Migrated-element registration is independent of dependency-schema success —
 			// a bad schema degrades validation detail, it doesn't block registerFrameworkElementDefinitions.
-			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills']);
+			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills', 'stamina-bar']);
 			// Legacy path is unaffected by the framework v2 schema failure.
 			expect((plugin as any).registeredProcessors.has('ds-ft')).toBe(true);
 
@@ -266,6 +267,50 @@ describe('D1 Task 2: Skills wiring through onload() (F1 §2.3 / §6 step 3)', ()
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('skills');
 		expect(root.querySelector('.ds-skills-container')).not.toBeNull();
+	});
+});
+
+describe('D1 Task 3: Stamina Bar wiring through onload() (F1 §2.3 / §6 step 4)', () => {
+	test('ds-stam, ds-stamina, and ds-stamina-bar are registered, and route to the framework registry\'s def (not RegisterElements.ts)', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+
+		await plugin.onload();
+
+		expect((plugin as any).registeredProcessors.has('ds-stam')).toBe(true);
+		expect((plugin as any).registeredProcessors.has('ds-stamina')).toBe(true);
+		expect((plugin as any).registeredProcessors.has('ds-stamina-bar')).toBe(true);
+		expect(plugin.frameworkV2!.registry.get('ds-stam')?.id).toBe('stamina-bar');
+	});
+
+	test('ds-stam is registered EXACTLY ONCE — no double-registration between the legacy and framework paths', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		const registerSpy = jest.spyOn(plugin, 'registerMarkdownCodeBlockProcessor');
+
+		await plugin.onload();
+
+		const calls = registerSpy.mock.calls.filter(([language]) => language === 'ds-stam');
+		expect(calls).toHaveLength(1);
+
+		registerSpy.mockRestore();
+	});
+
+	test('rendering a ds-stam block through the wired processor produces the stamina-bar DOM (end-to-end)', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		await plugin.onload();
+
+		app.vault.setFile('Note.md', '```ds-stam\nmax_stamina: 20\n```\n');
+		const { makeFakeContext } = await import('../../mocks/obsidian');
+		const ctx = makeFakeContext(app, 'Note.md');
+		const handler = (plugin as any).registeredProcessors.get('ds-stam');
+
+		await handler('max_stamina: 20', ctx.el, ctx);
+
+		const root = ctx.el.firstElementChild as HTMLElement;
+		expect(root.getAttribute('data-dse-element')).toBe('stamina-bar');
+		expect(root.querySelector('.ds-stamina-bar')).not.toBeNull();
 	});
 });
 

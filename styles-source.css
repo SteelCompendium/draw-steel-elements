@@ -2131,6 +2131,98 @@ button.action-button {
 	}
 }
 
+/* ==================== */
+/* Stamina Bar (D1 Task 3, F1 §6 step 4) */
+/* ==================== */
+/* Scoped under [data-dse-element="stamina-bar"] (F1 §3.5) -- ported 1:1 from the deleted
+   StaminaBar.vue's <style scoped> block (`.ds-stamina-bar` replaces the SFC's
+   `.vue-stamina-bar-container`; the rest are newly-named, since Vue's scoped-style compiler
+   generated and injected these at build time -- they never lived in this file before).
+   `--stamina-bar-color*` custom properties are the pre-existing shared globals at the
+   bottom of this file, referenced here via var(). Dropped the SFC's unreferenced
+   `.temp-stamina-spacer` rule (never applied to any element in the template -- dead CSS).
+   NOT shared with the DOM @views/StaminaEditModal (kept) or the initiative tracker's own
+   inline `.character-stamina` bar -- those use their own, unrelated `.stamina-bar-container`
+   / `.stamina-bar` / `.stamina-bar-fill-*` classes (verified zero overlap by grep), which
+   stay exactly where they are, untouched. */
+
+[data-dse-element="stamina-bar"] {
+	.ds-stamina-bar {
+		position: relative;
+		width: 100%;
+		height: 20px;
+		background-color: var(--code-background);
+		border: 1px solid var(--text-normal);
+		border-radius: var(--radius-s);
+		margin-bottom: 10px;
+
+		&.clickable {
+			cursor: pointer;
+		}
+	}
+
+	.ds-stamina-bar-overlay-container,
+	.ds-stamina-bar-stamina-container,
+	.ds-stamina-bar-temp-container {
+		position: absolute;
+		display: flex;
+		height: 100%;
+		width: 100%;
+		align-items: center;
+		overflow: hidden;
+	}
+
+	.ds-stamina-bar-temp-container {
+		align-items: end;
+	}
+
+	.ds-stamina-bar-indicator {
+		height: calc(100% - 2px);
+		margin-left: 1px;
+		border-radius: calc(var(--radius-s) - 1px);
+	}
+
+	.ds-stamina-bar-temp-indicator {
+		height: 50%;
+		border-top-left-radius: calc(var(--radius-s) - 1px);
+		border-top-right-radius: calc(var(--radius-s) - 1px);
+		background-color: purple;
+	}
+
+	.ds-stamina-bar-winded-overlay,
+	.ds-stamina-bar-dying-overlay,
+	.ds-stamina-bar-stamina-overlay {
+		display: flex;
+		height: 100%;
+		width: calc(100% / 3);
+		color: black;
+		font-size: 0.7em;
+		border-top-left-radius: calc(var(--radius-s) - 1px);
+		border-bottom-left-radius: calc(var(--radius-s) - 1px);
+		justify-content: center;
+		align-items: center;
+	}
+
+	.ds-stamina-bar-winded-overlay {
+		background: repeating-linear-gradient(135deg, #000 0 1.41px, transparent 1px 6px);
+	}
+
+	.ds-stamina-bar-dying-overlay {
+		background: repeating-linear-gradient(45deg, #000 0 1.41px, transparent 1px 6px),
+			repeating-linear-gradient(135deg, #000 0 1.41px, transparent 1px 6px);
+	}
+
+	.background-pill {
+		display: flex;
+		height: 1em;
+		padding: 0 0.4em;
+		color: var(--text-normal);
+		background-color: var(--background-primary-alt);
+		border-radius: 10px;
+		justify-content: center;
+		align-items: center;
+	}
+}
 
 /*
 Post Vue Globals

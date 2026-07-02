@@ -5,15 +5,9 @@ import {NegotiationTrackerProcessor} from "@drawSteelAdmonition/negotiation/Nego
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
 import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
 import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
-import { StaminaBarProcessor } from "@drawSteelAdmonition/StaminaBar/StaminaBarProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
-import { genericComponentProcessor } from "./ComponentProcessor";
-
-import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
-
-import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
 
 export function registerElements (plugin: Plugin) {
 
@@ -44,10 +38,9 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
 
-	let staminaBarProcessor = new genericComponentProcessor(plugin, StaminaBar, StaminaBarModel, "Stamina Bar", true);
-	plugin.registerMarkdownCodeBlockProcessor("ds-stam", staminaBarProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-stamina", staminaBarProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-stamina-bar", staminaBarProcessor.handler);
+	// Stamina Bar migrated to Framework v2 (D1 Task 3, F1 §6 step 4) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Last
+	// Vue element migrated; Vue is now unused at runtime.
 
 	let counterProcessor = new CounterProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);

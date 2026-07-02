@@ -31,6 +31,7 @@ import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
 import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 import { skillsElement } from '@/elements/skills/definition';
+import { staminaBarElement } from '@/elements/stamina-bar/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -140,7 +141,9 @@ export function initializeElementFrameworkV2(
 /**
  * D1 Task 1 (F1 §2.3 "incremental migration switch") — registers every Framework-v2
  * element definition into `registry`. The first entry is Horizontal Rule (F1 §6 step 1);
- * D1 Task 2 appends Skills (F1 §6 step 3, first *interactive* element); later D1/F1
+ * D1 Task 2 appends Skills (F1 §6 step 3, first *interactive* element); D1 Task 3 appends
+ * Stamina Bar (F1 §6 step 4, first *persisted* element — and the last Vue element, so
+ * after this registration no `.vue` file is imported anywhere at runtime). Later D1/F1
  * migration steps append their own `registry.register(...)` call here as each element
  * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
@@ -148,13 +151,14 @@ export function initializeElementFrameworkV2(
 export function registerFrameworkElementDefinitions(registry: ElementRegistry): void {
 	registry.register(horizontalRuleElement);
 	registry.register(skillsElement);
+	registry.register(staminaBarElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
-    /** F1 (Plan 02, Task 10) scaffold + D1 Task 1 (first migrated element): framework v2
-     *  service bundle + registry (populated via `registerFrameworkElementDefinitions`,
-     *  currently just Horizontal Rule) + pipeline. Undefined before `onload` runs and
+    /** F1 (Plan 02, Task 10) scaffold + D1 (migrated elements): framework v2 service
+     *  bundle + registry (populated via `registerFrameworkElementDefinitions` — Horizontal
+     *  Rule, Skills, Stamina Bar so far) + pipeline. Undefined before `onload` runs and
      *  after `onunload` drops it. */
     frameworkV2?: ElementFrameworkV2;
 

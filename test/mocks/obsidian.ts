@@ -7,12 +7,39 @@
 import { load, dump } from 'js-yaml';
 
 // ---------------------------------------------------------------- yaml
-// Obsidian bundles js-yaml 4.x, so delegating gives matching behavior (F3 §4.2).
+// D1 Task 3 byte-fidelity finding — corrects F3 §4.2's assumption: Obsidian's REAL
+// parseYaml/stringifyYaml are NOT js-yaml. Inspecting the shipped app bundle
+// (obsidian.asar's app.js: `parseYaml:()=>_B` / `stringifyYaml:()=>jB`, where `_B`/`jB`
+// are thin wrappers matching the `yaml` npm package's (eemeli/yaml v2) exact
+// `parse(src, null, {})` / `stringify(value, null, {})` implementations byte-for-byte, incl.
+// its default-options object literal `{..., lineWidth:80, indentSeq:true, singleQuote:false,
+// ...}` found verbatim in the bundle) shows Obsidian uses the `yaml` package, not js-yaml.
+// The two libraries are NOT drop-in equivalent in general — different default quote style
+// (js-yaml: single-quote; `yaml`: double-quote) and different long-scalar folding
+// algorithms — but for scalar-only DTOs (booleans/integers/short enum strings, e.g.
+// StaminaBar's field set) their default output is byte-identical (verified directly
+// against both libraries, incl. `undefined`-field omission). js-yaml stays the test-only
+// stand-in (OD-8: no new runtime deps) with its options pinned to the values that match
+// `yaml`'s real defaults, rather than left implicit:
+//   - lineWidth: 80        — `yaml`'s actual default (NOT unlimited — confirmed in the
+//                            shipped bundle; do not "fix" this to -1).
+//   - noArrayIndent: false — matches `yaml`'s indentSeq:true (sequences indented under
+//                            their parent key).
+//   - sortKeys: false      — matches `yaml`'s insertion-order emission (already the
+//                            default for both; pinned here for self-documentation).
+//   - quotingType: '"'     — matches `yaml`'s singleQuote:false (double-quote preference
+//                            when a plain scalar needs quoting at all).
+// Residual, unavoidable divergence (blocked by "no new deps"): the two libraries' folding
+// algorithms for long free-text scalars differ regardless of these options. Elements with
+// unbounded string fields (Counter/Negotiation/Initiative — not yet migrated) should
+// re-verify byte-compat against a real Obsidian build before trusting this mock for that
+// case; StaminaBar's schema has no such field (StaminaBarSchema.yaml: only booleans,
+// integers, and a 2-value enum).
 export function parseYaml(yaml: string): any {
 	return load(yaml);
 }
 export function stringifyYaml(obj: any): string {
-	return dump(obj);
+	return dump(obj, { lineWidth: 80, noArrayIndent: false, sortKeys: false, quotingType: '"' });
 }
 
 // ---------------------------------------------------------------- files
