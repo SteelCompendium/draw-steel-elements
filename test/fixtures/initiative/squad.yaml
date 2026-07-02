@@ -1,0 +1,19 @@
+heroes:
+  - name: "Aragorn"
+    max_stamina: 120
+    conditions:
+      - grabbed
+      - key: bleeding
+        color: crimson
+enemy_groups:
+  - name: "Goblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Goblin"
+        max_stamina: 4
+        amount: 5
+        squad_role: minion
+      - name: "Goblin Captain"
+        max_stamina: 40
+        amount: 1
+        squad_role: captain
