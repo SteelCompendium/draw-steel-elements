@@ -320,7 +320,7 @@ export class InitiativeProcessor {
                 // Double-click to edit STAMINA
                 cellEl.addEventListener("dblclick", () => {
                     if (group.is_squad && creature.squad_role === "minion") {
-                        const modal = new MinionStaminaPoolModal(this.app, group, creature, data, ctx, () => {
+                        const modal = new MinionStaminaPoolModal(this.app, group, creature, () => {
                             container.empty();
                             this.buildUI(container, data, ctx);
                             CodeBlocks.updateInitiativeTracker(this.app, data, ctx);
@@ -371,7 +371,7 @@ export class InitiativeProcessor {
             this.updateStaminaDisplay(staminaEl, instance, creature, group);
             // Add event listener to edit the minion pool stamina
             staminaEl.addEventListener("click", () => {
-                const modal = new MinionStaminaPoolModal(this.app, group, creature, data, ctx, () => {
+                const modal = new MinionStaminaPoolModal(this.app, group, creature, () => {
                     container.empty();
                     this.buildDetailedCreatureRow(container, creature, instance, data, ctx, group);
                     CodeBlocks.updateInitiativeTracker(this.app, data, ctx);

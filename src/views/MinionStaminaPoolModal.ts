@@ -1,14 +1,14 @@
-import { App, Modal, MarkdownPostProcessorContext, setIcon } from "obsidian";
-import { Creature, CreatureInstance, EncounterData, EnemyGroup, Condition } from "@drawSteelAdmonition/EncounterData";
+import { App, Modal, setIcon } from "obsidian";
+import { Creature, CreatureInstance, EnemyGroup, Condition } from "@drawSteelAdmonition/EncounterData";
 import { ConditionManager } from "@utils/Conditions";
-import { CodeBlocks } from "@utils/CodeBlocks";
 
 export class MinionStaminaPoolModal extends Modal {
 	private group: EnemyGroup;
 	private creature: Creature; // Minion creature
-	private data: EncounterData;
-	private ctx: MarkdownPostProcessorContext;
-	private updateCallback: () => void;
+	// Injected persistence: the modal mutates the caller's shared encounter data in
+	// place, then persist() writes it back (and rebuilds the caller's UI). The modal
+	// never touches CodeBlocks/ctx directly.
+	private persist: () => void;
 
 	// New properties for pending STAMINA changes
 	private pendingStaminaChange: number = 0;
@@ -18,16 +18,12 @@ export class MinionStaminaPoolModal extends Modal {
 		app: App,
 		group: EnemyGroup,
 		creature: Creature,
-		data: EncounterData,
-		ctx: MarkdownPostProcessorContext,
-		updateCallback: () => void
+		persist: () => void
 	) {
 		super(app);
 		this.group = group;
 		this.creature = creature;
-		this.data = data;
-		this.ctx = ctx;
-		this.updateCallback = updateCallback;
+		this.persist = persist;
 	}
 
 	onOpen() {
@@ -188,7 +184,7 @@ export class MinionStaminaPoolModal extends Modal {
 
 			// Icons for conditions
 			const conditionsEl = minionRow.createEl("div", { cls: "minion-conditions" });
-			this.buildConditionIcons(conditionsEl, instance, this.data, this.ctx);
+			this.buildConditionIcons(conditionsEl, instance);
 		});
 
 		// Bottom: Action Button and Reset Button
@@ -223,7 +219,9 @@ export class MinionStaminaPoolModal extends Modal {
 		this.updateActionButton(actionButton, warningIcon);
 		actionButton.addEventListener("click", () => {
 			const newStamina = poolCurrentStamina + this.pendingStaminaChange;
-			const maxStamina = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0 * minionMaxStamina;
+			// Parens matter: `len ?? 0 * max` parses as `len ?? (0 * max)` and clamps
+			// the pool to the alive-minion COUNT instead of count * max (CB-1).
+			const maxStamina = (this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0) * minionMaxStamina;
 			this.group.minion_stamina_pool = Math.min(maxStamina, Math.max(0, newStamina));
 
 			// Update the minion instances based on the selected checkboxes
@@ -236,8 +234,8 @@ export class MinionStaminaPoolModal extends Modal {
 			// Update the creature.amount. EDIT: I dont think I want this...
 			// this.creature.amount = this.creature.instances.filter((inst) => !inst.isDead).length;
 
-			// Update the data and call the updateCallback
-			this.updateCallback();
+			// Persist the mutated encounter data via the injected callback
+			this.persist();
 			this.close();
 		});
 
@@ -402,12 +400,7 @@ export class MinionStaminaPoolModal extends Modal {
 		}
 	}
 
-	private buildConditionIcons(
-		container: HTMLElement,
-		character: CreatureInstance,
-		data: EncounterData,
-		ctx: MarkdownPostProcessorContext
-	): void {
+	private buildConditionIcons(container: HTMLElement, character: CreatureInstance): void {
 		const conditions = character.conditions || [];
 
 		const conditionManager = new ConditionManager();
@@ -443,13 +436,18 @@ export class MinionStaminaPoolModal extends Modal {
 				iconEl.addEventListener("click", () => {
 					character.conditions = conditions.filter((entry) => entry !== conditionEntry);
 					container.empty();
-					this.buildConditionIcons(container, character, data, ctx);
-					CodeBlocks.updateCodeBlock(this.app, data, ctx, "");
+					this.buildConditionIcons(container, character);
+					// Route through the injected callback — never CodeBlocks directly.
+					// The old direct CodeBlocks.updateCodeBlock(app, data, ctx, "") call
+					// rewrote the fence with an EMPTY language, corrupting the block (CB-2).
+					this.persist();
 				});
 			}
 		});
 
-		// TODO - Saving the condition changes seems to prevent the damage from saving.  Commenting out for now
+		// TODO - Add-condition UI stayed disabled after the original "saving condition
+		// changes prevents the damage from saving" bug (DC-6, now fixed by routing all
+		// persistence through this.persist()). Re-enabling is a feature decision.
 		// const addConditionEl = container.createEl("div", { cls: "add-condition-icon" });
 		// setIcon(addConditionEl, "plus-circle");
 		// addConditionEl.title = "Add Condition";
@@ -461,8 +459,8 @@ export class MinionStaminaPoolModal extends Modal {
 		// 		(newConditions) => {
 		// 			character.conditions = (character.conditions || []).concat(newConditions);
 		// 			container.empty();
-		// 			this.buildConditionIcons(container, character, data, ctx);
-		// 			CodeBlocks.updateCodeBlock(this.app, data, ctx);
+		// 			this.buildConditionIcons(container, character);
+		// 			this.persist();
 		// 		}
 		// 	);
 		// 	addConditionsModal.open();
