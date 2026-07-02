@@ -27,10 +27,10 @@ import * as path from 'path';
 
 // A sample of legacy aliases from RegisterElements.ts, spanning several element
 // families — proves registerElements(this) still runs unchanged alongside the new
-// registry for every element NOT YET migrated onto Framework v2. "ds-hr" is
-// deliberately excluded here (D1 Task 1 migrated Horizontal Rule off this path — see
-// the dedicated "D1 Task 1" describe block below).
-const LEGACY_ALIASES = ['ds-ft', 'ds-stam', 'ds-featureblock', 'ds-counter', 'ds-initiative-tracker', 'ds-skills'];
+// registry for every element NOT YET migrated onto Framework v2. "ds-hr" and "ds-skills"
+// are deliberately excluded here (D1 Task 1 migrated Horizontal Rule, D1 Task 2 migrated
+// Skills, off this path — see their dedicated describe blocks below).
+const LEGACY_ALIASES = ['ds-ft', 'ds-stam', 'ds-featureblock', 'ds-counter', 'ds-initiative-tracker'];
 
 /**
  * `DrawSteelAdmonitionPlugin` extends the REAL `obsidian` `Plugin` (main.ts imports
@@ -57,14 +57,14 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
 		await plugin.onload();
 
 		expect(plugin.frameworkV2).toBeDefined();
-		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule']);
+		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills']);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
 		expect(plugin.frameworkV2!.services.session).toBeDefined();
@@ -155,7 +155,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			expect(plugin.frameworkV2).toBeDefined();
 			// Migrated-element registration is independent of dependency-schema success —
 			// a bad schema degrades validation detail, it doesn't block registerFrameworkElementDefinitions.
-			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule']);
+			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule', 'skills']);
 			// Legacy path is unaffected by the framework v2 schema failure.
 			expect((plugin as any).registeredProcessors.has('ds-ft')).toBe(true);
 
@@ -224,6 +224,48 @@ describe('D1 Task 1: Horizontal Rule wiring through onload() (F1 §2.3 / §6 ste
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('horizontal-rule');
 		expect(root.querySelector('.ds-hr-container')).not.toBeNull();
+	});
+});
+
+describe('D1 Task 2: Skills wiring through onload() (F1 §2.3 / §6 step 3)', () => {
+	test('ds-skills is registered, and routes to the framework registry\'s def (not RegisterElements.ts)', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+
+		await plugin.onload();
+
+		expect((plugin as any).registeredProcessors.has('ds-skills')).toBe(true);
+		expect(plugin.frameworkV2!.registry.get('ds-skills')?.id).toBe('skills');
+	});
+
+	test('ds-skills is registered EXACTLY ONCE — no double-registration between the legacy and framework paths', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		const registerSpy = jest.spyOn(plugin, 'registerMarkdownCodeBlockProcessor');
+
+		await plugin.onload();
+
+		const skillsCalls = registerSpy.mock.calls.filter(([language]) => language === 'ds-skills');
+		expect(skillsCalls).toHaveLength(1);
+
+		registerSpy.mockRestore();
+	});
+
+	test('rendering a ds-skills block through the wired processor produces the skills DOM (end-to-end)', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		await plugin.onload();
+
+		app.vault.setFile('Note.md', '```ds-skills\nskills:\n  - climb\n```\n');
+		const { makeFakeContext } = await import('../../mocks/obsidian');
+		const ctx = makeFakeContext(app, 'Note.md');
+		const handler = (plugin as any).registeredProcessors.get('ds-skills');
+
+		await handler('skills:\n  - climb', ctx.el, ctx);
+
+		const root = ctx.el.firstElementChild as HTMLElement;
+		expect(root.getAttribute('data-dse-element')).toBe('skills');
+		expect(root.querySelector('.ds-skills-container')).not.toBeNull();
 	});
 });
 

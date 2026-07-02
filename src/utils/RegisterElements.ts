@@ -11,10 +11,8 @@ import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/Cha
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import { genericComponentProcessor } from "./ComponentProcessor";
 
-import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
 
-import { Skills as SkillsModel } from "@model/Skills";
 import { StaminaBar as StaminaBarModel } from '@/model/StaminaBar';
 
 export function registerElements (plugin: Plugin) {
@@ -59,8 +57,8 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-characteristics", charProcessor.handler);
 
-	let skillListProcessor = new genericComponentProcessor(plugin, SkillList, SkillsModel, "Skill List");
-	plugin.registerMarkdownCodeBlockProcessor("ds-skills", skillListProcessor.handler);
+	// Skills migrated to Framework v2 (D1 Task 2, F1 §6 step 3) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
 
 	let valRowProcessor = new ValuesRowProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);

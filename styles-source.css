@@ -1948,10 +1948,128 @@ button.action-button {
 }
 
 /* ==================== */
+/* Kit — collapsible heading & component wrapper (D1 Task 2, F1 framework/kit/) */
+/* ==================== */
+/* Shared vanilla-DOM chrome (framework/kit/collapsible.ts, framework/kit/componentWrapper.ts).
+   Reused by every element wrapped in the collapsible chrome -- Skills today, Stamina Bar in
+   D1 step 3 -- so these rules are intentionally NOT scoped under any single
+   [data-dse-element="..."]. `collapse-icon` / `is-collapsed` are Obsidian's own native
+   collapse-triangle classes (kept verbatim, not renamed, to inherit Obsidian's built-in
+   rotation styling -- ported from RightArrowToggleIndicator.vue's original comment: "Override
+   of Obsidian functionality to ironically gain function parity with Obsidian's own heading
+   elements"). `heading-collapse-indicator` is kept verbatim too -- it is the exact selector
+   the ported Live Preview positioning rule (CollapsibleHeading.vue) targets. */
+
+.ds-kit-collapsible-heading {
+	.heading-collapse-indicator.is-collapsed {
+		opacity: 1;
+
+		svg {
+			color: var(--collapse-icon-color-collapsed) !important;
+		}
+	}
+}
+
+.markdown-source-view.is-live-preview .ds-kit-collapsible-heading > .heading-collapse-indicator {
+	position: absolute;
+	left: 5px;
+}
+
+.ds-kit-component-wrapper {
+	min-height: 34px;
+	width: 100%;
+
+	.ds-kit-eye-container {
+		height: 0;
+		width: 100%;
+		display: flex;
+		justify-content: flex-end;
+		padding-top: 4px;
+		padding-right: 34px;
+		color: var(--text-muted);
+	}
+
+	.ds-kit-eye-indicator {
+		width: 30px;
+		height: 26px;
+		padding: var(--size-2-2) var(--size-2-3);
+		border-radius: var(--radius-s);
+
+		&:hover {
+			background-color: var(--background-modifier-hover);
+		}
+	}
+
+	.ds-kit-collapsed-wrapper {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		column-gap: 15px;
+	}
+
+	.ds-kit-v-rule-container {
+		display: flex;
+		justify-items: start;
+	}
+
+	.ds-kit-v-rule-wrapper {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		position: relative;
+		margin-left: 6px;
+		height: 100%;
+		min-height: 50px;
+	}
+
+	.ds-kit-v-rule-line {
+		flex-grow: 1;
+		width: 2px;
+		background-color: var(--icon-color);
+		left: 50%;
+		top: 0;
+		bottom: 0;
+
+		&.ds-kit-v-rule-line-top {
+			background: linear-gradient(to top, var(--icon-color) 0%, transparent 100%);
+		}
+
+		&.ds-kit-v-rule-line-bottom {
+			background: linear-gradient(to bottom, var(--icon-color) 0%, transparent 100%);
+		}
+	}
+
+	.ds-kit-v-rule-line-center {
+		width: 14px;
+		height: 14px;
+		background-color: var(--icon-color);
+		transform: translateZ(1px) translateX(1px) rotate(315deg);
+		position: relative;
+		z-index: 1;
+		flex-shrink: 0;
+		border-bottom: 2px solid var(--icon-color);
+		border-right: 2px solid var(--icon-color);
+		box-shadow: inset 0 0 0 3px var(--background-primary);
+	}
+}
+
+.markdown-source-view.is-live-preview .cm-preview-code-block .ds-kit-eye-indicator {
+	opacity: 0;
+}
+.markdown-source-view.is-live-preview .cm-preview-code-block:hover .ds-kit-eye-indicator {
+	opacity: 1;
+}
+
+/* ==================== */
 /* Skills               */
 /* ==================== */
+/* Scoped under [data-dse-element="skills"] (F1 §3.5): these ds-skill-* classes were
+   previously duplicated by the dead, unregistered DOM twin (drawSteelAdmonition/Skills/*,
+   deleted by this migration) -- Skills is now their only consumer, so they move under the
+   pipeline-stamped root attribute rather than staying global. */
 
-.ds-skills-container {
+[data-dse-element="skills"] .ds-skills-container {
 		width: 100%;
 
 	/* Skill group */

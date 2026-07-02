@@ -30,6 +30,7 @@ import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
 import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
+import { skillsElement } from '@/elements/skills/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -90,8 +91,8 @@ export interface ElementFrameworkV2 {
  * (`registerFrameworkElements`) as its own explicit steps, right after calling this
  * factory. `RegisterElements.ts` / `registerElements(plugin)` remains the owner of every
  * `registerMarkdownCodeBlockProcessor` call for elements NOT YET migrated (F1 §2.3's
- * "incremental migration switch" — Horizontal Rule is the first migrated element, D1
- * Task 1).
+ * "incremental migration switch" — Horizontal Rule (D1 Task 1) and Skills (D1 Task 2) are
+ * the migrated elements so far).
  */
 export function initializeElementFrameworkV2(
 	app: App,
@@ -139,12 +140,14 @@ export function initializeElementFrameworkV2(
 /**
  * D1 Task 1 (F1 §2.3 "incremental migration switch") — registers every Framework-v2
  * element definition into `registry`. The first entry is Horizontal Rule (F1 §6 step 1);
- * later D1/F1 migration steps append their own `registry.register(...)` call here as each
- * element moves off `RegisterElements.ts`. Kept as a standalone function (same rationale
- * as `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
+ * D1 Task 2 appends Skills (F1 §6 step 3, first *interactive* element); later D1/F1
+ * migration steps append their own `registry.register(...)` call here as each element
+ * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
+ * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
  */
 export function registerFrameworkElementDefinitions(registry: ElementRegistry): void {
 	registry.register(horizontalRuleElement);
+	registry.register(skillsElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
