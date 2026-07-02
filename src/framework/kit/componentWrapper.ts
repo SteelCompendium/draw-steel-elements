@@ -13,8 +13,16 @@
 // of its own — the calling ElementView owns reading the initial `collapsed` value from
 // SessionStore and persisting it back via `onToggle` (mirrors collapsible.ts's split).
 // `owner` only lifecycle-binds the click listener (F1 §4.5).
-import type { Component } from 'obsidian';
-import { setIcon } from 'obsidian';
+//
+// Per-cycle content teardown (Plan 05 Task 1 kit hardening): renderContent runs at mount
+// AND on every re-expand, but bodyEl.empty() only clears DOM — it never released
+// registerDomEvent/register handles bound to the long-lived view, so every collapse↔expand
+// cycle stacked one more set of live registrations (survey §5). The content body therefore
+// gets its own child Component (`contentOwner`), created fresh each expanded renderBody
+// pass via owner.addChild and unloaded via owner.removeChild before the next pass —
+// content-internal registrations live exactly one expand cycle. The wrapper's own
+// eye-toggle listeners stay on `owner` (view-lifetime), unchanged.
+import { Component, setIcon } from 'obsidian';
 
 export interface ComponentWrapperOptions {
 	/** Shown in the collapsed-state rail next to the vertical rule (Vue: componentName prop). */
@@ -24,8 +32,11 @@ export interface ComponentWrapperOptions {
 	/** Initial collapsed state (Vue: state.collapsed, seeded from collapse_default_modified). */
 	collapsed: boolean;
 	/** Builds the wrapped content into the given container. Invoked once now if expanded,
-	 *  and again on every expand (Vue only ever mounted the expanded branch via v-if). */
-	renderContent: (contentEl: HTMLElement) => void;
+	 *  and again on every expand (Vue only ever mounted the expanded branch via v-if).
+	 *  Content-internal listeners MUST bind to `contentOwner` — a fresh child Component per
+	 *  render cycle, unloaded on the next collapse/re-expand — never to the long-lived view
+	 *  (which would accumulate one registration set per cycle). */
+	renderContent: (contentEl: HTMLElement, contentOwner: Component) => void;
 	/** Called with the NEW collapsed state whenever the eye indicator is toggled. */
 	onToggle: (collapsed: boolean) => void;
 }
@@ -58,10 +69,19 @@ export function mountComponentWrapper(
 	const wrapperEl = parent.createDiv({ cls: 'ds-kit-component-wrapper' });
 	let collapsed = options.collapsed;
 	let bodyEl!: HTMLElement;
+	/** The current render cycle's content Component — see the file header. Null while
+	 *  collapsed (no content is mounted, so nothing to lifecycle-bind). */
+	let contentOwner: Component | null = null;
 
 	const applyIcon = (eyeIndicator: HTMLElement): void => setIcon(eyeIndicator, collapsed ? 'eye-off' : 'eye');
 
 	const renderBody = (): void => {
+		if (contentOwner) {
+			// Unloads the child, releasing every registerDomEvent/register handle the
+			// previous cycle's renderContent bound to it.
+			owner.removeChild(contentOwner);
+			contentOwner = null;
+		}
 		bodyEl.empty();
 		if (collapsed) {
 			const collapsedWrapper = bodyEl.createDiv({ cls: 'ds-kit-collapsed-wrapper' });
@@ -69,7 +89,8 @@ export function mountComponentWrapper(
 			collapsedWrapper.createEl('strong', { text: options.componentName });
 		} else {
 			const contentEl = bodyEl.createDiv();
-			options.renderContent(contentEl);
+			contentOwner = owner.addChild(new Component());
+			options.renderContent(contentEl, contentOwner);
 		}
 	};
 

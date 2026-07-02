@@ -7,7 +7,9 @@
 // in place (it is handed the SAME object reference) and its updateCallback both refreshes
 // the bar in place (targeted update, no rebuild) and schedules persist().
 import { setTooltip } from 'obsidian';
+import type { Component } from 'obsidian';
 import { ElementView } from '@/framework/view';
+import type { RenderContext } from '@/framework/context';
 import { mountComponentWrapper } from '@/framework/kit/componentWrapper';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
@@ -42,6 +44,21 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 	private dyingOverlayEl!: HTMLElement;
 	private windedOverlayEl!: HTMLElement;
 	private pillEl!: HTMLElement;
+	/** The modal from the most recent bar click. REPLACED (not accumulated) on every open,
+	 *  so the view holds exactly one pending closer regardless of how many times the modal
+	 *  was opened (Plan 05 Task 1 kit hardening — openEditModal previously registered a
+	 *  fresh `this.register(() => modal.close())` per click). */
+	private activeModal: StaminaEditModal | null = null;
+
+	constructor(cx: RenderContext) {
+		super(cx);
+		// F1 §4.5: a modal opened by the view must be closed on view unload. ONE
+		// view-lifetime registration over the replaced-on-open reference above; registered
+		// here (not in onMount, which the default update() path re-runs). Closing an
+		// already-user-closed modal is a no-op: StaminaEditModal overrides no onClose, and
+		// removing a detached containerEl does nothing.
+		this.register(() => this.activeModal?.close());
+	}
 
 	protected onMount(root: HTMLElement, model: StaminaBar): void {
 		mountComponentWrapper(root, this, {
@@ -58,12 +75,14 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 			// createApp on every postprocessor run) did.
 			collapsible: true,
 			collapsed: model.collapse_default,
-			renderContent: (contentEl) => this.renderBar(contentEl, model),
+			// Content listeners bind to contentOwner (fresh per expand cycle, torn down on
+			// collapse/re-expand — Plan 05 Task 1 kit hardening), never to the view itself.
+			renderContent: (contentEl, contentOwner) => this.renderBar(contentEl, contentOwner, model),
 			onToggle: () => {},
 		});
 	}
 
-	private renderBar(container: HTMLElement, model: StaminaBar): void {
+	private renderBar(container: HTMLElement, contentOwner: Component, model: StaminaBar): void {
 		if (model.style === 'sheet') {
 			container.createDiv({ cls: 'ds-stamina-bar-sheet-notice', text: SHEET_STYLE_NOTICE });
 			return;
@@ -92,7 +111,9 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, unresolvable
 		// canvas nodes) -> render read-only (visible but inert) instead of a dead-end click.
 		if (canPersist) {
-			this.registerDomEvent(bar, 'click', () => this.openEditModal());
+			// Per-cycle (contentOwner, not this): the bar is rebuilt on every wrapper
+			// expand; binding to the view would stack one leaked listener per cycle.
+			contentOwner.registerDomEvent(bar, 'click', () => this.openEditModal());
 		} else {
 			setTooltip(bar, READ_ONLY_TOOLTIP);
 		}
@@ -129,8 +150,9 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 			this.updateBarDisplay(this.model);
 			void this.persist();
 		});
-		// F1 §4.5: a modal opened by a view must be closed on view unload.
-		this.register(() => modal.close());
+		// F1 §4.5 unload-close is handled by the SINGLE registration in the constructor
+		// over this replaced-on-open reference — never register() per open (accumulates).
+		this.activeModal = modal;
 		modal.open();
 	}
 }

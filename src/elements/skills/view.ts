@@ -17,6 +17,7 @@
 // will be placed under 'Custom Skills'") and the (dead, unregistered) DOM twin
 // `SkillsProcessor`/`SkillsView` both already implement the intended, non-crashing rule;
 // buildGroupedSkillData below follows that documented behavior exactly.
+import type { Component } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import { mountComponentWrapper } from '@/framework/kit/componentWrapper';
 import { mountCollapsibleHeading } from '@/framework/kit/collapsible';
@@ -87,22 +88,25 @@ export class SkillsView extends ElementView<Skills> {
 			componentName: 'Skill List',
 			collapsible: model.collapsible,
 			collapsed,
-			renderContent: (contentEl) => this.renderGroups(contentEl, model),
+			// Content listeners bind to contentOwner (fresh per expand cycle, torn down on
+			// collapse/re-expand — Plan 05 Task 1 kit hardening), never to the view itself.
+			renderContent: (contentEl, contentOwner) => this.renderGroups(contentEl, contentOwner, model),
 			onToggle: (isCollapsed) => this.cx.session.set(this.blockKey, WRAPPER_COLLAPSE_SLOT, isCollapsed),
 		});
 	}
 
-	private renderGroups(container: HTMLElement, model: Skills): void {
+	private renderGroups(container: HTMLElement, contentOwner: Component, model: Skills): void {
 		const grouped = buildGroupedSkillData(model.custom_skills);
 		const activeSkills = buildActiveSkills(model);
 		const listContainer = container.createDiv({ cls: 'ds-skills-container' });
 		for (const [groupKey, skills] of Object.entries(grouped)) {
-			this.renderGroup(listContainer, groupKey, skills, activeSkills, model.only_show_selected);
+			this.renderGroup(listContainer, contentOwner, groupKey, skills, activeSkills, model.only_show_selected);
 		}
 	}
 
 	private renderGroup(
 		parent: HTMLElement,
+		contentOwner: Component,
 		groupKey: string,
 		skills: SkillInfo[],
 		activeSkills: string[],
@@ -138,7 +142,10 @@ export class SkillsView extends ElementView<Skills> {
 			}
 		};
 
-		const handle = mountCollapsibleHeading(groupEl, this, {
+		// Heading listeners live exactly one wrapper-expand cycle (contentOwner), so
+		// re-expanding never stacks a second listener set on the view. The group-collapse
+		// STATE itself is session-backed (this.cx.session) and survives the teardown.
+		const handle = mountCollapsibleHeading(groupEl, contentOwner, {
 			headerLevel: 3,
 			enabled: !collapsed,
 			text: groupDisplayName(groupKey),
