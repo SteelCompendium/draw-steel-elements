@@ -1,0 +1,36 @@
+name: Plugin CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # engines requires >=22.15; 24 also gives jest native TS-config loading.
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Informational until TS-1 (failing type-check) is fixed; flip to a hard
+      # gate by deleting continue-on-error once `npm run tsc` is green (F3 OD-6).
+      - name: Type check (informational)
+        run: npm run tsc
+        continue-on-error: true
+
+      # NOTE: no lint step yet — eslint is not installable in this repo (F3 BT-3).
+      # Add `npm run lint` here when BT-3 lands.
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Bundle must build
+        run: npm run build-no-check
