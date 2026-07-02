@@ -7,10 +7,14 @@ import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchema
 import componentWrapperSchemaYaml from '@model/schemas/ComponentWrapperSchema.yaml';
 import "./styles-source.css";
 
-// F1 (Plan 02, Task 10) — Element Framework v2 wiring. This is ADDITIVE alongside the
-// legacy schema/registration paths above: no element migrates in this task, so the
-// framework's ElementRegistry stays empty and Obsidian's markdown code-block
-// processors remain entirely legacy-owned (registerElements(this), unchanged).
+// F1 (Plan 02, Task 10) — Element Framework v2 wiring. ADDITIVE alongside the legacy
+// schema/registration paths above: the framework's ElementRegistry + its own
+// registerMarkdownCodeBlockProcessor wiring (registerFrameworkElements, D1 Task 1)
+// coexist with the legacy registerElements(this) path below — Obsidian's markdown
+// code-block processors are owned by BOTH paths at once, one alias at a time, as each
+// element migrates (F1 §2.3 "incremental migration switch"). Horizontal Rule is the
+// first migrated element (D1 Task 1, F1 §6 step 1): its ds-hr/ds-horizontal-rule
+// aliases are removed from RegisterElements.ts and registered here instead.
 import { createValidationService } from '@/framework/validation';
 import type { ValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
@@ -24,6 +28,8 @@ import type { ReferenceService } from '@/framework/seams/refs';
 import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
+import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
+import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -78,11 +84,14 @@ export interface ElementFrameworkV2 {
  * degrades gracefully (console.warn + a user-visible `Notice`) instead of throwing,
  * and every other schema / the rest of the bundle is unaffected.
  *
- * **Coexistence:** this registers NO elements. `RegisterElements.ts` /
- * `registerElements(plugin)` remains the sole owner of every
- * `registerMarkdownCodeBlockProcessor` call until a later task migrates the first
- * element (F1 §2.3's "incremental migration switch") — the returned `registry` is
- * always empty here.
+ * **Coexistence:** this function itself registers NO elements — the returned `registry`
+ * is always empty here; `onload()` populates it separately
+ * (`registerFrameworkElementDefinitions`) and wires it into Obsidian
+ * (`registerFrameworkElements`) as its own explicit steps, right after calling this
+ * factory. `RegisterElements.ts` / `registerElements(plugin)` remains the owner of every
+ * `registerMarkdownCodeBlockProcessor` call for elements NOT YET migrated (F1 §2.3's
+ * "incremental migration switch" — Horizontal Rule is the first migrated element, D1
+ * Task 1).
  */
 export function initializeElementFrameworkV2(
 	app: App,
@@ -127,11 +136,23 @@ export function initializeElementFrameworkV2(
 	};
 }
 
+/**
+ * D1 Task 1 (F1 §2.3 "incremental migration switch") — registers every Framework-v2
+ * element definition into `registry`. The first entry is Horizontal Rule (F1 §6 step 1);
+ * later D1/F1 migration steps append their own `registry.register(...)` call here as each
+ * element moves off `RegisterElements.ts`. Kept as a standalone function (same rationale
+ * as `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
+ */
+export function registerFrameworkElementDefinitions(registry: ElementRegistry): void {
+	registry.register(horizontalRuleElement);
+}
+
 export default class DrawSteelAdmonitionPlugin extends Plugin {
     settings: DSESettings;
-    /** F1 (Plan 02, Task 10): framework v2 service bundle + empty registry + pipeline.
-     *  Undefined before `onload` runs and after `onunload` drops it. No element
-     *  migrates in this task — see `initializeElementFrameworkV2`'s doc comment. */
+    /** F1 (Plan 02, Task 10) scaffold + D1 Task 1 (first migrated element): framework v2
+     *  service bundle + registry (populated via `registerFrameworkElementDefinitions`,
+     *  currently just Horizontal Rule) + pipeline. Undefined before `onload` runs and
+     *  after `onunload` drops it. */
     frameworkV2?: ElementFrameworkV2;
 
 	readonly githubOwner = "steelCompendium";
@@ -146,17 +167,26 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new MyPluginSettingTab(this.app, this));
 
-        // Legacy registration path — UNCHANGED, runs exactly as it does today.
+        // Legacy registration path — owns every element NOT YET migrated onto Framework v2.
         registerElements(this);
 
         // F1 (Plan 02, Task 10): construct the framework v2 bundle alongside the
         // legacy path above. Coexistence, not replacement — see the function doc.
-        this.frameworkV2 = initializeElementFrameworkV2(
+        const frameworkV2 = initializeElementFrameworkV2(
             this.app,
             this,
             this.settings,
             this.frameworkV2DependencySchemas(),
         );
+        this.frameworkV2 = frameworkV2;
+
+        // D1 Task 1 (F1 §2.3 "incremental migration switch"): populate the framework
+        // registry with migrated element definitions, then wire Obsidian's
+        // registerMarkdownCodeBlockProcessor for each of their aliases. ADDITIVE — the
+        // legacy registerElements(this) call above still owns every not-yet-migrated
+        // element.
+        registerFrameworkElementDefinitions(frameworkV2.registry);
+        registerFrameworkElements(this, frameworkV2);
 
         this.addCommand({
             id: 'download-data-md-dse',

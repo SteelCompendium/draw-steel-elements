@@ -27,8 +27,10 @@ import * as path from 'path';
 
 // A sample of legacy aliases from RegisterElements.ts, spanning several element
 // families — proves registerElements(this) still runs unchanged alongside the new
-// (still-empty) registry, not just that ONE alias survived.
-const LEGACY_ALIASES = ['ds-ft', 'ds-stam', 'ds-hr', 'ds-counter', 'ds-initiative-tracker', 'ds-skills'];
+// registry for every element NOT YET migrated onto Framework v2. "ds-hr" is
+// deliberately excluded here (D1 Task 1 migrated Horizontal Rule off this path — see
+// the dedicated "D1 Task 1" describe block below).
+const LEGACY_ALIASES = ['ds-ft', 'ds-stam', 'ds-featureblock', 'ds-counter', 'ds-initiative-tracker', 'ds-skills'];
 
 /**
  * `DrawSteelAdmonitionPlugin` extends the REAL `obsidian` `Plugin` (main.ts imports
@@ -55,14 +57,14 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and is empty (no element migrates in T-10)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
 		await plugin.onload();
 
 		expect(plugin.frameworkV2).toBeDefined();
-		expect(plugin.frameworkV2!.registry.all()).toEqual([]);
+		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule']);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
 		expect(plugin.frameworkV2!.services.session).toBeDefined();
@@ -80,8 +82,8 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		for (const alias of LEGACY_ALIASES) {
 			expect((plugin as any).registeredProcessors.has(alias)).toBe(true);
 		}
-		// And the new registry registers NOTHING against the plugin's processor map —
-		// today's markdown code-block processors are entirely legacy-owned.
+		// Not-yet-migrated elements are absent from the new registry — today's markdown
+		// code-block processors for them are entirely legacy-owned.
 		expect(plugin.frameworkV2!.registry.get('ds-ft')).toBeUndefined();
 	});
 
@@ -151,7 +153,9 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			expect(warnSpy).toHaveBeenCalled();
 			expect(Notice.notices.length).toBeGreaterThan(0);
 			expect(plugin.frameworkV2).toBeDefined();
-			expect(plugin.frameworkV2!.registry.all()).toEqual([]);
+			// Migrated-element registration is independent of dependency-schema success —
+			// a bad schema degrades validation detail, it doesn't block registerFrameworkElementDefinitions.
+			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(['horizontal-rule']);
 			// Legacy path is unaffected by the framework v2 schema failure.
 			expect((plugin as any).registeredProcessors.has('ds-ft')).toBe(true);
 
@@ -174,6 +178,52 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 
 			warnSpy.mockRestore();
 		});
+	});
+});
+
+describe('D1 Task 1: Horizontal Rule wiring through onload() (F1 §2.3 / §6 step 1)', () => {
+	test('ds-hr and ds-horizontal-rule are registered, and route to the framework registry\'s def (not RegisterElements.ts)', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+
+		await plugin.onload();
+
+		expect((plugin as any).registeredProcessors.has('ds-hr')).toBe(true);
+		expect((plugin as any).registeredProcessors.has('ds-horizontal-rule')).toBe(true);
+		expect(plugin.frameworkV2!.registry.get('ds-hr')?.id).toBe('horizontal-rule');
+		expect(plugin.frameworkV2!.registry.get('ds-horizontal-rule')?.id).toBe('horizontal-rule');
+	});
+
+	test('ds-hr is registered EXACTLY ONCE — no double-registration between the legacy and framework paths', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		const registerSpy = jest.spyOn(plugin, 'registerMarkdownCodeBlockProcessor');
+
+		await plugin.onload();
+
+		const hrCalls = registerSpy.mock.calls.filter(([language]) => language === 'ds-hr');
+		const hrLongCalls = registerSpy.mock.calls.filter(([language]) => language === 'ds-horizontal-rule');
+		expect(hrCalls).toHaveLength(1);
+		expect(hrLongCalls).toHaveLength(1);
+
+		registerSpy.mockRestore();
+	});
+
+	test('rendering a ds-hr block through the wired processor produces the horizontal-rule DOM (end-to-end)', async () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		await plugin.onload();
+
+		app.vault.setFile('Note.md', '```ds-hr\n```\n');
+		const { makeFakeContext } = await import('../../mocks/obsidian');
+		const ctx = makeFakeContext(app, 'Note.md');
+		const handler = (plugin as any).registeredProcessors.get('ds-hr');
+
+		await handler('', ctx.el, ctx);
+
+		const root = ctx.el.firstElementChild as HTMLElement;
+		expect(root.getAttribute('data-dse-element')).toBe('horizontal-rule');
+		expect(root.querySelector('.ds-hr-container')).not.toBeNull();
 	});
 });
 

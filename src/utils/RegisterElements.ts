@@ -11,7 +11,6 @@ import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/Cha
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import { genericComponentProcessor } from "./ComponentProcessor";
 
-import HorizontalRule from "@drawSteelComponents/HorizontalRule.vue"
 import SkillList from "@drawSteelComponents/SkillList/SkillList.vue";
 import StaminaBar from "@drawSteelComponents/StaminaBar/StaminaBar.vue";
 
@@ -29,9 +28,8 @@ export function registerElements (plugin: Plugin) {
 	plugin.registerMarkdownCodeBlockProcessor("ds-fb", fbProcessor.handler);
 	plugin.registerMarkdownCodeBlockProcessor("ds-featureblock", fbProcessor.handler);
 
-	const hrProcessor = new genericComponentProcessor(plugin, HorizontalRule, undefined, "Horizontal Rule", true);
-	plugin.registerMarkdownCodeBlockProcessor("ds-hr", hrProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-horizontal-rule", hrProcessor.handler);
+	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
 
 	const initProcessor = new InitiativeProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
