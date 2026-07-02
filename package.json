@@ -39,7 +39,7 @@
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.4.1",
-    "js-yaml": "^5.2.1",
+    "js-yaml": "^4.1.0",
     "jszip": "^3.10.1",
     "jszip-utils": "^0.1.0",
     "obsidian": "1.8.7",
