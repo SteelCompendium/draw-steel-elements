@@ -196,8 +196,10 @@ export class Component {
 		this._registeredCallbacks.push(cb);
 	}
 	registerEvent(_ref: any): void {}
-	registerDomEvent(el: any, type: string, callback: any): void {
-		el.addEventListener(type, callback);
+	registerDomEvent(el: any, type: string, callback: any, options?: any): void {
+		el.addEventListener(type, callback, options);
+		// Real Component.registerDomEvent semantics: detached on unload (via register()).
+		this.register(() => el.removeEventListener(type, callback, options));
 	}
 	registerInterval(id: number): number {
 		return id;
