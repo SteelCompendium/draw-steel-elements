@@ -14,7 +14,7 @@ first** -- it contains the reading guide, role-based routing, and links to all o
 - `npm i` -- install dependencies
 - `npm run dev` -- build with watch mode
 - `npm run build` -- production build (type check + minified)
-- `npm test` -- run tests (Jest, currently no test files)
+- `npm test` -- run tests (Jest, two projects: `unit` and `dom`; `npx jest --selectProjects unit|dom` to run one)
 
 ## Key Architecture
 
