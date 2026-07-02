@@ -20,11 +20,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Informational until TS-1 (failing type-check) is fixed; flip to a hard
-      # gate by deleting continue-on-error once `npm run tsc` is green (F3 OD-6).
-      - name: Type check (informational)
+      # Hard gate (F3 OD-6): flipped once `npm run tsc` went green (D1, Vue removal
+      # complete) — was informational-only (continue-on-error: true) while TS-1
+      # (failing type-check) was outstanding.
+      - name: Type check
         run: npm run tsc
-        continue-on-error: true
 
       # NOTE: no lint step yet — eslint is not installable in this repo (F3 BT-3).
       # Add `npm run lint` here when BT-3 lands.
