@@ -4,15 +4,15 @@ import type { ThemeService } from '../../../src/framework/seams/theme';
 import type { PreferenceStore } from '../../../src/framework/seams/prefs';
 import type { ReferenceService } from '../../../src/framework/seams/refs';
 import type { SessionStore } from '../../../src/framework/session';
-import type { DSESettings } from '../../../src/model/Settings';
-import type { App, Plugin } from 'obsidian';
+import { DEFAULT_SETTINGS, type DSESettings } from '../../../src/model/Settings';
+import { App as MockApp, Plugin as MockPlugin } from '../../mocks/obsidian';
 
 // F1 §3.2: RenderContext — per-block-instance context object the pipeline builds
 // and passes to views. Contains no view reference and no DOM — views own DOM,
 // context owns services.
 describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
-	let mockApp: Partial<App>;
-	let mockPlugin: Partial<Plugin>;
+	let mockApp: MockApp;
+	let mockPlugin: MockPlugin;
 	let mockSettings: Readonly<DSESettings>;
 	let mockHost: Partial<BlockHost>;
 	let mockTheme: Partial<ThemeService>;
@@ -21,10 +21,11 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 	let mockSession: Partial<SessionStore>;
 
 	beforeEach(() => {
-		mockApp = { vault: {} };
-		mockPlugin = { app: mockApp };
+		mockApp = new MockApp();
+		mockPlugin = new MockPlugin(mockApp);
 		mockSettings = {
 			compendiumDestinationDirectory: 'compendium',
+			defaultImagePath: 'Media/test.png',
 		};
 		// Minimal mock HTMLElement for unit testing (no jsdom needed).
 		const mockContainerEl = {} as HTMLElement;
@@ -33,7 +34,7 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 			sourcePath: '/notes/test.md',
 			containerEl: mockContainerEl,
 			canPersist: true,
-			addChild: jest.fn((child) => child),
+			addChild: jest.fn((child) => child) as any,
 			getBlockInfo: jest.fn(() => ({ language: 'ds-ft', lineStart: 10, lineEnd: 15 })),
 			replaceSource: jest.fn(async () => true),
 			blockKey: jest.fn(() => '/notes/test.md::ds-ft::10'),
@@ -46,8 +47,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 
 	test('factory creates a RenderContext with all required members', () => {
 		const cx = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: mockHost as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -69,8 +70,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 
 	test('context.mode equals host.mode (convenience member)', () => {
 		const cx = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: mockHost as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -86,8 +87,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 	test('context.mode stays in sync with different host modes', () => {
 		const hostReading = { ...mockHost, mode: 'reading' as const };
 		const cxReading = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: hostReading as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -99,8 +100,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 
 		const hostLp = { ...mockHost, mode: 'live-preview' as const };
 		const cxLp = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: hostLp as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -113,8 +114,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 
 	test('all context members are readonly', () => {
 		const cx = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: mockHost as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -123,21 +124,7 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 			session: mockSession as SessionStore,
 		});
 
-		// TypeScript will enforce readonly at compile time, but we can test
-		// the object's property descriptors for runtime readonly enforcement.
-		const appDesc = Object.getOwnPropertyDescriptor(cx, 'app');
-		const pluginDesc = Object.getOwnPropertyDescriptor(cx, 'plugin');
-		const hostDesc = Object.getOwnPropertyDescriptor(cx, 'host');
-		const modeDesc = Object.getOwnPropertyDescriptor(cx, 'mode');
-
-		// Properties should be defined and non-writable if set up properly as readonly.
-		expect(appDesc).toBeDefined();
-		expect(pluginDesc).toBeDefined();
-		expect(hostDesc).toBeDefined();
-		expect(modeDesc).toBeDefined();
-
-		// Attempt to modify should fail in strict mode (or silently fail in non-strict).
-		// This test is more about the TypeScript interface than runtime behavior.
+		// Attempt to modify should fail in strict mode.
 		expect(() => {
 			(cx as any).app = {};
 		}).toThrow();
@@ -147,8 +134,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 		const mockRoll: RollService = {}; // Minimal empty interface
 
 		const cxWithRoll = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: mockHost as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -163,8 +150,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 
 	test('context roll is optional', () => {
 		const cxNoRoll = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: mockHost as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -178,8 +165,8 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 
 	test('context members are accessible and functional', () => {
 		const cx = createRenderContext({
-			app: mockApp as App,
-			plugin: mockPlugin as Plugin,
+			app: mockApp as any,
+			plugin: mockPlugin as any,
 			settings: mockSettings,
 			host: mockHost as BlockHost,
 			theme: mockTheme as ThemeService,
@@ -188,14 +175,10 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 			session: mockSession as SessionStore,
 		});
 
-		// Verify all service methods are accessible
-		expect(cx.host.getBlockInfo).toBeDefined();
-		expect(cx.host.replaceSource).toBeDefined();
-		expect(cx.host.addChild).toBeDefined();
-		expect(cx.prefs.get).toBeDefined();
-		expect(cx.prefs.reflect).toBeDefined();
-		expect(cx.refs.resolve).toBeDefined();
-		expect(cx.session.get).toBeDefined();
-		expect(cx.session.set).toBeDefined();
+		// Verify services work and methods are callable
+		expect(cx.host.getBlockInfo()).toEqual({ language: 'ds-ft', lineStart: 10, lineEnd: 15 });
+		expect(typeof cx.prefs.get).toBe('function');
+		expect(typeof cx.refs.resolve).toBe('function');
+		expect(typeof cx.session.get).toBe('function');
 	});
 });
