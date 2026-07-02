@@ -2,7 +2,21 @@ import type { Config } from 'jest';
 
 // Path aliases mirror tsconfig.json `paths` (+ baseUrl-resolved bare `main`).
 // Longest-prefix entries must come before the catch-all `@/`.
+//
+// T-10 fix: moduleNameMapper is matched in object-key insertion order, first match
+// wins (Jest docs: "the order in which the mocks are defined matters"). `.vue$` and
+// `.css$` MUST come before the `@drawSteelComponents/(.*)$` / catch-all `@/(.*)$`
+// prefix aliases, or e.g. `@drawSteelComponents/HorizontalRule.vue` resolves to the
+// REAL .vue file (via the prefix alias, matched first) instead of the stub — this was
+// latent (nothing imported main.ts / RegisterElements.ts, the only .vue importer,
+// from a test) until T-10 added test/dom/framework/plugin-wiring.test.ts.
 const aliases: Record<string, string> = {
+	// The obsidian npm package is types-only; all runtime goes to the mock.
+	'^obsidian$': '<rootDir>/test/mocks/obsidian.ts',
+	// Vue SFCs: out of scope until D1 (F3 §4.5) — stub them.
+	'\\.vue$': '<rootDir>/test/mocks/vueStub.ts',
+	// main.ts imports ./styles-source.css; identity-obj-proxy is already installed.
+	'\\.css$': 'identity-obj-proxy',
 	'^@model/(.*)$': '<rootDir>/src/model/$1',
 	'^@utils/(.*)$': '<rootDir>/src/utils/$1',
 	'^@views/(.*)$': '<rootDir>/src/views/$1',
@@ -10,12 +24,6 @@ const aliases: Record<string, string> = {
 	'^@drawSteelComponents/(.*)$': '<rootDir>/src/drawSteelComponents/$1',
 	'^@/(.*)$': '<rootDir>/src/$1',
 	'^main$': '<rootDir>/main.ts',
-	// The obsidian npm package is types-only; all runtime goes to the mock.
-	'^obsidian$': '<rootDir>/test/mocks/obsidian.ts',
-	// Vue SFCs: out of scope until D1 (F3 §4.5) — stub them.
-	'\\.vue$': '<rootDir>/test/mocks/vueStub.ts',
-	// main.ts imports ./styles-source.css; identity-obj-proxy is already installed.
-	'\\.css$': 'identity-obj-proxy',
 };
 
 const transform = {

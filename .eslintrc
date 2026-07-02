@@ -3,13 +3,14 @@
     "parser": "@typescript-eslint/parser",
     "env": { "node": true },
     "plugins": [
-      "@typescript-eslint"
+      "@typescript-eslint",
+      "import"
     ],
     "extends": [
       "eslint:recommended",
       "plugin:@typescript-eslint/eslint-recommended",
       "plugin:@typescript-eslint/recommended"
-    ], 
+    ],
     "parserOptions": {
         "sourceType": "module"
     },
@@ -18,6 +19,33 @@
       "@typescript-eslint/no-unused-vars": ["error", { "args": "none" }],
       "@typescript-eslint/ban-ts-comment": "off",
       "no-prototype-builtins": "off",
-      "@typescript-eslint/no-empty-function": "off"
-    } 
+      "@typescript-eslint/no-empty-function": "off",
+
+      // F1 §8 OD-8 — import-boundary enforcement: src/framework/ (the DSE Element
+      // Framework v2 keystone, F1 §2.5) must never import from src/elements/ (the
+      // per-element definitions that DEPEND ON the framework, never the reverse).
+      // Keeps the "framework has zero element coupling" contract lint-enforced
+      // instead of just convention.
+      //
+      // NOTE (config-only, per Plan 02 Task 10 / F3): this rule needs the "import"
+      // plugin above, which comes from `eslint-plugin-import` — and eslint itself is
+      // NOT YET a devDependency of this package. Neither is installed here (that is
+      // an explicit STOP/open-decision per the Task 10 brief — do NOT `npm install`
+      // them from this task). Until F3's CI/lint work adds `eslint` +
+      // `eslint-plugin-import` as devDependencies, this rule is inert (nothing runs
+      // this config), but it documents and pre-wires the boundary so F3 only has to
+      // install the tooling, not design the rule.
+      "import/no-restricted-paths": [
+        "error",
+        {
+          "zones": [
+            {
+              "target": "./src/framework",
+              "from": "./src/elements",
+              "message": "F1 OD-8: src/framework/ must not import from src/elements/ — the framework is the dependency-free keystone; elements depend on it, never the reverse."
+            }
+          ]
+        }
+      ]
+    }
   }
