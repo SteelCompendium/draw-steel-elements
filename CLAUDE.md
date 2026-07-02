@@ -18,10 +18,19 @@ first** -- it contains the reading guide, role-based routing, and links to all o
 
 ## Key Architecture
 
-- **Processor pattern**: Each `ds-*` element has a processor in `src/drawSteelAdmonition/`
-- **Two rendering strategies**: DOM manipulation (most elements) and Vue 3 (interactive elements)
-- **Models**: `src/model/` with `parseYaml()` static methods and AJV schema validation
-- **Vue components**: `src/drawSteelComponents/` using Composition API
+- **Two rendering strategies, coexisting**: **Element Framework v2** (`src/framework/` —
+  `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
+  `src/elements/`) for migrated elements (Horizontal Rule, Skills, Stamina Bar so far),
+  and legacy DOM-manipulation processors (`src/drawSteelAdmonition/`) for the rest.
+  Framework v2 replaced Vue 3 (2026-04-06 revert decision, executed by D1) — see
+  `.repo-docs/architecture.md` for the full picture and the migration model.
+- **Legacy processor pattern**: Each not-yet-migrated `ds-*` element has a processor in
+  `src/drawSteelAdmonition/`, registered in `src/utils/RegisterElements.ts`
+- **Framework v2 element pattern**: each migrated `ds-*` element has a
+  `src/elements/<name>/definition.ts` (`ElementDefinition`) + `view.ts` (`ElementView`
+  subclass), registered in `main.ts`'s `registerFrameworkElementDefinitions()`
+- **Models**: `src/model/` with `parseYaml()` static methods and AJV schema validation —
+  shared by both strategies
 - **SDK**: `steel-compendium-sdk` bundled at build time for data model parsing
 
 ## Important Constraints

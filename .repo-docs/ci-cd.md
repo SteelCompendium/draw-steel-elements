@@ -23,7 +23,9 @@ npm run build
 npm run build-no-check
 ```
 
-esbuild produces a single `main.js` (CJS format) and copies Vue-generated CSS to `styles.css`.
+esbuild produces a single `main.js` (CJS format) and copies the bundled `main.css`
+(from `main.ts`'s `styles-source.css` import — Vue was removed in D1, 2026-07; there is
+no more per-component SFC-style extraction step) to `styles.css`.
 
 ## Build Artifacts
 

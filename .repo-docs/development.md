@@ -45,7 +45,8 @@
 npm run tsc
 ```
 
-Runs `vue-tsc --noEmit` which type-checks both `.ts` and `.vue` files.
+Runs `tsc --noEmit`. Vue was removed (D1, 2026-07); this is now plain TypeScript
+type-checking, no `vue-tsc` involved. This is also a hard gate in CI (`plugin-ci.yml`).
 
 ### Production build
 
@@ -53,7 +54,7 @@ Runs `vue-tsc --noEmit` which type-checks both `.ts` and `.vue` files.
 npm run build
 ```
 
-Runs type checking first (`vue-tsc --noEmit`), then builds minified output without sourcemaps.
+Runs type checking first (`tsc --noEmit`), then builds minified output without sourcemaps.
 
 ### Build without type check
 
@@ -61,7 +62,7 @@ Runs type checking first (`vue-tsc --noEmit`), then builds minified output witho
 npm run build-no-check
 ```
 
-Skips `vue-tsc` and just runs esbuild in production mode. Used by the release recipe.
+Skips `tsc` and just runs esbuild in production mode. Used by the release recipe.
 
 ### Adding a new element
 

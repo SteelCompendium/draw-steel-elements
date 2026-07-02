@@ -2,117 +2,200 @@
 
 ## System Overview
 
-The plugin follows a processor-based architecture where each Draw Steel element type has a dedicated processor that parses YAML input and renders DOM output. Vue 3 components handle interactive elements; plain TypeScript DOM manipulation handles simpler ones.
+The plugin follows a processor-based architecture where each Draw Steel element type has
+a dedicated processor (or, for migrated elements, an `ElementDefinition`) that parses
+YAML input and renders DOM output. Two rendering strategies coexist: **Element Framework
+v2** (`src/framework/`) handles migrated elements via a declarative
+registry/pipeline/view model; plain TypeScript DOM manipulation (`src/drawSteelAdmonition/`)
+handles the rest via hand-rolled processors. Vue 3 was adopted (2025-08-22) and later
+removed (2026-04-06, see `decisions/2026-04-06-revert-vue-3-adoption.md`) — Framework v2
+is what replaced it, not a return to DOM-only. See "Framework v2 (`src/framework/`)"
+below for the coexistence model.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Obsidian App                          │
-│                                                         │
-│  ┌──────────────┐    ┌───────────────────────────────┐  │
-│  │  Markdown     │    │  Draw Steel Elements Plugin    │  │
-│  │  Note with    │───>│                               │  │
-│  │  ```ds-*      │    │  main.ts (Plugin entry)       │  │
-│  │  blocks       │    │    │                           │  │
-│  └──────────────┘    │    ▼                           │  │
-│                      │  RegisterElements.ts            │  │
-│                      │    │                           │  │
-│                      │    ├── FeatureProcessor         │  │
-│                      │    ├── StatblockProcessor       │  │
-│                      │    ├── InitiativeProcessor      │  │
-│                      │    ├── NegotiationProcessor     │  │
-│                      │    ├── genericComponentProcessor │  │
-│                      │    │   ├── HorizontalRule.vue   │  │
-│                      │    │   ├── SkillList.vue        │  │
-│                      │    │   └── StaminaBar.vue       │  │
-│                      │    ├── CounterProcessor         │  │
-│                      │    ├── CharacteristicsProcessor │  │
-│                      │    ├── FeatureblockProcessor    │  │
-│                      │    └── ValuesRowProcessor       │  │
-│                      │                               │  │
-│                      │  Utils:                        │  │
-│                      │    ├── ReferenceResolver        │  │
-│                      │    ├── JsonSchemaValidator      │  │
-│                      │    └── CompendiumDownloader     │  │
-│                      └───────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                            Obsidian App                                  │
+│                                                                          │
+│  ┌──────────────┐    ┌──────────────────────────────────────────────┐  │
+│  │  Markdown     │    │  Draw Steel Elements Plugin                    │  │
+│  │  Note with    │───>│                                               │  │
+│  │  ```ds-*      │    │  main.ts (Plugin entry, onload)               │  │
+│  │  blocks       │    │    │                                          │  │
+│  └──────────────┘    │    ├── registerElements(this)  [legacy path]   │  │
+│                      │    │     │                                     │  │
+│                      │    │     ├── FeatureProcessor                  │  │
+│                      │    │     ├── FeatureblockProcessor             │  │
+│                      │    │     ├── StatblockProcessor                │  │
+│                      │    │     ├── InitiativeProcessor                │  │
+│                      │    │     ├── NegotiationTrackerProcessor        │  │
+│                      │    │     ├── CounterProcessor                  │  │
+│                      │    │     ├── CharacteristicsProcessor           │  │
+│                      │    │     └── ValuesRowProcessor                │  │
+│                      │    │                                          │  │
+│                      │    ├── initializeElementFrameworkV2(...)       │  │
+│                      │    │     [framework/: registry + pipeline +    │  │
+│                      │    │      theme/prefs/refs/validation/session] │  │
+│                      │    ├── registerFrameworkElementDefinitions(..) │  │
+│                      │    │     ├── horizontal-rule (elements/)       │  │
+│                      │    │     ├── skills (elements/)                │  │
+│                      │    │     └── stamina-bar (elements/)           │  │
+│                      │    └── registerFrameworkElements(this, fw)     │  │
+│                      │          [wiring loop, F1 §2.3]                │  │
+│                      │                                               │  │
+│                      │  Utils:                                       │  │
+│                      │    ├── ReferenceResolver   (legacy)            │  │
+│                      │    ├── JsonSchemaValidator (legacy, singleton) │  │
+│                      │    └── CompendiumDownloader                    │  │
+│                      └──────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Components
 
 ### Plugin Entry (`main.ts`)
 
-- **Responsibility:** Loads settings, initializes schema registry, registers code block processors, adds compendium download command.
-- **Depends on:** `RegisterElements`, `JsonSchemaValidator`, `Settings`, `CompendiumDownloader`
+- **Responsibility:** Loads settings, initializes the legacy schema registry, calls
+  `registerElements(this)` (legacy path), constructs the Framework v2 service bundle
+  (`initializeElementFrameworkV2`), populates its registry
+  (`registerFrameworkElementDefinitions`), wires framework elements into Obsidian
+  (`registerFrameworkElements`), and adds the compendium download command. Drops the
+  framework bundle and clears `SessionStore` in `onunload`.
+- **Depends on:** `RegisterElements`, `JsonSchemaValidator`, `Settings`,
+  `CompendiumDownloader`, `src/framework/*` (registry, pipeline, session, validation,
+  seams), `src/elements/*` (migrated element definitions)
 - **Depended on by:** Obsidian app (plugin lifecycle)
 
-### Element Registration (`src/utils/RegisterElements.ts`)
+### Legacy Element Registration (`src/utils/RegisterElements.ts`)
 
-- **Responsibility:** Maps code block language tags (e.g., `ds-ft`, `ds-feature`) to their processors. Each element type gets multiple aliases.
-- **Depends on:** All processor classes, Vue components, model classes
+- **Responsibility:** Maps code block language tags (e.g., `ds-ft`, `ds-feature`) to
+  their legacy processors. Each element type gets multiple aliases. Owns every element
+  **not yet migrated** onto Framework v2 — as an element migrates, its
+  `registerMarkdownCodeBlockProcessor` call is deleted here (left as a code comment
+  pointing at the framework registration) and the alias moves to
+  `src/elements/<name>/definition.ts` instead.
+- **Depends on:** All legacy processor classes, model classes
 - **Depended on by:** `main.ts`
 
-### Processors (`src/drawSteelAdmonition/`)
+### Legacy Processors (`src/drawSteelAdmonition/`)
 
-Each element type has a processor with this pattern:
+Each not-yet-migrated element type has a processor with this pattern — parse YAML,
+create HTML elements via Obsidian's `createEl` API, manage any interactive state
+directly in the processor/View class:
 
-| Processor | Directory | Rendering approach |
-|-----------|-----------|-------------------|
-| FeatureProcessor | `Features/` | DOM manipulation via View classes |
-| FeatureblockProcessor | `featureblock/` | DOM manipulation via View classes |
-| StatblockProcessor | `statblock/` | DOM manipulation via View classes |
-| InitiativeProcessor | `initiativeProcessor.ts` | DOM manipulation with interactive state |
-| NegotiationTrackerProcessor | `negotiation/` | DOM manipulation with interactive state |
-| CounterProcessor | `Counter/` | DOM manipulation |
-| CharacteristicsProcessor | `Characteristics/` | DOM manipulation |
-| ValuesRowProcessor | `ValuesRow/` | DOM manipulation |
-| genericComponentProcessor | `(utils/)` | Vue 3 component mounting |
+| Processor | Directory | Aliases |
+|-----------|-----------|---------|
+| FeatureProcessor | `Features/` | `ds-ft`, `ds-feat`, `ds-feature` |
+| FeatureblockProcessor | `featureblock/` | `ds-fb`, `ds-featureblock` |
+| StatblockProcessor | `statblock/` | `ds-sb`, `ds-statblock` |
+| InitiativeProcessor | `initiativeProcessor.ts` | `ds-it`, `ds-init`, `ds-initiative`, `ds-initiative-tracker` |
+| NegotiationTrackerProcessor | `negotiation/` | `ds-nt`, `ds-negotiation`, `ds-negotiation-tracker` |
+| CounterProcessor | `Counter/` | `ds-ct`, `ds-counter` |
+| CharacteristicsProcessor | `Characteristics/` | `ds-char`, `ds-characteristics` |
+| ValuesRowProcessor | `ValuesRow/` | `ds-vr`, `ds-value-row`, `ds-values-row` |
 
-Two rendering strategies exist:
-1. **DOM-based processors**: Parse YAML, create HTML elements via Obsidian's `createEl` API. Used for most elements.
-2. **Vue-based processors**: Use `genericComponentProcessor` which mounts a Vue 3 app into the code block container. Used for SkillList, StaminaBar, HorizontalRule.
+These 8 element families are the "legacy" side of the coexistence model. They may
+migrate onto Framework v2 in future work; nothing in this list is Framework-v2-only or
+Vue-based today.
 
-### Vue Components (`src/drawSteelComponents/`)
+### Framework v2 (`src/framework/`)
 
-- **Responsibility:** Interactive UI components rendered via Vue 3 Composition API.
-- **Pattern:** Receive parsed model data as props, use Obsidian plugin/app/context via Vue's `provide`/`inject`.
-- **Key components:** `StaminaBar.vue` (health tracking with edit modal), `SkillList.vue` (collapsible skill groups), `HorizontalRule.vue` (styled divider).
+Element Framework v2 replaces Vue's role (declarative components, structured lifecycle,
+one error boundary) with a small, Obsidian-decoupled-where-possible layer purpose-built
+for this plugin. Element authors declare an `ElementDefinition`; the framework handles
+everything else (parsing, validation, ref resolution, mounting, error rendering,
+lifecycle cleanup, persistence write-back).
+
+| File | Responsibility |
+|------|-----------------|
+| `registry.ts` | `ElementRegistry` — pure in-memory `id`/alias → `ElementDefinition` lookup. No Obsidian coupling; unit-testable without a real `Plugin`. Rejects duplicate ids/aliases and `shape: "persisted"` definitions missing `serialize`. |
+| `pipeline.ts` | `ElementPipeline` — the render pipeline: parse → validate (AJV) → resolve refs → `createView` → mount, behind **one** error boundary (`renderErrorCard`, four failure stages: `parse`/`schema`/`reference`/`render`). Constructed once per plugin load with the service bundle; `run()` executes once per rendered block instance. |
+| `view.ts` | `ElementView<M>` — abstract view lifecycle base (extends Obsidian `Component`). Owns DOM (`rootEl`) and the current model; subclasses implement `onMount` (required) and optionally `onUpdate`. Implements the debounced (~400ms) `persist()` write-behind path for `shape: "persisted"` elements, flushed on unload. Also ships a `HeroPanel<S>` stub (unused in D1; reserved for a later effort). |
+| `context.ts` | `RenderContext` — the immutable per-block-instance DTO the pipeline builds and hands to `createView`/views: `app`, `plugin`, `settings`, `host`, `mode`, and the four service seams (`theme`, `prefs`, `refs`, `session`), plus an unused `roll` stub. Frozen at construction. |
+| `host/BlockHost.ts` | The `BlockHost` interface — the single seam between a mounted `ElementView` and *where* it lives (`containerEl`, `canPersist`, `replaceSource()`, `addChild()`, `getBlockInfo()`, `blockKey()`). `RenderMode` is `"reading" \| "live-preview" \| "sidebar"`. |
+| `host/ReadingModeBlockHost.ts` | The only implemented `BlockHost` (D1 ships reading mode only, matching the standing 2024-08-18 reading-mode-only decision). Fixes two legacy bugs on top of `src/utils/CodeBlocks.ts`'s approach: atomic read-modify-write via `Vault.process` (no lost updates from concurrent edits) and fence-language preservation on write-back (no silent alias-to-canonical rewriting). |
+| `host/LivePreviewBlockHost.ts` | Deliberately unimplemented stub — every member throws. Documents the CM6 realization of each `BlockHost` member for a future Live Preview effort; not to be constructed until that effort supersedes the reading-mode-only decision. |
+| `seams/theme.ts` | `ThemeService` — stamps `data-dse-theme="<active>"` on every element root, token → CSS var resolution (`cssVar()`). Minimal in D1 (effectively one constant theme); the token/theme value space is a later effort's scope. |
+| `seams/prefs.ts` | `PreferenceStore` — a small typed preference store (`DsePrefs`, currently just `theme`) backed by an injected `saveData`-like storage pair, with `reflect()` stamping any `attr`-bearing preference as `data-dse-<attr>` on element roots. The preference catalog is a later effort's scope. |
+| `seams/refs.ts` | `ReferenceService` — generalizes `src/utils/ReferenceResolver.ts` into a provider chain (`RefProvider`). Ships `at-path` (`@Creatures/Goblin`) and `wikilink` (`[[Thorn Dragon]]`) providers ported verbatim from the legacy resolver, plus a reserved, always-failing `scc`/`scc.vN:` provider placeholder for a future effort to supersede. `resolveDeep()` walks arbitrary parsed YAML. Does **not** replace `ReferenceResolver.ts`, which stays live for legacy elements. |
+| `session.ts` | `SessionStore` — plugin-scoped, in-memory, best-effort UI state (e.g. collapse open/closed) keyed by `(blockKey, slot)`. Cleared on plugin `onunload`. Pure — no Obsidian imports. Never used for document state. |
+| `validation.ts` | `ValidationService` — a plugin-scoped AJV wrapper (2019 dialect, `ajv-keywords` + `ajv-errors`, ported from `src/utils/JsonSchemaValidator.ts`) that compiles and caches one validator per element id (fixing the legacy validator's recompile-on-every-call cost). One instance per plugin load, dropped on unload — no module-global singleton (unlike the legacy validator, which stays a singleton for its own unmigrated clients). |
+| `registerFrameworkElements.ts` | The framework → Obsidian wiring loop: for every `ElementDefinition` currently in the registry, registers one `plugin.registerMarkdownCodeBlockProcessor` per alias, each invoking `pipeline.run(def, source, new ReadingModeBlockHost(...))`. A one-shot pass over `registry.all()` at call time — called once from `main.ts onload`, after the registry is populated. |
+| `kit/collapsible.ts`, `kit/componentWrapper.ts` | Small reusable, purely presentational DOM-mounting helpers (vanilla ports of the former `CollapsibleHeading.vue`/`RightArrowToggleIndicator.vue` and `ComponentWrapper.vue`/`ComponentHideIndicator.vue`+`VerticalRule.vue`). No persistence or service coupling; the calling `ElementView` owns state and lifecycle-binds listeners via `owner.registerDomEvent`. |
+
+**Coexistence model:** `main.ts onload` calls the legacy `registerElements(this)` and the
+framework wiring (`registerFrameworkElementDefinitions` + `registerFrameworkElements`)
+back to back. Obsidian's markdown code-block processor registry is owned by both paths
+at once, one alias at a time — an element belongs to exactly one path (never both), and
+which path owns it is a one-line decision recorded at the call site (a live
+`registerMarkdownCodeBlockProcessor` call in `RegisterElements.ts`, or a
+`registry.register(...)` line in `registerFrameworkElementDefinitions`). This is the
+incremental migration switch F1 designed for: elements move off `RegisterElements.ts`
+one at a time as they migrate, with no big-bang rewrite and no window where both paths
+fight over the same alias.
+
+### Migrated Elements (`src/elements/`)
+
+The three elements migrated onto Framework v2 in D1 (Horizontal Rule → Skills → Stamina
+Bar, simplest-to-most-complex by `ElementShape`):
+
+| Element | Directory | `shape` | Aliases | Notes |
+|---------|-----------|---------|---------|-------|
+| Horizontal Rule | `horizontal-rule/` | `static` | `ds-hr`, `ds-horizontal-rule` | No model (`parse` returns `undefined`); `onMount` reuses the legacy `HorizontalRuleProcessor.build()` DOM builder verbatim (that builder also stays live for Statblock/Featureblock, which embed it directly — not yet migrated). `noClickShield: true` matches the legacy Vue element's behavior. |
+| Skills | `skills/` | `interactive` | `ds-skills` | First interactive element: per-group and whole-element collapse state lives in `SessionStore`, never written back to the note (no `serialize`, matching the legacy Vue element). `model.ts` wraps `@model/Skills` verbatim. |
+| Stamina Bar | `stamina-bar/` | `persisted` | `ds-stam`, `ds-stamina`, `ds-stamina-bar` | First (and only, in D1) persisted element: edits write back via `ElementView.persist()` → `serialize()` → `host.replaceSource()`. `serialize()` reuses `@model/StaminaBar`'s own field/order shape (`stringifyYaml(model).trim()`) to stay byte-compatible with the legacy write path. Was the last Vue element — its migration unblocked Vue removal (D1 Task 4). |
+
+Each element directory follows the same shape: `definition.ts` (the `ElementDefinition`,
+registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the
+`ElementView` subclass), and — for Skills/Stamina Bar — `model.ts` (a thin `parse`/
+`serialize` wrapper around the pre-existing `@model/*` class, kept renderer-agnostic so
+the same model classes still back the legacy validator/schemas).
 
 ### Models (`src/model/`)
 
-- **Responsibility:** Define TypeScript types and provide `parseYaml(source)` static methods that convert raw YAML strings into typed objects.
-- **Pattern:** Each model class has a static `parseYaml()` method using Obsidian's `parseYaml` function. Some models use the SDK (`steel-compendium-sdk`) for parsing.
-- **Schemas:** `src/model/schemas/` contains YAML-format JSON Schemas validated by AJV at runtime.
+- **Responsibility:** Define TypeScript types and provide `parseYaml(source)` static
+  methods that convert raw YAML strings into typed objects. Shared by both rendering
+  strategies — Framework v2 elements' `model.ts` wrappers call into the same classes the
+  legacy processors use directly.
+- **Pattern:** Each model class has a static `parseYaml()` method using Obsidian's
+  `parseYaml` function. Some models use the SDK (`steel-compendium-sdk`) for parsing.
+- **Schemas:** `src/model/schemas/` contains YAML-format JSON Schemas. Legacy elements
+  validate via the `JsonSchemaValidator.ts` singleton; Framework v2 elements validate via
+  `framework/validation.ts`'s `ValidationService`. Both load the same schema files and
+  both register the shared `component-wrapper` dependency schema independently (once
+  each, at plugin load).
 
 ### Utilities (`src/utils/`)
 
 | Utility | Purpose |
 |---------|---------|
-| `ComponentProcessor.ts` | Generic Vue component mounting into Obsidian code blocks |
-| `ReferenceResolver.ts` | Resolves `@path` and `[[wikilink]]` references to content in other vault notes |
-| `JsonSchemaValidator.ts` | AJV-based validation with YAML schema support, singleton registry pattern |
-| `CompendiumDownloader.ts` | Downloads and extracts GitHub release zips into the Obsidian vault |
-| `RegisterElements.ts` | Code block processor registration |
-| `Conditions.ts` | Draw Steel condition definitions |
-| `SkillsData.ts` | Draw Steel skill definitions |
-| `Images.ts` | Image handling utilities |
-| `CodeBlocks.ts` | Code block parsing helpers |
-| `ModalProcessor.ts` | Modal dialog utilities |
-| `common.ts` | Shared utility functions |
+| `ReferenceResolver.ts` | Resolves `@path` and `[[wikilink]]` references to content in other vault notes. Legacy-only — stays live until every element that uses it migrates; Framework v2 elements use `framework/seams/refs.ts` instead. |
+| `JsonSchemaValidator.ts` | AJV-based validation with YAML schema support, singleton registry pattern. Legacy-only. |
+| `CompendiumDownloader.ts` | Downloads and extracts GitHub release zips into the Obsidian vault. |
+| `RegisterElements.ts` | Legacy code block processor registration (see above). |
+| `Conditions.ts` | Draw Steel condition definitions. |
+| `SkillsData.ts` | Draw Steel skill definitions. |
+| `Images.ts` | Image handling utilities. |
+| `CodeBlocks.ts` | Legacy code-block read/write helpers (`Vault.read`/`Vault.modify`-based). Superseded for migrated elements by `framework/host/ReadingModeBlockHost.ts`'s atomic `Vault.process`-based `replaceSource()`; stays live for legacy elements. |
+| `ModalProcessor.ts` | Modal dialog utilities. |
+| `common.ts` | Shared utility functions. |
 
 ### Views (`src/views/`)
 
 - **Responsibility:** Obsidian modal dialogs for interactive elements.
-- **Key modals:** `ConditionSelectModal` (pick conditions), `CustomizeConditionModal` (modify condition details), `MinionStaminaPoolModal` (manage minion shared stamina), `StaminaEditModal` (edit stamina values), `ResetEncounterModal` (reset initiative tracker), `SettingsTab` (plugin settings UI).
+- **Key modals:** `ConditionSelectModal` (pick conditions), `CustomizeConditionModal`
+  (modify condition details), `MinionStaminaPoolModal` (manage minion shared stamina),
+  `StaminaEditModal` (edit stamina values), `ResetEncounterModal` (reset initiative
+  tracker), `SettingsTab` (plugin settings UI).
 
 ## Data Flow
 
-### Code Block Rendering
+### Code Block Rendering — legacy path
 
 ```
 User writes ```ds-feature YAML``` in a note
         │
         ▼
-Obsidian detects registered language tag
+Obsidian detects registered language tag (RegisterElements.ts)
         │
         ▼
 FeatureProcessor.handler(source, el, ctx) called
@@ -124,14 +207,43 @@ YAML source parsed (Obsidian parseYaml or model.parseYaml)
         │   └── ReferenceResolver fetches content from other notes
         │
         ▼
-Optional: Schema validation (AJV)
+Optional: Schema validation (JsonSchemaValidator singleton, AJV)
         │
         ▼
 DOM elements created and appended to container (el)
-   OR Vue app mounted into container
         │
         ▼
 Rendered element visible in Reading mode
+```
+
+### Code Block Rendering — Framework v2 path
+
+```
+User writes ```ds-stam YAML``` in a note
+        │
+        ▼
+Obsidian detects registered language tag (registerFrameworkElements wiring loop)
+        │
+        ▼
+ElementPipeline.run(def, source, new ReadingModeBlockHost(...))
+        │
+        ├── Step 1: build RenderContext (services + host); stamp
+        │           data-dse-element, arm click shield on root
+        ├── Step 2: parse    — parseYaml(source)                    ─┐
+        ├── Step 3: validate — ValidationService (AJV), if def.schema │ any throw here
+        ├── Step 4/5: resolve refs (def.resolveRefs or                │ → renderErrorCard
+        │            autoResolveRefs), if declared                    │   (stage-tagged)
+        ├── Step 6: def.parse() → model                              ─┘
+        ▼
+def.createView(cx) → ElementView; theme.apply() + prefs.reflect() stamped on root
+        │
+        ▼
+view.mount(root, model) → subclass onMount() builds DOM
+        │
+        ▼
+Rendered element visible in Reading mode
+(shape: "persisted" elements: user edits → view.persist() → serialize(model) →
+ host.replaceSource() → debounced ~400ms write-behind to the note)
 ```
 
 ### Compendium Download
@@ -156,43 +268,64 @@ Extracts zip contents into vault (batch of 20 files)
 
 | Decision | Rationale |
 |----------|-----------|
-| Two rendering strategies (DOM + Vue) | Vue was introduced gradually (v3.3.0). Simpler elements use direct DOM; interactive elements with state use Vue. Migration is ongoing. |
+| Two rendering strategies (Framework v2 + legacy DOM) | Framework v2 replaced Vue (2026-04-06 revert) as the strategy for elements needing structured lifecycle/state/persistence; simpler/not-yet-migrated elements stay on hand-rolled DOM processors. Migration is ongoing, alias-by-alias — see "Coexistence model" above. |
+| One error boundary per Framework v2 render (`renderErrorCard`) | Replaces six-plus hand-rolled try/catch error `<div>`s in the legacy processors with one visual + copy standard, stage-tagged (`parse`/`schema`/`reference`/`render`). |
+| `ReferenceService`/`ValidationService` generalize rather than replace their legacy counterparts | Legacy elements keep using `ReferenceResolver.ts`/`JsonSchemaValidator.ts` untouched until they migrate; Framework v2 elements get purpose-built, plugin-scoped (non-singleton) equivalents. Avoids a risky shared-state rewrite while both strategies coexist. |
 | Multiple code block aliases per element | Convenience for users: `ds-ft`, `ds-feat`, `ds-feature` all work. Short aliases for frequent use, full names for readability. |
-| esbuild with Vue plugin | Fast builds. Vue SFC compilation via `unplugin-vue/esbuild`. YAML loaded as raw strings via custom loader plugin. |
-| Singleton AJV schema registry | Schemas registered once at plugin load, reused across validations. Fresh instances created per validation to avoid compiled schema conflicts. |
-| Reading mode only | Obsidian's Live Preview mode uses CodeMirror 6 with a different rendering pipeline. Supporting it requires significant additional work. |
+| esbuild, no framework compilation step | Fast builds. YAML loaded as raw strings via a custom loader plugin; CSS is a single `styles-source.css` import bundled by esbuild and copied to `styles.css` (no per-component style extraction, unlike the removed Vue SFC pipeline). |
+| Singleton AJV schema registry (legacy) / per-load `ValidationService` (Framework v2) | Legacy: schemas registered once at plugin load, reused across validations, fresh AJV instances per validation to avoid compiled-schema conflicts. Framework v2: one `ValidationService` per plugin load, compile-and-cache per element id, dropped on unload — no module-global singleton. |
+| Reading mode only | Obsidian's Live Preview mode uses CodeMirror 6 with a different rendering pipeline. Supporting it requires significant additional work; `framework/host/LivePreviewBlockHost.ts` documents the seam for a future effort but is an unimplemented stub today. |
 | SDK as devDependency | `steel-compendium-sdk` is bundled at build time by esbuild, not needed at runtime as a separate package. |
 
 ## Dependencies
 
 | Package | Why |
 |---------|-----|
-| `vue` (3.x) | Composition API components for interactive elements |
-| `ajv` / `ajv-errors` / `ajv-keywords` | Runtime YAML schema validation for element inputs |
+| `ajv` / `ajv-errors` / `ajv-keywords` | Runtime YAML schema validation for element inputs (both the legacy `JsonSchemaValidator` singleton and Framework v2's `ValidationService`). |
 | `obsidian` (dev) | Obsidian Plugin API types and runtime APIs |
 | `steel-compendium-sdk` (dev) | Draw Steel data model parsing (bundled at build time) |
 | `esbuild` (dev) | Fast bundler producing `main.js` |
-| `unplugin-vue` (dev) | Vue SFC compilation for esbuild |
-| `vue-tsc` (dev) | Vue-aware TypeScript type checking |
 | `jszip` / `jszip-utils` (dev) | Zip extraction for compendium downloads (bundled) |
-| `jest` / `ts-jest` (dev) | Test framework (configured but no tests yet) |
+| `jest` / `ts-jest` (dev) | Test framework: `unit` (node) and `dom` (jsdom) Jest projects, 308 tests as of D1 |
+
+Vue (`vue`, `@vue/compiler-sfc`, `unplugin-vue`, `vue-tsc`) was removed in D1 (2026-07) —
+see `decisions/2026-04-06-revert-vue-3-adoption.md`.
 
 ## Extension Points
 
-- **Adding a new element type:**
+- **Adding a new legacy (DOM) element type:**
   1. Create a processor class in `src/drawSteelAdmonition/<ElementName>/`
   2. Create a model in `src/model/` with a `parseYaml()` method
   3. Register code block languages in `src/utils/RegisterElements.ts`
   4. Add CSS in `styles-source.css`
   5. Add docs in `docs/`
 
-- **Adding a Vue-based element:** Use `genericComponentProcessor` with your Vue component and model class. See `SkillList` or `StaminaBar` for examples.
+- **Adding a new Framework v2 element type:**
+  1. Create `src/elements/<name>/definition.ts` exporting an `ElementDefinition` (id,
+     name, aliases, `shape`, optional `schema`, `parse`, optional `serialize` — required
+     when `shape: "persisted"` — and `createView`)
+  2. Create `src/elements/<name>/view.ts` with an `ElementView` subclass implementing
+     `onMount` (and optionally `onUpdate`)
+  3. If reusing an existing `@model/` class, add a thin `src/elements/<name>/model.ts`
+     wrapper (`parse`/`serialize`) around it, per the Skills/Stamina Bar pattern
+  4. Register the definition in `main.ts`'s `registerFrameworkElementDefinitions()`
+  5. Add CSS in `styles-source.css`, scoped under `[data-dse-element="<id>"]`
+  6. Add docs in `docs/`
 
-- **Adding a schema:** Create a YAML schema in `src/model/schemas/`, register it in `main.ts` `initializeSchemas()`.
+- **Migrating an existing legacy element onto Framework v2:** follow the Framework v2
+  steps above, then delete the element's `registerMarkdownCodeBlockProcessor` call(s)
+  from `RegisterElements.ts` (leave a comment pointing at the framework registration, per
+  the existing Horizontal Rule/Skills/Stamina Bar comments there).
+
+- **Adding a schema:** Create a YAML schema in `src/model/schemas/`, register it in
+  `main.ts` `initializeSchemas()` (legacy validator) and/or pass it as a
+  `def.schema` (Framework v2 — validated by `ValidationService` automatically).
 
 ## Constraints
 
-- Must work in Obsidian's sandboxed plugin environment (no direct filesystem access, use Vault API).
+- Must work in Obsidian's sandboxed plugin environment (no direct filesystem access, use
+  Vault API).
 - Output must be CJS format (`format: "cjs"`) for Obsidian compatibility.
 - Target ES2018 for broad Obsidian version support.
-- `obsidian`, `electron`, and CodeMirror packages are external (provided by the host app).
+- `obsidian`, `electron`, and CodeMirror packages are external (provided by the host
+  app).
