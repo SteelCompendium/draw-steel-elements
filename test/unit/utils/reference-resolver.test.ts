@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App } from '../../mocks/obsidian';
 
 const GOBLIN_NOTE = ['# Goblin', '', '```ds-sb', 'name: Goblin', 'stamina: "20"', '```'].join('\n');
+const DECOY_NOTE = ['# Decoy', '', '```ds-sb', 'name: Decoy', 'stamina: "99"', '```'].join('\n');
 
 function makeResolver() {
 	const app = new App();
@@ -13,12 +14,18 @@ function makeResolver() {
 describe('T-8: ReferenceResolver.findFile 5-step fallback chain (via resolvePath)', () => {
 	test('step 1: exact path from vault root', async () => {
 		const { app, resolver } = makeResolver();
+		// Add decoy file FIRST (same basename, different folder) to force step 5 to find it
+		// if step 1 doesn't fire. Then add the target file to ensure steps 1/2 find it.
+		app.vault.setFile('Decoy/Goblin.md', DECOY_NOTE);
 		app.vault.setFile('Goblin.md', GOBLIN_NOTE);
 		await expect(resolver.resolvePath('Goblin.md')).resolves.toEqual({ name: 'Goblin', stamina: '20' });
 	});
 
 	test('step 2: root path with .md appended', async () => {
 		const { app, resolver } = makeResolver();
+		// Add decoy file FIRST (same basename, different folder) to force step 5 to find it
+		// if step 2 doesn't fire. Then add the target file to ensure steps 1/2 find it.
+		app.vault.setFile('Decoy/Goblin.md', DECOY_NOTE);
 		app.vault.setFile('Goblin.md', GOBLIN_NOTE);
 		await expect(resolver.resolvePath('Goblin')).resolves.toEqual({ name: 'Goblin', stamina: '20' });
 	});
