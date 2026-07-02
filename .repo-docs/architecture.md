@@ -27,7 +27,6 @@ below for the coexistence model.
 │                      │    │     ├── FeatureblockProcessor             │  │
 │                      │    │     ├── StatblockProcessor                │  │
 │                      │    │     ├── InitiativeProcessor                │  │
-│                      │    │     ├── NegotiationTrackerProcessor        │  │
 │                      │    │     ├── CounterProcessor                  │  │
 │                      │    │     ├── CharacteristicsProcessor           │  │
 │                      │    │     └── ValuesRowProcessor                │  │
@@ -38,7 +37,8 @@ below for the coexistence model.
 │                      │    ├── registerFrameworkElementDefinitions(..) │  │
 │                      │    │     ├── horizontal-rule (elements/)       │  │
 │                      │    │     ├── skills (elements/)                │  │
-│                      │    │     └── stamina-bar (elements/)           │  │
+│                      │    │     ├── stamina-bar (elements/)           │  │
+│                      │    │     └── negotiation (elements/)           │  │
 │                      │    └── registerFrameworkElements(this, fw)     │  │
 │                      │          [wiring loop, F1 §2.3]                │  │
 │                      │                                               │  │
@@ -88,12 +88,13 @@ directly in the processor/View class:
 | FeatureblockProcessor | `featureblock/` | `ds-fb`, `ds-featureblock` |
 | StatblockProcessor | `statblock/` | `ds-sb`, `ds-statblock` |
 | InitiativeProcessor | `initiativeProcessor.ts` | `ds-it`, `ds-init`, `ds-initiative`, `ds-initiative-tracker` |
-| NegotiationTrackerProcessor | `negotiation/` | `ds-nt`, `ds-negotiation`, `ds-negotiation-tracker` |
 | CounterProcessor | `Counter/` | `ds-ct`, `ds-counter` |
 | CharacteristicsProcessor | `Characteristics/` | `ds-char`, `ds-characteristics` |
 | ValuesRowProcessor | `ValuesRow/` | `ds-vr`, `ds-value-row`, `ds-values-row` |
 
-These 8 element families are the "legacy" side of the coexistence model. They may
+These 7 element families are the "legacy" side of the coexistence model. (The
+`negotiation/` directory still exists, but only its four sub-views remain — its
+processor migrated onto Framework v2 in Plan 05; see Migrated Elements below.) They may
 migrate onto Framework v2 in future work; nothing in this list is Framework-v2-only or
 Vue-based today.
 
@@ -135,14 +136,15 @@ fight over the same alias.
 
 ### Migrated Elements (`src/elements/`)
 
-The three elements migrated onto Framework v2 in D1 (Horizontal Rule → Skills → Stamina
-Bar, simplest-to-most-complex by `ElementShape`):
+The elements migrated onto Framework v2 so far (Horizontal Rule → Skills → Stamina Bar
+in D1, simplest-to-most-complex by `ElementShape`; Negotiation Tracker in Plan 05):
 
 | Element | Directory | `shape` | Aliases | Notes |
 |---------|-----------|---------|---------|-------|
 | Horizontal Rule | `horizontal-rule/` | `static` | `ds-hr`, `ds-horizontal-rule` | No model (`parse` returns `undefined`); `onMount` reuses the legacy `HorizontalRuleProcessor.build()` DOM builder verbatim (that builder also stays live for Statblock/Featureblock, which embed it directly — not yet migrated). `noClickShield: true` matches the legacy Vue element's behavior. |
 | Skills | `skills/` | `interactive` | `ds-skills` | First interactive element: per-group and whole-element collapse state lives in `SessionStore`, never written back to the note (no `serialize`, matching the legacy Vue element). `model.ts` wraps `@model/Skills` verbatim. |
 | Stamina Bar | `stamina-bar/` | `persisted` | `ds-stam`, `ds-stamina`, `ds-stamina-bar` | First (and only, in D1) persisted element: edits write back via `ElementView.persist()` → `serialize()` → `host.replaceSource()`. `serialize()` reuses `@model/StaminaBar`'s own field/order shape (`stringifyYaml(model).trim()`) to stay byte-compatible with the legacy write path. Was the last Vue element — its migration unblocked Vue removal (D1 Task 4). |
+| Negotiation Tracker | `negotiation/` | `persisted` | `ds-nt`, `ds-negotiation`, `ds-negotiation-tracker` | Plan 05 (F1 §6 step 8): `NegotiationView` re-expresses the deleted `NegotiationTrackerProcessor`'s orchestration and REUSES the four sub-views still under `src/drawSteelAdmonition/negotiation/`, which now take an injected `persist: () => void` instead of calling `CodeBlocks.updateNegotiationTracker`. No schema (the legacy element never had one). Active tab is `SessionStore` state; rendering never writes (the legacy processor persisted during render — deliberately dropped). |
 
 Each element directory follows the same shape: `definition.ts` (the `ElementDefinition`,
 registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the
