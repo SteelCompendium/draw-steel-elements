@@ -10,7 +10,7 @@ import {
 } from '../../mocks/obsidian';
 
 describe('obsidian mock: yaml', () => {
-	test('parseYaml/stringifyYaml round-trip via js-yaml', () => {
+	test('parseYaml/stringifyYaml round-trip via the yaml package (Obsidian-faithful)', () => {
 		const obj = { name: 'Health', current_value: 10, nested: { list: [1, 2] } };
 		expect(parseYaml(stringifyYaml(obj))).toEqual(obj);
 	});
