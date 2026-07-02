@@ -8,9 +8,12 @@
 //
 // Ordering note (read F1 §2.4's PROSE, not the simplified §2.2 diagram — the task brief
 // calls this out explicitly): `def.resolveRefs?(model, refs)` takes the MODEL, so a
-// declared `resolveRefs` runs AFTER `def.parse`; the default deep-walk (`autoResolveRefs
-// !== false`) instead resolves the RAW parsed-YAML data BEFORE `def.parse` runs. Both
-// branches are exercised below, plus the autoResolveRefs:false skip.
+// declared `resolveRefs` runs AFTER `def.parse`; an opt-in `autoResolveRefs: true`
+// instead resolves the RAW parsed-YAML data BEFORE `def.parse` runs. Hardening pass
+// after F1's final review: autoResolveRefs is opt-in (default OFF) — omitting both
+// resolveRefs and autoResolveRefs skips reference resolution entirely. All three
+// branches (resolveRefs, autoResolveRefs:true, the default skip) are exercised below,
+// plus the explicit autoResolveRefs:false skip.
 import { ElementPipeline, renderErrorCard, ElementStageError } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { ElementDefinition } from '../../../src/framework/registry';
@@ -22,6 +25,7 @@ import type { PrefsStorage } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import type { ReferenceService, RefProvider } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
+import type { ValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, stringifyYaml } from '../../mocks/obsidian';
@@ -178,6 +182,34 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 
 			expect(themeAttrDuringMount).toBe('steel');
 		});
+
+		test('cx.theme.apply AND cx.prefs.reflect are both invoked BEFORE view.mount (F1 §2.4 step 4/5 ordering)', async () => {
+			const { deps } = makeDeps();
+			const applySpy = jest.spyOn(deps.theme, 'apply');
+			const reflectSpy = jest.spyOn(deps.prefs, 'reflect');
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost();
+			let mountSpy: jest.SpyInstance | undefined;
+
+			const def = labelDef({
+				createView: (cx) => {
+					const view = new LabelView(cx);
+					mountSpy = jest.spyOn(view, 'mount');
+					return view;
+				},
+			});
+
+			await pipeline.run(def, 'label: x', host);
+
+			expect(applySpy).toHaveBeenCalledTimes(1);
+			expect(reflectSpy).toHaveBeenCalledTimes(1);
+			expect(mountSpy).toHaveBeenCalledTimes(1);
+			const applyOrder = applySpy.mock.invocationCallOrder[0];
+			const reflectOrder = reflectSpy.mock.invocationCallOrder[0];
+			const mountOrder = mountSpy!.mock.invocationCallOrder[0];
+			expect(applyOrder).toBeLessThan(mountOrder);
+			expect(reflectOrder).toBeLessThan(mountOrder);
+		});
 	});
 
 	describe('persisted element: interaction -> persist() -> exactly one host.replaceSource (F1 §4.2)', () => {
@@ -207,7 +239,7 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 	});
 
 	describe('reference resolution ordering (F1 §2.4 step 3 prose)', () => {
-		test('default (autoResolveRefs !== false): raw data is resolved BEFORE def.parse runs', async () => {
+		test('autoResolveRefs: true (opt-in): raw data is resolved BEFORE def.parse runs', async () => {
 			const { deps, refs } = makeDeps();
 			const parseCalls: unknown[] = [];
 			const provider: RefProvider = {
@@ -224,6 +256,7 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 				name: 'Test Autoref',
 				aliases: ['ds-test-autoref'],
 				shape: 'static',
+				autoResolveRefs: true, // opt-in (default is now OFF — F1 hardening pass)
 				parse: (data) => {
 					parseCalls.push(data);
 					return { label: JSON.stringify(data) };
@@ -272,6 +305,21 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			const host = makeHost();
 
 			const def = labelDef({ autoResolveRefs: false, schema: undefined });
+
+			await pipeline.run(def, 'label: "REF:thing"', host);
+
+			expect(resolveDeepSpy).not.toHaveBeenCalled();
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.querySelector('.label-content')?.textContent).toBe('REF:thing');
+		});
+
+		test('neither resolveRefs nor autoResolveRefs declared (the new default, opt-in): refs.resolveDeep is never called; parse gets the raw string unchanged', async () => {
+			const { deps, refs } = makeDeps();
+			const resolveDeepSpy = jest.spyOn(refs, 'resolveDeep');
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost();
+
+			const def = labelDef(); // no resolveRefs, no autoResolveRefs
 
 			await pipeline.run(def, 'label: "REF:thing"', host);
 
@@ -353,14 +401,60 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 			const host = makeHost();
 
 			// "@NoSuchNote" satisfies the schema (a string) but the built-in at-path
-			// provider's findFile fails (nothing registered in the fake vault) — the
-			// default autoResolveRefs deep-walk (F1 §2.4 step 3) rejects before def.parse
-			// ever runs.
-			await pipeline.run(labelDef(), 'label: "@NoSuchNote"', host);
+			// provider's findFile fails (nothing registered in the fake vault) — with
+			// autoResolveRefs opted in, the deep-walk (F1 §2.4 step 3) rejects before
+			// def.parse ever runs.
+			await pipeline.run(labelDef({ autoResolveRefs: true }), 'label: "@NoSuchNote"', host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
 			expect(root.querySelectorAll('.dse-error-card')).toHaveLength(1);
 			expect(root.getAttribute('data-dse-error-stage')).toBe('reference');
+			expect(root.querySelector('.label-content')).toBeNull(); // not half-mounted
+		});
+
+		test('a rejecting custom def.resolveRefs -> ONE error card, stage "reference" (no half-mount)', async () => {
+			const { deps } = makeDeps();
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost();
+
+			const def: ElementDefinition<LabelModel> = {
+				id: 'test-rejecting-resolveRefs',
+				name: 'Test Rejecting ResolveRefs',
+				aliases: ['ds-test-rejecting-resolveRefs'],
+				shape: 'static',
+				parse: (data) => ({ label: String((data as { label: unknown }).label) }),
+				resolveRefs: async () => {
+					throw new Error('resolveRefs boom');
+				},
+				createView: (cx) => new LabelView(cx),
+			};
+
+			await pipeline.run(def, 'label: raw', host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.querySelectorAll('.dse-error-card')).toHaveLength(1);
+			expect(root.getAttribute('data-dse-error-stage')).toBe('reference');
+			expect(root.textContent).toContain('resolveRefs boom');
+			expect(root.querySelector('.label-content')).toBeNull(); // not half-mounted
+		});
+
+		test('ValidationService.validate throwing (distinct from a returned {valid:false}) -> ONE error card, stage "schema"', async () => {
+			const { deps } = makeDeps();
+			const throwingValidation: ValidationService = {
+				addDependencySchema: () => {},
+				validate: () => {
+					throw new Error('validate boom');
+				},
+			};
+			const pipeline = new ElementPipeline({ ...deps, validation: throwingValidation });
+			const host = makeHost();
+
+			await pipeline.run(labelDef(), 'label: x', host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.querySelectorAll('.dse-error-card')).toHaveLength(1);
+			expect(root.getAttribute('data-dse-error-stage')).toBe('schema');
+			expect(root.textContent).toContain('validate boom');
 			expect(root.querySelector('.label-content')).toBeNull(); // not half-mounted
 		});
 

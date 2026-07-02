@@ -77,6 +77,35 @@ describe('T-5 (Plan 02): ReadingModeBlockHost (F1 §3.4)', () => {
 			await expect(host.replaceSource('name: B')).resolves.toBe(false);
 			expect(app.vault.modifyCalls).toHaveLength(0);
 		});
+
+		test('block vanished under us: fence unlocatable inside Vault.process aborts without corrupting the note, resolves false', async () => {
+			// Hand-rolled ctx (like the "no backing vault file" case above): getSectionInfo
+			// is a fixed stub — it keeps returning a section (so the canPersist guard and
+			// replaceSource's own pre-process snapshot both pass), but the actual vault
+			// content at that lineStart is NOT a fence line. This models the file header's
+			// "block moved/vanished under us" case: something changed the live document
+			// (e.g. the fence was deleted/edited) between when the section was located and
+			// when Vault.process's callback runs against the real content — replaceSource
+			// must detect that inside the callback (parseOpenFence returns null) and abort
+			// rather than splice garbage into the note.
+			const app = new App();
+			const original = 'no fence here\nsecond line\nthird line';
+			app.vault.setFile('Note.md', original);
+			const plugin = new Plugin(app);
+			const el = document.createElement('div');
+			const ctx: MarkdownPostProcessorContext = {
+				docId: 'fake-doc-vanished',
+				sourcePath: 'Note.md',
+				frontmatter: undefined,
+				addChild: () => {},
+				getSectionInfo: () => ({ text: '```ds-counter\nname: A\n```', lineStart: 0, lineEnd: 2 }),
+			};
+			const host = new ReadingModeBlockHost(plugin as any, el, ctx as any, 'ds-counter');
+
+			expect(host.canPersist).toBe(true); // past the pre-checks; the abort must happen INSIDE process()
+			await expect(host.replaceSource('name: B')).resolves.toBe(false); // documented "no write" value
+			expect(app.vault.getContent('Note.md')).toBe(original); // content returned unchanged, no corruption
+		});
 	});
 
 	describe('CB-3 fix: atomic concurrent writes', () => {
