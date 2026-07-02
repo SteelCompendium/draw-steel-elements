@@ -2,7 +2,6 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
-import vue from "unplugin-vue/esbuild";
 import { promises as fs } from "fs";
 
 const banner =
@@ -14,8 +13,11 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 
+// D1 Task 4 (Plan 03): post-Vue, main.ts's `import "./styles-source.css"` is the only CSS
+// source esbuild bundles into main.css (no more SFC scoped-style extraction) — this plugin
+// just copies that bundled main.css to styles.css, which is what Obsidian loads.
 const copyToStylesPlugin = {
-  name: "copy-vue-css-to-styles",
+  name: "copy-css-to-styles",
   setup(build) {
     build.onEnd(async () => {
       try {
@@ -76,15 +78,11 @@ const context = await esbuild.context({
   tsconfig: "tsconfig.json",
   minify: prod,
   plugins: [
-    vue({ sourceMap: false }),
 	copyToStylesPlugin,
 	yamlLoaderPlugin
   ],
   define: {
-    'process.env.NODE_ENV': JSON.stringify(prod ? 'production' : 'development'),
-    __VUE_OPTIONS_API__: 'false',                     // no options api, composition api is preferred
-    __VUE_PROD_DEVTOOLS__: 'false',                   // no devtools in production
-    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false'  // no extra hydration info
+    'process.env.NODE_ENV': JSON.stringify(prod ? 'production' : 'development')
   }
 });
 

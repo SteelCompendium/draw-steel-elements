@@ -4,17 +4,16 @@ import type { Config } from 'jest';
 // Longest-prefix entries must come before the catch-all `@/`.
 //
 // T-10 fix: moduleNameMapper is matched in object-key insertion order, first match
-// wins (Jest docs: "the order in which the mocks are defined matters"). `.vue$` and
-// `.css$` MUST come before the `@drawSteelComponents/(.*)$` / catch-all `@/(.*)$`
-// prefix aliases, or e.g. `@drawSteelComponents/HorizontalRule.vue` resolves to the
-// REAL .vue file (via the prefix alias, matched first) instead of the stub — this was
-// latent (nothing imported main.ts / RegisterElements.ts, the only .vue importer,
-// from a test) until T-10 added test/dom/framework/plugin-wiring.test.ts.
+// wins (Jest docs: "the order in which the mocks are defined matters"). `.css$` MUST
+// come before the `@drawSteelComponents/(.*)$` / catch-all `@/(.*)$` prefix aliases,
+// or a CSS import under one of those prefixes would resolve via the prefix alias
+// (matched first) instead of the identity-obj-proxy stub.
+//
+// D1 Task 4 (Plan 03): Vue is gone — the `.vue$` -> vueStub.ts entry that lived here
+// (F3 §4.5) is removed along with the stub file.
 const aliases: Record<string, string> = {
 	// The obsidian npm package is types-only; all runtime goes to the mock.
 	'^obsidian$': '<rootDir>/test/mocks/obsidian.ts',
-	// Vue SFCs: out of scope until D1 (F3 §4.5) — stub them.
-	'\\.vue$': '<rootDir>/test/mocks/vueStub.ts',
 	// main.ts imports ./styles-source.css; identity-obj-proxy is already installed.
 	'\\.css$': 'identity-obj-proxy',
 	'^@model/(.*)$': '<rootDir>/src/model/$1',

@@ -21,8 +21,8 @@ data.json
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
 
-# Vue
-# Generated during build from .vue files' style tags
-main.css 
-# Generated during build from main.css and styles-source.css
+# CSS pipeline (esbuild.config.mjs copyToStylesPlugin)
+# Generated during build from styles-source.css
+main.css
+# Generated during build by copying main.css
 styles.css
