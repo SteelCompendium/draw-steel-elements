@@ -21,9 +21,10 @@
 // them before its own materialized keys — a value-neutral, ref-bearing-only key-order
 // divergence; ref-free models must remain BYTE-identical, pinned below.)
 //
-// KNOWN DIVERGENCE (spec'd, Plan 06 T-2): a DANGLING ref (file or ds-* block absent) makes
-// resolveBarePath return null, so the merge is skipped and phase 2's validation message
-// fires — legacy instead wrapped the not-found error in the "multiple instances" hint.
+// A DANGLING ref (file or ds-* block absent) throws from resolveBarePath with the legacy
+// resolvePath message, which the merge wraps in the "multiple instances" hint — byte-equal
+// to legacy. The ONE non-throwing miss is a ds-* block that parses to null: legacy
+// truth-tested the parsed data and silently skipped the merge, preserved here.
 import { parseYaml, App } from '../../mocks/obsidian';
 import { parseEncounterData } from '@drawSteelAdmonition/EncounterData';
 import type { EncounterData } from '@drawSteelAdmonition/EncounterData';
@@ -310,18 +311,38 @@ describe('T-2: resolution errors re-throw the legacy multi-line hint', () => {
 		expect(message).toContain('Failed to resolve creature statblock reference at index 0 (Bad Note):');
 	});
 
-	test("DANGLING ref (spec'd divergence): merge is skipped and the validation message fires instead of the legacy hint", async () => {
+	test('DANGLING ref (file not found) -> not-found error wrapped in the hint, byte-equal to legacy', async () => {
 		const { app, refs } = makeEnv();
 		const src = 'heroes:\n  - statblock: "Nope"\nenemy_groups: []';
-		// New behavior: resolveBarePath -> null -> phase-2 validation reports the field.
-		await expect(resolveLikePipeline(src, refs)).rejects.toThrow(
-			"Hero at index 0 is missing the 'name' field.",
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toBe(await errorMessageOf(legacyMaterialize(src, app)));
+		expect(message).toContain('Failed to resolve hero statblock reference at index 0 (Nope):');
+		expect(message).toContain('Reference file (Nope) not found in root, DS Compendium, or when searching the cache');
+		expect(message).toContain(
+			"Are there multiple instances of the 'Nope' file in your vault? If so, please specify the full path.",
 		);
-		// Legacy wrapped the not-found error in the "multiple instances" hint — documented
-		// divergence (Plan 06 T-2: resolveBarePath returns null on absent file/block).
-		await expect(legacyMaterialize(src, app)).rejects.toThrow(
-			/Failed to resolve hero statblock reference at index 0 \(Nope\):/,
-		);
+	});
+
+	test('DANGLING ref (file exists, no ds-* block) -> no-block error wrapped in the hint, byte-equal to legacy', async () => {
+		const { app, refs } = makeEnv();
+		app.vault.setFile('Plain Note.md', '# no ds block here');
+		const src = 'heroes:\n  - statblock: "Plain Note"\nenemy_groups: []';
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toBe(await errorMessageOf(legacyMaterialize(src, app)));
+		expect(message).toContain('Failed to resolve hero statblock reference at index 0 (Plain Note):');
+		expect(message).toContain('No Draw Steel Elements code block (ds-*) found in Plain Note.md');
+	});
+
+	test('block that parses to NULL: merge skipped WITHOUT the hint; validation reports the field (byte-equal to legacy)', async () => {
+		const { app, refs } = makeEnv();
+		// Legacy truth-tested the parsed data (`if (resolved)`, EncounterData.ts:114): a
+		// null-parsing block skips the merge silently, then the normal name validation fires.
+		app.vault.setFile('Hollow.md', dsNote(['# comments only, parses to null']));
+		const src = 'heroes:\n  - statblock: "Hollow"\nenemy_groups: []';
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toBe(await errorMessageOf(legacyMaterialize(src, app)));
+		expect(message).toBe("Hero at index 0 is missing the 'name' field.");
+		expect(message).not.toContain('Failed to resolve');
 	});
 });
 

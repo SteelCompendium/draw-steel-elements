@@ -64,10 +64,13 @@ export interface ReferenceService {
 	 *  (ReferenceResolver.resolveReferences string dispatch → resolvePath): strip a leading
 	 *  "@" or a "[[...]]" wrapper, run the 5-step findFile with the legacy hardcoded
 	 *  sourcePath "" (ReferenceResolver.ts:89 — global first match, NOT note-relative like
-	 *  the providers), then extract+parse the first ds-* block. Returns null when the file
-	 *  or its ds-* block is absent; throws the legacy message when the block YAML is
-	 *  malformed. Deliberately a DIRECT method, not a provider: bare strings must keep
-	 *  passing through resolve()/resolveDeep() untouched for every other element. */
+	 *  the providers), then extract+parse the first ds-* block. Throws the legacy messages
+	 *  when the file is not found or has no ds-* block, and when the block YAML is
+	 *  malformed (ReferenceResolver.resolvePath threw all three; the initiative merge wraps
+	 *  them in its hint). Returns null ONLY when the block parses to null/undefined —
+	 *  legacy's `if (resolved)` skipped the merge for that without erroring. Deliberately a
+	 *  DIRECT method, not a provider: bare strings must keep passing through
+	 *  resolve()/resolveDeep() untouched for every other element. */
 	resolveBarePath(path: string): Promise<ResolvedRef | null>;
 }
 
@@ -117,9 +120,8 @@ function findFile(app: App, settings: DSESettings, path: string, sourcePath: str
 
 // Read `file` and extract+parse its first ds-* fenced block (the tail of the legacy
 // ReferenceResolver.resolvePath). Returns null when the file has no ds-* block; throws
-// the legacy message when the block's YAML is malformed. Shared by resolveByPath (the
-// providers, which turn null into the legacy "No ... code block" error) and
-// resolveBarePath (which propagates the null).
+// the legacy message when the block's YAML is malformed. resolveByPath (the providers
+// AND resolveBarePath) turns the null into the legacy "No ... code block" error.
 async function readFirstDsBlock(app: App, file: TFile): Promise<{ data: unknown } | null> {
 	const content = await app.vault.read(file);
 	const match = content.match(DS_BLOCK_RE);
@@ -231,11 +233,14 @@ class DseReferenceService implements ReferenceService {
 
 	// Plan 06 (initiative): legacy bare-path statblock resolution — see the interface doc.
 	// Reproduces ReferenceResolver.resolveReferences' string dispatch (:14-21) + resolvePath
-	// (:38-63), with two deliberate differences spec'd by Plan 06 T-2: an absent file or
-	// ds-* block returns null instead of throwing (the caller's field validation reports
-	// the gap), while malformed block YAML still throws the legacy message. sourcePath is
-	// hardcoded "" in the findFile step-5 metadata-cache lookup, byte-exact with legacy
-	// (ReferenceResolver.ts:89) — NOT the note-relative sourcePath the providers use.
+	// (:38-63) via resolveByPath, which throws the byte-exact legacy messages on a missing
+	// file or missing ds-* block and on malformed block YAML (the initiative merge wraps
+	// them in its "multiple instances/full path" hint, matching legacy). The ONE
+	// non-throwing miss is a block that parses to null/undefined: legacy truth-tested the
+	// parsed data (`if (resolved)`, EncounterData.ts:114) and silently skipped the merge —
+	// surfaced here as a null return. sourcePath is hardcoded "" in the findFile step-5
+	// metadata-cache lookup, byte-exact with legacy (ReferenceResolver.ts:89) — NOT the
+	// note-relative sourcePath the providers use.
 	async resolveBarePath(path: string): Promise<ResolvedRef | null> {
 		let bare = path;
 		if (bare.startsWith('@')) {
@@ -244,13 +249,8 @@ class DseReferenceService implements ReferenceService {
 			bare = bare.substring(2, bare.length - 2);
 		}
 
-		const file = findFile(this.app, this.settings, bare, '');
-		if (!file) return null;
-
-		const block = await readFirstDsBlock(this.app, file);
-		if (!block) return null;
-
-		return { data: block.data, file };
+		const resolved = await resolveByPath(this.app, this.settings, bare, '');
+		return resolved.data == null ? null : resolved;
 	}
 
 	async resolveDeep(data: unknown, sourcePath: string): Promise<unknown> {

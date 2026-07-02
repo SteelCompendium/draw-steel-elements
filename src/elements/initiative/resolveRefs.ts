@@ -13,12 +13,11 @@
 //      block, legacy @/[[...]] stripping) and copy name / max_stamina (legacy `+` coercion)
 //      / image ONLY-IF-UNSET. The `statblock` string STAYS on the model — legacy kept it
 //      after merging, so it serializes back into the block byte-identically. Resolution
-//      errors re-throw the legacy multi-line "Failed to resolve … multiple instances …"
-//      hint verbatim (EncounterData.ts:119-127).
-//      KNOWN DIVERGENCE (spec'd, Plan 06 T-2): a DANGLING ref (file or ds-* block absent)
-//      yields resolveBarePath → null, so the merge is skipped and phase 2 reports the
-//      missing field — legacy wrapped its not-found error in the hint instead. Persisted
-//      bytes are unaffected (both paths error before any write-back).
+//      errors — file not found, no ds-* block, malformed block YAML — re-throw the legacy
+//      multi-line "Failed to resolve … multiple instances …" hint verbatim
+//      (EncounterData.ts:119-127). A block that parses to NULL is the one non-throwing
+//      miss (resolveBarePath → null): legacy truth-tested the parsed data and silently
+//      skipped the merge, so phase 2 reports any genuinely missing field instead.
 //   2. VALIDATE — the four checks Task 1 deferred because legacy ran them only after the
 //      merge, byte-identical messages, legacy per-entry order (name before max_stamina),
 //      for ALL entries: a ref-FREE hero missing max_stamina must still fail here.
@@ -48,6 +47,8 @@ export async function resolveInitiativeRefs(
 	for (const [index, hero] of model.heroes.entries()) {
 		if (typeof hero.statblock === 'string') {
 			try {
+				// Throws the legacy messages on a dangling ref (file/block absent) and on
+				// malformed block YAML; null ONLY when the block parses to null.
 				const resolved = await refs.resolveBarePath(hero.statblock);
 				// Legacy truth-tested the parsed DATA (`if (resolved)`): a block that
 				// parses to null skips the merge without erroring.

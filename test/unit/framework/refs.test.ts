@@ -172,9 +172,11 @@ describe('T-3 (Plan 02): ReferenceService (F1 §3.7)', () => {
 	// Plan 06 T-2: resolveBarePath — additive method for initiative's bare-path `statblock`
 	// refs. Reproduces the LEGACY statblock resolution (ReferenceResolver.resolveReferences'
 	// string dispatch -> resolvePath -> 5-step findFile) with the legacy hardcoded
-	// sourcePath "" (ReferenceResolver.ts:89). Differences from resolvePath: returns null
-	// (instead of throwing) when the file or its ds-* block is absent; still throws the
-	// legacy message on malformed block YAML. NOT a provider — the chain is untouched.
+	// sourcePath "" (ReferenceResolver.ts:89). Like resolvePath it THROWS the legacy
+	// messages when the file is not found, has no ds-* block, or the block YAML is
+	// malformed; it returns null ONLY when the block parses to null (legacy's
+	// `if (resolved)` skipped the merge for that without erroring). NOT a provider — the
+	// chain is untouched.
 	describe('T-2 (Plan 06): resolveBarePath — bare statblock paths (additive, no provider)', () => {
 		test('resolves a bare name via findFile step 5 (metadata cache) to the first ds-* block', async () => {
 			const { app, service } = makeService();
@@ -232,15 +234,25 @@ describe('T-3 (Plan 02): ReferenceService (F1 §3.7)', () => {
 			spy.mockRestore();
 		});
 
-		test('returns null when the file is absent (all 5 steps miss)', async () => {
+		test('throws the legacy not-found message when the file is absent (all 5 steps miss)', async () => {
 			const { service } = makeService();
-			await expect(service.resolveBarePath('Nope')).resolves.toBeNull();
+			await expect(service.resolveBarePath('Nope')).rejects.toThrow(
+				'Reference file (Nope) not found in root, DS Compendium, or when searching the cache',
+			);
 		});
 
-		test('returns null when the file exists but has no ds-* block', async () => {
+		test('throws the legacy no-block message when the file exists but has no ds-* block', async () => {
 			const { app, service } = makeService();
 			app.vault.setFile('Empty.md', '# nothing here');
-			await expect(service.resolveBarePath('Empty')).resolves.toBeNull();
+			await expect(service.resolveBarePath('Empty')).rejects.toThrow(
+				'No Draw Steel Elements code block (ds-*) found in Empty.md',
+			);
+		});
+
+		test('returns null (no throw) when the ds-* block parses to null — legacy skipped the merge silently', async () => {
+			const { app, service } = makeService();
+			app.vault.setFile('Hollow.md', ['```ds-sb', '# comments only, parses to null', '```'].join('\n'));
+			await expect(service.resolveBarePath('Hollow')).resolves.toBeNull();
 		});
 
 		test('throws the legacy message when the first ds-* block has malformed YAML', async () => {
