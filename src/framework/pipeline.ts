@@ -183,9 +183,12 @@ export class ElementPipeline {
 			}
 
 			// Steps 4-5 (F1 §2.4.3 PROSE — not the simplified §2.2 diagram): resolveRefs
-			// takes the MODEL, so a declared def.resolveRefs runs def.parse FIRST; the
-			// default deep-walk instead resolves the RAW data BEFORE def.parse runs; with
-			// autoResolveRefs:false and no resolveRefs, no resolution happens at all.
+			// takes the MODEL, so a declared def.resolveRefs runs def.parse FIRST; an
+			// explicit autoResolveRefs: true instead resolves the RAW data BEFORE def.parse
+			// runs. Hardening pass after F1's final review: autoResolveRefs is now OPT-IN
+			// (default OFF) — omitting both resolveRefs and autoResolveRefs skips reference
+			// resolution entirely; an element must ask for it explicitly, either bespoke
+			// (resolveRefs) or the default deep-walk (autoResolveRefs: true).
 			// def.parse() itself is bucketed under stage "render": F1 §3.8 defines exactly
 			// four stages, and model construction isn't YAML syntax (parse), AJV (schema),
 			// or reference resolution (reference) — it's part of building what step 6 renders.
@@ -194,7 +197,7 @@ export class ElementPipeline {
 				const resolveRefs = def.resolveRefs;
 				model = runStage('render', () => def.parse(rawData, source));
 				model = await runStageAsync('reference', () => resolveRefs(model, cx.refs));
-			} else if (def.autoResolveRefs !== false) {
+			} else if (def.autoResolveRefs === true) {
 				const resolved = await runStageAsync('reference', () => cx.refs.resolveDeep(rawData, host.sourcePath));
 				model = runStage('render', () => def.parse(resolved, source));
 			} else {
