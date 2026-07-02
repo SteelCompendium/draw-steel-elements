@@ -412,6 +412,61 @@ code.dsa {
 	position: relative;
 }
 
+/* Framework error card (renderErrorCard, src/framework/pipeline.ts) — the F1 §3.8
+   single error standard for migrated elements. Visually aligned with the legacy
+   .error-message above (monospace body, code-ish panel), but namespaced. Obsidian
+   theme vars only — no hard-coded colors (D3 owns the token layer later). The
+   data-dse-error-stage attribute (parse|schema|reference|render) lives on the card's
+   PARENT (the pipeline root), hence the `[…] > .dse-error-card` stage selectors. */
+
+.dse-error-card {
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-left: 3px solid var(--text-error);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-3);
+	margin: var(--size-4-2) 0;
+}
+
+.dse-error-card-title {
+	color: var(--text-error);
+	font-weight: var(--font-semibold);
+	margin-bottom: var(--size-4-1);
+}
+
+.dse-error-card-message {
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.dse-error-card-list {
+	margin: var(--size-4-1) 0 0;
+	padding-left: var(--size-4-4);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-smaller);
+}
+
+.dse-error-card-list-item {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+/* Stage accents: user-fixable input problems (parse/schema) read as warnings;
+   missing reference data reads informational; render (plugin bug) keeps the
+   default --text-error accent from .dse-error-card above. */
+
+[data-dse-error-stage="parse"] > .dse-error-card,
+[data-dse-error-stage="schema"] > .dse-error-card {
+	border-left-color: var(--color-orange);
+}
+
+[data-dse-error-stage="reference"] > .dse-error-card {
+	border-left-color: var(--color-blue);
+}
+
 /* Turn Indicator Styling */
 
 .turn-indicator {
