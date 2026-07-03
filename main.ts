@@ -37,6 +37,7 @@ import { initiativeElement } from '@/elements/initiative/definition';
 import { featureElement } from '@/elements/feature/definition';
 import { featureblockElement } from '@/elements/featureblock/definition';
 import { statblockElement } from '@/elements/statblock/definition';
+import { counterElement } from '@/elements/counter/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -153,7 +154,9 @@ export function initializeElementFrameworkV2(
  * appends Initiative (F1 §6 step 9, retiring InitiativeProcessor); Plan 07 Task 1 appends
  * Feature (F1 §6 step 5, retiring FeatureProcessor — its sub-views stay for
  * Featureblock/Statblock); Plan 07 Task 2 appends Featureblock (F1 §6 step 6, retiring
- * FeatureblockProcessor — its sub-views likewise stay for Statblock). Later D1/F1
+ * FeatureblockProcessor — its sub-views likewise stay for Statblock); Plan 07 Task 4
+ * appends Counter (F1 §6 step 7, retiring CounterProcessor + the legacy
+ * Counter/CounterView). Later D1/F1
  * migration steps append their own `registry.register(...)` call here as each element
  * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
@@ -167,6 +170,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(featureElement);
 	registry.register(featureblockElement);
 	registry.register(statblockElement);
+	registry.register(counterElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

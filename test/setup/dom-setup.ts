@@ -75,7 +75,7 @@ proto.hasClass = function (cls: string): boolean {
 	return this.classList.contains(cls);
 };
 
-// Obsidian also provides bare globals (used by src/drawSteelAdmonition/Counter/CounterView.ts:107).
+// Obsidian also provides bare globals (used by e.g. src/elements/counter/view.ts).
 (globalThis as any).createEl = (
 	tag: string,
 	info?: DomElementInfo | string,

@@ -29,11 +29,11 @@ import * as path from 'path';
 // families — proves registerElements(this) still runs unchanged alongside the new
 // registry for every element NOT YET migrated onto Framework v2. Migrated elements'
 // aliases (Horizontal Rule, Skills, Stamina Bar, Negotiation, Initiative, Feature,
-// Featureblock, Statblock) are deliberately excluded here — off this path; see their
-// dedicated describe blocks below / their per-element registration suites
+// Featureblock, Statblock, Counter) are deliberately excluded here — off this path; see
+// their dedicated describe blocks below / their per-element registration suites
 // (negotiation.test.ts, initiative.test.ts, feature.test.ts, featureblock.test.ts,
-// statblock.test.ts).
-const LEGACY_ALIASES = ['ds-characteristics', 'ds-counter', 'ds-vr'];
+// statblock.test.ts, counter.test.ts).
+const LEGACY_ALIASES = ['ds-characteristics', 'ds-vr'];
 
 /**
  * `DrawSteelAdmonitionPlugin` extends the REAL `obsidian` `Plugin` (main.ts imports
@@ -60,7 +60,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar, Plan 05 Task 5: negotiation, Plan 06 Task 5: initiative, Plan 07 Task 1: feature, Plan 07 Task 2: featureblock, Plan 07 Task 3: statblock)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar, Plan 05 Task 5: negotiation, Plan 06 Task 5: initiative, Plan 07 Task 1: feature, Plan 07 Task 2: featureblock, Plan 07 Task 3: statblock, Plan 07 Task 4: counter)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
@@ -76,6 +76,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			'feature',
 			'featureblock',
 			'statblock',
+			'counter',
 		]);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
@@ -176,6 +177,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 				'feature',
 				'featureblock',
 				'statblock',
+				'counter',
 			]);
 			// Legacy path is unaffected by the framework v2 schema failure.
 			expect((plugin as any).registeredProcessors.has('ds-vr')).toBe(true);

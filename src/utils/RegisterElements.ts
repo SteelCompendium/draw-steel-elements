@@ -1,4 +1,3 @@
-import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import {Plugin} from "obsidian";
@@ -37,9 +36,10 @@ export function registerElements (plugin: Plugin) {
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Last
 	// Vue element migrated; Vue is now unused at runtime.
 
-	let counterProcessor = new CounterProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-ct", counterProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-counter", counterProcessor.handler);
+	// Counter migrated to Framework v2 (Plan 07 Task 4, F1 §6 step 7) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. The
+	// legacy Counter/CounterProcessor.ts and Counter/CounterView.ts are deleted (logic
+	// ported into src/elements/counter/view.ts).
 
 	let charProcessor = new CharacteristicsProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);

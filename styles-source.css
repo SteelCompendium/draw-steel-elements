@@ -1946,7 +1946,10 @@ button.action-button {
 /* Counter			    */
 /* ==================== */
 
-.ds-counter-container {
+/* Scoped under the Framework v2 element root (Plan 07 Task 4): counter's CSS is fully
+   self-contained (no .ds-counter-* class is used by any other element), so the whole
+   legacy block re-scopes safely — same treatment as negotiation/initiative. */
+[data-dse-element="counter"] .ds-counter-container {
 	display: flex;
 	align-items: center;
 	justify-content: space-evenly;
