@@ -35,6 +35,7 @@ import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import { negotiationElement } from '@/elements/negotiation/definition';
 import { initiativeElement } from '@/elements/initiative/definition';
 import { featureElement } from '@/elements/feature/definition';
+import { featureblockElement } from '@/elements/featureblock/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -150,7 +151,8 @@ export function initializeElementFrameworkV2(
  * appends Negotiation (F1 §6 step 8, retiring NegotiationTrackerProcessor); Plan 06 Task 5
  * appends Initiative (F1 §6 step 9, retiring InitiativeProcessor); Plan 07 Task 1 appends
  * Feature (F1 §6 step 5, retiring FeatureProcessor — its sub-views stay for
- * Featureblock/Statblock). Later D1/F1
+ * Featureblock/Statblock); Plan 07 Task 2 appends Featureblock (F1 §6 step 6, retiring
+ * FeatureblockProcessor — its sub-views likewise stay for Statblock). Later D1/F1
  * migration steps append their own `registry.register(...)` call here as each element
  * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
@@ -162,6 +164,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(negotiationElement);
 	registry.register(initiativeElement);
 	registry.register(featureElement);
+	registry.register(featureblockElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

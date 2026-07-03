@@ -1,5 +1,4 @@
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
-import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
@@ -15,9 +14,10 @@ export function registerElements (plugin: Plugin) {
 	// sub-views (Features/FeatureView et al.) stay put: Featureblock/Statblock below
 	// still construct them directly.
 
-	const fbProcessor = new FeatureblockProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-fb", fbProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-featureblock", fbProcessor.handler);
+	// Featureblock migrated to Framework v2 (Plan 07 Task 2, F1 §6 step 6) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Its
+	// sub-views (featureblock/FeatureblockView et al.) stay put: Statblock below still
+	// constructs them directly.
 
 	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
