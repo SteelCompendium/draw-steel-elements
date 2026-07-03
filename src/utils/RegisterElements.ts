@@ -1,5 +1,4 @@
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
-import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
 import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
@@ -11,10 +10,10 @@ import {Plugin} from "obsidian";
 // Task 5, solely because the since-retired InitiativeProcessor's constructor required it.)
 export function registerElements (plugin: Plugin) {
 
-	const abilityProcessor = new FeatureProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-ft", abilityProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-feat", abilityProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-feature", abilityProcessor.handler);
+	// Feature migrated to Framework v2 (Plan 07 Task 1, F1 §6 step 5) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Its
+	// sub-views (Features/FeatureView et al.) stay put: Featureblock/Statblock below
+	// still construct them directly.
 
 	const fbProcessor = new FeatureblockProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-fb", fbProcessor.handler);
