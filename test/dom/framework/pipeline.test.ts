@@ -238,6 +238,33 @@ describe('T-9 (Plan 02): ElementPipeline.run (F1 §2.4)', () => {
 		});
 	});
 
+	describe('read-only stamp (data-dse-readonly) — host.canPersist', () => {
+		test('canPersist === false: root is stamped data-dse-readonly; element/theme stamps unchanged', async () => {
+			const { deps } = makeDeps();
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost({ canPersist: false });
+
+			await pipeline.run(counterDef(), 'count: 1', host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.hasAttribute('data-dse-readonly')).toBe(true);
+			// Additive: the existing element/theme stamping is untouched.
+			expect(root.getAttribute('data-dse-element')).toBe('test-counter');
+			expect(root.getAttribute('data-dse-theme')).toBe('steel');
+		});
+
+		test('canPersist === true: the data-dse-readonly attribute is ABSENT', async () => {
+			const { deps } = makeDeps();
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost(); // canPersist: true (the fake's default)
+
+			await pipeline.run(counterDef(), 'count: 1', host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			expect(root.hasAttribute('data-dse-readonly')).toBe(false);
+		});
+	});
+
 	describe('reference resolution ordering (F1 §2.4 step 3 prose)', () => {
 		test('autoResolveRefs: true (opt-in): raw data is resolved BEFORE def.parse runs', async () => {
 			const { deps, refs } = makeDeps();

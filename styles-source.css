@@ -467,6 +467,37 @@ code.dsa {
 	border-left-color: var(--color-blue);
 }
 
+/* Framework read-only affordance (src/framework/pipeline.ts) — the pipeline stamps
+   data-dse-readonly on the element root when the host can't persist edits
+   (host.canPersist === false, e.g. Obsidian canvas). Elements already gate their
+   writes; this badge is the visible indication. CSS-only (::after pseudo-element —
+   the pipeline injects no DOM), scoped entirely under the attribute (which only ever
+   appears on DSE element roots), and Obsidian theme vars only — no hard-coded colors
+   (D3 owns the token layer later). */
+
+[data-dse-readonly] {
+	/* Anchor for the absolutely-positioned badge below; scoped here so no element's
+	   own layout needs touching. */
+	position: relative;
+}
+
+[data-dse-readonly]::after {
+	content: 'Read-only';
+	position: absolute;
+	top: var(--size-2-2);
+	right: var(--size-2-2);
+	z-index: 1;
+	padding: var(--size-2-1) var(--size-2-3);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	font-size: var(--font-smallest);
+	font-weight: var(--font-semibold);
+	line-height: 1;
+	pointer-events: none;
+}
+
 /* Turn Indicator Styling */
 
 .turn-indicator {

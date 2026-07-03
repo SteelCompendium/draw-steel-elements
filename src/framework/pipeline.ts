@@ -159,11 +159,15 @@ export class ElementPipeline {
 		// The root must exist before ANY step below: renderErrorCard (F1 §3.8) needs
 		// somewhere to render even a step-2 YAML parse failure. data-dse-element is
 		// stamped by the PIPELINE itself (F1 §3.5's contract — ThemeService only owns
-		// data-dse-theme). The click shield is content-independent, so it is armed here
+		// data-dse-theme). When the host can't persist (e.g. Obsidian canvas), the root
+		// is also stamped data-dse-readonly — the CSS-only "Read-only" badge in
+		// styles-source.css hangs off that attribute; write-gating stays per-element.
+		// The click shield is content-independent, so it is armed here
 		// too, before parse/validate/render even run (covers error cards the same as
 		// successful mounts, matching the legacy per-processor behavior it replaces).
 		const root = host.containerEl.createDiv();
 		root.setAttribute('data-dse-element', def.id);
+		if (!host.canPersist) root.setAttribute('data-dse-readonly', 'true');
 		if (!def.noClickShield) armClickShield(root);
 
 		try {

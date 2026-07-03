@@ -266,6 +266,10 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 			await pipeline.run(staminaBarElement, BASIC_YAML, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
+			// The framework-level read-only affordance flows end-to-end through a real
+			// element: the pipeline stamps data-dse-readonly on the root when
+			// host.canPersist === false (the CSS badge hangs off this attribute).
+			expect(root.hasAttribute('data-dse-readonly')).toBe(true);
 			const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
 			expect(bar.classList.contains('clickable')).toBe(false);
 			expect(bar.getAttribute('data-tooltip')).toBe('Read-only in this context');
