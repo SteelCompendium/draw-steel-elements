@@ -38,6 +38,8 @@ import { featureElement } from '@/elements/feature/definition';
 import { featureblockElement } from '@/elements/featureblock/definition';
 import { statblockElement } from '@/elements/statblock/definition';
 import { counterElement } from '@/elements/counter/definition';
+import { valuesRowElement } from '@/elements/values-row/definition';
+import { characteristicsElement } from '@/elements/characteristics/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -156,9 +158,11 @@ export function initializeElementFrameworkV2(
  * Featureblock/Statblock); Plan 07 Task 2 appends Featureblock (F1 §6 step 6, retiring
  * FeatureblockProcessor — its sub-views likewise stay for Statblock); Plan 07 Task 4
  * appends Counter (F1 §6 step 7, retiring CounterProcessor + the legacy
- * Counter/CounterView). Later D1/F1
- * migration steps append their own `registry.register(...)` call here as each element
- * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
+ * Counter/CounterView); Plan 07 Task 5 appends Values Row + Characteristics (F1 §6
+ * step 2, retiring ValuesRowProcessor + CharacteristicsProcessor — their Views stay,
+ * reused by the element views). With those two, the D-wave element migration is
+ * COMPLETE: all 11 elements are registered here and `RegisterElements.ts` registers
+ * nothing. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
  */
 export function registerFrameworkElementDefinitions(registry: ElementRegistry): void {
@@ -171,6 +175,8 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(featureblockElement);
 	registry.register(statblockElement);
 	registry.register(counterElement);
+	registry.register(valuesRowElement);
+	registry.register(characteristicsElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
@@ -193,7 +199,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new MyPluginSettingTab(this.app, this));
 
-        // Legacy registration path — owns every element NOT YET migrated onto Framework v2.
+        // Legacy registration path — now registers NOTHING (Plan 07 Task 5: all 11
+        // elements are migrated onto Framework v2 and registered below). The call stays
+        // until the F1 §6 step-10 cleanup deletes RegisterElements.ts entirely.
         registerElements(this);
 
         // F1 (Plan 02, Task 10): construct the framework v2 bundle alongside the

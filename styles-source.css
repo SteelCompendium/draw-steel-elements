@@ -2004,11 +2004,15 @@ button.action-button {
 }
 
 /* ==================== */
-/* Characteristics      */
+/* Characteristics + Values Row */
 /* ==================== */
 
-.ds-characteristics-container,
-.ds-values-row-container {
+/* Scoped under the Framework v2 element roots (Plan 07 Task 5): Characteristics and
+   Values Row share this ONE block — and only with each other (no other element uses
+   .ds-characteristics-* / .ds-values-row-* classes) — so the combined selector re-scopes
+   it cleanly; same treatment as counter/negotiation/initiative. */
+[data-dse-element="characteristics"] .ds-characteristics-container,
+[data-dse-element="values-row"] .ds-values-row-container {
 	width: 100%;
 	overflow-x: auto;
 

@@ -4,10 +4,12 @@
 // Proves (F1 §2.3 registry wiring, §5 dependency-schema registration, §8 OD-8):
 //  - constructing + loading the plugin (fake App/Plugin) runs the new framework v2
 //    wiring WITHOUT throwing;
-//  - the new ElementRegistry exists on the plugin and is empty of migrated elements
-//    (Plan 02 migrates no element in this task);
-//  - the legacy `registerElements`/RegisterElements.ts path still runs UNCHANGED
-//    alongside it (coexistence — e.g. the "ds-vr" alias is still registered);
+//  - the new ElementRegistry exists on the plugin and holds ALL 11 migrated elements
+//    (the D-wave migration is complete as of Plan 07 Task 5 — when Plan 02 authored this
+//    file the registry was asserted EMPTY, and each migration task appended its element);
+//  - the legacy `registerElements`/RegisterElements.ts path still runs alongside it but
+//    now registers ZERO markdown code-block processors (Plan 07 Task 5 migrated the last
+//    two, Values Row + Characteristics) — every handler comes from the framework;
 //  - a malformed dependency schema does NOT crash the whole plugin `onload` — the
 //    `ValidationService.addDependencySchema` call is wrapped in try/catch and degrades
 //    gracefully (console.warn + Notice) instead of throwing (Task-1 review requirement);
@@ -19,21 +21,31 @@ import DrawSteelAdmonitionPlugin, {
 	initializeElementFrameworkV2,
 	FRAMEWORK_V2_DEPENDENCY_SCHEMAS,
 } from 'main';
+import { registerElements } from '@/utils/RegisterElements';
 import { App, Notice } from '../../mocks/obsidian';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { ElementPipeline } from '@/framework/pipeline';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// A sample of legacy aliases from RegisterElements.ts, spanning several element
-// families — proves registerElements(this) still runs unchanged alongside the new
-// registry for every element NOT YET migrated onto Framework v2. Migrated elements'
-// aliases (Horizontal Rule, Skills, Stamina Bar, Negotiation, Initiative, Feature,
-// Featureblock, Statblock, Counter) are deliberately excluded here — off this path; see
-// their dedicated describe blocks below / their per-element registration suites
-// (negotiation.test.ts, initiative.test.ts, feature.test.ts, featureblock.test.ts,
-// statblock.test.ts, counter.test.ts).
-const LEGACY_ALIASES = ['ds-characteristics', 'ds-vr'];
+// The COMPLETE Framework v2 registry, in registration order
+// (registerFrameworkElementDefinitions in main.ts). As of Plan 07 Task 5 (Values Row +
+// Characteristics, the last two), ALL 11 elements live here and the legacy
+// RegisterElements.ts path registers nothing — there are no legacy aliases left to
+// sample (this file's original LEGACY_ALIASES coexistence constant is retired with them).
+const ALL_FRAMEWORK_ELEMENT_IDS = [
+	'horizontal-rule',
+	'skills',
+	'stamina-bar',
+	'negotiation',
+	'initiative',
+	'feature',
+	'featureblock',
+	'statblock',
+	'counter',
+	'values-row',
+	'characteristics',
+];
 
 /**
  * `DrawSteelAdmonitionPlugin` extends the REAL `obsidian` `Plugin` (main.ts imports
@@ -60,24 +72,14 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar, Plan 05 Task 5: negotiation, Plan 06 Task 5: initiative, Plan 07 Task 1: feature, Plan 07 Task 2: featureblock, Plan 07 Task 3: statblock, Plan 07 Task 4: counter)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds ALL 11 migrated elements (D-wave migration complete, Plan 07 Task 5)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
 		await plugin.onload();
 
 		expect(plugin.frameworkV2).toBeDefined();
-		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual([
-			'horizontal-rule',
-			'skills',
-			'stamina-bar',
-			'negotiation',
-			'initiative',
-			'feature',
-			'featureblock',
-			'statblock',
-			'counter',
-		]);
+		expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(ALL_FRAMEWORK_ELEMENT_IDS);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
 		expect(plugin.frameworkV2!.services.session).toBeDefined();
@@ -86,18 +88,35 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		expect(plugin.frameworkV2!.services.refs).toBeDefined();
 	});
 
-	test('coexistence: the legacy RegisterElements path still runs (legacy aliases registered)', async () => {
+	// Successor to the original "coexistence" test (which sampled ds-characteristics/ds-vr
+	// as still-legacy aliases): with the D-wave migration complete there is no legacy
+	// element left to sample, so the intent flips to its endpoint — the legacy path is a
+	// verified NO-OP and every markdown code-block handler comes from the framework.
+	test('migration complete: registerElements() registers ZERO markdown code-block processors', () => {
+		const app = new App();
+		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
+		const registerSpy = jest.spyOn(plugin, 'registerMarkdownCodeBlockProcessor');
+
+		registerElements(plugin);
+
+		expect(registerSpy).not.toHaveBeenCalled();
+		registerSpy.mockRestore();
+	});
+
+	test('migration complete: through the REAL onload(), every registered processor alias resolves in the framework registry', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
 		await plugin.onload();
 
-		for (const alias of LEGACY_ALIASES) {
-			expect((plugin as any).registeredProcessors.has(alias)).toBe(true);
+		const registered = Array.from((plugin as any).registeredProcessors.keys()) as string[];
+		expect(registered.length).toBeGreaterThan(0);
+		for (const alias of registered) {
+			expect(plugin.frameworkV2!.registry.get(alias)).toBeDefined();
 		}
-		// Not-yet-migrated elements are absent from the new registry — today's markdown
-		// code-block processors for them are entirely legacy-owned.
-		expect(plugin.frameworkV2!.registry.get('ds-vr')).toBeUndefined();
+		// And the registry's aliases are exactly what got wired into Obsidian.
+		const frameworkAliases = plugin.frameworkV2!.registry.all().flatMap((def) => [...def.aliases]);
+		expect(registered.sort()).toEqual(frameworkAliases.sort());
 	});
 
 	test('onunload clears the SessionStore and drops the framework v2 bundle', async () => {
@@ -168,19 +187,11 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			expect(plugin.frameworkV2).toBeDefined();
 			// Migrated-element registration is independent of dependency-schema success —
 			// a bad schema degrades validation detail, it doesn't block registerFrameworkElementDefinitions.
-			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual([
-				'horizontal-rule',
-				'skills',
-				'stamina-bar',
-				'negotiation',
-				'initiative',
-				'feature',
-				'featureblock',
-				'statblock',
-				'counter',
-			]);
-			// Legacy path is unaffected by the framework v2 schema failure.
+			expect(plugin.frameworkV2!.registry.all().map((def) => def.id)).toEqual(ALL_FRAMEWORK_ELEMENT_IDS);
+			// Framework wiring is likewise unaffected: the (now fully migrated) ds-vr
+			// alias still gets its processor from the framework registry.
 			expect((plugin as any).registeredProcessors.has('ds-vr')).toBe(true);
+			expect(plugin.frameworkV2!.registry.get('ds-vr')?.id).toBe('values-row');
 
 			warnSpy.mockRestore();
 		});

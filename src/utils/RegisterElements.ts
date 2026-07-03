@@ -1,55 +1,50 @@
-import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
-import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
 import {Plugin} from "obsidian";
 
-// `plugin` is the generic Obsidian `Plugin`: every remaining legacy processor here only
-// needs `Plugin`/`App`. (It was the concrete DrawSteelAdmonitionPlugin until Plan 06
-// Task 5, solely because the since-retired InitiativeProcessor's constructor required it.)
-export function registerElements (plugin: Plugin) {
+// The signature keeps the generic Obsidian `Plugin` parameter (unused now — see below)
+// so main.ts's call site stays untouched until the whole file is deleted.
+export function registerElements (_plugin: Plugin) {
 
-	// Feature migrated to Framework v2 (Plan 07 Task 1, F1 §6 step 5) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Its
-	// sub-views (Features/FeatureView et al.) stay put: the Featureblock/Statblock
-	// element views still construct them directly.
+	// EMPTY ON PURPOSE — the D-wave element migration is complete (Plan 07 Task 5): all
+	// 11 elements (Horizontal Rule, Values Row, Characteristics, Skills, Stamina Bar,
+	// Feature, Featureblock, Statblock, Counter, Negotiation Tracker, Initiative Tracker)
+	// are registered onto Framework v2 via registerFrameworkElementDefinitions +
+	// registerFrameworkElements in main.ts's onload(). This function registers NOTHING;
+	// it (and its onload() call) are kept only until the F1 §6 step-10 cleanup deletes
+	// the legacy registration path entirely.
 
-	// Featureblock migrated to Framework v2 (Plan 07 Task 2, F1 §6 step 6) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Its
-	// sub-views (featureblock/FeatureblockView et al.) stay put: the Statblock element
-	// view still constructs several of the shared ones directly.
+	// Feature migrated to Framework v2 (Plan 07 Task 1, F1 §6 step 5). Its sub-views
+	// (Features/FeatureView et al.) stay put: the Featureblock/Statblock element views
+	// still construct them directly.
 
-	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
+	// Featureblock migrated to Framework v2 (Plan 07 Task 2, F1 §6 step 6). Its sub-views
+	// (featureblock/FeatureblockView et al.) stay put: the Statblock element view still
+	// constructs several of the shared ones directly.
 
-	// Initiative Tracker migrated to Framework v2 (Plan 06, F1 §6 step 9) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
+	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1).
 
-	// Negotiation Tracker migrated to Framework v2 (Plan 05, F1 §6 step 8) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
+	// Initiative Tracker migrated to Framework v2 (Plan 06, F1 §6 step 9).
 
-	// Statblock migrated to Framework v2 (Plan 07 Task 3, F1 §6 step 6) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. The
-	// sub-views its buildUI composed (Common/HeaderView, statblock/StatsView,
-	// Features/FeaturesView, horizontalRuleProcessor) stay put — the statblock element
-	// view constructs them directly.
+	// Negotiation Tracker migrated to Framework v2 (Plan 05, F1 §6 step 8).
 
-	// Stamina Bar migrated to Framework v2 (D1 Task 3, F1 §6 step 4) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Last
-	// Vue element migrated; Vue is now unused at runtime.
+	// Statblock migrated to Framework v2 (Plan 07 Task 3, F1 §6 step 6). The sub-views its
+	// buildUI composed (Common/HeaderView, statblock/StatsView, Features/FeaturesView,
+	// horizontalRuleProcessor) stay put — the statblock element view constructs them
+	// directly.
 
-	// Counter migrated to Framework v2 (Plan 07 Task 4, F1 §6 step 7) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. The
-	// legacy Counter/CounterProcessor.ts and Counter/CounterView.ts are deleted (logic
-	// ported into src/elements/counter/view.ts).
+	// Stamina Bar migrated to Framework v2 (D1 Task 3, F1 §6 step 4). Last Vue element
+	// migrated; Vue is now unused at runtime.
 
-	let charProcessor = new CharacteristicsProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-char", charProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-characteristics", charProcessor.handler);
+	// Counter migrated to Framework v2 (Plan 07 Task 4, F1 §6 step 7). The legacy
+	// Counter/CounterProcessor.ts and Counter/CounterView.ts are deleted (logic ported
+	// into src/elements/counter/view.ts).
 
-	// Skills migrated to Framework v2 (D1 Task 2, F1 §6 step 3) — registered via
-	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
+	// Characteristics migrated to Framework v2 (Plan 07 Task 5, F1 §6 step 2). The legacy
+	// CharacteristicsProcessor is deleted; Characteristics/CharacteristicsView stays,
+	// reused by src/elements/characteristics/view.ts.
 
-	let valRowProcessor = new ValuesRowProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-vr", valRowProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-value-row", valRowProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-values-row", valRowProcessor.handler);
+	// Skills migrated to Framework v2 (D1 Task 2, F1 §6 step 3).
+
+	// Values Row migrated to Framework v2 (Plan 07 Task 5, F1 §6 step 2). The legacy
+	// ValuesRowProcessor is deleted; ValuesRow/ValuesRowView stays, reused by
+	// src/elements/values-row/view.ts.
 }
