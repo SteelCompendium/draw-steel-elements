@@ -400,6 +400,16 @@ code.dsa {
 /* ==================== */
 /*   Initiative Tracker */
 /* ==================== */
+/* In-tracker rules are scoped under [data-dse-element="initiative"] (F1 §3.5) since the
+   Framework v2 migration (Plan 06): the pipeline stamps the attribute on the element root.
+   Deliberately NOT scoped (do not "fix" this):
+   - the modal blocks below (Stamina Modal, Minion Stamina Pool Modal, Condition Modal):
+     Obsidian modals mount in document.body, OUTSIDE the element root — scoping them would
+     break every initiative modal;
+   - classes shared by the tracker AND the modals: .condition-icon, .add-condition-icon,
+     and the .condition-effect-* Effects block;
+   - .error-message (legacy processors + negotiation still use it) and the framework
+     error-card / read-only rules just below (all elements). */
 
 /* Error Message Styling */
 
@@ -500,7 +510,7 @@ code.dsa {
 
 /* Turn Indicator Styling */
 
-.turn-indicator {
+[data-dse-element="initiative"] .turn-indicator {
 	cursor: pointer;
 
     svg {
@@ -520,7 +530,7 @@ code.dsa {
 
 /* Top action bar */
 
-.top-action-bar {
+[data-dse-element="initiative"] .top-action-bar {
 	margin-bottom: 10px;
 	display: flex;
 	justify-content: flex-start;
@@ -533,8 +543,8 @@ code.dsa {
 
 /* Character Rows */
 
-.heroes-container .character-row,
-.enemy-group {
+[data-dse-element="initiative"] .heroes-container .character-row,
+[data-dse-element="initiative"] .enemy-group {
 	position: relative;
 	padding-top: 1px;
 	padding-right: 1em;
@@ -570,7 +580,7 @@ code.dsa {
 
 /* Enemies Header */
 
-.enemies-header {
+[data-dse-element="initiative"] .enemies-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
@@ -578,7 +588,7 @@ code.dsa {
 
 /* Villain Power Styling */
 
-.malice-container {
+[data-dse-element="initiative"] .malice-container {
 	font-weight: bold;
 	color: red;
 	display: flex;
@@ -594,12 +604,12 @@ code.dsa {
     }
 }
 
-.malice-modifiers svg {
+[data-dse-element="initiative"] .malice-modifiers svg {
 	height: 100%;
 	width: 100%;
 }
 
-.malice-modifier {
+[data-dse-element="initiative"] .malice-modifier {
 	cursor: pointer;
 	height: 24px;
 
@@ -608,22 +618,22 @@ code.dsa {
     }
 }
 
-.malice-text {
+[data-dse-element="initiative"] .malice-text {
 	user-select: none;
 }
 
 /* Enemy Group Container */
 
-.enemy-group-container {
+[data-dse-element="initiative"] .enemy-group-container {
 	display: flex;
 }
 
-.enemy-group {
+[data-dse-element="initiative"] .enemy-group {
 	padding: 1em;
 	width: 100%;
 }
 
-.group-header {
+[data-dse-element="initiative"] .group-header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -635,13 +645,13 @@ code.dsa {
 
 /* Creature Group */
 
-.creature-group {
+[data-dse-element="initiative"] .creature-group {
 	margin-bottom: 20px;
 }
 
 /* Detailed Creature Row */
 
-.creature-detail-row {
+[data-dse-element="initiative"] .creature-detail-row {
 	margin-bottom: 10px;
 }
 
@@ -649,7 +659,7 @@ code.dsa {
 /*    Creature Instances Grid     */
 /* ============================= */
 
-.creature-instances-grid {
+[data-dse-element="initiative"] .creature-instances-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
 	gap: 10px;
@@ -663,7 +673,7 @@ code.dsa {
     }
 }
 
-.creature-instance-cell {
+[data-dse-element="initiative"] .creature-instance-cell {
 	text-align: center;
 	padding: 5px;
 	background-color: var(--color-base-30);
@@ -685,7 +695,7 @@ code.dsa {
     }
 }
 
-.instance-image {
+[data-dse-element="initiative"] .instance-image {
 	width: 50px;
 	height: 50px;
 	margin-bottom: 5px;
@@ -698,7 +708,7 @@ code.dsa {
     }
 }
 
-.instance-stamina {
+[data-dse-element="initiative"] .instance-stamina {
 	font-size: 14px;
 	word-wrap: break-word;
 	text-align: center;
@@ -713,12 +723,12 @@ code.dsa {
 /*    Hero and Character Rows  */
 /* =========================== */
 
-.hero-container {
+[data-dse-element="initiative"] .hero-container {
 	display: flex;
 }
 
-.character-icon,
-.enemy-group-icon {
+[data-dse-element="initiative"] .character-icon,
+[data-dse-element="initiative"] .enemy-group-icon {
 	height: 1.5em;
 	width: 1.5em;
 	border: 1px solid var(--icon-color);
@@ -726,14 +736,14 @@ code.dsa {
 	border-radius: 5px 0 0 5px;
 }
 
-.character-row {
+[data-dse-element="initiative"] .character-row {
 	display: flex;
 	align-items: center;
 	margin-bottom: 10px;
 	width: 100%;
 }
 
-.character-image {
+[data-dse-element="initiative"] .character-image {
 	display: flex;
 
     img {
@@ -743,16 +753,16 @@ code.dsa {
     }
 }
 
-.character-info {
+[data-dse-element="initiative"] .character-info {
 	flex: 1;
 	margin-left: 10px;
 }
 
-.character-name {
+[data-dse-element="initiative"] .character-name {
 	font-weight: bold;
 }
 
-.character-conditions {
+[data-dse-element="initiative"] .character-conditions {
 	margin-top: 5px;
 	height: 24px;
 	display: flex;
@@ -781,11 +791,11 @@ code.dsa {
     }
 }
 
-.character-health {
+[data-dse-element="initiative"] .character-health {
 	margin-left: 10px;
 }
 
-.character-stamina {
+[data-dse-element="initiative"] .character-stamina {
 	cursor: pointer;
 	font-weight: bold;
 }
