@@ -7,7 +7,7 @@
 //  - the new ElementRegistry exists on the plugin and is empty of migrated elements
 //    (Plan 02 migrates no element in this task);
 //  - the legacy `registerElements`/RegisterElements.ts path still runs UNCHANGED
-//    alongside it (coexistence — e.g. the "ds-statblock" alias is still registered);
+//    alongside it (coexistence — e.g. the "ds-vr" alias is still registered);
 //  - a malformed dependency schema does NOT crash the whole plugin `onload` — the
 //    `ValidationService.addDependencySchema` call is wrapped in try/catch and degrades
 //    gracefully (console.warn + Notice) instead of throwing (Task-1 review requirement);
@@ -29,10 +29,11 @@ import * as path from 'path';
 // families — proves registerElements(this) still runs unchanged alongside the new
 // registry for every element NOT YET migrated onto Framework v2. Migrated elements'
 // aliases (Horizontal Rule, Skills, Stamina Bar, Negotiation, Initiative, Feature,
-// Featureblock) are deliberately excluded here — off this path; see their dedicated
-// describe blocks below / their per-element registration suites (negotiation.test.ts,
-// initiative.test.ts, feature.test.ts, featureblock.test.ts).
-const LEGACY_ALIASES = ['ds-characteristics', 'ds-counter', 'ds-statblock'];
+// Featureblock, Statblock) are deliberately excluded here — off this path; see their
+// dedicated describe blocks below / their per-element registration suites
+// (negotiation.test.ts, initiative.test.ts, feature.test.ts, featureblock.test.ts,
+// statblock.test.ts).
+const LEGACY_ALIASES = ['ds-characteristics', 'ds-counter', 'ds-vr'];
 
 /**
  * `DrawSteelAdmonitionPlugin` extends the REAL `obsidian` `Plugin` (main.ts imports
@@ -59,7 +60,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar, Plan 05 Task 5: negotiation, Plan 06 Task 5: initiative, Plan 07 Task 1: feature, Plan 07 Task 2: featureblock)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds the migrated elements (D1 Task 1: horizontal-rule, D1 Task 2: skills, D1 Task 3: stamina-bar, Plan 05 Task 5: negotiation, Plan 06 Task 5: initiative, Plan 07 Task 1: feature, Plan 07 Task 2: featureblock, Plan 07 Task 3: statblock)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 
@@ -74,6 +75,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 			'initiative',
 			'feature',
 			'featureblock',
+			'statblock',
 		]);
 		expect(plugin.frameworkV2!.pipeline).toBeInstanceOf(ElementPipeline);
 		expect(plugin.frameworkV2!.services.validation).toBeDefined();
@@ -94,7 +96,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		}
 		// Not-yet-migrated elements are absent from the new registry — today's markdown
 		// code-block processors for them are entirely legacy-owned.
-		expect(plugin.frameworkV2!.registry.get('ds-statblock')).toBeUndefined();
+		expect(plugin.frameworkV2!.registry.get('ds-vr')).toBeUndefined();
 	});
 
 	test('onunload clears the SessionStore and drops the framework v2 bundle', async () => {
@@ -173,9 +175,10 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 				'initiative',
 				'feature',
 				'featureblock',
+				'statblock',
 			]);
 			// Legacy path is unaffected by the framework v2 schema failure.
-			expect((plugin as any).registeredProcessors.has('ds-statblock')).toBe(true);
+			expect((plugin as any).registeredProcessors.has('ds-vr')).toBe(true);
 
 			warnSpy.mockRestore();
 		});

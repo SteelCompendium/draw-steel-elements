@@ -36,6 +36,7 @@ import { negotiationElement } from '@/elements/negotiation/definition';
 import { initiativeElement } from '@/elements/initiative/definition';
 import { featureElement } from '@/elements/feature/definition';
 import { featureblockElement } from '@/elements/featureblock/definition';
+import { statblockElement } from '@/elements/statblock/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -165,6 +166,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(initiativeElement);
 	registry.register(featureElement);
 	registry.register(featureblockElement);
+	registry.register(statblockElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

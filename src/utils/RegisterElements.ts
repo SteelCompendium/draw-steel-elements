@@ -1,4 +1,3 @@
-import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
@@ -11,13 +10,13 @@ export function registerElements (plugin: Plugin) {
 
 	// Feature migrated to Framework v2 (Plan 07 Task 1, F1 §6 step 5) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Its
-	// sub-views (Features/FeatureView et al.) stay put: Featureblock/Statblock below
-	// still construct them directly.
+	// sub-views (Features/FeatureView et al.) stay put: the Featureblock/Statblock
+	// element views still construct them directly.
 
 	// Featureblock migrated to Framework v2 (Plan 07 Task 2, F1 §6 step 6) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Its
-	// sub-views (featureblock/FeatureblockView et al.) stay put: Statblock below still
-	// constructs them directly.
+	// sub-views (featureblock/FeatureblockView et al.) stay put: the Statblock element
+	// view still constructs several of the shared ones directly.
 
 	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
@@ -28,9 +27,11 @@ export function registerElements (plugin: Plugin) {
 	// Negotiation Tracker migrated to Framework v2 (Plan 05, F1 §6 step 8) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
 
-	let sbProcessor = new StatblockProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-sb", sbProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-statblock", sbProcessor.handler);
+	// Statblock migrated to Framework v2 (Plan 07 Task 3, F1 §6 step 6) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. The
+	// sub-views its buildUI composed (Common/HeaderView, statblock/StatsView,
+	// Features/FeaturesView, horizontalRuleProcessor) stay put — the statblock element
+	// view constructs them directly.
 
 	// Stamina Bar migrated to Framework v2 (D1 Task 3, F1 §6 step 4) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead. Last
