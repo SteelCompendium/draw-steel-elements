@@ -1,5 +1,7 @@
-// T-10b: CounterView — the smallest interactive element, same template shape
-// as initiative-render.test.ts (see the F1 NOTE there).
+// T-10b: CounterView — the smallest interactive element, same template shape as the
+// T-10a harness (initiative-render.test.ts, deleted with the legacy InitiativeProcessor
+// in Plan 06 Task 5): parse a golden fixture → render into an extended jsdom div →
+// assert structure → simulate one interaction → assert exactly one vault write.
 import { CounterView } from '@drawSteelAdmonition/Counter/CounterView';
 import { Counter } from '@model/Counter';
 import { App, Plugin, makeFakeContext, flushAsync } from '../../mocks/obsidian';

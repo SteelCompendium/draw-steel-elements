@@ -1,10 +1,7 @@
-// Plan 06 Task 4 — the Initiative Tracker ElementDefinition on Framework v2.
-//
-// NOT REGISTERED YET (deliberate): registerFrameworkElementDefinitions (main.ts) does not
-// include this definition and RegisterElements.ts still wires the legacy
-// InitiativeProcessor for every ds-it* alias. Task 5 flips registration (register here,
-// remove the legacy registration, delete initiativeProcessor.ts) — keeping this task free
-// of a half-migrated live element.
+// Plan 06 (F1 §6 step 9) — the Initiative Tracker ElementDefinition on Framework v2,
+// retiring the legacy InitiativeProcessor. Registered via
+// registerFrameworkElementDefinitions (main.ts) since Task 5, which also deleted
+// initiativeProcessor.ts and its RegisterElements.ts ds-it* wiring.
 import type { ElementDefinition } from '@/framework/registry';
 import type { EncounterData } from './model';
 import { parse, serialize } from './model';

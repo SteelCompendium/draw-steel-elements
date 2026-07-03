@@ -1,18 +1,15 @@
-import {InitiativeProcessor} from "@drawSteelAdmonition/initiativeProcessor";
 import {StatblockProcessor} from "@drawSteelAdmonition/statblock/StatblockProcessor";
 import { FeatureProcessor } from "@drawSteelAdmonition/Features/FeatureProcessor";
 import { FeatureblockProcessor } from "@drawSteelAdmonition/featureblock/FeatureblockProcessor";
 import {CounterProcessor} from "@drawSteelAdmonition/Counter/CounterProcessor";
 import {CharacteristicsProcessor} from "@drawSteelAdmonition/Characteristics/CharacteristicsProcessor";
 import {ValuesRowProcessor} from "@drawSteelAdmonition/ValuesRow/ValuesRowProcessor";
-import DrawSteelAdmonitionPlugin from "main";
+import {Plugin} from "obsidian";
 
-// `plugin` is typed as the concrete DrawSteelAdmonitionPlugin (not the generic Obsidian
-// `Plugin`) because InitiativeProcessor's constructor requires it; every other processor
-// here only needs `Plugin`/`App`, and DrawSteelAdmonitionPlugin extends Plugin, so this is
-// a strictly more specific — not different — type for all of them. The sole caller
-// (main.ts's `registerElements(this)`) already passes a DrawSteelAdmonitionPlugin.
-export function registerElements (plugin: DrawSteelAdmonitionPlugin) {
+// `plugin` is the generic Obsidian `Plugin`: every remaining legacy processor here only
+// needs `Plugin`/`App`. (It was the concrete DrawSteelAdmonitionPlugin until Plan 06
+// Task 5, solely because the since-retired InitiativeProcessor's constructor required it.)
+export function registerElements (plugin: Plugin) {
 
 	const abilityProcessor = new FeatureProcessor(plugin);
 	plugin.registerMarkdownCodeBlockProcessor("ds-ft", abilityProcessor.handler);
@@ -26,11 +23,8 @@ export function registerElements (plugin: DrawSteelAdmonitionPlugin) {
 	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
 
-	const initProcessor = new InitiativeProcessor(plugin);
-	plugin.registerMarkdownCodeBlockProcessor("ds-it", initProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-init", initProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-initiative", initProcessor.handler);
-	plugin.registerMarkdownCodeBlockProcessor("ds-initiative-tracker", initProcessor.handler);
+	// Initiative Tracker migrated to Framework v2 (Plan 06, F1 §6 step 9) — registered via
+	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.
 
 	// Negotiation Tracker migrated to Framework v2 (Plan 05, F1 §6 step 8) — registered via
 	// registerFrameworkElements(plugin, frameworkV2) in main.ts's onload() instead.

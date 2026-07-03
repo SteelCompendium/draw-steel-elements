@@ -33,6 +33,7 @@ import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 import { skillsElement } from '@/elements/skills/definition';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import { negotiationElement } from '@/elements/negotiation/definition';
+import { initiativeElement } from '@/elements/initiative/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -93,8 +94,8 @@ export interface ElementFrameworkV2 {
  * (`registerFrameworkElements`) as its own explicit steps, right after calling this
  * factory. `RegisterElements.ts` / `registerElements(plugin)` remains the owner of every
  * `registerMarkdownCodeBlockProcessor` call for elements NOT YET migrated (F1 §2.3's
- * "incremental migration switch" — Horizontal Rule (D1 Task 1) and Skills (D1 Task 2) are
- * the migrated elements so far).
+ * "incremental migration switch" — `registerFrameworkElementDefinitions` below is the
+ * single source of truth for which elements HAVE migrated).
  */
 export function initializeElementFrameworkV2(
 	app: App,
@@ -145,7 +146,8 @@ export function initializeElementFrameworkV2(
  * D1 Task 2 appends Skills (F1 §6 step 3, first *interactive* element); D1 Task 3 appends
  * Stamina Bar (F1 §6 step 4, first *persisted* element — and the last Vue element, so
  * after this registration no `.vue` file is imported anywhere at runtime); Plan 05 Task 5
- * appends Negotiation (F1 §6 step 8, retiring NegotiationTrackerProcessor). Later D1/F1
+ * appends Negotiation (F1 §6 step 8, retiring NegotiationTrackerProcessor); Plan 06 Task 5
+ * appends Initiative (F1 §6 step 9, retiring InitiativeProcessor). Later D1/F1
  * migration steps append their own `registry.register(...)` call here as each element
  * moves off `RegisterElements.ts`. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
@@ -155,6 +157,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(skillsElement);
 	registry.register(staminaBarElement);
 	registry.register(negotiationElement);
+	registry.register(initiativeElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

@@ -1,8 +1,8 @@
-// Plan 06 Task 4 — the Initiative Tracker on Framework v2: InitiativeView + definition,
-// driven through the REAL ElementPipeline (mirrors negotiation.test.ts / the T-10
-// initiative-render.test.ts harness template). The definition is deliberately NOT
-// registered yet (Task 5 flips registration and retires the legacy processor), so no
-// registry is needed here — the pipeline is invoked with the definition directly.
+// Plan 06 — the Initiative Tracker on Framework v2: InitiativeView + definition, driven
+// through the REAL ElementPipeline (mirrors negotiation.test.ts; supersedes the deleted
+// legacy T-10a initiative-render.test.ts harness). Task 5 registered the definition and
+// retired the legacy InitiativeProcessor — the T-5 block below pins registered-exactly-
+// once; the render tests still invoke the pipeline with the definition directly.
 //
 // BYTE-COMPAT oracle: the legacy writer (CodeBlocks.updateInitiativeTracker) did exactly
 // `stringifyYaml(<the live materialized EncounterData>).trim()` — so expected bytes are
@@ -28,7 +28,7 @@ import { InitiativeView } from '../../../src/elements/initiative/view';
 import { parse, serialize, resetEncounter } from '../../../src/elements/initiative/model';
 import type { Condition, EncounterData } from '../../../src/elements/initiative/model';
 import { resolveInitiativeRefs } from '../../../src/elements/initiative/resolveRefs';
-import { registerFrameworkElementDefinitions } from 'main';
+import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
 import statblockRefs from '../../fixtures/initiative/statblock-refs.yaml';
@@ -144,13 +144,33 @@ describe('T-4: initiative ElementDefinition', () => {
 		expect(initiativeElement.createView(cx as any)).toBeInstanceOf(InitiativeView);
 	});
 
-	test('Task 4 state: NOT yet in the framework registry — the legacy processor still owns ds-it* (Task 5 flips this)', () => {
+});
+
+describe('T-5: registered EXACTLY ONCE — framework registry owns ds-it*, RegisterElements.ts does not', () => {
+	test('registerFrameworkElementDefinitions registers initiative; every alias resolves to it', () => {
 		const registry = createElementRegistry();
 		registerFrameworkElementDefinitions(registry);
-		expect(registry.get('initiative')).toBeUndefined();
+
+		expect(registry.get('initiative')?.id).toBe('initiative');
 		for (const alias of IT_ALIASES) {
-			expect(registry.get(alias)).toBeUndefined();
+			expect(registry.get(alias)?.id).toBe('initiative');
 		}
+	});
+
+	test('through the REAL onload(): each ds-it* alias gets exactly one registerMarkdownCodeBlockProcessor call (no legacy double-registration)', async () => {
+		const app = new App();
+		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
+		const registerSpy = jest.spyOn(plugin, 'registerMarkdownCodeBlockProcessor');
+
+		await plugin.onload();
+
+		for (const alias of IT_ALIASES) {
+			const calls = registerSpy.mock.calls.filter(([language]) => language === alias);
+			expect(calls).toHaveLength(1);
+		}
+		expect(plugin.frameworkV2!.registry.get('ds-it')?.id).toBe('initiative');
+
+		registerSpy.mockRestore();
 	});
 });
 
