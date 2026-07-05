@@ -1,12 +1,16 @@
-// Plan 07 Task 5 (F1 §6 step 2) — Values Row on Framework v2: valuesRowElement definition
-// + ValuesRowElementView, driven through the REAL ElementPipeline (static-element harness
-// mirroring feature.test.ts; T-5 registration blocks mirroring its onload() suite). The
-// element view is a thin wrapper: it recreates the legacy ValuesRowProcessor's
-// `.ds-values-row-ele-container` root and delegates ALL rendering to the KEPT
-// ValuesRow/ValuesRowView — so the golden test pins the wrapper byte-for-byte against a
-// direct ValuesRowView.build() call. Unlike most legacy DOM processors, ValuesRowProcessor
-// never armed a click shield, so the definition opts OUT (noClickShield: true, same
-// byte-identical rationale as horizontal-rule).
+// Plan 09 Task 1 (D2 §3.2) — Values Row on the shared `.dse-statgrid` grammar: the
+// valuesRowElement definition + ValuesRowElementView, driven through the REAL
+// ElementPipeline (static-element harness mirroring feature.test.ts; T-5 registration
+// blocks mirroring its onload() suites). The redesign folds the deleted legacy
+// ValuesRow/ValuesRowView into onMount: one `.dse-statgrid` of `__cell` (`__value` over
+// `__label`) — the SAME grammar characteristics/view.ts renders ([data-dse-element]
+// distinguishes them at the CSS level). SC-5 eviction: the value_height/name_height YAML
+// knobs become --dse-value-scale/--dse-label-scale custom properties (sanctioned --dse-*
+// geometry) — NEVER inline font-size, never inline color. Unlike most legacy DOM
+// processors, ValuesRowProcessor never armed a click shield, so the definition opts OUT
+// (noClickShield: true, same rationale as horizontal-rule).
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -19,11 +23,11 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { KeyValuePairs } from '@model/KeyValuePairs';
-import { ValuesRowView } from '@drawSteelAdmonition/ValuesRow/ValuesRowView';
 import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import { valuesRowElement } from '../../../src/elements/values-row/definition';
 import { ValuesRowElementView } from '../../../src/elements/values-row/view';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
+import { styleGuardFindings } from '../kit/styleGuard';
 
 const VR_ALIASES = ['ds-vr', 'ds-value-row', 'ds-values-row'] as const;
 
@@ -134,55 +138,120 @@ describe('Plan 07 Task 5: values-row ElementDefinition (F1 §6 step 2)', () => {
 	});
 });
 
-describe('Plan 07 Task 5: values-row rendered through the REAL ElementPipeline', () => {
-	test('golden render: byte-identical to the legacy wrapper (ds-values-row-ele-container + ValuesRowView.build)', async () => {
-		const { root, deps } = await renderValuesRow(SAMPLE);
+describe('Plan 09 Task 1: values-row rendered through the REAL ElementPipeline (.dse-statgrid)', () => {
+	test('renders ONE .dse-statgrid directly under the element root; NO legacy .ds-values-row-* DOM survives', async () => {
+		const { root } = await renderValuesRow(SAMPLE);
 
-		// The legacy ValuesRowProcessor DOM, minus the framework-owned root div: a
-		// `.ds-values-row-ele-container` wrapper around ValuesRowView.build().
-		const golden = document.createElement('div');
-		const goldenContainer = golden.createEl('div', { cls: 'ds-values-row-ele-container' });
-		new ValuesRowView(deps.plugin, KeyValuePairs.parseYaml(SAMPLE), { sourcePath: 'Note.md' } as any).build(
-			goldenContainer,
-		);
-
-		expect(root.innerHTML).toBe(golden.innerHTML);
+		const grid = root.querySelector(':scope > .dse-statgrid');
+		expect(grid).not.toBeNull();
+		expect(root.querySelectorAll('.dse-statgrid')).toHaveLength(1);
+		expect(root.querySelector('[class*="ds-values-row"]')).toBeNull();
 	});
 
-	test('root carries data-dse-element="values-row" + data-dse-theme; container classes match the legacy processor', async () => {
+	test('root carries data-dse-element="values-row" + data-dse-theme (the attr that scopes the shared statgrid CSS)', async () => {
 		const { root } = await renderValuesRow(SAMPLE);
 
 		expect(root.getAttribute('data-dse-element')).toBe('values-row');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
-		const container = root.querySelector(':scope > .ds-values-row-ele-container');
-		expect(container).not.toBeNull();
-		expect(container!.querySelector(':scope > .ds-values-row-container')).not.toBeNull();
 	});
 
-	test('cells: one .ds-values-row-cell per pair with value/name text and the configured em font sizes', async () => {
+	test('cells: one __cell per pair, each a __value over a __label with the pair\'s text', async () => {
 		const { root } = await renderValuesRow(SAMPLE);
 
-		const cells = root.querySelectorAll('.ds-values-row-row > .ds-values-row-cell');
+		const cells = root.querySelectorAll('.dse-statgrid > .dse-statgrid__cell');
 		expect(cells).toHaveLength(3);
+		for (const cell of Array.from(cells)) {
+			const children = Array.from(cell.children).map((el) => el.className);
+			expect(children).toEqual(['dse-statgrid__value', 'dse-statgrid__label']);
+		}
 
-		const values = Array.from(root.querySelectorAll('.ds-values-row-value')).map((el) => el.textContent);
-		const names = Array.from(root.querySelectorAll('.ds-values-row-name')).map((el) => el.textContent);
+		const values = Array.from(root.querySelectorAll('.dse-statgrid__value')).map((el) => el.textContent);
+		const labels = Array.from(root.querySelectorAll('.dse-statgrid__label')).map((el) => el.textContent);
 		expect(values).toEqual(['5', '1M', '0']);
-		expect(names).toEqual(['Speed', 'Size', 'Stability']);
-
-		expect((root.querySelector('.ds-values-row-value') as HTMLElement).style.fontSize).toBe('2em');
-		expect((root.querySelector('.ds-values-row-name') as HTMLElement).style.fontSize).toBe('1em');
+		expect(labels).toEqual(['Speed', 'Size', 'Stability']);
 	});
 
-	test('nameless (scalar) entries render a value with an empty name (KVPair.nameless path)', async () => {
+	test('SC-5 eviction: value_height/name_height arrive as --dse-value-scale/--dse-label-scale via setProperty — NO inline font-size anywhere', async () => {
+		const { root } = await renderValuesRow(SAMPLE);
+
+		const grid = root.querySelector('.dse-statgrid') as HTMLElement;
+		expect(grid.style.getPropertyValue('--dse-value-scale')).toBe('2');
+		expect(grid.style.getPropertyValue('--dse-label-scale')).toBe('1');
+
+		for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+			expect(el.style.fontSize).toBe('');
+		}
+	});
+
+	test('defaults apply when heights are omitted: --dse-value-scale 3 / --dse-label-scale 1', async () => {
 		const { root } = await renderValuesRow('values:\n  - lone value\n  - 42\n');
 
-		const values = Array.from(root.querySelectorAll('.ds-values-row-value')).map((el) => el.textContent);
-		const names = Array.from(root.querySelectorAll('.ds-values-row-name')).map((el) => el.textContent);
+		const grid = root.querySelector('.dse-statgrid') as HTMLElement;
+		expect(grid.style.getPropertyValue('--dse-value-scale')).toBe('3');
+		expect(grid.style.getPropertyValue('--dse-label-scale')).toBe('1');
+	});
+
+	test('nameless (scalar) entries render a value with an empty label (KVPair.nameless path)', async () => {
+		const { root } = await renderValuesRow('values:\n  - lone value\n  - 42\n');
+
+		const values = Array.from(root.querySelectorAll('.dse-statgrid__value')).map((el) => el.textContent);
+		const labels = Array.from(root.querySelectorAll('.dse-statgrid__label')).map((el) => el.textContent);
 		expect(values).toEqual(['lone value', '42']);
-		expect(names).toEqual(['', '']);
-		// Defaults apply when heights are omitted: value 3em, name 1em.
-		expect((root.querySelector('.ds-values-row-value') as HTMLElement).style.fontSize).toBe('3em');
+		expect(labels).toEqual(['', '']);
+	});
+
+	test('D2 §5: zero inline color — no element carries style.color or any non---dse-* inline declaration', async () => {
+		const { root } = await renderValuesRow(SAMPLE);
+
+		for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+			expect(el.style.color).toBe('');
+			const inline = el.getAttribute('style');
+			if (inline !== null) {
+				for (const decl of inline.split(';')) {
+					if (decl.trim() === '') continue;
+					expect(decl.trim().startsWith('--dse-')).toBe(true);
+				}
+			}
+		}
+	});
+
+	test('view source hygiene: the ONLY .style access is setProperty("--dse-*", …) (shared kit style guard)', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/values-row/view.ts'),
+			'utf8',
+		);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('CSS contract: .dse-statgrid is scoped under BOTH element roots, consumes --dse-fg/--dse-fg-muted + the scale properties, and keeps the @media column flip', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		// One shared block scoped under both [data-dse-element] roots (D2 §3.2/3.3).
+		expect(sheet).toMatch(
+			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid\s*\{/,
+		);
+
+		const block = sheet.match(
+			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
+		);
+		expect(block).not.toBeNull();
+		expect(block![0]).toMatch(/var\(--dse-fg\)/);
+		expect(block![0]).toMatch(/var\(--dse-fg-muted\)/);
+		expect(block![0]).toMatch(/calc\(var\(--dse-value-scale/);
+		expect(block![0]).toMatch(/calc\(var\(--dse-label-scale/);
+
+		// Today's <=600px column flip, preserved (D2 §3.2 "today's @media column flip") —
+		// a top-level media rule re-selecting both statgrid roots (see the CSS comment:
+		// a nested `& {}` inside @media gets mangled by esbuild's minifier).
+		const media = sheet.match(
+			/@media\s*\(max-width:\s*600px\)\s*\{\s*\n\s*\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
+		);
+		expect(media).not.toBeNull();
+		expect(media![0]).toMatch(/flex-direction:\s*column/);
+
+		// The old legacy class block is gone (both elements now render the statgrid).
+		expect(sheet).not.toMatch(/\.ds-values-row-container/);
+		expect(sheet).not.toMatch(/\.ds-characteristics-container/);
 	});
 
 	test('static: rendering never writes back (no replaceSource) and no error card renders', async () => {
@@ -206,8 +275,8 @@ describe('Plan 07 Task 5: values-row rendered through the REAL ElementPipeline',
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const container = root.querySelector('.ds-values-row-container') as HTMLElement;
-				container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+				const grid = root.querySelector('.dse-statgrid') as HTMLElement;
+				grid.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(1);
 			} finally {
 				document.removeEventListener('mousedown', onDocMousedown);
@@ -222,7 +291,7 @@ describe('Plan 07 Task 5: values-row rendered through the REAL ElementPipeline',
 		expect(root.getAttribute('data-dse-error-stage')).toBe('parse');
 		expect(root.querySelector('.dse-error-card')).not.toBeNull();
 		expect(root.querySelector('.dse-error-card-title')!.textContent).toContain('Values row: failed to render');
-		expect(root.querySelector('.ds-values-row-container')).toBeNull();
+		expect(root.querySelector('.dse-statgrid')).toBeNull();
 	});
 
 	test('valid YAML but bad shape (values not an array) renders the error card with the model\'s message (stage "render")', async () => {
@@ -260,7 +329,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-vr*, Regis
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-vr block through the wired processor produces the values-row DOM (end-to-end)', async () => {
+	test('rendering a ds-vr block through the wired processor produces the values-row statgrid DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -273,6 +342,6 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-vr*, Regis
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('values-row');
-		expect(root.querySelector('.ds-values-row-ele-container .ds-values-row-container')).not.toBeNull();
+		expect(root.querySelector(':scope > .dse-statgrid .dse-statgrid__cell')).not.toBeNull();
 	});
 });

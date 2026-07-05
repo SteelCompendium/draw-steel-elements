@@ -1,12 +1,16 @@
-// Plan 07 Task 5 (F1 §6 step 2) — Characteristics on Framework v2: characteristicsElement
-// definition + CharacteristicsElementView, driven through the REAL ElementPipeline
-// (static-element harness mirroring feature.test.ts / values-row.test.ts; T-5 registration
-// blocks mirroring their onload() suites). The element view is a thin wrapper: it recreates
-// the legacy CharacteristicsProcessor's `.ds-characteristics-ele-container` root and
-// delegates ALL rendering to the KEPT Characteristics/CharacteristicsView — the golden test
-// pins the wrapper byte-for-byte against a direct CharacteristicsView.build() call. Unlike
-// Values Row, the legacy processor DID arm the capture-phase click shield, so the framework
-// default (shield ON, noClickShield unset) is the byte-identical choice here.
+// Plan 09 Task 1 (D2 §3.3) — Characteristics on the shared `.dse-statgrid` grammar: the
+// characteristicsElement definition + CharacteristicsElementView, driven through the REAL
+// ElementPipeline (static-element harness mirroring feature.test.ts / values-row.test.ts;
+// T-5 registration blocks mirroring their onload() suites). The redesign folds the deleted
+// legacy Characteristics/CharacteristicsView into onMount: one `.dse-statgrid` of the five
+// fixed characteristic `__cell`s (`__value` over `__label`) — the SAME grammar
+// values-row/view.ts renders ([data-dse-element] distinguishes them at the CSS level; the
+// shared CSS contract lives in values-row.test.ts). SC-5 eviction: value_height/name_height
+// become --dse-value-scale/--dse-label-scale custom properties — never inline font-size,
+// never inline color. Unlike Values Row, the legacy processor DID arm the capture-phase
+// click shield, so the framework default (shield ON, noClickShield unset) stays.
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -19,11 +23,11 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { Characteristics } from '@model/Characteristics';
-import { CharacteristicsView } from '@drawSteelAdmonition/Characteristics/CharacteristicsView';
 import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
 import { characteristicsElement } from '../../../src/elements/characteristics/definition';
 import { CharacteristicsElementView } from '../../../src/elements/characteristics/view';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
+import { styleGuardFindings } from '../kit/styleGuard';
 
 const CHAR_ALIASES = ['ds-char', 'ds-characteristics'] as const;
 
@@ -135,53 +139,83 @@ describe('Plan 07 Task 5: characteristics ElementDefinition (F1 §6 step 2)', ()
 	});
 });
 
-describe('Plan 07 Task 5: characteristics rendered through the REAL ElementPipeline', () => {
-	test('golden render: byte-identical to the legacy wrapper (ds-characteristics-ele-container + CharacteristicsView.build)', async () => {
-		const { root, deps } = await renderCharacteristics(SAMPLE);
+describe('Plan 09 Task 1: characteristics rendered through the REAL ElementPipeline (.dse-statgrid)', () => {
+	test('renders ONE .dse-statgrid directly under the element root; NO legacy .ds-characteristics-* DOM survives', async () => {
+		const { root } = await renderCharacteristics(SAMPLE);
 
-		// The legacy CharacteristicsProcessor DOM, minus the framework-owned root div: a
-		// `.ds-characteristics-ele-container` wrapper around CharacteristicsView.build().
-		const golden = document.createElement('div');
-		const goldenContainer = golden.createEl('div', { cls: 'ds-characteristics-ele-container' });
-		new CharacteristicsView(deps.plugin, Characteristics.parseYaml(SAMPLE), { sourcePath: 'Note.md' } as any).build(
-			goldenContainer,
-		);
-
-		expect(root.innerHTML).toBe(golden.innerHTML);
+		const grid = root.querySelector(':scope > .dse-statgrid');
+		expect(grid).not.toBeNull();
+		expect(root.querySelectorAll('.dse-statgrid')).toHaveLength(1);
+		expect(root.querySelector('[class*="ds-characteristics"]')).toBeNull();
 	});
 
-	test('root carries data-dse-element="characteristics" + data-dse-theme; container classes match the legacy processor', async () => {
+	test('root carries data-dse-element="characteristics" + data-dse-theme (the attr that scopes the shared statgrid CSS)', async () => {
 		const { root } = await renderCharacteristics(SAMPLE);
 
 		expect(root.getAttribute('data-dse-element')).toBe('characteristics');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
-		const container = root.querySelector(':scope > .ds-characteristics-ele-container');
-		expect(container).not.toBeNull();
-		expect(container!.querySelector(':scope > .ds-characteristics-container')).not.toBeNull();
 	});
 
-	test('cells: always the five fixed characteristics with value/name text and the configured em font sizes', async () => {
+	test('cells: always the five fixed characteristics, each a __value over a __label', async () => {
 		const { root } = await renderCharacteristics(SAMPLE);
 
-		const cells = root.querySelectorAll('.ds-characteristics-row > .ds-characteristics-cell');
+		const cells = root.querySelectorAll('.dse-statgrid > .dse-statgrid__cell');
 		expect(cells).toHaveLength(5);
+		for (const cell of Array.from(cells)) {
+			const children = Array.from(cell.children).map((el) => el.className);
+			expect(children).toEqual(['dse-statgrid__value', 'dse-statgrid__label']);
+		}
 
-		const values = Array.from(root.querySelectorAll('.ds-characteristics-value')).map((el) => el.textContent);
-		const names = Array.from(root.querySelectorAll('.ds-characteristics-name')).map((el) => el.textContent);
+		const values = Array.from(root.querySelectorAll('.dse-statgrid__value')).map((el) => el.textContent);
+		const labels = Array.from(root.querySelectorAll('.dse-statgrid__label')).map((el) => el.textContent);
 		expect(values).toEqual(['2', '1', '0', '-1', '3']);
-		expect(names).toEqual(['Might', 'Agility', 'Reason', 'Intuition', 'Presence']);
-
-		expect((root.querySelector('.ds-characteristics-value') as HTMLElement).style.fontSize).toBe('2em');
-		expect((root.querySelector('.ds-characteristics-name') as HTMLElement).style.fontSize).toBe('1em');
+		expect(labels).toEqual(['Might', 'Agility', 'Reason', 'Intuition', 'Presence']);
 	});
 
-	test('omitted characteristics default to 0; omitted heights default to 3em/1em', async () => {
+	test('SC-5 eviction: value_height/name_height arrive as --dse-value-scale/--dse-label-scale via setProperty — NO inline font-size anywhere', async () => {
+		const { root } = await renderCharacteristics(SAMPLE);
+
+		const grid = root.querySelector('.dse-statgrid') as HTMLElement;
+		expect(grid.style.getPropertyValue('--dse-value-scale')).toBe('2');
+		expect(grid.style.getPropertyValue('--dse-label-scale')).toBe('1');
+
+		for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+			expect(el.style.fontSize).toBe('');
+		}
+	});
+
+	test('omitted characteristics default to 0; omitted heights default to scale 3/1', async () => {
 		const { root } = await renderCharacteristics('might: 4\n');
 
-		const values = Array.from(root.querySelectorAll('.ds-characteristics-value')).map((el) => el.textContent);
+		const values = Array.from(root.querySelectorAll('.dse-statgrid__value')).map((el) => el.textContent);
 		expect(values).toEqual(['4', '0', '0', '0', '0']);
-		expect((root.querySelector('.ds-characteristics-value') as HTMLElement).style.fontSize).toBe('3em');
-		expect((root.querySelector('.ds-characteristics-name') as HTMLElement).style.fontSize).toBe('1em');
+
+		const grid = root.querySelector('.dse-statgrid') as HTMLElement;
+		expect(grid.style.getPropertyValue('--dse-value-scale')).toBe('3');
+		expect(grid.style.getPropertyValue('--dse-label-scale')).toBe('1');
+	});
+
+	test('D2 §5: zero inline color — no element carries style.color or any non---dse-* inline declaration', async () => {
+		const { root } = await renderCharacteristics(SAMPLE);
+
+		for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+			expect(el.style.color).toBe('');
+			const inline = el.getAttribute('style');
+			if (inline !== null) {
+				for (const decl of inline.split(';')) {
+					if (decl.trim() === '') continue;
+					expect(decl.trim().startsWith('--dse-')).toBe(true);
+				}
+			}
+		}
+	});
+
+	test('view source hygiene: the ONLY .style access is setProperty("--dse-*", …) (shared kit style guard)', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/characteristics/view.ts'),
+			'utf8',
+		);
+		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
 	test('static: rendering never writes back (no replaceSource) and no error card renders', async () => {
@@ -205,8 +239,8 @@ describe('Plan 07 Task 5: characteristics rendered through the REAL ElementPipel
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const container = root.querySelector('.ds-characteristics-container') as HTMLElement;
-				container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+				const grid = root.querySelector('.dse-statgrid') as HTMLElement;
+				grid.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(0);
 			} finally {
 				document.removeEventListener('mousedown', onDocMousedown);
@@ -223,7 +257,7 @@ describe('Plan 07 Task 5: characteristics rendered through the REAL ElementPipel
 		expect(root.querySelector('.dse-error-card-title')!.textContent).toContain(
 			'Characteristics: failed to render',
 		);
-		expect(root.querySelector('.ds-characteristics-container')).toBeNull();
+		expect(root.querySelector('.dse-statgrid')).toBeNull();
 	});
 });
 
@@ -254,7 +288,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-char*, Reg
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-char block through the wired processor produces the characteristics DOM (end-to-end)', async () => {
+	test('rendering a ds-char block through the wired processor produces the characteristics statgrid DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -267,6 +301,6 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-char*, Reg
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('characteristics');
-		expect(root.querySelector('.ds-characteristics-ele-container .ds-characteristics-container')).not.toBeNull();
+		expect(root.querySelector(':scope > .dse-statgrid .dse-statgrid__cell')).not.toBeNull();
 	});
 });

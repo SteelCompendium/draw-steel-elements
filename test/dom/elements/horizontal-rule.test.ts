@@ -1,10 +1,12 @@
-// D1 Task 1 (Plan 03) — Horizontal Rule: the first real element on Framework v2 (F1 §6
-// step 1 / D1 spec step 1). Static, zero-config: parse() ignores its input entirely, so
-// this element's whole job is proving parse -> validate(skipped, no schema) -> createView
-// -> mount end-to-end through the REAL ElementPipeline (same pattern as
-// test/dom/framework/pipeline.test.ts's makeDeps()), and that HorizontalRuleView.onMount
-// reuses the legacy Common/horizontalRuleProcessor DOM builder byte-for-byte (that file is
-// NOT deleted by this migration — Statblock/Featureblock still call it directly).
+// Plan 09 Task 1 (D2 §3.1) — Horizontal Rule on the kit divider. Static, zero-config:
+// parse() ignores its input entirely, so this element's whole job is proving parse ->
+// validate(skipped, no schema) -> createView -> mount end-to-end through the REAL
+// ElementPipeline (same pattern as test/dom/framework/pipeline.test.ts's makeDeps()),
+// and that HorizontalRuleView.onMount now renders the kit `divider` (`.dse-hr` + fade
+// lines + ◆ diamond — Plan 08's DOM/CSS) instead of the legacy
+// Common/horizontalRuleProcessor. That legacy builder is NOT deleted by this redesign —
+// Statblock/Featureblock still call it directly (they migrate in Plan 09 Task 6) — so a
+// guard test pins it still building the old `.ds-hr-container` DOM.
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -19,6 +21,7 @@ import { App, Plugin } from '../../mocks/obsidian';
 import { horizontalRuleElement } from '../../../src/elements/horizontal-rule/definition';
 import { HorizontalRuleView } from '../../../src/elements/horizontal-rule/view';
 import { HorizontalRuleProcessor } from '@drawSteelAdmonition/Common/horizontalRuleProcessor';
+import { divider } from '../../../src/framework/kit';
 
 function makeHost(): BlockHost & { containerEl: HTMLElement } {
 	const containerEl = document.createElement('div');
@@ -83,8 +86,8 @@ describe('D1 Task 1: horizontal-rule ElementDefinition (F1 §6 step 1)', () => {
 	});
 });
 
-describe('D1 Task 1: horizontal-rule rendered through the REAL ElementPipeline', () => {
-	test('golden render: matches the legacy HorizontalRuleProcessor.build() DOM byte-for-byte', async () => {
+describe('Plan 09 Task 1: horizontal-rule rendered through the REAL ElementPipeline', () => {
+	test('golden render: matches a direct kit divider(axis:"h", ornament:true) call byte-for-byte', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
@@ -92,19 +95,36 @@ describe('D1 Task 1: horizontal-rule rendered through the REAL ElementPipeline',
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		const golden = document.createElement('div');
-		HorizontalRuleProcessor.build(golden);
+		divider(golden, { axis: 'h', ornament: true });
 
 		expect(root.innerHTML).toBe(golden.innerHTML);
 	});
 
-	test('exact structure: .ds-hr-container > .ds-hr-left-line + .ds-hr-center + .ds-hr-right-line', async () => {
+	test('exact structure: .dse-hr[role="separator"] > line--left + diamond + line--right; NO legacy .ds-hr-container', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		await pipeline.run(horizontalRuleElement, '', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const container = root.querySelector(':scope > .ds-hr-container');
+		const rule = root.querySelector(':scope > .dse-hr');
+		expect(rule).not.toBeNull();
+		expect(rule!.getAttribute('role')).toBe('separator');
+		const children = Array.from(rule!.children).map((el) => el.className);
+		expect(children).toEqual([
+			'dse-hr__line dse-hr__line--left',
+			'dse-hr__diamond',
+			'dse-hr__line dse-hr__line--right',
+		]);
+		// The redesign moves this element's OWN view off the legacy builder entirely.
+		expect(root.querySelector('.ds-hr-container')).toBeNull();
+	});
+
+	test('legacy HorizontalRuleProcessor.build() is untouched — Statblock/Featureblock still embed .ds-hr-container until Task 6', () => {
+		const parent = document.createElement('div');
+		HorizontalRuleProcessor.build(parent);
+
+		const container = parent.querySelector(':scope > .ds-hr-container');
 		expect(container).not.toBeNull();
 		const children = Array.from(container!.children).map((el) => el.className);
 		expect(children).toEqual(['ds-hr-left-line', 'ds-hr-center', 'ds-hr-right-line']);
@@ -128,7 +148,7 @@ describe('D1 Task 1: horizontal-rule rendered through the REAL ElementPipeline',
 		await pipeline.run(horizontalRuleElement, '', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		expect(root.querySelector('.ds-hr-container')).not.toBeNull();
+		expect(root.querySelector('.dse-hr')).not.toBeNull();
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
@@ -139,7 +159,7 @@ describe('D1 Task 1: horizontal-rule rendered through the REAL ElementPipeline',
 		await pipeline.run(horizontalRuleElement, 'unexpected: keys\nnested: [1, 2, 3]\n', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		expect(root.querySelector('.ds-hr-container')).not.toBeNull();
+		expect(root.querySelector('.dse-hr')).not.toBeNull();
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
@@ -166,7 +186,7 @@ describe('D1 Task 1: horizontal-rule rendered through the REAL ElementPipeline',
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const container = root.querySelector('.ds-hr-container') as HTMLElement;
+				const container = root.querySelector('.dse-hr') as HTMLElement;
 				container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(1);
 			} finally {

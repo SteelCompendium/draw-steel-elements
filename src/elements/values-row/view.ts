@@ -1,26 +1,30 @@
-// Plan 07 Task 5 / F1 §6 step 2 — ValuesRowElementView.
+// Plan 09 Task 1 (D2 §3.2) — ValuesRowElementView on the shared `.dse-statgrid` grammar.
 //
-// onMount reuses the KEPT legacy ValuesRow/ValuesRowView DOM builder VERBATIM (same
-// pattern as feature/view.ts reusing Features/FeatureView): the element view only
-// recreates the deleted ValuesRowProcessor's `.ds-values-row-ele-container` wrapper and
-// delegates everything inside it to ValuesRowView.build().
+// The redesign folds the deleted legacy ValuesRow/ValuesRowView into onMount: one flat
+// `.dse-statgrid` of `.dse-statgrid__cell`s, each a `__value` (big, --dse-fg) over a
+// `__label` (muted, --dse-fg-muted) — the SAME grammar characteristics/view.ts renders;
+// the root's [data-dse-element="values-row"] attr is what scopes/distinguishes it at the
+// CSS level (styles-source.css scopes `.dse-statgrid` under both element roots).
 //
-// What the framework replaced from the legacy processor (F1 §2.4): the try/catch +
-// ".error-message" div -> the pipeline's single error boundary + renderErrorCard. There is
-// NO click shield to replace — the legacy processor never armed one, which is why the
-// definition sets noClickShield: true.
-import type { MarkdownPostProcessorContext } from 'obsidian';
+// SC-5 eviction (D2 §5): the value_height/name_height YAML knobs no longer become inline
+// `font-size` — they arrive as the --dse-value-scale / --dse-label-scale custom
+// properties (sanctioned `--dse-*` geometry via setProperty), consumed by the
+// stylesheet's `calc(var(--dse-…-scale) * 1em)` font sizes. No other `.style` access, no
+// color anywhere in code. Static element: no persistence, no listeners (and the legacy
+// ValuesRowProcessor never armed a click shield — the definition keeps noClickShield).
 import { ElementView } from '@/framework/view';
-import { ValuesRowView } from '@drawSteelAdmonition/ValuesRow/ValuesRowView';
-import type { KeyValuePairs } from '@model/KeyValuePairs';
+import type { KeyValuePairs, KVPair } from '@model/KeyValuePairs';
 
 export class ValuesRowElementView extends ElementView<KeyValuePairs> {
 	protected onMount(root: HTMLElement, model: KeyValuePairs): void {
-		const container = root.createEl('div', { cls: 'ds-values-row-ele-container' });
-		// The kept view still takes a MarkdownPostProcessorContext but never reads it (it
-		// only stores ctx); host.sourcePath is the framework's ctx.sourcePath equivalent
-		// (F1 §3.4), so a minimal shim bridges the shared, untouched view.
-		const ctx = { sourcePath: this.cx.host.sourcePath } as MarkdownPostProcessorContext;
-		new ValuesRowView(this.cx.plugin, model, ctx).build(container);
+		const grid = root.createDiv({ cls: 'dse-statgrid' });
+		grid.style.setProperty('--dse-value-scale', String(model.value_height));
+		grid.style.setProperty('--dse-label-scale', String(model.name_height));
+
+		model.values.forEach((pair: KVPair) => {
+			const cell = grid.createDiv({ cls: 'dse-statgrid__cell' });
+			cell.createDiv({ cls: 'dse-statgrid__value', text: pair.value ?? '' });
+			cell.createDiv({ cls: 'dse-statgrid__label', text: pair.name ?? '' });
+		});
 	}
 }

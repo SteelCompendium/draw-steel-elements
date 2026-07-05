@@ -2004,52 +2004,56 @@ button.action-button {
 }
 
 /* ==================== */
-/* Characteristics + Values Row */
+/* Statgrid — Values Row + Characteristics (D2 §3.2/3.3, Plan 09 Task 1) */
 /* ==================== */
 
-/* Scoped under the Framework v2 element roots (Plan 07 Task 5): Characteristics and
-   Values Row share this ONE block — and only with each other (no other element uses
-   .ds-characteristics-* / .ds-values-row-* classes) — so the combined selector re-scopes
-   it cleanly; same treatment as counter/negotiation/initiative. */
-[data-dse-element="characteristics"] .ds-characteristics-container,
-[data-dse-element="values-row"] .ds-values-row-container {
+/* ONE shared grammar for the two static stat-row elements — the root's
+   [data-dse-element] attr is what distinguishes them (and lets the Steel theme, D3,
+   re-skin per element). Layout is the Legacy-faithful port of the old
+   .ds-values-row-* / .ds-characteristics-* block: a flex row of centered cells, big
+   bold value over a muted label, with today's <=600px column flip preserved. The
+   value_height/name_height YAML knobs arrive as the --dse-value-scale /
+   --dse-label-scale custom properties set by the views (SC-5: sanctioned --dse-*
+   geometry via setProperty — never inline font-size); --dse-surface is the Steel
+   theme's "engraved plate" hook (D3), Legacy stays the bare row. */
+[data-dse-element="values-row"] .dse-statgrid,
+[data-dse-element="characteristics"] .dse-statgrid {
 	width: 100%;
 	overflow-x: auto;
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: flex-start;
 
-	.ds-characteristics-row,
-	.ds-values-row-row {
-		display: flex;
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: flex-start;
-	}
-
-	.ds-characteristics-cell,
-	.ds-values-row-cell {
+	.dse-statgrid__cell {
 		flex: 1;
 		text-align: center;
 		margin: 0 5px;
 	}
 
-	.ds-characteristics-value,
-	.ds-values-row-value {
+	.dse-statgrid__value {
+		color: var(--dse-fg);
 		font-weight: bold;
+		font-size: calc(var(--dse-value-scale, 3) * 1em);
 	}
 
-	.ds-characteristics-name,
-	.ds-values-row-name {
-		color: var(--text-muted);
+	.dse-statgrid__label {
+		color: var(--dse-fg-muted);
+		font-size: calc(var(--dse-label-scale, 1) * 1em);
 	}
+}
 
-	@media (max-width: 600px) {
-		.ds-characteristics-row,
-		.ds-values-row-row {
-			flex-direction: column;
-			align-items: center;
-		}
+/* Today's <=600px column flip, preserved (D2 §3.2). Top-level (not nested) on purpose:
+   the flexed element IS the statgrid root, and a nested `& {}` inside @media gets
+   rewritten by esbuild's CSS minifier into bare declarations after a nested rule —
+   which older Chromium drops. */
+@media (max-width: 600px) {
+	[data-dse-element="values-row"] .dse-statgrid,
+	[data-dse-element="characteristics"] .dse-statgrid {
+		flex-direction: column;
+		align-items: center;
 
-		.ds-characteristics-cell,
-		.ds-values-row-cell {
+		.dse-statgrid__cell {
 			margin: 10px 0;
 		}
 	}

@@ -39,12 +39,12 @@ export function registerElements (_plugin: Plugin) {
 	// into src/elements/counter/view.ts).
 
 	// Characteristics migrated to Framework v2 (Plan 07 Task 5, F1 §6 step 2). The legacy
-	// CharacteristicsProcessor is deleted; Characteristics/CharacteristicsView stays,
-	// reused by src/elements/characteristics/view.ts.
+	// CharacteristicsProcessor and Characteristics/CharacteristicsView are both deleted
+	// (view folded into src/elements/characteristics/view.ts's statgrid, Plan 09 Task 1).
 
 	// Skills migrated to Framework v2 (D1 Task 2, F1 §6 step 3).
 
 	// Values Row migrated to Framework v2 (Plan 07 Task 5, F1 §6 step 2). The legacy
-	// ValuesRowProcessor is deleted; ValuesRow/ValuesRowView stays, reused by
-	// src/elements/values-row/view.ts.
+	// ValuesRowProcessor and ValuesRow/ValuesRowView are both deleted (view folded into
+	// src/elements/values-row/view.ts's statgrid, Plan 09 Task 1).
 }
