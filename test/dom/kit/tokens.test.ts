@@ -63,8 +63,9 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(sheet).not.toMatch(/\[data-dse-theme="legacy"\]/);
 	});
 
-	test('the union covers the full D2 §6 sheet (62 tokens: ~45 core + 12 roles + 6 actions)', () => {
-		expect(DSE_TOKEN_NAMES.length).toBe(62);
+	test('the union covers the full D2 §6 sheet (64 tokens: ~47 core + 12 roles + 6 actions)', () => {
+		// 62 from Task 1 + the two Task-5 gap-closes (page-bg, badge-fg).
+		expect(DSE_TOKEN_NAMES.length).toBe(64);
 		// One representative per §6 group, so a whole group can't silently vanish.
 		for (const key of [
 			'surface', // structure / surface
@@ -99,6 +100,15 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(rootValue('stamina-track')).toBe('var(--code-background)');
 		expect(rootValue('turn-done')).toBe('limegreen');
 		expect(rootValue('danger')).toBe('crimson');
+	});
+
+	test('Task-5 gap-close tokens carry their Legacy values (page-bg, badge-fg)', () => {
+		// The divider diamond punch-out must match the HOST PAGE background —
+		// previously a bare var(--background-primary) in the kit CSS, now tokenized.
+		expect(rootValue('page-bg')).toBe('var(--background-primary)');
+		// Tier-badge text: Legacy .tN-key-body-text sets no color (inherits
+		// --text-normal) — so badge-fg = the normal foreground token.
+		expect(rootValue('badge-fg')).toBe('var(--dse-fg)');
 	});
 
 	test('role/action accents are monochrome in Legacy (OD-2: Steel-only color)', () => {

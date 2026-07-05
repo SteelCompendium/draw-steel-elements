@@ -17,6 +17,7 @@ export const DSE_TOKEN_NAMES = [
 	'surface',
 	'surface-raised',
 	'surface-sunken',
+	'page-bg', // the HOST PAGE background (divider punch-out) — Task-5 gap-close
 	'border',
 	'border-strong',
 	'radius',
@@ -52,6 +53,7 @@ export const DSE_TOKEN_NAMES = [
 	'tier-mid',
 	'tier-high',
 	'tier-crit',
+	'badge-fg', // tier-badge text color (§2.8 D3 hook) — Task-5 gap-close
 	// -- Semantic: stamina --
 	'stamina-healthy',
 	'stamina-winded',

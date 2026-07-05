@@ -2365,6 +2365,9 @@ Shared globals
 	--dse-surface: var(--code-background);
 	--dse-surface-raised: var(--color-base-25);
 	--dse-surface-sunken: rgba(0,0,0,.2);
+	/* The HOST PAGE background (not a card surface) — the divider diamond
+	   punch-out keys off this (Task-5 gap-close). */
+	--dse-page-bg: var(--background-primary);
 	--dse-border: var(--background-modifier-border);
 	--dse-border-strong: var(--text-normal);
 	--dse-radius: 5px;
@@ -2412,6 +2415,10 @@ Shared globals
 	--dse-tier-mid: var(--text-normal);
 	--dse-tier-high: var(--text-normal);
 	--dse-tier-crit: var(--text-normal);
+	/* Tier-badge text color (§2.8 D3 hook, Task-5 gap-close). Legacy
+	   .tN-key-body-text sets no color (inherits --text-normal) = the fg token;
+	   D3's Steel layer may contrast it against colored badge fills. */
+	--dse-badge-fg: var(--dse-fg);
 
 	/* -- Semantic: stamina -- */
 	--dse-stamina-healthy: limegreen;
@@ -2457,11 +2464,10 @@ Shared globals
 /*   framework/kit control primitives (D2 §2, Plan 08 Task 2)         */
 /* ================================================================== */
 /*
-   Authored ONLY against the --dse-* token base above (D2 §5: no color literals —
-   the one exception is the diamond's punch-out inset, which must match the host
-   page background and has no token; it references Obsidian's own variable, not a
-   literal). The shared kit :focus-visible ring is Plan 08 Task 5; these classes
-   are the ones it will target.
+   Authored ONLY against the --dse-* token base above (D2 §5: no color literals;
+   test/dom/kit/kit-index.test.ts literal-scans everything from this banner down
+   to the END-framework/kit delimiter — keep kit rules inside those markers).
+   The shared kit :focus-visible ring (§4.5) lives at the end of the kit CSS.
 */
 
 /* -- iconButton (§2.1): real <button>, ≥44px hit area via padding (§4.6) -- */
@@ -2580,9 +2586,11 @@ Shared globals
 	margin: 0 auto;
 	border-bottom: 2px solid var(--dse-rule);
 	border-right: 2px solid var(--dse-rule);
-	/* Punch-out matches the host page background — no --dse token exists for it
-	   (--dse-surface is the code-block surface); same value today's .ds-hr-center uses. */
-	box-shadow: inset 0 0 0 3px var(--background-primary);
+	/* Punch-out matches the host page background — --dse-page-bg (Task-5
+	   gap-close; Legacy = var(--background-primary), the same value today's
+	   .ds-hr-center uses; --dse-surface would be wrong: that's the code-block
+	   surface). */
+	box-shadow: inset 0 0 0 3px var(--dse-page-bg);
 }
 .dse-vr {
 	flex: 0 0 auto;
@@ -2834,12 +2842,7 @@ button.dse-pr__row:hover {
 	background: var(--dse-surface-sunken);
 	border-color: var(--dse-border);
 }
-/* §4.5 focus ring now, so selectable rows are compliant standalone; Plan 08
-   Task 5's shared kit :focus-visible rule may consolidate this. */
-.dse-pr__row:focus-visible {
-	outline: 2px solid var(--dse-focus-ring);
-	outline-offset: 2px;
-}
+/* (§4.5 focus ring: consolidated into the shared kit :focus-visible rule below.) */
 .dse-pr__text {
 	flex: 1 1 auto;
 	min-width: 0;
@@ -2851,9 +2854,8 @@ button.dse-pr__row:hover {
    copied VERBATIM from the .t1/.t2/.t3/.crit-key-body originals above (§2.8:
    "badge boxes keep the existing clip-path shapes" — the shape IS the design,
    no font); only the fill moves onto the --dse-tier-* tokens (Legacy = today's
-   monochrome --text-normal). --dse-badge-fg is a D3 hook (§2.8) not yet in the
-   Task-1 :root vocabulary — referenced with a --dse-fg fallback so Legacy is
-   unchanged until D3 defines it (and adds it to the DseTokenName union). */
+   monochrome --text-normal). --dse-badge-fg is the §2.8 D3 hook — in the :root
+   vocabulary since the Task-5 gap-close (Legacy = var(--dse-fg), i.e. unchanged). */
 .dse-pr__badge {
 	position: relative;
 	flex: 0 0 auto;
@@ -2862,7 +2864,7 @@ button.dse-pr__row:hover {
 	text-align: center;
 	font-size: 0.8em;
 	font-weight: bold;
-	color: var(--dse-badge-fg, var(--dse-fg));
+	color: var(--dse-badge-fg);
 }
 .dse-pr__badge::before {
 	content: '';
@@ -2932,9 +2934,30 @@ button.dse-pr__row:hover {
 	place-items: center;
 }
 
+/* -- The framework-default focus ring (D2 §4.5, Plan 08 Task 5) -- */
+/* ONE rule, EVERY kit control that takes focus: real <button>s (iconButton —
+   which also covers the stepper's ± buttons — collapsible2 headers, tabs,
+   selectable power-roll rows) plus the stepper's editable <input>. There were
+   ZERO focus styles before the kit — this is the a11y default; new focusable
+   kit controls must join this selector list. */
+.dse-btn:focus-visible,
+.dse-stepper__btn:focus-visible,
+.dse-stepper__input:focus-visible,
+.dse-collapse__header:focus-visible,
+.dse-tabs__tab:focus-visible,
+.dse-pr__row[aria-pressed]:focus-visible {
+	outline: 2px solid var(--dse-focus-ring);
+	outline-offset: 2px;
+}
+
 /* §4.9: motion is opt-out — the chevron rotate must not animate under reduced motion. */
 @media (prefers-reduced-motion: reduce) {
 	.dse-collapse__chevron {
 		transition: none;
 	}
 }
+
+/* ================================================================== */
+/*   END framework/kit (D2) — kit rules go ABOVE this line: the kit   */
+/*   literal-scan test (kit-index.test.ts) covers banner -> here.     */
+/* ================================================================== */
