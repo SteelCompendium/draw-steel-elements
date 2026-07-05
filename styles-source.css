@@ -2174,72 +2174,72 @@ button.action-button {
 }
 
 /* ==================== */
-/* Skills               */
+/* Skills (D2 §3.4, Plan 09 Task 2) */
 /* ==================== */
-/* Scoped under [data-dse-element="skills"] (F1 §3.5): these ds-skill-* classes were
-   previously duplicated by the dead, unregistered DOM twin (drawSteelAdmonition/Skills/*,
-   deleted by this migration) -- Skills is now their only consumer, so they move under the
-   pipeline-stamped root attribute rather than staying global. */
+/* Scoped under [data-dse-element="skills"] (F1 §3.5). Legacy-faithful port of the old
+   pre-D2 skills block onto the .dse-skills__* grammar: same 1em rounded-box marks, same
+   lowercase-with-capital titles and names. Group headers (and the whole-element wrapper)
+   are the kit collapsible2 — the shared .dse-collapse* chrome owns the button/chevron/
+   region; only the skills-specific looks live here (incl. sizing the kit __title to
+   match the old h3 group title). The mark's on-state is shape (solid vs hollow box via
+   [data-on]) + an aria-label set by the view (§4) — never color alone. Tokens only:
+   --dse-accent (marked; Legacy = today's --interactive-accent), --dse-fg-muted (box
+   border; Legacy = today's --text-muted), --dse-fg via inheritance. */
 
-[data-dse-element="skills"] .ds-skills-container {
-		width: 100%;
+[data-dse-element="skills"] .dse-skills {
+	width: 100%;
 
-	/* Skill group */
-	.ds-skill-group {
-		/*margin-bottom: 1em;*/
-	}
-
-	/* Skill group title */
-	.ds-skill-group-title {
+	/* Group title, both forms: the kit header's title span (collapsible groups) and the
+	   bare h3 (only_show_selected mode) — sized/cased like the old group title. */
+	.dse-collapse__title,
+	.dse-skills__group-title {
 		font-size: 1.2em;
-		margin-bottom: 0.5em;
-		margin-top: 0;
 		text-transform: lowercase;
 
-        &:first-letter{
-            text-transform: uppercase;
-        }
+		&:first-letter {
+			text-transform: uppercase;
+		}
 	}
 
-	/* Skills list */
-	.ds-skill-list {
+	.dse-skills__group-title {
+		margin-bottom: 0.5em;
+		margin-top: 0;
+	}
+
+	.dse-skills__list {
 		list-style: none;
 		padding: 0;
 	}
 
-	/* Skill item */
-	.ds-skill-item {
+	.dse-skills__item {
 		display: flex;
 		align-items: center;
 		margin-bottom: 0.3em;
 	}
 
-	/* Skill indicator */
-	.ds-skill-indicator {
+	/* Status mark: hollow box = not owned; [data-on] fills it solid (shape, not hue). */
+	.dse-skills__mark {
 		width: 1em;
 		height: 1em;
 		margin-right: 0.5em;
-		border: 1px solid var(--text-muted);
+		border: 1px solid var(--dse-fg-muted);
 		display: inline-block;
+		flex: 0 0 auto;
 		border-radius: 0.2em;
-
-        &.enabled {
-            background-color: var(--interactive-accent);
-        }
-
-        &.disabled {
-            background-color: transparent;
-        }
+		background-color: transparent;
 	}
 
-	/* Skill name */
-	.ds-skill-name {
+	.dse-skills__mark[data-on] {
+		background-color: var(--dse-accent);
+	}
+
+	.dse-skills__name {
 		cursor: default;
 		text-transform: lowercase;
 
-        &:first-letter{
-            text-transform: uppercase;
-        }
+		&:first-letter {
+			text-transform: uppercase;
+		}
 	}
 }
 

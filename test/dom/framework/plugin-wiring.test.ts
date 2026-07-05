@@ -301,7 +301,7 @@ describe('D1 Task 2: Skills wiring through onload() (F1 §2.3 / §6 step 3)', ()
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('skills');
-		expect(root.querySelector('.ds-skills-container')).not.toBeNull();
+		expect(root.querySelector('.dse-skills')).not.toBeNull();
 	});
 });
 
