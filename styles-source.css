@@ -2453,3 +2453,140 @@ Shared globals
 	--dse-act-none: none;
 	--dse-act-trait: none;
 }
+/* ================================================================== */
+/*   framework/kit control primitives (D2 §2, Plan 08 Task 2)         */
+/* ================================================================== */
+/*
+   Authored ONLY against the --dse-* token base above (D2 §5: no color literals —
+   the one exception is the diamond's punch-out inset, which must match the host
+   page background and has no token; it references Obsidian's own variable, not a
+   literal). The shared kit :focus-visible ring is Plan 08 Task 5; these classes
+   are the ones it will target.
+*/
+
+/* -- iconButton (§2.1): real <button>, ≥44px hit area via padding (§4.6) -- */
+.dse-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35em;
+	box-sizing: border-box;
+	min-width: var(--dse-touch-min);
+	min-height: var(--dse-touch-min);
+	padding: 0.25em 0.6em;
+	background: var(--dse-surface-raised);
+	color: var(--dse-fg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	font: inherit;
+	cursor: pointer;
+}
+.dse-btn:hover:not([disabled]):not(.dse-btn--accent) {
+	background: var(--dse-hover);
+}
+.dse-btn[disabled] {
+	color: var(--dse-fg-muted);
+	opacity: 0.5;
+	cursor: default;
+}
+.dse-btn--accent {
+	background: var(--dse-accent);
+	color: var(--dse-accent-fg);
+	border-color: var(--dse-accent);
+}
+.dse-btn--accent:hover:not([disabled]) {
+	filter: brightness(1.1);
+}
+.dse-btn--ghost {
+	background: transparent;
+	border-color: transparent;
+}
+.dse-btn--danger {
+	background: transparent;
+	color: var(--dse-danger);
+	border-color: var(--dse-danger);
+}
+/* Toggled-on state (aria-pressed mirrors it for AT — §4.3). */
+.dse-btn[data-pressed] {
+	background: var(--dse-accent);
+	color: var(--dse-accent-fg);
+	border-color: var(--dse-accent);
+}
+.dse-btn__icon {
+	display: inline-flex;
+	align-items: center;
+	/* Glyph stays small; the hit area comes from the button's padding/min sizes. */
+}
+.dse-btn__text {
+	line-height: 1.2;
+}
+.dse-btn-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.5em;
+}
+
+/* -- stepper (§2.2): minus / value / plus triad -- */
+.dse-stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+}
+.dse-stepper__value {
+	min-width: 2.5ch;
+	text-align: center;
+	color: var(--dse-fg);
+	font-variant-numeric: tabular-nums;
+}
+.dse-stepper__input {
+	width: 4.5em;
+	padding: 0.25em;
+	text-align: center;
+	color: var(--dse-fg);
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	font: inherit;
+}
+
+/* -- divider (§2.10): .dse-hr / .dse-vr -- */
+/* Ornamented h-rule: Legacy-faithful port of .ds-hr-container (two fade lines
+   meeting a rotated ◆), re-keyed to --dse-rule / --dse-rule-fade. */
+.dse-hr {
+	display: flex;
+	align-items: center;
+	position: relative;
+	margin-top: 6px;
+}
+.dse-hr__line {
+	flex-grow: 1;
+	height: 2px;
+	background: var(--dse-rule);
+}
+.dse-hr__line--left {
+	background: linear-gradient(to left, var(--dse-rule) 0%, var(--dse-rule-fade) 100%);
+}
+.dse-hr__line--right {
+	background: linear-gradient(to right, var(--dse-rule) 0%, var(--dse-rule-fade) 100%);
+}
+.dse-hr__diamond {
+	width: 14px;
+	height: 14px;
+	background-color: var(--dse-rule);
+	transform: translateZ(1px) translateY(1px) rotate(45deg);
+	position: relative;
+	z-index: 1;
+	margin: 0 auto;
+	border-bottom: 2px solid var(--dse-rule);
+	border-right: 2px solid var(--dse-rule);
+	/* Punch-out matches the host page background — no --dse token exists for it
+	   (--dse-surface is the code-block surface); same value today's .ds-hr-center uses. */
+	box-shadow: inset 0 0 0 3px var(--background-primary);
+}
+.dse-vr {
+	flex: 0 0 auto;
+	align-self: stretch;
+	width: 1px;
+	background: var(--dse-rule);
+}
