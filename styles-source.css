@@ -2710,6 +2710,228 @@ Shared globals
 	border-radius: var(--dse-radius);
 }
 
+/* -- cardHead (§2.7): the 6-slot header grid (ports DESIGN.md .sc-head) -- */
+/* A real 3-column grid (crest · left stack · right rail) over three shared lanes
+   (eyebrow / primary / deck). Lanes are grid ROWS rather than two stacked flex
+   columns — load-bearing: when one side omits a slot, the lane is still reserved
+   by the other side, so the two primaries stay on the same line and an omitted
+   slot reads as a GAP (§2.7). */
+.dse-head {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-rows: auto auto auto;
+	align-items: center;
+	row-gap: 0.12em;
+	color: var(--dse-fg);
+}
+/* crest → the leading column, spanning every lane, centered beside the text (§2.9). */
+.dse-head > .dse-crest {
+	grid-column: 1;
+	grid-row: 1 / -1;
+	align-self: center;
+	margin-right: 0.9em;
+}
+/* Lane placement: eyebrow (row 1) · primary (row 2) · deck (row 3). The name
+   bottom-aligns in its lane (sits tight above the deck); the right primary is
+   optically CENTERED against the taller name (DESIGN.md). */
+.dse-head__eyebrow--left {
+	grid-area: 1 / 2;
+}
+.dse-head__primary--left {
+	grid-area: 2 / 2;
+	align-self: end;
+}
+.dse-head__deck--left {
+	grid-area: 3 / 2;
+}
+.dse-head__eyebrow--right {
+	grid-area: 1 / 3;
+}
+.dse-head__primary--right {
+	grid-area: 2 / 3;
+	align-self: center;
+}
+.dse-head__deck--right {
+	grid-area: 3 / 3;
+}
+.dse-head__eyebrow--right,
+.dse-head__primary--right,
+.dse-head__deck--right {
+	justify-self: end;
+	text-align: right;
+	margin-left: 1.5em;
+}
+/* Lanes share emphasis on BOTH sides: eyebrow = small context, primary = the
+   headline, deck = quiet detail. */
+.dse-head__eyebrow,
+.dse-head__deck {
+	font-size: 0.85em;
+	line-height: 1.2;
+	color: var(--dse-fg-muted);
+}
+.dse-head__primary--left {
+	font-size: 1.25em;
+	line-height: 1.15;
+	/* §6: --dse-heading carries the color; the bold weight is this widget's rule. */
+	font-weight: bold;
+	color: var(--dse-heading);
+}
+/* Role accent hook: the right mini-title tints by --dse-role INHERITED from the
+   card root (the element maps data-dse-role="<x>" → --dse-role: var(--dse-role-<x>)).
+   Legacy roots define no bare --dse-role, so the fallback = today's monochrome.
+   --dse-act is the same kind of inherited hook (the action spine), consumed by
+   element sheets rather than the head itself. */
+.dse-head__primary--right {
+	font-weight: 600;
+	color: var(--dse-role, var(--dse-heading));
+}
+/* --chip: a compact pill — the DEFAULT right-column render style (§2.7). The
+   right primary reads as a mini-title plate (surface-raised), the small chips
+   carry the tag background. */
+.dse-head__eyebrow--chip,
+.dse-head__primary--chip,
+.dse-head__deck--chip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1.2;
+	padding: 0.14em 0.5em;
+	background: var(--dse-chip-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+.dse-head__primary--chip {
+	background: var(--dse-surface-raised);
+}
+
+/* -- powerRollPanel + tierBadge (§2.8): the shared roll grammar -- */
+.dse-pr__head {
+	font-weight: bold;
+	color: var(--dse-heading);
+}
+.dse-pr__row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75em; /* ports the .tier-key-container margin-right */
+	width: 100%;
+}
+/* Selectable rows are REAL <button>s (§2.8/§4.1) — flatten the UA chrome so
+   static and selectable rows read identically; state paints via aria-pressed. */
+button.dse-pr__row {
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--dse-radius);
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	padding: 0.1em 0.25em;
+	cursor: pointer;
+}
+button.dse-pr__row:hover {
+	background: var(--dse-hover);
+}
+.dse-pr__row[aria-pressed='true'] {
+	background: var(--dse-surface-sunken);
+	border-color: var(--dse-border);
+}
+/* §4.5 focus ring now, so selectable rows are compliant standalone; Plan 08
+   Task 5's shared kit :focus-visible rule may consolidate this. */
+.dse-pr__row:focus-visible {
+	outline: 2px solid var(--dse-focus-ring);
+	outline-offset: 2px;
+}
+.dse-pr__text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.dse-pr__text p {
+	margin-block: 0;
+}
+/* The tier badge: the outcome-range key box. The polygon clip-paths below are
+   copied VERBATIM from the .t1/.t2/.t3/.crit-key-body originals above (§2.8:
+   "badge boxes keep the existing clip-path shapes" — the shape IS the design,
+   no font); only the fill moves onto the --dse-tier-* tokens (Legacy = today's
+   monochrome --text-normal). --dse-badge-fg is a D3 hook (§2.8) not yet in the
+   Task-1 :root vocabulary — referenced with a --dse-fg fallback so Legacy is
+   unchanged until D3 defines it (and adds it to the DseTokenName union). */
+.dse-pr__badge {
+	position: relative;
+	flex: 0 0 auto;
+	width: 3em;
+	max-height: 1em;
+	text-align: center;
+	font-size: 0.8em;
+	font-weight: bold;
+	color: var(--dse-badge-fg, var(--dse-fg));
+}
+.dse-pr__badge::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+}
+.dse-pr__badge--t1::before {
+	background: var(--dse-tier-low);
+	clip-path: polygon(0.2em 0.2em, 0.4em 0, calc(100% - 0.2em) 0, 100% 0.2em, 100% calc(100% - 0.2em), calc(100% - 0.2em) 100%, 0.4em 100%, 0.2em calc(100% - 0.2em), 0.2em calc(50% + 0.2em), 0 50%, 0.2em calc(50% - 0.2em), 0.2em 0.2em, calc(0.2em + 1px) calc(0.2em + 0.41px), calc(0.2em + 1px) calc(50% - 0.2em + 0.41px), 1.41px 50%, calc(0.2em + 1px) calc(50% + 0.2em - 0.41px), calc(0.2em + 1px) calc(100% - 0.2em - 0.41px), calc(0.4em + 0.41px) calc(100% - 1px), calc(100% - 0.2em - 0.41px) calc(100% - 1px), calc(100% - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 1px) calc(0.2em + 0.41px), calc(100% - 0.2em - 0.41px) 1px, calc(0.4em + 0.41px) 1px, calc(0.2em + 1px) calc(0.2em + 0.41px));
+}
+.dse-pr__badge--t2::before {
+	background: var(--dse-tier-mid);
+	clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.2em) 0, 100% 0.2em, 100% calc(100% - 0.2em), calc(100% - 0.2em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.2em - 0.41px) calc(100% - 1px), calc(100% - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 1px) calc(0.2em + 0.41px), calc(100% - 0.2em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
+}
+.dse-pr__badge--t3::before {
+	background: var(--dse-tier-high);
+	clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px), calc(100% - 1.41px) 50%, calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px), calc(100% - 0.2em - 1px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
+}
+.dse-pr__badge--crit::before {
+	background: var(--dse-tier-crit);
+	clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 3px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
+}
+.dse-pr__badge-text {
+	font-size: 0.9em;
+}
+.dse-pr__badge--crit .dse-pr__badge-text {
+	padding-right: 3px;
+}
+
+/* -- crest (§2.9): the Steel-only heraldic shield (mirrors the site's .sc-crest) -- */
+/* Legacy (the unthemed BASE — Task 1: "Legacy IS the base") hides the crest
+   entirely, so today's look is unchanged wherever elements adopt cardHead+crest
+   before D3 lands. The show-override (display + real values for the ornament
+   tokens below) ships WITH D3's [data-dse-theme="steel"] skin layer, NOT here:
+   the ACTIVE theme id is already "steel" (DEFAULT_THEME_ID) while that layer
+   doesn't exist yet, so keying display on the attribute today would flash bare
+   glyphs on an unskinned shield. Everything below display is inert while hidden
+   and ready for D3's flip to inline-grid. */
+.dse-crest {
+	display: none;
+	position: relative;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 2.4em;
+	height: 2.7em;
+	background: var(--dse-metal-grad);
+	clip-path: var(--dse-crest-shape);
+	box-shadow: var(--dse-bevel);
+	color: var(--dse-fg-muted);
+}
+.dse-crest--lg {
+	width: 3em;
+	height: 3.4em;
+}
+/* The shield's inner face/rim (the site's .sc-crest::before inset), keyed to
+   --dse-metal-line (Legacy: none). */
+.dse-crest::before {
+	content: '';
+	position: absolute;
+	inset: 1.5px;
+	clip-path: var(--dse-crest-shape);
+	background: var(--dse-metal-line);
+}
+.dse-crest__glyph {
+	position: relative;
+	display: grid;
+	place-items: center;
+}
+
 /* §4.9: motion is opt-out — the chevron rotate must not animate under reduced motion. */
 @media (prefers-reduced-motion: reduce) {
 	.dse-collapse__chevron {
