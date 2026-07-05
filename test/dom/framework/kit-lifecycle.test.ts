@@ -170,8 +170,8 @@ function makeDeps(): ElementPipelineDeps {
 	};
 }
 
-describe('Plan 05 Task 1: stamina-bar modal-close does not accumulate per bar click', () => {
-	test('N open→close cycles + one left open: unload fires exactly ONE close (F1 §4.5 still closes the open modal)', async () => {
+describe('Plan 05 Task 1 (carried onto D2/Task 3): stamina-bar modal-close does not accumulate per bar click', () => {
+	test('N open→close cycles + one left open: unload fires exactly ONE real close (F1 §4.5 still closes the open modal)', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const addChild = jest.fn((child: unknown) => child);
@@ -180,14 +180,18 @@ describe('Plan 05 Task 1: stamina-bar modal-close does not accumulate per bar cl
 		await pipeline.run(staminaBarElement, BASIC_YAML, hostWithSpy as BlockHost);
 		const view = addChild.mock.calls[0][0] as StaminaBarView;
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
+		const bar = root.querySelector('.dse-stamina') as HTMLElement;
 
-		// Three user open→close cycles (Apply closes the modal)…
+		// Three user open→close cycles (Apply closes the modal). The unified Task-3
+		// modal's apply button is REAL-disabled at "No Stamina Change" (CB-8), so each
+		// cycle makes a change first (alternating Kill / Full Heal keeps it non-zero).
 		for (let i = 0; i < 3; i++) {
 			bar.click();
 			const modalEl = document.body.lastElementChild as HTMLElement;
 			expect(modalEl.classList.contains('modal-container')).toBe(true);
-			(modalEl.querySelector('.action-button') as HTMLElement).click();
+			const quick = i % 2 === 0 ? 'Kill' : 'Full Heal';
+			(modalEl.querySelector(`button[aria-label="${quick}"]`) as HTMLElement).click();
+			(modalEl.querySelector('.dse-modal__footer .dse-btn--accent') as HTMLElement).click();
 			expect(document.body.contains(modalEl)).toBe(false);
 		}
 		// …then a fourth open left OPEN at unload time.
@@ -201,8 +205,11 @@ describe('Plan 05 Task 1: stamina-bar modal-close does not accumulate per bar cl
 
 			// F1 §4.5 still holds: the modal that is actually open IS closed on unload…
 			expect(document.body.contains(openModalEl)).toBe(false);
-			// …but via exactly ONE pending closer — not one per historical open (was 4:
-			// openEditModal registered a fresh `this.register(() => modal.close())` per click).
+			// …and exactly ONE close reaches Modal.close. The guarantee's carrier moved
+			// in Task 3: openManagedModal registers one closer per open, but DseModal's
+			// idempotent close() (dseOpen guard) makes the three already-closed modals'
+			// closers no-ops that never reach Modal.close — the historical "N pending
+			// closers all re-firing real closes on unload" bug stays dead.
 			expect(closeSpy).toHaveBeenCalledTimes(1);
 		} finally {
 			closeSpy.mockRestore();

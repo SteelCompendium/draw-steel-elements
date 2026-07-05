@@ -1,13 +1,137 @@
-import { App, Modal, setIcon } from "obsidian";
-import {StaminaBar} from "@model/StaminaBar";
+// Plan 09 Task 3 (D2 §3.5b / OD-6) — the ONE stamina-modal template, on the kit
+// managedModal (DseModal). StaminaEditModal (single stamina: hero/creature) and
+// MinionStaminaPoolModal (the squad pool) were ~90% identical hand-rolled Modals; the
+// shared template primitives now live HERE (staminaPreviewBar, staminaStepperRow,
+// setButtonText — exported) and MinionStaminaPoolModal composes exactly the same
+// scaffold plus its own optional minion-list section (.dse-sedit__minions).
+//
+// CB-8: every control is a kit iconButton/stepper — REAL <button>s with the REAL
+// `disabled` property; the legacy "disabled" class (opacity + pointer-events) is gone.
+//
+// SC-5: this file (with MinionStaminaPoolModal.ts) was the inline-style epicenter. The
+// preview bar's fill/delta widths are now `--dse-*` custom properties (setProperty
+// geometry — the ONE sanctioned .style use, D2 §5) and every color comes from a class
+// rule keyed to --dse-* tokens ([data-state] / [data-kind] / .dse-sedit__warn). Zero
+// color literals, zero el.style.color.
+//
+// Persistence byte-compat (the Task-3 bar): the edit MATH is preserved verbatim from
+// the legacy modal — pending-change bookkeeping, temp-absorbs-damage ordering, the
+// hero ceil(-0.5 × max) floor, and clampStamina at Apply. The model mutation +
+// updateCallback contract are unchanged, so the YAML any caller persists after an edit
+// is byte-identical to what the legacy modal produced for the same edit.
+import type { App, Component } from 'obsidian';
+import { DseModal, iconButton, stepper } from '@/framework/kit';
+import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
+import { StaminaBar } from '@model/StaminaBar';
 
-export class StaminaEditModal extends Modal {
+// ---------------------------------------------------------------------------------
+// Shared §3.5b template primitives (composed by BOTH stamina modals)
+
+export interface StaminaPreviewBarOptions {
+	/** Render the hero "Dying" threshold zone (single-stamina hero modal only). */
+	dyingZone?: boolean;
+	/** Minion-death tick positions as FRACTIONS of the track (minion pool modal only). */
+	ticks?: number[];
+}
+
+export interface StaminaPreviewBarHandle {
+	readonly rootEl: HTMLElement;
+	/**
+	 * Reflects the pending edit onto the bar, in place: fill/delta widths as
+	 * --dse-fill/--dse-delta-fill percentages (sanctioned geometry), the delta's
+	 * heal-vs-damage COLOR via [data-kind] class rules — never inline (SC-5).
+	 */
+	set(fillPct: number, deltaPct: number, kind: 'heal' | 'damage' | 'none'): void;
+}
+
+/**
+ * The preview bar at the top of both stamina modals (D2 §3.5b): the same .dse-stamina
+ * grammar as the element bar, in its --modal variant (fill + pending-delta flex pair).
+ * The fill keeps the legacy modals' constant healthy green ([data-state="healthy"]) —
+ * the modal bars never state-shifted, and Legacy is today's look.
+ */
+export function staminaPreviewBar(
+	parent: HTMLElement,
+	opts: StaminaPreviewBarOptions = {},
+): StaminaPreviewBarHandle {
+	const rootEl = parent.createDiv({ cls: 'dse-stamina dse-stamina--modal' });
+	const track = rootEl.createDiv({ cls: 'dse-stamina__track' });
+	const fillEl = track.createDiv({ cls: 'dse-stamina__fill' });
+	fillEl.setAttribute('data-state', 'healthy');
+	const deltaEl = track.createDiv({ cls: 'dse-stamina__delta' });
+	deltaEl.setAttribute('data-kind', 'none');
+	if (opts.dyingZone) {
+		const zone = track.createDiv({ cls: 'dse-stamina__threshold dse-stamina__threshold--dying' });
+		zone.createSpan({ cls: 'dse-stamina__label', text: 'Dying' });
+	}
+	for (const frac of opts.ticks ?? []) {
+		const tick = track.createDiv({ cls: 'dse-stamina__tick' });
+		tick.style.setProperty('--dse-tick-x', `${frac * 100}%`);
+	}
+	return {
+		rootEl,
+		set(fillPct: number, deltaPct: number, kind: 'heal' | 'damage' | 'none'): void {
+			fillEl.style.setProperty('--dse-fill', `${fillPct}%`);
+			deltaEl.style.setProperty('--dse-delta-fill', `${kind === 'none' ? 0 : deltaPct}%`);
+			deltaEl.setAttribute('data-kind', kind);
+		},
+	};
+}
+
+export interface StaminaStepperRowOptions {
+	value: number;
+	min?: number;
+	max?: number;
+	/** Accessible name of the stepper group (the ± buttons derive theirs from it). */
+	label: string;
+	/** The "/ N" display max shown beside the stepper. */
+	displayMax: number;
+	onChange: (value: number) => void;
+}
+
+/** The shared "⊖ [value] ⊕ / max" row: a kit editable stepper plus the max display. */
+export function staminaStepperRow(
+	parent: HTMLElement,
+	opts: StaminaStepperRowOptions,
+	owner: Component,
+): StepperHandle {
+	const rowEl = parent.createDiv({ cls: 'dse-sedit__stepper-row' });
+	const handle = stepper(
+		rowEl,
+		{
+			value: opts.value,
+			min: opts.min,
+			max: opts.max,
+			editable: true,
+			label: opts.label,
+			onChange: opts.onChange,
+		},
+		owner,
+	);
+	rowEl.createSpan({ cls: 'dse-sedit__max', text: `/ ${opts.displayMax}` });
+	return handle;
+}
+
+/**
+ * Updates a kit iconButton's visible text AND accessible name in place (the dynamic
+ * "Gain N Stamina" apply button). DOM text only — no styles involved.
+ */
+export function setButtonText(btn: IconButtonHandle, text: string): void {
+	(btn.buttonEl.querySelector('.dse-btn__text') as HTMLElement | null)?.setText(text);
+	btn.setLabel(text);
+}
+
+// ---------------------------------------------------------------------------------
+// The single-stamina modal (hero / creature)
+
+export class StaminaEditModal extends DseModal {
 	private staminaBar: StaminaBar;
 	private isHero: boolean;
 	private name: string;
 	private updateCallback: () => void;
 
-	// New properties for pending STAMINA and Temp STAMINA changes
+	// Pending STAMINA and Temp STAMINA changes — the legacy bookkeeping, verbatim
+	// (byte-compat-load-bearing: every Apply funnels through clampStamina below).
 	private pendingStaminaChange: number = 0;
 	private pendingTempStaminaChange: number = 0;
 
@@ -16,7 +140,7 @@ export class StaminaEditModal extends Modal {
 		staminaBar: StaminaBar,
 		isHero: boolean,
 		name: string,
-		updateCallback: () => void
+		updateCallback: () => void,
 	) {
 		super(app);
 		this.staminaBar = staminaBar;
@@ -26,243 +150,230 @@ export class StaminaEditModal extends Modal {
 	}
 
 	onOpen() {
-		const { contentEl } = this;
+		this.setDseTitle(this.name ? `${this.name} Stamina` : 'Stamina');
 
-		contentEl.empty();
-
-		// Character Info
-		contentEl.createEl('h2', { text: `${this.name} Stamina`, cls: 'stamina-header' });
-
-		// Adjust maxStamina and negativeStaminaLimit based on character type
+		// Adjust maxStamina and negativeStaminaLimit based on character type (legacy
+		// verbatim; the hero floor is ceil(-0.5 × max)).
 		const maxStamina = this.staminaBar.max_stamina;
 		const currentStamina = this.staminaBar.current_stamina ?? maxStamina;
 		const currentTempStamina = this.staminaBar.temp_stamina ?? 0;
 		const negativeStaminaLimit = this.isHero ? Math.ceil(-0.5 * maxStamina) : 0;
 
-		// First Row: STAMINA Bar
-		const staminaBarContainer = contentEl.createEl('div', { cls: 'stamina-bar-container' });
-		if (this.isHero) {
-			staminaBarContainer.createEl('div', { cls: 'stamina-bar-overlay', text: "Dying" });
-		}
-		const staminaBar = staminaBarContainer.createEl('div', { cls: 'stamina-bar' });
-		const staminaBarFillLeft = staminaBar.createEl('div', { cls: 'stamina-bar-fill-left' });
-		const staminaBarFillRight = staminaBar.createEl('div', { cls: 'stamina-bar-fill-right' });
+		// -- The preview bar (shared template) --------------------------------------
+		const bar = staminaPreviewBar(this.body, { dyingZone: this.isHero });
+		const updateBar = (): void => {
+			// Legacy geometry verbatim: percentages over max + dying zone.
+			const dyingLength = negativeStaminaLimit * -1;
+			const barLength = maxStamina + dyingLength;
+			const adjustedCurrentStamina = this.staminaBar.current_stamina + dyingLength;
+			if (this.pendingStaminaChange > 0) {
+				bar.set(
+					(adjustedCurrentStamina / barLength) * 100,
+					(this.pendingStaminaChange / barLength) * 100,
+					'heal',
+				);
+			} else if (this.pendingStaminaChange < 0) {
+				bar.set(
+					((adjustedCurrentStamina + this.pendingStaminaChange) / barLength) * 100,
+					(this.pendingStaminaChange / barLength) * -100,
+					'damage',
+				);
+			} else {
+				bar.set((adjustedCurrentStamina / barLength) * 100, 0, 'none');
+			}
+		};
 
-		// Update the STAMINA bar display
-		this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
+		// -- Body sections: apply | numeric adjust + temp | quick actions -----------
+		const row = this.body.createDiv({ cls: 'dse-sedit__row' });
 
-		// Third Row: Apply Damage/Healing with Input
-		const modifierContainer = contentEl.createEl('div', { cls: 'modifier-container' });
-
-		const applyContainer = modifierContainer.createEl('div', { cls: 'apply-container' });
-
-		const applyRow = applyContainer.createEl('div', { cls: 'apply-row' });
-		applyRow.createEl('span', { text: 'Apply' });
-
+		// Apply-damage/heal panel.
+		const applySection = row.createDiv({ cls: 'dse-modal__section dse-sedit__apply' });
+		const applyRow = applySection.createDiv({ cls: 'dse-sedit__apply-row' });
+		applyRow.createSpan({ text: 'Apply' });
 		const applyInput = applyRow.createEl('input', {
 			type: 'number',
-			cls: 'apply-input',
+			cls: 'dse-sedit__apply-input',
 		}) as HTMLInputElement;
 		applyInput.value = '0';
-		applyInput.focus();
+		applyInput.setAttribute('aria-label', 'Amount to apply');
 
-		const damageButton = applyContainer.createEl('button', { cls: 'apply-btn' });
-		setIcon(damageButton.createEl('div', { cls: 'btn-icon' }), "sword");
-		damageButton.createEl('div', { cls: 'btn-text', text: 'Damage' });
-		damageButton.addEventListener('click', () => {
-			const adjustment = parseInt(applyInput.value);
-			if (!isNaN(adjustment)) {
-				// Apply damage to temp STAMINA first
-				let tempStaminaAvailable = currentTempStamina + this.pendingTempStaminaChange;
-				let tempStaminaUsed = Math.min(adjustment, tempStaminaAvailable);
-				this.pendingTempStaminaChange -= tempStaminaUsed;
-				let remainingDamage = adjustment - tempStaminaUsed;
-				this.pendingStaminaChange -= Math.min(remainingDamage, this.amountToDeath(currentStamina, negativeStaminaLimit));
+		iconButton(
+			applySection,
+			{
+				icon: 'sword',
+				label: 'Damage',
+				text: 'Damage',
+				onClick: () => {
+					const adjustment = parseInt(applyInput.value);
+					if (!isNaN(adjustment)) {
+						// Legacy verbatim: damage consumes temp STAMINA first, the
+						// remainder is capped at the distance to the death floor.
+						const tempStaminaAvailable = currentTempStamina + this.pendingTempStaminaChange;
+						const tempStaminaUsed = Math.min(adjustment, tempStaminaAvailable);
+						this.pendingTempStaminaChange -= tempStaminaUsed;
+						const remainingDamage = adjustment - tempStaminaUsed;
+						this.pendingStaminaChange -= Math.min(
+							remainingDamage,
+							this.amountToDeath(currentStamina, negativeStaminaLimit),
+						);
+						refresh();
+					}
+				},
+			},
+			this.lifecycle,
+		).buttonEl.classList.add('dse-sedit__btn');
+		iconButton(
+			applySection,
+			{
+				icon: 'plus',
+				label: 'Healing',
+				text: 'Healing',
+				onClick: () => {
+					const adjustment = parseInt(applyInput.value);
+					if (!isNaN(adjustment)) {
+						this.pendingStaminaChange += Math.min(
+							adjustment,
+							this.amountToMaxStamina(currentStamina, maxStamina),
+						);
+						refresh();
+					}
+				},
+			},
+			this.lifecycle,
+		).buttonEl.classList.add('dse-sedit__btn');
 
-				this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-				tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
-				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-				this.updateActionButton(actionButton);
-			}
-		});
+		// Numeric adjust (kit stepper) + temp stamina.
+		const adjustSection = row.createDiv({ cls: 'dse-modal__section dse-sedit__adjust' });
+		// Deliberately UNBOUNDED (no stepper min/max): the legacy modal clamped the
+		// STEP (a ± press near a bound was a no-op) but never the pending VALUE — e.g.
+		// stacked Spend Recovery presses over-shoot max and the display showed the raw
+		// sum. Only clampStamina at Apply owns the final value; giving the stepper
+		// value bounds here would silently re-route those over-shot sequences to
+		// DIFFERENT persisted bytes (byte-compat, the Task-3 bar).
+		const staminaStepper = staminaStepperRow(
+			adjustSection,
+			{
+				value: currentStamina,
+				label: 'Stamina',
+				displayMax: maxStamina,
+				onChange: (value) => {
+					this.pendingStaminaChange = value - currentStamina;
+					refresh();
+				},
+			},
+			this.lifecycle,
+		);
 
-		const healingButton = applyContainer.createEl('button', { cls: 'apply-btn' });
-		setIcon(healingButton.createEl('div', { cls: 'btn-icon' }), "plus");
-		healingButton.createEl('div', { cls: 'btn-text', text: 'Healing' });
-		healingButton.addEventListener('click', () => {
-			const adjustment = parseInt(applyInput.value);
-			if (!isNaN(adjustment)) {
-				this.pendingStaminaChange += Math.min(adjustment, this.amountToMaxStamina(currentStamina, maxStamina));
-				this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-				this.updateActionButton(actionButton);
-			}
-		});
+		const tempSection = adjustSection.createDiv({ cls: 'dse-sedit__temp' });
+		tempSection.createDiv({ cls: 'dse-sedit__temp-title', text: 'Temporary Stamina' });
+		// min 0 IS the legacy behavior: the decrement guard refused to go below 0 and
+		// typed negatives were corrected to 0 — the stepper floor reproduces both
+		// (with a real disabled minus at the floor instead of a silent no-op, CB-8).
+		const tempStepper = stepper(
+			tempSection,
+			{
+				value: currentTempStamina,
+				min: 0,
+				editable: true,
+				label: 'Temporary Stamina',
+				onChange: (value) => {
+					this.pendingTempStaminaChange = value - currentTempStamina;
+					refresh();
+				},
+			},
+			this.lifecycle,
+		);
 
-		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' ' });
+		// Quick modifiers.
+		const quickSection = row.createDiv({ cls: 'dse-modal__section dse-sedit__quick' });
+		iconButton(
+			quickSection,
+			{
+				icon: 'skull',
+				label: 'Kill',
+				text: 'Kill',
+				variant: 'danger',
+				onClick: () => {
+					this.pendingStaminaChange = negativeStaminaLimit - currentStamina;
+					this.pendingTempStaminaChange = -currentTempStamina; // Remove all temp STAMINA
+					refresh();
+				},
+			},
+			this.lifecycle,
+		).buttonEl.classList.add('dse-sedit__btn');
+		iconButton(
+			quickSection,
+			{
+				icon: 'plus',
+				label: 'Full Heal',
+				text: 'Full Heal',
+				onClick: () => {
+					this.pendingStaminaChange = maxStamina - currentStamina;
+					this.pendingTempStaminaChange = -currentTempStamina; // Reset temp stamina to 0
+					refresh();
+				},
+			},
+			this.lifecycle,
+		).buttonEl.classList.add('dse-sedit__btn');
+		iconButton(
+			quickSection,
+			{
+				icon: 'syringe',
+				label: 'Spend Recovery',
+				text: 'Spend Recovery',
+				onClick: () => {
+					const adjustment = Math.min(Math.floor(maxStamina / 3), maxStamina);
+					if (!isNaN(adjustment)) {
+						this.pendingStaminaChange += adjustment;
+						refresh();
+					}
+				},
+			},
+			this.lifecycle,
+		).buttonEl.classList.add('dse-sedit__btn');
 
-		// Stamina edit container
-		const staminaModContainer = modifierContainer.createEl('div', { cls: 'stamina-mod-container' });
-		const staminaNumericContainer = staminaModContainer.createEl('div', { cls: 'stamina-numeric-container' });
+		// -- Footer: Reset + the dynamic apply button (accent) ----------------------
+		const [, actionBtn] = this.footer([
+			{
+				icon: 'undo',
+				label: 'Reset',
+				text: 'Reset',
+				onClick: () => {
+					this.pendingStaminaChange = 0;
+					this.pendingTempStaminaChange = 0;
+					refresh();
+				},
+			},
+			{
+				label: 'No Stamina Change',
+				text: 'No Stamina Change',
+				variant: 'accent',
+				disabled: true,
+				onClick: () => {
+					// Legacy Apply verbatim — clampStamina is the byte-compat gate.
+					const newCurrentStamina = this.clampStamina(
+						currentStamina + this.pendingStaminaChange,
+						negativeStaminaLimit,
+						maxStamina,
+					);
+					this.staminaBar.current_stamina = newCurrentStamina;
+					this.staminaBar.temp_stamina = currentTempStamina + this.pendingTempStaminaChange;
+					this.updateCallback();
+					this.close();
+				},
+			},
+		]);
+		// Reset left / apply right (the legacy space-between footer).
+		actionBtn.buttonEl.parentElement?.classList.add('dse-sedit__footer');
 
-		// Decrement Button
-		const decrementButton = staminaNumericContainer.createEl('div', { cls: 'stamina-adjust-btn' });
-		setIcon(decrementButton, "minus-circle");
-		decrementButton.addEventListener('click', () => {
-			this.pendingStaminaChange -= Math.min(1, this.amountToDeath(currentStamina, negativeStaminaLimit));
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-			this.updateActionButton(actionButton);
-		});
-
-		// STAMINA Value Display (Editable)
-		const staminaValueDisplay = staminaNumericContainer.createEl('input', {
-			type: 'number',
-			cls: 'stamina-value-display',
-		}) as HTMLInputElement;
-		staminaValueDisplay.value = (currentStamina + this.pendingStaminaChange).toString();
-		staminaValueDisplay.autofocus = false;
-		staminaValueDisplay.addEventListener('input', () => {
-			const newStaminaValue = parseInt(staminaValueDisplay.value);
-			if (!isNaN(newStaminaValue)) {
-				this.pendingStaminaChange = newStaminaValue - currentStamina;
-				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-				this.updateActionButton(actionButton);
-			}
-		});
-
-		// Display Max STAMINA
-		staminaNumericContainer.createEl('span', { text: `/ ${maxStamina}`, cls: 'max-stamina-display' });
-
-		// Increment Button
-		const incrementButton = staminaNumericContainer.createEl('div', { cls: 'stamina-adjust-btn' });
-		setIcon(incrementButton, "plus-circle");
-		incrementButton.addEventListener('click', () => {
-			this.pendingStaminaChange += Math.min(1, this.amountToMaxStamina(currentStamina, maxStamina));
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-			this.updateActionButton(actionButton);
-		});
-
-		// Temporary Stamina Container
-		const tempStaminaContainer = staminaModContainer.createEl('div', { cls: 'temp-stamina-container' });
-		tempStaminaContainer.createEl('div', { cls: 'temp-stamina-title', text: 'Temporary Stamina' });
-		const tempStaminaBody = tempStaminaContainer.createEl('div', { cls: 'temp-stamina-body' });
-
-		// Decrease Temp Stamina Button
-		const decrementTempButton = tempStaminaBody.createEl('div', { cls: 'temp-stamina-btn' });
-		setIcon(decrementTempButton, 'minus-circle');
-		decrementTempButton.addEventListener('click', () => {
-			if (currentTempStamina + this.pendingTempStaminaChange <= 0) {
-				return;
-			}
-			this.pendingTempStaminaChange -= 1;
-			tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
-			this.updateActionButton(actionButton);
-		});
-
-		// Input for temp stamina
-		const tempStaminaInput = tempStaminaBody.createEl('input', {
-			type: 'number',
-			cls: 'temp-stamina-input',
-		}) as HTMLInputElement;
-		tempStaminaInput.min = '0';
-		tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
-		tempStaminaInput.addEventListener('input', () => {
-			let newTempStaminaValue = parseInt(tempStaminaInput.value);
-			if (!isNaN(newTempStaminaValue)) {
-				// Ensure the temp stamina value is not negative
-				if (newTempStaminaValue < 0) {
-					newTempStaminaValue = 0;
-					tempStaminaInput.value = '0'; // Update the input field to reflect the corrected value
-				}
-				this.pendingTempStaminaChange = newTempStaminaValue - currentTempStamina;
-				this.updateActionButton(actionButton);
-			}
-		});
-
-		// Increase Temp Stamina Button
-		const incrementTempButton = tempStaminaBody.createEl('div', { cls: 'temp-stamina-btn' });
-		setIcon(incrementTempButton, 'plus-circle');
-		incrementTempButton.addEventListener('click', () => {
-			this.pendingTempStaminaChange += 1;
-			tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
-			this.updateActionButton(actionButton);
-		});
-
-		modifierContainer.createEl('div', { cls: 'vertical-divider', text: ' ' });
-
-		// Quick Modifiers
-		const quickModContainer = modifierContainer.createEl('div', { cls: 'quick-mod-container' });
-
-		const killButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn' });
-		setIcon(killButton.createEl('div', { cls: 'btn-icon' }), "skull");
-		killButton.createEl('div', { cls: 'btn-text', text: 'Kill' });
-		killButton.addEventListener('click', () => {
-			this.pendingStaminaChange = negativeStaminaLimit - currentStamina;
-			this.pendingTempStaminaChange = -currentTempStamina; // Remove all temp STAMINA
-			tempStaminaInput.value = '0';
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-			this.updateActionButton(actionButton);
-		});
-
-		const fullHealButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn' });
-		setIcon(fullHealButton.createEl('div', { cls: 'btn-icon' }), "plus");
-		fullHealButton.createEl('div', { cls: 'btn-text', text: 'Full Heal' });
-		fullHealButton.addEventListener('click', () => {
-			this.pendingStaminaChange = maxStamina - currentStamina;
-			this.pendingTempStaminaChange = -currentTempStamina; // Reset temp stamina to 0
-			tempStaminaInput.value = '0';
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-			this.updateActionButton(actionButton);
-		});
-
-		const recoveryButton = quickModContainer.createEl('button', { cls: 'quick-mod-btn' });
-		setIcon(recoveryButton.createEl('div', { cls: 'btn-icon' }), "syringe");
-		recoveryButton.createEl('div', { cls: 'btn-text', text: 'Spend Recovery' });
-		recoveryButton.addEventListener('click', () => {
-			const adjustment = Math.min(Math.floor(maxStamina / 3), maxStamina);
-			if (!isNaN(adjustment)) {
-				this.pendingStaminaChange += adjustment;
-				this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-				this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-				this.updateActionButton(actionButton);
-			}
-		});
-
-		// Bottom: Action Button and Reset Button
-		const actionButtonContainer = contentEl.createEl('div', { cls: 'action-button-container' });
-
-		// Reset Button
-		const resetButton = actionButtonContainer.createEl('button', { cls: 'reset-button' });
-		setIcon(resetButton.createEl('div', { cls: 'btn-icon' }), "undo");
-		resetButton.createEl('div', { cls: 'btn-text', text: 'Reset' });
-		resetButton.addEventListener('click', () => {
-			this.pendingStaminaChange = 0;
-			this.pendingTempStaminaChange = 0;
-			this.updateStaminaDisplay(staminaValueDisplay, currentStamina);
-			tempStaminaInput.value = (currentTempStamina + this.pendingTempStaminaChange).toString();
-			this.updateStaminaBar(staminaBarFillLeft, staminaBarFillRight, negativeStaminaLimit, maxStamina);
-			this.updateActionButton(actionButton);
-		});
-
-		const actionButton = actionButtonContainer.createEl('button', { cls: 'action-button' });
-		this.updateActionButton(actionButton);
-		actionButton.addEventListener('click', () => {
-			const newCurrentStamina = this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
-			this.staminaBar.current_stamina = newCurrentStamina;
-
-			const newTempStamina = currentTempStamina + this.pendingTempStaminaChange;
-			this.staminaBar.temp_stamina = newTempStamina;
-
-			this.updateCallback();
-			this.close();
-		});
-
-		// Set focus once we have loaded
-		queueMicrotask(() => { applyInput.focus(); });
+		/** One targeted refresh after every edit: steppers, bar, apply button — in place. */
+		const refresh = (): void => {
+			staminaStepper.setValue(currentStamina + this.pendingStaminaChange);
+			tempStepper.setValue(currentTempStamina + this.pendingTempStaminaChange);
+			updateBar();
+			this.updateActionButton(actionBtn);
+		};
+		refresh();
 	}
 
 	private clampStamina(stamina: number, negativeStaminaLimit: number, maxPossibleStamina: number): number {
@@ -279,40 +390,8 @@ export class StaminaEditModal extends Modal {
 		return (negativeStaminaLimit * -1) + currentStamina + this.pendingStaminaChange;
 	}
 
-	private updateStaminaBar(staminaBarFillLeft: HTMLElement, staminaBarFillRight: HTMLElement, negativeStaminaLimit: number, maxStamina: number) {
-		const dyingLength = negativeStaminaLimit * -1;
-		const barLength = maxStamina + dyingLength;
-		const adjustedCurrentStamina = this.staminaBar.current_stamina + dyingLength;
-
-		if (this.pendingStaminaChange > 0) {
-			// Healing
-			staminaBarFillLeft.style.width = `${((adjustedCurrentStamina) / barLength) * 100}%`;
-			staminaBarFillLeft.style.backgroundColor = 'limegreen';
-			staminaBarFillRight.style.width = `${((this.pendingStaminaChange) / barLength) * 100}%`;
-			staminaBarFillRight.style.backgroundColor = 'deepskyblue';
-			staminaBarFillRight.style.borderRadius = '0 3px 3px 0';
-		} else if (this.pendingStaminaChange < 0) {
-			// Damage
-			staminaBarFillLeft.style.width = `${((adjustedCurrentStamina + this.pendingStaminaChange) / barLength) * 100}%`;
-			staminaBarFillLeft.style.backgroundColor = 'limegreen';
-			staminaBarFillRight.style.width = `${(this.pendingStaminaChange / barLength) * -100}%`;
-			staminaBarFillRight.style.backgroundColor = 'crimson';
-			staminaBarFillRight.style.borderRadius = '3px 0 0 3px';
-		} else {
-			// No change
-			staminaBarFillLeft.style.width = `${(adjustedCurrentStamina / barLength) * 100}%`;
-			staminaBarFillLeft.style.backgroundColor = 'limegreen';
-			staminaBarFillRight.style.width = `0%`;
-			staminaBarFillRight.style.backgroundColor = 'deepskyblue';
-		}
-	}
-
-	private updateStaminaDisplay(staminaValueDisplay: HTMLInputElement, currentStamina: number) {
-		const newStaminaValue = currentStamina + this.pendingStaminaChange;
-		staminaValueDisplay.value = newStaminaValue.toString();
-	}
-
-	private updateActionButton(actionButton: HTMLElement) {
+	/** Legacy wording verbatim; the disabled state is the REAL property (CB-8). */
+	private updateActionButton(actionBtn: IconButtonHandle): void {
 		const staminaChange = this.pendingStaminaChange;
 		const tempStaminaChange = this.pendingTempStaminaChange;
 		let actionText = '';
@@ -338,9 +417,7 @@ export class StaminaEditModal extends Modal {
 			actionText = 'No Stamina Change';
 		}
 
-		actionButton.textContent = actionText;
-
-		// Disable the button if no change
-		actionButton.toggleClass('disabled', staminaChange === 0 && tempStaminaChange === 0);
+		setButtonText(actionBtn, actionText);
+		actionBtn.setDisabled(staminaChange === 0 && tempStaminaChange === 0);
 	}
 }

@@ -1,11 +1,17 @@
-// D1 Task 3 (Plan 03) — Stamina Bar: the first *persisted* element on Framework v2 (F1 §6
-// step 4) and the LAST Vue element (unblocks Vue teardown, D1 step 4). Mirrors
-// horizontal-rule.test.ts / skills.test.ts's convention of driving elements through the
-// REAL ElementPipeline with real framework services; additionally drives the persisted
-// write path through a REAL ReadingModeBlockHost + FakeVault (reading-mode-host.test.ts's
-// pattern) to prove the "exactly one replaceSource, fence/alias preserved" contract, and
-// asserts BYTE-COMPAT of `serialize` against the legacy `stringifyYaml(StaminaBar.parseYaml)`
-// write path (D1 spec §"Step 3" / F1 §6's "byte-compatible output is the compatibility bar").
+// Plan 09 Task 3 (D2 §3.5) — Stamina Bar on the D2 kit: the whole-element wrapper is the
+// kit collapsible2 (title "Stamina Bar", seeded from collapse_default, NO session
+// persistence — the element was never session-tracked), and the bar renders the
+// .dse-stamina grammar: state COLOR via the [data-state] class (never inline), fill
+// widths via --dse-fill/--dse-temp-fill setProperty geometry (SC-5). Clicking opens the
+// unified managedModal StaminaEditModal (§3.5b).
+//
+// Carries forward D1 Task 3's persistence nets unchanged in SUBSTANCE: the write path
+// through a REAL ReadingModeBlockHost + FakeVault ("exactly one replaceSource,
+// fence/alias preserved") and BYTE-COMPAT of `serialize` against the legacy
+// `stringifyYaml(StaminaBar.parseYaml)` — the compatibility bar for this task is that
+// the DOM/CSS redesign changes NOTHING about the persisted YAML.
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -25,6 +31,7 @@ import { App, Plugin, stringifyYaml, makeFakeContext } from '../../mocks/obsidia
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
 import { StaminaBarView } from '../../../src/elements/stamina-bar/view';
 import { serialize as frameworkSerialize } from '../../../src/elements/stamina-bar/model';
+import { styleGuardFindings } from '../kit/styleGuard';
 // StaminaBarSchema.yaml $refs the shared component-wrapper dependency schema (F1 §5) — same
 // convention as skills.test.ts.
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
@@ -74,13 +81,30 @@ function makeDeps(): ElementPipelineDeps {
 	};
 }
 
-/** Extracts the numeric percentage out of either a plain "NN.NNN%" or a
- *  "calc(NN.NNN% - Xpx)" inline style value. */
-function pctOf(style: string): number {
-	const match = style.match(/([\d.]+)%/);
-	if (!match) throw new Error(`not a "...%..." value: "${style}"`);
-	return Number(match[1]);
+/** Numeric value of a --dse-* percentage custom property on an element. */
+function dseVar(el: HTMLElement, prop: string): number {
+	const raw = el.style.getPropertyValue(prop);
+	if (raw === '') throw new Error(`no ${prop} custom property set`);
+	return parseFloat(raw);
 }
+
+/** The kit iconButton (inside an open modal) carrying the given accessible name. */
+function modalBtn(modalEl: HTMLElement, label: string): HTMLButtonElement {
+	const el = modalEl.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+	if (!el) throw new Error(`no button [aria-label="${label}"]`);
+	return el;
+}
+
+/** The unified modal's footer apply button (accent variant, dynamic text). */
+function modalApplyBtn(modalEl: HTMLElement): HTMLButtonElement {
+	const el = modalEl.querySelector<HTMLButtonElement>('.dse-modal__footer .dse-btn--accent');
+	if (!el) throw new Error('no footer accent action button');
+	return el;
+}
+
+afterEach(() => {
+	document.body.innerHTML = '';
+});
 
 describe('D1 Task 3: stamina-bar ElementDefinition (F1 §6 step 4)', () => {
 	test('id/aliases/shape/schema/serialize match the preserved ds-stam contract (persisted)', () => {
@@ -109,7 +133,7 @@ describe('D1 Task 3: stamina-bar ElementDefinition (F1 §6 step 4)', () => {
 	});
 });
 
-describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () => {
+describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
@@ -125,34 +149,46 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
 	});
 
-	test('renders the bar with correct indicator width/color, temp overlay, dying/winded overlay width, and the (cur/max + temp) pill', async () => {
+	test('renders .dse-stamina: fill/temp/zone geometry as --dse-* custom properties, state via [data-state], the (cur/max + temp) pill — ZERO inline colors/widths', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		await pipeline.run(staminaBarElement, BASIC_YAML, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
+		const bar = root.querySelector('.dse-stamina') as HTMLElement;
 		expect(bar).not.toBeNull();
-		expect(bar.classList.contains('clickable')).toBe(true);
-		expect(bar.style.height).toBe('calc(1em + 4px)');
+		expect(bar.classList.contains('dse-stamina--clickable')).toBe(true);
+		expect(bar.style.getPropertyValue('--dse-bar-h')).toBe('1em');
 
 		// max=20, current=15, temp=5 -> dyingStamina=10, totalStamina=30.
-		const indicator = bar.querySelector('.ds-stamina-bar-indicator') as HTMLElement;
-		expect(pctOf(indicator.style.width)).toBeCloseTo(((15 + 10) / 30) * 100, 2);
-		expect(indicator.style.backgroundColor).toBe('var(--stamina-bar-color)'); // 15 >= floor(20/2)=10
+		const fill = bar.querySelector('.dse-stamina__fill') as HTMLElement;
+		expect(dseVar(fill, '--dse-fill')).toBeCloseTo(((15 + 10) / 30) * 100, 2);
+		expect(fill.getAttribute('data-state')).toBe('healthy'); // 15 >= floor(20/2)=10
+		expect(fill.style.backgroundColor).toBe(''); // color is the [data-state] CSS rule's job
+		expect(fill.style.width).toBe(''); // width is the --dse-fill CSS rule's job
 
-		const tempIndicator = bar.querySelector('.ds-stamina-bar-temp-indicator') as HTMLElement;
-		expect(pctOf(tempIndicator.style.width)).toBeCloseTo((5 / 30) * 100, 2);
+		const temp = bar.querySelector('.dse-stamina__temp') as HTMLElement;
+		expect(dseVar(temp, '--dse-temp-fill')).toBeCloseTo((5 / 30) * 100, 2);
 
-		const overlayPct = ((10) / 30) * 100; // floor(max/2)=10, ignoreDying
-		const dying = bar.querySelector('.ds-stamina-bar-dying-overlay') as HTMLElement;
-		const winded = bar.querySelector('.ds-stamina-bar-winded-overlay') as HTMLElement;
-		expect(pctOf(dying.style.width)).toBeCloseTo(overlayPct, 2);
-		expect(pctOf(winded.style.width)).toBeCloseTo(overlayPct, 2);
+		// One shared zone width feeds both threshold regions (floor(max/2)=10, ignoreDying).
+		const track = bar.querySelector('.dse-stamina__track') as HTMLElement;
+		expect(dseVar(track, '--dse-zone')).toBeCloseTo((10 / 30) * 100, 2);
+		const thresholds = bar.querySelectorAll('.dse-stamina__threshold');
+		expect(thresholds).toHaveLength(2);
+		expect(thresholds[0].textContent).toBe('Dying');
+		expect(thresholds[1].textContent).toBe('Winded');
 
-		const pill = bar.querySelector('.ds-stamina-bar-stamina-overlay .background-pill') as HTMLElement;
+		const pill = bar.querySelector('.dse-stamina__num .dse-stamina__pill') as HTMLElement;
 		expect(pill.textContent).toBe('(15/20 + 5)');
+
+		// SC-5: the ONLY inline styles anywhere under the element root are --dse-* props.
+		for (const el of Array.from(root.querySelectorAll<HTMLElement>('[style]'))) {
+			for (const decl of el.getAttribute('style')!.split(';')) {
+				if (decl.trim() === '') continue;
+				expect(decl.trim()).toMatch(/^--dse-/);
+			}
+		}
 	});
 
 	test('temp_stamina omitted (0): the pill omits the "+ N" suffix (CB-17 fix)', async () => {
@@ -162,40 +198,41 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 		await pipeline.run(staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 15', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const pill = root.querySelector('.ds-stamina-bar-stamina-overlay .background-pill') as HTMLElement;
+		const pill = root.querySelector('.dse-stamina__num .dse-stamina__pill') as HTMLElement;
 		expect(pill.textContent).toBe('(15/20)');
 	});
 
-	test('current_stamina <= 0: dying color', async () => {
+	test('current_stamina <= 0: [data-state="dying"]', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		await pipeline.run(staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 0', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const indicator = root.querySelector('.ds-stamina-bar-indicator') as HTMLElement;
-		expect(indicator.style.backgroundColor).toBe('var(--stamina-bar-color-dying)');
+		const fill = root.querySelector('.dse-stamina__fill') as HTMLElement;
+		expect(fill.getAttribute('data-state')).toBe('dying');
+		expect(fill.style.backgroundColor).toBe('');
 	});
 
-	test('current_stamina below half max: winded color', async () => {
+	test('current_stamina below half max: [data-state="winded"]', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		await pipeline.run(staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 5', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const indicator = root.querySelector('.ds-stamina-bar-indicator') as HTMLElement;
-		expect(indicator.style.backgroundColor).toBe('var(--stamina-bar-color-winded)');
+		const fill = root.querySelector('.dse-stamina__fill') as HTMLElement;
+		expect(fill.getAttribute('data-state')).toBe('winded');
 	});
 
-	test('CB-15 pinned: current_stamina omitted defaults to 0, not max (preserved, not "fixed" under D1)', async () => {
+	test('CB-15 pinned: current_stamina omitted defaults to 0, not max (preserved, not "fixed" under D2)', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		await pipeline.run(staminaBarElement, 'max_stamina: 20', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const pill = root.querySelector('.ds-stamina-bar-stamina-overlay .background-pill') as HTMLElement;
+		const pill = root.querySelector('.dse-stamina__num .dse-stamina__pill') as HTMLElement;
 		expect(pill.textContent).toBe('(0/20)');
 	});
 
@@ -206,32 +243,75 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 		await pipeline.run(staminaBarElement, 'max_stamina: 20\nstyle: sheet', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		expect(root.querySelector('.ds-stamina-bar')).toBeNull();
-		const notice = root.querySelector('.ds-stamina-bar-sheet-notice') as HTMLElement;
+		expect(root.querySelector('.dse-stamina')).toBeNull();
+		const notice = root.querySelector('.dse-stamina__notice') as HTMLElement;
 		expect(notice.textContent).toBe('Sheet style is not implemented, use default style');
 	});
 
-	test('collapse_default: true starts the whole element collapsed (component-wrapper, preserved YAML contract)', async () => {
-		const pipeline = new ElementPipeline(makeDeps());
-		const host = makeHost();
+	describe('whole-element wrapper = kit collapsible2 (collapse_default YAML contract; NOT session-tracked)', () => {
+		test('wraps the bar in ONE .dse-collapse titled "Stamina Bar", expanded by default', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
 
-		await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapse_default: true`, host);
+			await pipeline.run(staminaBarElement, BASIC_YAML, host);
 
-		const root = host.containerEl.firstElementChild as HTMLElement;
-		expect(root.querySelector('.ds-kit-collapsed-wrapper')).not.toBeNull();
-		expect(root.querySelector('.ds-stamina-bar')).toBeNull();
-		expect(root.querySelector('.ds-kit-collapsed-wrapper strong')?.textContent).toBe('Stamina Bar');
-	});
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			const wrapper = root.querySelector(':scope > .dse-collapse') as HTMLElement;
+			expect(wrapper).not.toBeNull();
+			const header = wrapper.querySelector(':scope > .dse-collapse__header') as HTMLButtonElement;
+			expect(header.tagName).toBe('BUTTON');
+			expect(header.getAttribute('aria-expanded')).toBe('true');
+			expect(header.querySelector('.dse-collapse__title')?.textContent).toBe('Stamina Bar');
+			const region = wrapper.querySelector(':scope > .dse-collapse__region') as HTMLElement;
+			expect(region.hidden).toBe(false);
+			expect(region.querySelector('.dse-stamina')).not.toBeNull();
+			// The old kit ComponentWrapper chrome is gone.
+			expect(root.querySelector('.ds-kit-eye-container')).toBeNull();
+			expect(root.querySelector('.ds-kit-collapsed-wrapper')).toBeNull();
+		});
 
-	test('collapsible: false in the YAML is NOT honored — matches the legacy Vue quirk (StaminaBar.vue always passed `!disable_click`, never `model.collapsible`, to ComponentWrapper)', async () => {
-		const pipeline = new ElementPipeline(makeDeps());
-		const host = makeHost();
+		test('collapse_default: true starts collapsed (region hidden — content stays in the DOM)', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
 
-		await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapsible: false`, host);
+			await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapse_default: true`, host);
 
-		const root = host.containerEl.firstElementChild as HTMLElement;
-		// The eye-toggle indicator is still shown (collapsible is hardcoded true).
-		expect(root.querySelector('.ds-kit-eye-container')).not.toBeNull();
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
+			const region = root.querySelector(':scope > .dse-collapse > .dse-collapse__region') as HTMLElement;
+			expect(header.getAttribute('aria-expanded')).toBe('false');
+			expect(region.hidden).toBe(true);
+			expect(region.querySelector('.dse-stamina')).not.toBeNull(); // hidden, not skipped
+		});
+
+		test('collapsible: false in the YAML is NOT honored — the legacy Vue quirk is preserved (StaminaBar.vue always passed `!disable_click`, never `model.collapsible`)', async () => {
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
+
+			await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapsible: false`, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			// The collapse affordance is still rendered (collapsible is hardcoded true).
+			expect(root.querySelector(':scope > .dse-collapse > .dse-collapse__header')).not.toBeNull();
+		});
+
+		test('NOT session-tracked: a remount with the same blockKey starts fresh from collapse_default (unlike Skills)', async () => {
+			const deps = makeDeps();
+
+			const hostA = makeHost();
+			await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, hostA);
+			const rootA = hostA.containerEl.firstElementChild as HTMLElement;
+			const headerA = rootA.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
+			headerA.click(); // user collapses
+			expect(headerA.getAttribute('aria-expanded')).toBe('false');
+
+			// Same deps (same SessionStore) + same blockKey: the echo-rebuild equivalent.
+			const hostB = makeHost();
+			await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, hostB);
+			const rootB = hostB.containerEl.firstElementChild as HTMLElement;
+			const headerB = rootB.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
+			expect(headerB.getAttribute('aria-expanded')).toBe('true'); // fresh, not remembered
+		});
 	});
 
 	test('schema validation failure (missing max_stamina) renders the error card, not the bar', async () => {
@@ -243,7 +323,7 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-error-stage')).toBe('schema');
 		expect(root.querySelector('.dse-error-card')).not.toBeNull();
-		expect(root.querySelector('.ds-stamina-bar')).toBeNull();
+		expect(root.querySelector('.dse-stamina')).toBeNull();
 	});
 
 	test('ties StaminaBarView to host.addChild (block lifecycle)', async () => {
@@ -259,7 +339,7 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 	});
 
 	describe('canPersist: false (F1 §4.4 — visible but inert, not a dead-end click)', () => {
-		test('no "clickable" class, a read-only tooltip, and clicking never opens the modal / never writes', async () => {
+		test('no clickable modifier, a read-only tooltip, and clicking never opens the modal / never writes', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost({ canPersist: false });
 
@@ -270,8 +350,8 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 			// element: the pipeline stamps data-dse-readonly on the root when
 			// host.canPersist === false (the CSS badge hangs off this attribute).
 			expect(root.hasAttribute('data-dse-readonly')).toBe(true);
-			const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
-			expect(bar.classList.contains('clickable')).toBe(false);
+			const bar = root.querySelector('.dse-stamina') as HTMLElement;
+			expect(bar.classList.contains('dse-stamina--clickable')).toBe(false);
 			expect(bar.getAttribute('data-tooltip')).toBe('Read-only in this context');
 
 			document.body.appendChild(host.containerEl);
@@ -286,15 +366,15 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 		});
 	});
 
-	describe('click -> DOM StaminaEditModal (OD-D1-1) -> edit -> persist', () => {
-		test('clicking the bar opens the existing DOM StaminaEditModal (not a re-expression of the deleted Vue modal)', async () => {
+	describe('click -> the unified managedModal StaminaEditModal (§3.5b) -> edit -> persist', () => {
+		test('clicking the bar opens the kit DseModal-based StaminaEditModal', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
 			await pipeline.run(staminaBarElement, BASIC_YAML, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
+			const bar = root.querySelector('.dse-stamina') as HTMLElement;
 			const bodyChildrenBefore = document.body.children.length;
 
 			bar.click();
@@ -302,8 +382,9 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 			expect(document.body.children.length).toBe(bodyChildrenBefore + 1);
 			const modalEl = document.body.lastElementChild as HTMLElement;
 			expect(modalEl.classList.contains('modal-container')).toBe(true);
-			expect(modalEl.querySelector('.stamina-header')?.textContent?.trim()).toBe('Stamina');
-			expect(modalEl.querySelector('.apply-input')).not.toBeNull(); // DOM modal's own markup
+			expect(modalEl.classList.contains('dse-modal')).toBe(true); // the kit scaffold
+			expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Stamina');
+			expect(modalEl.querySelector('.dse-sedit__apply-input')).not.toBeNull();
 		});
 
 		test('applying "Full Heal" mutates the model, refreshes the bar in place, and — after the debounce — persists exactly once with the expected byte-exact YAML', async () => {
@@ -314,20 +395,21 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 			await pipeline.run(staminaBarElement, BASIC_YAML, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
-			const indicator = bar.querySelector('.ds-stamina-bar-indicator') as HTMLElement;
-			const pill = bar.querySelector('.ds-stamina-bar-stamina-overlay .background-pill') as HTMLElement;
-			const widthBefore = indicator.style.width;
+			const bar = root.querySelector('.dse-stamina') as HTMLElement;
+			const fill = bar.querySelector('.dse-stamina__fill') as HTMLElement;
+			const pill = bar.querySelector('.dse-stamina__num .dse-stamina__pill') as HTMLElement;
+			const fillBefore = dseVar(fill, '--dse-fill');
 
 			bar.click();
 			const modalEl = document.body.lastElementChild as HTMLElement;
-			(modalEl.querySelectorAll('.quick-mod-btn')[1] as HTMLElement).click(); // Full Heal
-			(modalEl.querySelector('.action-button') as HTMLElement).click();
+			modalBtn(modalEl, 'Full Heal').click();
+			modalApplyBtn(modalEl).click();
 
 			// Targeted update happened synchronously (no rebuild, no debounce needed for the
 			// visual refresh) — current 15/20 + temp 5 -> Full Heal -> current 20, temp 0.
 			expect(pill.textContent).toBe('(20/20)');
-			expect(indicator.style.width).not.toBe(widthBefore);
+			expect(dseVar(fill, '--dse-fill')).not.toBe(fillBefore);
+			expect(dseVar(fill, '--dse-fill')).toBeCloseTo(100, 2);
 			expect(host.replaceSource).not.toHaveBeenCalled(); // still inside the debounce window
 
 			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
@@ -339,7 +421,35 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 			);
 		});
 
-		test('a modal opened by the view is closed on view unload (F1 §4.5)', async () => {
+		test('a stepper edit updates the bar IN PLACE (same fill node, no rebuild) and persists exactly once, byte-identical', async () => {
+			jest.useFakeTimers();
+			const pipeline = new ElementPipeline(makeDeps());
+			const host = makeHost();
+
+			await pipeline.run(staminaBarElement, BASIC_YAML, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			const bar = root.querySelector('.dse-stamina') as HTMLElement;
+			const fill = bar.querySelector('.dse-stamina__fill') as HTMLElement;
+
+			bar.click();
+			const modalEl = document.body.lastElementChild as HTMLElement;
+			modalBtn(modalEl, 'Increase Stamina').click(); // kit stepper: 15 -> 16
+			modalApplyBtn(modalEl).click();
+
+			// The SAME fill element was updated in place via setProperty — no DOM rebuild.
+			expect(bar.querySelector('.dse-stamina__fill')).toBe(fill);
+			expect(dseVar(fill, '--dse-fill')).toBeCloseTo(((16 + 10) / 30) * 100, 2);
+
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(
+				['collapsible: true', 'collapse_default: false', 'max_stamina: 20', 'current_stamina: 16', 'temp_stamina: 5', 'height: 1', 'style: default'].join('\n'),
+			);
+		});
+
+		test('a modal opened by the view is closed on view unload (F1 §4.5, via openManagedModal)', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 			const addChild = jest.fn((child: unknown) => child);
@@ -349,7 +459,7 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 			const view = addChild.mock.calls[0][0] as StaminaBarView;
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			(root.querySelector('.ds-stamina-bar') as HTMLElement).click();
+			(root.querySelector('.dse-stamina') as HTMLElement).click();
 			const modalEl = document.body.lastElementChild as HTMLElement;
 			expect(document.body.contains(modalEl)).toBe(true);
 
@@ -357,6 +467,24 @@ describe('D1 Task 3: stamina-bar rendered through the REAL ElementPipeline', () 
 
 			expect(document.body.contains(modalEl)).toBe(false);
 		});
+	});
+
+	test('view source hygiene: no old-kit imports, kit from @/framework/kit, style guard clean (SC-5)', () => {
+		const src = fs.readFileSync(path.join(__dirname, '../../../src/elements/stamina-bar/view.ts'), 'utf8');
+		expect(src).not.toMatch(/mountComponentWrapper|mountCollapsibleHeading/);
+		expect(src).toMatch(/from '@\/framework\/kit'/);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('CSS contract: .dse-stamina consumes the --dse-stamina-* tokens via [data-state]; the old .ds-stamina-bar block is gone', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		expect(sheet).toMatch(/\.dse-stamina__fill\[data-state="healthy"\][^}]*var\(--dse-stamina-healthy\)/);
+		expect(sheet).toMatch(/\.dse-stamina__fill\[data-state="winded"\][^}]*var\(--dse-stamina-winded\)/);
+		expect(sheet).toMatch(/\.dse-stamina__fill\[data-state="dying"\][^}]*var\(--dse-stamina-dying\)/);
+		expect(sheet).toMatch(/\.dse-stamina__temp\b[^}]*var\(--dse-stamina-temp\)/);
+		expect(sheet).toMatch(/\.dse-stamina__track\b[^}]*var\(--dse-stamina-track\)/);
+		// The D1 legacy-port block (its widths/colors were inline) is fully evicted.
+		expect(sheet).not.toMatch(/\.ds-stamina-bar/);
 	});
 });
 
@@ -390,11 +518,11 @@ describe('D1 Task 3: persisted write path through a REAL ReadingModeBlockHost + 
 		await pipeline.run(staminaBarElement, 'max_stamina: 20\ncurrent_stamina: 15\ntemp_stamina: 5', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const bar = root.querySelector('.ds-stamina-bar') as HTMLElement;
+		const bar = root.querySelector('.dse-stamina') as HTMLElement;
 		bar.click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
-		(modalEl.querySelectorAll('.quick-mod-btn')[0] as HTMLElement).click(); // Kill
-		(modalEl.querySelector('.action-button') as HTMLElement).click();
+		modalBtn(modalEl, 'Kill').click();
+		modalApplyBtn(modalEl).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 

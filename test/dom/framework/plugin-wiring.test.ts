@@ -345,7 +345,7 @@ describe('D1 Task 3: Stamina Bar wiring through onload() (F1 §2.3 / §6 step 4)
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('stamina-bar');
-		expect(root.querySelector('.ds-stamina-bar')).not.toBeNull();
+		expect(root.querySelector('.dse-stamina')).not.toBeNull();
 	});
 });
 

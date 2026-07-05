@@ -1,21 +1,28 @@
-// D1 Task 3 (Plan 03) / F1 §6 step "Stamina Bar" — StaminaBarView: re-expresses
-// StaminaBar.vue as a createEl tree (bar container, stamina indicator, temp-stamina
-// overlay, dying/winded overlays, "(cur/max + temp)" pill), wrapped in the kit
-// ComponentWrapper (D1 Task 2's framework/kit/componentWrapper). Persisted shape (F1
-// §1.3): clicking opens the EXISTING DOM @views/StaminaEditModal (OD-D1-1 — NOT a
-// re-expression of the deleted StaminaEditModal.vue); the modal mutates `this.model`
-// in place (it is handed the SAME object reference) and its updateCallback both refreshes
-// the bar in place (targeted update, no rebuild) and schedules persist().
+// Plan 09 Task 3 (D2 §3.5) — StaminaBarView on the D2 kit. The whole-element wrapper is
+// the kit collapsible2 (title "Stamina Bar", seeded from collapse_default, NO
+// SessionPersist — this element was never session-tracked: every mount starts fresh
+// from the YAML, exactly as the Vue component did). The bar renders the .dse-stamina
+// grammar: state COLOR via the [data-state] class rules on the --dse-stamina-* tokens,
+// fill widths via --dse-fill/--dse-temp-fill setProperty geometry (SC-5 — zero inline
+// colors/widths; the only .style use is `setProperty("--dse-*", …)`).
+//
+// Clicking opens the unified managedModal StaminaEditModal (D2 §3.5b); the modal
+// mutates `this.model` in place (it is handed the SAME object reference) and its
+// updateCallback both refreshes the bar in place (targeted update, no rebuild) and
+// schedules persist(). The serialize path (model.ts) is untouched — persisted YAML
+// stays byte-compatible (F1 §6).
 import { setTooltip } from 'obsidian';
-import type { Component } from 'obsidian';
 import { ElementView } from '@/framework/view';
-import type { RenderContext } from '@/framework/context';
-import { mountComponentWrapper } from '@/framework/kit/componentWrapper';
+import { collapsible2, openManagedModal } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 
 const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
+
+/** Title shown in the whole-element collapsible2 header (the old ComponentWrapper
+ *  componentName, previously visible only in the collapsed rail). */
+const WRAPPER_TITLE = 'Stamina Bar';
 
 /** Ports StaminaBar.vue's `calculatePercentFromStamina` 1:1. */
 function calculatePercentFromStamina(model: StaminaBar, stamina: number, ignoreDying = false): number {
@@ -25,96 +32,74 @@ function calculatePercentFromStamina(model: StaminaBar, stamina: number, ignoreD
 	return (absoluteStamina / totalStamina) * 100;
 }
 
-/** Ports StaminaBar.vue's `barColor` computed 1:1. */
-function barColor(model: StaminaBar): string {
+/** The SFC's `barColor` computed, re-expressed as the [data-state] value (D2 §3.5):
+ *  the state names the condition; the COLOR lives in CSS on the --dse-stamina-* tokens. */
+function staminaState(model: StaminaBar): 'healthy' | 'winded' | 'dying' {
 	const current = model.current_stamina ?? 0;
-	if (current <= 0) return 'var(--stamina-bar-color-dying)';
-	if (current < Math.floor((model.max_stamina ?? 0) / 2)) return 'var(--stamina-bar-color-winded)';
-	return 'var(--stamina-bar-color)';
+	if (current <= 0) return 'dying';
+	if (current < Math.floor((model.max_stamina ?? 0) / 2)) return 'winded';
+	return 'healthy';
 }
 
-/** Ports StaminaBar.vue's `overlayWidth` computed 1:1. */
+/** Ports StaminaBar.vue's `overlayWidth` computed 1:1 (the dying/winded zone width). */
 function overlayWidthPercent(model: StaminaBar): number {
 	return calculatePercentFromStamina(model, Math.floor((model.max_stamina ?? 0) / 2), true);
 }
 
 export class StaminaBarView extends ElementView<StaminaBar> {
-	private indicatorEl!: HTMLElement;
-	private tempIndicatorEl!: HTMLElement;
-	private dyingOverlayEl!: HTMLElement;
-	private windedOverlayEl!: HTMLElement;
-	private pillEl!: HTMLElement;
-	/** The currently OPEN modal from the most recent bar click, or null once it closes.
-	 *  REPLACED (not accumulated) on every open and nulled on close, so the view holds
-	 *  exactly one pending closer regardless of how many times the modal was opened
-	 *  (Plan 05 Task 1 kit hardening — openEditModal previously registered a fresh
-	 *  `this.register(() => modal.close())` per click). */
-	private activeModal: StaminaEditModal | null = null;
-
-	constructor(cx: RenderContext) {
-		super(cx);
-		// F1 §4.5: a modal opened by the view must be closed on view unload. ONE
-		// view-lifetime registration over the replaced-on-open reference above; registered
-		// here (not in onMount, which the default update() path re-runs). openEditModal
-		// nulls the reference when the modal actually closes, so this never re-fires
-		// close() on an already-user-closed modal.
-		this.register(() => this.activeModal?.close());
-	}
+	private trackEl!: HTMLElement;
+	private fillEl!: HTMLElement;
+	private tempEl!: HTMLElement;
+	private numPillEl!: HTMLElement;
 
 	protected onMount(root: HTMLElement, model: StaminaBar): void {
-		mountComponentWrapper(root, this, {
-			componentName: 'Stamina Bar',
-			// Legacy quirk preserved verbatim (D1 spec §"Step 3"): StaminaBar.vue always
-			// passed `!disable_click` — never `model.collapsible` — as ComponentWrapper's
-			// `collapsible` prop, and `disable_click` was only ever set (to true) by the
-			// now-deleted StaminaEditModal.vue's embedded preview. In every reachable
-			// production render (the code-block processor path) `disable_click` was always
-			// undefined, so `collapsible` was always `true`. Not session-tracked (unlike
-			// Skills' whole-element collapse) — matches the D1 spec's "F1 interface used"
-			// list, which omits RenderContext.session for this element: each mount starts
-			// fresh from collapse_default, exactly as the Vue component (recreated fresh by
-			// createApp on every postprocessor run) did.
-			collapsible: true,
-			collapsed: model.collapse_default,
-			// Content listeners bind to contentOwner (fresh per expand cycle, torn down on
-			// collapse/re-expand — Plan 05 Task 1 kit hardening), never to the view itself.
-			renderContent: (contentEl, contentOwner) => this.renderBar(contentEl, contentOwner, model),
-			onToggle: () => {},
-		});
+		// Whole-element wrapper: ONE kit collapsible2 (replaces the old kit
+		// ComponentWrapper). Legacy quirk preserved verbatim (D1 spec §"Step 3"):
+		// StaminaBar.vue always passed `!disable_click` — never `model.collapsible` —
+		// as ComponentWrapper's `collapsible` prop, and in every reachable production
+		// render that was `true`, so the YAML `collapsible` flag is deliberately NOT
+		// honored: the element is always collapsible. Seeded from collapse_default
+		// with NO SessionPersist (unlike Skills): not session-tracked, matching the
+		// legacy element.
+		const wrapper = collapsible2(root, { title: WRAPPER_TITLE, open: !model.collapse_default }, this);
+		this.renderBar(wrapper.contentEl, model);
 	}
 
-	private renderBar(container: HTMLElement, contentOwner: Component, model: StaminaBar): void {
-		if (model.style === 'sheet') {
-			container.createDiv({ cls: 'ds-stamina-bar-sheet-notice', text: SHEET_STYLE_NOTICE });
+	private renderBar(container: HTMLElement, model: StaminaBar): void {
+		// Destructured (not `model.style`) so the SC-5 style guard's `.style` scan sees
+		// only the sanctioned setProperty calls — this is the YAML `style` FIELD.
+		const { style: renderStyle } = model;
+		if (renderStyle === 'sheet') {
+			container.createDiv({ cls: 'dse-stamina__notice', text: SHEET_STYLE_NOTICE });
 			return;
 		}
 
 		const canPersist = this.cx.host.canPersist;
-		const bar = container.createDiv({ cls: canPersist ? 'ds-stamina-bar clickable' : 'ds-stamina-bar' });
-		bar.style.height = `calc(${model.height ?? 1}em + 4px)`;
+		const bar = container.createDiv({
+			cls: canPersist ? 'dse-stamina dse-stamina--clickable' : 'dse-stamina',
+		});
+		// Sanctioned --dse-* geometry (D2 §5): the YAML height feeds the track height.
+		bar.style.setProperty('--dse-bar-h', `${model.height ?? 1}em`);
 
-		const staminaContainer = bar.createSpan({ cls: 'ds-stamina-bar-stamina-container' });
-		this.indicatorEl = staminaContainer.createDiv({ cls: 'ds-stamina-bar-indicator' });
-
-		const tempContainer = bar.createSpan({ cls: 'ds-stamina-bar-temp-container' });
-		this.tempIndicatorEl = tempContainer.createDiv({ cls: 'ds-stamina-bar-temp-indicator' });
-
-		const overlayContainer = bar.createSpan({ cls: 'ds-stamina-bar-overlay-container' });
-		this.dyingOverlayEl = overlayContainer.createDiv({ cls: 'ds-stamina-bar-dying-overlay' });
-		this.dyingOverlayEl.createSpan({ cls: 'background-pill', text: 'Dying' });
-		this.windedOverlayEl = overlayContainer.createDiv({ cls: 'ds-stamina-bar-winded-overlay' });
-		this.windedOverlayEl.createSpan({ cls: 'background-pill', text: 'Winded' });
-		const staminaOverlay = overlayContainer.createDiv({ cls: 'ds-stamina-bar-stamina-overlay' });
-		this.pillEl = staminaOverlay.createSpan({ cls: 'background-pill' });
+		this.trackEl = bar.createDiv({ cls: 'dse-stamina__track' });
+		this.fillEl = this.trackEl.createDiv({ cls: 'dse-stamina__fill' });
+		this.tempEl = this.trackEl.createDiv({ cls: 'dse-stamina__temp' });
+		const dying = this.trackEl.createDiv({ cls: 'dse-stamina__threshold dse-stamina__threshold--dying' });
+		dying.createSpan({ cls: 'dse-stamina__pill', text: 'Dying' });
+		const winded = this.trackEl.createDiv({ cls: 'dse-stamina__threshold dse-stamina__threshold--winded' });
+		winded.createSpan({ cls: 'dse-stamina__pill', text: 'Winded' });
+		const num = this.trackEl.createDiv({ cls: 'dse-stamina__num' });
+		this.numPillEl = num.createSpan({ cls: 'dse-stamina__pill' });
 
 		this.updateBarDisplay(model);
 
 		// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, unresolvable
 		// canvas nodes) -> render read-only (visible but inert) instead of a dead-end click.
+		// collapsible2 hides (never rebuilds) its region, so the bar mounts exactly once
+		// per onMount and view-bound listeners are correct (the old per-expand-cycle
+		// contentOwner machinery is gone — same shift as Skills, Plan 09 Task 2).
 		if (canPersist) {
-			// Per-cycle (contentOwner, not this): the bar is rebuilt on every wrapper
-			// expand; binding to the view would stack one leaked listener per cycle.
-			contentOwner.registerDomEvent(bar, 'click', () => this.openEditModal());
+			this.registerDomEvent(bar, 'click', () => this.openEditModal());
 		} else {
 			setTooltip(bar, READ_ONLY_TOOLTIP);
 		}
@@ -122,48 +107,39 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 
 	/**
 	 * Targeted DOM update (F1 §6 "explicit targeted update methods", no reactivity lib) —
-	 * applies StaminaBar.vue's barColor/overlayWidth/calculatePercentFromStamina computed
-	 * properties imperatively, in place, without rebuilding the DOM. Called once at mount
-	 * and again after every modal edit.
+	 * re-expresses the SFC's barColor/overlayWidth/calculatePercentFromStamina computeds
+	 * in place, without rebuilding the DOM: widths as --dse-* custom properties, the
+	 * state color as [data-state]. Called once at mount and again after every modal edit.
 	 */
 	private updateBarDisplay(model: StaminaBar): void {
 		const current = model.current_stamina ?? 0;
 		const temp = model.temp_stamina ?? 0;
 		const max = model.max_stamina ?? 0;
 
-		this.indicatorEl.style.width = `calc(${calculatePercentFromStamina(model, current)}% - 2px)`;
-		this.indicatorEl.style.backgroundColor = barColor(model);
-		this.tempIndicatorEl.style.width = `calc(${calculatePercentFromStamina(model, temp, true)}% - 1px)`;
-
-		const overlayPct = `${overlayWidthPercent(model)}%`;
-		this.dyingOverlayEl.style.width = overlayPct;
-		this.windedOverlayEl.style.width = overlayPct;
+		this.fillEl.style.setProperty('--dse-fill', `${calculatePercentFromStamina(model, current)}%`);
+		this.fillEl.setAttribute('data-state', staminaState(model));
+		this.tempEl.style.setProperty('--dse-temp-fill', `${calculatePercentFromStamina(model, temp, true)}%`);
+		// ONE zone width on the track feeds both threshold regions and the numeric
+		// region (inherited custom property).
+		this.trackEl.style.setProperty('--dse-zone', `${overlayWidthPercent(model)}%`);
 
 		// Fixes CB-17 (D1 spec): the SFC wrote `model?.temp_stamina??0 > 0`, which — due to
 		// `??` binding looser than `>` — actually parses as `model?.temp_stamina ?? (0 > 0)`
 		// i.e. `model?.temp_stamina ?? false`, NOT the intended "> 0" comparison. Replaced
 		// here with the correct, explicit check.
-		this.pillEl.setText(`(${current}/${max}${temp > 0 ? ' + ' + temp : ''})`);
+		this.numPillEl.setText(`(${current}/${max}${temp > 0 ? ' + ' + temp : ''})`);
 	}
 
 	private openEditModal(): void {
-		const modal = new StaminaEditModal(this.cx.app, this.model, true, '', () => {
-			this.updateBarDisplay(this.model);
-			void this.persist();
-		});
-		// Null the reference once the modal ACTUALLY closes (user close or unload-close),
-		// so the constructor's view-lifetime closer never fires close() — and any
-		// side-effecting onClose StaminaEditModal may gain — a second time. Wraps (not
-		// replaces) the inherited onClose so future StaminaEditModal.onClose behavior
-		// still runs; identity-guarded so an older modal's close cannot null a newer one.
-		const inheritedOnClose = modal.onClose.bind(modal);
-		modal.onClose = () => {
-			inheritedOnClose();
-			if (this.activeModal === modal) this.activeModal = null;
-		};
-		// F1 §4.5 unload-close is handled by the SINGLE registration in the constructor
-		// over this replaced-on-open reference — never register() per open (accumulates).
-		this.activeModal = modal;
-		modal.open();
+		// F1 §4.5 via the kit: openManagedModal registers the view-unload closer per
+		// open; DseModal.close() is idempotent, so the old hand-rolled activeModal
+		// bookkeeping (needed when StaminaEditModal was a raw, non-idempotent Modal)
+		// is gone.
+		openManagedModal(this, () =>
+			new StaminaEditModal(this.cx.app, this.model, true, '', () => {
+				this.updateBarDisplay(this.model);
+				void this.persist();
+			}),
+		);
 	}
 }

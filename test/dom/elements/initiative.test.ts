@@ -102,12 +102,26 @@ async function renderInit(source: string, hostOverrides: Partial<BlockHost> = {}
 /** The most recently opened modal's container (the obsidian-mock Modal appends to body). */
 const lastModal = (): HTMLElement => document.body.lastElementChild as HTMLElement;
 
-/** MinionStaminaPoolModal helper: type damage×minions into the Apply row and click Apply. */
+/** MinionStaminaPoolModal helper: type damage×minions into the Apply row and click Apply.
+ *  (Task-3 unified modal DOM: .dse-sedit__apply-input inputs + a kit iconButton.) */
 function applyPoolDamage(modalEl: HTMLElement, damage: number, minions: number): void {
-	const inputs = modalEl.querySelectorAll<HTMLInputElement>('.apply-input');
+	const inputs = modalEl.querySelectorAll<HTMLInputElement>('.dse-sedit__apply-input');
 	inputs[0].value = String(damage);
 	inputs[1].value = String(minions);
-	(modalEl.querySelector('.apply-btn') as HTMLElement).click();
+	(modalEl.querySelector('button[aria-label="Apply Damage"]') as HTMLElement).click();
+}
+
+/** The unified stamina modal's footer apply button (kit accent iconButton). */
+function modalApplyBtn(modalEl: HTMLElement): HTMLButtonElement {
+	return modalEl.querySelector('.dse-modal__footer .dse-btn--accent') as HTMLButtonElement;
+}
+
+/** Commit a value into the unified modal's kit stepper input (commits on Enter/blur —
+ *  the legacy modal committed on every input event). */
+function commitStepperValue(modalEl: HTMLElement, value: number): void {
+	const input = modalEl.querySelector('.dse-stepper__input') as HTMLInputElement;
+	input.value = String(value);
+	input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
 }
 
 afterEach(() => {
@@ -308,12 +322,10 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 
 		const modalEl = lastModal();
 		expect(modalEl.classList.contains('modal-container')).toBe(true);
-		expect(modalEl.querySelector('.stamina-header')!.textContent).toBe('Frodo Baggins Stamina');
+		expect(modalEl.querySelector('.dse-modal__title')!.textContent).toBe('Frodo Baggins Stamina');
 
-		const valueInput = modalEl.querySelector('.stamina-value-display') as HTMLInputElement;
-		valueInput.value = '50';
-		valueInput.dispatchEvent(new Event('input'));
-		(modalEl.querySelector('.action-button') as HTMLElement).click();
+		commitStepperValue(modalEl, 50);
+		modalApplyBtn(modalEl).click();
 
 		expect(staminaEl.textContent).toBe('50/80'); // targeted update, no rebuild
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
@@ -334,10 +346,8 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		staminaEl.click();
 
 		const modalEl = lastModal();
-		const valueInput = modalEl.querySelector('.stamina-value-display') as HTMLInputElement;
-		valueInput.value = '10';
-		valueInput.dispatchEvent(new Event('input'));
-		(modalEl.querySelector('.action-button') as HTMLElement).click();
+		commitStepperValue(modalEl, 10);
+		modalApplyBtn(modalEl).click();
 
 		expect(staminaEl.textContent).toBe('10/40');
 		// Legacy grid-cell sync (nth-child(instance.id)) — Orc #1 is the first cell.
@@ -429,13 +439,13 @@ describe('T-4: minion stamina pool — the Task-3 decoupled modal through the vi
 		cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
 
 		const modalEl = lastModal();
-		expect(modalEl.querySelector('.minion-stamina-modal')).not.toBeNull();
+		expect(modalEl.querySelector('.dse-sedit__minions')).not.toBeNull(); // the pool modal's minion section
 
 		applyPoolDamage(modalEl, 4, 1); // exactly one minion's worth: pool 20 -> 16, 1 kill
-		const checkbox = modalEl.querySelector('.minion-checkbox') as HTMLInputElement;
+		const checkbox = modalEl.querySelector('.dse-minion__check') as HTMLInputElement;
 		checkbox.checked = true;
 		checkbox.dispatchEvent(new Event('change'));
-		(modalEl.querySelector('.action-button') as HTMLElement).click();
+		modalApplyBtn(modalEl).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -466,9 +476,9 @@ describe('T-4: minion stamina pool — the Task-3 decoupled modal through the vi
 		(root.querySelector('.creature-detail-row .character-stamina') as HTMLElement).click();
 
 		const modalEl = lastModal();
-		expect(modalEl.querySelector('.minion-stamina-modal')).not.toBeNull();
+		expect(modalEl.querySelector('.dse-sedit__minions')).not.toBeNull(); // the pool modal's minion section
 		applyPoolDamage(modalEl, 3, 1); // 3 damage, 0 kills — no checkbox needed
-		(modalEl.querySelector('.action-button') as HTMLElement).click();
+		modalApplyBtn(modalEl).click();
 
 		// The injected persist callback refreshed the detail row (legacy behavior) …
 		expect(root.querySelector('.creature-detail-row .character-stamina')!.textContent).toBe('17/20 (4)');

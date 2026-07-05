@@ -800,467 +800,301 @@ code.dsa {
 	font-weight: bold;
 }
 
-/* ==================== */
-/*     Stamina Modal    */
-/* ==================== */
+/* ============================================================== */
+/*  Stamina (D2 §3.5 + §3.5b, Plan 09 Task 3): .dse-stamina grammar  */
+/* ============================================================== */
+/* ONE bar grammar shared by the stamina-bar ELEMENT and the two UNIFIED stamina
+   modals (StaminaEditModal / MinionStaminaPoolModal — the .dse-stamina--modal
+   variant below). SC-5: all GEOMETRY arrives as --dse-* custom properties set by the
+   views (--dse-bar-h / --dse-fill / --dse-temp-fill / --dse-zone / --dse-delta-fill /
+   --dse-tick-x); every COLOR is a class rule on the --dse-* tokens ([data-state] /
+   [data-kind]) — zero inline styles, zero color literals (the hatch-pattern #000s
+   below are pattern ink, not in the D2 §5 eviction list — today's look). Deliberately
+   NOT scoped under [data-dse-element="stamina-bar"]: the modals mount in
+   document.body, outside any element root. */
 
-.stamina-header {
-	text-align: center;
+.dse-stamina--clickable {
+	cursor: pointer;
 }
 
-/* Stamina Bar */
-
-.stamina-bar-container {
+.dse-stamina__track {
+	position: relative;
 	width: 100%;
-	background-color: var(--code-background);
-	border: 1px solid var(--text-normal);
-	border-radius: 5px;
+	height: calc(var(--dse-bar-h, 1em) + 4px);
+	background-color: var(--dse-stamina-track);
+	border: 1px solid var(--dse-border-strong);
+	border-radius: var(--radius-s);
 	margin-bottom: 10px;
-	position: relative;
-	height: 20px;
+	overflow: hidden;
 }
 
-.stamina-bar {
-	width: 100%;
-	height: 100%;
-	position: relative;
-	display: flex;
-}
-
-.stamina-bar-overlay {
+/* The current-stamina fill: width via --dse-fill, state color via [data-state]. */
+.dse-stamina__fill {
 	position: absolute;
+	top: 1px;
+	left: 1px;
+	height: calc(100% - 2px);
+	width: calc(var(--dse-fill, 0%) - 2px);
+	border-radius: calc(var(--radius-s) - 1px);
+}
+.dse-stamina__fill[data-state="healthy"] {
+	background-color: var(--dse-stamina-healthy);
+}
+.dse-stamina__fill[data-state="winded"] {
+	background-color: var(--dse-stamina-winded);
+}
+.dse-stamina__fill[data-state="dying"] {
+	background-color: var(--dse-stamina-dying);
+}
+
+/* Temp-stamina overlay (element bar): bottom-aligned half-height strip. */
+.dse-stamina__temp {
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	height: 50%;
+	width: calc(var(--dse-temp-fill, 0%) - 1px);
+	border-top-left-radius: calc(var(--radius-s) - 1px);
+	border-top-right-radius: calc(var(--radius-s) - 1px);
+	background-color: var(--dse-stamina-temp);
+}
+
+/* Threshold zones + the numeric region (element bar): positioned children whose
+   widths/offsets ride the ONE --dse-zone the view sets on the track. */
+.dse-stamina__threshold,
+.dse-stamina__num {
+	position: absolute;
+	top: 0;
+	display: flex;
+	height: 100%;
+	font-size: 0.7em;
+	justify-content: center;
+	align-items: center;
+	border-top-left-radius: calc(var(--radius-s) - 1px);
+	border-bottom-left-radius: calc(var(--radius-s) - 1px);
+}
+.dse-stamina__threshold {
+	width: var(--dse-zone, calc(100% / 3));
+}
+.dse-stamina__threshold--dying {
+	left: 0;
+	background: repeating-linear-gradient(45deg, #000 0 1.41px, transparent 1px 6px),
+		repeating-linear-gradient(135deg, #000 0 1.41px, transparent 1px 6px);
+}
+.dse-stamina__threshold--winded {
+	left: var(--dse-zone, calc(100% / 3));
+	background: repeating-linear-gradient(135deg, #000 0 1.41px, transparent 1px 6px);
+}
+.dse-stamina__num {
+	right: 0;
+	width: calc(100% - 2 * var(--dse-zone, calc(100% / 3)));
+}
+
+/* The label chip (threshold names + the "(cur/max + temp)" readout). */
+.dse-stamina__pill {
+	display: flex;
+	height: 1em;
+	padding: 0 0.4em;
+	color: var(--dse-fg);
+	background-color: var(--background-primary-alt);
+	border-radius: 10px;
+	justify-content: center;
+	align-items: center;
+}
+
+/* -- The §3.5b modal preview bar: fill + pending-delta as adjacent flex fills -- */
+.dse-stamina--modal .dse-stamina__track {
+	height: 20px;
+	display: flex;
+	border-radius: var(--dse-radius);
+}
+.dse-stamina--modal .dse-stamina__fill {
+	position: relative;
+	top: 1px;
+	left: 1px;
+	width: var(--dse-fill, 0%);
+	border-radius: 3px;
+}
+/* The pending-change delta: color/radius keyed to [data-kind] — heal rides the temp
+   blue, damage is --dse-danger (the old inline deepskyblue/crimson, evicted). */
+.dse-stamina--modal .dse-stamina__delta {
+	position: relative;
+	top: 1px;
+	height: calc(100% - 2px);
+	width: var(--dse-delta-fill, 0%);
+}
+.dse-stamina__delta[data-kind="heal"] {
+	background-color: var(--dse-stamina-temp);
+	border-radius: 0 3px 3px 0;
+}
+.dse-stamina__delta[data-kind="damage"] {
+	background-color: var(--dse-danger);
+	border-radius: 3px 0 0 3px;
+}
+/* The hero "Dying" zone (single-stamina modal) — the legacy dashed overlay, on
+   tokens (--dse-surface-sunken WAS the rgba(0,0,0,.2); the track color doubles as
+   the zone's chrome exactly as --code-background did). */
+.dse-stamina--modal .dse-stamina__threshold--dying {
+	position: absolute;
+	top: 1px;
+	left: 1px;
 	height: calc(100% - 2px);
 	width: 33.33%;
-	background-color: rgba(0, 0, 0, 0.2);
-	left: 1px;
-	top: 1px;
-	border: 1.5px dashed var(--code-background);
-	z-index: 1;
+	background: var(--dse-surface-sunken);
+	border: 1.5px dashed var(--dse-stamina-track);
 	border-radius: 3px 0 0 3px;
-	color: var(--code-background);
-	text-align: center;
-	line-height: 100%;
-	font-size: 0.7em;
-	padding-top: 1px;
-	text-shadow: 0.5px 0.5px 4px var(--text-normal);
+	color: var(--dse-stamina-track);
+	text-shadow: 0.5px 0.5px 4px var(--dse-border-strong);
 	font-weight: bold;
-	box-shadow: 1px 0px 0px 0px var(--text-normal);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
+	box-shadow: 1px 0px 0px 0px var(--dse-border-strong);
+	z-index: 1;
+}
+/* Minion-death ticks (pool modal): positioned via --dse-tick-x. */
+.dse-stamina--modal .dse-stamina__tick {
+	position: absolute;
+	bottom: 0;
+	left: var(--dse-tick-x, 0%);
+	height: 50%;
+	width: 2px;
+	background-color: var(--dse-stamina-track);
+	border-right: 1px solid var(--dse-border-strong);
+	z-index: 3;
+}
+.dse-stamina--modal .dse-stamina__tick::after {
+	display: none;
 }
 
-.stamina-bar-fill-left {
-	position: relative;
-	height: calc(100% - 2px);
-	top: 1px;
-	left: 1px;
-	background-color: limegreen; /* Default color */
-	width: 50%; /* Will be updated dynamically */
-	border-radius: 3px 3px 3px 3px;
+/* ============================================================ */
+/*  The unified stamina modal chrome (.dse-sedit, D2 §3.5b/OD-6) */
+/* ============================================================ */
+/* Layout only — controls are kit .dse-btn/.dse-stepper (their own chrome), the
+   scaffold is .dse-modal/.dse-modal__section. Shared by BOTH stamina modals; the
+   minion-list pieces (.dse-sedit__minions/.dse-minion*) appear only in the pool one. */
+
+.dse-sedit__row {
+	display: flex;
+	gap: 0.5em;
+	align-items: stretch;
 }
 
-.stamina-bar-fill-right {
-	height: calc(100% - 2px);
-	top: 1px;
-	position: relative;
-	background-color: deepskyblue; /* Default color */
-	width: 50%; /* Will be updated dynamically */
-	border-radius: 0 3px 3px 0;
-	border-left: 1px solid var(--code-background);
-}
-
-/* Numeric Stamina Display */
-
-.stamina-numeric-container {
-	display: -webkit-inline-box;
-	margin-bottom: 10px;
-}
-
-.stamina-adjust-btn {
-	width: 30px;
-	height: 30px;
+.dse-sedit__apply-row {
 	display: flex;
 	justify-content: center;
-	cursor: pointer;
-
-    svg {
-        height: 100%;
-    }
-}
-
-.stamina-value-display {
-	width: 3em;
-	text-align: center;
-	margin: 0 5px;
-}
-
-.max-stamina-display {
-	margin-left: 5px;
-	margin-right: 5px;
-}
-
-/* Apply Damage/Healing */
-
-.modifier-container {
-	display: flex;
 	align-items: center;
-	margin-bottom: 10px;
-	justify-content: space-between;
-
-    > div {
-        width: 100%;
-        padding: 1em;
-    }
+	gap: 0.4em;
+	margin-bottom: 0.5em;
 }
-
-.vertical-divider {
-	padding: 0 !important;
-	padding-top: 8em !important;
-	width: 1px !important;
-	border-left: 1px solid var(--color-base-40);
-}
-
-.apply-row {
-	display: flex;
-	justify-content: space-around;
-	align-items: center;
-	margin-top: 0.5em;
-}
-
-.apply-input {
+.dse-sedit__apply-input {
 	width: 60px;
 }
-
-.apply-btn,
-.quick-mod-btn {
-	display: flex;
+/* Stacked full-width panel buttons (Damage/Healing/Kill/Full Heal/Spend Recovery);
+   the pool modal's inline Apply-Damage button (in the apply ROW) is not stacked. */
+.dse-sedit__btn {
 	width: 100%;
+	justify-content: flex-start;
 	margin-top: 0.5em;
-	justify-content: start;
-
-    .btn-text {
-        height: 100%;
-        margin-left: 0.5em;
-    }
 }
 
-.reset-button .btn-text {
-	height: 100%;
-	margin-left: 0.5em;
+.dse-sedit__stepper-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4em;
+}
+.dse-sedit__adjust > .dse-sedit__stepper-row {
+	margin-bottom: 0.5em;
 }
 
-/* Temporary Stamina Container */
-
-.temp-stamina-container {
-	background-color: var(--code-background);
+.dse-sedit__temp {
+	background-color: var(--dse-surface);
 	margin-top: 0.5em;
-	border-radius: 5px;
+	border-radius: var(--dse-radius);
 	padding: 0.5em 0;
 }
-
-.temp-stamina-title {
+.dse-sedit__temp-title {
 	text-align: center;
 	font-size: var(--font-ui-small);
+	margin-bottom: 0.5em;
 }
-
-.temp-stamina-body {
+.dse-sedit__temp .dse-stepper {
 	display: flex;
 	justify-content: space-evenly;
 	align-items: center;
-	margin-top: 0.5em;
 }
 
-.temp-stamina-input {
-	width: 3em;
-}
-
-/* Action Button */
-
-.action-button-container {
-	text-align: center;
-	margin-top: 20px;
-	display: flex;
+/* Footer: Reset left, (warning +) apply right — the legacy space-between. */
+.dse-modal__footer.dse-sedit__footer {
 	justify-content: space-between;
 }
-
-button.action-button {
-	padding: 10px 20px;
-	font-size: 16px;
-	background-color: var(--interactive-accent);
-
-    &.disabled {
-        opacity: 0.5;
-        pointer-events: none;
-        background-color: var(--interactive-normal);
-    }
+/* The healing warning (--dse-warn — the old inline orange): shown/hidden via the
+   `hidden` ATTRIBUTE, never inline display (D2 §5). */
+.dse-sedit__warn {
+	display: flex;
+	align-items: center;
+	color: var(--dse-warn);
+	margin-left: auto;
+	margin-right: 1em;
+}
+.dse-sedit__warn[hidden] {
+	display: none;
 }
 
-/* ============================ */
-/*  Minion Stamina Pool Modal   */
-/* ============================ */
-
-.minion-stamina-modal {
-    .stamina-header {
-        text-align: center;
-    }
-
-    /* Stamina Pool Bar */
-
-    .stamina-bar-container {
-        width: 100%;
-        background-color: var(--code-background);
-        border: 1px solid var(--text-normal);
-        border-radius: 5px;
-        margin-bottom: 10px;
-        position: relative;
-        height: 20px;
-    }
-
-    .stamina-bar {
-        width: 100%;
-        height: 100%;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .stamina-bar-fill-left {
-        position: relative;
-        height: calc(100% - 2px);
-        top: 1px;
-        left: 1px;
-        background-color: limegreen;
-        width: 0%; /* Will be updated dynamically */
-        border-radius: 3px 0 0 3px;
-        z-index: 1;
-    }
-
-    .stamina-bar-fill-right {
-        position: relative;
-        height: calc(100% - 2px);
-        top: 1px;
-        background-color: deepskyblue;
-        width: 0%; /* Will be updated dynamically */
-        border-radius: 0 3px 3px 0;
-        z-index: 2;
-    }
-
-    .stamina-bar-tick {
-        position: absolute;
-        bottom: 0;
-        height: 50%;
-        width: 2px;
-        background-color: var(--code-background);
-        border-right: 1px solid var(--text-normal);
-        z-index: 3;
-
-        &::after {
-            display: none;
-        }
-    }
-
-    /* Stamina Modifiers */
-
-    .stamina-mod-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 10px;
-
-        .stamina-adjust-btn {
-            width: 30px;
-            height: 30px;
-            display: flex;
-            justify-content: center;
-            cursor: pointer;
-
-            svg {
-                height: 100%;
-            }
-        }
-
-        .stamina-value-display {
-            width: 4em;
-            text-align: center;
-            margin: 0 5px;
-        }
-
-        .max-stamina-display {
-            margin-left: 5px;
-            margin-right: 5px;
-        }
-    }
-
-    /* Apply Damage Section */
-
-    .apply-container {
-        margin-bottom: 10px;
-    }
-
-    .apply-row {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-top: 0.5em;
-
-        span {
-            margin: 0 5px;
-            text-align: center;
-        }
-
-        input {
-            width: 3em;
-        }
-    }
-
-    .apply-input {
-        width: 60px;
-    }
-
-    /* Apply Damage Button */
-
-    .apply-btn {
-        display: flex;
-        width: 100%;
-        margin-top: 0.5em;
-        justify-content: center;
-        max-width: fit-content;
-
-        .btn-icon {
-            margin-right: 0.5em;
-            width: 1em;
-            height: 1em;
-        }
-
-        .btn-text {
-            line-height: 24px;
-        }
-    }
-
-    /* Info Text */
-
-    .info-text {
-        text-align: center;
-        font-size: var(--font-ui-large);
-        margin: 1em 0;
-        white-space: pre-line;
-    }
-
-    /* Minion List */
-
-    .minion-list-container {
-        max-height: 200px;
-        overflow-y: auto;
-        margin-bottom: 10px;
-        border-radius: 5px;
-    }
-
-    .minion-row {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.25em 0;
-        justify-items: center;
-        justify-content: start;
-        width: 50%;
-
-        &:hover {
-            background-color: var(--code-background);
-        }
-    }
-
-    .minion-checkbox {
-        margin-right: 10px;
-
-        &[disabled] + span {
-            color: var(--text-faint);
-        }
-
-        &:checked + span {
-            color: crimson;
-        }
-    }
-
-    .minion-name {
-        margin-right: 10px;
-        flex-grow: 1;
-    }
-
-    .minion-conditions {
-        display: flex;
-        align-items: center;
-    }
-
-    /* Condition Icons */
-
-    .condition-icon {
-        width: 20px;
-        height: 20px;
-        margin-right: 5px;
-        cursor: pointer;
-
-        svg {
-            width: 100%;
-            height: 100%;
-        }
-    }
-
-    /* Add Condition Icon */
-
-    .add-condition-icon {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-
-        svg {
-            width: 100%;
-            height: 100%;
-        }
-    }
-
-    /* Action Button */
-
-    .action-button-container {
-        text-align: center;
-        margin-top: 20px;
-        display: flex;
-        justify-content: space-between;
-    }
-
-    button.action-button {
-        padding: 10px 20px;
-        font-size: 16px;
-        background-color: var(--interactive-accent);
-    }
-
-    .action-button.disabled {
-        opacity: 0.5;
-        pointer-events: none;
-        background-color: var(--interactive-normal);
-    }
-
-    .warning-icon {
-        flex-grow: 1;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        color: orange;
-        margin-right: 1em;
-    }
-
-    /* Reset Button */
-
-    .reset-button {
-        display: flex;
-        align-items: center;
-
-        .btn-icon {
-            margin-right: 0.5em;
-        }
-
-        .btn-text {
-            line-height: 24px;
-        }
-    }
+/* -- The OPTIONAL minion-list section (pool modal only) -- */
+.dse-sedit__info {
+	text-align: center;
+	font-size: var(--font-ui-large);
+	margin: 1em 0;
+	white-space: pre-line;
+}
+.dse-sedit__minions {
+	max-height: 200px;
+	overflow-y: auto;
+	margin-bottom: 10px;
+	border-radius: var(--dse-radius);
+}
+.dse-minion {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.25em 0;
+	justify-content: flex-start;
+	width: 50%;
+}
+.dse-minion:hover {
+	background-color: var(--dse-hover);
+}
+.dse-minion__check {
+	margin-right: 10px;
+}
+/* Row states ride the checkbox's REAL properties (CB-8). Order matters: the :checked
+   rule wins for checked+disabled rows (auto-selected at pool 0), matching the legacy
+   cascade. */
+.dse-minion__check[disabled] ~ * {
+	color: var(--dse-fg-faint);
+}
+/* The kill-marked row: the old inline crimson, now the --dse-danger token (SC-5). */
+.dse-minion__check:checked ~ * {
+	color: var(--dse-danger);
+}
+.dse-minion__name {
+	margin-right: 10px;
+	flex-grow: 1;
+	cursor: pointer;
+}
+.dse-minion__conditions {
+	display: flex;
+	align-items: center;
+}
+/* Condition icons: sized as in the legacy pool modal; a user-customized color rides
+   the --dse-condition-color scoped property (SC-5 — never el.style.color). */
+.dse-sedit__minions .condition-icon {
+	width: 20px;
+	height: 20px;
+	margin-right: 5px;
+	color: var(--dse-condition-color, inherit);
+}
+.dse-sedit__minions .condition-icon svg {
+	width: 100%;
+	height: 100%;
 }
 
 /* ===================== */
@@ -2244,107 +2078,25 @@ button.action-button {
 }
 
 /* ==================== */
-/* Stamina Bar (D1 Task 3, F1 §6 step 4) */
+/* Stamina Bar (D2 §3.5, Plan 09 Task 3) */
 /* ==================== */
-/* Scoped under [data-dse-element="stamina-bar"] (F1 §3.5) -- ported 1:1 from the deleted
-   StaminaBar.vue's <style scoped> block (`.ds-stamina-bar` replaces the SFC's
-   `.vue-stamina-bar-container`; the rest are newly-named, since Vue's scoped-style compiler
-   generated and injected these at build time -- they never lived in this file before).
-   `--stamina-bar-color*` custom properties are the pre-existing shared globals at the
-   bottom of this file, referenced here via var(). Dropped the SFC's unreferenced
-   `.temp-stamina-spacer` rule (never applied to any element in the template -- dead CSS).
-   NOT shared with the DOM @views/StaminaEditModal (kept) or the initiative tracker's own
-   inline `.character-stamina` bar -- those use their own, unrelated `.stamina-bar-container`
-   / `.stamina-bar` / `.stamina-bar-fill-*` classes (verified zero overlap by grep), which
-   stay exactly where they are, untouched. */
-
-[data-dse-element="stamina-bar"] {
-	.ds-stamina-bar {
-		position: relative;
-		width: 100%;
-		height: 20px;
-		background-color: var(--code-background);
-		border: 1px solid var(--text-normal);
-		border-radius: var(--radius-s);
-		margin-bottom: 10px;
-
-		&.clickable {
-			cursor: pointer;
-		}
-	}
-
-	.ds-stamina-bar-overlay-container,
-	.ds-stamina-bar-stamina-container,
-	.ds-stamina-bar-temp-container {
-		position: absolute;
-		display: flex;
-		height: 100%;
-		width: 100%;
-		align-items: center;
-		overflow: hidden;
-	}
-
-	.ds-stamina-bar-temp-container {
-		align-items: end;
-	}
-
-	.ds-stamina-bar-indicator {
-		height: calc(100% - 2px);
-		margin-left: 1px;
-		border-radius: calc(var(--radius-s) - 1px);
-	}
-
-	.ds-stamina-bar-temp-indicator {
-		height: 50%;
-		border-top-left-radius: calc(var(--radius-s) - 1px);
-		border-top-right-radius: calc(var(--radius-s) - 1px);
-		background-color: purple;
-	}
-
-	.ds-stamina-bar-winded-overlay,
-	.ds-stamina-bar-dying-overlay,
-	.ds-stamina-bar-stamina-overlay {
-		display: flex;
-		height: 100%;
-		width: calc(100% / 3);
-		color: black;
-		font-size: 0.7em;
-		border-top-left-radius: calc(var(--radius-s) - 1px);
-		border-bottom-left-radius: calc(var(--radius-s) - 1px);
-		justify-content: center;
-		align-items: center;
-	}
-
-	.ds-stamina-bar-winded-overlay {
-		background: repeating-linear-gradient(135deg, #000 0 1.41px, transparent 1px 6px);
-	}
-
-	.ds-stamina-bar-dying-overlay {
-		background: repeating-linear-gradient(45deg, #000 0 1.41px, transparent 1px 6px),
-			repeating-linear-gradient(135deg, #000 0 1.41px, transparent 1px 6px);
-	}
-
-	.background-pill {
-		display: flex;
-		height: 1em;
-		padding: 0 0.4em;
-		color: var(--text-normal);
-		background-color: var(--background-primary-alt);
-		border-radius: 10px;
-		justify-content: center;
-		align-items: center;
-	}
-}
+/* The bar renders the SHARED .dse-stamina grammar (see the "Stamina" block above the
+   modal chrome, §3.5/§3.5b) — geometry via --dse-* custom properties, colors via
+   [data-state] token rules; the whole-element wrapper is the kit collapsible2 (shared
+   .dse-collapse* chrome). No element-scoped rules remain: the D1 legacy-port block
+   (the SFC's inline widths/colors) is fully evicted. */
 
 /*
 Shared globals
 */
 
 :root {
-  --stamina-bar-color: limegreen;
-  --stamina-bar-color-winded: yellow;
-  --stamina-bar-color-dying: red;
-  /* --stamina-bar-color: var(--text-accent) */
+  /* Formalized onto the --dse-stamina-* tokens (D2 §3.5): the legacy names stay for
+     user CSS snippets, but the values flow from the token block below (Legacy values
+     unchanged: limegreen / yellow / red). Nothing in DSE consumes these anymore. */
+  --stamina-bar-color: var(--dse-stamina-healthy);
+  --stamina-bar-color-winded: var(--dse-stamina-winded);
+  --stamina-bar-color-dying: var(--dse-stamina-dying);
 }
 
 /* ================================================================== */
