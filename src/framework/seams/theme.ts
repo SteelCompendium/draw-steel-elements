@@ -10,9 +10,12 @@
 // scoped under [data-dse-element]. "Legacy" (D3) = today's visual styling
 // expressed as a theme.
 import type { Component } from 'obsidian';
+import type { DseTokenName } from '../tokens';
 
 export type DseThemeId = 'steel' | 'legacy' | (string & {}); // D3 finalizes members
-export type DseTokenName = string; // D3 narrows to a union
+// Narrowed union (Plan 08 Task 1, D2 §6) — defined in framework/tokens.ts (seams must
+// not import kit); re-exported here so the F1 import surface stays intact.
+export type { DseTokenName };
 
 export interface ThemeService {
 	readonly active: DseThemeId;

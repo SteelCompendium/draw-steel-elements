@@ -2342,3 +2342,114 @@ Shared globals
   --stamina-bar-color-dying: red;
   /* --stamina-bar-color: var(--text-accent) */
 }
+
+/* ================================================================== */
+/*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
+/* ================================================================== */
+/*
+   Legacy = TODAY'S look, authored as the unscoped :root BASE so every element
+   root inherits these by default. Steel is an OVERRIDE layer that D3 authors
+   under [data-dse-theme="steel"] — the closest scoped definition wins within a
+   steel element root; until D3 ships that layer, the default theme ("steel")
+   renders this Legacy base, i.e. today's look. Do NOT add a
+   data-dse-theme="legacy" scope: Legacy IS the base.
+
+   D3 owns the token VALUES (both themes, both color schemes) going forward;
+   the NAMES are the contract — they mirror the DseTokenName union in
+   src/framework/tokens.ts one-for-one (test/dom/kit/tokens.test.ts pins the
+   mapping). This block is the ONE place color literals live (D2 §5): widgets
+   consume tokens only.
+*/
+:root {
+	/* -- Structure / surface -- */
+	--dse-surface: var(--code-background);
+	--dse-surface-raised: var(--color-base-25);
+	--dse-surface-sunken: rgba(0,0,0,.2);
+	--dse-border: var(--background-modifier-border);
+	--dse-border-strong: var(--text-normal);
+	--dse-radius: 5px;
+	--dse-pad: 1rem;
+	--dse-hover: var(--background-modifier-hover);
+	/* The .ds-container top-left hairline gradient (horizontal leg; the vertical
+	   leg is the same fade rotated `to bottom`). Endpoints = rule → rule-fade. */
+	--dse-hairline-fade: linear-gradient(to right, var(--icon-color), transparent);
+	--dse-touch-min: 44px;
+
+	/* -- Text -- */
+	/* §6 "(--text-normal bold)": the token carries the color; the bold weight is
+	   the consuming widget's rule. */
+	--dse-heading: var(--text-normal);
+	--dse-fg: var(--text-normal);
+	--dse-fg-muted: var(--text-muted);
+	--dse-fg-faint: var(--text-faint);
+	--dse-font-display: var(--font-text); /* OD-4: Steel may map to a serif stack (D3) */
+	--dse-font-mono: var(--font-monospace);
+	--dse-chip-bg: var(--tag-background);
+
+	/* -- Accent / interaction -- */
+	--dse-accent: var(--interactive-accent);
+	--dse-accent-fg: var(--text-on-accent);
+	--dse-focus-ring: var(--interactive-accent);
+	--dse-select: #D50000; /* initiative selected cell */
+
+	/* -- Steel ornament: Legacy = flat/none; Steel = the --fx-* analogs (D3) -- */
+	--dse-metal-grad: none;
+	--dse-metal-line: none;
+	--dse-metal-faint: none;
+	--dse-bevel: none;
+	--dse-emboss: none;
+	--dse-card-bg: none;
+	--dse-crest-shape: none;
+	--dse-rule: var(--icon-color);
+	/* §6 implicit: the fade endpoint of the rule hairline (today's .ds-container
+	   gradients fade to transparent). */
+	--dse-rule-fade: transparent;
+
+	/* -- Semantic: power-roll tiers -- */
+	/* §6 implicit ("Legacy = today's monochrome badges"): today's tier key boxes
+	   are var(--text-normal) clip-path shapes. Steel = --sc-tier-* parity (D3). */
+	--dse-tier-low: var(--text-normal);
+	--dse-tier-mid: var(--text-normal);
+	--dse-tier-high: var(--text-normal);
+	--dse-tier-crit: var(--text-normal);
+
+	/* -- Semantic: stamina -- */
+	--dse-stamina-healthy: limegreen;
+	--dse-stamina-winded: yellow;
+	--dse-stamina-dying: red;
+	--dse-stamina-temp: deepskyblue;
+	--dse-stamina-track: var(--code-background);
+
+	/* -- Semantic: encounter -- */
+	--dse-turn-done: limegreen;
+	--dse-malice: red;
+	--dse-vp: orange;
+	--dse-warn: orange;
+	--dse-danger: crimson;
+
+	/* -- Combat-role accents (set via data-dse-role) -- */
+	/* OD-2 (Steel-only): Legacy = leader-grey monochrome for ALL roles, i.e.
+	   today's look. Steel = --sc-role-* parity (D3). */
+	--dse-role-ambusher: var(--dse-fg-muted);
+	--dse-role-harrier: var(--dse-fg-muted);
+	--dse-role-artillery: var(--dse-fg-muted);
+	--dse-role-brute: var(--dse-fg-muted);
+	--dse-role-controller: var(--dse-fg-muted);
+	--dse-role-hexer: var(--dse-fg-muted);
+	--dse-role-mount: var(--dse-fg-muted);
+	--dse-role-support: var(--dse-fg-muted);
+	--dse-role-defender: var(--dse-fg-muted);
+	--dse-role-leader: var(--dse-fg-muted);
+	--dse-role-solo: var(--dse-fg-muted);
+	--dse-role-minion: var(--dse-fg-muted);
+
+	/* -- Ability action-type accents (set via data-dse-act) -- */
+	/* OD-2 (Steel-only): the action spine does not render in Legacy — none.
+	   Steel = --sc-act-* parity (D3). */
+	--dse-act-main: none;
+	--dse-act-maneuver: none;
+	--dse-act-triggered: none;
+	--dse-act-move: none;
+	--dse-act-none: none;
+	--dse-act-trait: none;
+}
