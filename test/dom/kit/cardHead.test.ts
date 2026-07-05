@@ -4,11 +4,13 @@
 // right column mirrored. The name is the card's heading (role="heading" +
 // aria-level); any omitted slot collapses to a gap — NEVER a mislabeled placeholder.
 //
-// Also hosts the Task-4 kit hygiene guard: the three new kit files must contain no
-// .style access and no color literal (D2 §5 — tokens only).
+// Also hosts the Task-4 kit hygiene guard (reconciled by Plan 09 Task 0): the three
+// kit files must contain no inline COLOR and no color literal (D2 §5 — tokens only);
+// el.style.setProperty('--dse-*', …) dynamic geometry is allowed (see ./styleGuard.ts).
 import * as fs from 'fs';
 import * as path from 'path';
 import { cardHead } from '../../../src/framework/kit/cardHead';
+import { styleGuardFindings } from './styleGuard';
 
 const ALL_SLOTS = {
 	leftEyebrow: 'Ability',
@@ -171,17 +173,30 @@ describe('Plan 08 Task 4: kit hygiene guard (D2 §5 — no inline color, tokens 
 	const kitDir = path.join(__dirname, '../../../src/framework/kit');
 	const taskFiles = ['cardHead.ts', 'powerRollPanel.ts', 'crest.ts'];
 
-	test.each(taskFiles)('%s has no el.style.* access and no color literal', (file) => {
+	test.each(taskFiles)('%s: inline color banned; --dse-* geometry setProperty allowed', (file) => {
 		const src = fs.readFileSync(path.join(kitDir, file), 'utf8');
-		// The SC-5 exit rule: el.style.color (and ANY .style access — these widgets have
-		// no dynamic geometry, so even setProperty is out of place here) is banned.
-		expect(src).not.toMatch(/\.style\b/);
-		// No color literals in any form.
-		expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-		expect(src).not.toMatch(/\b(?:rgb|rgba|hsl|hsla)\(/);
-		expect(src).not.toMatch(
-			/\b(?:red|green|blue|limegreen|deepskyblue|crimson|yellow|orange|white|black|grey|gray)\b/i,
-		);
+		// The reconciled SC-5 rule (Plan 09 Task 0): inline COLOR + color literals are
+		// banned, but the D2 Global Constraint's dynamic-geometry escape hatch —
+		// el.style.setProperty('--dse-*', …) — is allowed. See ./styleGuard.ts.
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	// Proof the reconciled guard discriminates (Plan 09 Task 0) — the geometry escape
+	// hatch passes, everything the old blanket /\.style\b/ guard meant to stop still fails.
+	describe('the reconciled guard (styleGuardFindings) discriminates', () => {
+		test("ALLOWS setProperty('--dse-*', …) dynamic geometry", () => {
+			expect(styleGuardFindings("el.style.setProperty('--dse-fill', '50%');")).toEqual([]);
+			expect(
+				styleGuardFindings('el.style.setProperty("--dse-value-scale", String(v));'),
+			).toEqual([]);
+		});
+
+		test('still BANS inline color, color literals, and non-geometry .style access', () => {
+			expect(styleGuardFindings("el.style.color = 'red';")).not.toEqual([]);
+			expect(styleGuardFindings('const c = "#ff0000";')).not.toEqual([]);
+			expect(styleGuardFindings('el.style.setProperty("--not-dse", "x");')).not.toEqual([]);
+			expect(styleGuardFindings("el.style.display = 'none';")).not.toEqual([]);
+		});
 	});
 
 	test.each(taskFiles)('%s does not import elements or the Obsidian app surface (kit⊥elements)', (file) => {

@@ -4,12 +4,14 @@
 // aria-pressed for toggles (§4.3), owner-bound listeners (F1 §4.5), and a Handle for
 // in-place updates (no container.empty() rebuilds, CB-7).
 //
-// Also hosts the kit-wide hygiene guard: the four Task-2 kit files must contain no
-// el.style.* access and no color literal (D2 §5 exit rule), and the .dse-btn CSS must
-// derive its ≥44px hit area from var(--dse-touch-min) (§4.6).
+// Also hosts the kit-wide hygiene guard (reconciled by Plan 09 Task 0): the four
+// Task-2 kit files must contain no inline COLOR and no color literal (D2 §5 exit
+// rule; setProperty('--dse-*') geometry is allowed — see ./styleGuard.ts), and the
+// .dse-btn CSS must derive its ≥44px hit area from var(--dse-touch-min) (§4.6).
 import * as fs from 'fs';
 import * as path from 'path';
 import { iconButton, buttonRow } from '../../../src/framework/kit/iconButton';
+import { styleGuardFindings } from './styleGuard';
 import { Component } from '../../mocks/obsidian';
 
 // Same convention as collapsible.test.ts / seams.test.ts: the mock Component's
@@ -224,17 +226,13 @@ describe('Plan 08 Task 2: kit hygiene guard (D2 §5 — no inline color, tokens 
 	const kitDir = path.join(__dirname, '../../../src/framework/kit');
 	const taskFiles = ['iconButton.ts', 'stepper.ts', 'tooltip.ts', 'divider.ts'];
 
-	test.each(taskFiles)('%s has no el.style.* access and no color literal', (file) => {
+	test.each(taskFiles)('%s: inline color banned; --dse-* geometry setProperty allowed', (file) => {
 		const src = fs.readFileSync(path.join(kitDir, file), 'utf8');
-		// The SC-5 exit rule: el.style.color (and ANY .style access — these widgets have
-		// no dynamic geometry, so even setProperty is out of place here) is banned.
-		expect(src).not.toMatch(/\.style\b/);
-		// No color literals in any form.
-		expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-		expect(src).not.toMatch(/\b(?:rgb|rgba|hsl|hsla)\(/);
-		expect(src).not.toMatch(
-			/\b(?:red|green|blue|limegreen|deepskyblue|crimson|yellow|orange|white|black|grey|gray)\b/i,
-		);
+		// The reconciled SC-5 rule (Plan 09 Task 0): inline COLOR + color literals are
+		// banned, but the D2 Global Constraint's dynamic-geometry escape hatch —
+		// el.style.setProperty('--dse-*', …) — is allowed. See ./styleGuard.ts
+		// (proof tests live in cardHead.test.ts).
+		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
 	test('.dse-btn CSS derives its ≥44px hit area from var(--dse-touch-min) (§4.6)', () => {

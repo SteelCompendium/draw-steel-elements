@@ -1,8 +1,9 @@
 // Plan 08 Task 4 (D2 §2.8) — kit/powerRollPanel + tierBadge: the shared roll grammar.
 // One titled "Power Roll + {chars}" panel with the four tier rows (≤11 / 12-16 / 17+ /
 // crit), each row = a clip-path badge + the outcome text. Static by default; in
-// `selectable` mode every row is a REAL <button aria-pressed> inside a
-// role="radiogroup" (a roll resolves to exactly ONE tier) with the tabs-style roving
+// `selectable` mode every row is a REAL <button role="radio" aria-checked> inside a
+// role="radiogroup" — a TRUE radiogroup (a roll resolves to exactly ONE tier; Plan 09
+// Task 0 replaced the aria-pressed toggle-button mismatch) with the tabs-style roving
 // arrow-key pattern. Markdown renders via the caller-supplied renderMd callback —
 // the kit never touches MarkdownRenderer/app (kit⊥elements).
 import * as fs from 'fs';
@@ -120,11 +121,12 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 	});
 
 	describe('static by default (§2.8 a11y)', () => {
-		test('rows are NOT buttons, no radiogroup, no aria-pressed', () => {
+		test('rows are NOT buttons, no radiogroup, no radio role, no aria-checked', () => {
 			const { handle, rowEls } = mount();
 			for (const row of rowEls) {
 				expect(row).not.toBeInstanceOf(HTMLButtonElement);
-				expect(row.hasAttribute('aria-pressed')).toBe(false);
+				expect(row.hasAttribute('role')).toBe(false);
+				expect(row.hasAttribute('aria-checked')).toBe(false);
 			}
 			expect(handle.rootEl.querySelector('[role="radiogroup"]')).toBeNull();
 			expect(handle.getSelected()).toBeUndefined();
@@ -134,12 +136,12 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			const { handle, rowEls } = mount();
 			handle.select('mid' as any);
 			expect(handle.getSelected()).toBeUndefined();
-			expect(rowEls[1].hasAttribute('aria-pressed')).toBe(false);
+			expect(rowEls[1].hasAttribute('aria-checked')).toBe(false);
 		});
 	});
 
-	describe('selectable mode — role="radiogroup" of REAL <button aria-pressed> rows', () => {
-		test('rows become <button type="button"> inside a radiogroup labelled by the head', () => {
+	describe('selectable mode — a TRUE radiogroup of <button role="radio" aria-checked> rows', () => {
+		test('rows become <button type="button" role="radio"> inside a radiogroup labelled by the head', () => {
 			const { handle, rowEls } = mount({ selectable: true });
 			const group = handle.rootEl.querySelector<HTMLElement>('[role="radiogroup"]')!;
 			expect(group).not.toBeNull();
@@ -150,8 +152,12 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			for (const row of rowEls) {
 				expect(row).toBeInstanceOf(HTMLButtonElement);
 				expect(row.getAttribute('type')).toBe('button');
+				// A radiogroup's owned elements are radios with aria-checked —
+				// never <button aria-pressed> toggles (the ARIA mismatch Task 0 fixed).
+				expect(row.getAttribute('role')).toBe('radio');
 				expect(group.contains(row)).toBe(true);
-				expect(row.hasAttribute('aria-pressed')).toBe(true);
+				expect(row.hasAttribute('aria-checked')).toBe(true);
+				expect(row.hasAttribute('aria-pressed')).toBe(false);
 			}
 		});
 
@@ -163,20 +169,21 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			expect(rowEls[3].textContent).toContain('crit');
 		});
 
-		test('initial selected → exactly that row aria-pressed="true" + roving tabindex 0', () => {
+		test('initial selected → exactly ONE radio aria-checked="true" + roving tabindex 0', () => {
 			const { rowEls } = mount({ selectable: true, selected: 'mid' });
-			expect(rowEls.map((r) => r.getAttribute('aria-pressed'))).toEqual([
+			expect(rowEls.map((r) => r.getAttribute('aria-checked'))).toEqual([
 				'false',
 				'true',
 				'false',
 				'false',
 			]);
+			expect(rowEls.filter((r) => r.getAttribute('aria-checked') === 'true')).toHaveLength(1);
 			expect(rowEls.map((r) => r.getAttribute('tabindex'))).toEqual(['-1', '0', '-1', '-1']);
 		});
 
-		test('no initial selection → all unpressed, first row is the single Tab stop', () => {
+		test('no initial selection → all unchecked, first row is the single Tab stop', () => {
 			const { handle, rowEls } = mount({ selectable: true });
-			expect(rowEls.every((r) => r.getAttribute('aria-pressed') === 'false')).toBe(true);
+			expect(rowEls.every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
 			expect(rowEls.map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1']);
 			expect(handle.getSelected()).toBeUndefined();
 		});
@@ -189,7 +196,7 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			expect(onSelect).toHaveBeenCalledTimes(1);
 			expect(onSelect).toHaveBeenCalledWith('high');
 			expect(handle.getSelected()).toBe('high');
-			expect(rowEls.map((r) => r.getAttribute('aria-pressed'))).toEqual([
+			expect(rowEls.map((r) => r.getAttribute('aria-checked'))).toEqual([
 				'false',
 				'false',
 				'true',
@@ -201,7 +208,7 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			const { rowEls, onSelect } = mount({ selectable: true, selected: 'low' });
 			rowEls[0].click();
 			expect(onSelect).not.toHaveBeenCalled();
-			expect(rowEls[0].getAttribute('aria-pressed')).toBe('true');
+			expect(rowEls[0].getAttribute('aria-checked')).toBe('true');
 		});
 	});
 
@@ -213,7 +220,7 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			keydown(rowEls[0], 'ArrowDown');
 
 			expect(onSelect).toHaveBeenLastCalledWith('mid');
-			expect(rowEls[1].getAttribute('aria-pressed')).toBe('true');
+			expect(rowEls[1].getAttribute('aria-checked')).toBe('true');
 			expect(document.activeElement).toBe(rowEls[1]);
 		});
 
@@ -229,11 +236,11 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			const { rowEls, onSelect } = mount({ selectable: true, selected: 'crit' });
 			keydown(rowEls[3], 'ArrowDown');
 			expect(onSelect).toHaveBeenLastCalledWith('low');
-			expect(rowEls[0].getAttribute('aria-pressed')).toBe('true');
+			expect(rowEls[0].getAttribute('aria-checked')).toBe('true');
 
 			keydown(rowEls[0], 'ArrowUp');
 			expect(onSelect).toHaveBeenLastCalledWith('crit');
-			expect(rowEls[3].getAttribute('aria-pressed')).toBe('true');
+			expect(rowEls[3].getAttribute('aria-checked')).toBe('true');
 		});
 
 		test('Home selects the first tier; End the last', () => {
@@ -249,7 +256,7 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			rowEls[0].focus();
 			keydown(rowEls[0], 'ArrowDown');
 			expect(onSelect).toHaveBeenLastCalledWith('mid');
-			expect(rowEls[1].getAttribute('aria-pressed')).toBe('true');
+			expect(rowEls[1].getAttribute('aria-checked')).toBe('true');
 		});
 
 		test('handled keys are preventDefault-ed; other keys pass through untouched', () => {
@@ -261,16 +268,16 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 	});
 
 	describe('Handle: select(tier) / getSelected — programmatic, in place, silent', () => {
-		test('select() updates aria-pressed + tabindex without firing onSelect or stealing focus', () => {
+		test('select() updates aria-checked + tabindex without firing onSelect or stealing focus', () => {
 			const { handle, rowEls, onSelect } = mount({ selectable: true, selected: 'low' });
 			const focusBefore = document.activeElement;
 
 			handle.select('crit' as any);
 
 			expect(handle.getSelected()).toBe('crit');
-			expect(rowEls[3].getAttribute('aria-pressed')).toBe('true');
+			expect(rowEls[3].getAttribute('aria-checked')).toBe('true');
 			expect(rowEls[3].getAttribute('tabindex')).toBe('0');
-			expect(rowEls[0].getAttribute('aria-pressed')).toBe('false');
+			expect(rowEls[0].getAttribute('aria-checked')).toBe('false');
 			expect(onSelect).not.toHaveBeenCalled();
 			expect(document.activeElement).toBe(focusBefore);
 		});
@@ -291,7 +298,7 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 		keydown(rowEls[0], 'ArrowDown');
 
 		expect(onSelect).not.toHaveBeenCalled();
-		expect(rowEls[0].getAttribute('aria-pressed')).toBe('true'); // unchanged
+		expect(rowEls[0].getAttribute('aria-checked')).toBe('true'); // unchanged
 	});
 
 	describe('tierBadge — standalone (§2.8)', () => {

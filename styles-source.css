@@ -2823,8 +2823,9 @@ Shared globals
 	gap: 0.75em; /* ports the .tier-key-container margin-right */
 	width: 100%;
 }
-/* Selectable rows are REAL <button>s (§2.8/§4.1) — flatten the UA chrome so
-   static and selectable rows read identically; state paints via aria-pressed. */
+/* Selectable rows are REAL <button role="radio">s (§2.8/§4.1) — flatten the UA
+   chrome so static and selectable rows read identically; state paints via
+   aria-checked (a TRUE radiogroup — Plan 09 Task 0). */
 button.dse-pr__row {
 	background: transparent;
 	border: 1px solid transparent;
@@ -2838,7 +2839,7 @@ button.dse-pr__row {
 button.dse-pr__row:hover {
 	background: var(--dse-hover);
 }
-.dse-pr__row[aria-pressed='true'] {
+.dse-pr__row[aria-checked='true'] {
 	background: var(--dse-surface-sunken);
 	border-color: var(--dse-border);
 }
@@ -2945,7 +2946,7 @@ button.dse-pr__row:hover {
 .dse-stepper__input:focus-visible,
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
-.dse-pr__row[aria-pressed]:focus-visible {
+.dse-pr__row[aria-checked]:focus-visible {
 	outline: 2px solid var(--dse-focus-ring);
 	outline-offset: 2px;
 }

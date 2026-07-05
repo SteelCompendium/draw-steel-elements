@@ -23,7 +23,11 @@ export type { DividerOptions, DividerHandle } from './divider';
 
 // -- Containers (D2 §2.3/2.4/2.6, Task 3) --
 export { collapsible2 } from './collapsible2';
-export type { Collapsible2Options, Collapsible2Handle, SessionPersist } from './collapsible2';
+export type { Collapsible2Options, Collapsible2Handle } from './collapsible2';
+// SessionPersist lives in framework/session (Plan 09 Task 0 — neutral home beside
+// SessionStore) but stays part of the kit's import surface: it is the accessor
+// callers hand to collapsible2/tabs.
+export type { SessionPersist } from '../session';
 export { tabs } from './tabs';
 export type { TabSpec, TabsOptions, TabsHandle } from './tabs';
 export { DseModal, openManagedModal } from './managedModal';

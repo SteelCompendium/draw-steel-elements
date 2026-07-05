@@ -12,10 +12,12 @@
 // Without the callback the text is set plainly.
 //
 // A11y (§2.8/§4): static by default. In `selectable` mode (Negotiation) every row
-// is a REAL <button aria-pressed> inside a role="radiogroup" — a roll resolves to
-// exactly ONE tier — with the tabs-style roving-tabindex arrow-key pattern
-// (selection follows focus, wrapping). Color is never the sole signal: each row
-// always shows its range text (§4.7). F1 §4.5: all listeners are owner-bound.
+// is a REAL <button role="radio" aria-checked> inside a role="radiogroup" — a TRUE
+// radiogroup (a roll resolves to exactly ONE tier; a radiogroup's owned elements
+// must be radios with aria-checked, not aria-pressed toggles — Plan 09 Task 0) —
+// with the tabs-style roving-tabindex arrow-key pattern (selection follows focus,
+// wrapping). Color is never the sole signal: each row always shows its range text
+// (§4.7). F1 §4.5: all listeners are owner-bound.
 import type { Component } from 'obsidian';
 
 export type PowerRollTier = 'low' | 'mid' | 'high' | 'crit';
@@ -37,7 +39,7 @@ export interface PowerRollPanelOptions {
 	chars?: string;
 	/** The tier rows to render, in order (a full roll has all four). */
 	rows: readonly PowerRollRow[];
-	/** Rows become <button aria-pressed> radios (Negotiation). Default static. */
+	/** Rows become <button role="radio" aria-checked> radios (Negotiation). Default static. */
 	selectable?: boolean;
 	/** Initially selected tier (selectable mode only). */
 	selected?: PowerRollTier;
@@ -103,7 +105,12 @@ export function powerRollPanel(
 		const rowEl = opts.selectable
 			? (rowsEl.createEl('button', { cls: 'dse-pr__row' }) as HTMLButtonElement)
 			: rowsEl.createDiv({ cls: 'dse-pr__row' });
-		if (opts.selectable) rowEl.setAttribute('type', 'button'); // never a form submit
+		if (opts.selectable) {
+			rowEl.setAttribute('type', 'button'); // never a form submit
+			// The radiogroup's owned elements are radios (keyboard operability stays
+			// native — a real <button> — with the radio role/state painted on top).
+			rowEl.setAttribute('role', 'radio');
+		}
 		rowEl.setAttribute('data-tier', row.tier);
 		tierBadge(rowEl, row.tier);
 		const textEl = rowEl.createSpan({ cls: 'dse-pr__text' });
@@ -120,13 +127,14 @@ export function powerRollPanel(
 			? opts.selected
 			: undefined;
 
-	/** Reflects `selected` onto every row: aria-pressed + roving tabindex (§4.4).
-	 *  With no selection yet, the FIRST row is the single Tab stop. */
+	/** Reflects `selected` onto every row: aria-checked + roving tabindex (§4.4) —
+	 *  exactly one radio checked once selected. With no selection yet, the FIRST
+	 *  row is the single Tab stop. */
 	function render(): void {
 		tiers.forEach((tier, i) => {
 			const rowEl = rowEls[tier]!;
 			const isSelected = tier === selected;
-			rowEl.setAttribute('aria-pressed', String(isSelected));
+			rowEl.setAttribute('aria-checked', String(isSelected));
 			const isStop = selected === undefined ? i === 0 : isSelected;
 			rowEl.setAttribute('tabindex', isStop ? '0' : '-1');
 		});

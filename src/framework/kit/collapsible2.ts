@@ -9,27 +9,16 @@
 //
 // Session persistence WITHOUT breaking kit⊥elements: the kit never imports cx — the
 // caller hands over the SessionStore plus its own (blockKey, slot) address as
-// `opts.persist` (the SessionPersist accessor; SessionStore is framework, not
-// elements). Open-state then survives the echo-rebuild without polluting the note
-// (F1 §4.3 — the session-state migration path for Skills groups). Only real state
-// CHANGES are written — mounting never pollutes the store with defaults.
+// `opts.persist` (the SessionPersist accessor, defined in framework/session next to
+// SessionStore — both framework, not elements). Open-state then survives the
+// echo-rebuild without polluting the note (F1 §4.3 — the session-state migration
+// path for Skills groups). Only real state CHANGES are written — mounting never
+// pollutes the store with defaults.
 //
 // F1 §4.5: the click listener is owner-bound (registerDomEvent).
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
-import type { SessionStore } from '../session';
-
-/**
- * SessionStore accessor for kit widgets (collapsible2, tabs): the caller — who has
- * cx — passes the store and the (blockKey, slot) address; the kit stays cx-free.
- */
-export interface SessionPersist {
-	session: SessionStore;
-	/** Best-effort stable block key (BlockHost.blockKey()). */
-	blockKey: string;
-	/** Slot within the block (e.g. "collapse", "collapse.skills.crafting"). */
-	slot: string;
-}
+import type { SessionPersist } from '../session';
 
 export interface Collapsible2Options {
 	/** Plain-text title rendered in the header. */

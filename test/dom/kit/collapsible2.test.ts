@@ -12,6 +12,10 @@ import * as path from 'path';
 import { collapsible2 } from '../../../src/framework/kit/collapsible2';
 import { Component } from '../../mocks/obsidian';
 import { createSessionStore } from '../../../src/framework/session';
+// The SessionPersist ACCESSOR type now lives in framework/session (Plan 09 Task 0 —
+// neutral home; collapsible2.ts is deleted by the rename later in Plan 09).
+import type { SessionPersist } from '../../../src/framework/session';
+import { styleGuardFindings } from './styleGuard';
 
 function fakeOwner(): any {
 	return new Component();
@@ -127,7 +131,8 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 	});
 
 	describe('persist — SessionStore accessor (NO cx import; kit⊥elements)', () => {
-		const persistOf = (session: ReturnType<typeof createSessionStore>) => ({
+		// Typed as SessionPersist from framework/session: pins the type's neutral home.
+		const persistOf = (session: ReturnType<typeof createSessionStore>): SessionPersist => ({
 			session,
 			blockKey: 'note.md::ds-skills::12',
 			slot: 'collapse',
@@ -228,17 +233,13 @@ describe('Plan 08 Task 3: kit hygiene guard (D2 §5 — no inline color, tokens 
 	const kitDir = path.join(__dirname, '../../../src/framework/kit');
 	const taskFiles = ['collapsible2.ts', 'tabs.ts', 'managedModal.ts'];
 
-	test.each(taskFiles)('%s has no el.style.* access and no color literal', (file) => {
+	test.each(taskFiles)('%s: inline color banned; --dse-* geometry setProperty allowed', (file) => {
 		const src = fs.readFileSync(path.join(kitDir, file), 'utf8');
-		// The SC-5 exit rule: el.style.color (and ANY .style access — these widgets have
-		// no dynamic geometry, so even setProperty is out of place here) is banned.
-		expect(src).not.toMatch(/\.style\b/);
-		// No color literals in any form.
-		expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-		expect(src).not.toMatch(/\b(?:rgb|rgba|hsl|hsla)\(/);
-		expect(src).not.toMatch(
-			/\b(?:red|green|blue|limegreen|deepskyblue|crimson|yellow|orange|white|black|grey|gray)\b/i,
-		);
+		// The reconciled SC-5 rule (Plan 09 Task 0): inline COLOR + color literals are
+		// banned, but the D2 Global Constraint's dynamic-geometry escape hatch —
+		// el.style.setProperty('--dse-*', …) — is allowed. See ./styleGuard.ts
+		// (proof tests live in cardHead.test.ts).
+		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
 	test.each(taskFiles)('%s does not import from src/elements/ (kit⊥elements)', (file) => {

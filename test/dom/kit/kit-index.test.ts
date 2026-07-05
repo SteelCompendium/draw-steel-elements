@@ -7,8 +7,9 @@
 //   3. the two token gap-closes landed: --dse-page-bg (divider punch-out) and
 //      --dse-badge-fg (tier-badge text) — consumers repointed, no fallbacks left.
 //   4. the kit CSS SECTION of styles-source.css ships zero color literals
-//      (hex / rgb() / hsl() / named colors) — the :root token base + legacy CSS
-//      are exempt (that's where Legacy literals legitimately live).
+//      (hex / rgb() / hsl() / hwb() / lab() / lch() / oklab() / oklch() / color()
+//      / named colors) — the :root token base + legacy CSS are exempt (that's
+//      where Legacy literals legitimately live).
 //   5. the whole src/framework/kit/ TS ships zero color literals, zero
 //      `el.style.color`, and never imports from src/elements/ (F1 OD-8 boundary).
 import * as fs from 'fs';
@@ -26,6 +27,7 @@ import type {
 	CrestHandle,
 	CollapsibleHeadingHandle,
 	ComponentWrapperHandle,
+	SessionPersist,
 } from '@/framework/kit';
 
 const repoRoot = path.join(__dirname, '../../..');
@@ -88,10 +90,12 @@ const NAMED_COLORS = new Set([
 const ALLOWED_KEYWORDS = new Set(['transparent', 'inherit', 'currentcolor', 'none']);
 
 /**
- * Scans (comment-stripped) CSS declarations for color LITERALS: hex, rgb()/hsl(),
- * and named-color keywords. Standalone alphabetic value tokens only — pieces of
- * hyphenated identifiers (linear-gradient, tabular-nums) and function names
- * (polygon(, calc() never match, and var(--dse-*) references pass untouched.
+ * Scans (comment-stripped) CSS declarations for color LITERALS: hex, the color
+ * functions (rgb()/hsl()/hwb()/lab()/lch()/oklab()/oklch()/color() — Plan 09
+ * Task 0 widened past rgb/hsl), and named-color keywords. Standalone alphabetic
+ * value tokens only — pieces of hyphenated identifiers (linear-gradient,
+ * tabular-nums) and function names (polygon(, calc(), color-mix() via its own
+ * literal args) never match, and var(--dse-*) references pass untouched.
  */
 function cssColorLiteralFindings(css: string): string[] {
 	const findings: string[] = [];
@@ -100,7 +104,9 @@ function cssColorLiteralFindings(css: string): string[] {
 		const value = m[2].trim();
 		const at = `${prop}: ${value}`;
 		if (/#[0-9a-fA-F]{3,8}\b/.test(value)) findings.push(`${at}  <- hex literal`);
-		if (/\b(?:rgb|hsl)a?\s*\(/i.test(value)) findings.push(`${at}  <- rgb()/hsl() literal`);
+		if (/\b(?:(?:rgb|hsl)a?|hwb|lab|lch|oklab|oklch|color)\s*\(/i.test(value)) {
+			findings.push(`${at}  <- color-function literal`);
+		}
 		for (const tok of value.matchAll(/(?<![\w-])[a-zA-Z]+(?![\w(-])/g)) {
 			const word = tok[0].toLowerCase();
 			if (ALLOWED_KEYWORDS.has(word)) continue;
@@ -156,6 +162,9 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 			d?: DividerHandle; e?: Collapsible2Handle; f?: TabsHandle;
 			g?: CardHeadHandle; h?: PowerRollPanelHandle; i?: CrestHandle;
 			j?: CollapsibleHeadingHandle; k?: ComponentWrapperHandle;
+			// SessionPersist stays a barrel export after its move to framework/session
+			// (Plan 09 Task 0 — it must survive collapsible2.ts's later deletion).
+			l?: SessionPersist;
 		} = {};
 		expect(probe).toEqual({});
 	});
@@ -173,7 +182,7 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		'.dse-stepper__input:focus-visible',
 		'.dse-collapse__header:focus-visible',
 		'.dse-tabs__tab:focus-visible',
-		'.dse-pr__row[aria-pressed]:focus-visible',
+		'.dse-pr__row[aria-checked]:focus-visible',
 	];
 
 	function focusRule(): { selector: string; body: string } | undefined {
@@ -240,6 +249,13 @@ describe('Plan 08 Task 5: kit CSS section literal-scan (D2 §5)', () => {
 		['rgb()', '.dse-x { background: rgb(10, 20, 30); }'],
 		['rgba()', '.dse-x { background: rgba(0,0,0,.2); }'],
 		['hsl()', '.dse-x { color: hsl(120 50% 50%); }'],
+		// The modern color-function families (Plan 09 Task 0 widening):
+		['hwb()', '.dse-x { color: hwb(120 10% 10%); }'],
+		['lab()', '.dse-x { color: lab(52% 40 59); }'],
+		['lch()', '.dse-x { color: lch(52% 72 50); }'],
+		['oklab()', '.dse-x { color: oklab(0.7 0.1 0.1); }'],
+		['oklch()', '.dse-x { color: oklch(0.7 0.1 200); }'],
+		['color()', '.dse-x { background: color(display-p3 1 0 0); }'],
 		['named color', '.dse-x { background: red; }'],
 		['named color in shorthand', '.dse-x { border: 2px solid limegreen; }'],
 	])('catches an injected %s literal', (_family, css) => {

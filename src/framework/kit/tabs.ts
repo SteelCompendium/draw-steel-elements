@@ -13,7 +13,7 @@
 // F1 §4.5: all listeners are owner-bound (registerDomEvent).
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
-import type { SessionPersist } from './collapsible2';
+import type { SessionPersist } from '../session';
 
 export interface TabSpec {
 	/** Stable tab id — the onSelect/select()/session currency (not a DOM id). */

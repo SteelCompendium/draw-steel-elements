@@ -33,6 +33,21 @@ export interface SessionStore {
 }
 
 /**
+ * SessionStore accessor for kit widgets (collapsible2, tabs, …): the caller — who
+ * has cx — passes the store and the (blockKey, slot) address; the kit stays cx-free
+ * (kit⊥elements). Lives here, NOT in a kit widget module, so it survives widget
+ * renames/deletions (Plan 09 Task 0 — it originally lived in kit/collapsible2.ts,
+ * which the collapsible2→collapsible rename deletes).
+ */
+export interface SessionPersist {
+	session: SessionStore;
+	/** Best-effort stable block key (BlockHost.blockKey()). */
+	blockKey: string;
+	/** Slot within the block (e.g. "collapse", "collapse.skills.crafting"). */
+	slot: string;
+}
+
+/**
  * Create a new plugin-scoped SessionStore instance.
  */
 export function createSessionStore(): SessionStore {
