@@ -2590,3 +2590,129 @@ Shared globals
 	width: 1px;
 	background: var(--dse-rule);
 }
+
+/* ================================================================== */
+/*   framework/kit containers (D2 §2.3/2.4/2.6, Plan 08 Task 3)       */
+/* ================================================================== */
+
+/* -- collapsible2 (§2.3): header <button aria-expanded> + hidden-attr region -- */
+/* Legacy-faithful: today's collapsible headings are plain text with a rotating
+   indicator — an unobtrusive full-width row, not a boxed bar. */
+.dse-collapse__header {
+	display: flex;
+	align-items: center;
+	gap: 0.35em;
+	width: 100%;
+	padding: 0.25em 0.35em;
+	background: transparent;
+	color: var(--dse-fg);
+	border: none;
+	border-radius: var(--dse-radius);
+	font: inherit;
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+}
+.dse-collapse__header:hover {
+	background: var(--dse-hover);
+}
+.dse-collapse__chevron {
+	display: inline-flex;
+	align-items: center;
+	transition: transform 150ms ease;
+}
+/* State lives on the ROOT ([data-open], set by the widget) — rotation is pure CSS,
+   no JS inline transform. */
+.dse-collapse[data-open] > .dse-collapse__header .dse-collapse__chevron {
+	transform: rotate(90deg);
+}
+/* Shown/hidden via the `hidden` ATTRIBUTE (never inline display) — §2.3. The
+   [hidden] guard keeps that true even if a theme sets a display on the region. */
+.dse-collapse__region[hidden] {
+	display: none;
+}
+
+/* -- tabs (§2.4): tablist / tab / tabpanel -- */
+/* Legacy-faithful port of .ds-nt-action-tabs: boxed tabs whose selected bottom
+   border merges into the panel below (the panel overlaps by -1px). */
+.dse-tabs__list {
+	display: flex;
+}
+.dse-tabs__tab {
+	flex: 1 1 auto;
+	position: relative;
+	padding: 0.5em;
+	text-align: center;
+	background: var(--dse-surface);
+	color: inherit;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	font: inherit;
+	cursor: pointer;
+}
+.dse-tabs__tab:hover {
+	background: var(--dse-hover);
+}
+.dse-tabs__tab[aria-selected="true"] {
+	background: var(--dse-surface-raised);
+	/* Merge into the panel below (Legacy: border-bottom matched the panel bg)… */
+	border-bottom-color: var(--dse-surface-raised);
+	z-index: 1;
+	/* …and pair it with a non-color-only signal: the accent top bar (§4.7). */
+	box-shadow: inset 0 2px 0 0 var(--dse-accent);
+}
+.dse-tabs__icon {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: middle;
+	margin-right: 0.35em;
+}
+.dse-tabs__panel {
+	margin-top: -1px;
+	padding: var(--dse-pad);
+	background: var(--dse-surface-raised);
+	border: 1px solid var(--dse-border);
+	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
+}
+/* Same hidden-attribute guard as the collapsible region (§2.4). Panel switches are
+   instant (no transition), so they are prefers-reduced-motion-safe by construction. */
+.dse-tabs__panel[hidden] {
+	display: none;
+}
+
+/* -- managedModal (§2.6): title / scrollable body / iconButton footer -- */
+/* Obsidian's own .modal supplies the dialog chrome (surface, shadow, focus trap);
+   these rules only style DSE's slots inside it. */
+.dse-modal {
+	color: var(--dse-fg);
+}
+.dse-modal__title {
+	color: var(--dse-fg);
+	font-weight: 600;
+}
+.dse-modal__body {
+	max-height: 70vh;
+	overflow-y: auto;
+}
+.dse-modal__footer {
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 0.5em;
+	margin-top: var(--dse-pad);
+}
+/* Side-by-side apply/quick-mod panels: flex-ready so a flexed body row splits them. */
+.dse-modal__section {
+	flex: 1 1 0;
+	padding: var(--dse-pad);
+	background: var(--dse-surface);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+
+/* §4.9: motion is opt-out — the chevron rotate must not animate under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+	.dse-collapse__chevron {
+		transition: none;
+	}
+}
