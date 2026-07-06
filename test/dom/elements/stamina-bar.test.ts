@@ -60,9 +60,9 @@ function makeHost(overrides: Partial<BlockHost> = {}) {
 function makeDeps(): ElementPipelineDeps {
 	const app = new App();
 	const plugin = new Plugin(app);
-	const theme = createThemeService();
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
 	for (const { id, schema } of FRAMEWORK_V2_DEPENDENCY_SCHEMAS) {

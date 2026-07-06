@@ -39,9 +39,9 @@ function makeHost(): BlockHost & { containerEl: HTMLElement } {
 function makeDeps(): ElementPipelineDeps {
 	const app = new App();
 	const plugin = new Plugin(app);
-	const theme = createThemeService();
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
 	const session = createSessionStore();

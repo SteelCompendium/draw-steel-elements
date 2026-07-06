@@ -56,9 +56,26 @@ export interface PrefsStorage {
 	set(prefs: Partial<DsePrefs>): Promise<void>;
 }
 
-const BUILTIN_DESCRIPTORS: readonly PrefDescriptor[] = [
-	// NO attr — see the module doc comment above.
-	{ key: 'theme', default: DEFAULT_THEME_ID },
+/** Built-in descriptors seeded into every store. Exported for tests and for D4's
+ *  settings tab (which renders each descriptor's `ui`). */
+export const BUILTIN_DESCRIPTORS: readonly PrefDescriptor[] = [
+	// NO attr — see the module doc comment above (hard D3→D4 contract, D3 §7.1:
+	// ThemeService.apply() is the single writer of data-dse-theme; an attr here
+	// would double-stamp it via reflect()). The `ui` is the D4 settings-picker
+	// row (D3 OD-5 labels — "Match Obsidian (Legacy)" clarifies that Legacy
+	// defers to the active Obsidian theme).
+	{
+		key: 'theme',
+		default: DEFAULT_THEME_ID,
+		ui: {
+			label: 'Theme',
+			control: 'select',
+			options: [
+				{ value: 'legacy', label: 'Match Obsidian (Legacy)' },
+				{ value: 'steel', label: 'Steel' },
+			],
+		},
+	},
 ];
 
 class DsePreferenceStore implements PreferenceStore {

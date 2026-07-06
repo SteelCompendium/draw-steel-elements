@@ -76,9 +76,9 @@ function makeEnv(): { deps: ElementPipelineDeps; app: App } {
 	// legacy initiative-render.test.ts).
 	app.vault.setFile('Media/token_1.png', '');
 	const plugin = new Plugin(app);
-	const theme = createThemeService();
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
 	const session = createSessionStore();
@@ -1042,14 +1042,15 @@ describe('T-9: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		const ctx = makeFakeContext(app, 'Encounter.md');
 		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-it');
 
-		const theme = createThemeService();
 		const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
+		const prefs = createPreferenceStore(storage);
+		const theme = createThemeService(prefs, plugin as any);
 		const deps: ElementPipelineDeps = {
 			app: app as any,
 			plugin: plugin as any,
 			settings: DEFAULT_SETTINGS,
 			theme,
-			prefs: createPreferenceStore(storage),
+			prefs,
 			refs: createReferenceService(app as any, DEFAULT_SETTINGS),
 			validation: createValidationService(),
 			session: createSessionStore(),

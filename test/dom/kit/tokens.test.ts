@@ -11,6 +11,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DSE_TOKEN_NAMES } from '../../../src/framework/tokens';
 import { createThemeService, type DseTokenName } from '../../../src/framework/seams/theme';
+import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { Component } from '../../mocks/obsidian';
 
 const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
@@ -121,7 +123,9 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 	});
 
 	test('ThemeService.cssVar resolves against the narrowed union', () => {
-		const theme = createThemeService();
+		// D3 §2.2: the service is PreferenceStore-backed; cssVar itself is pref-independent.
+		const prefs = createPreferenceStore({ get: async () => undefined, set: async () => {} });
+		const theme = createThemeService(prefs, new Component() as any);
 		// DseTokenName re-exported from seams/theme keeps the F1 import surface intact.
 		const name: DseTokenName = 'accent';
 		expect(theme.cssVar(name)).toBe('var(--dse-accent)');

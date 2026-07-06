@@ -1,18 +1,25 @@
-// F1 §3.5 — Seam (a): theming / tokens.
+// F1 §3.5 / D3 §2.2 — Seam (a): theming / tokens.
 //
-// Minimal in F1: `active` is effectively constant ("steel"). D3 owns the value
-// space (DseThemeId members, the DseTokenName union, and the --dse-* CSS custom
-// property sheet in styles-source.css) — this file ships the machinery only.
+// D3 (Plan 10 Task 2) replaces F1's in-memory stub with the real implementation:
+// the active theme IS the persisted `theme` preference (F1 §3.6's PreferenceStore
+// key), so it survives restarts and is the same value the D4 settings picker edits.
+// D3 owns the value space (DseThemeId members, the DseTokenName union, and the
+// --dse-* CSS custom property sheet in styles-source.css).
 //
-// Contract downstream code relies on (F1 §3.5): every element root carries
+// Contract downstream code relies on (F1 §3.5, D3 §7.2): every element root carries
 // data-dse-element="<def.id>" (stamped by the pipeline — NOT this seam) and
-// data-dse-theme="<active>" (stamped here, by apply()). All element CSS is
-// scoped under [data-dse-element]. "Legacy" (D3) = today's visual styling
-// expressed as a theme.
+// data-dse-theme="<active>" (stamped here, by apply() — the SINGLE writer of that
+// attribute; the `theme` PrefDescriptor deliberately has no `attr`, see prefs.ts).
+// All element CSS is scoped under [data-dse-element]. "Legacy" = today's visual
+// styling expressed as a theme.
+//
+// Popout safety (D3 §2.5): state is per-root, not per-document — apply() stamps the
+// element's OWN root in whatever window it lives; document.body is never touched.
 import type { Component } from 'obsidian';
 import type { DseTokenName } from '../tokens';
+import type { PreferenceStore } from './prefs';
 
-export type DseThemeId = 'steel' | 'legacy' | (string & {}); // D3 finalizes members
+export type DseThemeId = 'steel' | 'legacy' | (string & {}); // D3 §2.3 — open for snippet ids (§6)
 // Narrowed union (Plan 08 Task 1, D2 §6) — defined in framework/tokens.ts (seams must
 // not import kit); re-exported here so the F1 import surface stays intact.
 export type { DseTokenName };
@@ -31,10 +38,8 @@ export interface ThemeService {
 /**
  * Pipeline-internal extension of ThemeService: mutates the active theme. Not part
  * of the public ThemeService surface consumed by element views (§3.5's interface
- * has no setter — "active is effectively constant" in F1). What drives this in a
- * running plugin (e.g. wiring the `theme` PreferenceStore key to it) is later-task
- * scope (pipeline / main.ts wiring, D3/D4) — F1 ships the mechanism so it's already
- * testable and D3/D4 have something to call.
+ * has no setter). D4's settings picker drives this (or writes the `theme` pref
+ * directly — both paths converge on prefs.set, see setActive below).
  */
 export interface ThemeServiceInternal extends ThemeService {
 	setActive(theme: DseThemeId): void;
@@ -42,22 +47,41 @@ export interface ThemeServiceInternal extends ThemeService {
 
 export const DEFAULT_THEME_ID: DseThemeId = 'steel';
 
+/**
+ * D3 §2.2 — the PreferenceStore-backed ThemeService. `active` reads the `theme`
+ * pref synchronously; `setActive` persists it; ONE long-lived upstream
+ * `prefs.subscribe` (owned by the plugin — the single sanctioned long-lived
+ * subscription) fans every pref change out to the onChange listeners, which is
+ * what re-stamps every live apply()'d root. A theme switch is therefore reflow,
+ * not re-render: O(live roots) attribute writes, no view teardown.
+ */
 class DseThemeService implements ThemeServiceInternal {
-	private _active: DseThemeId;
 	private readonly listeners = new Set<(theme: DseThemeId) => void>();
 
-	constructor(initial: DseThemeId) {
-		this._active = initial;
+	constructor(
+		private readonly prefs: PreferenceStore,
+		owner: Component,
+	) {
+		// Single upstream subscription: when the `theme` pref changes (setActive here,
+		// the D4 picker, or a persisted-value load), fan out to listeners. Owner = the
+		// plugin, so it lives exactly as long as the plugin — it drives, not leaks.
+		this.prefs.subscribe('theme', owner, (theme) => {
+			// Snapshot: a listener unsubscribing another listener mid-notify must not
+			// perturb this pass (Set iteration would otherwise skip/repeat entries).
+			for (const cb of [...this.listeners]) cb(theme);
+		});
 	}
 
 	get active(): DseThemeId {
-		return this._active;
+		return this.prefs.get('theme');
 	}
 
 	apply(rootEl: HTMLElement, owner: Component): void {
-		rootEl.setAttribute('data-dse-theme', this._active);
+		rootEl.dataset.dseTheme = this.active;
+		// Re-stamp on change; auto-unsubscribes when owner (the ElementView) unloads.
+		// Per-root, never document.body — popout safety (D3 §2.5).
 		const unsubscribe = this.onChange((theme) => {
-			rootEl.setAttribute('data-dse-theme', theme);
+			rootEl.dataset.dseTheme = theme;
 		});
 		owner.register(unsubscribe);
 	}
@@ -77,15 +101,15 @@ class DseThemeService implements ThemeServiceInternal {
 	}
 
 	setActive(theme: DseThemeId): void {
-		if (theme === this._active) return;
-		this._active = theme;
-		// Snapshot: a listener unsubscribing another listener mid-notify must not
-		// perturb this pass (Set iteration would otherwise skip/repeat entries).
-		for (const cb of [...this.listeners]) cb(theme);
+		if (theme === this.active) return;
+		// Persist only — the upstream prefs.subscribe in the constructor drives the
+		// listener fan-out. Notifying here as well would double-fire every listener.
+		void this.prefs.set('theme', theme);
 	}
 }
 
-/** Construct a fresh ThemeService (pipeline-internal: ThemeServiceInternal). */
-export function createThemeService(initial: DseThemeId = DEFAULT_THEME_ID): ThemeServiceInternal {
-	return new DseThemeService(initial);
+/** Construct the ThemeService over `prefs` (pipeline-internal: ThemeServiceInternal).
+ *  `owner` = the plugin: it owns the service's one long-lived pref subscription. */
+export function createThemeService(prefs: PreferenceStore, owner: Component): ThemeServiceInternal {
+	return new DseThemeService(prefs, owner);
 }

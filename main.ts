@@ -111,7 +111,6 @@ export function initializeElementFrameworkV2(
 ): ElementFrameworkV2 {
 	const validation = createValidationService();
 	const session = createSessionStore();
-	const theme = createThemeService();
 	// F1 §3.6 / OD-2: real persisted-storage wiring (merged under the plugin's saved
 	// settings, under a `prefs` key) is D4 scope — F1's seam only needs a working
 	// get/set pair, same convention the framework's own pipeline tests use.
@@ -120,6 +119,10 @@ export function initializeElementFrameworkV2(
 		set: async () => {},
 	};
 	const prefs = createPreferenceStore(prefsStorage);
+	// D3 §2.2 (Plan 10 Task 2): the ThemeService is PreferenceStore-backed — the
+	// active theme IS the persisted `theme` pref. The plugin owns the service's
+	// single long-lived upstream subscription, so prefs must be built first.
+	const theme = createThemeService(prefs, plugin);
 	const refs = createReferenceService(app, settings);
 
 	for (const { id, schema } of dependencySchemas) {
