@@ -1469,50 +1469,88 @@ code.dsa {
 /* ==================== */
 /* Negotiation Tracker  */
 /* ==================== */
-/* Scoped under [data-dse-element="negotiation"] (F1 §3.5) since the Framework v2 migration
-   (Plan 05 Task 5): the pipeline stamps the attribute on the element root and the view
-   builds the legacy .ds-nt-container.ds-container structure inside it. Only the outer
-   selector changed — every nested .ds-nt-* rule is untouched. The shared .ds-container
-   base class stays global (top of this file). */
-
-[data-dse-element="negotiation"] .ds-nt-container {
+/* D2 §3.10 (Plan 09 Task 7): the tracker on the D2 kit — cardHead (CB-16), iconButton
+   bubbles (aria-pressed), kit tabs (Make/Learn), selectable powerRollPanel radiogroup.
+   The whole legacy .ds-nt-* class block is EVICTED (the view no longer renders those
+   classes). Panel chrome (surface + the .ds-container hairline pair) sits on the
+   pipeline root, same pattern as the feature element; the grammar below is scoped
+   under [data-dse-element="negotiation"]. Tokens only (D2 §5) — no color literals. */
+[data-dse-element="negotiation"]:not([data-dse-error-stage]) {
 	position: relative;
-	background: var(--code-background);
-	margin-top: .5em;
-	margin-bottom: .5em;
-	padding: 1em;
+	display: block;
+	background: var(--dse-surface);
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
 	letter-spacing: 0.03em;
+}
+[data-dse-element="negotiation"]:not([data-dse-error-stage])::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 1px;
+	width: 12em;
+	background: var(--dse-hairline-fade);
+}
+[data-dse-element="negotiation"]:not([data-dse-error-stage])::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1px;
+	height: 100%;
+	max-height: 12em;
+	background: linear-gradient(to bottom, var(--dse-rule), var(--dse-rule-fade));
+}
 
-	.ds-nt-name-line, .ds-nt-name-line div {
+[data-dse-element="negotiation"] .dse-nt {
+	padding: var(--dse-pad);
+
+	/* -- head row: kit cardHead + the options-menu button -- */
+	.dse-nt__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.5em;
+
+        /* the kit head grid (the row's first child) grows; the menu button hugs
+           the right edge. Deliberately not a named kit-head selector: the kit's
+           cardHead CSS-contract test greps the sheet's FIRST such block. */
+        > :first-child {
+            flex: 1 1 auto;
+        }
+
+        .dse-nt__menu {
+            flex: 0 0 auto;
+        }
+	}
+
+	/* -- the shared bubble control: a round kit iconButton (aria-pressed) -- */
+	/* The kit's --dse-touch-min min-size IS the bubble diameter (§4.6); the pressed
+	   fill comes from the kit's .dse-btn[data-pressed] accent rule. */
+	.dse-nt__bubble {
+		width: var(--dse-touch-min);
+		padding: 0;
+		border-radius: 50%;
+		background: var(--dse-surface);
+		border: 1px solid var(--dse-border-strong);
+		z-index: 1;
+	}
+
+	/* -- Patience: label + 6 bubbles over a connector line -- */
+	.dse-nt__patience {
+		display: flex;
+		margin-top: 0.5em;
+		margin-bottom: 0.5em;
+	}
+
+	.dse-nt__patience-label {
+		font-weight: bold;
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 	}
 
-	.ds-nt-name-value {
-		font-weight: bold;
-	}
-
-	.ds-nt-sidebar {
-
-	}
-
-	.ds-nt-trackers {
-
-	}
-
-	/*.ds-nt-button-selected {*/
-	/*	background-color: var(--background-modifier-border-focus);*/
-	/*}*/
-
-	.ds-nt-patience-container {
-		display: flex;
-		/*justify-content: space-between;*/
-		margin-top: .5em;
-		margin-bottom: .5em;
-	}
-
-	.ds-nt-patience-bubble-container {
+	.dse-nt__patience-track {
 		display: flex;
 		justify-content: space-between;
 		width: 100%;
@@ -1526,126 +1564,65 @@ code.dsa {
             width: 100%;
             transform: translateY(-50%);
             height: 5px;
-            background-color: var(--color-base-35);
+            background-color: var(--dse-border);
             top: 50%;
         }
 	}
 
-	.ds-nt-patience-label {
+	/* -- Interest: the 5..0 offer ladder over a vertical connector -- */
+	.dse-nt__interest-header {
 		font-weight: bold;
-		display: flex;
-		align-items: center;
 	}
 
-	.ds-nt-patience-bubble {
-		background-color: var(--code-background);
-		border: 1px solid var(--text-normal);
-		border-radius: 50%;
-		height: 2em;
-		width: 2em;
-		text-align: center;
-		line-height: 2em;
-		z-index: 1;
-		cursor: pointer;
-	}
-
-	.ds-nt-interest-offer-container {
+	.dse-nt__interest-ladder {
 		position: relative;
 
         &:before {
             content: "";
             position: absolute;
-            height: calc(100% - 2em);
-            margin-top: 1em;
+            height: calc(100% - var(--dse-touch-min));
+            top: calc(var(--dse-touch-min) / 2);
             transform: translateX(-50%);
             width: 5px;
-            background-color: var(--color-base-35);
-            left: 1.5em;
+            background-color: var(--dse-border);
+            left: calc(0.5em + var(--dse-touch-min) / 2);
         }
 	}
 
-	.ds-nt-interest-header {
-		font-weight: bold;
-	}
-
-	.ds-nt-interest-line {
+	.dse-nt__interest-row {
 		display: flex;
+		align-items: center;
 		position: relative;
 		z-index: 1;
 
-        &.ds-nt-interest-selected .ds-nt-interest-label,
-        .ds-nt-patience-container .ds-nt-patience-selected {
-            background-color: var(--background-modifier-border-focus);
+        .dse-nt__bubble {
+            margin: 0.5em;
         }
 
-        .ds-nt-interest-faded {
-            color: var(--text-faint);
-        }
-
-        &.ds-nt-interest-current .ds-nt-interest-label {
-            box-shadow: 0 0 20px var(--color-accent);
+        /* the current rung: the accent glow (D2 §3.10) */
+        &[data-current] .dse-nt__bubble {
+            box-shadow: 0 0 20px var(--dse-accent);
         }
 	}
 
-	.ds-nt-interest-label {
-		background-color: var(--code-background);
-		border: 1px solid var(--text-normal);
-		margin: 0.5em;
-		border-radius: 50%;
-		width: 2em;
-		min-width: 2em;
-		height: 2em;
-		line-height: 2em;
-		text-align: center;
-		cursor: pointer;
-	}
-
-	.ds-nt-interest-offer {
+	.dse-nt__interest-offer {
 		display: flex;
 		align-items: center;
-		justify-content: center;
+
+        /* passed/reached rungs fade (D2 §3.10) */
+        &[data-reached] {
+            color: var(--dse-fg-faint);
+        }
 	}
 
-	.ds-nt-actions-container {
+	/* -- the two-tab actions area (the kit .dse-tabs owns the tab/panel chrome) -- */
+	.dse-nt__actions {
 		margin-top: 1em;
 		margin-bottom: 1em;
 	}
 
-	.ds-nt-action-tabs {
-		display: flex;
-		justify-content: space-around;
-	}
-
-	.ds-nt-action-tab {
-		border: 1px solid var(--text-normal);
-		border-radius: .25em .25em 0 0;
-		padding: .5em;
-		width: 40%;
-		text-align: center;
-		cursor: pointer;
-
-        &.active {
-            border-bottom: 1px solid var(--code-background);
-        }
-	}
-
-	.ds-nt-action-container {
-		border: 1px solid var(--text-normal);
-		border-radius: .25em;
-		margin-top: -1px;
-		padding: 1em;
-		display: none;
-
-        &.active {
-            display: block;
-        }
-	}
-
-
-	.ds-nt-argument-body {
-	}
-
-	.ds-nt-argument-modifiers {
+	/* -- Make an Argument -- */
+	.dse-nt__argument-modifiers {
 		display: flex;
 
         > div {
@@ -1653,101 +1630,63 @@ code.dsa {
         }
 	}
 
-	.ds-nt-argument-modifier-motivation-header,
-	.ds-nt-argument-modifier-pitfall-header {
+	.dse-nt__argument-header {
 		font-weight: bold;
 	}
 
-	.ds-nt-argument-modifier-motivation-line,
-	.ds-nt-argument-modifier-pitfall-line {
-		margin-left: 2em;
-	}
-
-	.ds-nt-argument-modifier-other {
-		margin-top: 0.3em;
-	}
-
-	/* disabled checkboxes */
-
-	.ds-nt-argument-body input[type=checkbox]:disabled,
-		/* labels with disabled inputs */
-	.ds-nt-argument-body label:has(input:disabled) {
-		color: var(--text-faint);
-	}
-
-	/* Make sure hover effects on disabled checkboxes dont show */
-
-	.ds-nt-argument-body input[type=checkbox]:disabled {
-		border: 1px solid var(--checkbox-border-color);
-
-        &:checked {
-            background-color: var(--checkbox-border-color);
-        }
-	}
-
-	.ds-nt-arg-motivation-used {
-		text-decoration: line-through;
-	}
-
-	.ds-nt-argument-power-roll {
-		margin-top: .3em;
-
-        .ds-pr-roll-line {
-            font-weight: bold;
-        }
-
-        .ds-feature-detail-line {
-            margin: 0;
-            padding: 0.3em;
-            user-select: none;
-        }
-
-        .ds-pr-tier-line {
-            margin-left: 1em;
-            border: 1px solid transparent;
-            border-radius: 5px;
-            cursor: pointer;
-
-            &.active {
-                background-color: var(--color-base-25);
-                border: 1px solid var(--color-base-30);
-                box-shadow: 0 0 5px var(--color-accent);
-            }
-        }
-	}
-
-	.ds-nt-argument-footer {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-	}
-
-	.ds-nt-details-label {
+	.dse-nt__argument-item {
 		display: block;
 		margin-left: 2em;
 	}
 
-	.ds-nt-details-header {
+	.dse-nt__argument-other {
+		margin-top: 0.3em;
+
+        .dse-nt__argument-item {
+            margin-left: 0;
+        }
+	}
+
+	/* previously-appealed motivations strike through (legacy parity) */
+	.dse-nt__argument-item--used {
+		text-decoration: line-through;
+	}
+
+	/* disabled modifier lines fade (legacy parity, on the token) */
+	.dse-nt__argument label:has(input:disabled) {
+		color: var(--dse-fg-faint);
+	}
+
+	.dse-nt__argument .dse-pr {
+		margin-top: 0.5em;
+	}
+
+	.dse-nt__argument-footer {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		margin-top: 0.5em;
+	}
+
+	/* -- details: the Motivations / Pitfalls lists -- */
+	.dse-nt__details-header {
 		font-weight: bold;
 		margin-top: 1em;
 		margin-bottom: 1em;
 	}
 
-	.ds-nt-details-name {
+	.dse-nt__details-item {
+		display: block;
+		margin-left: 2em;
+	}
+
+	.dse-nt__details-name {
 		font-weight: bold;
 	}
 
-	/* labels with disabled inputs */
-
-	.ds-nt-motivation-label:has(input:checked) {
+	/* already-appealed motivations strike through (legacy parity) */
+	.dse-nt__motivations label:has(input:checked) {
 		text-decoration: line-through;
-	}
-
-	.btn-icon {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-right: 1em;
 	}
 }
 

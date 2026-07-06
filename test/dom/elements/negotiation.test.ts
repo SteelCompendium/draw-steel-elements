@@ -1,17 +1,26 @@
-// Plan 05 Task 5 — Negotiation Tracker on Framework v2 (F1 §6 step 8): the element view +
-// definition + registration, retiring the legacy NegotiationTrackerProcessor. Mirrors
-// stamina-bar.test.ts's convention of driving the element through the REAL ElementPipeline
-// with real framework services, plus the persisted write path through a REAL
-// ReadingModeBlockHost + FakeVault ("exactly one replaceSource, surrounding note intact").
+// Plan 09 Task 7 (D2 §3.10) — Negotiation Tracker redesigned onto the D2 kit: cardHead
+// (CB-16: the name slot, never a dangling "Negotiation: " prefix), kit tabs (a REAL
+// tablist; active tab in cx.session, OD-7), powerRollPanel(selectable) (the Task-0
+// radiogroup — role="radio" + aria-checked, exactly one tier), and iconButton bubbles
+// (aria-pressed) for the Patience track + Interest ladder. Every legacy click-<div>
+// becomes a real, keyboard-operable control. CB-4 (the legacy singleton-processor reset
+// that clobbered the last-rendered tracker) is pinned per-instance here.
 //
-// BYTE-COMPAT oracle (ties to Task 4): the legacy writer did exactly
-// `stringifyYaml(<the live NegotiationData instance>).trim()` — so expected bytes here are
-// always `stringifyYaml(parseNegotiationData(src) + the same mutation).trim()`.
+// Same harness as counter/stamina-bar: the element drives through the REAL
+// ElementPipeline with real framework services, plus the persisted write path through a
+// REAL ReadingModeBlockHost + FakeVault ("exactly one replaceSource, surrounding note
+// intact").
 //
-// Deliberate behavior change pinned here (documented in the view): the LEGACY processor
-// wrote the file on EVERY render (PatienceInterestView.build initialized the display via
-// setPatience/setInterest, which called CodeBlocks.updateNegotiationTracker). On Framework
-// v2 rendering never writes — persist() is scheduled only by USER mutations.
+// BYTE-COMPAT oracle (unchanged from Plan 05 Task 4/5 — the redesign touches ONLY the
+// DOM): the legacy writer did exactly `stringifyYaml(<the live NegotiationData
+// instance>).trim()`, so expected bytes are always
+// `stringifyYaml(parseNegotiationData(src) + the same mutation).trim()`.
+//
+// Deliberate behavior pinned here (documented in the view): rendering NEVER writes —
+// persist() is scheduled only by USER mutations (the legacy processor wrote the file on
+// every render).
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -30,6 +39,7 @@ import { App, Plugin, Menu, Notice, stringifyYaml, makeFakeContext } from '../..
 import { negotiationElement } from '../../../src/elements/negotiation/definition';
 import { NegotiationView } from '../../../src/elements/negotiation/view';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
+import { styleGuardFindings } from '../kit/styleGuard';
 import frodoYaml from '../../fixtures/negotiation/frodo.yaml';
 
 const NT_ALIASES = ['ds-nt', 'ds-negotiation', 'ds-negotiation-tracker'] as const;
@@ -88,12 +98,33 @@ async function renderFrodo(pipeline: ElementPipeline, host: BlockHost): Promise<
 	return host.containerEl.firstElementChild as HTMLElement;
 }
 
-const selectedPatience = (root: HTMLElement): number[] =>
-	[0, 1, 2, 3, 4, 5].filter((i) =>
-		(root.querySelector(`.ds-nt-patience-bubble-${i}`) as HTMLElement).classList.contains('ds-nt-patience-selected'),
-	);
+// -- kit-DOM accessors (D2 §3.10 grammar) --
+const patienceBubble = (root: HTMLElement, i: number) =>
+	root.querySelector(`.dse-nt__patience .dse-nt__bubble[data-value="${i}"]`) as HTMLButtonElement;
+const pressedPatience = (root: HTMLElement): number[] =>
+	[0, 1, 2, 3, 4, 5].filter((i) => patienceBubble(root, i).getAttribute('aria-pressed') === 'true');
+const interestRow = (root: HTMLElement, i: number) =>
+	root.querySelector(`.dse-nt__interest-row[data-interest="${i}"]`) as HTMLElement;
+const interestBubble = (root: HTMLElement, i: number) =>
+	interestRow(root, i).querySelector('.dse-nt__bubble') as HTMLButtonElement;
+const pressedInterest = (root: HTMLElement): number[] =>
+	[0, 1, 2, 3, 4, 5].filter((i) => interestBubble(root, i).getAttribute('aria-pressed') === 'true');
+const interestOffer = (root: HTMLElement, i: number) =>
+	interestRow(root, i).querySelector('.dse-nt__interest-offer') as HTMLElement;
+const tabEls = (root: HTMLElement) =>
+	Array.from(root.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+const tierRadios = (root: HTMLElement) =>
+	Array.from(root.querySelectorAll('.dse-nt__argument .dse-pr__row')) as HTMLButtonElement[];
+const completeBtn = (root: HTMLElement) =>
+	root.querySelector('.dse-nt__argument-footer .dse-btn') as HTMLButtonElement | null;
+const menuBtn = (root: HTMLElement) =>
+	root.querySelector('.dse-nt__menu') as HTMLButtonElement | null;
 
-describe('T-5: negotiation ElementDefinition (F1 §6 step 8)', () => {
+function pressKey(el: HTMLElement, key: string): void {
+	el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+}
+
+describe('T-7: negotiation ElementDefinition (unchanged by the D2 redesign)', () => {
 	test('id/name/aliases/shape match the brief; persisted with serialize, NO schema, no auto ref-resolution', () => {
 		expect(negotiationElement.id).toBe('negotiation');
 		expect(negotiationElement.name).toBe('Negotiation tracker');
@@ -122,12 +153,12 @@ describe('T-5: negotiation ElementDefinition (F1 §6 step 8)', () => {
 	});
 });
 
-describe('T-5: negotiation rendered through the REAL ElementPipeline (frodo fixture)', () => {
+describe('T-7: negotiation rendered through the REAL ElementPipeline (D2 §3.10 kit DOM)', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
 
-	test('root carries data-dse-element="negotiation" + theme; legacy container classes preserved; NOT kit-wrapped', async () => {
+	test('root carries data-dse-element="negotiation" + theme; ONE .dse-nt; NO legacy .ds-nt-* DOM; NOT kit-wrapped', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
@@ -135,90 +166,165 @@ describe('T-5: negotiation rendered through the REAL ElementPipeline (frodo fixt
 
 		expect(root.getAttribute('data-dse-element')).toBe('negotiation');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
-		const container = root.querySelector('.ds-nt-container') as HTMLElement;
-		expect(container).not.toBeNull();
-		expect(container.classList.contains('ds-container')).toBe(true);
+		expect(root.querySelectorAll('.dse-nt')).toHaveLength(1);
+		expect(root.querySelector('[class*="ds-nt-"]')).toBeNull();
 		// Negotiation is NOT collapsible — no ComponentWrapper chrome (legacy parity).
 		expect(root.querySelector('.ds-kit-component-wrapper')).toBeNull();
 		expect(root.querySelector('.ds-kit-eye-container')).toBeNull();
 	});
 
-	test('name line renders "Negotiation: <name>"', async () => {
+	test('CB-16: cardHead — the name slot is a heading with the RAW name (eyebrow carries the kind-noun; no "Negotiation: " prefix anywhere)', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		const root = await renderFrodo(pipeline, host);
 
-		expect(root.querySelector('.ds-nt-name-value')?.textContent).toBe(
-			'Negotiation: Convincing Frodo to remember the taste of strawberries',
-		);
-		expect(root.querySelector('.ds-nt-settings-menu')).not.toBeNull();
+		const head = root.querySelector('.dse-nt__head .dse-head') as HTMLElement;
+		expect(head).not.toBeNull();
+		const name = head.querySelector('.dse-head__primary--left') as HTMLElement;
+		expect(name.textContent).toBe('Convincing Frodo to remember the taste of strawberries');
+		expect(name.getAttribute('role')).toBe('heading');
+		expect(head.querySelector('.dse-head__eyebrow--left')?.textContent).toBe('Negotiation');
+		expect(root.textContent).not.toContain('Negotiation:');
 	});
 
-	test('patience: 6 bubbles, 0..3 selected (current_patience from initial_patience: 3)', async () => {
+	test('CB-16: an UNNAMED negotiation heads as plain "Negotiation" — no dangling colon, no duplicated eyebrow', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
+		await pipeline.run(negotiationElement, 'initial_patience: 2', host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
 
-		const root = await renderFrodo(pipeline, host);
-
-		expect(root.querySelectorAll('.ds-nt-patience-bubble')).toHaveLength(6);
-		expect(selectedPatience(root)).toEqual([0, 1, 2, 3]);
+		const name = root.querySelector('.dse-head__primary--left') as HTMLElement;
+		expect(name.textContent).toBe('Negotiation');
+		expect(root.querySelector('.dse-head__eyebrow--left')).toBeNull();
+		expect(root.textContent).not.toContain('Negotiation:');
 	});
 
-	test('interest: lines 5..0 with fixture offers, interest 3 current (from initial_interest: 3)', async () => {
+	test('patience: 6 REAL <button aria-pressed> bubbles (labelled, type=button), 0..3 pressed from initial_patience: 3', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		const root = await renderFrodo(pipeline, host);
 
-		expect(root.querySelectorAll('.ds-nt-interest-line')).toHaveLength(6);
-		expect(root.querySelector('.ds-nt-interest-5-offer')?.textContent).toBe(
-			'Remembers the taste of strawberries and cream!',
-		);
-		expect(root.querySelector('.ds-nt-interest-0-offer')?.textContent).toBe(
-			"Thinks you're after the ring; becomes hostile",
-		);
-		const line3 = root.querySelector('.ds-nt-interest-3-line') as HTMLElement;
-		expect(line3.classList.contains('ds-nt-interest-current')).toBe(true);
-		expect(line3.classList.contains('ds-nt-interest-selected')).toBe(true);
-		const line4 = root.querySelector('.ds-nt-interest-4-line') as HTMLElement;
-		expect(line4.classList.contains('ds-nt-interest-selected')).toBe(false);
+		const bubbles = root.querySelectorAll('.dse-nt__patience .dse-nt__bubble');
+		expect(bubbles).toHaveLength(6);
+		for (let i = 0; i <= 5; i++) {
+			const bubble = patienceBubble(root, i);
+			expect(bubble.tagName).toBe('BUTTON');
+			expect(bubble.getAttribute('type')).toBe('button');
+			expect(bubble.getAttribute('aria-label')).toBe(`Set patience to ${i}`);
+			expect(bubble.textContent).toBe(String(i));
+		}
+		expect(pressedPatience(root)).toEqual([0, 1, 2, 3]);
 	});
 
-	test('details: motivations and pitfalls from the fixture', async () => {
+	test('interest: ladder rows 5..0 (fixture offers), REAL bubble buttons; current row [data-current]; passed rungs [data-reached]', async () => {
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 
 		const root = await renderFrodo(pipeline, host);
 
-		const details = root.querySelector('.ds-nt-details') as HTMLElement;
-		const motivationNames = Array.from(details.querySelectorAll('.ds-nt-motivation-name')).map(
+		const rows = Array.from(root.querySelectorAll('.dse-nt__interest-row'));
+		expect(rows.map((r) => r.getAttribute('data-interest'))).toEqual(['5', '4', '3', '2', '1', '0']);
+		expect(interestOffer(root, 5).textContent).toBe('Remembers the taste of strawberries and cream!');
+		expect(interestOffer(root, 0).textContent).toBe("Thinks you're after the ring; becomes hostile");
+		for (let i = 0; i <= 5; i++) {
+			expect(interestBubble(root, i).tagName).toBe('BUTTON');
+			expect(interestBubble(root, i).getAttribute('aria-label')).toBe(`Set interest to ${i}`);
+		}
+		// initial_interest: 3 — bubbles 0..3 pressed, row 3 is the accent-glow current…
+		expect(pressedInterest(root)).toEqual([0, 1, 2, 3]);
+		expect(interestRow(root, 3).hasAttribute('data-current')).toBe(true);
+		expect(interestRow(root, 4).hasAttribute('data-current')).toBe(false);
+		// …and only the PASSED rungs (below current) fade via [data-reached].
+		expect([0, 1, 2, 3, 4, 5].filter((i) => interestOffer(root, i).hasAttribute('data-reached'))).toEqual([
+			0, 1, 2,
+		]);
+	});
+
+	test('tabs: a REAL tablist (aria-selected + roving tabindex); argument selected by default; panels are tabpanels hidden via the hidden ATTRIBUTE; both bodies mounted up front', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+
+		const root = await renderFrodo(pipeline, host);
+
+		expect(root.querySelector('.dse-tabs [role="tablist"], .dse-tabs[role="tablist"], [role="tablist"]')).not.toBeNull();
+		const [argTab, learnTab] = tabEls(root);
+		expect(argTab.tagName).toBe('BUTTON');
+		expect(argTab.textContent).toContain('Make an Argument');
+		expect(learnTab.textContent).toContain('Learn Motivation/Pitfall');
+		expect(argTab.getAttribute('aria-selected')).toBe('true');
+		expect(argTab.getAttribute('tabindex')).toBe('0');
+		expect(learnTab.getAttribute('aria-selected')).toBe('false');
+		expect(learnTab.getAttribute('tabindex')).toBe('-1');
+
+		const panels = Array.from(root.querySelectorAll('[role="tabpanel"]')) as HTMLElement[];
+		expect(panels).toHaveLength(2);
+		expect(panels[0].hidden).toBe(false);
+		expect(panels[1].hidden).toBe(true);
+		// Both tab bodies are populated (legacy parity: both built at mount).
+		expect(panels[0].querySelector('.dse-nt__argument')).not.toBeNull();
+		expect(panels[1].querySelector('.dse-nt__learn-more')).not.toBeNull();
+	});
+
+	test('argument power roll: a TRUE radiogroup — 4 REAL <button role="radio" aria-checked> tiers, none checked initially, first is the single Tab stop; legacy head + tier wording', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+
+		const root = await renderFrodo(pipeline, host);
+
+		const rowsEl = root.querySelector('.dse-nt__argument .dse-pr__rows') as HTMLElement;
+		expect(rowsEl.getAttribute('role')).toBe('radiogroup');
+		expect(root.querySelector('.dse-nt__argument .dse-pr__head')?.textContent).toBe(
+			'Power Roll + Reason, Intuition, or Presence',
+		);
+
+		const radios = tierRadios(root);
+		expect(radios).toHaveLength(4);
+		for (const radio of radios) {
+			expect(radio.tagName).toBe('BUTTON');
+			expect(radio.getAttribute('role')).toBe('radio');
+			expect(radio.getAttribute('aria-checked')).toBe('false');
+		}
+		expect(radios.map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1']);
+		// Baseline argument (no motivation/pitfall/lie/reuse): the legacy tier outcomes.
+		expect(radios[0].textContent).toContain('-1 Interest, -1 Patience');
+		expect(radios[1].textContent).toContain('-1 Patience');
+		expect(radios[2].textContent).toContain('+1 Interest, -1 Patience');
+		expect(radios[3].textContent).toContain('+1 Interest');
+		// The Complete Argument button is a REAL kit button, disabled until a tier is picked.
+		expect(completeBtn(root)!.tagName).toBe('BUTTON');
+		expect(completeBtn(root)!.disabled).toBe(true);
+	});
+
+	test('learn-more tab: rules text + a STATIC (non-selectable) 3-tier power roll panel', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+
+		const root = await renderFrodo(pipeline, host);
+
+		const learn = root.querySelector('.dse-nt__learn-more') as HTMLElement;
+		expect(learn.textContent).toContain('learn one of the NPC’s motivations or pitfalls');
+		const rows = learn.querySelectorAll('.dse-pr__row');
+		expect(rows).toHaveLength(3);
+		// Static grammar: plain rows, no radio semantics.
+		expect(learn.querySelector('[role="radiogroup"]')).toBeNull();
+		expect(rows[0].tagName).not.toBe('BUTTON');
+	});
+
+	test('details: motivations (checkboxes) and pitfalls from the fixture under .dse-nt__motivations', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+
+		const root = await renderFrodo(pipeline, host);
+
+		const details = root.querySelector('.dse-nt__motivations') as HTMLElement;
+		const motivationNames = Array.from(details.querySelectorAll('.dse-nt__details-name')).map(
 			(el) => el.textContent,
 		);
-		expect(motivationNames).toEqual(['Higher Authority: ', 'Peace: ']);
-		expect(details.querySelector('.ds-nt-pitfall-name')?.textContent).toBe('Power: ');
-		expect(details.querySelector('.ds-nt-pitfall-reason')?.textContent).toBe(
-			'The ring is too powerful to ignore',
-		);
-	});
-
-	test('tabs: argument tab + container active by default; learn-more content mounted but inactive', async () => {
-		const pipeline = new ElementPipeline(makeDeps());
-		const host = makeHost();
-
-		const root = await renderFrodo(pipeline, host);
-
-		const argumentTab = root.querySelector('.ds-nt-argument-tab') as HTMLElement;
-		const learnMoreTab = root.querySelector('.ds-nt-learn-more-tab') as HTMLElement;
-		const argumentContainer = root.querySelector('.ds-nt-argument-container') as HTMLElement;
-		const learnMoreContainer = root.querySelector('.ds-nt-learn-more-container') as HTMLElement;
-		expect(argumentTab.classList.contains('active')).toBe(true);
-		expect(argumentContainer.classList.contains('active')).toBe(true);
-		expect(learnMoreTab.classList.contains('active')).toBe(false);
-		expect(learnMoreContainer.classList.contains('active')).toBe(false);
-		// Both tab bodies are populated (legacy parity: both built at mount).
-		expect(argumentContainer.querySelector('.ds-nt-complete-argument-button')).not.toBeNull();
-		expect(learnMoreContainer.querySelector('.ds-nt-learn-more-body')).not.toBeNull();
+		expect(motivationNames).toEqual(['Higher Authority: ', 'Peace: ', 'Power: ']);
+		expect(details.querySelectorAll('input[type="checkbox"]')).toHaveLength(2); // pitfalls have none
+		expect(details.textContent).toContain('The ring is too powerful to ignore');
 	});
 
 	test('rendering performs ZERO writes (legacy wrote the file on every render — deliberately dropped)', async () => {
@@ -231,32 +337,71 @@ describe('T-5: negotiation rendered through the REAL ElementPipeline (frodo fixt
 
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
+
+	test('source hygiene: the view + every negotiation sub-view pass the shared kit style guard (no inline color, no color literals)', () => {
+		const files = [
+			'../../../src/elements/negotiation/view.ts',
+			'../../../src/drawSteelAdmonition/negotiation/PatienceInterestView.ts',
+			'../../../src/drawSteelAdmonition/negotiation/ArgumentView.ts',
+			'../../../src/drawSteelAdmonition/negotiation/LearnMoreView.ts',
+			'../../../src/drawSteelAdmonition/negotiation/MotivationsPitfallsView.ts',
+		];
+		for (const file of files) {
+			const src = fs.readFileSync(path.join(__dirname, file), 'utf8');
+			expect(styleGuardFindings(src)).toEqual([]);
+		}
+	});
+
+	test('CSS contract: .dse-nt scoped under [data-dse-element="negotiation"], on the §3.10 tokens — and the legacy .ds-nt-* block is GONE', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		const block = sheet.match(/\[data-dse-element="negotiation"\]\s+\.dse-nt\s*\{[\s\S]*?\n\}/);
+		expect(block).not.toBeNull();
+		expect(block![0]).toMatch(/var\(--dse-accent\)/); // the current-interest glow
+		expect(block![0]).toMatch(/var\(--dse-fg-faint\)/); // faded/reached rungs
+		expect(block![0]).toMatch(/var\(--dse-border\)/); // track/ladder connectors
+
+		// The whole legacy class block is evicted (comments may still cite the old names).
+		const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(noComments).not.toMatch(/\.ds-nt-/);
+	});
 });
 
-describe('T-5: tab switching — session UI state, never document state (F1 §4.3)', () => {
+describe('T-7: tab switching — kit tablist, session UI state, never document state (F1 §4.3 / OD-7)', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
 
-	test('clicking Learn Motivation/Pitfall flips .active on tab + container, with zero vault writes', async () => {
+	test('clicking Learn Motivation/Pitfall flips aria-selected + panel hidden-ness, with zero vault writes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		(root.querySelector('.ds-nt-learn-more-tab') as HTMLElement).click();
+		const [argTab, learnTab] = tabEls(root);
+		learnTab.click();
 
-		expect((root.querySelector('.ds-nt-learn-more-tab') as HTMLElement).classList.contains('active')).toBe(true);
-		expect(
-			(root.querySelector('.ds-nt-learn-more-container') as HTMLElement).classList.contains('active'),
-		).toBe(true);
-		expect((root.querySelector('.ds-nt-argument-tab') as HTMLElement).classList.contains('active')).toBe(false);
-		expect(
-			(root.querySelector('.ds-nt-argument-container') as HTMLElement).classList.contains('active'),
-		).toBe(false);
+		expect(learnTab.getAttribute('aria-selected')).toBe('true');
+		expect(argTab.getAttribute('aria-selected')).toBe('false');
+		const panels = Array.from(root.querySelectorAll('[role="tabpanel"]')) as HTMLElement[];
+		expect(panels[0].hidden).toBe(true);
+		expect(panels[1].hidden).toBe(false);
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 		expect(host.replaceSource).not.toHaveBeenCalled();
+	});
+
+	test('the tablist is keyboard-operable: ArrowRight moves selection (selection follows focus)', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		const [argTab, learnTab] = tabEls(root);
+		pressKey(argTab, 'ArrowRight');
+
+		expect(learnTab.getAttribute('aria-selected')).toBe('true');
+		expect(learnTab.getAttribute('tabindex')).toBe('0');
+		expect(argTab.getAttribute('tabindex')).toBe('-1');
 	});
 
 	test('the active tab survives a re-render via SessionStore (same blockKey, fresh mount)', async () => {
@@ -264,32 +409,33 @@ describe('T-5: tab switching — session UI state, never document state (F1 §4.
 		const pipeline = new ElementPipeline(deps);
 		const host1 = makeHost();
 		const root1 = await renderFrodo(pipeline, host1);
-		(root1.querySelector('.ds-nt-learn-more-tab') as HTMLElement).click();
+		tabEls(root1)[1].click();
 
 		// Fresh render of the same block (same blockKey, same SessionStore).
 		const host2 = makeHost();
 		const root2 = await renderFrodo(pipeline, host2);
 
-		expect((root2.querySelector('.ds-nt-learn-more-tab') as HTMLElement).classList.contains('active')).toBe(true);
-		expect((root2.querySelector('.ds-nt-argument-tab') as HTMLElement).classList.contains('active')).toBe(false);
+		const [argTab2, learnTab2] = tabEls(root2);
+		expect(learnTab2.getAttribute('aria-selected')).toBe('true');
+		expect(argTab2.getAttribute('aria-selected')).toBe('false');
 	});
 });
 
-describe('T-5: persisted mutations — exactly ONE debounced replaceSource, byte-compatible with the legacy writer', () => {
+describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte-compatible with the legacy writer', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
 
-	test('clicking patience bubble 1 updates the DOM in place, then persists exactly once with legacy bytes', async () => {
+	test('clicking patience bubble 1 repaints aria-pressed IN PLACE, then persists exactly once with legacy bytes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		(root.querySelector('.ds-nt-patience-bubble-1') as HTMLElement).click();
+		patienceBubble(root, 1).click();
 
 		// Sub-view updated its own DOM in place (no rebuild) — still inside the debounce.
-		expect(selectedPatience(root)).toEqual([0, 1]);
+		expect(pressedPatience(root)).toEqual([0, 1]);
 		expect(host.replaceSource).not.toHaveBeenCalled();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
@@ -298,14 +444,35 @@ describe('T-5: persisted mutations — exactly ONE debounced replaceSource, byte
 		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoYaml, (m) => (m.current_patience = 1)));
 	});
 
+	test('clicking interest bubble 2 repaints the ladder (pressed/current/reached) in place + one write with legacy bytes', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		interestBubble(root, 2).click();
+
+		expect(pressedInterest(root)).toEqual([0, 1, 2]);
+		expect(interestRow(root, 2).hasAttribute('data-current')).toBe(true);
+		expect(interestRow(root, 3).hasAttribute('data-current')).toBe(false);
+		expect([0, 1, 2, 3, 4, 5].filter((i) => interestOffer(root, i).hasAttribute('data-reached'))).toEqual([
+			0, 1,
+		]);
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(legacyBytes(frodoYaml, (m) => (m.current_interest = 2)));
+	});
+
 	test('rapid mutations coalesce into ONE write serializing the final model state', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
 
-		(root.querySelector('.ds-nt-patience-bubble-1') as HTMLElement).click();
-		(root.querySelector('.ds-nt-interest-2-label') as HTMLElement).click();
+		patienceBubble(root, 1).click();
+		interestBubble(root, 2).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -325,7 +492,7 @@ describe('T-5: persisted mutations — exactly ONE debounced replaceSource, byte
 		const root = await renderFrodo(pipeline, host);
 
 		const checkbox = root.querySelector(
-			'.ds-nt-details .ds-nt-motivation-checkbox',
+			'.dse-nt__motivations input[type="checkbox"]',
 		) as HTMLInputElement;
 		checkbox.checked = true;
 		checkbox.dispatchEvent(new Event('change'));
@@ -345,7 +512,7 @@ describe('T-5: persisted mutations — exactly ONE debounced replaceSource, byte
 		const root = await renderFrodo(pipeline, host);
 
 		const checkbox = root.querySelector(
-			'.ds-nt-argument-container .ds-nt-argument-modifier-motivation-checkbox',
+			'.dse-nt__argument-motivations input[type="checkbox"]',
 		) as HTMLInputElement;
 		checkbox.checked = true;
 		checkbox.dispatchEvent(new Event('change'));
@@ -357,28 +524,109 @@ describe('T-5: persisted mutations — exactly ONE debounced replaceSource, byte
 			legacyBytes(frodoYaml, (m) => m.currentArgument.motivationsUsed.push('Higher Authority')),
 		);
 	});
+
+	test('tier radiogroup: click checks EXACTLY ONE radio (roving tabindex) and enables Complete — selection alone never writes', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		const radios = tierRadios(root);
+		radios[2].click(); // tier 3: +1 Interest, -1 Patience
+
+		expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true', 'false']);
+		expect(radios.map((r) => r.getAttribute('tabindex'))).toEqual(['-1', '-1', '0', '-1']);
+		expect(completeBtn(root)!.disabled).toBe(false);
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+	});
+
+	test('tier radiogroup is keyboard-operable: ArrowDown moves the checked tier (selection follows focus)', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		const radios = tierRadios(root);
+		radios[2].click();
+		pressKey(radios[2], 'ArrowDown');
+
+		expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'true']);
+	});
+
+	test('Complete Argument applies the selected tier (interest/patience deltas), resets the current argument, re-disables itself, and persists ONCE with legacy bytes', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		tierRadios(root)[2].click(); // +1 Interest, -1 Patience
+		completeBtn(root)!.click();
+
+		expect(completeBtn(root)!.disabled).toBe(true); // armed again only by a new tier pick
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(frodoYaml, (m) => {
+				m.current_interest = 4;
+				m.current_patience = 2;
+			}),
+		);
+	});
+
+	test('Complete Argument marks used motivations as appealed-to (currentArgument resets to defaults in the same write)', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+
+		const checkbox = root.querySelector(
+			'.dse-nt__argument-motivations input[type="checkbox"]',
+		) as HTMLInputElement;
+		checkbox.checked = true;
+		checkbox.dispatchEvent(new Event('change')); // schedules a persist…
+		tierRadios(root)[3].click(); // crit: +1 Interest
+		completeBtn(root)!.click(); // …which COALESCES with the complete's persist
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// One debounced flush serializing the FINAL model state (F1 §4.2): the used
+		// motivation is appealed-to, the tier applied, currentArgument back to defaults.
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(frodoYaml, (m) => {
+				m.motivations[0].hasBeenAppealedTo = true;
+				m.current_interest = 4;
+			}),
+		);
+	});
 });
 
-describe('T-5: reset menu — resetData + rebuild + persist', () => {
+describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 		Notice.notices.length = 0;
 		Menu.lastMenu = null;
 	});
 
-	test('the settings menu offers exactly Reset Negotiation; clicking it resets the model, rebuilds the DOM, and persists the reset bytes', async () => {
+	test('the options button is a REAL labelled button; its menu offers exactly Reset Negotiation; clicking resets the model, rebuilds the DOM, and persists the reset bytes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		let root = await renderFrodo(pipeline, host);
 
 		// Mutate first so the reset is observable: patience 3 -> 1 (flushed write #1).
-		(root.querySelector('.ds-nt-patience-bubble-1') as HTMLElement).click();
+		patienceBubble(root, 1).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
-		expect(selectedPatience(root)).toEqual([0, 1]);
+		expect(pressedPatience(root)).toEqual([0, 1]);
 
-		(root.querySelector('.ds-nt-settings-menu') as HTMLElement).click();
+		const button = menuBtn(root)!;
+		expect(button.tagName).toBe('BUTTON');
+		expect(button.getAttribute('aria-label')).toBe('Negotiation options');
+		button.click();
 		const menu = Menu.lastMenu!;
 		expect(menu.items).toHaveLength(1);
 		expect(menu.items[0].title).toBe('Reset Negotiation');
@@ -390,40 +638,96 @@ describe('T-5: reset menu — resetData + rebuild + persist', () => {
 		expect(Notice.notices).toContain('Negotiation reset to initial state');
 		// The DOM was rebuilt from the reset model (framework default update()).
 		root = host.containerEl.firstElementChild as HTMLElement;
-		expect(selectedPatience(root)).toEqual([0, 1, 2, 3]);
+		expect(pressedPatience(root)).toEqual([0, 1, 2, 3]);
 		// Write #2 is the reset state — byte-identical to a fresh parse of the fixture.
 		expect(host.replaceSource).toHaveBeenCalledTimes(2);
 		expect(host.replaceSource.mock.calls[1][0]).toBe(legacyBytes(frodoYaml));
 	});
+
+	test('CB-4: with TWO trackers rendered, resetting tracker A never touches tracker B (the legacy singleton reset hit the last-rendered block)', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const hostA = makeHost();
+		const hostB = makeHost({
+			blockKey: () => 'Note.md::ds-nt::40',
+			getBlockInfo: () => ({ language: 'ds-nt', lineStart: 40, lineEnd: 60 }),
+		});
+		const rootA = await renderFrodo(pipeline, hostA);
+		const rootB = await renderFrodo(pipeline, hostB); // B renders LAST (the CB-4 trap)
+
+		// Mutate both: A -> patience 2, B -> patience 1 (each flushes its own write #1).
+		patienceBubble(rootA, 2).click();
+		patienceBubble(rootB, 1).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(hostA.replaceSource).toHaveBeenCalledTimes(1);
+		expect(hostB.replaceSource).toHaveBeenCalledTimes(1);
+
+		// Reset tracker A through ITS OWN menu.
+		menuBtn(rootA)!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// A got the reset write and rebuilt to the fixture-initial state…
+		expect(hostA.replaceSource).toHaveBeenCalledTimes(2);
+		expect(hostA.replaceSource.mock.calls[1][0]).toBe(legacyBytes(frodoYaml));
+		expect(pressedPatience(hostA.containerEl.firstElementChild as HTMLElement)).toEqual([0, 1, 2, 3]);
+		// …and B is untouched: no extra write, DOM still shows ITS mutation.
+		expect(hostB.replaceSource).toHaveBeenCalledTimes(1);
+		expect(pressedPatience(rootB)).toEqual([0, 1]);
+	});
 });
 
-describe('T-5: canPersist=false — read-only, zero writes (F1 §4.4)', () => {
+describe('T-7: canPersist=false — read-only renders WITHOUT write affordances, zero writes (F1 §4.4)', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
 
-	test('renders without the reset menu; interacting never writes', async () => {
+	test('readonly badge attr; no menu/Complete buttons; bubbles + checkboxes REAL-disabled; tiers render STATIC; interacting never writes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost({ canPersist: false });
 		const root = await renderFrodo(pipeline, host);
 
-		// The reset menu is a write action — gated off entirely.
-		expect(root.querySelector('.ds-nt-settings-menu')).toBeNull();
-		// The tracker still renders (visible, not an error card).
-		expect(root.querySelector('.ds-nt-container')).not.toBeNull();
+		// Framework-level read-only affordance (the CSS badge hangs off this attribute).
+		expect(root.hasAttribute('data-dse-readonly')).toBe(true);
+		// Write actions are gated off entirely (no dead-end affordances)…
+		expect(menuBtn(root)).toBeNull();
+		expect(completeBtn(root)).toBeNull();
+		// …state displays stay visible but inert: REAL disabled (CB-8 — the kit guard
+		// also swallows synthetic clicks), and the tier panel is plain static rows.
+		for (let i = 0; i <= 5; i++) {
+			expect(patienceBubble(root, i).disabled).toBe(true);
+			expect(interestBubble(root, i).disabled).toBe(true);
+		}
+		root.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+			expect((cb as HTMLInputElement).disabled).toBe(true);
+		});
+		expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+		expect(root.querySelector('.dse-nt__argument .dse-pr')).not.toBeNull();
 
-		(root.querySelector('.ds-nt-patience-bubble-1') as HTMLElement).click();
-		const checkbox = root.querySelector('.ds-nt-details .ds-nt-motivation-checkbox') as HTMLInputElement;
+		patienceBubble(root, 1).click();
+		expect(pressedPatience(root)).toEqual([0, 1, 2, 3]); // unchanged
+		const checkbox = root.querySelector('.dse-nt__motivations input[type="checkbox"]') as HTMLInputElement;
 		checkbox.checked = true;
 		checkbox.dispatchEvent(new Event('change'));
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
+
+	test('tabs still switch read-only (session UI state is not a document write)', async () => {
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost({ canPersist: false });
+		const root = await renderFrodo(pipeline, host);
+
+		const [argTab, learnTab] = tabEls(root);
+		learnTab.click();
+		expect(learnTab.getAttribute('aria-selected')).toBe('true');
+		expect(argTab.getAttribute('aria-selected')).toBe('false');
+	});
 });
 
-describe('T-5: persisted write path through a REAL ReadingModeBlockHost + FakeVault (F1 §3.4/§4.2)', () => {
+describe('T-7: persisted write path through a REAL ReadingModeBlockHost + FakeVault (F1 §3.4/§4.2)', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
@@ -443,7 +747,7 @@ describe('T-5: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		await pipeline.run(negotiationElement, frodoYaml, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		(root.querySelector('.ds-nt-patience-bubble-1') as HTMLElement).click();
+		patienceBubble(root, 1).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(app.vault.modifyCalls).toHaveLength(1);
@@ -455,7 +759,7 @@ describe('T-5: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 	});
 });
 
-describe('T-5: registered EXACTLY ONCE — framework registry owns ds-nt*, RegisterElements.ts does not', () => {
+describe('T-7: registered EXACTLY ONCE — framework registry owns ds-nt*, RegisterElements.ts does not', () => {
 	test('registerFrameworkElementDefinitions registers negotiation; every alias resolves to it', () => {
 		const registry = createElementRegistry();
 		registerFrameworkElementDefinitions(registry);
@@ -482,7 +786,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-nt*, Regis
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-nt block through the wired processor produces the negotiation DOM (end-to-end)', async () => {
+	test('rendering a ds-nt block through the wired processor produces the kit negotiation DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -495,6 +799,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-nt*, Regis
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('negotiation');
-		expect(root.querySelector('.ds-nt-container')).not.toBeNull();
+		expect(root.querySelector('.dse-nt')).not.toBeNull();
+		expect(root.querySelectorAll('.dse-nt__patience .dse-nt__bubble')).toHaveLength(6);
 	});
 });

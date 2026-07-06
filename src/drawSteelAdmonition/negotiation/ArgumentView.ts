@@ -1,318 +1,276 @@
-import { setTooltip } from "obsidian";
-import { NegotiationData } from "@model/NegotiationData";
-import {ArgumentPowerRoll, ArgumentResult} from "@model/ArgumentPowerRolls";
-import { labeledIcon } from "@utils/common";
-import {EffectView} from "@drawSteelAdmonition/Features/EffectView";
+// Plan 09 Task 7 (D2 §3.10) — the "Make an Argument" tab on the D2 kit. The legacy
+// hand-rolled tier lines (EffectView.tierNKey + click-<div> selection) become ONE kit
+// powerRollPanel in `selectable` mode: a TRUE radiogroup (<button role="radio"
+// aria-checked>, exactly one tier, arrow-key roving — Plan 09 Task 0). The Complete
+// button is a kit iconButton with the REAL `disabled` property, armed only while a
+// tier is checked. Modifier checkboxes stay native <input type=checkbox> (real
+// controls already); their listeners are owner-bound (F1 §4.5), and their titles moved
+// onto the kit tooltip (§4.2).
+//
+// Tier values are computed ONCE at mount from the current argument state (legacy
+// parity): a modifier change persists, and the echo-rebuild re-renders the panel with
+// the recomputed tiers. Completing an argument likewise leaves the checked radio for
+// the echo-rebuild to clear (legacy left its .active class the same way).
+//
+// Read-only hosts (F1 §4.4): the panel renders STATIC (no radios), checkboxes are
+// REAL-disabled with no listeners, and the Complete footer is omitted entirely — no
+// dead-end write affordances.
+import type { Component } from 'obsidian';
+import { iconButton, powerRollPanel, tooltip } from '@/framework/kit';
+import type { IconButtonHandle, PowerRollTier, RenderMdCallback } from '@/framework/kit';
+import { NegotiationData } from '@model/NegotiationData';
+import { ArgumentPowerRoll, ArgumentResult } from '@model/ArgumentPowerRolls';
 
-// Plan 05 Task 5 (F1 §6 step 8): persistence decoupled from CodeBlocks — the owning
-// NegotiationView injects `persist`; `app`/`ctx` existed only for the legacy
-// CodeBlocks.updateNegotiationTracker call sites (now `this.persist()`). The legacy `root`
-// parameter of build()/populateArgumentTab() was never read — dropped. (`setIcon` was
-// likewise an unused legacy import.)
 export class ArgumentView {
-    private data: NegotiationData;
-    private persist: () => void;
+	private selectedTier: ArgumentResult | null = null;
+	private completeButton?: IconButtonHandle;
 
-    private selectedPowerRollTier: ArgumentResult | null = null; // To track selected power roll tier
-    private completeButton: HTMLButtonElement; // Used for selecting power roll
+	constructor(
+		private readonly data: NegotiationData,
+		private readonly persist: () => void,
+		private readonly owner: Component,
+		private readonly renderMd: RenderMdCallback,
+		private readonly canPersist: boolean,
+	) {}
 
-    constructor(data: NegotiationData, persist: () => void) {
-        this.data = data;
-        this.persist = persist;
-    }
+	public build(parent: HTMLElement): void {
+		const body = parent.createDiv({ cls: 'dse-nt__argument' });
 
-    public build(parent: HTMLElement) {
-        this.populateArgumentTab(parent);
-    }
+		const modifiers = body.createDiv({ cls: 'dse-nt__argument-modifiers' });
+		this.buildMotivations(modifiers);
+		this.buildPitfalls(modifiers);
+		this.buildOtherMods(body);
+		this.buildPowerRoll(body);
 
-    private populateArgumentTab(argumentContainer: HTMLElement) {
-        const argumentBody = argumentContainer.createEl("div", { cls: "ds-nt-argument-body" });
-        const argModifiers = argumentBody.createEl("div", { cls: "ds-nt-argument-modifiers" });
+		// The Complete footer is a write action — omitted on read-only hosts (F1 §4.4).
+		if (this.canPersist) this.buildFooter(body);
+	}
 
-        // Argument modifiers
-        this.buildMotivationView(argModifiers);
-        this.buildPitfallsView(argModifiers);
+	/** A modifier line: <label> wrapping a native checkbox + its text (a real control). */
+	private checkboxLine(
+		parent: HTMLElement,
+		text: string,
+		init: (cb: HTMLInputElement) => void,
+		onChange: (cb: HTMLInputElement) => void,
+	): { line: HTMLElement; checkbox: HTMLInputElement } {
+		const line = parent.createEl('label', { cls: 'dse-nt__argument-item' });
+		const checkbox = line.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+		init(checkbox);
+		if (!this.canPersist) checkbox.disabled = true;
+		line.createSpan({ text });
+		// Read-only: no listener at all — there is no write path to reach (§4.4).
+		if (this.canPersist) {
+			this.owner.registerDomEvent(checkbox, 'change', () => onChange(checkbox));
+		}
+		return { line, checkbox };
+	}
 
-        this.buildOtherModsView(argumentBody);
+	private buildMotivations(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: 'dse-nt__argument-motivations' });
+		if (this.data.motivations.length === 0) return;
 
-        // Power Roll Display
-        const argumentPowerRoll = ArgumentPowerRoll.build(
-            this.data.currentArgument.usesMotivation(),
-            this.data.currentArgument.usesPitfall(),
-            this.data.currentArgument.lieUsed,
-            this.data.currentArgument.reusedMotivation,
-            this.data.currentArgument.sameArgumentUsed
-        );
-        this.buildPowerRoll(argumentBody, argumentPowerRoll);
+		const header = container.createDiv({
+			cls: 'dse-nt__argument-header',
+			text: 'Appeals to Motivation',
+		});
+		tooltip(
+			header,
+			'If the Heroes appeal to a Motivation (w/o a Pitfall): Difficulty of the Argument Test is Easy.',
+		);
 
-        // Complete Argument Button
-        const footer = argumentContainer.createEl('div', { cls: 'ds-nt-argument-footer' });
-        this.completeButton = footer.createEl('button', { cls: 'ds-nt-complete-argument-button' }) as HTMLButtonElement;
-        this.completeButton.title = "Resolve the Argument using the current state of motivations, pitfalls, etc. \nRequires Power Roll tier to be selected.";
-        labeledIcon("messages-square", "Complete Argument", this.completeButton);
-        this.completeButton.disabled = true; // Disable the button initially
-        this.completeButton.addEventListener('click', () => this.completeArgument());
-    }
+		for (const mot of this.data.motivations) {
+			const { line } = this.checkboxLine(
+				container,
+				mot.name,
+				(cb) => {
+					cb.checked = this.data.currentArgument.motivationsUsed.includes(mot.name);
+				},
+				(cb) => this.onMotivationToggled(mot.name, cb.checked),
+			);
+			if (mot.hasBeenAppealedTo) {
+				line.addClass('dse-nt__argument-item--used');
+				tooltip(line, 'This Motivation was used in a previous Argument.');
+			}
+		}
+	}
 
-    private buildMotivationView(argModifiers: any) {
-        const motContainer = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-motivations" });
+	private onMotivationToggled(name: string, used: boolean): void {
+		const usedList = this.data.currentArgument.motivationsUsed;
+		if (used) {
+			if (!usedList.includes(name)) usedList.push(name);
+			const mot = this.data.motivations.find((m) => m.name === name);
+			if (mot?.hasBeenAppealedTo) this.data.currentArgument.reusedMotivation = true;
+		} else {
+			const index = usedList.indexOf(name);
+			if (index > -1) {
+				usedList.splice(index, 1);
+				// Only recompute on REMOVAL: when adding a previously-appealed motivation
+				// the user may deselect the "reused" checkbox and that choice must stick —
+				// we may only force reusedMotivation true (known reuse) or false (no
+				// appealed-to motivation remains in the argument). Legacy behavior.
+				this.data.currentArgument.reusedMotivation = this.data.argumentReusesMotivation();
+			}
+		}
+		this.persist();
+	}
 
-        if (this.data.motivations.length > 0) {
-            const motHeader = motContainer.createEl("div", {
-                cls: "ds-nt-argument-modifier-motivation-header",
-                text: "Appeals to Motivation"
-            });
-            setTooltip(motHeader, "If the Heroes appeal to a Motivation (w/o a Pitfall): Difficulty of the Argument Test is Easy.");
+	private buildPitfalls(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: 'dse-nt__argument-pitfalls' });
+		if (this.data.pitfalls.length === 0) return;
 
-            this.data.motivations.forEach(mot => {
-                const motLine = motContainer.createEl("div", { cls: "ds-nt-argument-modifier-motivation-line" });
+		const header = container.createDiv({ cls: 'dse-nt__argument-header', text: 'Mentions Pitfall' });
+		tooltip(header, 'If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.');
 
-                // Create label and wrap checkbox and text within it
-                const motLabel = motLine.createEl("label", { cls: "ds-nt-argument-modifier-motivation-label" });
-                motLabel.classList.toggle("ds-nt-arg-motivation-used", mot.hasBeenAppealedTo ?? false);
+		for (const pit of this.data.pitfalls) {
+			this.checkboxLine(
+				container,
+				pit.name,
+				(cb) => {
+					cb.checked = this.data.currentArgument.pitfallsUsed.includes(pit.name);
+				},
+				(cb) => {
+					const usedList = this.data.currentArgument.pitfallsUsed;
+					if (cb.checked) {
+						if (!usedList.includes(pit.name)) usedList.push(pit.name);
+					} else {
+						const index = usedList.indexOf(pit.name);
+						if (index > -1) usedList.splice(index, 1);
+					}
+					this.persist();
+				},
+			);
+		}
+	}
 
-                if (mot.hasBeenAppealedTo) {
-                    setTooltip(motLabel, "This Motivation was used in a previous Argument.");
-                } else {
-                    setTooltip(motLabel, "");
-                }
+	private buildOtherMods(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: 'dse-nt__argument-other' });
 
-                const motCB = motLabel.createEl("input", {
-                    cls: "ds-nt-argument-modifier-motivation-checkbox",
-                    type: "checkbox"
-                }) as HTMLInputElement;
+		// Reused Motivation — enabled only while the argument actually reuses one.
+		const reusable = this.data.argumentReusesMotivation();
+		const reuse = this.checkboxLine(
+			container,
+			'Reuses a Motivation that has already been appealed to',
+			(cb) => {
+				cb.disabled = !reusable;
+				cb.checked = reusable && this.data.currentArgument.reusedMotivation;
+			},
+			(cb) => {
+				this.data.currentArgument.reusedMotivation = cb.checked;
+				this.persist();
+			},
+		);
+		tooltip(
+			reuse.line,
+			'If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.',
+		);
 
-                motCB.checked = this.data.currentArgument.motivationsUsed.includes(mot.name);
+		// Lie caught.
+		const lie = this.checkboxLine(
+			container,
+			'NPC caught a lie and is offended',
+			(cb) => {
+				cb.checked = this.data.currentArgument.lieUsed;
+			},
+			(cb) => {
+				this.data.currentArgument.lieUsed = cb.checked;
+				this.persist();
+			},
+		);
+		tooltip(
+			lie.line,
+			'If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.',
+		);
 
-                // Add the text inside the label
-                motLabel.createSpan({ text: mot.name });
+		// Same argument (without motivation).
+		const sameArg = this.checkboxLine(
+			container,
+			'Argument has already been made (w/o Motivation)',
+			(cb) => {
+				cb.disabled = this.data.currentArgument.usesMotivation();
+				cb.checked = this.data.currentArgument.sameArgumentUsed;
+			},
+			(cb) => {
+				this.data.currentArgument.sameArgumentUsed = cb.checked;
+				this.persist();
+			},
+		);
+		tooltip(
+			sameArg.line,
+			'If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.',
+		);
+	}
 
-                motCB.addEventListener("change", () => {
-                    if (motCB.checked) {
-                        if (!this.data.currentArgument.motivationsUsed.includes(mot.name)) {
-                            this.data.currentArgument.motivationsUsed.push(mot.name);
-                        }
-                        if (mot.hasBeenAppealedTo) {
-                            this.data.currentArgument.reusedMotivation = true;
-                        }
-                    } else {
-                        const index = this.data.currentArgument.motivationsUsed.indexOf(mot.name);
-                        if (index > -1) {
-                            this.data.currentArgument.motivationsUsed.splice(index, 1);
-                            // Make sure to only update this status if we are deleting a motivation.  When a motivation
-                            // is added and it appeals to a previously used motivation, the user MAY deselect the
-                            // "reused motivation" button and we want to preserve that state.  We can ONLY set the
-                            // "reusedMotivation" value to true (if we know its reused) or false (if motivation is no
-                            // long appealed to)
-                            this.data.currentArgument.reusedMotivation = this.data.argumentReusesMotivation();
-                        }
-                    }
+	private buildPowerRoll(parent: HTMLElement): void {
+		const roll = ArgumentPowerRoll.build(
+			this.data.currentArgument.usesMotivation(),
+			this.data.currentArgument.usesPitfall(),
+			this.data.currentArgument.lieUsed,
+			this.data.currentArgument.reusedMotivation,
+			this.data.currentArgument.sameArgumentUsed,
+		);
+		const byTier: Record<PowerRollTier, ArgumentResult> = {
+			low: roll.t1,
+			mid: roll.t2,
+			high: roll.t3,
+			crit: roll.crit,
+		};
 
-                    this.persist();
-                });
-            });
-        }
-    }
+		powerRollPanel(
+			parent,
+			{
+				chars: 'Reason, Intuition, or Presence',
+				rows: [
+					{ tier: 'low', md: roll.t1.toString() },
+					{ tier: 'mid', md: roll.t2.toString() },
+					{ tier: 'high', md: roll.t3.toString() },
+					{ tier: 'crit', md: roll.crit.toString() },
+				],
+				// Read-only hosts get the STATIC grammar — no radios to nowhere (§4.4).
+				selectable: this.canPersist,
+				onSelect: (tier) => {
+					this.selectedTier = byTier[tier];
+					this.completeButton?.setDisabled(false);
+				},
+				renderMd: this.renderMd,
+			},
+			this.owner,
+		);
+	}
 
-    private buildPitfallsView(argModifiers: any) {
-        const pitContainer = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-pitfalls" });
-        if (this.data.pitfalls.length > 0) {
-            const pitHeader = pitContainer.createEl("div", {
-                cls: "ds-nt-argument-modifier-pitfall-header",
-                text: "Mentions Pitfall"
-            });
-            pitHeader.title = "If the Heroes mention a Pitfall: Argument fails and the NPC may warn Heroes.";
+	private buildFooter(parent: HTMLElement): void {
+		const footer = parent.createDiv({ cls: 'dse-nt__argument-footer' });
+		this.completeButton = iconButton(
+			footer,
+			{
+				icon: 'messages-square',
+				label: 'Complete Argument',
+				text: 'Complete Argument',
+				disabled: true, // armed by tier selection (a radiogroup pick)
+				tooltip:
+					'Resolve the Argument using the current state of motivations, pitfalls, etc. \nRequires Power Roll tier to be selected.',
+				onClick: () => this.completeArgument(),
+			},
+			this.owner,
+		);
+	}
 
-            this.data.pitfalls.forEach(pit => {
-                const pitLine = pitContainer.createEl("div", { cls: "ds-nt-argument-modifier-pitfall-line" });
+	/** Resolve the argument: mark used motivations appealed-to, apply the selected
+	 *  tier's interest/patience deltas, reset the current argument, persist ONCE. */
+	private completeArgument(): void {
+		for (const motName of this.data.currentArgument.motivationsUsed) {
+			const mot = this.data.motivations.find((m) => m.name === motName);
+			if (mot) mot.hasBeenAppealedTo = true;
+		}
 
-                // Create label and wrap checkbox and text within it
-                const pitLabel = pitLine.createEl("label", { cls: "ds-nt-argument-modifier-pitfall-label" });
+		if (this.selectedTier) {
+			this.data.current_interest += this.selectedTier.interest;
+			this.data.current_patience += this.selectedTier.patience;
+		}
 
-                const pitCB = pitLabel.createEl("input", {
-                    cls: "ds-nt-argument-modifier-pitfall-checkbox",
-                    type: "checkbox"
-                }) as HTMLInputElement;
+		this.selectedTier = null;
+		this.completeButton?.setDisabled(true);
+		this.data.currentArgument.resetData();
 
-                pitCB.checked = this.data.currentArgument.pitfallsUsed.includes(pit.name);
-
-                // Add the text inside the label
-                pitLabel.createSpan({ text: pit.name });
-
-                pitCB.addEventListener("change", () => {
-                    if (pitCB.checked) {
-                        if (!this.data.currentArgument.pitfallsUsed.includes(pit.name)) {
-                            this.data.currentArgument.pitfallsUsed.push(pit.name);
-                        }
-                    } else {
-                        const index = this.data.currentArgument.pitfallsUsed.indexOf(pit.name);
-                        if (index > -1) {
-                            this.data.currentArgument.pitfallsUsed.splice(index, 1);
-                        }
-                    }
-                    this.persist();
-                });
-            });
-        }
-    }
-
-    private buildOtherModsView(argModifiers: any) {
-        const otherContainer = argModifiers.createEl("div", { cls: "ds-nt-argument-modifier-other" });
-
-        // Reused Motivation
-        const reuseMotivationLine = otherContainer.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-reuse-motivation-line" });
-        reuseMotivationLine.title = "If the Heroes try to appeal to a Motivation multiple times: Interest remains and Patience decreases by 1.";
-
-        // Create label and wrap checkbox and text within it
-        const reuseMotivationLabel = reuseMotivationLine.createEl("label", { cls: "ds-nt-argument-modifier-reuse-motivation-label" });
-
-        const reuseMotivationCheckbox = reuseMotivationLabel.createEl("input", {
-            cls: "ds-nt-argument-modifier-reuse-motivation-checkbox",
-            type: "checkbox"
-        }) as HTMLInputElement;
-
-        reuseMotivationCheckbox.disabled = !this.data.argumentReusesMotivation();
-        reuseMotivationCheckbox.checked = !reuseMotivationCheckbox.disabled && this.data.currentArgument.reusedMotivation;
-
-        reuseMotivationLabel.createSpan({
-            cls: "ds-nt-argument-modifier-reuse-motivation-text",
-            text: "Reuses a Motivation that has already been appealed to"
-        });
-
-        reuseMotivationCheckbox.addEventListener("change", () => {
-            this.data.currentArgument.reusedMotivation = reuseMotivationCheckbox.checked;
-            this.persist();
-        });
-
-        // Lie used
-        const lieLine = otherContainer.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-lie-line" });
-        lieLine.title = "If the NPC catches a lie: Arguments that fail to increase Interest will lose an additional Interest.";
-
-        // Create label and wrap checkbox and text within it
-        const lieLabel = lieLine.createEl("label", { cls: "ds-nt-argument-modifier-lie-label" });
-
-        const lieCheckbox = lieLabel.createEl("input", {
-            cls: "ds-nt-argument-modifier-lie-checkbox",
-            type: "checkbox"
-        }) as HTMLInputElement;
-
-        lieCheckbox.checked = this.data.currentArgument.lieUsed;
-
-        lieLabel.createSpan({ text: "NPC caught a lie and is offended" });
-
-        lieCheckbox.addEventListener("change", () => {
-            this.data.currentArgument.lieUsed = lieCheckbox.checked;
-            this.persist();
-        });
-
-        // Same Argument
-        const sameArgLine = otherContainer.createEl("div", { cls: "ds-nt-argument-modifier-line ds-nt-argument-modifier-same-arg-line" });
-        sameArgLine.title = "If the Heroes try to use the same Argument (w/o Motivation): Test automatically gets tier-1 result.";
-
-        // Create label and wrap checkbox and text within it
-        const sameArgLabel = sameArgLine.createEl("label", { cls: "ds-nt-argument-modifier-same-arg-label" });
-
-        const sameArgCheckbox = sameArgLabel.createEl("input", {
-            cls: "ds-nt-argument-modifier-same-arg-checkbox",
-            type: "checkbox"
-        }) as HTMLInputElement;
-
-        sameArgCheckbox.disabled = this.data.currentArgument.usesMotivation();
-        sameArgCheckbox.checked = this.data.currentArgument.sameArgumentUsed;
-
-        sameArgLabel.createSpan({
-            cls: "ds-nt-argument-modifier-same-arg-text",
-            text: "Argument has already been made (w/o Motivation)"
-        });
-
-        sameArgCheckbox.addEventListener("change", () => {
-            this.data.currentArgument.sameArgumentUsed = sameArgCheckbox.checked;
-            this.persist();
-        });
-    }
-
-    private buildPowerRoll(argumentBody: HTMLDivElement, argumentPowerRoll: ArgumentPowerRoll) {
-        const argPowerRoll = argumentBody.createEl("div", { cls: "ds-nt-argument-power-roll" });
-
-        const typeContainer = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-roll-line" });
-        typeContainer.createEl("span", { cls: "ability-roll-value", text: "Power Roll + Reason, Intuition, or Presence" });
-
-        const t1Container = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-tier-1-line" });
-        EffectView.tier1Key(t1Container);
-        t1Container.createEl("span", { cls: "pr-tier-value pr-tier-1-value", text: argumentPowerRoll.t1.toString() });
-
-        const t2Container = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-tier-2-line" });
-        EffectView.tier2Key(t2Container);
-        t2Container.createEl("span", { cls: "pr-tier-value pr-tier-2-value", text: argumentPowerRoll.t2.toString() });
-
-        const t3Container = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-tier-3-line" });
-        EffectView.tier3Key(t3Container);
-        t3Container.createEl("span", { cls: "pr-tier-value pr-tier-3-value", text: argumentPowerRoll.t3.toString() });
-
-        const critContainer = argPowerRoll.createEl("div", { cls: "ability-detail-line pr-tier-line pr-crit-line" });
-        EffectView.critKey(critContainer);
-        critContainer.createEl("span", { cls: "pr-tier-value pr-crit-value", text: argumentPowerRoll.crit.toString() });
-
-        // Array of containers and their corresponding results
-        const containers = [
-            { container: t1Container, result: argumentPowerRoll.t1 },
-            { container: t2Container, result: argumentPowerRoll.t2 },
-            { container: t3Container, result: argumentPowerRoll.t3 },
-            { container: critContainer, result: argumentPowerRoll.crit }
-        ];
-
-        // Add event listeners
-        containers.forEach(item => {
-            item.container.addEventListener('click', () => {
-                if (this.selectedPowerRollTier === item.result) {
-                    this.selectedPowerRollTier = null;
-                }  else {
-                    this.selectedPowerRollTier = item.result;
-                }
-
-                // Update classes to reflect active state
-                containers.forEach(c => {
-                    if (c.container === item.container && this.selectedPowerRollTier === item.result) {
-                        c.container.classList.add('active');
-                    } else {
-                        c.container.classList.remove('active');
-                    }
-                });
-
-                // Update the state of the complete button
-                this.updateCompleteButtonState();
-            });
-        });
-    }
-
-    private updateCompleteButtonState() {
-        if (this.completeButton) {
-            this.completeButton.disabled = this.selectedPowerRollTier == null;
-        }
-    }
-
-    private completeArgument() {
-        // Update mot.hasBeenAppealedTo for motivations used in the current argument
-        this.data.currentArgument.motivationsUsed.forEach(motName => {
-            const mot = this.data.motivations.find(m => m.name === motName);
-            if (mot) {
-                mot.hasBeenAppealedTo = true;
-            }
-        });
-
-        // Update current_interest and current_patience based on selected tier
-        if (this.selectedPowerRollTier) {
-            this.data.current_interest += this.selectedPowerRollTier.interest;
-            this.data.current_patience += this.selectedPowerRollTier.patience;
-        }
-
-        // Reset selectedPowerRollTier
-        this.selectedPowerRollTier = null;
-        this.updateCompleteButtonState();
-
-        // Reset current argument
-        this.data.currentArgument.resetData();
-
-        this.persist();
-    }
+		this.persist();
+	}
 }

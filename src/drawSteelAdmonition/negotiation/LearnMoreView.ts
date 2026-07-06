@@ -1,38 +1,42 @@
-import {PowerRollTiers} from "@model/powerRoll";
-import {EffectView} from "@drawSteelAdmonition/Features/EffectView";
+// Plan 09 Task 7 (D2 §3.10) — the "Learn Motivation/Pitfall" tab on the D2 kit: the
+// legacy hand-rolled tier lines (EffectView.tierNKey) become ONE STATIC kit
+// powerRollPanel (this panel was never clickable — it renders rules text only, three
+// tiers, no crit row). Markdown goes through the caller-supplied renderMd callback
+// (the owning view's this.renderMarkdown — ML-1); this module never touches Obsidian's
+// renderer. No data, no persistence — nothing to gate on canPersist.
+import type { Component } from 'obsidian';
+import { powerRollPanel } from '@/framework/kit';
+import type { RenderMdCallback } from '@/framework/kit';
 
-// Plan 05 Task 5 (F1 §6 step 8): this view renders static rules text only — it never
-// persisted, and its legacy `app`/`data`/`ctx` constructor fields were never read
-// (they existed only for constructor-signature symmetry with the other sub-views).
-// All three are dropped; `setTooltip` was likewise an unused legacy import.
+const INTRO =
+	'If the heroes want to learn one of the NPC’s motivations or pitfalls, a hero can make the following test while interacting with the NPC during the negotiation. After this test is made, the heroes can’t make another test to determine the same NPC’s motivations or pitfalls until they make an argument to the NPC or the negotiation ends.';
+
+const TIER_1 =
+	'The hero learns no information regarding the NPC’s motivations or pitfalls, and the NPC realizes the hero is trying to read them and becomes annoyed. As a consequence, the NPC’s patience is reduced by 1.';
+const TIER_2 = 'The hero learns no information regarding the NPC’s motivations or pitfalls.';
+const TIER_3 = 'The hero learns one of the NPC’s motivations or pitfalls (their choice).';
+
 export class LearnMoreView {
-	private static learnMorePowerRoll = new PowerRollTiers(
-		"The hero learns no information regarding the NPC’s motivations or pitfalls, and the NPC realizes the hero is trying to read them and becomes annoyed. As a consequence, the NPC’s patience is reduced by 1.",
-		"The hero learns no information regarding the NPC’s motivations or pitfalls.",
-		"The hero learns one of the NPC’s motivations or pitfalls (their choice).",
-		""
-	);
+	constructor(
+		private readonly owner: Component,
+		private readonly renderMd: RenderMdCallback,
+	) {}
 
-	public build(parent: HTMLElement) {
-		const learnMoreBody = parent.createEl("div", {cls: "ds-nt-learn-more-body"});
-		learnMoreBody.createEl("p", {text: "If the heroes want to learn one of the NPC’s motivations or pitfalls, a hero can make the following test while interacting with the NPC during the negotiation. After this test is made, the heroes can’t make another test to determine the same NPC’s motivations or pitfalls until they make an argument to the NPC or the negotiation ends."});
-		this.buildPowerRoll(learnMoreBody);
-	}
-
-	private buildPowerRoll(parent: HTMLDivElement) {
-		const argPowerRoll = parent.createEl("div", {cls: "ds-nt-argument-power-roll"});
-
-		const typeContainer = argPowerRoll.createEl("div", {cls: "ability-detail-line pr-roll-line"});
-		typeContainer.createEl("span", {cls: "ability-roll-value", text: "Power Roll + Reason, Intuition, or Presence"});
-
-		const t1Container = argPowerRoll.createEl("div", {cls: "ability-detail-line pr-tier-line pr-tier-1-line"});
-		EffectView.tier1Key(t1Container);
-		t1Container.createEl("span", {cls: "pr-tier-value pr-tier-1-value", text: LearnMoreView.learnMorePowerRoll.t1});
-		const t2Container = argPowerRoll.createEl("div", {cls: "ability-detail-line pr-tier-line pr-tier-2-line"});
-		EffectView.tier2Key(t2Container);
-		t2Container.createEl("span", {cls: "pr-tier-value pr-tier-2-value", text: LearnMoreView.learnMorePowerRoll.t2});
-		const t3Container = argPowerRoll.createEl("div", {cls: "ability-detail-line pr-tier-line pr-tier-3-line"});
-		EffectView.tier3Key(t3Container);
-		t3Container.createEl("span", {cls: "pr-tier-value pr-tier-3-value", text: LearnMoreView.learnMorePowerRoll.t3});
+	public build(parent: HTMLElement): void {
+		const body = parent.createDiv({ cls: 'dse-nt__learn-more' });
+		body.createEl('p', { text: INTRO });
+		powerRollPanel(
+			body,
+			{
+				chars: 'Reason, Intuition, or Presence',
+				rows: [
+					{ tier: 'low', md: TIER_1 },
+					{ tier: 'mid', md: TIER_2 },
+					{ tier: 'high', md: TIER_3 },
+				],
+				renderMd: this.renderMd,
+			},
+			this.owner,
+		);
 	}
 }

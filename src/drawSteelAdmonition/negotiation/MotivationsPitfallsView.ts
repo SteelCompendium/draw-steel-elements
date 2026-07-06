@@ -1,56 +1,63 @@
-import {NegotiationData} from "@model/NegotiationData";
+// Plan 09 Task 7 (D2 §3.10) — the Motivations/Pitfalls details block, re-classed onto
+// the .dse-nt__motivations grammar (same list/details structure as before: motivation
+// rows are <label> + native checkbox — already real controls — pitfall rows are static
+// name/reason lines). Listeners are owner-bound (F1 §4.5); the legacy `title` moved
+// onto the kit tooltip (§4.2). Read-only hosts (F1 §4.4): checkboxes render REAL-
+// disabled with no listeners — visible state, no write path.
+//
+// Persistence contract unchanged (Plan 05 Task 5): the owning NegotiationView injects
+// `persist`; a user toggle routes through NegotiationData.setMotivationUsed (which also
+// maintains currentArgument.reusedMotivation) and persists — rendering never writes.
+import type { Component } from 'obsidian';
+import { tooltip } from '@/framework/kit';
+import { NegotiationData } from '@model/NegotiationData';
 
-// Plan 05 Task 5 (F1 §6 step 8): persistence decoupled from CodeBlocks — the owning
-// NegotiationView injects `persist`; `app`/`ctx` existed only for the
-// CodeBlocks.updateNegotiationTracker call and are gone.
 export class MotivationsPitfallsView {
-	private data: NegotiationData;
-	private persist: () => void;
+	constructor(
+		private readonly data: NegotiationData,
+		private readonly persist: () => void,
+		private readonly owner: Component,
+		private readonly canPersist: boolean,
+	) {}
 
-	constructor(data: NegotiationData, persist: () => void) {
-		this.data = data;
-		this.persist = persist;
+	public build(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: 'dse-nt__motivations' });
+		this.addMotivations(container);
+		this.addPitfalls(container);
 	}
 
-	public build(parent: HTMLElement) {
-		this.addMotivations(parent);
-		this.addPitfalls(parent);
-	}
+	private addMotivations(parent: HTMLElement): void {
+		if (this.data.motivations.length === 0) return;
+		parent.createDiv({ cls: 'dse-nt__details-header', text: 'Motivations' });
+		const list = parent.createDiv({ cls: 'dse-nt__details-list' });
 
-	// Add Motivations
-	private addMotivations(parent: HTMLElement) {
-		if (this.data.motivations.length > 0) {
-			const motivationsCont = parent.createEl("div", { cls: "ds-nt-motivations" });
-			motivationsCont.createEl("div", { cls: "ds-nt-details-header ds-nt-motivation-header", text: "Motivations" });
-			const motivationList = motivationsCont.createEl("div", { cls: "ds-nt-motivation-list" });
-
-			this.data.motivations.forEach(mot => {
-				const label = motivationList.createEl("label", { cls: "ds-nt-details-label ds-nt-motivation-label" });
-				label.title = "Check Motivations that have already been appealed to.";
-				const checkbox = label.createEl("input", { cls: "ds-nt-details-checkbox ds-nt-motivation-checkbox", type: "checkbox" }) as HTMLInputElement;
-				checkbox.checked = mot.hasBeenAppealedTo ?? false;
-				label.createEl("span", { cls: "ds-nt-details-name ds-nt-motivation-name", text: mot.name + ": " });
-				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-motivation-reason", text: mot.reason });
-				checkbox.addEventListener("change", () => {
+		for (const mot of this.data.motivations) {
+			const label = list.createEl('label', { cls: 'dse-nt__details-item' });
+			tooltip(label, 'Check Motivations that have already been appealed to.');
+			const checkbox = label.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+			checkbox.checked = mot.hasBeenAppealedTo ?? false;
+			if (!this.canPersist) checkbox.disabled = true;
+			label.createSpan({ cls: 'dse-nt__details-name', text: mot.name + ': ' });
+			label.createSpan({ cls: 'dse-nt__details-reason', text: mot.reason });
+			// Read-only: no listener at all — there is no write path to reach (§4.4).
+			if (this.canPersist) {
+				this.owner.registerDomEvent(checkbox, 'change', () => {
 					this.data.setMotivationUsed(mot.name, checkbox.checked);
 					this.persist();
 				});
-			});
+			}
 		}
 	}
 
-	// Add Pitfalls
-	private addPitfalls(parent: HTMLElement) {
-		if (this.data.pitfalls.length > 0) {
-			const pitfallsCont = parent.createEl("div", { cls: "ds-nt-pitfalls" });
-			pitfallsCont.createEl("div", { cls: "ds-nt-details-header ds-nt-pitfall-header", text: "Pitfalls" });
-			const pitfallList = pitfallsCont.createEl("div", { cls: "ds-nt-pitfall-list" });
+	private addPitfalls(parent: HTMLElement): void {
+		if (this.data.pitfalls.length === 0) return;
+		parent.createDiv({ cls: 'dse-nt__details-header', text: 'Pitfalls' });
+		const list = parent.createDiv({ cls: 'dse-nt__details-list' });
 
-			this.data.pitfalls.forEach(pit => {
-				const label = pitfallList.createEl("label", { cls: "ds-nt-details-label ds-nt-pitfall-label" });
-				label.createEl("span", { cls: "ds-nt-details-name ds-nt-pitfall-name", text: pit.name + ": " });
-				label.createEl("span", { cls: "ds-nt-details-reason ds-nt-pitfall-reason", text: pit.reason });
-			});
+		for (const pit of this.data.pitfalls) {
+			const item = list.createDiv({ cls: 'dse-nt__details-item' });
+			item.createSpan({ cls: 'dse-nt__details-name', text: pit.name + ': ' });
+			item.createSpan({ cls: 'dse-nt__details-reason', text: pit.reason });
 		}
 	}
 }

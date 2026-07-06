@@ -1,74 +1,96 @@
-import {NegotiationData} from "@model/NegotiationData";
+// Plan 09 Task 7 (D2 §3.10) — the Patience track + Interest ladder on the kit
+// iconButton: every clickable bubble is a REAL <button aria-pressed> (click-to-set),
+// keyboard-operable by construction, replacing the legacy click-<div>s. Selection
+// repaints IN PLACE through the kit handles (aria-pressed/[data-pressed]) plus the
+// [data-current]/[data-reached] attributes the CSS keys to --dse-accent (current-rung
+// glow) and --dse-fg-faint (passed rungs) — no querySelector class sweeps, no rebuild.
+//
+// Persistence contract unchanged (Plan 05 Task 5): the owning NegotiationView injects
+// `persist` (framework debounced write-behind); a user mutation mutates the model then
+// persists — rendering NEVER writes. Read-only hosts (F1 §4.4): the bubbles render as
+// visible state but REAL-disabled (CB-8 — the kit guard also swallows synthetic
+// clicks), and no persist path can fire.
+import type { Component } from 'obsidian';
+import { iconButton } from '@/framework/kit';
+import type { IconButtonHandle } from '@/framework/kit';
+import { NegotiationData } from '@model/NegotiationData';
 
-// Plan 05 Task 5 (F1 §6 step 8): persistence decoupled from CodeBlocks — the owning
-// NegotiationView injects `persist` (framework debounced write-behind); `app`/`ctx`
-// existed only for the CodeBlocks.updateNegotiationTracker call and are gone. This view
-// still updates its own DOM in place on mutation (class toggling via querySelector).
 export class PatienceInterestView {
-	private data: NegotiationData;
-	private persist: () => void;
+	private readonly patienceBubbles: IconButtonHandle[] = [];
+	private readonly interestBubbles: IconButtonHandle[] = [];
+	private readonly interestRows: HTMLElement[] = [];
+	private readonly interestOffers: HTMLElement[] = [];
 
-	constructor(data: NegotiationData, persist: () => void) {
-		this.data = data;
-		this.persist = persist;
-	}
+	constructor(
+		private readonly data: NegotiationData,
+		private readonly persist: () => void,
+		private readonly owner: Component,
+		private readonly canPersist: boolean,
+	) {}
 
-	public build(parent: HTMLElement) {
+	public build(parent: HTMLElement): void {
 		this.addPatience(parent);
 		this.addInterest(parent);
 	}
 
-	// Add Patience Tracker
-	private addPatience(parent: HTMLElement) {
-		const patienceCont = parent.createEl("div", { cls: "ds-nt-patience-container" });
-		patienceCont.createEl("div", { cls: "ds-nt-patience-label", text: "Patience" });
-
-		const bubbleCont = patienceCont.createEl("div", { cls: "ds-nt-patience-bubble-container" });
-		for (let i = 0; i <= 5; i++) {
-			const bubble = bubbleCont.createEl("div", {
-				cls: `ds-nt-patience-bubble ds-nt-patience-bubble-${i}`,
-				text: `${i}`
-			});
-			bubble.addEventListener("click", () => this.setPatience(i, parent));
-		}
-
-		// Initialize Patience Display — display only. The legacy processor initialized via
-		// setPatience(), which ALSO persisted: rendering a note wrote the note. On Framework
-		// v2 rendering must never write, so init skips the mutate+persist step.
-		if (this.data.current_patience != null) {
-			this.updatePatienceDisplay(this.data.current_patience, parent);
-		}
+	/** A track bubble: round kit iconButton, aria-pressed = "filled up to here". */
+	private bubble(
+		parent: HTMLElement,
+		value: number,
+		label: string,
+		onClick: () => void,
+	): IconButtonHandle {
+		const handle = iconButton(
+			parent,
+			{
+				text: String(value),
+				label,
+				pressed: false, // painted by the render pass below
+				disabled: !this.canPersist,
+				onClick,
+			},
+			this.owner,
+		);
+		handle.buttonEl.addClass('dse-nt__bubble');
+		handle.buttonEl.setAttribute('data-value', String(value));
+		return handle;
 	}
 
-	// Set Patience Level (user mutation: update display, update data, persist)
-	private setPatience(newPatience: number, container: HTMLElement) {
-		this.updatePatienceDisplay(newPatience, container);
-		this.data.current_patience = newPatience;
+	// -- Patience: label + 6 bubbles over a connector line ---------------------------
+
+	private addPatience(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: 'dse-nt__patience' });
+		container.createDiv({ cls: 'dse-nt__patience-label', text: 'Patience' });
+		const track = container.createDiv({ cls: 'dse-nt__patience-track' });
+		for (let i = 0; i <= 5; i++) {
+			this.patienceBubbles.push(
+				this.bubble(track, i, `Set patience to ${i}`, () => this.setPatience(i)),
+			);
+		}
+		this.renderPatience();
+	}
+
+	/** User mutation: update data, repaint in place, persist (render never writes). */
+	private setPatience(value: number): void {
+		this.data.current_patience = value;
+		this.renderPatience();
 		this.persist();
 	}
 
-	private updatePatienceDisplay(newPatience: number, container: HTMLElement) {
-		for (let i = 0; i <= 5; i++) {
-			const bubble = container.querySelector(`.ds-nt-patience-bubble-${i}`) as HTMLElement;
-			if (i > newPatience) {
-				bubble.classList.remove("ds-nt-patience-selected");
-			} else {
-				bubble.classList.add("ds-nt-patience-selected");
-			}
-		}
+	private renderPatience(): void {
+		this.patienceBubbles.forEach((bubble, i) => bubble.setPressed(i <= this.data.current_patience));
 	}
 
-	// Add Interest Tracker
-	private addInterest(parent: HTMLElement) {
-		const interestCont = parent.createEl("div", { cls: "ds-nt-interest-container" });
-		interestCont.createEl("div", { cls: "ds-nt-interest-header", text: "Interest" });
+	// -- Interest: the 5..0 offer ladder ----------------------------------------------
 
-		const offerCont = interestCont.createEl("div", { cls: "ds-nt-interest-offer-container" });
+	private addInterest(parent: HTMLElement): void {
+		const container = parent.createDiv({ cls: 'dse-nt__interest' });
+		container.createDiv({ cls: 'dse-nt__interest-header', text: 'Interest' });
+		const ladder = container.createDiv({ cls: 'dse-nt__interest-ladder' });
 
-		// NegotiationData's i0..i5 fields aren't index-signature-accessible (they're
-		// individually declared, non-optional string fields); look them up via an
-		// explicit map instead of dynamic `this.data[`i${i}`]` indexing.
-		const interestOffers: Record<number, string> = {
+		// NegotiationData's i0..i5 are individually declared string fields (not
+		// index-signature-accessible) — an explicit map instead of `this.data[`i${i}`]`.
+		const offers: Record<number, string> = {
 			0: this.data.i0,
 			1: this.data.i1,
 			2: this.data.i2,
@@ -78,47 +100,33 @@ export class PatienceInterestView {
 		};
 
 		for (let i = 5; i >= 0; i--) {
-			const iLine = offerCont.createEl("div", { cls: `ds-nt-interest-line ds-nt-interest-${i}-line` });
-			const label = iLine.createEl("div", { cls: `ds-nt-interest-label ds-nt-interest-${i}-label`, text: `${i}` });
-			label.addEventListener("click", () => this.setInterest(i, parent));
-
-			const offerText = interestOffers[i] ?? `Offer at Interest ${i}`;
-			iLine.createEl("div", { cls: `ds-nt-interest-offer ds-nt-interest-${i}-offer`, text: offerText });
+			const row = ladder.createDiv({ cls: 'dse-nt__interest-row' });
+			row.setAttribute('data-interest', String(i));
+			this.interestBubbles[i] = this.bubble(row, i, `Set interest to ${i}`, () =>
+				this.setInterest(i),
+			);
+			this.interestRows[i] = row;
+			this.interestOffers[i] = row.createDiv({ cls: 'dse-nt__interest-offer', text: offers[i] });
 		}
-
-		// Initialize Interest Display — display only (same render-must-not-write rule as
-		// the patience init above).
-		if (this.data.current_interest != null) {
-			this.updateInterestDisplay(this.data.current_interest, parent);
-		}
+		this.renderInterest();
 	}
 
-	// Set Interest Level (user mutation: update display, update data, persist)
-	private setInterest(newInterest: number, container: HTMLElement) {
-		this.updateInterestDisplay(newInterest, container);
-		this.data.current_interest = newInterest;
+	/** User mutation: update data, repaint in place, persist (render never writes). */
+	private setInterest(value: number): void {
+		this.data.current_interest = value;
+		this.renderInterest();
 		this.persist();
 	}
 
-	private updateInterestDisplay(newInterest: number, container: HTMLElement) {
+	private renderInterest(): void {
+		const current = this.data.current_interest;
 		for (let i = 0; i <= 5; i++) {
-			const line = container.querySelector(`.ds-nt-interest-${i}-line`) as HTMLElement;
-			const offer = line.querySelector(`.ds-nt-interest-offer`) as HTMLElement;
-			if (i > newInterest) {
-				line.classList.remove("ds-nt-interest-selected");
-			} else {
-				line.classList.add("ds-nt-interest-selected");
-			}
-			if (i < newInterest) {
-				offer.classList.add("ds-nt-interest-faded");
-			} else {
-				offer.classList.remove("ds-nt-interest-faded");
-			}
-			if (i === newInterest) {
-				line.classList.add("ds-nt-interest-current");
-			} else {
-				line.classList.remove("ds-nt-interest-current");
-			}
+			// Bubbles fill up to the current rung (legacy ds-nt-interest-selected)…
+			this.interestBubbles[i].setPressed(i <= current);
+			// …the current rung glows (--dse-accent, via CSS)…
+			this.interestRows[i].toggleAttribute('data-current', i === current);
+			// …and PASSED rungs below it fade (--dse-fg-faint, via CSS).
+			this.interestOffers[i].toggleAttribute('data-reached', i < current);
 		}
 	}
 }
