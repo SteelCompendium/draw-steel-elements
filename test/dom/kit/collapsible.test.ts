@@ -1,19 +1,19 @@
-// Plan 08 Task 3 (D2 §2.3) — kit/collapsible2: the ComponentWrapper replacement.
+// Plan 08 Task 3 (D2 §2.3) — kit/collapsible: the ComponentWrapper replacement.
 // Header is a REAL <button aria-expanded> wired to the region via aria-controls;
 // the region hides via the `hidden` ATTRIBUTE (never inline display); the chevron
 // (setIcon "chevron-right") rotates via CSS keyed to [data-open] (reduced-motion-
 // safe); `persist` round-trips open-state through a SessionStore accessor so
 // collapse survives a remount WITHOUT the kit importing cx (kit⊥elements).
 //
-// Named collapsible2 because kit/collapsible.ts (the D1 CollapsibleHeading port)
-// still owns the `collapsible` name — Plan 09 renames after the old one is deleted.
+// Originally shipped under a "2"-suffixed name while the D1 CollapsibleHeading port
+// still owned `collapsible` — Plan 09 Task 10 deleted it and renamed this one.
 import * as fs from 'fs';
 import * as path from 'path';
-import { collapsible2 } from '../../../src/framework/kit/collapsible2';
+import { collapsible } from '../../../src/framework/kit/collapsible';
 import { Component } from '../../mocks/obsidian';
 import { createSessionStore } from '../../../src/framework/session';
-// The SessionPersist ACCESSOR type now lives in framework/session (Plan 09 Task 0 —
-// neutral home; collapsible2.ts is deleted by the rename later in Plan 09).
+// The SessionPersist ACCESSOR type lives in framework/session (Plan 09 Task 0 —
+// neutral home, so it survived this widget's Task 10 rename).
 import type { SessionPersist } from '../../../src/framework/session';
 import { styleGuardFindings } from './styleGuard';
 
@@ -21,11 +21,11 @@ function fakeOwner(): any {
 	return new Component();
 }
 
-describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
+describe('Plan 08 Task 3: kit/collapsible (D2 §2.3)', () => {
 	describe('structure + a11y', () => {
 		test('header is a REAL <button type="button" aria-expanded> with aria-controls → the region id', () => {
 			const parent = document.createElement('div');
-			const handle = collapsible2(parent, { title: 'Skills', open: true }, fakeOwner());
+			const handle = collapsible(parent, { title: 'Skills', open: true }, fakeOwner());
 
 			const rootEl = parent.querySelector('.dse-collapse')!;
 			expect(rootEl).not.toBeNull();
@@ -43,14 +43,14 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 
 		test('two collapsibles get DISTINCT region ids (aria-controls stays unambiguous)', () => {
 			const parent = document.createElement('div');
-			const first = collapsible2(parent, { title: 'A', open: true }, fakeOwner());
-			const second = collapsible2(parent, { title: 'B', open: true }, fakeOwner());
+			const first = collapsible(parent, { title: 'A', open: true }, fakeOwner());
+			const second = collapsible(parent, { title: 'B', open: true }, fakeOwner());
 			expect(first.contentEl.id).not.toBe(second.contentEl.id);
 		});
 
 		test('chevron is a setIcon("chevron-right") span inside the header', () => {
 			const parent = document.createElement('div');
-			const handle = collapsible2(parent, { title: 'Skills', open: false }, fakeOwner());
+			const handle = collapsible(parent, { title: 'Skills', open: false }, fakeOwner());
 			const chevron = handle.headerEl.querySelector('.dse-collapse__chevron')!;
 			expect(chevron).not.toBeNull();
 			expect(chevron.getAttribute('data-icon')).toBe('chevron-right');
@@ -60,7 +60,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 			const parent = document.createElement('div');
 			const titleEl = document.createElement('em');
 			titleEl.textContent = 'Custom title';
-			const handle = collapsible2(parent, { titleEl, open: true }, fakeOwner());
+			const handle = collapsible(parent, { titleEl, open: true }, fakeOwner());
 			expect(handle.headerEl.contains(titleEl)).toBe(true);
 		});
 	});
@@ -68,7 +68,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 	describe('open/closed state — aria-expanded + the hidden ATTRIBUTE + [data-open]', () => {
 		test('open: aria-expanded="true", region visible, [data-open] set (drives the CSS chevron rotate)', () => {
 			const parent = document.createElement('div');
-			const handle = collapsible2(parent, { title: 'x', open: true }, fakeOwner());
+			const handle = collapsible(parent, { title: 'x', open: true }, fakeOwner());
 			const rootEl = parent.querySelector('.dse-collapse')!;
 
 			expect(handle.headerEl.getAttribute('aria-expanded')).toBe('true');
@@ -79,7 +79,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 
 		test('closed: aria-expanded="false", region carries the hidden ATTRIBUTE (no inline display)', () => {
 			const parent = document.createElement('div');
-			const handle = collapsible2(parent, { title: 'x', open: false }, fakeOwner());
+			const handle = collapsible(parent, { title: 'x', open: false }, fakeOwner());
 			const rootEl = parent.querySelector('.dse-collapse')!;
 
 			expect(handle.headerEl.getAttribute('aria-expanded')).toBe('false');
@@ -94,7 +94,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 		test('header click toggles everything and fires onToggle with the NEW state', () => {
 			const parent = document.createElement('div');
 			const onToggle = jest.fn();
-			const handle = collapsible2(parent, { title: 'x', open: false, onToggle }, fakeOwner());
+			const handle = collapsible(parent, { title: 'x', open: false, onToggle }, fakeOwner());
 			const rootEl = parent.querySelector('.dse-collapse')!;
 
 			handle.headerEl.click();
@@ -118,7 +118,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 		test('setOpen reflects state onto the SAME nodes without firing onToggle', () => {
 			const parent = document.createElement('div');
 			const onToggle = jest.fn();
-			const handle = collapsible2(parent, { title: 'x', open: false, onToggle }, fakeOwner());
+			const handle = collapsible(parent, { title: 'x', open: false, onToggle }, fakeOwner());
 			const regionBefore = handle.contentEl;
 
 			handle.setOpen(true);
@@ -141,14 +141,14 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 		test('a user toggle survives a remount (open-state round-trips through the session)', () => {
 			const session = createSessionStore();
 			const parentA = document.createElement('div');
-			const a = collapsible2(parentA, { title: 'x', open: false, persist: persistOf(session) }, fakeOwner());
+			const a = collapsible(parentA, { title: 'x', open: false, persist: persistOf(session) }, fakeOwner());
 
 			a.headerEl.click(); // user opens it
 			expect(a.isOpen()).toBe(true);
 			parentA.remove(); // echo-rebuild: old DOM goes away
 
 			const parentB = document.createElement('div');
-			const b = collapsible2(parentB, { title: 'x', open: false, persist: persistOf(session) }, fakeOwner());
+			const b = collapsible(parentB, { title: 'x', open: false, persist: persistOf(session) }, fakeOwner());
 			expect(b.isOpen()).toBe(true); // persisted state beats opts.open
 			expect(b.headerEl.getAttribute('aria-expanded')).toBe('true');
 			expect(b.contentEl.hasAttribute('hidden')).toBe(false);
@@ -158,7 +158,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 			const session = createSessionStore();
 			const persist = persistOf(session);
 			const parent = document.createElement('div');
-			const handle = collapsible2(parent, { title: 'x', open: true, persist }, fakeOwner());
+			const handle = collapsible(parent, { title: 'x', open: true, persist }, fakeOwner());
 			expect(handle.isOpen()).toBe(true);
 			// Mount alone must not pollute the store — only real state CHANGES persist.
 			expect(session.get(persist.blockKey, persist.slot)).toBeUndefined();
@@ -168,7 +168,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 			const session = createSessionStore();
 			const persist = persistOf(session);
 			const parent = document.createElement('div');
-			const handle = collapsible2(parent, { title: 'x', open: false, persist }, fakeOwner());
+			const handle = collapsible(parent, { title: 'x', open: false, persist }, fakeOwner());
 
 			handle.setOpen(true);
 			expect(session.get<boolean>(persist.blockKey, persist.slot)).toBe(true);
@@ -177,12 +177,12 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 		test('two slots on the same blockKey stay independent', () => {
 			const session = createSessionStore();
 			const parent = document.createElement('div');
-			const a = collapsible2(
+			const a = collapsible(
 				parent,
 				{ title: 'a', open: false, persist: { session, blockKey: 'k', slot: 'collapse-a' } },
 				fakeOwner(),
 			);
-			collapsible2(
+			collapsible(
 				parent,
 				{ title: 'b', open: false, persist: { session, blockKey: 'k', slot: 'collapse-b' } },
 				fakeOwner(),
@@ -198,7 +198,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 		const parent = document.createElement('div');
 		const onToggle = jest.fn();
 		const owner = fakeOwner();
-		const handle = collapsible2(parent, { title: 'x', open: false, onToggle }, owner);
+		const handle = collapsible(parent, { title: 'x', open: false, onToggle }, owner);
 
 		owner.unload();
 		handle.headerEl.click();
@@ -231,7 +231,7 @@ describe('Plan 08 Task 3: kit/collapsible2 (D2 §2.3)', () => {
 
 describe('Plan 08 Task 3: kit hygiene guard (D2 §5 — no inline color, tokens only)', () => {
 	const kitDir = path.join(__dirname, '../../../src/framework/kit');
-	const taskFiles = ['collapsible2.ts', 'tabs.ts', 'managedModal.ts'];
+	const taskFiles = ['collapsible.ts', 'tabs.ts', 'managedModal.ts'];
 
 	test.each(taskFiles)('%s: inline color banned; --dse-* geometry setProperty allowed', (file) => {
 		const src = fs.readFileSync(path.join(kitDir, file), 'utf8');

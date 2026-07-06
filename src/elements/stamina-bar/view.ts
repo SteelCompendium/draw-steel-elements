@@ -1,5 +1,5 @@
 // Plan 09 Task 3 (D2 §3.5) — StaminaBarView on the D2 kit. The whole-element wrapper is
-// the kit collapsible2 (title "Stamina Bar", seeded from collapse_default, NO
+// the kit collapsible (title "Stamina Bar", seeded from collapse_default, NO
 // SessionPersist — this element was never session-tracked: every mount starts fresh
 // from the YAML, exactly as the Vue component did). The bar renders the .dse-stamina
 // grammar: state COLOR via the [data-state] class rules on the --dse-stamina-* tokens,
@@ -13,14 +13,14 @@
 // stays byte-compatible (F1 §6).
 import { setTooltip } from 'obsidian';
 import { ElementView } from '@/framework/view';
-import { collapsible2, openManagedModal } from '@/framework/kit';
+import { collapsible, openManagedModal } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 
 const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
 
-/** Title shown in the whole-element collapsible2 header (the old ComponentWrapper
+/** Title shown in the whole-element collapsible header (the old ComponentWrapper
  *  componentName, previously visible only in the collapsed rail). */
 const WRAPPER_TITLE = 'Stamina Bar';
 
@@ -53,7 +53,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 	private numPillEl!: HTMLElement;
 
 	protected onMount(root: HTMLElement, model: StaminaBar): void {
-		// Whole-element wrapper: ONE kit collapsible2 (replaces the old kit
+		// Whole-element wrapper: ONE kit collapsible (replaces the old kit
 		// ComponentWrapper). Legacy quirk preserved verbatim (D1 spec §"Step 3"):
 		// StaminaBar.vue always passed `!disable_click` — never `model.collapsible` —
 		// as ComponentWrapper's `collapsible` prop, and in every reachable production
@@ -61,7 +61,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// honored: the element is always collapsible. Seeded from collapse_default
 		// with NO SessionPersist (unlike Skills): not session-tracked, matching the
 		// legacy element.
-		const wrapper = collapsible2(root, { title: WRAPPER_TITLE, open: !model.collapse_default }, this);
+		const wrapper = collapsible(root, { title: WRAPPER_TITLE, open: !model.collapse_default }, this);
 		this.renderBar(wrapper.contentEl, model);
 	}
 
@@ -95,7 +95,7 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 
 		// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, unresolvable
 		// canvas nodes) -> render read-only (visible but inert) instead of a dead-end click.
-		// collapsible2 hides (never rebuilds) its region, so the bar mounts exactly once
+		// collapsible hides (never rebuilds) its region, so the bar mounts exactly once
 		// per onMount and view-bound listeners are correct (the old per-expand-cycle
 		// contentOwner machinery is gone — same shift as Skills, Plan 09 Task 2).
 		if (canPersist) {

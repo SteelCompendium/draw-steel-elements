@@ -2,10 +2,6 @@
 /*     General Styles    */
 /* ==================== */
 
-.ds-multiline {
-	white-space: pre-line;
-}
-
 .ds-labeled-icon {
 	display: flex;
 	align-items: center;
@@ -23,36 +19,6 @@
 	}
 }
 
-/* Top-left border fade for containers */
-.ds-container {
-	position: relative;
-
-    &::before,
-    &::after {
-        content: '';
-        position: absolute;
-        background: linear-gradient(to right, transparent, var(--icon-color));
-        height: 1px; /* Border thickness */
-        width: 100%;
-    }
-
-    &::before {
-        top: 0;
-        left: 0;
-        background: linear-gradient(to right, var(--icon-color), transparent);
-        width: 12em;
-    }
-
-    &::after {
-        top: 0;
-        left: 0;
-        height: 100%;
-        max-height: 12em;
-        background: linear-gradient(to bottom, var(--icon-color), transparent);
-        width: 1px; /* Border thickness */
-    }
-}
-
 /* ==================== */
 /*   Settings           */
 /* ==================== */
@@ -65,143 +31,6 @@ button.settings-action-button {
 	float: right;
 }
 
-/* ==================== */
-/*   Features List      */
-/* ==================== */
-
-.ds-features {
-    .ds-feature-container {
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
-
-        /* Hover effect on each "container" */
-        &:hover {
-            background-color: var(--color-base-25);
-        }
-    }
-
-    /*
-    Each line needs to have padding.
-    Ideally this would be at the root container, but line backgrounds need 100% width
-     */
-
-    .ds-feature-name-value {
-        text-decoration: underline;
-        font-variant: small-caps;
-        font-size: var(--font-ui-large);
-        font-weight: bold;
-    }
-}
-
-/* ==================== */
-/*   Feature            */
-/* ==================== */
-
-.ds-feature-container {
-    .ds-feature-header-line {
-        display: flex;
-        justify-content: space-between;
-    }
-
-	.ds-feature-name-value,
-	.ds-feature-cost-value {
-		font-weight: bold;
-	}
-
-    .ds-feature-ability-type {
-        font-weight: bold;
-    }
-
-	.ds-feature-roll-value,
-	.ds-feature-tier-key {
-		font-weight: bold;
-	}
-
-	.ds-feature-flavor-value,
-	.ds-feature-note-list,
-	.ds-feature-note-line {
-		font-style: italic;
-	}
-
-	.ds-feature-note-list {
-		margin-bottom: 0;
-	}
-
-	.ds-feature-detail-line,
-	.ds-feature-field-line {
-		margin-top: 0.5em;
-		margin-bottom: 0.75em;
-	}
-
-	.ds-feature-detail-table-row {
-		display: flex;
-        justify-content: space-between;
-	}
-
-	.ds-feature-detail-table-cell {
-		/*this will float the text to the left*/
-        /*width: 50%;*/
-	}
-
-	.ds-feature-detail-key,
-	.ds-feature-field-key {
-		font-weight: bold;
-	}
-
-	.ds-feature-inline-p,
-	.ds-feature-inline-p p {
-		display: inline;
-	}
-
-	.ds-feature-inline-p p,
-	.ds-feature-inline-p ul {
-		margin-block-start: 0;
-		margin-block-end: 0;
-	}
-
-	.ds-feature-inline-p ul {
-		display: grid;
-	}
-}
-
-/* ========================== */
-/*   Feature Element Styles   */
-/* ========================== */
-
-.ds-feature-ele-container {
-	position: relative;
-	background: var(--code-background);
-	margin-top: 0.5em;
-	margin-bottom: 0.5em;
-	padding: 1em;
-	letter-spacing: 0.03em;
-
-    /* Indentation levels for power roll container */
-    &:has(> .indent-1) {
-        margin-left: calc(var(--list-indent) * 1);
-    }
-
-    &:has(> .indent-2) {
-        margin-left: calc(var(--list-indent) * 2);
-    }
-
-    &:has(> .indent-3) {
-        margin-left: calc(var(--list-indent) * 3);
-    }
-
-    &:has(> .indent-4) {
-        margin-left: calc(var(--list-indent) * 4);
-    }
-
-    &:has(> .indent-5) {
-        margin-left: calc(var(--list-indent) * 5);
-    }
-
-    &:has(> .indent-6) {
-        margin-left: calc(var(--list-indent) * 6);
-    }
-}
-
 /* ================================================================== */
 /*  Feature card grammar (D2 §3.6, Plan 09 Task 5): .dse-feature      */
 /* ================================================================== */
@@ -209,9 +38,9 @@ button.settings-action-button {
    The REUSABLE ability/feature grammar (kit cardHead + powerRollPanel + titled
    .dse-section panels + the [data-dse-act] action spine) emitted by
    src/elements/feature/renderFeature.ts. Statblock/Featureblock re-embed this
-   grammar in Task 6, so — exactly like the legacy .ds-feature-* block above,
-   which STAYS until Task 6 retires the legacy FeatureView — these classes are
-   GLOBAL, not scoped under [data-dse-element="feature"].
+   grammar (Task 6), so these classes are GLOBAL, not scoped under
+   [data-dse-element="feature"]. (The legacy .ds-feature-* block that lived
+   above was evicted in Task 10 with the legacy FeatureView.)
 
    Legacy = today's look: monochrome, no spine (every --dse-act-* token is
    `none` in the Legacy base and the spine consumes it as a background, so it
@@ -379,154 +208,6 @@ code.dsa {
 	text-decoration: var(--tag-decoration);
 	padding: var(--tag-padding-y) var(--tag-padding-x);
 	line-height: 1;
-}
-
-/* =========================== */
-/*   Tier Key Symbol Boxes     */
-/* =========================== */
-
-.ds-pr-tier-line {
-	display: flex;
-	line-height: 1em;
-}
-
-.tier-key-container {
-	display: flex;
-	font-size: 1em;
-	margin-right: 0.75em;
-	max-height: 1em;
-}
-
-/* Tier 1 */
-
-.t1-key-body {
-	position: relative;
-	width: 3em;
-	text-align: center;
-	font-size: 0.8em;
-	font-weight: bold;
-
-    &:before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: var(--text-normal);
-        /* clip-path ... */
-        clip-path: polygon(0.2em 0.2em, 0.4em 0, calc(100% - 0.2em) 0, 100% 0.2em, 100% calc(100% - 0.2em), calc(100% - 0.2em) 100%, 0.4em 100%, 0.2em calc(100% - 0.2em), 0.2em calc(50% + 0.2em), 0 50%, 0.2em calc(50% - 0.2em), 0.2em 0.2em, calc(0.2em + 1px) calc(0.2em + 0.41px), calc(0.2em + 1px) calc(50% - 0.2em + 0.41px), 1.41px 50%, calc(0.2em + 1px) calc(50% + 0.2em - 0.41px), calc(0.2em + 1px) calc(100% - 0.2em - 0.41px), calc(0.4em + 0.41px) calc(100% - 1px), calc(100% - 0.2em - 0.41px) calc(100% - 1px), calc(100% - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 1px) calc(0.2em + 0.41px), calc(100% - 0.2em - 0.41px) 1px, calc(0.4em + 0.41px) 1px, calc(0.2em + 1px) calc(0.2em + 0.41px));
-    }
-}
-
-.t1-key-body-text {
-	font-size: 0.9em;
-}
-
-/* Tier 2  */
-
-.t2-key-body {
-	position: relative;
-	width: 3em;
-	text-align: center;
-	font-size: 0.8em;
-	font-weight: bold;
-
-    &:before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: var(--text-normal);
-        clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.2em) 0, 100% 0.2em, 100% calc(100% - 0.2em), calc(100% - 0.2em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.2em - 0.41px) calc(100% - 1px), calc(100% - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 1px) calc(0.2em + 0.41px), calc(100% - 0.2em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
-    }
-}
-
-.t2-key-body-text {
-	font-size: 0.9em;
-}
-
-/* Tier 3 */
-
-.t3-key-body {
-	position: relative;
-	width: 3em;
-	text-align: center;
-	font-size: 0.8em;
-	font-weight: bold;
-
-    &:before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: var(--text-normal);
-        clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px), calc(100% - 1.41px) 50%, calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px), calc(100% - 0.2em - 1px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
-    }
-}
-
-.t3-key-body-text {
-	font-size: 0.9em;
-}
-
-/* Critical */
-
-.crit-key-body {
-	position: relative;
-	width: 3em;
-	text-align: center;
-	font-size: 0.8em;
-	font-weight: bold;
-
-    &:before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: var(--text-normal);
-        clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 3px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
-    }
-}
-
-.crit-key-body-text {
-	font-size: 0.9em;
-	padding-right: 3px;
-}
-
-/* ==================== */
-/*    Horizontal Rule   */
-/* ==================== */
-
-.ds-hr-container {
-	display: flex;
-	align-items: center;
-	position: relative;
-	margin-top: 6px;
-
-    .ds-hr-left-line,
-    .ds-hr-right-line {
-        flex-grow: 1;
-        height: 2px;
-        background-color: var(--icon-color);
-        top: 50%; /* Center it vertically */
-        left: 0;
-        right: 0;
-    }
-
-    .ds-hr-left-line {
-        background: linear-gradient(to left, var(--icon-color) 0%, transparent 100%);
-    }
-
-    .ds-hr-right-line {
-        background: linear-gradient(to right, var(--icon-color) 0%, transparent 100%);
-    }
-
-    .ds-hr-center {
-        width: 14px;
-        height: 14px;
-        background-color: var(--icon-color);
-        transform: translateZ(1px) translateY(1px) rotate(45deg); /* Rotate to make a diamond */
-        position: relative;
-        z-index: 1; /* Ensure the diamond is above the lines */
-        margin: 0 auto; /* Center the diamond */
-        border-bottom: 2px solid var(--icon-color);
-        border-right: 2px solid var(--icon-color);
-        box-shadow: inset 0 0 0 3px var(--background-primary);
-    }
 }
 
 /* ==================== */
@@ -928,6 +609,12 @@ code.dsa {
         display: flex;
         justify-content: center;
         align-items: center;
+    }
+
+    /* Pointer only on the real interactive buttons — read-only renders emit
+       static .dse-cond spans, which must not advertise clickability. */
+    button.dse-cond,
+    button.dse-cond--add {
         cursor: pointer;
     }
 
@@ -1761,44 +1448,6 @@ code.dsa {
 	}
 }
 
-/* ==================== */
-/* HeaderView           */
-/* ==================== */
-
-.ds-header-container {
-    .ds-header-title-line,
-    .ds-header-subtitle-line {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-
-    .ds-header-title-line {
-        font-size: var(--font-ui-large);
-        font-weight: bold;
-        background-color: var(--color-base-25);
-        padding-top: 0.5rem;
-    }
-    .ds-header-subtitle-line {
-        background-color: var(--color-base-25);
-        padding-bottom: 0.5rem;
-    }
-}
-
-/* ==================== */
-/* BoldKeyWithValue     */
-/* ==================== */
-
-.ds-bkv-container {
-    display: inline-block;
-
-    .ds-bkv-key {
-        font-weight: bold;
-    }
-}
-
 /* ================================================================== */
 /*  Statblock card grammar (D2 §3.8, Plan 09 Task 6b): .dse-sb        */
 /* ================================================================== */
@@ -1808,8 +1457,8 @@ code.dsa {
    characteristics row + kit divider (the legacy ◆ rule) + Task 5's shared
    .dse-feature/.dse-pr feature grammar. The old legacy statblock block that
    lived here is EVICTED — statblock was the LAST element rendering those
-   classes (the legacy HeaderView/StatsView/FeaturesView builders stay in-tree
-   as code only; Task 10 retires them and their .ds-header-* CSS).
+   classes (Task 10 then deleted the legacy HeaderView/StatsView/FeaturesView
+   builders themselves and their .ds-header- / .ds-bkv- CSS blocks).
 
    Role tint (§3.8): the element sets [data-dse-role="<role>"] + the --dse-role
    ELEMENT-SET ALIAS on .dse-sb (shared roleTint helper); the spine below and
@@ -2107,126 +1756,12 @@ code.dsa {
 }
 
 /* ==================== */
-/* Kit — collapsible heading & component wrapper (D1 Task 2, F1 framework/kit/) */
-/* ==================== */
-/* Shared vanilla-DOM chrome (framework/kit/collapsible.ts, framework/kit/componentWrapper.ts).
-   Reused by every element wrapped in the collapsible chrome -- Skills today, Stamina Bar in
-   D1 step 3 -- so these rules are intentionally NOT scoped under any single
-   [data-dse-element="..."]. `collapse-icon` / `is-collapsed` are Obsidian's own native
-   collapse-triangle classes (kept verbatim, not renamed, to inherit Obsidian's built-in
-   rotation styling -- ported from RightArrowToggleIndicator.vue's original comment: "Override
-   of Obsidian functionality to ironically gain function parity with Obsidian's own heading
-   elements"). `heading-collapse-indicator` is kept verbatim too -- it is the exact selector
-   the ported Live Preview positioning rule (CollapsibleHeading.vue) targets. */
-
-.ds-kit-collapsible-heading {
-	.heading-collapse-indicator.is-collapsed {
-		opacity: 1;
-
-		svg {
-			color: var(--collapse-icon-color-collapsed) !important;
-		}
-	}
-}
-
-.markdown-source-view.is-live-preview .ds-kit-collapsible-heading > .heading-collapse-indicator {
-	position: absolute;
-	left: 5px;
-}
-
-.ds-kit-component-wrapper {
-	min-height: 34px;
-	width: 100%;
-
-	.ds-kit-eye-container {
-		height: 0;
-		width: 100%;
-		display: flex;
-		justify-content: flex-end;
-		padding-top: 4px;
-		padding-right: 34px;
-		color: var(--text-muted);
-	}
-
-	.ds-kit-eye-indicator {
-		width: 30px;
-		height: 26px;
-		padding: var(--size-2-2) var(--size-2-3);
-		border-radius: var(--radius-s);
-
-		&:hover {
-			background-color: var(--background-modifier-hover);
-		}
-	}
-
-	.ds-kit-collapsed-wrapper {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		column-gap: 15px;
-	}
-
-	.ds-kit-v-rule-container {
-		display: flex;
-		justify-items: start;
-	}
-
-	.ds-kit-v-rule-wrapper {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		position: relative;
-		margin-left: 6px;
-		height: 100%;
-		min-height: 50px;
-	}
-
-	.ds-kit-v-rule-line {
-		flex-grow: 1;
-		width: 2px;
-		background-color: var(--icon-color);
-		left: 50%;
-		top: 0;
-		bottom: 0;
-
-		&.ds-kit-v-rule-line-top {
-			background: linear-gradient(to top, var(--icon-color) 0%, transparent 100%);
-		}
-
-		&.ds-kit-v-rule-line-bottom {
-			background: linear-gradient(to bottom, var(--icon-color) 0%, transparent 100%);
-		}
-	}
-
-	.ds-kit-v-rule-line-center {
-		width: 14px;
-		height: 14px;
-		background-color: var(--icon-color);
-		transform: translateZ(1px) translateX(1px) rotate(315deg);
-		position: relative;
-		z-index: 1;
-		flex-shrink: 0;
-		border-bottom: 2px solid var(--icon-color);
-		border-right: 2px solid var(--icon-color);
-		box-shadow: inset 0 0 0 3px var(--background-primary);
-	}
-}
-
-.markdown-source-view.is-live-preview .cm-preview-code-block .ds-kit-eye-indicator {
-	opacity: 0;
-}
-.markdown-source-view.is-live-preview .cm-preview-code-block:hover .ds-kit-eye-indicator {
-	opacity: 1;
-}
-
-/* ==================== */
 /* Skills (D2 §3.4, Plan 09 Task 2) */
 /* ==================== */
 /* Scoped under [data-dse-element="skills"] (F1 §3.5). Legacy-faithful port of the old
    pre-D2 skills block onto the .dse-skills__* grammar: same 1em rounded-box marks, same
    lowercase-with-capital titles and names. Group headers (and the whole-element wrapper)
-   are the kit collapsible2 — the shared .dse-collapse* chrome owns the button/chevron/
+   are the kit collapsible — the shared .dse-collapse* chrome owns the button/chevron/
    region; only the skills-specific looks live here (incl. sizing the kit __title to
    match the old h3 group title). The mark's on-state is shape (solid vs hollow box via
    [data-on]) + an aria-label set by the view (§4) — never color alone. Tokens only:
@@ -2295,7 +1830,7 @@ code.dsa {
 /* ==================== */
 /* The bar renders the SHARED .dse-stamina grammar (see the "Stamina" block above the
    modal chrome, §3.5/§3.5b) — geometry via --dse-* custom properties, colors via
-   [data-state] token rules; the whole-element wrapper is the kit collapsible2 (shared
+   [data-state] token rules; the whole-element wrapper is the kit collapsible (shared
    .dse-collapse* chrome). No element-scoped rules remain: the D1 legacy-port block
    (the SFC's inline widths/colors) is fully evicted. */
 
@@ -2572,7 +2107,7 @@ Shared globals
 /*   framework/kit containers (D2 §2.3/2.4/2.6, Plan 08 Task 3)       */
 /* ================================================================== */
 
-/* -- collapsible2 (§2.3): header <button aria-expanded> + hidden-attr region -- */
+/* -- collapsible (§2.3): header <button aria-expanded> + hidden-attr region -- */
 /* Legacy-faithful: today's collapsible headings are plain text with a rotating
    indicator — an unobtrusive full-width row, not a boxed bar. */
 .dse-collapse__header {
@@ -2820,12 +2355,14 @@ button.dse-pr__row:hover {
 .dse-pr__text p {
 	margin-block: 0;
 }
-/* The tier badge: the outcome-range key box. The polygon clip-paths below are
-   copied VERBATIM from the .t1/.t2/.t3/.crit-key-body originals above (§2.8:
-   "badge boxes keep the existing clip-path shapes" — the shape IS the design,
-   no font); only the fill moves onto the --dse-tier-* tokens (Legacy = today's
-   monochrome --text-normal). --dse-badge-fg is the §2.8 D3 hook — in the :root
-   vocabulary since the Task-5 gap-close (Legacy = var(--dse-fg), i.e. unchanged). */
+/* The tier badge: the outcome-range key box. The polygon clip-paths below were
+   copied VERBATIM from the legacy .t1/.t2/.t3/.crit-key-body originals (evicted
+   in Task 10 with the legacy EffectView that emitted them; the kit test pins the
+   polygons literally). §2.8: "badge boxes keep the existing clip-path shapes" —
+   the shape IS the design, no font; only the fill moves onto the --dse-tier-*
+   tokens (Legacy = today's monochrome --text-normal). --dse-badge-fg is the §2.8
+   D3 hook — in the :root vocabulary since the Task-5 gap-close (Legacy =
+   var(--dse-fg), i.e. unchanged). */
 .dse-pr__badge {
 	position: relative;
 	flex: 0 0 auto;
@@ -2906,7 +2443,7 @@ button.dse-pr__row:hover {
 
 /* -- The framework-default focus ring (D2 §4.5, Plan 08 Task 5) -- */
 /* ONE rule, EVERY kit control that takes focus: real <button>s (iconButton —
-   which also covers the stepper's ± buttons — collapsible2 headers, tabs,
+   which also covers the stepper's ± buttons — collapsible headers, tabs,
    selectable power-roll rows) plus the stepper's editable <input>. There were
    ZERO focus styles before the kit — this is the a11y default; new focusable
    kit controls must join this selector list. */

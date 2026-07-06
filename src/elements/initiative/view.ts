@@ -188,6 +188,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 				malice,
 				{
 					value: data.malice.value,
+					// Future-proofing: malice has no editable input today (stepper
+					// buttons only), so `integer` is inert until one is enabled.
 					integer: true,
 					label: 'Malice',
 					format: (v) => 'Malice: ' + v,

@@ -506,17 +506,19 @@ describe('Plan 09 Task 6b: source + CSS hygiene', () => {
 		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
-	test('legacy builders stay in-tree UNTOUCHED but are now element-DEAD (statblock was the last consumer; Task 10 retires them)', () => {
-		for (const [file, marker] of [
-			['../../../src/drawSteelAdmonition/Common/HeaderView.ts', /class HeaderView/],
-			['../../../src/drawSteelAdmonition/statblock/StatsView.ts', /class StatsView/],
-			['../../../src/drawSteelAdmonition/Features/FeaturesView.ts', /class FeaturesView/],
-			[
-				'../../../src/drawSteelAdmonition/Common/horizontalRuleProcessor.ts',
-				/class HorizontalRuleProcessor/,
-			],
+	test('legacy builders are RETIRED (Task 10 deleted them — statblock was the last consumer)', () => {
+		for (const file of [
+			'../../../src/drawSteelAdmonition/Common/HeaderView.ts',
+			'../../../src/drawSteelAdmonition/statblock/StatsView.ts',
+			'../../../src/drawSteelAdmonition/Features/FeaturesView.ts',
+			'../../../src/drawSteelAdmonition/Features/FeatureView.ts',
+			'../../../src/drawSteelAdmonition/Features/EffectView.ts',
+			'../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts',
+			'../../../src/drawSteelAdmonition/featureblock/FeatureblockStatsView.ts',
+			'../../../src/drawSteelAdmonition/Common/BoldKeyWithValueView.ts',
+			'../../../src/drawSteelAdmonition/Common/horizontalRuleProcessor.ts',
 		] as const) {
-			expect(fs.readFileSync(path.join(__dirname, file), 'utf8')).toMatch(marker);
+			expect(fs.existsSync(path.join(__dirname, file))).toBe(false);
 		}
 		// …and no framework element imports them anymore.
 		for (const view of ['statblock', 'featureblock', 'feature'] as const) {

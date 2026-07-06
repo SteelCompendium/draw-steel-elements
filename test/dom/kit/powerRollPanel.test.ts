@@ -380,10 +380,10 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 	});
 });
 
-describe('Plan 08 Task 4: badge CSS reuses the EXISTING clip-path shapes verbatim (§2.8)', () => {
+describe('Plan 08 Task 4: badge CSS keeps the legacy clip-path shapes verbatim (§2.8)', () => {
 	const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-	/** First clip-path value after `selector` (the legacy blocks nest it in &:before). */
+	/** First clip-path value after `selector`. */
 	function firstClipPathAfter(selector: string): string {
 		const idx = sheet.indexOf(selector);
 		expect(idx).toBeGreaterThan(-1);
@@ -392,13 +392,17 @@ describe('Plan 08 Task 4: badge CSS reuses the EXISTING clip-path shapes verbati
 		return m![1].replace(/\s+/g, ' ').trim();
 	}
 
+	// The polygons ARE the design (§2.8: "badge boxes keep the existing clip-path
+	// shapes"). Pinned as literals: they were copied verbatim from the legacy
+	// .t1/.t2/.t3/.crit-key-body blocks, which Task 10 evicted with the legacy
+	// EffectView that emitted them.
 	test.each([
-		['.t1-key-body', '.dse-pr__badge--t1'],
-		['.t2-key-body', '.dse-pr__badge--t2'],
-		['.t3-key-body', '.dse-pr__badge--t3'],
-		['.crit-key-body', '.dse-pr__badge--crit'],
-	])('%s polygon === %s polygon', (legacySel, dseSel) => {
-		expect(firstClipPathAfter(dseSel)).toBe(firstClipPathAfter(legacySel));
+		['.dse-pr__badge--t1', 'polygon(0.2em 0.2em, 0.4em 0, calc(100% - 0.2em) 0, 100% 0.2em, 100% calc(100% - 0.2em), calc(100% - 0.2em) 100%, 0.4em 100%, 0.2em calc(100% - 0.2em), 0.2em calc(50% + 0.2em), 0 50%, 0.2em calc(50% - 0.2em), 0.2em 0.2em, calc(0.2em + 1px) calc(0.2em + 0.41px), calc(0.2em + 1px) calc(50% - 0.2em + 0.41px), 1.41px 50%, calc(0.2em + 1px) calc(50% + 0.2em - 0.41px), calc(0.2em + 1px) calc(100% - 0.2em - 0.41px), calc(0.4em + 0.41px) calc(100% - 1px), calc(100% - 0.2em - 0.41px) calc(100% - 1px), calc(100% - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 1px) calc(0.2em + 0.41px), calc(100% - 0.2em - 0.41px) 1px, calc(0.4em + 0.41px) 1px, calc(0.2em + 1px) calc(0.2em + 0.41px))'],
+		['.dse-pr__badge--t2', 'polygon(0 0.2em, 0.2em 0, calc(100% - 0.2em) 0, 100% 0.2em, 100% calc(100% - 0.2em), calc(100% - 0.2em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.2em - 0.41px) calc(100% - 1px), calc(100% - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 1px) calc(0.2em + 0.41px), calc(100% - 0.2em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px))'],
+		['.dse-pr__badge--t3', 'polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 1px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 1px) calc(50% + 0.2em - 0.41px), calc(100% - 1.41px) 50%, calc(100% - 0.2em - 1px) calc(50% - 0.2em + 0.41px), calc(100% - 0.2em - 1px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px))'],
+		['.dse-pr__badge--crit', 'polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 3px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px))'],
+	] as const)('%s keeps the ported legacy polygon', (dseSel, polygon) => {
+		expect(firstClipPathAfter(dseSel)).toBe(polygon);
 	});
 
 	test('badge fills consume the --dse-tier-* tokens (no color literals)', () => {

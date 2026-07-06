@@ -5,7 +5,7 @@
 // follows focus, per the ARIA authoring pattern), and exactly one panel is visible —
 // the rest carry the `hidden` ATTRIBUTE (never inline display, D2 §5).
 //
-// Selection persists via the same SessionPersist accessor as collapsible2 (no cx
+// Selection persists via the same SessionPersist accessor as collapsible (no cx
 // import — kit⊥elements): today the active tab is written into YAML purely to survive
 // re-render; this demotes it to session state (F1 §4.3). Only real selection CHANGES
 // are written — mounting never pollutes the store.

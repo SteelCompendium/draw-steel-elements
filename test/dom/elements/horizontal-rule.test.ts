@@ -2,11 +2,10 @@
 // parse() ignores its input entirely, so this element's whole job is proving parse ->
 // validate(skipped, no schema) -> createView -> mount end-to-end through the REAL
 // ElementPipeline (same pattern as test/dom/framework/pipeline.test.ts's makeDeps()),
-// and that HorizontalRuleView.onMount now renders the kit `divider` (`.dse-hr` + fade
+// and that HorizontalRuleView.onMount renders the kit `divider` (`.dse-hr` + fade
 // lines + ◆ diamond — Plan 08's DOM/CSS) instead of the legacy
-// Common/horizontalRuleProcessor. That legacy builder is NOT deleted by this redesign —
-// Statblock/Featureblock still call it directly (they migrate in Plan 09 Task 6) — so a
-// guard test pins it still building the old `.ds-hr-container` DOM.
+// Common/horizontalRuleProcessor (retired in Plan 09 Task 10, once Task 6 moved its
+// last consumers — Statblock/Featureblock — onto the kit grammar).
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -20,7 +19,6 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin } from '../../mocks/obsidian';
 import { horizontalRuleElement } from '../../../src/elements/horizontal-rule/definition';
 import { HorizontalRuleView } from '../../../src/elements/horizontal-rule/view';
-import { HorizontalRuleProcessor } from '@drawSteelAdmonition/Common/horizontalRuleProcessor';
 import { divider } from '../../../src/framework/kit';
 
 function makeHost(): BlockHost & { containerEl: HTMLElement } {
@@ -118,16 +116,6 @@ describe('Plan 09 Task 1: horizontal-rule rendered through the REAL ElementPipel
 		]);
 		// The redesign moves this element's OWN view off the legacy builder entirely.
 		expect(root.querySelector('.ds-hr-container')).toBeNull();
-	});
-
-	test('legacy HorizontalRuleProcessor.build() is untouched — Statblock/Featureblock still embed .ds-hr-container until Task 6', () => {
-		const parent = document.createElement('div');
-		HorizontalRuleProcessor.build(parent);
-
-		const container = parent.querySelector(':scope > .ds-hr-container');
-		expect(container).not.toBeNull();
-		const children = Array.from(container!.children).map((el) => el.className);
-		expect(children).toEqual(['ds-hr-left-line', 'ds-hr-center', 'ds-hr-right-line']);
 	});
 
 	test('root carries data-dse-element="horizontal-rule" and data-dse-theme (F1 §3.5 contract)', async () => {

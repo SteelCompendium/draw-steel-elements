@@ -33,11 +33,11 @@ export interface SessionStore {
 }
 
 /**
- * SessionStore accessor for kit widgets (collapsible2, tabs, …): the caller — who
+ * SessionStore accessor for kit widgets (collapsible, tabs, …): the caller — who
  * has cx — passes the store and the (blockKey, slot) address; the kit stays cx-free
  * (kit⊥elements). Lives here, NOT in a kit widget module, so it survives widget
- * renames/deletions (Plan 09 Task 0 — it originally lived in kit/collapsible2.ts,
- * which the collapsible2→collapsible rename deletes).
+ * renames/deletions (Plan 09 Task 0 — it originally lived inside the collapsible
+ * widget's module, whose Task 10 rename proved the point).
  */
 export interface SessionPersist {
 	session: SessionStore;

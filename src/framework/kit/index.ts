@@ -22,11 +22,11 @@ export { divider } from './divider';
 export type { DividerOptions, DividerHandle } from './divider';
 
 // -- Containers (D2 §2.3/2.4/2.6, Task 3) --
-export { collapsible2 } from './collapsible2';
-export type { Collapsible2Options, Collapsible2Handle } from './collapsible2';
+export { collapsible } from './collapsible';
+export type { CollapsibleOptions, CollapsibleHandle } from './collapsible';
 // SessionPersist lives in framework/session (Plan 09 Task 0 — neutral home beside
 // SessionStore) but stays part of the kit's import surface: it is the accessor
-// callers hand to collapsible2/tabs.
+// callers hand to collapsible/tabs.
 export type { SessionPersist } from '../session';
 export { tabs } from './tabs';
 export type { TabSpec, TabsOptions, TabsHandle } from './tabs';
@@ -46,8 +46,5 @@ export type {
 export { crest } from './crest';
 export type { CrestSize, CrestOptions, CrestHandle } from './crest';
 
-// -- Pre-existing kit helpers (F1) — re-exported unchanged --
-export { mountCollapsibleHeading } from './collapsible';
-export type { CollapsibleHeadingOptions, CollapsibleHeadingHandle } from './collapsible';
-export { mountComponentWrapper } from './componentWrapper';
-export type { ComponentWrapperOptions, ComponentWrapperHandle } from './componentWrapper';
+// The F1-era helpers (mountCollapsibleHeading / mountComponentWrapper) are gone —
+// retired by Plan 09 Task 10 once every element had moved onto the D2 widgets above.

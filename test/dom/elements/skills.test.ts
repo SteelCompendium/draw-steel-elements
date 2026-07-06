@@ -1,5 +1,5 @@
 // Plan 09 Task 2 (D2 §3.4) — Skills on the D2 kit: the whole-element wrapper AND each
-// skill group are kit `collapsible2` regions (real <button aria-expanded> headers,
+// skill group are kit `collapsible` regions (real <button aria-expanded> headers,
 // hidden-attr regions, open-state round-tripped through SessionStore via the
 // SessionPersist accessor — F1 §4.3, never written back to the note; Skills has no
 // `serialize`). Items are `.dse-skills__item` with a `.dse-skills__mark[data-on]`
@@ -87,7 +87,7 @@ function makeDeps(session: SessionStore = createSessionStore()): ElementPipeline
 	};
 }
 
-/** A skill group container: a kit collapsible2 root (`.dse-collapse` — header title span)
+/** A skill group container: a kit collapsible root (`.dse-collapse` — header title span)
  *  in normal mode, or a plain div with an h3 `.dse-skills__group-title` when
  *  only_show_selected. Both carry `.dse-skills__group`. */
 function groupEl(root: HTMLElement, label: string): HTMLElement {
@@ -100,7 +100,7 @@ function groupEl(root: HTMLElement, label: string): HTMLElement {
 	return found as HTMLElement;
 }
 
-/** The group's collapsible2 header button (normal mode). */
+/** The group's collapsible header button (normal mode). */
 function groupHeader(root: HTMLElement, label: string): HTMLButtonElement {
 	const header = groupEl(root, label).querySelector(':scope > .dse-collapse__header');
 	if (!header) throw new Error(`group "${label}" has no .dse-collapse__header`);
@@ -168,8 +168,8 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 		expect(root.querySelector('.dse-skills')).not.toBeNull();
 	});
 
-	describe('whole-element wrapper = kit collapsible2 (collapsible/collapse_default YAML contract, F1 §1.4)', () => {
-		test('default (collapsible, expanded): root wraps the list in ONE collapsible2 titled "Skill List" with a real <button aria-expanded="true">', async () => {
+	describe('whole-element wrapper = kit collapsible (collapsible/collapse_default YAML contract, F1 §1.4)', () => {
+		test('default (collapsible, expanded): root wraps the list in ONE collapsible titled "Skill List" with a real <button aria-expanded="true">', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
@@ -189,7 +189,7 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 			expect(region.querySelector('.dse-skills')).not.toBeNull();
 		});
 
-		test('collapsible: false renders the list bare — NO whole-element collapsible2 (groups keep theirs)', async () => {
+		test('collapsible: false renders the list bare — NO whole-element collapsible (groups keep theirs)', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 			const yaml = ['collapsible: false', 'skills:', '  - climb'].join('\n');
@@ -215,7 +215,7 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 			const region = root.querySelector(':scope > .dse-collapse > .dse-collapse__region') as HTMLElement;
 			expect(header.getAttribute('aria-expanded')).toBe('false');
 			expect(region.hidden).toBe(true);
-			// collapsible2 hides via the hidden ATTRIBUTE — the list is rendered, not destroyed.
+			// collapsible hides via the hidden ATTRIBUTE — the list is rendered, not destroyed.
 			expect(region.querySelector('.dse-skills')).not.toBeNull();
 		});
 
@@ -351,8 +351,8 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 		});
 	});
 
-	describe('per-group collapse = kit collapsible2 (interactive, session-only, F1 §4.3)', () => {
-		test('every group renders as a collapsible2 with a real <button aria-expanded> wired to its region', async () => {
+	describe('per-group collapse = kit collapsible (interactive, session-only, F1 §4.3)', () => {
+		test('every group renders as a collapsible with a real <button aria-expanded> wired to its region', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
@@ -387,7 +387,7 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 
 			expect(groupHeader(root, 'Crafting').getAttribute('aria-expanded')).toBe('false');
 			expect(region.hidden).toBe(true);
-			// collapsible2 persists the OPEN state at slot group:<key>.
+			// collapsible persists the OPEN state at slot group:<key>.
 			expect(session.get<boolean>(host.blockKey(), 'group:crafting')).toBe(false);
 			expect(host.replaceSource).not.toHaveBeenCalled();
 		});
@@ -436,7 +436,7 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 	});
 
 	describe('only_show_selected (preserved YAML contract)', () => {
-		test('filters items to only the selected skills; group headers are PLAIN headings (no collapsible2), and empty groups still show', async () => {
+		test('filters items to only the selected skills; group headers are PLAIN headings (no collapsible), and empty groups still show', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 			const yaml = ['only_show_selected: true', 'skills:', '  - climb'].join('\n');

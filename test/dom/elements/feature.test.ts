@@ -504,27 +504,23 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
-	test('legacy Features/FeatureView.ts stays in-tree UNTOUCHED — element-dead since Task 6b (Task 10 retires it)', () => {
-		const legacy = fs.readFileSync(
-			path.join(__dirname, '../../../src/drawSteelAdmonition/Features/FeatureView.ts'),
-			'utf8',
-		);
-		expect(legacy).toMatch(/class FeatureView/);
-		// Statblock — its last ELEMENT consumer — no longer imports the legacy tree
-		// (T6b); only the untouched legacy FeatureblockView still composes it.
+	test('legacy Features/FeatureView.ts is RETIRED (deleted by Task 10; element-dead since Task 6b)', () => {
+		for (const file of [
+			'../../../src/drawSteelAdmonition/Features/FeatureView.ts',
+			'../../../src/drawSteelAdmonition/Features/FeaturesView.ts',
+			'../../../src/drawSteelAdmonition/Features/EffectView.ts',
+		] as const) {
+			expect(fs.existsSync(path.join(__dirname, file))).toBe(false);
+		}
+		// Statblock — the legacy tree's last ELEMENT consumer — imports nothing from it.
 		const statblock = fs.readFileSync(
 			path.join(__dirname, '../../../src/elements/statblock/view.ts'),
 			'utf8',
 		);
 		expect(statblock).not.toMatch(/from '@drawSteelAdmonition/);
-		const featureblock = fs.readFileSync(
-			path.join(__dirname, '../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts'),
-			'utf8',
-		);
-		expect(featureblock).toMatch(/Features\/FeaturesView/);
 	});
 
-	test('CSS contract: .dse-feature grammar in styles-source.css — token-only spine via var(--dse-act), .dse-section title on --dse-heading; the legacy .ds-feature-* block STAYS until Task 6', () => {
+	test('CSS contract: .dse-feature grammar in styles-source.css — token-only spine via var(--dse-act), .dse-section title on --dse-heading; the legacy .ds-feature-* block is EVICTED (Task 10)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
 		// The action spine consumes the element-set alias, background-keyed so the
@@ -540,9 +536,9 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 		expect(sheet).toMatch(/\.dse-feature__meta\s*\{/);
 		expect(sheet).toMatch(/\.dse-feature__flavor\s*\{/);
 
-		// The legacy classes are still consumed by Statblock/Featureblock (via the
-		// untouched legacy FeatureView) — Task 6 retires them, not Task 5.
-		expect(sheet).toMatch(/\.ds-feature-container\s*\{/);
+		// The legacy .ds-feature-* CSS is dead: Task 6 moved its last consumers
+		// (Statblock/Featureblock) onto this grammar and Task 10 evicted the block.
+		expect(sheet).not.toMatch(/\.ds-feature-container\s*\{/);
 	});
 });
 

@@ -2,7 +2,7 @@
 // role set with aria-selected + ROVING tabindex (only the selected tab is 0), arrow-key
 // + Home/End keyboard selection (selection follows focus, wrapping), exactly one
 // visible panel (`hidden` attr on the rest), and session-persisted selection via the
-// same SessionStore accessor pattern as collapsible2 (no cx import — kit⊥elements).
+// same SessionStore accessor pattern as collapsible (no cx import — kit⊥elements).
 import { tabs } from '../../../src/framework/kit/tabs';
 import { Component } from '../../mocks/obsidian';
 import { createSessionStore } from '../../../src/framework/session';

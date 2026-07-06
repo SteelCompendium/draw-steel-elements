@@ -12,13 +12,12 @@ export function registerElements (_plugin: Plugin) {
 	// it (and its onload() call) are kept only until the F1 §6 step-10 cleanup deletes
 	// the legacy registration path entirely.
 
-	// Feature migrated to Framework v2 (Plan 07 Task 1, F1 §6 step 5). Its sub-views
-	// (Features/FeatureView et al.) stay put: the Featureblock/Statblock element views
-	// still construct them directly.
+	// Feature migrated to Framework v2 (Plan 07 Task 1, F1 §6 step 5). Its legacy
+	// sub-views (Features/FeatureView et al.) are deleted (Plan 09 Task 10) — the kit
+	// feature grammar (elements/feature/renderFeature.ts) replaced them.
 
-	// Featureblock migrated to Framework v2 (Plan 07 Task 2, F1 §6 step 6). Its sub-views
-	// (featureblock/FeatureblockView et al.) stay put: the Statblock element view still
-	// constructs several of the shared ones directly.
+	// Featureblock migrated to Framework v2 (Plan 07 Task 2, F1 §6 step 6). Its legacy
+	// sub-views (featureblock/FeatureblockView et al.) are deleted (Plan 09 Task 10).
 
 	// Horizontal Rule migrated to Framework v2 (D1 Task 1, F1 §6 step 1).
 
@@ -26,10 +25,10 @@ export function registerElements (_plugin: Plugin) {
 
 	// Negotiation Tracker migrated to Framework v2 (Plan 05, F1 §6 step 8).
 
-	// Statblock migrated to Framework v2 (Plan 07 Task 3, F1 §6 step 6). The sub-views its
-	// buildUI composed (Common/HeaderView, statblock/StatsView, Features/FeaturesView,
-	// horizontalRuleProcessor) stay put — the statblock element view constructs them
-	// directly.
+	// Statblock migrated to Framework v2 (Plan 07 Task 3, F1 §6 step 6). The legacy
+	// sub-views its buildUI composed (Common/HeaderView, statblock/StatsView,
+	// Features/FeaturesView, horizontalRuleProcessor) are deleted (Plan 09 Task 10) —
+	// the view renders through the kit card grammar.
 
 	// Stamina Bar migrated to Framework v2 (D1 Task 3, F1 §6 step 4). Last Vue element
 	// migrated; Vue is now unused at runtime.

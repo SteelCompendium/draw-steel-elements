@@ -1,7 +1,8 @@
 // Plan 08 Task 5 — the D2 kit foundation tie-off:
-//   1. the barrel (src/framework/kit/index.ts) exports every D2 widget + the
-//      pre-existing helpers, importable via the `@/` alias (`@/framework/kit`);
-//      there is NO `@framework` alias in tsconfig — `@/*` -> `src/*` is the path.
+//   1. the barrel (src/framework/kit/index.ts) exports every D2 widget (the F1-era
+//      helpers were retired by Plan 09 Task 10), importable via the `@/` alias
+//      (`@/framework/kit`); there is NO `@framework` alias in tsconfig — `@/*` ->
+//      `src/*` is the path.
 //   2. the ONE framework-default :focus-visible rule (D2 §4.5) covers every kit
 //      control class that takes focus.
 //   3. the two token gap-closes landed: --dse-page-bg (divider punch-out) and
@@ -20,13 +21,11 @@ import type {
 	ButtonRowHandle,
 	StepperHandle,
 	DividerHandle,
-	Collapsible2Handle,
+	CollapsibleHandle,
 	TabsHandle,
 	CardHeadHandle,
 	PowerRollPanelHandle,
 	CrestHandle,
-	CollapsibleHeadingHandle,
-	ComponentWrapperHandle,
 	SessionPersist,
 } from '@/framework/kit';
 
@@ -134,14 +133,14 @@ function tsColorFindings(src: string): string[] {
 /* ------------------------------------------------------------------ */
 
 describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
-	test('exports every D2 widget mount + the pre-existing helpers', () => {
+	test('exports every D2 widget mount; the retired F1 helpers are GONE (Task 10)', () => {
 		// D2 §2 widgets (Tasks 2-4)…
 		expect(typeof kit.iconButton).toBe('function');
 		expect(typeof kit.buttonRow).toBe('function');
 		expect(typeof kit.stepper).toBe('function');
 		expect(typeof kit.tooltip).toBe('function');
 		expect(typeof kit.divider).toBe('function');
-		expect(typeof kit.collapsible2).toBe('function');
+		expect(typeof kit.collapsible).toBe('function');
 		expect(typeof kit.tabs).toBe('function');
 		expect(typeof kit.DseModal).toBe('function'); // class
 		expect(typeof kit.openManagedModal).toBe('function');
@@ -149,9 +148,9 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 		expect(typeof kit.powerRollPanel).toBe('function');
 		expect(typeof kit.tierBadge).toBe('function');
 		expect(typeof kit.crest).toBe('function');
-		// …plus the existing helpers, unchanged.
-		expect(typeof kit.mountCollapsibleHeading).toBe('function');
-		expect(typeof kit.mountComponentWrapper).toBe('function');
+		// …and the retired F1 helpers are no longer on the barrel (Plan 09 Task 10).
+		expect((kit as Record<string, unknown>).mountCollapsibleHeading).toBeUndefined();
+		expect((kit as Record<string, unknown>).mountComponentWrapper).toBeUndefined();
 	});
 
 	test('exports the Handle types (compile-time — the real gate is `npx tsc --noEmit`)', () => {
@@ -159,11 +158,10 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 		// re-exports resolve; ts-jest runs diagnostics:false so tsc is the enforcer.
 		const probe: {
 			a?: IconButtonHandle; b?: ButtonRowHandle; c?: StepperHandle;
-			d?: DividerHandle; e?: Collapsible2Handle; f?: TabsHandle;
+			d?: DividerHandle; e?: CollapsibleHandle; f?: TabsHandle;
 			g?: CardHeadHandle; h?: PowerRollPanelHandle; i?: CrestHandle;
-			j?: CollapsibleHeadingHandle; k?: ComponentWrapperHandle;
 			// SessionPersist stays a barrel export after its move to framework/session
-			// (Plan 09 Task 0 — it must survive collapsible2.ts's later deletion).
+			// (Plan 09 Task 0 — neutral home; it survived the Task 10 widget rename).
 			l?: SessionPersist;
 		} = {};
 		expect(probe).toEqual({});
@@ -290,7 +288,9 @@ describe('Plan 08 Task 5: kit TS hygiene + import boundary', () => {
 
 	test('kit dir contains the expected modules (barrel included)', () => {
 		expect(kitFiles).toContain('index.ts');
-		expect(kitFiles.length).toBeGreaterThanOrEqual(13);
+		// 11 = 10 widget modules + the barrel (the two F1-era helpers were deleted
+		// by Plan 09 Task 10).
+		expect(kitFiles.length).toBeGreaterThanOrEqual(11);
 	});
 
 	test.each(kitFiles)('%s: zero color literals, zero el.style.color', (file) => {

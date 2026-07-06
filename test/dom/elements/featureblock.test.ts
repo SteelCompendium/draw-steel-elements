@@ -492,13 +492,13 @@ describe('Plan 09 Task 6a: source + CSS hygiene', () => {
 		expect(code).not.toMatch(/querySelector/);
 	});
 
-	test('legacy FeatureblockView + sub-views stay in-tree UNTOUCHED — element-dead since T6b (Task 10 retires them)', () => {
-		const legacy = fs.readFileSync(
-			path.join(__dirname, '../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts'),
-			'utf8',
-		);
-		expect(legacy).toMatch(/class FeatureblockView/);
-		expect(legacy).toMatch(/Features\/FeaturesView/);
+	test('legacy FeatureblockView + sub-views are RETIRED (deleted by Task 10; element-dead since T6b)', () => {
+		for (const file of [
+			'../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts',
+			'../../../src/drawSteelAdmonition/featureblock/FeatureblockStatsView.ts',
+		] as const) {
+			expect(fs.existsSync(path.join(__dirname, file))).toBe(false);
+		}
 		// Statblock's T6b redesign dropped the last element import of the legacy tree.
 		const statblock = fs.readFileSync(
 			path.join(__dirname, '../../../src/elements/statblock/view.ts'),

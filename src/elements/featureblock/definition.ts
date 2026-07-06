@@ -1,10 +1,10 @@
 // Plan 07 Task 2 / F1 §6 step 6 — Featureblock: second of the Plan 07 static batch,
-// retiring the legacy FeatureblockProcessor. The migration deletes ONLY that processor:
-// the featureblock sub-views (FeatureblockView, FeatureblockStatsView) and everything
-// they compose (Common/HeaderView, Common/BoldKeyWithValueView,
+// retiring the legacy FeatureblockProcessor. The migration deleted ONLY that processor
+// at the time; the featureblock sub-views (FeatureblockView, FeatureblockStatsView) and
+// everything they composed (Common/HeaderView, Common/BoldKeyWithValueView,
 // Common/horizontalRuleProcessor's static build, Features/FeaturesView -> FeatureView)
-// stay in place — Statblock (F1 §6 step 6's other half) still constructs several of
-// them directly.
+// were later retired too — Plan 09 Task 6 moved the last consumers onto the kit
+// grammar and Task 10 deleted them.
 //
 // Static + SDK-backed: no schema (the SDK reader is the validator, same as legacy), no
 // serialize (nothing persists), no ref resolution (autoResolveRefs stays false — the

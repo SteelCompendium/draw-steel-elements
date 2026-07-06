@@ -258,7 +258,7 @@ describe('D1 Task 1: Horizontal Rule wiring through onload() (F1 §2.3 / §6 ste
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('horizontal-rule');
 		// Plan 09 Task 1 (D2 §3.1): HR's own view renders the kit divider, not the
-		// legacy .ds-hr-container (which only Statblock/Featureblock still embed).
+		// legacy .ds-hr-container (whose builder Task 10 deleted).
 		expect(root.querySelector('.dse-hr')).not.toBeNull();
 	});
 });

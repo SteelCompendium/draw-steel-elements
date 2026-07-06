@@ -6,7 +6,7 @@
 //   - inline COLOR stays banned: .style.color, color-ish props, color literals;
 //   - setProperty on a `--dse-*` custom property is the ONE allowed .style use;
 //   - any OTHER .style access is still banned (the original guard's intent).
-// Imported by the per-file hygiene guards (iconButton/collapsible2/cardHead.test.ts).
+// Imported by the per-file hygiene guards (iconButton/collapsible/cardHead.test.ts).
 
 export function styleGuardFindings(src: string): string[] {
 	const findings: string[] = [];

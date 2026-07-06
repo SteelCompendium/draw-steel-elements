@@ -1,12 +1,12 @@
 // Plan 09 Task 2 (D2 §3.4) — SkillsView on the D2 kit: both the whole-element wrapper
 // (the preserved `collapsible`/`collapse_default` YAML contract, F1 §1.4) and each skill
-// group are kit `collapsible2` regions. Open-state round-trips through SessionStore via
+// group are kit `collapsible` regions. Open-state round-trips through SessionStore via
 // the SessionPersist accessor (F1 §4.3) — keyed by `cx.host.blockKey()`, never written
 // back to the note (Skills has no `serialize`). Replaces the D1 rendering on the old
-// kit componentWrapper/collapsibleHeading helpers (which stay for their remaining
-// consumers until the Plan 09 final cleanup).
+// kit componentWrapper/collapsibleHeading helpers (deleted in the Plan 09 Task 10
+// cleanup once no consumer remained).
 //
-// collapsible2 collapses by HIDING its region (`hidden` attribute) rather than
+// collapsible collapses by HIDING its region (`hidden` attribute) rather than
 // re-rendering content per expand cycle, so the old per-cycle contentOwner machinery is
 // gone: content mounts exactly once per onMount and the only listeners are the kit's own
 // owner-bound header clicks (bound to `this`, the view — one registration set per mount,
@@ -22,17 +22,17 @@
 // buildGroupedSkillData below follows the documented behavior (docs/skills-element.md:
 // unmatched/absent skill_group → the "Custom Skills" bucket) exactly.
 import { ElementView } from '@/framework/view';
-import { collapsible2 } from '@/framework/kit';
+import { collapsible } from '@/framework/kit';
 import { Skills, CustomSkill } from '@model/Skills';
 import { SKILL_DATA, SkillInfo } from '@utils/SkillsData';
 import { toProperCase } from '@utils/common';
 
-/** SessionStore slot for the whole-element collapsible2 open-state (F1 §4.3). Stores the
+/** SessionStore slot for the whole-element collapsible open-state (F1 §4.3). Stores the
  *  kit's OPEN boolean (true = expanded) — the inverse sense of the old ComponentWrapper
  *  'collapsed' slot it replaces (session-only state; nothing outlives a plugin reload). */
 const WRAPPER_OPEN_SLOT = 'open';
 
-/** Title shown in the whole-element collapsible2 header (the old ComponentWrapper
+/** Title shown in the whole-element collapsible header (the old ComponentWrapper
  *  componentName, previously visible only in the collapsed rail). */
 const WRAPPER_TITLE = 'Skill List';
 
@@ -93,14 +93,14 @@ export class SkillsView extends ElementView<Skills> {
 
 		// Whole-element wrapper (F1 §1.4 contract): `collapsible: false` opts out of the
 		// collapse affordance entirely — the list renders bare (collapse_default only
-		// applies to a collapsible element). Otherwise ONE collapsible2 wraps the list;
+		// applies to a collapsible element). Otherwise ONE collapsible wraps the list;
 		// a session value (SessionPersist) beats the collapse_default seed, exactly as
 		// the old SessionStore-then-model fallback read.
 		if (!model.collapsible) {
 			this.renderGroups(root, model);
 			return;
 		}
-		const wrapper = collapsible2(
+		const wrapper = collapsible(
 			root,
 			{
 				title: WRAPPER_TITLE,
@@ -144,10 +144,10 @@ export class SkillsView extends ElementView<Skills> {
 			return;
 		}
 
-		// Per-group collapsible2: open-state lives at (blockKey, group:<key>) so it
+		// Per-group collapsible: open-state lives at (blockKey, group:<key>) so it
 		// survives the echo-rebuild (F1 §4.3) — the group-level persistence guarantee the
 		// D1 rewrite introduced, now carried by the kit's SessionPersist round-trip.
-		const group = collapsible2(
+		const group = collapsible(
 			parent,
 			{
 				title: groupDisplayName(groupKey),

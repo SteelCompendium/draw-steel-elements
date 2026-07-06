@@ -1,5 +1,5 @@
 // Plan 09 Task 3 (D2 §3.5) — Stamina Bar on the D2 kit: the whole-element wrapper is the
-// kit collapsible2 (title "Stamina Bar", seeded from collapse_default, NO session
+// kit collapsible (title "Stamina Bar", seeded from collapse_default, NO session
 // persistence — the element was never session-tracked), and the bar renders the
 // .dse-stamina grammar: state COLOR via the [data-state] class (never inline), fill
 // widths via --dse-fill/--dse-temp-fill setProperty geometry (SC-5). Clicking opens the
@@ -248,7 +248,7 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 		expect(notice.textContent).toBe('Sheet style is not implemented, use default style');
 	});
 
-	describe('whole-element wrapper = kit collapsible2 (collapse_default YAML contract; NOT session-tracked)', () => {
+	describe('whole-element wrapper = kit collapsible (collapse_default YAML contract; NOT session-tracked)', () => {
 		test('wraps the bar in ONE .dse-collapse titled "Stamina Bar", expanded by default', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
