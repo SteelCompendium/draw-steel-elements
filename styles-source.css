@@ -1781,60 +1781,46 @@ code.dsa {
 /* Counter			    */
 /* ==================== */
 
-/* Scoped under the Framework v2 element root (Plan 07 Task 4): counter's CSS is fully
-   self-contained (no .ds-counter-* class is used by any other element), so the whole
-   legacy block re-scopes safely — same treatment as negotiation/initiative. */
-[data-dse-element="counter"] .ds-counter-container {
+/* D2 §3.9 (Plan 09 Task 4): the counter on the kit stepper — the whole legacy
+   counter class block is evicted (the view no longer renders those classes). The big
+   bold value is the stepper's value node (editable input, or a static span when
+   read-only), tagged .dse-counter__value; the muted .dse-counter__name sits below.
+   The value_height / name_height YAML knobs arrive as the --dse-value-scale /
+   --dse-label-scale custom properties set by the view (SC-5: sanctioned --dse-*
+   geometry via setProperty — never inline font-size), the same scale grammar as the
+   statgrid elements. The ± buttons are kit .dse-btn/.dse-stepper__btn (their own
+   chrome + focus ring). */
+[data-dse-element="counter"] .dse-counter {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	justify-content: space-evenly;
+	justify-content: center;
 	width: 100%;
 
-	.ds-counter-display-container {
-		text-align: center;
-	}
-
-	.ds-counter-value {
-		font-size: 2em;
+	.dse-counter__value {
+		color: var(--dse-fg);
 		font-weight: bold;
+		font-size: calc(var(--dse-value-scale, 3) * 1em);
 		line-height: 1em;
 		min-width: 1.5em;
-	}
-
-	.ds-counter-name {
-		font-size: 1em;
-		color: var(--text-muted);
-	}
-
-	.ds-counter-controls {
-		display: flex;
-		flex-direction: column;
-		padding: 1em;
-	}
-
-	.ds-counter-button {
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0.5em;
-
-        &:hover {
-            background-color: var(--background-modifier-hover);
-        }
-
-        &[disabled] {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-	}
-
-	.ds-counter-input {
-		font-size: inherit;
 		text-align: center;
-		width: 100%;
+	}
+
+	/* The editable stepper input reads as today's plain big number (the legacy
+	   transparent, borderless counter-input look), not a form field: strip the
+	   kit's field chrome. height: 1em is the evicted legacy inline style
+	   (CounterView's inputField.style.height), now a class rule. */
+	input.dse-counter__value {
+		width: 4ch;
+		height: 1em;
+		padding: 0;
 		border: none;
 		background: transparent;
-		outline: none;
+	}
+
+	.dse-counter__name {
+		color: var(--dse-fg-muted);
+		font-size: calc(var(--dse-label-scale, 1) * 1em);
 	}
 }
 

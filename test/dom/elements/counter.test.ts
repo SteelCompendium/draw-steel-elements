@@ -1,15 +1,22 @@
-// Plan 07 Task 4 (F1 §6 step 7) — Counter: a small persisted element migrated onto
-// Framework v2, retiring the legacy CounterProcessor + Counter/CounterView. Mirrors
-// stamina-bar.test.ts's convention exactly: drives the element through the REAL
-// ElementPipeline with real framework services, drives the persisted write path through a
-// REAL ReadingModeBlockHost + FakeVault ("exactly one replaceSource, fence/alias
-// preserved"), and asserts BYTE-COMPAT of `serialize` against the legacy
-// `stringifyYaml(Counter.parseYaml(...)).trim()` write path (CodeBlocks.updateCounter ->
-// updateMarkdownCodeBlock does exactly `stringifyYaml(data).trim()` on the Counter class
-// instance — F1 §6's "byte-compatible output is the compatibility bar").
+// Plan 09 Task 4 (D2 §3.9) — Counter redesigned onto the D2 kit `stepper`: the
+// counterElement definition + CounterElementView driven through the REAL ElementPipeline
+// (same harness as stamina-bar/values-row). The redesign replaces the legacy
+// hand-rolled chevron <button>s + click-to-edit input swap with ONE kit stepper
+// (`integer: true` — a typed "5.5" commits 5, never persists a float; `editable: true`
+// — CB-10 single-commit typed input) whose value node IS the counter's big value
+// (`.dse-counter__value`), over a muted `.dse-counter__name`.
 //
-// Replaces the deleted legacy test/dom/elements/counter-view.test.ts (T-10b), which
-// tested the legacy CounterView directly.
+// SC-5 eviction: value_height/name_height arrive as --dse-value-scale/--dse-label-scale
+// custom properties (sanctioned --dse-* geometry via setProperty) — NEVER inline
+// font-size; the legacy input's inline height:1em became a stylesheet rule.
+//
+// Persistence is UNTOUCHED (F1 §6 byte-compat bar): the write path still drives a REAL
+// ReadingModeBlockHost + FakeVault ("exactly one replaceSource, fence/alias preserved"),
+// and `serialize` stays byte-identical to the legacy
+// `stringifyYaml(Counter.parseYaml(...)).trim()` (CodeBlocks.updateCounter ->
+// updateMarkdownCodeBlock did exactly `stringifyYaml(data).trim()`).
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -29,6 +36,7 @@ import { counterElement } from '../../../src/elements/counter/definition';
 import { CounterElementView } from '../../../src/elements/counter/view';
 import { serialize as frameworkSerialize } from '../../../src/elements/counter/model';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
+import { styleGuardFindings } from '../kit/styleGuard';
 import counterYaml from '../../fixtures/counter/health.yaml';
 
 const CT_ALIASES = ['ds-ct', 'ds-counter'] as const;
@@ -95,9 +103,21 @@ async function renderCounter(source: string = counterYaml, hostOverrides: Partia
 	return { host, root };
 }
 
-const valueEl = (root: HTMLElement) => root.querySelector('.ds-counter-value') as HTMLElement;
-const inputEl = (root: HTMLElement) => root.querySelector('.ds-counter-input') as HTMLInputElement | null;
-const buttons = (root: HTMLElement) => root.querySelectorAll<HTMLButtonElement>('.ds-counter-button');
+// -- kit-DOM accessors (D2 §3.9 grammar) --
+const counterEl = (root: HTMLElement) => root.querySelector('.dse-counter') as HTMLElement;
+const stepperEl = (root: HTMLElement) => root.querySelector('.dse-stepper') as HTMLElement;
+/** The editable stepper input, which carries the element's value class. */
+const inputEl = (root: HTMLElement) =>
+	root.querySelector('input.dse-counter__value') as HTMLInputElement | null;
+const minusBtn = (root: HTMLElement) =>
+	root.querySelector('.dse-stepper__btn[aria-label^="Decrease"]') as HTMLButtonElement;
+const plusBtn = (root: HTMLElement) =>
+	root.querySelector('.dse-stepper__btn[aria-label^="Increase"]') as HTMLButtonElement;
+const nameEl = (root: HTMLElement) => root.querySelector('.dse-counter__name') as HTMLElement;
+
+function pressKey(el: HTMLElement, key: string): void {
+	el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+}
 
 describe('Plan 07 Task 4: counter ElementDefinition (F1 §6 step 7)', () => {
 	test('id/aliases/shape/serialize match the preserved ds-ct contract (persisted, NO schema)', () => {
@@ -130,7 +150,7 @@ describe('Plan 07 Task 4: counter ElementDefinition (F1 §6 step 7)', () => {
 	});
 });
 
-describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', () => {
+describe('Plan 09 Task 4: counter rendered through the REAL ElementPipeline (D2 §3.9 kit stepper)', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 	});
@@ -141,32 +161,81 @@ describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', ()
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
 	});
 
-	test('renders the legacy DOM: ele-container, container (flex), value/name displays with height-driven font sizes, chevron buttons', async () => {
+	test('kit DOM: ONE .dse-counter with a kit stepper (two REAL buttons + editable number input as the value) over a .dse-counter__name; NO legacy .ds-counter-* DOM survives', async () => {
 		const { root } = await renderCounter();
 
-		const ele = root.querySelector('.ds-counter-ele-container') as HTMLElement;
-		expect(ele).not.toBeNull();
-		const container = ele.querySelector('.ds-counter-container') as HTMLElement;
-		expect(container).not.toBeNull();
-		expect(container.classList.contains('ds-counter-flex')).toBe(true);
+		const el = counterEl(root);
+		expect(el).not.toBeNull();
+		expect(root.querySelectorAll('.dse-counter')).toHaveLength(1);
+		expect(root.querySelector('[class*="ds-counter"]')).toBeNull();
 
-		const value = valueEl(root);
-		expect(value.textContent).toBe('10');
-		expect(value.style.fontSize).toBe('3em'); // value_height default 3
+		// The kit stepper: role=group named after the counter, minus/plus REAL <button>s.
+		const triad = stepperEl(root);
+		expect(triad).not.toBeNull();
+		expect(triad.getAttribute('role')).toBe('group');
+		expect(triad.getAttribute('aria-label')).toBe('Health');
+		expect(minusBtn(root).tagName).toBe('BUTTON');
+		expect(plusBtn(root).tagName).toBe('BUTTON');
+		expect(minusBtn(root).getAttribute('aria-label')).toBe('Decrease Health');
+		expect(plusBtn(root).getAttribute('aria-label')).toBe('Increase Health');
+		expect(minusBtn(root).querySelector('.dse-btn__icon')!.getAttribute('data-icon')).toBe('minus');
+		expect(plusBtn(root).querySelector('.dse-btn__icon')!.getAttribute('data-icon')).toBe('plus');
+		expect(minusBtn(root).disabled).toBe(false); // 10 > min 0
+		expect(plusBtn(root).disabled).toBe(false); // 10 < max 20
 
-		const name = root.querySelector('.ds-counter-name') as HTMLElement;
-		expect(name.textContent).toBe('Health');
-		expect(name.style.fontSize).toBe('1em'); // name_height default 1
+		// CB-10: the value IS the stepper's editable input (single-commit path), tagged
+		// with the element's value class; min/max/step forwarded as native attrs.
+		const input = inputEl(root)!;
+		expect(input).not.toBeNull();
+		expect(input.type).toBe('number');
+		expect(input.value).toBe('10');
+		expect(input.classList.contains('dse-stepper__input')).toBe(true);
+		expect(input.getAttribute('min')).toBe('0');
+		expect(input.getAttribute('max')).toBe('20');
+		expect(input.getAttribute('step')).toBe('1');
 
-		const btns = buttons(root);
-		expect(btns).toHaveLength(2);
-		expect(btns[0].getAttribute('data-icon')).toBe('chevron-up');
-		expect(btns[1].getAttribute('data-icon')).toBe('chevron-down');
-		expect(btns[0].hasAttribute('disabled')).toBe(false); // 10 < max 20
-		expect(btns[1].hasAttribute('disabled')).toBe(false); // 10 > min 0
+		expect(nameEl(root).textContent).toBe('Health');
 	});
 
-	test('increment: model mutates, display updates in place, and — after the debounce — persists EXACTLY ONCE with byte-compat YAML', async () => {
+	test('SC-5 eviction: value_height/name_height arrive as --dse-value-scale/--dse-label-scale via setProperty — NO inline font-size/height/color anywhere', async () => {
+		const { root } = await renderCounter();
+
+		// Fixture omits the heights -> model defaults (3 / 1) materialize as the props.
+		const el = counterEl(root);
+		expect(el.style.getPropertyValue('--dse-value-scale')).toBe('3');
+		expect(el.style.getPropertyValue('--dse-label-scale')).toBe('1');
+
+		const custom = await renderCounter('name: Piety\ncurrent_value: 3\nvalue_height: 2\nname_height: 1.5');
+		const customEl = counterEl(custom.root);
+		expect(customEl.style.getPropertyValue('--dse-value-scale')).toBe('2');
+		expect(customEl.style.getPropertyValue('--dse-label-scale')).toBe('1.5');
+
+		// The old CounterView inline sites (fontSize on value/name/input, height on the
+		// input) are gone: no inline font-size/height, no inline color, and every inline
+		// declaration that DOES exist is a --dse-* custom property.
+		for (const node of Array.from(root.querySelectorAll<HTMLElement>('*')).concat(root)) {
+			expect(node.style.fontSize).toBe('');
+			expect(node.style.height).toBe('');
+			expect(node.style.color).toBe('');
+			const inline = node.getAttribute('style');
+			if (inline !== null) {
+				for (const decl of inline.split(';')) {
+					if (decl.trim() === '') continue;
+					expect(decl.trim().startsWith('--dse-')).toBe(true);
+				}
+			}
+		}
+	});
+
+	test('view source hygiene: the ONLY .style access is setProperty("--dse-*", …) (shared kit style guard)', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/counter/view.ts'),
+			'utf8',
+		);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('increment: model mutates, the stepper refreshes in place, and — after the debounce — persists EXACTLY ONCE with byte-compat YAML', async () => {
 		jest.useFakeTimers();
 		const deps = makeDeps();
 		const pipeline = new ElementPipeline(deps);
@@ -176,10 +245,10 @@ describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', ()
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		const view = addChild.mock.calls[0][0] as CounterElementView;
 
-		buttons(root)[0].click();
+		plusBtn(root).click();
 
 		expect(((view as any).model as Counter).current_value).toBe(11);
-		expect(valueEl(root).textContent).toBe('11');
+		expect(inputEl(root)!.value).toBe('11');
 		expect(host.replaceSource).not.toHaveBeenCalled(); // still inside the debounce window
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
@@ -192,10 +261,10 @@ describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', ()
 		jest.useFakeTimers();
 		const { host, root } = await renderCounter();
 
-		buttons(root)[0].click();
-		buttons(root)[0].click();
-		buttons(root)[0].click();
-		expect(valueEl(root).textContent).toBe('13');
+		plusBtn(root).click();
+		plusBtn(root).click();
+		plusBtn(root).click();
+		expect(inputEl(root)!.value).toBe('13');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -207,8 +276,8 @@ describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', ()
 		jest.useFakeTimers();
 		const { host, root } = await renderCounter();
 
-		buttons(root)[1].click();
-		expect(valueEl(root).textContent).toBe('9');
+		minusBtn(root).click();
+		expect(inputEl(root)!.value).toBe('9');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -216,21 +285,165 @@ describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', ()
 		expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(9));
 	});
 
-	test('bounds: at max the increment button is disabled and clicking never writes; same for min/decrement', async () => {
+	test('CB-8 bounds: at max the plus is REAL-disabled and even a synthetic click never writes; same for min/minus; an unbounded counter never disables plus', async () => {
 		jest.useFakeTimers();
 		const atMax = await renderCounter('name: Health\ncurrent_value: 20\nmax_value: 20');
-		expect(buttons(atMax.root)[0].hasAttribute('disabled')).toBe(true);
-		buttons(atMax.root)[0].click();
-		expect(valueEl(atMax.root).textContent).toBe('20');
+		expect(plusBtn(atMax.root).disabled).toBe(true); // the REAL property, not a class
+		expect(minusBtn(atMax.root).disabled).toBe(false);
+		plusBtn(atMax.root).click(); // synthetic dispatch — the kit guard swallows it (CB-8)
+		expect(inputEl(atMax.root)!.value).toBe('20');
 
 		const atMin = await renderCounter('name: Health\ncurrent_value: 0\nmin_value: 0');
-		expect(buttons(atMin.root)[1].hasAttribute('disabled')).toBe(true);
-		buttons(atMin.root)[1].click();
-		expect(valueEl(atMin.root).textContent).toBe('0');
+		expect(minusBtn(atMin.root).disabled).toBe(true);
+		minusBtn(atMin.root).click();
+		expect(inputEl(atMin.root)!.value).toBe('0');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(atMax.host.replaceSource).not.toHaveBeenCalled();
+		expect(atMax.host.replaceSource).not.toHaveBeenCalled(); // clamped click skips the write
 		expect(atMin.host.replaceSource).not.toHaveBeenCalled();
+
+		// No max_value in the YAML -> unbounded: plus stays enabled arbitrarily high.
+		const unbounded = await renderCounter('name: Deaths\ncurrent_value: 9999');
+		expect(plusBtn(unbounded.root).disabled).toBe(false);
+		expect(inputEl(unbounded.root)!.hasAttribute('max')).toBe(false);
+	});
+
+	describe('editable value (kit stepper input — CB-10 single-commit)', () => {
+		test('typing a value and pressing Enter commits once and persists exactly once, byte-compat', async () => {
+			jest.useFakeTimers();
+			const { host, root } = await renderCounter();
+
+			const input = inputEl(root)!;
+			input.value = '15';
+			pressKey(input, 'Enter');
+
+			expect(input.value).toBe('15');
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(15));
+		});
+
+		test('CB-10: Enter then the trailing blur does NOT double-commit (one commit path, no-op unless changed)', async () => {
+			jest.useFakeTimers();
+			const { host, root } = await renderCounter();
+
+			const input = inputEl(root)!;
+			input.value = '15';
+			pressKey(input, 'Enter');
+			input.dispatchEvent(new Event('blur'));
+
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(15));
+		});
+
+		test('blur alone commits the edit (legacy behavior preserved)', async () => {
+			jest.useFakeTimers();
+			const { host, root } = await renderCounter();
+
+			const input = inputEl(root)!;
+			input.value = '12';
+			input.dispatchEvent(new Event('blur'));
+
+			expect(input.value).toBe('12');
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(12));
+		});
+
+		test('integer: a typed "5.5" commits 5 (Math.trunc, parseInt semantics) — the counter NEVER persists a float', async () => {
+			jest.useFakeTimers();
+			const deps = makeDeps();
+			const pipeline = new ElementPipeline(deps);
+			const addChild = jest.fn((child: unknown) => child);
+			const host = makeHost({ addChild: addChild as unknown as BlockHost['addChild'] });
+			await pipeline.run(counterElement, counterYaml, host);
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			const view = addChild.mock.calls[0][0] as CounterElementView;
+
+			const input = inputEl(root)!;
+			input.value = '5.5';
+			pressKey(input, 'Enter');
+
+			const model = (view as any).model as Counter;
+			expect(model.current_value).toBe(5);
+			expect(Number.isInteger(model.current_value)).toBe(true);
+			expect(input.value).toBe('5'); // display normalized, not "5.5"
+
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(5));
+		});
+
+		test('out-of-range input clamps to max (and REAL-disables plus at the new bound); empty/invalid input reverts with NO write', async () => {
+			jest.useFakeTimers();
+			const over = await renderCounter();
+			const overInput = inputEl(over.root)!;
+			overInput.value = '999';
+			pressKey(overInput, 'Enter');
+			expect(overInput.value).toBe('20'); // clamped to max_value
+			expect(plusBtn(over.root).disabled).toBe(true); // at max now (CB-8)
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(over.host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(over.host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(20));
+
+			const bad = await renderCounter();
+			const badInput = inputEl(bad.root)!;
+			badInput.value = '';
+			pressKey(badInput, 'Enter');
+			expect(badInput.value).toBe('10'); // reverted
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(bad.host.replaceSource).not.toHaveBeenCalled(); // nothing changed, nothing written
+		});
+
+		test('Escape reverts a dirty draft in place (CB-10); the following blur is a no-op — NO write', async () => {
+			jest.useFakeTimers();
+			const { host, root } = await renderCounter();
+
+			const input = inputEl(root)!;
+			input.value = '17';
+			pressKey(input, 'Escape');
+			expect(input.value).toBe('10'); // reverted, editor stays in place
+
+			input.dispatchEvent(new Event('blur'));
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('canPersist: false (F1 §4.4 — visible but inert)', () => {
+		test('read-only badge attribute, REAL-disabled stepper buttons, a static (non-input) value, tooltip, ZERO writes', async () => {
+			jest.useFakeTimers();
+			const { host, root } = await renderCounter(counterYaml, { canPersist: false });
+
+			// Framework-level read-only affordance (the CSS badge hangs off this attribute).
+			expect(root.hasAttribute('data-dse-readonly')).toBe(true);
+
+			expect(minusBtn(root).disabled).toBe(true);
+			expect(plusBtn(root).disabled).toBe(true);
+			expect(counterEl(root).getAttribute('data-tooltip')).toBe('Read-only in this context');
+
+			// No editable input at all: the value renders as the stepper's static span,
+			// still carrying the element's value class.
+			expect(inputEl(root)).toBeNull();
+			const value = root.querySelector('.dse-stepper__value.dse-counter__value') as HTMLElement;
+			expect(value).not.toBeNull();
+			expect(value.textContent).toBe('10');
+
+			plusBtn(root).click();
+			minusBtn(root).click();
+			expect(value.textContent).toBe('10');
+
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).not.toHaveBeenCalled();
+		});
+	});
+
+	test('malformed YAML renders the framework error card, not the legacy try/catch div', async () => {
+		const { root } = await renderCounter('name: [unclosed');
+		expect(root.getAttribute('data-dse-error-stage')).toBe('parse');
+		expect(root.querySelector('.dse-error-card')).not.toBeNull();
+		expect(root.querySelector('.dse-counter')).toBeNull();
 	});
 
 	test('ties CounterElementView to host.addChild (block lifecycle)', async () => {
@@ -244,126 +457,20 @@ describe('Plan 07 Task 4: counter rendered through the REAL ElementPipeline', ()
 		expect(addChild.mock.calls[0][0]).toBeInstanceOf(CounterElementView);
 	});
 
-	test('malformed YAML renders the framework error card, not the legacy try/catch div', async () => {
-		const { root } = await renderCounter('name: [unclosed');
-		expect(root.getAttribute('data-dse-error-stage')).toBe('parse');
-		expect(root.querySelector('.dse-error-card')).not.toBeNull();
-		expect(root.querySelector('.ds-counter-container')).toBeNull();
-	});
+	test('CSS contract: .dse-counter is scoped under [data-dse-element="counter"], consumes --dse-fg/--dse-fg-muted + the scale properties, carries the evicted input height — and the old .ds-counter-* block is GONE', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-	describe('click-to-edit input', () => {
-		test('clicking the value swaps in a number input (buttons disabled while editing); Enter commits, restores the display, and persists exactly once', async () => {
-			jest.useFakeTimers();
-			const { host, root } = await renderCounter();
+		const block = sheet.match(/\[data-dse-element="counter"\]\s+\.dse-counter\s*\{[\s\S]*?\n\}/);
+		expect(block).not.toBeNull();
+		expect(block![0]).toMatch(/var\(--dse-fg\)/);
+		expect(block![0]).toMatch(/var\(--dse-fg-muted\)/);
+		expect(block![0]).toMatch(/calc\(var\(--dse-value-scale/);
+		expect(block![0]).toMatch(/calc\(var\(--dse-label-scale/);
+		// The legacy inline `inputField.style.height = '1em'` lives here as a class rule now.
+		expect(block![0]).toMatch(/height:\s*1em/);
 
-			valueEl(root).click();
-			const input = inputEl(root)!;
-			expect(input).not.toBeNull();
-			expect(input.type).toBe('number');
-			expect(input.value).toBe('10');
-			expect(input.style.fontSize).toBe('3em');
-			expect(root.querySelector('.ds-counter-value')).toBeNull(); // display swapped out
-			expect(buttons(root)[0].hasAttribute('disabled')).toBe(true);
-			expect(buttons(root)[1].hasAttribute('disabled')).toBe(true);
-
-			input.value = '15';
-			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-
-			expect(inputEl(root)).toBeNull(); // input swapped back out
-			expect(valueEl(root).textContent).toBe('15');
-			expect(buttons(root)[0].hasAttribute('disabled')).toBe(false);
-			expect(buttons(root)[1].hasAttribute('disabled')).toBe(false);
-
-			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(15));
-		});
-
-		test('Enter then a late blur does NOT double-commit (finishEditing is guarded)', async () => {
-			jest.useFakeTimers();
-			const { host, root } = await renderCounter();
-
-			valueEl(root).click();
-			const input = inputEl(root)!;
-			input.value = '15';
-			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-
-			// The detached input's blur (browsers may fire it after replaceWith) must no-op.
-			input.dispatchEvent(new Event('blur'));
-			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-		});
-
-		test('blur commits the edit (legacy behavior)', async () => {
-			jest.useFakeTimers();
-			const { host, root } = await renderCounter();
-
-			valueEl(root).click();
-			const input = inputEl(root)!;
-			input.value = '12';
-			input.dispatchEvent(new Event('blur'));
-
-			expect(valueEl(root).textContent).toBe('12');
-			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-			expect(host.replaceSource).toHaveBeenCalledTimes(1);
-			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(12));
-		});
-
-		test('out-of-range input clamps to max/min; non-numeric input reverts (legacy finishEditing rules)', async () => {
-			jest.useFakeTimers();
-			const over = await renderCounter();
-			valueEl(over.root).click();
-			const overInput = inputEl(over.root)!;
-			overInput.value = '999';
-			overInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-			expect(valueEl(over.root).textContent).toBe('20'); // clamped to max_value
-			expect(buttons(over.root)[0].hasAttribute('disabled')).toBe(true); // at max now
-
-			const bad = await renderCounter();
-			valueEl(bad.root).click();
-			const badInput = inputEl(bad.root)!;
-			badInput.value = '';
-			badInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-			expect(valueEl(bad.root).textContent).toBe('10'); // reverted
-		});
-
-		test('Escape reverts to the current value and closes the editor', async () => {
-			jest.useFakeTimers();
-			const { root } = await renderCounter();
-			valueEl(root).click();
-			const input = inputEl(root)!;
-			input.value = '17';
-			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-			expect(inputEl(root)).toBeNull();
-			expect(valueEl(root).textContent).toBe('10');
-		});
-	});
-
-	describe('canPersist: false (F1 §4.4 — visible but inert)', () => {
-		test('read-only badge attribute, disabled buttons, no click-to-edit, ZERO writes', async () => {
-			jest.useFakeTimers();
-			const { host, root } = await renderCounter(counterYaml, { canPersist: false });
-
-			// Framework-level read-only affordance (the CSS badge hangs off this attribute).
-			expect(root.hasAttribute('data-dse-readonly')).toBe(true);
-
-			const btns = buttons(root);
-			expect(btns[0].hasAttribute('disabled')).toBe(true);
-			expect(btns[1].hasAttribute('disabled')).toBe(true);
-			const container = root.querySelector('.ds-counter-container') as HTMLElement;
-			expect(container.getAttribute('data-tooltip')).toBe('Read-only in this context');
-
-			btns[0].click();
-			btns[1].click();
-			valueEl(root).click();
-			expect(inputEl(root)).toBeNull(); // no editor swapped in
-			expect(valueEl(root).textContent).toBe('10');
-
-			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-			expect(host.replaceSource).not.toHaveBeenCalled();
-		});
+		// The whole legacy class block is evicted.
+		expect(sheet).not.toMatch(/\.ds-counter-/);
 	});
 });
 
@@ -398,7 +505,7 @@ describe('Plan 07 Task 4: persisted write path through a REAL ReadingModeBlockHo
 		await pipeline.run(counterElement, 'name: Health\ncurrent_value: 10\nmax_value: 20\nmin_value: 0', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		buttons(root)[0].click();
+		plusBtn(root).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -438,7 +545,7 @@ describe('Plan 07 Task 4: registered EXACTLY ONCE — framework registry owns ds
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-ct block through the wired processor produces the counter DOM (end-to-end)', async () => {
+	test('rendering a ds-ct block through the wired processor produces the counter stepper DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -451,7 +558,8 @@ describe('Plan 07 Task 4: registered EXACTLY ONCE — framework registry owns ds
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('counter');
-		expect(root.querySelector('.ds-counter-value')!.textContent).toBe('10');
+		expect(inputEl(root)!.value).toBe('10');
+		expect(nameEl(root).textContent).toBe('Health');
 	});
 });
 

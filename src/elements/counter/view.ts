@@ -1,168 +1,82 @@
-// Plan 07 Task 4 (F1 §6 step 7) — CounterElementView: ports the legacy
-// Counter/CounterView.ts DOM (value display, click-to-edit <input type=number>, +/−
-// chevron buttons) onto ElementView. The legacy manual click shield
-// (CounterProcessor's capture-phase mousedown/pointerdown stop) and try/catch error div
-// are dropped — the pipeline arms the shield on the root and owns the single error
-// boundary (F1 §2.4).
+// Plan 09 Task 4 (D2 §3.9) — CounterElementView on the D2 kit `stepper`, replacing the
+// Plan 07 port's hand-rolled chevron <button>s + click-to-edit input swap. The stepper
+// is the whole control surface:
+//  - `editable: true` — the value IS the stepper's <input type=number>, with the kit's
+//    ONE commit path (CB-10): Enter/blur funnel into a single guarded commit, Escape
+//    reverts a dirty draft, and a no-op/clamped commit never fires onChange — so a
+//    clamped edit skips the write entirely (the Plan 07 view's "nothing changed,
+//    nothing to persist" contract, now kit-enforced);
+//  - `integer: true` — a typed "5.5" commits 5 (Math.trunc = parseInt's toward-zero
+//    semantics, the legacy finishEditing behavior): the counter NEVER persists a float;
+//  - min/max forward the model bounds, so the ± buttons auto-disable at the bounds via
+//    the REAL `disabled` property (CB-8; an undefined max_value stays unbounded);
+//  - the stepper's render() already does the targeted display refresh (input value +
+//    button disabling, in place) BEFORE onChange fires, so onChange is exactly "mutate
+//    this.model, then void this.persist()" — the framework's debounced write-behind
+//    (F1 §4.2) coalesces rapid ± clicks into exactly one host.replaceSource call. The
+//    serialize path (model.ts) is untouched: persisted YAML stays byte-compatible.
 //
-// Key adaptations from the legacy view (same recipe as stamina-bar):
-//  - the 3 `CodeBlocks.updateCounter(plugin.app, data, ctx)` calls (legacy
-//    CounterView.ts:55/:65/:160) become "mutate this.model, then void this.persist()" —
-//    the framework's debounced write-behind (F1 §4.2) coalesces rapid clicks into
-//    exactly one host.replaceSource call;
-//  - raw addEventListener (legacy :32/:51/:61/:149/:163-165) becomes
-//    this.registerDomEvent — Counter mounts its DOM exactly once (no collapsible
-//    wrapper / re-render cycle), so binding to the view itself is lifecycle-correct;
-//  - the legacy per-edit churn (a fresh <input> and a fresh value <div> per edit cycle,
-//    each re-binding listeners) is replaced by TWO stable nodes created once in onMount
-//    and swapped in/out via replaceWith — every listener is registered exactly once for
-//    the view's lifetime, and the `editing` guard keeps Enter-then-blur from committing
-//    (and persisting) twice;
-//  - all write-triggering controls are gated on cx.host.canPersist (F1 §4.4): when the
-//    host can't persist, no listener is bound at all, the buttons render disabled, and a
-//    read-only tooltip is set (the framework's data-dse-readonly badge shows on the root
-//    automatically).
-import { setIcon, setTooltip } from 'obsidian';
+// SC-5 eviction (D2 §5): the value_height/name_height YAML knobs no longer become
+// inline `font-size` (nor the input an inline height) — they arrive as the
+// --dse-value-scale / --dse-label-scale custom properties (sanctioned --dse-* geometry
+// via setProperty, the same statgrid scale grammar as values-row/characteristics),
+// consumed by the stylesheet's `.dse-counter__value/__name` rules. No other `.style`
+// access, no color anywhere in code.
+import { setTooltip } from 'obsidian';
 import { ElementView } from '@/framework/view';
+import { stepper } from '@/framework/kit';
 import type { Counter } from '@model/Counter';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
 
 export class CounterElementView extends ElementView<Counter> {
-	private valueDisplay!: HTMLElement;
-	private inputField!: HTMLInputElement;
-	private incrementButton!: HTMLButtonElement;
-	private decrementButton!: HTMLButtonElement;
-	/** True while the click-to-edit input is swapped into the display slot. Guards
-	 *  finishEditing so an Enter commit followed by the browser's late blur (the input
-	 *  is detached by then) cannot mutate + persist a second time. */
-	private editing = false;
-
 	protected onMount(root: HTMLElement, model: Counter): void {
-		// Legacy DOM parity: CounterProcessor created `.ds-counter-ele-container` around
-		// CounterView.build's `.ds-counter-container` — keep both so existing user CSS
-		// targeting either class keeps working.
-		const eleContainer = root.createEl('div', { cls: 'ds-counter-ele-container' });
-		const container = eleContainer.createEl('div', { cls: 'ds-counter-container' });
+		const container = root.createDiv({ cls: 'dse-counter' });
+		container.style.setProperty('--dse-value-scale', String(model.value_height));
+		container.style.setProperty('--dse-label-scale', String(model.name_height));
 
-		const displayContainer = container.createEl('div', { cls: 'ds-counter-display-container' });
-		this.valueDisplay = displayContainer.createEl('div', {
-			cls: 'ds-counter-value',
-			text: model.current_value.toString(),
-		});
-		this.valueDisplay.style.fontSize = `${model.value_height}em`;
+		const canPersist = this.cx.host.canPersist;
+		const handle = stepper(
+			container,
+			{
+				value: model.current_value,
+				// Counter.parse always materializes min_value (default 0) — the legacy
+				// updateButtons floor; max_value may be undefined (unbounded: the plus
+				// button then never auto-disables), exactly as the legacy view behaved.
+				min: model.min_value,
+				max: model.max_value,
+				// F1 §4.4: when the host can't persist, render the static span (no dead
+				// input) — the buttons are force-disabled below.
+				editable: canPersist,
+				integer: true,
+				label: model.name || 'Counter',
+				onChange: (value) => {
+					this.model.current_value = value;
+					void this.persist();
+				},
+			},
+			this,
+		);
 
-		const nameDisplay = displayContainer.createEl('div', { cls: 'ds-counter-name', text: model.name });
-		nameDisplay.style.fontSize = `${model.name_height}em`;
+		// The stepper's value node (input when editable, span when read-only) IS the
+		// counter's big value — tag it with the element grammar class so the stylesheet
+		// scales it via --dse-value-scale.
+		handle.rootEl
+			.querySelector<HTMLElement>('.dse-stepper__input, .dse-stepper__value')
+			?.addClass('dse-counter__value');
 
-		const controlsContainer = container.createEl('div', { cls: 'ds-counter-controls' });
-		this.incrementButton = controlsContainer.createEl('button', { cls: 'ds-counter-button' });
-		setIcon(this.incrementButton, 'chevron-up');
-		this.decrementButton = controlsContainer.createEl('button', { cls: 'ds-counter-button' });
-		setIcon(this.decrementButton, 'chevron-down');
+		container.createDiv({ cls: 'dse-counter__name', text: model.name });
 
-		container.addClass('ds-counter-flex');
-
-		// The click-to-edit input is created ONCE (detached — global createEl, as the
-		// legacy view used) and swapped in/out of the display slot, so its listeners
-		// below are registered exactly once.
-		this.inputField = createEl('input', { type: 'number', cls: 'ds-counter-input' }) as HTMLInputElement;
-		this.inputField.style.fontSize = `${model.value_height}em`;
-		this.inputField.style.height = '1em';
-
-		if (this.cx.host.canPersist) {
-			this.registerDomEvent(this.valueDisplay, 'click', () => this.beginEditing());
-			this.registerDomEvent(this.incrementButton, 'click', () => this.step(+1));
-			this.registerDomEvent(this.decrementButton, 'click', () => this.step(-1));
-			this.registerDomEvent(this.inputField, 'blur', () => this.finishEditing());
-			this.registerDomEvent(this.inputField, 'keydown', (e: KeyboardEvent) => {
-				if (e.key === 'Enter') {
-					this.finishEditing();
-				} else if (e.key === 'Escape') {
-					// Cancel editing (legacy behavior): revert the input to the current
-					// value, then commit — a no-op mutation.
-					this.inputField.value = this.model.current_value.toString();
-					this.finishEditing();
-				}
+		if (!canPersist) {
+			// Visible but inert: REAL `disabled` on both kit buttons (CB-8 — the kit's
+			// click guard also swallows synthetic dispatchEvent clicks). Nothing ever
+			// calls setValue here, so the stepper never re-enables them; persist() is
+			// double-gated anyway (ElementView.persist no-ops when !canPersist), and the
+			// pipeline already stamped data-dse-readonly on the root (CSS badge).
+			handle.rootEl.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
+				btn.disabled = true;
 			});
-			this.updateButtons();
-		} else {
-			// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, canvas)
-			// -> visible but inert. No listeners bound at all; the pipeline already stamped
-			// data-dse-readonly on the root (CSS badge).
-			this.incrementButton.setAttribute('disabled', 'true');
-			this.decrementButton.setAttribute('disabled', 'true');
 			setTooltip(container, READ_ONLY_TOOLTIP);
 		}
-	}
-
-	/** Legacy incrementValue/decrementValue merged: bound-clamped ±1 on the model, then
-	 *  targeted display refresh + debounced persist. Bound clicks can't normally happen
-	 *  (updateButtons disables the button first, and disabled buttons don't dispatch
-	 *  click), so the early return is a belt only — and unlike the legacy handler (which
-	 *  unconditionally called CodeBlocks.updateCounter even after a clamped no-op), a
-	 *  clamped click here skips the write entirely: nothing changed, nothing to persist. */
-	private step(delta: 1 | -1): void {
-		const { current_value, max_value, min_value } = this.model;
-		if (delta > 0 && max_value !== undefined && current_value >= max_value) return;
-		if (delta < 0 && current_value <= min_value) return;
-		this.model.current_value += delta;
-
-		this.valueDisplay.setText(this.model.current_value.toString());
-		this.updateButtons();
-		void this.persist();
-	}
-
-	/** Ports legacy updateButtons 1:1 (disable at max_value / min_value). */
-	private updateButtons(): void {
-		const { current_value, max_value, min_value } = this.model;
-		if (max_value !== undefined && current_value >= max_value) {
-			this.incrementButton.setAttribute('disabled', 'true');
-		} else {
-			this.incrementButton.removeAttribute('disabled');
-		}
-		if (current_value <= min_value) {
-			this.decrementButton.setAttribute('disabled', 'true');
-		} else {
-			this.decrementButton.removeAttribute('disabled');
-		}
-	}
-
-	/** Ports legacy makeValueEditable: swap the value display for the number input and
-	 *  disable both buttons while editing. */
-	private beginEditing(): void {
-		if (this.editing) return;
-		this.editing = true;
-
-		this.inputField.value = this.model.current_value.toString();
-		this.valueDisplay.replaceWith(this.inputField);
-		this.inputField.focus();
-		this.inputField.select();
-
-		this.incrementButton.setAttribute('disabled', 'true');
-		this.decrementButton.setAttribute('disabled', 'true');
-	}
-
-	/** Ports legacy finishEditing: clamp/revert the typed value, mutate the model, swap
-	 *  the display back, refresh the buttons, and persist (debounced). */
-	private finishEditing(): void {
-		if (!this.editing) return;
-		this.editing = false;
-
-		let newValue = parseInt(this.inputField.value);
-		if (isNaN(newValue)) {
-			newValue = this.model.current_value; // Revert if invalid
-		} else {
-			if (this.model.max_value !== undefined) {
-				newValue = Math.min(newValue, this.model.max_value);
-			}
-			newValue = Math.max(newValue, this.model.min_value);
-		}
-		this.model.current_value = newValue;
-
-		this.valueDisplay.setText(newValue.toString());
-		this.inputField.replaceWith(this.valueDisplay);
-		this.updateButtons();
-		void this.persist();
 	}
 }
