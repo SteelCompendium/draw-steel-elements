@@ -21,13 +21,14 @@
 // Role tint: [data-dse-role="<role>"] + the --dse-role ELEMENT-SET ALIAS
 // (--dse-role: var(--dse-role-<role>)) — the same fails-safe pattern as renderFeature's
 // data-dse-act. Unmapped types set NEITHER (grey/monochrome fallback); in Legacy every
-// --dse-role-* token is the muted grey, so the accent is Steel-only (OD-2).
+// --dse-role-* token is the muted grey, so the accent is Steel-only (OD-2). The role
+// vocabulary + application live in the SHARED roleTint helper (extracted for T6b —
+// statblock tints from its SDK roles line with the same map).
 //
 // This IS the featureblock render-subsystem evolution the workspace memory
 // (featureblock-refactor-in-flight) tracks — built cleanly on the kit grammar, not
 // entangled with the legacy builders. The legacy FeatureblockView + sub-views stay in
-// the codebase UNTOUCHED: Statblock (T6b) still constructs HeaderView/FeaturesView/HR
-// directly until its own redesign.
+// the codebase UNTOUCHED — since T6b they are element-dead code; Task 10 retires them.
 //
 // Static + SDK-backed: no persistence, no interactive controls. All markdown renders
 // through this.renderMarkdown (owner-parented, ML-1) passed to the kit/renderer as the
@@ -37,36 +38,9 @@ import { ElementView } from '@/framework/view';
 import { cardHead, divider } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { applyRoleTint } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { FeatureblockConfig } from '@model/FeatureblockConfig';
-
-/** The combat-role vocabulary (matches the --dse-role-* token family, D2 §5). */
-const FB_ROLES = [
-	'ambusher',
-	'harrier',
-	'artillery',
-	'brute',
-	'controller',
-	'hexer',
-	'mount',
-	'support',
-	'defender',
-	'leader',
-	'solo',
-	'minion',
-] as const;
-export type FbRole = (typeof FB_ROLES)[number];
-
-/**
- * Extracts the combat role from a featureblock_type ("Hazard Hexer" → "hexer").
- * Returns undefined when no role word appears — the caller then sets NO
- * attribute/alias, so the tint fails safe to monochrome (D2 §3.7).
- */
-export function fbRoleOf(featureblockType: string | undefined): FbRole | undefined {
-	if (!featureblockType) return undefined;
-	const words = featureblockType.toLowerCase().split(/[^a-z]+/);
-	return FB_ROLES.find((role) => words.includes(role));
-}
 
 /** A feature's advancement level: the untyped `level` field the SDK reader preserves
  *  on the Feature object (fixture/retainer advancement tiers). 0 = the main flow. */
@@ -86,11 +60,7 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 		card.setAttribute('data-dse-fb-stats', 'grid');
 
 		const typeText = fb.featureblock_type?.trim() || undefined;
-		const role = fbRoleOf(typeText);
-		if (role) {
-			card.setAttribute('data-dse-role', role);
-			card.style.setProperty('--dse-role', `var(--dse-role-${role})`);
-		}
+		const role = applyRoleTint(card, typeText);
 
 		// -- cardHead (§3.7 fill; legacy header wording preserved verbatim) --
 		cardHead(

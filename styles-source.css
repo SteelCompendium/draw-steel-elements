@@ -1789,108 +1789,131 @@ code.dsa {
     }
 }
 
-/* ==================== */
-/* Statblock            */
-/* ==================== */
+/* ================================================================== */
+/*  Statblock card grammar (D2 §3.8, Plan 09 Task 6b): .dse-sb        */
+/* ================================================================== */
+/*
+   The most-consulted element, on the kit card grammar: kit cardHead (§3.8 fill)
+   + the .dse-sb__meta info grid (item row + kv cells) + the .dse-sb__chars
+   characteristics row + kit divider (the legacy ◆ rule) + Task 5's shared
+   .dse-feature/.dse-pr feature grammar. The old legacy statblock block that
+   lived here is EVICTED — statblock was the LAST element rendering those
+   classes (the legacy HeaderView/StatsView/FeaturesView builders stay in-tree
+   as code only; Task 10 retires them and their .ds-header-* CSS).
 
-.ds-sb-container {
-	background-color: var(--code-background);
-	padding-bottom: 1rem;
+   Role tint (§3.8): the element sets [data-dse-role="<role>"] + the --dse-role
+   ELEMENT-SET ALIAS on .dse-sb (shared roleTint helper); the spine below and
+   the kit .dse-head__primary--right consume var(--dse-role, <fallback>), so an
+   unmapped role (no alias) and the Legacy base (every --dse-role-* token = the
+   muted grey) both fail safe to monochrome (OD-2: the accent is Steel-only).
 
-	/* General space-between (left-right) line */
+   Pref hooks (D4 owns the VALUES; the element ships static defaults):
+   [data-dse-density="comfortable|compact"], [data-dse-sb-featstyle="card|flat"].
+   NO word/number changes anywhere — the "label: " colons are CSS-owned so the
+   rendered text stays verbatim while the DOM stays layout-agnostic.
+   Tokens only (D2 §5) — no color literals.
+*/
+[data-dse-element='statblock']:not([data-dse-error-stage]) {
+	display: block;
+	background: var(--dse-surface);
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+.dse-sb {
+	padding: var(--dse-pad);
+	padding-top: 0.5rem;
+}
+/* The combat-role spine: only a mapped role draws it (the attribute and the
+   alias are always set together), so the token fallback never actually paints —
+   it exists to keep the rule valid, not as a second code path. */
+.dse-sb[data-dse-role] {
+	border-left: 3px solid var(--dse-role, var(--dse-rule));
+}
 
-	.ds-sb-title-line,
-	.ds-sb-subtitle-line,
-	.ds-sb-info-line,
-	.ds-sb-stats-line {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
+/* -- .dse-sb__meta: the info grid -- */
+.dse-sb__meta {
+	margin-top: 0.5em;
+}
+/* The Size/Speed/Stamina/Stability/Free Strike item row (legacy stats-row
+   rhythm: evenly spread, centered, big bold value over its label). */
+.dse-sb__items {
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+	padding-bottom: 0.5rem;
+}
+.dse-sb__item {
+	flex: 1 1 0;
+	text-align: center;
+}
+.dse-sb__item-v {
+	font-size: calc(var(--font-ui-large) * 1.5);
+	font-weight: bold;
+}
+.dse-sb__item-l {
+	font-size: 0.9em;
+	color: var(--dse-fg-muted);
+}
+/* The Immunity/Weakness + Movement/With Captain kv cells: a 2-col grid keeping
+   the legacy left/right line pairing (right column right-aligned). */
+.dse-sb__grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 1.5em;
+	row-gap: 0.25em;
+	margin-top: 0.25rem;
+}
+.dse-sb__kv:nth-child(even) {
+	justify-self: end;
+	text-align: right;
+}
+/* Legacy "Immunity: …" wording: bold key + the CSS-owned colon (never baked
+   into the DOM — same rule as .dse-fb__stat-l / .dse-section__title). */
+.dse-sb__kv-l {
+	font-weight: bold;
+	color: var(--dse-heading);
+}
+.dse-sb__kv-l::after {
+	content: ': ';
+}
 
-	/* General purpose separator */
+/* -- .dse-sb__chars: the characteristics row (legacy centered-bold rhythm) -- */
+.dse-sb__chars {
+	display: flex;
+	justify-content: space-around;
+	font-weight: bold;
+	text-align: center;
+	margin-top: 0.5rem;
+	padding: 0.5rem 0;
+}
+.dse-sb__char {
+	flex: 1 1 0;
+}
 
-	.ds-sb-characteristics-line {
-		padding-top: 0.5rem;
-		padding-bottom: 0.5rem;
+/* -- density pref (D4 drives the attribute value; CSS keys the reflow) -- */
+.dse-sb[data-dse-density='compact'] {
+	padding: calc(var(--dse-pad) / 2);
+	padding-top: 0.25rem;
+}
+.dse-sb[data-dse-density='compact'] .dse-sb__item-v {
+	font-size: var(--font-ui-large);
+}
+.dse-sb[data-dse-density='compact'] .dse-sb__items {
+	padding-bottom: 0.25rem;
+}
+.dse-sb[data-dse-density='compact'] .dse-sb__chars {
+	padding: 0.25rem 0;
+	margin-top: 0.25rem;
+}
 
-        /* Hover effect on each "container" */
-        &:hover {
-            background-color: var(--color-base-25);
-        }
-	}
-
-    .ds-sb-info-line:hover,
-	.ds-sb-stats-line:hover {
-		background-color: var(--color-base-25);
-	}
-
-	/*
-	Each line needs to have padding.
-	Ideally this would be at the root container, but line backgrounds need 100% width
-	 */
-
-	.ds-sb-title-line,
-	.ds-sb-subtitle-line,
-	.ds-sb-info-line,
-	.ds-sb-stats-line,
-	.ds-feature-container,
-	.ds-hr-container {
-		padding-left: 1rem;
-		padding-right: 1rem;
-	}
-
-	.ds-hr-container {
-		margin: 0.5rem 0 0.5em 0;
-	}
-
-	.ds-sb-title-line {
-		font-size: var(--font-ui-large);
-		font-weight: bold;
-		background-color: var(--color-base-25);
-		padding-top: 0.5rem;
-	}
-	.ds-sb-subtitle-line {
-		background-color: var(--color-base-25);
-		padding-bottom: 0.5rem;
-	}
-
-	.ds-sb-stats-row {
-		display: flex;
-		justify-content: space-around;
-		align-items: center;
-		padding-bottom: 0.5rem;
-	}
-
-	.ds-sb-stats-item {
-		text-align: center;
-		width: -webkit-fill-available;
-	}
-	.ds-sb-stats-item-top {
-		font-size: calc(var(--font-ui-large) * 1.5);
-		font-weight: bold;
-	}
-	.ds-sb-stats-item-bottom {
-	}
-
-	.ds-sb-stats-line {
-		margin-top: 0.25rem;
-	}
-
-	.ds-sb-characteristics-line {
-		font-weight: bold;
-		text-align: center;
-		margin-top: 0.5rem;
-	}
-	.ds-sb-characteristics-pair {
-		width: -webkit-fill-available;
-	}
-
-	/*.ds-feature-detail-line:hover,*/
-	/*.ds-feature-detail-table-cell:hover,*/
-	/*.ds-sb-trait-effect:hover {*/
-	/*	background-color: var(--color-base-30);*/
-	/*}*/
+/* -- feature-style pref: 'card' = the shared .dse-feature card rhythm
+   (default); 'flat' tightens the list into a dense hoverless flat run -- */
+.dse-sb[data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature {
+	padding-top: 0.25rem;
+	padding-bottom: 0.25rem;
+}
+.dse-sb[data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature:hover {
+	background-color: transparent;
 }
 
 /* ================================================================== */

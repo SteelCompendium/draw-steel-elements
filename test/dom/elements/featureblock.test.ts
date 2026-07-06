@@ -492,18 +492,19 @@ describe('Plan 09 Task 6a: source + CSS hygiene', () => {
 		expect(code).not.toMatch(/querySelector/);
 	});
 
-	test('legacy FeatureblockView + sub-views stay in place UNTOUCHED (T6b: statblock still shares the legacy builders)', () => {
+	test('legacy FeatureblockView + sub-views stay in-tree UNTOUCHED — element-dead since T6b (Task 10 retires them)', () => {
 		const legacy = fs.readFileSync(
 			path.join(__dirname, '../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts'),
 			'utf8',
 		);
 		expect(legacy).toMatch(/class FeatureblockView/);
 		expect(legacy).toMatch(/Features\/FeaturesView/);
+		// Statblock's T6b redesign dropped the last element import of the legacy tree.
 		const statblock = fs.readFileSync(
 			path.join(__dirname, '../../../src/elements/statblock/view.ts'),
 			'utf8',
 		);
-		expect(statblock).toMatch(/Features\/FeaturesView/);
+		expect(statblock).not.toMatch(/from '@drawSteelAdmonition/);
 	});
 
 	test('CSS contract: .dse-fb grammar in styles-source.css; the old .ds-fb-* block is evicted', () => {

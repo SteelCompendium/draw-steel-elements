@@ -504,18 +504,19 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
-	test('legacy Features/FeatureView.ts stays in place UNTOUCHED for Statblock/Featureblock (retired in Task 6)', () => {
+	test('legacy Features/FeatureView.ts stays in-tree UNTOUCHED — element-dead since Task 6b (Task 10 retires it)', () => {
 		const legacy = fs.readFileSync(
 			path.join(__dirname, '../../../src/drawSteelAdmonition/Features/FeatureView.ts'),
 			'utf8',
 		);
-		// Its consumers still construct it directly (via FeaturesView -> FeatureView).
 		expect(legacy).toMatch(/class FeatureView/);
+		// Statblock — its last ELEMENT consumer — no longer imports the legacy tree
+		// (T6b); only the untouched legacy FeatureblockView still composes it.
 		const statblock = fs.readFileSync(
 			path.join(__dirname, '../../../src/elements/statblock/view.ts'),
 			'utf8',
 		);
-		expect(statblock).toMatch(/Features\/FeaturesView/);
+		expect(statblock).not.toMatch(/from '@drawSteelAdmonition/);
 		const featureblock = fs.readFileSync(
 			path.join(__dirname, '../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts'),
 			'utf8',

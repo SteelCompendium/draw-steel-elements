@@ -1,60 +1,148 @@
-// Plan 07 Task 3 / F1 §6 step 6 — StatblockElementView.
+// Plan 09 Task 6b (D2 §3.8) — StatblockElementView on the D2 kit card grammar.
 //
-// Unlike Feature/Featureblock, Statblock had NO legacy view class — its whole render
-// lived in the deleted StatblockProcessor's private buildUI. onMount therefore folds
-// those sub-view calls in VERBATIM (same strings, same fallbacks, same guard): recreate
-// the processor's `.ds-sb-container.ds-container` wrapper, then Common/HeaderView ->
-// statblock/StatsView -> (only when features exist) HorizontalRuleProcessor.build +
-// Features/FeaturesView over `features.map(f => new FeatureConfig(f))`. Those sub-views
-// are NOT migrated or deleted here — they are the same kept builders Feature/Featureblock
-// still delegate to. The Statblock CSS (`.ds-sb-*`) and the nested shared classes
-// (`.ds-feature-container`, `.ds-hr-container`, `.ds-header-container`, …) stay GLOBAL —
-// featureblock/legacy rules consume them with no `[data-dse-element="statblock"]`
-// ancestor (HeaderView even emits `.ds-sb-header-*` inside featureblock renders), so
-// re-scoping would silently unstyle them (per-element scoping of shared classes is a D3
-// job).
+// Re-cast from the folded legacy buildUI sub-view calls (Common/HeaderView +
+// statblock/StatsView + HorizontalRuleProcessor + Features/FeaturesView) onto the
+// site-aligned statblock card:
 //
-// What the framework replaced from the legacy processor (F1 §2.4): the manual
-// capture-phase mousedown/pointerdown stop -> the pipeline's default click shield
-// (def.noClickShield unset); the try/catch + ".error-message" div -> the pipeline's
-// single error boundary + renderErrorCard.
-import type { MarkdownPostProcessorContext } from 'obsidian';
+//   .dse-sb[data-dse-role][data-dse-density][data-dse-sb-featstyle]  ← the card root
+//     .dse-head                             ← kit cardHead (§3.8 slot fill below)
+//     .dse-sb__meta                         ← the info grid:
+//       .dse-sb__items > .dse-sb__item      ←   Size/Speed/Stamina/Stability/Free Strike
+//       .dse-sb__grid  > .dse-sb__kv        ←   Immunity/Weakness/Movement/With Captain
+//     .dse-sb__chars > .dse-sb__char        ← Might/Agility/Reason/Intuition/Presence
+//     .dse-hr (kit divider, ornament)       ← the legacy ◆ rule before the features
+//     .dse-feature__nested > .dse-feature…  ← Task 5's renderFeatureList (shared grammar)
+//
+// §3.8 cardHead fill: left-eyebrow = the ancestry line, left-primary = name,
+// right-eyebrow = Level, right-primary = the roles line (Org · Role), right-deck =
+// EV. COMMUNITY-CONTROVERSIAL CONSTRAINT: NO word/number changes — every label,
+// value, and fallback string ('Unnamed Creature', 'Level N/A', 'No Role',
+// 'Unknown Ancestry', 'EV N/A', the '-' info fallbacks, formatCharacteristic's
+// '+N'/'-N'/'N/A') is carried over from the legacy HeaderView/StatsView VERBATIM;
+// only the design changed (the "Immunity: " colon is CSS-owned, same rule as
+// .dse-fb__stat-l / .dse-section__title).
+//
+// Role tint: the shared applyRoleTint (roleTint.ts, extracted from T6a) maps the
+// SDK roles line onto [data-dse-role] + the --dse-role element-set alias; an
+// unmapped role ("Boss") sets neither, failing safe to grey/monochrome (OD-2:
+// Steel-only accent). Pref hooks: data-dse-density / data-dse-sb-featstyle ship
+// as static defaults here — D4's pref reflection owns the VALUES.
+//
+// The legacy builders this view stops constructing stay in the codebase UNTOUCHED
+// — statblock was their LAST element consumer, so they are now element-dead code;
+// Task 10 retires them (and their .ds-header-*/.ds-feature-* CSS).
+//
+// Static + SDK-backed (OD-7: stays static): no persistence, no interactive
+// controls. All markdown renders through this.renderMarkdown (owner-parented,
+// ML-1) passed to renderFeatureList as the renderMd callback.
 import { ElementView } from '@/framework/view';
-import { HeaderView } from '@drawSteelAdmonition/Common/HeaderView';
-import { StatsView } from '@drawSteelAdmonition/statblock/StatsView';
-import { FeaturesView } from '@drawSteelAdmonition/Features/FeaturesView';
-import { HorizontalRuleProcessor } from '@drawSteelAdmonition/Common/horizontalRuleProcessor';
+import { cardHead, divider } from '@/framework/kit';
+import type { RenderMdCallback } from '@/framework/kit';
+import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { applyRoleTint } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
 
+/** The legacy StatsView.formatCharacteristic, VERBATIM (word/number parity). */
+function formatCharacteristic(value?: number): string {
+	if (value === undefined || isNaN(value)) {
+		return 'N/A';
+	}
+	return value >= 0 ? `+${value}` : `${value}`;
+}
+
 export class StatblockElementView extends ElementView<StatblockConfig> {
 	protected onMount(root: HTMLElement, model: StatblockConfig): void {
-		const container = root.createEl('div', { cls: 'ds-sb-container ds-container' });
-		// The kept sub-views still take a MarkdownPostProcessorContext but read ONLY
-		// ctx.sourcePath (every renderMD call in the nested FeaturesView/FeatureView tree;
-		// HeaderView/StatsView/HorizontalRuleProcessor never read ctx at all).
-		// host.sourcePath is the framework's equivalent (F1 §3.4 "mirrors
-		// ctx.sourcePath"), so a minimal shim bridges the shared, untouched sub-views —
-		// same as feature/featureblock's view.ts.
-		const ctx = { sourcePath: this.cx.host.sourcePath } as MarkdownPostProcessorContext;
+		const sb = model.statblock;
+		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
 
-		// -- StatblockProcessor.buildUI, folded in verbatim ------------------------------
-		const level = model.statblock.level !== undefined ? `Level ${model.statblock.level}` : 'Level N/A';
-		const roles = model.statblock.roles?.join(', ') ?? 'No Role';
-		new HeaderView(
-			this.cx.plugin,
-			ctx,
-			model.statblock.name ?? 'Unnamed Creature',
-			`${level} ${roles}`,
-			model.statblock.ancestry?.join(', ') ?? 'Unknown Ancestry',
-			model.statblock.ev !== undefined ? `EV ${model.statblock.ev}` : 'EV N/A',
-		).build(container);
+		const card = root.createDiv({ cls: 'dse-sb' });
+		// D4 pref hooks (§3.8): the attributes ship now so CSS can key off them;
+		// D4's pref reflection drives the values. Static defaults = today's look.
+		card.setAttribute('data-dse-density', 'comfortable');
+		card.setAttribute('data-dse-sb-featstyle', 'card');
 
-		new StatsView(this.cx.plugin, model, ctx).build(container);
-		if (model.statblock.features?.length > 0) {
-			HorizontalRuleProcessor.build(container);
-			const featureConfigs = model.statblock.features.map((f) => new FeatureConfig(f));
-			new FeaturesView(this.cx.plugin, featureConfigs, ctx).build(container);
-		}
+		// Role spine + header tint from the SDK combat role (fails-safe unmapped).
+		applyRoleTint(card, sb.roles?.join(', '));
+
+		// -- cardHead (§3.8 fill; legacy header wording preserved verbatim — the
+		// fallback strings always rendered in the legacy header, so no slot is a gap) --
+		cardHead(
+			card,
+			{
+				leftEyebrow: sb.ancestry?.join(', ') ?? 'Unknown Ancestry',
+				name: sb.name ?? 'Unnamed Creature',
+				rightEyebrow: sb.level !== undefined ? `Level ${sb.level}` : 'Level N/A',
+				rightPrimary: sb.roles?.join(', ') ?? 'No Role',
+				rightDeck: sb.ev !== undefined ? `EV ${sb.ev}` : 'EV N/A',
+				level: 2, // the block heading; feature cards default to 3
+			},
+			this,
+		);
+
+		this.renderMeta(card, model);
+		this.renderChars(card, model);
+		this.renderFeatures(card, model, renderMd);
+	}
+
+	/** The .dse-sb__meta info grid: the legacy StatsView surface — the
+	 *  Size/Speed/Stamina/Stability/Free Strike item row, then the
+	 *  Immunity/Weakness/Movement/With Captain kv cells — labels + values VERBATIM
+	 *  (incl. the '-' fallbacks); the "label: " colon is CSS-owned. */
+	private renderMeta(card: HTMLElement, model: StatblockConfig): void {
+		const sb = model.statblock;
+		const meta = card.createDiv({ cls: 'dse-sb__meta' });
+
+		const items = meta.createDiv({ cls: 'dse-sb__items' });
+		const item = (label: string, value: string): void => {
+			const itemEl = items.createDiv({ cls: 'dse-sb__item' });
+			itemEl.createDiv({ cls: 'dse-sb__item-v', text: value });
+			itemEl.createDiv({ cls: 'dse-sb__item-l', text: label });
+		};
+		item('Size', `${sb.size ?? '-'}`);
+		item('Speed', `${sb.speed ?? '-'}`);
+		item('Stamina', `${sb.stamina ?? '-'}`);
+		item('Stability', `${sb.stability ?? '-'}`);
+		item('Free Strike', `${sb.freeStrike ?? '-'}`);
+
+		const grid = meta.createDiv({ cls: 'dse-sb__grid' });
+		const kv = (modifier: string, label: string, value: string): void => {
+			const kvEl = grid.createDiv({ cls: `dse-sb__kv dse-sb__kv--${modifier}` });
+			kvEl.createSpan({ cls: 'dse-sb__kv-l', text: label });
+			kvEl.createSpan({ cls: 'dse-sb__kv-v', text: value });
+		};
+		// Legacy StatsView parity: Immunity/Weakness/Movement always print (with the
+		// '-' fallback); the With Captain cell only exists when the field does.
+		kv('immunity', 'Immunity', sb.immunities?.length ? sb.immunities.join(', ') : '-');
+		kv('weakness', 'Weakness', sb.weaknesses?.length ? sb.weaknesses.join(', ') : '-');
+		kv('movement', 'Movement', `${sb.movement ?? '-'}`);
+		if (sb.withCaptain) kv('captain', 'With Captain', sb.withCaptain);
+	}
+
+	/** The .dse-sb__chars row: five verbatim "Name +N" pairs, legacy order. */
+	private renderChars(card: HTMLElement, model: StatblockConfig): void {
+		const chars = model.statblock.characteristics;
+		const row = card.createDiv({ cls: 'dse-sb__chars' });
+		const pair = (label: string, value?: number): void => {
+			row.createDiv({ cls: 'dse-sb__char', text: `${label} ${formatCharacteristic(value)}` });
+		};
+		pair('Might', chars.might);
+		pair('Agility', chars.agility);
+		pair('Reason', chars.reason);
+		pair('Intuition', chars.intuition);
+		pair('Presence', chars.presence);
+	}
+
+	/** The feature list on Task 5's shared grammar, behind the legacy ◆ rule
+	 *  (now the kit divider). Same guard as the legacy `features?.length > 0`. */
+	private renderFeatures(
+		card: HTMLElement,
+		model: StatblockConfig,
+		renderMd: RenderMdCallback,
+	): void {
+		const features = model.statblock.features;
+		if (!features || features.length === 0) return;
+		divider(card, { axis: 'h', ornament: true }, this);
+		renderFeatureList(card, FeatureConfig.allFrom(features), this, renderMd);
 	}
 }

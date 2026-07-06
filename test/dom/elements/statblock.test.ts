@@ -1,12 +1,23 @@
-// Plan 07 Task 3 (F1 §6 step 6) — the Statblock element on Framework v2:
-// statblockElement definition + StatblockElementView, driven through the REAL
-// ElementPipeline (same static-element harness as feature.test.ts / featureblock.test.ts,
-// which this file mirrors). Statblock had NO legacy view class — its render lived in
-// StatblockProcessor.buildUI — so the element view folds those sub-view calls in
-// directly (Common/HeaderView -> statblock/StatsView -> [HorizontalRuleProcessor.build +
-// Features/FeaturesView via FeatureConfig]). The golden tests below pin the fold
-// byte-for-byte against a direct replay of those same sub-view calls rather than
-// duplicating structure assertions.
+// Plan 09 Task 6b (D2 §3.8) — the Statblock element re-cast onto the D2 kit card
+// grammar: kit cardHead (§3.8 fill: left-eyebrow = ancestry line, name heading,
+// Level → right eyebrow chip, roles → right primary, EV → right deck) + role tint
+// via [data-dse-role] (the element maps --dse-role: var(--dse-role-<role>) from the
+// SDK combat role; unmapped → NO attribute/alias, fails safe to monochrome) + the
+// .dse-sb__meta info grid (Size/Speed/Stamina/Stability/Free Strike items +
+// Immunity/Weakness/Movement/With Captain kv cells) + the .dse-sb__chars
+// characteristics row + the D4 pref-attr hooks (data-dse-density /
+// data-dse-sb-featstyle) + the feature list through Task 5's renderFeatureList
+// (shared .dse-feature/.dse-pr grammar).
+//
+// COMMUNITY-CONTROVERSIAL CONSTRAINT (§3.8): NO word/number changes — every label,
+// value, and fallback string the legacy HeaderView/StatsView emitted appears
+// VERBATIM; only the design changed. These tests replace Plan 07 Task 3's
+// golden-DOM pin (which froze the legacy buildUI fold byte-for-byte). The legacy
+// builders (HeaderView/StatsView/FeaturesView/HorizontalRuleProcessor) stay in the
+// codebase UNTOUCHED — statblock was their LAST element consumer, so they are now
+// element-dead; Task 10 retires them.
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -19,25 +30,48 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { StatblockConfig } from '@model/StatblockConfig';
-import { FeatureConfig } from '@model/FeatureConfig';
-import { HeaderView } from '@drawSteelAdmonition/Common/HeaderView';
-import { StatsView } from '@drawSteelAdmonition/statblock/StatsView';
-import { FeaturesView } from '@drawSteelAdmonition/Features/FeaturesView';
-import { HorizontalRuleProcessor } from '@drawSteelAdmonition/Common/horizontalRuleProcessor';
-import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
 import { statblockElement } from '../../../src/elements/statblock/definition';
 import { StatblockElementView } from '../../../src/elements/statblock/view';
+import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import humanBanditChief from '../../fixtures/statblock/human-bandit-chief.yaml';
 
 const SB_ALIASES = ['ds-sb', 'ds-statblock'] as const;
 
-/** A statblock with NO features (and no level/roles/ancestry/ev either) — exercises the
- *  skipped `features?.length > 0` branch (no HR, no FeaturesView) AND the legacy
- *  buildUI's N/A fallback strings in the header. */
+/** A statblock with NO features (and no level/roles/ancestry/ev either) — exercises
+ *  the skipped features branch (no divider, no feature list) AND the legacy header's
+ *  N/A fallback strings, which must survive the redesign VERBATIM. */
 const NO_FEATURES = `type: statblock
 name: Bare Creature
 stamina: "10"
+`;
+
+/** The stat surface the bandit-chief fixture lacks: movement, with_captain,
+ *  weaknesses, a negative/zero/missing characteristic — plus an UNMAPPED role word
+ *  ("Boss"), pinning the grey/monochrome fails-safe. */
+const WITH_META = `type: statblock
+name: Goblin Monarch
+level: 2
+roles:
+  - Boss
+ancestry:
+  - Goblin
+ev: "10"
+stamina: "40"
+speed: 6
+movement: climb
+size: 1S
+stability: 0
+free_strike: 2
+weaknesses:
+  - fire 2
+  - holy 1
+with_captain: Strike damage +2
+might: -1
+agility: 2
+reason: 0
+intuition: 1
 `;
 
 function makeHost(overrides: Partial<BlockHost> = {}) {
@@ -88,34 +122,7 @@ async function renderStatblock(source: string, hostOverrides: Partial<BlockHost>
 	return { pipeline, host, root, deps };
 }
 
-/** Direct replay of the deleted StatblockProcessor.buildUI (verbatim sub-view calls),
- *  wrapped in its `.ds-sb-container.ds-container` root — the golden the element view's
- *  onMount must match byte-for-byte. */
-function buildGolden(plugin: unknown, source: string): HTMLElement {
-	const golden = document.createElement('div');
-	const container = golden.createEl('div', { cls: 'ds-sb-container ds-container' });
-	const ctx = { sourcePath: 'Note.md' } as any;
-	const data = StatblockConfig.readYaml(source);
-	const level = data.statblock.level !== undefined ? `Level ${data.statblock.level}` : 'Level N/A';
-	const roles = data.statblock.roles?.join(', ') ?? 'No Role';
-	new HeaderView(
-		plugin as any,
-		ctx,
-		data.statblock.name ?? 'Unnamed Creature',
-		`${level} ${roles}`,
-		data.statblock.ancestry?.join(', ') ?? 'Unknown Ancestry',
-		data.statblock.ev !== undefined ? `EV ${data.statblock.ev}` : 'EV N/A',
-	).build(container);
-	new StatsView(plugin as any, data, ctx).build(container);
-	if (data.statblock.features?.length > 0) {
-		HorizontalRuleProcessor.build(container);
-		const featureConfigs = data.statblock.features.map((f) => new FeatureConfig(f));
-		new FeaturesView(plugin as any, featureConfigs, ctx).build(container);
-	}
-	return golden;
-}
-
-describe('Plan 07 Task 3: statblock ElementDefinition (F1 §6 step 6)', () => {
+describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', () => {
 	test('id/name/aliases/shape match the preserved ds-sb/ds-statblock contract; static, NO schema/serialize/resolveRefs', () => {
 		expect(statblockElement.id).toBe('statblock');
 		expect(statblockElement.name).toBe('Statblock');
@@ -162,106 +169,285 @@ describe('Plan 07 Task 3: statblock ElementDefinition (F1 §6 step 6)', () => {
 	});
 });
 
-describe('Plan 07 Task 3: statblock rendered through the REAL ElementPipeline', () => {
-	test('golden render: byte-identical to the legacy buildUI replay (HeaderView + StatsView + HR + FeaturesView)', async () => {
-		const { root, deps } = await renderStatblock(humanBanditChief);
-		const golden = buildGolden(deps.plugin, humanBanditChief);
-		expect(root.innerHTML).toBe(golden.innerHTML);
-	});
-
-	test('golden render holds for the featureless fixture too (skipped HR/FeaturesView branch)', async () => {
-		const { root, deps } = await renderStatblock(NO_FEATURES);
-		const golden = buildGolden(deps.plugin, NO_FEATURES);
-		expect(root.innerHTML).toBe(golden.innerHTML);
-	});
-
-	test('root carries data-dse-element="statblock" + data-dse-theme; container classes match the legacy processor', async () => {
+describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8)', () => {
+	test('root carries data-dse-element="statblock" + data-dse-theme; the .dse-sb card replaces the legacy wrapper classes', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
 		expect(root.getAttribute('data-dse-element')).toBe('statblock');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
-		const container = root.querySelector(':scope > .ds-sb-container');
-		expect(container).not.toBeNull();
-		expect(container!.classList.contains('ds-container')).toBe(true);
-		expect(container!.querySelector(':scope > .ds-header-container')).not.toBeNull();
+		expect(root.querySelector(':scope > .dse-sb')).not.toBeNull();
+		// The legacy buildUI DOM is fully retired for this element.
+		expect(root.querySelector('.ds-sb-container')).toBeNull();
+		expect(root.querySelector('.ds-header-container')).toBeNull();
+		expect(root.querySelector('.ds-sb-stats')).toBeNull();
+		expect(root.querySelector('.ds-hr-container')).toBeNull();
+		expect(root.querySelector('.ds-feature-container')).toBeNull();
 	});
 
-	test('header (Common/HeaderView): name, "Level N roles", ancestry, and "EV N" render', async () => {
+	test('cardHead (§3.8 fill): ancestry → left eyebrow; name = the heading (aria-level 2); Level → right eyebrow; roles → right primary; EV → right deck — all VERBATIM', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
-		const header = root.querySelector('.ds-sb-container > .ds-header-container') as HTMLElement;
-		expect(header).not.toBeNull();
-		expect(header.querySelector('.ds-header-title-left')!.textContent).toBe('Human Bandit Chief');
-		expect(header.querySelector('.ds-header-title-right')!.textContent).toBe('Level 3 Leader');
-		expect(header.querySelector('.ds-sb-header-left')!.textContent).toBe('Human, Humanoid');
-		expect(header.querySelector('.ds-sb-header-right')!.textContent).toBe('EV 20');
+		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
+		expect(head).not.toBeNull();
+
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Human, Humanoid');
+
+		const name = head.querySelector('.dse-head__primary--left') as HTMLElement;
+		expect(name.getAttribute('role')).toBe('heading');
+		expect(name.getAttribute('aria-level')).toBe('2');
+		expect(name.textContent).toBe('Human Bandit Chief');
+
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level 3');
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Leader');
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('EV 20');
 	});
 
-	test('header fallbacks: missing level/roles/ancestry/ev render the legacy N/A strings', async () => {
+	test('cardHead fallbacks: missing level/roles/ancestry/ev render the legacy N/A strings VERBATIM (never gaps — legacy always printed them)', async () => {
 		const { root } = await renderStatblock(NO_FEATURES);
 
-		const header = root.querySelector('.ds-sb-container > .ds-header-container') as HTMLElement;
-		expect(header.querySelector('.ds-header-title-left')!.textContent).toBe('Bare Creature');
-		expect(header.querySelector('.ds-header-title-right')!.textContent).toBe('Level N/A No Role');
-		expect(header.querySelector('.ds-sb-header-left')!.textContent).toBe('Unknown Ancestry');
-		expect(header.querySelector('.ds-sb-header-right')!.textContent).toBe('EV N/A');
+		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Unknown Ancestry');
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Bare Creature');
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level N/A');
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('No Role');
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('EV N/A');
 	});
 
-	test('stats (statblock/StatsView): stat items, immunity/weakness line, characteristics line', async () => {
+	test('[data-dse-role]: the SDK combat role sets the attribute + the --dse-role element-set alias', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
-		const stats = root.querySelector('.ds-sb-container > .ds-sb-stats') as HTMLElement;
-		expect(stats).not.toBeNull();
-		const itemTops = Array.from(stats.querySelectorAll('.ds-sb-stats-item-top')).map(
-			(el) => el.textContent,
-		);
-		const itemBottoms = Array.from(stats.querySelectorAll('.ds-sb-stats-item-bottom')).map(
-			(el) => el.textContent,
-		);
-		expect(itemBottoms).toEqual(['Size', 'Speed', 'Stamina', 'Stability', 'Free Strike']);
-		expect(itemTops).toEqual(['1M', '5', '120', '2', '5']);
-		const lines = stats.querySelectorAll(':scope > .ds-sb-stats-line');
-		expect(lines[0].querySelector('.ds-sb-stats-left')!.textContent).toBe(
-			'Immunity: Corruption 4, psychic 4',
-		);
-		expect(lines[0].querySelector('.ds-sb-stats-right')!.textContent).toBe('Weakness: -');
-		const chars = Array.from(root.querySelectorAll('.ds-sb-characteristics-pair')).map(
+		const card = root.querySelector('.dse-sb') as HTMLElement;
+		expect(card.getAttribute('data-dse-role')).toBe('leader');
+		// Element-set alias: --dse-role -> var(--dse-role-<role>). Legacy maps every
+		// --dse-role-* token to the muted grey, so the tint fails safe to monochrome.
+		expect(card.style.getPropertyValue('--dse-role')).toBe('var(--dse-role-leader)');
+	});
+
+	test('[data-dse-role]: an unmapped role word ("Boss") and missing roles both set NOTHING (grey/monochrome fallback, no alias)', async () => {
+		for (const source of [WITH_META, NO_FEATURES]) {
+			const { root } = await renderStatblock(source);
+			const card = root.querySelector('.dse-sb') as HTMLElement;
+			expect(card.hasAttribute('data-dse-role')).toBe(false);
+			expect(card.style.getPropertyValue('--dse-role')).toBe('');
+		}
+	});
+
+	test('pref-attr hooks (D4 owns the values): data-dse-density="comfortable" + data-dse-sb-featstyle="card" ship as static defaults', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+		const card = root.querySelector('.dse-sb') as HTMLElement;
+		expect(card.getAttribute('data-dse-density')).toBe('comfortable');
+		expect(card.getAttribute('data-dse-sb-featstyle')).toBe('card');
+	});
+
+	test('.dse-sb__meta items: Size/Speed/Stamina/Stability/Free Strike — labels AND values verbatim, legacy order', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const items = root.querySelector('.dse-sb__meta > .dse-sb__items') as HTMLElement;
+		expect(items).not.toBeNull();
+		const labels = Array.from(items.querySelectorAll('.dse-sb__item-l')).map((el) => el.textContent);
+		const values = Array.from(items.querySelectorAll('.dse-sb__item-v')).map((el) => el.textContent);
+		expect(labels).toEqual(['Size', 'Speed', 'Stamina', 'Stability', 'Free Strike']);
+		expect(values).toEqual(['1M', '5', '120', '2', '5']);
+	});
+
+	test('.dse-sb__meta kv: Immunity/Weakness/Movement always render (legacy "-" fallbacks verbatim); the ": " colon is CSS-owned; no captain cell when absent', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const grid = root.querySelector('.dse-sb__meta > .dse-sb__grid') as HTMLElement;
+		expect(grid).not.toBeNull();
+		const labels = Array.from(grid.querySelectorAll('.dse-sb__kv-l')).map((el) => el.textContent);
+		const values = Array.from(grid.querySelectorAll('.dse-sb__kv-v')).map((el) => el.textContent);
+		// The legacy "Immunity: …" colon is CSS-owned (::after), never baked into the DOM.
+		expect(labels).toEqual(['Immunity', 'Weakness', 'Movement']);
+		expect(values).toEqual(['Corruption 4, psychic 4', '-', '-']);
+		expect(grid.querySelector('.dse-sb__kv--captain')).toBeNull();
+	});
+
+	test('.dse-sb__meta kv: weaknesses/movement/with-captain values verbatim when present (legacy wording, incl. "With Captain")', async () => {
+		const { root } = await renderStatblock(WITH_META);
+
+		const grid = root.querySelector('.dse-sb__meta > .dse-sb__grid') as HTMLElement;
+		const labels = Array.from(grid.querySelectorAll('.dse-sb__kv-l')).map((el) => el.textContent);
+		const values = Array.from(grid.querySelectorAll('.dse-sb__kv-v')).map((el) => el.textContent);
+		expect(labels).toEqual(['Immunity', 'Weakness', 'Movement', 'With Captain']);
+		expect(values).toEqual(['-', 'fire 2, holy 1', 'climb', 'Strike damage +2']);
+	});
+
+	test('.dse-sb__chars: the five characteristics render as verbatim "Name +N" pairs, legacy order', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const chars = Array.from(root.querySelectorAll('.dse-sb__chars > .dse-sb__char')).map(
 			(el) => el.textContent,
 		);
 		expect(chars).toEqual(['Might +2', 'Agility +3', 'Reason +2', 'Intuition +3', 'Presence +2']);
 	});
 
-	test('features: HR separator (Common/horizontalRuleProcessor) then .ds-sb-features with the nested feature tree', async () => {
+	test('.dse-sb__chars formatting parity: negative "-N", zero "+0", missing "N/A" — the legacy formatCharacteristic verbatim', async () => {
+		const { root } = await renderStatblock(WITH_META);
+
+		const chars = Array.from(root.querySelectorAll('.dse-sb__chars > .dse-sb__char')).map(
+			(el) => el.textContent,
+		);
+		expect(chars).toEqual(['Might -1', 'Agility +2', 'Reason +0', 'Intuition +1', 'Presence N/A']);
+	});
+
+	test("features render through Task 5's renderFeatureList: ◆ divider, then .dse-feature__nested > .dse-feature cards (shared grammar)", async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
-		// HorizontalRuleProcessor.build is called directly by the element view — the kept
-		// static builder, NOT the migrated horizontal-rule element.
-		expect(root.querySelector('.ds-sb-container > .ds-hr-container')).not.toBeNull();
+		// The legacy ◆ rule between the stats and the features survives as the kit
+		// divider (ornament) — pixel-faithful to today's .ds-hr-container in Legacy.
+		expect(root.querySelector('.dse-sb > .dse-hr .dse-hr__diamond')).not.toBeNull();
 
-		const featuresEl = root.querySelector('.ds-sb-features') as HTMLElement;
-		expect(featuresEl).not.toBeNull();
-		expect(featuresEl.classList.contains('ds-features')).toBe(true);
+		const list = root.querySelector('.dse-sb > .dse-feature__nested') as HTMLElement;
+		expect(list).not.toBeNull();
+		const cards = list.querySelectorAll(':scope > .dse-feature');
+		expect(cards).toHaveLength(8);
 
-		const features = featuresEl.querySelectorAll(':scope > .ds-feature-container');
-		expect(features).toHaveLength(8);
-		expect(features[0].querySelector('.ds-feature-name-value')!.textContent).toBe(
-			'Whip and Magic Longsword',
+		const names = Array.from(cards).map(
+			(c) => c.querySelector('.dse-head__primary--left')!.textContent,
 		);
-		expect(features[0].querySelectorAll('.ds-pr-tier-line').length).toBeGreaterThan(0);
+		expect(names).toEqual([
+			'Whip and Magic Longsword',
+			'Kneel, Peasant!',
+			'Bloodstones',
+			'End Effect',
+			'Supernatural Insight',
+			'Shoot!',
+			'Form Up!',
+			'Lead From the Front',
+		]);
+		// Feature headings sit one level under the statblock heading (aria-level 3).
+		expect(cards[0].querySelector('.dse-head__primary--left')!.getAttribute('aria-level')).toBe('3');
+		// The shared power-roll grammar (kit .dse-pr) renders the ability tiers.
+		expect(cards[0].querySelectorAll('.dse-pr .dse-pr__row')).toHaveLength(3);
 	});
 
-	test('no features -> no HR and no .ds-sb-features (features?.length > 0 guard)', async () => {
+	test('End Effect (trait) renders on the feature grammar: [data-dse-act="trait"] card with a .dse-section body', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const traits = Array.from(root.querySelectorAll('.dse-feature[data-dse-act="trait"]'));
+		const endEffect = traits.find(
+			(el) => el.querySelector('.dse-head__primary--left')?.textContent === 'End Effect',
+		) as HTMLElement;
+		expect(endEffect).toBeDefined();
+		expect(endEffect.querySelector('.dse-section')!.textContent).toContain(
+			'At the end of each of their turns',
+		);
+	});
+
+	test('no features -> no divider and no feature list; head + meta + chars still render', async () => {
 		const { root } = await renderStatblock(NO_FEATURES);
-		expect(root.querySelector('.ds-hr-container')).toBeNull();
-		expect(root.querySelector('.ds-sb-features')).toBeNull();
-		// The header + stats still render.
-		expect(root.querySelector('.ds-header-container')).not.toBeNull();
-		expect(root.querySelector('.ds-sb-stats')).not.toBeNull();
+		expect(root.querySelector('.dse-hr')).toBeNull();
+		expect(root.querySelector('.dse-feature__nested')).toBeNull();
+		expect(root.querySelector('.dse-sb > .dse-head')).not.toBeNull();
+		expect(root.querySelector('.dse-sb__meta')).not.toBeNull();
+		expect(root.querySelector('.dse-sb__chars')).not.toBeNull();
 	});
 
-	test('static: rendering never writes back (no replaceSource) and no error card renders', async () => {
+	test('NO content loss: every field the legacy HeaderView/StatsView/FeaturesView tree rendered appears verbatim (bandit chief)', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+		const text = root.textContent!;
+
+		for (const expected of [
+			// header
+			'Human Bandit Chief',
+			'Human, Humanoid',
+			'Level 3',
+			'Leader',
+			'EV 20',
+			// stat items (label + value)
+			'Size',
+			'1M',
+			'Speed',
+			'Stamina',
+			'120',
+			'Stability',
+			'Free Strike',
+			// info lines
+			'Immunity',
+			'Corruption 4, psychic 4',
+			'Weakness',
+			'Movement',
+			// characteristics
+			'Might +2',
+			'Agility +3',
+			'Reason +2',
+			'Intuition +3',
+			'Presence +2',
+			// features: names
+			'Whip and Magic Longsword',
+			'Kneel, Peasant!',
+			'Bloodstones',
+			'End Effect',
+			'Supernatural Insight',
+			'Shoot!',
+			'Form Up!',
+			'Lead From the Front',
+			// features: types / costs / meta
+			'Signature Ability',
+			'Villain Action 1',
+			'Villain Action 2',
+			'Villain Action 3',
+			'Magic, Melee, Strike, Weapon',
+			'Main action',
+			'Melee 2',
+			'Two enemies or objects',
+			'2 Malice',
+			// features: rolls / tiers / effects / trigger
+			'Power Roll + 2',
+			'8 damage; pull 1',
+			'12 damage; pull 2',
+			'15 damage; pull 3',
+			'takes 3 corruption damage',
+			'The bandit chief makes a power roll.',
+			'At the end of each of their turns',
+			'Each target makes a ranged free strike.',
+		]) {
+			expect(text).toContain(expected);
+		}
+	});
+
+	test('NO content loss: the featureless fixture keeps every fallback string verbatim', async () => {
+		const { root } = await renderStatblock(NO_FEATURES);
+		const text = root.textContent!;
+
+		for (const expected of [
+			'Bare Creature',
+			'Unknown Ancestry',
+			'Level N/A',
+			'No Role',
+			'EV N/A',
+			'Stamina',
+			'10',
+			'Immunity',
+			'Weakness',
+			'Movement',
+			'Might N/A',
+			'Presence N/A',
+		]) {
+			expect(text).toContain(expected);
+		}
+	});
+
+	test('ML-1: ALL markdown renders through the view-parented renderMarkdown (component = the view, never the plugin)', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		try {
+			await renderStatblock(humanBanditChief);
+
+			expect(renderSpy.mock.calls.length).toBeGreaterThan(8); // feature names/effects/tiers
+			for (const call of renderSpy.mock.calls) {
+				expect(call[3]).toBe('Note.md'); // host.sourcePath
+				expect(call[4]).toBeInstanceOf(StatblockElementView); // lifecycle owner (ML-1)
+			}
+		} finally {
+			renderSpy.mockRestore();
+		}
+	});
+
+	test('static: rendering never writes back (no replaceSource) and mounts NO interactive controls', async () => {
 		const { root, host } = await renderStatblock(humanBanditChief);
 		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
@@ -280,8 +466,8 @@ describe('Plan 07 Task 3: statblock rendered through the REAL ElementPipeline', 
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const container = root.querySelector('.ds-sb-container') as HTMLElement;
-				container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+				const card = root.querySelector('.dse-sb') as HTMLElement;
+				card.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(0);
 			} finally {
 				document.removeEventListener('mousedown', onDocMousedown);
@@ -298,7 +484,69 @@ describe('Plan 07 Task 3: statblock rendered through the REAL ElementPipeline', 
 		expect(root.querySelector('.dse-error-card-title')!.textContent).toContain(
 			'Statblock: failed to render',
 		);
-		expect(root.querySelector('.ds-header-container')).toBeNull();
+		expect(root.querySelector('.dse-sb')).toBeNull();
+	});
+});
+
+describe('Plan 09 Task 6b: source + CSS hygiene', () => {
+	/** Comments explain what the code must NOT do — strip them so the negative scans
+	 *  below only see real code (same trick styleGuardFindings uses). */
+	const stripComments = (src: string) =>
+		src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+	test('view.ts: renders via cardHead + renderFeatureList, no longer constructs ANY legacy builder; style guard clean', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/statblock/view.ts'),
+			'utf8',
+		);
+		const code = stripComments(src);
+		expect(code).toMatch(/cardHead/);
+		expect(code).toMatch(/renderFeatureList/);
+		expect(code).not.toMatch(/drawSteelAdmonition/);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('legacy builders stay in-tree UNTOUCHED but are now element-DEAD (statblock was the last consumer; Task 10 retires them)', () => {
+		for (const [file, marker] of [
+			['../../../src/drawSteelAdmonition/Common/HeaderView.ts', /class HeaderView/],
+			['../../../src/drawSteelAdmonition/statblock/StatsView.ts', /class StatsView/],
+			['../../../src/drawSteelAdmonition/Features/FeaturesView.ts', /class FeaturesView/],
+			[
+				'../../../src/drawSteelAdmonition/Common/horizontalRuleProcessor.ts',
+				/class HorizontalRuleProcessor/,
+			],
+		] as const) {
+			expect(fs.readFileSync(path.join(__dirname, file), 'utf8')).toMatch(marker);
+		}
+		// …and no framework element imports them anymore.
+		for (const view of ['statblock', 'featureblock', 'feature'] as const) {
+			const src = fs.readFileSync(
+				path.join(__dirname, `../../../src/elements/${view}/view.ts`),
+				'utf8',
+			);
+			expect(stripComments(src)).not.toMatch(/drawSteelAdmonition/);
+		}
+	});
+
+	test('CSS contract: .dse-sb grammar in styles-source.css (meta/chars/kv colon/role spine/pref hooks); the old .ds-sb-* block is evicted', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		expect(sheet).toMatch(/\.dse-sb__meta\s*\{/);
+		expect(sheet).toMatch(/\.dse-sb__items\s*\{/);
+		expect(sheet).toMatch(/\.dse-sb__chars\s*\{/);
+		expect(sheet).toMatch(/\.dse-sb__kv-l::after\s*\{/); // the CSS-owned ": " colon
+		// The role spine consumes the inherited --dse-role alias, token fallback only.
+		const spine = sheet.match(/\.dse-sb\[data-dse-role\]\s*\{[\s\S]*?\n\}/);
+		expect(spine).not.toBeNull();
+		expect(spine![0]).toMatch(/var\(--dse-role,\s*var\(--dse-rule\)\)/);
+		// D4 pref hooks have CSS keyed off the reflected attributes.
+		expect(sheet).toMatch(/\[data-dse-density='compact'\]/);
+		expect(sheet).toMatch(/\[data-dse-sb-featstyle='flat'\]/);
+
+		// The legacy statblock CSS is dead (nothing renders .ds-sb-* anymore).
+		expect(sheet).not.toMatch(/\.ds-sb-container/);
+		expect(sheet).not.toMatch(/\.ds-sb-stats/);
+		expect(sheet).not.toMatch(/\.ds-sb-characteristics/);
 	});
 });
 
@@ -329,7 +577,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-sb*, Regis
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-sb block through the wired processor produces the statblock DOM (end-to-end)', async () => {
+	test('rendering a ds-sb block through the wired processor produces the kit statblock DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -342,7 +590,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-sb*, Regis
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('statblock');
-		expect(root.querySelector('.ds-sb-container > .ds-header-container')).not.toBeNull();
-		expect(root.querySelector('.ds-sb-features .ds-feature-container')).not.toBeNull();
+		expect(root.querySelector('.dse-sb > .dse-head')).not.toBeNull();
+		expect(root.querySelector('.dse-sb .dse-feature__nested .dse-feature')).not.toBeNull();
 	});
 });
