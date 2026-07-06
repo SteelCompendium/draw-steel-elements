@@ -32,7 +32,13 @@ interface Setup {
 // `persist: true` mirrors production: the caller-injected persist callback
 // writes the block back via CodeBlocks.updateInitiativeTracker (the modal itself
 // never touches CodeBlocks — needed for the CB-2/DC-6 scenarios).
-async function setup(options: { condition?: boolean; persist?: boolean; pool?: number } = {}): Promise<Setup> {
+async function setup(
+	options: {
+		condition?: boolean | { color?: string; effect?: string };
+		persist?: boolean;
+		pool?: number;
+	} = {},
+): Promise<Setup> {
 	const app = new App();
 	const note = '# Encounter\n\n```ds-initiative\n' + squadYaml.trimEnd() + '\n```\n';
 	app.vault.setFile('Encounter.md', note);
@@ -42,7 +48,8 @@ async function setup(options: { condition?: boolean; persist?: boolean; pool?: n
 	const minion = group.creatures[0];
 	if (options.pool !== undefined) group.minion_stamina_pool = options.pool;
 	if (options.condition) {
-		minion.instances![0].conditions = [{ key: 'grabbed', color: undefined, effect: undefined }];
+		const custom = typeof options.condition === 'object' ? options.condition : {};
+		minion.instances![0].conditions = [{ key: 'grabbed', color: custom.color, effect: custom.effect }];
 	}
 	const updateCallback = options.persist
 		? (jest.fn(() => { CodeBlocks.updateInitiativeTracker(app as any, data, ctx as any); }) as jest.Mock)
@@ -256,6 +263,45 @@ describe('D2 §3.5b: the pool modal on the unified template (optional minion sec
 				expect(decl.trim()).toMatch(/^--dse-/);
 			}
 		}
+	});
+
+	// P09 review fix: the condition icons were the ONE remaining site writing
+	// --dse-condition-color / condition-effect-* raw. They now route through the
+	// shared Task 8 helpers (applyConditionColor / applyConditionEffect), which adds
+	// SD-2 validation — same icon, same element, invalid input now rejected.
+	test('a valid condition color/effect still reaches the icon (via the Task 8 helpers)', async () => {
+		const { content } = await setup({ condition: { color: 'red', effect: 'glow' } });
+		const icon = content.querySelector('.condition-icon') as HTMLElement;
+		expect(icon.style.getPropertyValue('--dse-condition-color')).toBe('red');
+		expect(icon.classList.contains('condition-effect-glow')).toBe(true);
+	});
+
+	test('SD-2: an INVALID condition color is rejected — no property, no inline style at all', async () => {
+		const { content } = await setup({ condition: { color: 'expression(alert(1))' } });
+		const icon = content.querySelector('.condition-icon') as HTMLElement;
+		expect(icon.style.getPropertyValue('--dse-condition-color')).toBe('');
+		expect(icon.getAttribute('style') ?? '').toBe('');
+	});
+
+	test('a whitespace effect no longer throws (raw classList.add DOMException footgun) and adds no class', async () => {
+		// Pre-fix, classList.add(`condition-effect-x y`) threw InvalidCharacterError
+		// during onOpen — setup() itself would reject. Post-fix the icon renders clean.
+		const { content } = await setup({ condition: { effect: 'x y' } });
+		const icon = content.querySelector('.condition-icon') as HTMLElement;
+		expect(icon).not.toBeNull();
+		expect(Array.from(icon.classList)).toEqual(['condition-icon']);
+	});
+
+	test('source hygiene: the modal imports the shared helpers, no raw condition-color/effect writes remain', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/views/MinionStaminaPoolModal.ts'),
+			'utf8',
+		);
+		const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+		expect(code).toMatch(/applyConditionColor\(/);
+		expect(code).toMatch(/applyConditionEffect\(/);
+		expect(code).not.toMatch(/setProperty\(\s*['"`]--dse-condition-color/);
+		expect(code).not.toMatch(/classList\.add\(\s*`condition-effect-/);
 	});
 
 	test('CSS contract: the checked-minion crimson is the `.dse-minion__check:checked ~ *` token rule (--dse-danger), the warn icon is --dse-warn', () => {

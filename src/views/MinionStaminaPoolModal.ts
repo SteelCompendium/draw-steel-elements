@@ -17,6 +17,7 @@ import { setIcon } from 'obsidian';
 import type { App } from 'obsidian';
 import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
+import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 import { DseModal, iconButton } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { staminaPreviewBar, staminaStepperRow, setButtonText } from './StaminaEditModal';
@@ -380,18 +381,14 @@ export class MinionStaminaPoolModal extends DseModal {
 				setIcon(iconEl, condition.iconName);
 				iconEl.title = condition.displayName;
 
-				// Apply color and effect customizations
+				// Apply color and effect customizations through the SHARED Task 8
+				// helpers (SC-5/SD-2): the user-supplied color rides the sanctioned
+				// --dse-condition-color custom property only after CSS.supports
+				// validation, and the effect class only toggles for the known
+				// vocabulary (raw classList.add throws on whitespace).
 				if (conditionData) {
-					if (conditionData.color) {
-						// SC-5: the USER-SUPPLIED color rides the sanctioned scoped custom
-						// property (never el.style.color); CSSOM setProperty is
-						// injection-safe (invalid values are dropped at parse). Full SD-2
-						// validation of condition colors is Task 8's (shared condition UI).
-						iconEl.style.setProperty('--dse-condition-color', conditionData.color);
-					}
-					if (conditionData.effect) {
-						iconEl.classList.add(`condition-effect-${conditionData.effect}`);
-					}
+					applyConditionColor(iconEl, conditionData.color);
+					applyConditionEffect(iconEl, conditionData.effect);
 				}
 
 				this.lifecycle.registerDomEvent(iconEl, 'click', () => {
