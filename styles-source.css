@@ -1893,52 +1893,81 @@ code.dsa {
 	/*}*/
 }
 
-/* ==================== */
-/* Featureblock         */
-/* ==================== */
+/* ================================================================== */
+/*  Featureblock card grammar (D2 §3.7, Plan 09 Task 6a): .dse-fb     */
+/* ================================================================== */
+/*
+   The Forged Band card emitted by src/elements/featureblock/view.ts: kit cardHead
+   + .dse-fb__flavor + the .dse-fb__stats loose-stat header + kit divider (the
+   legacy ◆ rule) + Task 5's shared .dse-feature/.dse-pr feature grammar. The old
+   .ds-fb-* block that lived here is EVICTED — nothing renders those classes
+   anymore (the legacy FeatureblockView builder stays in-tree only as code, for
+   T6b's statblock-shared sub-views).
 
-.ds-fb-container {
-	background-color: var(--code-background);
-	padding-bottom: 1rem;
+   Role tint: the element sets [data-dse-role="<role>"] + the --dse-role
+   ELEMENT-SET ALIAS (--dse-role: var(--dse-role-<role>)) on .dse-fb; rules below
+   consume var(--dse-role, <monochrome fallback>) so an unmapped block (no alias)
+   and the Legacy base (every --dse-role-* token = the muted grey) both fail safe
+   to monochrome (OD-2: the accent is Steel-only; D3 lights it). Tokens only
+   (D2 §5) — no color literals.
+*/
+[data-dse-element='featureblock']:not([data-dse-error-stage]) {
+	display: block;
+	background: var(--dse-surface);
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+	padding: var(--dse-pad);
+}
 
-	.ds-fb-flavor, .ds-fb-stats, .ds-hr-container, .ds-feature-container {
-		padding-left: 1rem;
-		padding-right: 1rem;
-	}
+.dse-fb__flavor {
+	font-style: italic;
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
 
+/* -- the loose-stat header: label/value cells. Layout is a pure CSS reflow keyed
+   by [data-dse-fb-stats] on the card root (grid today, matching the legacy
+   two-per-row look; ledger is the D4 pref hook — markup stays layout-agnostic) -- */
+.dse-fb__stats {
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+.dse-fb[data-dse-fb-stats='grid'] > .dse-fb__stats {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 1.5em;
+	row-gap: 0.5em;
+}
+.dse-fb[data-dse-fb-stats='grid'] > .dse-fb__stats > .dse-fb__stat:nth-child(even) {
+	justify-self: end;
+	text-align: right;
+}
+.dse-fb[data-dse-fb-stats='ledger'] > .dse-fb__stats > .dse-fb__stat {
+	display: flex;
+	justify-content: space-between;
+}
+/* Legacy "Stamina: 30" wording: bold key + the CSS-owned colon (never baked into
+   the DOM, so Steel's chip/ledger looks can drop it — same rule as
+   .dse-section__title). */
+.dse-fb__stat-l {
+	font-weight: bold;
+	color: var(--dse-heading);
+}
+.dse-fb__stat-l::after {
+	content: ': ';
+}
 
-	.ds-fb-flavor {
-		font-style: italic;
-		margin-bottom: 0.5rem;
-	}
-
-	.ds-fb-stats {
-		list-style: none;
-		margin: 0;
-		margin-bottom: 0.5rem;
-
-        .ds-fb-stats-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 0.5rem;
-        }
-
-        .ds-fb-stats-item {
-            text-align: center;
-            width: -webkit-fill-available;
-        }
-        .ds-fb-stats-item-top {
-            font-size: calc(var(--font-ui-large) * 1.5);
-            font-weight: bold;
-        }
-        .ds-fb-stats-item-bottom {
-        }
-
-        .ds-fb-stats-line {
-            margin-top: 0.25rem;
-        }
-	}
+/* -- Level>0 advancement band (mirrors the site's fb__band--adv): a role-tinted
+   left rail + the "Level N Advancement" sub-head -- */
+.dse-fb__band--adv {
+	margin-top: 0.75em;
+	padding-left: 0.75em;
+	border-left: 2px solid var(--dse-role, var(--dse-rule));
+}
+.dse-fb__adv-head {
+	font-weight: bold;
+	color: var(--dse-role, var(--dse-heading));
+	margin-bottom: 0.25em;
 }
 
 /* ==================== */

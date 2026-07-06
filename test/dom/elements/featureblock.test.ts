@@ -1,14 +1,20 @@
-// Plan 07 Task 2 (F1 §6 step 6) — the Featureblock element on Framework v2:
-// featureblockElement definition + FeatureblockElementView, driven through the REAL
-// ElementPipeline (same static-element harness as feature.test.ts, which this file
-// mirrors). The element view is a thin wrapper: it recreates the legacy
-// FeatureblockProcessor's `.ds-fb-container.ds-container` root and delegates ALL
-// rendering to the KEPT legacy sub-view tree (featureblock/FeatureblockView ->
-// FeatureblockStatsView + Common/HeaderView/BoldKeyWithValueView/
-// HorizontalRuleProcessor -> Features/FeaturesView -> FeatureView) — Statblock (the
-// next migration) reuses several of those same sub-views, so the golden test below pins
-// the wrapper byte-for-byte against a direct FeatureblockView.build() call rather than
-// duplicating structure assertions.
+// Plan 09 Task 6a (D2 §3.7) — the Featureblock element re-cast onto the D2 kit card
+// grammar: kit cardHead (§3.7 fill: left-eyebrow = kind-noun, name heading, Level →
+// right eyebrow chip, role/category → right primary, EV → right deck) + role tint via
+// [data-dse-role] (the element maps --dse-role: var(--dse-role-<role>) from the SDK
+// featureblock_type; unmapped → NO attribute/alias, fails safe to monochrome) +
+// .dse-fb__flavor + the .dse-fb__stats loose-stat header ([data-dse-fb-stats]) +
+// .dse-fb__band--adv (Level>0 advancement band, mirrors the site) + the feature list
+// through Task 5's renderFeatureList (shared .dse-feature/.dse-pr grammar).
+//
+// These tests replace Plan 07 Task 2's golden-DOM pin (which froze the legacy
+// FeatureblockView wrapper byte-for-byte) with kit-DOM + a11y + no-content-loss
+// assertions. The legacy sub-view tree (FeatureblockView -> HeaderView /
+// FeatureblockStatsView / FeaturesView) stays in the codebase UNTOUCHED — Statblock
+// (T6b) still constructs several of those builders — but featureblock no longer
+// renders through it.
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -21,18 +27,18 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { FeatureblockConfig } from '@model/FeatureblockConfig';
-import { FeatureblockView } from '@drawSteelAdmonition/featureblock/FeatureblockView';
-import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
 import { featureblockElement } from '../../../src/elements/featureblock/definition';
 import { FeatureblockElementView } from '../../../src/elements/featureblock/view';
+import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import angulotlMalice from '../../fixtures/featureblock/angulotl-malice.yaml';
 
 const FB_ALIASES = ['ds-fb', 'ds-featureblock'] as const;
 
-/** A featureblock with the full stat surface (level/ev in the header, stamina/size +
- *  named stats in FeatureblockStatsView -> BoldKeyWithValueView) — the angulotl fixture
- *  has none of these, so this pins the stats-row path too. */
+/** A featureblock with the full stat surface (level/ev in the head, stamina/size +
+ *  named stats in the .dse-fb__stats header) — the angulotl fixture has none of these,
+ *  so this pins the stats path too. */
 const WITH_STATS = `type: featureblock
 featureblock_type: Fixture
 name: Bloodstone of Yendral
@@ -53,6 +59,53 @@ features:
     name: Hungering Pulse
     effects:
       - effect: Each enemy within 2 squares takes 2 corruption damage.
+`;
+
+/** A role-carrying featureblock_type ("Hazard Hexer" → hexer) — the [data-dse-role]
+ *  tint path + the §3.7 right-primary role/category slot. */
+const WITH_ROLE = `type: featureblock
+featureblock_type: Hazard Hexer
+name: Corrosive Pit
+level: 2
+ev: "6"
+features:
+  - type: feature
+    feature_type: trait
+    name: Dissolve
+    effects:
+      - effect: Acid sprays each adjacent creature.
+`;
+
+/** Features carrying a Level > 0 group into the .dse-fb__band--adv advancement band
+ *  (mirrors the site's fixture/retainer advancement tiers). `level` is an untyped
+ *  extra field the SDK reader preserves on the Feature object. */
+const WITH_ADVANCEMENT = `type: featureblock
+featureblock_type: Fixture
+name: Tiered Idol
+features:
+  - type: feature
+    feature_type: trait
+    name: Base Glow
+    effects:
+      - effect: Sheds light 2.
+  - type: feature
+    feature_type: trait
+    name: Blinding Flare
+    level: 3
+    effects:
+      - effect: Each enemy within 3 squares is dazzled.
+  - type: feature
+    feature_type: trait
+    name: Searing Beam
+    level: 3
+    effects:
+      - effect: One enemy within 5 squares takes 5 fire damage.
+  - type: feature
+    feature_type: trait
+    name: Solar Crown
+    level: 6
+    effects:
+      - effect: Allies within 2 squares gain an edge.
 `;
 
 function makeHost(overrides: Partial<BlockHost> = {}) {
@@ -103,7 +156,7 @@ async function renderFeatureblock(source: string, hostOverrides: Partial<BlockHo
 	return { pipeline, host, root, deps };
 }
 
-describe('Plan 07 Task 2: featureblock ElementDefinition (F1 §6 step 6)', () => {
+describe('featureblock ElementDefinition (contract unchanged by the D2 redesign)', () => {
 	test('id/name/aliases/shape match the preserved ds-fb/ds-featureblock contract; static, NO schema/serialize/resolveRefs', () => {
 		expect(featureblockElement.id).toBe('featureblock');
 		expect(featureblockElement.name).toBe('Featureblock');
@@ -152,107 +205,225 @@ describe('Plan 07 Task 2: featureblock ElementDefinition (F1 §6 step 6)', () =>
 	});
 });
 
-describe('Plan 07 Task 2: featureblock rendered through the REAL ElementPipeline', () => {
-	test('golden render: byte-identical to the legacy wrapper (ds-fb-container + FeatureblockView.build)', async () => {
-		const { root, deps } = await renderFeatureblock(angulotlMalice);
-
-		// The legacy FeatureblockProcessor DOM, minus the framework-owned root div: a
-		// `.ds-fb-container.ds-container` wrapper around FeatureblockView.build().
-		const golden = document.createElement('div');
-		const goldenContainer = golden.createEl('div', { cls: 'ds-fb-container ds-container' });
-		new FeatureblockView(deps.plugin, FeatureblockConfig.readYaml(angulotlMalice), {
-			sourcePath: 'Note.md',
-		} as any).build(goldenContainer);
-
-		expect(root.innerHTML).toBe(golden.innerHTML);
-	});
-
-	test('golden render holds for the stats-bearing fixture too (FeatureblockStatsView path)', async () => {
-		const { root, deps } = await renderFeatureblock(WITH_STATS);
-
-		const golden = document.createElement('div');
-		const goldenContainer = golden.createEl('div', { cls: 'ds-fb-container ds-container' });
-		new FeatureblockView(deps.plugin, FeatureblockConfig.readYaml(WITH_STATS), {
-			sourcePath: 'Note.md',
-		} as any).build(goldenContainer);
-
-		expect(root.innerHTML).toBe(golden.innerHTML);
-	});
-
-	test('root carries data-dse-element="featureblock" + data-dse-theme; container classes match the legacy processor', async () => {
+describe('Plan 09 Task 6a: featureblock re-cast onto the D2 kit card grammar (§3.7)', () => {
+	test('root carries data-dse-element="featureblock" + data-dse-theme; the .dse-fb card replaces the legacy wrapper classes', async () => {
 		const { root } = await renderFeatureblock(angulotlMalice);
 
 		expect(root.getAttribute('data-dse-element')).toBe('featureblock');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
-		const container = root.querySelector(':scope > .ds-fb-container');
-		expect(container).not.toBeNull();
-		expect(container!.classList.contains('ds-container')).toBe(true);
-		expect(container!.querySelector(':scope > .ds-fb-header')).not.toBeNull();
+		expect(root.querySelector(':scope > .dse-fb')).not.toBeNull();
+		// The legacy FeatureblockView DOM is fully retired for this element.
+		expect(root.querySelector('.ds-fb-container')).toBeNull();
+		expect(root.querySelector('.ds-fb-header')).toBeNull();
+		expect(root.querySelector('.ds-header-container')).toBeNull();
+		expect(root.querySelector('.ds-fb-stats')).toBeNull();
+		expect(root.querySelector('.ds-feature-container')).toBeNull();
 	});
 
-	test('header (Common/HeaderView) + flavor: name, type, and flavor text render', async () => {
+	test('cardHead (§3.7): name is the heading (role="heading", aria-level 2); Level → right eyebrow chip; EV → right deck chip', async () => {
+		const { root } = await renderFeatureblock(WITH_STATS);
+
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head).not.toBeNull();
+
+		const name = head.querySelector('.dse-head__primary--left') as HTMLElement;
+		expect(name.getAttribute('role')).toBe('heading');
+		expect(name.getAttribute('aria-level')).toBe('2');
+		expect(name.textContent).toBe('Bloodstone of Yendral');
+
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level 2');
+		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('EV 6');
+	});
+
+	test('cardHead (§3.7): a role-less featureblock_type is the KIND-NOUN → left eyebrow; right primary stays a gap', async () => {
 		const { root } = await renderFeatureblock(angulotlMalice);
 
-		const header = root.querySelector('.ds-fb-header .ds-header-container') as HTMLElement;
-		expect(header).not.toBeNull();
-		expect(header.querySelector('.ds-header-title-left')!.textContent).toBe('Angulotl Malice');
-		expect(header.querySelector('.ds-header-title-right')!.textContent).toContain('Malice Features');
-		expect(root.querySelector('.ds-fb-flavor')!.textContent).toContain(
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Malice Features');
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Angulotl Malice');
+		// Omitted slots are GAPS (cardHead contract) — no invented placeholder.
+		expect(head.querySelector('.dse-head__primary--right')).toBeNull();
+		expect(head.querySelector('.dse-head__eyebrow--right')).toBeNull(); // no level
+		expect(head.querySelector('.dse-head__deck--right')).toBeNull(); // no EV
+	});
+
+	test('cardHead (§3.7): a ROLE-carrying featureblock_type is the role/category → right primary, verbatim; left eyebrow stays a gap', async () => {
+		const { root } = await renderFeatureblock(WITH_ROLE);
+
+		const head = root.querySelector('.dse-fb > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Hazard Hexer');
+		expect(head.querySelector('.dse-head__eyebrow--left')).toBeNull();
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level 2');
+	});
+
+	test('[data-dse-role]: the role word in featureblock_type sets the attribute + the --dse-role element-set alias', async () => {
+		const { root } = await renderFeatureblock(WITH_ROLE);
+
+		const card = root.querySelector('.dse-fb') as HTMLElement;
+		expect(card.getAttribute('data-dse-role')).toBe('hexer');
+		// Element-set alias: --dse-role -> var(--dse-role-<role>). Legacy maps every
+		// --dse-role-* token to the muted grey, so the tint fails safe to monochrome.
+		expect(card.style.getPropertyValue('--dse-role')).toBe('var(--dse-role-hexer)');
+	});
+
+	test('[data-dse-role]: an unmapped featureblock_type sets NOTHING (grey/monochrome fallback, no alias)', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+
+		const card = root.querySelector('.dse-fb') as HTMLElement;
+		expect(card.hasAttribute('data-dse-role')).toBe(false);
+		expect(card.style.getPropertyValue('--dse-role')).toBe('');
+	});
+
+	test('.dse-fb__flavor renders the flavor markdown', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+		expect(root.querySelector('.dse-fb > .dse-fb__flavor')!.textContent).toContain(
 			'you can spend Malice to activate',
 		);
 	});
 
-	test('level/EV in the header and stamina/size/stats rows (FeatureblockStatsView -> BoldKeyWithValueView)', async () => {
+	test('.dse-fb__stats: stamina/size then the named stats as label/value cells, verbatim, colon CSS-owned; [data-dse-fb-stats="grid"] on the card', async () => {
 		const { root } = await renderFeatureblock(WITH_STATS);
 
-		const header = root.querySelector('.ds-fb-header .ds-header-container') as HTMLElement;
-		expect(header.querySelector('.ds-header-title-right')!.textContent).toBe('Level 2 Fixture');
-		expect(header.querySelector('.ds-sb-header-right')!.textContent).toBe('EV 6');
+		const card = root.querySelector('.dse-fb') as HTMLElement;
+		expect(card.getAttribute('data-dse-fb-stats')).toBe('grid');
 
-		// Row 1: Stamina/Size. Rows 2-3: the three named stats, two per row.
-		const rows = root.querySelectorAll('.ds-fb-stats > .ds-fb-stats-row');
-		expect(rows).toHaveLength(3);
-		const keys = Array.from(root.querySelectorAll('.ds-bkv-key')).map((el) => el.textContent);
-		const values = Array.from(root.querySelectorAll('.ds-bkv-value')).map((el) => el.textContent);
-		expect(keys).toEqual(['Stamina: ', 'Size: ', 'Speed: ', 'Stability: ', 'Free Strike: ']);
+		const stats = card.querySelector(':scope > .dse-fb__stats') as HTMLElement;
+		expect(stats).not.toBeNull();
+		const labels = Array.from(stats.querySelectorAll('.dse-fb__stat-l')).map((el) => el.textContent);
+		const values = Array.from(stats.querySelectorAll('.dse-fb__stat-v')).map((el) => el.textContent);
+		// The legacy "Stamina: " colon is CSS-owned (::after), never baked into the DOM.
+		expect(labels).toEqual(['Stamina', 'Size', 'Speed', 'Stability', 'Free Strike']);
 		expect(values).toEqual(['30', '2', '0', '3', '2']);
-		expect(rows[0].querySelector('.ds-bkv-container.ds-fb-stats-left .ds-bkv-key')!.textContent).toBe(
-			'Stamina: ',
-		);
-		expect(rows[0].querySelector('.ds-bkv-container.ds-fb-stats-right .ds-bkv-key')!.textContent).toBe(
-			'Size: ',
-		);
 	});
 
-	test('features: HR separator (Common/horizontalRuleProcessor) then .ds-fb-features with the nested feature tree', async () => {
+	test('no stamina/size/stats -> no .dse-fb__stats at all', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+		expect(root.querySelector('.dse-fb__stats')).toBeNull();
+	});
+
+	test('features render through Task 5\'s renderFeatureList: ◆ divider, then .dse-feature__nested > .dse-feature cards (shared grammar)', async () => {
 		const { root } = await renderFeatureblock(angulotlMalice);
 
-		// HorizontalRuleProcessor.build is still called directly by FeatureblockView —
-		// the kept builder, NOT the migrated horizontal-rule element.
-		expect(root.querySelector('.ds-fb-container > .ds-hr-container')).not.toBeNull();
+		// The legacy ◆ rule between the stat header and the features survives as the
+		// kit divider (ornament) — pixel-faithful to today's .ds-hr-container in Legacy.
+		expect(root.querySelector('.dse-fb > .dse-hr .dse-hr__diamond')).not.toBeNull();
 
-		const featuresEl = root.querySelector('.ds-fb-features') as HTMLElement;
-		expect(featuresEl).not.toBeNull();
-		expect(featuresEl.classList.contains('ds-features')).toBe(true);
+		const list = root.querySelector('.dse-fb > .dse-feature__nested') as HTMLElement;
+		expect(list).not.toBeNull();
+		const cards = list.querySelectorAll(':scope > .dse-feature');
+		expect(cards).toHaveLength(3);
 
-		const features = featuresEl.querySelectorAll('.ds-feature-container');
-		expect(features).toHaveLength(3);
-		expect(features[0].querySelector('.ds-feature-name-value')!.textContent).toBe('Leapfrog');
-		expect(features[0].querySelector('.ds-feature-cost-value')!.textContent).toBe(' (3 Malice)');
-		expect(features[1].querySelector('.ds-feature-name-value')!.textContent).toBe('Resonating Croak');
-		expect(features[1].querySelectorAll('.ds-pr-tier-line')).toHaveLength(3);
-		expect(features[2].querySelector('.ds-feature-name-value')!.textContent).toBe('Rainfall');
+		// The shared feature grammar: kit cardHead name + cost chip, kit .dse-pr tiers.
+		const names = Array.from(cards).map(
+			(c) => c.querySelector('.dse-head__primary--left')!.textContent,
+		);
+		expect(names).toEqual(['Leapfrog', 'Resonating Croak', 'Rainfall']);
+		expect(cards[0].querySelector('.dse-head__eyebrow--right')!.textContent).toBe('3 Malice');
+		expect(cards[1].querySelectorAll('.dse-pr .dse-pr__row')).toHaveLength(3);
+		// Nested feature headings sit one level under the block heading (aria-level 3).
+		expect(cards[0].querySelector('.dse-head__primary--left')!.getAttribute('aria-level')).toBe('3');
 	});
 
-	test('no features -> no HR and no .ds-fb-features (renderFeatures guard)', async () => {
+	test('no features -> no divider and no feature list (renderFeatures guard)', async () => {
 		const { root } = await renderFeatureblock('type: featureblock\nname: Bare Block\n');
-		expect(root.querySelector('.ds-hr-container')).toBeNull();
-		expect(root.querySelector('.ds-fb-features')).toBeNull();
+		expect(root.querySelector('.dse-hr')).toBeNull();
+		expect(root.querySelector('.dse-feature__nested')).toBeNull();
 	});
 
-	test('static: rendering never writes back (no replaceSource) and no error card renders', async () => {
-		const { root, host } = await renderFeatureblock(angulotlMalice);
+	test('.dse-fb__band--adv: contiguous Level>0 features wrap in an advancement band (data-level + "Level N Advancement" head), level-0 stay in the main flow', async () => {
+		const { root } = await renderFeatureblock(WITH_ADVANCEMENT);
+		const card = root.querySelector('.dse-fb') as HTMLElement;
+
+		// Base (level-0) feature: directly in the card's main feature flow.
+		const mainList = card.querySelector(':scope > .dse-feature__nested') as HTMLElement;
+		expect(mainList.querySelector('.dse-head__primary--left')!.textContent).toBe('Base Glow');
+
+		const bands = card.querySelectorAll(':scope > .dse-fb__band--adv');
+		expect(bands).toHaveLength(2);
+
+		expect(bands[0].getAttribute('data-level')).toBe('3');
+		expect(bands[0].querySelector('.dse-fb__adv-head')!.textContent).toBe('Level 3 Advancement');
+		const level3Names = Array.from(bands[0].querySelectorAll('.dse-head__primary--left')).map(
+			(el) => el.textContent,
+		);
+		expect(level3Names).toEqual(['Blinding Flare', 'Searing Beam']);
+
+		expect(bands[1].getAttribute('data-level')).toBe('6');
+		expect(bands[1].querySelector('.dse-fb__adv-head')!.textContent).toBe('Level 6 Advancement');
+		expect(bands[1].querySelector('.dse-head__primary--left')!.textContent).toBe('Solar Crown');
+	});
+
+	test('no advancement levels -> no band (typical blocks are unchanged)', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+		expect(root.querySelector('.dse-fb__band--adv')).toBeNull();
+	});
+
+	test('NO content loss: every field the legacy FeatureblockView tree rendered appears in the new DOM (angulotl)', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+		const text = root.textContent!;
+
+		for (const expected of [
+			'Angulotl Malice', // name
+			'Malice Features', // featureblock_type
+			'you can spend Malice to activate', // flavor
+			'Leapfrog', // feature names
+			'Resonating Croak',
+			'Rainfall',
+			'3 Malice', // feature costs
+			'5 Malice',
+			'7 Malice',
+			'jump 3 squares', // effect text
+			'Intuition test', // effect with tiers
+			'5 sonic damage; slowed (EoT)', // tier1
+			'4 sonic damage', // tier2
+			'No effect.', // tier3
+			'unleash rain', // plain effect
+		]) {
+			expect(text).toContain(expected);
+		}
+	});
+
+	test('NO content loss: level/ev/stamina/size/stats all appear verbatim (stats-bearing block)', async () => {
+		const { root } = await renderFeatureblock(WITH_STATS);
+		const text = root.textContent!;
+
+		for (const expected of [
+			'Bloodstone of Yendral',
+			'Fixture',
+			'Level 2',
+			'EV 6',
+			'Stamina',
+			'30',
+			'Size',
+			'Speed',
+			'Stability',
+			'Free Strike',
+			'Hungering Pulse',
+			'Each enemy within 2 squares takes 2 corruption damage.',
+		]) {
+			expect(text).toContain(expected);
+		}
+	});
+
+	test('ML-1: ALL markdown renders through the view-parented renderMarkdown (component = the view, never the plugin)', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		try {
+			await renderFeatureblock(angulotlMalice);
+
+			expect(renderSpy.mock.calls.length).toBeGreaterThan(3); // flavor + feature bodies
+			for (const call of renderSpy.mock.calls) {
+				expect(call[3]).toBe('Note.md'); // host.sourcePath
+				expect(call[4]).toBeInstanceOf(FeatureblockElementView); // lifecycle owner (ML-1)
+			}
+		} finally {
+			renderSpy.mockRestore();
+		}
+	});
+
+	test('static: rendering never writes back (no replaceSource) and mounts NO interactive controls', async () => {
+		const { root, host } = await renderFeatureblock(WITH_STATS);
 		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
@@ -271,8 +442,8 @@ describe('Plan 07 Task 2: featureblock rendered through the REAL ElementPipeline
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const container = root.querySelector('.ds-fb-container') as HTMLElement;
-				container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+				const card = root.querySelector('.dse-fb') as HTMLElement;
+				card.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(0);
 			} finally {
 				document.removeEventListener('mousedown', onDocMousedown);
@@ -289,7 +460,67 @@ describe('Plan 07 Task 2: featureblock rendered through the REAL ElementPipeline
 		expect(root.querySelector('.dse-error-card-title')!.textContent).toContain(
 			'Featureblock: failed to render',
 		);
-		expect(root.querySelector('.ds-fb-header')).toBeNull();
+		expect(root.querySelector('.dse-fb')).toBeNull();
+	});
+});
+
+describe('Plan 09 Task 6a: source + CSS hygiene', () => {
+	/** Comments explain what the code must NOT do — strip them so the negative scans
+	 *  below only see real code (same trick styleGuardFindings uses). */
+	const stripComments = (src: string) =>
+		src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+	test('view.ts: renders via cardHead + renderFeatureList, no longer constructs the legacy FeatureblockView; style guard clean', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/featureblock/view.ts'),
+			'utf8',
+		);
+		const code = stripComments(src);
+		expect(code).toMatch(/renderFeatureList/);
+		expect(code).toMatch(/cardHead/);
+		expect(code).not.toMatch(/FeatureblockView\b.*from/);
+		expect(code).not.toMatch(/drawSteelAdmonition/);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('renderFeature.ts: no .dse-pr__head querySelector reach-in remains (the kit head option owns it)', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/feature/renderFeature.ts'),
+			'utf8',
+		);
+		const code = stripComments(src);
+		expect(code).not.toMatch(/querySelector/);
+	});
+
+	test('legacy FeatureblockView + sub-views stay in place UNTOUCHED (T6b: statblock still shares the legacy builders)', () => {
+		const legacy = fs.readFileSync(
+			path.join(__dirname, '../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts'),
+			'utf8',
+		);
+		expect(legacy).toMatch(/class FeatureblockView/);
+		expect(legacy).toMatch(/Features\/FeaturesView/);
+		const statblock = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/statblock/view.ts'),
+			'utf8',
+		);
+		expect(statblock).toMatch(/Features\/FeaturesView/);
+	});
+
+	test('CSS contract: .dse-fb grammar in styles-source.css; the old .ds-fb-* block is evicted', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		expect(sheet).toMatch(/\.dse-fb__flavor\s*\{/);
+		expect(sheet).toMatch(/\.dse-fb__stat-l::after\s*\{/); // the CSS-owned colon
+		expect(sheet).toMatch(/\.dse-fb__band--adv/);
+		expect(sheet).toMatch(/\[data-dse-fb-stats='grid'\]/);
+		// The adv-head tints via the inherited --dse-role alias, monochrome fallback.
+		const advHead = sheet.match(/\.dse-fb__adv-head\s*\{[\s\S]*?\n\}/);
+		expect(advHead).not.toBeNull();
+		expect(advHead![0]).toMatch(/var\(--dse-role,\s*var\(--dse-heading\)\)/);
+
+		// The legacy featureblock CSS is dead (nothing renders .ds-fb-* anymore).
+		expect(sheet).not.toMatch(/\.ds-fb-container/);
+		expect(sheet).not.toMatch(/\.ds-fb-stats/);
 	});
 });
 
@@ -320,7 +551,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-fb*, Regis
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-fb block through the wired processor produces the featureblock DOM (end-to-end)', async () => {
+	test('rendering a ds-fb block through the wired processor produces the kit featureblock DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -333,7 +564,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-fb*, Regis
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('featureblock');
-		expect(root.querySelector('.ds-fb-container .ds-fb-header')).not.toBeNull();
-		expect(root.querySelector('.ds-fb-features .ds-feature-container')).not.toBeNull();
+		expect(root.querySelector('.dse-fb > .dse-head')).not.toBeNull();
+		expect(root.querySelector('.dse-fb .dse-feature__nested .dse-feature')).not.toBeNull();
 	});
 });

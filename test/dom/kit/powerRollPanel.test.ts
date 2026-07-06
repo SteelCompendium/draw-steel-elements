@@ -87,6 +87,66 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 		});
 	});
 
+	describe('head option (Plan 09 Task 6a) — string override / false = headless / default', () => {
+		test('head: string renders VERBATIM as the head text (plain, no renderMd)', () => {
+			const { handle } = mount({ head: '2d10 + 3' });
+			expect(handle.rootEl.querySelector('.dse-pr__head')!.textContent).toBe('2d10 + 3');
+		});
+
+		test('head: string flows through renderMd like the rows (caller data may be markdown)', () => {
+			const renderMd = jest.fn((md: string, el: HTMLElement) => {
+				el.createEl('em', { text: md });
+			});
+			const { handle } = mount({ head: 'Power Roll + **Might**', renderMd });
+
+			const head = handle.rootEl.querySelector<HTMLElement>('.dse-pr__head')!;
+			expect(renderMd).toHaveBeenCalledWith('Power Roll + **Might**', head);
+			expect(head.querySelector('em')!.textContent).toBe('Power Roll + **Might**');
+		});
+
+		test('head: false mounts NO head element at all', () => {
+			const { handle } = mount({ head: false });
+			expect(handle.rootEl.querySelector('.dse-pr__head')).toBeNull();
+			// The rows still render — only the head is omitted.
+			expect(handle.rootEl.querySelectorAll('.dse-pr__row')).toHaveLength(4);
+		});
+
+		test('head: undefined keeps the default "Power Roll + {chars}" caption (today unchanged)', () => {
+			const { handle } = mount({ head: undefined });
+			expect(handle.rootEl.querySelector('.dse-pr__head')!.textContent).toBe(
+				'Power Roll + Might or Agility',
+			);
+		});
+
+		test('Handle.headEl: present (and === the DOM head) when a head exists; absent when head: false', () => {
+			const withDefault = mount();
+			expect(withDefault.handle.headEl).toBe(withDefault.handle.rootEl.querySelector('.dse-pr__head'));
+
+			const withString = mount({ head: 'Verbatim' });
+			expect(withString.handle.headEl).toBe(withString.handle.rootEl.querySelector('.dse-pr__head'));
+
+			const headless = mount({ head: false });
+			expect(headless.handle.headEl).toBeUndefined();
+		});
+
+		test('selectable + head: false — the radiogroup mounts WITHOUT aria-labelledby (graceful, no dangling id ref)', () => {
+			const { handle, rowEls } = mount({ head: false, selectable: true });
+			const group = handle.rootEl.querySelector<HTMLElement>('[role="radiogroup"]')!;
+			expect(group).not.toBeNull();
+			expect(group.hasAttribute('aria-labelledby')).toBe(false);
+			// Selection semantics are untouched by headlessness.
+			expect(rowEls.every((r) => r.getAttribute('role') === 'radio')).toBe(true);
+		});
+
+		test('selectable + head: string — aria-labelledby still wires to the (overridden) head', () => {
+			const { handle } = mount({ head: 'Custom Roll', selectable: true });
+			const group = handle.rootEl.querySelector<HTMLElement>('[role="radiogroup"]')!;
+			const head = handle.rootEl.querySelector<HTMLElement>('.dse-pr__head')!;
+			expect(head.id).not.toBe('');
+			expect(group.getAttribute('aria-labelledby')).toBe(head.id);
+		});
+	});
+
 	describe('outcome text — renderMd callback (the kit stays app-free)', () => {
 		test('without renderMd the md is set as plain text in .dse-pr__text', () => {
 			const { rowEls } = mount();

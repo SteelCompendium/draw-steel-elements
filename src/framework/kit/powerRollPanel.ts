@@ -37,6 +37,14 @@ export type RenderMdCallback = (md: string, el: HTMLElement) => void | Promise<v
 export interface PowerRollPanelOptions {
 	/** The roll's characteristics, e.g. "Might or Agility" → "Power Roll + …". */
 	chars?: string;
+	/**
+	 * Head override (Plan 09 Task 6a). A string renders VERBATIM as the head text —
+	 * through `renderMd` when provided, like the rows (caller data may be markdown);
+	 * `false` mounts NO head element at all (headless tiers — the default caption
+	 * would invent words the data doesn't have); `undefined` keeps today's default
+	 * 'Power Roll + {chars}' caption (kit chrome, always plain text).
+	 */
+	head?: string | false;
 	/** The tier rows to render, in order (a full roll has all four). */
 	rows: readonly PowerRollRow[];
 	/** Rows become <button role="radio" aria-checked> radios (Negotiation). Default static. */
@@ -50,6 +58,8 @@ export interface PowerRollPanelOptions {
 
 export interface PowerRollPanelHandle {
 	readonly rootEl: HTMLElement;
+	/** The head element, for callers that decorate it. Absent when `head: false`. */
+	readonly headEl?: HTMLElement;
 	/** Row elements by tier, for callers that decorate rows. */
 	readonly rowEls: Readonly<Partial<Record<PowerRollTier, HTMLElement>>>;
 	/** External update, in place (selectable mode). No onSelect, no focus steal. */
@@ -87,15 +97,27 @@ export function powerRollPanel(
 	const uid = `dse-pr-${++prCounter}`;
 	const rootEl = parent.createDiv({ cls: 'dse-pr' });
 
-	const headEl = rootEl.createDiv({ cls: 'dse-pr__head' });
-	headEl.id = `${uid}-head`;
-	headEl.setText(opts.chars ? `Power Roll + ${opts.chars}` : 'Power Roll');
+	// head: false → headless (no element); string → verbatim override (renderMd owns
+	// markdown, like the rows); undefined → the default caption (plain kit chrome).
+	let headEl: HTMLElement | undefined;
+	if (opts.head !== false) {
+		headEl = rootEl.createDiv({ cls: 'dse-pr__head' });
+		headEl.id = `${uid}-head`;
+		if (typeof opts.head === 'string') {
+			if (opts.renderMd) void opts.renderMd(opts.head, headEl);
+			else headEl.setText(opts.head);
+		} else {
+			headEl.setText(opts.chars ? `Power Roll + ${opts.chars}` : 'Power Roll');
+		}
+	}
 
 	const rowsEl = rootEl.createDiv({ cls: 'dse-pr__rows' });
 	if (opts.selectable) {
 		// A roll resolves to exactly one tier → a radiogroup, labelled by the head.
+		// Headless panels fall back gracefully: no aria-labelledby (never a dangling
+		// id reference), selection semantics unchanged.
 		rowsEl.setAttribute('role', 'radiogroup');
-		rowsEl.setAttribute('aria-labelledby', headEl.id);
+		if (headEl) rowsEl.setAttribute('aria-labelledby', headEl.id);
 	}
 
 	const tiers = opts.rows.map((r) => r.tier);
@@ -191,6 +213,7 @@ export function powerRollPanel(
 
 	return {
 		rootEl,
+		headEl,
 		rowEls,
 		select: (tier: PowerRollTier): void => {
 			if (!opts.selectable) return; // static panels have no selection state

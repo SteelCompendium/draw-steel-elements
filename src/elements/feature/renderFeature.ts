@@ -188,16 +188,23 @@ export function renderFeature(
 			title || effect.effect ? section(parentEl, title || undefined, effect.effect) : parentEl;
 
 		// Power roll: one STATIC kit panel per rolling effect (no radiogroup — features
-		// are not selectable; tier outcomes flow through the renderMd callback).
+		// are not selectable; tier outcomes flow through the renderMd callback). The
+		// head carries the block's OWN roll wording verbatim, or nothing (head: false)
+		// — the kit's default "Power Roll" caption would invent words the data doesn't
+		// have. dse-md-inline on the head keeps the callback-rendered <p> inline (the
+		// same treatment the md() helper gives every other markdown target here).
 		const rows: PowerRollRow[] = [];
 		if (effect.tier1) rows.push({ tier: 'low', md: effect.tier1 });
 		if (effect.tier2) rows.push({ tier: 'mid', md: effect.tier2 });
 		if (effect.tier3) rows.push({ tier: 'high', md: effect.tier3 });
 		if (effect.crit) rows.push({ tier: 'crit', md: effect.crit });
 		if (effect.roll || rows.length > 0) {
-			const handle = powerRollPanel(hostEl, { rows, renderMd }, owner);
-			const headEl = handle.rootEl.querySelector<HTMLElement>('.dse-pr__head');
-			mountRollHead(headEl, effect.roll?.trim());
+			const handle = powerRollPanel(
+				hostEl,
+				{ rows, renderMd, head: effect.roll?.trim() || false },
+				owner,
+			);
+			handle.headEl?.addClass('dse-md-inline');
 		}
 
 		if (effect.features && effect.features.length > 0) {
@@ -205,17 +212,5 @@ export function renderFeature(
 				headingLevel: Math.min(level + 1, 6),
 			});
 		}
-	}
-
-	/** The panel head must carry the block's OWN roll wording verbatim (or nothing):
-	 *  the kit's default "Power Roll" caption would invent words the data doesn't have. */
-	function mountRollHead(headEl: HTMLElement | null, rollText: string | undefined): void {
-		if (!headEl) return;
-		if (!rollText) {
-			headEl.remove();
-			return;
-		}
-		headEl.empty();
-		md(rollText, headEl);
 	}
 }
