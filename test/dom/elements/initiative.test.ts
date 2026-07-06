@@ -1,14 +1,20 @@
-// Plan 06 — the Initiative Tracker on Framework v2: InitiativeView + definition, driven
-// through the REAL ElementPipeline (mirrors negotiation.test.ts; supersedes the deleted
-// legacy T-10a initiative-render.test.ts harness). Task 5 registered the definition and
-// retired the legacy InitiativeProcessor — the T-5 block below pins registered-exactly-
-// once; the render tests still invoke the pipeline with the definition directly.
+// Plan 09 Task 9 (D2 §3.11) — the Initiative Tracker redesigned onto the D2 kit: the
+// a11y epicenter. Every legacy click-<div> is now a REAL labelled kit control
+// (`.dse-init__turn` iconButton, kit malice stepper, `.dse-init__cell` buttons,
+// `.dse-init__stamina` buttons, `.dse-cond` buttons), colors ride the --dse-* tokens
+// ([data-taken]/[data-selected]/[data-state] — zero inline color), and the tests below
+// pin CB-7 (stepper updates the value IN PLACE, chevron buttons survive) and CB-6
+// (cells tagged data-instance-key so the targeted refresh hits the RIGHT cell).
+// Driven through the REAL ElementPipeline (the Plan 06 harness, selectors migrated).
 //
-// BYTE-COMPAT oracle: the legacy writer (CodeBlocks.updateInitiativeTracker) did exactly
+// BYTE-COMPAT oracle (UNCHANGED from Plan 06): the legacy writer
+// (CodeBlocks.updateInitiativeTracker) did exactly
 // `stringifyYaml(<the live materialized EncounterData>).trim()` — so expected bytes are
 // always `serialize(parse(parseYaml(src)) + the same mutation)`, the same expression on
 // the same object shape (pinned against legacy by initiative-serialize.test.ts).
 // Every interaction must persist EXACTLY ONCE per user action (debounced write-behind).
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -16,7 +22,7 @@ import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlo
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
-import type { PrefsStorage } from '../../../src/framework/seams/prefs';
+import type { PrefsStorage, PrefDescriptor } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
@@ -29,6 +35,7 @@ import { parse, serialize, resetEncounter } from '../../../src/elements/initiati
 import type { Condition, EncounterData } from '../../../src/elements/initiative/model';
 import { resolveInitiativeRefs } from '../../../src/elements/initiative/resolveRefs';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
+import { styleGuardFindings } from '../kit/styleGuard';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
 import statblockRefs from '../../fixtures/initiative/statblock-refs.yaml';
@@ -124,6 +131,13 @@ function commitStepperValue(modalEl: HTMLElement, value: number): void {
 	input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
 }
 
+/** The Lucide icon of a control: kit buttons carry it on the .dse-btn__icon child;
+ *  read-only static glyph spans carry it on a .dse-init__turn-glyph child or on the
+ *  element itself (mock setIcon stamps data-icon). */
+function iconOf(el: Element): string | null {
+	return el.getAttribute('data-icon') ?? el.querySelector('[data-icon]')?.getAttribute('data-icon') ?? null;
+}
+
 afterEach(() => {
 	jest.useRealTimers();
 	document.querySelectorAll('.modal-container').forEach((el) => el.remove());
@@ -188,58 +202,222 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-it*, Regis
 	});
 });
 
-describe('T-4: rendered through the REAL ElementPipeline (quick-start fixture)', () => {
-	test('structure: root stamp, container, hero rows + names, enemy group, malice, detail row, instances grid', async () => {
+describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', () => {
+	test('structure: root stamp, .dse-init grammar, hero rows + names, enemy group, malice stepper, detail row, cell grid', async () => {
 		const { root } = await renderInit(quickStart);
 
 		expect(root.getAttribute('data-dse-element')).toBe('initiative');
-		expect(root.querySelector('.ds-init-container')).not.toBeNull();
+		expect(root.querySelector('.dse-init')).not.toBeNull();
 
-		// Top action bar (writable host).
-		expect(root.querySelector('.top-action-bar .reset-round-button')).not.toBeNull();
-		expect(root.querySelector('.top-action-bar .reset-encounter-button')).not.toBeNull();
+		// Action bar (writable host): a kit buttonRow of REAL labelled buttons.
+		const actionbar = root.querySelector('.dse-init__actionbar') as HTMLElement;
+		expect(actionbar).not.toBeNull();
+		expect(actionbar.classList.contains('dse-btn-row')).toBe(true);
+		const resetRound = actionbar.querySelector('button[aria-label="Reset Round"]') as HTMLButtonElement;
+		const resetEnc = actionbar.querySelector('button[aria-label="Reset Encounter State"]') as HTMLButtonElement;
+		expect(resetRound).not.toBeNull();
+		expect(resetEnc).not.toBeNull();
+		expect(resetRound.getAttribute('type')).toBe('button');
+		expect(resetRound.querySelector('.dse-btn__text')!.textContent).toBe('Reset Round');
+		expect(resetEnc.querySelector('.dse-btn__text')!.textContent).toBe('Reset Encounter State');
 
 		// Heroes.
-		expect(root.querySelectorAll('.hero-container')).toHaveLength(2);
-		const names = [...root.querySelectorAll('.heroes-container .character-name')].map((n) => n.textContent);
+		expect(root.querySelectorAll('.dse-init__group--heroes .dse-init__entry')).toHaveLength(2);
+		const names = [...root.querySelectorAll('.dse-init__group--heroes .dse-init__name')].map(
+			(n) => n.textContent,
+		);
 		expect(names).toEqual(['Frodo Baggins', 'Samwise Gamgee']);
-		const heroStamina = [...root.querySelectorAll('.heroes-container .character-stamina')].map(
+		const heroStamina = [...root.querySelectorAll('.dse-init__group--heroes .dse-init__stamina')].map(
 			(n) => n.textContent,
 		);
 		expect(heroStamina).toEqual(['80/80', '90/90']);
 
-		// Enemy group + malice.
-		expect(root.querySelectorAll('.enemy-group-container')).toHaveLength(1);
-		expect(root.querySelector('.group-header h4')!.textContent).toBe('Mordor Forces');
-		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 5');
-		expect(root.querySelectorAll('.malice-modifier')).toHaveLength(2);
+		// Enemy group + malice (kit stepper — value formatted exactly as legacy).
+		expect(root.querySelectorAll('.dse-init__group--enemies .dse-init__entry')).toHaveLength(1);
+		expect(root.querySelector('.dse-init__grouphead h4')!.textContent).toBe('Mordor Forces');
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+		expect(root.querySelectorAll('.dse-init__malice .dse-stepper__btn')).toHaveLength(2);
 
 		// Detail row defaults to the first instance; grid renders 4 orcs + 1 troll.
-		expect(root.querySelector('.creature-detail-row .character-name')!.textContent).toBe('Orc #1');
-		expect(root.querySelector('.creature-detail-row .character-stamina')!.textContent).toBe('40/40');
-		expect(root.querySelectorAll('.creature-instance-cell')).toHaveLength(5);
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Orc #1');
+		expect(root.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe('40/40');
+		expect(root.querySelectorAll('.dse-init__cell')).toHaveLength(5);
 	});
 
-	test('squad fixture: hero condition icons (with customization), squad pool display, minion + captain cells', async () => {
+	test('a11y: turn indicators are real toggle buttons; cells real aria-pressed buttons tagged data-instance-key (CB-6); stamina/malice/conditions labelled', async () => {
+		const { root } = await renderInit(quickStart);
+
+		// Turn indicators: REAL <button type=button aria-pressed> with an accessible
+		// name and the kit tooltip — check/dot glyph, [data-taken] for CSS.
+		const turns = [...root.querySelectorAll('.dse-init__turn')] as HTMLElement[];
+		expect(turns).toHaveLength(3); // 2 heroes + 1 enemy group
+		for (const turn of turns) {
+			expect(turn.tagName).toBe('BUTTON');
+			expect(turn.getAttribute('type')).toBe('button');
+			expect(turn.getAttribute('aria-pressed')).toBe('false');
+			expect(turn.hasAttribute('data-taken')).toBe(false);
+			expect(iconOf(turn)).toBe('dot');
+			expect(turn.getAttribute('data-tooltip')).toBe('Toggle to mark turn taken');
+		}
+		expect(turns[0].getAttribute('aria-label')).toBe('Toggle turn taken: Frodo Baggins');
+		expect(turns[2].getAttribute('aria-label')).toBe('Toggle turn taken: Mordor Forces');
+
+		// Malice: the kit stepper — role=group, labelled ± buttons, aria-live value.
+		const malice = root.querySelector('.dse-init__malice .dse-stepper') as HTMLElement;
+		expect(malice.getAttribute('role')).toBe('group');
+		expect(malice.getAttribute('aria-label')).toBe('Malice');
+		expect(malice.querySelector('button[aria-label="Increase Malice"]')).not.toBeNull();
+		expect(malice.querySelector('button[aria-label="Decrease Malice"]')).not.toBeNull();
+		expect(root.querySelector('.dse-init__malice-value')!.getAttribute('aria-live')).toBe('polite');
+
+		// Grid cells: REAL toggle buttons carrying data-instance-key (CB-6).
+		const cells = [...root.querySelectorAll('.dse-init__cell')] as HTMLElement[];
+		expect(cells.map((c) => c.getAttribute('data-instance-key'))).toEqual([
+			'0-1',
+			'0-2',
+			'0-3',
+			'0-4',
+			'1-1',
+		]);
+		for (const cell of cells) {
+			expect(cell.tagName).toBe('BUTTON');
+			expect(cell.getAttribute('aria-pressed')).toBe('false'); // nothing selected yet
+			expect(cell.hasAttribute('data-selected')).toBe(false);
+		}
+		expect(cells[0].getAttribute('aria-label')).toBe('Select Orc #1');
+		expect(cells[4].getAttribute('aria-label')).toBe('Select Troll #1');
+
+		// Stamina numbers: real labelled buttons (open the edit modal), aria-live.
+		const heroStamina = root.querySelector('.dse-init__group--heroes .dse-init__stamina') as HTMLElement;
+		expect(heroStamina.tagName).toBe('BUTTON');
+		expect(heroStamina.getAttribute('aria-label')).toBe('Edit stamina: Frodo Baggins');
+		expect(heroStamina.getAttribute('aria-live')).toBe('polite');
+		const detailStamina = root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement;
+		expect(detailStamina.tagName).toBe('BUTTON');
+		expect(detailStamina.getAttribute('aria-label')).toBe('Edit stamina: Orc #1');
+
+		// Add-condition affordance: a real labelled kit button.
+		const add = root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement;
+		expect(add.tagName).toBe('BUTTON');
+		expect(add.getAttribute('aria-label')).toBe('Add Condition');
+	});
+
+	test('squad fixture: condition icons are real buttons riding applyConditionColor (validated custom property, NEVER el.style.color)', async () => {
 		const { root } = await renderInit(squad);
 
 		// Aragorn: grabbed (hand) + bleeding (droplet, crimson) + the add affordance.
-		const heroConditions = root.querySelectorAll('.heroes-container .condition-icon');
+		const heroConditions = [
+			...root.querySelectorAll('.dse-init__group--heroes .dse-cond'),
+		] as HTMLElement[];
 		expect(heroConditions).toHaveLength(2);
-		expect(heroConditions[0].getAttribute('data-icon')).toBe('hand');
-		expect((heroConditions[0] as HTMLElement).title).toBe('Grabbed');
-		expect(heroConditions[1].getAttribute('data-icon')).toBe('droplet');
-		expect((heroConditions[1] as HTMLElement).style.color).toBe('crimson');
-		expect(root.querySelector('.heroes-container .add-condition-icon')).not.toBeNull();
+		expect(heroConditions[0].tagName).toBe('BUTTON');
+		expect(iconOf(heroConditions[0])).toBe('hand');
+		expect(heroConditions[0].getAttribute('aria-label')).toBe('Remove condition: Grabbed');
+		expect(heroConditions[0].getAttribute('data-tooltip')).toBe('Grabbed');
+		expect(iconOf(heroConditions[1])).toBe('droplet');
+		// The user color arrives as the VALIDATED --dse-condition-color property (T8
+		// helper) — never an inline color style.
+		expect(heroConditions[1].style.getPropertyValue('--dse-condition-color')).toBe('crimson');
+		expect(heroConditions[1].style.color).toBe('');
+		expect(root.querySelector('.dse-init__group--heroes .dse-cond--add')).not.toBeNull();
 
 		// Detail row defaults to Goblin #1 (minion): pool display "pool/max*amount (max)".
-		expect(root.querySelector('.creature-detail-row .character-name')!.textContent).toBe('Goblin #1');
-		expect(root.querySelector('.creature-detail-row .character-stamina')!.textContent).toBe('20/20 (4)');
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Goblin #1');
+		expect(root.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe('20/20 (4)');
 
 		// Grid: 5 minions + 1 captain.
-		const cells = root.querySelectorAll('.creature-instance-cell');
+		const cells = root.querySelectorAll('.dse-init__cell');
 		expect(cells).toHaveLength(6);
-		expect(cells[5].querySelector('.instance-stamina')!.textContent).toBe('40/40');
+		expect(cells[5].querySelector('.dse-init__cell-stamina')!.textContent).toBe('40/40');
+	});
+
+	test('condition color is VALIDATED (invalid input cleared) and effect classes come from the known vocabulary only', async () => {
+		const source = [
+			'heroes:',
+			'  - name: "Aragorn"',
+			'    max_stamina: 100',
+			'    conditions:',
+			'      - key: bleeding',
+			'        color: "not a color"',
+			'        effect: glow',
+			'      - key: grabbed',
+			'        color: "#ff0000"',
+			'        effect: whatever',
+			'enemy_groups:',
+			'  - name: "Squad"',
+			'    creatures:',
+			'      - name: "Goblin"',
+			'        max_stamina: 4',
+			'        amount: 1',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const { root } = await renderInit(source);
+
+		const conds = [...root.querySelectorAll('.dse-cond')] as HTMLElement[];
+		expect(conds.length).toBeGreaterThanOrEqual(2);
+		// Invalid color REJECTED (property cleared → CSS var() fallback), valid effect applied.
+		expect(conds[0].style.getPropertyValue('--dse-condition-color')).toBe('');
+		expect(conds[0].classList.contains('condition-effect-glow')).toBe(true);
+		// Valid color applied as the property; unknown effect adds NO class.
+		expect(conds[1].style.getPropertyValue('--dse-condition-color')).toBe('#ff0000');
+		expect([...conds[1].classList].some((c) => c.startsWith('condition-effect-'))).toBe(false);
+		// Never inline color.
+		for (const cond of conds) expect(cond.style.color).toBe('');
+	});
+
+	test('stamina numbers carry [data-state] (healthy/dying) instead of inline red/green', async () => {
+		const source = [
+			'heroes:',
+			'  - name: "Temp"',
+			'    max_stamina: 100',
+			'    current_stamina: 80',
+			'    temp_stamina: 11',
+			'  - name: "Down"',
+			'    max_stamina: 50',
+			'    current_stamina: -3',
+			'  - name: "Fine"',
+			'    max_stamina: 50',
+			'enemy_groups:',
+			'  - name: "Squad"',
+			'    creatures:',
+			'      - name: "Goblin"',
+			'        max_stamina: 4',
+			'        amount: 1',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const { root } = await renderInit(source);
+
+		const stamina = [
+			...root.querySelectorAll('.dse-init__group--heroes .dse-init__stamina'),
+		] as HTMLElement[];
+		expect(stamina.map((s) => s.textContent)).toEqual(['80(+11)/100', '-3/50', '50/50']);
+		expect(stamina[0].getAttribute('data-state')).toBe('healthy');
+		expect(stamina[1].getAttribute('data-state')).toBe('dying');
+		expect(stamina[2].hasAttribute('data-state')).toBe(false);
+		// SC-5: state is the attribute + token, never an inline color.
+		for (const s of stamina) {
+			expect(s.style.color).toBe('');
+			expect(s.getAttribute('style') ?? '').not.toMatch(/color/);
+		}
+	});
+
+	test('portraits pref (D4-owned): reflected onto the root as data-dse-portraits and live-updated', async () => {
+		const { deps } = makeEnv();
+		// D4 owns the descriptor catalog; registering one here exercises the SAME
+		// reflection path the pipeline already runs on every element root.
+		deps.prefs.describe([
+			{ key: 'portraits', default: 'on', attr: 'portraits' },
+		] as unknown as readonly PrefDescriptor[]);
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost();
+		await pipeline.run(initiativeElement, quickStart, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.getAttribute('data-dse-portraits')).toBe('on');
+		await (deps.prefs.set as (k: string, v: unknown) => Promise<void>)('portraits', 'off');
+		expect(root.getAttribute('data-dse-portraits')).toBe('off');
 	});
 
 	test('rendering performs ZERO writes (persist only ever runs on user mutation)', async () => {
@@ -250,17 +428,18 @@ describe('T-4: rendered through the REAL ElementPipeline (quick-start fixture)',
 	});
 });
 
-describe('T-4: persisted mutations — exactly ONE debounced write each, byte-compatible with the legacy writer', () => {
-	test('hero turn indicator: in-place check toggle, then one write with has_taken_turn: true', async () => {
+describe('T-9: persisted mutations — exactly ONE debounced write each, byte-compatible with the legacy writer', () => {
+	test('hero turn indicator: in-place aria-pressed/[data-taken]/check toggle, then one write with has_taken_turn: true', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		const indicator = root.querySelector('.heroes-container .turn-indicator') as HTMLElement;
+		const indicator = root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement;
 		indicator.click();
 
 		// In-place targeted update, still inside the debounce window.
-		expect(indicator.classList.contains('taken-turn')).toBe(true);
-		expect(indicator.getAttribute('data-icon')).toBe('check');
+		expect(indicator.getAttribute('aria-pressed')).toBe('true');
+		expect(indicator.hasAttribute('data-taken')).toBe(true);
+		expect(iconOf(indicator)).toBe('check');
 		expect(host.replaceSource).not.toHaveBeenCalled();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
@@ -271,13 +450,19 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 				m.heroes[0].has_taken_turn = true;
 			}),
 		);
+
+		// Toggling back is in-place too (dot glyph, pressed off).
+		indicator.click();
+		expect(indicator.getAttribute('aria-pressed')).toBe('false');
+		expect(indicator.hasAttribute('data-taken')).toBe(false);
+		expect(iconOf(indicator)).toBe('dot');
 	});
 
 	test('enemy-group turn indicator: one write with the group has_taken_turn: true', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		(root.querySelector('.enemy-group-container .turn-indicator') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--enemies .dse-init__turn') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
@@ -288,20 +473,22 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
-	test('malice +/−: in-place .malice-text update, chevrons SURVIVE (legacy setText wiped them), rapid clicks coalesce into one write', async () => {
+	test('malice kit stepper (CB-7): value updates IN PLACE, both ± buttons survive, rapid clicks coalesce into one write', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		const [up, down] = [...root.querySelectorAll('.malice-modifier')] as HTMLElement[];
+		const up = root.querySelector('.dse-init__malice button[aria-label="Increase Malice"]') as HTMLElement;
+		const down = root.querySelector('.dse-init__malice button[aria-label="Decrease Malice"]') as HTMLElement;
 		up.click();
 		up.click();
 		down.click();
 
-		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 6');
-		// The deliberate divergence pin: legacy's maliceContainer.setText destroyed the
-		// chevron modifiers on first click (masked by the post-write re-render); the v2
-		// port updates .malice-text in place so the controls stay usable.
-		expect(root.querySelectorAll('.malice-modifier')).toHaveLength(2);
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 6');
+		// CB-7: the legacy container.setText wiped the chevrons on first click; the kit
+		// stepper updates ONLY its value node — the ± buttons stay alive and attached.
+		expect(root.querySelectorAll('.dse-init__malice .dse-stepper__btn')).toHaveLength(2);
+		expect(root.contains(up)).toBe(true);
+		expect(root.contains(down)).toBe(true);
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -317,7 +504,7 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		const staminaEl = root.querySelector('.heroes-container .character-stamina') as HTMLElement;
+		const staminaEl = root.querySelector('.dse-init__group--heroes .dse-init__stamina') as HTMLElement;
 		staminaEl.click();
 
 		const modalEl = lastModal();
@@ -338,11 +525,11 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
-	test('creature stamina modal (detail row): edit -> detail + grid cell refresh -> one write on the instance', async () => {
+	test('creature stamina modal (detail row): edit -> detail + its own grid cell refresh -> one write on the instance', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		const staminaEl = root.querySelector('.creature-detail-row .character-stamina') as HTMLElement;
+		const staminaEl = root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement;
 		staminaEl.click();
 
 		const modalEl = lastModal();
@@ -350,10 +537,11 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		modalApplyBtn(modalEl).click();
 
 		expect(staminaEl.textContent).toBe('10/40');
-		// Legacy grid-cell sync (nth-child(instance.id)) — Orc #1 is the first cell.
-		expect(root.querySelector('.creature-instance-cell:nth-child(1) .instance-stamina')!.textContent).toBe(
-			'10/40',
-		);
+		// CB-6: the grid-cell sync targets the instance's own cell by data-instance-key.
+		expect(
+			root.querySelector('.dse-init__cell[data-instance-key="0-1"] .dse-init__cell-stamina')!
+				.textContent,
+		).toBe('10/40');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -365,15 +553,56 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
-	test('instance-cell select: detail row rebuilt for that instance, one write persisting selectedInstanceKey', async () => {
+	test('CB-6: the targeted refresh hits the RIGHT cell — the troll (key 1-1), where legacy nth-child(instance.id) hit Orc #1', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		const cells = [...root.querySelectorAll('.creature-instance-cell')] as HTMLElement[];
+		// Select the troll: instance.id = 1, so the legacy nth-child(1) lookup resolved
+		// to the FIRST cell (Orc #1) — the CB-6 bug.
+		const trollCell = root.querySelector('.dse-init__cell[data-instance-key="1-1"]') as HTMLElement;
+		trollCell.click();
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Troll #1');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+
+		// Edit the troll's stamina from the detail row.
+		(root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement).click();
+		const modalEl = lastModal();
+		commitStepperValue(modalEl, 100);
+		modalApplyBtn(modalEl).click();
+
+		// The troll's OWN cell refreshed; Orc #1's (the nth-child victim) untouched.
+		expect(trollCell.querySelector('.dse-init__cell-stamina')!.textContent).toBe('100/150');
+		expect(
+			root.querySelector('.dse-init__cell[data-instance-key="0-1"] .dse-init__cell-stamina')!
+				.textContent,
+		).toBe('40/40');
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(2);
+		expect(host.replaceSource.mock.calls[1][0]).toBe(
+			legacyBytes(quickStart, (m) => {
+				m.enemy_groups[0].selectedInstanceKey = '1-1';
+				m.enemy_groups[0].creatures[1].instances![0].current_stamina = 100;
+			}),
+		);
+	});
+
+	test('instance-cell select: aria-pressed/[data-selected] repaint in place, detail row rebuilt, one write persisting selectedInstanceKey', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(quickStart);
+
+		const cells = [...root.querySelectorAll('.dse-init__cell')] as HTMLElement[];
 		cells[1].click(); // Orc #2
 
-		expect(cells[1].classList.contains('selected')).toBe(true);
-		expect(root.querySelector('.creature-detail-row .character-name')!.textContent).toBe('Orc #2');
+		expect(cells[1].getAttribute('aria-pressed')).toBe('true');
+		expect(cells[1].hasAttribute('data-selected')).toBe(true);
+		// Every other cell reads unselected — attribute AND aria state.
+		for (const other of [cells[0], cells[2], cells[3], cells[4]]) {
+			expect(other.getAttribute('aria-pressed')).toBe('false');
+			expect(other.hasAttribute('data-selected')).toBe(false);
+		}
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Orc #2');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -385,19 +614,43 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
+	test('cell dblclick (non-minion): stamina modal for THAT instance -> its cell refreshes -> one write', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(quickStart);
+
+		const cell = root.querySelector('.dse-init__cell[data-instance-key="0-2"]') as HTMLElement;
+		cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+		const modalEl = lastModal();
+		expect(modalEl.querySelector('.dse-modal__title')!.textContent).toBe('Orc Stamina');
+		commitStepperValue(modalEl, 25);
+		modalApplyBtn(modalEl).click();
+
+		expect(cell.querySelector('.dse-init__cell-stamina')!.textContent).toBe('25/40');
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(quickStart, (m) => {
+				m.enemy_groups[0].creatures[0].instances![1].current_stamina = 25;
+			}),
+		);
+	});
+
 	test('condition add (hero): AddConditionsModal -> icons rebuilt in place -> one write with the new condition', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		(root.querySelector('.heroes-container .add-condition-icon') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
 		// Task 8: the modal is a kit managedModal — rows/footer are labelled kit buttons.
 		const modalEl = lastModal();
 		(modalEl.querySelector('button[aria-label="Bleeding"]') as HTMLElement).click();
 		(modalEl.querySelector('.dse-modal__footer button[aria-label="Add Conditions"]') as HTMLElement).click();
 
-		const heroConditions = root.querySelectorAll('.heroes-container .hero-container .condition-icon');
+		const heroConditions = root.querySelectorAll('.dse-init__group--heroes .dse-cond');
 		expect(heroConditions).toHaveLength(1);
-		expect(heroConditions[0].getAttribute('data-icon')).toBe('droplet');
+		expect(iconOf(heroConditions[0])).toBe('droplet');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -409,15 +662,15 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
-	test('condition remove (hero, squad fixture): icon click -> container rebuilt -> one write without the removed condition', async () => {
+	test('condition remove (hero, squad fixture): icon button click -> container rebuilt -> one write without the removed condition', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(squad);
 
-		(root.querySelector('.heroes-container .condition-icon') as HTMLElement).click(); // remove "grabbed"
+		(root.querySelector('.dse-init__group--heroes .dse-cond') as HTMLElement).click(); // remove "grabbed"
 
-		const remaining = root.querySelectorAll('.heroes-container .condition-icon');
+		const remaining = root.querySelectorAll('.dse-init__group--heroes .dse-cond');
 		expect(remaining).toHaveLength(1);
-		expect(remaining[0].getAttribute('data-icon')).toBe('droplet'); // bleeding stays
+		expect(iconOf(remaining[0])).toBe('droplet'); // bleeding stays
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -430,12 +683,12 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 	});
 });
 
-describe('T-4: minion stamina pool — the Task-3 decoupled modal through the view', () => {
+describe('T-9: minion stamina pool — the Task-3 decoupled modal through the view', () => {
 	test('grid dblclick (kill flow): pool damage + death -> whole-view update() rebuild -> exactly one write', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(squad);
 
-		const cell = root.querySelector('.creature-instance-cell') as HTMLElement;
+		const cell = root.querySelector('.dse-init__cell') as HTMLElement;
 		cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
 
 		const modalEl = lastModal();
@@ -450,15 +703,21 @@ describe('T-4: minion stamina pool — the Task-3 decoupled modal through the vi
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		// The persist callback rebuilt the whole view from the mutated model:
-		// Goblin #1 is dead (DEAD in its cell AND in the default-selected detail row),
-		// the surviving minions' cells show the reduced pool over the display max
+		// Goblin #1 is dead (DEAD in its cell AND in the default-selected detail row,
+		// on the [data-state="dead"] token — not inline crimson), the surviving
+		// minions' cells show the reduced pool over the display max
 		// (creature.max_stamina × creature.amount — amount deliberately stays 5, the
 		// legacy behavior), and the grid lost nothing structurally.
-		const rebuiltCells = root.querySelectorAll('.creature-instance-cell');
+		const rebuiltCells = root.querySelectorAll('.dse-init__cell');
 		expect(rebuiltCells).toHaveLength(6);
-		expect(rebuiltCells[0].querySelector('.instance-stamina')!.textContent).toBe('DEAD');
-		expect(rebuiltCells[1].querySelector('.instance-stamina')!.textContent).toBe('16/20 (4)');
-		expect(root.querySelector('.creature-detail-row .character-stamina')!.textContent).toBe('DEAD');
+		const deadCellStamina = rebuiltCells[0].querySelector('.dse-init__cell-stamina') as HTMLElement;
+		expect(deadCellStamina.textContent).toBe('DEAD');
+		expect(deadCellStamina.getAttribute('data-state')).toBe('dead');
+		expect(deadCellStamina.style.color).toBe('');
+		expect(rebuiltCells[1].querySelector('.dse-init__cell-stamina')!.textContent).toBe('16/20 (4)');
+		const detailStamina = root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement;
+		expect(detailStamina.textContent).toBe('DEAD');
+		expect(detailStamina.getAttribute('data-state')).toBe('dead');
 
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 		expect(host.replaceSource.mock.calls[0][0]).toBe(
@@ -473,7 +732,7 @@ describe('T-4: minion stamina pool — the Task-3 decoupled modal through the vi
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(squad);
 
-		(root.querySelector('.creature-detail-row .character-stamina') as HTMLElement).click();
+		(root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement).click();
 
 		const modalEl = lastModal();
 		expect(modalEl.querySelector('.dse-sedit__minions')).not.toBeNull(); // the pool modal's minion section
@@ -481,7 +740,7 @@ describe('T-4: minion stamina pool — the Task-3 decoupled modal through the vi
 		modalApplyBtn(modalEl).click();
 
 		// The injected persist callback refreshed the detail row (legacy behavior) …
-		expect(root.querySelector('.creature-detail-row .character-stamina')!.textContent).toBe('17/20 (4)');
+		expect(root.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe('17/20 (4)');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -495,21 +754,22 @@ describe('T-4: minion stamina pool — the Task-3 decoupled modal through the vi
 	});
 });
 
-describe('T-4: reset flows — model mutation -> framework update() rebuild -> persist', () => {
+describe('T-9: reset flows — model mutation -> framework update() rebuild -> persist', () => {
 	test('Reset Round: clears every has_taken_turn, rebuilds, persists the cleared state', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
 		// Take a turn first so the reset is observable (write #1).
-		(root.querySelector('.heroes-container .turn-indicator') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 
-		(root.querySelector('.reset-round-button') as HTMLElement).click();
+		(root.querySelector('button[aria-label="Reset Round"]') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		// Rebuilt DOM: no indicator marked anymore.
-		expect(root.querySelectorAll('.turn-indicator.taken-turn')).toHaveLength(0);
+		expect(root.querySelectorAll('.dse-init__turn[data-taken]')).toHaveLength(0);
+		expect(root.querySelectorAll('.dse-init__turn[aria-pressed="true"]')).toHaveLength(0);
 		// Write #2 = every has_taken_turn false — byte-identical to a fresh parse.
 		expect(host.replaceSource).toHaveBeenCalledTimes(2);
 		expect(host.replaceSource.mock.calls[1][0]).toBe(legacyBytes(quickStart));
@@ -519,7 +779,7 @@ describe('T-4: reset flows — model mutation -> framework update() rebuild -> p
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		(root.querySelector('.reset-encounter-button') as HTMLElement).click();
+		(root.querySelector('button[aria-label="Reset Encounter State"]') as HTMLElement).click();
 		const modalEl = lastModal();
 		expect(modalEl.textContent).toContain('Confirm Encounter Reset');
 		// Task 8: the confirm is a kit managedModal — a labelled danger footer button.
@@ -528,8 +788,8 @@ describe('T-4: reset flows — model mutation -> framework update() rebuild -> p
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		// Rebuilt from the reset model: malice back to 0, hero rows still present.
-		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 0');
-		expect(root.querySelectorAll('.hero-container')).toHaveLength(2);
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 0');
+		expect(root.querySelectorAll('.dse-init__group--heroes .dse-init__entry')).toHaveLength(2);
 
 		// The write is the reset model's bytes — exactly what legacy wrote (legacy
 		// serialized the reset data directly; re-materialization only ever happened on
@@ -542,18 +802,18 @@ describe('T-4: reset flows — model mutation -> framework update() rebuild -> p
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
-		(root.querySelector('.reset-encounter-button') as HTMLElement).click();
+		(root.querySelector('button[aria-label="Reset Encounter State"]') as HTMLElement).click();
 		const modalEl = lastModal();
 		// Task 8: the confirm is a kit managedModal — a labelled Cancel footer button.
 		(modalEl.querySelector('button[aria-label="Cancel"]') as HTMLElement).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
-		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 5');
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 });
 
-describe('T-4: modal lifecycle (F1 §4.5)', () => {
+describe('T-9: modal lifecycle (F1 §4.5)', () => {
 	test('a modal opened by the view is closed on view unload', async () => {
 		const { deps } = makeEnv();
 		const pipeline = new ElementPipeline(deps);
@@ -564,7 +824,7 @@ describe('T-4: modal lifecycle (F1 §4.5)', () => {
 		const view = addChild.mock.calls[0][0] as InitiativeView;
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		(root.querySelector('.heroes-container .character-stamina') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--heroes .dse-init__stamina') as HTMLElement).click();
 		const modalEl = lastModal();
 		expect(document.body.contains(modalEl)).toBe(true);
 
@@ -574,8 +834,8 @@ describe('T-4: modal lifecycle (F1 §4.5)', () => {
 	});
 });
 
-describe('T-4: canPersist=false — inert tracker, zero writes (F1 §4.4)', () => {
-	test('renders read-only: data-dse-readonly stamped, write affordances absent, interactions do nothing', async () => {
+describe('T-9: canPersist=false — inert tracker, zero writes (F1 §4.4)', () => {
+	test('renders read-only: data-dse-readonly stamped, NO buttons at all, state still displayed, interactions do nothing', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart, { canPersist: false });
 
@@ -583,39 +843,104 @@ describe('T-4: canPersist=false — inert tracker, zero writes (F1 §4.4)', () =
 		expect(root.getAttribute('data-dse-readonly')).toBe('true');
 
 		// The tracker still renders (visible, not an error card) …
-		expect(root.querySelector('.ds-init-container')).not.toBeNull();
-		expect(root.querySelectorAll('.hero-container')).toHaveLength(2);
-		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 5');
-		expect(root.querySelectorAll('.creature-instance-cell')).toHaveLength(5);
+		expect(root.querySelector('.dse-init')).not.toBeNull();
+		expect(root.querySelectorAll('.dse-init__group--heroes .dse-init__entry')).toHaveLength(2);
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+		expect(root.querySelectorAll('.dse-init__cell')).toHaveLength(5);
 
-		// … but every write affordance is gone.
-		expect(root.querySelector('.top-action-bar')).toBeNull();
-		expect(root.querySelectorAll('.malice-modifier')).toHaveLength(0);
-		expect(root.querySelectorAll('.add-condition-icon')).toHaveLength(0);
+		// … but EVERY write affordance is gone: not one <button> in the whole tracker
+		// (turn indicators, cells, stamina render as static state displays).
+		expect(root.querySelectorAll('button')).toHaveLength(0);
+		expect(root.querySelector('.dse-init__actionbar')).toBeNull();
+		expect(root.querySelectorAll('.dse-init__malice .dse-stepper__btn')).toHaveLength(0);
+		expect(root.querySelectorAll('.dse-cond--add')).toHaveLength(0);
 
-		// Turn indicator: inert (no toggle, no write).
-		const indicator = root.querySelector('.heroes-container .turn-indicator') as HTMLElement;
+		// Turn indicator: a static glyph (dot), inert on click.
+		const indicator = root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement;
+		expect(indicator.tagName).not.toBe('BUTTON');
+		expect(iconOf(indicator)).toBe('dot');
 		indicator.click();
-		expect(indicator.classList.contains('taken-turn')).toBe(false);
+		expect(indicator.hasAttribute('data-taken')).toBe(false);
 
 		// Stamina: no modal opens.
 		const bodyChildrenBefore = document.body.children.length;
-		(root.querySelector('.heroes-container .character-stamina') as HTMLElement).click();
-		(root.querySelector('.creature-detail-row .character-stamina') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--heroes .dse-init__stamina') as HTMLElement).click();
+		(root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement).click();
 		expect(document.body.children.length).toBe(bodyChildrenBefore);
 
 		// Instance cells: selection is a persisted write — inert too.
-		const cells = [...root.querySelectorAll('.creature-instance-cell')] as HTMLElement[];
+		const cells = [...root.querySelectorAll('.dse-init__cell')] as HTMLElement[];
 		cells[1].click();
-		expect(root.querySelectorAll('.creature-instance-cell.selected')).toHaveLength(0);
-		expect(root.querySelector('.creature-detail-row .character-name')!.textContent).toBe('Orc #1');
+		expect(root.querySelectorAll('.dse-init__cell[data-selected]')).toHaveLength(0);
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Orc #1');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 });
 
-describe('T-4: statblock refs end-to-end through the pipeline reference stage (Task 2 wiring)', () => {
+describe('T-9: SC-5 hygiene + CSS contract (D2 §5/§6)', () => {
+	test('source hygiene: the view passes the shared kit style guard (no .style access, no color literals)', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/initiative/view.ts'),
+			'utf8',
+		);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('CSS contract: .dse-init scoped under [data-dse-element="initiative"] on the §3.11 tokens — and the legacy class block is GONE', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		const block = sheet.match(/\[data-dse-element="initiative"\]\s+\.dse-init\s*\{[\s\S]*?\n\}/);
+		expect(block).not.toBeNull();
+		expect(block![0]).toMatch(/var\(--dse-turn-done\)/); // taken-turn fill (Legacy limegreen)
+		expect(block![0]).toMatch(/var\(--dse-select\)/); // selected cell ring (Legacy #D50000)
+		expect(block![0]).toMatch(/var\(--dse-malice\)/); // malice text (Legacy red)
+		expect(block![0]).toMatch(/var\(--dse-stamina-healthy\)/); // temp-stamina numbers
+		expect(block![0]).toMatch(/var\(--dse-stamina-dying\)/); // negative-stamina numbers
+		expect(block![0]).toMatch(/var\(--dse-danger\)/); // DEAD (Legacy crimson)
+		expect(block![0]).toMatch(/var\(--dse-condition-color/); // validated per-condition color
+		expect(block![0]).toMatch(/var\(--dse-surface\)/); // row/turn surface
+		expect(block![0]).toMatch(/var\(--dse-hairline-fade\)/); // the row border-fade ornament
+
+		// Portraits pref (D4): CSS hides the images when data-dse-portraits="off".
+		expect(sheet).toMatch(/\[data-dse-element="initiative"\]\[data-dse-portraits="off"\]/);
+
+		// Reduced motion (§4.9): the condition-effect animations are disabled.
+		const reduced = sheet.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/);
+		expect(reduced).not.toBeNull();
+		expect(reduced![0]).toMatch(/condition-effect/);
+		expect(reduced![0]).toMatch(/animation: none/);
+
+		// The whole legacy class block is evicted (comments may still cite the old names).
+		// .condition-icon deliberately SURVIVES — it's shared with MinionStaminaPoolModal.
+		const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+		for (const legacyClass of [
+			'.ds-init-container',
+			'.top-action-bar',
+			'.malice-',
+			'.turn-indicator',
+			'.creature-instance',
+			'.creature-detail-row',
+			'.creature-group',
+			'.creature-instances-grid',
+			'.heroes-container',
+			'.enemies-header',
+			'.enemy-group',
+			'.hero-container',
+			'.character-',
+			'.instance-image',
+			'.instance-stamina',
+			'.add-condition-icon',
+			'.reset-round-button',
+			'.reset-encounter-button',
+		]) {
+			expect(noComments).not.toContain(legacyClass);
+		}
+	});
+});
+
+describe('T-9: statblock refs end-to-end through the pipeline reference stage (Task 2 wiring)', () => {
 	/** Target notes for statblock-refs.yaml (same seeding as initiative-resolve-refs.test.ts). */
 	function seedStatblockNotes(app: App): void {
 		const dsNote = (lines: string[]): string => ['```ds-statblock', ...lines, '```'].join('\n');
@@ -647,26 +972,28 @@ describe('T-4: statblock refs end-to-end through the pipeline reference stage (T
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		// Merged hero names/stamina (explicit local name "Sam" wins over the ref).
-		const names = [...root.querySelectorAll('.heroes-container .character-name')].map((n) => n.textContent);
+		const names = [...root.querySelectorAll('.dse-init__group--heroes .dse-init__name')].map(
+			(n) => n.textContent,
+		);
 		expect(names).toEqual(['Frodo Baggins', 'Sam']);
-		const heroStamina = [...root.querySelectorAll('.heroes-container .character-stamina')].map(
+		const heroStamina = [...root.querySelectorAll('.dse-init__group--heroes .dse-init__stamina')].map(
 			(n) => n.textContent,
 		);
 		expect(heroStamina).toEqual(['80/80', '90/90']);
 
 		// Merged creature: Mordor Forces' detail row is the resolved Orc Warrior.
-		expect(root.querySelector('.creature-detail-row .character-name')!.textContent).toBe('Orc Warrior #1');
+		expect(root.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Orc Warrior #1');
 		// Squad from refs: pool materialized post-merge = 4 × 5.
-		const squadDetail = root.querySelectorAll('.enemy-group-container')[1];
-		expect(squadDetail.querySelector('.creature-detail-row .character-stamina')!.textContent).toBe(
+		const squadDetail = root.querySelectorAll('.dse-init__group--enemies .dse-init__entry')[1];
+		expect(squadDetail.querySelector('.dse-init__detail .dse-init__stamina')!.textContent).toBe(
 			'20/20 (4)',
 		);
-		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 2');
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 2');
 
 		// A mutation persists the resolved model's bytes — statblock strings preserved,
 		// merged fields serialized (the Task-2-pinned first-write materialization).
 		jest.useFakeTimers();
-		(root.querySelector('.heroes-container .turn-indicator') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		jest.useRealTimers();
 
@@ -694,7 +1021,7 @@ describe('T-4: statblock refs end-to-end through the pipeline reference stage (T
 	});
 });
 
-describe('T-4: persisted write path through a REAL ReadingModeBlockHost + FakeVault (F1 §3.4/§4.2)', () => {
+describe('T-9: persisted write path through a REAL ReadingModeBlockHost + FakeVault (F1 §3.4/§4.2)', () => {
 	test('turn toggle inside a ```ds-it block -> exactly one Vault write; alias + surrounding note intact; body = legacy writer bytes', async () => {
 		jest.useFakeTimers();
 		const app = new App();
@@ -732,7 +1059,7 @@ describe('T-4: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		await pipeline.run(initiativeElement, quickStart, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		(root.querySelector('.heroes-container .turn-indicator') as HTMLElement).click();
+		(root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(app.vault.modifyCalls).toHaveLength(1);

@@ -1,48 +1,53 @@
-// Plan 06 Task 4 — InitiativeView: the Initiative Tracker on Framework v2. Ports the
-// legacy InitiativeProcessor's nine build/update methods (initiativeProcessor.ts:58-532)
-// into an ElementView, mirroring negotiation/view.ts (per-mount cycleOwner, async
-// reset-rebuild) and stamina-bar/view.ts (single view-lifetime modal closer, read-only
-// degrade). The legacy processor is NOT deleted and this element is NOT registered yet —
-// Task 5 flips registration; until then the legacy processor keeps serving users.
+// Plan 09 Task 9 (D2 §3.11) — InitiativeView on the D2 kit: the a11y epicenter. The
+// Plan 06 port (which transcribed the legacy InitiativeProcessor's nine build/update
+// methods) rebuilt so every legacy click-<div> is a REAL, labelled, focus-visible kit
+// control, with every color riding the --dse-* tokens (D2 §5 — zero inline color):
+//  - the top action bar -> kit buttonRow (real <button>s, labelled);
+//  - the turn indicator -> kit iconButton: aria-pressed + [data-taken] (check/dot glyph
+//    swap — color is never the sole signal, §4.7);
+//  - Malice ± -> the kit stepper (CB-7 FIX at the root: the stepper's render() updates
+//    ONLY its value node in place, so the ± buttons can never be wiped the way legacy's
+//    maliceContainer.setText wiped the chevrons);
+//  - creature grid cells -> real toggle <button>s (aria-pressed + [data-selected] on the
+//    --dse-select token) tagged data-instance-key, and the stamina-edit grid-cell sync
+//    targets that key (CB-6 FIX — legacy's nth-child(instance.id) lookup hit the wrong
+//    cell whenever the instance wasn't also the grid's nth child, e.g. any creature
+//    after the first);
+//  - stamina numbers -> .dse-init__stamina[data-state="healthy|dying|dead"] (the inline
+//    red/green/crimson eviction, SC-5) on real buttons that open the stamina modals;
+//  - condition icons -> .dse-cond kit iconButtons riding the T8 validated helpers
+//    (applyConditionColor — CSS.supports-gated --dse-condition-color custom property,
+//    never el.style.color — and applyConditionEffect's known-vocabulary classes).
+// The portraits preference (D4 owns the descriptor) arrives on the element root as
+// data-dse-portraits via the pipeline's prefs.reflect(); the stylesheet hides
+// .dse-init__portrait/.dse-init__cell-portrait when it is "off" — nothing to wire here.
 //
-// What the framework replaced from the legacy processor:
-//  - the manual capture-phase mousedown/pointerdown stop (initiativeProcessor.ts:46-47)
-//    -> the pipeline's default click shield (def.noClickShield unset);
-//  - the try/catch + ".error-message" div (:48-55) -> the pipeline's single error
-//    boundary + renderErrorCard;
-//  - ALL 13 CodeBlocks.updateInitiativeTracker(app, data, ctx) calls (:82,93,124,129,
-//    157,196,219,317,326,377,402,506,523) -> mutate this.model in place, then
-//    void this.persist() (debounced write-behind through host.replaceSource).
+// PERSISTENCE IS UNTOUCHED (the byte-compat bar): the model + serialize path are exactly
+// the Plan 06 wrappers; every mutation still mutates this.model in place then
+// `void this.persist()` (debounced write-behind through host.replaceSource).
 //
-// UPDATE STRATEGY (preserves legacy's mixed approach):
-//  - in-place targeted updates stay in-place: turn indicator, stamina text, malice text,
-//    condition-icon container rebuild — immediate feedback; persist() just saves;
-//  - mid-level: instance-cell select rebuilds only the detail-row sub-container (:312);
-//  - coarse rebuilds (legacy Reset Round :78 / grid minion-pool callback :324 emptied a
-//    container and re-ran buildUI INSIDE it — the minion-pool one even nested the whole
-//    tracker inside one group's container, masked only by the post-write re-render)
-//    become rebuildAndPersist(): framework default update() (unload owned children +
-//    onMount against this.model), then persist — the negotiation resetNegotiation shape.
-//  - Reset Encounter (:90-95) never rebuilt in legacy at all (it relied on the
-//    file-write re-render); on v2 rendering never writes without a user mutation, so it
-//    now goes through the same rebuildAndPersist().
-//
-// DELIBERATE DIVERGENCE (malice): legacy's malice click did
-// `maliceContainer.setText(...)` (:123,:128), which — setText replacing the container's
-// ENTIRE content — destroyed the chevron modifiers and the .malice-text div on first
-// click; the post-write reading-mode re-render immediately rebuilt them, hiding the bug.
-// persist() alone doesn't rebuild, so the port sets the text on the .malice-text element
-// itself, keeping the chevrons alive (same visible behavior legacy users saw).
+// UPDATE STRATEGY (preserves the port's mixed approach):
+//  - in-place targeted updates stay in-place: turn indicator, stamina text, the malice
+//    stepper value, condition-icon container rebuild — immediate feedback; persist()
+//    just saves;
+//  - mid-level: instance-cell select rebuilds only the detail-row sub-container and
+//    repaints cell selection through the kit handles;
+//  - coarse rebuilds (Reset Round / Reset Encounter / squad-pool edits from the grid)
+//    go through rebuildAndPersist(): framework default update() (unload owned children
+//    + onMount against this.model), then persist — the negotiation resetNegotiation
+//    shape.
 //
 // READ-ONLY (F1 §4.4 — cx.host.canPersist === false, e.g. canvas): the tracker renders
-// inert. No write-triggering handler is wired (turn/stamina/malice/condition/select/
-// reset), and dead-end write affordances (top action bar, malice chevrons, add-condition
-// icons, click-invite titles) are not built at all. The pipeline stamps
-// data-dse-readonly + the CSS badge shows "Read-only"; nothing extra needed here.
+// inert. No write-triggering handler is wired and no dead-end write affordance is built
+// — the action bar, malice stepper, add-condition and remove-condition buttons are
+// omitted, and turn indicators / cells / stamina render as static state displays (spans,
+// not buttons). The pipeline stamps data-dse-readonly + the CSS badge shows "Read-only".
 import { Component, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
+import { buttonRow, iconButton, stepper, tooltip } from '@/framework/kit';
+import type { IconButtonHandle } from '@/framework/kit';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
@@ -50,6 +55,7 @@ import { StaminaEditModal } from '@views/StaminaEditModal';
 import { ResetEncounterModal } from '@views/ResetEncounterModal';
 import { AddConditionsModal } from '@views/ConditionSelectModal';
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
+import { applyConditionColor, applyConditionEffect } from '../conditionColor';
 import {
 	Condition,
 	Creature,
@@ -83,7 +89,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// update(), whose unloadOwnedChildren() releases every registration bound here
 		// before onMount runs again — nothing accumulates on the view across rebuilds.
 		const owner = this.addChild(new Component());
-		const container = root.createEl('div', { cls: 'ds-init-container' });
+		const container = root.createDiv({ cls: 'dse-init' });
 		this.buildUI(container, owner, model);
 	}
 
@@ -119,118 +125,181 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 	}
 
-	// ------------------------------------------------------------- build (port of :58)
+	// ------------------------------------------------------------------------- build
 
 	private buildUI(container: HTMLElement, owner: Component, data: EncounterData): void {
 		// Top action bar: both children are write actions — gated off entirely when
 		// read-only (F1 §4.4: no dead-end write affordances).
 		if (this.canWrite) {
-			const topActionBar = container.createEl('div', { cls: 'top-action-bar' });
-
-			// Reset Round Button (:62): legacy emptied the container and re-ran buildUI
-			// inside it; on v2 the same coarse rebuild is the framework update().
-			const resetRoundButton = topActionBar.createEl('button', {
-				text: 'Reset Round',
-				cls: 'reset-round-button',
-			});
-			owner.registerDomEvent(resetRoundButton, 'click', () => {
-				this.model.heroes.forEach((hero) => {
-					hero.has_taken_turn = false;
-				});
-				this.model.enemy_groups.forEach((group) => {
-					group.has_taken_turn = false;
-				});
-				void this.rebuildAndPersist();
-			});
-
-			// Reset Encounter Button (:86).
-			const resetEncounterButton = topActionBar.createEl('button', {
-				text: 'Reset Encounter State',
-				cls: 'reset-encounter-button',
-			});
-			owner.registerDomEvent(resetEncounterButton, 'click', () => {
-				this.openModal(
-					new ResetEncounterModal(this.cx.app, () => {
-						resetEncounter(this.model);
-						void this.rebuildAndPersist();
-					}),
-				);
-			});
+			const bar = buttonRow(
+				container,
+				[
+					{
+						icon: 'rotate-ccw',
+						text: 'Reset Round',
+						label: 'Reset Round',
+						onClick: () => {
+							this.model.heroes.forEach((hero) => {
+								hero.has_taken_turn = false;
+							});
+							this.model.enemy_groups.forEach((group) => {
+								group.has_taken_turn = false;
+							});
+							void this.rebuildAndPersist();
+						},
+					},
+					{
+						icon: 'refresh-cw',
+						text: 'Reset Encounter State',
+						label: 'Reset Encounter State',
+						onClick: () => {
+							this.openModal(
+								new ResetEncounterModal(this.cx.app, () => {
+									resetEncounter(this.model);
+									void this.rebuildAndPersist();
+								}),
+							);
+						},
+					},
+				],
+				owner,
+			);
+			bar.rowEl.addClass('dse-init__actionbar');
 		}
 
-		// Heroes UI (:98).
-		const heroesContainer = container.createEl('div', { cls: 'heroes-container' });
-		heroesContainer.createEl('h3', { text: 'Heroes' });
+		// Heroes.
+		const heroesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--heroes' });
+		heroesGroup.createEl('h3', { text: 'Heroes' });
 		data.heroes.forEach((hero) => {
-			const heroContEl = heroesContainer.createEl('div', { cls: 'hero-container' });
-			this.buildCharacterRow(heroContEl, hero, owner);
+			this.buildCharacterRow(heroesGroup.createDiv({ cls: 'dse-init__entry' }), hero, owner);
 		});
 
-		// Enemies UI (:107).
-		const enemiesContainer = container.createEl('div', { cls: 'enemies-container' });
-		const enemyHeader = enemiesContainer.createEl('div', { cls: 'enemies-header' });
-		enemyHeader.createEl('h3', { text: 'Enemy Groups' });
+		// Enemies.
+		const enemiesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--enemies' });
+		const enemiesHead = enemiesGroup.createDiv({ cls: 'dse-init__enemies-head' });
+		enemiesHead.createEl('h3', { text: 'Enemy Groups' });
 
-		// Villain Power (:112). Chevrons are write controls — not built when read-only.
-		const maliceContainer = enemyHeader.createEl('div', { cls: 'malice-container' });
-		let maliceUp: HTMLElement | null = null;
-		let maliceDown: HTMLElement | null = null;
+		// Malice: the kit stepper (write) or a static value (read-only). CB-7 is fixed
+		// by construction — stepper.render() sets ONLY its value node, so the ± buttons
+		// survive every press (legacy's container.setText destroyed the chevrons).
+		const malice = enemiesHead.createDiv({ cls: 'dse-init__malice' });
 		if (this.canWrite) {
-			const maliceModifiers = maliceContainer.createEl('div', { cls: 'malice-modifiers' });
-			maliceUp = maliceModifiers.createEl('div', { cls: 'malice-modifier' });
-			maliceDown = maliceModifiers.createEl('div', { cls: 'malice-modifier' });
-			setIcon(maliceUp, 'chevron-up');
-			setIcon(maliceDown, 'chevron-down');
-		}
-		const maliceText = maliceContainer.createEl('div', {
-			cls: 'malice-text',
-			text: 'Malice: ' + data.malice.value,
-		});
-		if (maliceUp && maliceDown) {
-			// In-place text update on the .malice-text el — NOT legacy's
-			// maliceContainer.setText, which wiped the chevrons (see file header).
-			owner.registerDomEvent(maliceUp, 'click', () => {
-				data.malice.value += 1;
-				maliceText.setText('Malice: ' + data.malice.value);
-				void this.persist();
-			});
-			owner.registerDomEvent(maliceDown, 'click', () => {
-				data.malice.value -= 1;
-				maliceText.setText('Malice: ' + data.malice.value);
-				void this.persist();
-			});
+			const handle = stepper(
+				malice,
+				{
+					value: data.malice.value,
+					integer: true,
+					label: 'Malice',
+					format: (v) => 'Malice: ' + v,
+					onChange: (v) => {
+						data.malice.value = v;
+						void this.persist();
+					},
+				},
+				owner,
+			);
+			handle.rootEl
+				.querySelector<HTMLElement>('.dse-stepper__value')
+				?.addClass('dse-init__malice-value');
+		} else {
+			malice.createDiv({ cls: 'dse-init__malice-value', text: 'Malice: ' + data.malice.value });
 		}
 
 		data.enemy_groups.forEach((group) => {
-			const groupContEl = enemiesContainer.createEl('div', { cls: 'enemy-group-container' });
-			this.buildEnemyGroupRow(groupContEl, group, owner);
+			this.buildEnemyGroupRow(enemiesGroup.createDiv({ cls: 'dse-init__entry' }), group, owner);
 		});
 	}
 
-	// -------------------------------------------------------------- hero row (:138)
+	// ---------------------------------------------------------------- turn indicator
 
-	private buildCharacterRow(container: HTMLElement, character: Hero, owner: Component): void {
-		// Left icons
-		const icon = container.createEl('div', { cls: 'character-icon' });
-
-		// Turn Indicator
-		const turnIndicatorEl = icon.createEl('div', { cls: 'turn-indicator' });
-		this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn ?? false);
-		if (this.canWrite) {
-			turnIndicatorEl.title = 'Toggle to mark turn taken';
-			owner.registerDomEvent(turnIndicatorEl, 'click', () => {
-				if (this.isHero(character)) {
-					character.has_taken_turn = !(character.has_taken_turn ?? false);
-					this.updateTurnIndicator(turnIndicatorEl, character.has_taken_turn);
-					void this.persist();
-				}
-			});
+	/** The turn indicator: a kit iconButton (aria-pressed + [data-taken], §4.3) when
+	 *  writable; a static glyph span when read-only (state display, not a dead-end
+	 *  control). `toggle` flips the model and returns the new state. */
+	private buildTurnIndicator(
+		entry: HTMLElement,
+		name: string,
+		taken: boolean,
+		toggle: (() => boolean) | null,
+		owner: Component,
+	): void {
+		const box = entry.createDiv({ cls: 'dse-init__turnbox' });
+		if (toggle) {
+			const handle = iconButton(
+				box,
+				{
+					icon: taken ? 'check' : 'dot',
+					label: `Toggle turn taken: ${name}`,
+					pressed: taken,
+					tooltip: 'Toggle to mark turn taken',
+					onClick: () => {
+						const nowTaken = toggle();
+						handle.setPressed(nowTaken);
+						this.updateTurnGlyph(handle.buttonEl, nowTaken);
+						void this.persist();
+					},
+				},
+				owner,
+			);
+			handle.buttonEl.addClass('dse-init__turn');
+			this.updateTurnGlyph(handle.buttonEl, taken); // stamp [data-taken] at build
+		} else {
+			const el = box.createSpan({ cls: 'dse-init__turn' });
+			el.createSpan({ cls: 'dse-init__turn-glyph' });
+			this.updateTurnGlyph(el, taken);
 		}
+	}
 
-		const rowEl = container.createEl('div', { cls: 'character-row' });
+	/** In-place turn repaint: [data-taken] for the CSS (--dse-turn-done) + the check/dot
+	 *  glyph swap (§4.7 — color is never the sole signal). */
+	private updateTurnGlyph(turnEl: HTMLElement, taken: boolean): void {
+		turnEl.toggleAttribute('data-taken', taken);
+		const glyph = turnEl.querySelector<HTMLElement>('.dse-btn__icon, .dse-init__turn-glyph');
+		if (glyph) setIcon(glyph, taken ? 'check' : 'dot');
+	}
+
+	// -------------------------------------------------------------- stamina control
+
+	/** The clickable stamina number: a kit iconButton (opens the edit modal) when
+	 *  writable; a static span when read-only. Content + [data-state] are painted by
+	 *  updateStaminaDisplay. aria-live announces in-place value changes (§4.8). */
+	private createStaminaControl(
+		parent: HTMLElement,
+		label: string,
+		onClick: (() => void) | null,
+		owner: Component,
+	): HTMLElement {
+		let el: HTMLElement;
+		if (onClick) {
+			el = iconButton(parent, { label, onClick }, owner).buttonEl;
+		} else {
+			el = parent.createSpan();
+		}
+		el.addClass('dse-init__stamina');
+		el.setAttribute('aria-live', 'polite');
+		return el;
+	}
+
+	// -------------------------------------------------------------------- hero row
+
+	private buildCharacterRow(entry: HTMLElement, character: Hero, owner: Component): void {
+		const name = character.name ?? 'Hero';
+		this.buildTurnIndicator(
+			entry,
+			name,
+			character.has_taken_turn ?? false,
+			this.canWrite
+				? () => {
+						character.has_taken_turn = !(character.has_taken_turn ?? false);
+						return character.has_taken_turn;
+					}
+				: null,
+			owner,
+		);
+
+		const rowEl = entry.createDiv({ cls: 'dse-init__row' });
 
 		// Character Image
-		const imageEl = rowEl.createEl('div', { cls: 'character-image' });
+		const imageEl = rowEl.createDiv({ cls: 'dse-init__portrait' });
 		const imgSrcRaw = character.image ?? null;
 		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath).then(
 			(imgSrc) => {
@@ -239,60 +308,63 @@ export class InitiativeView extends ElementView<EncounterData> {
 		);
 
 		// Middle: Character Info
-		const infoEl = rowEl.createEl('div', { cls: 'character-info' });
-		infoEl.createEl('div', { cls: 'character-name', text: character.name });
-		const conditionsEl = infoEl.createEl('div', { cls: 'character-conditions' });
+		const infoEl = rowEl.createDiv({ cls: 'dse-init__info' });
+		infoEl.createDiv({ cls: 'dse-init__name', text: character.name });
+		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionIcons(conditionsEl, character, owner);
 
 		// Right: Health Info
-		const rightContainer = rowEl.createEl('div', { cls: 'character-right' });
-		const healthEl = rightContainer.createEl('div', { cls: 'character-health' });
-		const staminaEl = healthEl.createEl('div', { cls: 'character-stamina' });
+		const rightEl = rowEl.createDiv({ cls: 'dse-init__right' });
+		const healthEl = rightEl.createDiv({ cls: 'dse-init__health' });
+		const staminaEl = this.createStaminaControl(
+			healthEl,
+			`Edit stamina: ${name}`,
+			this.canWrite
+				? () => {
+						const staminaBar = StaminaBar.fromHero(character);
+						this.openModal(
+							new StaminaEditModal(this.cx.app, staminaBar, true, character.name, () => {
+								staminaBar.updateHero(character);
+								this.updateStaminaDisplay(staminaEl, character);
+								void this.persist();
+							}),
+						);
+					}
+				: null,
+			owner,
+		);
 		this.updateStaminaDisplay(staminaEl, character);
-
-		if (this.canWrite) {
-			owner.registerDomEvent(staminaEl, 'click', () => {
-				const staminaBar = StaminaBar.fromHero(character);
-				this.openModal(
-					new StaminaEditModal(this.cx.app, staminaBar, true, character.name, () => {
-						staminaBar.updateHero(character);
-						this.updateStaminaDisplay(staminaEl, character);
-						void this.persist();
-					}),
-				);
-			});
-		}
 	}
 
-	// ------------------------------------------------------------ group row (:202)
+	// ------------------------------------------------------------------- group row
 
-	private buildEnemyGroupRow(container: HTMLElement, group: EnemyGroup, owner: Component): void {
-		// Left icons
-		const icon = container.createEl('div', { cls: 'enemy-group-icon' });
+	private buildEnemyGroupRow(entry: HTMLElement, group: EnemyGroup, owner: Component): void {
+		this.buildTurnIndicator(
+			entry,
+			group.name ?? 'Enemy group',
+			group.has_taken_turn ?? false,
+			this.canWrite
+				? () => {
+						group.has_taken_turn = !(group.has_taken_turn ?? false);
+						return group.has_taken_turn;
+					}
+				: null,
+			owner,
+		);
 
-		// Turn Indicator
-		const turnIndicatorEl = icon.createEl('div', { cls: 'turn-indicator' });
-		this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn ?? false);
-		if (this.canWrite) {
-			turnIndicatorEl.title = 'Toggle to mark turn taken';
-			owner.registerDomEvent(turnIndicatorEl, 'click', () => {
-				group.has_taken_turn = !(group.has_taken_turn ?? false);
-				this.updateTurnIndicator(turnIndicatorEl, group.has_taken_turn);
-				void this.persist();
-			});
-		}
-
-		const groupEl = container.createEl('div', { cls: 'enemy-group' });
+		const groupEl = entry.createDiv({ cls: 'dse-init__groupbody' });
 
 		// Group Header
-		const groupHeader = groupEl.createEl('div', { cls: 'group-header' });
+		const groupHeader = groupEl.createDiv({ cls: 'dse-init__grouphead' });
 		groupHeader.createEl('h4', { text: group.name });
 
 		// Detailed Creature Row Container
-		const detailRowContainer = groupEl.createEl('div', { cls: 'creature-detail-row' });
+		const detailRowContainer = groupEl.createDiv({ cls: 'dse-init__detail' });
 
-		// Determine the selected creature instance (:232 — verbatim).
-		let selectedInstance: { creature: Creature; instance: CreatureInstance } | null = null;
+		// Determine the selected creature instance (legacy :232 — verbatim, but the
+		// creature INDEX is tracked so the detail row knows its data-instance-key).
+		let selectedInstance: { creature: Creature; instance: CreatureInstance; key: string } | null =
+			null;
 		if (group.selectedInstanceKey != null) {
 			for (let creatureIndex = 0; creatureIndex < group.creatures.length; creatureIndex++) {
 				const creature = group.creatures[creatureIndex];
@@ -302,7 +374,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 						return instanceKey === group.selectedInstanceKey;
 					});
 					if (instance) {
-						selectedInstance = { creature, instance };
+						selectedInstance = { creature, instance, key: group.selectedInstanceKey };
 						break;
 					}
 				}
@@ -310,9 +382,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 		if (!selectedInstance) {
 			// If no selected instance, default to the first instance
-			for (const creature of group.creatures) {
+			for (let creatureIndex = 0; creatureIndex < group.creatures.length; creatureIndex++) {
+				const creature = group.creatures[creatureIndex];
 				if (creature.instances && creature.instances.length > 0) {
-					selectedInstance = { creature, instance: creature.instances[0] };
+					const instance = creature.instances[0];
+					selectedInstance = { creature, instance, key: `${creatureIndex}-${instance.id}` };
 					break;
 				}
 			}
@@ -323,7 +397,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 				detailRowContainer,
 				selectedInstance.creature,
 				selectedInstance.instance,
+				selectedInstance.key,
 				group,
+				groupEl,
 				owner,
 			);
 		}
@@ -333,19 +409,78 @@ export class InitiativeView extends ElementView<EncounterData> {
 			return;
 		}
 
-		// Grid of Creature Instances
-		const instancesGrid = groupEl.createEl('div', { cls: 'creature-instances-grid' });
+		// Grid of Creature Instances: every cell is a REAL toggle button (aria-pressed,
+		// [data-selected] on --dse-select) tagged data-instance-key (CB-6), or a static
+		// state display when read-only. Selection repaints through the kit handles.
+		const instancesGrid = groupEl.createDiv({ cls: 'dse-init__grid' });
+		const cellHandles: IconButtonHandle[] = [];
 
 		group.creatures.forEach((creature, creatureIndex) => {
 			creature.instances?.forEach((instance) => {
-				const cellEl = instancesGrid.createEl('div', { cls: 'creature-instance-cell' });
-
 				const instanceKey = `${creatureIndex}-${instance.id}`;
-				if (group.selectedInstanceKey === instanceKey) {
-					cellEl.addClass('selected');
+				const selected = group.selectedInstanceKey === instanceKey;
+
+				let cellEl: HTMLElement;
+				if (this.canWrite) {
+					const handle = iconButton(
+						instancesGrid,
+						{
+							label: `Select ${creature.name} #${instance.id}`,
+							pressed: selected,
+							onClick: () => {
+								// Repaint selection in place: kit handles own aria-pressed;
+								// [data-selected] carries the --dse-select ring.
+								cellHandles.forEach((h) => {
+									h.setPressed(false);
+									h.buttonEl.removeAttribute('data-selected');
+								});
+								handle.setPressed(true);
+								cellEl.setAttribute('data-selected', '');
+
+								detailRowContainer.empty();
+								this.buildDetailedCreatureRow(
+									detailRowContainer,
+									creature,
+									instance,
+									instanceKey,
+									group,
+									groupEl,
+									owner,
+								);
+
+								group.selectedInstanceKey = instanceKey;
+								void this.persist();
+							},
+						},
+						owner,
+					);
+					handle.buttonEl.addClass('dse-init__cell');
+					cellHandles.push(handle);
+					cellEl = handle.buttonEl;
+
+					// Double-click: edit STAMINA (legacy :321).
+					owner.registerDomEvent(cellEl, 'dblclick', () => {
+						if (group.is_squad && creature.squad_role === 'minion') {
+							// The Task-3 decoupled modal: it mutates the shared model, then the
+							// injected persist callback must BOTH refresh the owner UI AND save.
+							// The whole-view update() is the equivalent coarse rebuild.
+							this.openModal(
+								new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
+									void this.rebuildAndPersist();
+								}),
+							);
+						} else {
+							this.openCreatureStaminaModal(instance, creature, staminaEl, groupEl, instanceKey);
+						}
+					});
+				} else {
+					cellEl = instancesGrid.createDiv({ cls: 'dse-init__cell' });
 				}
 
-				const imgEl = cellEl.createEl('div', { cls: 'instance-image' });
+				cellEl.setAttribute('data-instance-key', instanceKey);
+				if (selected) cellEl.setAttribute('data-selected', '');
+
+				const imgEl = cellEl.createSpan({ cls: 'dse-init__cell-portrait' });
 				const imgSrcRaw = creature.image ?? null;
 				Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath).then(
 					(imgSrc) => {
@@ -353,60 +488,27 @@ export class InitiativeView extends ElementView<EncounterData> {
 					},
 				);
 
-				const staminaEl = cellEl.createEl('div', { cls: 'instance-stamina' });
+				const staminaEl = cellEl.createSpan({ cls: 'dse-init__stamina dse-init__cell-stamina' });
 				this.updateStaminaDisplay(staminaEl, instance, creature, group);
-
-				// Selection persists selectedInstanceKey and dblclick edits stamina —
-				// both are writes; the cells stay inert when read-only.
-				if (!this.canWrite) return;
-
-				// Click: select + rebuild the detail-row sub-container (:303).
-				owner.registerDomEvent(cellEl, 'click', () => {
-					instancesGrid.querySelectorAll('.creature-instance-cell').forEach((cell) => {
-						cell.removeClass('selected');
-					});
-					cellEl.addClass('selected');
-
-					detailRowContainer.empty();
-					this.buildDetailedCreatureRow(detailRowContainer, creature, instance, group, owner);
-
-					group.selectedInstanceKey = instanceKey;
-					void this.persist();
-				});
-
-				// Double-click: edit STAMINA (:321).
-				owner.registerDomEvent(cellEl, 'dblclick', () => {
-					if (group.is_squad && creature.squad_role === 'minion') {
-						// The Task-3 decoupled modal: it mutates the shared model, then the
-						// injected persist callback must BOTH refresh the owner UI AND save.
-						// Legacy re-ran buildUI inside the group container (:324) — on v2
-						// the whole-view update() is the equivalent coarse rebuild.
-						this.openModal(
-							new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
-								void this.rebuildAndPersist();
-							}),
-						);
-					} else {
-						this.openCreatureStaminaModal(instance, creature, staminaEl, container);
-					}
-				});
 			});
 		});
 	}
 
-	// ---------------------------------------------------------- detail row (:337)
+	// ------------------------------------------------------------------ detail row
 
 	private buildDetailedCreatureRow(
 		container: HTMLElement,
 		creature: Creature,
 		instance: CreatureInstance,
+		instanceKey: string,
 		group: EnemyGroup,
+		groupBodyEl: HTMLElement,
 		owner: Component,
 	): void {
-		container.addClass('character-row');
+		container.addClass('dse-init__row');
 
 		// Left: Creature Image
-		const imageEl = container.createEl('div', { cls: 'character-image' });
+		const imageEl = container.createDiv({ cls: 'dse-init__portrait' });
 		const imgSrcRaw = creature.image ?? null;
 		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath).then(
 			(imgSrc) => {
@@ -415,49 +517,58 @@ export class InitiativeView extends ElementView<EncounterData> {
 		);
 
 		// Middle: Creature Info
-		const infoEl = container.createEl('div', { cls: 'character-info' });
-		infoEl.createEl('div', { cls: 'character-name', text: `${creature.name} #${instance.id}` });
-		const conditionsEl = infoEl.createEl('div', { cls: 'character-conditions' });
+		const name = `${creature.name} #${instance.id}`;
+		const infoEl = container.createDiv({ cls: 'dse-init__info' });
+		infoEl.createDiv({ cls: 'dse-init__name', text: name });
+		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionIcons(conditionsEl, instance, owner);
 
 		// Right: Health Info
-		const healthEl = container.createEl('div', { cls: 'character-health' });
-		const staminaEl = healthEl.createEl('div', { cls: 'character-stamina' });
-
-		if (group.is_squad && creature.squad_role === 'minion') {
-			// For minions in a squad, display the pool health
-			this.updateStaminaDisplay(staminaEl, instance, creature, group);
-			if (this.canWrite) {
-				owner.registerDomEvent(staminaEl, 'click', () => {
-					// Persist callback refreshes the affected UI (this detail row, as
-					// legacy :374-378 did) and saves.
-					this.openModal(
-						new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
-							container.empty();
-							this.buildDetailedCreatureRow(container, creature, instance, group, owner);
-							void this.persist();
-						}),
-					);
-				});
-			}
-		} else {
-			// For normal creatures and captains
-			this.updateStaminaDisplay(staminaEl, instance, creature, group);
-			if (this.canWrite) {
-				owner.registerDomEvent(staminaEl, 'click', () => {
-					this.openCreatureStaminaModal(instance, creature, staminaEl, container);
-				});
-			}
-		}
+		const healthEl = container.createDiv({ cls: 'dse-init__health' });
+		const isSquadMinion = !!group.is_squad && creature.squad_role === 'minion';
+		const staminaEl = this.createStaminaControl(
+			healthEl,
+			`Edit stamina: ${name}`,
+			this.canWrite
+				? () => {
+						if (isSquadMinion) {
+							// For minions in a squad: the pool modal. Persist callback
+							// refreshes the affected UI (this detail row, as legacy did)
+							// and saves.
+							this.openModal(
+								new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
+									container.empty();
+									this.buildDetailedCreatureRow(
+										container,
+										creature,
+										instance,
+										instanceKey,
+										group,
+										groupBodyEl,
+										owner,
+									);
+									void this.persist();
+								}),
+							);
+						} else {
+							// For normal creatures and captains
+							this.openCreatureStaminaModal(instance, creature, staminaEl, groupBodyEl, instanceKey);
+						}
+					}
+				: null,
+			owner,
+		);
+		this.updateStaminaDisplay(staminaEl, instance, creature, group);
 	}
 
-	// ------------------------------------------------- creature stamina modal (:390)
+	// ------------------------------------------------------ creature stamina modal
 
 	private openCreatureStaminaModal(
 		instance: CreatureInstance,
 		creature: Creature,
 		staminaEl: HTMLElement,
-		container: HTMLElement,
+		groupBodyEl: HTMLElement,
+		instanceKey: string,
 	): void {
 		const staminaBar = StaminaBar.fromCreature(instance, creature);
 		this.openModal(
@@ -466,46 +577,43 @@ export class InitiativeView extends ElementView<EncounterData> {
 				this.updateStaminaDisplay(staminaEl, instance, creature);
 				void this.persist();
 
-				// Update the STAMINA in the grid cell as well (legacy :405 —
-				// nth-child(instance.id) targeting ported verbatim, quirks included).
-				const gridCell = container.parentElement?.querySelector(
-					`.creature-instance-cell:nth-child(${instance.id}) .instance-stamina`,
+				// CB-6: refresh THE instance's own grid cell, found by data-instance-key
+				// within this group's body (legacy's nth-child(instance.id) lookup hit
+				// the wrong cell for any creature after the first).
+				const gridCell = groupBodyEl.querySelector<HTMLElement>(
+					`.dse-init__cell[data-instance-key="${instanceKey}"] .dse-init__cell-stamina`,
 				);
 				if (gridCell) {
-					this.updateStaminaDisplay(gridCell as HTMLElement, instance, creature);
+					this.updateStaminaDisplay(gridCell, instance, creature);
 				}
 			}),
 		);
 	}
 
-	// --------------------------------------------------- targeted updates (:414/:425)
+	// -------------------------------------------------------------- targeted updates
 
-	private updateTurnIndicator(el: HTMLElement, hasTakenTurn: boolean): void {
-		el.empty();
-		if (hasTakenTurn) {
-			el.addClass('taken-turn');
-			setIcon(el, 'check');
-		} else {
-			el.removeClass('taken-turn');
-			setIcon(el, 'dot');
-		}
-	}
-
+	/** In-place stamina repaint: text + [data-state] (SC-5 — the state attribute keys
+	 *  the --dse-stamina-* / --dse-danger tokens in CSS; never an inline color). */
 	private updateStaminaDisplay(
 		staminaEl: HTMLElement,
 		character: Hero | CreatureInstance,
 		creature?: Creature,
 		group?: EnemyGroup,
 	): void {
+		const setState = (state: 'healthy' | 'dying' | 'dead' | null): void => {
+			if (state) staminaEl.setAttribute('data-state', state);
+			else staminaEl.removeAttribute('data-state');
+		};
+
 		if (group?.is_squad && creature?.squad_role === 'minion') {
 			// For minions in squads, display the minion stamina pool or DEAD
 			if ((character as CreatureInstance).isDead) {
 				staminaEl.textContent = `DEAD`;
-				staminaEl.style.color = 'crimson';
+				setState('dead');
 			} else {
 				const currentStamina = group.minion_stamina_pool ?? 0;
 				staminaEl.textContent = `${currentStamina}/${creature.max_stamina * creature.amount} (${creature.max_stamina})`;
-				staminaEl.style.color = 'var(--text-normal)';
+				setState(null);
 			}
 		} else {
 			const currentStamina = character.current_stamina ?? 0;
@@ -521,18 +629,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 			displayText += `/${maxStamina}`;
 
 			staminaEl.textContent = displayText;
-
-			if (currentStamina < 0) {
-				staminaEl.style.color = 'red';
-			} else if (tempStamina > 0) {
-				staminaEl.style.color = 'green';
-			} else {
-				staminaEl.style.color = '';
-			}
+			setState(currentStamina < 0 ? 'dying' : tempStamina > 0 ? 'healthy' : null);
 		}
 	}
 
-	// ------------------------------------------------------- condition icons (:466)
+	// -------------------------------------------------------------- condition icons
 
 	private buildConditionIcons(
 		container: HTMLElement,
@@ -554,48 +655,61 @@ export class InitiativeView extends ElementView<EncounterData> {
 			}
 
 			const condition = this.conditionManager.getAnyConditionByKey(conditionKey);
-			if (condition) {
-				const iconEl = container.createEl('div', { cls: 'condition-icon' });
+			if (!condition) return;
+
+			// Click-to-remove is a write — read-only renders a static state glyph.
+			let iconEl: HTMLElement;
+			if (this.canWrite) {
+				iconEl = iconButton(
+					container,
+					{
+						icon: condition.iconName,
+						label: `Remove condition: ${condition.displayName}`,
+						tooltip: condition.displayName,
+						onClick: () => {
+							character.conditions = conditions.filter((entry) => entry !== conditionEntry);
+							container.empty();
+							this.buildConditionIcons(container, character, owner);
+							void this.persist();
+						},
+					},
+					owner,
+				).buttonEl;
+			} else {
+				iconEl = container.createSpan();
 				setIcon(iconEl, condition.iconName);
-				iconEl.title = condition.displayName;
-
-				// Apply color and effect customizations
-				if (conditionData) {
-					if (conditionData.color) {
-						iconEl.style.color = conditionData.color;
-					}
-					if (conditionData.effect) {
-						iconEl.classList.add(`condition-effect-${conditionData.effect}`);
-					}
-				}
-
-				// Click-to-remove is a write — inert when read-only.
-				if (this.canWrite) {
-					owner.registerDomEvent(iconEl, 'click', () => {
-						character.conditions = conditions.filter((entry) => entry !== conditionEntry);
-						container.empty();
-						this.buildConditionIcons(container, character, owner);
-						void this.persist();
-					});
-				}
+				tooltip(iconEl, condition.displayName);
 			}
+			iconEl.addClass('dse-cond');
+
+			// Color and effect customizations ride the T8 validated helpers: the color
+			// arrives as the CSS.supports-gated --dse-condition-color custom property
+			// (never el.style.color), the effect as a known-vocabulary class.
+			applyConditionColor(iconEl, conditionData?.color);
+			applyConditionEffect(iconEl, conditionData?.effect);
 		});
 
 		// The add-condition affordance is pure write UI — not built when read-only.
 		if (!this.canWrite) return;
-		const addConditionEl = container.createEl('div', { cls: 'add-condition-icon' });
-		setIcon(addConditionEl, 'plus-circle');
-		addConditionEl.title = 'Add Condition';
-		owner.registerDomEvent(addConditionEl, 'click', () => {
-			this.openModal(
-				new AddConditionsModal(this.cx.app, character, this.conditionManager, (newConditions) => {
-					character.conditions = (character.conditions || []).concat(newConditions);
-					container.empty();
-					this.buildConditionIcons(container, character, owner);
-					void this.persist();
-				}),
-			);
-		});
+		iconButton(
+			container,
+			{
+				icon: 'plus-circle',
+				label: 'Add Condition',
+				tooltip: 'Add Condition',
+				onClick: () => {
+					this.openModal(
+						new AddConditionsModal(this.cx.app, character, this.conditionManager, (newConditions) => {
+							character.conditions = (character.conditions || []).concat(newConditions);
+							container.empty();
+							this.buildConditionIcons(container, character, owner);
+							void this.persist();
+						}),
+					);
+				},
+			},
+			owner,
+		).buttonEl.addClass('dse-cond--add');
 	}
 
 	private isHero(character: Hero | CreatureInstance): character is Hero {

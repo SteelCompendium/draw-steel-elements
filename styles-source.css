@@ -564,15 +564,17 @@ code.dsa {
 /* ==================== */
 /*   Initiative Tracker */
 /* ==================== */
-/* In-tracker rules are scoped under [data-dse-element="initiative"] (F1 §3.5) since the
-   Framework v2 migration (Plan 06): the pipeline stamps the attribute on the element root.
-   Deliberately NOT scoped (do not "fix" this):
+/* In-tracker rules live in the .dse-init grammar scoped under
+   [data-dse-element="initiative"] (D2 §3.11, Plan 09 Task 9) — the pipeline stamps the
+   attribute on the element root; the whole legacy class block (.ds-init-container and
+   the malice / turn-indicator / creature / character families) is EVICTED (the view no
+   longer renders those classes). Deliberately NOT scoped (do not "fix" this):
    - the modal blocks below (Stamina Modal, Minion Stamina Pool Modal, Condition Modal):
      Obsidian modals mount in document.body, OUTSIDE the element root — scoping them would
      break every initiative modal;
-   - classes shared by the tracker AND the modals: .condition-icon, .add-condition-icon,
-     and the .condition-effect-* Effects block;
-   - .error-message (legacy processors + negotiation still use it) and the framework
+   - classes shared with the modals: .condition-icon (MinionStaminaPoolModal) and the
+     .condition-effect-* Effects block;
+   - .error-message (legacy processors still use it) and the framework
      error-card / read-only rules just below (all elements). */
 
 /* Error Message Styling */
@@ -672,273 +674,11 @@ code.dsa {
 	pointer-events: none;
 }
 
-/* Turn Indicator Styling */
+/* Condition icons in the MinionStaminaPoolModal (T3) — deliberately GLOBAL: the
+   modal mounts in document.body. The TRACKER's own condition icons are the .dse-cond
+   kit buttons under [data-dse-element="initiative"] below (D2 §3.11). */
 
-[data-dse-element="initiative"] .turn-indicator {
-	cursor: pointer;
-
-    svg {
-        margin: 1px;
-        height: calc(100% - 2px);
-        width: calc(100% - 2px);
-        color: var(--text-normal);
-        background-color: var(--code-background);
-        border-radius: 4px 0 0 4px;
-    }
-
-    &.taken-turn svg {
-        background-color: limegreen;
-        color: var(--code-background);
-    }
-}
-
-/* Top action bar */
-
-[data-dse-element="initiative"] .top-action-bar {
-	margin-bottom: 10px;
-	display: flex;
-	justify-content: flex-start;
-	align-items: center;
-
-    button {
-        margin-right: 1em;
-    }
-}
-
-/* Character Rows */
-
-[data-dse-element="initiative"] .heroes-container .character-row,
-[data-dse-element="initiative"] .enemy-group {
-	position: relative;
-	padding-top: 1px;
-	padding-right: 1em;
-	margin-bottom: 0.75em;
-	background-color: var(--code-background);
-
-    /* Top-left border fade for character rows */
-    &::before,
-    &::after {
-        content: '';
-        position: absolute;
-        background: linear-gradient(to right, transparent, var(--icon-color));
-        height: 1px; /* Border thickness */
-        width: 100%;
-    }
-
-    &::before {
-        top: 0;
-        left: 0;
-        background: linear-gradient(to right, var(--icon-color), transparent);
-        width: 12em;
-    }
-
-    &::after {
-        top: 0;
-        left: 0;
-        height: 100%;
-        max-height: 12em;
-        background: linear-gradient(to bottom, var(--icon-color), transparent);
-        width: 1px; /* Border thickness */
-    }
-}
-
-/* Enemies Header */
-
-[data-dse-element="initiative"] .enemies-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-/* Villain Power Styling */
-
-[data-dse-element="initiative"] .malice-container {
-	font-weight: bold;
-	color: red;
-	display: flex;
-	align-items: center;
-
-    .malice-modifiers {
-        visibility: hidden;
-        margin-right: 0.5em;
-    }
-
-    &:hover .malice-modifiers {
-        visibility: visible;
-    }
-}
-
-[data-dse-element="initiative"] .malice-modifiers svg {
-	height: 100%;
-	width: 100%;
-}
-
-[data-dse-element="initiative"] .malice-modifier {
-	cursor: pointer;
-	height: 24px;
-
-    &:hover {
-        background-color: var(--code-background);
-    }
-}
-
-[data-dse-element="initiative"] .malice-text {
-	user-select: none;
-}
-
-/* Enemy Group Container */
-
-[data-dse-element="initiative"] .enemy-group-container {
-	display: flex;
-}
-
-[data-dse-element="initiative"] .enemy-group {
-	padding: 1em;
-	width: 100%;
-}
-
-[data-dse-element="initiative"] .group-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-
-    h4 {
-        margin-top: 0;
-    }
-}
-
-/* Creature Group */
-
-[data-dse-element="initiative"] .creature-group {
-	margin-bottom: 20px;
-}
-
-/* Detailed Creature Row */
-
-[data-dse-element="initiative"] .creature-detail-row {
-	margin-bottom: 10px;
-}
-
-/* ============================= */
-/*    Creature Instances Grid     */
-/* ============================= */
-
-[data-dse-element="initiative"] .creature-instances-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-	gap: 10px;
-
-    @media (min-width: 600px) {
-        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    }
-
-    @media (max-width: 599px) {
-        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-    }
-}
-
-[data-dse-element="initiative"] .creature-instance-cell {
-	text-align: center;
-	padding: 5px;
-	background-color: var(--color-base-30);
-	border: 1px solid transparent;
-	border-radius: 4px;
-	cursor: pointer;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	min-width: 80px;
-
-    &.selected {
-        border-color: #D50000;
-        box-shadow: 0 0 5px #D50000;
-    }
-
-    @media (max-width: 599px) {
-        min-width: 60px;
-    }
-}
-
-[data-dse-element="initiative"] .instance-image {
-	width: 50px;
-	height: 50px;
-	margin-bottom: 5px;
-
-    img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        pointer-events: none;
-    }
-}
-
-[data-dse-element="initiative"] .instance-stamina {
-	font-size: 14px;
-	word-wrap: break-word;
-	text-align: center;
-	max-width: 100%;
-
-    @media (max-width: 599px) {
-        font-size: 12px;
-    }
-}
-
-/* =========================== */
-/*    Hero and Character Rows  */
-/* =========================== */
-
-[data-dse-element="initiative"] .hero-container {
-	display: flex;
-}
-
-[data-dse-element="initiative"] .character-icon,
-[data-dse-element="initiative"] .enemy-group-icon {
-	height: 1.5em;
-	width: 1.5em;
-	border: 1px solid var(--icon-color);
-	border-right: 0;
-	border-radius: 5px 0 0 5px;
-}
-
-[data-dse-element="initiative"] .character-row {
-	display: flex;
-	align-items: center;
-	margin-bottom: 10px;
-	width: 100%;
-}
-
-[data-dse-element="initiative"] .character-image {
-	display: flex;
-
-    img {
-        width: 60px;
-        height: 60px;
-        object-fit: cover;
-    }
-}
-
-[data-dse-element="initiative"] .character-info {
-	flex: 1;
-	margin-left: 10px;
-}
-
-[data-dse-element="initiative"] .character-name {
-	font-weight: bold;
-}
-
-[data-dse-element="initiative"] .character-conditions {
-	margin-top: 5px;
-	height: 24px;
-	display: flex;
-	align-items: center;
-
-    svg {
-        display: block;
-    }
-}
-
-.condition-icon,
-.add-condition-icon {
+.condition-icon {
 	width: 24px;
 	height: 24px;
 	display: flex;
@@ -947,21 +687,357 @@ code.dsa {
 	cursor: pointer;
 }
 
-.add-condition-icon {
-	color: var(--color-base-50);
+/* ------------------------------------------------------------------ */
+/*  D2 §3.11 (Plan 09 Task 9): the tracker on the D2 kit — .dse-init  */
+/* ------------------------------------------------------------------ */
+/* Every control is a kit .dse-btn (a REAL <button>): the compact overrides below keep
+   TODAY's dense glyph sizes while the transparent ::after overlay supplies the ≥44px
+   hit target (§4.6 — the glyph stays small, the target does not). Colors ride the
+   --dse-* tokens only (D2 §5): [data-taken] → --dse-turn-done, [data-selected] →
+   --dse-select, [data-state] → the stamina tokens + --dse-danger, malice →
+   --dse-malice, per-condition color → the VALIDATED --dse-condition-color property. */
 
-    &:hover {
+[data-dse-element="initiative"] .dse-init {
+
+    /* -- compact kit buttons: legacy visual size, kit semantics -- */
+    .dse-init__turn,
+    .dse-cond,
+    .dse-cond--add,
+    .dse-init__stamina,
+    .dse-init__malice .dse-stepper__btn {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        color: inherit;
+    }
+
+    /* §4.6: the ≥44px hit target as a click-catching overlay on the small glyphs. */
+    button.dse-init__turn::after,
+    button.dse-init__stamina::after,
+    .dse-init__malice .dse-stepper__btn::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: max(100%, var(--dse-touch-min));
+        height: max(100%, var(--dse-touch-min));
+        transform: translate(-50%, -50%);
+    }
+
+    /* Adjacent 24px condition icons: the target extends vertically only, so
+       neighbouring icons never shadow each other. */
+    button.dse-cond::after,
+    button.dse-cond--add::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 100%;
+        height: var(--dse-touch-min);
+        transform: translateY(-50%);
+    }
+
+    /* -- top action bar (the kit buttonRow supplies the flex row) -- */
+    .dse-init__actionbar {
+        margin-bottom: 10px;
+    }
+
+    /* -- turn indicator: iconButton (aria-pressed) in the bordered box -- */
+    .dse-init__turnbox {
+        height: 1.5em;
+        width: 1.5em;
+        border: 1px solid var(--dse-rule);
+        border-right: 0;
+        border-radius: 5px 0 0 5px;
+    }
+
+    .dse-init__turn {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    .dse-init__turn .dse-btn__icon,
+    .dse-init__turn .dse-init__turn-glyph {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    .dse-init__turn svg {
+        margin: 1px;
+        height: calc(100% - 2px);
+        width: calc(100% - 2px);
+        color: var(--dse-fg);
+        background-color: var(--dse-surface);
+        border-radius: 4px 0 0 4px;
+    }
+
+    .dse-init__turn[data-taken] svg {
+        background-color: var(--dse-turn-done);
+        color: var(--dse-surface);
+    }
+
+    /* -- row chrome: surface + the top-left hairline-fade pair (Legacy = today) -- */
+    .dse-init__group--heroes .dse-init__row,
+    .dse-init__groupbody {
+        position: relative;
+        padding-top: 1px;
+        padding-right: 1em;
+        margin-bottom: 0.75em;
+        background-color: var(--dse-surface);
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 1px;
+            width: 12em;
+            background: var(--dse-hairline-fade);
+        }
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 100%;
+            max-height: 12em;
+            background: linear-gradient(to bottom, var(--dse-rule), var(--dse-rule-fade));
+        }
+    }
+
+    /* -- enemies header: heading + malice -- */
+    .dse-init__enemies-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* -- Malice: the kit stepper (CB-7 — its render() updates ONLY the value node) -- */
+    .dse-init__malice {
+        font-weight: bold;
+        color: var(--dse-malice);
+        display: flex;
+        align-items: center;
+    }
+
+    /* The ± reveal on hover AND focus (a11y — legacy was hover-only). */
+    .dse-init__malice .dse-stepper__btn {
+        visibility: hidden;
+        height: 24px;
+    }
+
+    .dse-init__malice:hover .dse-stepper__btn,
+    .dse-init__malice:focus-within .dse-stepper__btn {
+        visibility: visible;
+    }
+
+    .dse-init__malice .dse-stepper__btn:hover {
+        background-color: var(--dse-surface);
+    }
+
+    /* Legacy glyph size: the 24px chevron box (kit icons default smaller). */
+    .dse-init__malice .dse-stepper__btn svg {
+        height: 24px;
+        width: 24px;
+    }
+
+    /* The kit value node paints --dse-fg by default; the malice line is red. */
+    .dse-init__malice .dse-stepper__value {
+        color: inherit;
+    }
+
+    .dse-init__malice-value {
+        user-select: none;
+    }
+
+    /* -- hero / enemy-group entries -- */
+    .dse-init__entry {
+        display: flex;
+    }
+
+    .dse-init__groupbody {
+        padding: 1em;
+        width: 100%;
+    }
+
+    .dse-init__grouphead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        h4 {
+            margin-top: 0;
+        }
+    }
+
+    .dse-init__detail {
+        margin-bottom: 10px;
+    }
+
+    /* -- character rows -- */
+    .dse-init__row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+        width: 100%;
+    }
+
+    .dse-init__portrait {
+        display: flex;
+
+        img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+        }
+    }
+
+    .dse-init__info {
+        flex: 1;
+        margin-left: 10px;
+    }
+
+    .dse-init__name {
+        font-weight: bold;
+    }
+
+    .dse-init__conditions {
+        margin-top: 5px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+
+        svg {
+            display: block;
+        }
+    }
+
+    /* -- condition icons: kit buttons on the VALIDATED per-condition color -- */
+    .dse-cond,
+    .dse-cond--add {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .dse-cond {
+        color: var(--dse-condition-color, inherit);
+    }
+
+    .dse-cond--add {
+        color: var(--color-base-50);
+    }
+
+    .dse-cond--add:hover {
         color: var(--color-base-100);
+    }
+
+    /* -- stamina numbers: [data-state] keys the tokens (SC-5 eviction) -- */
+    .dse-init__health {
+        margin-left: 10px;
+    }
+
+    .dse-init__stamina {
+        font-weight: bold;
+    }
+
+    .dse-init__stamina[data-state='healthy'] {
+        color: var(--dse-stamina-healthy);
+    }
+
+    .dse-init__stamina[data-state='winded'] {
+        color: var(--dse-stamina-winded);
+    }
+
+    .dse-init__stamina[data-state='dying'] {
+        color: var(--dse-stamina-dying);
+    }
+
+    .dse-init__stamina[data-state='dead'] {
+        color: var(--dse-danger);
+    }
+
+    /* -- creature instances grid: cells are real toggle buttons (CB-6 keyed) -- */
+    .dse-init__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 10px;
+    }
+
+    .dse-init__cell {
+        text-align: center;
+        padding: 5px;
+        background-color: var(--color-base-30);
+        border: 1px solid transparent;
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 80px;
+        color: inherit;
+    }
+
+    /* Selection = the --dse-select ring; aria-pressed carries the AT state (the
+       kit's pressed accent fill is flattened by the cell rules above). */
+    .dse-init__cell[data-selected] {
+        border-color: var(--dse-select);
+        box-shadow: 0 0 5px var(--dse-select);
+    }
+
+    .dse-init__cell-portrait {
+        display: block;
+        width: 50px;
+        height: 50px;
+        margin-bottom: 5px;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+        }
+    }
+
+    .dse-init__cell-stamina {
+        display: block;
+        font-size: 14px;
+        word-wrap: break-word;
+        text-align: center;
+        max-width: 100%;
+    }
+
+    @media (max-width: 599px) {
+        .dse-init__grid {
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        }
+
+        .dse-init__cell {
+            min-width: 60px;
+        }
+
+        .dse-init__cell-stamina {
+            font-size: 12px;
+        }
     }
 }
 
-[data-dse-element="initiative"] .character-health {
-	margin-left: 10px;
-}
-
-[data-dse-element="initiative"] .character-stamina {
-	cursor: pointer;
-	font-weight: bold;
+/* Portraits preference (D4 owns the value; the pipeline's prefs.reflect() stamps
+   data-dse-portraits on the element root): "off" hides the 50–60px images for a
+   dense tracker. */
+[data-dse-element="initiative"][data-dse-portraits="off"] .dse-init__portrait,
+[data-dse-element="initiative"][data-dse-portraits="off"] .dse-init__cell-portrait {
+	display: none;
 }
 
 /* ============================================================== */
@@ -1445,6 +1521,19 @@ code.dsa {
 	}
 	100% {
 		opacity: 0.5;
+	}
+}
+
+/* §4.9 — reduced motion: every condition-effect ANIMATION is disabled (the static
+   .condition-effect-glow drop-shadow is not motion and keeps its look). */
+@media (prefers-reduced-motion: reduce) {
+	.condition-effect-blink,
+	.condition-effect-breathing,
+	.condition-effect-blur-pulse path,
+	.condition-effect-blur-pulse svg,
+	.condition-effect-glow-pulse path,
+	.condition-effect-glow-pulse svg {
+		animation: none;
 	}
 }
 
