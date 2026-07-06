@@ -49,6 +49,14 @@ export class CounterElementView extends ElementView<Counter> {
 				// input) — the buttons are force-disabled below.
 				editable: canPersist,
 				integer: true,
+				// P09 T4 review (Important #1): a persisted current_value may sit OUTSIDE
+				// [min,max] (hand-edited YAML, a later-lowered max_value). Show it as
+				// stored and let ± step it back toward the range one press at a time —
+				// the legacy CounterView contract exactly (display never clamped;
+				// decrement guarded only by min, so 25 → 24 under max 20; increment
+				// disabled at/above max; typed finishEditing clamped, as typed commits
+				// still do here).
+				clampInitial: false,
 				label: model.name || 'Counter',
 				onChange: (value) => {
 					this.model.current_value = value;

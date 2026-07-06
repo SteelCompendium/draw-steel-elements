@@ -31,6 +31,20 @@ export interface StepperOptions {
 	 */
 	integer?: boolean;
 	/**
+	 * Clamp the SEED value into [min,max] on first render. Default true. Set false
+	 * (P09 T4 review) for persisted values that may legitimately sit out of range — a
+	 * hand-edited `current_value: 25` under `max: 20` — which must DISPLAY as stored,
+	 * never be silently misrepresented as the bound. While out of range, the ± buttons
+	 * step the value back TOWARD the range one `step` at a time (25 → 24, never a
+	 * jump to 20) but never further out (the outward button disables via the normal
+	 * at-bound rule, since 25 ≥ max); once back inside [min,max], normal clamping
+	 * resumes. TYPED commits (`editable`) and setValue still clamp normally — typing
+	 * is deliberate; only the seeded/±-stepped value honors out-of-range. This is the
+	 * legacy CounterView contract (display unclamped; decrement guarded only by min,
+	 * increment only by max; finishEditing clamped).
+	 */
+	clampInitial?: boolean;
+	/**
 	 * Accessible name of the whole group (§4.2); the buttons derive theirs from it
 	 * ("Decrease {label}" / "Increase {label}").
 	 */
@@ -61,7 +75,26 @@ export function stepper(
 		if (opts.max !== undefined && n > opts.max) return opts.max;
 		return n;
 	};
-	let current = clamp(opts.value);
+	let current = opts.clampInitial === false ? opts.value : clamp(opts.value);
+	/**
+	 * Clamp for ± STEP commits. Under clampInitial:false an out-of-range `current`
+	 * widens its violated bound to itself, so a step may move toward the range
+	 * (25 → 24 with max 20 — the step result stands, no snap to the bound) but never
+	 * further out; the far bound still clamps normally (a big step from 25 can't
+	 * overshoot below min). With in-range values — and always in the default mode —
+	 * this IS `clamp`.
+	 */
+	const stepClamp = (n: number): number => {
+		let lo = opts.min;
+		let hi = opts.max;
+		if (opts.clampInitial === false) {
+			if (hi !== undefined && current > hi) hi = current;
+			if (lo !== undefined && current < lo) lo = current;
+		}
+		if (lo !== undefined && n < lo) return lo;
+		if (hi !== undefined && n > hi) return hi;
+		return n;
+	};
 
 	const rootEl = parent.createDiv({ cls: 'dse-stepper' });
 	rootEl.setAttribute('role', 'group');
@@ -107,9 +140,12 @@ export function stepper(
 	 * The ONE commit path (CB-10): clamp, then no-op unless the value actually changed
 	 * — so Enter-then-blur cannot double-fire onChange. render() runs either way to
 	 * normalize a draft like "07" or an out-of-range "50" back to the shown value.
+	 * Uses stepClamp (≡ clamp except for an out-of-range clampInitial:false value);
+	 * the typed path below pre-applies the FULL clamp, so typed commits always land
+	 * inside [min,max].
 	 */
 	function commit(next: number): void {
-		next = clamp(next);
+		next = stepClamp(next);
 		if (next === current) {
 			render();
 			return;
@@ -129,7 +165,10 @@ export function stepper(
 				return;
 			}
 			// `integer`: truncate toward zero (parseInt semantics) BEFORE clamping.
-			commit(opts.integer ? Math.trunc(parsed) : parsed);
+			// FULL clamp here (typing is deliberate — it lands inside [min,max] even
+			// when clampInitial:false left `current` out of range); stepClamp inside
+			// commit() is then an identity on the already-clamped value.
+			commit(clamp(opts.integer ? Math.trunc(parsed) : parsed));
 		};
 		owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
 			if (evt.key === 'Enter') {

@@ -124,6 +124,141 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 		});
 	});
 
+	describe('clampInitial: false — an out-of-range seed shows AS-IS and steps back toward the range (P09 T4 review)', () => {
+		// Legacy CounterView parity: display was current_value.toString() (never clamped),
+		// decrement guarded only by min (25 → 24 even above max), increment disabled
+		// at/above max, and only TYPED commits clamped.
+		function overMax(onChange = jest.fn()) {
+			const parent = document.createElement('div');
+			const handle = stepper(
+				parent,
+				{ value: 25, min: 0, max: 20, clampInitial: false, label: 'Health', onChange },
+				fakeOwner(),
+			);
+			const [minusEl, plusEl] = Array.from(
+				handle.rootEl.querySelectorAll<HTMLButtonElement>('.dse-stepper__btn'),
+			);
+			return { handle, minusEl, plusEl, onChange };
+		}
+
+		test('seeds the stored value UNCLAMPED: 25 displays as 25 with max 20', () => {
+			const { handle } = overMax();
+			expect(handle.getValue()).toBe(25);
+			expect(handle.rootEl.querySelector('.dse-stepper__value')!.textContent).toBe('25');
+		});
+
+		test('above max: minus steps 25 → 24 (ONE step toward the range, NOT a jump to 20)', () => {
+			const { handle, minusEl, onChange } = overMax();
+			minusEl.click();
+			expect(onChange).toHaveBeenCalledTimes(1);
+			expect(onChange).toHaveBeenLastCalledWith(24);
+			expect(handle.getValue()).toBe(24);
+			expect(handle.rootEl.querySelector('.dse-stepper__value')!.textContent).toBe('24');
+		});
+
+		test('above max: increment is REAL-disabled (cannot go further out); a synthetic click is swallowed', () => {
+			const { handle, plusEl, onChange } = overMax();
+			expect(plusEl.disabled).toBe(true);
+			plusEl.click();
+			expect(onChange).not.toHaveBeenCalled();
+			expect(handle.getValue()).toBe(25);
+		});
+
+		test('stepping down re-enters the range at 20, then normal min/max behavior resumes', () => {
+			const { handle, minusEl, plusEl, onChange } = overMax();
+			for (let i = 0; i < 5; i++) minusEl.click(); // 25 → 24 → 23 → 22 → 21 → 20
+			expect(handle.getValue()).toBe(20);
+			expect(onChange).toHaveBeenLastCalledWith(20);
+			expect(onChange).toHaveBeenCalledTimes(5);
+			expect(plusEl.disabled).toBe(true); // now AT max — the normal at-bound rule
+			minusEl.click();
+			expect(handle.getValue()).toBe(19);
+			expect(plusEl.disabled).toBe(false); // back inside: normal clamping resumed
+		});
+
+		test('a large step from above max lands inside the range and clamps at the FAR bound (never overshoots below min)', () => {
+			const parent = document.createElement('div');
+			const onChange = jest.fn();
+			const handle = stepper(
+				parent,
+				{ value: 25, min: 0, max: 20, step: 30, clampInitial: false, label: 'x', onChange },
+				fakeOwner(),
+			);
+			handle.rootEl.querySelectorAll<HTMLButtonElement>('.dse-stepper__btn')[0].click(); // 25 − 30
+			expect(onChange).toHaveBeenLastCalledWith(0); // min-clamped once in range
+			expect(handle.getValue()).toBe(0);
+		});
+
+		test('symmetric below min: -5 displays as -5; minus is disabled; plus steps -5 → -4 (not a jump to 0)', () => {
+			const parent = document.createElement('div');
+			const onChange = jest.fn();
+			const handle = stepper(
+				parent,
+				{ value: -5, min: 0, max: 20, clampInitial: false, label: 'Health', onChange },
+				fakeOwner(),
+			);
+			const [minusEl, plusEl] = Array.from(
+				handle.rootEl.querySelectorAll<HTMLButtonElement>('.dse-stepper__btn'),
+			);
+			expect(handle.rootEl.querySelector('.dse-stepper__value')!.textContent).toBe('-5');
+			expect(minusEl.disabled).toBe(true); // can't go further below min
+			expect(plusEl.disabled).toBe(false);
+			minusEl.click();
+			expect(onChange).not.toHaveBeenCalled();
+			plusEl.click();
+			expect(onChange).toHaveBeenCalledTimes(1);
+			expect(onChange).toHaveBeenLastCalledWith(-4);
+			expect(handle.getValue()).toBe(-4);
+		});
+
+		test('TYPED commits still clamp to [min,max] (typing is deliberate): draft "99" commits 20', () => {
+			const parent = document.createElement('div');
+			const onChange = jest.fn();
+			const handle = stepper(
+				parent,
+				{ value: 25, min: 0, max: 20, clampInitial: false, editable: true, label: 'Health', onChange },
+				fakeOwner(),
+			);
+			const inputEl = handle.rootEl.querySelector<HTMLInputElement>('input.dse-stepper__input')!;
+			expect(inputEl.value).toBe('25'); // the unclamped seed reaches the editable input too
+			inputEl.value = '99';
+			keydown(inputEl, 'Enter');
+			expect(onChange).toHaveBeenCalledTimes(1);
+			expect(onChange).toHaveBeenCalledWith(20);
+			expect(inputEl.value).toBe('20');
+			expect(handle.getValue()).toBe(20);
+		});
+
+		test('an IN-RANGE seed under clampInitial:false behaves exactly like the default', () => {
+			const parent = document.createElement('div');
+			const onChange = jest.fn();
+			const handle = stepper(
+				parent,
+				{ value: 10, min: 0, max: 20, clampInitial: false, label: 'x', onChange },
+				fakeOwner(),
+			);
+			const [minusEl, plusEl] = Array.from(
+				handle.rootEl.querySelectorAll<HTMLButtonElement>('.dse-stepper__btn'),
+			);
+			expect(handle.getValue()).toBe(10);
+			expect(minusEl.disabled).toBe(false);
+			expect(plusEl.disabled).toBe(false);
+			plusEl.click();
+			expect(onChange).toHaveBeenLastCalledWith(11);
+		});
+
+		test('DEFAULT (clampInitial unset) still clamps the seed: 25 with max 20 displays 20 (unchanged)', () => {
+			const parent = document.createElement('div');
+			const handle = stepper(
+				parent,
+				{ value: 25, min: 0, max: 20, label: 'x', onChange: () => {} },
+				fakeOwner(),
+			);
+			expect(handle.getValue()).toBe(20);
+			expect(handle.rootEl.querySelector('.dse-stepper__value')!.textContent).toBe('20');
+		});
+	});
+
 	describe('Handle: setValue / getValue (in-place, CB-7)', () => {
 		test('setValue updates the SAME value node in place without firing onChange', () => {
 			const parent = document.createElement('div');

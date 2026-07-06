@@ -308,6 +308,61 @@ describe('Plan 09 Task 4: counter rendered through the REAL ElementPipeline (D2 
 		expect(inputEl(unbounded.root)!.hasAttribute('max')).toBe(false);
 	});
 
+	describe('out-of-range persisted value (P09 T4 review — clampInitial:false, legacy CounterView parity)', () => {
+		// A hand-edited current_value: 25 with max_value: 20 must DISPLAY as 25 (the
+		// legacy CounterView rendered current_value.toString(), never clamped) and step
+		// back toward the range one press at a time (legacy decrement guarded only by
+		// min: 25 → 24, NOT a jump to 20).
+		const OVER_MAX_YAML = 'name: Health\ncurrent_value: 25\nmax_value: 20\nmin_value: 0';
+
+		test('a stored current_value ABOVE max renders AS-STORED (25, not clamped 20); plus disabled, minus enabled', async () => {
+			const { root } = await renderCounter(OVER_MAX_YAML);
+			expect(inputEl(root)!.value).toBe('25');
+			expect(plusBtn(root).disabled).toBe(true); // can't go FURTHER above max
+			expect(minusBtn(root).disabled).toBe(false); // stepping back in is allowed
+		});
+
+		test('a stored current_value BELOW min renders AS-STORED (-5); minus disabled, plus enabled', async () => {
+			const { root } = await renderCounter('name: Health\ncurrent_value: -5\nmax_value: 20\nmin_value: 0');
+			expect(inputEl(root)!.value).toBe('-5');
+			expect(minusBtn(root).disabled).toBe(true);
+			expect(plusBtn(root).disabled).toBe(false);
+		});
+
+		test('the first minus from 25 mutates the model to 24 (NOT 20) and persists EXACTLY ONCE, byte-compat', async () => {
+			jest.useFakeTimers();
+			const deps = makeDeps();
+			const pipeline = new ElementPipeline(deps);
+			const addChild = jest.fn((child: unknown) => child);
+			const host = makeHost({ addChild: addChild as unknown as BlockHost['addChild'] });
+			await pipeline.run(counterElement, OVER_MAX_YAML, host);
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			const view = addChild.mock.calls[0][0] as CounterElementView;
+
+			minusBtn(root).click();
+
+			expect(((view as any).model as Counter).current_value).toBe(24);
+			expect(inputEl(root)!.value).toBe('24');
+
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(24));
+		});
+
+		test('typed edits STILL clamp (legacy finishEditing parity): a draft "99" over a stored 25 commits 20', async () => {
+			jest.useFakeTimers();
+			const { host, root } = await renderCounter(OVER_MAX_YAML);
+			const input = inputEl(root)!;
+			input.value = '99';
+			pressKey(input, 'Enter');
+			expect(input.value).toBe('20');
+			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(20));
+		});
+	});
+
 	describe('editable value (kit stepper input — CB-10 single-commit)', () => {
 		test('typing a value and pressing Enter commits once and persists exactly once, byte-compat', async () => {
 			jest.useFakeTimers();
@@ -515,6 +570,31 @@ describe('Plan 07 Task 4: persisted write path through a REAL ReadingModeBlockHo
 		expect(updated.endsWith('\n~~~\n\nAfter text.')).toBe(true);
 		const body = updated.match(/~~~ds-ct\n([\s\S]*?)\n~~~/)?.[1];
 		expect(body).toBe(healthSerialized(11));
+	});
+
+	test('out-of-range stored 25/max 20 (T4 review): renders 25, first minus persists 24 — exactly one Vault write, byte-identical', async () => {
+		jest.useFakeTimers();
+		const app = new App();
+		const source = 'name: Health\ncurrent_value: 25\nmax_value: 20\nmin_value: 0';
+		const note = ['Before text.', '', '~~~ds-ct', ...source.split('\n'), '~~~', '', 'After text.'].join('\n');
+		app.vault.setFile('Note.md', note);
+		const plugin = new Plugin(app);
+		const ctx = makeFakeContext(app, 'Note.md');
+		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-ct');
+		const pipeline = new ElementPipeline(makeDeps());
+
+		await pipeline.run(counterElement, source, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(inputEl(root)!.value).toBe('25'); // shown as stored, never silently 20
+
+		minusBtn(root).click();
+		expect(inputEl(root)!.value).toBe('24'); // one step toward the range — legacy arithmetic
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(app.vault.modifyCalls).toHaveLength(1);
+		const body = app.vault.getContent('Note.md')!.match(/~~~ds-ct\n([\s\S]*?)\n~~~/)?.[1];
+		expect(body).toBe(healthSerialized(24));
 	});
 });
 
