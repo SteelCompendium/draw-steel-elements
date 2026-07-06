@@ -70,7 +70,11 @@ export class MinionStaminaPoolModal extends DseModal {
 		// -- Numeric adjust (kit stepper) ---------------------------------------------
 		// Bounded [0, poolMax] — exactly the legacy ± behavior (its in/decrement already
 		// clamped the step to those value bounds); the Apply-time CB-1 clamp below stays
-		// the authoritative gate for the persisted value.
+		// the authoritative gate for the persisted value. KNOWN DEVIATION: a TYPED draft
+		// past poolMax is clamped at commit here, where legacy carried the raw overshoot
+		// pending until Apply — so the type-past-max-then-decrement corridor persists a
+		// different in-range value (same pending maintainer sign-off as the single-stamina
+		// stepper's overshoot note in StaminaEditModal).
 		const adjustSection = this.body.createDiv({ cls: 'dse-sedit__adjust' });
 		this.poolStepper = staminaStepperRow(
 			adjustSection,

@@ -187,6 +187,24 @@ describe('D2 §3.5b: the pool modal on the unified template (optional minion sec
 		expect(action.getAttribute('title')).toBeNull();
 	});
 
+	test('typed decimals integer-coerce (legacy parseInt semantics): persist() writes an INTEGER pool', async () => {
+		const { modal, content, group } = await setup(); // pool 20, minion max 4
+		const input = content.querySelector('.dse-stepper__input') as HTMLInputElement;
+		input.value = '12.5';
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect((modal as any).pendingStaminaChange).toBe(-8); // trunc(12.5) = 12 → -8
+
+		// 8 damage kills 2 minions — select them so Apply enables, then persist.
+		const checks = Array.from(content.querySelectorAll<HTMLInputElement>('.dse-minion__check'));
+		for (const check of checks.slice(0, 2)) {
+			check.checked = true;
+			check.dispatchEvent(new Event('change'));
+		}
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(12); // an INTEGER, never 12.5
+		expect(Number.isInteger(group.minion_stamina_pool)).toBe(true);
+	});
+
 	test('the healing warning ("minions cannot regain stamina") shows via the hidden attribute + .dse-sedit__warn — no inline display toggling', async () => {
 		// Pre-damaged pool: healing is only reachable below the pool max (as in legacy,
 		// where the increment button was a no-op at the full pool).

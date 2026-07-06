@@ -103,6 +103,9 @@ export function staminaStepperRow(
 			min: opts.min,
 			max: opts.max,
 			editable: true,
+			// Stamina is count-like: a typed "7.5" commits 7 (Math.trunc — the legacy
+			// modals' parseInt semantics), so persist() never writes a float.
+			integer: true,
 			label: opts.label,
 			onChange: opts.onChange,
 		},
@@ -245,11 +248,16 @@ export class StaminaEditModal extends DseModal {
 		// Numeric adjust (kit stepper) + temp stamina.
 		const adjustSection = row.createDiv({ cls: 'dse-modal__section dse-sedit__adjust' });
 		// Deliberately UNBOUNDED (no stepper min/max): the legacy modal clamped the
-		// STEP (a ± press near a bound was a no-op) but never the pending VALUE — e.g.
-		// stacked Spend Recovery presses over-shoot max and the display showed the raw
-		// sum. Only clampStamina at Apply owns the final value; giving the stepper
-		// value bounds here would silently re-route those over-shot sequences to
-		// DIFFERENT persisted bytes (byte-compat, the Task-3 bar).
+		// STEP but never the pending VALUE — e.g. stacked Spend Recovery presses
+		// over-shoot max and the display shows the raw sum, with clampStamina at Apply
+		// owning the final persisted value. KNOWN DEVIATION (degenerate overshoot
+		// corridor): once the pending value sits past max, legacy's next `+` was
+		// CORRECTIVE — its step was min(1, distance-to-max), NEGATIVE when over, so it
+		// snapped the value back to max — e.g. max 20, current 10: Spend Recovery ×2
+		// (→22) → `+` (→20) → `−`×3 → legacy persisted 17, while this unbounded stepper
+		// walks 22 → 23 → 20 and Apply's clamp persists 20. A deliberate, no-corruption
+		// deviation (both persist in-range values) — PENDING maintainer sign-off on
+		// strict byte-compat vs. this cleaner behavior.
 		const staminaStepper = staminaStepperRow(
 			adjustSection,
 			{
@@ -275,6 +283,7 @@ export class StaminaEditModal extends DseModal {
 				value: currentTempStamina,
 				min: 0,
 				editable: true,
+				integer: true, // typed "2.5" commits 2 (legacy parseInt semantics)
 				label: 'Temporary Stamina',
 				onChange: (value) => {
 					this.pendingTempStaminaChange = value - currentTempStamina;

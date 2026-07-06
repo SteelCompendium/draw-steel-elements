@@ -205,6 +205,27 @@ describe('D2 §3.5b: the managedModal template (kit scaffold, CB-8, SC-5)', () =
 		expect(actionBtn(content).textContent).toContain('Gain 7 Stamina');
 	});
 
+	test('typed decimals integer-coerce (legacy parseInt semantics): Apply persists INTEGERS, never floats', () => {
+		const { modal, content, bar } = makeModal(20, 10, 0);
+		const [staminaEl, tempEl] = Array.from(content.querySelectorAll<HTMLElement>('.dse-stepper'));
+
+		const staminaInput = staminaEl.querySelector('.dse-stepper__input') as HTMLInputElement;
+		staminaInput.value = '17.5'; // type="number" step="1" still accepts decimals
+		staminaInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(modal.pendingStaminaChange).toBe(7); // trunc(17.5) = 17 → +7
+
+		const tempInput = tempEl.querySelector('.dse-stepper__input') as HTMLInputElement;
+		tempInput.value = '2.5';
+		tempInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(modal.pendingTempStaminaChange).toBe(2);
+
+		apply(content);
+		expect(bar.current_stamina).toBe(17); // an INTEGER — legacy persisted parseInt('17.5') = 17
+		expect(bar.temp_stamina).toBe(2);
+		expect(Number.isInteger(bar.current_stamina)).toBe(true);
+		expect(Number.isInteger(bar.temp_stamina)).toBe(true);
+	});
+
 	test('the temp stepper is floored at 0 (real disabled minus at the floor — legacy was a silent no-op)', () => {
 		const { modal, content } = makeModal(20, 10, 0);
 		const minus = btn(content, 'Decrease Temporary Stamina');

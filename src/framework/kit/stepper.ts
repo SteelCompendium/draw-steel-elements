@@ -23,6 +23,14 @@ export interface StepperOptions {
 	/** Render the value as an <input type="number"> the user can type into. */
 	editable?: boolean;
 	/**
+	 * Integer-coerce TYPED commits with Math.trunc (parseInt's toward-zero semantics,
+	 * applied before clamping) — for count-like steppers (stamina, counters) where a
+	 * typed "7.5" must commit 7, never persist a float. The ± buttons already move by
+	 * integer `step`, so this only affects the `editable` typed-commit path. Default
+	 * false (raw Number() commit).
+	 */
+	integer?: boolean;
+	/**
 	 * Accessible name of the whole group (§4.2); the buttons derive theirs from it
 	 * ("Decrease {label}" / "Increase {label}").
 	 */
@@ -120,7 +128,8 @@ export function stepper(
 				render(); // invalid draft → revert, no commit
 				return;
 			}
-			commit(parsed);
+			// `integer`: truncate toward zero (parseInt semantics) BEFORE clamping.
+			commit(opts.integer ? Math.trunc(parsed) : parsed);
 		};
 		owner.registerDomEvent(el, 'keydown', (evt: KeyboardEvent) => {
 			if (evt.key === 'Enter') {

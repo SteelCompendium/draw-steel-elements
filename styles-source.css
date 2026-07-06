@@ -1090,6 +1090,7 @@ code.dsa {
 	width: 20px;
 	height: 20px;
 	margin-right: 5px;
+	cursor: pointer; /* still click-to-remove */
 	color: var(--dse-condition-color, inherit);
 }
 .dse-sedit__minions .condition-icon svg {

@@ -235,6 +235,49 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 			expect(inputEl.value).toBe('3');
 		});
 
+		describe('integer: true — typed commits truncate toward zero (parseInt semantics)', () => {
+			test('typing "7.5" commits 7, not a float', () => {
+				const { handle, inputEl, onChange } = editable({ integer: true });
+				inputEl.value = '7.5';
+				keydown(inputEl, 'Enter');
+				expect(onChange).toHaveBeenCalledTimes(1);
+				expect(onChange).toHaveBeenCalledWith(7);
+				expect(handle.getValue()).toBe(7);
+				expect(inputEl.value).toBe('7'); // normalized display
+			});
+
+			test('truncation is toward zero: "-2.9" commits -2 (not -3), matching parseInt', () => {
+				const parent = document.createElement('div');
+				const onChange = jest.fn();
+				const handle = stepper(
+					parent,
+					{ value: 0, editable: true, integer: true, label: 'x', onChange },
+					fakeOwner(),
+				);
+				const inputEl = handle.rootEl.querySelector<HTMLInputElement>('input.dse-stepper__input')!;
+				inputEl.value = '-2.9';
+				keydown(inputEl, 'Enter');
+				expect(onChange).toHaveBeenCalledWith(-2);
+				expect(handle.getValue()).toBe(-2);
+			});
+
+			test('truncation runs BEFORE clamping (min 0: "-2.9" → -2 → clamped 0, the legacy correct-to-0)', () => {
+				const { handle, inputEl, onChange } = editable({ integer: true }); // min 0, max 10, value 3
+				inputEl.value = '-2.9';
+				keydown(inputEl, 'Enter');
+				expect(onChange).toHaveBeenCalledWith(0);
+				expect(handle.getValue()).toBe(0);
+			});
+
+			test('default (integer unset) still commits the raw decimal — opt-in only', () => {
+				const { handle, inputEl, onChange } = editable();
+				inputEl.value = '7.5';
+				keydown(inputEl, 'Enter');
+				expect(onChange).toHaveBeenCalledWith(7.5);
+				expect(handle.getValue()).toBe(7.5);
+			});
+		});
+
 		test('the ± buttons drive the input value too', () => {
 			const { handle, inputEl, onChange } = editable();
 			handle.rootEl.querySelectorAll<HTMLButtonElement>('.dse-stepper__btn')[1].click();
