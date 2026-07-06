@@ -1,12 +1,20 @@
-// Plan 07 Task 1 (F1 §6 step 5) — the Feature element on Framework v2: featureElement
-// definition + FeatureElementView, driven through the REAL ElementPipeline (static-element
-// harness mirroring horizontal-rule.test.ts; T-5 registration blocks mirroring
-// negotiation.test.ts). The element view is a thin wrapper: it recreates the legacy
-// FeatureProcessor's `.ds-feature-ele-container.ds-container` root and delegates ALL
-// rendering to the KEPT legacy sub-view tree (Features/FeatureView -> EffectView ->
-// FeaturesView) — Featureblock + Statblock (the next migrations) reuse those same
-// sub-views, so the golden test below pins the wrapper byte-for-byte against a direct
-// FeatureView.build() call rather than duplicating structure assertions.
+// Plan 09 Task 5 (D2 §3.6) — the Feature element re-cast onto the D2 kit card grammar:
+// kit cardHead (name heading + cost/ability-type right slots) + .dse-feature__meta +
+// .dse-feature__flavor + a STATIC kit powerRollPanel (≤11 / 12-16 / 17+ / crit) + titled
+// .dse-section panels + the [data-dse-act] action-type spine (Steel-only accent; the
+// Legacy base maps every --dse-act-* to `none`, so the accent fails safe to monochrome).
+//
+// The renderer is src/elements/feature/renderFeature.ts — the REUSABLE feature grammar
+// Task 6 (Statblock/Featureblock) consumes. It takes a caller-supplied renderMd callback
+// (the element passes its view-parented this.renderMarkdown — the ML-1 fix) and never
+// imports Obsidian's markdown renderer or app surface. The LEGACY sub-view tree
+// (Features/FeatureView -> EffectView -> FeaturesView) stays untouched: Statblock +
+// Featureblock still construct it directly until Task 6 switches them over.
+//
+// These tests replace Plan 07 Task 1's golden-DOM pin (which froze the legacy wrapper
+// byte-for-byte) with kit-DOM + a11y + no-content-loss assertions.
+import * as fs from 'fs';
+import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -19,24 +27,70 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { FeatureConfig } from '@model/FeatureConfig';
-import { FeatureView } from '@drawSteelAdmonition/Features/FeatureView';
-import { App, Plugin, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
 import { featureElement } from '../../../src/elements/feature/definition';
 import { FeatureElementView } from '../../../src/elements/feature/view';
+import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import magmaTitan from '../../fixtures/feature/magma-titan.yaml';
 
 const FT_ALIASES = ['ds-ft', 'ds-feat', 'ds-feature'] as const;
 
-/** A feature whose effect nests further features (Effect.features) — exercising the
- *  recursion path EffectView -> FeaturesView -> FeatureView that Featureblock/Statblock
- *  also depend on. */
+/** Header-heavy ability: every cardHead slot the feature grammar fills is present. */
+const HEADER = `type: feature
+feature_type: ability
+name: Whip Strike
+cost: Signature
+ability_type: Villain Action 1
+usage: Main action
+`;
+
+/** A feature whose effect nests further features — the recursion path the legacy
+ *  EffectView -> FeaturesView -> FeatureView tree carried, preserved by renderFeature. */
 const NESTED = `type: feature
 feature_type: trait
 name: Outer Feature
 effects:
   - name: Outer Effect
     effect: Outer effect text.
+    features:
+      - type: feature
+        feature_type: trait
+        name: Inner Feature
+        effects:
+          - name: Inner Effect
+            effect: Inner effect text.
+`;
+
+/** Every field the legacy FeatureView/EffectView rendered, in one block (the
+ *  no-content-loss pin): name, cost, ability_type, flavor, keywords, usage, distance,
+ *  target, trigger, named effect (+cost), all four power-roll tiers, nested feature. */
+const FULL = `type: feature
+feature_type: ability
+name: Coverage Strike
+cost: 5 Malice
+ability_type: Villain Action 1
+flavor: A sweeping flourish of steel.
+keywords:
+  - Attack
+  - Weapon
+usage: Main action
+distance: Melee 1
+target: One creature
+trigger: A creature ends its turn adjacent to the target.
+effects:
+  - name: Effect
+    effect: The primary effect text.
+  - roll: Power Roll + Might
+    tier1: Tier one outcome.
+    tier2: Tier two outcome.
+    tier3: Tier three outcome.
+    crit: Crit outcome.
+  - name: Special
+    cost: 2 Malice
+    effect: Special clause text.
+  - name: Aftermath
+    effect: Wrapper text.
     features:
       - type: feature
         feature_type: trait
@@ -85,7 +139,7 @@ function makeDeps(): ElementPipelineDeps {
 	};
 }
 
-async function renderFeature(source: string, hostOverrides: Partial<BlockHost> = {}) {
+async function renderBlock(source: string, hostOverrides: Partial<BlockHost> = {}) {
 	const deps = makeDeps();
 	const pipeline = new ElementPipeline(deps);
 	const host = makeHost(hostOverrides);
@@ -94,7 +148,7 @@ async function renderFeature(source: string, hostOverrides: Partial<BlockHost> =
 	return { pipeline, host, root, deps };
 }
 
-describe('Plan 07 Task 1: feature ElementDefinition (F1 §6 step 5)', () => {
+describe('feature ElementDefinition (contract unchanged by the D2 redesign)', () => {
 	test('id/name/aliases/shape match the preserved ds-ft/ds-feat/ds-feature contract; static, NO schema/serialize/resolveRefs', () => {
 		expect(featureElement.id).toBe('feature');
 		expect(featureElement.name).toBe('Feature');
@@ -110,8 +164,6 @@ describe('Plan 07 Task 1: feature ElementDefinition (F1 §6 step 5)', () => {
 	});
 
 	test('parse consumes the RAW block text (SDK YamlReader), NOT the pipeline pre-parsed data', () => {
-		// `data` is deliberately garbage: only `raw` carries the block. FeatureConfig
-		// .readYaml = Feature.read(new YamlReader(...), raw) — an SDK text reader.
 		const model = featureElement.parse(undefined, magmaTitan);
 		expect(model).toBeInstanceOf(FeatureConfig);
 		expect(model.feature.name).toBe('Magma Titan');
@@ -143,118 +195,269 @@ describe('Plan 07 Task 1: feature ElementDefinition (F1 §6 step 5)', () => {
 	});
 });
 
-describe('Plan 07 Task 1: feature rendered through the REAL ElementPipeline', () => {
-	test('golden render: byte-identical to the legacy wrapper (ds-feature-ele-container + FeatureView.build)', async () => {
-		const { root, deps } = await renderFeature(magmaTitan);
+describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)', () => {
+	test('cardHead: name is the heading (role="heading", aria-level 3); cost -> right eyebrow chip; ability_type -> right primary chip', async () => {
+		const { root } = await renderBlock(HEADER);
 
-		// The legacy FeatureProcessor DOM, minus the framework-owned root div: a
-		// `.ds-feature-ele-container.ds-container` wrapper around FeatureView.build().
-		const golden = document.createElement('div');
-		const goldenContainer = golden.createEl('div', { cls: 'ds-feature-ele-container ds-container' });
-		new FeatureView(deps.plugin, FeatureConfig.readYaml(magmaTitan), { sourcePath: 'Note.md' } as any).build(
-			goldenContainer,
-		);
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head).not.toBeNull();
 
-		expect(root.innerHTML).toBe(golden.innerHTML);
+		const name = head.querySelector('.dse-head__primary--left') as HTMLElement;
+		expect(name.getAttribute('role')).toBe('heading');
+		expect(name.getAttribute('aria-level')).toBe('3');
+		expect(name.textContent).toBe('Whip Strike');
+
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Signature');
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Villain Action 1');
 	});
 
-	test('root carries data-dse-element="feature" + data-dse-theme; container classes match the legacy processor', async () => {
-		const { root } = await renderFeature(magmaTitan);
+	test('cardHead: omitted slots are GAPS — no ability_type means no right-primary element at all', async () => {
+		const { root } = await renderBlock(magmaTitan);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Magma Titan');
+		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('9 Essence');
+		expect(head.querySelector('.dse-head__primary--right')).toBeNull();
+	});
+
+	test('.dse-feature__meta: keyword/type/distance/target grid, labels as key spans, values verbatim', async () => {
+		const { root } = await renderBlock(magmaTitan);
+
+		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
+		expect(meta).not.toBeNull();
+
+		const cellText = (mod: string, part: 'key' | 'value') =>
+			meta.querySelector(`.dse-feature__meta-cell--${mod} .dse-feature__meta-${part}`)!.textContent;
+
+		expect(cellText('keywords', 'key')).toBe('Keywords');
+		expect(cellText('keywords', 'value')).toBe('Earth, Fire, Magic, Ranged, Void');
+		expect(cellText('type', 'key')).toBe('Type');
+		expect(cellText('type', 'value')).toBe('Main action');
+		expect(cellText('distance', 'key')).toBe('Distance');
+		expect(cellText('distance', 'value')).toBe('Ranged 10');
+		expect(cellText('target', 'key')).toBe('Target');
+		expect(cellText('target', 'value')).toBe('One creature or object');
+	});
+
+	test('.dse-feature__flavor renders the italic flavor text', async () => {
+		const { root } = await renderBlock(magmaTitan);
+		expect(root.querySelector('.dse-feature__flavor')!.textContent).toContain(
+			'Their body swells with lava, mud, and might',
+		);
+	});
+
+	test('powerRollPanel: STATIC mode — kit .dse-pr with head + tier rows, NO radiogroup/radios/buttons', async () => {
+		const { root } = await renderBlock(magmaTitan);
+
+		const pr = root.querySelector('.dse-feature .dse-pr') as HTMLElement;
+		expect(pr).not.toBeNull();
+		expect(pr.querySelector('.dse-pr__head')!.textContent).toBe('Power Roll + Reason');
+
+		const rows = pr.querySelectorAll('.dse-pr__row');
+		expect(rows).toHaveLength(3);
+		expect(rows[0].getAttribute('data-tier')).toBe('low');
+		expect(rows[1].getAttribute('data-tier')).toBe('mid');
+		expect(rows[2].getAttribute('data-tier')).toBe('high');
+		expect(rows[0].querySelector('.dse-pr__badge-text')!.textContent).toBe('≤11');
+		expect(rows[1].querySelector('.dse-pr__badge-text')!.textContent).toBe('12-16');
+		expect(rows[2].querySelector('.dse-pr__badge-text')!.textContent).toBe('17+');
+		expect(rows[0].querySelector('.dse-pr__text')!.textContent).toBe(
+			'You teleport the target up to 4 squares.',
+		);
+
+		// Static: features are not selectable — no radio semantics, no controls.
+		expect(pr.querySelector('[role="radiogroup"]')).toBeNull();
+		expect(pr.querySelector('[role="radio"]')).toBeNull();
+		expect(pr.querySelector('[aria-checked]')).toBeNull();
+		expect(pr.querySelector('button')).toBeNull();
+	});
+
+	test('powerRollPanel: all four tiers render when crit is present (≤11 / 12-16 / 17+ / crit)', async () => {
+		const { root } = await renderBlock(FULL);
+
+		const pr = root.querySelector('.dse-feature .dse-pr') as HTMLElement;
+		const rows = pr.querySelectorAll('.dse-pr__row');
+		expect(rows).toHaveLength(4);
+		expect(rows[3].getAttribute('data-tier')).toBe('crit');
+		expect(rows[3].querySelector('.dse-pr__badge-text')!.textContent).toBe('crit');
+		expect(rows[3].querySelector('.dse-pr__text')!.textContent).toBe('Crit outcome.');
+	});
+
+	test('powerRollPanel: tiers WITHOUT a roll line render rows but NO invented "Power Roll" head', async () => {
+		const source = ['type: feature', 'feature_type: ability', 'name: Tiers Only', 'effects:', '  - tier1: One.', '    tier2: Two.', '    tier3: Three.'].join('\n');
+		const { root } = await renderBlock(source);
+
+		const pr = root.querySelector('.dse-pr') as HTMLElement;
+		expect(pr.querySelectorAll('.dse-pr__row')).toHaveLength(3);
+		expect(pr.querySelector('.dse-pr__head')).toBeNull();
+	});
+
+	test('powerRollPanel: a roll line that is not "Power Roll + X" renders VERBATIM in the head (no wording change)', async () => {
+		const source = ['type: feature', 'feature_type: ability', 'name: Odd Roll', 'effects:', '  - roll: 2d10 + 3', '    tier1: One.'].join('\n');
+		const { root } = await renderBlock(source);
+
+		expect(root.querySelector('.dse-pr__head')!.textContent).toBe('2d10 + 3');
+	});
+
+	test('.dse-section: named effects become titled panels — title has NO baked-in colon, cost joins the title, body is the effect text', async () => {
+		const { root } = await renderBlock(FULL);
+
+		// :scope keeps the query on the TOP-LEVEL card — the nested inner feature has
+		// direct-child sections of its own.
+		const card = root.querySelector(':scope > .dse-feature') as HTMLElement;
+		const sections = card.querySelectorAll(':scope > .dse-section');
+		const titles = Array.from(sections).map((s) => s.querySelector('.dse-section__title')!.textContent);
+		expect(titles).toEqual(['Trigger', 'Effect', 'Special (2 Malice)', 'Aftermath']);
+
+		const effect = Array.from(sections).find(
+			(s) => s.querySelector('.dse-section__title')!.textContent === 'Effect',
+		)!;
+		expect(effect.querySelector('.dse-section__body')!.textContent).toBe('The primary effect text.');
+	});
+
+	test('.dse-section: feature.trigger renders as a "Trigger" titled section before the effects', async () => {
+		const { root } = await renderBlock(FULL);
+
+		const trigger = root.querySelector('.dse-section--trigger') as HTMLElement;
+		expect(trigger.querySelector('.dse-section__title')!.textContent).toBe('Trigger');
+		expect(trigger.querySelector('.dse-section__body')!.textContent).toBe(
+			'A creature ends its turn adjacent to the target.',
+		);
+	});
+
+	test.each([
+		['Main action', 'main'],
+		['Maneuver', 'maneuver'],
+		['Triggered action', 'triggered'],
+		['Free triggered action', 'triggered'],
+		['Move action', 'move'],
+		['No action', 'none'],
+	])('[data-dse-act]: usage %j -> data-dse-act=%j + the --dse-act element-set alias', async (usage, act) => {
+		const source = ['type: feature', 'feature_type: ability', 'name: X', `usage: ${usage}`].join('\n');
+		const { root } = await renderBlock(source);
+
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.getAttribute('data-dse-act')).toBe(act);
+		// Element-set alias (Steel-only accent): --dse-act -> var(--dse-act-<type>).
+		// Legacy maps every --dse-act-* token to `none`, so the spine fails safe.
+		expect(card.style.getPropertyValue('--dse-act')).toBe(`var(--dse-act-${act})`);
+	});
+
+	test('[data-dse-act]: a trait (feature_type: trait) maps to "trait"', async () => {
+		const { root } = await renderBlock(NESTED);
+		expect(root.querySelector('.dse-feature')!.getAttribute('data-dse-act')).toBe('trait');
+	});
+
+	test('[data-dse-act]: an unmappable action type sets NOTHING (accent fails safe, no alias)', async () => {
+		const source = ['type: feature', 'feature_type: ability', 'name: X', 'usage: Gibberish ritual'].join('\n');
+		const { root } = await renderBlock(source);
+
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.hasAttribute('data-dse-act')).toBe(false);
+		expect(card.style.getPropertyValue('--dse-act')).toBe('');
+	});
+
+	test('nesting: effect.features recurse as .dse-feature cards inside .dse-feature__nested; nested heading aria-level bumps', async () => {
+		const { root } = await renderBlock(NESTED);
+
+		const outer = root.querySelector('.dse-feature') as HTMLElement;
+		expect(outer.querySelector('.dse-head__primary--left')!.textContent).toBe('Outer Feature');
+
+		// The nested list mounts INSIDE the owning effect's section (the legacy
+		// EffectView kept nested features inside its container).
+		const nested = outer.querySelector('.dse-section > .dse-feature__nested') as HTMLElement;
+		expect(nested).not.toBeNull();
+
+		const inner = nested.querySelector('.dse-feature') as HTMLElement;
+		const innerName = inner.querySelector('.dse-head__primary--left') as HTMLElement;
+		expect(innerName.textContent).toBe('Inner Feature');
+		expect(innerName.getAttribute('aria-level')).toBe('4');
+		expect(inner.querySelector('.dse-section__body')!.textContent).toBe('Inner effect text.');
+	});
+
+	test('indent: N in the block adds the legacy indent-N class to .dse-feature (F1 preserves it)', async () => {
+		const { root } = await renderBlock(magmaTitan + 'indent: 1\n');
+		expect(root.querySelector('.dse-feature.indent-1')).not.toBeNull();
+	});
+
+	test('NO content loss: every field the legacy FeatureView rendered appears in the new DOM', async () => {
+		const { root } = await renderBlock(FULL);
+		const text = root.textContent!;
+
+		for (const expected of [
+			'Coverage Strike', // name
+			'5 Malice', // cost
+			'Villain Action 1', // ability_type
+			'A sweeping flourish of steel.', // flavor
+			'Attack, Weapon', // keywords
+			'Main action', // usage
+			'Melee 1', // distance
+			'One creature', // target
+			'A creature ends its turn adjacent to the target.', // trigger
+			'The primary effect text.', // named effect
+			'Power Roll + Might', // roll
+			'Tier one outcome.', // tier1
+			'Tier two outcome.', // tier2
+			'Tier three outcome.', // tier3
+			'Crit outcome.', // crit
+			'Special (2 Malice)', // effect name + cost
+			'Special clause text.',
+			'Inner Feature', // nested feature
+			'Inner effect text.',
+		]) {
+			expect(text).toContain(expected);
+		}
+	});
+
+	test('ML-1: ALL markdown renders through the view-parented renderMarkdown (component = the view, never the plugin)', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		try {
+			await renderBlock(FULL);
+
+			expect(renderSpy.mock.calls.length).toBeGreaterThan(10);
+			for (const call of renderSpy.mock.calls) {
+				expect(call[3]).toBe('Note.md'); // host.sourcePath
+				expect(call[4]).toBeInstanceOf(FeatureElementView); // lifecycle owner (ML-1)
+			}
+		} finally {
+			renderSpy.mockRestore();
+		}
+	});
+
+	test('static: rendering never writes back and mounts NO interactive controls', async () => {
+		const { root, host } = await renderBlock(FULL);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+	});
+
+	test('root carries data-dse-element="feature" + data-dse-theme; the legacy wrapper classes are gone', async () => {
+		const { root } = await renderBlock(magmaTitan);
 
 		expect(root.getAttribute('data-dse-element')).toBe('feature');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
-		const container = root.querySelector(':scope > .ds-feature-ele-container');
-		expect(container).not.toBeNull();
-		expect(container!.classList.contains('ds-container')).toBe(true);
-		expect(container!.querySelector(':scope > .ds-feature-container')).not.toBeNull();
-	});
-
-	test('header/flavor/detail rows: name, cost, flavor, keywords, usage, distance, target', async () => {
-		const { root } = await renderFeature(magmaTitan);
-
-		expect(root.querySelector('.ds-feature-name-value')!.textContent).toBe('Magma Titan');
-		expect(root.querySelector('.ds-feature-cost-value')!.textContent).toBe(' (9 Essence)');
-		expect(root.querySelector('.ds-feature-flavor-value')!.textContent).toContain(
-			'Their body swells with lava, mud, and might',
-		);
-		expect(root.querySelector('.pr-keyword-value')!.textContent).toBe('Earth, Fire, Magic, Ranged, Void');
-		expect(root.querySelector('.pr-type-value')!.textContent).toBe('Main action');
-		expect(root.querySelector('.ds-feature-distance-value')!.textContent).toBe('Ranged 10');
-		expect(root.querySelector('.ds-feature-target-value')!.textContent).toBe('One creature or object');
-	});
-
-	test('effects: three .ds-effect-container blocks — named effect, power roll with three tiers, persistent', async () => {
-		const { root } = await renderFeature(magmaTitan);
-
-		const effects = root.querySelectorAll('.ds-effects-container > .ds-effect-container');
-		expect(effects).toHaveLength(3);
-
-		expect(effects[0].querySelector('.ds-pr-effect-key')!.textContent).toBe('Effect: ');
-		expect(effects[0].querySelector('.ds-pr-effect-value')!.textContent).toContain(
-			'Their size and stability increase by 2',
-		);
-
-		expect(effects[1].querySelector('.ds-pr-roll-line .ds-feature-roll-value')!.textContent).toBe(
-			'Power Roll + Reason',
-		);
-		expect(effects[1].querySelectorAll('.ds-pr-tier-line')).toHaveLength(3);
-		expect(effects[1].querySelector('.ds-pr-tier-1-value')!.textContent).toBe(
-			'You teleport the target up to 4 squares.',
-		);
-		expect(effects[1].querySelector('.ds-pr-tier-2-value')!.textContent).toBe(
-			'You teleport the target up to 6 squares.',
-		);
-		expect(effects[1].querySelector('.ds-pr-tier-3-value')!.textContent).toBe(
-			'You teleport the target up to 8 squares.',
-		);
-		expect(effects[1].querySelector('.t1-key-body-text')!.textContent).toBe('≤11');
-		expect(effects[1].querySelector('.t2-key-body-text')!.textContent).toBe('12-16');
-		expect(effects[1].querySelector('.t3-key-body-text')!.textContent).toBe('17+');
-
-		expect(effects[2].querySelector('.ds-pr-effect-key')!.textContent).toBe('Persistent 2: ');
-	});
-
-	test('nested effect.features recurse (EffectView -> FeaturesView -> FeatureView)', async () => {
-		const { root } = await renderFeature(NESTED);
-
-		const outer = root.querySelector('.ds-feature-container') as HTMLElement;
-		expect(outer.querySelector('.ds-feature-name-value')!.textContent).toBe('Outer Feature');
-
-		const nested = outer.querySelector('.ds-effect-container > .ds-features') as HTMLElement;
-		expect(nested).not.toBeNull();
-		const inner = nested.querySelector('.ds-feature-container') as HTMLElement;
-		expect(inner.querySelector('.ds-feature-name-value')!.textContent).toBe('Inner Feature');
-		expect(inner.querySelector('.ds-pr-effect-value')!.textContent).toBe('Inner effect text.');
-	});
-
-	test('indent: N in the block adds the legacy indent-N class to .ds-feature-container', async () => {
-		const { root } = await renderFeature(magmaTitan + 'indent: 1\n');
-		expect(root.querySelector('.ds-feature-container.indent-1')).not.toBeNull();
-	});
-
-	test('static: rendering never writes back (no replaceSource) and no error card renders', async () => {
-		const { root, host } = await renderFeature(magmaTitan);
-		expect(host.replaceSource).not.toHaveBeenCalled();
-		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector(':scope > .dse-feature')).not.toBeNull();
+		expect(root.querySelector('.ds-feature-ele-container')).toBeNull();
+		expect(root.querySelector('.ds-feature-container')).toBeNull();
 	});
 
 	test('ties FeatureElementView to host.addChild (block lifecycle)', async () => {
 		const addChild = jest.fn((child: unknown) => child);
-		await renderFeature(magmaTitan, { addChild } as Partial<BlockHost>);
+		await renderBlock(magmaTitan, { addChild } as Partial<BlockHost>);
 		expect(addChild).toHaveBeenCalledTimes(1);
 		expect(addChild.mock.calls[0][0]).toBeInstanceOf(FeatureElementView);
 	});
 
 	test('pipeline default click shield replaces the legacy manual mousedown/pointerdown stop', async () => {
-		const { root, host } = await renderFeature(magmaTitan);
+		const { root, host } = await renderBlock(magmaTitan);
 		document.body.appendChild(host.containerEl);
 		try {
 			let bubbledToDocument = 0;
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const container = root.querySelector('.ds-feature-container') as HTMLElement;
-				container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+				const card = root.querySelector('.dse-feature') as HTMLElement;
+				card.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(0);
 			} finally {
 				document.removeEventListener('mousedown', onDocMousedown);
@@ -264,12 +467,81 @@ describe('Plan 07 Task 1: feature rendered through the REAL ElementPipeline', ()
 		}
 	});
 
-	test('malformed YAML renders the framework error card (stage "parse") — replaces the legacy try/catch div', async () => {
-		const { root } = await renderFeature('name: [unclosed');
+	test('malformed YAML renders the framework error card (stage "parse")', async () => {
+		const { root } = await renderBlock('name: [unclosed');
 		expect(root.getAttribute('data-dse-error-stage')).toBe('parse');
 		expect(root.querySelector('.dse-error-card')).not.toBeNull();
 		expect(root.querySelector('.dse-error-card-title')!.textContent).toContain('Feature: failed to render');
-		expect(root.querySelector('.ds-feature-container')).toBeNull();
+		expect(root.querySelector('.dse-feature')).toBeNull();
+	});
+});
+
+describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 consumes)', () => {
+	/** Comments explain what the code must NOT do — strip them so the negative import
+	 *  scans below only see real code (same trick styleGuardFindings uses). */
+	const stripComments = (src: string) =>
+		src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+	test('renderFeature.ts: NO MarkdownRenderer/app import (markdown flows through the renderMd callback); type-only obsidian import; style guard clean', () => {
+		const src = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/feature/renderFeature.ts'),
+			'utf8',
+		);
+		const code = stripComments(src);
+		expect(code).not.toMatch(/MarkdownRenderer/);
+		expect(code).not.toMatch(/\.app\b/);
+		// The only obsidian coupling allowed is the type-only Component import.
+		expect(code).toMatch(/import type \{[^}]*Component[^}]*\} from 'obsidian'/);
+		expect(code).not.toMatch(/^import \{[^}]*\} from 'obsidian'/m);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('view.ts: delegates to renderFeature, no longer constructs the legacy FeatureView; style guard clean', () => {
+		const src = fs.readFileSync(path.join(__dirname, '../../../src/elements/feature/view.ts'), 'utf8');
+		const code = stripComments(src);
+		expect(code).toMatch(/renderFeature/);
+		expect(code).not.toMatch(/drawSteelAdmonition\/Features\/FeatureView/);
+		expect(styleGuardFindings(src)).toEqual([]);
+	});
+
+	test('legacy Features/FeatureView.ts stays in place UNTOUCHED for Statblock/Featureblock (retired in Task 6)', () => {
+		const legacy = fs.readFileSync(
+			path.join(__dirname, '../../../src/drawSteelAdmonition/Features/FeatureView.ts'),
+			'utf8',
+		);
+		// Its consumers still construct it directly (via FeaturesView -> FeatureView).
+		expect(legacy).toMatch(/class FeatureView/);
+		const statblock = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/statblock/view.ts'),
+			'utf8',
+		);
+		expect(statblock).toMatch(/Features\/FeaturesView/);
+		const featureblock = fs.readFileSync(
+			path.join(__dirname, '../../../src/drawSteelAdmonition/featureblock/FeatureblockView.ts'),
+			'utf8',
+		);
+		expect(featureblock).toMatch(/Features\/FeaturesView/);
+	});
+
+	test('CSS contract: .dse-feature grammar in styles-source.css — token-only spine via var(--dse-act), .dse-section title on --dse-heading; the legacy .ds-feature-* block STAYS until Task 6', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		// The action spine consumes the element-set alias, background-keyed so the
+		// Legacy `none` token value fails safe to invisible.
+		const spine = sheet.match(/\.dse-feature\[data-dse-act\]::before\s*\{[\s\S]*?\n\}/);
+		expect(spine).not.toBeNull();
+		expect(spine![0]).toMatch(/background:\s*var\(--dse-act/);
+
+		const sectionTitle = sheet.match(/\.dse-section__title\s*\{[\s\S]*?\n\}/);
+		expect(sectionTitle).not.toBeNull();
+		expect(sectionTitle![0]).toMatch(/var\(--dse-heading\)/);
+
+		expect(sheet).toMatch(/\.dse-feature__meta\s*\{/);
+		expect(sheet).toMatch(/\.dse-feature__flavor\s*\{/);
+
+		// The legacy classes are still consumed by Statblock/Featureblock (via the
+		// untouched legacy FeatureView) — Task 6 retires them, not Task 5.
+		expect(sheet).toMatch(/\.ds-feature-container\s*\{/);
 	});
 });
 
@@ -300,7 +572,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-ft*, Regis
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-ft block through the wired processor produces the feature DOM (end-to-end)', async () => {
+	test('rendering a ds-ft block through the wired processor produces the kit feature DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -313,6 +585,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-ft*, Regis
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('feature');
-		expect(root.querySelector('.ds-feature-ele-container .ds-feature-container')).not.toBeNull();
+		expect(root.querySelector('.dse-feature > .dse-head')).not.toBeNull();
+		expect(root.querySelector('.dse-feature .dse-pr')).not.toBeNull();
 	});
 });
