@@ -1,99 +1,102 @@
-import {App, Modal, setIcon} from "obsidian";
-import {Condition} from "@drawSteelAdmonition/EncounterData";
-import {ConditionConfig} from "@utils/Conditions";
+// Plan 09 Task 8 (D2 §3.x) — CustomizeConditionModal on the kit managedModal. The
+// native <input type="color"> STAYS (§3.x — it is the right control for the job);
+// the preview icon is colored through the VALIDATED --dse-condition-color scoped
+// property (applyConditionColor, OD-8/SD-2) — never el.style.color (this file's :80
+// was an SC-5 eviction-map site) — and the effect classes ride the shared
+// applyConditionEffect (the legacy duplicated updateIconPreview is gone). Footer
+// buttons are REAL kit <button>s (CB-8). Constructor signature
+// (app, conditionData, conditionConfig, onUpdate) and the save/cancel callback
+// contract are the legacy ones, unchanged; the constructor still edits a COPY, so
+// Cancel never leaks a half-edit back to the caller.
+import type { App } from 'obsidian';
+import { setIcon } from 'obsidian';
+import { Condition } from '@drawSteelAdmonition/EncounterData';
+import { ConditionConfig } from '@utils/Conditions';
+import { DseModal } from '@/framework/kit';
+import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS } from '@/elements/conditionColor';
 
-export class CustomizeConditionModal extends Modal {
-    private conditionData: Condition;
-    private conditionConfig: ConditionConfig;
-    private onUpdate: (conditionData: Condition) => void;
+/** The color input's initial swatch when the condition has no color yet (the legacy
+ *  default). A form-control VALUE, not styling — exempted by name in the
+ *  source-hygiene test's literal scan. */
+const COLOR_INPUT_DEFAULT = '#ffffff';
 
-    constructor(app: App, conditionData: Condition, conditionConfig: ConditionConfig, onUpdate: (conditionData: Condition) => void) {
-        super(app);
-        this.conditionData = { ...conditionData };
+export class CustomizeConditionModal extends DseModal {
+	private conditionData: Condition;
+	private conditionConfig: ConditionConfig;
+	private onUpdate: (conditionData: Condition) => void;
+
+	constructor(
+		app: App,
+		conditionData: Condition,
+		conditionConfig: ConditionConfig,
+		onUpdate: (conditionData: Condition) => void,
+	) {
+		super(app);
+		this.conditionData = { ...conditionData };
 		this.conditionConfig = conditionConfig;
-        this.onUpdate = onUpdate;
-    }
+		this.onUpdate = onUpdate;
+	}
 
-    onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
+	onOpen() {
+		this.setDseTitle('Customize Condition');
 
-        const modalContainer = contentEl.createEl('div', { cls: 'customize-condition-modal' });
+		const layout = this.body.createDiv({ cls: 'dse-cust' });
+		const tools = layout.createDiv({ cls: 'dse-cust__tools' });
 
-        modalContainer.createEl('h2', { text: 'Customize Condition' });
+		// Color picker — the native <input type="color"> stays (§3.x). It only ever
+		// yields #rrggbb hex, but stored data may hold anything: the PREVIEW (and every
+		// later consumer) goes through the validating helper regardless.
+		const colorRow = tools.createDiv({ cls: 'dse-cust__row' });
+		colorRow.createEl('label', { text: 'Color: ' });
+		const colorInput = colorRow.createEl('input', { type: 'color' }) as HTMLInputElement;
+		colorInput.setAttribute('aria-label', 'Condition color');
+		colorInput.value = this.conditionData.color || COLOR_INPUT_DEFAULT;
 
-        const bodyContainer = modalContainer.createEl('div', { cls: 'customize-condition-body' });
+		// Effect selector.
+		const effectRow = tools.createDiv({ cls: 'dse-cust__row' });
+		effectRow.createEl('label', { text: 'Effect: ' });
+		const effectSelect = effectRow.createEl('select') as HTMLSelectElement;
+		effectSelect.setAttribute('aria-label', 'Condition effect');
+		for (const effect of ['static', ...CONDITION_EFFECTS]) {
+			const option = effectSelect.createEl('option', { text: effect, value: effect });
+			if (this.conditionData.effect === effect) option.selected = true;
+		}
 
-        const toolsContainer = bodyContainer.createEl('div', { cls: 'customize-condition-tools' });
+		// Preview — reflects the CURRENT customization immediately, then live-updates.
+		const previewEl = layout.createDiv({ cls: 'dse-cust__preview' });
+		setIcon(previewEl, this.conditionConfig.iconName);
+		this.updatePreview(previewEl);
 
-        // Color Picker
-        const colorPickerContainer = toolsContainer.createEl('div', { cls: 'color-picker-container' });
-        colorPickerContainer.createEl('label', { text: 'Color: ' });
-        const colorInput = colorPickerContainer.createEl('input', { type: 'color' }) as HTMLInputElement;
-        colorInput.value = this.conditionData.color || '#ffffff';
-
-        // Effect Selector
-        const effectContainer = toolsContainer.createEl('div', { cls: 'effect-container' });
-        effectContainer.createEl('label', { text: 'Effect: ' });
-        const effectSelect = effectContainer.createEl('select') as HTMLSelectElement;
-        const effects = ['static', 'blink', 'glow', 'glow-pulse', 'breathing', 'blur-pulse'];
-        effects.forEach(effect => {
-            const option = effectSelect.createEl('option', { text: effect, value: effect });
-            if (this.conditionData.effect === effect) option.selected = true;
-        });
-
-		// Preview
-        const previewContainer = bodyContainer.createEl('div', { cls: 'customize-condition-preview', text: 'asdf' });
-        setIcon(previewContainer, this.conditionConfig.iconName);
-
-		effectSelect.addEventListener('change', () => {
-			this.conditionData.effect = effectSelect.value;
-			this.updateIconPreview(previewContainer, this.conditionData);
-		});
-
-		colorInput.addEventListener('change', () => {
+		this.lifecycle.registerDomEvent(colorInput, 'change', () => {
 			this.conditionData.color = colorInput.value;
-			this.updateIconPreview(previewContainer, this.conditionData);
+			this.updatePreview(previewEl);
+		});
+		this.lifecycle.registerDomEvent(effectSelect, 'change', () => {
+			this.conditionData.effect = effectSelect.value;
+			this.updatePreview(previewEl);
 		});
 
-        // Modal action buttons
-        const buttonsContainer = modalContainer.createEl('div', { cls: 'modal-buttons' });
-        const cancelButton = buttonsContainer.createEl('button', { text: 'Cancel' });
-        const saveButton = buttonsContainer.createEl('button', { text: 'Save' });
+		this.footer([
+			{ label: 'Cancel', text: 'Cancel', onClick: () => this.close() },
+			{
+				label: 'Save',
+				text: 'Save',
+				variant: 'accent',
+				onClick: () => {
+					// Legacy Save contract verbatim: color/effect are read off the
+					// controls (an untouched modal saves the defaults) and the edited
+					// COPY is handed to the caller.
+					this.conditionData.color = colorInput.value;
+					this.conditionData.effect = effectSelect.value;
+					this.onUpdate(this.conditionData);
+					this.close();
+				},
+			},
+		]);
+	}
 
-        cancelButton.addEventListener('click', () => {
-            this.close();
-        });
-
-        saveButton.addEventListener('click', () => {
-            this.conditionData.color = colorInput.value;
-            this.conditionData.effect = effectSelect.value;
-            this.onUpdate(this.conditionData);
-            this.close();
-        });
-    }
-
-	// TODO - this is duplicated code
-	private updateIconPreview(iconEl: HTMLElement, conditionData: Condition) {
-		// Apply color customization
-		if (conditionData.color) {
-			iconEl.style.color = conditionData.color;
-		} else {
-			iconEl.style.color = '';
-		}
-
-		// Remove existing effect classes
-		iconEl.classList.remove(
-			'condition-effect-blink',
-			'condition-effect-glow',
-			'condition-effect-glow-pulse',
-			'condition-effect-glow-pulse',
-			'condition-effect-breathing',
-			'condition-effect-blur-pulse');
-
-		// Apply effect customization
-		if (conditionData.effect && conditionData.effect !== 'static') {
-			iconEl.classList.add(`condition-effect-${conditionData.effect}`);
-		}
+	private updatePreview(previewEl: HTMLElement): void {
+		applyConditionColor(previewEl, this.conditionData.color);
+		applyConditionEffect(previewEl, this.conditionData.effect);
 	}
 }

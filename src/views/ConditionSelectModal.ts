@@ -1,9 +1,25 @@
-import { App, Modal, setIcon } from 'obsidian';
-import { Condition, CreatureInstance, Hero } from "@drawSteelAdmonition/EncounterData";
-import { ConditionManager, ConditionConfig } from "@utils/Conditions";
-import { CustomizeConditionModal } from "@views/CustomizeConditionModal";
+// Plan 09 Task 8 (D2 §3.x) — AddConditionsModal on the kit managedModal. Every
+// condition is a .dse-cond-item[aria-selected] row of REAL kit <button>s (CB-8/MP-1):
+// a ghost toggle carrying the icon + name (aria-pressed = the checkbox state) and a
+// customize-cog revealed by CSS on hover AND focus (:hover / :focus-within — a11y;
+// the legacy mouseenter-only inline display toggle is gone). Row icons are colored
+// through the VALIDATED --dse-condition-color property (applyConditionColor,
+// OD-8/SD-2) — never el.style.color — with the shared applyConditionEffect replacing
+// the duplicated effect-class block. The child CustomizeConditionModal is opened
+// through openManagedModal against THIS modal's lifecycle, so closing the select
+// modal closes an open customize child with it (F1 §4.5). The constructor signature
+// (app, character, conditionManager, onAdd) and the onAdd(Condition[]) contract are
+// the legacy ones, unchanged — Initiative (T9) keeps opening it the same way.
+import type { App } from 'obsidian';
+import { setIcon } from 'obsidian';
+import { Condition, CreatureInstance, Hero } from '@drawSteelAdmonition/EncounterData';
+import { ConditionManager, ConditionConfig } from '@utils/Conditions';
+import { CustomizeConditionModal } from '@views/CustomizeConditionModal';
+import { DseModal, divider, iconButton, openManagedModal } from '@/framework/kit';
+import type { IconButtonHandle } from '@/framework/kit';
+import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 
-export class AddConditionsModal extends Modal {
+export class AddConditionsModal extends DseModal {
 	private character: Hero | CreatureInstance;
 	private conditionManager: ConditionManager;
 	private onAdd: (conditions: Condition[]) => void;
@@ -13,7 +29,7 @@ export class AddConditionsModal extends Modal {
 		app: App,
 		character: Hero | CreatureInstance,
 		conditionManager: ConditionManager,
-		onAdd: (conditions: Condition[]) => void
+		onAdd: (conditions: Condition[]) => void,
 	) {
 		super(app);
 		this.character = character;
@@ -23,152 +39,129 @@ export class AddConditionsModal extends Modal {
 	}
 
 	onOpen() {
-		const { contentEl } = this;
-		contentEl.empty();
+		this.setDseTitle('Add Conditions');
 
-		const modalContainer = contentEl.createEl('div', { cls: 'add-condition-modal' });
+		const listEl = this.body.createDiv({ cls: 'dse-cond-list' });
+		listEl.setAttribute('role', 'group');
+		listEl.setAttribute('aria-label', 'Conditions');
 
-		modalContainer.createEl('h2', { text: 'Add Conditions' });
-
-		const conditionsList = modalContainer.createEl('div', { cls: 'conditions-list' });
-
-		// Add standard conditions
-		this.conditionManager.getConditions().forEach(condition => {
-			this.addConditionToModal(conditionsList, condition);
+		this.conditionManager.getConditions().forEach((condition) => {
+			this.addConditionRow(listEl, condition);
 		});
 
-		// Divider between conditions and pseudo-conditions
-		const divider = conditionsList.createEl('div', { cls: 'horizontal-divider' });
+		// Kit divider between conditions and pseudo-conditions (§2.10).
+		divider(listEl, { axis: 'h' });
 
-		// Add pseudo-conditions
-		this.conditionManager.getPseudoConditions().forEach(condition => {
-			this.addConditionToModal(conditionsList, condition);
+		this.conditionManager.getPseudoConditions().forEach((condition) => {
+			this.addConditionRow(listEl, condition);
 		});
 
-		// Modal action buttons
-		const buttonsContainer = modalContainer.createEl('div', { cls: 'modal-buttons' });
-		const cancelButton = buttonsContainer.createEl('button', { text: 'Cancel' });
-		const addButton = buttonsContainer.createEl('button', { text: 'Add Conditions' });
-
-		cancelButton.addEventListener('click', () => {
-			this.close();
-		});
-
-		addButton.addEventListener('click', () => {
-			this.onAdd(Array.from(this.selectedConditions.values()));
-			this.close();
-		});
+		this.footer([
+			{ label: 'Cancel', text: 'Cancel', onClick: () => this.close() },
+			{
+				label: 'Add Conditions',
+				text: 'Add Conditions',
+				variant: 'accent',
+				onClick: () => {
+					this.onAdd(Array.from(this.selectedConditions.values()));
+					this.close();
+				},
+			},
+		]);
 	}
 
-	private addConditionToModal(conditionsList: HTMLElement, condition: ConditionConfig) {
-		const conditionEl = conditionsList.createEl('div', { cls: 'condition-item' });
+	private addConditionRow(listEl: HTMLElement, condition: ConditionConfig): void {
+		const rowEl = listEl.createDiv({ cls: 'dse-cond-item' });
+		rowEl.setAttribute('aria-selected', 'false');
 
-		// Icon preview
-		const iconEl = conditionEl.createEl('div', { cls: 'condition-icon-preview' });
-		setIcon(iconEl, condition.iconName);
+		// The selection toggle: a real button owning the icon + name; aria-pressed is
+		// the announced checkbox state, aria-selected on the row is the visual hook.
+		const toggle = iconButton(
+			rowEl,
+			{
+				icon: condition.iconName,
+				label: condition.displayName,
+				text: condition.displayName,
+				variant: 'ghost',
+				pressed: false,
+				onClick: () => this.toggleCondition(rowEl, toggle, condition),
+			},
+			this.lifecycle,
+		);
+		toggle.buttonEl.addClass('dse-cond-item__toggle');
 
-		// Label for the condition name
-		const label = conditionEl.createEl('div', { cls: 'condition-label', text: condition.displayName });
-
-		// Customize icon (cog), hidden by default, shown on hover
-		const customizeIconEl = conditionEl.createEl('div', { cls: 'condition-customize-icon' });
-		setIcon(customizeIconEl, 'cog');
-		customizeIconEl.title = 'Customize Condition';
-
-		// Hide customize icon initially
-		customizeIconEl.style.display = 'none';
-
-		// Show the customize icon on hover
-		conditionEl.addEventListener('mouseenter', () => {
-			customizeIconEl.style.display = '';
-		});
-		conditionEl.addEventListener('mouseleave', () => {
-			customizeIconEl.style.display = 'none';
-		});
-
-		// Click handler for customize icon
-		customizeIconEl.addEventListener('click', (event) => {
-			event.stopPropagation(); // Prevent the click from toggling selection
-			this.openCustomizeConditionModal(condition.key, iconEl, condition);
-		});
-
-		// Click handler for selecting/deselecting the condition
-		conditionEl.addEventListener('click', () => {
-			if (this.selectedConditions.has(condition.key)) {
-				// Deselect condition
-				this.selectedConditions.delete(condition.key);
-				conditionEl.classList.remove('selected');
-			} else {
-				// Select condition
-				const conditionData: Condition = { key: condition.key };
-				this.selectedConditions.set(condition.key, conditionData);
-				conditionEl.classList.add('selected');
-			}
-		});
-
-		// Double-click handler for opening customization modal
-		conditionEl.addEventListener('dblclick', (event) => {
-			event.stopPropagation(); // Prevent the click from toggling selection again
-			this.openCustomizeConditionModal(condition.key, iconEl, condition);
-		});
-
-		// Append elements to conditionEl
-		conditionEl.appendChild(iconEl);
-		conditionEl.appendChild(label);
-		conditionEl.appendChild(customizeIconEl);
+		// The customize cog: its own real button (never nested inside the toggle);
+		// CSS reveals it on row hover AND focus-within.
+		const cog = iconButton(
+			rowEl,
+			{
+				icon: 'cog',
+				label: `Customize ${condition.displayName}`,
+				variant: 'ghost',
+				tooltip: 'Customize Condition',
+				onClick: () => this.openCustomizeConditionModal(rowEl, toggle, condition),
+			},
+			this.lifecycle,
+		);
+		cog.buttonEl.addClass('dse-cond-item__cog');
 	}
 
-	// Updates the icon preview with customizations
-	private updateIconPreview(iconEl: HTMLElement, conditionConfig: ConditionConfig, conditionData: Condition) {
-		// Reset icon classes and set the icon
-		iconEl.className = 'condition-icon-preview';
-		setIcon(iconEl, conditionConfig.iconName);
+	private setSelected(rowEl: HTMLElement, toggle: IconButtonHandle, selected: boolean): void {
+		rowEl.setAttribute('aria-selected', String(selected));
+		toggle.setPressed(selected);
+	}
 
-		// Apply color customization
-		if (conditionData.color) {
-			iconEl.style.color = conditionData.color;
+	private toggleCondition(
+		rowEl: HTMLElement,
+		toggle: IconButtonHandle,
+		condition: ConditionConfig,
+	): void {
+		if (this.selectedConditions.has(condition.key)) {
+			this.selectedConditions.delete(condition.key);
+			this.setSelected(rowEl, toggle, false);
 		} else {
-			iconEl.style.color = '';
-		}
-
-		// Remove existing effect classes
-		iconEl.classList.remove(
-			'condition-effect-blink',
-			'condition-effect-glow',
-			'condition-effect-glow-pulse',
-			'condition-effect-breathing',
-			'condition-effect-blur-pulse'
-		);
-
-		// Apply effect customization
-		if (conditionData.effect && conditionData.effect !== 'static') {
-			iconEl.classList.add(`condition-effect-${conditionData.effect}`);
+			this.selectedConditions.set(condition.key, { key: condition.key });
+			this.setSelected(rowEl, toggle, true);
 		}
 	}
 
-	// Opens the customize condition modal and updates the icon preview upon changes
-	private openCustomizeConditionModal(conditionKey: string, iconEl: HTMLElement, conditionConfig: ConditionConfig) {
-		let conditionData = this.selectedConditions.get(conditionKey);
-		if (!conditionData) {
-			// If condition is not selected yet, create default condition data and select it
-			conditionData = { key: conditionKey };
-			this.selectedConditions.set(conditionKey, conditionData);
-			// Also mark the condition as selected
-			const conditionEl = iconEl.parentElement;
-			if (conditionEl) {
-				conditionEl.classList.add('selected');
-			}
-		}
+	// Reflects a saved customization back onto the row's icon (validated color +
+	// effect class — the legacy updateIconPreview, now the shared helpers).
+	private updateIconPreview(
+		toggle: IconButtonHandle,
+		conditionConfig: ConditionConfig,
+		conditionData: Condition,
+	): void {
+		const iconEl = toggle.buttonEl.querySelector<HTMLElement>('.dse-btn__icon');
+		if (!iconEl) return;
+		setIcon(iconEl, conditionConfig.iconName);
+		applyConditionColor(iconEl, conditionData.color);
+		applyConditionEffect(iconEl, conditionData.effect);
+	}
 
-		const customizeModal = new CustomizeConditionModal(
-			this.app,
-			conditionData,
-			conditionConfig,
-			updatedCondition => {
-				this.selectedConditions.set(conditionKey, updatedCondition);
-				this.updateIconPreview(iconEl, conditionConfig, updatedCondition);
-			}
+	private openCustomizeConditionModal(
+		rowEl: HTMLElement,
+		toggle: IconButtonHandle,
+		conditionConfig: ConditionConfig,
+	): void {
+		let existing = this.selectedConditions.get(conditionConfig.key);
+		if (!existing) {
+			// Customizing an unselected condition selects it (legacy behavior).
+			existing = { key: conditionConfig.key };
+			this.selectedConditions.set(conditionConfig.key, existing);
+			this.setSelected(rowEl, toggle, true);
+		}
+		const conditionData: Condition = existing;
+
+		// Owner-bound to THIS modal's lifecycle: if the select modal goes away (user
+		// dismissal or the owning view unloading), the child closes with it (§4.5).
+		openManagedModal(
+			this.lifecycle,
+			() =>
+				new CustomizeConditionModal(this.app, conditionData, conditionConfig, (updatedCondition) => {
+					this.selectedConditions.set(conditionConfig.key, updatedCondition);
+					this.updateIconPreview(toggle, conditionConfig, updatedCondition);
+				}),
 		);
-		customizeModal.open();
 	}
 }

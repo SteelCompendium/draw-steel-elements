@@ -91,4 +91,21 @@ proto.hasClass = function (cls: string): boolean {
 (globalThis as any).createSpan = (info?: DomElementInfo | string, callback?: (el: HTMLElement) => void) =>
 	(globalThis as any).createEl('span', info, callback);
 
+// CSS.supports shim — jsdom ships no CSS global, but applyConditionColor (OD-8/SD-2,
+// src/elements/conditionColor.ts) validates user color input through
+// CSS.supports('color', v). Delegate to jsdom's cssstyle parser: setProperty keeps
+// valid values and silently drops invalid ones, which is exactly the accept/reject
+// signal the real CSS.supports gives (verified: 'red'/'#ff0000'/'rgb(…)' accepted;
+// 'not a color', '; }', 'expression(…)', 'url(javascript:…)' rejected).
+if (typeof (globalThis as any).CSS === 'undefined') {
+	const probe = document.createElement('div').style;
+	(globalThis as any).CSS = {
+		supports: (property: string, value: string): boolean => {
+			probe.setProperty(property, '');
+			probe.setProperty(property, value);
+			return probe.getPropertyValue(property) !== '';
+		},
+	};
+}
+
 export {};

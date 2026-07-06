@@ -390,10 +390,10 @@ describe('T-4: persisted mutations — exactly ONE debounced write each, byte-co
 		const { root, host } = await renderInit(quickStart);
 
 		(root.querySelector('.heroes-container .add-condition-icon') as HTMLElement).click();
+		// Task 8: the modal is a kit managedModal — rows/footer are labelled kit buttons.
 		const modalEl = lastModal();
-		(modalEl.querySelector('.condition-item') as HTMLElement).click(); // Bleeding (first standard condition)
-		const buttons = modalEl.querySelectorAll('.modal-buttons button');
-		(buttons[1] as HTMLElement).click(); // "Add Conditions"
+		(modalEl.querySelector('button[aria-label="Bleeding"]') as HTMLElement).click();
+		(modalEl.querySelector('.dse-modal__footer button[aria-label="Add Conditions"]') as HTMLElement).click();
 
 		const heroConditions = root.querySelectorAll('.heroes-container .hero-container .condition-icon');
 		expect(heroConditions).toHaveLength(1);
@@ -522,7 +522,8 @@ describe('T-4: reset flows — model mutation -> framework update() rebuild -> p
 		(root.querySelector('.reset-encounter-button') as HTMLElement).click();
 		const modalEl = lastModal();
 		expect(modalEl.textContent).toContain('Confirm Encounter Reset');
-		(modalEl.querySelector('.mod-warning') as HTMLElement).click(); // "Yes, Reset"
+		// Task 8: the confirm is a kit managedModal — a labelled danger footer button.
+		(modalEl.querySelector('button[aria-label="Yes, Reset"]') as HTMLElement).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
@@ -543,8 +544,8 @@ describe('T-4: reset flows — model mutation -> framework update() rebuild -> p
 
 		(root.querySelector('.reset-encounter-button') as HTMLElement).click();
 		const modalEl = lastModal();
-		const buttons = modalEl.querySelectorAll('.modal-button-container button');
-		(buttons[1] as HTMLElement).click(); // "Cancel"
+		// Task 8: the confirm is a kit managedModal — a labelled Cancel footer button.
+		(modalEl.querySelector('button[aria-label="Cancel"]') as HTMLElement).click();
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
 		expect(root.querySelector('.malice-text')!.textContent).toBe('Malice: 5');

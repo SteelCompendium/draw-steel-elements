@@ -1262,122 +1262,104 @@ code.dsa {
 	height: 100%;
 }
 
-/* ===================== */
-/*    Condition Modal    */
-/* ===================== */
+/* ============================================================== */
+/*  Condition modals (D2 §3.x, Plan 09 Task 8): .dse-cond / .dse-cust  */
+/* ============================================================== */
+/* Both condition modals ride the kit .dse-modal scaffold; rows, cogs, and footers
+   are kit .dse-btn (their own chrome) — layout only here. The user-picked condition
+   color rides the VALIDATED --dse-condition-color scoped property
+   (applyConditionColor, OD-8/SD-2 — never el.style.color); absent/invalid input
+   falls back to --dse-fg-muted through the var() default. */
 
-/* Conditions List */
-.conditions-list {
+.dse-cond-list {
 	display: flex;
 	flex-wrap: wrap;
 }
+/* The kit divider between conditions and pseudo-conditions must break the wrap row. */
+.dse-cond-list > .dse-hr {
+	width: 100%;
+	margin: 0.5em 0;
+}
 
-/* Condition Item */
-.condition-item {
+.dse-cond-item {
 	position: relative;
 	display: flex;
 	align-items: center;
 	width: calc(50% - 2em);
-	padding: 4px 1em;
-	/* padding-left: 1em; */
-	cursor: pointer;
-	box-sizing: border-box;
-	transition: background-color 0.2s;
 	margin: 0 1em 0.25em 1em;
+	box-sizing: border-box;
 	border: 2px solid transparent;
-	border-radius: 4px;
-
-    &:hover {
-        background-color: var(--code-background);
-
-        .condition-customize-icon {
-            display: inline-block; /* Show on hover */
-        }
-    }
-
-    /* Selected Condition */
-    &.selected {
-        border: 2px solid var(--interactive-accent);
-        border-radius: 4px;
-    }
+	border-radius: var(--dse-radius);
+	transition: background-color 0.2s;
+}
+.dse-cond-item:hover {
+	background-color: var(--dse-hover);
+}
+/* Selection reads on the ROW (the legacy accent border), keyed to aria-selected. */
+.dse-cond-item[aria-selected='true'] {
+	border-color: var(--dse-accent);
 }
 
-/* Condition Icon Preview */
-.condition-icon-preview {
+/* The row toggle: a ghost kit button filling the row. Its aria-pressed state is
+   announced, but the VISUAL selection is the row border above — so the kit's
+   pressed accent-fill is flattened here (higher specificity than .dse-btn[data-pressed]). */
+.dse-cond-item__toggle {
+	flex: 1 1 auto;
+	min-width: 0;
+	justify-content: flex-start;
+	/* keep the label clear of the absolutely-positioned cog */
+	padding-right: var(--dse-touch-min);
+}
+.dse-cond-item .dse-btn[data-pressed] {
+	background: transparent;
+	color: var(--dse-fg);
+	border-color: transparent;
+}
+.dse-cond-item__toggle .dse-btn__icon {
 	font-size: 1.5em;
+	color: var(--dse-condition-color, var(--dse-fg-muted));
 }
 
-/* Condition Label */
-.condition-label {
-	margin-left: 8px;
-	flex-grow: 1;
+/* The customize cog reveals on hover AND focus (§3.x — a11y, not hover-only).
+   visibility (not display) keeps it in the tab order the moment the row gains
+   :focus-within via its toggle. */
+.dse-cond-item__cog {
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	visibility: hidden;
+}
+.dse-cond-item:hover .dse-cond-item__cog,
+.dse-cond-item:focus-within .dse-cond-item__cog {
+	visibility: visible;
 }
 
-/* Customize Icon (Cog) */
-.condition-customize-icon {
-	margin-left: 8px;
-	cursor: pointer;
-	display: none; /* Hidden by default */
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-
-    /* Customize Icon Size */
-    svg {
-        width: 1em;
-        height: 1em;
-    }
-}
-
-/* Horizontal Divider */
-.horizontal-divider {
-	width: 100%;
-	margin: 1em 0;
-	height: 1px;
-	background-color: var(--color-base-40);
-}
-
-/* Modal Buttons */
-.add-condition-modal,
-.customize-condition-modal {
-    .modal-buttons {
-        display: flex;
-        justify-content: flex-end;
-
-        button {
-            margin: 1em 0 0 1em;
-        }
-    }
-}
-
-.customize-condition-body {
+/* CustomizeConditionModal body: tools column beside the live preview. */
+.dse-cust {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+	gap: var(--dse-pad);
 }
-
-.customize-condition-modal {
-    .color-picker-container,
-    .effect-container {
-        margin-top: 1em;
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-    }
-
-    label {
-        width: 4em;
-        margin-right: 1em;
-    }
+.dse-cust__row {
+	margin-top: 1em;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
 }
-
-.customize-condition-preview {
+.dse-cust__row label {
+	width: 4em;
+	margin-right: 1em;
+}
+.dse-cust__preview {
 	height: 2em;
-	width: 100%;
+	flex: 1 1 auto;
 	display: flex;
 	justify-content: center;
 	align-items: center;
+	font-size: 1.5em;
+	color: var(--dse-condition-color, var(--dse-fg-muted));
 }
 
 /* ===================== */
