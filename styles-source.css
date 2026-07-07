@@ -1964,6 +1964,106 @@ Shared globals
 	--dse-act-none: none;
 	--dse-act-trait: none;
 }
+
+/* ================================================================== */
+/*   --dse-* Steel theme — value override layer (D3 Plan 10 Task 3)   */
+/* ================================================================== */
+/*
+   High-Fantasy Steel skin: overrides every --dse-* whose Steel value differs
+   from the Legacy base above. Values are transcribed VERBATIM from the
+   authoritative token map (docs/superpowers/dse-overhaul/D3-token-map.md,
+   "Steel value (dark)" column) — do NOT re-decide here; keep in manual sync
+   with v2/docs/stylesheets/palette.css (OD-6). This is the DARK ground (Steel's
+   signature); the .theme-light variant is a SEPARATE layer (D3 Task 4).
+
+   var(--sc-*, #hex) chaining: the --sc-* vars live in the v2 site and are
+   normally UNDEFINED in the plugin, so the #hex fallback is what resolves; if a
+   Steel-Compendium-aware snippet defines them, DSE picks them up (cost-free
+   forward-compat, spec §2.4).
+
+   Tokens deliberately ABSENT (they inherit the Legacy base — the map marks them
+   "= Legacy, theme-invariant"): page-bg, pad, touch-min, font-mono, rule-fade.
+*/
+[data-dse-element][data-dse-theme="steel"] {
+	/* -- Structure / surface -- */
+	--dse-surface: #1a1e21;
+	--dse-surface-raised: #22272b;
+	--dse-surface-sunken: rgba(220,226,230,0.06); /* 6% wash reads inset-panel, not darker */
+	--dse-border: rgba(220,226,230,0.12);
+	--dse-border-strong: rgba(220,226,230,0.24);
+	--dse-radius: 0.4em; /* DESIGN.md card radius (Legacy 5px) */
+	--dse-hover: rgba(77,184,199,0.10);
+	/* Re-keyed to the rule tokens so the hairline tracks the theme (map fn 4). */
+	--dse-hairline-fade: linear-gradient(to right, var(--dse-rule), var(--dse-rule-fade));
+
+	/* -- Text -- */
+	--dse-heading: rgba(220,226,230,0.95);
+	--dse-fg: rgba(220,226,230,0.88);
+	--dse-fg-muted: rgba(220,226,230,0.62);
+	--dse-fg-faint: rgba(220,226,230,0.38);
+	--dse-font-display: "Source Serif 4", var(--font-text); /* OD-4 free-serif fallback */
+	--dse-chip-bg: rgba(220,226,230,0.06);
+
+	/* -- Accent / interaction -- */
+	--dse-accent: #4db8c7;
+	--dse-accent-fg: #0f1214;
+	--dse-focus-ring: #4db8c7;
+	--dse-select: #e0584b;
+
+	/* -- Steel ornament (ports the site's --fx-* chrome; Legacy = flat/none) -- */
+	--dse-metal-grad: linear-gradient(180deg, #e3e7e9 0%, #a9b0b5 48%, #686f74 100%);
+	--dse-metal-line: rgba(176,183,187,.5);
+	--dse-metal-faint: rgba(176,183,187,.16);
+	--dse-bevel: inset 0 1px 0 rgba(255,255,255,.07);
+	--dse-emboss: 0 1px 0 rgba(0,0,0,.55), 0 -1px 0 rgba(255,255,255,.04);
+	--dse-card-bg: linear-gradient(160deg, #232a2e, #181c1f);
+	--dse-crest-shape: polygon(6% 0, 94% 0, 94% 58%, 50% 100%, 6% 58%);
+	--dse-rule: var(--sc-steel, #8e959a);
+
+	/* -- Semantic: power-roll tiers -- */
+	--dse-tier-low: var(--sc-tier-low, #e74c3c);
+	--dse-tier-mid: var(--sc-tier-mid, #f0b429);
+	--dse-tier-high: var(--sc-tier-high, #4caf6a);
+	--dse-tier-crit: #e3c14a; /* PROPOSED gold — no site --sc-tier-crit (map fn 9; Scott review) */
+	--dse-badge-fg: #0f1214; /* near-black ink on the bright dark-scheme tier fills */
+
+	/* -- Semantic: stamina / HP -- */
+	--dse-stamina-healthy: var(--sc-role-hexer, #5cc98a);
+	--dse-stamina-winded: #f0b429;
+	--dse-stamina-dying: #e74c3c;
+	--dse-stamina-temp: #5dade2; /* PROPOSED blue (cont. w/ shipped deepskyblue); spec purple #7c5cd6 (map fn 11; Scott review) */
+	--dse-stamina-track: rgba(220,226,230,0.06);
+
+	/* -- Semantic: encounter -- */
+	--dse-turn-done: var(--sc-role-hexer, #5cc98a);
+	--dse-malice: #e0584b;
+	--dse-vp: #e3c14a; /* PROPOSED victory-gold (shared w/ tier-crit; map fn 12; Scott review) */
+	--dse-warn: #e8954a;
+	--dse-danger: #e74c3c;
+
+	/* -- Combat-role accents (data-dse-role spine; --sc-role-* verbatim) -- */
+	--dse-role-ambusher: var(--sc-role-ambusher, #e3c14a);
+	--dse-role-harrier: var(--sc-role-harrier, #e07ba8);
+	--dse-role-artillery: var(--sc-role-artillery, #a87cd6);
+	--dse-role-brute: var(--sc-role-brute, #5d8fe0);
+	--dse-role-controller: var(--sc-role-controller, #e0584b);
+	--dse-role-hexer: var(--sc-role-hexer, #5cc98a);
+	--dse-role-mount: var(--sc-role-mount, #48c9b0);
+	--dse-role-support: var(--sc-role-support, #e8954a);
+	--dse-role-defender: var(--sc-role-defender, #c7a173);
+	--dse-role-leader: var(--sc-role-leader, #9aa2a8);
+	--dse-role-solo: var(--sc-role-solo, #9aa2a8);
+	--dse-role-minion: var(--sc-role-minion, #9aa2a8);
+
+	/* -- Ability action-type accents (data-dse-act spine; --sc-ability-* slots; Scott review) -- */
+	--dse-act-main: var(--sc-ability-strike, #e74c3c);
+	--dse-act-maneuver: var(--sc-ability-maneuver, #bb8fce);
+	--dse-act-triggered: var(--sc-ability-triggered, #f0b429);
+	--dse-act-move: var(--sc-ability-ranged, #5dade2);
+	--dse-act-none: var(--sc-ability-area, #48c9a4);
+	--dse-act-trait: var(--sc-ability-passive, #b0b7bb);
+}
+
 /* ================================================================== */
 /*   framework/kit control primitives (D2 §2, Plan 08 Task 2)         */
 /* ================================================================== */
