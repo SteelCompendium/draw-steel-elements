@@ -20,7 +20,7 @@ import type { ValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
 import type { SessionStore } from '@/framework/session';
 import { createThemeService } from '@/framework/seams/theme';
-import type { ThemeService } from '@/framework/seams/theme';
+import type { ThemeService, ThemeServiceInternal, DseThemeId } from '@/framework/seams/theme';
 import { createPreferenceStore } from '@/framework/seams/prefs';
 import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
 import { createReferenceService } from '@/framework/seams/refs';
@@ -229,6 +229,56 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             id: 'download-data-md-dse',
             name: 'Download Compendium',
             callback: () => this.downloadAndExtractRelease(),
+        });
+
+        // TEMPORARY review/dev affordance (D3) — a command-palette shortcut to A/B the two
+        // themes during review. D4's settings picker replaces this with the real UI; delete
+        // this command then. It drives the already-built ThemeService: setActive() persists
+        // the `theme` pref AND live-reflows every rendered DSE block (O(live roots) attribute
+        // rewrites of data-dse-theme, no re-render) — no manual DOM walk needed here. The
+        // bundle exposes `services.theme` as the read-only ThemeService, but the runtime
+        // instance from createThemeService() is a ThemeServiceInternal; cast to reach setActive.
+        this.addCommand({
+            id: 'dse-cycle-theme',
+            name: 'Switch theme (Legacy ⇄ Steel)',
+            callback: () => {
+                const theme = this.frameworkV2?.services.theme as ThemeServiceInternal | undefined;
+                if (!theme) return;
+                const next: DseThemeId = theme.active === 'steel' ? 'legacy' : 'steel';
+                theme.setActive(next);
+                new Notice(`Draw Steel Elements theme: ${next}`);
+            },
+        });
+
+        // TEMPORARY review/dev affordance (D3) — toggle the on-screen print-preview twin
+        // (data-dse-print="on", the @media print layout shown on screen) for A/B during
+        // review. D4's settings picker replaces this with the real toggle; delete it then.
+        // The ThemeService does NOT own data-dse-print, so this does a scoped one-shot DOM
+        // pass over the CURRENTLY-rendered roots (main window + any popout documents). LIMITATION:
+        // it neither persists nor auto-applies to blocks rendered after the toggle — good enough
+        // for a review affordance; the real picker (D4) will make it a persisted preference.
+        this.addCommand({
+            id: 'dse-toggle-print-preview',
+            name: 'Toggle print preview',
+            callback: () => {
+                // Collect every document currently hosting DSE roots: the plugin's own
+                // (main) document, plus each open leaf's document (covers popout windows).
+                const docs = new Set<Document>([document]);
+                this.app.workspace.iterateAllLeaves?.((leaf) => {
+                    const doc = leaf.view?.containerEl?.ownerDocument;
+                    if (doc) docs.add(doc);
+                });
+                const roots: HTMLElement[] = [];
+                for (const doc of docs) {
+                    roots.push(...Array.from(doc.querySelectorAll<HTMLElement>('[data-dse-element]')));
+                }
+                const turningOn = !roots.some((el) => el.dataset.dsePrint === 'on');
+                for (const el of roots) {
+                    if (turningOn) el.dataset.dsePrint = 'on';
+                    else delete el.dataset.dsePrint;
+                }
+                new Notice(`Draw Steel Elements print preview: ${turningOn ? 'on' : 'off'}`);
+            },
         });
     }
 
