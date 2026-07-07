@@ -2065,6 +2065,68 @@ Shared globals
 }
 
 /* ================================================================== */
+/*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
+/* ================================================================== */
+/*
+   Steel's DARK ground (above) is the signature; Obsidian stamps
+   .theme-light / .theme-dark on <body>, so this layer borrows ONLY that
+   light/dark bit and re-tints Steel for a light scheme. It overrides EXACTLY
+   the tokens whose value shifts (the token map's "Steel light" column) — nothing
+   else: role hues, stamina fills, tier-crit, encounter markers and select are
+   light/dark-STABLE (palette.css locks them) and therefore inherit the dark
+   Steel value. Values transcribed VERBATIM from the map (OD-6 manual sync).
+*/
+.theme-light [data-dse-element][data-dse-theme="steel"] {
+	/* -- Structure / surface (light steel-white) -- */
+	--dse-surface: #f6f8f8;
+	--dse-surface-raised: #edf0f0;
+	--dse-surface-sunken: #eaeeef;
+	--dse-border: #c8cdd0;
+	--dse-border-strong: #8e959a;
+	--dse-hover: rgba(42,123,136,0.10);
+
+	/* -- Text (dark ink grades) -- */
+	--dse-heading: #1a1d20;
+	--dse-fg: #2c2e30;
+	--dse-fg-muted: #555960;
+	--dse-fg-faint: #828890;
+	--dse-chip-bg: #eaeeef;
+
+	/* -- Accent / interaction (deep teal for light contrast) -- */
+	--dse-accent: #2a7b88;
+	--dse-accent-fg: #fff;
+	--dse-focus-ring: #2a7b88;
+
+	/* -- Steel ornament (site's default/light --fx-* block) -- */
+	--dse-metal-grad: linear-gradient(180deg, #9aa1a6 0%, #6a7176 48%, #474d51 100%);
+	--dse-metal-line: rgba(95,103,108,.45);
+	--dse-metal-faint: rgba(95,103,108,.14);
+	--dse-bevel: inset 0 1px 0 rgba(255,255,255,.8);
+	--dse-emboss: none; /* site: no light emboss */
+	--dse-card-bg: linear-gradient(160deg, #ffffff, #eef1f1);
+	--dse-rule: #5a6368;
+	/* hairline-fade is NOT re-listed: it re-keys off --dse-rule (dark block) and
+	   tracks this light rule automatically. */
+
+	/* -- Power-roll tiers (darkened light-column hues + white badge ink) -- */
+	--dse-tier-low: #c0392b;
+	--dse-tier-mid: #b9770e;
+	--dse-tier-high: #1e8449;
+	--dse-badge-fg: #fff;
+
+	/* -- Stamina bar track -- */
+	--dse-stamina-track: #eaeeef;
+
+	/* -- Ability action-type spines (darkened light-column hues) -- */
+	--dse-act-main: #c0392b;
+	--dse-act-maneuver: #7d3c98;
+	--dse-act-triggered: #b9770e;
+	--dse-act-move: #2874a6;
+	--dse-act-none: #148f77;
+	--dse-act-trait: #7b8a8b;
+}
+
+/* ================================================================== */
 /*   framework/kit control primitives (D2 §2, Plan 08 Task 2)         */
 /* ================================================================== */
 /*
@@ -2568,3 +2630,224 @@ button.dse-pr__row:hover {
 /*   END framework/kit (D2) — kit rules go ABOVE this line: the kit   */
 /*   literal-scan test (kit-index.test.ts) covers banner -> here.     */
 /* ================================================================== */
+
+/* ================================================================== */
+/*   --dse-* Print / export layer (D3 Plan 10 Task 5)                 */
+/* ================================================================== */
+/*
+   Ink-economy OVERRIDE layer that composes over WHICHEVER data-dse-theme is
+   active (spec §5.2 — the theme axis is orthogonal to the medium axis). Two
+   delivery surfaces share ONE value block:
+     • @media print            — real Ctrl-P / Export-to-PDF from Obsidian
+     • [data-dse-print="on"]    — on-screen export-PREVIEW twin (D4 toggles it)
+   Values transcribed VERBATIM from the token map's "Print" column.
+
+   Print-layer scoping caveat (map): the NEUTRAL block (surfaces to white, fg to
+   near-black, ornament off, borders to grey hairlines, radius 0, plus the always-
+   rendered semantics tier / stamina / encounter) applies to BOTH themes. The
+   role and act spines are meaning Steel ADDS (Legacy draws grey role spines and
+   NO act spine), so their print values are SCOPED to [data-dse-theme="steel"] —
+   a Legacy print stays monochrome. Lives OUTSIDE the kit banner→END markers
+   because it carries intentional color literals (like the theme blocks above).
+
+   Tokens intentionally NOT overridden in print (inherit the active theme):
+   touch-min, font-display, font-mono, rule-fade, and role-* ("= Steel exact").
+*/
+
+/* -- NEUTRAL print value block (both themes) — @media print surface -- */
+@media print {
+	[data-dse-element] {
+		/* surfaces → white */
+		--dse-surface: #fff;
+		--dse-surface-raised: #fff;
+		--dse-surface-sunken: #fff;
+		--dse-page-bg: #fff;
+		/* borders → grey hairlines; shape flat */
+		--dse-border: #ccc;
+		--dse-border-strong: #999;
+		--dse-radius: 0;
+		--dse-pad: 0.4em;
+		--dse-hover: transparent;
+		--dse-hairline-fade: none;
+		/* text → near-black grades */
+		--dse-heading: #000;
+		--dse-fg: #000;
+		--dse-fg-muted: #333;
+		--dse-fg-faint: #666;
+		--dse-chip-bg: transparent;
+		/* accent → ink */
+		--dse-accent: #000;
+		--dse-accent-fg: #fff;
+		--dse-focus-ring: #333;
+		--dse-select: #000;
+		/* ornament → OFF */
+		--dse-metal-grad: none;
+		--dse-metal-line: none;
+		--dse-metal-faint: none;
+		--dse-bevel: none;
+		--dse-emboss: none;
+		--dse-card-bg: none;
+		--dse-crest-shape: none;
+		--dse-rule: #bbb;
+		/* tiers (meaning-bearing → darkened legible) */
+		--dse-tier-low: #c0392b;
+		--dse-tier-mid: #b9770e;
+		--dse-tier-high: #1e8449;
+		--dse-tier-crit: #8a6a00;
+		--dse-badge-fg: #fff;
+		/* stamina */
+		--dse-stamina-healthy: #1a7a3a;
+		--dse-stamina-winded: #8a6a00;
+		--dse-stamina-dying: #a11;
+		--dse-stamina-temp: #555;
+		--dse-stamina-track: #fff;
+		/* encounter */
+		--dse-turn-done: #1a7a3a;
+		--dse-malice: #a11;
+		--dse-vp: #8a6a00;
+		--dse-warn: #8a5a00;
+		--dse-danger: #a11;
+	}
+}
+/* -- …and the on-screen preview TWIN (same neutral values) -- */
+[data-dse-element][data-dse-print="on"] {
+	--dse-surface: #fff;
+	--dse-surface-raised: #fff;
+	--dse-surface-sunken: #fff;
+	--dse-page-bg: #fff;
+	--dse-border: #ccc;
+	--dse-border-strong: #999;
+	--dse-radius: 0;
+	--dse-pad: 0.4em;
+	--dse-hover: transparent;
+	--dse-hairline-fade: none;
+	--dse-heading: #000;
+	--dse-fg: #000;
+	--dse-fg-muted: #333;
+	--dse-fg-faint: #666;
+	--dse-chip-bg: transparent;
+	--dse-accent: #000;
+	--dse-accent-fg: #fff;
+	--dse-focus-ring: #333;
+	--dse-select: #000;
+	--dse-metal-grad: none;
+	--dse-metal-line: none;
+	--dse-metal-faint: none;
+	--dse-bevel: none;
+	--dse-emboss: none;
+	--dse-card-bg: none;
+	--dse-crest-shape: none;
+	--dse-rule: #bbb;
+	--dse-tier-low: #c0392b;
+	--dse-tier-mid: #b9770e;
+	--dse-tier-high: #1e8449;
+	--dse-tier-crit: #8a6a00;
+	--dse-badge-fg: #fff;
+	--dse-stamina-healthy: #1a7a3a;
+	--dse-stamina-winded: #8a6a00;
+	--dse-stamina-dying: #a11;
+	--dse-stamina-temp: #555;
+	--dse-stamina-track: #fff;
+	--dse-turn-done: #1a7a3a;
+	--dse-malice: #a11;
+	--dse-vp: #8a6a00;
+	--dse-warn: #8a5a00;
+	--dse-danger: #a11;
+}
+
+/* -- STEEL-composed print semantics: act spines darken; role spines keep the
+      Steel hue (= Steel exact, so no override). Scoped to Steel so a Legacy
+      print never gains a colored spine (map caveat). -- */
+@media print {
+	[data-dse-element][data-dse-theme="steel"] {
+		--dse-act-main: #c0392b;
+		--dse-act-maneuver: #7d3c98;
+		--dse-act-triggered: #b9770e;
+		--dse-act-move: #2874a6;
+		--dse-act-none: #148f77;
+		--dse-act-trait: #7b8a8b;
+	}
+}
+[data-dse-element][data-dse-theme="steel"][data-dse-print="on"] {
+	--dse-act-main: #c0392b;
+	--dse-act-maneuver: #7d3c98;
+	--dse-act-triggered: #b9770e;
+	--dse-act-move: #2874a6;
+	--dse-act-none: #148f77;
+	--dse-act-trait: #7b8a8b;
+}
+
+/* -- Print RULES (structure, not values): §5.1 rules 3-5 -- */
+@media print {
+	/* Rule 3 — force collapsibles OPEN (nothing hidden behind a fold on paper);
+	   overrides the base `.dse-collapse__region[hidden]{display:none}` (§2.3). */
+	.dse-collapse__region[hidden] {
+		display: block !important;
+	}
+	/* …and drop the now-meaningless toggle chevron. */
+	.dse-collapse__chevron {
+		display: none;
+	}
+	/* Rule 4 — hide interactive-only chrome (inert on paper; the STATE they
+	   controlled prints as static text — the stepper VALUE/INPUT stays). The ±
+	   buttons are `.dse-btn` instances, so hiding `.dse-btn` removes them too. */
+	.dse-btn,
+	.dse-tabs__list,
+	.dse-cond--add,
+	.dse-cond-item__toggle,
+	.dse-cond-item__cog {
+		display: none;
+	}
+	/* Rule 5 — page-break hygiene: never split a statblock / ability / power-roll
+	   / characteristics row across a page. */
+	[data-dse-element],
+	.dse-feature,
+	.dse-pr,
+	.dse-statgrid {
+		break-inside: avoid;
+	}
+	/* Rule 2 — meaning-bearing color must survive the printer's ink-saving:
+	   tier badges + stamina fills print exactly (both themes)… */
+	.dse-pr__badge,
+	.dse-stamina__fill,
+	.dse-stamina__temp {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+	/* …and the role/act spines print exactly ONLY under Steel (Legacy = mono). */
+	[data-dse-theme="steel"] .dse-feature[data-dse-act]::before,
+	[data-dse-theme="steel"] .dse-fb {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+}
+
+/* -- …the same RULES for the on-screen preview twin (scoped under the attr) -- */
+[data-dse-print="on"] .dse-collapse__region[hidden] {
+	display: block !important;
+}
+[data-dse-print="on"] .dse-collapse__chevron,
+[data-dse-print="on"] .dse-btn,
+[data-dse-print="on"] .dse-tabs__list,
+[data-dse-print="on"] .dse-cond--add,
+[data-dse-print="on"] .dse-cond-item__toggle,
+[data-dse-print="on"] .dse-cond-item__cog {
+	display: none;
+}
+[data-dse-element][data-dse-print="on"],
+[data-dse-print="on"] .dse-feature,
+[data-dse-print="on"] .dse-pr,
+[data-dse-print="on"] .dse-statgrid {
+	break-inside: avoid;
+}
+[data-dse-print="on"] .dse-pr__badge,
+[data-dse-print="on"] .dse-stamina__fill,
+[data-dse-print="on"] .dse-stamina__temp {
+	-webkit-print-color-adjust: exact;
+	print-color-adjust: exact;
+}
+[data-dse-theme="steel"][data-dse-print="on"] .dse-feature[data-dse-act]::before,
+[data-dse-theme="steel"][data-dse-print="on"] .dse-fb {
+	-webkit-print-color-adjust: exact;
+	print-color-adjust: exact;
+}

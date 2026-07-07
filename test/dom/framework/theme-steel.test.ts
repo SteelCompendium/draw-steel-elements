@@ -209,3 +209,165 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		expect(el.matches('.theme-light [data-dse-element][data-dse-theme="steel"]')).toBe(false);
 	});
 });
+
+// ====================================================================
+//   D3 Task 4 — the Steel LIGHT variant (.theme-light [data-dse-theme])
+// ====================================================================
+//
+// Obsidian stamps .theme-light / .theme-dark on <body>. Steel's DARK block is
+// the signature default; the light variant OVERRIDES only the tokens whose value
+// shifts under light (per the token map's "Steel light" column — surfaces, fg,
+// and the light-column ability/tier hues). Role hues, stamina fills, tier-crit,
+// select, encounter markers are light/dark-STABLE → deliberately NOT re-listed.
+// Same parse-the-declaration strategy as the dark block above.
+
+/** Body of the `.theme-light [data-dse-element][data-dse-theme="steel"]` block. */
+function steelLightBlockBody(): string {
+	const m = sheet.match(
+		/(?:^|\n)[ \t]*\.theme-light\s+\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
+	);
+	if (!m)
+		throw new Error(
+			'Steel LIGHT variant block `.theme-light [data-dse-element][data-dse-theme="steel"]` not found in styles-source.css',
+		);
+	return m[1];
+}
+
+/** Declared value of --dse-<name> in the Steel light block, or undefined if absent. */
+function steelLightValue(name: string): string | undefined {
+	const m = steelLightBlockBody().match(new RegExp(`(?:^|[\\s{;])--dse-${name}\\s*:\\s*([^;]+);`));
+	return m ? m[1].trim() : undefined;
+}
+
+/** All --dse-* names DEFINED in the Steel light block. */
+function steelLightDefinitions(): string[] {
+	const defs: string[] = [];
+	for (const d of steelLightBlockBody().matchAll(/(?:^|[\s{;])--dse-([a-z0-9-]+)\s*:/g)) defs.push(d[1]);
+	return defs;
+}
+
+/**
+ * The authoritative Steel LIGHT overrides — transcribed VERBATIM from the map's
+ * "Steel light" column (ONLY the rows whose light value is non-blank). Exactly
+ * the set that shifts vs. the dark ground; everything else inherits dark Steel.
+ */
+const STEEL_LIGHT: Record<string, string> = {
+	// surfaces
+	surface: '#f6f8f8',
+	'surface-raised': '#edf0f0',
+	'surface-sunken': '#eaeeef',
+	// borders
+	border: '#c8cdd0',
+	'border-strong': '#8e959a',
+	// hover
+	hover: 'rgba(42,123,136,0.10)',
+	// text
+	heading: '#1a1d20',
+	fg: '#2c2e30',
+	'fg-muted': '#555960',
+	'fg-faint': '#828890',
+	'chip-bg': '#eaeeef',
+	// accent
+	accent: '#2a7b88',
+	'accent-fg': '#fff',
+	'focus-ring': '#2a7b88',
+	// ornament (site's default/light --fx-* block)
+	'metal-grad': 'linear-gradient(180deg, #9aa1a6 0%, #6a7176 48%, #474d51 100%)',
+	'metal-line': 'rgba(95,103,108,.45)',
+	'metal-faint': 'rgba(95,103,108,.14)',
+	bevel: 'inset 0 1px 0 rgba(255,255,255,.8)',
+	emboss: 'none', // site: no light emboss
+	'card-bg': 'linear-gradient(160deg, #ffffff, #eef1f1)',
+	rule: '#5a6368',
+	// power-roll tiers (darkened light-column hues)
+	'tier-low': '#c0392b',
+	'tier-mid': '#b9770e',
+	'tier-high': '#1e8449',
+	'badge-fg': '#fff', // white ink on the darker light-scheme tier fills
+	// stamina bar track
+	'stamina-track': '#eaeeef',
+	// action-type spines (darkened light-column hues)
+	'act-main': '#c0392b',
+	'act-maneuver': '#7d3c98',
+	'act-triggered': '#b9770e',
+	'act-move': '#2874a6',
+	'act-none': '#148f77',
+	'act-trait': '#7b8a8b',
+};
+
+/**
+ * Tokens that are light/dark-STABLE per the map (Steel light column blank): they
+ * MUST NOT appear in the light block (they inherit the dark Steel value).
+ */
+const STEEL_LIGHT_STABLE = [
+	// all 12 role hues (locked in palette.css, light/dark-stable)
+	'role-ambusher', 'role-harrier', 'role-artillery', 'role-brute', 'role-controller',
+	'role-hexer', 'role-mount', 'role-support', 'role-defender', 'role-leader',
+	'role-solo', 'role-minion',
+	// stamina fills + crit + encounter markers + select: fills, no contrast pressure
+	'stamina-healthy', 'stamina-winded', 'stamina-dying', 'stamina-temp',
+	'tier-crit', 'turn-done', 'malice', 'vp', 'warn', 'danger', 'select',
+	// geometry / typography carried from dark (radius, crest-shape, font-display …)
+	'radius', 'crest-shape', 'font-display', 'hairline-fade',
+] as const;
+
+describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])', () => {
+	test('the light-variant block exists AFTER the dark Steel block', () => {
+		const dark = sheet.search(/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{/);
+		const light = sheet.search(/\.theme-light\s+\[data-dse-element\]\[data-dse-theme="steel"\]\s*\{/);
+		expect(dark).toBeGreaterThan(-1);
+		expect(light).toBeGreaterThan(dark);
+	});
+
+	test('every light override carries its map value VERBATIM', () => {
+		for (const [name, expected] of Object.entries(STEEL_LIGHT)) {
+			expect(steelLightValue(name)).toBe(expected);
+		}
+	});
+
+	test('the light block overrides EXACTLY the shifting tokens (32) — none extra, none twice', () => {
+		const defs = steelLightDefinitions();
+		expect(new Set(defs)).toEqual(new Set(Object.keys(STEEL_LIGHT)));
+		expect(defs.length).toBe(32);
+		expect(Object.keys(STEEL_LIGHT).length).toBe(32);
+		const seen = new Set<string>();
+		expect(defs.filter((n) => (seen.has(n) ? true : (seen.add(n), false)))).toEqual([]);
+	});
+
+	test('every light override actually DIFFERS from the dark Steel value (only-what-shifts)', () => {
+		for (const name of Object.keys(STEEL_LIGHT)) {
+			expect(steelLightValue(name)).not.toBe(steelValue(name));
+		}
+	});
+
+	test('light/dark-stable tokens (role hues, stamina fills, crit, encounter) are NOT re-listed', () => {
+		for (const name of STEEL_LIGHT_STABLE) {
+			expect(steelLightValue(name)).toBeUndefined();
+		}
+	});
+
+	test('the light block defines no token outside the union', () => {
+		const union = new Set<string>(DSE_TOKEN_NAMES);
+		expect(steelLightDefinitions().filter((n) => !union.has(n))).toEqual([]);
+	});
+
+	test('attribute-selector semantics: light block matches ONLY under a .theme-light ancestor', () => {
+		const wrap = document.createElement('div');
+		wrap.className = 'theme-light';
+		const el = document.createElement('div');
+		el.setAttribute('data-dse-element', 'statblock');
+		el.dataset.dseTheme = 'steel';
+		wrap.appendChild(el);
+		document.body.appendChild(wrap);
+		try {
+			expect(el.matches('.theme-light [data-dse-element][data-dse-theme="steel"]')).toBe(true);
+			// The dark Steel block still matches too — light is an override ON TOP of it.
+			expect(el.matches('[data-dse-element][data-dse-theme="steel"]')).toBe(true);
+			// Remove the light ancestor → light variant no longer applies (dark ground).
+			wrap.className = '';
+			expect(el.matches('.theme-light [data-dse-element][data-dse-theme="steel"]')).toBe(false);
+		} finally {
+			wrap.remove();
+		}
+	});
+});
