@@ -147,7 +147,11 @@ describe('Plan 08 Task 4: kit/cardHead (D2 §2.7)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
 		test('.dse-head is a 3-column grid with three explicit lane rows', () => {
-			const block = sheet.match(/\.dse-head\s*\{([^}]*)\}/);
+			// Anchor to the base rule at a line start: a grouped selector line
+			// (".dse-x,\n.dse-head { … }") or a compound (".dse-head__x { … }",
+			// ".dse-head > … {") must not be picked up positionally — we want the
+			// standalone `.dse-head { … }` rule.
+			const block = sheet.match(/^\.dse-head\s*\{([^}]*)\}/m);
 			expect(block).not.toBeNull();
 			expect(block![1]).toMatch(/display:\s*grid/);
 			expect(block![1]).toMatch(/grid-template-columns:/);

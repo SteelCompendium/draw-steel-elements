@@ -120,7 +120,11 @@ function tsColorFindings(src: string): string[] {
 	const findings: string[] = [];
 	const code = stripComments(src).replace(/\/\/[^\n]*/g, '');
 	if (/#[0-9a-fA-F]{3,8}\b/.test(code)) findings.push('hex color literal');
-	if (/\b(?:rgb|hsl)a?\(/.test(code)) findings.push('rgb()/hsl() literal');
+	// Mirror the CSS scanner's color-function coverage (the modern families too) so a
+	// kit TS literal can't slip a color the CSS scan would have caught.
+	if (/\b(?:(?:rgb|hsl)a?|hwb|lab|lch|oklab|oklch|color)\s*\(/i.test(code)) {
+		findings.push('color-function literal');
+	}
 	if (/\.style\.color\b/.test(code)) findings.push('el.style.color inline style');
 	if (/\.style\.(?:background|backgroundColor|borderColor|fill|outline)\b/.test(code)) {
 		findings.push('inline color-ish style assignment');
@@ -298,10 +302,13 @@ describe('Plan 08 Task 5: kit TS hygiene + import boundary', () => {
 		expect(tsColorFindings(src)).toEqual([]);
 	});
 
-	test('the TS scanner discriminates (catches hex / rgb( / .style.color)', () => {
+	test('the TS scanner discriminates (catches hex / rgb( / modern color-fns / .style.color)', () => {
 		expect(tsColorFindings('el.style.color = "red";')).not.toEqual([]);
 		expect(tsColorFindings('const c = "#ff0000";')).not.toEqual([]);
 		expect(tsColorFindings('const c = `rgb(1,2,3)`;')).not.toEqual([]);
+		// The modern color-function families, now scanned symmetrically with the CSS scan:
+		expect(tsColorFindings('const c = `oklch(0.7 0.1 200)`;')).not.toEqual([]);
+		expect(tsColorFindings('const c = `color(display-p3 1 0 0)`;')).not.toEqual([]);
 		expect(tsColorFindings('el.addClass("dse-btn"); // #hexy comment is stripped')).toEqual([]);
 	});
 
