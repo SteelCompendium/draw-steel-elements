@@ -99,13 +99,16 @@ export function powerRollPanel(
 
 	// head: false → headless (no element); string → verbatim override (renderMd owns
 	// markdown, like the rows); undefined → the default caption (plain kit chrome).
+	// An empty/whitespace-only override carries no words → normalize to headless: a
+	// blank head is chrome the data doesn't justify (callers already `… || false`).
+	const head = typeof opts.head === 'string' && opts.head.trim() === '' ? false : opts.head;
 	let headEl: HTMLElement | undefined;
-	if (opts.head !== false) {
+	if (head !== false) {
 		headEl = rootEl.createDiv({ cls: 'dse-pr__head' });
 		headEl.id = `${uid}-head`;
-		if (typeof opts.head === 'string') {
-			if (opts.renderMd) void opts.renderMd(opts.head, headEl);
-			else headEl.setText(opts.head);
+		if (typeof head === 'string') {
+			if (opts.renderMd) void opts.renderMd(head, headEl);
+			else headEl.setText(head);
 		} else {
 			headEl.setText(opts.chars ? `Power Roll + ${opts.chars}` : 'Power Roll');
 		}

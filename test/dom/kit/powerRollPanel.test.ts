@@ -111,6 +111,15 @@ describe('Plan 08 Task 4: kit/powerRollPanel (D2 §2.8)', () => {
 			expect(handle.rootEl.querySelectorAll('.dse-pr__row')).toHaveLength(4);
 		});
 
+		test('head: "" (empty/whitespace-only override) normalizes to headless — no empty head element', () => {
+			for (const blank of ['', '   ']) {
+				const { handle } = mount({ head: blank });
+				expect(handle.rootEl.querySelector('.dse-pr__head')).toBeNull();
+				expect(handle.headEl).toBeUndefined();
+				expect(handle.rootEl.querySelectorAll('.dse-pr__row')).toHaveLength(4);
+			}
+		});
+
 		test('head: undefined keeps the default "Power Roll + {chars}" caption (today unchanged)', () => {
 			const { handle } = mount({ head: undefined });
 			expect(handle.rootEl.querySelector('.dse-pr__head')!.textContent).toBe(
