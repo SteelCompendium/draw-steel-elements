@@ -2,12 +2,15 @@
 // visual-harness/shoot-url.mjs — screenshot any URL (e.g. the live v2 site for design
 // reference / SC-67). Usage: npm run shot-url -- <url> <out.png>
 import { chromium } from 'playwright';
+import path from 'path';
+import fs from 'fs';
 
 const [url, out] = process.argv.slice(2);
 if (!url || !out) {
 	console.error('usage: npm run shot-url -- <url> <out.png>');
 	process.exit(2);
 }
+fs.mkdirSync(path.dirname(out), { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage({
 	viewport: { width: 1440, height: 1000 },

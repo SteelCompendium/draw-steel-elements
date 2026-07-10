@@ -16,8 +16,11 @@ still real Obsidian. Spec: workspace `docs/superpowers/dse-overhaul/F4-visual-ha
 (node via the workspace devbox: `devbox run -- bash -c "cd <this repo> && npm run shots"`.)
 
 Output: `visual-harness/shots/<element>--<theme>-<bg>.png`, `<element>--steel-print.png`,
-`gallery--<theme>-<bg>.png`. Deterministic names — diff before/after by filename. A failed
-mount saves `…--ERROR.png` and exits nonzero: fix before trusting any shot.
+`gallery--<theme>-<bg>.png`. Deterministic names — diff before/after by filename. Narrowing
+with `--theme=` or `--bg=` excludes the print shot — it's only part of full (unnarrowed)
+sweeps. A failed mount saves `…--ERROR.png` and exits 1: fix before trusting any shot. An
+unrecognized `--element=`/`--theme=`/`--bg=` value is a different failure mode — no shots are
+attempted, the offending value is named on stderr, and it exits 2.
 
 One-time setup: `npx playwright install chromium`.
 
