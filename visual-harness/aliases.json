@@ -1,0 +1,13 @@
+{
+	"horizontal-rule": "ds-hr",
+	"skills": "ds-skills",
+	"stamina-bar": "ds-stam",
+	"negotiation": "ds-nt",
+	"initiative": "ds-it",
+	"feature": "ds-ft",
+	"featureblock": "ds-fb",
+	"statblock": "ds-sb",
+	"counter": "ds-ct",
+	"values-row": "ds-vr",
+	"characteristics": "ds-char"
+}
