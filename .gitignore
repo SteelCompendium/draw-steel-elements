@@ -30,3 +30,10 @@ styles.css
 # F4 visual harness (Plan 11) — build output + screenshots are generated
 visual-harness/dist
 visual-harness/shots
+
+# F5 demo vault (Plan 12): generated/third-party/session content stays untracked
+demo-vault/DS Compendium
+demo-vault/Harness
+demo-vault/.obsidian/workspace.json
+demo-vault/.obsidian/plugins/*
+!demo-vault/.obsidian/plugins/draw-steel-elements

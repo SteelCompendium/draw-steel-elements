@@ -1,0 +1,153 @@
+{
+  "nodes": [
+    {
+      "id": "fb2f04b6eec60e6c",
+      "type": "file",
+      "file": "rogue.png",
+      "styleAttributes": {},
+      "x": -980,
+      "y": -520,
+      "width": 436,
+      "height": 252
+    },
+    {
+      "id": "68bc9486bc42d491",
+      "type": "file",
+      "file": "DS Compendium/Rules/Abilities/Shadow/1st-Level Features/In All This Confusion.md",
+      "styleAttributes": {},
+      "x": -512,
+      "y": -237,
+      "width": 462,
+      "height": 497
+    },
+    {
+      "id": "46502a78f55fa90b",
+      "type": "file",
+      "file": "DS Compendium/Classes/Shadow/1st-Level Features/Hesitation Is Weakness.md",
+      "styleAttributes": {},
+      "x": -42,
+      "y": -237,
+      "width": 462,
+      "height": 497
+    },
+    {
+      "id": "90b698b42e3263dd",
+      "type": "file",
+      "file": "DS Compendium/Classes/Shadow/1st-Level Features/1st-Level College Features/Black Ash Teleport.md",
+      "styleAttributes": {},
+      "x": -42,
+      "y": 300,
+      "width": 462,
+      "height": 580
+    },
+    {
+      "id": "59d49b1c6414400c",
+      "type": "file",
+      "file": "DS Compendium/Classes/Shadow/1st-Level Features/Shadow Abilities/Signature Ability/You Were Watching The Wrong One.md",
+      "styleAttributes": {},
+      "x": -512,
+      "y": 300,
+      "width": 462,
+      "height": 580
+    },
+    {
+      "id": "b89913ce06f78d4f",
+      "type": "text",
+      "text": "```ds-skills\nskills:\n- Heal\n- Sneak\n- Forgery\n- Navigate\n```",
+      "styleAttributes": {},
+      "x": -960,
+      "y": -237,
+      "width": 416,
+      "height": 1957
+    },
+    {
+      "id": "58525b0daad9808b",
+      "type": "text",
+      "text": "```ds-counter\ncurrent_value: 2\nmin_value: 0\nname: Victories\nvalue_height: 3\nname_height: 1\n```",
+      "styleAttributes": {
+        "border": "invisible"
+      },
+      "x": 240,
+      "y": -520,
+      "width": 180,
+      "height": 100,
+      "color": "4"
+    },
+    {
+      "id": "66c7b7739bdc22a1",
+      "type": "text",
+      "text": "```ds-characteristics\nmight: 1\nagility: 2\nreason: \"0\"\nintuition: \"0\"\npresence: 2\nvalue_height: 2\n```",
+      "styleAttributes": {
+        "border": "invisible"
+      },
+      "x": -120,
+      "y": -400,
+      "width": 540,
+      "height": 84,
+      "color": "5"
+    },
+    {
+      "id": "9b7ef50ebdafb7f8",
+      "type": "text",
+      "text": "```ds-values-row\nvalues:\n- Size: 1M\n- Speed: 8\n- Stability: \"0\"\nvalue_height: 1.75\nname_height: 1\n```",
+      "styleAttributes": {
+        "border": "invisible"
+      },
+      "x": -512,
+      "y": -400,
+      "width": 380,
+      "height": 84,
+      "color": "5"
+    },
+    {
+      "id": "ba5780a823701bea",
+      "type": "text",
+      "text": "# Remy Nox\nShadow - College of Black Ash",
+      "styleAttributes": {
+        "border": "invisible"
+      },
+      "x": -512,
+      "y": -520,
+      "width": 380,
+      "height": 100,
+      "color": "#ffffff"
+    },
+    {
+      "id": "f52b0b352ac90017",
+      "type": "text",
+      "text": "",
+      "styleAttributes": {},
+      "x": -1420,
+      "y": -740,
+      "width": 260,
+      "height": 60
+    },
+    {
+      "id": "bfb0942e84b4fdd6",
+      "type": "text",
+      "text": "```ds-counter\ncurrent_value: 3\nmin_value: 0\nname: Insight\nvalue_height: 3\nname_height: 1\n```",
+      "styleAttributes": {
+        "border": "invisible"
+      },
+      "x": 40,
+      "y": -520,
+      "width": 180,
+      "height": 100,
+      "color": "4"
+    },
+    {
+      "id": "68188fb0e0b28a9c",
+      "type": "text",
+      "text": "```ds-stamina-bar\nmax_stamina: 30\nheight: 2\n```",
+      "styleAttributes": {
+        "border": "invisible"
+      },
+      "x": -512,
+      "y": -333,
+      "width": 1004,
+      "height": 96
+    }
+  ],
+  "edges": [],
+  "metadata": {}
+}
