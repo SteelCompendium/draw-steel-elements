@@ -16,6 +16,14 @@ first** -- it contains the reading guide, role-based routing, and links to all o
 - `npm run build` -- production build (type check + minified)
 - `npm test` -- run tests (Jest: `unit` node project + `dom` jsdom project; `npx jest --selectProjects unit|dom` to run one)
 
+## Visual harness (see it rendered)
+
+`npm run shots` renders every element through the real pipeline in Chromium and writes
+PNGs to `visual-harness/shots/` (`<element>--<theme>-<bg>.png` + galleries) — agents can
+read these to see the plugin. Narrow with `--element=/--theme=`. `npm run shot-url -- <url>
+<out.png>` screenshots any URL. Details: `visual-harness/README.md`. Fidelity is
+close-enough (vendored default-theme vars) — final QA is real Obsidian.
+
 ## Key Architecture
 
 - **Two rendering strategies, coexisting**: **Element Framework v2** (`src/framework/` —
