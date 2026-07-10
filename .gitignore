@@ -26,3 +26,7 @@ data.json
 main.css
 # Generated during build by copying main.css
 styles.css
+
+# F4 visual harness (Plan 11) — build output + screenshots are generated
+visual-harness/dist
+visual-harness/shots

@@ -1,0 +1,117 @@
+/* visual-harness/vars.css — vendored Obsidian DEFAULT-theme variables (F4, Plan 11).
+   Close-enough fidelity by design (see the F4 spec): hand-vendored from Obsidian 1.x
+   defaults, 2026-07-10. Covers ONLY the non---dse- vars styles-source.css references,
+   plus page basics and harness chrome. NOT here on purpose: --sc-* (styles-source.css
+   chains those with inline hex fallbacks — the v2-palette sync is a snippet concern). */
+
+body {
+	/* theme-independent */
+	--radius-s: 4px;
+	--radius-m: 8px;
+	--size-2-1: 2px;
+	--size-2-2: 4px;
+	--size-2-3: 6px;
+	--size-4-1: 4px;
+	--size-4-2: 8px;
+	--size-4-3: 12px;
+	--size-4-4: 16px;
+	--font-smallest: 0.8em;
+	--font-smaller: 0.875em;
+	--font-ui-small: 13px;
+	--font-ui-large: 20px;
+	--font-semibold: 600;
+	--list-indent: 2em;
+	--font-text: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI',
+		Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+	--font-monospace: ui-monospace, SFMono-Regular, 'Cascadia Mono', 'Roboto Mono', Menlo,
+		Monaco, monospace;
+	--tag-size: var(--font-smaller);
+	--tag-color: var(--interactive-accent);
+	--tag-background: rgba(127, 109, 242, 0.1);
+	--tag-border-color: transparent;
+	--tag-border-width: 0;
+	--tag-decoration: none;
+	--tag-padding-x: 0.65em;
+	--tag-padding-y: 0.25em;
+	--tag-radius: 2em;
+	--tag-weight: inherit;
+
+	margin: 0;
+	padding: 24px;
+	font-family: var(--font-text);
+	font-size: 16px;
+	line-height: 1.5;
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+}
+
+body.theme-dark {
+	color-scheme: dark;
+	--color-base-25: #2a2a2a;
+	--color-base-30: #363636;
+	--color-base-50: #666666;
+	--color-base-100: #dadada;
+	--background-primary: #1e1e1e;
+	--background-primary-alt: #242424;
+	--background-secondary: #262626;
+	--background-modifier-border: #363636;
+	--background-modifier-hover: rgba(255, 255, 255, 0.075);
+	--code-background: #262626;
+	--text-normal: #dadada;
+	--text-muted: #b3b3b3;
+	--text-faint: #666666;
+	--text-error: #fb464c;
+	--text-on-accent: #ffffff;
+	--icon-color: #b3b3b3;
+	--interactive-accent: #7f6df2;
+	--color-blue: #086ddd;
+	--color-orange: #e9973f;
+}
+
+body.theme-light {
+	color-scheme: light;
+	--color-base-25: #e6e6e6;
+	--color-base-30: #dddddd;
+	--color-base-50: #ababab;
+	--color-base-100: #222222;
+	--background-primary: #ffffff;
+	--background-primary-alt: #fafafa;
+	--background-secondary: #f6f6f6;
+	--background-modifier-border: #dddddd;
+	--background-modifier-hover: rgba(0, 0, 0, 0.05);
+	--code-background: #f5f5f5;
+	--text-normal: #222222;
+	--text-muted: #5c5c5c;
+	--text-faint: #999999;
+	--text-error: #e93147;
+	--text-on-accent: #ffffff;
+	--icon-color: #5c5c5c;
+	--interactive-accent: #7f6df2;
+	--color-blue: #086ddd;
+	--color-orange: #ec7500;
+}
+
+/* harness chrome */
+#mount {
+	max-width: 760px;
+}
+.dse-harness-section {
+	margin: 0 0 32px;
+}
+.dse-harness-section > h2 {
+	margin: 0 0 8px;
+	font-size: 14px;
+	font-weight: var(--font-semibold);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-muted);
+}
+.dse-harness-notice {
+	position: fixed;
+	top: 12px;
+	right: 12px;
+	padding: 8px 12px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+}

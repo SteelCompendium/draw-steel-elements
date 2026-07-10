@@ -7,6 +7,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "build-no-check": "node esbuild.config.mjs production",
+    "harness:build": "node visual-harness/esbuild.mjs",
     "test": "jest",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "tsc": "tsc --noEmit"

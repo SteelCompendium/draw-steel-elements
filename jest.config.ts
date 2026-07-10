@@ -44,6 +44,8 @@ const transform = {
 	],
 	// .yaml imports are raw text, matching esbuild's yamlLoaderPlugin.
 	'^.+\\.ya?ml$': '<rootDir>/test/mocks/rawTextTransformer.js',
+	// F4 (Plan 11): harness fixtures are .md-as-raw-text, same treatment as .yaml.
+	'^.+\\.md$': '<rootDir>/test/mocks/rawTextTransformer.js',
 } as const;
 
 const config: Config = {
