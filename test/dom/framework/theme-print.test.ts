@@ -113,12 +113,13 @@ const PRINT_NEUTRAL: Record<string, string> = {
 
 /** The 6 STEEL-scoped print tokens (act spines darkened, Steel-composed). */
 const PRINT_STEEL: Record<string, string> = {
+	// SC-10 realignment: print act twins = the site's light --sc-act-* values.
 	'act-main': '#c0392b',
-	'act-maneuver': '#7d3c98',
-	'act-triggered': '#b9770e',
-	'act-move': '#2874a6',
-	'act-none': '#148f77',
-	'act-trait': '#7b8a8b',
+	'act-maneuver': '#2874a6',
+	'act-triggered': '#1e8449',
+	'act-move': '#b9770e',
+	'act-none': '#5a6368',
+	'act-trait': '#7d3c98',
 };
 
 /** Tokens intentionally NOT overridden in print (= Legacy / = active theme / = Steel exact). */

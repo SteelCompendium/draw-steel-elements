@@ -2059,12 +2059,17 @@ Shared globals
 	--dse-role-minion: var(--sc-role-minion, #9aa2a8);
 
 	/* -- Ability action-type accents (data-dse-act spine; --sc-ability-* slots; Scott review) -- */
-	--dse-act-main: var(--sc-ability-strike, #e74c3c);
-	--dse-act-maneuver: var(--sc-ability-maneuver, #bb8fce);
-	--dse-act-triggered: var(--sc-ability-triggered, #f0b429);
-	--dse-act-move: var(--sc-ability-ranged, #5dade2);
-	--dse-act-none: var(--sc-ability-area, #48c9a4);
-	--dse-act-trait: var(--sc-ability-passive, #b0b7bb);
+	/* SC-10 realignment: chained to the site's CANONICAL action-type tokens
+	   (--sc-act-* in steel-ability-cards.css — Main red / Maneuver blue /
+	   Triggered green / Move orange / None white / Trait purple). The D3 draft
+	   chained the --sc-ability-* CLASSIFICATION hues instead — a different
+	   taxonomy that disagreed with the site's action-type semantics. */
+	--dse-act-main: var(--sc-act-main, #e74c3c);
+	--dse-act-maneuver: var(--sc-act-maneuver, #5dade2);
+	--dse-act-triggered: var(--sc-act-triggered, #4caf6a);
+	--dse-act-move: var(--sc-act-move, #e8a13a);
+	--dse-act-none: var(--sc-act-none, #cdd1d4);
+	--dse-act-trait: var(--sc-act-trait, #bb8fce);
 }
 
 /* -- Steel STRUCTURAL rules (SC-10): layout the skin needs beyond token values -- */
@@ -2075,6 +2080,44 @@ Shared globals
    Plan 12). Reserve the spine's lane whenever a spine can draw. */
 [data-dse-theme='steel'] .dse-feature[data-dse-act] {
 	padding-left: calc(3px + 0.55em);
+}
+
+/* Card ground (SC-10): the site's steel-kit recipe — forged card gradient +
+   bevel + lift shadow + hairline — on the top-level element panels
+   (steel-kit.css / steel-ability-cards.css port; Legacy stays flat). */
+[data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage]),
+[data-dse-theme='steel'] .dse-fb,
+[data-dse-theme='steel'] .dse-sb {
+	background: var(--dse-card-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+}
+body.theme-light [data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage]),
+body.theme-light [data-dse-theme='steel'] .dse-fb,
+body.theme-light [data-dse-theme='steel'] .dse-sb {
+	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Embossed headings (SC-10): the site's fx-emboss treatment on card titles,
+   section keys and the power-roll head; the primary title takes the display
+   face (Source Serif 4 fallback per D3 OD-4). */
+[data-dse-theme='steel'] .dse-head__primary--left,
+[data-dse-theme='steel'] .dse-section__title,
+[data-dse-theme='steel'] .dse-pr__head,
+[data-dse-theme='steel'] .dse-statgrid__value {
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel'] .dse-head__primary--left {
+	font-family: var(--dse-font-display);
+	letter-spacing: 0.01em;
+}
+
+/* Chips read forged (SC-10): metal-faint wash instead of the tag background
+   (the raised primary plate keeps --dse-surface-raised). */
+[data-dse-theme='steel'] .dse-head__eyebrow--chip,
+[data-dse-theme='steel'] .dse-head__deck--chip {
+	background: var(--dse-metal-faint);
 }
 
 /* ================================================================== */
@@ -2131,11 +2174,11 @@ Shared globals
 
 	/* -- Ability action-type spines (darkened light-column hues) -- */
 	--dse-act-main: #c0392b;
-	--dse-act-maneuver: #7d3c98;
-	--dse-act-triggered: #b9770e;
-	--dse-act-move: #2874a6;
-	--dse-act-none: #148f77;
-	--dse-act-trait: #7b8a8b;
+	--dse-act-maneuver: #2874a6;
+	--dse-act-triggered: #1e8449;
+	--dse-act-move: #b9770e;
+	--dse-act-none: #5a6368;
+	--dse-act-trait: #7d3c98;
 }
 
 /* ================================================================== */
@@ -2771,20 +2814,20 @@ button.dse-pr__row:hover {
 @media print {
 	[data-dse-element][data-dse-theme="steel"] {
 		--dse-act-main: #c0392b;
-		--dse-act-maneuver: #7d3c98;
-		--dse-act-triggered: #b9770e;
-		--dse-act-move: #2874a6;
-		--dse-act-none: #148f77;
-		--dse-act-trait: #7b8a8b;
+		--dse-act-maneuver: #2874a6;
+		--dse-act-triggered: #1e8449;
+		--dse-act-move: #b9770e;
+		--dse-act-none: #5a6368;
+		--dse-act-trait: #7d3c98;
 	}
 }
 [data-dse-element][data-dse-theme="steel"][data-dse-print="on"] {
 	--dse-act-main: #c0392b;
-	--dse-act-maneuver: #7d3c98;
-	--dse-act-triggered: #b9770e;
-	--dse-act-move: #2874a6;
-	--dse-act-none: #148f77;
-	--dse-act-trait: #7b8a8b;
+	--dse-act-maneuver: #2874a6;
+	--dse-act-triggered: #1e8449;
+	--dse-act-move: #b9770e;
+	--dse-act-none: #5a6368;
+	--dse-act-trait: #7d3c98;
 }
 
 /* -- Print RULES (structure, not values): §5.1 rules 3-5 -- */

@@ -126,12 +126,14 @@ const STEEL_DARK: Record<string, string> = {
 	'role-defender': 'var(--sc-role-defender, #c7a173)',
 	'role-leader': 'var(--sc-role-leader, #9aa2a8)',
 	// action-type spines (--sc-ability-* slots)
-	'act-main': 'var(--sc-ability-strike, #e74c3c)',
-	'act-maneuver': 'var(--sc-ability-maneuver, #bb8fce)',
-	'act-triggered': 'var(--sc-ability-triggered, #f0b429)',
-	'act-move': 'var(--sc-ability-ranged, #5dade2)',
-	'act-none': 'var(--sc-ability-area, #48c9a4)',
-	'act-trait': 'var(--sc-ability-passive, #b0b7bb)',
+	// SC-10 realignment: the site's CANONICAL --sc-act-* action-type tokens
+	// (steel-ability-cards.css), not the --sc-ability-* classification hues.
+	'act-main': 'var(--sc-act-main, #e74c3c)',
+	'act-maneuver': 'var(--sc-act-maneuver, #5dade2)',
+	'act-triggered': 'var(--sc-act-triggered, #4caf6a)',
+	'act-move': 'var(--sc-act-move, #e8a13a)',
+	'act-none': 'var(--sc-act-none, #cdd1d4)',
+	'act-trait': 'var(--sc-act-trait, #bb8fce)',
 };
 
 describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => {
@@ -289,12 +291,13 @@ const STEEL_LIGHT: Record<string, string> = {
 	// stamina bar track
 	'stamina-track': '#eaeeef',
 	// action-type spines (darkened light-column hues)
+	// SC-10 realignment: the site's light --sc-act-* values.
 	'act-main': '#c0392b',
-	'act-maneuver': '#7d3c98',
-	'act-triggered': '#b9770e',
-	'act-move': '#2874a6',
-	'act-none': '#148f77',
-	'act-trait': '#7b8a8b',
+	'act-maneuver': '#2874a6',
+	'act-triggered': '#1e8449',
+	'act-move': '#b9770e',
+	'act-none': '#5a6368',
+	'act-trait': '#7d3c98',
 };
 
 /**
