@@ -22,7 +22,10 @@ first** -- it contains the reading guide, role-based routing, and links to all o
 PNGs to `visual-harness/shots/` (`<element>--<theme>-<bg>.png` + galleries) — agents can
 read these to see the plugin. Narrow with `--element=/--theme=`. `npm run shot-url -- <url>
 <out.png>` screenshots any URL. Details: `visual-harness/README.md`. Fidelity is
-close-enough (vendored default-theme vars) — final QA is real Obsidian.
+close-enough (vendored default-theme vars) — final QA is real Obsidian. `npm run
+obsidian-shots` produces ground-truth PNGs from a real spawned Obsidian
+(`<element>--obsidian-<theme>-<bg>.png`) — slower; use it for sign-off, the browser harness
+for iteration.
 
 ## Key Architecture
 

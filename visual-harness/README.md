@@ -49,3 +49,42 @@ Steel vars as `var(--sc-*, #hex)`, and `vars.css` deliberately doesn't vendor `-
 palette lives in the v2 site's snippet), so every Steel shot renders the inline hex fallbacks
 — the no-palette-snippet default-install look. The harness can't show Steel-with-`--sc-*`, so
 validate Steel design work against these fallback values.
+
+## Obsidian camera (ground truth)
+
+    npm run obsidian-shots                                       # 44 PNGs: 11 elements × legacy/steel × dark/light
+    npm run obsidian-shots -- --element=statblock --theme=steel   # narrowed
+
+Spawns a REAL, second Obsidian instance (scratch `--user-data-dir` + CDP port 9223 by
+default — your own Obsidian is untouched; a window appears on the desktop during the run; a
+short warm-up launch runs first if the scratch dir has no self-updated app asar yet, since
+the system-installed Obsidian is Electron-106-era and auto-updates on first launch) against
+the git-managed `demo-vault/`. One spawn/attach for the whole sweep: it opens a generated
+note per element (`demo-vault/Harness/` — git-ignored, regenerated every run by
+`notes-gen.mjs` from the F4 fixtures + `aliases.json`) and screenshots the rendered element
+over CDP, once per plugin-theme (`legacy`/`steel`) × chrome-bg (`dark`/`light`) combo. Before
+quitting it restores plugin theme=`steel` / chrome=`dark` so the vault's persisted state
+matches the committed baseline.
+
+`npm run obsidian-shots` runs `notes-gen.mjs` and a `build-no-check` build before the camera
+itself — no separate setup step. Output: `shots/<element>--obsidian-<theme>-<bg>.png`, named
+to diff directly against the browser harness's `<element>--<theme>-<bg>.png`. Browser shots
+iterate fast; Obsidian shots are the ground truth. Same failure contract as `shots`: a
+per-combo failure saves `<element>--obsidian-<theme>-<bg>--ERROR.png`, the sweep continues,
+and the run exits 1 listing every failure; a bad `--element=`/`--theme=`/`--bg=` value exits
+2 before anything spawns. Needs a display (`:1` by default) and the system Obsidian
+installed — local tool, not CI.
+
+### Known deltas vs. browser shots
+
+Verified by comparing F4 and F5 shots of the same element side by side:
+
+- **Card body font**: real Obsidian renders it in a serif font; the browser harness's
+  vendored `--font-text` (`vars.css`) is a sans stack, so browser shots read sans where
+  ground truth is serif.
+- **Chip/metric styling**: minor spacing/sizing differences from Obsidian's own base CSS —
+  the harness only vendors the subset `styles-source.css` reads, not Obsidian's full
+  default theme.
+- **Steel fallback palette**: both cameras show Steel's fallback-hex values (no `--sc-*`
+  variable is defined in either the harness's `vars.css` or `demo-vault/`) — not a fidelity
+  delta, just confirmation the two cameras agree here.
