@@ -36,7 +36,16 @@ One-time setup: `npx playwright install chromium`.
   `test/dom/visual-harness/fixtures.test.ts`.
 - `dist/`, `shots/` — generated, git-ignored.
 
+`test/dom/visual-harness/fixtures.test.ts` is jest's gate on this harness — it imports
+`entry.ts` under jest, where `obsidian` maps to the TEST mock, not `shim/obsidian.ts`. Touching
+the shim doesn't move that gate at all, so after editing `shim/obsidian.ts` re-run
+`npm run shots` yourself — CI won't catch a shim regression.
+
 ## v1 limits (spec §"Out of scope")
 
 Static states only — no modals/hover/focus scripting, no CI pixel gates, default Obsidian
-theme only.
+theme only. Steel shots show the **fallback-hex palette**: `styles-source.css` chains its
+Steel vars as `var(--sc-*, #hex)`, and `vars.css` deliberately doesn't vendor `--sc-*` (that
+palette lives in the v2 site's snippet), so every Steel shot renders the inline hex fallbacks
+— the no-palette-snippet default-install look. The harness can't show Steel-with-`--sc-*`, so
+validate Steel design work against these fallback values.
