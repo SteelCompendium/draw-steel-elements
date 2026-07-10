@@ -489,6 +489,10 @@ async function main() {
 		} catch (e) {
 			console.log(`restore-defaults failed (non-fatal): ${String(e)}`);
 		}
+		// Let Obsidian FLUSH the restored config before quitting: app.quit() racing the
+		// async appearance.json write has truncated the tracked file to 0 bytes once
+		// (SC-10 session — the exact fire-and-forget race the Plan-12 review predicted).
+		await sleep(750);
 		// electron.remote.app.quit() is the working quit on this build (there is NO
 		// app:quit command). It tears down the CDP socket mid-call; fire and tolerate.
 		evaluate(cdp, 'window.electron?.remote?.app?.quit()').catch(() => {});
