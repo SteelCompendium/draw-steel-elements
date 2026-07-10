@@ -131,9 +131,10 @@ const printSteel = blockBody(
 );
 
 // Map-declared "intentionally not overridden" sets (mirror the map's columns).
-const STEEL_INVARIANT = new Set(['page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade']);
+// SC-10: badge-fg is theme-invariant (hollow frame → ink-on-surface everywhere).
+const STEEL_INVARIANT = new Set(['page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg']);
 const PRINT_INVARIANT = new Set([
-	'touch-min', 'font-display', 'font-mono', 'rule-fade',
+	'touch-min', 'font-display', 'font-mono', 'rule-fade', 'badge-fg', // badge-fg: SC-10 invariant
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')), // "= Steel (exact)"
 ]);
 
@@ -227,18 +228,18 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 
 	test('EVERY union token is overridden in Steel OR map-marked Steel-invariant', () => {
 		expect(steelGaps(DSE_TOKEN_NAMES)).toEqual([]);
-		// The map's exact split: 59 overridden + 5 invariant = 64.
+		// The map's exact split: 58 overridden + 6 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inSteel.has(n));
-		expect(overridden.length).toBe(59);
-		expect(STEEL_INVARIANT.size).toBe(5);
+		expect(overridden.length).toBe(58);
+		expect(STEEL_INVARIANT.size).toBe(6);
 	});
 
 	test('EVERY union token is overridden in a Print block OR map-marked print-invariant', () => {
 		expect(printGaps(DSE_TOKEN_NAMES)).toEqual([]);
-		// 48 overridden (42 neutral + 6 Steel-scoped act) + 16 invariant = 64.
+		// 47 overridden (41 neutral + 6 Steel-scoped act) + 17 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inPrint.has(n));
-		expect(overridden.length).toBe(48);
-		expect(PRINT_INVARIANT.size).toBe(16);
+		expect(overridden.length).toBe(47);
+		expect(PRINT_INVARIANT.size).toBe(17); // SC-10: +badge-fg
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});
 

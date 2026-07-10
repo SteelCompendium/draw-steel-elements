@@ -59,7 +59,11 @@ function steelDefinitions(): string[] {
  * (polygon) are NOT here: the map gives them concrete Steel values (they differ
  * from Legacy), so Steel overrides them.
  */
-const THEME_INVARIANT = ['page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade'] as const;
+// SC-10: badge-fg joined the invariants — the tier-badge frame is a hollow
+// clip-path whose interior is the card surface, so its ink is ink-on-surface
+// (var(--dse-fg)) in EVERY theme; the old per-theme overrides assumed solid
+// fills and rendered invisible (ground-truth-confirmed, Plan 12).
+const THEME_INVARIANT = ['page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg'] as const;
 
 /**
  * The authoritative Steel (dark) values — transcribed from D3-token-map.md. A
@@ -104,7 +108,6 @@ const STEEL_DARK: Record<string, string> = {
 	'tier-mid': 'var(--sc-tier-mid, #f0b429)',
 	'tier-high': 'var(--sc-tier-high, #4caf6a)',
 	'tier-crit': '#e3c14a',
-	'badge-fg': '#0f1214',
 	// stamina / HP
 	'stamina-healthy': 'var(--sc-role-hexer, #5cc98a)',
 	'stamina-winded': '#f0b429',
@@ -183,9 +186,9 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 			(n) => steelValue(n) === undefined && !(THEME_INVARIANT as readonly string[]).includes(n),
 		);
 		expect(uncovered).toEqual([]);
-		// The map's exact split: 59 overridden + 5 theme-invariant = 64 union tokens.
-		expect(overridden.length).toBe(59);
-		expect(THEME_INVARIANT.length).toBe(5);
+		// The map's exact split: 58 overridden + 6 theme-invariant = 64 union tokens (SC-10: badge-fg → invariant).
+		expect(overridden.length).toBe(58);
+		expect(THEME_INVARIANT.length).toBe(6);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
 
@@ -283,7 +286,6 @@ const STEEL_LIGHT: Record<string, string> = {
 	'tier-low': '#c0392b',
 	'tier-mid': '#b9770e',
 	'tier-high': '#1e8449',
-	'badge-fg': '#fff', // white ink on the darker light-scheme tier fills
 	// stamina bar track
 	'stamina-track': '#eaeeef',
 	// action-type spines (darkened light-column hues)
@@ -325,11 +327,11 @@ describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])
 		}
 	});
 
-	test('the light block overrides EXACTLY the shifting tokens (32) — none extra, none twice', () => {
+	test('the light block overrides EXACTLY the shifting tokens (31) — none extra, none twice', () => {
 		const defs = steelLightDefinitions();
 		expect(new Set(defs)).toEqual(new Set(Object.keys(STEEL_LIGHT)));
-		expect(defs.length).toBe(32);
-		expect(Object.keys(STEEL_LIGHT).length).toBe(32);
+		expect(defs.length).toBe(31); // SC-10: badge-fg no longer light-overridden
+		expect(Object.keys(STEEL_LIGHT).length).toBe(31); // SC-10: badge-fg removed
 		const seen = new Set<string>();
 		expect(defs.filter((n) => (seen.has(n) ? true : (seen.add(n), false)))).toEqual([]);
 	});

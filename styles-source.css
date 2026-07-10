@@ -1922,6 +1922,10 @@ Shared globals
 	/* Tier-badge text color (§2.8 D3 hook, Task-5 gap-close). Legacy
 	   .tN-key-body-text sets no color (inherits --text-normal) = the fg token;
 	   D3's Steel layer may contrast it against colored badge fills. */
+	/* SC-10: theme-INVARIANT by design — the badge frame is a hollow clip-path,
+	   so its interior is always the card surface and the ink is always
+	   ink-on-surface. Steel/light/print overrides were REMOVED (they assumed
+	   solid fills and rendered invisible; ground-truth-confirmed, Plan 12). */
 	--dse-badge-fg: var(--dse-fg);
 
 	/* -- Semantic: stamina -- */
@@ -2025,7 +2029,6 @@ Shared globals
 	--dse-tier-mid: var(--sc-tier-mid, #f0b429);
 	--dse-tier-high: var(--sc-tier-high, #4caf6a);
 	--dse-tier-crit: #e3c14a; /* PROPOSED gold — no site --sc-tier-crit (map fn 9; Scott review) */
-	--dse-badge-fg: #0f1214; /* near-black ink on the bright dark-scheme tier fills */
 
 	/* -- Semantic: stamina / HP -- */
 	--dse-stamina-healthy: var(--sc-role-hexer, #5cc98a);
@@ -2062,6 +2065,16 @@ Shared globals
 	--dse-act-move: var(--sc-ability-ranged, #5dade2);
 	--dse-act-none: var(--sc-ability-area, #48c9a4);
 	--dse-act-trait: var(--sc-ability-passive, #b0b7bb);
+}
+
+/* -- Steel STRUCTURAL rules (SC-10): layout the skin needs beyond token values -- */
+/* The act spine (.dse-feature[data-dse-act]::before, 3px at left:0) is invisible
+   in Legacy (--dse-act-* = none) but PAINTS in Steel — and nested feature cards
+   are chromeless (no padding), so without this the spine overlaps the first
+   character of flush-left text (ground-truth-confirmed in real Obsidian,
+   Plan 12). Reserve the spine's lane whenever a spine can draw. */
+[data-dse-theme='steel'] .dse-feature[data-dse-act] {
+	padding-left: calc(3px + 0.55em);
 }
 
 /* ================================================================== */
@@ -2108,11 +2121,10 @@ Shared globals
 	/* hairline-fade is NOT re-listed: it re-keys off --dse-rule (dark block) and
 	   tracks this light rule automatically. */
 
-	/* -- Power-roll tiers (darkened light-column hues + white badge ink) -- */
+	/* -- Power-roll tiers (darkened light-column hues) -- */
 	--dse-tier-low: #c0392b;
 	--dse-tier-mid: #b9770e;
 	--dse-tier-high: #1e8449;
-	--dse-badge-fg: #fff;
 
 	/* -- Stamina bar track -- */
 	--dse-stamina-track: #eaeeef;
@@ -2694,7 +2706,6 @@ button.dse-pr__row:hover {
 		--dse-tier-mid: #b9770e;
 		--dse-tier-high: #1e8449;
 		--dse-tier-crit: #8a6a00;
-		--dse-badge-fg: #fff;
 		/* stamina */
 		--dse-stamina-healthy: #1a7a3a;
 		--dse-stamina-winded: #8a6a00;
@@ -2742,7 +2753,6 @@ button.dse-pr__row:hover {
 	--dse-tier-mid: #b9770e;
 	--dse-tier-high: #1e8449;
 	--dse-tier-crit: #8a6a00;
-	--dse-badge-fg: #fff;
 	--dse-stamina-healthy: #1a7a3a;
 	--dse-stamina-winded: #8a6a00;
 	--dse-stamina-dying: #a11;

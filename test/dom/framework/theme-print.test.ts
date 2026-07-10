@@ -97,7 +97,6 @@ const PRINT_NEUTRAL: Record<string, string> = {
 	'tier-mid': '#b9770e',
 	'tier-high': '#1e8449',
 	'tier-crit': '#8a6a00',
-	'badge-fg': '#fff',
 	// stamina
 	'stamina-healthy': '#1a7a3a',
 	'stamina-winded': '#8a6a00',
@@ -128,6 +127,7 @@ const PRINT_INVARIANT = [
 	'font-display', // = active theme (no font override in print)
 	'font-mono', // = Legacy
 	'rule-fade', // = Legacy (theme-invariant)
+	'badge-fg', // = Legacy ink-on-surface (hollow frame; print --dse-fg is #000) — SC-10
 	// role-* (12): "= Steel (exact)" — keep the Steel hue, no darkening (added below)
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')),
 ] as const;
@@ -145,10 +145,10 @@ describe('D3 Task 5: print / export value layer', () => {
 		}
 	});
 
-	test('the neutral twin defines EXACTLY the 42 neutral tokens (none invariant, none act)', () => {
+	test('the neutral twin defines EXACTLY the 41 neutral tokens (none invariant, none act)', () => {
 		const defs = defsIn(printNeutralBody());
 		expect(new Set(defs)).toEqual(new Set(Object.keys(PRINT_NEUTRAL)));
-		expect(defs.length).toBe(42);
+		expect(defs.length).toBe(41); // SC-10: badge-fg no longer print-overridden
 		// The Steel-scoped act tokens are NOT in the neutral block…
 		for (const act of Object.keys(PRINT_STEEL)) expect(defs).not.toContain(act);
 		// …nor are the print-invariant tokens.
@@ -165,7 +165,7 @@ describe('D3 Task 5: print / export value layer', () => {
 
 	test('the @media print neutral block MIRRORS the twin (representative decls)', () => {
 		const media = printMediaNeutralBody();
-		for (const name of ['surface', 'fg', 'border', 'radius', 'hover', 'metal-grad', 'tier-low', 'stamina-dying', 'badge-fg']) {
+		for (const name of ['surface', 'fg', 'border', 'radius', 'hover', 'metal-grad', 'tier-low', 'stamina-dying']) {
 			expect(valueIn(media, name)).toBe(PRINT_NEUTRAL[name]);
 		}
 	});
