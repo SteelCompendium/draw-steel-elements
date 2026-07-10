@@ -2086,7 +2086,7 @@ Shared globals
    bevel + lift shadow + hairline — on the top-level element panels
    (steel-kit.css / steel-ability-cards.css port; Legacy stays flat). */
 [data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage]),
-[data-dse-theme='steel'] .dse-fb,
+[data-dse-theme='steel'][data-dse-element='featureblock']:not([data-dse-error-stage]),
 [data-dse-theme='steel'] .dse-sb {
 	background: var(--dse-card-bg);
 	border: 1px solid var(--dse-border);
@@ -2094,9 +2094,19 @@ Shared globals
 	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
 }
 body.theme-light [data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage]),
-body.theme-light [data-dse-theme='steel'] .dse-fb,
+body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock']:not([data-dse-error-stage]),
 body.theme-light [data-dse-theme='steel'] .dse-sb {
 	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+/* Single-layer plates: the statblock root's flat surface would peek through
+   .dse-sb's rounded corners; the feature root's legacy corner hairlines would
+   double the new real border. Steel neutralizes both (review findings). */
+[data-dse-theme='steel'][data-dse-element='statblock'] {
+	background: transparent;
+}
+[data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage])::before,
+[data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage])::after {
+	display: none;
 }
 
 /* Embossed headings (SC-10): the site's fx-emboss treatment on card titles,
@@ -2873,11 +2883,24 @@ button.dse-pr__row:hover {
 		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
 	}
+	/* SC-10 card lift-shadow is a literal (not a token) — zero it for ink economy. */
+	[data-dse-theme='steel'][data-dse-element='feature'],
+	[data-dse-theme='steel'][data-dse-element='featureblock'],
+	[data-dse-theme='steel'] .dse-sb {
+		box-shadow: none;
+	}
 }
 
 /* -- …the same RULES for the on-screen preview twin (scoped under the attr) -- */
 [data-dse-print="on"] .dse-collapse__region[hidden] {
 	display: block !important;
+}
+/* SC-10 card lift-shadow: same ink-economy zero for the preview twin. */
+[data-dse-print="on"][data-dse-theme='steel'][data-dse-element='feature'],
+[data-dse-print="on"][data-dse-theme='steel'][data-dse-element='featureblock'],
+[data-dse-print="on"] [data-dse-theme='steel'] .dse-sb,
+[data-dse-theme='steel'][data-dse-print="on"] .dse-sb {
+	box-shadow: none;
 }
 [data-dse-print="on"] .dse-collapse__chevron,
 [data-dse-print="on"] .dse-btn,
