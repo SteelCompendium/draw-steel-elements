@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// visual-harness/obsidian-camera.mjs — F5 (Plan 12) SPIKE v0: the real-Obsidian camera.
+// visual-harness/obsidian-camera.mjs — F5 (Plan 12): the real-Obsidian camera.
 // Launches a SECOND, fully isolated Obsidian instance (scratch --user-data-dir + CDP port),
-// attaches over raw CDP, opens demo-vault/Harness/statblock.md in reading mode, and
-// clip-screenshots the rendered [data-dse-element] to
-// visual-harness/shots/statblock--obsidian-legacy-dark.png. Also proves the dark/light
-// theme switch API. Task 4 grows this into the full element × theme sweep.
+// attaches over raw CDP, opens each demo-vault/Harness/<element>.md in reading mode, and
+// clip-screenshots the rendered [data-dse-element] once per combo of
+//   plugin theme (legacy|steel — frameworkV2.services.theme.setActive, the DSE skin)
+// × chrome bg  (dark|light  — app.changeTheme, Obsidian's own moonstone/obsidian theme)
+// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (11 × 2 × 2 = 44 shots).
+// These are two INDEPENDENT axes: the plugin theme re-stamps data-dse-theme on element
+// roots; the chrome theme flips body.theme-dark/light. Both are awaited before each shot.
 //
 // WHY RAW CDP (not Playwright): playwright's chromium.connectOverCDP() fails against
 // Obsidian's Electron with "Browser.setDownloadBehavior: Browser context management is
@@ -12,7 +15,12 @@
 // needs). Raw CDP over Node's built-in WebSocket (Node >= 22) works: GET /json/list,
 // attach to the app://obsidian.md page target, Runtime.evaluate + Page.captureScreenshot.
 //
-// Usage: node visual-harness/obsidian-camera.mjs --spike [--skip-build]
+// Entry point: `npm run obsidian-shots` (regenerates Harness notes + builds the plugin
+// first). Running this file directly assumes both are already up to date.
+//
+// Usage: node visual-harness/obsidian-camera.mjs [--element=<id>] [--theme=<legacy|steel>] [--bg=<dark|light>]
+//        Bad flag values exit 2 naming them. Per-combo failures write an --ERROR-suffixed
+//        window shot, the sweep CONTINUES, and the run exits 1 listing every failure.
 // Env:   DSE_CAMERA_TMP     scratch root (default /tmp/claude-1000/dse-obsidian-camera)
 //        DSE_CAMERA_PORT    CDP port (default 9223)
 //        DSE_CAMERA_DISPLAY X display (default :1)
@@ -20,7 +28,7 @@
 //
 // SAFETY: never touches ~/.config/obsidian; refuses to start if the CDP port is already
 // serving (i.e. some other instance owns it); kills ONLY the child it spawned.
-import { spawn, execSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,6 +47,59 @@ const udd = path.join(tmpRoot, 'obsidian-harness-udd');
 const VAULT_ID = 'dseharness0001';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// -- matrix + flags (F4 shoot.mjs conventions) -------------------------------------------
+const args = Object.fromEntries(
+	process.argv
+		.slice(2)
+		.filter((a) => a.startsWith('--'))
+		.map((a) => {
+			const [k, v] = a.replace(/^--/, '').split('=');
+			return [k, v ?? '1'];
+		}),
+);
+
+const THEMES = ['legacy', 'steel']; // DSE plugin theme (data-dse-theme on element roots)
+const BGS = ['dark', 'light']; // Obsidian chrome theme (body.theme-dark / theme-light)
+const aliases = JSON.parse(fs.readFileSync(path.join(dir, 'aliases.json'), 'utf8'));
+
+let elements = Object.keys(aliases).sort();
+if (args.element) {
+	if (!elements.includes(args.element)) {
+		console.error(`unknown --element=${args.element}`);
+		process.exit(2);
+	}
+	elements = [args.element];
+}
+let themes = THEMES;
+if (args.theme) {
+	if (!THEMES.includes(args.theme)) {
+		console.error(`unknown --theme=${args.theme} (expected ${THEMES.join('|')})`);
+		process.exit(2);
+	}
+	themes = [args.theme];
+}
+let bgs = BGS;
+if (args.bg) {
+	if (!BGS.includes(args.bg)) {
+		console.error(`unknown --bg=${args.bg} (expected ${BGS.join('|')})`);
+		process.exit(2);
+	}
+	bgs = [args.bg];
+}
+const combos = themes.flatMap((theme) => bgs.map((bg) => ({ theme, bg })));
+
+// The Harness notes are generated (notes-gen.mjs) and the vault loads the plugin via a
+// symlink to this repo's build output — both must exist before launching Obsidian.
+for (const id of elements) {
+	const note = path.join(vaultPath, 'Harness', `${id}.md`);
+	if (!fs.existsSync(note)) {
+		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
+	}
+}
+if (!fs.existsSync(path.join(repo, 'main.js'))) {
+	throw new Error(`missing ${path.join(repo, 'main.js')} — run \`npm run obsidian-shots\` (it builds the plugin first)`);
+}
 
 // -- safety: the scratch user-data-dir must never be the real config dir ----------------
 const realCfg = path.join(os.homedir(), '.config', 'obsidian');
@@ -200,12 +261,6 @@ async function warmUpUpdate() {
 }
 
 async function main() {
-	// -- step 0: build plugin + generate harness notes -----------------------------------
-	if (!process.argv.includes('--skip-build')) {
-		console.log('building plugin (npm run build-no-check)…');
-		execSync('npm run build-no-check', { cwd: repo, stdio: 'inherit' });
-	}
-	execSync(`node ${JSON.stringify(path.join(dir, 'notes-gen.mjs'))}`, { stdio: 'inherit' });
 	fs.mkdirSync(shotsDir, { recursive: true });
 
 	// -- step 1: seed scratch user-data-dir + spawn --------------------------------------
@@ -217,6 +272,7 @@ async function main() {
 	const child = spawnObsidian();
 	console.log(`spawned obsidian pid=${child.pid} (udd=${udd}, port=${PORT}, display=${DISPLAY})`);
 
+	const failures = [];
 	let cdp;
 	try {
 		// -- step 2: poll CDP for the workspace window target (<=30 s), attach ------------
@@ -271,7 +327,7 @@ async function main() {
 			loaded &&
 			(await evaluate(cdp, "!!window.app.plugins.plugins['draw-steel-elements'].frameworkV2"));
 		if (!hasFramework) {
-			const blocked = path.join(shotsDir, 'SPIKE-BLOCKED.png');
+			const blocked = path.join(shotsDir, 'CAMERA-BLOCKED.png');
 			await screenshot(cdp, blocked);
 			const modalText = await evaluate(
 				cdp,
@@ -283,108 +339,175 @@ async function main() {
 		}
 		console.log('plugin loaded, frameworkV2 present');
 
-		// -- step 3: open Harness/statblock in reading mode --------------------------------
-		await evaluate(
-			cdp,
-			`(async () => {
-				await window.app.workspace.openLinkText('Harness/statblock', '', false);
-				const leaf = window.app.workspace.getMostRecentLeaf();
-				await leaf.setViewState({
-					type: 'markdown',
-					state: { file: 'Harness/statblock.md', mode: 'preview' },
-					active: true,
-				});
-			})()`,
-		);
-		const elSel = "document.querySelector('.workspace-leaf.mod-active [data-dse-element]')";
-		await waitFor(cdp, `(() => { const el = ${elSel}; return !!el && el.getBoundingClientRect().height > 20; })()`, {
-			what: 'rendered [data-dse-element]',
-		});
-		await sleep(500); // settle: fonts/images/late layout
-		// Floating notices ("Indexing vault…", update download prompt) overlay the top-right
-		// of the pane — remove them so they can't sit on top of the element being shot.
+		// -- step 3: sweep — outer loop elements (one note-open each), inner loop combos ---
 		const clearNotices = () =>
+			// Floating notices ("Indexing vault…", update download prompt) overlay the
+			// top-right of the pane — remove them so they can't sit on top of the shot.
 			evaluate(cdp, "document.querySelectorAll('.notice').forEach((n) => n.remove())");
-		await clearNotices();
-		const rectExpr = `(() => { const r = ${elSel}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth }; })()`;
-		let rect = await evaluate(cdp, rectExpr);
-		// Tall elements overflow the (screen-clamped) window; enlarging the emulated
-		// viewport re-lays-out the workspace so the whole element paints on screen.
-		let emulated = false;
-		if (rect.y + rect.height > rect.vh) {
-			await cdp.call('Emulation.setDeviceMetricsOverride', {
-				width: rect.vw,
-				height: Math.ceil(rect.y + rect.height + 100),
-				deviceScaleFactor: 0,
-				mobile: false,
+
+		// The DSE plugin theme: setActive persists the `theme` pref, which re-stamps
+		// data-dse-theme on every live element root (reflow, not re-render). This is the
+		// exact path main.ts's dse-cycle-theme command uses. Independent of the chrome bg.
+		const setPluginTheme = async (elSel, theme) => {
+			await evaluate(
+				cdp,
+				`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.theme.setActive('${theme}')`,
+			);
+			await waitFor(cdp, `${elSel}?.dataset.dseTheme === '${theme}'`, {
+				timeout: 10000,
+				what: `data-dse-theme="${theme}" on the element root`,
 			});
-			emulated = true;
-			await sleep(500); // re-layout
-			await clearNotices();
-			rect = await evaluate(cdp, rectExpr);
-			console.log(`emulated viewport ${rect.vw}x${rect.vh} to fit tall element`);
-		}
-		const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-		const out = path.join(shotsDir, 'statblock--obsidian-legacy-dark.png');
-		const bytes = await screenshot(cdp, out, clip);
-		if (emulated) {
-			await cdp.call('Emulation.clearDeviceMetricsOverride');
-			await sleep(300);
-		}
-		console.log(`shot ${out} (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)})`);
+		};
 
-		// -- step 3b: prove the dark/light switch (needed by Task 4), then switch back -----
-		const theme = await evaluate(
-			cdp,
-			`(async () => {
-				const isDark = () => document.body.classList.contains('theme-dark');
-				const before = isDark() ? 'dark' : 'light';
-				const useChangeTheme = typeof window.app.changeTheme === 'function';
-				const set = (t) => {
-					if (useChangeTheme) window.app.changeTheme(t);
-					else { window.app.vault.setConfig('theme', t); window.app.updateTheme(); }
-				};
-				set('moonstone');
-				await new Promise((r) => setTimeout(r, 300));
-				const mid = isDark() ? 'dark' : 'light';
-				set('obsidian');
-				await new Promise((r) => setTimeout(r, 300));
-				const after = isDark() ? 'dark' : 'light';
-				const mech = useChangeTheme
-					? "app.changeTheme('moonstone'|'obsidian')"
-					: "app.vault.setConfig('theme',…) + app.updateTheme()";
-				return { before, mid, after, mech };
-			})()`,
-		);
-		console.log(`theme switch: ${theme.before} → ${theme.mid} → ${theme.after} via ${theme.mech}`);
-		if (!(theme.before === 'dark' && theme.mid === 'light' && theme.after === 'dark')) {
-			throw new Error(`theme switch did not behave (${JSON.stringify(theme)})`);
+		// The Obsidian chrome dark/light: app.changeTheme flips body.theme-dark/light
+		// (spike-proven; fallback path kept for older builds). Never assume a start state —
+		// set what the combo needs and wait for the class to reflect it.
+		const setChromeBg = async (bg) => {
+			const t = bg === 'dark' ? 'obsidian' : 'moonstone';
+			await evaluate(
+				cdp,
+				`(() => {
+					if (typeof window.app.changeTheme === 'function') window.app.changeTheme('${t}');
+					else { window.app.vault.setConfig('theme', '${t}'); window.app.updateTheme(); }
+				})()`,
+			);
+			await waitFor(cdp, `document.body.classList.contains('theme-${bg}')`, {
+				timeout: 10000,
+				what: `body.theme-${bg}`,
+			});
+		};
+
+		const errorShot = async (outName) => {
+			// Best-effort full-window shot so a failed combo leaves visual evidence.
+			try {
+				await screenshot(cdp, path.join(shotsDir, `${outName}--ERROR.png`));
+			} catch {
+				/* the window may be gone entirely — the failures list still records it */
+			}
+		};
+
+		for (const id of elements) {
+			// Element roots carry data-dse-element="<def.id>" (stamped by the pipeline);
+			// scoping the selector to the id kills any race with the previous note's DOM.
+			const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${id}"]')`;
+			let openErr = null;
+			try {
+				await evaluate(
+					cdp,
+					`(async () => {
+						await window.app.workspace.openLinkText('Harness/${id}', '', false);
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						await leaf.setViewState({
+							type: 'markdown',
+							state: { file: 'Harness/${id}.md', mode: 'preview' },
+							active: true,
+						});
+					})()`,
+				);
+				await waitFor(
+					cdp,
+					`(() => {
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						if (leaf?.view?.file?.path !== 'Harness/${id}.md') return false;
+						const el = ${elSel};
+						if (!el) return false;
+						// Laid-out box, not an arbitrary height floor: horizontal-rule is
+						// only a few px tall and must still pass this gate.
+						const r = el.getBoundingClientRect();
+						return r.width > 0 && r.height > 0;
+					})()`,
+					{ what: `rendered [data-dse-element="${id}"] in Harness/${id}.md` },
+				);
+				await sleep(500); // settle: fonts/images/late layout
+			} catch (e) {
+				openErr = e;
+			}
+
+			for (const c of combos) {
+				const outName = `${id}--obsidian-${c.theme}-${c.bg}`;
+				if (openErr) {
+					failures.push({ outName, errors: [`note open/render failed: ${String(openErr)}`] });
+					await errorShot(outName);
+					console.log(`FAIL ${outName} (note open/render)`);
+					continue;
+				}
+				let emulated = false;
+				try {
+					await setPluginTheme(elSel, c.theme);
+					await setChromeBg(c.bg);
+					await sleep(300); // settle both restyles before measuring
+					await clearNotices();
+					// Fresh rect EVERY shot — theme flips can resize the element.
+					const rectExpr = `(() => { const r = ${elSel}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth }; })()`;
+					let rect = await evaluate(cdp, rectExpr);
+					// Tall elements overflow the (screen-clamped) window; enlarging the
+					// emulated viewport re-lays-out the workspace so the whole element paints.
+					if (rect.y + rect.height > rect.vh) {
+						await cdp.call('Emulation.setDeviceMetricsOverride', {
+							width: rect.vw,
+							height: Math.ceil(rect.y + rect.height + 100),
+							deviceScaleFactor: 0,
+							mobile: false,
+						});
+						emulated = true;
+						await sleep(500); // re-layout
+						await clearNotices();
+						rect = await evaluate(cdp, rectExpr);
+					}
+					const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+					const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+					console.log(
+						`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''})`,
+					);
+				} catch (e) {
+					failures.push({ outName, errors: [String(e)] });
+					await errorShot(outName);
+					console.log(`FAIL ${outName}: ${String(e)}`);
+				} finally {
+					if (emulated) {
+						try {
+							await cdp.call('Emulation.clearDeviceMetricsOverride');
+							await sleep(300);
+						} catch {
+							/* socket may already be down; killChild still runs */
+						}
+					}
+				}
+			}
 		}
 
-		// -- step 4: quit cleanly -----------------------------------------------------------
-		const quitIds = await evaluate(
-			cdp,
-			"window.app.commands.listCommands().filter((c) => /quit|exit/i.test(c.id)).map((c) => c.id)",
-		);
-		console.log(`quit-ish commands available: ${JSON.stringify(quitIds)}`);
-		// The quit tears down the CDP socket mid-call; fire and tolerate the socket dying.
-		if (quitIds?.includes('app:quit')) {
-			evaluate(cdp, "window.app.commands.executeCommandById('app:quit')").catch(() => {});
-		} else {
-			evaluate(cdp, 'window.electron?.remote?.app?.quit()').catch(() => {});
+		// -- step 4: restore persisted defaults, then quit cleanly --------------------------
+		// The plugin theme pref (data.json, git-ignored) and the vault's appearance.json
+		// (tracked) both persist whatever the sweep last set — put them back to the
+		// committed baselines (plugin: steel, chrome: dark) so runs leave no value churn.
+		try {
+			await evaluate(
+				cdp,
+				`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.theme.setActive('steel')`,
+			);
+			await setChromeBg('dark');
+		} catch (e) {
+			console.log(`restore-defaults failed (non-fatal): ${String(e)}`);
 		}
+		// electron.remote.app.quit() is the working quit on this build (there is NO
+		// app:quit command). It tears down the CDP socket mid-call; fire and tolerate.
+		evaluate(cdp, 'window.electron?.remote?.app?.quit()').catch(() => {});
 		await Promise.race([child.exited, sleep(10000)]);
 		console.log(child.alive ? 'in-app quit did not exit the process' : 'quit cleanly in-app');
 	} finally {
 		cdp?.close();
 		await killChild(child);
 	}
+
+	if (failures.length) {
+		console.error(`\n${failures.length} shot(s) had errors:`);
+		for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
+		process.exit(1);
+	}
+	console.log(`\nall ${elements.length * combos.length} shots written to ${shotsDir}`);
 }
 
-main().then(
-	() => console.log('spike OK'),
-	(e) => {
-		console.error(String(e?.stack ?? e));
-		process.exit(1);
-	},
-);
+main().catch((e) => {
+	console.error(String(e?.stack ?? e));
+	process.exit(1);
+});
