@@ -39,18 +39,24 @@ async function snap(page, params, outName) {
 	const pageErrors = [];
 	const onErr = (e) => pageErrors.push(String(e));
 	page.on('pageerror', onErr);
-	await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
-	await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
-		timeout: 15000,
-	});
-	const done = await page.evaluate(() => window.__dseHarnessDone);
-	page.off('pageerror', onErr);
-	const errors = [...done.errors, ...pageErrors];
-	const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
-	if (params.gallery) await page.screenshot({ path: file, fullPage: true });
-	else await page.locator('#mount').screenshot({ path: file });
-	if (errors.length) failures.push({ outName, errors });
-	console.log(`${errors.length ? 'FAIL' : '  ok'} ${path.basename(file)}`);
+	try {
+		await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
+			timeout: 15000,
+		});
+		const done = await page.evaluate(() => window.__dseHarnessDone);
+		const errors = [...done.errors, ...pageErrors];
+		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
+		if (params.gallery) await page.screenshot({ path: file, fullPage: true });
+		else await page.locator('#mount').screenshot({ path: file });
+		if (errors.length) failures.push({ outName, errors });
+		console.log(`${errors.length ? 'FAIL' : '  ok'} ${path.basename(file)}`);
+	} catch (e) {
+		failures.push({ outName, errors: ['exception: ' + String(e)] });
+		console.log(`FAIL ${outName} (exception)`);
+	} finally {
+		page.off('pageerror', onErr);
+	}
 }
 
 const browser = await chromium.launch();
@@ -60,36 +66,51 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 
-// Manifest drives the sweep — single source of truth is the page itself.
-await page.goto(pageUrl);
-await page.waitForFunction(() => window.__dseHarnessManifest !== undefined);
-const manifest = await page.evaluate(() => window.__dseHarnessManifest);
+try {
+	// Manifest drives the sweep — single source of truth is the page itself.
+	await page.goto(pageUrl);
+	await page.waitForFunction(() => window.__dseHarnessManifest !== undefined);
+	const manifest = await page.evaluate(() => window.__dseHarnessManifest);
 
-let elements = manifest.elements.map((e) => e.id);
-if (args.element) elements = elements.filter((id) => id === args.element);
-if (args.element && elements.length === 0) {
-	console.error(`unknown --element=${args.element}`);
-	process.exit(2);
-}
-let combos = COMBOS;
-if (args.theme) combos = combos.filter((c) => c.theme === args.theme && !c.print);
-if (args.bg) combos = combos.filter((c) => c.bg === args.bg);
+	let elements = manifest.elements.map((e) => e.id);
+	if (args.element) elements = elements.filter((id) => id === args.element);
+	if (args.element && elements.length === 0) {
+		console.error(`unknown --element=${args.element}`);
+		process.exit(2);
+	}
+	let combos = COMBOS;
+	if (args.theme) combos = combos.filter((c) => c.theme === args.theme && !c.print);
+	if (args.bg) combos = combos.filter((c) => c.bg === args.bg && !c.print);
+	if (combos.length === 0) {
+		const badParts = [];
+		if (args.theme) badParts.push(`--theme=${args.theme}`);
+		if (args.bg) badParts.push(`--bg=${args.bg}`);
+		console.error(`no combos match ${badParts.join(' ')}`);
+		process.exit(2);
+	}
 
-for (const id of elements) {
-	for (const c of combos) {
-		const params = { element: id, fixture: args.fixture ?? 'default', theme: c.theme, bg: c.bg };
-		if (c.print) params.print = '1';
-		if (args.readonly) params.readonly = '1';
-		const suffix = args.readonly ? '--readonly' : '';
-		await snap(page, params, `${id}--${comboName(c)}${suffix}`);
+	for (const id of elements) {
+		for (const c of combos) {
+			const params = { element: id, fixture: args.fixture ?? 'default', theme: c.theme, bg: c.bg };
+			if (c.print) params.print = '1';
+			if (args.readonly) params.readonly = '1';
+			const suffix = args.readonly ? '--readonly' : '';
+			await snap(page, params, `${id}--${comboName(c)}${suffix}`);
+		}
 	}
-}
-if (!args.element) {
-	for (const c of combos.filter((c) => !c.print)) {
-		await snap(page, { gallery: '1', theme: c.theme, bg: c.bg }, `gallery--${comboName(c)}`);
+	if (!args.element) {
+		for (const c of combos.filter((c) => !c.print)) {
+			await snap(page, { gallery: '1', theme: c.theme, bg: c.bg }, `gallery--${comboName(c)}`);
+		}
 	}
+} catch (e) {
+	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
+	// failing) still gets a curated failure entry instead of an uncaught crash.
+	failures.push({ outName: 'sweep', errors: ['exception: ' + String(e)] });
+	console.log(`FAIL sweep (exception)`);
+} finally {
+	await browser.close();
 }
-await browser.close();
 
 if (failures.length) {
 	console.error(`\n${failures.length} shot(s) had errors:`);
