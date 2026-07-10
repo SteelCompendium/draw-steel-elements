@@ -20,14 +20,34 @@ import { createReferenceService } from '../src/framework/seams/refs';
 import { createValidationService } from '../src/framework/validation';
 import { createSessionStore } from '../src/framework/session';
 import { DEFAULT_SETTINGS } from '../src/model/Settings';
-import { registerFrameworkElementDefinitions } from '../main';
+import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
 import { App, Plugin } from '../test/mocks/obsidian-core';
 
-// Fixtures — esbuild `.md` text loader / jest rawTextTransformer. Task 4 adds the rest.
+// Fixtures — esbuild `.md` text loader / jest rawTextTransformer.
+import characteristicsDefault from './fixtures/characteristics/default.md';
+import counterDefault from './fixtures/counter/default.md';
 import featureDefault from './fixtures/feature/default.md';
+import featureblockDefault from './fixtures/featureblock/default.md';
+import horizontalRuleDefault from './fixtures/horizontal-rule/default.md';
+import initiativeDefault from './fixtures/initiative/default.md';
+import negotiationDefault from './fixtures/negotiation/default.md';
+import skillsDefault from './fixtures/skills/default.md';
+import staminaBarDefault from './fixtures/stamina-bar/default.md';
+import statblockDefault from './fixtures/statblock/default.md';
+import valuesRowDefault from './fixtures/values-row/default.md';
 
 export const FIXTURES: Record<string, Record<string, string>> = {
+	characteristics: { default: characteristicsDefault },
+	counter: { default: counterDefault },
 	feature: { default: featureDefault },
+	featureblock: { default: featureblockDefault },
+	'horizontal-rule': { default: horizontalRuleDefault },
+	initiative: { default: initiativeDefault },
+	negotiation: { default: negotiationDefault },
+	skills: { default: skillsDefault },
+	'stamina-bar': { default: staminaBarDefault },
+	statblock: { default: statblockDefault },
+	'values-row': { default: valuesRowDefault },
 };
 
 export interface HarnessParams {
@@ -56,12 +76,24 @@ export function parseParams(search: string): HarnessParams {
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
 	const app = new App();
+	// Seed the default token image so Images.resolveImageSourceOrDefault's fallback
+	// resolves for fixtures with images (e.g. initiative) — avoids CB-14 unhandled
+	// rejections during render (same seeding as test/dom/elements/initiative.test.ts's
+	// makeEnv()).
+	app.vault.setFile(DEFAULT_SETTINGS.defaultImagePath, '');
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
+	// Mirrors main.ts's initializeElementFrameworkV2: element schemas (e.g. Skills,
+	// Stamina Bar) $ref the shared component-wrapper dependency schema, which is only
+	// ever registered at real plugin onload — without it, validation fails with
+	// "can't resolve reference ...component-wrapper-1.0.0".
+	for (const { id, schema } of FRAMEWORK_V2_DEPENDENCY_SCHEMAS) {
+		validation.addDependencySchema(id, schema);
+	}
 	const session = createSessionStore();
 	return {
 		deps: {

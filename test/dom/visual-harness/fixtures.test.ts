@@ -18,9 +18,12 @@ describe('F4 visual-harness fixtures', () => {
 		}
 	});
 
-	// Task 4 replaces this with the full 11-element equality assertion.
-	test('FIXTURES covers feature (Task 3 scaffold)', () => {
-		expect(Object.keys(FIXTURES)).toContain('feature');
+	test('FIXTURES covers every registered element (all 11)', () => {
+		const registered = registry
+			.all()
+			.map((d) => d.id)
+			.sort();
+		expect(Object.keys(FIXTURES).sort()).toEqual(registered);
 	});
 
 	for (const [id, fixtures] of Object.entries(FIXTURES)) {
