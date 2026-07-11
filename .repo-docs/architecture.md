@@ -116,7 +116,7 @@ lifecycle cleanup, persistence write-back).
 | `host/ReadingModeBlockHost.ts` | The only implemented `BlockHost` (D1 ships reading mode only, matching the standing 2024-08-18 reading-mode-only decision). Fixes two legacy bugs on top of `src/utils/CodeBlocks.ts`'s approach: atomic read-modify-write via `Vault.process` (no lost updates from concurrent edits) and fence-language preservation on write-back (no silent alias-to-canonical rewriting). |
 | `host/LivePreviewBlockHost.ts` | Deliberately unimplemented stub — every member throws. Documents the CM6 realization of each `BlockHost` member for a future Live Preview effort; not to be constructed until that effort supersedes the reading-mode-only decision. |
 | `seams/theme.ts` | `ThemeService` — stamps `data-dse-theme="<active>"` on every element root, token → CSS var resolution (`cssVar()`). Minimal in D1 (effectively one constant theme); the token/theme value space is a later effort's scope. |
-| `seams/prefs.ts` | `PreferenceStore` — a small typed preference store (`DsePrefs`, currently just `theme`) backed by an injected `saveData`-like storage pair, with `reflect()` stamping any `attr`-bearing preference as `data-dse-<attr>` on element roots. The preference catalog is a later effort's scope. |
+| `seams/prefs.ts` | `PreferenceStore` — a typed preference store (`DsePrefs`, built-in `theme` key only) backed by an injected `PrefsStorage` adapter, with `reflect()` stamping any `attr`-bearing preference as `data-dse-<attr>` on element roots. The preference catalog, settings tab, and per-block overrides are D4's scope — see "Preferences (`src/prefs/`, D4)" below. |
 | `seams/refs.ts` | `ReferenceService` — generalizes `src/utils/ReferenceResolver.ts` into a provider chain (`RefProvider`). Ships `at-path` (`@Creatures/Goblin`) and `wikilink` (`[[Thorn Dragon]]`) providers ported verbatim from the legacy resolver, plus a reserved, always-failing `scc`/`scc.vN:` provider placeholder for a future effort to supersede. `resolveDeep()` walks arbitrary parsed YAML. Does **not** replace `ReferenceResolver.ts`, which stays live for legacy elements. |
 | `session.ts` | `SessionStore` — plugin-scoped, in-memory, best-effort UI state (e.g. collapse open/closed) keyed by `(blockKey, slot)`. Cleared on plugin `onunload`. Pure — no Obsidian imports. Never used for document state. |
 | `validation.ts` | `ValidationService` — a plugin-scoped AJV wrapper (2019 dialect, `ajv-keywords` + `ajv-errors`, ported from `src/utils/JsonSchemaValidator.ts`) that compiles and caches one validator per element id (fixing the legacy validator's recompile-on-every-call cost). One instance per plugin load, dropped on unload — no module-global singleton (unlike the legacy validator, which stays a singleton for its own unmigrated clients). |
@@ -151,6 +151,53 @@ registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the
 `ElementView` subclass), and — for Skills/Stamina Bar — `model.ts` (a thin `parse`/
 `serialize` wrapper around the pre-existing `@model/*` class, kept renderer-agnostic so
 the same model classes still back the legacy validator/schemas).
+
+### Preferences (`src/prefs/`, D4)
+
+Descriptor-driven: one `PrefDescriptor` list drives storage, CSS reflection, the
+settings tab, and per-block overrides — adding a pref means adding a descriptor, not
+hand-wiring four call sites.
+
+- **Catalog** (`src/prefs/catalog.ts`): owns the `DsePrefs` module-augmentation (F1's
+  `seams/prefs.ts` ships only the built-in `theme` key), `DSE_PREF_DESCRIPTORS`, the
+  finalized `PrefUi` shape (group/label/help/control/options — F1 left `ui` `unknown`),
+  and the statblock preset bundles (`SB_PRESETS`; `deriveSbPreset` re-derives "Custom"
+  the moment any one member diverges — a preset is never itself stored). Defaults
+  reproduce today's look byte-for-byte (`catalog.test.ts` guards it).
+- **Storage chain**: `DsePreferenceStore` (`seams/prefs.ts`) holds live values and calls
+  out to an injected `PrefsStorage` adapter. Production's adapter
+  (`main.ts createSaveDataPrefsStorage`) mirrors the snapshot onto `plugin.settings.prefs`
+  synchronously, then debounces the `saveData` disk write 250ms (`flush()` forces it on
+  unload). The snapshot is **sparse** — only values differing from their descriptor
+  default are written (`DSESettings.prefs: Partial<DsePrefs>`) — so new prefs and default
+  changes are migration-free. `DSESettings.settingsVersion` (currently 1) is reserved for
+  future *structural* changes only, via `migrateSettings()`.
+- **Reflection**: `reflect(root, owner)` stamps every `attr`-bearing descriptor as
+  `data-dse-<attr>="<value>"` and keeps it live. The pipeline (`framework/pipeline.ts`)
+  calls it once per block, after `def.createView()` and before `view.mount()`. `theme` is
+  deliberately attr-less in the catalog: `ThemeService.apply()` is the sole writer of
+  `data-dse-theme` (D3 §7.1); double-stamping here would race.
+- **Settings tab** (`src/views/SettingsTab.ts`): groups descriptors by `PrefUi.group` in
+  `GROUP_ORDER` and renders one `Setting` row per descriptor — no per-pref branching.
+  `onChange` calls `prefs.set()` directly (no Apply button): `set()` notifies `reflect()`'s
+  subscribers synchronously, so open elements reflow live behind the dialog. Per-group and
+  whole-tab reset actions write descriptor defaults (sparse storage then drops them). The
+  Statblock display group also renders the preset dropdown and a live preview
+  (`SettingsPreview.ts`), both wholly derived, never persisted.
+- **Per-block `prefs:` overrides** (`framework/prefOverrides.ts`): a reserved `prefs:`
+  map, presentation keys only. `extractPrefOverrides` pops it off the parsed YAML BEFORE
+  schema validation and `def.parse`; unknown or behavioral keys (no `attr` — those use the
+  block's own `collapsible:`/`collapse_default:`, see `resolveCollapsePrefs`) are dropped
+  with a `console.warn`, not an error card. `applyPrefOverrides` pins the override AFTER
+  `reflect()` runs, so it wins on any later global change (listener-order precedence, no
+  F1 signature change). For `shape: "persisted"` elements, `withPrefOverrides` wraps
+  `def.serialize` to re-emit the `prefs:` map on every write-back — content-preserving but
+  re-stringified (key order/values intact, formatting may normalize); blocks with no
+  `prefs:` map are untouched.
+- **Deliberate deferrals** (cataloged, not built): `sbChars`/`sbVillain`/`sbStickyMeta`
+  (need D2-level statblock DOM changes); `cardStyle` (needs a designed compact card
+  treatment); D3-aware filtering of the theme option list. Rationale + open-decisions
+  table: workspace repo `docs/superpowers/dse-overhaul/D4-preferences-spec.md`.
 
 ### Models (`src/model/`)
 

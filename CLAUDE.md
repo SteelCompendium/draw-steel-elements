@@ -43,6 +43,13 @@ for iteration.
 - **Models**: `src/model/` with `parseYaml()` static methods and AJV schema validation —
   shared by both strategies
 - **SDK**: `steel-compendium-sdk` bundled at build time for data model parsing
+- **Preferences (D4)**: descriptor-driven — `src/prefs/catalog.ts` owns the `DsePrefs`
+  augmentation, the `PrefDescriptor` list (attrs = the `data-dse-*` vocabulary CSS reflows
+  on), and the statblock presets; storage is a SPARSE `prefs` slice on `DSESettings`
+  (debounced `saveData`, `main.ts createSaveDataPrefsStorage`). The settings tab
+  (`src/views/SettingsTab.ts`) renders FROM the descriptors — adding a pref = adding a
+  descriptor. Per-block `prefs:` YAML overrides: `src/framework/prefOverrides.ts`.
+  Defaults must always reproduce the current look (legacy-fidelity bar).
 
 ## Important Constraints
 
