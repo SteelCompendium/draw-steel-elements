@@ -234,9 +234,11 @@ export function renderFeature(
 		if (effect.features && effect.features.length > 0) {
 			// D5: nested abilities inherit the hooks (single shared blockKey). Each
 			// nested feature gets its own renderFeature frame — that resets the
-			// rollableIndex ordinal, so nested rolling effects of the SAME block can
-			// collide on session slots across siblings; acceptable for best-effort
-			// dice state (F1 §4.3 key drift is already documented) — not a bug.
+			// rollableIndex ordinal, so every nested feature shares the parent's
+			// blockKey ordinal space: the parent's rolling effect 0 and a nested
+			// feature's effect 0 land on the SAME session slot (and nested siblings
+			// collide with each other likewise); acceptable for best-effort dice
+			// state (F1 §4.3 key drift is already documented) — not a bug.
 			renderFeatureList(hostEl, FeatureConfig.allFrom(effect.features), owner, renderMd, {
 				headingLevel: Math.min(level + 1, 6),
 				roll: opts.roll,

@@ -204,7 +204,7 @@ function makeHost(containerEl: HTMLElement, owner: any): BlockHost {
 	};
 }
 
-async function mountFixture(elementId: string, enableRolling: boolean) {
+async function mountFixture(elementId: string, enableRolling: boolean, source?: string) {
 	const registry = createElementRegistry();
 	registerFrameworkElementDefinitions(registry);
 	const { deps, prefs } = makeDeps();
@@ -214,7 +214,7 @@ async function mountFixture(elementId: string, enableRolling: boolean) {
 	const containerEl = document.createElement('div');
 	document.body.appendChild(containerEl);
 	const pipeline = new ElementPipeline(deps);
-	await pipeline.run(registry.get(elementId)!, FIXTURES[elementId].default, makeHost(containerEl, owner));
+	await pipeline.run(registry.get(elementId)!, source ?? FIXTURES[elementId].default, makeHost(containerEl, owner));
 	await flushAsync(2);
 	return { containerEl, prefs };
 }
@@ -240,6 +240,36 @@ describe('pipeline integration — the fidelity bar and the opt-in', () => {
 		const panels = containerEl.querySelectorAll('.dse-pr');
 		expect(panels.length).toBeGreaterThan(0);
 		expect(containerEl.querySelectorAll('.dse-roll-btn')).toHaveLength(panels.length);
+	});
+
+	test('nested abilities inherit the roller: a nested power roll gains its own launch button', async () => {
+		// The stock fixture's nested feature has no power roll — this source pins
+		// renderFeature's `roll: opts.roll` forward on the nested renderFeatureList
+		// call (drop that forward and the nested panel silently loses its roller).
+		const nestedRollSource = [
+			'type: feature',
+			'feature_type: ability',
+			'name: Outer Strike',
+			'usage: Main action',
+			'effects:',
+			'  - name: Effect',
+			'    effect: Wrapper text.',
+			'    features:',
+			'      - type: feature',
+			'        feature_type: ability',
+			'        name: Nested Strike',
+			'        usage: Main action',
+			'        effects:',
+			'          - roll: Power Roll + Might',
+			'            tier1: Tier one outcome.',
+			'            tier2: Tier two outcome.',
+			'            tier3: Tier three outcome.',
+		].join('\n');
+		const { containerEl } = await mountFixture('feature', true, nestedRollSource);
+		const nested = containerEl.querySelector('.dse-feature__nested .dse-feature');
+		expect(nested).not.toBeNull();
+		expect(nested!.querySelector('.dse-pr')).not.toBeNull(); // the nested panel renders…
+		expect(nested!.querySelector('.dse-roll-btn')).not.toBeNull(); // …WITH its roll affordance
 	});
 
 	test('featureblock abilities gain the roller too', async () => {

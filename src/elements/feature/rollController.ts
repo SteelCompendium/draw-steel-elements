@@ -125,7 +125,14 @@ export function attachRollControls(opts: AttachRollControlsOptions): void {
 
 	async function doRoll(state?: RollBarState): Promise<void> {
 		const s = state ?? ensureBar().getState();
-		opts.hooks.session.set(opts.hooks.blockKey, lastSlot, s);
+		// mainAction never persists: crit eligibility is inferred per-ability (OD-6),
+		// not a sticky user modifier — restore always re-infers from mainActionDefault.
+		opts.hooks.session.set(opts.hooks.blockKey, lastSlot, {
+			characteristic: s.characteristic,
+			skillBonus: s.skillBonus,
+			edges: s.edges,
+			banes: s.banes,
+		});
 		const input: RollInput = {
 			mode: parsed.mode,
 			characteristic: s.characteristic,
