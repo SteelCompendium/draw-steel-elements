@@ -187,7 +187,11 @@ export class ElementPipeline {
 			// is self-describing to renderErrorCard, no ElementStageError tag needed.
 			if (def.schema) {
 				const schema = def.schema;
-				const result = runStage('schema', () => validation.validate(def.id, schema, rawData));
+				// D5 (Plan 14): parseYaml('') is undefined, which no JSON-Schema type
+				// accepts — normalize to null so schemas can OPT IN to empty blocks via
+				// type: ["object","null"] (ds-roll does). Schemas without "null" keep
+				// erroring on empty sources exactly as before.
+				const result = runStage('schema', () => validation.validate(def.id, schema, rawData ?? null));
 				if (!result.valid) {
 					renderErrorCard(root, def, result);
 					return;

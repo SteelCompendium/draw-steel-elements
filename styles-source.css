@@ -2699,6 +2699,17 @@ button.dse-pr__row:hover {
 [data-dse-element] .dse-roll-btn {
 	margin-left: 0.5rem;
 }
+/* -- D5 ds-roll element card (Plan 14 Task 5) -- */
+[data-dse-element='roll'] .dse-roll {
+	padding: var(--dse-pad);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background-color: var(--dse-surface);
+}
+[data-dse-element='roll'] .dse-roll__expr {
+	font-size: var(--font-ui-smaller);
+	color: var(--dse-fg-muted);
+}
 /* (§4.5 focus ring: consolidated into the shared kit :focus-visible rule below.) */
 .dse-pr__text {
 	flex: 1 1 auto;

@@ -4,9 +4,10 @@
 // Proves (F1 §2.3 registry wiring, §5 dependency-schema registration, §8 OD-8):
 //  - constructing + loading the plugin (fake App/Plugin) runs the new framework v2
 //    wiring WITHOUT throwing;
-//  - the new ElementRegistry exists on the plugin and holds ALL 11 migrated elements
-//    (the D-wave migration is complete as of Plan 07 Task 5 — when Plan 02 authored this
-//    file the registry was asserted EMPTY, and each migration task appended its element);
+//  - the new ElementRegistry exists on the plugin and holds ALL 12 elements — the 11
+//    migrated ones (the D-wave migration is complete as of Plan 07 Task 5 — when Plan 02
+//    authored this file the registry was asserted EMPTY, and each migration task appended
+//    its element) plus Roll, the first framework-born element (Plan 14 Task 5);
 //  - the legacy `registerElements`/RegisterElements.ts path still runs alongside it but
 //    now registers ZERO markdown code-block processors (Plan 07 Task 5 migrated the last
 //    two, Values Row + Characteristics) — every handler comes from the framework;
@@ -30,9 +31,10 @@ import * as path from 'path';
 
 // The COMPLETE Framework v2 registry, in registration order
 // (registerFrameworkElementDefinitions in main.ts). As of Plan 07 Task 5 (Values Row +
-// Characteristics, the last two), ALL 11 elements live here and the legacy
+// Characteristics, the last two), ALL 11 migrated elements live here and the legacy
 // RegisterElements.ts path registers nothing — there are no legacy aliases left to
 // sample (this file's original LEGACY_ALIASES coexistence constant is retired with them).
+// Plan 14 Task 5 appends Roll (ds-roll) — the 12th element, born on the framework.
 const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'horizontal-rule',
 	'skills',
@@ -45,6 +47,7 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'counter',
 	'values-row',
 	'characteristics',
+	'roll',
 ];
 
 /**
@@ -72,7 +75,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		await expect(plugin.onload()).resolves.not.toThrow();
 	});
 
-	test('the new ElementRegistry exists on the plugin and holds ALL 11 migrated elements (D-wave migration complete, Plan 07 Task 5)', async () => {
+	test('the new ElementRegistry exists on the plugin and holds ALL 12 elements (11 migrated + ds-roll, Plan 14 Task 5)', async () => {
 		const app = new App();
 		const plugin = makePlugin(DrawSteelAdmonitionPlugin, app);
 

@@ -9,5 +9,6 @@
 	"statblock": "ds-sb",
 	"counter": "ds-ct",
 	"values-row": "ds-vr",
-	"characteristics": "ds-char"
+	"characteristics": "ds-char",
+	"roll": "ds-roll"
 }

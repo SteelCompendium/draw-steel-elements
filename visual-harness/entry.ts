@@ -33,6 +33,7 @@ import featureblockDefault from './fixtures/featureblock/default.md';
 import horizontalRuleDefault from './fixtures/horizontal-rule/default.md';
 import initiativeDefault from './fixtures/initiative/default.md';
 import negotiationDefault from './fixtures/negotiation/default.md';
+import rollDefault from './fixtures/roll/default.md';
 import skillsDefault from './fixtures/skills/default.md';
 import staminaBarDefault from './fixtures/stamina-bar/default.md';
 import statblockDefault from './fixtures/statblock/default.md';
@@ -46,6 +47,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	'horizontal-rule': { default: horizontalRuleDefault },
 	initiative: { default: initiativeDefault },
 	negotiation: { default: negotiationDefault },
+	roll: { default: rollDefault },
 	skills: { default: skillsDefault },
 	'stamina-bar': { default: staminaBarDefault },
 	statblock: { default: statblockDefault },

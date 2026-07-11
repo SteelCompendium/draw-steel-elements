@@ -1,0 +1,56 @@
+# Plan 14 Task 5 (D5 §5.2) — the ds-roll block schema (AJV, hard-fail per F1 §5).
+# `type` includes "null" so a completely EMPTY ds-roll block is valid — it rolls
+# a bare 2d10 power roll (§5.2's first line). The reserved `prefs:` map is popped
+# by the pipeline BEFORE validation, so it is deliberately absent here.
+# Dialect: 2019-09 like every other element schema — the plugin-scoped AJV is
+# Ajv2019, and an unregistered $schema URI (e.g. draft-07) throws at compile.
+$schema: "https://json-schema.org/draft/2019-09/schema"
+$id: "https://steelcompendium.io/schemas/dse-roll-1.0.0"
+type: ["object", "null"]
+additionalProperties: false
+properties:
+  name:
+    type: string
+  roll:
+    type: string
+    description: Free-text expression ("Power Roll + Reason", "2d10 + 5", "Might test"). Wins over the structured fields below.
+  mode:
+    type: string
+    enum: [power-roll, test, opposed, flat]
+  characteristic:
+    description: A number (score, used directly) OR a keyword ("Reason", labels a manual stepper).
+    oneOf:
+      - type: number
+      - type: string
+  skill:
+    description: true ⇒ +2; or a skill name (display only) ⇒ +2.
+    oneOf:
+      - type: boolean
+      - type: string
+  edges:
+    type: integer
+    minimum: 0
+  banes:
+    type: integer
+    minimum: 0
+  bonus:
+    type: number
+  difficulty:
+    type: string
+    enum: [easy, medium, hard]
+  main_action:
+    type: boolean
+  dice:
+    type: string
+    description: Flat mode only — arbitrary dice ("1d6+2").
+  tiers:
+    type: object
+    additionalProperties: false
+    properties:
+      t1: { type: string }
+      t2: { type: string }
+      t3: { type: string }
+  crit:
+    type: string
+  auto_roll:
+    type: boolean

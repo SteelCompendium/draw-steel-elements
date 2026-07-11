@@ -43,6 +43,7 @@ import { statblockElement } from '@/elements/statblock/definition';
 import { counterElement } from '@/elements/counter/definition';
 import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
+import { rollElement } from '@/elements/roll/definition';
 
 /** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
 export interface DependencySchema {
@@ -218,8 +219,10 @@ export function initializeElementFrameworkV2(
  * Counter/CounterView); Plan 07 Task 5 appends Values Row + Characteristics (F1 §6
  * step 2, retiring ValuesRowProcessor + CharacteristicsProcessor — their Views stay,
  * reused by the element views). With those two, the D-wave element migration is
- * COMPLETE: all 11 elements are registered here and `RegisterElements.ts` registers
- * nothing. Kept as a standalone function (same rationale as
+ * COMPLETE: all 11 migrated elements are registered here and `RegisterElements.ts`
+ * registers nothing. Plan 14 Task 5 appends Roll (D5 §5) — the 12th element and the
+ * first NEW element born on the framework (not a migration); RegisterElements.ts still
+ * registers nothing. Kept as a standalone function (same rationale as
  * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
  */
 export function registerFrameworkElementDefinitions(registry: ElementRegistry): void {
@@ -234,6 +237,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(counterElement);
 	registry.register(valuesRowElement);
 	registry.register(characteristicsElement);
+	registry.register(rollElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

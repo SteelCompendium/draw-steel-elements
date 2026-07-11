@@ -5,42 +5,18 @@
 // fixtures.test.ts) and pins the fidelity bar: at catalog defaults the roller
 // leaves NO trace in the DOM.
 import { ElementPipeline } from '../../../src/framework/pipeline';
-import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { registerFrameworkElementDefinitions } from 'main';
-import { createPreferenceStore } from '../../../src/framework/seams/prefs';
-import type { PrefsStorage } from '../../../src/framework/seams/prefs';
-import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
-import { createThemeService } from '../../../src/framework/seams/theme';
-import { createReferenceService } from '../../../src/framework/seams/refs';
-import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import type { SessionStore } from '../../../src/framework/session';
-import { resolveRoll } from '../../../src/framework/roll/engine';
-import type { RollService } from '../../../src/framework/roll/service';
-import type { DiceSource, RollInput } from '../../../src/framework/roll/types';
 import { attachRollControls } from '../../../src/elements/feature/rollController';
 import type { FeatureRollHooks } from '../../../src/elements/feature/rollController';
 import { powerRollPanel } from '../../../src/framework/kit';
-import type { BlockHost } from '../../../src/framework/host/BlockHost';
-import { migrateSettings } from '@model/Settings';
 import { FIXTURES } from '../../../visual-harness/entry';
-import { App, Component, flushAsync } from '../../mocks/obsidian';
-import type { Plugin } from 'obsidian';
-
-// ---- seeded RollService stub: replays `faces` afresh on every roll() ----
-function stubService(faces: number[]): RollService {
-	const seeded = (): DiceSource => {
-		let i = 0;
-		return { rollDie: () => faces[i++] ?? 1 };
-	};
-	return {
-		resolve: (input: RollInput, dice?: DiceSource) => resolveRoll(input, dice ?? seeded()),
-		roll: async (input: RollInput) => resolveRoll(input, seeded()),
-		dice: seeded(),
-		delegate: 'native',
-	};
-}
+// stubService/makeDeps/makeHost extracted to rollTestHelpers.ts (Plan 14 Task 5)
+// so roll.test.ts shares them — same code, no test-behavior change.
+import { stubService, makeDeps, makeHost } from './rollTestHelpers';
+import { Component, flushAsync } from '../../mocks/obsidian';
 
 // ---- controller harness (no pipeline; full row control) ----
 function mountController(opts: {
@@ -170,40 +146,6 @@ describe('attachRollControls — the per-effect roller', () => {
 });
 
 // ---- pipeline integration over the known-good harness fixtures ----
-function makeDeps() {
-	const app = new App() as never;
-	const plugin = new Component() as unknown as Plugin;
-	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
-	const prefs = createPreferenceStore(storage);
-	prefs.describe(DSE_PREF_DESCRIPTORS);
-	const settings = migrateSettings(undefined);
-	const deps: ElementPipelineDeps = {
-		app,
-		plugin,
-		settings,
-		theme: createThemeService(prefs, plugin),
-		prefs,
-		refs: createReferenceService(app, settings),
-		validation: createValidationService(),
-		session: createSessionStore(),
-		roll: stubService([5, 6]),
-	};
-	return { deps, prefs };
-}
-
-function makeHost(containerEl: HTMLElement, owner: any): BlockHost {
-	return {
-		mode: 'reading',
-		sourcePath: '',
-		containerEl,
-		canPersist: true,
-		addChild: (child) => { owner.addChild(child); return child; },
-		getBlockInfo: () => null,
-		replaceSource: async () => false,
-		blockKey: () => 'test-block',
-	};
-}
-
 async function mountFixture(elementId: string, enableRolling: boolean, source?: string) {
 	const registry = createElementRegistry();
 	registerFrameworkElementDefinitions(registry);
