@@ -25,6 +25,7 @@ import { App, Plugin } from '../../mocks/obsidian';
 import { skillsElement } from '../../../src/elements/skills/definition';
 import { SkillsView } from '../../../src/elements/skills/view';
 import { styleGuardFindings } from '../kit/styleGuard';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 // SkillsSchema.yaml $refs the shared component-wrapper dependency schema (F1 §5) — main.ts
 // registers it once at plugin load; tests driving the REAL ValidationService need to do the
 // same, so pull the same constant onload() uses rather than duplicating the schema id/text.
@@ -69,6 +70,11 @@ function makeDeps(session: SessionStore = createSessionStore()): ElementPipeline
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	// D4 (Plan 13 Task 5): SkillsView now resolves collapsible/collapse_default
+	// through resolveCollapsePrefs(model, cx.prefs), which calls prefs.get() for the
+	// collapsibleDefault/collapseDefault descriptors — they must be registered, same
+	// convention as statblock.test.ts's makeDeps().
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();

@@ -16,6 +16,7 @@ import { ElementView } from '@/framework/view';
 import { collapsible, openManagedModal } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
+import { resolveCollapsePrefs } from '@/prefs/catalog';
 
 const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
@@ -60,8 +61,12 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// render that was `true`, so the YAML `collapsible` flag is deliberately NOT
 		// honored: the element is always collapsible. Seeded from collapse_default
 		// with NO SessionPersist (unlike Skills): not session-tracked, matching the
-		// legacy element.
-		const wrapper = collapsible(root, { title: WRAPPER_TITLE, open: !model.collapse_default }, this);
+		// legacy element. D4 §1.3 (Plan 13, amended): the collapse_default SEED now
+		// falls back to the collapseDefault pref when the block doesn't set it — the
+		// `collapsible` half of resolveCollapsePrefs's result is deliberately unused
+		// here, preserving the same quirk.
+		const { collapseDefault } = resolveCollapsePrefs(model, this.cx.prefs);
+		const wrapper = collapsible(root, { title: WRAPPER_TITLE, open: !collapseDefault }, this);
 		this.renderBar(wrapper.contentEl, model);
 	}
 

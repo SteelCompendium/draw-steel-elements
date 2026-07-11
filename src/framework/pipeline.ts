@@ -16,6 +16,7 @@ import type { PreferenceStore } from './seams/prefs';
 import type { ReferenceService } from './seams/refs';
 import type { ValidationService, ValidationResult } from './validation';
 import type { SessionStore } from './session';
+import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 
 /** The four failure stages renderErrorCard can report (F1 §3.8). */
 export type ErrorStage = 'parse' | 'schema' | 'reference' | 'render';
@@ -174,6 +175,11 @@ export class ElementPipeline {
 			// Step 2: parse (F1 §2.4.1). Parse failure -> error card, stage "parse".
 			const rawData = runStage('parse', () => parseYaml(source));
 
+			// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
+			// validation (schemas never see the reserved key) and before def.parse
+			// (it never enters the semantic model).
+			const prefOverrides = extractPrefOverrides(rawData, prefs);
+
 			// Step 3: validate (F1 §2.4.2). Invalid -> error card, stage "schema", one
 			// `path: message` per error — returned directly (not thrown): a ValidationResult
 			// is self-describing to renderErrorCard, no ElementStageError tag needed.
@@ -215,7 +221,15 @@ export class ElementPipeline {
 			const view = runStage('render', () => def.createView(cx));
 			cx.theme.apply(root, view);
 			cx.prefs.reflect(root, view);
-			if (def.serialize) view.setSerializer(def.serialize);
+			// D4 §1.4: pinned AFTER reflect() — registration order makes the
+			// override re-stamp last on any global change (OD-D4-3a).
+			applyPrefOverrides(root, view, prefOverrides, cx.prefs);
+			if (def.serialize) {
+				const serialize = def.serialize;
+				// D4: a block carrying prefs: must not lose it when replaceSource
+				// rewrites the body from serialize(model).
+				view.setSerializer(prefOverrides ? withPrefOverrides(serialize, prefOverrides) : serialize);
+			}
 			host.addChild(view);
 			await runStageAsync('render', () => view.mount(root, model));
 		} catch (error) {

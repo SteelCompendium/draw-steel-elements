@@ -26,6 +26,7 @@ import { collapsible } from '@/framework/kit';
 import { Skills, CustomSkill } from '@model/Skills';
 import { SKILL_DATA, SkillInfo } from '@utils/SkillsData';
 import { toProperCase } from '@utils/common';
+import { resolveCollapsePrefs } from '@/prefs/catalog';
 
 /** SessionStore slot for the whole-element collapsible open-state (F1 §4.3). Stores the
  *  kit's OPEN boolean (true = expanded) — the inverse sense of the old ComponentWrapper
@@ -96,7 +97,11 @@ export class SkillsView extends ElementView<Skills> {
 		// applies to a collapsible element). Otherwise ONE collapsible wraps the list;
 		// a session value (SessionPersist) beats the collapse_default seed, exactly as
 		// the old SessionStore-then-model fallback read.
-		if (!model.collapsible) {
+		//
+		// D4 §1.3 (Plan 13, amended): block key > global pref > default — the existing
+		// collapsible:/collapse_default: YAML keys ARE the per-block override.
+		const { collapsible: isCollapsible, collapseDefault } = resolveCollapsePrefs(model, this.cx.prefs);
+		if (!isCollapsible) {
 			this.renderGroups(root, model);
 			return;
 		}
@@ -104,7 +109,7 @@ export class SkillsView extends ElementView<Skills> {
 			root,
 			{
 				title: WRAPPER_TITLE,
-				open: !model.collapse_default,
+				open: !collapseDefault,
 				persist: { session: this.cx.session, blockKey: this.blockKey, slot: WRAPPER_OPEN_SLOT },
 			},
 			this,

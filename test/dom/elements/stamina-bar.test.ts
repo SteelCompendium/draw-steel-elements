@@ -32,6 +32,7 @@ import { staminaBarElement } from '../../../src/elements/stamina-bar/definition'
 import { StaminaBarView } from '../../../src/elements/stamina-bar/view';
 import { serialize as frameworkSerialize } from '../../../src/elements/stamina-bar/model';
 import { styleGuardFindings } from '../kit/styleGuard';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 // StaminaBarSchema.yaml $refs the shared component-wrapper dependency schema (F1 §5) — same
 // convention as skills.test.ts.
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
@@ -62,6 +63,11 @@ function makeDeps(): ElementPipelineDeps {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	// D4 (Plan 13 Task 5): StaminaBarView now resolves collapse_default through
+	// resolveCollapsePrefs(model, cx.prefs), which calls prefs.get() for the
+	// collapsibleDefault/collapseDefault descriptors — they must be registered, same
+	// convention as statblock.test.ts's makeDeps().
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();

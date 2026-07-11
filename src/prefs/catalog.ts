@@ -20,6 +20,7 @@
 // object/array — DsePreferenceStore.persist() sparse-checks via strict equality
 // (`value === descriptor.default`), which is only correct for primitives.
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '../framework/seams/prefs';
+import { declaredCollapsePrefs } from '@model/ComponentWrapper';
 
 declare module '../framework/seams/prefs' {
 	interface DsePrefs {
@@ -203,4 +204,31 @@ export async function applySbPreset(prefs: PreferenceStore, preset: SbPresetId):
 	for (const k of SB_PRESET_MEMBERS) {
 		await prefs.set(k, SB_PRESETS[preset][k]);
 	}
+}
+
+/**
+ * D4 §1.3 behavioral precedence for the ComponentWrapper contract (AMENDED —
+ * task-5-report-d4.md "Continuation"): block key (`collapsible:` / `collapse_default:`)
+ * > global pref > built-in default. `ComponentWrapper`'s constructor keeps materializing
+ * concrete `true`/`false` on the model (byte-compat, unchanged) — this helper instead
+ * consults the side channel (`declaredCollapsePrefs`) recorded at construction time to
+ * tell "the block said so" apart from "the constructor's own `?? true`/`?? false`
+ * default filled it in". The block keys ARE the per-block override for these two
+ * prefs — no `prefs:` map entry exists for behavioral keys (extractPrefOverrides warns
+ * on them).
+ */
+export function resolveCollapsePrefs(
+	model: { collapsible?: boolean; collapse_default?: boolean },
+	prefs: PreferenceStore,
+): { collapsible: boolean; collapseDefault: boolean } {
+	// No side-channel entry (shouldn't happen for a real element model — see the
+	// declaredCollapsePrefs doc comment) is treated as "declared", falling back to the
+	// model's own already-concrete field rather than guessing.
+	const declared = declaredCollapsePrefs(model as object);
+	const collapsibleDeclared = declared?.collapsible ?? true;
+	const collapseDefaultDeclared = declared?.collapseDefault ?? true;
+	return {
+		collapsible: collapsibleDeclared ? (model.collapsible ?? true) : prefs.get('collapsibleDefault'),
+		collapseDefault: collapseDefaultDeclared ? (model.collapse_default ?? false) : prefs.get('collapseDefault'),
+	};
 }

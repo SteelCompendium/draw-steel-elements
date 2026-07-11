@@ -24,6 +24,7 @@ import { App, Plugin, Modal } from '../../mocks/obsidian';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
 import type { StaminaBarView } from '../../../src/elements/stamina-bar/view';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 
 // ---------------------------------------------------------------------------------
 // Stamina-bar modal-close accumulation — driven through the REAL ElementPipeline with
@@ -53,6 +54,11 @@ function makeDeps(): ElementPipelineDeps {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	// D4 (Plan 13 Task 5): StaminaBarView now resolves collapse_default through
+	// resolveCollapsePrefs(model, cx.prefs), which calls prefs.get() for the
+	// collapsibleDefault/collapseDefault descriptors — they must be registered, same
+	// convention as statblock.test.ts's makeDeps().
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
