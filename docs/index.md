@@ -44,6 +44,12 @@ The [Statblock Element](statblock.md) is used to display statblocks.
 
 The [Horizontal Rule Element](horizontal-rule.md) is used as an alternative `<hr>` mimicking the Draw Steel design 
 
+### Roll Element
+
+The [Roll Element](Roll.md) is a standalone Draw Steel dice roller (power rolls, tests, opposed rolls, flat dice). Rolling can also be enabled on rendered ability cards via the plugin's **Rolling** settings.
+
+![roll](Media/roll.png)
+
 ## Canvas Character Sheets
 
 Various Elements are provided to support building [Character Sheets in Canvas](canvas-character-sheet.md)

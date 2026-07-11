@@ -111,7 +111,7 @@ lifecycle cleanup, persistence write-back).
 | `registry.ts` | `ElementRegistry` — pure in-memory `id`/alias → `ElementDefinition` lookup. No Obsidian coupling; unit-testable without a real `Plugin`. Rejects duplicate ids/aliases and `shape: "persisted"` definitions missing `serialize`. |
 | `pipeline.ts` | `ElementPipeline` — the render pipeline: parse → validate (AJV) → resolve refs → `createView` → mount, behind **one** error boundary (`renderErrorCard`, four failure stages: `parse`/`schema`/`reference`/`render`). Constructed once per plugin load with the service bundle; `run()` executes once per rendered block instance. |
 | `view.ts` | `ElementView<M>` — abstract view lifecycle base (extends Obsidian `Component`). Owns DOM (`rootEl`) and the current model; subclasses implement `onMount` (required) and optionally `onUpdate`. Implements the debounced (~400ms) `persist()` write-behind path for `shape: "persisted"` elements, flushed on unload. Also ships a `HeroPanel<S>` stub (unused in D1; reserved for a later effort). |
-| `context.ts` | `RenderContext` — the immutable per-block-instance DTO the pipeline builds and hands to `createView`/views: `app`, `plugin`, `settings`, `host`, `mode`, and the four service seams (`theme`, `prefs`, `refs`, `session`), plus an unused `roll` stub. Frozen at construction. |
+| `context.ts` | `RenderContext` — the immutable per-block-instance DTO the pipeline builds and hands to `createView`/views: `app`, `plugin`, `settings`, `host`, `mode`, and the service seams (`theme`, `prefs`, `refs`, `session`, plus the optional `roll` — a real `RollService` since D5, supplied by the pipeline; see "Rolling" below). Frozen at construction. |
 | `host/BlockHost.ts` | The `BlockHost` interface — the single seam between a mounted `ElementView` and *where* it lives (`containerEl`, `canPersist`, `replaceSource()`, `addChild()`, `getBlockInfo()`, `blockKey()`). `RenderMode` is `"reading" \| "live-preview" \| "sidebar"`. |
 | `host/ReadingModeBlockHost.ts` | The only implemented `BlockHost` (D1 ships reading mode only, matching the standing 2024-08-18 reading-mode-only decision). Fixes two legacy bugs on top of `src/utils/CodeBlocks.ts`'s approach: atomic read-modify-write via `Vault.process` (no lost updates from concurrent edits) and fence-language preservation on write-back (no silent alias-to-canonical rewriting). |
 | `host/LivePreviewBlockHost.ts` | Deliberately unimplemented stub — every member throws. Documents the CM6 realization of each `BlockHost` member for a future Live Preview effort; not to be constructed until that effort supersedes the reading-mode-only decision. |
@@ -198,6 +198,49 @@ hand-wiring four call sites.
   (need D2-level statblock DOM changes); `cardStyle` (needs a designed compact card
   treatment); D3-aware filtering of the theme option list. Rationale + open-decisions
   table: workspace repo `docs/superpowers/dse-overhaul/D4-preferences-spec.md`.
+
+### Rolling (`src/framework/roll/`, D5)
+
+Interactive Draw Steel dice rolling, split pure-engine / service on purpose:
+
+- **Engine** (`engine.ts` `resolveRoll` + `types.ts`, `parse.ts`): pure and total — no
+  Obsidian, no DOM, no `Math.random` (dice come from an injected `DiceSource`). This is
+  the ONE module where tier/crit/edge-bane resolution happens; D7/D8 import it rather
+  than re-derive the math. Edges/banes cap each side at 2 FIRST, then cancel (rulebook
+  "Rolling With Edges and Banes"); natural 19–20 is always tier 3; crits require
+  power-roll mode + a main action. `parse.ts parseRollExpression` maps the ability
+  YAML's free-text `roll:` strings to a partial roll shape, leniently (garbage ⇒ bare
+  power roll), as a pure module export — not a service method.
+- **Service** (`service.ts` `RollService`, the `cx.roll` seam): owns the RNG source and
+  delegation. An optional field on `RenderContext`, supplied by the pipeline
+  (`main.ts` constructs it after prefs); views null-check it and degrade to a static
+  card. `roll()` uses native `Math.random` d10s, or — when the `rollerEngine` pref is
+  `dice-roller` — the Dice Roller community-plugin bridge (`diceBridge.ts`):
+  capability-detected over `app.plugins` per roll (never version-detected, no import,
+  no dependency), per-die `1dN` formulas so the faces stay exact, and null/throw on ANY
+  failure falls back to native — the bridge can never break rolling. The bridge only
+  supplies faces; they replay into `resolveRoll`, so the math ownership rule holds.
+- **Pref gates** (`src/prefs/catalog.ts`, "Rolling" group): `rollingEnabled` (master,
+  default `false` — defaults render zero roll UI on ability cards), `rollClickToRoll`
+  (default `true`, click a tier row to roll; moot until the master is on), and
+  `rollerEngine` (`native` default / `dice-roller`). The `ds-roll` element ignores
+  `rollingEnabled`: authoring the block is its own opt-in.
+- **UI composition** (`kit/rollBar.ts`, `kit/rollResultCard.ts`,
+  `kit/powerRollPanel.ts`; `src/elements/feature/rollController.ts` for the shared
+  feature grammar, `src/elements/roll/` for the standalone element): the panel's
+  roll-result highlight is a separate `data-dse-roll-result="active|dimmed"` attribute
+  channel, deliberately disjoint from Negotiation's selectable rows (`role="radio"` +
+  `aria-checked`) — roll highlighting never touches selection semantics, so it works on
+  static panels.
+- **State**: session-only. Callers (not the service) write `SessionStore` slots
+  `roll.lastInput.<n>` / `roll.history.<n>` (`<n>` = per-block rolling-effect ordinal;
+  history capped at the last 10 results), keyed by `blockKey` — best-effort, so key
+  drift after note edits just means a cold bar. Rolling NEVER writes the note;
+  read-only hosts roll fine.
+- **Deliberate deferrals**: a history popover UI (recording already ships), note-pin
+  persistence for `ds-roll`, two-sided opposed-roll compare, and D7 wiring of the live
+  `CharacteristicProvider` hook (`binding.ts`) to a real hero. Spec + open-decision
+  rationale: workspace repo `docs/superpowers/dse-overhaul/D5-rolling-interactivity-spec.md`.
 
 ### Models (`src/model/`)
 

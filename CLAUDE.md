@@ -31,7 +31,8 @@ for iteration.
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`). ALL 11 elements are migrated; every legacy processor is retired
+  `src/elements/`). ALL 12 elements live on the framework (11 migrated + `ds-roll`, new
+  in D5); every legacy processor is retired
   (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation sub-views the
   framework reuses). Framework v2 replaced Vue 3 (2026-04-06 revert decision, executed
   by D1) — see `.repo-docs/architecture.md` for the full picture.
@@ -50,6 +51,14 @@ for iteration.
   (`src/views/SettingsTab.ts`) renders FROM the descriptors — adding a pref = adding a
   descriptor. Per-block `prefs:` YAML overrides: `src/framework/prefOverrides.ts`.
   Defaults must always reproduce the current look (legacy-fidelity bar).
+- **Rolling (D5)**: `src/framework/roll/` — pure engine (`engine.ts resolveRoll`:
+  2d10/tiers/edges/banes/crit, injected `DiceSource`), lenient `parse.ts`, and the
+  `RollService` seam (`service.ts`, reached as `cx.roll`; optional Dice Roller plugin
+  bridge via `diceBridge.ts`, capability-detected, always falls back to native). The
+  feature grammar's roller lives in `src/elements/feature/rollController.ts`, gated by
+  the `rollingEnabled` pref (default OFF — defaults render zero roll UI); `ds-roll`
+  (`src/elements/roll/`) is the standalone element and always rolls. Results are
+  session-only (`SessionStore` `roll.*` slots) — rolling NEVER writes the note.
 
 ## Important Constraints
 
