@@ -303,11 +303,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Character Image
 		const imageEl = rowEl.createDiv({ cls: 'dse-init__portrait' });
 		const imgSrcRaw = character.image ?? null;
-		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath).then(
-			(imgSrc) => {
+		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
+			.then((imgSrc) => {
 				imageEl.createEl('img', { attr: { src: imgSrc, alt: character.name } });
-			},
-		);
+			})
+			// SC-4: when BOTH the character image and the default token image are missing
+			// from the vault, the resolve chain rejects — previously an UNHANDLED rejection
+			// (console error every render). Warn once, leave the portrait slot empty.
+			.catch(() => {
+				console.warn(`Draw Steel Elements: no portrait image found for "${character.name}" (and no default token image)`);
+			});
 
 		// Middle: Character Info
 		const infoEl = rowEl.createDiv({ cls: 'dse-init__info' });
@@ -484,11 +489,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 				const imgEl = cellEl.createSpan({ cls: 'dse-init__cell-portrait' });
 				const imgSrcRaw = creature.image ?? null;
-				Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath).then(
-					(imgSrc) => {
+				Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
+					.then((imgSrc) => {
 						imgEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
-					},
-				);
+					})
+					// SC-4: see the hero-row portrait catch above.
+					.catch(() => {
+						console.warn(`Draw Steel Elements: no portrait image found for "${creature.name}" (and no default token image)`);
+					});
 
 				const staminaEl = cellEl.createSpan({ cls: 'dse-init__stamina dse-init__cell-stamina' });
 				this.updateStaminaDisplay(staminaEl, instance, creature, group);
@@ -512,11 +520,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Left: Creature Image
 		const imageEl = container.createDiv({ cls: 'dse-init__portrait' });
 		const imgSrcRaw = creature.image ?? null;
-		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath).then(
-			(imgSrc) => {
+		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
+			.then((imgSrc) => {
 				imageEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
-			},
-		);
+			})
+			// SC-4: see the hero-row portrait catch above.
+			.catch(() => {
+				console.warn(`Draw Steel Elements: no portrait image found for "${creature.name}" (and no default token image)`);
+			});
 
 		// Middle: Creature Info
 		const name = `${creature.name} #${instance.id}`;
