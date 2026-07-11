@@ -355,6 +355,17 @@ code.dsa {
 	pointer-events: none;
 }
 
+/* D4 (Plan 13) — reduce-motion pref: an EXPLICIT override on top of the OS
+   prefers-reduced-motion media query (which component CSS honors regardless).
+   Reflected value-mode: [data-dse-reduce-motion="true"|"false"] on every root. */
+[data-dse-element][data-dse-reduce-motion='true'],
+[data-dse-element][data-dse-reduce-motion='true'] *,
+[data-dse-element][data-dse-reduce-motion='true'] *::before,
+[data-dse-element][data-dse-reduce-motion='true'] *::after {
+	transition: none !important;
+	animation: none !important;
+}
+
 /* Condition icons in the MinionStaminaPoolModal (T3) — deliberately GLOBAL: the
    modal mounts in document.body. The TRACKER's own condition icons are the .dse-cond
    kit buttons under [data-dse-element="initiative"] below (D2 §3.11). */
@@ -1466,8 +1477,10 @@ code.dsa {
    unmapped role (no alias) and the Legacy base (every --dse-role-* token = the
    muted grey) both fail safe to monochrome (OD-2: the accent is Steel-only).
 
-   Pref hooks (D4 owns the VALUES; the element ships static defaults):
-   [data-dse-density="comfortable|compact"], [data-dse-sb-featstyle="card|flat"].
+   Pref hooks (D4 Plan 13 Task 3 — reflected onto the ELEMENT ROOT by
+   prefs.reflect(), not stamped by the element):
+   [data-dse-density="comfortable|compact"], [data-dse-sb-featstyle="card|flat"],
+   [data-dse-sb-columns="single|wide"], [data-dse-sb-stats="grid|ledger"].
    NO word/number changes anywhere — the "label: " colons are CSS-owned so the
    rendered text stays verbatim while the DOM stays layout-agnostic.
    Tokens only (D2 §5) — no color literals.
@@ -1549,30 +1562,66 @@ code.dsa {
 	flex: 1 1 0;
 }
 
-/* -- density pref (D4 drives the attribute value; CSS keys the reflow) -- */
-.dse-sb[data-dse-density='compact'] {
+/* -- density pref (D4 Plan 13: reflected as data-dse-density on the ELEMENT ROOT
+   by prefs.reflect(); 'comfortable' = default = the pre-D4 look, expressed by the
+   base rules above — only 'compact' needs selectors) -- */
+[data-dse-element='statblock'][data-dse-density='compact'] .dse-sb {
 	padding: calc(var(--dse-pad) / 2);
 	padding-top: 0.25rem;
 }
-.dse-sb[data-dse-density='compact'] .dse-sb__item-v {
+[data-dse-element='statblock'][data-dse-density='compact'] .dse-sb__item-v {
 	font-size: var(--font-ui-large);
 }
-.dse-sb[data-dse-density='compact'] .dse-sb__items {
+[data-dse-element='statblock'][data-dse-density='compact'] .dse-sb__items {
 	padding-bottom: 0.25rem;
 }
-.dse-sb[data-dse-density='compact'] .dse-sb__chars {
+[data-dse-element='statblock'][data-dse-density='compact'] .dse-sb__chars {
 	padding: 0.25rem 0;
 	margin-top: 0.25rem;
 }
 
-/* -- feature-style pref: 'card' = the shared .dse-feature card rhythm
-   (default); 'flat' tightens the list into a dense hoverless flat run -- */
-.dse-sb[data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature {
+/* -- feature-style pref: 'card' = the shared .dse-feature card rhythm (default);
+   'flat' tightens the list into a dense hoverless flat run -- */
+[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature {
 	padding-top: 0.25rem;
 	padding-bottom: 0.25rem;
 }
-.dse-sb[data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature:hover {
+[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature:hover {
 	background-color: transparent;
+}
+
+/* -- columns pref (D4 §3.1, the site data-sb-wide analogue): 'wide' lays the
+   statblock's TOP-LEVEL feature list side-by-side on wide panes; nested feature
+   groups keep single column. auto-fill so narrow panes degrade to one column. -- */
+[data-dse-element='statblock'][data-dse-sb-columns='wide'] .dse-sb > .dse-feature__nested {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+	column-gap: 1rem;
+	align-items: start;
+}
+
+/* -- secondary-stats pref (the site data-sb-meta analogue): 'grid' = the default
+   evenly-spread item row; 'ledger' stacks Size/Speed/Stamina/Stability/Free Strike
+   as hairline label-left / value-right rows -- */
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__items {
+	display: block;
+	padding-bottom: 0.25rem;
+}
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__item {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	text-align: left;
+	border-bottom: 1px solid var(--dse-rule);
+	padding: 0.15rem 0;
+}
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__item-v {
+	font-size: var(--font-ui-medium);
+	order: 2;
+}
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__item-l {
+	order: 1;
+	font-size: inherit;
 }
 
 /* ================================================================== */

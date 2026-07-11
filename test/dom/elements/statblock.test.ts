@@ -5,9 +5,11 @@
 // SDK combat role; unmapped → NO attribute/alias, fails safe to monochrome) + the
 // .dse-sb__meta info grid (Size/Speed/Stamina/Stability/Free Strike items +
 // Immunity/Weakness/Movement/With Captain kv cells) + the .dse-sb__chars
-// characteristics row + the D4 pref-attr hooks (data-dse-density /
-// data-dse-sb-featstyle) + the feature list through Task 5's renderFeatureList
-// (shared .dse-feature/.dse-pr grammar).
+// characteristics row + the D4 (Plan 13 Task 3) pref-attr hooks (data-dse-density /
+// data-dse-sb-featstyle / data-dse-sb-columns / data-dse-sb-stats), REFLECTED onto
+// the element ROOT by prefs.reflect() rather than stamped by this view, + the
+// feature list through Task 5's renderFeatureList (shared .dse-feature/.dse-pr
+// grammar).
 //
 // COMMUNITY-CONTROVERSIAL CONSTRAINT (§3.8): NO word/number changes — every label,
 // value, and fallback string the legacy HeaderView/StatsView emitted appears
@@ -24,6 +26,7 @@ import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHos
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
 import type { PrefsStorage } from '../../../src/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
@@ -97,6 +100,7 @@ function makeDeps(): ElementPipelineDeps {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
@@ -232,11 +236,15 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		}
 	});
 
-	test('pref-attr hooks (D4 owns the values): data-dse-density="comfortable" + data-dse-sb-featstyle="card" ship as static defaults', async () => {
+	test('pref-attr hooks (D4 Plan 13 Task 3): reflected onto the ELEMENT ROOT with catalog defaults; the .dse-sb card carries none of them', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 		const card = root.querySelector('.dse-sb') as HTMLElement;
-		expect(card.getAttribute('data-dse-density')).toBe('comfortable');
-		expect(card.getAttribute('data-dse-sb-featstyle')).toBe('card');
+		expect(card.hasAttribute('data-dse-density')).toBe(false);
+		expect(card.hasAttribute('data-dse-sb-featstyle')).toBe(false);
+		expect(root.getAttribute('data-dse-density')).toBe('comfortable');
+		expect(root.getAttribute('data-dse-sb-featstyle')).toBe('card');
+		expect(root.getAttribute('data-dse-sb-columns')).toBe('single');
+		expect(root.getAttribute('data-dse-sb-stats')).toBe('grid');
 	});
 
 	test('.dse-sb__meta items: Size/Speed/Stamina/Stability/Free Strike — labels AND values verbatim, legacy order', async () => {

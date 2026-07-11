@@ -16,6 +16,7 @@ import { createThemeService } from '../src/framework/seams/theme';
 import type { ThemeServiceInternal, DseThemeId } from '../src/framework/seams/theme';
 import { createPreferenceStore } from '../src/framework/seams/prefs';
 import type { PrefsStorage } from '../src/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '../src/prefs/catalog';
 import { createReferenceService } from '../src/framework/seams/refs';
 import { createValidationService } from '../src/framework/validation';
 import { createSessionStore } from '../src/framework/session';
@@ -84,6 +85,7 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();

@@ -4,7 +4,8 @@
 // statblock/StatsView + HorizontalRuleProcessor + Features/FeaturesView) onto the
 // site-aligned statblock card:
 //
-//   .dse-sb[data-dse-role][data-dse-density][data-dse-sb-featstyle]  ← the card root
+//   .dse-sb[data-dse-role]  ← the card root (density/featstyle/columns/stats arrive
+//     on the ELEMENT ROOT via prefs.reflect(), not stamped here — see below)
 //     .dse-head                             ← kit cardHead (§3.8 slot fill below)
 //     .dse-sb__meta                         ← the info grid:
 //       .dse-sb__items > .dse-sb__item      ←   Size/Speed/Stamina/Stability/Free Strike
@@ -25,8 +26,9 @@
 // Role tint: the shared applyRoleTint (roleTint.ts, extracted from T6a) maps the
 // SDK roles line onto [data-dse-role] + the --dse-role element-set alias; an
 // unmapped role ("Boss") sets neither, failing safe to grey/monochrome (OD-2:
-// Steel-only accent). Pref hooks: data-dse-density / data-dse-sb-featstyle ship
-// as static defaults here — D4's pref reflection owns the VALUES.
+// Steel-only accent). Pref hooks: data-dse-density / data-dse-sb-featstyle /
+// data-dse-sb-columns / data-dse-sb-stats are reflected onto the ELEMENT ROOT by
+// prefs.reflect() (D4, Plan 13 Task 3) — the statblock view stamps none of them.
 //
 // The legacy builders this view stops constructing stay in the codebase UNTOUCHED
 // — statblock was their LAST element consumer, so they are now element-dead code;
@@ -57,10 +59,9 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
 
 		const card = root.createDiv({ cls: 'dse-sb' });
-		// D4 pref hooks (§3.8): the attributes ship now so CSS can key off them;
-		// D4's pref reflection drives the values. Static defaults = today's look.
-		card.setAttribute('data-dse-density', 'comfortable');
-		card.setAttribute('data-dse-sb-featstyle', 'card');
+		// D4 (Plan 13 Task 3): density/featstyle/columns/stats arrive on the ELEMENT
+		// ROOT as data-dse-* via the pipeline's prefs.reflect() — nothing to stamp
+		// here. CSS keys off [data-dse-element='statblock'][data-dse-…] descendants.
 
 		// Role spine + header tint from the SDK combat role (fails-safe unmapped).
 		applyRoleTint(card, sb.roles?.join(', '));
