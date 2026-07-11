@@ -29,12 +29,12 @@ for iteration.
 
 ## Key Architecture
 
-- **Two rendering strategies, coexisting**: **Element Framework v2** (`src/framework/` —
+- **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`) for migrated elements (Horizontal Rule, Skills, Stamina Bar so far),
-  and legacy DOM-manipulation processors (`src/drawSteelAdmonition/`) for the rest.
-  Framework v2 replaced Vue 3 (2026-04-06 revert decision, executed by D1) — see
-  `.repo-docs/architecture.md` for the full picture and the migration model.
+  `src/elements/`). ALL 11 elements are migrated; every legacy processor is retired
+  (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation sub-views the
+  framework reuses). Framework v2 replaced Vue 3 (2026-04-06 revert decision, executed
+  by D1) — see `.repo-docs/architecture.md` for the full picture.
 - **Legacy processor pattern**: Each not-yet-migrated `ds-*` element has a processor in
   `src/drawSteelAdmonition/`, registered in `src/utils/RegisterElements.ts`
 - **Framework v2 element pattern**: each migrated `ds-*` element has a
