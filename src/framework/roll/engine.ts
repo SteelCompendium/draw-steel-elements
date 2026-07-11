@@ -27,10 +27,15 @@ export function resolveRoll(input: RollInput, dice: DiceSource): RollResult {
 	}
 	const natural = faces.reduce((sum, face) => sum + face, 0);
 
-	// 2. Net edges/banes: cancel 1-for-1, cap magnitude at 2 (D5 §1.3).
+	// 2. Net edges/banes: cap EACH side at 2 first, THEN cancel (D5 §1.3;
+	// rulebook "Rolling With Edges and Banes": "If you have a double edge and
+	// just one bane, the roll is made with one edge, regardless of how many
+	// individual edges contribute to the double edge" — symmetric for banes,
+	// and double vs double cancels fully). Cancel-then-cap would wrongly turn
+	// e.g. 3 edges + 1 bane into a double edge.
 	const edges = Math.max(0, Math.trunc(input.edges ?? 0));
 	const banes = Math.max(0, Math.trunc(input.banes ?? 0));
-	const net = clamp(edges - banes, -2, 2);
+	const net = Math.min(edges, 2) - Math.min(banes, 2);
 
 	// 3. Flat portion of edge/bane (mode-dependent; doubles shift instead — step 5).
 	let edgeBaneFlat = 0;

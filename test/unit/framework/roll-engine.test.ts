@@ -49,7 +49,9 @@ describe('D5 §8.2 — edges & banes (single = flat, double = shift, cancel, cap
 		[0, 1, [5, 6], { net: -1, edgeBaneFlat: -2, total: 9, tier: 1 }],  // single bane = −2
 		[2, 0, [5, 6], { net: 2, edgeBaneFlat: 0, total: 11, tier: 2 }],   // double edge: band 1 → shift → 2
 		[0, 2, [8, 8], { net: -2, edgeBaneFlat: 0, total: 16, tier: 1 }],  // double bane: band 2 → shift → 1
-		[3, 1, [5, 6], { net: 2, edgeBaneFlat: 0, total: 11, tier: 2 }],   // 3e−1b = net +2 (cap)
+		[3, 1, [5, 6], { net: 1, edgeBaneFlat: 2, total: 13, tier: 2 }],   // 3e (capped: double edge) − 1b = ONE edge, +2 (cap BEFORE cancel)
+		[1, 3, [8, 9], { net: -1, edgeBaneFlat: -2, total: 15, tier: 2 }], // 1e − 3b (capped: double bane) = ONE bane, −2
+		[2, 3, [8, 8], { net: 0, edgeBaneFlat: 0, total: 16, tier: 2 }],   // double edge vs double bane (capped) = full cancel
 		[2, 2, [5, 6], { net: 0, edgeBaneFlat: 0, total: 11, tier: 1 }],   // full cancel
 		[1, 2, [8, 9], { net: -1, edgeBaneFlat: -2, total: 15, tier: 2 }], // net −1: flat, not shift
 		[2, 0, [10, 9], { net: 2, edgeBaneFlat: 0, total: 19, tier: 3 }],  // double edge on nat19: clamp at 3
@@ -84,6 +86,14 @@ describe('D5 §8.3 — modes', () => {
 		expect(r.tier).toBeUndefined();
 		expect(r.edgeBaneFlat).toBe(2);
 		expect(r.total).toBe(13);
+	});
+
+	test('opposed: natural 19–20 → isNat true, tier undefined, never critical (pinned contract)', () => {
+		const r = roll({ mode: 'opposed', isMainActionAbility: true }, [9, 10]);
+		expect(r.isNat).toBe(true);
+		expect(r.tier).toBeUndefined();
+		expect(r.isCritical).toBe(false);
+		expect(r.total).toBe(19);
 	});
 
 	test('opposed: DOUBLE edge/bane become flat ±4 (no shift)', () => {
