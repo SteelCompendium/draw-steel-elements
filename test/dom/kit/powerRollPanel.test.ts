@@ -421,3 +421,30 @@ describe('Plan 08 Task 4: badge CSS keeps the legacy clip-path shapes verbatim (
 		expect(sheet).toMatch(/\.dse-pr__badge--crit[^{]*\{[^}]*var\(--dse-tier-crit\)/);
 	});
 });
+
+describe('Plan 14 (D5 §3.4) — setRollResult: the roll-highlight channel', () => {
+	test('active rows get data-dse-roll-result="active"; the rest "dimmed"; null clears', () => {
+		const { handle } = mount(); // FOUR_ROWS: all four tiers, static panel
+		handle.setRollResult(['high', 'crit']);
+		expect(handle.rowEls.high!.getAttribute('data-dse-roll-result')).toBe('active');
+		expect(handle.rowEls.crit!.getAttribute('data-dse-roll-result')).toBe('active');
+		expect(handle.rowEls.low!.getAttribute('data-dse-roll-result')).toBe('dimmed');
+		expect(handle.rowEls.mid!.getAttribute('data-dse-roll-result')).toBe('dimmed');
+		handle.setRollResult(null);
+		for (const row of Object.values(handle.rowEls)) {
+			expect(row!.hasAttribute('data-dse-roll-result')).toBe(false);
+		}
+	});
+
+	test('setRollResult never touches selectable-mode state (aria-checked/tabindex)', () => {
+		const { handle } = mount({
+			rows: [{ tier: 'low', md: 'a' }, { tier: 'mid', md: 'b' }],
+			selectable: true,
+			selected: 'mid',
+		});
+		handle.setRollResult(['low']);
+		expect(handle.rowEls.mid!.getAttribute('aria-checked')).toBe('true'); // selection intact
+		expect(handle.rowEls.mid!.getAttribute('tabindex')).toBe('0');
+		expect(handle.rowEls.low!.getAttribute('data-dse-roll-result')).toBe('active');
+	});
+});

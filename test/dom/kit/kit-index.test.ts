@@ -27,6 +27,8 @@ import type {
 	PowerRollPanelHandle,
 	CrestHandle,
 	SessionPersist,
+	RollBarHandle,
+	RollResultCardHandle,
 } from '@/framework/kit';
 
 const repoRoot = path.join(__dirname, '../../..');
@@ -152,6 +154,9 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 		expect(typeof kit.powerRollPanel).toBe('function');
 		expect(typeof kit.tierBadge).toBe('function');
 		expect(typeof kit.crest).toBe('function');
+		// …the D5 rolling widgets (Plan 14 Task 3)…
+		expect(typeof kit.rollBar).toBe('function');
+		expect(typeof kit.rollResultCard).toBe('function');
 		// …and the retired F1 helpers are no longer on the barrel (Plan 09 Task 10).
 		expect((kit as Record<string, unknown>).mountCollapsibleHeading).toBeUndefined();
 		expect((kit as Record<string, unknown>).mountComponentWrapper).toBeUndefined();
@@ -167,6 +172,8 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 			// SessionPersist stays a barrel export after its move to framework/session
 			// (Plan 09 Task 0 — neutral home; it survived the Task 10 widget rename).
 			l?: SessionPersist;
+			// The D5 rolling widget handles (Plan 14 Task 3).
+			m?: RollBarHandle; n?: RollResultCardHandle;
 		} = {};
 		expect(probe).toEqual({});
 	});

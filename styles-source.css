@@ -2629,6 +2629,76 @@ button.dse-pr__row:hover {
 	background: var(--dse-surface-sunken);
 	border-color: var(--dse-border);
 }
+/* -- D5 (Plan 14) roll-result highlight: a SEPARATE attribute channel from
+   selectable-mode aria-checked. Dimming is opacity (no color literal); the
+   active row borrows the select/accent tokens. -- */
+[data-dse-element] .dse-pr__row[data-dse-roll-result='dimmed'] {
+	opacity: 0.45;
+}
+[data-dse-element] .dse-pr__row[data-dse-roll-result='active'] {
+	background-color: var(--dse-select);
+	border-radius: var(--dse-radius);
+	outline: 1px solid var(--dse-accent);
+	outline-offset: -1px;
+}
+
+/* -- D5 roll bar + result card (kit widgets; token-composed) -- */
+[data-dse-element] .dse-rollbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.35rem 0.5rem;
+	margin-top: 0.35rem;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background-color: var(--dse-surface-sunken);
+}
+[data-dse-element] .dse-rollbar__net {
+	font-size: var(--font-ui-smaller);
+	color: var(--dse-fg-muted);
+}
+[data-dse-element] .dse-rollbar__char-fixed {
+	font-size: var(--font-ui-smaller);
+	color: var(--dse-fg);
+	background-color: var(--dse-chip-bg);
+	border-radius: var(--dse-radius);
+	padding: 0.1rem 0.4rem;
+}
+[data-dse-element] .dse-rollcard {
+	margin-top: 0.35rem;
+	padding: 0.5rem 0.65rem;
+	border: 1px solid var(--dse-border-strong);
+	border-radius: var(--dse-radius);
+	background-color: var(--dse-surface-raised);
+}
+[data-dse-element] .dse-rollcard__headline {
+	font-weight: 700;
+	color: var(--dse-heading);
+}
+[data-dse-element] .dse-rollcard__crit-note {
+	font-size: var(--font-ui-smaller);
+	color: var(--dse-warn);
+}
+[data-dse-element] .dse-rollcard__breakdown {
+	font-family: var(--dse-font-mono);
+	font-size: var(--font-ui-smaller);
+	color: var(--dse-fg-muted);
+}
+[data-dse-element] .dse-rollcard__delegate {
+	font-size: var(--font-ui-smaller);
+	color: var(--dse-fg-faint);
+	font-style: italic;
+}
+[data-dse-element] .dse-rollcard__actions {
+	display: flex;
+	gap: 0.35rem;
+	margin-top: 0.25rem;
+}
+/* Roll affordance button on feature cards (mounted by the roll controller). */
+[data-dse-element] .dse-roll-btn {
+	margin-left: 0.5rem;
+}
 /* (§4.5 focus ring: consolidated into the shared kit :focus-visible rule below.) */
 .dse-pr__text {
 	flex: 1 1 auto;

@@ -65,6 +65,12 @@ export interface PowerRollPanelHandle {
 	/** External update, in place (selectable mode). No onSelect, no focus steal. */
 	select(tier: PowerRollTier): void;
 	getSelected(): PowerRollTier | undefined;
+	/**
+	 * D5 (Plan 14): roll-result highlight — data-dse-roll-result="active|dimmed"
+	 * on every row (null clears). A SEPARATE channel from selectable-mode
+	 * selection: never touches aria-checked/tabindex, works on static panels.
+	 */
+	setRollResult(active: readonly PowerRollTier[] | null): void;
 }
 
 /** Tier → badge modifier + range text (the .tN-key-body-text originals, verbatim). */
@@ -223,5 +229,12 @@ export function powerRollPanel(
 			change(tier, { notify: false, focus: false });
 		},
 		getSelected: () => selected,
+		setRollResult: (active: readonly PowerRollTier[] | null): void => {
+			for (const tier of tiers) {
+				const rowEl = rowEls[tier]!;
+				if (active === null) rowEl.removeAttribute('data-dse-roll-result');
+				else rowEl.setAttribute('data-dse-roll-result', active.includes(tier) ? 'active' : 'dimmed');
+			}
+		},
 	};
 }

@@ -46,5 +46,11 @@ export type {
 export { crest } from './crest';
 export type { CrestSize, CrestOptions, CrestHandle } from './crest';
 
+// -- Rolling (D5 §3.5/§4, Plan 14) --
+export { rollBar } from './rollBar';
+export type { RollBarState, RollBarOptions, RollBarHandle } from './rollBar';
+export { rollResultCard } from './rollResultCard';
+export type { RollResultCardOptions, RollResultCardHandle } from './rollResultCard';
+
 // The F1-era helpers (mountCollapsibleHeading / mountComponentWrapper) are gone —
 // retired by Plan 09 Task 10 once every element had moved onto the D2 widgets above.
