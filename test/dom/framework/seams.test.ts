@@ -285,6 +285,7 @@ describe('T-4 (Plan 02): PreferenceStore (F1 §3.6)', () => {
 		test('carries the D4 settings-picker ui (OD-5 labels)', () => {
 			const descriptor = BUILTIN_DESCRIPTORS.find((d) => d.key === 'theme');
 			expect(descriptor?.ui).toEqual({
+				group: 'Appearance',
 				label: 'Theme',
 				control: 'select',
 				options: [

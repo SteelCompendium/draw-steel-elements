@@ -41,6 +41,9 @@ export interface PreferenceStore {
 	reflect(rootEl: HTMLElement, owner: Component): void;
 	/** D4: register descriptors (defaults, attrs, settings UI rows). */
 	describe(descriptors: readonly PrefDescriptor[]): void;
+	/** All registered descriptors, in registration order (D4: drives the settings
+	 *  renderer and per-block `prefs:` validation). */
+	descriptors(): readonly PrefDescriptor[];
 }
 
 /**
@@ -68,6 +71,7 @@ export const BUILTIN_DESCRIPTORS: readonly PrefDescriptor[] = [
 		key: 'theme',
 		default: DEFAULT_THEME_ID,
 		ui: {
+			group: 'Appearance',
 			label: 'Theme',
 			control: 'select',
 			options: [
@@ -79,7 +83,7 @@ export const BUILTIN_DESCRIPTORS: readonly PrefDescriptor[] = [
 ];
 
 class DsePreferenceStore implements PreferenceStore {
-	private readonly descriptors = new Map<string, PrefDescriptor>();
+	private readonly descriptorMap = new Map<string, PrefDescriptor>();
 	private readonly values = new Map<string, unknown>();
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
 	/** Raw snapshot from storage.get(), kept so a descriptor described() AFTER the
@@ -107,7 +111,7 @@ class DsePreferenceStore implements PreferenceStore {
 
 	private applyPersistedValue(key: string, value: unknown): void {
 		if (value === undefined) return;
-		if (!this.descriptors.has(key)) return; // no descriptor yet; describe() will re-apply
+		if (!this.descriptorMap.has(key)) return; // no descriptor yet; describe() will re-apply
 		this.values.set(key, value);
 		this.notify(key, value);
 	}
@@ -115,7 +119,7 @@ class DsePreferenceStore implements PreferenceStore {
 	describe(descriptors: readonly PrefDescriptor[]): void {
 		for (const descriptor of descriptors) {
 			const key = descriptor.key as string;
-			this.descriptors.set(key, descriptor as PrefDescriptor);
+			this.descriptorMap.set(key, descriptor as PrefDescriptor);
 			if (!this.values.has(key)) {
 				this.values.set(key, descriptor.default);
 			}
@@ -126,11 +130,15 @@ class DsePreferenceStore implements PreferenceStore {
 	}
 
 	private descriptorFor(key: string): PrefDescriptor {
-		const descriptor = this.descriptors.get(key);
+		const descriptor = this.descriptorMap.get(key);
 		if (!descriptor) {
 			throw new Error(`Unknown preference "${key}" — register a PrefDescriptor via describe() before use.`);
 		}
 		return descriptor;
+	}
+
+	descriptors(): readonly PrefDescriptor[] {
+		return [...this.descriptorMap.values()];
 	}
 
 	get<K extends keyof DsePrefs>(key: K): DsePrefs[K] {
@@ -149,7 +157,7 @@ class DsePreferenceStore implements PreferenceStore {
 
 	private async persist(): Promise<void> {
 		const snapshot: Record<string, unknown> = {};
-		for (const [key, descriptor] of this.descriptors) {
+		for (const [key, descriptor] of this.descriptorMap) {
 			if (!this.values.has(key)) continue;
 			const value = this.values.get(key);
 			if (value === descriptor.default) continue; // sparse: defaults are implicit
@@ -179,7 +187,7 @@ class DsePreferenceStore implements PreferenceStore {
 	}
 
 	reflect(rootEl: HTMLElement, owner: Component): void {
-		for (const descriptor of this.descriptors.values()) {
+		for (const descriptor of this.descriptorMap.values()) {
 			if (!descriptor.attr) continue; // e.g. `theme` — ThemeService.apply() owns it
 			const attrName = `data-dse-${descriptor.attr}`;
 			const stamp = (value: unknown) => rootEl.setAttribute(attrName, String(value));

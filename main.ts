@@ -23,6 +23,7 @@ import { createThemeService } from '@/framework/seams/theme';
 import type { ThemeService, ThemeServiceInternal, DseThemeId } from '@/framework/seams/theme';
 import { createPreferenceStore } from '@/framework/seams/prefs';
 import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '@/prefs/catalog';
 import { createReferenceService } from '@/framework/seams/refs';
 import type { ReferenceService } from '@/framework/seams/refs';
 import { createElementRegistry } from '@/framework/registry';
@@ -161,6 +162,10 @@ export function initializeElementFrameworkV2(
 	// D4 (Plan 13 Task 1): production injects the saveData-backed adapter
 	// (createSaveDataPrefsStorage); the default stays in-memory for tests/harnesses.
 	const prefs = createPreferenceStore(prefsStorage);
+	// D4 (Plan 13 Task 2): the full preference catalog — every bundle (plugin,
+	// tests, visual harness) gets the same descriptor set. describe() is
+	// idempotent-safe for late persisted loads (persistedSnapshot re-apply).
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	// D3 §2.2 (Plan 10 Task 2): the ThemeService is PreferenceStore-backed — the
 	// active theme IS the persisted `theme` pref. The plugin owns the service's
 	// single long-lived upstream subscription, so prefs must be built first.
