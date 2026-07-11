@@ -21,6 +21,7 @@ import {
 	prefUi,
 	type SbPresetId,
 } from '@/prefs/catalog';
+import { mountSettingsPreview } from '@views/SettingsPreview';
 
 /** Structural slice of DropdownComponent the preset re-derivation needs. */
 interface ValueControl {
@@ -86,6 +87,9 @@ export class DseSettingTab extends PluginSettingTab {
 				);
 			if (groupName === 'Statblock display') this.renderPresetControl(containerEl, prefs);
 			for (const descriptor of members) this.renderRow(containerEl, prefs, descriptor);
+			if (groupName === 'Statblock display' && this.displayOwner) {
+				mountSettingsPreview(containerEl, this.plugin, this.displayOwner);
+			}
 		}
 		new Setting(containerEl).addButton((button) =>
 			button

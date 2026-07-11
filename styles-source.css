@@ -366,6 +366,12 @@ code.dsa {
 	animation: none !important;
 }
 
+/* D4 §4.2 (Plan 13) — the settings-tab statblock preview container */
+.dse-settings-preview {
+	margin: 0.5rem 0 1rem;
+	max-width: 40rem;
+}
+
 /* Condition icons in the MinionStaminaPoolModal (T3) — deliberately GLOBAL: the
    modal mounts in document.body. The TRACKER's own condition icons are the .dse-cond
    kit buttons under [data-dse-element="initiative"] below (D2 §3.11). */
