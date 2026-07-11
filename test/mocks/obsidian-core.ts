@@ -345,39 +345,161 @@ export class Menu {
 	}
 }
 
-// Infinitely-chainable stub for Setting's fluent sub-component callbacks
-// (addText(cb) etc.). Any method returns the chain; good enough for code that
-// only wires settings UI.
-const chain: any = new Proxy(function () {}, {
-	get: () => chain,
-	apply: () => chain,
-});
-
-export class Setting {
-	constructor(_containerEl: any) {}
-	setName(_name: string): this {
+// Recording Setting fakes (Plan 13 Task 4): the settings tab is driven by REAL
+// jsdom tests, so the fakes record names/options/values and expose trigger() to
+// simulate user input. Only src/views/SettingsTab.ts constructs Setting.
+class FakeSettingComponent {
+	disabled = false;
+	protected changeCb: ((value: any) => any) | null = null;
+	onChange(cb: (value: any) => any): this {
+		this.changeCb = cb;
 		return this;
 	}
-	setDesc(_desc: string): this {
+	setDisabled(disabled: boolean): this {
+		this.disabled = disabled;
+		return this;
+	}
+	setTooltip(_tooltip: string): this {
+		return this;
+	}
+}
+export class FakeToggle extends FakeSettingComponent {
+	value = false;
+	setValue(value: boolean): this {
+		this.value = value;
+		return this;
+	}
+	/** Test helper: simulate a user flip (setValue + fire onChange). */
+	trigger(value: boolean): void {
+		this.value = value;
+		this.changeCb?.(value);
+	}
+}
+export class FakeDropdown extends FakeSettingComponent {
+	value = '';
+	readonly options: { value: string; label: string }[] = [];
+	addOption(value: string, label: string): this {
+		this.options.push({ value, label });
+		return this;
+	}
+	addOptions(options: Record<string, string>): this {
+		for (const [value, label] of Object.entries(options)) this.addOption(value, label);
+		return this;
+	}
+	setValue(value: string): this {
+		this.value = value;
+		return this;
+	}
+	trigger(value: string): void {
+		this.value = value;
+		this.changeCb?.(value);
+	}
+}
+export class FakeText extends FakeSettingComponent {
+	value = '';
+	placeholder = '';
+	setPlaceholder(placeholder: string): this {
+		this.placeholder = placeholder;
+		return this;
+	}
+	setValue(value: string): this {
+		this.value = value;
+		return this;
+	}
+	trigger(value: string): void {
+		this.value = value;
+		this.changeCb?.(value);
+	}
+}
+export class FakeButton {
+	text = '';
+	icon = '';
+	cta = false;
+	private clickCb: (() => any) | null = null;
+	setButtonText(text: string): this {
+		this.text = text;
+		return this;
+	}
+	setIcon(icon: string): this {
+		this.icon = icon;
+		return this;
+	}
+	setCta(): this {
+		this.cta = true;
+		return this;
+	}
+	setTooltip(_tooltip: string): this {
+		return this;
+	}
+	onClick(cb: () => any): this {
+		this.clickCb = cb;
+		return this;
+	}
+	click(): void {
+		this.clickCb?.();
+	}
+}
+export class Setting {
+	/** All Settings constructed since the last reset — tests read rows from here
+	 *  (reset with Setting.created.length = 0 in beforeEach). */
+	static created: Setting[] = [];
+	settingEl: HTMLElement | null;
+	name = '';
+	desc = '';
+	heading = false;
+	readonly toggles: FakeToggle[] = [];
+	readonly dropdowns: FakeDropdown[] = [];
+	readonly texts: FakeText[] = [];
+	readonly buttons: FakeButton[] = [];
+	readonly extraButtons: FakeButton[] = [];
+	constructor(containerEl: any) {
+		this.settingEl =
+			typeof document !== 'undefined' && containerEl?.createDiv
+				? containerEl.createDiv({ cls: 'setting-item' })
+				: null;
+		Setting.created.push(this);
+	}
+	setName(name: string): this {
+		this.name = name;
+		this.settingEl?.setAttribute('data-setting-name', name);
+		return this;
+	}
+	setDesc(desc: string): this {
+		this.desc = desc;
 		return this;
 	}
 	setHeading(): this {
+		this.heading = true;
 		return this;
 	}
-	addText(callback?: (text: any) => any): this {
-		callback?.(chain);
+	addText(cb?: (text: FakeText) => any): this {
+		const c = new FakeText();
+		this.texts.push(c);
+		cb?.(c);
 		return this;
 	}
-	addToggle(callback?: (toggle: any) => any): this {
-		callback?.(chain);
+	addToggle(cb?: (toggle: FakeToggle) => any): this {
+		const c = new FakeToggle();
+		this.toggles.push(c);
+		cb?.(c);
 		return this;
 	}
-	addButton(callback?: (button: any) => any): this {
-		callback?.(chain);
+	addButton(cb?: (button: FakeButton) => any): this {
+		const c = new FakeButton();
+		this.buttons.push(c);
+		cb?.(c);
 		return this;
 	}
-	addDropdown(callback?: (dropdown: any) => any): this {
-		callback?.(chain);
+	addExtraButton(cb?: (button: FakeButton) => any): this {
+		const c = new FakeButton();
+		this.extraButtons.push(c);
+		cb?.(c);
+		return this;
+	}
+	addDropdown(cb?: (dropdown: FakeDropdown) => any): this {
+		const c = new FakeDropdown();
+		this.dropdowns.push(c);
+		cb?.(c);
 		return this;
 	}
 }
