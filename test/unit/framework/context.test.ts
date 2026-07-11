@@ -132,7 +132,9 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 	});
 
 	test('context optionally carries roll service', () => {
-		const mockRoll: RollService = {}; // Minimal empty interface
+		// D5 (Plan 14) made RollService real — this test only checks pass-through
+		// identity, so a cast stub stands in for the full interface.
+		const mockRoll = {} as RollService;
 
 		const cxWithRoll = createRenderContext({
 			app: mockApp as any,

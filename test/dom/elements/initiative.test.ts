@@ -22,6 +22,7 @@ import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlo
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage, PrefDescriptor } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
@@ -92,6 +93,7 @@ function makeEnv(): { deps: ElementPipelineDeps; app: App } {
 			refs,
 			validation,
 			session,
+			roll: createRollService(prefs),
 		},
 		app,
 	};
@@ -1054,6 +1056,7 @@ describe('T-9: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 			refs: createReferenceService(app as any, DEFAULT_SETTINGS),
 			validation: createValidationService(),
 			session: createSessionStore(),
+			roll: createRollService(prefs),
 		};
 		const pipeline = new ElementPipeline(deps);
 

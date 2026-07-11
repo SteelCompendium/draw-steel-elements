@@ -21,6 +21,7 @@ import { ElementView, PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import type { ReferenceService, RefProvider } from '../../../src/framework/seams/refs';
@@ -134,6 +135,7 @@ function makeDeps(): { deps: ElementPipelineDeps; refs: ReferenceService } {
 		refs,
 		validation,
 		session,
+		roll: createRollService(prefs),
 	};
 	return { deps, refs };
 }

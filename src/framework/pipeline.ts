@@ -14,6 +14,7 @@ import type { BlockHost } from './host/BlockHost';
 import type { ThemeService } from './seams/theme';
 import type { PreferenceStore } from './seams/prefs';
 import type { ReferenceService } from './seams/refs';
+import type { RollService } from './roll/service';
 import type { ValidationService, ValidationResult } from './validation';
 import type { SessionStore } from './session';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
@@ -134,6 +135,7 @@ export interface ElementPipelineServices {
 	refs: ReferenceService;
 	validation: ValidationService;
 	session: SessionStore;
+	roll: RollService;
 }
 
 export interface ElementPipelineDeps extends ElementPipelineServices {
@@ -152,10 +154,10 @@ export class ElementPipeline {
 	constructor(private readonly deps: ElementPipelineDeps) {}
 
 	async run<M>(def: ElementDefinition<M>, source: string, host: BlockHost): Promise<void> {
-		const { app, plugin, settings, theme, prefs, refs, validation, session } = this.deps;
+		const { app, plugin, settings, theme, prefs, refs, validation, session, roll } = this.deps;
 
 		// Step 1 (F1 §2.4): build the RenderContext for this block instance.
-		const cx = createRenderContext({ app, plugin, settings, host, theme, prefs, refs, session });
+		const cx = createRenderContext({ app, plugin, settings, host, theme, prefs, refs, session, roll });
 
 		// The root must exist before ANY step below: renderErrorCard (F1 §3.8) needs
 		// somewhere to render even a step-2 YAML parse failure. data-dse-element is

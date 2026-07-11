@@ -15,6 +15,7 @@ import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
@@ -75,6 +76,7 @@ function makeDeps(): ElementPipelineDeps {
 		refs,
 		validation,
 		session,
+		roll: createRollService(prefs),
 	};
 }
 

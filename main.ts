@@ -26,6 +26,8 @@ import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
 import { DSE_PREF_DESCRIPTORS } from '@/prefs/catalog';
 import { createReferenceService } from '@/framework/seams/refs';
 import type { ReferenceService } from '@/framework/seams/refs';
+import { createRollService } from '@/framework/roll/service';
+import type { RollService } from '@/framework/roll/service';
 import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
@@ -71,6 +73,7 @@ export interface ElementFrameworkV2Services {
 	theme: ThemeService;
 	prefs: PreferenceStore;
 	refs: ReferenceService;
+	roll: RollService;
 }
 
 /** The framework v2 bundle constructed in `onload` and dropped in `onunload`. */
@@ -171,6 +174,10 @@ export function initializeElementFrameworkV2(
 	// single long-lived upstream subscription, so prefs must be built first.
 	const theme = createThemeService(prefs, plugin);
 	const refs = createReferenceService(app, settings);
+	// D5 (Plan 14 Task 2): the roll seam — native RNG by default; the rollerEngine
+	// pref + live capability detection can delegate raw dice to the Dice Roller
+	// plugin (framework/roll/diceBridge.ts). Constructed after prefs (it reads them).
+	const roll = createRollService(prefs, app);
 
 	for (const { id, schema } of dependencySchemas) {
 		try {
@@ -187,10 +194,10 @@ export function initializeElementFrameworkV2(
 	}
 
 	const registry = createElementRegistry();
-	const pipeline = new ElementPipeline({ app, plugin, settings, theme, prefs, refs, validation, session });
+	const pipeline = new ElementPipeline({ app, plugin, settings, theme, prefs, refs, validation, session, roll });
 
 	return {
-		services: { validation, session, theme, prefs, refs },
+		services: { validation, session, theme, prefs, refs, roll },
 		registry,
 		pipeline,
 	};

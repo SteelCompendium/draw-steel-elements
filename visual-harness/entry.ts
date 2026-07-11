@@ -15,6 +15,7 @@ import type { ElementRegistry } from '../src/framework/registry';
 import { createThemeService } from '../src/framework/seams/theme';
 import type { ThemeServiceInternal, DseThemeId } from '../src/framework/seams/theme';
 import { createPreferenceStore } from '../src/framework/seams/prefs';
+import { createRollService } from '../src/framework/roll/service';
 import type { PrefsStorage } from '../src/framework/seams/prefs';
 import { DSE_PREF_DESCRIPTORS } from '../src/prefs/catalog';
 import { createReferenceService } from '../src/framework/seams/refs';
@@ -107,6 +108,7 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
 			refs,
 			validation,
 			session,
+			roll: createRollService(prefs),
 		},
 		theme,
 	};

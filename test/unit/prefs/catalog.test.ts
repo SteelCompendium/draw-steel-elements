@@ -53,13 +53,15 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 	});
 });
 
-test('every descriptor carries a PrefUi in a known group; D5/F2 rows are hidden', () => {
+test('every descriptor carries a PrefUi in a known group; unshipped-consumer rows are hidden', () => {
 	for (const d of DSE_PREF_DESCRIPTORS) {
 		const ui = prefUi(d);
 		expect(ui).toBeDefined();
 		expect(GROUP_ORDER).toContain(ui!.group);
 	}
-	for (const key of ['rollerEngine', 'rollClickToRoll', 'webLinkFallback']) {
+	// rollerEngine is visible since D5 shipped RollService (Plan 14 Task 2);
+	// rollClickToRoll un-hides with the D5 feature integration (Task 4), webLinkFallback with F2.
+	for (const key of ['rollClickToRoll', 'webLinkFallback']) {
 		const d = DSE_PREF_DESCRIPTORS.find((x) => (x.key as string) === key)!;
 		expect(prefUi(d)!.hidden).toBe(true);
 	}

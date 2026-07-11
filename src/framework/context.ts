@@ -5,24 +5,22 @@
 // and essential app/plugin/settings for cross-cutting concerns. It contains NO view
 // reference and NO DOM — views own DOM; context owns services.
 //
-// The optional `roll` field (additive for D5 planning) is a stub `RollService` to be
-// filled in by D5; it's available for future use but unused in F1.
+// The optional `roll` field is the REAL RollService seam (D5, Plan 14) — supplied by
+// the pipeline; re-exported from './roll/service' so F1-era import paths keep working.
 
 import type { App, Plugin } from 'obsidian';
 import type { RenderMode, BlockHost } from './host/BlockHost';
 import type { ThemeService } from './seams/theme';
 import type { PreferenceStore } from './seams/prefs';
 import type { ReferenceService } from './seams/refs';
+import type { RollService } from './roll/service';
 import type { SessionStore } from './session';
 import type { DSESettings } from '@model/Settings';
 
-/**
- * Stub interface for roll service (D5 implementation).
- * Minimal/empty in F1 — D5 fills the contract.
- */
-export interface RollService {
-	// Placeholder for D5; intentionally empty for now.
-}
+// D5 (Plan 14): the F1-era stub is gone — the REAL RollService lives in
+// framework/roll/service.ts and is re-exported here so F1-era importers
+// (view.ts's PanelHost) keep their './context' import path unchanged.
+export type { RollService };
 
 /**
  * Per-block-instance render context: services + essentials injected into views.
@@ -50,7 +48,8 @@ export interface RenderContext {
 	readonly refs: ReferenceService;
 	/** Session store — best-effort in-memory state, keyed by (blockKey, slot). Cleared on plugin unload. */
 	readonly session: SessionStore;
-	/** Optional roll service stub (D5 implementation). */
+	/** Roll service seam (D5) — supplied by the pipeline; optional so bare
+	 *  createRenderContext callers (tests) stay valid. Views guard on absence. */
 	readonly roll?: RollService;
 }
 

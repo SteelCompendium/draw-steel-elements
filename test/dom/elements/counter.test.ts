@@ -24,6 +24,7 @@ import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlo
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
@@ -92,6 +93,7 @@ function makeDeps(): ElementPipelineDeps {
 		refs,
 		validation,
 		session,
+		roll: createRollService(prefs),
 	};
 }
 

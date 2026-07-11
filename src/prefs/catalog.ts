@@ -36,7 +36,8 @@ declare module '../framework/seams/prefs' {
 		// —— Element defaults (behavioral — no attr; views read cx.prefs.get) ——
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
-		// —— Rolling (behavioral; D5 consumes — rows hidden until it ships) ——
+		// —— Rolling (behavioral; D5's RollService consumes rollerEngine;
+		//    rollClickToRoll hidden until the feature integration ships) ——
 		rollerEngine: 'native' | 'dice-roller';
 		rollClickToRoll: boolean;
 		// —— References (behavioral; F2 consumes — row hidden until it ships) ——
@@ -156,11 +157,14 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
-	// —— Rolling (OD-D4-1a: cataloged now, hidden until D5 ships and flips hidden) ——
+	// —— Rolling (OD-D4-1a: cataloged in D4; D5 shipped rollerEngine's consumer —
+	// RollService — so its row is visible; rollClickToRoll stays hidden until the
+	// D5 feature integration ships (Plan 14 Task 4)) ——
 	d({
 		key: 'rollerEngine', default: 'native',
 		ui: {
-			group: 'Rolling', hidden: true, label: 'Roller', control: 'select',
+			group: 'Rolling', label: 'Roller', control: 'select',
+			help: 'Which engine rolls the dice. "Dice Roller plugin" delegates the raw dice to the community Dice Roller plugin when it is installed and enabled (Draw Steel tier/edge/bane math always stays native); it falls back to the built-in roller automatically.',
 			options: [{ value: 'native', label: 'Draw Steel native' }, { value: 'dice-roller', label: 'Dice Roller plugin' }],
 		},
 	}),

@@ -86,6 +86,7 @@ describe('T-10: main.ts framework v2 wiring (F1 §2.3 / §5)', () => {
 		expect(plugin.frameworkV2!.services.theme).toBeDefined();
 		expect(plugin.frameworkV2!.services.prefs).toBeDefined();
 		expect(plugin.frameworkV2!.services.refs).toBeDefined();
+		expect(plugin.frameworkV2!.services.roll).toBeDefined();
 	});
 
 	// Successor to the original "coexistence" test (which sampled ds-characteristics/ds-vr
