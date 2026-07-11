@@ -89,8 +89,11 @@ class DsePreferenceStore implements PreferenceStore {
 	constructor(private readonly storage: PrefsStorage) {
 		this.describe(BUILTIN_DESCRIPTORS);
 		// Fire-and-forget: get() must stay synchronous (§3.6), so persisted values
-		// are applied (and subscribers notified) whenever the load resolves.
-		void this.load();
+		// are applied (and subscribers notified) whenever the load resolves. D4:
+		// a load failure must not vanish silently (Plan 10 follow-up).
+		this.load().catch((error) => {
+			console.error('Draw Steel Elements: failed to load preferences', error);
+		});
 	}
 
 	private async load(): Promise<void> {
@@ -140,14 +143,17 @@ class DsePreferenceStore implements PreferenceStore {
 		const k = key as string;
 		this.descriptorFor(k);
 		this.values.set(k, value);
+		this.notify(k, value); // D4 §5.2: reflect/subscribers fire before the disk write
 		await this.persist();
-		this.notify(k, value);
 	}
 
 	private async persist(): Promise<void> {
 		const snapshot: Record<string, unknown> = {};
-		for (const key of this.descriptors.keys()) {
-			if (this.values.has(key)) snapshot[key] = this.values.get(key);
+		for (const [key, descriptor] of this.descriptors) {
+			if (!this.values.has(key)) continue;
+			const value = this.values.get(key);
+			if (value === descriptor.default) continue; // sparse: defaults are implicit
+			snapshot[key] = value;
 		}
 		this.persistedSnapshot = snapshot;
 		await this.storage.set(snapshot as Partial<DsePrefs>);

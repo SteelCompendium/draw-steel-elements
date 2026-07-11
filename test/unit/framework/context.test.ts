@@ -24,6 +24,7 @@ describe('T-6 (Plan 02): RenderContext (F1 §3.2)', () => {
 		mockApp = new MockApp();
 		mockPlugin = new MockPlugin(mockApp);
 		mockSettings = {
+			...DEFAULT_SETTINGS,
 			compendiumDestinationDirectory: 'compendium',
 			defaultImagePath: 'Media/test.png',
 		};

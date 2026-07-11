@@ -1,6 +1,6 @@
 import {App, Notice, Plugin} from 'obsidian';
 import {MyPluginSettingTab} from "@views/SettingsTab";
-import {DEFAULT_SETTINGS, DSESettings} from "@model/Settings";
+import {DSESettings, migrateSettings} from "@model/Settings";
 import {CompendiumDownloader} from "@utils/CompendiumDownloader";
 import { registerElements } from '@/utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
@@ -103,21 +103,63 @@ export interface ElementFrameworkV2 {
  * "incremental migration switch" — `registerFrameworkElementDefinitions` below is the
  * single source of truth for which elements HAVE migrated).
  */
+/** F1's original in-memory PrefsStorage stub — still the DEFAULT for
+ *  initializeElementFrameworkV2 so tests/harnesses that don't care about
+ *  persistence are unchanged. Production onload injects the real adapter below. */
+export const IN_MEMORY_PREFS_STORAGE: PrefsStorage = {
+	get: async () => undefined,
+	set: async () => {},
+};
+
+/** PrefsStorage with an unload-time escape hatch for the trailing debounce. */
+export interface FlushablePrefsStorage extends PrefsStorage {
+	/** Write any pending debounced save NOW (fire-and-forget; onunload calls this). */
+	flush(): void;
+}
+
+/**
+ * D4 §5.2 — the real PrefsStorage: the store's sparse snapshot lands on
+ * `plugin.settings.prefs` synchronously; the actual `saveData` write is DEBOUNCED
+ * (250 ms trailing) so a preset batch-write or a toggle flurry costs one disk write.
+ * Structural param (settings + saveSettings) keeps it unit-testable without a Plugin.
+ */
+export function createSaveDataPrefsStorage(
+	plugin: { settings: DSESettings; saveSettings(): Promise<void> },
+	debounceMs = 250,
+): FlushablePrefsStorage {
+	let timer: ReturnType<typeof setTimeout> | null = null;
+	const write = (): void => {
+		timer = null;
+		plugin.saveSettings().catch((error) => {
+			console.error('Draw Steel Elements: failed to save preferences', error);
+		});
+	};
+	return {
+		get: async () => plugin.settings.prefs,
+		set: async (prefs) => {
+			plugin.settings.prefs = prefs;
+			if (timer !== null) clearTimeout(timer);
+			timer = setTimeout(write, debounceMs);
+		},
+		flush: () => {
+			if (timer === null) return;
+			clearTimeout(timer);
+			write();
+		},
+	};
+}
+
 export function initializeElementFrameworkV2(
 	app: App,
 	plugin: Plugin,
 	settings: Readonly<DSESettings>,
 	dependencySchemas: readonly DependencySchema[] = FRAMEWORK_V2_DEPENDENCY_SCHEMAS,
+	prefsStorage: PrefsStorage = IN_MEMORY_PREFS_STORAGE,
 ): ElementFrameworkV2 {
 	const validation = createValidationService();
 	const session = createSessionStore();
-	// F1 §3.6 / OD-2: real persisted-storage wiring (merged under the plugin's saved
-	// settings, under a `prefs` key) is D4 scope — F1's seam only needs a working
-	// get/set pair, same convention the framework's own pipeline tests use.
-	const prefsStorage: PrefsStorage = {
-		get: async () => undefined,
-		set: async () => {},
-	};
+	// D4 (Plan 13 Task 1): production injects the saveData-backed adapter
+	// (createSaveDataPrefsStorage); the default stays in-memory for tests/harnesses.
 	const prefs = createPreferenceStore(prefsStorage);
 	// D3 §2.2 (Plan 10 Task 2): the ThemeService is PreferenceStore-backed — the
 	// active theme IS the persisted `theme` pref. The plugin owns the service's
@@ -190,6 +232,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      *  before `onload` runs and after `onunload` drops it. */
     frameworkV2?: ElementFrameworkV2;
 
+    /** D4: the debounced saveData adapter behind the PreferenceStore; flushed on unload. */
+    private prefsStorage?: FlushablePrefsStorage;
+
 	readonly githubOwner = "steelCompendium";
 	readonly githubRepo = "data-md-dse";
 
@@ -209,11 +254,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 
         // F1 (Plan 02, Task 10): construct the framework v2 bundle alongside the
         // legacy path above. Coexistence, not replacement — see the function doc.
+        this.prefsStorage = createSaveDataPrefsStorage(this);
         const frameworkV2 = initializeElementFrameworkV2(
             this.app,
             this,
             this.settings,
             this.frameworkV2DependencySchemas(),
+            this.prefsStorage,
         );
         this.frameworkV2 = frameworkV2;
 
@@ -320,6 +367,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // module-global state — they're constructed fresh in onload — so dropping the
         // reference is enough; no view is ever stored on the plugin (F1 §2.4 step 6).
         this.frameworkV2?.services.session.clear();
+        // D4: don't lose a pref change made in the last 250 ms before unload.
+        this.prefsStorage?.flush();
+        this.prefsStorage = undefined;
         this.frameworkV2 = undefined;
 
         console.log("Draw Steel Elements Plugin unloaded and schema registry reset");
@@ -331,7 +381,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        this.settings = migrateSettings(await this.loadData());
     }
 
     async saveSettings() {

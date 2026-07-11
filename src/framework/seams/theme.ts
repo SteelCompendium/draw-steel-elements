@@ -104,7 +104,10 @@ class DseThemeService implements ThemeServiceInternal {
 		if (theme === this.active) return;
 		// Persist only — the upstream prefs.subscribe in the constructor drives the
 		// listener fan-out. Notifying here as well would double-fire every listener.
-		void this.prefs.set('theme', theme);
+		// D4 (Plan 10 FOLLOWUP): a storage rejection must not vanish silently.
+		this.prefs.set('theme', theme).catch((error) => {
+			console.error('Draw Steel Elements: failed to persist theme preference', error);
+		});
 	}
 }
 
