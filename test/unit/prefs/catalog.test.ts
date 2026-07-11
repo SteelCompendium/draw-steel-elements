@@ -31,6 +31,8 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('sbStats')).toBe('grid');
 	expect(store.get('collapsibleDefault')).toBe(true);     // old ComponentWrapper ?? true
 	expect(store.get('collapseDefault')).toBe(false);       // old ComponentWrapper ?? false
+	expect(store.get('rollingEnabled')).toBe(false);        // D5 master switch — OFF is the fidelity bar
+	expect(store.get('rollClickToRoll')).toBe(true);        // OD-5: gated by rollingEnabled, shipped default kept
 });
 
 test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs have none', () => {
@@ -47,6 +49,7 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbStats: 'sb-stats',
 		collapsibleDefault: null,
 		collapseDefault: null,
+		rollingEnabled: null,
 		rollerEngine: null,
 		rollClickToRoll: null,
 		webLinkFallback: null,
@@ -59,9 +62,9 @@ test('every descriptor carries a PrefUi in a known group; unshipped-consumer row
 		expect(ui).toBeDefined();
 		expect(GROUP_ORDER).toContain(ui!.group);
 	}
-	// rollerEngine is visible since D5 shipped RollService (Plan 14 Task 2);
-	// rollClickToRoll un-hides with the D5 feature integration (Task 4), webLinkFallback with F2.
-	for (const key of ['rollClickToRoll', 'webLinkFallback']) {
+	// The Rolling rows all went live with the D5 feature integration (Plan 14
+	// Task 4); webLinkFallback stays hidden until F2 ships.
+	for (const key of ['webLinkFallback']) {
 		const d = DSE_PREF_DESCRIPTORS.find((x) => (x.key as string) === key)!;
 		expect(prefUi(d)!.hidden).toBe(true);
 	}

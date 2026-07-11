@@ -36,8 +36,8 @@ declare module '../framework/seams/prefs' {
 		// —— Element defaults (behavioral — no attr; views read cx.prefs.get) ——
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
-		// —— Rolling (behavioral; D5's RollService consumes rollerEngine;
-		//    rollClickToRoll hidden until the feature integration ships) ——
+		// —— Rolling (behavioral; D5) ——
+		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
 		rollClickToRoll: boolean;
 		// —— References (behavioral; F2 consumes — row hidden until it ships) ——
@@ -157,9 +157,14 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
-	// —— Rolling (OD-D4-1a: cataloged in D4; D5 shipped rollerEngine's consumer —
-	// RollService — so its row is visible; rollClickToRoll stays hidden until the
-	// D5 feature integration ships (Plan 14 Task 4)) ——
+	// —— Rolling (D5, Plan 14: OD-D4-1a's hidden rows go live + the master switch) ——
+	d({
+		key: 'rollingEnabled', default: false,
+		ui: {
+			group: 'Rolling', label: 'Enable rolling', control: 'toggle',
+			help: 'Add a dice roller to rendered ability cards (feature, featureblock, statblock). Off — the default — renders cards exactly as before. The ds-roll element always rolls; authoring one is its own opt-in.',
+		},
+	}),
 	d({
 		key: 'rollerEngine', default: 'native',
 		ui: {
@@ -168,9 +173,16 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 			options: [{ value: 'native', label: 'Draw Steel native' }, { value: 'dice-roller', label: 'Dice Roller plugin' }],
 		},
 	}),
+	// rollClickToRoll's BUILT default (true) is deliberately kept (OD-5): it only
+	// takes effect once rollingEnabled is on, so fresh-default fidelity is preserved
+	// by the master switch, and flipping a shipped default would be a gratuitous
+	// divergence from what D4 persisted.
 	d({
 		key: 'rollClickToRoll', default: true,
-		ui: { group: 'Rolling', hidden: true, label: 'Click ability to roll', control: 'toggle' },
+		ui: {
+			group: 'Rolling', label: 'Click ability to roll', control: 'toggle',
+			help: 'When rolling is enabled, clicking a power-roll tier row rolls it. The Roll button always works regardless.',
+		},
 	}),
 
 	// —— References (hidden until F2 ships) ——

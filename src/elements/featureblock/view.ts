@@ -35,9 +35,11 @@
 // renderMd callback.
 import type { Feature } from 'steel-compendium-sdk';
 import { ElementView } from '@/framework/view';
+import type { RenderContext } from '@/framework/context';
 import { cardHead, divider } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { featureRollHooks } from '@/elements/feature/rollController';
 import { applyRoleTint } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { FeatureblockConfig } from '@model/FeatureblockConfig';
@@ -51,6 +53,16 @@ function featureLevelOf(feature: Feature): number {
 }
 
 export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
+	constructor(cx: RenderContext) {
+		super(cx);
+		// D5 roll-pref re-mount — see FeatureElementView's constructor comment.
+		const remount = (): void => {
+			if (this.rootEl) void this.update(this.model);
+		};
+		cx.prefs.subscribe('rollingEnabled', this, remount);
+		cx.prefs.subscribe('rollClickToRoll', this, remount);
+	}
+
 	protected onMount(root: HTMLElement, model: FeatureblockConfig): void {
 		const fb = model.featureblock;
 		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
@@ -136,7 +148,9 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 				host.setAttribute('data-level', String(run.level));
 				host.createDiv({ cls: 'dse-fb__adv-head', text: `Level ${run.level} Advancement` });
 			}
-			renderFeatureList(host, FeatureConfig.allFrom(run.features), this, renderMd);
+			renderFeatureList(host, FeatureConfig.allFrom(run.features), this, renderMd, {
+				roll: featureRollHooks(this.cx),
+			});
 		}
 	}
 }

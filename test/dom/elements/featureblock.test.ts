@@ -22,6 +22,7 @@ import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
 import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage } from '../../../src/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
@@ -132,6 +133,10 @@ function makeDeps(): ElementPipelineDeps {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	// D5 (Plan 14 Task 4): the view reads the Rolling catalog prefs — mount at
+	// CATALOG DEFAULTS (rollingEnabled false ⇒ byte-identical DOM), the same
+	// convention as statblock.test.ts's makeDeps.
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();

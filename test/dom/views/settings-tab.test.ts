@@ -31,12 +31,13 @@ describe('D4 §4 — DseSettingTab', () => {
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
 		const headings = Setting.created.filter((s) => s.heading).map((s) => s.name);
-		// D5 (Plan 14 Task 2) un-hid rollerEngine, so the Rolling group now renders;
-		// rollClickToRoll (Task 4) and webLinkFallback (F2) rows stay hidden.
+		// D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine, Task 4 the
+		// master switch + rollClickToRoll; only webLinkFallback (F2) stays hidden.
 		expect(headings).toEqual(['Appearance', 'Statblock display', 'Element defaults', 'Rolling']);
 		const names = Setting.created.map((s) => s.name);
+		expect(names).toContain('Enable rolling');
 		expect(names).toContain('Roller');
-		expect(names).not.toContain('Click ability to roll');
+		expect(names).toContain('Click ability to roll');
 		expect(names).not.toContain('Fall back to steelcompendium.io links');
 		// operational carry-over intact:
 		expect(names).toContain('Release Tag (Optional)');

@@ -38,9 +38,11 @@
 // controls. All markdown renders through this.renderMarkdown (owner-parented,
 // ML-1) passed to renderFeatureList as the renderMd callback.
 import { ElementView } from '@/framework/view';
+import type { RenderContext } from '@/framework/context';
 import { cardHead, divider } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { featureRollHooks } from '@/elements/feature/rollController';
 import { applyRoleTint } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
@@ -54,6 +56,16 @@ function formatCharacteristic(value?: number): string {
 }
 
 export class StatblockElementView extends ElementView<StatblockConfig> {
+	constructor(cx: RenderContext) {
+		super(cx);
+		// D5 roll-pref re-mount — see FeatureElementView's constructor comment.
+		const remount = (): void => {
+			if (this.rootEl) void this.update(this.model);
+		};
+		cx.prefs.subscribe('rollingEnabled', this, remount);
+		cx.prefs.subscribe('rollClickToRoll', this, remount);
+	}
+
 	protected onMount(root: HTMLElement, model: StatblockConfig): void {
 		const sb = model.statblock;
 		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
@@ -144,6 +156,8 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const features = model.statblock.features;
 		if (!features || features.length === 0) return;
 		divider(card, { axis: 'h', ornament: true }, this);
-		renderFeatureList(card, FeatureConfig.allFrom(features), this, renderMd);
+		renderFeatureList(card, FeatureConfig.allFrom(features), this, renderMd, {
+			roll: featureRollHooks(this.cx),
+		});
 	}
 }

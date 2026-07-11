@@ -30,6 +30,8 @@ import type { Effect } from 'steel-compendium-sdk';
 import { cardHead, powerRollPanel } from '@/framework/kit';
 import type { PowerRollRow, RenderMdCallback } from '@/framework/kit';
 import { FeatureConfig } from '@model/FeatureConfig';
+import { attachRollControls } from './rollController';
+import type { FeatureRollHooks } from './rollController';
 
 /** D2 §3.6's action-type spine vocabulary (matches the --dse-act-* token family). */
 export type ActionType = 'main' | 'maneuver' | 'triggered' | 'move' | 'none' | 'trait';
@@ -37,6 +39,10 @@ export type ActionType = 'main' | 'maneuver' | 'triggered' | 'move' | 'none' | '
 export interface RenderFeatureOptions {
 	/** aria-level for the cardHead name heading. Default 3; nested abilities get +1. */
 	headingLevel?: number;
+	/** D5 (Plan 14): roll interactivity hooks. ABSENT ⇒ output byte-identical to
+	 *  the pre-D5 grammar (the fidelity bar); present ⇒ each rolling effect gains
+	 *  a roll controller. Built by featureRollHooks(cx) in the element views. */
+	roll?: FeatureRollHooks;
 }
 
 /**
@@ -95,6 +101,8 @@ export function renderFeature(
 
 	// The action-type spine (Steel-only accent; see the file header).
 	const act = actionTypeOf(config);
+	// D5: per-feature ordinal of rolling effects — keys the session slots.
+	let rollableIndex = 0;
 	if (act) {
 		rootEl.setAttribute('data-dse-act', act);
 		rootEl.style.setProperty('--dse-act', `var(--dse-act-${act})`);
@@ -205,11 +213,33 @@ export function renderFeature(
 				owner,
 			);
 			handle.headEl?.addClass('dse-md-inline');
+			// D5 (Plan 14): the roller layers ONTO the static panel when hooks are
+			// supplied (rollingEnabled) — attribute channel only, no DOM change to the
+			// rows themselves; without hooks this branch is byte-identical to before.
+			if (opts.roll) {
+				attachRollControls({
+					hostEl,
+					panel: handle,
+					rollExpr: effect.roll ?? undefined,
+					mainActionDefault: act === 'main',
+					abilityName: feature.name ?? 'power roll',
+					effectIndex: rollableIndex,
+					hooks: opts.roll,
+					owner,
+				});
+			}
+			rollableIndex++;
 		}
 
 		if (effect.features && effect.features.length > 0) {
+			// D5: nested abilities inherit the hooks (single shared blockKey). Each
+			// nested feature gets its own renderFeature frame — that resets the
+			// rollableIndex ordinal, so nested rolling effects of the SAME block can
+			// collide on session slots across siblings; acceptable for best-effort
+			// dice state (F1 §4.3 key drift is already documented) — not a bug.
 			renderFeatureList(hostEl, FeatureConfig.allFrom(effect.features), owner, renderMd, {
 				headingLevel: Math.min(level + 1, 6),
+				roll: opts.roll,
 			});
 		}
 	}
