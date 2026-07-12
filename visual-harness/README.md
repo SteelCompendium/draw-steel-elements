@@ -32,8 +32,9 @@ One-time setup: `npx playwright install chromium`.
 - `shim/obsidian.ts` — browser `obsidian` module: jest-free mock core + real Lucide icons +
   `marked` markdown + toast Notice. Aliased in by `esbuild.mjs` for this bundle only.
 - `vars.css` — vendored Obsidian default-theme variables (only what `styles-source.css` uses).
-- `fixtures/<element>/default.md` — code-fence bodies; validity-gated by
-  `test/dom/visual-harness/fixtures.test.ts`.
+- `../src/elements/<id>/example.yaml` — D9 (Plan 15 Task 2): single-sourced fixture body,
+  shared with `authoring.example` on each element's definition; code-fence bodies
+  validity-gated by `test/dom/visual-harness/fixtures.test.ts`.
 - `dist/`, `shots/` — generated, git-ignored.
 
 `test/dom/visual-harness/fixtures.test.ts` is jest's gate on this harness — it imports
@@ -61,7 +62,7 @@ short warm-up launch runs first if the scratch dir has no self-updated app asar 
 the system-installed Obsidian is Electron-106-era and auto-updates on first launch) against
 the git-managed `demo-vault/`. One spawn/attach for the whole sweep: it opens a generated
 note per element (`demo-vault/Harness/` — git-ignored, regenerated every run by
-`notes-gen.mjs` from the F4 fixtures + `aliases.json`) and screenshots the rendered element
+`notes-gen.mjs` from the per-element `example.yaml` bodies + `aliases.json`) and screenshots the rendered element
 over CDP, once per plugin-theme (`legacy`/`steel`) × chrome-bg (`dark`/`light`) combo. Before
 quitting it restores plugin theme=`steel` / chrome=`dark` so the vault's persisted state
 matches the committed baseline.

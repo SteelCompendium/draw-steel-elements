@@ -7,6 +7,7 @@ import { Skills } from '@model/Skills';
 import skillsSchemaYaml from '@model/schemas/SkillsSchema.yaml';
 import { parse } from './model';
 import { SkillsView } from './view';
+import skillsExample from './example.yaml';
 
 export const skillsElement: ElementDefinition<Skills> = {
 	id: 'skills',
@@ -17,4 +18,5 @@ export const skillsElement: ElementDefinition<Skills> = {
 	autoResolveRefs: false,
 	parse,
 	createView: (cx) => new SkillsView(cx),
+	authoring: { example: skillsExample },
 };

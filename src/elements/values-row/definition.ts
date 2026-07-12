@@ -15,6 +15,7 @@
 import type { ElementDefinition } from '@/framework/registry';
 import { KeyValuePairs } from '@model/KeyValuePairs';
 import { ValuesRowElementView } from './view';
+import valuesRowExample from './example.yaml';
 
 export const valuesRowElement: ElementDefinition<KeyValuePairs> = {
 	id: 'values-row',
@@ -25,4 +26,5 @@ export const valuesRowElement: ElementDefinition<KeyValuePairs> = {
 	autoResolveRefs: false,
 	noClickShield: true,
 	createView: (cx) => new ValuesRowElementView(cx),
+	authoring: { example: valuesRowExample },
 };

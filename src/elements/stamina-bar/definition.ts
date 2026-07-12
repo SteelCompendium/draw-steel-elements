@@ -5,6 +5,7 @@ import { StaminaBar } from '@model/StaminaBar';
 import staminaBarSchemaYaml from '@model/schemas/StaminaBarSchema.yaml';
 import { parse, serialize } from './model';
 import { StaminaBarView } from './view';
+import staminaExample from './example.yaml';
 
 export const staminaBarElement: ElementDefinition<StaminaBar> = {
 	id: 'stamina-bar',
@@ -16,4 +17,5 @@ export const staminaBarElement: ElementDefinition<StaminaBar> = {
 	parse,
 	serialize,
 	createView: (cx) => new StaminaBarView(cx),
+	authoring: { example: staminaExample },
 };

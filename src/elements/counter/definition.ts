@@ -5,6 +5,7 @@ import type { ElementDefinition } from '@/framework/registry';
 import type { Counter } from '@model/Counter';
 import { parse, serialize } from './model';
 import { CounterElementView } from './view';
+import counterExample from './example.yaml';
 
 export const counterElement: ElementDefinition<Counter> = {
 	id: 'counter',
@@ -18,4 +19,5 @@ export const counterElement: ElementDefinition<Counter> = {
 	parse,
 	serialize,
 	createView: (cx) => new CounterElementView(cx),
+	authoring: { example: counterExample },
 };

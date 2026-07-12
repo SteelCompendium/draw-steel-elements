@@ -11,6 +11,7 @@
 // new listener no user-facing bug ever required.
 import type { ElementDefinition } from '@/framework/registry';
 import { HorizontalRuleView } from './view';
+import horizontalRuleExample from './example.yaml';
 
 export const horizontalRuleElement: ElementDefinition<void> = {
 	id: 'horizontal-rule',
@@ -21,4 +22,5 @@ export const horizontalRuleElement: ElementDefinition<void> = {
 	autoResolveRefs: false,
 	noClickShield: true,
 	createView: (cx) => new HorizontalRuleView(cx),
+	authoring: { example: horizontalRuleExample },
 };

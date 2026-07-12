@@ -5,6 +5,7 @@ import type { ElementDefinition } from '@/framework/registry';
 import type { NegotiationData } from '@model/NegotiationData';
 import { parse, serialize } from './model';
 import { NegotiationView } from './view';
+import negotiationExample from './example.yaml';
 
 export const negotiationElement: ElementDefinition<NegotiationData> = {
 	id: 'negotiation',
@@ -18,4 +19,5 @@ export const negotiationElement: ElementDefinition<NegotiationData> = {
 	parse,
 	serialize,
 	createView: (cx) => new NegotiationView(cx),
+	authoring: { example: negotiationExample },
 };

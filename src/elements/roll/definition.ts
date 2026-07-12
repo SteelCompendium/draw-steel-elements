@@ -4,6 +4,7 @@
 // refs (autoResolveRefs false): a roll block carries no @path/scc strings.
 import type { ElementDefinition } from '@/framework/registry';
 import rollSchemaYaml from './schema.yaml';
+import rollExample from './example.yaml';
 import { parseRollModel } from './model';
 import type { RollModel } from './model';
 import { RollView } from './view';
@@ -17,4 +18,5 @@ export const rollElement: ElementDefinition<RollModel> = {
 	parse: (data) => parseRollModel(data),
 	autoResolveRefs: false,
 	createView: (cx) => new RollView(cx),
+	authoring: { example: rollExample },
 };

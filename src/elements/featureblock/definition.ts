@@ -14,6 +14,7 @@
 import type { ElementDefinition } from '@/framework/registry';
 import { FeatureblockConfig } from '@model/FeatureblockConfig';
 import { FeatureblockElementView } from './view';
+import featureblockExample from './example.yaml';
 
 export const featureblockElement: ElementDefinition<FeatureblockConfig> = {
 	id: 'featureblock',
@@ -27,4 +28,5 @@ export const featureblockElement: ElementDefinition<FeatureblockConfig> = {
 	parse: (_data, raw) => FeatureblockConfig.readYaml(raw),
 	autoResolveRefs: false,
 	createView: (cx) => new FeatureblockElementView(cx),
+	authoring: { example: featureblockExample, sdkModel: 'featureblock' },
 };

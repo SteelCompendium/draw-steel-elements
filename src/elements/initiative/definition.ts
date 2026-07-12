@@ -7,6 +7,7 @@ import type { EncounterData } from './model';
 import { parse, serialize } from './model';
 import { resolveInitiativeRefs } from './resolveRefs';
 import { InitiativeView } from './view';
+import initiativeExample from './example.yaml';
 
 export const initiativeElement: ElementDefinition<EncounterData> = {
 	id: 'initiative',
@@ -20,4 +21,5 @@ export const initiativeElement: ElementDefinition<EncounterData> = {
 	serialize,
 	resolveRefs: resolveInitiativeRefs,
 	createView: (cx) => new InitiativeView(cx),
+	authoring: { example: initiativeExample },
 };

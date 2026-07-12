@@ -14,6 +14,7 @@
 import type { ElementDefinition } from '@/framework/registry';
 import { StatblockConfig } from '@model/StatblockConfig';
 import { StatblockElementView } from './view';
+import statblockExample from './example.yaml';
 
 export const statblockElement: ElementDefinition<StatblockConfig> = {
 	id: 'statblock',
@@ -27,4 +28,5 @@ export const statblockElement: ElementDefinition<StatblockConfig> = {
 	parse: (_data, raw) => StatblockConfig.readYaml(raw),
 	autoResolveRefs: false,
 	createView: (cx) => new StatblockElementView(cx),
+	authoring: { example: statblockExample, sdkModel: 'statblock' },
 };

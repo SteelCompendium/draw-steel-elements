@@ -15,6 +15,7 @@
 import type { ElementDefinition } from '@/framework/registry';
 import { Characteristics } from '@model/Characteristics';
 import { CharacteristicsElementView } from './view';
+import characteristicsExample from './example.yaml';
 
 export const characteristicsElement: ElementDefinition<Characteristics> = {
 	id: 'characteristics',
@@ -24,4 +25,5 @@ export const characteristicsElement: ElementDefinition<Characteristics> = {
 	parse: (data) => Characteristics.parse(data),
 	autoResolveRefs: false,
 	createView: (cx) => new CharacteristicsElementView(cx),
+	authoring: { example: characteristicsExample },
 };

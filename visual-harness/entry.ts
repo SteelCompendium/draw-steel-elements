@@ -25,19 +25,20 @@ import { DEFAULT_SETTINGS } from '../src/model/Settings';
 import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
 import { App, Plugin } from '../test/mocks/obsidian-core';
 
-// Fixtures — esbuild `.md` text loader / jest rawTextTransformer.
-import characteristicsDefault from './fixtures/characteristics/default.md';
-import counterDefault from './fixtures/counter/default.md';
-import featureDefault from './fixtures/feature/default.md';
-import featureblockDefault from './fixtures/featureblock/default.md';
-import horizontalRuleDefault from './fixtures/horizontal-rule/default.md';
-import initiativeDefault from './fixtures/initiative/default.md';
-import negotiationDefault from './fixtures/negotiation/default.md';
-import rollDefault from './fixtures/roll/default.md';
-import skillsDefault from './fixtures/skills/default.md';
-import staminaBarDefault from './fixtures/stamina-bar/default.md';
-import statblockDefault from './fixtures/statblock/default.md';
-import valuesRowDefault from './fixtures/values-row/default.md';
+// Fixtures — D9 (Plan 15 Task 2): single-sourced from each element's own
+// authoring.example (src/elements/<id>/example.yaml), esbuild/jest `.yaml` text loader.
+import characteristicsDefault from '../src/elements/characteristics/example.yaml';
+import counterDefault from '../src/elements/counter/example.yaml';
+import featureDefault from '../src/elements/feature/example.yaml';
+import featureblockDefault from '../src/elements/featureblock/example.yaml';
+import horizontalRuleDefault from '../src/elements/horizontal-rule/example.yaml';
+import initiativeDefault from '../src/elements/initiative/example.yaml';
+import negotiationDefault from '../src/elements/negotiation/example.yaml';
+import rollDefault from '../src/elements/roll/example.yaml';
+import skillsDefault from '../src/elements/skills/example.yaml';
+import staminaBarDefault from '../src/elements/stamina-bar/example.yaml';
+import statblockDefault from '../src/elements/statblock/example.yaml';
+import valuesRowDefault from '../src/elements/values-row/example.yaml';
 
 export const FIXTURES: Record<string, Record<string, string>> = {
 	characteristics: { default: characteristicsDefault },
