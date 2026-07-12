@@ -5,6 +5,8 @@ import {CompendiumDownloader} from "@utils/CompendiumDownloader";
 import { registerElements } from '@/utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
 import componentWrapperSchemaYaml from '@model/schemas/ComponentWrapperSchema.yaml';
+import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '@/framework/dependencySchemas';
+import type { DependencySchema } from '@/framework/dependencySchemas';
 import "./styles-source.css";
 
 // F1 (Plan 02, Task 10) — Element Framework v2 wiring. ADDITIVE alongside the legacy
@@ -48,26 +50,14 @@ import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
 
-/** One dependency schema entry for `ValidationService.addDependencySchema` (F1 §5). */
-export interface DependencySchema {
-	id: string;
-	schema: string;
-}
-
-/**
- * F1 §5 — the shared `component-wrapper` dependency schema (`collapsible` /
- * `collapse_default`), registered once at load; element schemas `$ref` it, same as the
- * legacy `initializeSchemaRegistry` call below registers it for the legacy validator.
- * Exported (not inlined) so Task 10's test can pass a deliberately malformed
- * substitute to `initializeElementFrameworkV2` without needing to fake the real
- * schema file.
- */
-export const FRAMEWORK_V2_DEPENDENCY_SCHEMAS: readonly DependencySchema[] = [
-	{
-		id: "https://steelcompendium.io/schemas/component-wrapper-1.0.0",
-		schema: componentWrapperSchemaYaml,
-	},
-];
+// `DependencySchema` + `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` now live in
+// `@/framework/dependencySchemas` (D9 Task 4): `DsSchemaSuggest` needs the same data to
+// resolve `$ref`s for autocomplete, and importing it here would cycle back through
+// schemaSuggest.ts's import of this file. Re-exported below so existing
+// `import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main'` call sites (tests,
+// visual-harness) are unaffected.
+export type { DependencySchema };
+export { FRAMEWORK_V2_DEPENDENCY_SCHEMAS };
 
 /** Service bundle F1 §2.2's onload block assembles: ValidationService, SessionStore,
  *  and the three seam defaults (ThemeService / PreferenceStore / ReferenceService). */
