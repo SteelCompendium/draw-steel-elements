@@ -59,6 +59,17 @@ for iteration.
   the `rollingEnabled` pref (default OFF — defaults render zero roll UI); `ds-roll`
   (`src/elements/roll/`) is the standalone element and always rolls. Results are
   session-only (`SessionStore` `roll.*` slots) — rolling NEVER writes the note.
+- **Authoring (D9)**: `src/authoring/` — four generators over the registry (no per-element
+  code). `scaffold.ts` builds insert bodies (curated `authoring.example` → else a
+  schema-walked stub); `insert.ts` registers one Insert command per element; `suggest.ts`
+  is the `/ds` EditorSuggest scaffolder; `schemaSuggest.ts` is key/enum autocomplete inside
+  a `ds-*` fence; `FormModal.ts`/`formModel.ts` are the generic schema→form editor (live
+  validation via F1's `ValidationService`, live preview via `createView`, Save through
+  `BlockHost.replaceSource`), reachable from a reading-mode pencil gated by the default-OFF
+  `authoringControls` pref. The `ElementDefinition.authoring` slot (`registry.ts`) carries
+  `example`/`sdkModel`/`fields`; each element's `example.yaml` is the SINGLE source shared
+  by the palette AND the visual-harness fixture. Deferred: the SDK-reader text importer (F2)
+  and the CM6 squiggle linter (§5.2).
 
 ## Important Constraints
 

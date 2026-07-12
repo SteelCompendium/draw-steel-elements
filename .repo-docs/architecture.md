@@ -242,6 +242,52 @@ Interactive Draw Steel dice rolling, split pure-engine / service on purpose:
   `CharacteristicProvider` hook (`binding.ts`) to a real hero. Spec + open-decision
   rationale: workspace repo `docs/superpowers/dse-overhaul/D5-rolling-interactivity-spec.md`.
 
+### Authoring (`src/authoring/`, D9)
+
+Four generators over the registry, no per-element code: register an `ElementDefinition` and
+authoring support (insert command, `/ds` scaffold, in-fence autocomplete, form editor) comes
+free, derived from `def.schema`/`def.authoring`.
+
+- **`authoring` contract** (`framework/registry.ts`): the one additive touch D9 makes to F1's
+  `ElementDefinition` — an optional `AuthoringHint` (`example`/`sdkModel`/`fields`). Absence
+  changes nothing (every tool falls back to the schema); presence enriches (a curated starter
+  body, the SDK model the deferred text importer would route to, per-field form UI overrides).
+- **Insert commands** (`insert.ts`) and **`/ds`** (`suggest.ts`, an `EditorSuggest`): both build
+  their scaffold via `scaffold.ts` (`buildScaffold` — curated `authoring.example` else a
+  schema-walked stub, cursor at the first body character) and only ever `replaceSelection`/
+  `replaceRange` over the trigger token — INSERT ONLY, never a range-replace over existing
+  content. `/ds` suppresses itself inside any already-open fence (`fenceScan.ts`'s top-down
+  scan, shared with the in-fence suggester below) so accepting it can never corrupt a block
+  the cursor happens to be inside.
+- **In-fence autocomplete** (`schemaSuggest.ts`): key/enum completion inside an open `ds-*`
+  fence only, top-level keys only (an indented line suppresses suggestion, never resolves
+  against the wrong scope). Schema shapes (`allOf`/`$ref` resolved against the same
+  `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` AJV registers) come from `schemaShape.ts`'s
+  `shapeFromSchemaYaml` — the SAME resolver `formModel.ts` uses for form fields, so the two
+  never drift.
+- **Form editor** (`FormModal.ts`/`formModel.ts`): one modal for every element — schema fields
+  render as `Setting` controls (schemaless, or a complex array/object/`$ref` field, falls back
+  to a raw-YAML textarea), reachable from a reading-mode pencil the pipeline stamps only when
+  `cx.host.canPersist` AND the `authoringControls` pref (default OFF) is on.
+  `ValidationService` is passed to the modal explicitly as a constructor argument — NOT read
+  off `cx`, which carries no validation seam. Save hard-fails closed (disabled while the
+  working data is invalid, OD-6) and writes through `host.replaceSource` — the SAME path
+  persisted elements use, no parallel writer. The live preview mounts through a
+  `canPersist: false` host stamped `data-dse-readonly`; a reserved `prefs:` override map is
+  popped before validation/preview and re-emitted on Save via the pipeline's own
+  `withPrefOverrides` wrapper.
+- **`example.yaml`** (`src/elements/<id>/example.yaml`): one YAML body per element is the
+  SINGLE source for the curated `authoring.example` scaffold, the F4 visual-harness fixture
+  (`visual-harness/entry.ts`), and the F5 Obsidian-camera notes (`visual-harness/notes-gen.mjs`
+  reads it straight off disk) — no second hand-maintained fixture. Validity-gated by
+  `test/dom/visual-harness/fixtures.test.ts`, which mounts every fixture through the real
+  pipeline and asserts no error card.
+- **Deliberate deferrals**: the SDK-reader text importer (blocked on F2 — the pinned SDK lacks
+  the reader/writer types it needs; `authoring.sdkModel` is declared now so it's purely
+  additive once F2 bumps the SDK) and the CM6 inline-validation squiggle linter (§5.2 — a
+  bigger, riskier CM6 surface than the `EditorSuggest`-based tools above). Spec + open-decision
+  rationale: workspace repo `docs/superpowers/dse-overhaul/D9-authoring-ux-spec.md`.
+
 ### Models (`src/model/`)
 
 - **Responsibility:** Define TypeScript types and provide `parseYaml(source)` static
