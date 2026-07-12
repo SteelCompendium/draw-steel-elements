@@ -233,6 +233,71 @@ export class MarkdownRenderChild extends Component {
 
 export class Events {}
 
+// ---------------------------------------------------------------- editor surface (D9 Task 3)
+// Minimal jest-free Editor/EditorSuggest mocks — Plan 15 Task 3. The real obsidian-mock has
+// no editor surface yet (F3/F4 predate D9's authoring work); this is the smallest shape the
+// insert command + /ds suggester need, matching the pattern of the rest of this file (records
+// what it's asked to do, never simulates real CodeMirror behavior).
+export interface EditorPosition {
+	line: number;
+	ch: number;
+}
+export interface EditorSuggestTriggerInfo {
+	start: EditorPosition;
+	end: EditorPosition;
+	query: string;
+}
+export interface EditorSuggestContext {
+	editor: Editor;
+	file: TFile | null;
+	start: EditorPosition;
+	end: EditorPosition;
+	query: string;
+}
+
+/** Minimal line-buffer editor for authoring tests: records every write it is asked to make. */
+export class Editor {
+	private lines: string[];
+	cursor: EditorPosition = { line: 0, ch: 0 };
+	readonly writes: Array<{ text: string; from: EditorPosition; to: EditorPosition }> = [];
+	constructor(text = '') {
+		this.lines = text.split('\n');
+	}
+	getLine(n: number): string {
+		return this.lines[n] ?? '';
+	}
+	lineCount(): number {
+		return this.lines.length;
+	}
+	getCursor(): EditorPosition {
+		return this.cursor;
+	}
+	setCursor(pos: EditorPosition): void {
+		this.cursor = pos;
+	}
+	getValue(): string {
+		return this.lines.join('\n');
+	}
+	replaceSelection(text: string): void {
+		this.writes.push({ text, from: this.cursor, to: this.cursor });
+	}
+	replaceRange(text: string, from: EditorPosition, to: EditorPosition): void {
+		this.writes.push({ text, from, to });
+	}
+}
+
+export abstract class EditorSuggest<T> {
+	app: App;
+	context: EditorSuggestContext | null = null;
+	constructor(app: App) {
+		this.app = app;
+	}
+	abstract onTrigger(cursor: EditorPosition, editor: Editor, file: TFile | null): EditorSuggestTriggerInfo | null;
+	abstract getSuggestions(context: EditorSuggestContext): T[] | Promise<T[]>;
+	abstract renderSuggestion(value: T, el: HTMLElement): void;
+	abstract selectSuggestion(value: T, evt: unknown): void;
+}
+
 export class Plugin extends Component {
 	app: App;
 	manifest: any;
@@ -252,12 +317,21 @@ export class Plugin extends Component {
 	): void {
 		this.registeredProcessors.set(language, handler);
 	}
-	addCommand(_command: any): void {}
 	addSettingTab(_tab: any): void {}
 	async loadData(): Promise<any> {
 		return {};
 	}
 	async saveData(_data: any): Promise<void> {}
+	readonly commands: any[] = [];
+	readonly editorSuggests: any[] = [];
+	addCommand(command: any): any {
+		this.commands.push(command);
+		return command;
+	}
+	registerEditorSuggest(suggest: any): void {
+		this.editorSuggests.push(suggest);
+	}
+	registerEditorExtension(_ext: any): void {}
 }
 
 // ---------------------------------------------------------------- UI classes

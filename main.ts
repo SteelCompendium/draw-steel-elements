@@ -32,6 +32,8 @@ import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
+import { registerInsertCommands } from '@/authoring/insert';
+import { DsElementSuggest } from '@/authoring/suggest';
 import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 import { skillsElement } from '@/elements/skills/definition';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
@@ -287,6 +289,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // element.
         registerFrameworkElementDefinitions(frameworkV2.registry);
         registerFrameworkElements(this, frameworkV2);
+
+        // D9 (Plan 15 Task 3): authoring scaffolders — one Insert command per element and a
+        // /ds EditorSuggest, both pure loops over the registry (no per-element code). Editor
+        // surfaces only: insert-at-cursor, never a rewrite.
+        registerInsertCommands(this, frameworkV2.registry);
+        this.registerEditorSuggest(new DsElementSuggest(this.app, frameworkV2.registry));
 
         this.addCommand({
             id: 'download-data-md-dse',
