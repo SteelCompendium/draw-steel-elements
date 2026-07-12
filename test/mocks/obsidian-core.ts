@@ -260,6 +260,9 @@ export class Editor {
 	private lines: string[];
 	cursor: EditorPosition = { line: 0, ch: 0 };
 	readonly writes: Array<{ text: string; from: EditorPosition; to: EditorPosition }> = [];
+	/** Every setCursor() call, in order — lets tests assert placement was actually invoked
+	 * (not just that final `.cursor` happens to match by coincidence). */
+	readonly setCursorCalls: EditorPosition[] = [];
 	constructor(text = '') {
 		this.lines = text.split('\n');
 	}
@@ -269,10 +272,11 @@ export class Editor {
 	lineCount(): number {
 		return this.lines.length;
 	}
-	getCursor(): EditorPosition {
+	getCursor(_side?: 'from' | 'to' | 'head' | 'anchor'): EditorPosition {
 		return this.cursor;
 	}
 	setCursor(pos: EditorPosition): void {
+		this.setCursorCalls.push(pos);
 		this.cursor = pos;
 	}
 	getValue(): string {

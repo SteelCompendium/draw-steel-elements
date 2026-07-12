@@ -5,7 +5,7 @@
 import { EditorSuggest } from 'obsidian';
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo, TFile } from 'obsidian';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
-import { buildScaffold } from './scaffold';
+import { advancePosition, buildScaffold } from './scaffold';
 
 /** `/ds` optionally followed by a query, anchored to a word boundary so it never fires mid-word. */
 const TRIGGER = /(?:^|\s)\/ds([a-z-]*)$/i;
@@ -16,17 +16,52 @@ const TRIGGER = /(?:^|\s)\/ds([a-z-]*)$/i;
 // fenced scaffold into the middle of the existing block — corrupting it. Task 4's
 // DsSchemaSuggest is a *different* suggester that positively fires inside a fence for
 // key/enum completion; this one must do the opposite and stay out entirely.
-const OPEN_DS_FENCE = /^(?:```|~~~)\s*ds-[a-z0-9-]+\s*$/i;
-const CLOSE_FENCE = /^(?:```|~~~)\s*$/;
+//
+// A fence-marker line: an optional Obsidian callout/blockquote prefix (one or more `> `,
+// e.g. nested callouts), up to 3 leading spaces (CommonMark still treats that as
+// unindented), then 3+ backticks OR 3+ tildes (captured — group 1), then the rest of the
+// line (group 2: the info string for an opener, or nothing for a closer).
+const BQ_PREFIX = String.raw`(?:>\s?)*`;
+const LEADING_WS = '[ ]{0,3}';
+const FENCE_LINE = new RegExp(`^${BQ_PREFIX}${LEADING_WS}(\`{3,}|~{3,})(.*)$`);
+const DS_INFO = /^\s*ds-[a-z0-9-]+\s*$/i;
 
-/** True if `line` sits inside an already-opened ds-* fence (walk upward for the opener). */
+/**
+ * True if `line` sits inside an already-opened ds-* fence. This is a full top-down scan
+ * from the start of the document (not a walk-upward first-match): fences don't nest in
+ * CommonMark, so "am I inside a fence" is state that must be threaded from the top —
+ * walking upward and stopping at the nearest fence-looking line can mis-clear that state
+ * when an unclosed ds- fence is followed, further down but still above the cursor, by a
+ * fence-looking line that isn't actually a valid closer for it (wrong marker char, too
+ * short, or carrying an info string) — that line is just literal content of the still-open
+ * fence, not a real close. A real closer must match the opener's marker character and be at
+ * least as long (mirrors CommonMark: ```` ``` ```` can't close ` ```` `, and a tilde fence
+ * only closes with tildes).
+ */
 function isInsideDsFence(editor: Editor, line: number): boolean {
-	for (let i = line - 1; i >= 0; i--) {
-		const text = editor.getLine(i);
-		if (OPEN_DS_FENCE.test(text)) return true;
-		if (CLOSE_FENCE.test(text)) return false;
+	let inFence = false;
+	let isDs = false;
+	let fenceChar = '';
+	let fenceLen = 0;
+	for (let i = 0; i < line; i++) {
+		const m = FENCE_LINE.exec(editor.getLine(i));
+		if (!m) continue;
+		const marker = m[1];
+		const rest = m[2];
+		if (!inFence) {
+			inFence = true;
+			fenceChar = marker[0];
+			fenceLen = marker.length;
+			isDs = DS_INFO.test(rest);
+		} else if (marker[0] === fenceChar && marker.length >= fenceLen && rest.trim() === '') {
+			inFence = false;
+			isDs = false;
+		}
+		// else: a fence-marker-looking line while already inside an open fence, but it
+		// doesn't validly close it (wrong char, too short, or has an info string) — treat
+		// it as literal content and keep scanning in the current state.
 	}
-	return false;
+	return inFence && isDs;
 }
 
 export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
@@ -65,6 +100,9 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 
 	selectSuggestion(def: ElementDefinition, _evt: MouseEvent | KeyboardEvent): void {
 		if (!this.context) return;
-		this.context.editor.replaceRange(buildScaffold(def).text, this.context.start, this.context.end);
+		const { editor, start, end } = this.context;
+		const scaffold = buildScaffold(def);
+		editor.replaceRange(scaffold.text, start, end);
+		editor.setCursor(advancePosition(start, scaffold.text, scaffold.cursorOffset));
 	}
 }

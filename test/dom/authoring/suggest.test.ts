@@ -48,6 +48,42 @@ test('onTrigger fires again once the cursor is back outside the fence', () => {
 	expect(info!.query).toBe('roll');
 });
 
+test('onTrigger does NOT fire inside a ds-* fence indented 0-3 spaces', () => {
+	const s = makeSuggest();
+	const editor = new Editor('   ```ds-roll\n   roll: /dsroll');
+	expect(s.onTrigger({ line: 1, ch: 14 }, editor as never, null)).toBeNull();
+});
+
+test('onTrigger does NOT fire inside a ds-* fence quoted in an Obsidian callout/blockquote', () => {
+	const s = makeSuggest();
+	const editor = new Editor('> ```ds-roll\n> roll: /dsroll');
+	expect(s.onTrigger({ line: 1, ch: 14 }, editor as never, null)).toBeNull();
+});
+
+test('onTrigger does NOT fire inside a 4-backtick ds-* fence', () => {
+	const s = makeSuggest();
+	const editor = new Editor('````ds-roll\nroll: /dsroll');
+	expect(s.onTrigger({ line: 1, ch: 13 }, editor as never, null)).toBeNull();
+});
+
+test('onTrigger fires again once the cursor is back outside a properly-closed fence (regression)', () => {
+	const s = makeSuggest();
+	const editor = new Editor('```ds-roll\nroll: 2d6\n```\n/dsroll');
+	const info = s.onTrigger({ line: 3, ch: 7 }, editor as never, null);
+	expect(info).not.toBeNull();
+});
+
+test('onTrigger does NOT fire when a still-open ds- fence is followed by a line that only ' +
+	'LOOKS like a closer (too short to close a 4-backtick fence) — no first-delimiter-wins mis-clearing', () => {
+	const s = makeSuggest();
+	// The 4-backtick opener requires a 4+-backtick (or matching) closer; this bare 3-backtick
+	// line can't close it, so it's just literal content — the ds- fence is still open at
+	// line 3. A walk-upward first-match guard would wrongly stop at line 2 and report "not
+	// inside a fence".
+	const editor = new Editor('````ds-roll\nfoo: 1\n```\n/dsroll');
+	expect(s.onTrigger({ line: 3, ch: 7 }, editor as never, null)).toBeNull();
+});
+
 test('getSuggestions filters by name and alias; empty query lists all', () => {
 	const s = makeSuggest();
 	s.context = { editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: '' };
@@ -66,4 +102,18 @@ test('selectSuggestion replaces the token range with the scaffold', () => {
 	expect(editor.writes[0].from).toEqual({ line: 0, ch: 2 });
 	expect(editor.writes[0].to).toEqual({ line: 0, ch: 9 });
 	expect(editor.writes[0].text.startsWith('```ds-roll\n')).toBe(true);
+});
+
+test('selectSuggestion drops the cursor at the scaffold\'s first body character, on a non-zero line', () => {
+	const s = makeSuggest();
+	const editor = new Editor('l0\nl1\nl2\nl3\nl4\n  /dsroll');
+	// trigger token "/dsroll" starts at ch 2 on line 5 (non-zero insertion line)
+	s.context = { editor: editor as never, file: null as never, start: { line: 5, ch: 2 }, end: { line: 5, ch: 9 }, query: 'roll' };
+	const roll = s['registry'].get('roll')!;
+	s.selectSuggestion(roll, null as never);
+	// scaffold text starts "```ds-roll\n" (11 chars, one newline) — cursorOffset lands right
+	// after that newline, so the cursor moves to the next line, column 0.
+	expect(editor.setCursorCalls).toHaveLength(1);
+	expect(editor.setCursorCalls[0]).toEqual({ line: 6, ch: 0 });
+	expect(editor.cursor).toEqual({ line: 6, ch: 0 });
 });

@@ -4,6 +4,7 @@
 // optionals commented), else a placeholder. PURE: parseYaml aside, no Obsidian, no DOM,
 // no editor mutation — the editor writes happen in insert.ts/suggest.ts.
 import { parseYaml } from 'obsidian';
+import type { EditorPosition } from 'obsidian';
 import type { ElementDefinition } from '@/framework/registry';
 
 export interface Scaffold {
@@ -89,6 +90,27 @@ export function scaffoldFromSchema(schemaYaml: string | undefined): string {
 		for (const n of optional) emit(n, true);
 	}
 	return lines.join('\n');
+}
+
+/**
+ * Walk `text` forward from `base` by `offset` characters (pure string math, no editor
+ * access): each `\n` bumps the line and resets `ch` to 0, everything else advances `ch`.
+ * Used to turn a Scaffold's `cursorOffset` into the concrete EditorPosition to drop the
+ * cursor at, relative to wherever the scaffold text was actually inserted.
+ */
+export function advancePosition(base: EditorPosition, text: string, offset: number): EditorPosition {
+	let line = base.line;
+	let ch = base.ch;
+	const end = Math.min(offset, text.length);
+	for (let i = 0; i < end; i++) {
+		if (text[i] === '\n') {
+			line++;
+			ch = 0;
+		} else {
+			ch++;
+		}
+	}
+	return { line, ch };
 }
 
 /** Build the ready-to-insert scaffold for an element. */

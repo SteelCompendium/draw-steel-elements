@@ -35,3 +35,15 @@ test('the command callback inserts the element scaffold at the cursor only', () 
 	expect(editor.writes[0].from).toEqual(editor.writes[0].to); // pure insert, no range replace
 	expect(editor.getValue()).toBe('existing line'); // mock records, never mangles
 });
+
+test('the command callback drops the cursor at the scaffold\'s first body character, on a non-zero line', () => {
+	const editor = new Editor('l0\nl1\nl2\nl3\nl4\nline 5 xyz');
+	editor.cursor = { line: 5, ch: 7 }; // insertion point captured BEFORE the write
+	const def = makeRegistry().get('roll')!;
+	insertScaffold(editor as never, def);
+	// scaffold text starts "```ds-roll\n" (11 chars, one newline) — cursorOffset lands right
+	// after that newline, so the cursor moves to the next line, column 0.
+	expect(editor.setCursorCalls).toHaveLength(1);
+	expect(editor.setCursorCalls[0]).toEqual({ line: 6, ch: 0 });
+	expect(editor.cursor).toEqual({ line: 6, ch: 0 });
+});

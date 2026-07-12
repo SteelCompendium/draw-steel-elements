@@ -3,11 +3,20 @@
 // existing content (editor-mutation safety, Global Constraints / OD-D9-12).
 import type { Editor, Plugin } from 'obsidian';
 import type { ElementDefinition, ElementRegistry } from '@/framework/registry';
-import { buildScaffold } from './scaffold';
+import { advancePosition, buildScaffold } from './scaffold';
 
-/** Insert the element's scaffold at the cursor (or over the current selection). */
+/**
+ * Insert the element's scaffold at the cursor (or over the current selection), then drop
+ * the cursor at the scaffold's `cursorOffset` (its first body character). The insertion
+ * point must be captured with getCursor('from') BEFORE the write: replaceSelection()
+ * replaces [from, to), and once it runs, getCursor() reports the post-insertion position,
+ * not where the text landed.
+ */
 export function insertScaffold(editor: Editor, def: ElementDefinition): void {
-	editor.replaceSelection(buildScaffold(def).text);
+	const insertionPoint = editor.getCursor('from');
+	const scaffold = buildScaffold(def);
+	editor.replaceSelection(scaffold.text);
+	editor.setCursor(advancePosition(insertionPoint, scaffold.text, scaffold.cursorOffset));
 }
 
 /** Register `insert-<id>` for every element in the registry (loop, no per-element code). */
