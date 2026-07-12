@@ -22,12 +22,27 @@ export function wrapFence(alias: string, body: string): string {
 /** Placeholder value for a property, by JSON-Schema node: default → enum[0] → typed stub. */
 function stubFor(prop: unknown): string {
 	if (!prop || typeof prop !== 'object') return '""';
-	const p = prop as { default?: unknown; enum?: unknown[]; type?: string };
+	const p = prop as {
+		default?: unknown;
+		enum?: unknown[];
+		type?: string;
+		minimum?: number;
+		exclusiveMinimum?: number;
+	};
 	if ('default' in p) return typeof p.default === 'string' ? p.default : JSON.stringify(p.default);
-	if (Array.isArray(p.enum) && p.enum.length > 0) return JSON.stringify(p.enum[0]);
+	if (Array.isArray(p.enum) && p.enum.length > 0) {
+		// Same plain-scalar treatment as a string default: an unquoted string enum value
+		// reads as authored YAML, not a JSON.stringify'd literal.
+		const first = p.enum[0];
+		return typeof first === 'string' ? first : JSON.stringify(first);
+	}
 	switch (p.type) {
 		case 'integer':
 		case 'number':
+			// Respect a declared floor: a bare 0 would be schema-invalid out of the box
+			// for e.g. `minimum: 1` fields.
+			if (typeof p.minimum === 'number') return String(p.minimum);
+			if (typeof p.exclusiveMinimum === 'number') return String(p.exclusiveMinimum + 1);
 			return '0';
 		case 'boolean':
 			return 'false';
