@@ -11,6 +11,32 @@ import type { ReferenceService } from './seams/refs';
 /** Strongest behavioral requirement an element makes — drives pipeline wiring (F1 §1.3). */
 export type ElementShape = 'static' | 'interactive' | 'persisted';
 
+/** Form control kind the schema-driven form maps a field to (D9). */
+export type FormWidget = 'text' | 'textarea' | 'number' | 'toggle' | 'select';
+
+/** Per-field UI override for the generated form; the schema is the fallback for each. */
+export interface AuthoringFieldHint {
+	label?: string;
+	widget?: FormWidget;
+	order?: number;
+	hidden?: boolean;
+	help?: string;
+}
+
+/**
+ * D9 authoring-tool hints. Absence changes nothing (scaffold/form still derive from the
+ * schema); presence enriches. Purely additive — this is the ONLY change D9 makes to an F1
+ * interface (F1 reserved the slot at registry.ts as `authoring?: unknown`).
+ */
+export interface AuthoringHint {
+	/** Curated starter block BODY (YAML, no fences). Overrides the schema-derived scaffold. */
+	example?: string;
+	/** SDK model this element parses — routes the (deferred) text importer. Declared now. */
+	sdkModel?: 'statblock' | 'feature' | 'featureblock';
+	/** Per-field UI overrides for the form; schema is the fallback for every field. */
+	fields?: Record<string, AuthoringFieldHint>;
+}
+
 /**
  * Declarative definition of one DSE element type (F1 §3.1). Authored by element code
  * (`elements/<name>/definition.ts`) and passed to `ElementRegistry.register()` once at
@@ -52,11 +78,10 @@ export interface ElementDefinition<M = unknown> {
 	/** Suppress the reading-mode click shield. Default false (shield on). */
 	noClickShield?: boolean;
 	/**
-	 * Additive optional authoring-tool hint slot (D9 fills this contract; not specified by
-	 * F1). Left untyped on purpose — F1 only needs the field to exist so downstream defs can
-	 * start populating it without a breaking interface change later.
+	 * D9 authoring-tool hints (curated example, importer sdk model, per-field form UI).
+	 * Additive + optional — absence changes nothing; every tool falls back to the schema.
 	 */
-	authoring?: unknown;
+	authoring?: AuthoringHint;
 }
 
 /**
