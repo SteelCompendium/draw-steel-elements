@@ -54,13 +54,15 @@ export class ElementStageError extends Error {
  * contract), so a strict prefs.get() here would break every such harness on every render.
  * Treat "not registered" the same as "off" — matches the pref's own default and keeps the
  * pipeline robust against any caller that hasn't wired the full catalog.
+ *
+ * Minor fix (review round 1): a surgical `descriptors().some(...)` presence check —
+ * `PreferenceStore.descriptors()` never throws (BUILTIN_DESCRIPTORS is always seeded in
+ * the constructor), so there is no need to blanket try/catch prefs.get() and risk masking
+ * an unrelated bug behind "pencil hidden".
  */
 function isAuthoringControlsOn(prefs: PreferenceStore): boolean {
-	try {
-		return prefs.get('authoringControls') === true;
-	} catch {
-		return false;
-	}
+	if (!prefs.descriptors().some((d) => d.key === 'authoringControls')) return false;
+	return prefs.get('authoringControls') === true;
 }
 
 /** Runs `fn`, tagging any thrown error with `stage` (unless already tagged). */
@@ -270,7 +272,7 @@ export class ElementPipeline {
 						icon: 'pencil',
 						label: `Edit ${def.name}`,
 						variant: 'ghost',
-						onClick: () => openFormEditor(cx, def, source, this.deps.validation),
+						onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
 					},
 					view,
 				);
