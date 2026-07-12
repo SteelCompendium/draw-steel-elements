@@ -53,6 +53,7 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		rollerEngine: null,
 		rollClickToRoll: null,
 		webLinkFallback: null,
+		authoringControls: null,
 	});
 });
 

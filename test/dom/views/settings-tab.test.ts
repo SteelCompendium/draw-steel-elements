@@ -33,7 +33,9 @@ describe('D4 §4 — DseSettingTab', () => {
 		const headings = Setting.created.filter((s) => s.heading).map((s) => s.name);
 		// D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine, Task 4 the
 		// master switch + rollClickToRoll; only webLinkFallback (F2) stays hidden.
-		expect(headings).toEqual(['Appearance', 'Statblock display', 'Element defaults', 'Rolling']);
+		// D9 (Plan 15 Task 5) adds the Authoring group (authoringControls, default OFF —
+		// row is NOT hidden, so it renders a heading).
+		expect(headings).toEqual(['Appearance', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring']);
 		const names = Setting.created.map((s) => s.name);
 		expect(names).toContain('Enable rolling');
 		expect(names).toContain('Roller');

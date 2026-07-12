@@ -42,6 +42,8 @@ declare module '../framework/seams/prefs' {
 		rollClickToRoll: boolean;
 		// —— References (behavioral; F2 consumes — row hidden until it ships) ——
 		webLinkFallback: boolean;
+		// —— Authoring (behavioral; D9 — gates the reading-mode form pencil) ——
+		authoringControls: boolean;
 	}
 }
 
@@ -50,7 +52,8 @@ export type PrefGroup =
 	| 'Statblock display'
 	| 'Element defaults'
 	| 'Rolling'
-	| 'References';
+	| 'References'
+	| 'Authoring';
 
 /** Section order in the settings tab. */
 export const GROUP_ORDER: readonly PrefGroup[] = [
@@ -59,6 +62,7 @@ export const GROUP_ORDER: readonly PrefGroup[] = [
 	'Element defaults',
 	'Rolling',
 	'References',
+	'Authoring',
 ];
 
 /** D4 §4.1 — the finalized shape of PrefDescriptor.ui (F1 typed it `unknown`). */
@@ -191,6 +195,15 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'References', hidden: true, label: 'Fall back to steelcompendium.io links', control: 'toggle',
 			help: "When an SCC link isn't found in your vault, open it on the website (on click only).",
+		},
+	}),
+
+	// —— Authoring (D9 — the reading-mode form pencil) ——
+	d({
+		key: 'authoringControls', default: false,
+		ui: {
+			group: 'Authoring', label: 'Show edit button on rendered blocks', control: 'toggle',
+			help: 'Adds a pencil to each rendered Draw Steel block that opens a form editor (writes back through the normal save path). Off — the default — renders blocks exactly as before; the Insert commands and /ds autocomplete work regardless of this setting.',
 		},
 	}),
 ];

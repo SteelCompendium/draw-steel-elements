@@ -18,6 +18,8 @@ import type { RollService } from './roll/service';
 import type { ValidationService, ValidationResult } from './validation';
 import type { SessionStore } from './session';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
+import { iconButton } from './kit/iconButton';
+import { openFormEditor } from '@/authoring/FormModal';
 
 /** The four failure stages renderErrorCard can report (F1 §3.8). */
 export type ErrorStage = 'parse' | 'schema' | 'reference' | 'render';
@@ -40,6 +42,24 @@ export class ElementStageError extends Error {
 		this.name = 'ElementStageError';
 		this.stage = stage;
 		this.cause = cause;
+	}
+}
+
+/**
+ * D9 (Plan 15 Task 5): defensive read of the authoringControls pref. Production always
+ * registers the full DSE_PREF_DESCRIPTORS catalog at plugin onload (main.ts), but several
+ * existing test harnesses build a bare PreferenceStore (createPreferenceStore + only the
+ * BUILTIN theme descriptor) to exercise a single element's pipeline in isolation — those
+ * never describe() this pref. PreferenceStore.get() throws for an undescribed key (§3.6
+ * contract), so a strict prefs.get() here would break every such harness on every render.
+ * Treat "not registered" the same as "off" — matches the pref's own default and keeps the
+ * pipeline robust against any caller that hasn't wired the full catalog.
+ */
+function isAuthoringControlsOn(prefs: PreferenceStore): boolean {
+	try {
+		return prefs.get('authoringControls') === true;
+	} catch {
+		return false;
 	}
 }
 
@@ -238,6 +258,23 @@ export class ElementPipeline {
 			}
 			host.addChild(view);
 			await runStageAsync('render', () => view.mount(root, model));
+
+			// D9 (Plan 15 Task 5): opt-in reading-mode edit affordance. Default OFF
+			// (authoringControls) ⇒ this branch never runs ⇒ rendered DOM is unchanged.
+			// Gated on canPersist (never on embeds/exports); writes go through the SAME
+			// host.replaceSource path (no parallel writer).
+			if (cx.host.canPersist && isAuthoringControlsOn(prefs)) {
+				iconButton(
+					root,
+					{
+						icon: 'pencil',
+						label: `Edit ${def.name}`,
+						variant: 'ghost',
+						onClick: () => openFormEditor(cx, def, source, this.deps.validation),
+					},
+					view,
+				);
+			}
 		} catch (error) {
 			// ONE error boundary for the whole pipeline (F1 §2.4) — no per-element
 			// try/catch. renderErrorCard always clears root first, so a render-stage
