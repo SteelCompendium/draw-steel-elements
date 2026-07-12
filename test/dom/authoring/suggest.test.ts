@@ -48,6 +48,16 @@ test('onTrigger fires again once the cursor is back outside the fence', () => {
 	expect(info!.query).toBe('roll');
 });
 
+// Carried fix from Task 3's re-review: the guard must be fence-TYPE-agnostic. Typing "/ds"
+// inside a non-ds fence (e.g. ```js) must still be suppressed — accepting the suggestion
+// would replaceRange a ds-* scaffold into the middle of an unrelated fenced code block,
+// corrupting it just as badly as doing so inside a ds-* fence would.
+test('onTrigger does NOT fire inside a non-ds fence (e.g. ```js) — fence-type-agnostic guard', () => {
+	const s = makeSuggest();
+	const editor = new Editor('```js\nconst x = /dsroll');
+	expect(s.onTrigger({ line: 1, ch: 15 }, editor as never, null)).toBeNull();
+});
+
 test('onTrigger does NOT fire inside a ds-* fence indented 0-3 spaces', () => {
 	const s = makeSuggest();
 	const editor = new Editor('   ```ds-roll\n   roll: /dsroll');
