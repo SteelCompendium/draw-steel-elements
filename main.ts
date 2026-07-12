@@ -34,6 +34,7 @@ import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
 import { registerInsertCommands } from '@/authoring/insert';
 import { DsElementSuggest } from '@/authoring/suggest';
+import { DsSchemaSuggest } from '@/authoring/schemaSuggest';
 import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 import { skillsElement } from '@/elements/skills/definition';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
@@ -295,6 +296,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // surfaces only: insert-at-cursor, never a rewrite.
         registerInsertCommands(this, frameworkV2.registry);
         this.registerEditorSuggest(new DsElementSuggest(this.app, frameworkV2.registry));
+
+        // D9 (Plan 15 Task 4): key/enum autocomplete inside an already-open ds-* fence —
+        // the inverse trigger of DsElementSuggest above (that one suppresses itself inside
+        // any fence; this one only fires inside a ds-* fence). Registered as a second,
+        // independent EditorSuggest.
+        this.registerEditorSuggest(new DsSchemaSuggest(this.app, frameworkV2.registry));
 
         this.addCommand({
             id: 'download-data-md-dse',
