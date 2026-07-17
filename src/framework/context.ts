@@ -17,6 +17,7 @@ import type { RollService } from './roll/service';
 import type { SessionStore } from './session';
 import type { DSESettings } from '@model/Settings';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
+import type { CompendiumIndex } from '@/services/CompendiumIndex';
 
 // D5 (Plan 14): the F1-era stub is gone — the REAL RollService lives in
 // framework/roll/service.ts and is re-exported here so F1-era importers
@@ -62,6 +63,16 @@ export interface RenderContext {
 	 * no-ops the rewrite pass when this is absent.
 	 */
 	readonly sccAnchors?: SccAnchorResolver;
+	/**
+	 * D6 Task 3 (spec §1.2) — the typed-model compendium accessor (D6 Task 2). Threaded
+	 * through so `RefUnwrapView` can resolve a whole-block reference (bare slug -> code
+	 * via `resolveSlug`, typed model + source via `getEntity`) without going back through
+	 * `SccRefProvider` (which throws on web/unresolved — recon gotcha (d)). Optional so
+	 * bare `createRenderContext` callers (tests, and any harness that doesn't care about
+	 * compendium references) stay valid; `RefUnwrapView` degrades to a "compendium not
+	 * installed" card when absent.
+	 */
+	readonly compendium?: CompendiumIndex;
 }
 
 /**
@@ -82,6 +93,7 @@ export function createRenderContext(args: {
 	session: SessionStore;
 	roll?: RollService;
 	sccAnchors?: SccAnchorResolver;
+	compendium?: CompendiumIndex;
 }): RenderContext {
 	const context: RenderContext = {
 		app: args.app,
@@ -95,6 +107,7 @@ export function createRenderContext(args: {
 		session: args.session,
 		roll: args.roll,
 		sccAnchors: args.sccAnchors,
+		compendium: args.compendium,
 	};
 
 	// Freeze to enforce immutability at runtime.

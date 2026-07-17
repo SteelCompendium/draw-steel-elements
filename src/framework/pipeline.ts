@@ -18,6 +18,7 @@ import type { RollService } from './roll/service';
 import type { ValidationService, ValidationResult } from './validation';
 import type { SessionStore } from './session';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
+import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -164,6 +165,11 @@ export interface ElementPipelineServices {
 	 *  own scc.v1: anchors. Optional: harnesses/tests that don't care about scc links
 	 *  omit it and renderMarkdown simply skips the rewrite pass. */
 	sccAnchors?: SccAnchorResolver;
+	/** D6 Task 3 (spec §1.2) — threaded into every RenderContext, symmetric with
+	 *  sccAnchors, so RefUnwrapView can resolve whole-block references. Optional:
+	 *  harnesses/tests that don't care about compendium references omit it and
+	 *  RefUnwrapView degrades to a "compendium not installed" card. */
+	compendium?: CompendiumIndex;
 }
 
 export interface ElementPipelineDeps extends ElementPipelineServices {
@@ -182,10 +188,23 @@ export class ElementPipeline {
 	constructor(private readonly deps: ElementPipelineDeps) {}
 
 	async run<M>(def: ElementDefinition<M>, source: string, host: BlockHost): Promise<void> {
-		const { app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors } = this.deps;
+		const { app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors, compendium } =
+			this.deps;
 
 		// Step 1 (F1 §2.4): build the RenderContext for this block instance.
-		const cx = createRenderContext({ app, plugin, settings, host, theme, prefs, refs, session, roll, sccAnchors });
+		const cx = createRenderContext({
+			app,
+			plugin,
+			settings,
+			host,
+			theme,
+			prefs,
+			refs,
+			session,
+			roll,
+			sccAnchors,
+			compendium,
+		});
 
 		// The root must exist before ANY step below: renderErrorCard (F1 §3.8) needs
 		// somewhere to render even a step-2 YAML parse failure. data-dse-element is
