@@ -34,13 +34,14 @@ describe('D4 §4 — DseSettingTab', () => {
 		tab.display();
 		const headings = Setting.created.filter((s) => s.heading).map((s) => s.name);
 		// D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine, Task 4 the
-		// master switch + rollClickToRoll; the webLinkFallback PREFS-CATALOG row stays
-		// hidden forever (F2 Task 11 §note below ships the equivalent control as an
-		// OPERATIONAL setting instead — see delta #3 — so 'References' never gets a
-		// heading here). D9 (Plan 15 Task 5) adds the Authoring group (authoringControls,
-		// default OFF — row is NOT hidden, so it renders a heading). F2 Task 11 appends
-		// the operational headings (Compendium, Links, Initiative tracker) after the
-		// generated pref sections.
+		// master switch + rollClickToRoll. F2 Task 11 shipped the SCC web-fallback
+		// control as an OPERATIONAL setting (below) instead of the dead prefs-catalog
+		// 'References' group scaffolding, which the F2 final-review fix wave deleted
+		// outright (webLinkFallback descriptor + the now-empty group) — so no
+		// 'References' heading ever appears here. D9 (Plan 15 Task 5) adds the
+		// Authoring group (authoringControls, default OFF — row is NOT hidden, so it
+		// renders a heading). F2 Task 11 appends the operational headings (Compendium,
+		// Links, Initiative tracker) after the generated pref sections.
 		expect(headings).toEqual([
 			'Appearance', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
@@ -49,9 +50,9 @@ describe('D4 §4 — DseSettingTab', () => {
 		expect(names).toContain('Enable rolling');
 		expect(names).toContain('Roller');
 		expect(names).toContain('Click ability to roll');
-		// F2 Task 11: this label now appears exactly once — the OPERATIONAL sccWebFallback
-		// row, not the still-hidden prefs-catalog webLinkFallback descriptor (dead scaffolding,
-		// intentionally left unrendered per delta #3).
+		// F2 Task 11: this label appears exactly once — the OPERATIONAL sccWebFallback
+		// row (the prefs-catalog webLinkFallback descriptor it used to also live behind
+		// is gone entirely as of the F2 final-review fix wave).
 		expect(names.filter((n) => n === 'Fall back to steelcompendium.io links')).toHaveLength(1);
 		// operational carry-over intact (F2 Task 11 renamed to sentence case):
 		expect(names).toContain('Release');

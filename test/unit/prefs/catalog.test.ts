@@ -52,22 +52,16 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		rollingEnabled: null,
 		rollerEngine: null,
 		rollClickToRoll: null,
-		webLinkFallback: null,
 		authoringControls: null,
 	});
 });
 
-test('every descriptor carries a PrefUi in a known group; unshipped-consumer rows are hidden', () => {
+test('every descriptor carries a PrefUi in a known group; no hidden rows remain (F2 fix wave removed the dead webLinkFallback scaffolding — sccWebFallback is the real, operational setting)', () => {
 	for (const d of DSE_PREF_DESCRIPTORS) {
 		const ui = prefUi(d);
 		expect(ui).toBeDefined();
 		expect(GROUP_ORDER).toContain(ui!.group);
-	}
-	// The Rolling rows all went live with the D5 feature integration (Plan 14
-	// Task 4); webLinkFallback stays hidden until F2 ships.
-	for (const key of ['webLinkFallback']) {
-		const d = DSE_PREF_DESCRIPTORS.find((x) => (x.key as string) === key)!;
-		expect(prefUi(d)!.hidden).toBe(true);
+		expect(ui!.hidden).toBeFalsy();
 	}
 });
 

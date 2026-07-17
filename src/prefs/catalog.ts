@@ -40,8 +40,6 @@ declare module '../framework/seams/prefs' {
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
 		rollClickToRoll: boolean;
-		// —— References (behavioral; F2 consumes — row hidden until it ships) ——
-		webLinkFallback: boolean;
 		// —— Authoring (behavioral; D9 — gates the reading-mode form pencil) ——
 		authoringControls: boolean;
 	}
@@ -52,7 +50,6 @@ export type PrefGroup =
 	| 'Statblock display'
 	| 'Element defaults'
 	| 'Rolling'
-	| 'References'
 	| 'Authoring';
 
 /** Section order in the settings tab. */
@@ -61,7 +58,6 @@ export const GROUP_ORDER: readonly PrefGroup[] = [
 	'Statblock display',
 	'Element defaults',
 	'Rolling',
-	'References',
 	'Authoring',
 ];
 
@@ -186,15 +182,6 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Rolling', label: 'Click ability to roll', control: 'toggle',
 			help: 'When rolling is enabled, clicking a power-roll tier row rolls it. The Roll button always works regardless.',
-		},
-	}),
-
-	// —— References (hidden until F2 ships) ——
-	d({
-		key: 'webLinkFallback', default: true,
-		ui: {
-			group: 'References', hidden: true, label: 'Fall back to steelcompendium.io links', control: 'toggle',
-			help: "When an SCC link isn't found in your vault, open it on the website (on click only).",
 		},
 	}),
 
