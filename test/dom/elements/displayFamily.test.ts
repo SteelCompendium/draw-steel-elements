@@ -174,12 +174,18 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 		)!;
 		expect(projectRow.querySelector('.dse-card__row-value')!.textContent).toContain('150');
 
-		const effectRow = Array.from(root.querySelectorAll('.dse-card__row')).find(
-			(el) => el.querySelector('.dse-card__row-label')!.textContent === 'Effect',
-		)!;
-		expect(effectRow.querySelector('.dse-card__row-value')!.textContent).toContain('cold immunity');
+		// D6 Task 7 review fix (Finding 2): the Effect row's value re-states verbatim as a
+		// labeled sentence in `content` (`m.effect` === the "**Effect:**" line's text once
+		// normalized) — the duplication guard suppresses the row so the effect prose renders
+		// exactly once, via body. `Project`'s row value is a `·`-joined synthesis of three
+		// separate fields (Source/Roll Characteristic/Goal) that never appears in that exact
+		// joined form in `content`, so it isn't (and shouldn't be) suppressed — see the
+		// dedicated duplication-guard describe block below for the exact-once assertion.
+		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
+		expect(rowLabels).not.toContain('Effect');
 
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Anjali sigil');
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('cold immunity');
 	});
 });
 
@@ -214,7 +220,7 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('On Humans');
 	});
 
-	test('ds-culture: inline example.yaml renders title/flavor/body with NO rows (every Culture row field is unpopulated corpus-wide)', async () => {
+	test('ds-culture: inline example.yaml renders title/body with NO rows (every Culture row field is unpopulated corpus-wide) and NO separate flavor slot (D6 Task 7 review fix: flavor duplicates content\'s lead paragraph)', async () => {
 		const host = inlineHost('ds-culture');
 		await new ElementPipeline(makeInlineDeps()).run(cultureElement, cultureExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
@@ -222,11 +228,16 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Urban');
 		expect(root.querySelector('.dse-card__rows')).toBeNull();
-		expect(root.querySelector('.dse-card__flavor')!.textContent).toContain('centered in a city');
+		// D6 Task 7 review fix (Finding 1): `flavor` === (a markdown-free copy of) content's
+		// lead paragraph in the real corpus — the duplication guard suppresses the redundant
+		// `.dse-card__flavor` slot so the prose renders exactly once, via body. See the
+		// dedicated duplication-guard describe block below for the exact-once assertion.
+		expect(root.querySelector('.dse-card__flavor')).toBeNull();
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('centered in a city');
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Skill Options');
 	});
 
-	test('ds-career: inline example.yaml renders title/badges/rows; Skills and Perk rows render their inline SCC links through renderMarkdown', async () => {
+	test('ds-career: inline example.yaml renders title/badges; Skills and Perk rows are suppressed (D6 Task 7 review fix: both duplicate content verbatim) and their markdown renders once, via body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-career');
 		await new ElementPipeline(makeInlineDeps()).run(careerElement, careerExample, host);
@@ -237,22 +248,23 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		const badgeTexts = Array.from(root.querySelectorAll('.dse-card__badge')).map((el) => el.textContent);
 		expect(badgeTexts).toEqual(expect.arrayContaining(['Renown +1', 'Wealth +1']));
 
-		const rowByLabel = (label: string) =>
-			Array.from(root.querySelectorAll('.dse-card__row')).find(
-				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
-			)!;
-		const skillsMarkdown =
-			'Two skills from the [interpersonal skill group](scc.v1:mcdm.heroes.v1/skill.group/interpersonal) (*Quick Build:* [Lead](scc.v1:mcdm.heroes.v1/skill.interpersonal/lead), [Lie](scc.v1:mcdm.heroes.v1/skill.interpersonal/lie).)';
-		expect(rowByLabel('Skills').querySelector('.dse-card__row-value')!.textContent).toBe(skillsMarkdown);
-		const perkMarkdown =
-			'One interpersonal perk (*Quick Build:* [Engrossing Monologue](scc.v1:mcdm.heroes.v1/perk/engrossing-monologue).)';
-		expect(rowByLabel('Perk').querySelector('.dse-card__row-value')!.textContent).toBe(perkMarkdown);
-		expect(renderSpy.mock.calls.some((c) => c[1] === skillsMarkdown)).toBe(true);
-		expect(renderSpy.mock.calls.some((c) => c[1] === perkMarkdown)).toBe(true);
+		// D6 Task 7 review fix (Finding 1): `m.skills`/`m.perk` re-state verbatim as labeled
+		// sentences in `content` — the duplication guard suppresses both rows so the prose
+		// (with its inline SCC links) renders exactly once, via body, instead of once as a
+		// row AND again in body. See the dedicated duplication-guard describe block below
+		// for the exact-once assertion.
+		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
+		expect(rowLabels).not.toContain('Skills');
+		expect(rowLabels).not.toContain('Perk');
+		expect(renderSpy.mock.calls.some((c) => typeof c[1] === 'string' && c[1].includes('[Lead](scc.v1:'))).toBe(
+			true,
+		);
+		expect(
+			renderSpy.mock.calls.some((c) => typeof c[1] === 'string' && c[1].includes('[Engrossing Monologue](scc.v1:')),
+		).toBe(true);
 
 		// inciting_incidents is never populated in the real corpus (embedded in `content`
 		// prose instead) — the row is correctly absent, not rendering "undefined".
-		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
 		expect(rowLabels).not.toContain('Inciting incidents');
 	});
 
@@ -283,7 +295,7 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		);
 	});
 
-	test('ds-title: inline example.yaml renders title/echelon badge/rows; Prerequisite and Effect render through renderMarkdown', async () => {
+	test('ds-title: inline example.yaml renders title/echelon badge; Prerequisite, Effect, and flavor are suppressed (D6 Task 7 review fix: all three duplicate content verbatim), Prerequisite renders once, via body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-title');
 		await new ElementPipeline(makeInlineDeps()).run(titleElement, titleExample, host);
@@ -293,20 +305,24 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Back From the Grave');
 		expect(root.querySelector('.dse-card__badge--echelon')!.textContent).toBe('Echelon 3');
 
-		const rowByLabel = (label: string) =>
-			Array.from(root.querySelectorAll('.dse-card__row')).find(
-				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
-			)!;
-		const prereqMarkdown = "You die at the hands of your greatest foe, that foe still lives, and you aren't a [revenant](scc.v1:mcdm.heroes.v1/ancestry/revenant).";
-		expect(rowByLabel('Prerequisite').querySelector('.dse-card__row-value')!.textContent).toBe(prereqMarkdown);
-		expect(renderSpy.mock.calls.some((c) => c[1] === prereqMarkdown)).toBe(true);
-
-		// benefits[] is never populated in the real corpus (0/66 titles) — correctly absent.
+		// D6 Task 7 review fix (Finding 1): `flavor` and `m.prerequisite`/`m.effect` all
+		// re-state verbatim in `content` — the duplication guard suppresses the flavor slot
+		// and both rows so the prose (with its inline SCC links) renders exactly once, via
+		// body. See the dedicated duplication-guard describe block below for the exact-once
+		// assertion.
+		expect(root.querySelector('.dse-card__flavor')).toBeNull();
 		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
+		expect(rowLabels).not.toContain('Prerequisite');
+		expect(rowLabels).not.toContain('Effect');
+		// benefits[] is never populated in the real corpus (0/66 titles) — correctly absent.
 		expect(rowLabels).not.toContain('Benefits');
+
+		const prereqMarkdown = "You die at the hands of your greatest foe, that foe still lives, and you aren't a [revenant](scc.v1:mcdm.heroes.v1/ancestry/revenant).";
+		expect(renderSpy.mock.calls.some((c) => typeof c[1] === 'string' && c[1].includes(prereqMarkdown))).toBe(true);
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('restored to life');
 	});
 
-	test('ds-perk: inline example.yaml renders title/flavor/body, no Prerequisites row (unpopulated)', async () => {
+	test('ds-perk: inline example.yaml renders title/body, no flavor slot (D6 Task 7 review fix: flavor duplicates content) and no Prerequisites row (unpopulated)', async () => {
 		const host = inlineHost('ds-perk');
 		await new ElementPipeline(makeInlineDeps()).run(perkElement, perkExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
@@ -314,10 +330,11 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Familiar');
 		expect(root.querySelector('.dse-card__rows')).toBeNull();
+		expect(root.querySelector('.dse-card__flavor')).toBeNull();
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Familiar Statblock');
 	});
 
-	test('ds-complication: inline example.yaml renders title/rows; Benefit and Drawback render through renderMarkdown', async () => {
+	test('ds-complication: inline example.yaml renders title; Benefit and Drawback rows are suppressed (D6 Task 7 review fix: both duplicate content verbatim) and render once, via body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-complication');
 		await new ElementPipeline(makeInlineDeps()).run(complicationElement, complicationExample, host);
@@ -326,16 +343,115 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Chosen One');
 
-		const rowByLabel = (label: string) =>
-			Array.from(root.querySelectorAll('.dse-card__row')).find(
-				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
-			)!;
+		// D6 Task 7 review fix (Finding 1): `flavor`, `m.benefit`, and `m.drawback` all
+		// re-state verbatim in `content` — the duplication guard suppresses the flavor slot
+		// and both rows so the prose (with its inline SCC links) renders exactly once, via
+		// body. See the dedicated duplication-guard describe block below for the exact-once
+		// assertion.
+		expect(root.querySelector('.dse-card__flavor')).toBeNull();
+		expect(root.querySelector('.dse-card__rows')).toBeNull();
+
 		const benefitMarkdown =
 			"You have 3 destiny points. Whenever you spend your [Heroic Resource](scc.v1:mcdm.heroes.v1/rule.resource/heroic-resource) for your class, you can spend 1 or more destiny points instead. Each time you earn a [Victory](scc.v1:mcdm.heroes.v1/rule.resource/victories), you regain 1 destiny point.";
-		expect(rowByLabel('Benefit').querySelector('.dse-card__row-value')!.textContent).toBe(benefitMarkdown);
-		expect(renderSpy.mock.calls.some((c) => c[1] === benefitMarkdown)).toBe(true);
-		const drawbackText = rowByLabel('Drawback').querySelector('.dse-card__row-value')!.textContent;
-		expect(drawbackText).toContain('psychic damage');
+		expect(renderSpy.mock.calls.some((c) => typeof c[1] === 'string' && c[1].includes(benefitMarkdown))).toBe(true);
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('psychic damage');
+	});
+});
+
+// D6 Task 7 review fix (Finding 1/2): the direct regression coverage the review asked for —
+// for each affected type, assert the previously-duplicated text (flavor's lead paragraph,
+// and — where applicable — a duplicated row's value) appears EXACTLY ONCE in the whole
+// rendered card, not zero (over-suppressed) and not two-plus (the original bug). Comparison
+// normalizes whitespace AND markdown (link syntax stripped to link text, emphasis markers
+// stripped) — mirroring CardLayout.ts's own `normalizeForDuplicateCheck` — because the DOM
+// text content is the RAW markdown string (the jest MarkdownRenderer mock appends markdown
+// verbatim as a text node, per F3 §4.2), so a duplicated sentence can appear once as plain
+// text (a row/flavor field) and once wrapped in `[text](url)` link syntax (inside `content`).
+describe('D6 Task 7 review fix: previously-duplicated flavor/row text appears exactly once per card', () => {
+	function normalizeForCount(s: string): string {
+		return s
+			.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+			.replace(/[*_`]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.toLowerCase();
+	}
+
+	function countOccurrences(haystack: string, needle: string): number {
+		const h = normalizeForCount(haystack);
+		const n = normalizeForCount(needle);
+		if (!n) return 0;
+		let count = 0;
+		let from = 0;
+		for (;;) {
+			const at = h.indexOf(n, from);
+			if (at === -1) break;
+			count++;
+			from = at + n.length;
+		}
+		return count;
+	}
+
+	test('ds-class: the flavor/opening paragraph appears exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-class');
+		await new ElementPipeline(makeInlineDeps()).run(classElement, classExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const snippet =
+			'Strategist. Defender. Leader. With weapon in hand, you lead allies into the maw of battle, barking out commands';
+		expect(countOccurrences(root.textContent ?? '', snippet)).toBe(1);
+	});
+
+	test('ds-culture: the flavor/opening paragraph appears exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-culture');
+		await new ElementPipeline(makeInlineDeps()).run(cultureElement, cultureExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const snippet = 'An urban culture is always centered in a city. Such a culture might arise within the walls of';
+		expect(countOccurrences(root.textContent ?? '', snippet)).toBe(1);
+	});
+
+	test('ds-perk: the flavor/opening paragraph appears exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-perk');
+		await new ElementPipeline(makeInlineDeps()).run(perkElement, perkExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const snippet = 'A supernatural spirit who has taken the form of a specific small animal or animated object';
+		expect(countOccurrences(root.textContent ?? '', snippet)).toBe(1);
+	});
+
+	test('ds-complication: flavor, Benefit, and Drawback each appear exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-complication');
+		await new ElementPipeline(makeInlineDeps()).run(complicationElement, complicationExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const text = root.textContent ?? '';
+		expect(countOccurrences(text, 'Perhaps the stars marked you out at birth')).toBe(1);
+		expect(countOccurrences(text, 'You have 3 destiny points')).toBe(1);
+		expect(countOccurrences(text, "you take 1d10 psychic damage that can't be reduced in any way")).toBe(1);
+	});
+
+	test('ds-title: flavor, Prerequisite, and Effect each appear exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-title');
+		await new ElementPipeline(makeInlineDeps()).run(titleElement, titleExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const text = root.textContent ?? '';
+		expect(countOccurrences(text, 'Hi! Remember me?')).toBe(1);
+		expect(countOccurrences(text, "You die at the hands of your greatest foe, that foe still lives")).toBe(1);
+		expect(countOccurrences(text, 'You are restored to life')).toBe(1);
+	});
+
+	test('ds-treasure: the Effect row value appears exactly once (Finding 2)', async () => {
+		const host = inlineHost('ds-treasure');
+		await new ElementPipeline(makeInlineDeps()).run(treasureElement, treasureExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const snippet = 'While worn, a blue Color Cloak grants you cold immunity equal to your level';
+		expect(countOccurrences(root.textContent ?? '', snippet)).toBe(1);
+	});
+
+	test('ds-career: Skills and Perk rows each appear exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-career');
+		await new ElementPipeline(makeInlineDeps()).run(careerElement, careerExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const text = root.textContent ?? '';
+		expect(countOccurrences(text, 'Two skills from the interpersonal skill group')).toBe(1);
+		expect(countOccurrences(text, 'One interpersonal perk')).toBe(1);
 	});
 });
 

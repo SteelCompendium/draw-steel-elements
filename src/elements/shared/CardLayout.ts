@@ -62,6 +62,30 @@ export interface CardLayout<M> {
 	useSourceBody?: boolean;
 }
 
+// D6 Task 7 review fix (Finding 1/2, spec §9's stated mitigation shape: "CardLayout marks
+// which fields the body already contains"): `content` is the canonical, full-prose field —
+// `flavor`/rows are pre-pipeline extractions FROM the same source prose, so across the real
+// corpus `content`'s lead paragraph is (at minimum a prefix of) `flavor` verbatim, and some
+// rows' values (Benefit/Drawback/Effect/Prerequisite/Skills/Perk…) re-appear as labeled
+// sentences further down. `flavor`/row values are plain text; `content` carries the same
+// prose WITH markdown (links/emphasis) — so a byte-equality check misses every real case
+// (verified directly against the corpus, see layouts.ts's file header). We therefore
+// normalize both sides (strip markdown links/emphasis, collapse whitespace, lowercase) and
+// compare — robust to those markdown/whitespace differences without ever touching `content`
+// itself (content stays canonical; the DUPLICATE SLOT is what's suppressed). A minimum
+// length guard on row values avoids false-positive suppression of short/generic strings
+// (e.g. "One language") coincidentally appearing as a substring of a long body.
+const DUPLICATE_ROW_MIN_LENGTH = 20;
+
+function normalizeForDuplicateCheck(s: string): string {
+	return s
+		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links -> link text
+		.replace(/[*_`]/g, '') // emphasis/code markers
+		.replace(/\s+/g, ' ')
+		.trim()
+		.toLowerCase();
+}
+
 /**
  * The shared frame every display card mounts through: one class, driven entirely by a
  * `CardLayout<M>` (constructor arg — no subclassing per card type). `SourceAware` is the
@@ -101,17 +125,36 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 			}
 		}
 
-		const flavor = this.layout.flavor?.(model);
-		if (flavor) await this.renderMarkdown(flavor, card.createDiv({ cls: 'dse-card__flavor' }));
-
 		// Hybrid mode is "a RefSource has been threaded in" — true only once Task 9 wires a
 		// display def through withReference + RefUnwrapView; always false today.
 		const hybrid = this.source !== undefined;
+		const useSource = hybrid && this.layout.useSourceBody !== false;
+
+		// Inline body text, computed here (rather than down in the body section below) so
+		// the flavor/row duplication guard above can compare against it — only when it will
+		// actually render: in hybrid mode `body` never renders inline (Task 9 renders the
+		// source body instead per useSourceBody), so there's nothing for `flavor`/rows to
+		// duplicate and `omitWhenSource` alone governs row suppression there, untouched by
+		// this guard.
+		const bodyMd = !useSource ? this.layout.body?.(model) : undefined;
+		const normalizedBody = bodyMd && bodyMd.trim() ? normalizeForDuplicateCheck(bodyMd) : undefined;
+
+		const flavor = this.layout.flavor?.(model);
+		const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+		if (flavor && !flavorDuplicatesBody) {
+			await this.renderMarkdown(flavor, card.createDiv({ cls: 'dse-card__flavor' }));
+		}
+
 		const rows = (this.layout.rows ?? []).filter((r) => !(hybrid && r.omitWhenSource));
 		const rendered: Array<{ row: FieldRow<M>; value: string }> = [];
 		for (const row of rows) {
 			const value = row.value(model);
-			if (value != null && value !== '') rendered.push({ row, value });
+			if (value == null || value === '') continue;
+			if (normalizedBody) {
+				const normalizedValue = normalizeForDuplicateCheck(value);
+				if (normalizedValue.length >= DUPLICATE_ROW_MIN_LENGTH && normalizedBody.includes(normalizedValue)) continue;
+			}
+			rendered.push({ row, value });
 		}
 		if (rendered.length) {
 			const grid = card.createDiv({ cls: 'dse-card__rows' });
@@ -140,7 +183,8 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 		}
 
 		// Body: pure-model path (this task) — the inline `body` field, when the layout
-		// carries one and (in hybrid mode) `useSourceBody` doesn't claim it.
+		// carries one and (in hybrid mode) `useSourceBody` doesn't claim it. `bodyMd`/
+		// `useSource` were computed above (the duplication guard needs them too).
 		//
 		// TODO(Task 9): when `hybrid && useSource`, render `this.source!.body` (the
 		// resolved compendium file's markdown) instead of the inline `body` — the by-SCC
@@ -148,9 +192,7 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 		// half-built `this.source!.body` render) — the double-render-guard interaction with
 		// `omitWhenSource` rows is Task 9's design to make, and `this.source` is never set
 		// in production yet, so this branch is currently unreachable outside direct tests.
-		const useSource = hybrid && this.layout.useSourceBody !== false;
 		if (!useSource) {
-			const bodyMd = this.layout.body?.(model);
 			if (bodyMd && bodyMd.trim()) {
 				await this.renderMarkdown(bodyMd, card.createDiv({ cls: 'dse-card__body' }));
 			}
