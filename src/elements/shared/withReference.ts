@@ -74,6 +74,10 @@ export function withReference<M>(
 	return {
 		...base,
 		autoResolveRefs: false,
+		// Fix round 1 (spec §1.1): lets the pipeline's parse-stage guard recognize a bare
+		// `@path` body as this def's business (parseYaml would otherwise throw on the
+		// leading `@` before detectWholeBlockRef ever runs) — see registry.ts's doc.
+		acceptsWholeBlockRef: true,
 		// Explicit `undefined` overrides (not just omissions) — `base.serialize`/
 		// `base.resolveRefs` are typed against `M`, not `RefOrInline<M>`; spreading them
 		// through unchanged would carry the narrower (wrong) parameter type into the

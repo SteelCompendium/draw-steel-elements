@@ -82,6 +82,18 @@ export interface ElementDefinition<M = unknown> {
 	 * Additive + optional — absence changes nothing; every tool falls back to the schema.
 	 */
 	authoring?: AuthoringHint;
+	/**
+	 * D6 Task 3 fix round 1 (spec §1.1) — set by `withReference()`. A bare `@path`
+	 * whole-block reference is NOT valid YAML on its own (`yaml` — and Obsidian's real
+	 * `parseYaml`, which wraps it — reserves a leading `@` on a plain scalar: "Plain
+	 * value cannot start with reserved character @"), so the pipeline's parse stage
+	 * (pipeline.ts step 2) needs to know a def can accept that raw string BEFORE
+	 * `parseYaml` ever runs, and skip straight to `def.parse` with the trimmed source
+	 * instead of error-carding. Narrowly scoped: false/absent for every def that hasn't
+	 * opted in via `withReference`, so their `@`-leading bodies (there is no legitimate
+	 * reason to write one) still error-card exactly as before.
+	 */
+	acceptsWholeBlockRef?: boolean;
 }
 
 /**

@@ -222,7 +222,30 @@ export class ElementPipeline {
 
 		try {
 			// Step 2: parse (F1 §2.4.1). Parse failure -> error card, stage "parse".
-			const rawData = runStage('parse', () => parseYaml(source));
+			//
+			// Fix round 1 (D6 spec §1.1): a bare `@path` whole-block reference
+			// (`@Homebrew/Fireball`) is not valid YAML on its own — the `yaml` package
+			// (which Obsidian's real parseYaml wraps) reserves a leading `@` on a plain
+			// scalar and throws "Plain value cannot start with reserved character @"
+			// BEFORE detectWholeBlockRef ever gets a look at it. The narrowest possible
+			// rescue: only when parseYaml throws, AND the def opted in
+			// (`acceptsWholeBlockRef`, set by withReference()), AND the trimmed source is
+			// a SINGLE LINE starting with `@` (the one YAML-reserved-character case that
+			// differs from every other bare scalar, which already parses fine as a plain
+			// string) — treat rawData as that trimmed string directly instead of
+			// error-carding. Anything else (multi-line garbage, other malformed YAML, a
+			// def that hasn't opted in) still error-cards exactly as before.
+			let rawData: unknown;
+			try {
+				rawData = runStage('parse', () => parseYaml(source));
+			} catch (error) {
+				const trimmed = source.trim();
+				if (def.acceptsWholeBlockRef && trimmed.startsWith('@') && !trimmed.includes('\n')) {
+					rawData = trimmed;
+				} else {
+					throw error;
+				}
+			}
 
 			// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
 			// validation (schemas never see the reserved key) and before def.parse

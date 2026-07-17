@@ -15,6 +15,7 @@ import { ElementView } from '@/framework/view';
 import { renderErrorCard } from '@/framework/pipeline';
 import type { RenderContext } from '@/framework/context';
 import type { ElementDefinition } from '@/framework/registry';
+import type { ResolvedRef } from '@/framework/seams/refs';
 import type { RefOrInline, RefSource, WithReferenceOptions } from './withReference';
 
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
@@ -50,12 +51,23 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	}
 
 	private async resolveAndMount(root: HTMLElement, raw: string): Promise<void> {
+		const trimmed = raw.trim();
+		// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
+		// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
+		// them; they resolve entirely through cx.refs (the ReferenceService's at-path/
+		// wikilink providers, F1 §3.7). Handled BEFORE the SCC ladder below, which stays
+		// scc-prefixed/bare-slug only (fix round 1, Critical finding).
+		if (trimmed.startsWith('@') || (trimmed.startsWith('[[') && trimmed.endsWith(']]'))) {
+			await this.resolveLegacyRef(root, trimmed);
+			return;
+		}
+
 		const index = this.cx.compendium;
 		if (!index || !index.available) {
 			this.errorCard(root, 'Compendium not installed — run "Sync compendium" to render references.');
 			return;
 		}
-		// Resolve to a bare code (bare slug -> scoped candidates; prefixed/linked -> SccResolver).
+		// Resolve to a bare code (bare slug -> scoped candidates; scc-prefixed -> SccResolver).
 		const code = this.toCode(root, raw, index);
 		if (code === null) return; // toCode already rendered the right card
 		const resolution = this.cx.sccAnchors?.resolve(`scc:${code}`);
@@ -69,12 +81,22 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		}
 		// vault -> typed model + source, or the "found but not renderable" degrade.
 		const entity = await index.getEntity(code);
-		const parsed = await entity?.model();
-		if (!entity || parsed === undefined) {
-			const name = entity?.name ?? code;
+		if (!entity) {
 			this.errorCard(
 				root,
-				`"${name}" found but not renderable — this compendium predates the required block; re-sync.`,
+				`"${code}" found but not renderable — this compendium predates the required block; re-sync.`,
+			);
+			return;
+		}
+		const parsed = await entity.model();
+		if (parsed === undefined) {
+			// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
+			// not just the entity's display name, so a user debugging a stale-compendium
+			// file can tell which file/version is stale.
+			const type = entity.type || 'unknown';
+			this.errorCard(
+				root,
+				`"${entity.name}" found but not renderable — ${entity.file.path} (type: ${type}) predates the required block; re-sync.`,
 			);
 			return;
 		}
@@ -82,19 +104,40 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		await this.mountBase(root, parsed as M, source);
 	}
 
-	/** Bare slug -> code (scoped, §1.3); prefixed/linked -> strip to code via SccResolver's data-scc. */
-	private toCode(root: HTMLElement, raw: string, index: NonNullable<RenderContext['compendium']>): string | null {
-		const isPrefixed = /^(scc(\.v\d+)?:|@|\[\[)/.test(raw);
-		if (isPrefixed) {
-			const resolution = this.cx.sccAnchors?.resolve(raw);
-			// scc: forms carry a code; @path/[[..]] resolve via the legacy providers
-			// elsewhere — for the display/statblock ref case we require an scc code, so
-			// fall to unknown if not.
-			if (resolution && resolution.kind !== 'unresolved') return this.codeFromRaw(raw);
-			if (raw.startsWith('scc')) return this.codeFromRaw(raw);
-			this.errorCard(root, `Reference \`${raw}\` is not an SCC code.`);
-			return null;
+	/**
+	 * `@path`/`[[wikilink]]` legacy forms (D6 spec §1.1, fix round 1 — Critical finding).
+	 * Resolved through `cx.refs` (the at-path/wikilink `RefProvider`s, F1 §3.7), NOT
+	 * `cx.sccAnchors`/`cx.compendium` — these raw strings carry no SCC code to classify,
+	 * so the SCC ladder always misclassified them as "not an SCC code". `ResolvedRef.data`
+	 * is the target's parsed first-`ds-*`-block payload; it is run through the SAME
+	 * base-parse path the inline branch uses (`withReference.parse`'s
+	 * `{kind:'inline', model: base.parse(data, raw)}`) — matching spec §1.2's original
+	 * `resolveRefs` sketch (`base.parse(resolved.data, "")`, empty raw), just invoked
+	 * from here instead of a `resolveRefs` hook (recon (d): resolution needs the full
+	 * RenderContext).
+	 *
+	 * Source threading (`RefSource` / `SourceAware`) has no direct `ResolvedRef`
+	 * equivalent for this path (no frontmatter/type contract the way a compendium
+	 * `CompendiumEntity` has) — deliberately skipped: display-family cards are not
+	 * expected to be authored via `@path`/`[[wikilink]]` in practice (§2.3's SourceAware
+	 * threading targets real compendium hits).
+	 */
+	private async resolveLegacyRef(root: HTMLElement, raw: string): Promise<void> {
+		let resolved: ResolvedRef;
+		try {
+			resolved = await this.cx.refs.resolve(raw, this.cx.host.sourcePath);
+		} catch (error) {
+			this.errorCard(root, error instanceof Error ? error.message : String(error));
+			return;
 		}
+		const model = this.base.parse(resolved.data, '');
+		await this.mountBase(root, model);
+	}
+
+	/** Bare slug -> code (scoped, §1.3); scc-prefixed -> strip to code. `@path`/`[[..]]`
+	 *  never reach here (handled earlier by resolveLegacyRef). */
+	private toCode(root: HTMLElement, raw: string, index: NonNullable<RenderContext['compendium']>): string | null {
+		if (/^scc(\.v\d+)?:/.test(raw)) return this.codeFromRaw(raw);
 		if (raw.includes('/')) return raw; // already a full source/type/item code
 		const candidates = index.resolveSlug(raw, this.opts.sccType);
 		if (candidates.length === 1) return candidates[0];

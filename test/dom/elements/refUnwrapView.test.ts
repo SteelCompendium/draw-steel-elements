@@ -285,6 +285,10 @@ describe('RefUnwrapView (spec §1.5 degrade ladder)', () => {
 		const card = root.querySelector('.dse-error-card-message');
 		expect(card?.textContent).toContain('found but not renderable');
 		expect(card?.textContent).toContain('Goblin Stinker');
+		// Minor fix (review round 1, spec §1.5): names the file path + frontmatter
+		// `type`, not just the entity's display name.
+		expect(card?.textContent).toContain(file.path);
+		expect(card?.textContent).toContain('monster.goblin.statblock');
 	});
 
 	test('resolved code classifies as vault with a typed model: mounts the base view with the resolved model', async () => {
@@ -343,5 +347,72 @@ describe('RefUnwrapView (spec §1.5 degrade ladder)', () => {
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		const rendered = root.querySelector('.test-base-view')!;
 		expect(rendered.getAttribute('data-source-file')).toBe(file.path);
+	});
+});
+
+// Fix round 1 (Critical finding) — the legacy `@path` / `[[wikilink]]` whole-block
+// forms D6 spec §1.1 headlines as "still works" were 0-for-2 end-to-end: `@Homebrew/
+// Fireball` never survived the pipeline's own `parseYaml(source)` step (YAML reserves
+// a leading `@` on a plain scalar), and `[[Thorn Dragon]]` — which DOES survive
+// parsing — was misrouted through the SCC ladder (`cx.sccAnchors.resolve`, which only
+// understands `scc:`/`scc.vN:`) instead of `cx.refs` (the ReferenceService's at-path/
+// wikilink providers). Neither was exercised end-to-end through the REAL
+// ElementPipeline before this fix round — that gap is exactly why the bugs shipped.
+// These tests drive the real pipeline + real ReferenceService (no compendium seam at
+// all — proof these forms don't depend on cx.sccAnchors/cx.compendium).
+describe('RefUnwrapView — legacy @path / [[wikilink]] whole-block refs (D6 spec §1.1, fix round 1)', () => {
+	const DS_BLOCK = (text: string) => ['```ds-test-base', `text: ${text}`, '```'].join('\n');
+
+	test('@path body: pipeline parse-stage guard + cx.refs resolution renders the base card', async () => {
+		const def = withReference(baseDef(), { sccType: /statblock$/ });
+		const deps = makeDeps();
+		(deps.app as any).vault.setFile('Homebrew/Fireball.md', DS_BLOCK('Fireball Card'));
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost();
+
+		await pipeline.run(def, '@Homebrew/Fireball', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		const rendered = root.querySelector('.test-base-view')!;
+		expect(rendered.getAttribute('data-test-model')).toBe('Fireball Card');
+	});
+
+	test('[[wikilink]] body: cx.refs resolution (not the SCC ladder) renders the base card', async () => {
+		const def = withReference(baseDef(), { sccType: /statblock$/ });
+		const deps = makeDeps();
+		(deps.app as any).vault.setFile('Bestiary/Thorn Dragon.md', DS_BLOCK('Thorn Dragon Card'));
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost();
+
+		await pipeline.run(def, '[[Thorn Dragon]]', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		const rendered = root.querySelector('.test-base-view')!;
+		expect(rendered.getAttribute('data-test-model')).toBe('Thorn Dragon Card');
+	});
+
+	test('@path body that fails to resolve: error card surfaces the ReferenceService not-found message', async () => {
+		const def = withReference(baseDef(), { sccType: /statblock$/ });
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+
+		await pipeline.run(def, '@NoSuchFile', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const card = root.querySelector('.dse-error-card-message');
+		expect(card?.textContent).toContain('Reference file (NoSuchFile) not found');
+	});
+
+	test('malformed multi-line body starting with @ still parse-error-cards (guard stays narrow)', async () => {
+		const def = withReference(baseDef(), { sccType: /statblock$/ });
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+
+		await pipeline.run(def, '@Homebrew/Fireball\nextra: [unterminated', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.getAttribute('data-dse-error-stage')).toBe('parse');
 	});
 });
