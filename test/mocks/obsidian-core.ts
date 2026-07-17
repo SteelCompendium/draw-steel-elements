@@ -68,6 +68,20 @@ export class TFolder extends TAbstractFile {
 	}
 }
 
+// ---------------------------------------------------------------- paths
+// F2 Task 4: SccResolver joins the managed-root directory + a derived relative path
+// via normalizePath (as real element/settings code does before any vault lookup). The
+// mock previously had no normalizePath at all — nothing needed it before now. This
+// mirrors the real implementation's observable behavior (unify separators, collapse
+// duplicate slashes, drop a leading "./", trim leading/trailing slashes) without
+// pulling in Obsidian's actual (Electron-only) implementation.
+export function normalizePath(path: string): string {
+	let p = path.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+	if (p.startsWith('./')) p = p.slice(2);
+	p = p.replace(/^\/+/, '').replace(/\/+$/, '');
+	return p === '' ? '/' : p;
+}
+
 // ---------------------------------------------------------------- vault fake
 const macrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 

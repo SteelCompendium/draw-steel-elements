@@ -4,6 +4,10 @@ export interface DSESettings {
 	compendiumReleaseTag?: string; // Optional: if not set, fetch the latest release
 	compendiumDestinationDirectory: string;
 	defaultImagePath: string;
+	/** OD-7 (F2 §4.2): when an SCC code is not resolvable in the vault, link out to
+	 *  steelcompendium.io instead of rendering unresolved (click-time only — never
+	 *  binds content, just a redirect target). */
+	sccWebFallback: boolean;
 	/** D4 §5.3 — migration marker. Bump ONLY for structural pref changes (key
 	 *  renames / option-set changes); sparse storage makes default changes and new
 	 *  prefs migration-free. */
@@ -17,6 +21,7 @@ export const DEFAULT_SETTINGS: DSESettings = {
 	compendiumReleaseTag: '', // Leave empty to fetch the latest release
 	compendiumDestinationDirectory: 'DS Compendium', // Default directory in the vault
 	defaultImagePath: 'Media/token_1.png',
+	sccWebFallback: true,
 	settingsVersion: 1,
 	prefs: {},
 };

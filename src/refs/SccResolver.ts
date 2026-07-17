@@ -1,9 +1,9 @@
 // src/refs/SccResolver.ts — SCC (Steel Compendium Classification) code utilities (F2 §4).
 //
-// Task 3 scope: pure functions only (normalizeSccTarget, sccToFilePath). Kept free of any
-// `obsidian` import on purpose — these run in the `unit` jest project (node env, no DOM),
-// and Tasks 4+ layer the stateful `SccResolver` class (which does need App/TFile/etc.) on
-// top of them in a later commit.
+// Task 3 scope: pure functions only (normalizeSccTarget, sccToFilePath). Task 4 layers the
+// stateful `SccResolver` class (which does need App/TFile/etc.) on top of them below.
+import { App, Plugin, TAbstractFile, TFile, normalizePath } from 'obsidian';
+import type { DSESettings } from '@model/Settings';
 
 /**
  * Strip the `scc:`/`scc.v1:` prefix and any `#format` fragment (F2 §4.1).
@@ -53,4 +53,107 @@ export function sccToFilePath(code: string, ext = ".md"): string | null {
     return nonEmpty.length > 0 ? nonEmpty.join("/") : null;
 }
 
-// (SccResolver class added in a later task — Task 4.)
+/**
+ * F2 §4.2 — the outcome of resolving one `scc:`/`scc.vN:` target:
+ *   - "vault": a local file already carries (or was derived to carry) this code —
+ *     `linkpath` is the resolved vault path, `file` the TFile itself.
+ *   - "web": no local file, but the OD-7 web-fallback setting is on — `url` is the
+ *     permanent steelcompendium.io redirect stub for the code.
+ *   - "unresolved": no local file and no web fallback (toggle off, or the target
+ *     wasn't a resolvable scc reference in the first place) — callers render the
+ *     display text as plain, unlinked text.
+ */
+export type SccResolution =
+	| { kind: 'vault'; file: TFile; linkpath: string }
+	| { kind: 'web'; url: string }
+	| { kind: 'unresolved'; code: string };
+
+/**
+ * F2 §4.2 — SCC reference resolution. Synchronous by design so the DOM pass and
+ * F1's pipeline can call it mid-render; the frontmatter index seeds lazily on the
+ * first resolve that needs it and is maintained incrementally via registerWatchers.
+ */
+export class SccResolver {
+	/** bare code → vault path. null = not yet seeded. */
+	private index: Map<string, string> | null = null;
+
+	constructor(
+		private app: App,
+		private settings: DSESettings,
+	) {}
+
+	public resolve(rawTarget: string): SccResolution {
+		const code = normalizeSccTarget(rawTarget);
+		if (code === null) return { kind: 'unresolved', code: rawTarget.trim() };
+
+		// 1. Path derivation against the managed root (covers a fresh sync, O(1)).
+		const relative = sccToFilePath(code);
+		if (relative !== null) {
+			const derived = normalizePath(`${this.settings.compendiumDestinationDirectory}/${relative}`);
+			const file = this.app.vault.getAbstractFileByPath(derived);
+			if (file instanceof TFile) return { kind: 'vault', file, linkpath: file.path };
+		}
+
+		// 2. Frontmatter-`scc` index (codes are forever; paths are not).
+		const indexed = this.lookupIndex(code);
+		if (indexed !== null) return { kind: 'vault', file: indexed, linkpath: indexed.path };
+
+		// 3. Web permalink — the spec's permanent redirect stub (OD-7, click-time only).
+		if (this.settings.sccWebFallback) {
+			return { kind: 'web', url: `https://steelcompendium.io/scc/${code}/` };
+		}
+
+		// 4. Unresolved — caller renders display text as plain text.
+		return { kind: 'unresolved', code };
+	}
+
+	/** Wire incremental index maintenance to vault/metadata events (plugin lifetime). */
+	public registerWatchers(plugin: Plugin): void {
+		plugin.registerEvent(this.app.metadataCache.on('changed', (file: TFile) => this.handleChanged(file)));
+		plugin.registerEvent(
+			this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => this.handleRename(file, oldPath)),
+		);
+		plugin.registerEvent(this.app.vault.on('delete', (file: TAbstractFile) => this.handleDelete(file)));
+	}
+
+	public handleChanged(file: TFile): void {
+		if (this.index === null) return;
+		this.removePath(file.path);
+		this.indexFile(file);
+	}
+
+	public handleRename(file: TAbstractFile, oldPath: string): void {
+		if (this.index === null) return;
+		this.removePath(oldPath);
+		if (file instanceof TFile) this.indexFile(file);
+	}
+
+	public handleDelete(file: TAbstractFile): void {
+		if (this.index === null) return;
+		this.removePath(file.path);
+	}
+
+	private lookupIndex(code: string): TFile | null {
+		if (this.index === null) this.seedIndex();
+		const indexedPath = this.index!.get(code);
+		if (indexedPath === undefined) return null;
+		const file = this.app.vault.getAbstractFileByPath(indexedPath);
+		return file instanceof TFile ? file : null;
+	}
+
+	private seedIndex(): void {
+		this.index = new Map();
+		for (const file of this.app.vault.getMarkdownFiles()) this.indexFile(file);
+	}
+
+	private indexFile(file: TFile): void {
+		const scc = this.app.metadataCache.getFileCache(file)?.frontmatter?.scc;
+		if (typeof scc === 'string' && scc.length > 0) this.index!.set(scc, file.path);
+	}
+
+	private removePath(path: string): void {
+		for (const [code, indexedPath] of this.index!) {
+			if (indexedPath === path) this.index!.delete(code);
+		}
+	}
+}
