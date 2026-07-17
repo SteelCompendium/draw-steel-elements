@@ -5,7 +5,11 @@
 // clip-screenshots the rendered [data-dse-element] once per combo of
 //   plugin theme (legacy|steel — frameworkV2.services.theme.setActive, the DSE skin)
 // × chrome bg  (dark|light  — app.changeTheme, Obsidian's own moonstone/obsidian theme)
-// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (11 × 2 × 2 = 44 shots).
+// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (23 × 2 × 2 = 92 shots, as
+// of D6's 11 new displayFamily()/genericCard() elements) — plus ONE more: a dedicated
+// ground-truth capture (D6 Task 11) proving a by-SCC `ds-kit` reference card renders its
+// REAL nested `ds-feature` card through Obsidian's own markdown pipeline (see "step 3b"
+// below) — 93 shots total.
 // These are two INDEPENDENT axes: the plugin theme re-stamps data-dse-theme on element
 // roots; the chrome theme flips body.theme-dark/light. Both are awaited before each shot.
 //
@@ -63,14 +67,27 @@ const THEMES = ['legacy', 'steel']; // DSE plugin theme (data-dse-theme on eleme
 const BGS = ['dark', 'light']; // Obsidian chrome theme (body.theme-dark / theme-light)
 const aliases = JSON.parse(fs.readFileSync(path.join(dir, 'aliases.json'), 'utf8'));
 
+// D6 Task 11 — the by-SCC recursion ground-truth capture (see the header comment and
+// "step 3b" below). Not an element id (not in aliases.json) — selected via
+// --element=by-scc-kit, same as any other --element value, but runs its OWN single
+// capture instead of joining the theme×bg combo matrix (it exists to prove recursion
+// happened at all, not to sweep every visual combo).
+const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'kit' };
+
 let elements = Object.keys(aliases).sort();
+let onlySpecial = false;
 if (args.element) {
-	if (!elements.includes(args.element)) {
+	if (args.element === SPECIAL_NOTE.id) {
+		elements = [];
+		onlySpecial = true;
+	} else if (!elements.includes(args.element)) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
+	} else {
+		elements = [args.element];
 	}
-	elements = [args.element];
 }
+const runSpecial = !args.element || onlySpecial;
 let themes = THEMES;
 if (args.theme) {
 	if (!THEMES.includes(args.theme)) {
@@ -95,6 +112,16 @@ for (const id of elements) {
 	const note = path.join(vaultPath, 'Harness', `${id}.md`);
 	if (!fs.existsSync(note)) {
 		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
+	}
+}
+if (runSpecial) {
+	const note = path.join(vaultPath, 'Harness', `${SPECIAL_NOTE.id}.md`);
+	if (!fs.existsSync(note)) {
+		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
+	}
+	const seedRoot = path.join(vaultPath, 'DS Compendium', 'kit', 'panther.md');
+	if (!fs.existsSync(seedRoot)) {
+		throw new Error(`missing ${seedRoot} — run \`npm run obsidian-shots\` (it seeds the compendium subtree first)`);
 	}
 }
 if (!fs.existsSync(path.join(repo, 'main.js'))) {
@@ -476,6 +503,102 @@ async function main() {
 			}
 		}
 
+		// -- step 3b: the D6 Task 11 by-SCC recursion ground-truth capture -----------------
+		// A `ds-kit` block whose body is nothing but `scc.v1:mcdm.heroes.v1/kit/panther`
+		// (Harness/by-scc-kit.md) resolves against the real compendium file seeded at
+		// "DS Compendium/kit/panther.md" (notes-gen.mjs). That file's markdown body embeds
+		// its OWN `ds-feature` code block (the kit's signature ability, "Devastating
+		// Rush") — CardLayout's hybrid body render hands that real body to Obsidian's
+		// MarkdownRenderer.render, which (only in REAL Obsidian — the jsdom/mocked unit
+		// tests stub this out) recursively re-runs the registered code-block processors
+		// over it, mounting a SECOND, nested [data-dse-element="feature"] card inside the
+		// outer kit card. This is the actual proof (Task 9's review note: "real recursion
+		// deferred to Task 11 obsidian verification"); the assertion below fails loudly
+		// (not just a screenshot to eyeball) if that nesting doesn't happen.
+		if (runSpecial) {
+			const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${SPECIAL_NOTE.elementSel}"]')`;
+			const outName = `${SPECIAL_NOTE.id}--obsidian-recursion`;
+			let emulated = false;
+			try {
+				await evaluate(
+					cdp,
+					`(async () => {
+						await window.app.workspace.openLinkText('Harness/${SPECIAL_NOTE.id}', '', false);
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						await leaf.setViewState({
+							type: 'markdown',
+							state: { file: 'Harness/${SPECIAL_NOTE.id}.md', mode: 'preview' },
+							active: true,
+						});
+					})()`,
+				);
+				await waitFor(
+					cdp,
+					`(() => {
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						if (leaf?.view?.file?.path !== 'Harness/${SPECIAL_NOTE.id}.md') return false;
+						const el = ${elSel};
+						if (!el) return false;
+						const r = el.getBoundingClientRect();
+						return r.width > 0 && r.height > 0;
+					})()`,
+					{ what: `rendered [data-dse-element="${SPECIAL_NOTE.elementSel}"] in Harness/${SPECIAL_NOTE.id}.md` },
+				);
+				await sleep(500); // settle: the by-SCC resolve + nested render are both async
+				await setPluginTheme(elSel, 'steel');
+				await setChromeBg('dark');
+				await sleep(300);
+				await clearNotices();
+
+				const proof = await evaluate(
+					cdp,
+					`(() => {
+						const root = ${elSel};
+						if (!root) return { ok: false, reason: 'root not found' };
+						const errorCard = root.querySelector('.dse-error-card');
+						if (errorCard) return { ok: false, reason: 'error card: ' + errorCard.textContent };
+						const nested = root.querySelector('[data-dse-element="feature"]');
+						if (!nested) {
+							return { ok: false, reason: 'no nested [data-dse-element="feature"] -- by-SCC recursion did not occur' };
+						}
+						return { ok: true };
+					})()`,
+				);
+				if (!proof.ok) throw new Error(`by-SCC recursion proof failed: ${proof.reason}`);
+
+				const rectExpr = `(() => { const r = ${elSel}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth }; })()`;
+				let rect = await evaluate(cdp, rectExpr);
+				if (rect.y + rect.height > rect.vh) {
+					await cdp.call('Emulation.setDeviceMetricsOverride', {
+						width: rect.vw,
+						height: Math.ceil(rect.y + rect.height + 100),
+						deviceScaleFactor: 0,
+						mobile: false,
+					});
+					emulated = true;
+					await sleep(500);
+					await clearNotices();
+					rect = await evaluate(cdp, rectExpr);
+				}
+				const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+				const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+				console.log(`  ok ${outName}.png (${bytes} bytes) — nested [data-dse-element="feature"] confirmed`);
+			} catch (e) {
+				failures.push({ outName, errors: [String(e)] });
+				await errorShot(outName);
+				console.log(`FAIL ${outName}: ${String(e)}`);
+			} finally {
+				if (emulated) {
+					try {
+						await cdp.call('Emulation.clearDeviceMetricsOverride');
+						await sleep(300);
+					} catch {
+						/* socket may already be down; killChild still runs */
+					}
+				}
+			}
+		}
+
 		// -- step 4: restore persisted defaults, then quit cleanly --------------------------
 		// The plugin theme pref (data.json, git-ignored) and the vault's appearance.json
 		// (tracked) both persist whatever the sweep last set — put them back to the
@@ -508,7 +631,8 @@ async function main() {
 		for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
 		process.exit(1);
 	}
-	console.log(`\nall ${elements.length * combos.length} shots written to ${shotsDir}`);
+	const total = elements.length * combos.length + (runSpecial ? 1 : 0);
+	console.log(`\nall ${total} shots written to ${shotsDir}`);
 }
 
 main().catch((e) => {
