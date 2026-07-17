@@ -191,4 +191,29 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		expect(innerMessage?.textContent).toMatch(/nesting too deep/i);
 		expect(roots[1].querySelector('.dse-card')).toBeNull();
 	});
+
+	test('(e) the Task 7 duplicate-text guard suppresses frontmatter flavor when it\'s a duplicate of the source body\'s lead', async () => {
+		// The real panther fixture's frontmatter `flavor` field is nearly identical to
+		// the body's opening paragraph. In by-SCC mode, the duplicate-text guard
+		// (normalizeForDuplicateCheck / DUPLICATE_ROW_MIN_LENGTH) should suppress the
+		// flavor (which becomes a row) as a near-duplicate of the rendered body's lead
+		// text. This test asserts `.dse-card__flavor` is absent, proving the guard fires
+		// on this real-content path.
+		const { vault, deps } = makeCompendiumDeps();
+		loadMdDseFixture(vault, KIT_REL);
+		const host = makeHost('ds-kit');
+
+		await new ElementPipeline(deps).run(kitElement, `scc.v1:${KIT_CODE}`, host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		const card = root.querySelector('.dse-card') as HTMLElement;
+		expect(card.querySelector('.dse-card__title')?.textContent).toBe('Panther');
+
+		// Assert the flavor is absent (suppressed by the duplicate-text guard), not
+		// just a missing element — confirm the body is present to prove the guard
+		// ran and made a decision, not that the entire card failed to render.
+		expect(card.querySelector('.dse-card__flavor')).toBeNull();
+		expect(card.querySelector('.dse-card__body')).not.toBeNull();
+	});
 });

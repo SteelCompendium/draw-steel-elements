@@ -32,12 +32,13 @@ import type { RefOrInline, RefSource, WithReferenceOptions } from './withReferen
  * Deliberately a same-key REFUSAL, not a numeric depth counter: real compendium bodies
  * carry pre-resolved inline links (`[text](scc.v1:...)`), never whole-block refs — spec §9
  * itself calls practical depth "1" — so a true multi-level chain essentially can't occur
- * against real content. The risk this guards against is a cycle (A -> ... -> A), which a
- * "have I already started resolving this key, in this block, right now" check catches
- * exactly, with no need to pick an arbitrary max depth. Added at the start of a resolution
- * and removed in a `finally` once that resolution's full mount settles (covers any nested
- * rendering triggered synchronously inside it, not just the ref lookup itself) — so a LATER
- * (non-overlapping) resolution of the same key, e.g. on a subsequent onUpdate, is unaffected.
+ * against real content. This is a defense-in-depth guard keyed on the raw-text form (before
+ * SCC-prefix/slug normalization); it prevents obvious cycles via the same literal key in
+ * the same block but is not an exhaustive resolution-cycle detector. Added at the start of
+ * a resolution and removed in a `finally` once that resolution's full mount settles (covers
+ * any nested rendering triggered synchronously inside it, not just the ref lookup itself) —
+ * so a LATER (non-overlapping) resolution of the same key, e.g. on a subsequent onUpdate,
+ * is unaffected.
  */
 const IN_FLIGHT_REFS = new Set<string>();
 

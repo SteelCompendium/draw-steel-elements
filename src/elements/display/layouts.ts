@@ -57,7 +57,7 @@ export const kitLayout: CardLayout<Kit> = {
 	// already cover its stat-bonus lines and signature ability, so render it as the
 	// trailing body ONLY when there's no signature ability to avoid a double render
 	// (mirrors the pre-fix ternary's intent, minus the YAML-fence dump). By-SCC uses
-	// the source body instead (Task 9 — currently a deliberate no-op per CardLayout.ts).
+	// the source body instead (Task 9, implemented in CardLayout.ts).
 	body: (m) => (m.signature_ability ? undefined : m.content),
 	useSourceBody: true,
 };
