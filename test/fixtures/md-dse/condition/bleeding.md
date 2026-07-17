@@ -1,0 +1,14 @@
+---
+file_basename: bleeding
+file_dpath: condition
+item_id: bleeding
+item_name: Bleeding
+name: Bleeding
+scc: mcdm.heroes.v1/condition/bleeding
+source: mcdm.heroes.v1
+type: condition
+---
+
+While a creature is [bleeding](scc.v1:mcdm.heroes.v1/condition/bleeding), whenever they use a main action, use a [triggered action](scc.v1:mcdm.heroes.v1/rule.combat/triggered-action), or make a [test](scc.v1:mcdm.heroes.v1/rule.test/test) or [ability roll](scc.v1:mcdm.heroes.v1/rule.dice/ability-roll) using [Might](scc.v1:mcdm.heroes.v1/rule.character/might) or [Agility](scc.v1:mcdm.heroes.v1/rule.character/agility), they lose [Stamina](scc.v1:mcdm.heroes.v1/rule.health/stamina) equal to 1d6 + their level after the main action, [triggered action](scc.v1:mcdm.heroes.v1/rule.combat/triggered-action), or [power roll](scc.v1:mcdm.heroes.v1/rule.dice/power-roll) is resolved. This [Stamina](scc.v1:mcdm.heroes.v1/rule.health/stamina) loss can't be prevented in any way, and only happens once per action.
+
+You take damage from this [condition](scc.v1:mcdm.heroes.v1/rule.combat/condition) when you use a main action off your [turn](scc.v1:mcdm.heroes.v1/rule.combat/turn). For example, a [signature ability](scc.v1:mcdm.heroes.v1/rule.combat/signature-ability) used as a free [triggered action](scc.v1:mcdm.heroes.v1/rule.combat/triggered-action) with the assistance of the [tactician's](scc.v1:mcdm.heroes.v1/class/tactician) [Strike Now](scc.v1:mcdm.heroes.v1/feature.ability.tactician.level-1/strike-now) ability triggers the damage from the [bleeding](scc.v1:mcdm.heroes.v1/condition/bleeding) [condition](scc.v1:mcdm.heroes.v1/rule.combat/condition).
