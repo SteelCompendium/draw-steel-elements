@@ -54,6 +54,7 @@ import { rollElement } from '@/elements/roll/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
+import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 
 // `DependencySchema` + `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` now live in
 // `@/framework/dependencySchemas` (D9 Task 4): `DsSchemaSuggest` needs the same data to
@@ -158,6 +159,12 @@ export function initializeElementFrameworkV2(
 	settings: Readonly<DSESettings>,
 	dependencySchemas: readonly DependencySchema[] = FRAMEWORK_V2_DEPENDENCY_SCHEMAS,
 	prefsStorage: PrefsStorage = IN_MEMORY_PREFS_STORAGE,
+	// F2 §4.3(a) fix wave: the live SccResolver, threaded into the pipeline's
+	// ElementPipelineServices so every RenderContext carries it (view.ts's
+	// renderMarkdown calls rewriteSccAnchors when present). Optional — undefined for
+	// every test/harness caller that doesn't construct a SccResolver; the pipeline and
+	// renderMarkdown both no-op the rewrite pass in that case.
+	sccAnchors?: SccAnchorResolver,
 ): ElementFrameworkV2 {
 	const validation = createValidationService();
 	const session = createSessionStore();
@@ -193,7 +200,9 @@ export function initializeElementFrameworkV2(
 	}
 
 	const registry = createElementRegistry();
-	const pipeline = new ElementPipeline({ app, plugin, settings, theme, prefs, refs, validation, session, roll });
+	const pipeline = new ElementPipeline({
+		app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors,
+	});
 
 	return {
 		services: { validation, session, theme, prefs, refs, roll },
@@ -275,6 +284,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // until the F1 §6 step-10 cleanup deletes RegisterElements.ts entirely.
         registerElements(this);
 
+        // F2 §4.4 (fix wave: constructed BEFORE initializeElementFrameworkV2, not after
+        // — the pipeline built inside that call needs the resolver already in hand to
+        // thread it into every RenderContext as cx.sccAnchors, F2 §4.3(a)). Watchers +
+        // the RefProvider registration stay below, alongside the rest of the framework
+        // v2 wiring they depend on.
+        this.sccResolver = new SccResolver(this.app, this.settings);
+
         // F1 (Plan 02, Task 10): construct the framework v2 bundle alongside the
         // legacy path above. Coexistence, not replacement — see the function doc.
         this.prefsStorage = createSaveDataPrefsStorage(this);
@@ -284,6 +300,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             this.settings,
             this.frameworkV2DependencySchemas(),
             this.prefsStorage,
+            this.sccResolver,
         );
         this.frameworkV2 = frameworkV2;
 
@@ -293,11 +310,10 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.manifestStore = new ManifestStore(this.app, this.manifest.id);
         this.syncService = new CompendiumSyncService(this.app, this.manifestStore);
 
-        // F2 §4.4: the scc resolver + its RefProvider, registered onto the framework's
+        // F2 §4.4: the scc resolver's RefProvider, registered onto the framework's
         // ReferenceService (F1 §3.7 seam — see src/refs/SccRefProvider.ts). Later-
         // registered providers are consulted before built-ins, so this transparently
         // supersedes the seam's reserved "scc" placeholder.
-        this.sccResolver = new SccResolver(this.app, this.settings);
         this.sccResolver.registerWatchers(this);
         frameworkV2.services.refs.register(new SccRefProvider(this.app, this.sccResolver));
 

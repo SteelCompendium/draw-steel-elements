@@ -16,6 +16,7 @@
 // intent verbatim ("persist(): def.serialize(model) → host.replaceSource()").
 import { Component, MarkdownRenderer } from 'obsidian';
 import type { RenderContext, RollService } from './context';
+import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -100,9 +101,19 @@ export abstract class ElementView<M> extends Component {
 		await this.onMount(this.rootEl, model);
 	}
 
-	/** Render embedded markdown lifecycle-bound to THIS view (never the plugin). */
+	/**
+	 * Render embedded markdown lifecycle-bound to THIS view (never the plugin).
+	 *
+	 * F2 §4.3(a) fix wave: Obsidian's MarkdownRenderer emits `scc.v1:` links as inert
+	 * external anchors; this is the ONLY render path elements use, so it is the single
+	 * place to fix them up. The vault-wide sccPostProcessor (§4.3(b), main.ts) cannot
+	 * cover it — this call is async and fire-and-forget from the caller's perspective,
+	 * so the anchors don't exist yet when that synchronous post-processor runs. No-ops
+	 * when cx.sccAnchors isn't wired (bare test/harness contexts).
+	 */
 	protected async renderMarkdown(markdown: string, el: HTMLElement): Promise<void> {
 		await MarkdownRenderer.render(this.cx.app, markdown, el, this.cx.host.sourcePath, this);
+		if (this.cx.sccAnchors) rewriteSccAnchors(el, this.cx.sccAnchors);
 	}
 
 	/**

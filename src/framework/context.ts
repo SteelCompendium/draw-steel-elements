@@ -16,6 +16,7 @@ import type { ReferenceService } from './seams/refs';
 import type { RollService } from './roll/service';
 import type { SessionStore } from './session';
 import type { DSESettings } from '@model/Settings';
+import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 
 // D5 (Plan 14): the F1-era stub is gone — the REAL RollService lives in
 // framework/roll/service.ts and is re-exported here so F1-era importers
@@ -51,6 +52,16 @@ export interface RenderContext {
 	/** Roll service seam (D5) — supplied by the pipeline; optional so bare
 	 *  createRenderContext callers (tests) stay valid. Views guard on absence. */
 	readonly roll?: RollService;
+	/**
+	 * F2 §4.3(a)/§4.4 fix wave — the live SccResolver (main.ts's plugin.sccResolver),
+	 * threaded through so ElementView.renderMarkdown can call rewriteSccAnchors on its
+	 * own rendered DOM (the vault-wide sccPostProcessor, §4.3(b), only ever sees
+	 * synchronous post-render DOM and misses the async, fire-and-forget renderMarkdown
+	 * elements render through). Optional so bare createRenderContext callers (tests,
+	 * and any harness that doesn't care about scc links) stay valid — renderMarkdown
+	 * no-ops the rewrite pass when this is absent.
+	 */
+	readonly sccAnchors?: SccAnchorResolver;
 }
 
 /**
@@ -70,6 +81,7 @@ export function createRenderContext(args: {
 	refs: ReferenceService;
 	session: SessionStore;
 	roll?: RollService;
+	sccAnchors?: SccAnchorResolver;
 }): RenderContext {
 	const context: RenderContext = {
 		app: args.app,
@@ -82,6 +94,7 @@ export function createRenderContext(args: {
 		refs: args.refs,
 		session: args.session,
 		roll: args.roll,
+		sccAnchors: args.sccAnchors,
 	};
 
 	// Freeze to enforce immutability at runtime.

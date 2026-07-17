@@ -17,6 +17,7 @@ import type { ReferenceService } from './seams/refs';
 import type { RollService } from './roll/service';
 import type { ValidationService, ValidationResult } from './validation';
 import type { SessionStore } from './session';
+import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -158,6 +159,11 @@ export interface ElementPipelineServices {
 	validation: ValidationService;
 	session: SessionStore;
 	roll: RollService;
+	/** F2 §4.3(a)/§4.4 fix wave — the live SccResolver (main.ts's plugin.sccResolver),
+	 *  threaded into every RenderContext so ElementView.renderMarkdown can rewrite its
+	 *  own scc.v1: anchors. Optional: harnesses/tests that don't care about scc links
+	 *  omit it and renderMarkdown simply skips the rewrite pass. */
+	sccAnchors?: SccAnchorResolver;
 }
 
 export interface ElementPipelineDeps extends ElementPipelineServices {
@@ -176,10 +182,10 @@ export class ElementPipeline {
 	constructor(private readonly deps: ElementPipelineDeps) {}
 
 	async run<M>(def: ElementDefinition<M>, source: string, host: BlockHost): Promise<void> {
-		const { app, plugin, settings, theme, prefs, refs, validation, session, roll } = this.deps;
+		const { app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors } = this.deps;
 
 		// Step 1 (F1 §2.4): build the RenderContext for this block instance.
-		const cx = createRenderContext({ app, plugin, settings, host, theme, prefs, refs, session, roll });
+		const cx = createRenderContext({ app, plugin, settings, host, theme, prefs, refs, session, roll, sccAnchors });
 
 		// The root must exist before ANY step below: renderErrorCard (F1 §3.8) needs
 		// somewhere to render even a step-2 YAML parse failure. data-dse-element is
