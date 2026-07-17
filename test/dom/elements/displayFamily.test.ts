@@ -21,10 +21,29 @@ import { createValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin } from '../../mocks/obsidian';
-import { kitElement, conditionElement, treasureElement } from '@/elements/display';
+import {
+	kitElement,
+	conditionElement,
+	treasureElement,
+	ancestryElement,
+	cultureElement,
+	careerElement,
+	classElement,
+	titleElement,
+	perkElement,
+	complicationElement,
+} from '@/elements/display';
 import kitExample from '@/elements/display/kit/example.yaml';
 import conditionExample from '@/elements/display/condition/example.yaml';
 import treasureExample from '@/elements/display/treasure/example.yaml';
+import ancestryExample from '@/elements/display/ancestry/example.yaml';
+import cultureExample from '@/elements/display/culture/example.yaml';
+import careerExample from '@/elements/display/career/example.yaml';
+import classExample from '@/elements/display/class/example.yaml';
+import titleExample from '@/elements/display/title/example.yaml';
+import perkExample from '@/elements/display/perk/example.yaml';
+import complicationExample from '@/elements/display/complication/example.yaml';
+import type { ElementDefinition } from '@/framework/registry';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 import { MarkdownRenderer } from '../../mocks/obsidian';
 
@@ -164,6 +183,162 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 	});
 });
 
+// D6 Task 7 (spec §2): the remaining seven displayFamily() instances. Recon against every
+// real yaml in data-unified (not just the picked fixture) found several `rows` fields the
+// brief's draft layout left plain even though the corpus links them (Career.skills/perk,
+// Class.skills/*_potency, Title.prerequisite — same Task 6 Finding 2 pattern); each of
+// those gets a renderSpy assertion here, mirroring ds-kit's Stamina test above. It also
+// found several spec fields that are NEVER populated anywhere in the current corpus
+// (Culture's entire row set, Ancestry.{ancestry_points,purchased_traits}, Perk.{perk_group,
+// prerequisites}) — ds-culture's test asserts that omission directly (no `.dse-card__rows`
+// at all) so a future data-driven regression is caught instead of silently "still passing."
+describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
+	test('ds-ancestry: inline example.yaml renders title/signature-trait row/body, omits ungrounded rows', async () => {
+		const host = inlineHost('ds-ancestry');
+		await new ElementPipeline(makeInlineDeps()).run(ancestryElement, ancestryExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Human');
+
+		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
+		expect(rowLabels).toEqual(['Signature trait']);
+		const traitRow = root.querySelector('.dse-card__row-value')!;
+		expect(traitRow.textContent).toBe('Detect the Supernatural');
+		// human.yaml has no signature_trait_description/ancestry_points/purchased_traits
+		// (0/12 ancestries in the corpus populate them today) — those rows are correctly
+		// omitted rather than rendering "undefined".
+		expect(rowLabels).not.toContain('Ancestry points');
+		expect(rowLabels).not.toContain('Purchased traits');
+
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('On Humans');
+	});
+
+	test('ds-culture: inline example.yaml renders title/flavor/body with NO rows (every Culture row field is unpopulated corpus-wide)', async () => {
+		const host = inlineHost('ds-culture');
+		await new ElementPipeline(makeInlineDeps()).run(cultureElement, cultureExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Urban');
+		expect(root.querySelector('.dse-card__rows')).toBeNull();
+		expect(root.querySelector('.dse-card__flavor')!.textContent).toContain('centered in a city');
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Skill Options');
+	});
+
+	test('ds-career: inline example.yaml renders title/badges/rows; Skills and Perk rows render their inline SCC links through renderMarkdown', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		const host = inlineHost('ds-career');
+		await new ElementPipeline(makeInlineDeps()).run(careerElement, careerExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Politician');
+		const badgeTexts = Array.from(root.querySelectorAll('.dse-card__badge')).map((el) => el.textContent);
+		expect(badgeTexts).toEqual(expect.arrayContaining(['Renown +1', 'Wealth +1']));
+
+		const rowByLabel = (label: string) =>
+			Array.from(root.querySelectorAll('.dse-card__row')).find(
+				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
+			)!;
+		const skillsMarkdown =
+			'Two skills from the [interpersonal skill group](scc.v1:mcdm.heroes.v1/skill.group/interpersonal) (*Quick Build:* [Lead](scc.v1:mcdm.heroes.v1/skill.interpersonal/lead), [Lie](scc.v1:mcdm.heroes.v1/skill.interpersonal/lie).)';
+		expect(rowByLabel('Skills').querySelector('.dse-card__row-value')!.textContent).toBe(skillsMarkdown);
+		const perkMarkdown =
+			'One interpersonal perk (*Quick Build:* [Engrossing Monologue](scc.v1:mcdm.heroes.v1/perk/engrossing-monologue).)';
+		expect(rowByLabel('Perk').querySelector('.dse-card__row-value')!.textContent).toBe(perkMarkdown);
+		expect(renderSpy.mock.calls.some((c) => c[1] === skillsMarkdown)).toBe(true);
+		expect(renderSpy.mock.calls.some((c) => c[1] === perkMarkdown)).toBe(true);
+
+		// inciting_incidents is never populated in the real corpus (embedded in `content`
+		// prose instead) — the row is correctly absent, not rendering "undefined".
+		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
+		expect(rowLabels).not.toContain('Inciting incidents');
+	});
+
+	test('ds-class: inline example.yaml renders title/badges/rows; Potencies and Skills rows render their inline SCC links through renderMarkdown', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		const host = inlineHost('ds-class');
+		await new ElementPipeline(makeInlineDeps()).run(classElement, classExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Tactician');
+		const badgeTexts = Array.from(root.querySelectorAll('.dse-card__badge')).map((el) => el.textContent);
+		expect(badgeTexts).toEqual(expect.arrayContaining(['Might', 'Reason']));
+
+		const rowByLabel = (label: string) =>
+			Array.from(root.querySelectorAll('.dse-card__row')).find(
+				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
+			)!;
+		expect(rowByLabel('Starting stamina').querySelector('.dse-card__row-value')!.textContent).toBe('21');
+		expect(rowByLabel('Stamina / level').querySelector('.dse-card__row-value')!.textContent).toBe('9');
+		expect(rowByLabel('Recoveries').querySelector('.dse-card__row-value')!.textContent).toBe('10');
+		const potenciesMarkdown =
+			'[Reason](scc.v1:mcdm.heroes.v1/rule.character/reason) − 2 / [Reason](scc.v1:mcdm.heroes.v1/rule.character/reason) − 1 / [Reason](scc.v1:mcdm.heroes.v1/rule.character/reason)';
+		expect(rowByLabel('Potencies').querySelector('.dse-card__row-value')!.textContent).toBe(potenciesMarkdown);
+		expect(renderSpy.mock.calls.some((c) => c[1] === potenciesMarkdown)).toBe(true);
+		expect(renderSpy.mock.calls.some((c) => typeof c[1] === 'string' && c[1].includes('[Lead](scc.v1:'))).toBe(
+			true,
+		);
+	});
+
+	test('ds-title: inline example.yaml renders title/echelon badge/rows; Prerequisite and Effect render through renderMarkdown', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		const host = inlineHost('ds-title');
+		await new ElementPipeline(makeInlineDeps()).run(titleElement, titleExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Back From the Grave');
+		expect(root.querySelector('.dse-card__badge--echelon')!.textContent).toBe('Echelon 3');
+
+		const rowByLabel = (label: string) =>
+			Array.from(root.querySelectorAll('.dse-card__row')).find(
+				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
+			)!;
+		const prereqMarkdown = "You die at the hands of your greatest foe, that foe still lives, and you aren't a [revenant](scc.v1:mcdm.heroes.v1/ancestry/revenant).";
+		expect(rowByLabel('Prerequisite').querySelector('.dse-card__row-value')!.textContent).toBe(prereqMarkdown);
+		expect(renderSpy.mock.calls.some((c) => c[1] === prereqMarkdown)).toBe(true);
+
+		// benefits[] is never populated in the real corpus (0/66 titles) — correctly absent.
+		const rowLabels = Array.from(root.querySelectorAll('.dse-card__row-label')).map((el) => el.textContent);
+		expect(rowLabels).not.toContain('Benefits');
+	});
+
+	test('ds-perk: inline example.yaml renders title/flavor/body, no Prerequisites row (unpopulated)', async () => {
+		const host = inlineHost('ds-perk');
+		await new ElementPipeline(makeInlineDeps()).run(perkElement, perkExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Familiar');
+		expect(root.querySelector('.dse-card__rows')).toBeNull();
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Familiar Statblock');
+	});
+
+	test('ds-complication: inline example.yaml renders title/rows; Benefit and Drawback render through renderMarkdown', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		const host = inlineHost('ds-complication');
+		await new ElementPipeline(makeInlineDeps()).run(complicationElement, complicationExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Chosen One');
+
+		const rowByLabel = (label: string) =>
+			Array.from(root.querySelectorAll('.dse-card__row')).find(
+				(el) => el.querySelector('.dse-card__row-label')!.textContent === label,
+			)!;
+		const benefitMarkdown =
+			"You have 3 destiny points. Whenever you spend your [Heroic Resource](scc.v1:mcdm.heroes.v1/rule.resource/heroic-resource) for your class, you can spend 1 or more destiny points instead. Each time you earn a [Victory](scc.v1:mcdm.heroes.v1/rule.resource/victories), you regain 1 destiny point.";
+		expect(rowByLabel('Benefit').querySelector('.dse-card__row-value')!.textContent).toBe(benefitMarkdown);
+		expect(renderSpy.mock.calls.some((c) => c[1] === benefitMarkdown)).toBe(true);
+		const drawbackText = rowByLabel('Drawback').querySelector('.dse-card__row-value')!.textContent;
+		expect(drawbackText).toContain('psychic damage');
+	});
+});
+
 describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 	test('ds-kit: full scc.v1: code and bare slug both resolve, no error card', async () => {
 		const { vault, deps } = makeCompendiumDeps();
@@ -228,5 +403,146 @@ describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 		const card = root.querySelector('.dse-error-card-message');
 		expect(card?.textContent).toContain('No compendium entry matches');
 		expect(card?.textContent).toContain('bleeding');
+	});
+});
+
+// D6 Task 7 (spec §2): "every one of the ten mounts inline and by-SCC with no error card"
+// — parametrized over ALL TEN displayFamily() elements (the three from Task 6 + the seven
+// from this task). Inline mounts here are a light title-only smoke check; the rich
+// title/badges/rows/markdown-flag assertions live in the per-element describe blocks
+// above. By-SCC repeats each element's own describe-block assertion (full code + bare
+// slug, no error card) in one place so the "all ten" invariant is a single, obviously
+// exhaustive table rather than implied by scattered individual tests.
+const ALL_TEN: {
+	id: string;
+	element: ElementDefinition<any>;
+	example: string;
+	/** Inline-mode title (from `example`). */
+	inlineTitle: string;
+	/** By-SCC title (from the md-dse fixture at `rel`) — differs from `inlineTitle` for
+	 *  ds-treasure only (Task 6 review Finding 5 swapped the inline example.yaml to a
+	 *  different real treasure than the by-SCC fixture; both are real, just different). */
+	refTitle: string;
+	code: string;
+	rel: string;
+	slug: string;
+}[] = [
+	{ id: 'ds-kit', element: kitElement, example: kitExample, inlineTitle: 'Panther', refTitle: 'Panther', code: KIT_CODE, rel: KIT_REL, slug: 'panther' },
+	{
+		id: 'ds-condition',
+		element: conditionElement,
+		example: conditionExample,
+		inlineTitle: 'Bleeding',
+		refTitle: 'Bleeding',
+		code: CONDITION_CODE,
+		rel: CONDITION_REL,
+		slug: 'bleeding',
+	},
+	{
+		id: 'ds-treasure',
+		element: treasureElement,
+		example: treasureExample,
+		inlineTitle: 'Color Cloak (Blue)',
+		refTitle: "Executioner's Blade",
+		code: TREASURE_CODE,
+		rel: TREASURE_REL,
+		slug: 'executioners-blade',
+	},
+	{
+		id: 'ds-ancestry',
+		element: ancestryElement,
+		example: ancestryExample,
+		inlineTitle: 'Human',
+		refTitle: 'Human',
+		code: 'mcdm.heroes.v1/ancestry/human',
+		rel: 'ancestry/human.md',
+		slug: 'human',
+	},
+	{
+		id: 'ds-culture',
+		element: cultureElement,
+		example: cultureExample,
+		inlineTitle: 'Urban',
+		refTitle: 'Urban',
+		code: 'mcdm.heroes.v1/culture/urban',
+		rel: 'culture/urban.md',
+		slug: 'urban',
+	},
+	{
+		id: 'ds-career',
+		element: careerElement,
+		example: careerExample,
+		inlineTitle: 'Politician',
+		refTitle: 'Politician',
+		code: 'mcdm.heroes.v1/career/politician',
+		rel: 'career/politician.md',
+		slug: 'politician',
+	},
+	{
+		id: 'ds-class',
+		element: classElement,
+		example: classExample,
+		inlineTitle: 'Tactician',
+		refTitle: 'Tactician',
+		code: 'mcdm.heroes.v1/class/tactician',
+		rel: 'class/tactician.md',
+		slug: 'tactician',
+	},
+	{
+		id: 'ds-title',
+		element: titleElement,
+		example: titleExample,
+		inlineTitle: 'Back From the Grave',
+		refTitle: 'Back From the Grave',
+		code: 'mcdm.heroes.v1/title/back-from-the-grave',
+		rel: 'title/back-from-the-grave.md',
+		slug: 'back-from-the-grave',
+	},
+	{
+		id: 'ds-perk',
+		element: perkElement,
+		example: perkExample,
+		inlineTitle: 'Familiar',
+		refTitle: 'Familiar',
+		code: 'mcdm.heroes.v1/perk/familiar',
+		rel: 'perk/familiar.md',
+		slug: 'familiar',
+	},
+	{
+		id: 'ds-complication',
+		element: complicationElement,
+		example: complicationExample,
+		inlineTitle: 'Chosen One',
+		refTitle: 'Chosen One',
+		code: 'mcdm.heroes.v1/complication/chosen-one',
+		rel: 'complication/chosen-one.md',
+		slug: 'chosen-one',
+	},
+];
+
+describe('D6 Task 7: all ten displayFamily elements mount inline and by-SCC with no error card', () => {
+	test.each(ALL_TEN)('$id: inline example.yaml mounts with the expected title, no error card', async ({ id, element, example, inlineTitle }) => {
+		const host = inlineHost(id);
+		await new ElementPipeline(makeInlineDeps()).run(element, example, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe(inlineTitle);
+	});
+
+	test.each(ALL_TEN)('$id: full scc.v1: code and bare slug both resolve, no error card', async ({ id, element, refTitle, code, rel, slug }) => {
+		const { vault, deps } = makeCompendiumDeps();
+		loadMdDseFixture(vault, rel);
+
+		const codeHost = makeHost(id);
+		await new ElementPipeline(deps).run(element, `scc.v1:${code}`, codeHost);
+		const codeRoot = codeHost.containerEl.firstElementChild as HTMLElement;
+		expect(codeRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(codeRoot.querySelector('.dse-card__title')!.textContent).toBe(refTitle);
+
+		const slugHost = makeHost(id);
+		await new ElementPipeline(deps).run(element, slug, slugHost);
+		const slugRoot = slugHost.containerEl.firstElementChild as HTMLElement;
+		expect(slugRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe(refTitle);
 	});
 });

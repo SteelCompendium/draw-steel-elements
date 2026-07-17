@@ -54,6 +54,13 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'kit',
 	'condition',
 	'treasure',
+	'ancestry',
+	'culture',
+	'career',
+	'class',
+	'title',
+	'perk',
+	'complication',
 ];
 
 /**

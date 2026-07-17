@@ -39,25 +39,40 @@ import skillsDefault from '../src/elements/skills/example.yaml';
 import staminaBarDefault from '../src/elements/stamina-bar/example.yaml';
 import statblockDefault from '../src/elements/statblock/example.yaml';
 import valuesRowDefault from '../src/elements/values-row/example.yaml';
-// D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances.
+// D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances. Task 7 adds
+// the remaining seven.
 import kitDefault from '../src/elements/display/kit/example.yaml';
 import conditionDefault from '../src/elements/display/condition/example.yaml';
 import treasureDefault from '../src/elements/display/treasure/example.yaml';
+import ancestryDefault from '../src/elements/display/ancestry/example.yaml';
+import cultureDefault from '../src/elements/display/culture/example.yaml';
+import careerDefault from '../src/elements/display/career/example.yaml';
+import classDefault from '../src/elements/display/class/example.yaml';
+import titleDefault from '../src/elements/display/title/example.yaml';
+import perkDefault from '../src/elements/display/perk/example.yaml';
+import complicationDefault from '../src/elements/display/complication/example.yaml';
 
 export const FIXTURES: Record<string, Record<string, string>> = {
+	ancestry: { default: ancestryDefault },
+	career: { default: careerDefault },
 	characteristics: { default: characteristicsDefault },
+	class: { default: classDefault },
+	complication: { default: complicationDefault },
 	condition: { default: conditionDefault },
 	counter: { default: counterDefault },
+	culture: { default: cultureDefault },
 	feature: { default: featureDefault },
 	featureblock: { default: featureblockDefault },
 	'horizontal-rule': { default: horizontalRuleDefault },
 	initiative: { default: initiativeDefault },
 	kit: { default: kitDefault },
 	negotiation: { default: negotiationDefault },
+	perk: { default: perkDefault },
 	roll: { default: rollDefault },
 	skills: { default: skillsDefault },
 	'stamina-bar': { default: staminaBarDefault },
 	statblock: { default: statblockDefault },
+	title: { default: titleDefault },
 	treasure: { default: treasureDefault },
 	'values-row': { default: valuesRowDefault },
 };

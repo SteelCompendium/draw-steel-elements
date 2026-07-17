@@ -13,5 +13,12 @@
 	"roll": "ds-roll",
 	"kit": "ds-kit",
 	"condition": "ds-condition",
-	"treasure": "ds-treasure"
+	"treasure": "ds-treasure",
+	"ancestry": "ds-ancestry",
+	"culture": "ds-culture",
+	"career": "ds-career",
+	"class": "ds-class",
+	"title": "ds-title",
+	"perk": "ds-perk",
+	"complication": "ds-complication"
 }
