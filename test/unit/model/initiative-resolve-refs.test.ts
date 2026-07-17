@@ -323,14 +323,24 @@ describe('T-2: resolution errors re-throw the legacy multi-line hint', () => {
 		);
 	});
 
-	test('DANGLING ref (file exists, no ds-* block) -> no-block error wrapped in the hint, byte-equal to legacy', async () => {
+	test('DANGLING ref (file exists, no ds-* block) -> no-block error wrapped in the hint', async () => {
+		// NOT byte-equal to legacy as of Task 6 (F2 §4.3c): ReferenceResolver.ts's shared
+		// extractFirstDsBlock (used by legacyMaterialize, via EncounterData.ts) now appends
+		// a frontmatter-type-aware re-sync hint to this message. refs.ts's resolveBarePath
+		// still has its own pre-Task-6 inlined copy of the ds-block error (DS_BLOCK_RE at
+		// refs.ts:82/157) — Task 7 replaces that placeholder with extractFirstDsBlock and
+		// reunifies the two messages. Until then, only the shared prefix is asserted here.
 		const { app, refs } = makeEnv();
 		app.vault.setFile('Plain Note.md', '# no ds block here');
 		const src = 'heroes:\n  - statblock: "Plain Note"\nenemy_groups: []';
 		const message = await errorMessageOf(resolveLikePipeline(src, refs));
-		expect(message).toBe(await errorMessageOf(legacyMaterialize(src, app)));
+		const legacyMessage = await errorMessageOf(legacyMaterialize(src, app));
 		expect(message).toContain('Failed to resolve hero statblock reference at index 0 (Plain Note):');
 		expect(message).toContain('No Draw Steel Elements code block (ds-*) found in Plain Note.md');
+		expect(legacyMessage).toContain('Failed to resolve hero statblock reference at index 0 (Plain Note):');
+		expect(legacyMessage).toContain(
+			'No Draw Steel Elements code block (ds-*) found in Plain Note.md. If this is a compendium file, re-sync the compendium to get the latest format.',
+		);
 	});
 
 	test('block that parses to NULL: merge skipped WITHOUT the hint; validation reports the field (byte-equal to legacy)', async () => {

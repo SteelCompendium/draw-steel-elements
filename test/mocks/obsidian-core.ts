@@ -179,6 +179,21 @@ export class FakeMetadataCache {
 		}
 		return null;
 	}
+
+	// T-6: parses the file's YAML frontmatter block on demand (real Obsidian caches
+	// this; re-parsing per call is fine at test scale). Used by
+	// ReferenceResolver.extractFirstDsBlock's miss-error path (names frontmatter `type`).
+	getFileCache(file: TFile): { frontmatter?: Record<string, any> } | null {
+		const content = this.vault.getContent(file.path);
+		if (content == null) return null;
+		const match = /^---\n([\s\S]*?)\n---/.exec(content);
+		if (!match) return null;
+		try {
+			return { frontmatter: parseYaml(match[1]) };
+		} catch {
+			return null;
+		}
+	}
 }
 
 export class App {
