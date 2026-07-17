@@ -51,6 +51,9 @@ import classDefault from '../src/elements/display/class/example.yaml';
 import titleDefault from '../src/elements/display/title/example.yaml';
 import perkDefault from '../src/elements/display/perk/example.yaml';
 import complicationDefault from '../src/elements/display/complication/example.yaml';
+// D6 Task 8 (plan 16, spec §3) — genericCard()'s only instance: ds-rule (model-less,
+// reference-only, raw-markdown inline fallback per OD-D6-7).
+import ruleDefault from '../src/elements/display/rule/example.yaml';
 
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
@@ -69,6 +72,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	negotiation: { default: negotiationDefault },
 	perk: { default: perkDefault },
 	roll: { default: rollDefault },
+	rule: { default: ruleDefault },
 	skills: { default: skillsDefault },
 	'stamina-bar': { default: staminaBarDefault },
 	statblock: { default: statblockDefault },

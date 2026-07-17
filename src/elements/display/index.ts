@@ -2,7 +2,8 @@
 // ds-treasure, the first three displayFamily() instances. Task 7 adds the remaining seven
 // (ds-ancestry/ds-culture/ds-career/ds-class/ds-title/ds-perk/ds-complication) — same
 // factory, no new machinery.
-import { displayFamily } from './displayFamily';
+import { displayFamily, genericCard } from './displayFamily';
+import type { ElementDefinition } from '@/framework/registry';
 import {
 	kitLayout,
 	conditionLayout,
@@ -26,6 +27,7 @@ import classExample from './class/example.yaml';
 import titleExample from './title/example.yaml';
 import perkExample from './perk/example.yaml';
 import complicationExample from './complication/example.yaml';
+import ruleExample from './rule/example.yaml';
 
 export const kitElement = displayFamily<Kit>({
 	id: 'kit',
@@ -117,7 +119,25 @@ export const complicationElement = displayFamily<Complication>({
 	example: complicationExample,
 });
 
-export const displayElements = [
+// D6 Task 8 (spec §3): the model-less sibling — genericCard(), not displayFamily(). No SDK
+// model exists for `rule.*`; the by-SCC path is covered by TYPE_ADAPTERS' matching
+// GenericNote adapter (typeAdapters.ts) instead of a `type` lookup here.
+export const ruleElement = genericCard({
+	id: 'rule',
+	aliases: ['ds-rule'],
+	name: 'Rule',
+	sccType: /^rule($|\.)/,
+	example: ruleExample,
+});
+
+// D6 Task 8 review note: explicitly widened to `ElementDefinition<any>[]` — an implicit
+// array-literal type inferred a union of all eleven `ElementDefinition<RefOrInline<X>>`
+// element types, which `main.ts`'s `for (const el of displayElements) registry.register(el)`
+// then failed to type-check (`register<M>`'s generic inference can't collapse an invariant
+// union like `ElementDefinition<Kit> | ElementDefinition<GenericNote> | …` back down to a
+// single `M`). This array's whole purpose is "a bag of heterogeneous definitions, registered
+// generically" — `any` here is the correct, deliberate escape hatch for that, not a lint dodge.
+export const displayElements: ElementDefinition<any>[] = [
 	kitElement,
 	conditionElement,
 	treasureElement,
@@ -128,4 +148,5 @@ export const displayElements = [
 	titleElement,
 	perkElement,
 	complicationElement,
+	ruleElement,
 ];

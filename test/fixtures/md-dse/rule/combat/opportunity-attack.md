@@ -1,0 +1,14 @@
+---
+file_basename: opportunity-attack
+file_dpath: rule/combat
+item_id: opportunity-attack
+item_name: Opportunity Attacks
+name: Opportunity Attacks
+scc: mcdm.heroes.v1/rule.combat/opportunity-attack
+source: mcdm.heroes.v1
+type: rule
+---
+
+Whenever a creature has an enemy [adjacent](scc.v1:mcdm.heroes.v1/rule.combat/adjacent) to them and the enemy willingly moves to a space that isn't [adjacent](scc.v1:mcdm.heroes.v1/rule.combat/adjacent) to the creature without [shifting](scc.v1:mcdm.heroes.v1/movement/shifting), the creature can take advantage of that movement to quickly make a [melee](scc.v1:mcdm.heroes.v1/rule.combat/melee) [free strike](scc.v1:mcdm.heroes.v1/feature.common.main-actions/free-strike) against the enemy as a free [triggered action](scc.v1:mcdm.heroes.v1/rule.combat/triggered-action). This is called an opportunity attack.
+
+If a creature has a [bane](scc.v1:mcdm.heroes.v1/rule.dice/bane) or double [bane](scc.v1:mcdm.heroes.v1/rule.dice/bane) on the [power roll](scc.v1:mcdm.heroes.v1/rule.dice/power-roll) against the enemy, they can't make an opportunity attack.

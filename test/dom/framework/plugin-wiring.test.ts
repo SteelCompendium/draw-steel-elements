@@ -61,6 +61,7 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'title',
 	'perk',
 	'complication',
+	'rule',
 ];
 
 /**

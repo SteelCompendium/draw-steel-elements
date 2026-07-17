@@ -35,6 +35,24 @@ function frontmatterOf(app: App, file: TFile): Record<string, unknown> {
 export type ElementModel = unknown;
 
 /**
+ * D6 Task 8 (spec §3) -- the model-less family's "model": no SDK DTO exists for these SCC
+ * types (e.g. `rule.*`), so the file's own frontmatter name + body stand in directly.
+ * `genericCard()` (displayFamily.ts) is the inline-mode producer of this shape; the
+ * `genericNoteAdapter` below is the by-SCC producer -- same shape either way, so
+ * `DisplayCardView<GenericNote>` never has to know which path it came from.
+ */
+export interface GenericNote {
+	name: string;
+	type: string;
+	body: string;
+}
+
+/** Mirrors CompendiumIndex.ts's own frontmatter-stripping regex (kept local rather than
+ *  imported -- CompendiumIndex.ts already imports FROM this module, so importing back
+ *  would be circular). Both anchor the same `---\n...\n---\n?` frontmatter block. */
+const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
+
+/**
  * The statblock family's `type` scope, anchored so a bare `statblock` or any
  * `<family>.statblock` (e.g. `monster.goblin.statblock`) matches but `notastatblock`
  * doesn't. Exported so CompendiumIndex.getStatblock can gate on the SAME regex
@@ -84,6 +102,32 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown): TypeAdap
 }
 
 /**
+ * D6 Task 8 (spec §3) -- the model-less family (`rule.*`, …): no SDK model exists, so
+ * `fromFile` builds a `GenericNote` straight from the resolved file's frontmatter (name)
+ * + body (frontmatter-stripped markdown) instead of dispatching to an SDK reader. No
+ * `fromData` -- `genericCard()`'s inline path builds its own `GenericNote` directly (the
+ * raw block body itself IS the card body, OD-D6-7), so this adapter is by-SCC only,
+ * exactly like the ds-block family above being fromFile-only for the opposite reason.
+ */
+function genericNoteAdapter(re: RegExp): TypeAdapter {
+	return {
+		matches: (type) => re.test(type),
+		fromFile: async (app, file) => {
+			const fm = frontmatterOf(app, file);
+			const name =
+				typeof fm.item_name === "string" ? fm.item_name
+				: typeof fm.name === "string" ? fm.name
+				: file.basename;
+			const noteType = typeof fm.type === "string" ? fm.type : "";
+			const content = await app.vault.read(file);
+			const body = content.replace(FRONTMATTER_RE, "");
+			const note: GenericNote = { name, type: noteType, body };
+			return note;
+		},
+	};
+}
+
+/**
  * SINGLE SOURCE OF TRUTH -- the display family (Task 6) and CompendiumIndex share this.
  * Order matters: statblock/featureblock must precede the bare `feature` entry so
  * e.g. `monster.goblin.statblock` (or bare `statblock`) doesn't fall through to it.
@@ -102,6 +146,9 @@ export const TYPE_ADAPTERS: TypeAdapter[] = [
 	frontmatterAdapter(/^treasure$/, Treasure.modelDTOAdapter),
 	frontmatterAdapter(/^complication$/, Complication.modelDTOAdapter),
 	frontmatterAdapter(/^condition$/, Condition.modelDTOAdapter),
+	// D6 Task 8 (spec §3): model-less family -- `rule` (bare, in the real corpus) plus any
+	// future `rule.<sub>` namespacing. Placed last: nothing above it is ever named "rule".
+	genericNoteAdapter(/^rule($|\.)/),
 ];
 
 export function adapterForType(type: string): TypeAdapter | undefined {

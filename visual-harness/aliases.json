@@ -20,5 +20,6 @@
 	"class": "ds-class",
 	"title": "ds-title",
 	"perk": "ds-perk",
-	"complication": "ds-complication"
+	"complication": "ds-complication",
+	"rule": "ds-rule"
 }
