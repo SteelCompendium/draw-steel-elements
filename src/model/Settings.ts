@@ -35,11 +35,15 @@ export const DEFAULT_SETTINGS: DSESettings = {
  * D4 §5.3 — migrate whatever loadData() returned to the current shape. v0 → v1 is
  * purely additive and lossless: the three operational fields carry over verbatim;
  * `prefs` initializes empty (⇒ every pref resolves to its default ⇒ zero visual
- * change for existing vaults); `settingsVersion` stamps 1. Future structural
- * changes add `if (priorVersion < N) { … }` branches here — checked against the
- * RAW on-disk version (captured before Object.assign fills in the current default),
- * so an old on-disk object with no settingsVersion field at all is never mistaken
- * for "already migrated".
+ * change for existing vaults). Every migration run stamps `settingsVersion` to
+ * whatever `DEFAULT_SETTINGS.settingsVersion` currently is (line below — NOT a
+ * hardcoded literal), so this doc comment's version number tracks that constant,
+ * not a fixed "1": it was 1 when D4 shipped this migration; F2 Task 10 bumped it to
+ * 2 (see the v1 → v2 paragraph next) and a future structural change bumps it again.
+ * Future structural changes add `if (priorVersion < N) { … }` branches here —
+ * checked against the RAW on-disk version (captured before Object.assign fills in
+ * the current default), so an old on-disk object with no settingsVersion field at
+ * all is never mistaken for "already migrated".
  *
  * v1 → v2 (F2 Task 10, the 6.0.0 data-unified switch): pre-2.x `compendiumReleaseTag`
  * values are release tags from the now-retired `data-md-dse` repo (the legacy

@@ -2,8 +2,10 @@
 //
 // Two owners, one tab: the PREF SECTIONS are GENERATED from the descriptor list
 // (adding a pref = adding a descriptor in src/prefs/catalog.ts — no hand-wiring),
-// then the OPERATIONAL sections (Compendium downloader, Initiative tracker) are
-// hand-written carry-overs, F2's territory (F2 §3.4 reworks them; verbatim here).
+// then the OPERATIONAL sections (Compendium sync, Links, Initiative tracker) are
+// hand-written — F2's territory (F2 §3.4 Task 11 reworked the old Compendium
+// downloader section wholesale: sentence-case labels, a manifest-driven sync status
+// line, Sync/Check-for-updates buttons, and the new Links section for sccWebFallback).
 //
 // Live apply: every control's onChange calls prefs.set(); set() notifies
 // subscribers synchronously (Task 1), so prefs.reflect() re-stamps every mounted
