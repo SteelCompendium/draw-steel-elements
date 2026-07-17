@@ -1,7 +1,8 @@
 // Plan 13 Task 1 (D4 §5) — real saveData-backed preference storage: the sparse
-// prefs slice on DSESettings, the v0→v1 migration, the debounced storage adapter,
-// and the store's sparse/notify-first behavior. Replaces the F1-era no-op
-// PrefsStorage stub in initializeElementFrameworkV2 (main.ts).
+// prefs slice on DSESettings, the settings migration chain (v0→v1, then v1→v2 —
+// F2 Task 10's dead-repo release-tag reset), the debounced storage adapter, and the
+// store's sparse/notify-first behavior. Replaces the F1-era no-op PrefsStorage stub
+// in initializeElementFrameworkV2 (main.ts).
 import { DEFAULT_SETTINGS, migrateSettings } from '@model/Settings';
 import type { DSESettings } from '@model/Settings';
 import { createSaveDataPrefsStorage } from 'main';
@@ -11,19 +12,27 @@ import { createThemeService } from '../../../src/framework/seams/theme';
 import { Component } from '../../mocks/obsidian';
 import { flushAsync } from '../../mocks/obsidian';
 
-describe('D4 §5.3 — migrateSettings (v0 → v1, additive & lossless)', () => {
-	test('a v0 on-disk object carries its three fields over and gains prefs {} + settingsVersion 1', () => {
+describe('D4 §5.3 / F2 Task 10 §6 — migrateSettings (v0/v1 → v2, additive except the dead-repo tag reset)', () => {
+	test('a v0 on-disk object carries compendiumDestinationDirectory/defaultImagePath over, gains prefs {} + settingsVersion 2, but its dead-repo release tag is wiped', () => {
 		const v0 = {
-			compendiumReleaseTag: 'v2.0.0',
+			compendiumReleaseTag: 'v2.0.0', // a pre-6.0.0 data-md-dse tag — must never replay against data-unified
 			compendiumDestinationDirectory: 'My Compendium',
 			defaultImagePath: 'img/tok.png',
 		};
 		const s = migrateSettings(v0);
-		expect(s.compendiumReleaseTag).toBe('v2.0.0');
+		expect(s.compendiumReleaseTag).toBe('');
 		expect(s.compendiumDestinationDirectory).toBe('My Compendium');
 		expect(s.defaultImagePath).toBe('img/tok.png');
+		expect(s.compendiumLocale).toBe('en');
 		expect(s.prefs).toEqual({});
-		expect(s.settingsVersion).toBe(1);
+		expect(s.settingsVersion).toBe(2);
+	});
+
+	test('an already-v2 object with a user-pinned release tag passes it through unchanged', () => {
+		const v2 = { ...DEFAULT_SETTINGS, settingsVersion: 2, compendiumReleaseTag: 'v4.pinned' };
+		const s = migrateSettings(v2);
+		expect(s.compendiumReleaseTag).toBe('v4.pinned');
+		expect(s.settingsVersion).toBe(2);
 	});
 
 	test('null/undefined raw (fresh install) yields DEFAULT_SETTINGS shape', () => {

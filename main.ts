@@ -1,7 +1,9 @@
-import {App, Notice, Plugin} from 'obsidian';
+import {App, Notice, Plugin, TFolder, normalizePath} from 'obsidian';
 import {DseSettingTab} from "@views/SettingsTab";
+import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
-import {CompendiumDownloader} from "@utils/CompendiumDownloader";
+import {CompendiumSyncService, SyncOptions} from "@/data/CompendiumSyncService";
+import {ManifestStore} from "@/data/manifest";
 import { registerElements } from '@/utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
 import componentWrapperSchemaYaml from '@model/schemas/ComponentWrapperSchema.yaml';
@@ -87,7 +89,7 @@ export interface ElementFrameworkV2 {
  *
  * A standalone factory (App/Plugin/settings in, bundle out) rather than inline in
  * `onload`, so it is directly unit-testable without driving the full plugin lifecycle
- * (CompendiumDownloader, settings tab, etc. — see the Task 10 test).
+ * (compendium sync service, settings tab, etc.).
  *
  * **Resilience (Task-1 review requirement):** each dependency schema is registered
  * inside its own try/catch. A malformed schema must never crash plugin `onload` — it
@@ -248,11 +250,15 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      *  Task 12's post-processor reuses it directly. */
     sccResolver: SccResolver;
 
+    /** F2 Task 10: the compendium manifest-diff bookkeeping (Task 8) and the
+     *  network+zip sync engine (Task 9/10) that consumes it. Both plugin fields
+     *  (not just closed over) so `syncCompendium`/`syncOptions` and any future
+     *  Settings-tab operational section (Task 11) can reuse them directly. */
+    manifestStore: ManifestStore;
+    syncService: CompendiumSyncService;
+
     /** D4: the debounced saveData adapter behind the PreferenceStore; flushed on unload. */
     private prefsStorage?: FlushablePrefsStorage;
-
-	readonly githubOwner = "steelCompendium";
-	readonly githubRepo = "data-md-dse";
 
     async onload() {
         console.log("Loading Draw Steel Elements Plugin.")
@@ -279,6 +285,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             this.prefsStorage,
         );
         this.frameworkV2 = frameworkV2;
+
+        // F2 Task 10: the compendium sync engine. ManifestStore is pure vault-file
+        // bookkeeping (Task 8); CompendiumSyncService's default `requestUrlFn` param
+        // is the real `requestUrl` (Task 9's forward-compat ctor stub, wired live here).
+        this.manifestStore = new ManifestStore(this.app, this.manifest.id);
+        this.syncService = new CompendiumSyncService(this.app, this.manifestStore);
 
         // F2 §4.4: the scc resolver + its RefProvider, registered onto the framework's
         // ReferenceService (F1 §3.7 seam — see src/refs/SccRefProvider.ts). Later-
@@ -309,9 +321,16 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.registerEditorSuggest(new DsSchemaSuggest(this.app, frameworkV2.registry));
 
         this.addCommand({
+            id: 'sync-compendium',
+            name: 'Sync compendium',
+            callback: () => this.syncCompendium(),
+        });
+        // Legacy alias: removing a command id silently drops any hotkey a user bound
+        // to it. Keep for the 6.x cycle; remove in 7.0.0 (F2 §3.4).
+        this.addCommand({
             id: 'download-data-md-dse',
-            name: 'Download Compendium',
-            callback: () => this.downloadAndExtractRelease(),
+            name: 'Sync compendium (legacy alias)',
+            callback: () => this.syncCompendium(),
         });
     }
 
@@ -361,9 +380,39 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         console.log("Draw Steel Elements Plugin unloaded and schema registry reset");
     }
 
-    async downloadAndExtractRelease() {
-        return new CompendiumDownloader(this.app, this.githubOwner, this.githubRepo, undefined)
-            .downloadAndExtractRelease(this.settings.compendiumReleaseTag, this.settings.compendiumDestinationDirectory);
+    /** F2 Task 10 — the sync options derived from live settings; also Task 11's
+     *  Settings-tab handle for a "sync now" affordance. */
+    syncOptions(): SyncOptions {
+        return {
+            root: this.settings.compendiumDestinationDirectory,
+            releaseTag: this.settings.compendiumReleaseTag || undefined,
+            locale: this.settings.compendiumLocale,
+        };
+    }
+
+    /**
+     * F2 Task 10 — the command/settings-button entry point. OD-6: on a genuinely
+     * first sync (no manifest yet) where the configured root already holds files,
+     * offer the confirmed legacy-folder choice before touching anything; every other
+     * call goes straight to `syncService.sync` (itself non-destructive by
+     * construction — see CompendiumSyncService.applySync, Task 9).
+     */
+    async syncCompendium(): Promise<void> {
+        const options = this.syncOptions();
+        const manifest = await this.manifestStore.load();
+        if (manifest === null) {
+            const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
+            if (root instanceof TFolder && root.children.length > 0) {
+                new LegacyCompendiumModal(this.app, options.root, async (trashOldRoot) => {
+                    if (trashOldRoot) {
+                        await this.app.fileManager.trashFile(root);
+                    }
+                    await this.syncService.sync(this.syncOptions());
+                }).open();
+                return;
+            }
+        }
+        await this.syncService.sync(options);
     }
 
     async loadSettings() {

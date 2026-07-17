@@ -12,7 +12,6 @@
 // dse-toggle-print-preview), deleted from main.ts in this same task.
 import { App, Component, PluginSettingTab, Setting } from 'obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
-import { CompendiumDownloader } from '@utils/CompendiumDownloader';
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '@/framework/seams/prefs';
 import {
 	GROUP_ORDER,
@@ -198,7 +197,11 @@ export class DseSettingTab extends PluginSettingTab {
 	private renderOperationalSections(containerEl: HTMLElement): void {
 		containerEl.createEl('h3', { text: 'Draw Steel Compendium Downloader' });
 		containerEl.createEl('p', {
-			text: 'Important: The Compendium will download to a specific directory in your vault and delete any files in that directory',
+			// F2 Task 10: the sync engine (CompendiumSyncService.applySync) is
+			// non-destructive by construction — it never deletes or overwrites content
+			// it didn't install itself. Full copy rework is Task 11; this text is fixed
+			// here because the old wording is actively false/scary as of this change.
+			text: 'The Compendium syncs into a specific directory in your vault. Your own files there are never overwritten or deleted — anything that collides with a compendium file is skipped and reported.',
 		});
 
 		new Setting(containerEl)
@@ -216,7 +219,7 @@ export class DseSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Destination Directory')
-			.setDesc('Directory within your vault to extract the Compendium contents to.  THIS DIRECTORY WILL BE WIPED CLEAN!')
+			.setDesc('Directory within your vault to sync the Compendium contents into. Your own files there are safe (never overwritten or deleted).')
 			.addText((text) =>
 				text
 					.setPlaceholder('ImportedContent')
@@ -232,15 +235,7 @@ export class DseSettingTab extends PluginSettingTab {
 			text: 'Download Compendium',
 		});
 		downloadButton.addEventListener('click', () => {
-			return new CompendiumDownloader(
-				this.app,
-				this.plugin.githubOwner,
-				this.plugin.githubRepo,
-				undefined,
-			).downloadAndExtractRelease(
-				this.plugin.settings.compendiumReleaseTag,
-				this.plugin.settings.compendiumDestinationDirectory,
-			);
+			void this.plugin.syncCompendium();
 		});
 
 		containerEl.createEl('h3', { text: 'Initiative Tracker' });

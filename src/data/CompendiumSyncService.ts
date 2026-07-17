@@ -1,6 +1,7 @@
 import {
-	App, TFile, normalizePath, requestUrl, RequestUrlParam, RequestUrlResponse,
+	App, Notice, TFile, normalizePath, requestUrl, RequestUrlParam, RequestUrlResponse,
 } from "obsidian";
+import * as JSZip from "jszip";
 import {
 	CompendiumManifest, ManifestStore, MANIFEST_SCHEMA_VERSION, sha256Hex,
 } from "./manifest";
@@ -152,6 +153,124 @@ export class CompendiumSyncService {
 		};
 		await this.store.save(manifest);
 		return { report, manifest };
+	}
+
+	/**
+	 * F2 Task 10 — the full user-facing sync: resolve the release → download the
+	 * locale/format asset → unzip it → applySync. A single updating Notice tracks
+	 * progress; on failure the Notice is replaced with an error Notice and the error
+	 * rethrown (callers, e.g. main.ts's syncCompendium, don't need their own try/catch
+	 * for the common path).
+	 */
+	public async sync(options: SyncOptions): Promise<SyncReport> {
+		const notice = new Notice("Draw Steel Elements: resolving compendium release…", 0);
+		try {
+			const { tag, assetUrl } = await this.resolveRelease(options);
+			notice.setMessage(`Draw Steel Elements: downloading ${tag}…`);
+			const zipBuffer = await this.downloadAsset(assetUrl);
+			notice.setMessage("Draw Steel Elements: reading archive…");
+			const incoming = await this.readZip(zipBuffer);
+			const oldManifest = await this.store.load();
+			const { report } = await this.applySync(
+				incoming, oldManifest, options, tag,
+				(done, total) => notice.setMessage(
+					`Draw Steel Elements: syncing compendium… ${done}/${total}`));
+			notice.hide();
+			this.showSummary(report);
+			return report;
+		} catch (error) {
+			notice.hide();
+			const message = error instanceof Error ? error.message : String(error);
+			console.error("Draw Steel Elements: compendium sync failed:", error);
+			new Notice(`Draw Steel Elements: compendium sync failed — ${message}`, 8000);
+			throw error;
+		}
+	}
+
+	/**
+	 * Metadata-only update check (one GitHub API request; unauthenticated rate limit
+	 * is 60/hr) — never downloads or extracts the asset.
+	 */
+	public async checkForUpdates(): Promise<{
+		installedTag: string | null; latestTag: string; upToDate: boolean;
+	}> {
+		const { tag } = await this.resolveRelease({ root: "", locale: "en" });
+		const manifest = await this.store.load();
+		return {
+			installedTag: manifest?.releaseTag ?? null,
+			latestTag: tag,
+			upToDate: manifest?.releaseTag === tag,
+		};
+	}
+
+	/** Resolves the release (latest, or `options.releaseTag` pinned) and locates the
+	 *  `{format}-unified-{locale}.zip` asset within it — one GitHub API request. */
+	private async resolveRelease(options: SyncOptions): Promise<{ tag: string; assetUrl: string }> {
+		const base = `https://api.github.com/repos/${COMPENDIUM_SOURCE}/releases`;
+		const url = options.releaseTag
+			? `${base}/tags/${encodeURIComponent(options.releaseTag)}`
+			: `${base}/latest`;
+		const response = await this.requestUrlFn({
+			url, method: "GET",
+			headers: { Accept: "application/vnd.github.v3+json" },
+			throw: false,
+		});
+		if (response.status !== 200) {
+			throw new Error(`GitHub release lookup failed (HTTP ${response.status}) for ${url}`);
+		}
+		const release = response.json;
+		const assetName = `${COMPENDIUM_FORMAT}-unified-${options.locale}.zip`;
+		const asset = (release.assets ?? []).find((a: any) => a.name === assetName);
+		if (!asset) {
+			throw new Error(
+				`Release ${release.tag_name} has no asset named ${assetName}. ` +
+				`The data-unified release pipeline may not have published this locale/format yet.`);
+		}
+		return { tag: release.tag_name, assetUrl: asset.url };
+	}
+
+	private async downloadAsset(assetUrl: string): Promise<ArrayBuffer> {
+		const response = await this.requestUrlFn({
+			url: assetUrl, method: "GET",
+			headers: { Accept: "application/octet-stream" },
+			throw: false,
+		});
+		if (response.status !== 200) {
+			throw new Error(`Asset download failed (HTTP ${response.status})`);
+		}
+		if (!response.arrayBuffer || response.arrayBuffer.byteLength === 0) {
+			throw new Error("Downloaded compendium asset is empty.");
+		}
+		return response.arrayBuffer;
+	}
+
+	/** Zip root IS the incoming-set root (class/…, monster/… at top level — F2 §3.2),
+	 *  matching data-unified's real release layout (content at zip root). */
+	private async readZip(buffer: ArrayBuffer): Promise<Map<string, Uint8Array>> {
+		const zip = await JSZip.loadAsync(buffer);
+		const incoming = new Map<string, Uint8Array>();
+		for (const [entryPath, entry] of Object.entries(zip.files)) {
+			if (entry.dir) continue;
+			incoming.set(entryPath, await entry.async("uint8array"));
+		}
+		if (incoming.size === 0) throw new Error("Downloaded archive contains no files.");
+		return incoming;
+	}
+
+	private showSummary(report: SyncReport): void {
+		new Notice(
+			`Draw Steel Elements: compendium ${report.releaseTag} synced — ` +
+			`${report.created.length} new, ${report.updated.length} updated, ` +
+			`${report.trashed.length} removed.`);
+		const skipped = report.skippedConflicts.length + report.keptModified.length;
+		if (skipped > 0) {
+			new Notice(
+				`Draw Steel Elements: ${skipped} file(s) skipped to protect your changes — ` +
+				`see the developer console for the list.`, 10000);
+			console.warn(
+				"Draw Steel Elements: sync skipped these paths (user content is never overwritten):",
+				{ squattingOnCompendiumPaths: report.skippedConflicts, userModifiedRemovedUpstream: report.keptModified });
+		}
 	}
 
 	private async ensureParentFolders(vaultPath: string): Promise<void> {
