@@ -10,13 +10,22 @@ import type { Editor, Plugin } from 'obsidian';
 import type { CompendiumEntity, CompendiumEntry, CompendiumIndex } from '@/services/CompendiumIndex';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 import { typeToAlias } from '@/services/typeAdapters';
+import { wrapFence } from './scaffold';
 import { CompendiumSearchModal } from './CompendiumSearchModal';
 
 /** Reference block (OD-D6-6 default): a fenced `ds-<alias>` block whose body is just the
- *  bare SCC code — live-updates with the compendium, smallest possible note. */
+ *  bare SCC code — live-updates with the compendium, smallest possible note.
+ *
+ *  **Adjudication (D6 Task 10):** The spec's own example (§4.3) shows the inserted body as
+ *  a bare item slug (smallest note). We instead insert the full `entry.scc` triple
+ *  (`source/type/item`), a deliberate deviation justified by the workspace's "codes are
+ *  forever" principle: machine-inserted references prefer the unambiguous permanent code
+ *  over slug brevity, since a slug can become ambiguous as the corpus grows. `detectWholeBlockRef`
+ *  rule 2 (§1.3) handles this correctly: it detects `/` in the body and resolves the full code.
+ *  This deviation is ratified and documented here. */
 export function insertReferenceBlock(editor: Editor, entry: CompendiumEntry): void {
 	const alias = typeToAlias(entry.type);
-	editor.replaceSelection(`\`\`\`${alias}\n${entry.scc}\n\`\`\`\n`);
+	editor.replaceSelection(wrapFence(alias, entry.scc) + '\n');
 }
 
 /** Inline link: prose-friendly, renders via `rewriteSccAnchors` (F2 §4.3) and the D6 §5
@@ -58,7 +67,7 @@ export async function insertFullBlock(editor: Editor, entity: CompendiumEntity):
 	const model = await entity.model();
 	const dto = extractDTO(model);
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
-	editor.replaceSelection(`\`\`\`${alias}\n${body}\n\`\`\`\n`);
+	editor.replaceSelection(wrapFence(alias, body) + '\n');
 }
 
 /** Copy code: the bare `scc:<code>` form, for pasting elsewhere by hand. Best-effort —

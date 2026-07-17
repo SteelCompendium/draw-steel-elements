@@ -65,6 +65,22 @@ describe('parseCompendiumQuery', () => {
 	test('a type: prefix combined with free text keeps both', () => {
 		expect(parseCompendiumQuery('type:kit panth')).toEqual({ text: 'panth', filters: { type: 'kit' } });
 	});
+	test('both type: and source: in the same query parse together', () => {
+		expect(parseCompendiumQuery('type:kit source:mcdm.heroes.v1 panth')).toEqual({
+			text: 'panth',
+			filters: { type: 'kit', source: 'mcdm.heroes.v1' },
+		});
+	});
+	test('a colon adjacent to non-keyword text falls through to plain fuzzy text', () => {
+		expect(parseCompendiumQuery('Anti-type:hero')).toEqual({
+			text: 'Anti-type:hero',
+			filters: {},
+		});
+		expect(parseCompendiumQuery('Open source: License')).toEqual({
+			text: 'Open source: License',
+			filters: {},
+		});
+	});
 });
 
 describe('CompendiumSearchModal (spec §4.2)', () => {
@@ -218,12 +234,30 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 		expect(editor.writes[0].text.startsWith('```ds-rule\n')).toBe(true);
 	});
 
-	test('copyCode writes scc:<code> to the clipboard when available and always shows a Notice', async () => {
+	test('copyCode writes scc:<code> to the clipboard when available', async () => {
 		const writeText = jest.fn().mockResolvedValue(undefined);
 		(navigator as any).clipboard = { writeText };
 		await copyCode(kitEntry);
 		expect(writeText).toHaveBeenCalledWith(`scc:${KIT}`);
 		delete (navigator as any).clipboard;
+	});
+
+	test('copyCode always shows a Notice with the copied text on success', async () => {
+		const { Notice: NoticeMock } = await import('../../mocks/obsidian');
+		NoticeMock.notices.length = 0;
+		const writeText = jest.fn().mockResolvedValue(undefined);
+		(navigator as any).clipboard = { writeText };
+		await copyCode(kitEntry);
+		expect(NoticeMock.notices).toContain(`Copied scc:${KIT}`);
+		delete (navigator as any).clipboard;
+	});
+
+	test('copyCode shows a Notice even when clipboard is unavailable (older mobile webviews)', async () => {
+		const { Notice: NoticeMock } = await import('../../mocks/obsidian');
+		NoticeMock.notices.length = 0;
+		delete (navigator as any).clipboard;
+		await copyCode(kitEntry);
+		expect(NoticeMock.notices).toContain(`Copied scc:${KIT}`);
 	});
 });
 
