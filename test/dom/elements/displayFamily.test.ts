@@ -392,6 +392,21 @@ describe('D6 Task 7 review fix: previously-duplicated flavor/row text appears ex
 		return count;
 	}
 
+	// Task 11 carry-forward (Task 7 re-review nit): ancestry was covered by the earlier
+	// inline-rendering describe block above (title/rows/body) but never got its own
+	// exact-once pin, even though its flavor is the SAME "content's lead paragraph"
+	// duplication shape as class/culture/perk/etc below (human.yaml's `flavor` is a
+	// markdown-free copy of `content`'s opening paragraph).
+	test('ds-ancestry: the flavor/opening paragraph appears exactly once (Finding 1)', async () => {
+		const host = inlineHost('ds-ancestry');
+		await new ElementPipeline(makeInlineDeps()).run(ancestryElement, ancestryExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const snippet =
+			'Humans belong to the world in a way the other speaking peoples do not';
+		expect(countOccurrences(root.textContent ?? '', snippet)).toBe(1);
+		expect(root.querySelector('.dse-card__flavor')).toBeNull();
+	});
+
 	test('ds-class: the flavor/opening paragraph appears exactly once (Finding 1)', async () => {
 		const host = inlineHost('ds-class');
 		await new ElementPipeline(makeInlineDeps()).run(classElement, classExample, host);

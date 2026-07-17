@@ -169,6 +169,13 @@ export function initializeElementFrameworkV2(
 	// every test/harness caller that doesn't construct a SccResolver; the pipeline and
 	// renderMarkdown both no-op the rewrite pass in that case.
 	sccAnchors?: SccAnchorResolver,
+	// D6 Task 11 (spec §6/§1.2): the typed-model CompendiumIndex, threaded into the
+	// pipeline's ElementPipelineServices symmetric with sccAnchors above — every
+	// RenderContext carries it as cx.compendium (RefUnwrapView/CardLayout's by-SCC
+	// hybrid render, Task 3/9). Optional — undefined for every test/harness caller
+	// that doesn't construct one; the pipeline and RefUnwrapView both degrade to a
+	// "compendium not installed" card in that case.
+	compendium?: CompendiumIndex,
 ): ElementFrameworkV2 {
 	const validation = createValidationService();
 	const session = createSessionStore();
@@ -205,7 +212,7 @@ export function initializeElementFrameworkV2(
 
 	const registry = createElementRegistry();
 	const pipeline = new ElementPipeline({
-		app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors,
+		app, plugin, settings, theme, prefs, refs, validation, session, roll, sccAnchors, compendium,
 	});
 
 	return {
@@ -275,11 +282,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     manifestStore: ManifestStore;
     syncService: CompendiumSyncService;
 
-    /** D6 Task 2/10 (spec §6): the typed-model accessor over `sccResolver`'s read seam,
-     *  backing the compendium search modal + insert commands below (and D8's encounter
-     *  builder later). Kept as its own plugin field for the same reason `sccResolver` is
-     *  (a future consumer reusing it directly) — Task 11 finalizes this construction's
-     *  final position in `onload`. */
+    /** D6 Task 2/10/11 (spec §6): the typed-model accessor over `sccResolver`'s read seam,
+     *  backing the render pipeline's `cx.compendium` seam (Task 3/9's by-SCC hybrid
+     *  render), the compendium search modal + insert commands below, and D8's encounter
+     *  builder later. Kept as its own plugin field for the same reason `sccResolver` is
+     *  (a future consumer reusing it directly). Constructed right after `sccResolver`
+     *  below — before `initializeElementFrameworkV2` — so it can be threaded into that
+     *  call and reach every RenderContext. */
     compendiumIndex: CompendiumIndex;
 
     /** D4: the debounced saveData adapter behind the PreferenceStore; flushed on unload. */
@@ -306,6 +315,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // v2 wiring they depend on.
         this.sccResolver = new SccResolver(this.app, this.settings);
 
+        // D6 Task 11 (spec §6): CompendiumIndex depends only on app + sccResolver, so it
+        // is constructed right here — before initializeElementFrameworkV2 — and threaded
+        // into that call below as the `compendium` dep (mirrors sccAnchors just above).
+        // registerWatchers() + the search-modal/insert-command registration stay below,
+        // alongside the rest of the wiring that depends on frameworkV2/syncService.
+        this.compendiumIndex = createCompendiumIndex(this.app, this.sccResolver);
+
         // F1 (Plan 02, Task 10): construct the framework v2 bundle alongside the
         // legacy path above. Coexistence, not replacement — see the function doc.
         this.prefsStorage = createSaveDataPrefsStorage(this);
@@ -316,6 +332,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             this.frameworkV2DependencySchemas(),
             this.prefsStorage,
             this.sccResolver,
+            this.compendiumIndex,
         );
         this.frameworkV2 = frameworkV2;
 
@@ -358,12 +375,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // independent EditorSuggest.
         this.registerEditorSuggest(new DsSchemaSuggest(this.app, frameworkV2.registry));
 
-        // D6 Task 10 (spec §4): the compendium search modal + insert commands, over the
-        // typed-model accessor (CompendiumIndex, D6 Task 2) built on the sccResolver read
-        // seam constructed above. Task 11 finalizes where this construction lands relative
-        // to the rest of onload; it only needs sccResolver + syncService, both already in
+        // D6 Task 10/11 (spec §4): the compendium search modal + insert commands, over the
+        // typed-model accessor constructed above (right after sccResolver) and already
+        // threaded into the render pipeline as cx.compendium. Only needs syncService
+        // (the "sync now" affordance inside the search modal's empty state), which is in
         // hand by this point.
-        this.compendiumIndex = createCompendiumIndex(this.app, this.sccResolver);
         this.compendiumIndex.registerWatchers(this);
         registerCompendiumInsertCommands(this, this.compendiumIndex, this.syncService);
 
