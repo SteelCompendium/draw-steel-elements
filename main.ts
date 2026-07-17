@@ -49,6 +49,8 @@ import { counterElement } from '@/elements/counter/definition';
 import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
+import { SccResolver } from '@/refs/SccResolver';
+import { SccRefProvider } from '@/refs/SccRefProvider';
 
 // `DependencySchema` + `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` now live in
 // `@/framework/dependencySchemas` (D9 Task 4): `DsSchemaSuggest` needs the same data to
@@ -241,6 +243,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      *  before `onload` runs and after `onunload` drops it. */
     frameworkV2?: ElementFrameworkV2;
 
+    /** F2 §4.4: the SCC (Steel Compendium Classification) resolver backing
+     *  SccRefProvider — kept as its own plugin field (not just closed over) because
+     *  Task 12's post-processor reuses it directly. */
+    sccResolver: SccResolver;
+
     /** D4: the debounced saveData adapter behind the PreferenceStore; flushed on unload. */
     private prefsStorage?: FlushablePrefsStorage;
 
@@ -272,6 +279,14 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             this.prefsStorage,
         );
         this.frameworkV2 = frameworkV2;
+
+        // F2 §4.4: the scc resolver + its RefProvider, registered onto the framework's
+        // ReferenceService (F1 §3.7 seam — see src/refs/SccRefProvider.ts). Later-
+        // registered providers are consulted before built-ins, so this transparently
+        // supersedes the seam's reserved "scc" placeholder.
+        this.sccResolver = new SccResolver(this.app, this.settings);
+        this.sccResolver.registerWatchers(this);
+        frameworkV2.services.refs.register(new SccRefProvider(this.app, this.sccResolver));
 
         // D1 Task 1 (F1 §2.3 "incremental migration switch"): populate the framework
         // registry with migrated element definitions, then wire Obsidian's

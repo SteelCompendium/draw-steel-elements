@@ -165,10 +165,26 @@ export class FakeVault {
 	getResourcePath(file: TFile): string {
 		return `app://vault/${file.path}`;
 	}
+
+	// F2 Task 7: SccResolver.registerWatchers is the first production code to call
+	// `Component.registerEvent(vault.on(...))` through the REAL onload() path (dom
+	// tests construct the plugin against this mock, not test/fakes/fakeObsidian.ts's
+	// FakeVault, which already stubs `.on()`). Component.registerEvent(_ref: any)
+	// ignores the returned EventRef, so a bare stub is enough — no event actually
+	// fires from this mock; SccResolver's incremental index maintenance is exercised
+	// against fakeObsidian.ts's FakeVault instead (test/unit/refs/sccResolver.test.ts).
+	on(_name: string, _callback: (...args: any[]) => any): any {
+		return { unsubscribe: () => {} };
+	}
 }
 
 export class FakeMetadataCache {
 	constructor(private vault: FakeVault) {}
+
+	// See FakeVault.on above — same rationale.
+	on(_name: string, _callback: (...args: any[]) => any): any {
+		return { unsubscribe: () => {} };
+	}
 
 	// Resolves "Thorn Dragon" → any vault file whose basename matches
 	// (ReferenceResolver.findFile step 5).

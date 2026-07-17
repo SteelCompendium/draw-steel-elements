@@ -21,8 +21,15 @@
 //
 // Do NOT modify src/utils/ReferenceResolver.ts — it stays live for legacy elements
 // until they migrate (Plan 02 migrates no element).
-import { App, TFile, parseYaml } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import type { DSESettings } from '@model/Settings';
+// Task 7: the ds-* block extraction (findFile's tail) is shared with
+// ReferenceResolver.ts/SccRefProvider.ts via this helper, rather than carrying a
+// private copy here — this file used to inline its own DS_BLOCK_RE + miss error,
+// which had drifted from the shared one (no frontmatter-type hint). Reunifying means
+// resolveByPath (the at-path/wikilink providers) AND resolveBarePath (initiative) now
+// emit byte-identical miss errors to legacy's ReferenceResolver.
+import { extractFirstDsBlock } from '@utils/ReferenceResolver';
 
 export type RefKind = 'at-path' | 'wikilink' | 'scc' | (string & {});
 
@@ -77,10 +84,6 @@ export interface ReferenceService {
 // Matches `scc:` and `scc.v1:`, `scc.v2:`, … per spec v1.1 (bare "scc:" ≡ v1).
 const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
 
-// Matches ```ds-<something> ... ``` or ~~~ds-<something> ... ~~~ (first occurrence),
-// ported verbatim from ReferenceResolver.resolvePath.
-const DS_BLOCK_RE = /^([`~]{3,})ds-[\w-]+\s*\n([\s\S]+?)\n^\1/m;
-
 function unresolvableReferenceError(raw: string): Error {
 	return new Error(`Unresolvable reference: "${raw}" (no provider could resolve this reference)`);
 }
@@ -118,25 +121,10 @@ function findFile(app: App, settings: DSESettings, path: string, sourcePath: str
 	return null;
 }
 
-// Read `file` and extract+parse its first ds-* fenced block (the tail of the legacy
-// ReferenceResolver.resolvePath). Returns null when the file has no ds-* block; throws
-// the legacy message when the block's YAML is malformed. resolveByPath (the providers
-// AND resolveBarePath) turns the null into the legacy "No ... code block" error.
-async function readFirstDsBlock(app: App, file: TFile): Promise<{ data: unknown } | null> {
-	const content = await app.vault.read(file);
-	const match = content.match(DS_BLOCK_RE);
-
-	if (!match) return null;
-
-	try {
-		return { data: parseYaml(match[2]) };
-	} catch (e) {
-		throw new Error(`Failed to parse YAML in ${file.path}: ${(e as Error).message}`);
-	}
-}
-
 // Legacy ReferenceResolver.resolvePath: resolve `path` to a file, then extract and
-// parse the first ds-* fenced block. Shared by the at-path and wikilink providers.
+// parse the first ds-* fenced block (via the shared extractFirstDsBlock, which throws
+// the miss/parse errors). Shared by the at-path and wikilink providers, and by
+// resolveBarePath below.
 async function resolveByPath(
 	app: App,
 	settings: DSESettings,
@@ -151,13 +139,8 @@ async function resolveByPath(
 		);
 	}
 
-	const block = await readFirstDsBlock(app, file);
-
-	if (!block) {
-		throw new Error(`No Draw Steel Elements code block (ds-*) found in ${file.path}`);
-	}
-
-	return { data: block.data, file };
+	const data = await extractFirstDsBlock(app, file);
+	return { data, file };
 }
 
 function createAtPathProvider(app: App, settings: DSESettings): RefProvider {
