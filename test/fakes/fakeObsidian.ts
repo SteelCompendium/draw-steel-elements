@@ -74,6 +74,12 @@ export class FakeVault {
 	folders = new Set<string>();
 	configDir = ".obsidian";
 	adapter = new FakeAdapter();
+	private listeners = new Map<string, Array<(...args: any[]) => any>>();
+	/** Test-only: per-path gates for in-flight `read()` calls -- lets a test pause a
+	 *  read mid-flight (e.g. right after `model()` starts parsing), interleave other
+	 *  work such as firing an invalidation event, then let the read complete. Used by
+	 *  the CompendiumIndex cache-race test (D6 Task 2 review, MEDIUM finding). */
+	private readGates = new Map<string, Promise<void>>();
 
 	getAbstractFileByPath(path: string): TFile | TFolder | null {
 		if (this.files.has(path)) return fakeTFile(path);
@@ -84,6 +90,8 @@ export class FakeVault {
 		return [...this.files.keys()].filter((p) => p.endsWith(".md")).map(fakeTFile);
 	}
 	async read(file: TFile): Promise<string> {
+		const gate = this.readGates.get(file.path);
+		if (gate) await gate;
 		return new TextDecoder().decode(await this.bytes(file.path));
 	}
 	async readBinary(file: TFile): Promise<ArrayBuffer> {
@@ -126,9 +134,39 @@ export class FakeVault {
 		if (bytes === undefined) throw new Error(`ENOENT: ${path}`);
 		return bytes;
 	}
-	on(): any {
-		return { unsubscribe: () => {} };
-	} // EventRef stub
+	/** Real (not stubbed) event delivery: records the callback and returns an
+	 *  unsubscribe-capable EventRef, matching Obsidian's `Events.on()` contract closely
+	 *  enough for `registerWatchers`-style production code to be exercised end-to-end
+	 *  via `emit()` below. */
+	on(name: string, callback: (...args: any[]) => any): any {
+		const list = this.listeners.get(name) ?? [];
+		list.push(callback);
+		this.listeners.set(name, list);
+		return {
+			unsubscribe: () => {
+				this.listeners.set(name, (this.listeners.get(name) ?? []).filter((cb) => cb !== callback));
+			},
+		};
+	}
+	/** Test helper: fire a vault event to every listener registered via `on()`. */
+	emit(name: string, ...args: any[]): void {
+		for (const cb of this.listeners.get(name) ?? []) cb(...args);
+	}
+	/** Test helper: pause the next/ongoing `read()` of `path` until `release()` is
+	 *  called. */
+	gateRead(path: string): { release: () => void } {
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		this.readGates.set(path, gate);
+		return {
+			release: () => {
+				release();
+				this.readGates.delete(path);
+			},
+		};
+	}
 }
 
 export class FakeFileManager {

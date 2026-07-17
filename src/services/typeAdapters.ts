@@ -34,6 +34,15 @@ function frontmatterOf(app: App, file: TFile): Record<string, unknown> {
 /** Deliberately opaque -- callers know the concrete shape from the SCC `type` they queried. */
 export type ElementModel = unknown;
 
+/**
+ * The statblock family's `type` scope, anchored so a bare `statblock` or any
+ * `<family>.statblock` (e.g. `monster.goblin.statblock`) matches but `notastatblock`
+ * doesn't. Exported so CompendiumIndex.getStatblock can gate on the SAME regex
+ * TYPE_ADAPTERS uses below, instead of re-declaring a second (and previously looser)
+ * copy -- single source of truth for "what counts as a statblock type."
+ */
+export const STATBLOCK_TYPE_RE = /(^|\.)statblock$/;
+
 export interface TypeAdapter {
 	/** SCC-type test: does this adapter own a given frontmatter `type` value? */
 	matches(type: string): boolean;
@@ -63,7 +72,7 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown): TypeAdap
  * e.g. `monster.goblin.statblock` (or bare `statblock`) doesn't fall through to it.
  */
 export const TYPE_ADAPTERS: TypeAdapter[] = [
-	dsBlockAdapter(/(^|\.)statblock$/, (t) => StatblockConfig.readYaml(t)),
+	dsBlockAdapter(STATBLOCK_TYPE_RE, (t) => StatblockConfig.readYaml(t)),
 	dsBlockAdapter(/(^|\.)featureblock$/, (t) => FeatureblockConfig.readYaml(t)),
 	dsBlockAdapter(/^feature($|\.)/, (t) => FeatureConfig.readYaml(t)),
 	frontmatterAdapter(/^kit$/, Kit.modelDTOAdapter),

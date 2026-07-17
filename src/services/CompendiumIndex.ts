@@ -5,10 +5,10 @@
 // `Statblock` D8 needs. `getEntity().model()` dispatches through the shared TYPE_ADAPTERS
 // map (typeAdapters.ts) so this service and the display family (Task 6) never diverge on
 // "how do we parse a `type: X` file."
-import { App, TFile, Plugin } from "obsidian";
+import { App, TFile, TAbstractFile, Plugin } from "obsidian";
 import type { Statblock } from "steel-compendium-sdk";
 import { SccResolver } from "@/refs/SccResolver";
-import { adapterForType, extractFirstDsBlockText, ElementModel } from "./typeAdapters";
+import { adapterForType, ElementModel, STATBLOCK_TYPE_RE } from "./typeAdapters";
 import { StatblockConfig } from "@model/StatblockConfig";
 
 export interface CompendiumEntry {
@@ -41,13 +41,26 @@ export interface CompendiumIndex {
 const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
 
 class DseCompendiumIndex implements CompendiumIndex {
-	/** code -> parsed model. Insertion-ordered Map; cachePut evicts the oldest key on
-	 *  overflow (Map iteration order == insertion order), giving cheap LRU-ish behavior
-	 *  without a dedicated data structure. */
-	private readonly modelCache = new Map<string, ElementModel>();
+	/** code -> {parsed model, resolved vault path at cache-write time}. Insertion-ordered
+	 *  Map; `model()` touches (delete+re-insert) on a cache hit and `cachePut` evicts the
+	 *  oldest key on overflow, so Map iteration order tracks recency and gives true LRU
+	 *  behavior without a dedicated structure. The path is captured at write time (not
+	 *  re-derived from the live SccResolver index at invalidation time) so scoped
+	 *  invalidation can't be defeated by event-ordering races against SccResolver's own
+	 *  listener updating the same index for the same vault event. */
+	private readonly modelCache = new Map<string, { model: ElementModel; path: string }>();
 	private static readonly CACHE_MAX = 128;
+	/** Bumped on every cache invalidation (full or scoped). `model()` captures the
+	 *  generation before its genuinely-async `vault.read()`; `cachePut` only commits if
+	 *  the generation is unchanged, so a read that raced an invalidation (file changed
+	 *  mid-read) can never silently reintroduce a stale model into the cache. */
+	private generation = 0;
 
-	constructor(private app: App, private resolver: SccResolver) {}
+	constructor(
+		private app: App,
+		private resolver: SccResolver,
+		private readonly cacheMax: number = DseCompendiumIndex.CACHE_MAX,
+	) {}
 
 	get available(): boolean {
 		return this.resolver.entries().length > 0;
@@ -80,21 +93,37 @@ class DseCompendiumIndex implements CompendiumIndex {
 				return (await app.vault.read(entry.file)).replace(FRONTMATTER_RE, "");
 			},
 			async model(): Promise<ElementModel | undefined> {
-				if (self.modelCache.has(code)) return self.modelCache.get(code);
+				const cached = self.modelCache.get(code);
+				if (cached !== undefined) {
+					// Cache hit: touch (delete + re-insert) to move this entry to the
+					// Map's most-recently-used end -- true LRU, not insertion-order FIFO.
+					self.modelCache.delete(code);
+					self.modelCache.set(code, cached);
+					return cached.model;
+				}
 				const adapter = adapterForType(entry.type);
 				if (!adapter) return undefined;
+				// Capture the generation BEFORE the await -- vault.read() inside
+				// fromFile() is genuinely async, so an invalidation can land while this
+				// is in flight. cachePut checks the generation hasn't moved before
+				// committing (see cachePut's comment).
+				const genAtStart = self.generation;
 				const model = await adapter.fromFile(app, entry.file);
-				if (model != null) self.cachePut(code, model);
+				if (model != null) self.cachePut(code, model, entry.file.path, genAtStart);
 				return model ?? undefined;
 			},
 		};
 	}
 
 	async getStatblock(code: string): Promise<Statblock | null> {
+		// Single source of truth: gate on the SAME anchored regex TYPE_ADAPTERS uses,
+		// then dispatch through getEntity().model() -- the shared adapterForType path
+		// and cache -- rather than hand-rolling an independent read/parse here.
 		const entry = this.getEntry(code);
-		if (entry === null || !/statblock$/.test(entry.type)) return null;
-		const text = await extractFirstDsBlockText(this.app, entry.file);
-		return text === null ? null : StatblockConfig.readYaml(text).statblock;
+		if (entry === null || !STATBLOCK_TYPE_RE.test(entry.type)) return null;
+		const entity = await this.getEntity(code);
+		const model = await entity?.model();
+		return model instanceof StatblockConfig ? model.statblock : null;
 	}
 
 	query(text: string, filters?: { type?: string | RegExp; source?: string }): CompendiumEntry[] {
@@ -119,17 +148,46 @@ class DseCompendiumIndex implements CompendiumIndex {
 	}
 
 	registerWatchers(plugin: Plugin): void {
-		const drop = () => this.modelCache.clear();
-		plugin.registerEvent(this.app.vault.on("modify", drop));
-		plugin.registerEvent(this.app.vault.on("delete", drop));
-		plugin.registerEvent(this.app.vault.on("rename", drop));
+		plugin.registerEvent(this.app.vault.on("modify", (file) => this.handleVaultEvent(file)));
+		plugin.registerEvent(this.app.vault.on("delete", (file) => this.handleVaultEvent(file)));
+		plugin.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => {
+				this.handleVaultEvent(file);
+				this.invalidatePath(oldPath);
+			}),
+		);
 	}
 
-	private cachePut(code: string, model: ElementModel): void {
-		if (this.modelCache.size >= DseCompendiumIndex.CACHE_MAX) {
+	/** Scoped invalidation (evict only the cache entries whose resolved path matches
+	 *  the affected file) rather than the blunt "clear everything" the brief's Step 4
+	 *  sample used -- a vault with routine unrelated editing would otherwise rarely
+	 *  keep this cache warm. Falls back to a full clear only when the event can't be
+	 *  mapped to a path (defensive: real Obsidian always supplies one here). */
+	private handleVaultEvent(file: TAbstractFile): void {
+		if (typeof file?.path === "string") {
+			this.invalidatePath(file.path);
+		} else {
+			this.generation++;
+			this.modelCache.clear();
+		}
+	}
+
+	private invalidatePath(path: string): void {
+		this.generation++;
+		for (const [code, cached] of this.modelCache) {
+			if (cached.path === path) this.modelCache.delete(code);
+		}
+	}
+
+	private cachePut(code: string, model: ElementModel, path: string, genAtStart: number): void {
+		// The generation moved since this read started -- an invalidation raced it, so
+		// committing now would silently reintroduce a stale model. Drop the write; the
+		// next model() call will see a cache miss and re-read.
+		if (genAtStart !== this.generation) return;
+		if (this.modelCache.size >= this.cacheMax) {
 			this.modelCache.delete(this.modelCache.keys().next().value as string);
 		}
-		this.modelCache.set(code, model);
+		this.modelCache.set(code, { model, path });
 	}
 }
 
@@ -147,6 +205,10 @@ function fuzzy(haystack: string, needle: string): boolean {
 	return needle.length === 0;
 }
 
-export function createCompendiumIndex(app: App, resolver: SccResolver): CompendiumIndex {
-	return new DseCompendiumIndex(app, resolver);
+export function createCompendiumIndex(
+	app: App,
+	resolver: SccResolver,
+	options?: { cacheMax?: number },
+): CompendiumIndex {
+	return new DseCompendiumIndex(app, resolver, options?.cacheMax);
 }
