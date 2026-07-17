@@ -79,6 +79,7 @@ What actually happened? Lessons learned? Would you choose the same again?
 
 | Date | Decision | Status |
 |------|----------|--------|
+| 2026-07-01 | [Adopt data-unified releases, manifest-driven sync, and scc.v1 resolution](2026-07-01-data-unified-and-scc-resolution.md) | accepted |
 | 2026-04-06 | [Revert Vue 3 adoption](2026-04-06-revert-vue-3-adoption.md) | accepted |
 | 2024-03-01 | [Adopt Vue 3 for interactive components](2024-03-01-adopt-vue-3.md) | superseded |
 | 2024-01-15 | [Adopt steel-compendium-sdk for data parsing](2024-01-15-adopt-sdk.md) | accepted |

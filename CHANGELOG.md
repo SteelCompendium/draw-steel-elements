@@ -1,5 +1,37 @@
 # Changelog
 
+## 6.0.0
+
+- [BREAKING] Compendium source moved from the retired `data-md-dse` repo to
+  `data-unified` releases (unified Browse layout, `md-dse` format). Run
+  "Sync compendium" after updating — your old release-tag setting is reset
+  because old tags belong to the retired repo.
+- [BREAKING] Statblock YAML follows SDK 3.x: `roles:` is now `role:` +
+  `organization:`, and `ancestry:` is now `keywords:`. Legacy keys in your own
+  `ds-sb`/`ds-statblock` blocks keep working for the 6.x cycle — classified the
+  same way the SDK's own reader does (last entry matching a known organization
+  name wins that axis, everything else becomes the role) — with a console
+  deprecation warning; support is removed in 7.0.0.
+- Compendium sync is now non-destructive and manifest-driven: only files the
+  plugin installed are updated or removed (removals go to the trash, never a
+  hard delete), any incoming path that isn't safely inside the destination
+  folder is rejected outright, and your own notes inside the compendium folder
+  are never touched. The first sync offers — and never forces — moving a
+  pre-6.0 compendium folder to the trash.
+- New: `scc.v1:` links resolve everywhere — in compendium notes, inside element
+  text, and as references (e.g. initiative tracker
+  `statblock: scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker`).
+  Links resolve to your local compendium first, then optionally to
+  steelcompendium.io (toggle in Settings → Links → "Fall back to
+  steelcompendium.io links").
+- Settings' Compendium section is reworked: destination folder, release (pin a
+  tag or leave empty for latest), locale, a synced-status line, and
+  Sync/Check-for-updates buttons.
+- New commands: "Sync compendium" (the old command id remains as a hidden
+  "Sync compendium (legacy alias)" so hotkeys keep working; it will be removed
+  in 7.0.0).
+- Updates `steel-compendium-sdk` to 3.x.
+
 ## 5.1.1
 
 - Corrects issue where double-clicking on an Element in reading mode will open edit mode

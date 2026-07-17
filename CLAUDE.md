@@ -77,4 +77,6 @@ for iteration.
 - Output must be CJS format for Obsidian
 - Target ES2018
 - `obsidian`, `electron`, and CodeMirror packages are external (host-provided)
-- Compendium downloader deletes the destination directory before extracting -- don't store homebrew there
+- Compendium sync is manifest-driven and non-destructive (`src/data/CompendiumSyncService.ts`):
+  only manifest-tracked files are updated/trashed; user files under the compendium root are
+  never touched. Never reintroduce directory-wipe semantics.

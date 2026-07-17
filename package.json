@@ -1,6 +1,6 @@
 {
   "name": "draw-steel-elements",
-  "version": "6.0.0-rc1",
+  "version": "6.0.0",
   "description": "Components to support the Draw Steel TTRPG by MCDM.",
   "main": "main.js",
   "scripts": {
