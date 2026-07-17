@@ -6,6 +6,11 @@
 import JSZip from "jszip";
 import * as fs from "fs";
 import * as path from "path";
+// Notice.notices (mock-only static introspection field) isn't on the real obsidian
+// npm package's ambient types (tsc — unlike ts-jest's moduleNameMapper — resolves
+// bare `obsidian` imports against the REAL package); import the mock directly, same
+// convention as test/dom/framework/plugin-wiring.test.ts.
+import { Notice } from "../../mocks/obsidian";
 import { CompendiumSyncService, SyncOptions, COMPENDIUM_SOURCE, COMPENDIUM_FORMAT } from "@/data/CompendiumSyncService";
 import { ManifestStore } from "@/data/manifest";
 import { makeFakeApp } from "../../fakes/fakeObsidian";
@@ -134,6 +139,36 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		expect(await service.checkForUpdates())
 			.toEqual({ installedTag: "v4.two", latestTag: "v4.two", upToDate: true });
 		expect(fetchFake).toHaveBeenCalledTimes(1); // metadata only — no asset download
+	});
+
+	test("F2 review MUST-FIX #2: rejectedPaths (path-traversal defense) are surfaced in the sync summary Notice + console.warn payload", async () => {
+		const { app } = makeFakeApp();
+		// Note: a ".." segment can't survive round-tripping through JSZip's OWN writer
+		// (zip.file('../evil.md', …) gets path-cleaned to 'evil.md' on write — verified
+		// against this repo's jszip; only a non-JSZip-authored archive would carry a raw
+		// ".." entry). A leading-slash entry survives the round-trip unchanged and is
+		// exactly as unsafe (isUnsafeRelativePath, CompendiumSyncService.ts:313-316),
+		// so it stands in here for "the zip carried an unsafe path".
+		const zip = await zipOf({ "safe.md": "official", "/abs.md": "pwned" });
+		const fetchFake = githubFake(zip, "v4.rejected");
+		const service = new CompendiumSyncService(
+			app, new ManifestStore(app, "draw-steel-elements"), fetchFake);
+		Notice.notices.length = 0;
+		const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const report = await service.sync(OPTIONS);
+			expect(report.rejectedPaths).toEqual(["/abs.md"]);
+			expect(report.created).toEqual(["safe.md"]);
+			// Folded into the SAME skip-count notice as skippedConflicts/keptModified —
+			// before the fix, a rejected path was silently dropped from both this count
+			// and the console payload below.
+			expect(Notice.notices.some((n) => n.includes("1 file(s) skipped"))).toBe(true);
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.stringContaining("sync skipped these paths"),
+				expect.objectContaining({ rejectedUnsafePaths: ["/abs.md"] }));
+		} finally {
+			warnSpy.mockRestore();
+		}
 	});
 
 	test("real fixture files round-trip through a real JSZip archive (network-free integration check)", async () => {

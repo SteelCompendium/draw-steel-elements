@@ -262,14 +262,22 @@ export class CompendiumSyncService {
 			`Draw Steel Elements: compendium ${report.releaseTag} synced — ` +
 			`${report.created.length} new, ${report.updated.length} updated, ` +
 			`${report.trashed.length} removed.`);
-		const skipped = report.skippedConflicts.length + report.keptModified.length;
+		// F2 final-review MUST-FIX #2: rejectedPaths (the path-traversal defense above)
+		// was populated but never surfaced — a malformed/malicious archive silently
+		// dropped files with no user- or console-visible trace. Folded into the same
+		// skipped-count + console.warn payload as the other two skip reasons.
+		const skipped = report.skippedConflicts.length + report.keptModified.length + report.rejectedPaths.length;
 		if (skipped > 0) {
 			new Notice(
 				`Draw Steel Elements: ${skipped} file(s) skipped to protect your changes — ` +
 				`see the developer console for the list.`, 10000);
 			console.warn(
 				"Draw Steel Elements: sync skipped these paths (user content is never overwritten):",
-				{ squattingOnCompendiumPaths: report.skippedConflicts, userModifiedRemovedUpstream: report.keptModified });
+				{
+					squattingOnCompendiumPaths: report.skippedConflicts,
+					userModifiedRemovedUpstream: report.keptModified,
+					rejectedUnsafePaths: report.rejectedPaths,
+				});
 		}
 	}
 
