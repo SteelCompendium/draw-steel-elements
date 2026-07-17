@@ -19,8 +19,8 @@ import type { BlockHost } from '@/framework/host/BlockHost';
 export const PREVIEW_STATBLOCK_YAML = `type: statblock
 name: Human Bandit Chief
 level: 3
-role: Leader
-organization: Human
+role: ""
+organization: Leader
 keywords:
   - Human
   - Humanoid

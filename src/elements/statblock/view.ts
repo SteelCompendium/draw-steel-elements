@@ -29,9 +29,11 @@
 // slot renders empty (F2 golden update; the slot itself is never omitted).
 //
 // Role tint: the shared applyRoleTint (roleTint.ts, extracted from T6a) maps the
-// SDK `role` string onto [data-dse-role] + the --dse-role element-set alias; an
-// unmapped role ("Boss") sets neither, failing safe to grey/monochrome (OD-2:
-// Steel-only accent). Pref hooks: data-dse-density / data-dse-sb-featstyle /
+// SDK `role` string (falling back to `organization` when `role` is empty — the
+// real shape of every Leader/Solo statblock; see statblockHeaderParts below) onto
+// [data-dse-role] + the --dse-role element-set alias; an unmapped role ("Boss")
+// sets neither, failing safe to grey/monochrome (OD-2: Steel-only accent). Pref
+// hooks: data-dse-density / data-dse-sb-featstyle /
 // data-dse-sb-columns / data-dse-sb-stats are reflected onto the ELEMENT ROOT by
 // prefs.reflect() (D4, Plan 13 Task 3) — the statblock view stamps none of them.
 //
@@ -69,7 +71,13 @@ function formatCharacteristic(value?: number): string {
  * `rightPrimary` is the "Horde Controller" style line — organization then role,
  * per the rendered book format — falling back to the legacy 'No Role' string when
  * neither is present. `role` is passed through separately for applyRoleTint (the
- * SDK's single combat-role string, not the old joined roles line).
+ * SDK's single combat-role string, not the old joined roles line) — falling back to
+ * `organization` when `role` is empty, mirroring the already-shipped v2 site's
+ * `buildStatblockIsland` precedent (steel-etl `internal/site/statblock_page.go`:
+ * `roleKey := role; if roleKey == "" { roleKey = org }`). Every real
+ * `organization: Leader` (30/30) and `organization: Solo` (22/22) statblock in
+ * production carries `role: ""`, so without this fallback those ~52 boss/solo
+ * creatures would render with no role tint at all (task-1-review.md Critical).
  */
 export function statblockHeaderParts(statblock: Statblock): {
 	name: string;
@@ -88,7 +96,7 @@ export function statblockHeaderParts(statblock: Statblock): {
 		rightEyebrow: statblock.level !== undefined ? `Level ${statblock.level}` : 'Level N/A',
 		rightPrimary: orgRole.length > 0 ? orgRole : 'No Role',
 		rightDeck: statblock.ev !== undefined ? `EV ${statblock.ev}` : 'EV N/A',
-		role: statblock.role,
+		role: statblock.role || statblock.organization,
 	};
 }
 

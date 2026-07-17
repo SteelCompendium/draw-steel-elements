@@ -152,8 +152,12 @@ describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', 
 		expect(model).toBeInstanceOf(StatblockConfig);
 		expect(model.statblock.name).toBe('Human Bandit Chief');
 		expect(model.statblock.level).toBe(3);
-		expect(model.statblock.role).toBe('Leader');
-		expect(model.statblock.organization).toBe('Human');
+		// F2 review fix (task-1-review.md Critical): reshaped to the REAL production
+		// shape (data-unified's human-bandit-chief.yaml) — role: "" / organization:
+		// Leader, not a synthetic role: Leader / organization: Human. Every real
+		// Leader-org statblock carries an empty role; see the role-tint test below.
+		expect(model.statblock.role).toBe('');
+		expect(model.statblock.organization).toBe('Leader');
 		expect(model.statblock.keywords).toEqual(['Human', 'Humanoid']);
 		expect(model.statblock.ev).toBe('20');
 		expect(model.statblock.features).toHaveLength(8);
@@ -207,10 +211,12 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(name.textContent).toBe('Human Bandit Chief');
 
 		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level 3');
-		// "Horde Controller" style: organization then role — F2 golden update (was
-		// 'Leader' alone under SDK 2.x's `roles: [Leader]`; the fixture now carries
-		// both organization: Human and role: Leader).
-		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Human Leader');
+		// "Horde Controller" style: organization then role. F2 review fix: the fixture
+		// now carries the REAL production shape (organization: Leader, role: "") —
+		// role is filtered out of the join since it's empty, so right-primary is just
+		// the organization word. See the goblin-stinker fixture (statblockHeader.test.ts)
+		// for the combined "Horde Controller" org+role case.
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Leader');
 		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('EV 20');
 	});
 
@@ -228,10 +234,14 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('EV N/A');
 	});
 
-	test('[data-dse-role]: the SDK combat role sets the attribute + the --dse-role element-set alias', async () => {
+	test('[data-dse-role]: the SDK combat role sets the attribute + the --dse-role element-set alias — via the organization fallback (real Leader shape: role: "")', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
 		const card = root.querySelector('.dse-sb') as HTMLElement;
+		// F2 review fix (task-1-review.md Critical): the fixture's role is empty
+		// ("" — the real production shape for every Leader-org statblock), so this
+		// now specifically exercises statblockHeaderParts' organization fallback
+		// (role || organization), not a direct role match.
 		expect(card.getAttribute('data-dse-role')).toBe('leader');
 		// Element-set alias: --dse-role -> var(--dse-role-<role>). Legacy maps every
 		// --dse-role-* token to the muted grey, so the tint fails safe to monochrome.
@@ -372,7 +382,7 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 			'Human Bandit Chief',
 			'Human, Humanoid',
 			'Level 3',
-			'Human Leader',
+			'Leader',
 			'EV 20',
 			// stat items (label + value)
 			'Size',
