@@ -19,8 +19,11 @@
 // (which of the source body's own headings/rows would collide with `rows`) isn't decided
 // yet; rendering nothing in that branch for now is a correct, honest no-op rather than a
 // half-built guess.
+import type { Feature } from 'steel-compendium-sdk';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
+import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { FeatureConfig } from '@model/FeatureConfig';
 import type { RefSource, SourceAware } from './withReference';
 
 /** A small tag on a card's head — tone picks the CSS accent (cardFrame section, styles-source.css). */
@@ -45,6 +48,14 @@ export interface CardLayout<M> {
 	badges?: (m: M) => Badge[];
 	flavor?: (m: M) => string | undefined;
 	rows?: FieldRow<M>[];
+	/**
+	 * Nested feature cards (e.g. a kit's signature ability): rendered as REAL feature
+	 * cards through the shared `renderFeature`/`renderFeatureList` grammar
+	 * (src/elements/feature/renderFeature.ts) — the same DOM-building mechanism
+	 * featureblock/view.ts uses to recurse nested features — instead of a markdown/
+	 * YAML round-trip. Rendered after `rows`, before `body`.
+	 */
+	features?: (m: M) => Feature[] | undefined;
 	/** Inline-mode trailing markdown (usually m.content). */
 	body?: (m: M) => string | undefined;
 	/** By-SCC hybrid: render the resolved file body instead of `body`. Default true (Task 9). */
@@ -108,9 +119,24 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 				const rowEl = grid.createDiv({ cls: 'dse-card__row' });
 				rowEl.createSpan({ cls: 'dse-card__row-label', text: row.label });
 				const valEl = rowEl.createSpan({ cls: 'dse-card__row-value' });
-				if (row.markdown) await this.renderMarkdown(value, valEl);
-				else valEl.setText(value);
+				if (row.markdown) {
+					// The established inline-markdown idiom (renderFeature.ts's md()
+					// helper): keeps the callback-rendered <p> inline with the label
+					// instead of dropping to its own line (Task 6 review Finding 3).
+					valEl.addClass('dse-md-inline');
+					await this.renderMarkdown(value, valEl);
+				} else {
+					valEl.setText(value);
+				}
 			}
+		}
+
+		// Nested feature cards (e.g. a kit's signature ability): rendered through the
+		// shared renderFeature/renderFeatureList grammar (Task 6 review Finding 4) —
+		// real DOM feature cards, not a markdown/YAML round-trip.
+		const features = this.layout.features?.(model) ?? [];
+		if (features.length) {
+			renderFeatureList(card, FeatureConfig.allFrom(features), this, (md, el) => this.renderMarkdown(md, el));
 		}
 
 		// Body: pure-model path (this task) — the inline `body` field, when the layout

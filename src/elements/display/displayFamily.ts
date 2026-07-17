@@ -70,5 +70,9 @@ export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ElementDefiniti
 		authoring: { example: d.example },
 	};
 
-	return withReference(base, { sccType: new RegExp(`^${d.type}$`) });
+	// A plain string scope is an exact-match comparison (CompendiumIndex.ts's matchType:
+	// `type === scope`), byte-identical to `new RegExp(`^${d.type}$`).test(type)` for
+	// every current `type` key — but without the unescaped-regex-metacharacter footgun
+	// a future namespaced `type` (e.g. containing a `.`) would hit (Task 6 review, Nit).
+	return withReference(base, { sccType: d.type });
 }

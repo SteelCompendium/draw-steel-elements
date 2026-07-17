@@ -3,29 +3,8 @@
 // shared DisplayCardView frame. Field names/optionality verified against the LANDED SDK
 // models (data-sdk-npm/src/model/{Kit,Condition,Treasure}.ts): every `*_bonus` field and
 // Treasure.level are strings, not numbers.
-import { stringifyYaml } from 'obsidian';
-import type { Kit, Condition, Treasure, Feature } from 'steel-compendium-sdk';
+import type { Kit, Condition, Treasure } from 'steel-compendium-sdk';
 import type { Badge, CardLayout } from '@/elements/shared/CardLayout';
-
-/**
- * Kit's inline-mode trailing body: re-serializes the typed `signature_ability` Feature
- * model back into a `ds-feature` fenced block so it recurses through the real Obsidian
- * markdown pipeline (registered code-block processors) when rendered via
- * `this.renderMarkdown`. A nice-to-have for the inline/preview path only — the primary
- * by-SCC hybrid path renders the source file's OWN nested block instead (CardLayout.ts's
- * TODO(Task 9)). No dedicated Feature -> YAML serializer exists yet (FeatureConfig's
- * `toYaml` is commented out), so this goes straight through the SDK's own `toDTO()` +
- * Obsidian's `stringifyYaml` — the simplest correct path (task-6-brief.md).
- *
- * Note for test/harness environments: neither the jest `obsidian` mock's MarkdownRenderer
- * (appends raw markdown as a text node) nor the visual-harness browser shim's (plain
- * `marked.parse`, no code-block-processor recursion) actually re-renders this nested
- * fence as a live card — both degrade harmlessly (literal text / a `<pre><code>` block),
- * never an error. Only real Obsidian recurses it through the pipeline.
- */
-function featureToYaml(feature: Feature): string {
-	return stringifyYaml(feature.toDTO());
-}
 
 export const kitLayout: CardLayout<Kit> = {
 	title: (m) => m.name,
@@ -35,20 +14,32 @@ export const kitLayout: CardLayout<Kit> = {
 		...(m.weapon ?? []).map((w): Badge => ({ text: w, tone: 'keyword' })),
 	],
 	flavor: (m) => m.flavor,
+	// All *_bonus rows (and Equipment) carry `markdown: true` — 72% of real kits link an
+	// inline SCC term (e.g. "+N per [echelon](scc.v1:...)") inside a bonus string (Task 6
+	// review Finding 2); the rest render identically whether markdown or plain, so there's
+	// no downside to covering every row uniformly.
 	rows: [
-		{ label: 'Stamina', value: (m) => m.stamina_bonus },
-		{ label: 'Speed', value: (m) => m.speed_bonus },
-		{ label: 'Stability', value: (m) => m.stability_bonus },
-		{ label: 'Melee damage', value: (m) => m.melee_damage_bonus },
-		{ label: 'Ranged damage', value: (m) => m.ranged_damage_bonus },
-		{ label: 'Melee distance', value: (m) => m.melee_distance_bonus },
-		{ label: 'Ranged distance', value: (m) => m.ranged_distance_bonus },
-		{ label: 'Disengage', value: (m) => m.disengage_bonus },
+		{ label: 'Stamina', value: (m) => m.stamina_bonus, markdown: true },
+		{ label: 'Speed', value: (m) => m.speed_bonus, markdown: true },
+		{ label: 'Stability', value: (m) => m.stability_bonus, markdown: true },
+		{ label: 'Melee damage', value: (m) => m.melee_damage_bonus, markdown: true },
+		{ label: 'Ranged damage', value: (m) => m.ranged_damage_bonus, markdown: true },
+		{ label: 'Melee distance', value: (m) => m.melee_distance_bonus, markdown: true },
+		{ label: 'Ranged distance', value: (m) => m.ranged_distance_bonus, markdown: true },
+		{ label: 'Disengage', value: (m) => m.disengage_bonus, markdown: true },
 		{ label: 'Equipment', value: (m) => m.equipment_text, markdown: true },
 	],
-	// Inline mode: render the signature ability from the model; by-SCC uses the source
-	// body (Task 9 — currently a deliberate no-op per CardLayout.ts).
-	body: (m) => (m.signature_ability ? '```ds-feature\n' + featureToYaml(m.signature_ability) + '\n```' : m.content),
+	// Signature ability renders as a real feature card (Task 6 review Finding 4) through
+	// DisplayCardView's shared renderFeature/renderFeatureList grammar — not a markdown/
+	// YAML fence round-trip (which never actually recurses in jest or the visual harness,
+	// and was unverified in real Obsidian too).
+	features: (m) => (m.signature_ability ? [m.signature_ability] : undefined),
+	// Inline mode: `content` is the kit's full page markdown — rows/`features` above
+	// already cover its stat-bonus lines and signature ability, so render it as the
+	// trailing body ONLY when there's no signature ability to avoid a double render
+	// (mirrors the pre-fix ternary's intent, minus the YAML-fence dump). By-SCC uses
+	// the source body instead (Task 9 — currently a deliberate no-op per CardLayout.ts).
+	body: (m) => (m.signature_ability ? undefined : m.content),
 	useSourceBody: true,
 };
 

@@ -26,6 +26,7 @@ import kitExample from '@/elements/display/kit/example.yaml';
 import conditionExample from '@/elements/display/condition/example.yaml';
 import treasureExample from '@/elements/display/treasure/example.yaml';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
+import { MarkdownRenderer } from '../../mocks/obsidian';
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
 const KIT_REL = 'kit/panther.md';
@@ -89,13 +90,38 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 		)!;
 		expect(staminaRow.querySelector('.dse-card__row-value')!.textContent).toContain('+6 per');
 
-		// Inline body: the signature ability re-serialized into a nested ds-feature
-		// fence (layouts.ts's featureToYaml) — the jest MarkdownRenderer mock appends
-		// raw markdown as a text node (test/mocks/obsidian-core.ts), so its literal
-		// text is asserted rather than a rendered nested card.
-		const body = root.querySelector('.dse-card__body')!;
-		expect(body.textContent).toContain('```ds-feature');
-		expect(body.textContent).toContain('Devastating Rush');
+		// Inline body: no more YAML-fence body — the signature ability instead renders
+		// as a REAL feature card (Task 6 review Finding 4) through the shared
+		// renderFeature grammar (src/elements/feature/renderFeature.ts), the same
+		// mechanism featureblock/view.ts uses. Assert the feature card structure
+		// exists (title node) and that no raw YAML dump (`feature_type:`) leaks
+		// anywhere in the rendered output.
+		expect(root.querySelector('.dse-card__body')).toBeNull();
+		const featureCard = root.querySelector('.dse-feature')!;
+		expect(featureCard).not.toBeNull();
+		expect(featureCard.querySelector('.dse-head__primary--left')!.textContent).toBe('Devastating Rush');
+		expect(root.textContent).not.toContain('feature_type:');
+		expect(root.textContent).not.toContain('```ds-feature');
+	});
+
+	test('ds-kit: Stamina (and other *_bonus rows) render their inline SCC link through renderMarkdown', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
+		const host = inlineHost('ds-kit');
+		await new ElementPipeline(makeInlineDeps()).run(kitElement, kitExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+
+		const staminaRow = Array.from(root.querySelectorAll('.dse-card__row')).find(
+			(el) => el.querySelector('.dse-card__row-label')!.textContent === 'Stamina',
+		)!;
+		const staminaValueText = staminaRow.querySelector('.dse-card__row-value')!.textContent;
+		// The raw markdown source string for stamina_bonus, verbatim from example.yaml.
+		const staminaMarkdown = '+6 per [echelon](scc.v1:mcdm.heroes.v1/rule.general/echelon)';
+		expect(staminaValueText).toBe(staminaMarkdown);
+		// The dispatch recorder proves it went through renderMarkdown (markdown: true),
+		// not the plain-text valEl.setText() path — the two are indistinguishable by
+		// DOM text alone under the jest mock (F3 §4.2), so the recorder is the only
+		// reliable signal that the fix actually flipped the row's markdown flag.
+		expect(renderSpy.mock.calls.some((c) => c[1] === staminaMarkdown)).toBe(true);
 	});
 
 	test('ds-condition: inline example.yaml renders title/badge/body', async () => {
@@ -115,16 +141,26 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(root.querySelector('.dse-card__title')!.textContent).toBe("Executioner's Blade");
+		// Task 6 review Finding 5: example.yaml is now a REAL 1st-echelon trinket
+		// (data-unified/en/unified/yaml/treasure/1st-echelon/trinket/color-cloak-blue.yaml)
+		// instead of the leveled weapon, so the echelon badge and Effect row — both
+		// previously uncovered by any fixture — get real assertions.
+		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Color Cloak (Blue)');
 		const badgeTexts = Array.from(root.querySelectorAll('.dse-card__badge')).map((el) => el.textContent);
-		expect(badgeTexts).toEqual(expect.arrayContaining(['Heavy Weapon', 'Psionic']));
+		expect(badgeTexts).toEqual(expect.arrayContaining(['Echelon 1', 'Magic', 'Neck']));
+		expect(root.querySelector('.dse-card__badge--echelon')!.textContent).toBe('Echelon 1');
 
 		const projectRow = Array.from(root.querySelectorAll('.dse-card__row')).find(
 			(el) => el.querySelector('.dse-card__row-label')!.textContent === 'Project',
 		)!;
-		expect(projectRow.querySelector('.dse-card__row-value')!.textContent).toContain('450');
+		expect(projectRow.querySelector('.dse-card__row-value')!.textContent).toContain('150');
 
-		expect(root.querySelector('.dse-card__body')!.textContent).toContain('quarry weakens');
+		const effectRow = Array.from(root.querySelectorAll('.dse-card__row')).find(
+			(el) => el.querySelector('.dse-card__row-label')!.textContent === 'Effect',
+		)!;
+		expect(effectRow.querySelector('.dse-card__row-value')!.textContent).toContain('cold immunity');
+
+		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Anjali sigil');
 	});
 });
 

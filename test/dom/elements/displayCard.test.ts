@@ -142,6 +142,10 @@ describe('D6 Task 5: DisplayCardView pure-model render path (spec §2.4)', () =>
 		const row = root.querySelector('.dse-card__row-value');
 		expect(row?.textContent).toBe('**bold** note');
 		expect(renderSpy.mock.calls.some((c) => c[1] === '**bold** note')).toBe(true);
+		// Task 6 review Finding 3: markdown rows carry the established inline-markdown
+		// idiom (renderFeature.ts's `.dse-md-inline`) so the rendered <p> stays on the
+		// grid's value line instead of dropping below the label.
+		expect(row?.classList.contains('dse-md-inline')).toBe(true);
 	});
 
 	test('optional slots (subtitle/badges/flavor/rows/body) all omit cleanly when absent', async () => {
