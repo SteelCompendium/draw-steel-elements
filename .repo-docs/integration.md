@@ -42,8 +42,22 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-skills` | Skill list |
 | `ds-vr`, `ds-value-row`, `ds-values-row` | Values row |
 | `ds-hr`, `ds-horizontal-rule` | Horizontal rule |
+| `ds-roll` | Standalone dice roll (D5) |
+| `ds-kit` | Kit reference card (D6) |
+| `ds-condition` | Condition reference card (D6) |
+| `ds-treasure` | Treasure reference card (D6) |
+| `ds-ancestry` | Ancestry reference card (D6) |
+| `ds-culture` | Culture reference card (D6) |
+| `ds-career` | Career reference card (D6) |
+| `ds-class` | Class reference card (D6) |
+| `ds-title` | Title reference card (D6) |
+| `ds-perk` | Perk reference card (D6) |
+| `ds-complication` | Complication reference card (D6) |
+| `ds-rule` | Rule/glossary reference card (D6; model-less — `genericCard()`, not `displayFamily()`) |
 
-Users interact by writing YAML inside these fenced code blocks in Obsidian notes.
+Users interact by writing YAML inside these fenced code blocks in Obsidian notes. The 11
+D6 elements above, plus `ds-sb`/`ds-ft`/`ds-fb`, additionally accept a **whole-block
+reference** instead of inline YAML — see "Compendium reference (by-SCC)" below.
 
 ## Data Contracts
 
@@ -58,6 +72,54 @@ Elements can reference content in other notes:
 - `[[Note Name]]` -- resolve by Obsidian wikilink
 
 The `ReferenceResolver` searches: exact path, path + `.md`, compendium directory prefix, then Obsidian metadata cache.
+
+### Compendium reference (by-SCC) — D6
+
+`CompendiumIndex` (`src/services/CompendiumIndex.ts`, `createCompendiumIndex(app,
+sccResolver)`) is the typed-model accessor D8 (encounter builder) and the compendium
+search/insert commands consume: `getEntry`/`getEntity`/`getStatblock`/`query`/
+`resolveSlug`, backed by an LRU model cache (generation-guarded against races with vault
+events) and `SccResolver`'s frontmatter `scc:` index (Task 1's read seam — a file is only
+indexed if its frontmatter carries `scc: <code>`, matching real md-dse output).
+`main.ts` constructs it in `onload` right after `sccResolver` (it depends on nothing
+else), then threads it into `initializeElementFrameworkV2` as the `compendium` param —
+`ElementPipeline` carries it into every `RenderContext` as `cx.compendium`, symmetric
+with `cx.sccAnchors`.
+
+`src/elements/shared/withReference.ts` wraps a base element definition (`statblock`,
+`feature`, `featureblock`, and the 11 `displayFamily()`/`genericCard()` elements above) so
+its block body may be **either** inline YAML **or** a whole-block reference:
+`scc.v1:<code>` (or bare `scc:<code>`), `@<vault-path>`, `[[wikilink]]`, or (for the
+`displayFamily()` elements only) a **bare slug** scoped to that element's own type family
+(`ds-kit` given `panther` resolves; given `bleeding`, a condition, it error-cards — no
+cross-family guessing). `RefUnwrapView` (`src/elements/shared/RefUnwrapView.ts`) owns
+resolution against `cx.compendium` and the §1.5 degrade ladder: unresolvable code → plain
+"not found" card; `cx.compendium` absent (harness/test caller that didn't construct one)
+→ "compendium not installed" card; resolved but the wrong type family → "wrong type"
+card. Recursion is depth-guarded (a resolved file whose own body embeds another
+whole-block reference to itself/a cycle cannot recurse unboundedly).
+
+In **hybrid** mode (a reference resolved to a real vault file), `CardLayout`
+(`src/elements/shared/CardLayout.ts`) renders the card's chrome (title/badges/rows) from
+the typed model as usual, but its trailing body region renders the **real resolved
+file's markdown body** (`useSourceBody`, default true) through Obsidian's own
+`MarkdownRenderer.render` — which means a nested `ds-*` code block inside that real body
+(e.g. a kit's signature-ability `ds-feature` block) recurses through the SAME registered
+code-block processors and mounts as a real, nested element card. This can only be proven
+in a real Obsidian host (jsdom/unit tests stub `MarkdownRenderer`) — see
+`visual-harness/obsidian-camera.mjs`'s dedicated `by-scc-kit` capture (D6 Task 11), which
+seeds a real `kit/panther.md` fixture into the demo vault's managed compendium root and
+asserts a nested `[data-dse-element="feature"]` actually mounts. A `flavor`/row value that
+duplicates (a prefix of) the real source body is suppressed rather than shown twice
+(`omitWhenSource` rows; the flavor/body duplicate-text guard).
+
+Compendium search (`Ctrl/Cmd+P` → "Search compendium") and insert
+(`src/authoring/CompendiumSearchModal.ts` + `src/authoring/compendiumInsert.ts`) are a
+fuzzy `SuggestModal` over `CompendiumIndex.query()`, offering both a `scc.v1:` reference
+insert and a full-code inline insert.
+
+Deferred (recorded, not shipped): hover-preview on an `scc.v1:` link (OD-D6-5) and
+autocomplete for by-SCC block bodies (OD-D6-4) — both future work, not blocking.
 
 ### Compendium release format
 

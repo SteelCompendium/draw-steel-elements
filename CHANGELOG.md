@@ -31,6 +31,20 @@
   "Sync compendium (legacy alias)" so hotkeys keep working; it will be removed
   in 7.0.0).
 - Updates `steel-compendium-sdk` to 3.x.
+- New: compendium reference cards — `ds-kit`, `ds-condition`, `ds-treasure`,
+  `ds-ancestry`, `ds-culture`, `ds-career`, `ds-class`, `ds-title`, `ds-perk`,
+  `ds-complication`, and `ds-rule` (a general glossary/rule card) render a
+  compendium entry as a styled card. Each also accepts `ds-sb`/`ds-ft`/`ds-fb`
+  (statblock/feature/featureblock) as a **reference**: write `scc.v1:<code>`,
+  `@<path>`, `[[wikilink]]`, or (for the 11 new cards) a bare slug like
+  `panther`, instead of inline YAML, and the card renders live from your
+  synced compendium — including any nested ability cards embedded in that
+  entry's own content.
+- New: compendium search + insert — a fuzzy search command
+  ("Search compendium") to find and insert a reference or a full inline copy
+  of any compendium entry, without leaving the editor.
+- The `/ds` autocomplete and the per-element "Insert Draw Steel: …" commands
+  automatically cover every new card above.
 
 ## 5.1.1
 

@@ -25,17 +25,32 @@ read these to see the plugin. Narrow with `--element=/--theme=`. `npm run shot-u
 close-enough (vendored default-theme vars) — final QA is real Obsidian. `npm run
 obsidian-shots` produces ground-truth PNGs from a real spawned Obsidian
 (`<element>--obsidian-<theme>-<bg>.png`) — slower; use it for sign-off, the browser harness
-for iteration.
+for iteration. It also seeds a small real compendium subtree (`demo-vault/DS Compendium/`,
+git-ignored, regenerated every run) and captures one extra ground-truth shot
+(`by-scc-kit--obsidian-recursion.png`) proving a by-SCC `ds-kit` reference card renders its
+real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 11;
+`visual-harness/obsidian-camera.mjs`'s "step 3b").
 
 ## Key Architecture
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`). ALL 12 elements live on the framework (11 migrated + `ds-roll`, new
-  in D5); every legacy processor is retired
+  `src/elements/`). ALL 23 elements live on the framework (11 migrated + `ds-roll` (D5) +
+  11 D6 `displayFamily()`/`genericCard()` compendium-reference elements —
+  `ds-kit`/`ds-condition`/`ds-treasure`/`ds-ancestry`/`ds-culture`/`ds-career`/`ds-class`/
+  `ds-title`/`ds-perk`/`ds-complication`/`ds-rule`); every legacy processor is retired
   (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation sub-views the
   framework reuses). Framework v2 replaced Vue 3 (2026-04-06 revert decision, executed
   by D1) — see `.repo-docs/architecture.md` for the full picture.
+- **Compendium reference (D6)**: `src/services/CompendiumIndex.ts` (`cx.compendium`,
+  threaded into the pipeline in `main.ts` right after `sccResolver`) is the typed-model
+  accessor over the synced compendium (`getEntry`/`getEntity`/`getStatblock`/`query`).
+  `src/elements/shared/withReference.ts`/`RefUnwrapView.ts`/`CardLayout.ts` give
+  `statblock`/`feature`/`featureblock` and the 11 display-family elements a shared
+  "whole-block reference OR inline YAML" contract (`scc.v1:`/bare-slug/`@path`/
+  `[[wikilink]]`, by-SCC hybrid mode rendering the real resolved file's body). Compendium
+  search + insert: `src/authoring/CompendiumSearchModal.ts` +
+  `src/authoring/compendiumInsert.ts`.
 - **Legacy processor pattern**: Each not-yet-migrated `ds-*` element has a processor in
   `src/drawSteelAdmonition/`, registered in `src/utils/RegisterElements.ts`
 - **Framework v2 element pattern**: each migrated `ds-*` element has a
