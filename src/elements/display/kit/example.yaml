@@ -1,0 +1,45 @@
+content: "If you want a good balance of protection, [speed](scc.v1:mcdm.heroes.v1/rule.character/speed), and damage, the [Panther](scc.v1:mcdm.heroes.v1/kit/panther) kit is for you. This kit increases your [Stamina](scc.v1:mcdm.heroes.v1/rule.health/stamina) not by wearing armor, but through the focused battle preparation of body and mind, letting you be fast and mobile while swinging a heavy weapon at your foes.\n\n##### Equipment\n\nYou wear no armor and wield a heavy weapon.\n\n##### Kit Bonuses\n\n**[Stamina](scc.v1:mcdm.heroes.v1/rule.health/stamina) [Bonus](scc.v1:mcdm.heroes.v1/rule.dice/bonuses-and-penalties):** +6 per [echelon](scc.v1:mcdm.heroes.v1/rule.general/echelon)\n\n**[Speed](scc.v1:mcdm.heroes.v1/rule.character/speed) [Bonus](scc.v1:mcdm.heroes.v1/rule.dice/bonuses-and-penalties):** +1\n\n**[Stability](scc.v1:mcdm.heroes.v1/rule.character/stability) [Bonus](scc.v1:mcdm.heroes.v1/rule.dice/bonuses-and-penalties):** +1\n\n**[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee) Damage [Bonus](scc.v1:mcdm.heroes.v1/rule.dice/bonuses-and-penalties):** +0/+0/+4\n\n##### Signature Ability\n\n###### Devastating Rush\n\n*The faster you move, the harder you hit.*\n\n| **[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee), [Strike](scc.v1:mcdm.heroes.v1/rule.combat/strike), Weapon** |               **Main action** |\n|---------------------------|------------------------------:|\n| **\U0001F4CF [Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee) 1**            | **\U0001F3AF One creature or object** |\n\n**[Power Roll](scc.v1:mcdm.heroes.v1/rule.dice/power-roll) + [Might](scc.v1:mcdm.heroes.v1/rule.character/might) or [Agility](scc.v1:mcdm.heroes.v1/rule.character/agility):**\n\n- **≤11:** 3 + M or A damage\n- **12-16:** 6 + M or A damage\n- **17+:** 13 + M or A damage\n\n**Effect:** You can move up to 3 squares straight toward the target before this [strike](scc.v1:mcdm.heroes.v1/rule.combat/strike), which deals extra damage equal to the number of squares you move this way."
+equipment_text: You wear no armor and wield a heavy weapon.
+flavor: If you want a good balance of protection, speed, and damage, the Panther kit is for you. This kit increases your Stamina not by wearing armor, but through the focused battle preparation of body and mind, letting you be fast and mobile while swinging a heavy weapon at your foes.
+melee_damage_bonus: +0/+0/+4
+name: Panther
+scc: mcdm.heroes.v1/kit/panther
+signature_ability:
+    ability_type: Signature
+    distance: '[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee) 1'
+    effects:
+        - roll: Power Roll + [Might](scc.v1:mcdm.heroes.v1/rule.character/might) or [Agility](scc.v1:mcdm.heroes.v1/rule.character/agility)
+          tier1: 3 + M or A damage
+          tier2: 6 + M or A damage
+          tier3: 13 + M or A damage
+        - effect: You can move up to 3 squares straight toward the target before this [strike](scc.v1:mcdm.heroes.v1/rule.combat/strike), which deals extra damage equal to the number of squares you move this way.
+          name: Effect
+    feature_type: ability
+    flavor: The faster you move, the harder you hit.
+    keywords:
+        - '[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee)'
+        - '[Strike](scc.v1:mcdm.heroes.v1/rule.combat/strike)'
+        - Weapon
+    metadata:
+        ability_type: Signature
+        action_type: Main action
+        content: "*The faster you move, the harder you hit.*\n\n| **[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee), [Strike](scc.v1:mcdm.heroes.v1/rule.combat/strike), Weapon** |               **Main action** |\n|---------------------------|------------------------------:|\n| **\U0001F4CF [Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee) 1**            | **\U0001F3AF One creature or object** |\n\n**[Power Roll](scc.v1:mcdm.heroes.v1/rule.dice/power-roll) + [Might](scc.v1:mcdm.heroes.v1/rule.character/might) or [Agility](scc.v1:mcdm.heroes.v1/rule.character/agility):**\n\n- **≤11:** 3 + M or A damage\n- **12-16:** 6 + M or A damage\n- **17+:** 13 + M or A damage\n\n**Effect:** You can move up to 3 squares straight toward the target before this [strike](scc.v1:mcdm.heroes.v1/rule.combat/strike), which deals extra damage equal to the number of squares you move this way."
+        distance: '[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee) 1'
+        feature_type: ability
+        flavor: The faster you move, the harder you hit.
+        item_id: devastating-rush
+        item_name: Devastating Rush
+        keywords:
+            - '[Melee](scc.v1:mcdm.heroes.v1/rule.combat/melee)'
+            - '[Strike](scc.v1:mcdm.heroes.v1/rule.combat/strike)'
+            - Weapon
+        target: One creature or object
+        type: feature/ability/common
+    name: Devastating Rush
+    target: One creature or object
+    type: feature
+    usage: Main action
+speed_bonus: "+1"
+stability_bonus: "+1"
+stamina_bonus: +6 per [echelon](scc.v1:mcdm.heroes.v1/rule.general/echelon)
+type: kit

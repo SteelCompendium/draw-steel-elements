@@ -51,6 +51,7 @@ import { counterElement } from '@/elements/counter/definition';
 import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
+import { displayElements } from '@/elements/display';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -229,8 +230,11 @@ export function initializeElementFrameworkV2(
  * COMPLETE: all 11 migrated elements are registered here and `RegisterElements.ts`
  * registers nothing. Plan 14 Task 5 appends Roll (D5 §5) — the 12th element and the
  * first NEW element born on the framework (not a migration); RegisterElements.ts still
- * registers nothing. Kept as a standalone function (same rationale as
- * `initializeElementFrameworkV2`) so it is testable without the full plugin lifecycle.
+ * registers nothing. D6 Task 6 (plan 16, spec §2) appends the first three
+ * `displayFamily()` instances — Kit/Condition/Treasure — the 13th-15th elements and the
+ * first reference-capable (`withReference`-wrapped) display-family elements.
+ * Kept as a standalone function (same rationale as `initializeElementFrameworkV2`) so it
+ * is testable without the full plugin lifecycle.
  */
 export function registerFrameworkElementDefinitions(registry: ElementRegistry): void {
 	registry.register(horizontalRuleElement);
@@ -245,6 +249,7 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(valuesRowElement);
 	registry.register(characteristicsElement);
 	registry.register(rollElement);
+	for (const el of displayElements) registry.register(el);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

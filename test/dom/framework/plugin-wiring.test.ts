@@ -4,10 +4,11 @@
 // Proves (F1 §2.3 registry wiring, §5 dependency-schema registration, §8 OD-8):
 //  - constructing + loading the plugin (fake App/Plugin) runs the new framework v2
 //    wiring WITHOUT throwing;
-//  - the new ElementRegistry exists on the plugin and holds ALL 12 elements — the 11
+//  - the new ElementRegistry exists on the plugin and holds ALL 15 elements — the 11
 //    migrated ones (the D-wave migration is complete as of Plan 07 Task 5 — when Plan 02
 //    authored this file the registry was asserted EMPTY, and each migration task appended
-//    its element) plus Roll, the first framework-born element (Plan 14 Task 5);
+//    its element) plus Roll, the first framework-born element (Plan 14 Task 5), plus
+//    Kit/Condition/Treasure, the first three displayFamily() instances (D6 Task 6);
 //  - the legacy `registerElements`/RegisterElements.ts path still runs alongside it but
 //    now registers ZERO markdown code-block processors (Plan 07 Task 5 migrated the last
 //    two, Values Row + Characteristics) — every handler comes from the framework;
@@ -35,6 +36,8 @@ import * as path from 'path';
 // RegisterElements.ts path registers nothing — there are no legacy aliases left to
 // sample (this file's original LEGACY_ALIASES coexistence constant is retired with them).
 // Plan 14 Task 5 appends Roll (ds-roll) — the 12th element, born on the framework.
+// D6 Task 6 (plan 16, spec §2) appends Kit/Condition/Treasure (ds-kit/ds-condition/
+// ds-treasure) — the 13th-15th elements, the first `displayFamily()` instances.
 const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'horizontal-rule',
 	'skills',
@@ -48,6 +51,9 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'values-row',
 	'characteristics',
 	'roll',
+	'kit',
+	'condition',
+	'treasure',
 ];
 
 /**

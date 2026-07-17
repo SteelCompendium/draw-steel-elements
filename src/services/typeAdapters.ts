@@ -48,6 +48,15 @@ export interface TypeAdapter {
 	matches(type: string): boolean;
 	/** Turn a resolved compendium file into the element's model, or null when unavailable. */
 	fromFile(app: App, file: TFile): Promise<ElementModel>;
+	/**
+	 * D6 Task 6 (spec §2) -- turn ALREADY-PARSED data (inline block YAML, or a file's
+	 * frontmatter) into the element's model synchronously. `displayFamily` is the only
+	 * caller (its inline-body parse path) and only ever looks up frontmatter-family
+	 * types, so this is safe to leave undefined for the ds-block family (statblock/
+	 * feature/featureblock), whose readers consume raw block TEXT, not a pre-parsed
+	 * object, and have no equivalent "already-parsed data" entry point.
+	 */
+	fromData?: (data: unknown) => ElementModel;
 }
 
 /** ds-block family: SDK reader over the first ds-* block TEXT (statblock/feature/featureblock). */
@@ -61,9 +70,17 @@ function dsBlockAdapter(re: RegExp, readYaml: (text: string) => unknown): TypeAd
 	};
 }
 
-/** frontmatter family: SDK modelDTOAdapter over the file's frontmatter. */
+/** frontmatter family: SDK modelDTOAdapter over the file's frontmatter (fromFile) OR any
+ *  already-parsed data (fromData, D6 Task 6 -- e.g. an inline block body). Single
+ *  underlying `adapter` call either way -- one place (this map) that knows "this SCC
+ *  `type` maps to this SDK reader," per task-2-review.md's binding single-source-of-truth
+ *  constraint. */
 function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown): TypeAdapter {
-	return { matches: (type) => re.test(type), fromFile: async (app, file) => adapter(frontmatterOf(app, file)) };
+	return {
+		matches: (type) => re.test(type),
+		fromFile: async (app, file) => adapter(frontmatterOf(app, file)),
+		fromData: (data) => adapter(data),
+	};
 }
 
 /**
