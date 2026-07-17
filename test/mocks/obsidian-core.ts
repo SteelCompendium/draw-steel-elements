@@ -472,6 +472,52 @@ export class Modal {
 	}
 }
 
+/** D6 Task 10 (spec §4.2) -- `CompendiumSearchModal` is the first `SuggestModal` user in
+ *  this repo; no prior mock existed. Minimal, mirroring `Modal`'s own mock style: real
+ *  jsdom `containerEl`/`contentEl` (inherited from `Modal`) plus an `inputEl`/
+ *  `resultContainerEl` pair a subclass's `renderSuggestion` can write into, `setPlaceholder`,
+ *  a no-op `setInstructions` (the real hint-row footer -- irrelevant to test assertions),
+ *  and `getSuggestions`/`renderSuggestion`/`onChooseSuggestion` left abstract exactly like
+ *  real Obsidian. `open`/`close` are inherited as-is from `Modal` (already track "is this
+ *  in the DOM" via containerEl attach/detach -- no separate no-op tracking needed). Real
+ *  Obsidian's `selectSuggestion` calls `onChooseSuggestion` then closes the modal; the mock
+ *  does the same so a test can drive selection through either the abstract method directly
+ *  or `selectSuggestion` (matching a real click/Enter). */
+export abstract class SuggestModal<T> extends Modal {
+	limit = 100;
+	emptyStateText = 'No results found.';
+	inputEl: HTMLInputElement;
+	resultContainerEl: HTMLElement;
+
+	constructor(app: App) {
+		super(app);
+		this.inputEl = document.createElement('input');
+		this.inputEl.type = 'text';
+		this.resultContainerEl = document.createElement('div');
+		this.contentEl.appendChild(this.inputEl);
+		this.contentEl.appendChild(this.resultContainerEl);
+	}
+
+	setPlaceholder(placeholder: string): void {
+		this.inputEl.placeholder = placeholder;
+	}
+
+	setInstructions(_instructions: Array<{ command: string; purpose: string }>): void {}
+
+	onNoSuggestion(): void {}
+
+	abstract getSuggestions(query: string): T[] | Promise<T[]>;
+	abstract renderSuggestion(value: T, el: HTMLElement): void;
+	abstract onChooseSuggestion(item: T, evt: MouseEvent | KeyboardEvent): void;
+
+	selectSuggestion(value: T, evt: MouseEvent | KeyboardEvent): void {
+		this.onChooseSuggestion(value, evt);
+		this.close();
+	}
+
+	selectActiveSuggestion(_evt: MouseEvent | KeyboardEvent): void {}
+}
+
 export class Notice {
 	static readonly notices: string[] = [];
 	constructor(message: string, _duration?: number) {

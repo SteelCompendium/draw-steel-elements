@@ -39,6 +39,9 @@ import { registerFrameworkElements } from '@/framework/registerFrameworkElements
 import { registerInsertCommands } from '@/authoring/insert';
 import { DsElementSuggest } from '@/authoring/suggest';
 import { DsSchemaSuggest } from '@/authoring/schemaSuggest';
+import { registerCompendiumInsertCommands } from '@/authoring/compendiumInsert';
+import { createCompendiumIndex } from '@/services/CompendiumIndex';
+import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
 import { skillsElement } from '@/elements/skills/definition';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
@@ -272,6 +275,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     manifestStore: ManifestStore;
     syncService: CompendiumSyncService;
 
+    /** D6 Task 2/10 (spec §6): the typed-model accessor over `sccResolver`'s read seam,
+     *  backing the compendium search modal + insert commands below (and D8's encounter
+     *  builder later). Kept as its own plugin field for the same reason `sccResolver` is
+     *  (a future consumer reusing it directly) — Task 11 finalizes this construction's
+     *  final position in `onload`. */
+    compendiumIndex: CompendiumIndex;
+
     /** D4: the debounced saveData adapter behind the PreferenceStore; flushed on unload. */
     private prefsStorage?: FlushablePrefsStorage;
 
@@ -347,6 +357,15 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // any fence; this one only fires inside a ds-* fence). Registered as a second,
         // independent EditorSuggest.
         this.registerEditorSuggest(new DsSchemaSuggest(this.app, frameworkV2.registry));
+
+        // D6 Task 10 (spec §4): the compendium search modal + insert commands, over the
+        // typed-model accessor (CompendiumIndex, D6 Task 2) built on the sccResolver read
+        // seam constructed above. Task 11 finalizes where this construction lands relative
+        // to the rest of onload; it only needs sccResolver + syncService, both already in
+        // hand by this point.
+        this.compendiumIndex = createCompendiumIndex(this.app, this.sccResolver);
+        this.compendiumIndex.registerWatchers(this);
+        registerCompendiumInsertCommands(this, this.compendiumIndex, this.syncService);
 
         this.addCommand({
             id: 'sync-compendium',

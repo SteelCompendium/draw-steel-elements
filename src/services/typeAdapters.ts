@@ -60,6 +60,16 @@ export const STATBLOCK_TYPE_RE = /(^|\.)statblock$/;
 export interface TypeAdapter {
 	/** SCC-type test: does this adapter own a given frontmatter `type` value? */
 	matches(type: string): boolean;
+	/**
+	 * D6 Task 10 (spec §4.3) -- the canonical `ds-<alias>` code-block language for this
+	 * type family (e.g. "ds-kit", "ds-statblock"), matching the display element's own
+	 * `aliases[0]`-equivalent canonical form (see src/elements/display/index.ts and the
+	 * statblock/feature/featureblock definitions). `typeToAlias` below is the sole
+	 * reader -- single source of truth for "what fence do I wrap a reference/full-block
+	 * insert in for this SCC type," alongside `fromFile`/`fromData` already owning "how
+	 * do I parse it."
+	 */
+	alias: string;
 	/** Turn a resolved compendium file into the element's model, or null when unavailable. */
 	fromFile(app: App, file: TFile): Promise<ElementModel>;
 	/**
@@ -74,9 +84,10 @@ export interface TypeAdapter {
 }
 
 /** ds-block family: SDK reader over the first ds-* block TEXT (statblock/feature/featureblock). */
-function dsBlockAdapter(re: RegExp, readYaml: (text: string) => unknown): TypeAdapter {
+function dsBlockAdapter(re: RegExp, readYaml: (text: string) => unknown, alias: string): TypeAdapter {
 	return {
 		matches: (type) => re.test(type),
+		alias,
 		fromFile: async (app, file) => {
 			const text = await extractFirstDsBlockText(app, file);
 			return text === null ? null : readYaml(text);
@@ -89,9 +100,10 @@ function dsBlockAdapter(re: RegExp, readYaml: (text: string) => unknown): TypeAd
  *  underlying `adapter` call either way -- one place (this map) that knows "this SCC
  *  `type` maps to this SDK reader," per task-2-review.md's binding single-source-of-truth
  *  constraint. */
-function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown): TypeAdapter {
+function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown, alias: string): TypeAdapter {
 	return {
 		matches: (type) => re.test(type),
+		alias,
 		fromFile: async (app, file) => adapter(frontmatterOf(app, file)),
 		fromData: (data) => adapter(data),
 	};
@@ -105,9 +117,10 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown): TypeAdap
  * raw block body itself IS the card body, OD-D6-7), so this adapter is by-SCC only,
  * exactly like the ds-block family above being fromFile-only for the opposite reason.
  */
-function genericNoteAdapter(re: RegExp): TypeAdapter {
+function genericNoteAdapter(re: RegExp, alias: string): TypeAdapter {
 	return {
 		matches: (type) => re.test(type),
+		alias,
 		fromFile: async (app, file) => {
 			const fm = frontmatterOf(app, file);
 			const name =
@@ -129,24 +142,37 @@ function genericNoteAdapter(re: RegExp): TypeAdapter {
  * e.g. `monster.goblin.statblock` (or bare `statblock`) doesn't fall through to it.
  */
 export const TYPE_ADAPTERS: TypeAdapter[] = [
-	dsBlockAdapter(STATBLOCK_TYPE_RE, (t) => StatblockConfig.readYaml(t)),
-	dsBlockAdapter(/(^|\.)featureblock$/, (t) => FeatureblockConfig.readYaml(t)),
-	dsBlockAdapter(/^feature($|\.)/, (t) => FeatureConfig.readYaml(t)),
-	frontmatterAdapter(/^kit$/, Kit.modelDTOAdapter),
-	frontmatterAdapter(/^ancestry$/, Ancestry.modelDTOAdapter),
-	frontmatterAdapter(/^culture$/, Culture.modelDTOAdapter),
-	frontmatterAdapter(/^career$/, Career.modelDTOAdapter),
-	frontmatterAdapter(/^class$/, Class.modelDTOAdapter),
-	frontmatterAdapter(/^title$/, Title.modelDTOAdapter),
-	frontmatterAdapter(/^perk$/, Perk.modelDTOAdapter),
-	frontmatterAdapter(/^treasure$/, Treasure.modelDTOAdapter),
-	frontmatterAdapter(/^complication$/, Complication.modelDTOAdapter),
-	frontmatterAdapter(/^condition$/, Condition.modelDTOAdapter),
+	dsBlockAdapter(STATBLOCK_TYPE_RE, (t) => StatblockConfig.readYaml(t), 'ds-statblock'),
+	dsBlockAdapter(/(^|\.)featureblock$/, (t) => FeatureblockConfig.readYaml(t), 'ds-featureblock'),
+	dsBlockAdapter(/^feature($|\.)/, (t) => FeatureConfig.readYaml(t), 'ds-feature'),
+	frontmatterAdapter(/^kit$/, Kit.modelDTOAdapter, 'ds-kit'),
+	frontmatterAdapter(/^ancestry$/, Ancestry.modelDTOAdapter, 'ds-ancestry'),
+	frontmatterAdapter(/^culture$/, Culture.modelDTOAdapter, 'ds-culture'),
+	frontmatterAdapter(/^career$/, Career.modelDTOAdapter, 'ds-career'),
+	frontmatterAdapter(/^class$/, Class.modelDTOAdapter, 'ds-class'),
+	frontmatterAdapter(/^title$/, Title.modelDTOAdapter, 'ds-title'),
+	frontmatterAdapter(/^perk$/, Perk.modelDTOAdapter, 'ds-perk'),
+	frontmatterAdapter(/^treasure$/, Treasure.modelDTOAdapter, 'ds-treasure'),
+	frontmatterAdapter(/^complication$/, Complication.modelDTOAdapter, 'ds-complication'),
+	frontmatterAdapter(/^condition$/, Condition.modelDTOAdapter, 'ds-condition'),
 	// D6 Task 8 (spec §3): model-less family -- `rule` (bare, in the real corpus) plus any
 	// future `rule.<sub>` namespacing. Placed last: nothing above it is ever named "rule".
-	genericNoteAdapter(/^rule($|\.)/),
+	genericNoteAdapter(/^rule($|\.)/, 'ds-rule'),
 ];
 
 export function adapterForType(type: string): TypeAdapter | undefined {
 	return TYPE_ADAPTERS.find((a) => a.matches(type));
+}
+
+/**
+ * D6 Task 10 (spec §4.3) -- the compendium search/insert commands' "which fence do I
+ * wrap this SCC `type` in" lookup, over the SAME TYPE_ADAPTERS ordering/regexes
+ * `adapterForType` uses (no forked type->element mapping). Falls back to the model-less
+ * `ds-rule` alias for any `type` no adapter claims (empty/unrecognized frontmatter) --
+ * `genericCard`'s by-SCC path (`genericNoteAdapter`) already renders an arbitrary
+ * name+body generically, so it is the safest generic destination for a reference/full
+ * block whose real type this map doesn't know.
+ */
+export function typeToAlias(type: string): string {
+	return adapterForType(type)?.alias ?? 'ds-rule';
 }
