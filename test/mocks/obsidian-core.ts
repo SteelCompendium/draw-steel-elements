@@ -154,6 +154,14 @@ export class FakeVault {
 		return [...this.tfiles.values()];
 	}
 
+	// D6 Task 4 — SccResolver.seedIndex() (and CompendiumIndex.query/resolveSlug,
+	// which walk resolver.entries()) call the real Obsidian Vault.getMarkdownFiles();
+	// this mock only tracked files via allFiles() until now, which no production code
+	// happened to call. Purely additive (no existing caller relies on its absence).
+	getMarkdownFiles(): TFile[] {
+		return this.allFiles().filter((f) => f.path.endsWith('.md'));
+	}
+
 	// Snapshot-then-yield: content is captured at call time, then one macrotask
 	// elapses before it is returned. This deterministically reproduces the
 	// CB-3 read-modify-write race (a second write can land inside the window).

@@ -39,6 +39,7 @@ import { StatblockConfig } from '@model/StatblockConfig';
 import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
 import { statblockElement } from '../../../src/elements/statblock/definition';
 import { StatblockElementView } from '../../../src/elements/statblock/view';
+import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import humanBanditChief from '../../fixtures/statblock/human-bandit-chief.yaml';
@@ -148,7 +149,15 @@ describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', 
 	test('parse consumes the RAW block text (parseYaml + shim + SDK adapter), NOT the pipeline pre-parsed data', () => {
 		// `data` is deliberately garbage: only `raw` carries the block. StatblockConfig
 		// .readYaml = parseYaml(raw) -> applyLegacyStatblockKeys -> Statblock.modelDTOAdapter.
-		const model = statblockElement.parse(undefined, humanBanditChief);
+		//
+		// D6 Task 4: statblockElement is now withReference-wrapped, so parse() returns
+		// RefOrInline<StatblockConfig> — {kind:'inline', model} for an inline YAML
+		// mapping body (unchanged from here down: base.parse === StatblockConfig.readYaml
+		// still owns the inline path verbatim).
+		const wrapped = statblockElement.parse(undefined, humanBanditChief);
+		expect(wrapped.kind).toBe('inline');
+		if (wrapped.kind !== 'inline') throw new Error('expected inline');
+		const model = wrapped.model;
 		expect(model).toBeInstanceOf(StatblockConfig);
 		expect(model.statblock.name).toBe('Human Bandit Chief');
 		expect(model.statblock.level).toBe(3);
@@ -164,7 +173,11 @@ describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', 
 		expect(model.statblock.features[0].name).toBe('Whip and Magic Longsword');
 	});
 
-	test('createView returns a StatblockElementView', () => {
+	// D6 Task 4: createView now returns a RefUnwrapView (the withReference wrapper) —
+	// it mounts a REAL StatblockElementView underneath for an inline body (see the
+	// "ties StatblockElementView to host.addChild" / rendered-DOM tests below for
+	// proof the base view still does the actual rendering).
+	test('createView returns a RefUnwrapView (withReference wrapper)', () => {
 		const deps = makeDeps();
 		const host = makeHost();
 		const cx = {
@@ -178,7 +191,7 @@ describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', 
 			refs: deps.refs,
 			session: deps.session,
 		};
-		expect(statblockElement.createView(cx)).toBeInstanceOf(StatblockElementView);
+		expect(statblockElement.createView(cx)).toBeInstanceOf(RefUnwrapView);
 	});
 });
 
@@ -482,11 +495,14 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
-	test('ties StatblockElementView to host.addChild (block lifecycle)', async () => {
+	test('ties the created view to host.addChild (block lifecycle); a real StatblockElementView still renders underneath (D6 Task 4: wrapped in RefUnwrapView)', async () => {
 		const addChild = jest.fn((child: unknown) => child);
-		await renderStatblock(humanBanditChief, { addChild } as Partial<BlockHost>);
+		const { root } = await renderStatblock(humanBanditChief, { addChild } as Partial<BlockHost>);
 		expect(addChild).toHaveBeenCalledTimes(1);
-		expect(addChild.mock.calls[0][0]).toBeInstanceOf(StatblockElementView);
+		expect(addChild.mock.calls[0][0]).toBeInstanceOf(RefUnwrapView);
+		// StatblockElementView is not lost — it's mounted as RefUnwrapView's own child
+		// (Component.addChild, tracked for teardown) and does the actual rendering.
+		expect(root.querySelector(':scope > .dse-sb')).not.toBeNull();
 	});
 
 	test('pipeline default click shield replaces the legacy manual mousedown/pointerdown stop', async () => {

@@ -32,6 +32,7 @@ import { FeatureblockConfig } from '@model/FeatureblockConfig';
 import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
 import { featureblockElement } from '../../../src/elements/featureblock/definition';
 import { FeatureblockElementView } from '../../../src/elements/featureblock/view';
+import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import angulotlMalice from '../../fixtures/featureblock/angulotl-malice.yaml';
@@ -178,10 +179,17 @@ describe('featureblock ElementDefinition (contract unchanged by the D2 redesign)
 		expect(featureblockElement.noClickShield).toBeUndefined();
 	});
 
+	// D6 Task 4: featureblockElement is now withReference-wrapped, so parse() returns
+	// RefOrInline<FeatureblockConfig> — {kind:'inline', model} for an inline YAML
+	// mapping body (unchanged from here down: base.parse === FeatureblockConfig.readYaml
+	// still owns the inline path verbatim).
 	test('parse consumes the RAW block text (SDK YamlReader), NOT the pipeline pre-parsed data', () => {
 		// `data` is deliberately garbage: only `raw` carries the block. FeatureblockConfig
 		// .readYaml = Featureblock.read(new YamlReader(...), raw) — an SDK text reader.
-		const model = featureblockElement.parse(undefined, angulotlMalice);
+		const wrapped = featureblockElement.parse(undefined, angulotlMalice);
+		expect(wrapped.kind).toBe('inline');
+		if (wrapped.kind !== 'inline') throw new Error('expected inline');
+		const model = wrapped.model;
 		expect(model).toBeInstanceOf(FeatureblockConfig);
 		expect(model.featureblock.name).toBe('Angulotl Malice');
 		expect(model.featureblock.featureblock_type).toBe('Malice Features');
@@ -194,7 +202,11 @@ describe('featureblock ElementDefinition (contract unchanged by the D2 redesign)
 		]);
 	});
 
-	test('createView returns a FeatureblockElementView', () => {
+	// D6 Task 4: createView now returns a RefUnwrapView (the withReference wrapper) —
+	// it mounts a REAL FeatureblockElementView underneath for an inline body (see the
+	// "ties FeatureblockElementView to host.addChild" test below for proof the base
+	// view still does the actual rendering).
+	test('createView returns a RefUnwrapView (withReference wrapper)', () => {
 		const deps = makeDeps();
 		const host = makeHost();
 		const cx = {
@@ -208,7 +220,7 @@ describe('featureblock ElementDefinition (contract unchanged by the D2 redesign)
 			refs: deps.refs,
 			session: deps.session,
 		};
-		expect(featureblockElement.createView(cx)).toBeInstanceOf(FeatureblockElementView);
+		expect(featureblockElement.createView(cx)).toBeInstanceOf(RefUnwrapView);
 	});
 });
 
@@ -434,11 +446,12 @@ describe('Plan 09 Task 6a: featureblock re-cast onto the D2 kit card grammar (§
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
-	test('ties FeatureblockElementView to host.addChild (block lifecycle)', async () => {
+	test('ties the created view to host.addChild (block lifecycle); a real FeatureblockElementView still renders underneath (D6 Task 4: wrapped in RefUnwrapView)', async () => {
 		const addChild = jest.fn((child: unknown) => child);
-		await renderFeatureblock(angulotlMalice, { addChild } as Partial<BlockHost>);
+		const { root } = await renderFeatureblock(angulotlMalice, { addChild } as Partial<BlockHost>);
 		expect(addChild).toHaveBeenCalledTimes(1);
-		expect(addChild.mock.calls[0][0]).toBeInstanceOf(FeatureblockElementView);
+		expect(addChild.mock.calls[0][0]).toBeInstanceOf(RefUnwrapView);
+		expect(root.querySelector(':scope > .dse-fb')).not.toBeNull();
 	});
 
 	test('pipeline default click shield replaces the legacy manual mousedown/pointerdown stop', async () => {

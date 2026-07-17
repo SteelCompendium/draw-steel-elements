@@ -12,11 +12,16 @@
 // pipeline's default click shield replaces the processor's manual capture-phase
 // mousedown/pointerdown stop, so noClickShield stays unset.
 import type { ElementDefinition } from '@/framework/registry';
+import { withReference } from '@/elements/shared/withReference';
 import { StatblockConfig } from '@model/StatblockConfig';
 import { StatblockElementView } from './view';
 import statblockExample from './example.yaml';
 
-export const statblockElement: ElementDefinition<StatblockConfig> = {
+// D6 Task 4 (spec §1, §7) — the block body may be inline YAML (unchanged, below) OR a
+// whole-block reference (scc:/scc.v1:/bare-slug/@path/[[wikilink]]) to a compendium
+// statblock file, resolved by withReference/RefUnwrapView. This base def is
+// UNTOUCHED from the pre-D6 shape; only the exported `statblockElement` changes.
+const baseStatblockElement: ElementDefinition<StatblockConfig> = {
 	id: 'statblock',
 	name: 'Statblock',
 	aliases: ['ds-sb', 'ds-statblock'],
@@ -30,3 +35,7 @@ export const statblockElement: ElementDefinition<StatblockConfig> = {
 	createView: (cx) => new StatblockElementView(cx),
 	authoring: { example: statblockExample, sdkModel: 'statblock' },
 };
+
+// Bare-slug scope (§1.3): any `<family>.statblock` type (e.g. monster.goblin.statblock),
+// matching CompendiumIndex's own STATBLOCK_TYPE_RE family — verified against TYPE_ADAPTERS.
+export const statblockElement = withReference(baseStatblockElement, { sccType: /statblock$/ });

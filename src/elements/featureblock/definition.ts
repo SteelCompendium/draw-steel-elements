@@ -12,11 +12,16 @@
 // processor's manual capture-phase mousedown/pointerdown stop, so noClickShield stays
 // unset.
 import type { ElementDefinition } from '@/framework/registry';
+import { withReference } from '@/elements/shared/withReference';
 import { FeatureblockConfig } from '@model/FeatureblockConfig';
 import { FeatureblockElementView } from './view';
 import featureblockExample from './example.yaml';
 
-export const featureblockElement: ElementDefinition<FeatureblockConfig> = {
+// D6 Task 4 (spec §1, §7) — the block body may be inline YAML (unchanged, below) OR a
+// whole-block reference (scc:/scc.v1:/bare-slug/@path/[[wikilink]]) to a compendium
+// featureblock file, resolved by withReference/RefUnwrapView. This base def is
+// UNTOUCHED from the pre-D6 shape; only the exported `featureblockElement` changes.
+const baseFeatureblockElement: ElementDefinition<FeatureblockConfig> = {
 	id: 'featureblock',
 	name: 'Featureblock',
 	aliases: ['ds-fb', 'ds-featureblock'],
@@ -30,3 +35,7 @@ export const featureblockElement: ElementDefinition<FeatureblockConfig> = {
 	createView: (cx) => new FeatureblockElementView(cx),
 	authoring: { example: featureblockExample, sdkModel: 'featureblock' },
 };
+
+// Bare-slug scope (§1.3): any `<family>.featureblock` type (e.g.
+// monster.angulotl.featureblock), matching TYPE_ADAPTERS' featureblock entry.
+export const featureblockElement = withReference(baseFeatureblockElement, { sccType: /featureblock$/ });

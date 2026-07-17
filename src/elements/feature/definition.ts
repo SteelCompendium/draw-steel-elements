@@ -9,11 +9,16 @@
 // processor's manual capture-phase mousedown/pointerdown stop, so noClickShield stays
 // unset.
 import type { ElementDefinition } from '@/framework/registry';
+import { withReference } from '@/elements/shared/withReference';
 import { FeatureConfig } from '@model/FeatureConfig';
 import { FeatureElementView } from './view';
 import featureExample from './example.yaml';
 
-export const featureElement: ElementDefinition<FeatureConfig> = {
+// D6 Task 4 (spec §1, §7) — the block body may be inline YAML (unchanged, below) OR a
+// whole-block reference (scc:/scc.v1:/bare-slug/@path/[[wikilink]]) to a compendium
+// feature file, resolved by withReference/RefUnwrapView. This base def is UNTOUCHED
+// from the pre-D6 shape; only the exported `featureElement` changes.
+const baseFeatureElement: ElementDefinition<FeatureConfig> = {
 	id: 'feature',
 	name: 'Feature',
 	aliases: ['ds-ft', 'ds-feat', 'ds-feature'],
@@ -27,3 +32,9 @@ export const featureElement: ElementDefinition<FeatureConfig> = {
 	createView: (cx) => new FeatureElementView(cx),
 	authoring: { example: featureExample, sdkModel: 'feature' },
 };
+
+// Bare-slug scope (§1.3): a bare `feature` type or any `feature.<suffix>` (e.g.
+// feature.fury.level-1), matching TYPE_ADAPTERS' bare-feature entry — verified against
+// TYPE_ADAPTERS (statblock/featureblock entries precede it there so this never
+// shadows them).
+export const featureElement = withReference(baseFeatureElement, { sccType: /^feature($|\.)/ });

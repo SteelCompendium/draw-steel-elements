@@ -11,6 +11,7 @@
 //                web                               -> "View on steelcompendium.io" + "Sync
 //                                                       compendium" CTA card
 //                unresolved / no index             -> unknown-code / not-installed card
+import { stringifyYaml } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import { renderErrorCard } from '@/framework/pipeline';
 import type { RenderContext } from '@/framework/context';
@@ -109,12 +110,18 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	 * Resolved through `cx.refs` (the at-path/wikilink `RefProvider`s, F1 §3.7), NOT
 	 * `cx.sccAnchors`/`cx.compendium` — these raw strings carry no SCC code to classify,
 	 * so the SCC ladder always misclassified them as "not an SCC code". `ResolvedRef.data`
-	 * is the target's parsed first-`ds-*`-block payload; it is run through the SAME
-	 * base-parse path the inline branch uses (`withReference.parse`'s
-	 * `{kind:'inline', model: base.parse(data, raw)}`) — matching spec §1.2's original
-	 * `resolveRefs` sketch (`base.parse(resolved.data, "")`, empty raw), just invoked
-	 * from here instead of a `resolveRefs` hook (recon (d): resolution needs the full
-	 * RenderContext).
+	 * is the target's parsed first-`ds-*`-block payload (an already-parsed object, per
+	 * `extractFirstDsBlock`'s `parseYaml(match[2])` — NOT the raw block text).
+	 *
+	 * Task 4 fix (statblock/feature/featureblock e2e verification): spec §1.2's original
+	 * sketch called `base.parse(resolved.data, "")` — empty raw — which is correct for a
+	 * `data`-driven base.parse (the display family, Task 6) but silently produces an
+	 * EMPTY model for the ds-block family's SDK-reader defs (`(_data, raw) =>
+	 * X.readYaml(raw)`, statblock/feature/featureblock), which ignore `data` entirely and
+	 * re-`parseYaml` an empty string. Re-serializing `resolved.data` back to YAML text
+	 * (mirroring `FormModal.ts`'s own `def.parse(data, stringifyYaml(data))` round-trip)
+	 * gives BOTH parse shapes what they need from a single already-parsed object, with no
+	 * def-shape sniffing here.
 	 *
 	 * Source threading (`RefSource` / `SourceAware`) has no direct `ResolvedRef`
 	 * equivalent for this path (no frontmatter/type contract the way a compendium
@@ -130,7 +137,8 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 			this.errorCard(root, error instanceof Error ? error.message : String(error));
 			return;
 		}
-		const model = this.base.parse(resolved.data, '');
+		const rawYaml = resolved.data === undefined ? '' : stringifyYaml(resolved.data);
+		const model = this.base.parse(resolved.data, rawYaml);
 		await this.mountBase(root, model);
 	}
 

@@ -32,6 +32,7 @@ import { FeatureConfig } from '@model/FeatureConfig';
 import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
 import { featureElement } from '../../../src/elements/feature/definition';
 import { FeatureElementView } from '../../../src/elements/feature/view';
+import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import magmaTitan from '../../fixtures/feature/magma-titan.yaml';
@@ -170,8 +171,15 @@ describe('feature ElementDefinition (contract unchanged by the D2 redesign)', ()
 		expect(featureElement.noClickShield).toBeUndefined();
 	});
 
+	// D6 Task 4: featureElement is now withReference-wrapped, so parse() returns
+	// RefOrInline<FeatureConfig> — {kind:'inline', model} for an inline YAML mapping
+	// body (unchanged from here down: base.parse === FeatureConfig.readYaml still owns
+	// the inline path verbatim).
 	test('parse consumes the RAW block text (SDK YamlReader), NOT the pipeline pre-parsed data', () => {
-		const model = featureElement.parse(undefined, magmaTitan);
+		const wrapped = featureElement.parse(undefined, magmaTitan);
+		expect(wrapped.kind).toBe('inline');
+		if (wrapped.kind !== 'inline') throw new Error('expected inline');
+		const model = wrapped.model;
 		expect(model).toBeInstanceOf(FeatureConfig);
 		expect(model.feature.name).toBe('Magma Titan');
 		expect(model.feature.cost).toBe('9 Essence');
@@ -180,11 +188,17 @@ describe('feature ElementDefinition (contract unchanged by the D2 redesign)', ()
 	});
 
 	test('parse also reads `indent` from the raw YAML (FeatureConfig.readYaml second parseYaml pass)', () => {
-		const model = featureElement.parse(undefined, magmaTitan + 'indent: 2\n');
-		expect(model.indent).toBe(2);
+		const wrapped = featureElement.parse(undefined, magmaTitan + 'indent: 2\n');
+		expect(wrapped.kind).toBe('inline');
+		if (wrapped.kind !== 'inline') throw new Error('expected inline');
+		expect(wrapped.model.indent).toBe(2);
 	});
 
-	test('createView returns a FeatureElementView', () => {
+	// D6 Task 4: createView now returns a RefUnwrapView (the withReference wrapper) —
+	// it mounts a REAL FeatureElementView underneath for an inline body (see the
+	// "ties FeatureElementView to host.addChild" test below for proof the base view
+	// still does the actual rendering).
+	test('createView returns a RefUnwrapView (withReference wrapper)', () => {
 		const deps = makeDeps();
 		const host = makeHost();
 		const cx = {
@@ -198,7 +212,7 @@ describe('feature ElementDefinition (contract unchanged by the D2 redesign)', ()
 			refs: deps.refs,
 			session: deps.session,
 		};
-		expect(featureElement.createView(cx)).toBeInstanceOf(FeatureElementView);
+		expect(featureElement.createView(cx)).toBeInstanceOf(RefUnwrapView);
 	});
 });
 
@@ -448,11 +462,12 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		expect(root.querySelector('.ds-feature-container')).toBeNull();
 	});
 
-	test('ties FeatureElementView to host.addChild (block lifecycle)', async () => {
+	test('ties the created view to host.addChild (block lifecycle); a real FeatureElementView still renders underneath (D6 Task 4: wrapped in RefUnwrapView)', async () => {
 		const addChild = jest.fn((child: unknown) => child);
-		await renderBlock(magmaTitan, { addChild } as Partial<BlockHost>);
+		const { root } = await renderBlock(magmaTitan, { addChild } as Partial<BlockHost>);
 		expect(addChild).toHaveBeenCalledTimes(1);
-		expect(addChild.mock.calls[0][0]).toBeInstanceOf(FeatureElementView);
+		expect(addChild.mock.calls[0][0]).toBeInstanceOf(RefUnwrapView);
+		expect(root.querySelector(':scope > .dse-feature')).not.toBeNull();
 	});
 
 	test('pipeline default click shield replaces the legacy manual mousedown/pointerdown stop', async () => {
