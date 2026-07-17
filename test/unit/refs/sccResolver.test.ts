@@ -102,4 +102,62 @@ describe("SccResolver resolution order (F2 §4.2)", () => {
         resolver.handleDelete(fakeTFile(newPath));
         expect(resolver.resolve(`scc.v1:${GOBLIN_CODE}`).kind).toBe("web");
     });
+
+    test("handleChanged: a changed scc frontmatter value re-indexes the file under its new code", () => {
+        const { app, vault, metadataCache, settings } = setup();
+        // Move the turn note out of its derived path so resolution depends on the index.
+        const content = vault.text("DS Compendium/rule/combat/turn.md")!;
+        vault.files.delete("DS Compendium/rule/combat/turn.md");
+        vault.setText("My Notes/moved-turn.md", content);
+        metadataCache.frontmatter.delete("DS Compendium/rule/combat/turn.md");
+        metadataCache.frontmatter.set("My Notes/moved-turn.md", { scc: TURN_CODE });
+        const resolver = new SccResolver(app, settings);
+        // Seed the index and confirm the old code resolves via it first.
+        expect(resolver.resolve(`scc.v1:${TURN_CODE}`).kind).toBe("vault");
+
+        // Now the user edits the note's frontmatter to declare a different scc code.
+        const NEW_CODE = "homebrew.mine.v1/rule/renamed-turn";
+        metadataCache.frontmatter.set("My Notes/moved-turn.md", { scc: NEW_CODE });
+        resolver.handleChanged(fakeTFile("My Notes/moved-turn.md"));
+
+        // The old code no longer resolves via the index (falls through to web).
+        expect(resolver.resolve(`scc.v1:${TURN_CODE}`).kind).toBe("web");
+        // The new code resolves to the same file.
+        const result = resolver.resolve(`scc.v1:${NEW_CODE}`);
+        expect(result.kind).toBe("vault");
+        expect((result as any).linkpath).toBe("My Notes/moved-turn.md");
+    });
+
+    test("handleChanged: scc frontmatter removed entirely evicts the file from the index", () => {
+        const { app, vault, metadataCache, settings } = setup();
+        const content = vault.text("DS Compendium/rule/combat/turn.md")!;
+        vault.files.delete("DS Compendium/rule/combat/turn.md");
+        vault.setText("My Notes/moved-turn.md", content);
+        metadataCache.frontmatter.delete("DS Compendium/rule/combat/turn.md");
+        metadataCache.frontmatter.set("My Notes/moved-turn.md", { scc: TURN_CODE });
+        const resolver = new SccResolver(app, settings);
+        expect(resolver.resolve(`scc.v1:${TURN_CODE}`).kind).toBe("vault");
+
+        // The user strips the scc frontmatter key entirely.
+        metadataCache.frontmatter.set("My Notes/moved-turn.md", {});
+        resolver.handleChanged(fakeTFile("My Notes/moved-turn.md"));
+
+        expect(resolver.resolve(`scc.v1:${TURN_CODE}`).kind).toBe("web");
+    });
+
+    test("a folder sitting at the derived path is a miss, not a false vault resolution", () => {
+        const { app, vault, settings } = setup();
+        // GOBLIN_CODE derives to "DS Compendium/monster/goblin/statblock/goblin-stinker.md".
+        // Delete the real file and put an (empty) folder at that exact path instead.
+        const derivedPath = "DS Compendium/monster/goblin/statblock/goblin-stinker.md";
+        vault.files.delete(derivedPath);
+        vault.folders.add(derivedPath);
+        const resolver = new SccResolver(app, settings);
+        // Falls through path-derivation (folder, not TFile) and the index (never indexed),
+        // landing on the web fallback rather than incorrectly resolving to the folder.
+        expect(resolver.resolve(`scc.v1:${GOBLIN_CODE}`)).toEqual({
+            kind: "web",
+            url: `https://steelcompendium.io/scc/${GOBLIN_CODE}/`,
+        });
+    });
 });

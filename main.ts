@@ -53,6 +53,7 @@ import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
+import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
 
 // `DependencySchema` + `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` now live in
 // `@/framework/dependencySchemas` (D9 Task 4): `DsSchemaSuggest` needs the same data to
@@ -299,6 +300,12 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.sccResolver = new SccResolver(this.app, this.settings);
         this.sccResolver.registerWatchers(this);
         frameworkV2.services.refs.register(new SccRefProvider(this.app, this.sccResolver));
+
+        // F2 §4.3(b): vault-wide reading-mode pass rewriting scc.v1: anchors in
+        // compendium note bodies. First line inside is a querySelector early-exit,
+        // so non-compendium notes pay ~nothing. F1's pipeline may take ownership
+        // of this registration later (F2 §4.4) — keep sccPostProcessor the seam.
+        this.registerMarkdownPostProcessor(sccPostProcessor(this.sccResolver));
 
         // D1 Task 1 (F1 §2.3 "incremental migration switch"): populate the framework
         // registry with migrated element definitions, then wire Obsidian's

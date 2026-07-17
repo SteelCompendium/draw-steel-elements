@@ -96,3 +96,14 @@ describe("sccPostProcessor early exit (F2 §4.3b cost control)", () => {
         expect(el.querySelector("span.ds-scc-unresolved")).not.toBeNull();
     });
 });
+
+describe("post-processor as registered by main.ts", () => {
+    test("the factory-produced processor is a plain (el) => void suitable for registerMarkdownPostProcessor", () => {
+        const resolver = stubResolver({});
+        const process = sccPostProcessor(resolver);
+        expect(typeof process).toBe("function");
+        expect(process.length).toBe(1);
+        // And it is safe on a totally empty element:
+        expect(() => process(document.createElement("div"))).not.toThrow();
+    });
+});

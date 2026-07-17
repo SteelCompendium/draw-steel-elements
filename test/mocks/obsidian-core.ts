@@ -393,6 +393,9 @@ export class Plugin extends Component {
 		string,
 		(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => any
 	>();
+	/** Vault-wide reading-mode post-processors (registerMarkdownPostProcessor), in
+	 *  registration order — e.g. F2 §4.3(b)'s sccPostProcessor. */
+	readonly registeredPostProcessors: Array<(el: HTMLElement, ctx: MarkdownPostProcessorContext) => any> = [];
 
 	constructor(app?: App, manifest?: any) {
 		super();
@@ -404,6 +407,12 @@ export class Plugin extends Component {
 		handler: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => any,
 	): void {
 		this.registeredProcessors.set(language, handler);
+	}
+	registerMarkdownPostProcessor(
+		handler: (el: HTMLElement, ctx: MarkdownPostProcessorContext) => any,
+	): (el: HTMLElement, ctx: MarkdownPostProcessorContext) => any {
+		this.registeredPostProcessors.push(handler);
+		return handler;
 	}
 	addSettingTab(_tab: any): void {}
 	async loadData(): Promise<any> {
