@@ -145,9 +145,9 @@ describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', 
 		expect(statblockElement.noClickShield).toBeUndefined();
 	});
 
-	test('parse consumes the RAW block text (SDK YamlReader), NOT the pipeline pre-parsed data', () => {
+	test('parse consumes the RAW block text (parseYaml + shim + SDK adapter), NOT the pipeline pre-parsed data', () => {
 		// `data` is deliberately garbage: only `raw` carries the block. StatblockConfig
-		// .readYaml = Statblock.read(new YamlReader(...), raw) — an SDK text reader.
+		// .readYaml = parseYaml(raw) -> applyLegacyStatblockKeys -> Statblock.modelDTOAdapter.
 		const model = statblockElement.parse(undefined, humanBanditChief);
 		expect(model).toBeInstanceOf(StatblockConfig);
 		expect(model.statblock.name).toBe('Human Bandit Chief');

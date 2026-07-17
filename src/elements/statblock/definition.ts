@@ -21,10 +21,10 @@ export const statblockElement: ElementDefinition<StatblockConfig> = {
 	name: 'Statblock',
 	aliases: ['ds-sb', 'ds-statblock'],
 	shape: 'static',
-	// RAW-text parse, NOT the pipeline's pre-parsed `data`: StatblockConfig.readYaml runs
-	// the SDK's Statblock.read(new YamlReader(...), raw) — exactly the SDK-reader case
-	// ElementDefinition.parse's `raw` parameter exists for. Reused verbatim from the
-	// legacy processor.
+	// RAW-text parse, NOT the pipeline's pre-parsed `data`: StatblockConfig.readYaml parses
+	// `raw` with Obsidian's `parseYaml`, applies the OD-4 legacy-key shim, then feeds the
+	// SDK's Statblock.modelDTOAdapter — exactly the SDK-reader case ElementDefinition.parse's
+	// `raw` parameter exists for. Reused verbatim from the legacy processor.
 	parse: (_data, raw) => StatblockConfig.readYaml(raw),
 	autoResolveRefs: false,
 	createView: (cx) => new StatblockElementView(cx),

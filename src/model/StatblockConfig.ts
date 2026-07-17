@@ -10,26 +10,40 @@ const ORGANIZATIONS = new Set(["MINION", "HORDE", "PLATOON", "ELITE", "SOLO", "L
  * (the rest); `ancestry: string[]` → `keywords`. Modern keys always win per-axis.
  * DEPRECATED — remove in 7.0.0.
  */
+/** A legacy key may be a list (the documented shape) or a bare scalar (a plausible
+ * hand-authoring mistake, e.g. `roles: Horde`). Coerce either into a one-entry list
+ * rather than silently dropping the value. */
+function toLegacyList(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : [value];
+}
+
 export function applyLegacyStatblockKeys(raw: Record<string, any>): Record<string, any> {
-    const shimRoles = Array.isArray(raw.roles)
+    const shimRoles = raw.roles !== undefined
         && raw.role === undefined && raw.organization === undefined;
-    const shimAncestry = Array.isArray(raw.ancestry) && raw.keywords === undefined;
+    const shimAncestry = raw.ancestry !== undefined && raw.keywords === undefined;
     const hasLegacyKeys = raw.roles !== undefined || raw.ancestry !== undefined;
     if (!hasLegacyKeys) return raw;
 
     const out: Record<string, any> = { ...raw };
     if (shimRoles) {
-        const orgs: string[] = [];
-        const roles: string[] = [];
-        for (const entry of raw.roles as unknown[]) {
+        // Mirrors the SDK 3.0 MarkdownStatblockReader's classification loop
+        // (data-sdk-npm/src/io/markdown/MarkdownStatblockReader.ts:130-141) exactly:
+        // last-wins per axis, not accumulate-and-join.
+        let organization = "";
+        let role = "";
+        for (const entry of toLegacyList(raw.roles)) {
             const text = String(entry);
-            (ORGANIZATIONS.has(text.toUpperCase()) ? orgs : roles).push(text);
+            if (ORGANIZATIONS.has(text.toUpperCase())) {
+                organization = text;
+            } else {
+                role = text;
+            }
         }
-        out.organization = orgs.join(" ");
-        out.role = roles.join(" ");
+        out.organization = organization;
+        out.role = role;
     }
     if (shimAncestry) {
-        out.keywords = (raw.ancestry as unknown[]).map(String);
+        out.keywords = toLegacyList(raw.ancestry).map(String);
     }
     delete out.roles;
     delete out.ancestry;
