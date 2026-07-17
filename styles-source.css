@@ -183,6 +183,91 @@
 	margin-block-end: 0;
 }
 
+/* ================================================================== */
+/*  Display card grammar (D6 Task 5, spec §2.4): .dse-card            */
+/* ================================================================== */
+/*
+   The shared frame src/elements/shared/CardLayout.ts's DisplayCardView renders
+   every by-SCC display card through (ten small CardLayout<M> objects, not ten
+   view classes — Tasks 6-9 wire real elements onto this). Deliberately its own
+   minimal grammar, not a reuse of .dse-head/.dse-feature — those grammars carry
+   ability/statblock-specific slots (action spine, power-roll rows) this frame
+   doesn't need. Tokens only (D2 §5); no new --dse-* definitions (framework/tokens.ts's
+   DSE_TOKEN_NAMES pins the count — token-coverage.test.ts).
+*/
+.dse-card__title {
+	font-size: 1.15em;
+	font-weight: bold;
+	line-height: 1.2;
+	color: var(--dse-heading);
+}
+.dse-card__subtitle {
+	font-size: 0.9em;
+	color: var(--dse-fg-muted);
+	margin-top: 0.15em;
+}
+.dse-card__badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35em;
+	margin-top: 0.35em;
+}
+/* One shared pill shape; tone varies only the border accent, so every tone stays
+   legible (and ink-safe) even where a theme flattens color entirely. */
+.dse-card__badge {
+	display: inline-flex;
+	align-items: center;
+	line-height: 1.2;
+	padding: 0.1em 0.5em;
+	border-radius: var(--dse-radius);
+	background: var(--dse-chip-bg);
+	border: 1px solid var(--dse-border);
+	color: var(--dse-badge-fg);
+	font-size: 0.85em;
+}
+.dse-card__badge--keyword {
+	border-color: var(--dse-accent);
+}
+.dse-card__badge--echelon {
+	border-color: var(--dse-rule);
+}
+.dse-card__badge--rarity {
+	border-color: var(--dse-warn);
+}
+.dse-card__badge--type {
+	border-color: var(--dse-border-strong);
+}
+.dse-card__flavor {
+	font-style: italic;
+	color: var(--dse-fg-muted);
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+.dse-card__rows {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	column-gap: 0.75em;
+	row-gap: 0.25em;
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+.dse-card__row {
+	display: contents;
+}
+.dse-card__row-label {
+	font-weight: bold;
+	color: var(--dse-heading);
+}
+.dse-card__row-label::after {
+	content: ': ';
+}
+.dse-card__row-value {
+	color: var(--dse-fg);
+}
+.dse-card__body {
+	margin-top: 0.5em;
+}
+
 /* DSA tag styling (what is this for?) */
 
 span.dsa,
