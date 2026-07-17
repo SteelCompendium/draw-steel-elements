@@ -1,4 +1,4 @@
-import { SccResolution } from "./SccResolver";
+import { normalizeSccTarget, SccResolution } from "./SccResolver";
 
 /** Structural seam so F1's pipeline and tests can pass any resolver (F2 §4.4). */
 export interface SccAnchorResolver {
@@ -21,6 +21,8 @@ export function rewriteSccAnchors(root: HTMLElement, resolver: SccAnchorResolver
         if (href === null || !SCC_PREFIX.test(href)) continue; // e.g. href="sccschemes.md"
         const resolution = resolver.resolve(href);
         if (resolution.kind === "vault") {
+            const bareCode = normalizeSccTarget(href);
+            if (bareCode) anchor.setAttribute("data-scc", bareCode);
             anchor.classList.remove("external-link");
             anchor.classList.add("internal-link");
             anchor.setAttribute("href", resolution.linkpath);
@@ -28,6 +30,8 @@ export function rewriteSccAnchors(root: HTMLElement, resolver: SccAnchorResolver
             anchor.setAttribute("rel", "noopener");
             anchor.removeAttribute("target");
         } else if (resolution.kind === "web") {
+            const bareCode = normalizeSccTarget(href);
+            if (bareCode) anchor.setAttribute("data-scc", bareCode);
             anchor.classList.add("ds-scc-web");
             anchor.setAttribute("href", resolution.url);
             anchor.setAttribute("rel", "noopener");

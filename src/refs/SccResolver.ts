@@ -53,6 +53,12 @@ export function sccToFilePath(code: string, ext = ".md"): string | null {
     return nonEmpty.length > 0 ? nonEmpty.join("/") : null;
 }
 
+/** A single synced code → vault-path record (OD-D6-2a read seam). */
+export interface CompendiumCodeEntry {
+	scc: string;
+	path: string;
+}
+
 /**
  * F2 §4.2 — the outcome of resolving one `scc:`/`scc.vN:` target:
  *   - "vault": a local file already carries (or was derived to carry) this code —
@@ -105,6 +111,23 @@ export class SccResolver {
 
 		// 4. Unresolved — caller renders display text as plain text.
 		return { kind: 'unresolved', code };
+	}
+
+	/** OD-D6-2a: enumerate every indexed frontmatter-`scc` code → path (seeds on demand).
+	 *  Returns a snapshot copy so callers (CompendiumIndex) cannot mutate the live index. */
+	public entries(): CompendiumCodeEntry[] {
+		if (this.index === null) this.seedIndex();
+		const out: CompendiumCodeEntry[] = [];
+		for (const [scc, path] of this.index!) out.push({ scc, path });
+		return out;
+	}
+
+	/** OD-D6-2a: bare code → indexed vault path (seeds on demand), or null. Path-derivation
+	 *  (the resolve() fast path) is deliberately NOT consulted here — this is the identity
+	 *  index only; callers wanting the full ladder use resolve(). */
+	public codeToPath(code: string): string | null {
+		if (this.index === null) this.seedIndex();
+		return this.index!.get(code) ?? null;
 	}
 
 	/** Wire incremental index maintenance to vault/metadata events (plugin lifetime). */
