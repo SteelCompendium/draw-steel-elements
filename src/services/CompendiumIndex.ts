@@ -7,7 +7,7 @@
 // "how do we parse a `type: X` file."
 import { App, TFile, TAbstractFile, Plugin } from "obsidian";
 import type { Statblock } from "steel-compendium-sdk";
-import { SccResolver } from "@/refs/SccResolver";
+import { SccResolver, FRONTMATTER_RE } from "@/refs/SccResolver";
 import { adapterForType, ElementModel, STATBLOCK_TYPE_RE } from "./typeAdapters";
 import { StatblockConfig } from "@model/StatblockConfig";
 
@@ -37,8 +37,6 @@ export interface CompendiumIndex {
 	/** Wire vault-event cache invalidation (plugin lifetime). */
 	registerWatchers(plugin: Plugin): void;
 }
-
-const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
 
 class DseCompendiumIndex implements CompendiumIndex {
 	/** code -> {parsed model, resolved vault path at cache-write time}. Insertion-ordered

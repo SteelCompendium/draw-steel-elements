@@ -53,6 +53,10 @@ export function sccToFilePath(code: string, ext = ".md"): string | null {
     return nonEmpty.length > 0 ? nonEmpty.join("/") : null;
 }
 
+/** Frontmatter block delimiter pattern (YAML `---\n...\n---` block). Shared across
+ *  CompendiumIndex and typeAdapters to strip frontmatter from markdown bodies. */
+export const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
+
 /** A single synced code → vault-path record (OD-D6-2a read seam). */
 export interface CompendiumCodeEntry {
 	scc: string;

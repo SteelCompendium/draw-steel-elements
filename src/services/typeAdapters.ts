@@ -9,6 +9,7 @@ import { App, TFile } from "obsidian";
 import {
 	Kit, Ancestry, Culture, Career, Class, Title, Perk, Treasure, Complication, Condition,
 } from "steel-compendium-sdk";
+import { FRONTMATTER_RE } from "@/refs/SccResolver";
 import { StatblockConfig } from "@model/StatblockConfig";
 import { FeatureConfig } from "@model/FeatureConfig";
 import { FeatureblockConfig } from "@model/FeatureblockConfig";
@@ -46,11 +47,6 @@ export interface GenericNote {
 	type: string;
 	body: string;
 }
-
-/** Mirrors CompendiumIndex.ts's own frontmatter-stripping regex (kept local rather than
- *  imported -- CompendiumIndex.ts already imports FROM this module, so importing back
- *  would be circular). Both anchor the same `---\n...\n---\n?` frontmatter block. */
-const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
 
 /**
  * The statblock family's `type` scope, anchored so a bare `statblock` or any

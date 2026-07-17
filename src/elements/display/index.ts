@@ -130,14 +130,14 @@ export const ruleElement = genericCard({
 	example: ruleExample,
 });
 
-// D6 Task 8 review note: explicitly widened to `ElementDefinition<any>[]` — an implicit
+// D6 Task 8 review note: explicitly widened to `ElementDefinition<unknown>[]` — an implicit
 // array-literal type inferred a union of all eleven `ElementDefinition<RefOrInline<X>>`
 // element types, which `main.ts`'s `for (const el of displayElements) registry.register(el)`
 // then failed to type-check (`register<M>`'s generic inference can't collapse an invariant
 // union like `ElementDefinition<Kit> | ElementDefinition<GenericNote> | …` back down to a
 // single `M`). This array's whole purpose is "a bag of heterogeneous definitions, registered
-// generically" — `any` here is the correct, deliberate escape hatch for that, not a lint dodge.
-export const displayElements: ElementDefinition<any>[] = [
+// generically" — `unknown` here is the invariant-position workaround (widened type with no runtime cost).
+export const displayElements: ElementDefinition<unknown>[] = [
 	kitElement,
 	conditionElement,
 	treasureElement,
