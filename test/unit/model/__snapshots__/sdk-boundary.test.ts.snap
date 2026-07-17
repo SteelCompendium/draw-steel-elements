@@ -129,10 +129,6 @@ Featureblock {
 exports[`T-9: SDK boundary fixtures StatblockConfig.readYaml parses the documented statblock 1`] = `
 Statblock {
   "agility": 3,
-  "ancestry": [
-    "Human",
-    "Humanoid",
-  ],
   "characteristics": Characteristics {
     "agility": 3,
     "intuition": 3,
@@ -368,14 +364,17 @@ Statblock {
     "psychic 4",
   ],
   "intuition": 3,
+  "keywords": [
+    "Human",
+    "Humanoid",
+  ],
   "level": 3,
   "might": 2,
   "name": "Human Bandit Chief",
+  "organization": "Human",
   "presence": 2,
   "reason": 2,
-  "roles": [
-    "Leader",
-  ],
+  "role": "Leader",
   "size": "1M",
   "speed": 5,
   "stability": 2,

@@ -1,6 +1,8 @@
 // Plan 09 Task 6b (D2 §3.8) — the Statblock element re-cast onto the D2 kit card
-// grammar: kit cardHead (§3.8 fill: left-eyebrow = ancestry line, name heading,
-// Level → right eyebrow chip, roles → right primary, EV → right deck) + role tint
+// grammar: kit cardHead (§3.8 fill: left-eyebrow = keywords line, name heading,
+// Level → right eyebrow chip, organization+role ("Horde Controller" style) → right
+// primary, EV → right deck — F2 §2.1 B1 migrated this off SDK 2.x's `roles`/
+// `ancestry` string arrays onto 3.x's `role`/`organization`/`keywords`) + role tint
 // via [data-dse-role] (the element maps --dse-role: var(--dse-role-<role>) from the
 // SDK combat role; unmapped → NO attribute/alias, fails safe to monochrome) + the
 // .dse-sb__meta info grid (Size/Speed/Stamina/Stability/Free Strike items +
@@ -57,9 +59,9 @@ stamina: "10"
 const WITH_META = `type: statblock
 name: Goblin Monarch
 level: 2
-roles:
-  - Boss
-ancestry:
+role: Boss
+organization: Horde
+keywords:
   - Goblin
 ev: "10"
 stamina: "40"
@@ -150,8 +152,9 @@ describe('statblock ElementDefinition (contract unchanged by the D2 redesign)', 
 		expect(model).toBeInstanceOf(StatblockConfig);
 		expect(model.statblock.name).toBe('Human Bandit Chief');
 		expect(model.statblock.level).toBe(3);
-		expect(model.statblock.roles).toEqual(['Leader']);
-		expect(model.statblock.ancestry).toEqual(['Human', 'Humanoid']);
+		expect(model.statblock.role).toBe('Leader');
+		expect(model.statblock.organization).toBe('Human');
+		expect(model.statblock.keywords).toEqual(['Human', 'Humanoid']);
 		expect(model.statblock.ev).toBe('20');
 		expect(model.statblock.features).toHaveLength(8);
 		expect(model.statblock.features[0].name).toBe('Whip and Magic Longsword');
@@ -190,7 +193,7 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(root.querySelector('.ds-feature-container')).toBeNull();
 	});
 
-	test('cardHead (§3.8 fill): ancestry → left eyebrow; name = the heading (aria-level 2); Level → right eyebrow; roles → right primary; EV → right deck — all VERBATIM', async () => {
+	test('cardHead (§3.8 fill): keywords → left eyebrow; name = the heading (aria-level 2); Level → right eyebrow; organization+role → right primary; EV → right deck (F2 §2.1 B1: SDK 3.x fields)', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
 		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
@@ -204,15 +207,21 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(name.textContent).toBe('Human Bandit Chief');
 
 		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level 3');
-		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Leader');
+		// "Horde Controller" style: organization then role — F2 golden update (was
+		// 'Leader' alone under SDK 2.x's `roles: [Leader]`; the fixture now carries
+		// both organization: Human and role: Leader).
+		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Human Leader');
 		expect(head.querySelector('.dse-head__deck--right')!.textContent).toBe('EV 20');
 	});
 
-	test('cardHead fallbacks: missing level/roles/ancestry/ev render the legacy N/A strings VERBATIM (never gaps — legacy always printed them)', async () => {
+	test('cardHead fallbacks: missing level/role/organization/keywords/ev render the legacy N/A strings VERBATIM (never gaps — legacy always printed them)', async () => {
 		const { root } = await renderStatblock(NO_FEATURES);
 
 		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
-		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Unknown Ancestry');
+		// F2 golden update: the legacy 'Unknown Ancestry' fallback has no 3.x analog —
+		// a keywordless statblock's left-eyebrow slot renders empty (still mounted,
+		// never a gap; see statblockHeaderParts in src/elements/statblock/view.ts).
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('');
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Bare Creature');
 		expect(head.querySelector('.dse-head__eyebrow--right')!.textContent).toBe('Level N/A');
 		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('No Role');
@@ -363,7 +372,7 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 			'Human Bandit Chief',
 			'Human, Humanoid',
 			'Level 3',
-			'Leader',
+			'Human Leader',
 			'EV 20',
 			// stat items (label + value)
 			'Size',
@@ -423,7 +432,9 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 
 		for (const expected of [
 			'Bare Creature',
-			'Unknown Ancestry',
+			// F2 golden update: 'Unknown Ancestry' has no 3.x analog — a keywordless
+			// statblock's left-eyebrow slot now renders empty (see the cardHead
+			// fallbacks test above), so it is deliberately absent from this list.
 			'Level N/A',
 			'No Role',
 			'EV N/A',

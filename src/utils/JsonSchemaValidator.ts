@@ -17,6 +17,14 @@ export interface ValidationResult {
     errors: ValidationError[];
 }
 
+// NOTE (F2 §2.1 B2): steel-compendium-sdk 3.x schemas moved to JSON Schema draft
+// 2019-09 (`unevaluatedProperties`). This registry already instantiates from
+// "ajv/dist/2019" (see the Ajv2019 import above), so it is forward-compatible —
+// unlike the brief's stale assumption of a draft-07 Ajv here, no migration was
+// needed. This registry only loads *plugin* schemas today (main.ts's
+// ValidationService.addDependencySchema / FRAMEWORK_V2_DEPENDENCY_SCHEMAS in
+// src/framework/dependencySchemas.ts); any future validation against SDK-shipped
+// schemas can reuse this same Ajv2019 instance directly.
 // Singleton AJV instance with all schemas registered
 let globalAjv: AjvInstance | null = null;
 let registeredSchemas: Array<{ id: string, schema: object | string }> = [];

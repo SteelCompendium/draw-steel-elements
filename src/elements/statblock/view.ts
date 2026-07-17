@@ -14,17 +14,22 @@
 //     .dse-hr (kit divider, ornament)       ← the legacy ◆ rule before the features
 //     .dse-feature__nested > .dse-feature…  ← Task 5's renderFeatureList (shared grammar)
 //
-// §3.8 cardHead fill: left-eyebrow = the ancestry line, left-primary = name,
-// right-eyebrow = Level, right-primary = the roles line (Org · Role), right-deck =
-// EV. COMMUNITY-CONTROVERSIAL CONSTRAINT: NO word/number changes — every label,
-// value, and fallback string ('Unnamed Creature', 'Level N/A', 'No Role',
-// 'Unknown Ancestry', 'EV N/A', the '-' info fallbacks, formatCharacteristic's
-// '+N'/'-N'/'N/A') is carried over from the legacy HeaderView/StatsView VERBATIM;
-// only the design changed (the "Immunity: " colon is CSS-owned, same rule as
-// .dse-fb__stat-l / .dse-section__title).
+// §3.8 cardHead fill: left-eyebrow = the keywords line, left-primary = name,
+// right-eyebrow = Level, right-primary = the "Horde Controller" org/role line,
+// right-deck = EV — all derived by statblockHeaderParts (F2 §2.1 B1, below), the
+// pure extraction that migrated off SDK 2.x's `roles: string[]` / `ancestry:
+// string[]` onto 3.x's `role: string` / `organization: string` / `keywords:
+// string[]`. COMMUNITY-CONTROVERSIAL CONSTRAINT: NO word/number changes to the
+// surviving fallback strings ('Unnamed Creature', 'Level N/A', 'No Role', 'EV N/A',
+// the '-' info fallbacks, formatCharacteristic's '+N'/'-N'/'N/A') — carried over
+// from the legacy HeaderView/StatsView VERBATIM; only the design changed (the
+// "Immunity: " colon is CSS-owned, same rule as .dse-fb__stat-l / .dse-section__title).
+// The legacy 'Unknown Ancestry' fallback has no 3.x analog — `keywords` has no
+// domain-specific empty-value string, so a keywordless statblock's left-eyebrow
+// slot renders empty (F2 golden update; the slot itself is never omitted).
 //
 // Role tint: the shared applyRoleTint (roleTint.ts, extracted from T6a) maps the
-// SDK roles line onto [data-dse-role] + the --dse-role element-set alias; an
+// SDK `role` string onto [data-dse-role] + the --dse-role element-set alias; an
 // unmapped role ("Boss") sets neither, failing safe to grey/monochrome (OD-2:
 // Steel-only accent). Pref hooks: data-dse-density / data-dse-sb-featstyle /
 // data-dse-sb-columns / data-dse-sb-stats are reflected onto the ELEMENT ROOT by
@@ -46,6 +51,7 @@ import { featureRollHooks } from '@/elements/feature/rollController';
 import { applyRoleTint } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
+import type { Statblock } from 'steel-compendium-sdk';
 
 /** The legacy StatsView.formatCharacteristic, VERBATIM (word/number parity). */
 function formatCharacteristic(value?: number): string {
@@ -53,6 +59,37 @@ function formatCharacteristic(value?: number): string {
 		return 'N/A';
 	}
 	return value >= 0 ? `+${value}` : `${value}`;
+}
+
+/**
+ * F2 §2.1 B1 — pure, unit-testable header-line derivation for the statblock's
+ * cardHead fill + role tint (SDK 3.x fields: `role`, `organization`, `keywords`
+ * replace the removed `roles: string[]` / `ancestry: string[]`).
+ *
+ * `rightPrimary` is the "Horde Controller" style line — organization then role,
+ * per the rendered book format — falling back to the legacy 'No Role' string when
+ * neither is present. `role` is passed through separately for applyRoleTint (the
+ * SDK's single combat-role string, not the old joined roles line).
+ */
+export function statblockHeaderParts(statblock: Statblock): {
+	name: string;
+	leftEyebrow: string;
+	rightEyebrow: string;
+	rightPrimary: string;
+	rightDeck: string;
+	role: string | undefined;
+} {
+	const orgRole = [statblock.organization, statblock.role]
+		.filter((part): part is string => typeof part === 'string' && part.length > 0)
+		.join(' ');
+	return {
+		name: statblock.name ?? 'Unnamed Creature',
+		leftEyebrow: statblock.keywords?.join(', ') ?? '',
+		rightEyebrow: statblock.level !== undefined ? `Level ${statblock.level}` : 'Level N/A',
+		rightPrimary: orgRole.length > 0 ? orgRole : 'No Role',
+		rightDeck: statblock.ev !== undefined ? `EV ${statblock.ev}` : 'EV N/A',
+		role: statblock.role,
+	};
 }
 
 export class StatblockElementView extends ElementView<StatblockConfig> {
@@ -75,19 +112,23 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		// ROOT as data-dse-* via the pipeline's prefs.reflect() — nothing to stamp
 		// here. CSS keys off [data-dse-element='statblock'][data-dse-…] descendants.
 
+		// F2 §2.1 B1: SDK 3.x fields (role/organization/keywords) via the pure
+		// statblockHeaderParts extraction — shared by the role tint and cardHead fill.
+		const header = statblockHeaderParts(sb);
+
 		// Role spine + header tint from the SDK combat role (fails-safe unmapped).
-		applyRoleTint(card, sb.roles?.join(', '));
+		applyRoleTint(card, header.role);
 
 		// -- cardHead (§3.8 fill; legacy header wording preserved verbatim — the
 		// fallback strings always rendered in the legacy header, so no slot is a gap) --
 		cardHead(
 			card,
 			{
-				leftEyebrow: sb.ancestry?.join(', ') ?? 'Unknown Ancestry',
-				name: sb.name ?? 'Unnamed Creature',
-				rightEyebrow: sb.level !== undefined ? `Level ${sb.level}` : 'Level N/A',
-				rightPrimary: sb.roles?.join(', ') ?? 'No Role',
-				rightDeck: sb.ev !== undefined ? `EV ${sb.ev}` : 'EV N/A',
+				leftEyebrow: header.leftEyebrow,
+				name: header.name,
+				rightEyebrow: header.rightEyebrow,
+				rightPrimary: header.rightPrimary,
+				rightDeck: header.rightDeck,
 				level: 2, // the block heading; feature cards default to 3
 			},
 			this,

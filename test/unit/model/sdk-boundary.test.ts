@@ -6,9 +6,12 @@ import featureYaml from '../../fixtures/feature/magma-titan.yaml';
 import featureblockYaml from '../../fixtures/featureblock/angulotl-malice.yaml';
 
 // Golden inputs are the documented examples (docs/statblock.md, docs/Features.md,
-// docs/featureblock.md) — real user inputs. Snapshots pin steel-compendium-sdk
-// 2.1.5's parse output; the SDK 3.x upgrade (F2) must review these diffs.
-// If a spot-check below fails because 2.1.5 exposes a different property name,
+// docs/featureblock.md) — real user inputs. Snapshots pin steel-compendium-sdk's
+// parse output (F2 Task 1: updated 2026-07-16 for the 3.x upgrade — `role`/
+// `organization`/`keywords` replace the removed `roles`/`ancestry` arrays; the
+// human-bandit-chief.yaml fixture was migrated to the 3.x field shape in the
+// same commit).
+// If a spot-check below fails because the SDK exposes a different property name,
 // inspect the written snapshot and correct the property access — the snapshot
 // is the contract, the spot-check is a convenience.
 describe('T-9: SDK boundary fixtures', () => {
