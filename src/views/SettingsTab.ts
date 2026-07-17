@@ -10,7 +10,7 @@
 // element root and CSS reflows behind the open settings dialog — no Apply button,
 // no re-render. This replaces the D3 temporary commands (dse-cycle-theme,
 // dse-toggle-print-preview), deleted from main.ts in this same task.
-import { App, Component, PluginSettingTab, Setting } from 'obsidian';
+import { App, Component, Notice, PluginSettingTab, Setting } from 'obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '@/framework/seams/prefs';
 import {
@@ -193,23 +193,38 @@ export class DseSettingTab extends PluginSettingTab {
 		}
 	}
 
-	// —— Operational sections: verbatim carry-over of the pre-D4 tab (F2 reworks) ——
+	// —— Operational sections: F2 §3.4 rework (Task 11) — sentence case throughout,
+	// setHeading() sections instead of raw h3s, a manifest-driven sync status line,
+	// and Sync/Check-for-updates buttons wired to the Task 9/10 sync engine. ——
 	private renderOperationalSections(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: 'Draw Steel Compendium Downloader' });
+		new Setting(containerEl).setName('Compendium').setHeading();
 		containerEl.createEl('p', {
 			// F2 Task 10: the sync engine (CompendiumSyncService.applySync) is
 			// non-destructive by construction — it never deletes or overwrites content
-			// it didn't install itself. Full copy rework is Task 11; this text is fixed
-			// here because the old wording is actively false/scary as of this change.
-			text: 'The Compendium syncs into a specific directory in your vault. Your own files there are never overwritten or deleted — anything that collides with a compendium file is skipped and reported.',
+			// it didn't install itself. This replaces the old "WIPED CLEAN"-style
+			// warning, which was actively false/scary as of that change.
+			text: 'The compendium syncs into a folder in your vault. Only files installed by the plugin are updated or removed — your own notes in that folder are never touched.',
 		});
 
 		new Setting(containerEl)
-			.setName('Release Tag (Optional)')
-			.setDesc('Specific release tag to download. Leave empty to download the latest release.')
+			.setName('Destination folder')
+			.setDesc('Vault folder the compendium is synced into.')
 			.addText((text) =>
 				text
-					.setPlaceholder('v1.0.0')
+					.setPlaceholder('DS Compendium')
+					.setValue(this.plugin.settings.compendiumDestinationDirectory)
+					.onChange(async (value) => {
+						this.plugin.settings.compendiumDestinationDirectory = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName('Release')
+			.setDesc('Specific data-unified release tag to sync. Leave empty for the latest release.')
+			.addText((text) =>
+				text
+					.setPlaceholder('Latest')
 					.setValue(this.plugin.settings.compendiumReleaseTag ?? '')
 					.onChange(async (value) => {
 						this.plugin.settings.compendiumReleaseTag = value;
@@ -218,31 +233,68 @@ export class DseSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('Destination Directory')
-			.setDesc('Directory within your vault to sync the Compendium contents into. Your own files there are safe (never overwritten or deleted).')
-			.addText((text) =>
-				text
-					.setPlaceholder('ImportedContent')
-					.setValue(this.plugin.settings.compendiumDestinationDirectory)
+			.setName('Locale')
+			.setDesc('Compendium language. Only English is published today.')
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption('en', 'English')
+					.setValue(this.plugin.settings.compendiumLocale)
 					.onChange(async (value) => {
-						this.plugin.settings.compendiumDestinationDirectory = value;
+						this.plugin.settings.compendiumLocale = value;
 						await this.plugin.saveSettings();
 					}),
 			);
 
-		const downloadButton = containerEl.createEl('button', {
-			cls: 'settings-action-button',
-			text: 'Download Compendium',
+		const statusEl = containerEl.createEl('p', {
+			cls: 'ds-compendium-status',
+			text: 'Loading sync status…',
 		});
-		downloadButton.addEventListener('click', () => {
-			void this.plugin.syncCompendium();
-		});
-
-		containerEl.createEl('h3', { text: 'Initiative Tracker' });
+		void this.renderCompendiumStatus(statusEl);
 
 		new Setting(containerEl)
-			.setName('Default Creature Image Path')
-			.setDesc('Default image to use for creatures in the initiative tracker if not specified')
+			.setName('Sync compendium')
+			.setDesc('Download the selected release and update the files the plugin manages.')
+			.addButton((button) =>
+				button
+					.setButtonText('Sync')
+					.setCta()
+					.onClick(() => {
+						void this.plugin.syncCompendium();
+					}),
+			)
+			.addButton((button) =>
+				button.setButtonText('Check for updates').onClick(async () => {
+					try {
+						const result = await this.plugin.syncService.checkForUpdates();
+						new Notice(
+							result.upToDate
+								? `Compendium is up to date (${result.latestTag}).`
+								: `Update available: ${result.latestTag} (installed: ${result.installedTag ?? 'none'}).`,
+						);
+					} catch (error) {
+						const message = error instanceof Error ? error.message : String(error);
+						new Notice(`Update check failed — ${message}`);
+					}
+				}),
+			);
+
+		new Setting(containerEl).setName('Links').setHeading();
+
+		new Setting(containerEl)
+			.setName('Fall back to steelcompendium.io links')
+			.setDesc('When an SCC link is not found in your vault, link to its steelcompendium.io page instead. Navigation happens only on click.')
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.sccWebFallback).onChange(async (value) => {
+					this.plugin.settings.sccWebFallback = value;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		new Setting(containerEl).setName('Initiative tracker').setHeading();
+
+		new Setting(containerEl)
+			.setName('Default creature image path')
+			.setDesc('Default image to use for creatures in the initiative tracker if not specified.')
 			.addText((text) =>
 				text
 					.setPlaceholder('path/to/image.png')
@@ -252,5 +304,17 @@ export class DseSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+	}
+
+	/** F2 Task 11: renders the manifest-driven "last synced" line. Async because
+	 *  ManifestStore.load() reads the vault adapter; the placeholder text set by
+	 *  the caller covers the gap until this resolves. */
+	private async renderCompendiumStatus(el: HTMLElement): Promise<void> {
+		const manifest = await this.plugin.manifestStore.load();
+		el.setText(
+			manifest
+				? `${manifest.releaseTag} · ${Object.keys(manifest.files).length} files · synced ${manifest.syncedAt.slice(0, 10)}`
+				: 'No compendium synced yet.',
+		);
 	}
 }

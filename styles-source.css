@@ -19,18 +19,6 @@
 	}
 }
 
-/* ==================== */
-/*   Settings           */
-/* ==================== */
-
-
-button.settings-action-button {
-	padding: 10px 20px;
-	font-size: 16px;
-	background-color: var(--interactive-accent);
-	float: right;
-}
-
 /* ================================================================== */
 /*  Feature card grammar (D2 §3.6, Plan 09 Task 5): .dse-feature      */
 /* ================================================================== */

@@ -5,8 +5,10 @@
 // this tab supersedes).
 import DrawSteelAdmonitionPlugin from 'main';
 import { DseSettingTab } from '@views/SettingsTab';
-import { App, Plugin, Setting, Component, flushAsync } from '../../mocks/obsidian';
+import { App, Plugin, Setting, Component, Notice, flushAsync } from '../../mocks/obsidian';
 import { SB_PRESETS } from '../../../src/prefs/catalog';
+import { DEFAULT_SETTINGS } from '@model/Settings';
+import type { CompendiumManifest } from '@/data/manifest';
 
 function rowByName(name: string): Setting {
 	const row = Setting.created.find((s) => s.name === name);
@@ -26,24 +28,34 @@ describe('D4 §4 — DseSettingTab', () => {
 		Setting.created.length = 0;
 	});
 
-	test('renders the visible groups in order and NO hidden rows', async () => {
+	test('renders the visible groups in order and NO hidden PREF rows', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
 		const headings = Setting.created.filter((s) => s.heading).map((s) => s.name);
 		// D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine, Task 4 the
-		// master switch + rollClickToRoll; only webLinkFallback (F2) stays hidden.
-		// D9 (Plan 15 Task 5) adds the Authoring group (authoringControls, default OFF —
-		// row is NOT hidden, so it renders a heading).
-		expect(headings).toEqual(['Appearance', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring']);
+		// master switch + rollClickToRoll; the webLinkFallback PREFS-CATALOG row stays
+		// hidden forever (F2 Task 11 §note below ships the equivalent control as an
+		// OPERATIONAL setting instead — see delta #3 — so 'References' never gets a
+		// heading here). D9 (Plan 15 Task 5) adds the Authoring group (authoringControls,
+		// default OFF — row is NOT hidden, so it renders a heading). F2 Task 11 appends
+		// the operational headings (Compendium, Links, Initiative tracker) after the
+		// generated pref sections.
+		expect(headings).toEqual([
+			'Appearance', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Compendium', 'Links', 'Initiative tracker',
+		]);
 		const names = Setting.created.map((s) => s.name);
 		expect(names).toContain('Enable rolling');
 		expect(names).toContain('Roller');
 		expect(names).toContain('Click ability to roll');
-		expect(names).not.toContain('Fall back to steelcompendium.io links');
-		// operational carry-over intact:
-		expect(names).toContain('Release Tag (Optional)');
-		expect(names).toContain('Default Creature Image Path');
+		// F2 Task 11: this label now appears exactly once — the OPERATIONAL sccWebFallback
+		// row, not the still-hidden prefs-catalog webLinkFallback descriptor (dead scaffolding,
+		// intentionally left unrendered per delta #3).
+		expect(names.filter((n) => n === 'Fall back to steelcompendium.io links')).toHaveLength(1);
+		// operational carry-over intact (F2 Task 11 renamed to sentence case):
+		expect(names).toContain('Release');
+		expect(names).toContain('Default creature image path');
 	});
 
 	test('theme row: the builtin descriptor renders with OD-5 labels and live-applies to a mounted root', async () => {
@@ -167,5 +179,161 @@ describe('D4 §4 — DseSettingTab', () => {
 		expect(ids).not.toContain('dse-cycle-theme');
 		expect(ids).not.toContain('dse-toggle-print-preview');
 		addCommand.mockRestore();
+	});
+});
+
+// —— F2 Task 11: the Compendium operational-section rework (F2 §3.4) ——
+// Driven against a lightweight fake plugin (not the real onload() path above):
+// the operational section only touches plugin.settings/saveSettings/syncCompendium/
+// syncService/manifestStore, none of which need a real frameworkV2 or a real
+// vault adapter. `frameworkV2` stays undefined, matching display()'s own guard
+// (`if (prefs) this.renderPrefSections(...)`), so only the operational section
+// under test is rendered — the pref-section behavior is covered above.
+describe('F2 Task 11 — Compendium operational section', () => {
+	function makeFakePlugin(overrides: Record<string, unknown> = {}) {
+		const app = new App();
+		const plugin: any = {
+			app,
+			settings: { ...DEFAULT_SETTINGS },
+			frameworkV2: undefined,
+			saveSettings: jest.fn(async () => {}),
+			syncCompendium: jest.fn(async () => {}),
+			syncService: {
+				checkForUpdates: jest.fn(async () => (
+					{ installedTag: null, latestTag: 'v4.x', upToDate: false }
+				)),
+			},
+			manifestStore: { load: jest.fn(async () => null) },
+			...overrides,
+		};
+		const tab = new DseSettingTab(app as never, plugin);
+		return { tab, plugin, app };
+	}
+
+	beforeEach(() => {
+		Setting.created.length = 0;
+		Notice.notices.length = 0;
+	});
+
+	test('the safety sentence replaces any WIPED-CLEAN-style warning', () => {
+		const { tab } = makeFakePlugin();
+		tab.display();
+		const text = tab.containerEl.textContent ?? '';
+		expect(text).not.toMatch(/wiped clean/i);
+		expect(text).toContain('Only files installed by the plugin are updated or removed');
+		expect(text).toContain('your own notes in that folder are never touched');
+	});
+
+	test('no-manifest status line reads "No compendium synced yet."', async () => {
+		const { tab } = makeFakePlugin();
+		tab.display();
+		await flushAsync(2);
+		expect(tab.containerEl.textContent).toContain('No compendium synced yet.');
+	});
+
+	test('manifest-driven status line: tag, file count, sync date', async () => {
+		const manifest: CompendiumManifest = {
+			schemaVersion: 1,
+			source: 'SteelCompendium/data-unified',
+			releaseTag: 'v4.20260716T000000',
+			locale: 'en',
+			format: 'md-dse',
+			root: 'DS Compendium',
+			syncedAt: '2026-07-15T10:00:00.000Z',
+			files: { a: 'x', b: 'y', c: 'z' },
+		};
+		const { tab } = makeFakePlugin({ manifestStore: { load: jest.fn(async () => manifest) } });
+		tab.display();
+		await flushAsync(2);
+		const text = tab.containerEl.textContent ?? '';
+		expect(text).toContain('v4.20260716T000000');
+		expect(text).toContain('3 files');
+		expect(text).toContain('2026-07-15');
+	});
+
+	test('Destination folder / Release / Locale fields write settings and save', async () => {
+		const { tab, plugin } = makeFakePlugin();
+		tab.display();
+		rowByName('Destination folder').texts[0].trigger('My Compendium');
+		await flushAsync(1);
+		expect(plugin.settings.compendiumDestinationDirectory).toBe('My Compendium');
+
+		rowByName('Release').texts[0].trigger('v4.1.0');
+		await flushAsync(1);
+		expect(plugin.settings.compendiumReleaseTag).toBe('v4.1.0');
+
+		const localeDropdown = rowByName('Locale').dropdowns[0];
+		expect(localeDropdown.options).toEqual([{ value: 'en', label: 'English' }]);
+		localeDropdown.trigger('en');
+		await flushAsync(1);
+		expect(plugin.settings.compendiumLocale).toBe('en');
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(3);
+	});
+
+	test('Sync button invokes plugin.syncCompendium', () => {
+		const { tab, plugin } = makeFakePlugin();
+		tab.display();
+		rowByName('Sync compendium').buttons[0].click();
+		expect(plugin.syncCompendium).toHaveBeenCalledTimes(1);
+	});
+
+	test('Check for updates button reports up-to-date via Notice', async () => {
+		const { tab, plugin } = makeFakePlugin({
+			syncService: {
+				checkForUpdates: jest.fn(async () => (
+					{ installedTag: 'v4.1', latestTag: 'v4.1', upToDate: true }
+				)),
+			},
+		});
+		tab.display();
+		rowByName('Sync compendium').buttons[1].click();
+		await flushAsync(2);
+		expect(plugin.syncService.checkForUpdates).toHaveBeenCalledTimes(1);
+		expect(Notice.notices.some((n) => /up to date/i.test(n))).toBe(true);
+	});
+
+	test('Check for updates button reports an available update via Notice', async () => {
+		const { tab } = makeFakePlugin({
+			syncService: {
+				checkForUpdates: jest.fn(async () => (
+					{ installedTag: 'v4.0', latestTag: 'v4.1', upToDate: false }
+				)),
+			},
+		});
+		tab.display();
+		rowByName('Sync compendium').buttons[1].click();
+		await flushAsync(2);
+		expect(Notice.notices.some((n) => n.includes('v4.1') && n.includes('v4.0'))).toBe(true);
+	});
+
+	test('Check for updates failure surfaces the error via Notice, not a thrown rejection', async () => {
+		const { tab } = makeFakePlugin({
+			syncService: {
+				checkForUpdates: jest.fn(async () => { throw new Error('rate limited'); }),
+			},
+		});
+		tab.display();
+		rowByName('Sync compendium').buttons[1].click();
+		await flushAsync(2);
+		expect(Notice.notices.some((n) => n.includes('rate limited'))).toBe(true);
+	});
+
+	test('Links section: the fallback toggle is operational (sccWebFallback), not a hidden pref', async () => {
+		const { tab, plugin } = makeFakePlugin();
+		tab.display();
+		const toggle = rowByName('Fall back to steelcompendium.io links').toggles[0];
+		expect(toggle.value).toBe(DEFAULT_SETTINGS.sccWebFallback);
+		toggle.trigger(false);
+		await flushAsync(1);
+		expect(plugin.settings.sccWebFallback).toBe(false);
+	});
+
+	test('Initiative tracker: default creature image path field (sentence case)', async () => {
+		const { tab, plugin } = makeFakePlugin();
+		tab.display();
+		rowByName('Default creature image path').texts[0].trigger('token.png');
+		await flushAsync(1);
+		expect(plugin.settings.defaultImagePath).toBe('token.png');
 	});
 });

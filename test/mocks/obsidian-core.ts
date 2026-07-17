@@ -85,11 +85,50 @@ export function normalizePath(path: string): string {
 // ---------------------------------------------------------------- vault fake
 const macrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/**
+ * F2 Task 11: a minimal in-memory `DataAdapter` — enough for `ManifestStore`
+ * (exists/read/write/remove/rename over plugin-config-dir paths). Before this, the
+ * real `onload()` path in DOM tests (`makeLoadedPlugin()`) had NO adapter at all, so
+ * any settings-tab render that called `manifestStore.load()` (F2 Task 11's status
+ * line is the first) hit `undefined.exists` and fell into ManifestStore's fail-safe
+ * catch — harmless (resolves to `null`), but it logged a scary console.warn on every
+ * `display()` call. A real backing store avoids the warning and lets DOM tests seed
+ * a manifest via `vault.adapter.write(...)` if a future test needs to.
+ */
+export class FakeAdapter {
+	private store = new Map<string, string>();
+	async exists(path: string): Promise<boolean> {
+		return this.store.has(path);
+	}
+	async read(path: string): Promise<string> {
+		const value = this.store.get(path);
+		if (value === undefined) throw new Error(`ENOENT: ${path}`);
+		return value;
+	}
+	async write(path: string, data: string): Promise<void> {
+		this.store.set(path, data);
+	}
+	async remove(path: string): Promise<void> {
+		this.store.delete(path);
+	}
+	async rename(from: string, to: string): Promise<void> {
+		const value = this.store.get(from);
+		if (value === undefined) throw new Error(`ENOENT: ${from}`);
+		this.store.set(to, value);
+		this.store.delete(from);
+	}
+}
+
 export class FakeVault {
 	private contents = new Map<string, string>();
 	private tfiles = new Map<string, TFile>();
 	private folders = new Map<string, TFolder>();
 	readonly modifyCalls: { path: string; content: string }[] = [];
+	/** F2 Task 11: ManifestStore.manifestPath() joins this in. Real Obsidian's is
+	 *  `.obsidian` by default. */
+	configDir = '.obsidian';
+	/** F2 Task 11: backs ManifestStore's load/save. */
+	readonly adapter = new FakeAdapter();
 
 	/** Test seeding helper (not part of the Obsidian API). */
 	setFile(path: string, content: string): TFile {
