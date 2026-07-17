@@ -160,6 +160,73 @@ describe("CompendiumSyncService.applySync (F2 §3.4)", () => {
 		expect(vault.text("DS Compendium/already-gone.md")).toBeUndefined();
 	});
 
+	test("path-traversal / absolute incoming paths are rejected, never written outside the root", async () => {
+		const { vault, store, service } = setup();
+		const { report } = await service.applySync(
+			incomingOf({
+				"../../evil.md": "pwned",
+				"/abs.md": "pwned",
+				"safe.md": "official",
+			}), null, OPTIONS, "v4.new");
+		expect(report.rejectedPaths.sort()).toEqual(["../../evil.md", "/abs.md"]);
+		expect(report.created).toEqual(["safe.md"]);
+		// Nothing escaped the root: no file materialized anywhere named evil.md/abs.md.
+		expect([...vault.files.keys()].some((p) => p.endsWith("evil.md"))).toBe(false);
+		expect([...vault.files.keys()].some((p) => p.endsWith("abs.md"))).toBe(false);
+		expect(vault.text("DS Compendium/safe.md")).toBe("official");
+		const manifest = (await store.load())!;
+		expect(Object.keys(manifest.files)).toEqual(["safe.md"]);
+	});
+
+	test("F1 pin: managed file with BOTH a user edit AND an upstream change is overwritten (spec-sanctioned)", async () => {
+		const { vault, service } = setup();
+		vault.setText("DS Compendium/a.md", "user's own edits, not the installed content");
+		const old = await manifestOf("DS Compendium", { "a.md": "originally installed content" });
+		const { report } = await service.applySync(
+			incomingOf({ "a.md": "new upstream content" }), old, OPTIONS, "v4.new");
+		expect(report.updated).toEqual(["a.md"]);
+		expect(vault.text("DS Compendium/a.md")).toBe("new upstream content");
+	});
+
+	test("F3 pin: first sync (no manifest) adopts a pre-existing hash-identical file without treating it as a skip", async () => {
+		const { vault, store, service } = setup();
+		vault.setText("DS Compendium/already-here.md", "matches incoming exactly");
+		const { report } = await service.applySync(
+			incomingOf({ "already-here.md": "matches incoming exactly" }), null, OPTIONS, "v4.new");
+		expect(report.unchanged).toEqual(["already-here.md"]);
+		expect(report.skippedConflicts).toEqual([]);
+		expect(report.created).toEqual([]);
+		const manifest = (await store.load())!;
+		expect(manifest.files["already-here.md"]).toBeDefined();
+	});
+
+	test("F6 pin: mid-sync write failure leaves the old manifest untouched on disk", async () => {
+		const { vault, store, service } = setup();
+		const old = await manifestOf("DS Compendium", { "a.md": "old a" });
+		vault.setText("DS Compendium/a.md", "old a");
+		await store.save(old); // seed the on-disk manifest via the real save path
+
+		const adapterKeysBefore = [...vault.adapter.store.keys()].sort();
+		const contentBefore = await store.load();
+
+		let writes = 0;
+		const originalCreateBinary = vault.createBinary.bind(vault);
+		jest.spyOn(vault, "createBinary").mockImplementation(async (path, data) => {
+			writes += 1;
+			if (writes === 2) throw new Error("simulated write failure on file 2");
+			return originalCreateBinary(path, data);
+		});
+		const saveSpy = jest.spyOn(store, "save");
+
+		const incoming = incomingOf({ "b.md": "b1", "c.md": "c1", "d.md": "d1" });
+		await expect(service.applySync(incoming, old, OPTIONS, "v4.new")).rejects.toThrow(
+			"simulated write failure on file 2");
+
+		expect(saveSpy).not.toHaveBeenCalled();
+		expect(await store.load()).toEqual(contentBefore);
+		expect([...vault.adapter.store.keys()].sort()).toEqual(adapterKeysBefore); // no stray .tmp file either
+	});
+
 	test("progress callback fires and covers the full set", async () => {
 		const { service } = setup();
 		const progress: Array<[number, number]> = [];

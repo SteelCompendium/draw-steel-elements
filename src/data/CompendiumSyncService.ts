@@ -28,6 +28,8 @@ export interface SyncReport {
 	trashed: string[];
 	/** Manifest-tracked files removed upstream but user-modified → left in place. */
 	keptModified: string[];
+	/** Incoming paths rejected as unsafe (absolute, or containing a ".." segment) — never written. */
+	rejectedPaths: string[];
 }
 
 export type RequestUrlFn = (params: RequestUrlParam) => Promise<RequestUrlResponse>;
@@ -63,10 +65,20 @@ export class CompendiumSyncService {
 	): Promise<{ report: SyncReport; manifest: CompendiumManifest }> {
 		const report: SyncReport = {
 			releaseTag, created: [], updated: [], unchanged: [],
-			skippedConflicts: [], trashed: [], keptModified: [],
+			skippedConflicts: [], trashed: [], keptModified: [], rejectedPaths: [],
 		};
 		const newFiles: Record<string, string> = {};
-		const entries = [...incoming.entries()];
+		// Defense-in-depth write-boundary guard (review F2): reject any incoming path
+		// that could escape `options.root` before it ever reaches a vault write. The
+		// zip-extraction layer (Task 10) is expected to filter these too, but neither
+		// Obsidian's normalizePath nor this file's join resolves ".." segments.
+		const entries = [...incoming.entries()].filter(([relativePath]) => {
+			if (isUnsafeRelativePath(relativePath)) {
+				report.rejectedPaths.push(relativePath);
+				return false;
+			}
+			return true;
+		});
 
 		// Phase 1 — create / update / skip, batched with UI yields.
 		for (let i = 0; i < entries.length; i += BATCH_SIZE) {
@@ -95,6 +107,8 @@ export class CompendiumSyncService {
 					newFiles[relativePath] = incomingHash;
 				} else if (oldManifest?.files[relativePath] !== undefined) {
 					// We installed it → safe to update in place (no delete/recreate churn).
+					// Spec-sanctioned (F2 §3.4 step 3): upstream overwrites even if the user
+					// edited this managed file since install — deliberate, not a bug (review F1).
 					await this.app.vault.modifyBinary(existing, toArrayBuffer(content));
 					report.updated.push(relativePath);
 					newFiles[relativePath] = incomingHash;
@@ -160,4 +174,16 @@ export class CompendiumSyncService {
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 	return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+/**
+ * Rejects any incoming path that could escape `options.root` when joined and written.
+ * Absolute paths (leading slash/backslash, or a Windows drive prefix) are checked on the
+ * raw path, since normalizePath strips a leading slash rather than flagging it. ".."
+ * segments are checked after normalizePath (which only unifies separators — it does not
+ * resolve dot segments, so a literal ".." survives straight through to the vault write).
+ */
+function isUnsafeRelativePath(relativePath: string): boolean {
+	if (/^[\\/]/.test(relativePath) || /^[a-zA-Z]:[\\/]/.test(relativePath)) return true;
+	return normalizePath(relativePath).split("/").includes("..");
 }
