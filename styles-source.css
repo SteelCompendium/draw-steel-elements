@@ -343,6 +343,28 @@ code.dsa {
 	pointer-events: none;
 }
 
+/* F2 §4.3(a)/(b) scc anchor rewrite affordances (src/refs/rewriteSccAnchors.ts) — the
+   two non-default outcomes of resolving a `scc:`/`scc.v1:` link (the vault-hit outcome
+   needs no rule of its own: rewriteSccAnchors turns it into a plain `internal-link`,
+   which Obsidian's own theme already styles). Cosmetic only.
+
+   Reuses the existing --dse-* token vocabulary (Plan 08 Task 1) rather than adding new
+   custom properties — tokens.test.ts pins the token count/vocabulary, and these classes
+   land on anchors anywhere in a note (the vault-wide sccPostProcessor runs on ANY
+   markdown, not just inside a [data-dse-element] root), not only inside DSE elements.
+   That's safe here: the --dse-* vars are defined on the UNSCOPED :root base below, so
+   they resolve document-wide, not just under [data-dse-element]. */
+
+.ds-scc-web {
+	color: var(--dse-accent);
+}
+
+.ds-scc-unresolved {
+	color: var(--dse-fg-muted);
+	text-decoration: underline dotted;
+	cursor: help;
+}
+
 /* D4 (Plan 13) — reduce-motion pref: an EXPLICIT override on top of the OS
    prefers-reduced-motion media query (which component CSS honors regardless).
    Reflected value-mode: [data-dse-reduce-motion="true"|"false"] on every root. */
