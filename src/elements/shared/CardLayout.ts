@@ -8,17 +8,32 @@
 //
 // By-SCC hybrid (§2.3/§2.4, Task 9): DisplayCardView implements SourceAware so
 // RefUnwrapView can thread a resolved RefSource in via setSource() (called BEFORE mount —
-// see RefUnwrapView.mountBase). `useSourceBody`/`omitWhenSource` are the flags Task 9's
-// wiring reads once a display def is actually wrapped with withReference; no such
-// definition exists yet, so `this.source` is always undefined in production today. This
-// task lands the flags and the FULL pure-model render path (including how `rows` react to
-// hybrid mode being active) — the row-omission behavior already works correctly whenever
-// setSource() is called, which the displayCard.test.ts hybrid-mode tests exercise directly.
-// What's deliberately a stub: rendering the resolved file's body text itself. That's
-// TODO(Task 9) — see onMount's body section below — because the double-render-guard shape
-// (which of the source body's own headings/rows would collide with `rows`) isn't decided
-// yet; rendering nothing in that branch for now is a correct, honest no-op rather than a
-// half-built guess.
+// see RefUnwrapView.mountBase). `useSourceBody`/`omitWhenSource` are the flags every real
+// displayFamily() def (kit/condition/treasure/…) is wrapped with withReference and wired
+// through in production.
+//
+// Task 9 lands the actual source-body render: in hybrid mode (`this.source` set) with
+// `useSourceBody !== false` (the default), the card's trailing body region renders
+// `this.source.body` — the resolved compendium file's OWN markdown (frontmatter stripped
+// by CompendiumIndex.getEntity().body(), everything else kept) — through `renderMarkdown`,
+// instead of the layout's inline `body(model)`. This is what makes a kit's nested
+// ```ds-feature block (its signature ability, authored in the compendium FILE's body, not
+// its frontmatter — frontmatterAdapter's by-SCC model construction only reads frontmatter,
+// so `model.signature_ability` is undefined in hybrid mode) show up at all in by-SCC mode:
+// `renderMarkdown` recurses through Obsidian's real markdown pipeline, so a fenced ds-*
+// block inside the source body mounts as a REAL nested DSE card there, in real Obsidian.
+// (`body()` strips ONLY the frontmatter block — for a display-family file like kit, that
+// leaves prose + nested ds-* fences with no wrapping "primary" block of its own; a ds-block
+// -family file, by contrast, wraps its whole payload in a top-level fence matching its own
+// type, which is a different family's concern, not this one's.)
+//
+// `bodyMd` below is computed as "whichever markdown will actually render as the body" —
+// `this.source!.body` in hybrid+useSource mode, else `layout.body(model)` — BEFORE the
+// flavor/row duplicate-slot guard runs, so that guard (D6 Task 7 review fix, below) applies
+// uniformly in both modes: a flavor/row value that duplicates the REAL by-SCC source body
+// is suppressed exactly like one duplicating the inline body. `omitWhenSource` rows are a
+// separate, always-on-in-hybrid suppression (no duplicate-text check needed — the row is
+// just never a candidate in hybrid mode at all).
 import type { Feature } from 'steel-compendium-sdk';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
@@ -125,18 +140,16 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 			}
 		}
 
-		// Hybrid mode is "a RefSource has been threaded in" — true only once Task 9 wires a
-		// display def through withReference + RefUnwrapView; always false today.
+		// Hybrid mode is "a RefSource has been threaded in" (RefUnwrapView.mountBase calls
+		// setSource() before mount whenever a by-SCC reference resolved to a vault file).
 		const hybrid = this.source !== undefined;
 		const useSource = hybrid && this.layout.useSourceBody !== false;
 
-		// Inline body text, computed here (rather than down in the body section below) so
-		// the flavor/row duplication guard above can compare against it — only when it will
-		// actually render: in hybrid mode `body` never renders inline (Task 9 renders the
-		// source body instead per useSourceBody), so there's nothing for `flavor`/rows to
-		// duplicate and `omitWhenSource` alone governs row suppression there, untouched by
-		// this guard.
-		const bodyMd = !useSource ? this.layout.body?.(model) : undefined;
+		// Whichever markdown will ACTUALLY render as this card's body — the resolved
+		// source file's body in hybrid+useSource mode (Task 9), else the layout's inline
+		// `body(model)`. Computed here (rather than down in the body section below) so the
+		// flavor/row duplication guard right below can compare against it in BOTH modes.
+		const bodyMd = useSource ? this.source!.body : this.layout.body?.(model);
 		const normalizedBody = bodyMd && bodyMd.trim() ? normalizeForDuplicateCheck(bodyMd) : undefined;
 
 		const flavor = this.layout.flavor?.(model);
@@ -182,20 +195,16 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 			renderFeatureList(card, FeatureConfig.allFrom(features), this, (md, el) => this.renderMarkdown(md, el));
 		}
 
-		// Body: pure-model path (this task) — the inline `body` field, when the layout
-		// carries one and (in hybrid mode) `useSourceBody` doesn't claim it. `bodyMd`/
-		// `useSource` were computed above (the duplication guard needs them too).
-		//
-		// TODO(Task 9): when `hybrid && useSource`, render `this.source!.body` (the
-		// resolved compendium file's markdown) instead of the inline `body` — the by-SCC
-		// hybrid render this task's flags exist for. Left as a deliberate no-op here (not a
-		// half-built `this.source!.body` render) — the double-render-guard interaction with
-		// `omitWhenSource` rows is Task 9's design to make, and `this.source` is never set
-		// in production yet, so this branch is currently unreachable outside direct tests.
-		if (!useSource) {
-			if (bodyMd && bodyMd.trim()) {
-				await this.renderMarkdown(bodyMd, card.createDiv({ cls: 'dse-card__body' }));
-			}
+		// Body (Task 9): `bodyMd` — computed above, alongside the duplication guard — is
+		// already "whichever markdown should render here": `this.source!.body` in
+		// hybrid+useSource mode, the layout's inline `body(model)` otherwise. Rendering it
+		// through `renderMarkdown` is what makes a by-SCC hybrid card's nested ds-* blocks
+		// (e.g. a kit's signature ability, authored in the source file's body) recurse into
+		// real nested DSE cards in real Obsidian — MarkdownRenderer.render there re-enters
+		// this plugin's registered code-block processors for any fenced block inside;
+		// nothing else in this view has to know about that recursion.
+		if (bodyMd && bodyMd.trim()) {
+			await this.renderMarkdown(bodyMd, card.createDiv({ cls: 'dse-card__body' }));
 		}
 	}
 }

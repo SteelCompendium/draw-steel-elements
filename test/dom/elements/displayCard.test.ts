@@ -5,9 +5,11 @@
 //     horizontal-rule.test.ts / statblockRef.test.ts) with a hand-built tiny model + layout;
 //   - the hybrid/SourceAware seam (setSource(), called before mount — mirrors
 //     RefUnwrapView.mountBase's contract), exercised by instantiating DisplayCardView
-//     directly, since no real definition wires it through withReference yet (that's Task 9).
-//     Only the flags + row-filtering land here; the source-body render itself is a
-//     TODO(Task 9) stub that must not throw.
+//     directly against a hand-built layout/model (unit-style — a real end-to-end by-SCC
+//     render against a real fixture, including the source body's own recursion, is
+//     test/dom/elements/displayCardHybrid.test.ts, D6 Task 9). The source-body render
+//     itself landed in Task 9: hybrid + useSourceBody (default true) now renders
+//     `this.source.body` through renderMarkdown instead of the Task 5-era no-op stub.
 import { ElementPipeline } from '@/framework/pipeline';
 import type { ElementDefinition } from '@/framework/registry';
 import { createRenderContext } from '@/framework/context';
@@ -168,7 +170,7 @@ describe('D6 Task 5: DisplayCardView pure-model render path (spec §2.4)', () =>
 	});
 });
 
-describe('D6 Task 5: DisplayCardView hybrid seam (SourceAware, flags land now; body render is Task 9)', () => {
+describe('D6 Task 5/9: DisplayCardView hybrid seam (SourceAware; body render landed in Task 9)', () => {
 	function makeCx(host: ReturnType<typeof makeHost>) {
 		const { deps } = makeCompendiumDeps();
 		return createRenderContext({
@@ -228,7 +230,7 @@ describe('D6 Task 5: DisplayCardView hybrid seam (SourceAware, flags land now; b
 		expect(rows[0].querySelector('.dse-card__row-label')?.textContent).toBe('Kept');
 	});
 
-	test('hybrid + useSourceBody default (true): body render is the Task 9 stub — no throw, renders nothing', async () => {
+	test('hybrid + useSourceBody default (true): renders the resolved SOURCE body, not the inline `body` field (Task 9)', async () => {
 		const host = makeHost('ds-test-display-card');
 		const cx = makeCx(host);
 		const layout: CardLayout<TestCardModel> = {
@@ -241,7 +243,9 @@ describe('D6 Task 5: DisplayCardView hybrid seam (SourceAware, flags land now; b
 
 		await expect(view.mount(root, MODEL)).resolves.toBeUndefined();
 
-		expect(root.querySelector('.dse-card__body')).toBeNull();
+		// fakeSource().body === 'resolved file body' — NOT MODEL.content ('Grants +1 to
+		// **Speed** while worn.'), proving the source body wins over the inline field.
+		expect(root.querySelector('.dse-card__body')?.textContent).toBe('resolved file body');
 	});
 
 	test('hybrid + useSourceBody: false — the inline body still renders (flag opts OUT of the source body)', async () => {

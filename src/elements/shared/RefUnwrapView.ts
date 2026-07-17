@@ -20,6 +20,27 @@ import type { ResolvedRef } from '@/framework/seams/refs';
 import { extractFirstDsBlockText } from '@/services/typeAdapters';
 import type { RefOrInline, RefSource, WithReferenceOptions } from './withReference';
 
+/**
+ * D6 Task 9 (spec §9 risk) — depth guard against a by-SCC ref chain that resolves back
+ * into itself. Module-level (not per-instance) because the cycle we're guarding against
+ * spans MULTIPLE RefUnwrapView instances: block A resolves code C, mounts a base view
+ * whose rendered markdown contains a nested whole-block ref back to C — that nested block
+ * gets its OWN RefUnwrapView instance (a fresh code-block mount), not a recursive call on
+ * this one. `blockKey|raw` (not `raw` alone) so two DIFFERENT blocks in the same note that
+ * happen to reference the same code never collide with each other.
+ *
+ * Deliberately a same-key REFUSAL, not a numeric depth counter: real compendium bodies
+ * carry pre-resolved inline links (`[text](scc.v1:...)`), never whole-block refs — spec §9
+ * itself calls practical depth "1" — so a true multi-level chain essentially can't occur
+ * against real content. The risk this guards against is a cycle (A -> ... -> A), which a
+ * "have I already started resolving this key, in this block, right now" check catches
+ * exactly, with no need to pick an arbitrary max depth. Added at the start of a resolution
+ * and removed in a `finally` once that resolution's full mount settles (covers any nested
+ * rendering triggered synchronously inside it, not just the ref lookup itself) — so a LATER
+ * (non-overlapping) resolution of the same key, e.g. on a subsequent onUpdate, is unaffected.
+ */
+const IN_FLIGHT_REFS = new Set<string>();
+
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	/** Tracks the currently-mounted base view (if any) so onUpdate can tear it down before
 	 *  re-mounting — ElementView's own "unload owned children" default only fires when a
@@ -54,56 +75,75 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 
 	private async resolveAndMount(root: HTMLElement, raw: string): Promise<void> {
 		const trimmed = raw.trim();
-		// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
-		// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
-		// them; they resolve entirely through cx.refs (the ReferenceService's at-path/
-		// wikilink providers, F1 §3.7). Handled BEFORE the SCC ladder below, which stays
-		// scc-prefixed/bare-slug only (fix round 1, Critical finding).
-		if (trimmed.startsWith('@') || (trimmed.startsWith('[[') && trimmed.endsWith(']]'))) {
-			await this.resolveLegacyRef(root, trimmed);
-			return;
-		}
 
-		const index = this.cx.compendium;
-		if (!index || !index.available) {
-			this.errorCard(root, 'Compendium not installed — run "Sync compendium" to render references.');
-			return;
-		}
-		// Resolve to a bare code (bare slug -> scoped candidates; scc-prefixed -> SccResolver).
-		const code = this.toCode(root, raw, index);
-		if (code === null) return; // toCode already rendered the right card
-		const resolution = this.cx.sccAnchors?.resolve(`scc:${code}`);
-		if (!resolution || resolution.kind === 'unresolved') {
-			this.errorCard(root, `Unknown SCC code \`${code}\`. Try Draw Steel: Insert compendium reference.`);
-			return;
-		}
-		if (resolution.kind === 'web') {
-			this.webCard(root, code, resolution.url);
-			return;
-		}
-		// vault -> typed model + source, or the "found but not renderable" degrade.
-		const entity = await index.getEntity(code);
-		if (!entity) {
+		// D6 Task 9 (spec §9 risk): refuse a ref that is already mid-resolution for this
+		// SAME block — see IN_FLIGHT_REFS's doc comment above for why this is keyed on
+		// blockKey+raw and why a same-key refusal (not a numeric depth budget) is the
+		// right shape. Guards BOTH ladders below (legacy @path/[[wikilink]] and the SCC
+		// ladder) since both ultimately resolve "this ref" and mount a base view.
+		const guardKey = `${this.cx.host.blockKey()}|${trimmed}`;
+		if (IN_FLIGHT_REFS.has(guardKey)) {
 			this.errorCard(
 				root,
-				`"${code}" found but not renderable — this compendium predates the required block; re-sync.`,
+				`Reference nesting too deep — \`${trimmed}\` is already resolving in this block (spec §9 depth guard).`,
 			);
 			return;
 		}
-		const parsed = await entity.model();
-		if (parsed === undefined) {
-			// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
-			// not just the entity's display name, so a user debugging a stale-compendium
-			// file can tell which file/version is stale.
-			const type = entity.type || 'unknown';
-			this.errorCard(
-				root,
-				`"${entity.name}" found but not renderable — ${entity.file.path} (type: ${type}) predates the required block; re-sync.`,
-			);
-			return;
+		IN_FLIGHT_REFS.add(guardKey);
+		try {
+			// `@path` / `[[wikilink]]` — the legacy forms D6 spec §1.1 says "still work" —
+			// carry no SCC code at all, so cx.sccAnchors/cx.compendium can never classify
+			// them; they resolve entirely through cx.refs (the ReferenceService's at-path/
+			// wikilink providers, F1 §3.7). Handled BEFORE the SCC ladder below, which stays
+			// scc-prefixed/bare-slug only (fix round 1, Critical finding).
+			if (trimmed.startsWith('@') || (trimmed.startsWith('[[') && trimmed.endsWith(']]'))) {
+				await this.resolveLegacyRef(root, trimmed);
+				return;
+			}
+
+			const index = this.cx.compendium;
+			if (!index || !index.available) {
+				this.errorCard(root, 'Compendium not installed — run "Sync compendium" to render references.');
+				return;
+			}
+			// Resolve to a bare code (bare slug -> scoped candidates; scc-prefixed -> SccResolver).
+			const code = this.toCode(root, raw, index);
+			if (code === null) return; // toCode already rendered the right card
+			const resolution = this.cx.sccAnchors?.resolve(`scc:${code}`);
+			if (!resolution || resolution.kind === 'unresolved') {
+				this.errorCard(root, `Unknown SCC code \`${code}\`. Try Draw Steel: Insert compendium reference.`);
+				return;
+			}
+			if (resolution.kind === 'web') {
+				this.webCard(root, code, resolution.url);
+				return;
+			}
+			// vault -> typed model + source, or the "found but not renderable" degrade.
+			const entity = await index.getEntity(code);
+			if (!entity) {
+				this.errorCard(
+					root,
+					`"${code}" found but not renderable — this compendium predates the required block; re-sync.`,
+				);
+				return;
+			}
+			const parsed = await entity.model();
+			if (parsed === undefined) {
+				// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
+				// not just the entity's display name, so a user debugging a stale-compendium
+				// file can tell which file/version is stale.
+				const type = entity.type || 'unknown';
+				this.errorCard(
+					root,
+					`"${entity.name}" found but not renderable — ${entity.file.path} (type: ${type}) predates the required block; re-sync.`,
+				);
+				return;
+			}
+			const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body: await entity.body() };
+			await this.mountBase(root, parsed as M, source);
+		} finally {
+			IN_FLIGHT_REFS.delete(guardKey);
 		}
-		const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body: await entity.body() };
-		await this.mountBase(root, parsed as M, source);
 	}
 
 	/**
