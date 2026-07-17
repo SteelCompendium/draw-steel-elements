@@ -24,9 +24,10 @@ import { createReferenceService } from '@/framework/seams/refs';
 import { createValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin } from '../../mocks/obsidian';
+import { App, Plugin, parseYaml } from '../../mocks/obsidian';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex, CompendiumEntity } from '@/services/CompendiumIndex';
+import type { RefProvider } from '@/framework/seams/refs';
 import { fakeTFile } from '../../fakes/fakeObsidian';
 import { withReference, type RefSource, type SourceAware } from '@/elements/shared/withReference';
 
@@ -68,6 +69,26 @@ function baseDef(viewFactory: (cx: any) => ElementView<BaseModel> = (cx) => new 
 			text: data && typeof data === 'object' && 'text' in (data as any) ? String((data as any).text) : String(data),
 		}),
 		createView: viewFactory,
+	};
+}
+
+/** A `raw`-driven base def (mirrors the REAL ds-block family shape --
+ *  `(_data, raw) => X.readYaml(raw)`, statblock/feature/featureblock -- unlike `baseDef`
+ *  above, which is `data`-driven and so can't distinguish RefUnwrapView.legacyRefRawText's
+ *  two branches). Used by the fallback-branch test below (fix round 1, finding 3). */
+function rawBaseDef(): ElementDefinition<BaseModel> {
+	return {
+		id: 'test-raw-base',
+		name: 'Test Raw Base',
+		aliases: ['ds-test-raw-base'],
+		shape: 'static',
+		parse: (_data, raw): BaseModel => {
+			const parsed = parseYaml(raw);
+			return {
+				text: parsed && typeof parsed === 'object' && 'text' in parsed ? String((parsed as any).text) : String(parsed),
+			};
+		},
+		createView: (cx) => new BaseView(cx),
 	};
 }
 
@@ -414,5 +435,36 @@ describe('RefUnwrapView — legacy @path / [[wikilink]] whole-block refs (D6 spe
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-error-stage')).toBe('parse');
+	});
+
+	// Fix round 1 (Low, task-4-review.md finding 3): `RefUnwrapView.resolveLegacyRef` now
+	// prefers the byte-original block TEXT via `extractFirstDsBlockText(app, file)` (the
+	// helper the by-SCC path uses) whenever `ResolvedRef.file` is present -- both built-in
+	// providers (at-path/wikilink) always set it, so the two describe-block tests above
+	// exercise that primary path. This test pins the OTHER branch: a `RefProvider`
+	// (the public `ReferenceService.register` seam) that resolves data with NO backing
+	// vault file, which can only fall back to the `stringifyYaml` round-trip -- there is
+	// no file to re-read block text from. Uses `rawBaseDef`, which (like the real
+	// statblock/feature/featureblock defs) parses `raw`, not `data`, so this actually
+	// exercises `legacyRefRawText`'s fallback branch rather than being a no-op the way
+	// `baseDef`'s `data`-driven parse would be.
+	test('@path body resolved by a custom RefProvider with no backing file: falls back to the stringifyYaml round-trip', async () => {
+		const def = withReference(rawBaseDef(), { sccType: /statblock$/ });
+		const deps = makeDeps();
+		const noFileProvider: RefProvider = {
+			kind: 'at-path',
+			canResolve: (raw) => raw.startsWith('@'),
+			resolve: async () => ({ data: { text: 'No-File Card' } }),
+		};
+		deps.refs.register(noFileProvider);
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost();
+
+		await pipeline.run(def, '@Anything', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		const rendered = root.querySelector('.test-base-view')!;
+		expect(rendered.getAttribute('data-test-model')).toBe('No-File Card');
 	});
 });

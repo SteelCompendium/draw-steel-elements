@@ -99,6 +99,13 @@ describe('D6 Task 4: ds-statblock wrapped with withReference (spec §1, §7)', (
 		expect(card?.textContent).toContain('growing-ferocity');
 	});
 
+	// Fix round 1 (Low-Medium, task-4-review.md finding 2): strengthened from a coarse
+	// sbFingerprint-only compare to the SAME full innerHTML byte-equality the by-SCC test
+	// above uses — goblin-stinker.md is the richest real statblock fixture (quoted
+	// numeric strings `ev: "3"`/`stamina: "10"`, emoji icons, apostrophes inside a
+	// smart-quoted effect string, markdown links), so this is the strongest available
+	// regression guard against `resolveLegacyRef`'s YAML round-trip corrupting content
+	// the coarse fingerprint (title/org-role/EV/feature-count) would never catch.
 	test('@path whole-block ref still resolves (legacy form unchanged by wrapping)', async () => {
 		const { vault, deps } = makeCompendiumDeps();
 		const content = loadMdDseFixture(vault, GOBLIN_REL, 'Homebrew/GoblinStinker.md');
@@ -113,6 +120,9 @@ describe('D6 Task 4: ds-statblock wrapped with withReference (spec §1, §7)', (
 		const inlineRoot = inlineHost.containerEl.firstElementChild as HTMLElement;
 
 		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(normalizeIds(refRoot.querySelector('.dse-sb')!.innerHTML)).toBe(
+			normalizeIds(inlineRoot.querySelector('.dse-sb')!.innerHTML),
+		);
 		expect(sbFingerprint(refRoot)).toEqual(sbFingerprint(inlineRoot));
 	});
 
@@ -130,6 +140,9 @@ describe('D6 Task 4: ds-statblock wrapped with withReference (spec §1, §7)', (
 		const inlineRoot = inlineHost.containerEl.firstElementChild as HTMLElement;
 
 		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(normalizeIds(refRoot.querySelector('.dse-sb')!.innerHTML)).toBe(
+			normalizeIds(inlineRoot.querySelector('.dse-sb')!.innerHTML),
+		);
 		expect(sbFingerprint(refRoot)).toEqual(sbFingerprint(inlineRoot));
 	});
 });
@@ -168,6 +181,54 @@ describe('D6 Task 4: ds-feature wrapped with withReference (spec §1, §7)', () 
 		expect(card?.textContent).toContain('No compendium entry matches');
 		expect(card?.textContent).toContain('panther');
 	});
+
+	// Fix round 1 (Medium, task-4-review.md finding 1): closes the gap the review
+	// flagged — `FeatureConfig.readYaml` routes through the SDK's own `YamlReader`
+	// (unlike `StatblockConfig.readYaml`'s direct `parseYaml`), so it is the path most
+	// exposed to `resolveLegacyRef`'s round-trip and was previously unverified
+	// end-to-end. growing-ferocity.md is the richest real feature fixture: a
+	// multi-paragraph literal-block-scalar (`|-`) effect containing TWO full embedded
+	// markdown tables plus inline scc.v1: links — exactly the shape most likely to be
+	// mangled by a lossy re-serialization.
+	test('@path whole-block ref still resolves (legacy form unchanged by wrapping)', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		const content = loadMdDseFixture(vault, FEATURE_REL, 'Homebrew/GrowingFerocity.md');
+		const inlineBody = extractDsBlockText(content);
+
+		const refHost = makeHost('ds-feature');
+		await new ElementPipeline(deps).run(featureElement, '@Homebrew/GrowingFerocity', refHost);
+		const refRoot = refHost.containerEl.firstElementChild as HTMLElement;
+
+		const inlineHost = makeHost('ds-feature');
+		await new ElementPipeline(deps).run(featureElement, inlineBody, inlineHost);
+		const inlineRoot = inlineHost.containerEl.firstElementChild as HTMLElement;
+
+		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(normalizeIds(refRoot.querySelector('.dse-feature')!.innerHTML)).toBe(
+			normalizeIds(inlineRoot.querySelector('.dse-feature')!.innerHTML),
+		);
+		expect(refRoot.querySelector('.dse-head__primary--left')!.textContent).toBe('Growing Ferocity');
+	});
+
+	test('[[wikilink]] whole-block ref still resolves (legacy form unchanged by wrapping)', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		const content = loadMdDseFixture(vault, FEATURE_REL, 'Bestiary/Growing Ferocity.md');
+		const inlineBody = extractDsBlockText(content);
+
+		const refHost = makeHost('ds-feature');
+		await new ElementPipeline(deps).run(featureElement, '[[Growing Ferocity]]', refHost);
+		const refRoot = refHost.containerEl.firstElementChild as HTMLElement;
+
+		const inlineHost = makeHost('ds-feature');
+		await new ElementPipeline(deps).run(featureElement, inlineBody, inlineHost);
+		const inlineRoot = inlineHost.containerEl.firstElementChild as HTMLElement;
+
+		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(normalizeIds(refRoot.querySelector('.dse-feature')!.innerHTML)).toBe(
+			normalizeIds(inlineRoot.querySelector('.dse-feature')!.innerHTML),
+		);
+		expect(refRoot.querySelector('.dse-head__primary--left')!.textContent).toBe('Growing Ferocity');
+	});
 });
 
 describe('D6 Task 4: ds-featureblock wrapped with withReference (spec §1, §7)', () => {
@@ -176,6 +237,12 @@ describe('D6 Task 4: ds-featureblock wrapped with withReference (spec §1, §7)'
 	// Synthetic fixture (no md-dse fixture file ships for featureblock yet): a
 	// minimal but real frontmatter + ds-fb block, structurally identical to what a
 	// synced compendium file looks like (F2 OD-1 shape) for the other two families.
+	// Fix round 1 (Medium, finding 1): enriched to mirror the SAME fidelity-risk shapes
+	// the reviewer's throwaway checks exercised on goblin-stinker.md/growing-ferocity.md
+	// — a quoted numeric string (`ev: "3"`), an emoji icon, an apostrophe inside a
+	// single-quoted YAML scalar, and a multi-paragraph literal-block-scalar (`|-`) effect
+	// with an embedded markdown table — since no real md-dse featureblock fixture exists
+	// on disk to reuse directly.
 	const FB_CONTENT = `---
 scc: ${FB_CODE}
 type: monster.angulotl.featureblock
@@ -188,6 +255,7 @@ name: Angulotl Malice
 type: featureblock
 featureblock_type: Malice Features
 name: Angulotl Malice
+ev: "3"
 features:
   - type: feature
     feature_type: trait
@@ -195,7 +263,20 @@ features:
     icon: ⭐️
     cost: 3 Malice
     effects:
-      - effect: Test effect text.
+      - effect: 'The angulotl doesn''t provoke [opportunity attacks](scc.v1:mcdm.heroes.v1/rule.combat/opportunity-attack) by moving through the swamp''s murk.'
+  - type: feature
+    feature_type: ability
+    name: Swamp's Grasp
+    icon: 🐸
+    cost: 5 Malice
+    effects:
+      - effect: |-
+          The angulotl's tongue lashes out, dragging a foe through the mire. This benefit lasts until the end of the angulotl's next turn.
+
+          | Distance | Benefit |
+          |----------|---------|
+          | 1        | The target is [slid](scc.v1:mcdm.heroes.v1/movement/forced-movement) 1 square. |
+          | 3        | The target is [slid](scc.v1:mcdm.heroes.v1/movement/forced-movement) 3 squares and knocked [prone](scc.v1:mcdm.heroes.v1/condition/prone). |
 \`\`\`
 `;
 
@@ -229,5 +310,51 @@ features:
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(root.querySelector('.dse-head__primary--left')!.textContent).toBe('Angulotl Malice');
+	});
+
+	// Fix round 1 (Medium, task-4-review.md finding 1): closes the same gap as the
+	// ds-feature block above — `FeatureblockConfig.readYaml` also routes through the
+	// SDK's `YamlReader`, not `StatblockConfig.readYaml`'s direct `parseYaml`, and was
+	// previously unverified end-to-end for the legacy `@path`/`[[wikilink]]` forms.
+	// FB_CONTENT above carries the same fidelity-risk shapes (quoted numeric string,
+	// emoji, apostrophes, multi-paragraph literal-block effect with an embedded table).
+	test('@path whole-block ref still resolves (legacy form unchanged by wrapping)', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		(vault as any).setFile('Homebrew/AngulotlMalice.md', FB_CONTENT);
+		const inlineBody = extractDsBlockText(FB_CONTENT);
+
+		const refHost = makeHost('ds-featureblock');
+		await new ElementPipeline(deps).run(featureblockElement, '@Homebrew/AngulotlMalice', refHost);
+		const refRoot = refHost.containerEl.firstElementChild as HTMLElement;
+
+		const inlineHost = makeHost('ds-featureblock');
+		await new ElementPipeline(deps).run(featureblockElement, inlineBody, inlineHost);
+		const inlineRoot = inlineHost.containerEl.firstElementChild as HTMLElement;
+
+		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(normalizeIds(refRoot.querySelector('.dse-fb')!.innerHTML)).toBe(
+			normalizeIds(inlineRoot.querySelector('.dse-fb')!.innerHTML),
+		);
+		expect(refRoot.querySelector('.dse-head__primary--left')!.textContent).toBe('Angulotl Malice');
+	});
+
+	test('[[wikilink]] whole-block ref still resolves (legacy form unchanged by wrapping)', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		(vault as any).setFile('Bestiary/Angulotl Malice.md', FB_CONTENT);
+		const inlineBody = extractDsBlockText(FB_CONTENT);
+
+		const refHost = makeHost('ds-featureblock');
+		await new ElementPipeline(deps).run(featureblockElement, '[[Angulotl Malice]]', refHost);
+		const refRoot = refHost.containerEl.firstElementChild as HTMLElement;
+
+		const inlineHost = makeHost('ds-featureblock');
+		await new ElementPipeline(deps).run(featureblockElement, inlineBody, inlineHost);
+		const inlineRoot = inlineHost.containerEl.firstElementChild as HTMLElement;
+
+		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(normalizeIds(refRoot.querySelector('.dse-fb')!.innerHTML)).toBe(
+			normalizeIds(inlineRoot.querySelector('.dse-fb')!.innerHTML),
+		);
+		expect(refRoot.querySelector('.dse-head__primary--left')!.textContent).toBe('Angulotl Malice');
 	});
 });

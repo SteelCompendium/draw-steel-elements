@@ -17,6 +17,7 @@ import { renderErrorCard } from '@/framework/pipeline';
 import type { RenderContext } from '@/framework/context';
 import type { ElementDefinition } from '@/framework/registry';
 import type { ResolvedRef } from '@/framework/seams/refs';
+import { extractFirstDsBlockText } from '@/services/typeAdapters';
 import type { RefOrInline, RefSource, WithReferenceOptions } from './withReference';
 
 export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
@@ -118,10 +119,21 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	 * `data`-driven base.parse (the display family, Task 6) but silently produces an
 	 * EMPTY model for the ds-block family's SDK-reader defs (`(_data, raw) =>
 	 * X.readYaml(raw)`, statblock/feature/featureblock), which ignore `data` entirely and
-	 * re-`parseYaml` an empty string. Re-serializing `resolved.data` back to YAML text
-	 * (mirroring `FormModal.ts`'s own `def.parse(data, stringifyYaml(data))` round-trip)
-	 * gives BOTH parse shapes what they need from a single already-parsed object, with no
-	 * def-shape sniffing here.
+	 * re-`parseYaml` an empty string. Both parse shapes need SOME non-empty `raw` string
+	 * from a single already-parsed `ResolvedRef`, with no def-shape sniffing here.
+	 *
+	 * Fix round 1 (Low, task-4-review.md finding 3): `ResolvedRef` always carries `.file`
+	 * for both built-in providers (at-path/wikilink — `resolveByPath` in
+	 * `src/framework/seams/refs.ts` always sets it), so prefer the byte-original block
+	 * TEXT via `extractFirstDsBlockText` (the same helper `TYPE_ADAPTERS`' by-SCC path
+	 * uses) — this makes the legacy-ref path byte-identical to inline, matching the
+	 * guarantee already established for by-SCC, rather than merely "value-identical after
+	 * a `stringifyYaml` round-trip." The round-trip (mirroring `FormModal.ts`'s own
+	 * `def.parse(data, stringifyYaml(data))`) is kept ONLY as a fallback for a
+	 * `RefProvider` that resolves data without a backing vault file (none of the built-ins
+	 * do this today, but the seam is public — `ReferenceService.register` — so a future/
+	 * custom provider could), or for the defensive case where the file's own ds-* block
+	 * text can't be re-extracted despite `.data` having parsed successfully upstream.
 	 *
 	 * Source threading (`RefSource` / `SourceAware`) has no direct `ResolvedRef`
 	 * equivalent for this path (no frontmatter/type contract the way a compendium
@@ -137,9 +149,20 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 			this.errorCard(root, error instanceof Error ? error.message : String(error));
 			return;
 		}
-		const rawYaml = resolved.data === undefined ? '' : stringifyYaml(resolved.data);
-		const model = this.base.parse(resolved.data, rawYaml);
+		const rawText = await this.legacyRefRawText(resolved);
+		const model = this.base.parse(resolved.data, rawText);
 		await this.mountBase(root, model);
+	}
+
+	/** Fix round 1 (Low, finding 3): byte-original block text over a `stringifyYaml`
+	 *  round-trip whenever a vault file backs the resolution — see resolveLegacyRef's
+	 *  doc comment above for why. */
+	private async legacyRefRawText(resolved: ResolvedRef): Promise<string> {
+		if (resolved.file) {
+			const text = await extractFirstDsBlockText(this.cx.app, resolved.file);
+			if (text !== null) return text;
+		}
+		return resolved.data === undefined ? '' : stringifyYaml(resolved.data);
 	}
 
 	/** Bare slug -> code (scoped, §1.3); scc-prefixed -> strip to code. `@path`/`[[..]]`
