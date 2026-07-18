@@ -1,0 +1,119 @@
+# D7 Task 7 (spec §3.1, OD-1/OD-4) — the ds-hero block schema (AJV, hard-fail per F1 §5).
+# One flat document: the definition fields live at the document ROOT (there is no literal
+# `hero:` wrapper key — OD-1/spec §3.1's own example), with `state:` as a single sibling
+# key carrying the small, all-optional play surface (spec §3.4: "a freshly authored sheet
+# with no state: is valid — the pipeline seeds defaults"). Refs (`scc.vN:` / `@path` /
+# `[[wikilink]]`) validate as plain strings here — resolution is Task 8's `resolveRefs`,
+# not schema (this task ships none, recon delta 2). This schema also drives Task 9's D9
+# `openFormEditor` reuse for the definition-half editor (plan-18 recon delta 5).
+# Dialect: 2019-09 like every other element schema (Ajv2019; an unregistered $schema URI
+# throws at compile).
+$schema: "https://json-schema.org/draft/2019-09/schema"
+$id: "https://steelcompendium.io/schemas/dse-hero-1.0.0"
+type: object
+additionalProperties: false
+required: [name, level, characteristics]
+properties:
+  name:
+    type: string
+    minLength: 1
+    description: The hero's name.
+  level:
+    type: integer
+    minimum: 1
+    maximum: 10
+    description: Hero level (RR — echelons 1-4 map to levels 1-3/4-6/7-9/10).
+  ancestry:
+    type: [string, object]
+    description: >-
+      An SCC ref (scc.v1:.../ancestry/<id>), @path/[[wikilink]] reference, or inline
+      ancestry data. Resolution is Task 8's resolveRefs, not this schema.
+  class:
+    type: [string, object]
+    description: >-
+      An SCC ref, @path/[[wikilink]] reference, or inline class data. Drives resource
+      type, stamina formula, recoveries, and potency at render (Task 8) — not here.
+  subclass:
+    type: string
+  kits:
+    type: array
+    items:
+      type: string
+    description: "0-2 SCC refs / inline kit data (Tactician: 2). Not bounded here."
+  characteristics:
+    type: object
+    additionalProperties: false
+    required: [might, agility, reason, intuition, presence]
+    properties:
+      might: { type: integer }
+      agility: { type: integer }
+      reason: { type: integer }
+      intuition: { type: integer }
+      presence: { type: integer }
+  skills:
+    type: array
+    items:
+      type: string
+  abilities:
+    type: array
+    items:
+      type: [string, object]
+    description: SCC codes or inline ability YAML; resolved lazily per-row (Task 8/9).
+  max_stamina:
+    type: integer
+    description: Override; else derived from class+kit+level at render (Task 8/9).
+  recoveries_max:
+    type: integer
+    description: Override; else class-derived at render (Task 8/9).
+  resource:
+    type: object
+    additionalProperties: false
+    required: [type, min]
+    properties:
+      type: { type: string }
+      min: { type: integer }
+    description: Override; else class-derived at render (Task 8/9).
+  titles:
+    type: array
+    description: Optional display-only passthrough (Task 9 renders; this model never interprets).
+  perks:
+    type: array
+    description: Optional display-only passthrough (Task 9 renders; this model never interprets).
+  treasures:
+    type: array
+    description: Optional display-only passthrough (Task 9 renders; this model never interprets).
+  complication:
+    description: Optional display-only passthrough (Task 9 renders; this model never interprets).
+  state:
+    type: object
+    additionalProperties: false
+    description: >-
+      The persisted play surface — small, rewritten on interaction (spec §3.4). Every
+      field is optional: a freshly authored sheet with no state: at all is valid, and so
+      is a partial state: block (defaults fill the rest, model.ts's parseState).
+    properties:
+      stamina:
+        type: object
+        additionalProperties: false
+        required: [current, temp]
+        properties:
+          current: { type: integer }
+          temp: { type: integer }
+      resource:
+        type: integer
+      surges:
+        type: integer
+        minimum: 0
+      recoveries:
+        type: integer
+        minimum: 0
+      victories:
+        type: integer
+        minimum: 0
+      conditions:
+        type: array
+        items:
+          type: [string, object]
+      tokens_ref:
+        type: string
+        description: Optional read-through to the canonical party pool block (§4.5, OD-3).

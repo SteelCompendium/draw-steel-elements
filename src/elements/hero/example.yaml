@@ -1,0 +1,26 @@
+# ── definition (authored / resolved; not rewritten by normal play — §3.4) ──
+name: Torin Stonefist
+level: 3
+ancestry: scc.v1:mcdm.heroes.v1/ancestry/dwarf     # or inline; D6 resolves
+class:   scc.v1:mcdm.heroes.v1/class/fury           # → resource, stamina, recoveries, potency
+subclass: berserker
+kits:    [scc.v1:mcdm.heroes.v1/kit/mountain]       # 0–2 (Tactician: 2)
+characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
+skills:  [Endurance, Intimidate, Nature]
+abilities:                                          # SCC codes or inline ability YAML
+  - scc.v1:mcdm.heroes.v1/.../brute-strike           # signature
+  - scc.v1:mcdm.heroes.v1/.../into-the-fray          # heroic (costs ferocity)
+# optional overrides when NOT compendium-resolving:
+max_stamina: 48            # else derived from class+kit+level
+recoveries_max: 10         # else class-derived
+resource: { type: Ferocity, min: 0 }   # else class-derived
+# ── state (the persisted play surface — small; rewritten on interaction) ──
+state:
+  stamina: { current: 31, temp: 0 }
+  resource: 4
+  surges: 1
+  recoveries: 6
+  victories: 2
+  conditions:
+    - { key: bleeding, effect: "save ends" }
+  tokens_ref: "@Party/Session"   # optional: canonical party pool block (§4.5, OD-3)
