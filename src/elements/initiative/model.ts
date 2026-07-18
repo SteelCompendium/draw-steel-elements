@@ -19,9 +19,11 @@
 // `?? max_stamina` fills post-merge. Like legacy, parse mutates the parsed data in place and
 // returns it (safe: the pipeline parses a fresh object per run).
 //
-// The EncounterData interfaces + resetEncounter are reused from EncounterData.ts unmodified
-// (imported and re-exported below, never duplicated) — the legacy processor keeps working
-// off the same types until Task 5 retires it.
+// The EncounterData interfaces + resetEncounter live in EncounterData.ts and are re-exported
+// below (never duplicated). D8 Task 5 (Malice panel) added `round` + `Malice.round_gain`/`log`
+// there as additive optional fields (and taught resetEncounter to clear the runtime ones,
+// `round`/`log` — `round_gain` is a configured default and survives a reset) — parse()/
+// serialize() below needed no changes: unset optional fields simply pass through untouched.
 //
 // serialize(model): the BYTE-COMPAT boundary. The legacy write path
 // (CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
@@ -43,6 +45,7 @@ export type {
 	EnemyGroup,
 	Hero,
 	Malice,
+	MaliceLogEntry,
 } from '@drawSteelAdmonition/EncounterData';
 export { resetEncounter } from '@drawSteelAdmonition/EncounterData';
 

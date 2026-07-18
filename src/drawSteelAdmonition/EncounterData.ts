@@ -42,8 +42,27 @@ export interface EnemyGroup {
     minion_stamina_pool?: number;
 }
 
+/** A single Malice pool event — a spend (Deliverable 2, D8 spec §3.2) or a manual
+ *  trigger-based gain (quick-add, spec §3.3) — so the table can see where Malice went.
+ *  `amount` is always the event's magnitude (never signed to mean "spend"); the label
+ *  carries the meaning. */
+export interface MaliceLogEntry {
+    round: number;
+    amount: number;
+    label: string;
+}
+
 export interface Malice {
     value: number;
+    /** Per-round automatic gain applied by "Advance round" (D8 spec §3.3, OD-3).
+     *  ABSENT means no auto-gain — the reference omits the Director's-guide formula, so
+     *  this is a configurable, user-set value with no built-in default; trigger-based
+     *  gains (e.g. Feytouched +3) stay manual via the quick-add instead. Never
+     *  fabricated (reference-math honesty note, D8 spec header). */
+    round_gain?: number;
+    /** Spend/gain log ({round, amount, label}), oldest-first. Absent/empty until the
+     *  first quick-add or malice-feature spend (D8 spec §3.1/§3.2). */
+    log?: MaliceLogEntry[];
 }
 
 export interface Condition {
@@ -57,6 +76,9 @@ export interface EncounterData {
     enemy_groups: EnemyGroup[];
     // REVIEW: should we make this into a number since Malice is only {value: number}?
     malice: Malice;
+    /** Encounter round counter (D8 spec §7.3, additive). ABSENT → treated as round 1;
+     *  advanced only via InitiativeView's shared advanceRound() control. */
+    round?: number;
 }
 
 export function resetEncounter(data: EncounterData) {
@@ -77,6 +99,11 @@ export function resetEncounter(data: EncounterData) {
         });
     });
     data.malice.value = 0;
+    // The spend/gain log and round counter are per-encounter RUNTIME state — a fresh
+    // encounter starts with neither. `round_gain` is a configured default (not
+    // round-scoped state), so it survives a reset like max_stamina survives it.
+    data.malice.log = undefined;
+    data.round = undefined;
 }
 
 export async function parseEncounterData(source: string, app: App, settings: DSESettings): Promise<EncounterData> {

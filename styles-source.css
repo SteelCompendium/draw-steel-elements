@@ -606,11 +606,20 @@ code.dsa {
         }
     }
 
-    /* -- enemies header: heading + malice -- */
+    /* -- enemies header: heading + Malice panel -- */
     .dse-init__enemies-head {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+    }
+
+    /* D8 §3: the Malice panel wraps the pool stepper + round/log/quick-add stacked. */
+    .dse-init__malice-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+        max-width: 220px;
     }
 
     /* -- Malice: the kit stepper (CB-7 — its render() updates ONLY the value node) -- */
@@ -649,6 +658,63 @@ code.dsa {
 
     .dse-init__malice-value {
         user-select: none;
+    }
+
+    /* D8 §7.2/§3.1: round counter + the shared "Advance round" control. */
+    .dse-init__round {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85em;
+        color: var(--dse-fg-muted);
+    }
+
+    .dse-init__round-advance {
+        min-width: 0;
+        min-height: 0;
+        padding: 2px 6px;
+    }
+
+    /* D8 §3.1: the spend/gain log — a small, muted, right-aligned readout. */
+    .dse-init__malice-log {
+        font-size: 0.8em;
+        color: var(--dse-fg-muted);
+        text-align: right;
+        max-width: 100%;
+    }
+
+    .dse-init__malice-log-heading {
+        margin: 0;
+        font-size: 1em;
+        font-weight: 600;
+        color: var(--dse-fg-muted);
+    }
+
+    .dse-init__malice-log-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-height: 6em;
+        overflow-y: auto;
+    }
+
+    .dse-init__malice-log-empty {
+        font-style: italic;
+    }
+
+    /* D8 §3.3: labeled quick-add for manual trigger-based gains. */
+    .dse-init__malice-quickadd {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dse-init__malice-quickadd-amount {
+        width: 4.5em;
+    }
+
+    .dse-init__malice-quickadd-label {
+        width: 8em;
     }
 
     /* -- hero / enemy-group entries -- */

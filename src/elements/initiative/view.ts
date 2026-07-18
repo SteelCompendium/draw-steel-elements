@@ -65,6 +65,7 @@ import {
 	Hero,
 	resetEncounter,
 } from './model';
+import type { MaliceLogEntry } from './model';
 
 export class InitiativeView extends ElementView<EncounterData> {
 	/** Same construction site as the legacy processor's constructor (:31). */
@@ -125,6 +126,30 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 	}
 
+	/** "Advance round" (D8 spec §7.2/§3.1) — the ONE control shared by the round display
+	 *  and the Malice panel, so the two surfaces can't diverge. Increments `round`
+	 *  (absent → treated as 1, so the first press produces 2), clears `has_taken_turn`
+	 *  exactly like "Reset Round", and applies the Malice per-round gain when the GM has
+	 *  configured one (`malice.round_gain` — absent/0 means no auto-gain, manual-only,
+	 *  OD-3: never a fabricated default). Scope note: the per-actor action checklist
+	 *  (Main/Maneuver/Move/Triggered, spec §7.2) is a separate, not-yet-built turn-economy
+	 *  deliverable — this method does not touch a per-actor `actions` field because no UI
+	 *  produces one yet; it will gain that reset once that field exists. */
+	private advanceRound(): void {
+		this.model.round = (this.model.round ?? 1) + 1;
+		this.model.heroes.forEach((hero) => {
+			hero.has_taken_turn = false;
+		});
+		this.model.enemy_groups.forEach((group) => {
+			group.has_taken_turn = false;
+		});
+		const gain = this.model.malice.round_gain;
+		if (typeof gain === 'number' && gain !== 0) {
+			this.model.malice.value += gain;
+		}
+		void this.rebuildAndPersist();
+	}
+
 	// ------------------------------------------------------------------------- build
 
 	private buildUI(container: HTMLElement, owner: Component, data: EncounterData): void {
@@ -179,17 +204,38 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const enemiesHead = enemiesGroup.createDiv({ cls: 'dse-init__enemies-head' });
 		enemiesHead.createEl('h3', { text: 'Enemy Groups' });
 
-		// Malice: the kit stepper (write) or a static value (read-only). CB-7 is fixed
+		// Malice panel (D8 spec §3): pool stepper + round/advance + spend-gain log +
+		// quick-add. Deliverable 2 (spendable monster malice features) is gated on
+		// F2 OD-1 + D6 and not built here (OD-6/plan header).
+		this.buildMalicePanel(enemiesHead, data, owner);
+
+		data.enemy_groups.forEach((group) => {
+			this.buildEnemyGroupRow(enemiesGroup.createDiv({ cls: 'dse-init__entry' }), group, owner);
+		});
+	}
+
+	// -------------------------------------------------------------- Malice panel
+
+	/** The Malice panel (D8 spec §3, Deliverable 1): the pool (kit stepper, CB-7
+	 *  unchanged), the round counter + shared "Advance round" control (spec §7.2),
+	 *  a spend/gain log (`malice.log`), and a labeled quick-add for manual
+	 *  trigger-based gains (spec §3.3 — never a formulaic default). All new writes
+	 *  go through the existing persist()/rebuildAndPersist() paths — no new write
+	 *  machinery. Read-only renders every piece as static/inert (F1 §4.4): no
+	 *  stepper buttons, no Advance-round button, no quick-add inputs — matching the
+	 *  rest of this view's read-only contract. */
+	private buildMalicePanel(container: HTMLElement, data: EncounterData, owner: Component): void {
+		const panel = container.createDiv({ cls: 'dse-init__malice-panel' });
+
+		// Pool: the kit stepper (write) or a static value (read-only). CB-7 is fixed
 		// by construction — stepper.render() sets ONLY its value node, so the ± buttons
 		// survive every press (legacy's container.setText destroyed the chevrons).
-		const malice = enemiesHead.createDiv({ cls: 'dse-init__malice' });
+		const malice = panel.createDiv({ cls: 'dse-init__malice' });
 		if (this.canWrite) {
 			const handle = stepper(
 				malice,
 				{
 					value: data.malice.value,
-					// Future-proofing: malice has no editable input today (stepper
-					// buttons only), so `integer` is inert until one is enabled.
 					integer: true,
 					label: 'Malice',
 					format: (v) => 'Malice: ' + v,
@@ -207,9 +253,92 @@ export class InitiativeView extends ElementView<EncounterData> {
 			malice.createDiv({ cls: 'dse-init__malice-value', text: 'Malice: ' + data.malice.value });
 		}
 
-		data.enemy_groups.forEach((group) => {
-			this.buildEnemyGroupRow(enemiesGroup.createDiv({ cls: 'dse-init__entry' }), group, owner);
+		// Round counter (always shown — a state display) + "Advance round" (write-only;
+		// calls the SAME advanceRound() the round control elsewhere would call, so the
+		// two surfaces can't diverge, per the brief).
+		const roundRow = panel.createDiv({ cls: 'dse-init__round' });
+		const roundValueEl = roundRow.createSpan({
+			cls: 'dse-init__round-value',
+			text: `Round ${data.round ?? 1}`,
 		});
+		roundValueEl.setAttribute('aria-live', 'polite');
+		if (this.canWrite) {
+			const gain = data.malice.round_gain;
+			iconButton(
+				roundRow,
+				{
+					icon: 'skip-forward',
+					text: 'Advance round',
+					label: 'Advance round',
+					tooltip:
+						typeof gain === 'number' && gain !== 0
+							? `Advance round (+${gain} Malice)`
+							: 'Advance round',
+					onClick: () => this.advanceRound(),
+				},
+				owner,
+			).buttonEl.addClass('dse-init__round-advance');
+		}
+
+		// Spend/gain log (spec §3.1 — "so the table can see where Malice went").
+		// Read-only rendering only: this is a display, never an editable list.
+		const logEl = panel.createDiv({ cls: 'dse-init__malice-log' });
+		logEl.createEl('h5', { cls: 'dse-init__malice-log-heading', text: 'Malice log' });
+		const entries: MaliceLogEntry[] = data.malice.log ?? [];
+		if (entries.length === 0) {
+			logEl.createDiv({
+				cls: 'dse-init__malice-log-empty',
+				text: 'No Malice spent or gained yet.',
+			});
+		} else {
+			const list = logEl.createEl('ul', { cls: 'dse-init__malice-log-list' });
+			entries.forEach((entry) => {
+				const sign = entry.amount >= 0 ? '+' : '';
+				list.createEl('li', {
+					cls: 'dse-init__malice-log-entry',
+					text: `R${entry.round}: ${sign}${entry.amount} — ${entry.label}`,
+				});
+			});
+		}
+
+		// Quick-add: labeled trigger-based gains (spec §3.3, e.g. "+3 Feytouched") —
+		// manual, appends to the log. Write-only; omitted entirely when read-only
+		// (F1 §4.4: no dead-end write affordance).
+		if (this.canWrite) {
+			const quickAdd = panel.createDiv({ cls: 'dse-init__malice-quickadd' });
+			const amountInput = quickAdd.createEl('input', {
+				cls: 'dse-init__malice-quickadd-amount',
+				type: 'number',
+				attr: { step: '1', placeholder: 'Amount' },
+			});
+			amountInput.setAttribute('aria-label', 'Quick-add Malice amount');
+			const labelInput = quickAdd.createEl('input', {
+				cls: 'dse-init__malice-quickadd-label',
+				type: 'text',
+				attr: { placeholder: 'e.g. Feytouched' },
+			});
+			labelInput.setAttribute('aria-label', 'Quick-add Malice label');
+			iconButton(
+				quickAdd,
+				{
+					icon: 'plus-circle',
+					text: 'Add',
+					label: 'Add Malice log entry',
+					onClick: () => {
+						const amount = Number(amountInput.value);
+						const label = labelInput.value.trim();
+						if (!Number.isFinite(amount) || amount === 0 || label.length === 0) return;
+						data.malice.value = Math.max(0, data.malice.value + amount);
+						data.malice.log = data.malice.log ?? [];
+						data.malice.log.push({ round: data.round ?? 1, amount, label });
+						amountInput.value = '';
+						labelInput.value = '';
+						void this.rebuildAndPersist();
+					},
+				},
+				owner,
+			).buttonEl.addClass('dse-init__malice-quickadd-btn');
+		}
 	}
 
 	// ---------------------------------------------------------------- turn indicator
