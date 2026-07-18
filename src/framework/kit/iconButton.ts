@@ -63,7 +63,6 @@ export function iconButton(
 ): IconButtonHandle {
 	const buttonEl = parent.createEl('button', { cls: 'dse-btn' });
 	buttonEl.setAttribute('type', 'button'); // never an implicit form submit
-	buttonEl.setAttribute('aria-label', opts.label);
 	if (opts.variant && opts.variant !== 'default') {
 		buttonEl.addClass(`dse-btn--${opts.variant}`);
 	}
@@ -85,7 +84,14 @@ export function iconButton(
 
 	buttonEl.disabled = opts.disabled === true;
 
+	// FOLLOWUPS #27-fix-round finding 1: native setTooltip (kit tooltip(), §2.5) stamps
+	// aria-label as its OWN side effect. Ordered before the aria-label assignment below
+	// so the REQUIRED accessible name (opts.label, §4.2) always wins as the final write
+	// — otherwise a `tooltip` string that differs from `label` (common: "Remove
+	// condition: Grabbed" as the label, "Grabbed" as the hover tooltip) would silently
+	// clobber the button's real name.
 	if (opts.tooltip !== undefined) tooltip(buttonEl, opts.tooltip);
+	buttonEl.setAttribute('aria-label', opts.label);
 
 	owner.registerDomEvent(buttonEl, 'click', (evt: MouseEvent) => {
 		// The real property already suppresses native activation (click/Enter/Space);

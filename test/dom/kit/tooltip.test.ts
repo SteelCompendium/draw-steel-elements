@@ -19,8 +19,10 @@ describe('Plan 08 Task 2: kit/tooltip (D2 §2.5)', () => {
 
 		expect(spy).toHaveBeenCalledTimes(1);
 		expect(spy).toHaveBeenCalledWith(el, 'Copy the SCC link', undefined);
-		// The mock's observable effect — proves the call-through wasn't swallowed.
-		expect(el.getAttribute('data-tooltip')).toBe('Copy the SCC link');
+		// The mock's observable effect — proves the call-through wasn't swallowed. Real
+		// Obsidian's setTooltip stamps `aria-label` (not a `data-tooltip` attribute —
+		// FOLLOWUPS #27-fix-round finding 1), so the mock mirrors that exactly.
+		expect(el.getAttribute('aria-label')).toBe('Copy the SCC link');
 	});
 
 	test('passes placement through as Obsidian TooltipOptions', () => {

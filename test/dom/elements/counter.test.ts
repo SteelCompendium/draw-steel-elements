@@ -478,7 +478,9 @@ describe('Plan 09 Task 4: counter rendered through the REAL ElementPipeline (D2 
 
 			expect(minusBtn(root).disabled).toBe(true);
 			expect(plusBtn(root).disabled).toBe(true);
-			expect(counterEl(root).getAttribute('data-tooltip')).toBe('Read-only in this context');
+			// Real Obsidian's setTooltip stamps `aria-label` (FOLLOWUPS #27-fix-round
+			// finding 1), not `data-tooltip`.
+			expect(counterEl(root).getAttribute('aria-label')).toBe('Read-only in this context');
 
 			// No editable input at all: the value renders as the stepper's static span,
 			// still carrying the element's value class.

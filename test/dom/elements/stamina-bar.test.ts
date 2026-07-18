@@ -360,7 +360,9 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 			expect(root.hasAttribute('data-dse-readonly')).toBe(true);
 			const bar = root.querySelector('.dse-stamina') as HTMLElement;
 			expect(bar.classList.contains('dse-stamina--clickable')).toBe(false);
-			expect(bar.getAttribute('data-tooltip')).toBe('Read-only in this context');
+			// Real Obsidian's setTooltip stamps `aria-label` (FOLLOWUPS #27-fix-round
+			// finding 1), not `data-tooltip`.
+			expect(bar.getAttribute('aria-label')).toBe('Read-only in this context');
 
 			document.body.appendChild(host.containerEl);
 			const childCountBefore = document.body.children.length;

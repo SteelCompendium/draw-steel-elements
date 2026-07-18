@@ -82,6 +82,8 @@ describe('dom-setup: Modal + icon helpers', () => {
 		setIcon(el, 'chevron-up');
 		setTooltip(el, 'a tip');
 		expect(el.getAttribute('data-icon')).toBe('chevron-up');
-		expect(el.getAttribute('data-tooltip')).toBe('a tip');
+		// Real Obsidian's setTooltip stamps `aria-label` (FOLLOWUPS #27-fix-round
+		// finding 1) — the mock mirrors that, not a `data-tooltip` attribute.
+		expect(el.getAttribute('aria-label')).toBe('a tip');
 	});
 });

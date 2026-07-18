@@ -32,7 +32,7 @@
 import { ElementView } from '@/framework/view';
 import { collapsible, iconButton, openManagedModal, renderStaminaBar, tooltip, updateStaminaBar } from '@/framework/kit';
 import type { IconButtonHandle, StaminaBarValues } from '@/framework/kit';
-import { StaminaBar } from '@model/StaminaBar';
+import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { resolveCollapsePrefs } from '@/prefs/catalog';
 
@@ -195,15 +195,16 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 	/** RR §8 "Catch Breath (spend Recovery)": -1 recovery, heal recoveryValue Stamina
 	 *  (clamped to max_stamina — a heal never overshoots, same convention as
 	 *  StaminaEditModal's amountToMaxStamina). Persists via the SAME debounced write
-	 *  path as every other stamina edit. */
+	 *  path as every other stamina edit. FOLLOWUPS #27-fix-round: the heal-amount math
+	 *  is the shared recoveryHealAmount helper (also used by hero/view.ts's Catch Breath
+	 *  and StaminaEditModal's Spend Recovery). */
 	private catchBreath(): void {
 		const model = this.model;
 		const remaining = model.recoveries ?? 0;
 		if (remaining <= 0 || model.isDying) return; // defensive: the button is disabled too
 
 		model.recoveries = remaining - 1;
-		const heal = Math.max(Math.min(model.recoveryValue, model.max_stamina - model.current_stamina), 0);
-		model.current_stamina += heal;
+		model.current_stamina += recoveryHealAmount(model.recoveryValue, model.current_stamina, model.max_stamina);
 
 		this.updateBarDisplay(model);
 		void this.persist();

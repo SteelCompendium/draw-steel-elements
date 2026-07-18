@@ -30,6 +30,16 @@ function btn(content: HTMLElement, label: string): HTMLButtonElement {
 	return el;
 }
 
+/** Spend Recovery's aria-label is dynamic (FOLLOWUPS #27-fix-round finding 1: it
+ *  becomes the disabled-reason tooltip while no Recoveries remain — including when the
+ *  modal MOUNTS already at zero), so it can't be looked up by a fixed aria-label the
+ *  way the other quick-action buttons are; its icon is stable. */
+function spendRecoveryBtn(content: HTMLElement): HTMLButtonElement {
+	const el = content.querySelector<HTMLButtonElement>('button:has([data-icon="syringe"])');
+	if (!el) throw new Error('no Spend Recovery button');
+	return el;
+}
+
 /** The footer's primary (accent) action button — dynamic "Gain N Stamina…" text. */
 function actionBtn(content: HTMLElement): HTMLButtonElement {
 	const el = content.querySelector<HTMLButtonElement>('.dse-modal__footer .dse-btn--accent');
@@ -189,12 +199,14 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		expect(spend.disabled).toBe(false);
 		spend.click(); // remaining 1 -> 0
 		expect(spend.disabled).toBe(true);
-		expect(spend.getAttribute('data-tooltip')).toMatch(/no recoveries/i);
+		// Real Obsidian's setTooltip stamps `aria-label` (not `data-tooltip` — see the
+		// aria-label-lifecycle test below for why that distinction is load-bearing).
+		expect(spend.getAttribute('aria-label')).toMatch(/no recoveries/i);
 	});
 
 	test('mounts already at 0 recoveries: Spend Recovery starts disabled', () => {
 		const { content } = makeRecoveryModal(21, 10, 0, 5);
-		expect(btn(content, 'Spend Recovery').disabled).toBe(true);
+		expect(spendRecoveryBtn(content).disabled).toBe(true);
 	});
 
 	test('a disabled button swallows further clicks (CB-8): no extra heal, recoveries never negative', () => {
@@ -207,14 +219,35 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		expect(bar.recoveries).toBe(0);
 	});
 
-	test('Reset restores the pending recoveries change and re-enables the button (clears the reason tooltip)', () => {
+	test('Reset restores the pending recoveries change and re-enables the button (restores the accessible name)', () => {
 		const { content } = makeRecoveryModal(21, 0, 1, 5);
 		const spend = btn(content, 'Spend Recovery');
 		spend.click();
 		expect(spend.disabled).toBe(true);
 		btn(content, 'Reset').click();
 		expect(spend.disabled).toBe(false);
-		expect(spend.getAttribute('data-tooltip')).toBeNull();
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery');
+	});
+
+	// FOLLOWUPS #27-fix-round finding 1 (MUST-FIX): pins the actual bug — the disabled
+	// path sets the button's aria-label to the reason (native setTooltip's OWN side
+	// effect, §2.5), so re-enabling must explicitly RE-ASSERT the button's own label,
+	// not remove an attribute (`data-tooltip`) that real Obsidian never wrote. Before
+	// the fix, this stuck the "No Recoveries remaining" name on the button forever
+	// after the first disable — the jest mock's pre-fix divergence (it wrote
+	// `data-tooltip`, not `aria-label`) hid exactly this.
+	test('aria-label lifecycle: mounted → "Spend Recovery", disabled → "No Recoveries remaining", re-enabled → "Spend Recovery" again', () => {
+		const { content } = makeRecoveryModal(21, 0, 1, 5);
+		const spend = btn(content, 'Spend Recovery');
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery');
+
+		spend.click(); // remaining 1 -> 0
+		expect(spend.disabled).toBe(true);
+		expect(spend.getAttribute('aria-label')).toBe('No Recoveries remaining');
+
+		btn(content, 'Reset').click(); // remaining back to 1
+		expect(spend.disabled).toBe(false);
+		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery');
 	});
 
 	test('legacy block (no recoveries field): Spend Recovery never disables and recoveries stays undefined through Apply', () => {
@@ -224,6 +257,40 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		expect(spend.disabled).toBe(false);
 		apply(content);
 		expect(bar.recoveries).toBeUndefined();
+	});
+
+	// FOLLOWUPS #27-fix-round finding 2 (HIGH): `recoveries_max` — not `recoveries` — is
+	// the single source of truth for "recoveries tracked" (docs/stamina-bar.md, the
+	// StaminaBar field comment, stamina-bar/view.ts's own `recoveries_max !== undefined`
+	// gate). `recoveries_max` set with `recoveries` omitted is schema-legal and must be
+	// treated as 0 remaining — matching the bar's own `model.recoveries ?? 0` — so the
+	// modal agrees with what the bar element itself would render (an empty pip row, a
+	// disabled Catch Breath) instead of silently never disabling and never writing
+	// `recoveries` back.
+	test('recoveries_max set, recoveries omitted: treated as 0 remaining (agrees with the bar\'s `?? 0`), disabled with reason', () => {
+		const app = new App();
+		// Positional: (..., height, style, recoveries, recoveries_max) — recoveries
+		// deliberately omitted (undefined), recoveries_max=5.
+		const bar = new StaminaBar(false, false, 21, 10, 0, 1, 'default', undefined, 5);
+		expect(bar.recoveries).toBeUndefined();
+		const updateCallback = jest.fn();
+		const modal = new StaminaEditModal(app as any, bar, true, 'Frodo', updateCallback);
+		modal.open();
+		const content = (modal as any).contentEl as HTMLElement;
+
+		const spend = spendRecoveryBtn(content);
+		expect(spend.disabled).toBe(true);
+		expect(spend.getAttribute('aria-label')).toMatch(/no recoveries/i);
+
+		// A disabled Spend Recovery click is a no-op. Force a real (unrelated) edit so
+		// the footer Apply button enables, then confirm Apply still materializes the
+		// tracked block's `recoveries` at 0 (never leaves it `undefined` once the block
+		// IS tracked) alongside the ordinary stamina write.
+		spend.click(); // no-op: already disabled
+		clickHealing(content, 1);
+		apply(content);
+		expect(bar.current_stamina).toBe(11);
+		expect(bar.recoveries).toBe(0);
 	});
 });
 

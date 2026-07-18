@@ -903,8 +903,16 @@ export class MarkdownRenderer {
 export function setIcon(el: HTMLElement, iconId: string): void {
 	el.setAttribute('data-icon', iconId);
 }
+// FOLLOWUPS #27-fix-round finding 1: real Obsidian's setTooltip stamps `aria-label`
+// (verified production behavior — `el.setAttribute("aria-label", text)`), NOT a
+// `data-tooltip` attribute. The mock previously diverged (wrote `data-tooltip`), which
+// hid a real accessible-name-clobbering bug (StaminaEditModal's Spend Recovery button
+// kept a stale "No Recoveries remaining" aria-label after re-enabling, because the code
+// cleared `data-tooltip` — an attribute production never set — instead of re-asserting
+// the button's own label). Mirroring the real side effect here means any future
+// call site that lets a tooltip clobber a control's accessible name fails its tests too.
 export function setTooltip(el: HTMLElement, tooltip: string, _options?: any): void {
-	el.setAttribute('data-tooltip', tooltip);
+	el.setAttribute('aria-label', tooltip);
 }
 
 // ---------------------------------------------------------------- ctx fake

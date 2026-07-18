@@ -13,6 +13,11 @@ import * as path from 'path';
 import { iconButton, buttonRow } from '../../../src/framework/kit/iconButton';
 import { styleGuardFindings } from './styleGuard';
 import { Component } from '../../mocks/obsidian';
+import * as obsidian from '../../mocks/obsidian';
+
+afterEach(() => {
+	jest.restoreAllMocks();
+});
 
 // Same convention as collapsible.test.ts / seams.test.ts: the mock Component's
 // self-referencing generics don't structurally satisfy the real `obsidian` Component
@@ -161,16 +166,20 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 		});
 	});
 
-	test('tooltip option routes through the kit tooltip() → Obsidian setTooltip', () => {
+	test('tooltip option routes through the kit tooltip() → Obsidian setTooltip, WITHOUT clobbering the required aria-label', () => {
 		const parent = document.createElement('div');
+		const spy = jest.spyOn(obsidian, 'setTooltip');
 		const { buttonEl } = iconButton(
 			parent,
 			{ icon: 'copy', label: 'Copy link', tooltip: 'Copy the SCC link', onClick: () => {} },
 			fakeOwner(),
 		);
-		// The obsidian mock's setTooltip records the text as data-tooltip; the tooltip
-		// is NEVER the only name (§4.2) — the aria-label is independently required.
-		expect(buttonEl.getAttribute('data-tooltip')).toBe('Copy the SCC link');
+		// Native setTooltip really was called with the hover text...
+		expect(spy).toHaveBeenCalledWith(buttonEl, 'Copy the SCC link', undefined);
+		// ...but real Obsidian's setTooltip ALSO stamps aria-label as a side effect
+		// (the obsidian mock mirrors that, FOLLOWUPS #27-fix-round finding 1), so
+		// iconButton asserts the REQUIRED accessible name (§4.2) — which here
+		// deliberately differs from the tooltip text — LAST, so it always wins.
 		expect(buttonEl.getAttribute('aria-label')).toBe('Copy link');
 	});
 

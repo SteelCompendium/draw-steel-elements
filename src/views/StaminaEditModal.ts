@@ -22,7 +22,7 @@
 import type { App, Component } from 'obsidian';
 import { DseModal, iconButton, stepper, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
-import { StaminaBar } from '@model/StaminaBar';
+import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
 
 // ---------------------------------------------------------------------------------
 // Shared §3.5b template primitives (composed by BOTH stamina modals)
@@ -128,6 +128,12 @@ export function setButtonText(btn: IconButtonHandle, text: string): void {
  *  convention as the bar's own read-only tooltip) shown on Spend Recovery when no
  *  Recoveries remain. */
 const NO_RECOVERIES_TOOLTIP = 'No Recoveries remaining';
+/** The Spend Recovery button's own accessible name/tooltip (FOLLOWUPS #27-fix-round
+ *  finding 1) — re-asserted whenever the button re-enables, so the reason tooltip
+ *  above never sticks past the state it describes (native setTooltip stamps
+ *  aria-label as a side effect, so "clearing" a tooltip means re-asserting the
+ *  correct one, not removing an attribute production never sets). */
+const SPEND_RECOVERY_LABEL = 'Spend Recovery';
 
 // ---------------------------------------------------------------------------------
 // The single-stamina modal (hero / creature)
@@ -171,11 +177,18 @@ export class StaminaEditModal extends DseModal {
 		const currentStamina = this.staminaBar.current_stamina ?? maxStamina;
 		const currentTempStamina = this.staminaBar.temp_stamina ?? 0;
 		const negativeStaminaLimit = this.isHero ? Math.ceil(-0.5 * maxStamina) : 0;
-		// FOLLOWUPS #27b: gated entirely on the model carrying `recoveries` (D7 §4.2) —
-		// a legacy block (field absent) leaves this false and pendingRecoveriesChange
-		// stays 0 forever, so Spend Recovery's disable gate and recoveries write-back
-		// below are both no-ops for it (behavior unchanged, per the followup).
-		const recoveriesTracked = this.staminaBar.recoveries !== undefined;
+		// FOLLOWUPS #27b (fixed by #27-fix-round finding 2): gated on `recoveries_max`
+		// (D7 §4.2) — the same presence gate stamina-bar/view.ts uses
+		// (model.recoveries_max !== undefined) to decide whether to render the
+		// recoveries strip at all, and the single source of truth per docs/stamina-bar.md
+		// and StaminaBar's own field comment. `recoveries_max` set with `recoveries`
+		// omitted is schema-legal and means "0 remaining" (matching the bar's `?? 0`
+		// below) — gating on `recoveries !== undefined` instead missed that case: the
+		// button never disabled and `recoveries` never got written back. A legacy block
+		// (both fields absent) still leaves this false and pendingRecoveriesChange stays
+		// 0 forever, so Spend Recovery's disable gate and recoveries write-back below are
+		// both no-ops for it (behavior unchanged, per the followup).
+		const recoveriesTracked = this.staminaBar.recoveries_max !== undefined;
 		const currentRecoveries = this.staminaBar.recoveries ?? 0;
 
 		// -- The preview bar (shared template) --------------------------------------
@@ -344,15 +357,20 @@ export class StaminaEditModal extends DseModal {
 			quickSection,
 			{
 				icon: 'syringe',
-				label: 'Spend Recovery',
-				text: 'Spend Recovery',
+				label: SPEND_RECOVERY_LABEL,
+				text: SPEND_RECOVERY_LABEL,
 				onClick: () => {
 					// Defensive (CB-8): the button is real-disabled at zero remaining too.
 					if (recoveriesTracked && currentRecoveries + this.pendingRecoveriesChange <= 0) return;
 					// RR §8 "Recovery value: 1/3 of Stamina max" — the model's OWN derived
 					// value (StaminaBar.recoveryValue), not a re-derived literal; it is the
-					// same floor(max/3) math, just sourced from one place (FOLLOWUPS #27b).
-					const adjustment = this.staminaBar.recoveryValue;
+					// same floor(max/3) math, sourced from the shared recoveryHealAmount
+					// helper (FOLLOWUPS #27-fix-round finding 3 — also used by both
+					// elements' Catch Breath). `capped: false` — this modal defers ALL
+					// clamping to Apply's clampStamina and deliberately does not bound the
+					// per-press amount (see the KNOWN DEVIATION comment on the stepper
+					// above); behavior here is unchanged from before the consolidation.
+					const adjustment = recoveryHealAmount(this.staminaBar.recoveryValue, currentStamina, maxStamina, false);
 					if (!isNaN(adjustment)) {
 						this.pendingStaminaChange += adjustment;
 						if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
@@ -417,9 +435,14 @@ export class StaminaEditModal extends DseModal {
 				spendRecoveryBtn.setDisabled(noneLeft);
 				// House rule: never a silent disable — a visible reason tooltip
 				// accompanies the real `disabled` (CB-8), cleared once Recoveries are
-				// available again (e.g. after Reset).
+				// available again (e.g. after Reset). FOLLOWUPS #27-fix-round finding 1:
+				// Obsidian's native setTooltip stamps `aria-label` as a side effect (§2.5),
+				// so "clearing" the reason means RE-ASSERTING the button's own label, not
+				// removing an attribute (`data-tooltip`) real Obsidian never sets — the
+				// old removeAttribute left "No Recoveries remaining" as the permanent
+				// accessible name once the button had ever been disabled.
 				if (noneLeft) tooltip(spendRecoveryBtn.buttonEl, NO_RECOVERIES_TOOLTIP);
-				else spendRecoveryBtn.buttonEl.removeAttribute('data-tooltip');
+				else tooltip(spendRecoveryBtn.buttonEl, SPEND_RECOVERY_LABEL);
 			}
 		};
 		refresh();

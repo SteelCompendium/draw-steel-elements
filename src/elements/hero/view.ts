@@ -61,6 +61,7 @@ import { deriveHeroStats } from './deriveHeroStats';
 import type { DerivedStats } from './deriveHeroStats';
 import { HeroModel } from './model';
 import type { Condition, HeroStamina } from './model';
+import { recoveryHealAmount } from '@model/StaminaBar';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
 // Matches TYPE_ADAPTERS' bare-feature scope (typeAdapters.ts) — abilities[] entries are
@@ -358,7 +359,10 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		return { dying, winded };
 	}
 
-	/** RR §8 "Catch Breath": -1 recovery, heal recoveryValue Stamina (clamped to max). */
+	/** RR §8 "Catch Breath": -1 recovery, heal recoveryValue Stamina (clamped to max).
+	 *  FOLLOWUPS #27-fix-round: the heal-amount math is the shared recoveryHealAmount
+	 *  helper (also used by stamina-bar/view.ts's Catch Breath and StaminaEditModal's
+	 *  Spend Recovery). */
 	private catchBreath(): void {
 		const model = this.model;
 		const remaining = model.state.recoveries ?? 0;
@@ -368,8 +372,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		const max = this.stats.maxStamina.value ?? model.state.stamina.current;
 		const recoveryValue = this.stats.recoveryValue.value ?? 0;
 		model.state.recoveries = remaining - 1;
-		const heal = Math.max(Math.min(recoveryValue, max - model.state.stamina.current), 0);
-		model.state.stamina.current += heal;
+		model.state.stamina.current += recoveryHealAmount(recoveryValue, model.state.stamina.current, max);
 
 		this.refreshStaminaRegion(model);
 		void this.persist();

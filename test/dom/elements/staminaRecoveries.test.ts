@@ -236,7 +236,10 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 		await pipeline.run(staminaBarElement, RECOVERIES_YAML, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const catchBreathBtn = root.querySelector('button[aria-label="Catch Breath"]') as HTMLButtonElement;
+		// canPersist: false stamps the read-only reason as Catch Breath's OWN aria-label
+		// (native setTooltip's side effect — FOLLOWUPS #27-fix-round finding 1's class of
+		// bug), so it's found by its stable icon here, not the (now-replaced) label text.
+		const catchBreathBtn = root.querySelector('button:has([data-icon="wind"])') as HTMLButtonElement;
 		expect(catchBreathBtn.disabled).toBe(true);
 
 		document.body.appendChild(host.containerEl);

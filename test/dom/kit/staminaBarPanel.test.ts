@@ -115,7 +115,9 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		})!;
 
 		expect(bar.hasClass('dse-stamina--clickable')).toBe(false);
-		expect(bar.getAttribute('data-tooltip')).toBe('Read-only in this context');
+		// Real Obsidian's setTooltip stamps `aria-label` (FOLLOWUPS #27-fix-round
+		// finding 1), not `data-tooltip`.
+		expect(bar.getAttribute('aria-label')).toBe('Read-only in this context');
 		expect(registerSpy).not.toHaveBeenCalled();
 	});
 

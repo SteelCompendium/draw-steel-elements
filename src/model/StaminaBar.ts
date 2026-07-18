@@ -168,3 +168,22 @@ export class StaminaBar extends ComponentWrapper{
 		return Math.floor(this.max_stamina / 3);
 	}
 }
+
+// FOLLOWUPS #27-fix-round finding 3 (LOW): the "-1 Recovery, +recoveryValue Stamina"
+// spend formula (RR §8 "Catch Breath (spend Recovery)") was duplicated verbatim in
+// three places: stamina-bar/view.ts's catchBreath(), hero/view.ts's catchBreath(), and
+// StaminaEditModal's Spend Recovery quick action. Free function (not a StaminaBar
+// method) because hero/view.ts spends against HeroState's stamina/recoveries fields,
+// not a StaminaBar instance — only the plain numbers are shared.
+//
+// `capped` (default true) is the convention of the two IMMEDIATE-apply call sites
+// (stamina-bar/view.ts, hero/view.ts): the heal never overshoots `max` headroom, since
+// the mutation lands on the model the instant Catch Breath is clicked.
+// StaminaEditModal's Spend Recovery passes `capped: false` — that modal defers ALL
+// clamping to its own Apply-time clampStamina, and deliberately does NOT bound the
+// per-press amount (see the modal's "KNOWN DEVIATION" comment on why stacked presses
+// are allowed to overshoot before Apply reconciles them) — that design question is
+// unrelated to this consolidation and stays exactly as it was.
+export function recoveryHealAmount(recoveryValue: number, current: number, max: number, capped = true): number {
+	return capped ? Math.max(Math.min(recoveryValue, max - current), 0) : recoveryValue;
+}
