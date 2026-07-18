@@ -10,23 +10,57 @@
 // encounter awards 2 Victories vs 1").
 import type { EncounterComputed } from './model';
 
-/** `/(-?\d+)/` first-integer parse (recon delta 5: `ev` is a STRING on the SDK
- *  Statblock model, e.g. `"3"`, `"96"`, or a hand-authored `"~120 (minion)"`). A number
- *  input passes through as-is (defensive: no caller today hands this a number, but the
- *  brief's own signature is `string | number | undefined`); anything non-numeric or
- *  absent parses to 0 rather than throwing — an encounter builder must stay usable with
- *  a partially-synced compendium, never crash on one bad `ev` string. */
-export function parseEv(ev: string | number | undefined): number {
-	if (typeof ev === 'number') return Number.isFinite(ev) ? ev : 0;
-	if (typeof ev !== 'string') return 0;
-	const match = /(-?\d+)/.exec(ev);
-	return match ? parseInt(match[1], 10) : 0;
+/** Task 4 review round 1, Finding 1 (CRITICAL): the compendium's standard minion `ev`
+ *  convention is `"<N> for four minions"` (232 real `data-unified` statblocks, e.g.
+ *  `skitterling.md`'s `ev: 3 for four minions`, `organization: Minion`) — it prices a
+ *  SQUAD OF FOUR, not one individual (`Read/bestiary/monster-basics.md:230`: "It's why
+ *  you build encounters with them four at a time"). Mirrors `v2/docs/javascripts/
+ *  sc-encounter-core.js`'s `parseEV`/`pickCost` (`perFour` flag + `Math.ceil(count/4) *
+ *  ev`) VERBATIM — that file is the cited seed for this module's other tables and
+ *  already solved this exact problem; the gap was that its `perFour` handling never
+ *  made it into this module's `parseEv`/`spentEv`. */
+export interface ParsedEv {
+	value: number;
+	perFour: boolean;
 }
 
-/** spec §2.2 "Spent EV (citable, from data)": `Σ row.count × parseEv(row.ev)`. Every
- *  term comes from real compendium `ev` — this function does no lookup itself. */
+/** `/(-?\d+)/` first-integer parse (recon delta 5: `ev` is a STRING on the SDK
+ *  Statblock model, e.g. `"3"`, `"96"`, `"3 for four minions"`, or a hand-authored
+ *  `"~120 (minion)"`) plus the `perFour` flag (`/for four/i` — same pattern
+ *  sc-encounter-core.js's `parseEV` tests). A number input passes through as-is,
+ *  never `perFour` (defensive: no caller today hands this a number, but the brief's
+ *  own signature is `string | number | undefined`); anything non-numeric or absent
+ *  parses to `{ value: 0, perFour: false }` rather than throwing — an encounter
+ *  builder must stay usable with a partially-synced compendium, never crash on one
+ *  bad `ev` string. */
+export function parseEvInfo(ev: string | number | undefined): ParsedEv {
+	if (typeof ev === 'number') return { value: Number.isFinite(ev) ? ev : 0, perFour: false };
+	if (typeof ev !== 'string') return { value: 0, perFour: false };
+	const match = /(-?\d+)/.exec(ev);
+	return { value: match ? parseInt(match[1], 10) : 0, perFour: /for four/i.test(ev) };
+}
+
+/** The bare numeric magnitude of `ev` (drops the `perFour` flag) — kept for callers
+ *  that only need the per-unit number (e.g. display of a single unit's cost). Use
+ *  `rowEv`/`spentEv` for any total that involves `count`: those are the ones that must
+ *  apply the per-four squad pricing. */
+export function parseEv(ev: string | number | undefined): number {
+	return parseEvInfo(ev).value;
+}
+
+/** One row's total spent EV: `Math.ceil(count / 4) * value` when `ev` prices a squad of
+ *  four (`perFour`), else `count * value` — the exact `pickCost` shape
+ *  sc-encounter-core.js already ships. A row of 8 Skitterlings (`ev: "3 for four
+ *  minions"`) spends `Math.ceil(8/4) * 3 = 6`, not `8 * 3 = 24`. */
+export function rowEv(count: number, ev: string | number | undefined): number {
+	const { value, perFour } = parseEvInfo(ev);
+	return perFour ? Math.ceil(count / 4) * value : count * value;
+}
+
+/** spec §2.2 "Spent EV (citable, from data)": `Σ rowEv(row.count, row.ev)`. Every term
+ *  comes from real compendium `ev` — this function does no lookup itself. */
 export function spentEv(rows: { count: number; ev: string | number }[]): number {
-	return rows.reduce((total, row) => total + row.count * parseEv(row.ev), 0);
+	return rows.reduce((total, row) => total + rowEv(row.count, row.ev), 0);
 }
 
 /** spec §2.2 "Victory payout (citable)" — REF §13 line 370 / AGENT Part 12: a
@@ -113,24 +147,48 @@ export function bandTable(ratio: number): string {
 	return 'extreme';
 }
 
+// --------------------------------------------------------------- victory adjustment
+
+/** Task 4 review round 1, Finding 3 (LOW): spec §2.2's "(+ optional victory
+ *  adjustment)". `sc-encounter-core.js`'s `partyES` — the very file this module's
+ *  `heroEncounterStrength`/`DEFAULT_BUDGET_TABLE` are seeded from — adds "one hero for
+ *  every 2 Victories the heroes have earned on average" (source: `monster-basics.md`,
+ *  same citation as `heroEncounterStrength` above):
+ *  `partyES(n, level, victories) = heroES(level) * (n + floor(victories / 2))`.
+ *  `DEFAULT_BUDGET_TABLE` already materializes `heroEncounterStrength(level) * n`, so
+ *  the victory term decomposes cleanly to an ADDITIVE adjustment on top of the table
+ *  lookup: `heroEncounterStrength(level) * floor(victories / 2)`. Kept OD-2-disciplined
+ *  the same way budgetTable/bandTable are: injected via EncounterTables (settings
+ *  seam), not inlined into computeEncounter's own logic. verify against Draw Steel
+ *  core rules (OD-2). */
+export function victoryAdjustment(heroLevel: number, victories: number): number {
+	return heroEncounterStrength(heroLevel) * Math.floor(victories / 2); // verify against Draw Steel core rules (OD-2)
+}
+
 // -------------------------------------------------------------------- assembled math
 
-/** Injectable table pair — DEFAULT_TABLES below for production; tests inject a small
- *  fixed table to pin "configured vs unconfigured cell" behavior without depending on
- *  DEFAULT_BUDGET_TABLE's exact shipped range. */
+/** Injectable table triple — DEFAULT_TABLES below for production; tests inject small
+ *  fixed tables to pin "configured vs unconfigured cell" behavior without depending on
+ *  DEFAULT_BUDGET_TABLE's exact shipped range. `victoryAdjustment` is optional so
+ *  existing partial-table injections (pre-dating Finding 3) keep type-checking; a
+ *  caller that omits it gets no victory adjustment (0), not a fabricated default. */
 export interface EncounterTables {
 	budgetTable: (heroCount: number, heroLevel: number) => number | null;
 	bandTable: (ratio: number) => string;
+	victoryAdjustment?: (heroLevel: number, victories: number) => number;
 }
 
-export const DEFAULT_TABLES: EncounterTables = { budgetTable, bandTable };
+export const DEFAULT_TABLES: EncounterTables = { budgetTable, bandTable, victoryAdjustment };
 
 /**
  * spec §2.5 `_computed`, assembled: spent EV from real per-row `ev` (never a lookup),
- * budget/band from the (replaceable) tables above, victory payout from the one cited
- * rule. `ratio`/`band` stay null — not zero, not "trivial" — whenever `budget` is null
- * or non-positive, matching OD-2's "tool stays useful before the numbers are sourced"
- * (spent EV and the party inputs still show; only the difficulty read-out is withheld).
+ * budget/band from the (replaceable) tables above (budget additionally shifted by the
+ * victory adjustment, §2.2 "+ optional victory adjustment" — Finding 3), victory payout
+ * from the one cited rule. `ratio`/`band` stay null — not zero, not "trivial" —
+ * whenever budget is null or non-positive, matching OD-2's "tool stays useful before
+ * the numbers are sourced" (spent EV and the party inputs still show; only the
+ * difficulty read-out is withheld). The victory adjustment never applies to an unset
+ * budget — there is nothing to shift.
  */
 export function computeEncounter(
 	rows: { count: number; ev: string | number }[],
@@ -138,7 +196,9 @@ export function computeEncounter(
 	tables: EncounterTables = DEFAULT_TABLES,
 ): EncounterComputed {
 	const spent_ev = spentEv(rows);
-	const budget = tables.budgetTable(party.hero_count ?? 0, party.hero_level ?? 1);
+	const heroLevel = party.hero_level ?? 1;
+	const rawBudget = tables.budgetTable(party.hero_count ?? 0, heroLevel);
+	const budget = rawBudget === null ? null : rawBudget + (tables.victoryAdjustment?.(heroLevel, party.victories ?? 0) ?? 0);
 	const ratio = budget !== null && budget > 0 ? spent_ev / budget : null;
 	const band = ratio === null ? null : tables.bandTable(ratio);
 	return { spent_ev, budget, ratio, band, victories: victoryPayout(band) };

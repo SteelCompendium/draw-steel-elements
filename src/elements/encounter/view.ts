@@ -15,7 +15,7 @@ import { ElementView } from '@/framework/view';
 import { buttonRow, cardHead } from '@/framework/kit';
 import { normalizeSccTarget } from '@/refs/SccResolver';
 import type { EncounterComputed, EncounterModel, EncounterRow } from './model';
-import { computeEncounter, parseEv } from './budget';
+import { computeEncounter, rowEv } from './budget';
 import { serialize as serializeInitiative } from '../initiative/model';
 import type { EncounterData, EnemyGroup } from '../initiative/model';
 
@@ -26,6 +26,73 @@ import type { EncounterData, EnemyGroup } from '../initiative/model';
 type RowResolution =
 	| { kind: 'resolved'; row: EncounterRow; statblock: Statblock }
 	| { kind: 'unresolved'; row: EncounterRow; reason: string };
+
+type ResolvedRow = Extract<RowResolution, { kind: 'resolved' }>;
+
+/** Task 4 review round 1, Finding 2 (MEDIUM): spec §2.3/2.4's captain hand-off. A
+ *  `squad: captain` row has no schema field of its own to name the minion squad it
+ *  leads (spec §2.5's schema doesn't add one — a gap this task inherits, not
+ *  introduces), so pairing is by ADJACENCY in `monsters[]`: a minion row claims the
+ *  nearest unclaimed captain row immediately after it, else immediately before it (in
+ *  that order) — "grouping same-name/adjacent minion+captain rows," the review's own
+ *  suggested fix. Every minion row (paired or not) becomes a `'squad'` group so a lone
+ *  minion row keeps producing `is_squad: true` (unchanged prior behavior — see the
+ *  hand-off DOM test). A `squad: captain` row that never gets claimed is a `
+ *  'orphan-captain'` group: still resolved, still counted in EV, but flagged with a
+ *  visible roster note and handed off as an ordinary solo monster (never a silent,
+ *  inert `squad_role` field on a non-squad group). */
+type GroupedRow =
+	| { kind: 'plain'; entry: RowResolution }
+	| { kind: 'squad'; minion: ResolvedRow; captain?: ResolvedRow }
+	| { kind: 'orphan-captain'; entry: ResolvedRow };
+
+function groupRows(resolved: RowResolution[]): GroupedRow[] {
+	const isCaptainRow = (i: number): boolean => {
+		const entry = resolved[i];
+		return entry !== undefined && entry.kind === 'resolved' && entry.row.squad === 'captain';
+	};
+
+	// Pass 1: claim adjacency pairs left-to-right (prefer the following row, then the
+	// preceding row); a captain already claimed by an earlier minion can't be claimed
+	// again by a later one.
+	const captainClaimedBy = new Map<number, number>(); // captain index -> minion index
+	const minionCaptain = new Map<number, number>(); // minion index -> captain index
+	for (let i = 0; i < resolved.length; i++) {
+		const entry = resolved[i];
+		if (entry.kind !== 'resolved' || entry.row.squad === 'captain') continue;
+		if (!isMinionRow(entry.row, entry.statblock)) continue;
+		let captainIndex: number | null = null;
+		if (isCaptainRow(i + 1) && !captainClaimedBy.has(i + 1)) captainIndex = i + 1;
+		else if (isCaptainRow(i - 1) && !captainClaimedBy.has(i - 1)) captainIndex = i - 1;
+		if (captainIndex !== null) {
+			captainClaimedBy.set(captainIndex, i);
+			minionCaptain.set(i, captainIndex);
+		}
+	}
+
+	// Pass 2: emit one GroupedRow per input row, in original order, skipping captain
+	// rows that were claimed (they render as part of their minion's 'squad' group).
+	const grouped: GroupedRow[] = [];
+	for (let i = 0; i < resolved.length; i++) {
+		const entry = resolved[i];
+		if (entry.kind === 'resolved' && entry.row.squad === 'captain') {
+			if (captainClaimedBy.has(i)) continue;
+			grouped.push({ kind: 'orphan-captain', entry });
+			continue;
+		}
+		if (entry.kind === 'resolved' && isMinionRow(entry.row, entry.statblock)) {
+			const captainIndex = minionCaptain.get(i);
+			grouped.push({
+				kind: 'squad',
+				minion: entry,
+				captain: captainIndex !== undefined ? (resolved[captainIndex] as ResolvedRow) : undefined,
+			});
+			continue;
+		}
+		grouped.push({ kind: 'plain', entry });
+	}
+	return grouped;
+}
 
 /** Hand-off target D8 Task 10 wires in (sendToSidebar bound to the production
  *  DseSidebarServices bundle, main.ts). Kept as a late-bound MODULE hook rather than a
@@ -78,7 +145,14 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 *  form CompendiumIndex.getEntry/getStatblock key on (SccResolver's index is keyed
 	 *  bare — see CompendiumIndex.ts's getEntry, which calls codeToPath(code) with NO
 	 *  prefix stripping of its own). Binding note: `available === false` and a null
-	 *  per-row resolution are both VISIBLE degrade rows, never silent. */
+	 *  per-row resolution are both VISIBLE degrade rows, never silent.
+	 *
+	 *  Task 4 review round 1, Finding 4 (LOW): `Promise.allSettled` (not `Promise.all`)
+	 *  — a single row whose `getStatblock` THROWS (a malformed statblock file can throw
+	 *  inside `StatblockConfig.readYaml`'s `parseYaml`/`modelDTOAdapter`) degrades ONLY
+	 *  that row, matching the design intent stated throughout this file ("excluded from
+	 *  EV… never silently dropped, never all-or-nothing") rather than rejecting the
+	 *  whole roster and handing the pipeline a generic error card. */
 	private async resolveRows(rows: EncounterRow[]): Promise<RowResolution[]> {
 		const index = this.cx.compendium;
 		if (!index) {
@@ -87,13 +161,16 @@ export class EncounterView extends ElementView<EncounterModel> {
 		if (!index.available) {
 			return rows.map((row) => ({ kind: 'unresolved', row, reason: NOT_SYNCED }));
 		}
-		return Promise.all(
+		const settled = await Promise.allSettled(
 			rows.map(async (row): Promise<RowResolution> => {
 				const bareCode = normalizeSccTarget(row.code) ?? row.code;
 				const statblock = await index.getStatblock(bareCode);
 				if (!statblock) return { kind: 'unresolved', row, reason: NOT_RESOLVED };
 				return { kind: 'resolved', row, statblock };
 			}),
+		);
+		return settled.map((result, i) =>
+			result.status === 'fulfilled' ? result.value : { kind: 'unresolved', row: rows[i], reason: resolveErrorReason(result.reason) },
 		);
 	}
 
@@ -140,21 +217,49 @@ export class EncounterView extends ElementView<EncounterModel> {
 		});
 
 		const tbody = table.createEl('tbody');
-		for (const entry of resolved) {
-			const tr = tbody.createEl('tr', { cls: 'dse-enc__row' });
-			if (entry.kind === 'resolved') {
-				const sb = entry.statblock;
-				const rowEv = parseEv(sb.ev) * entry.row.count;
-				tr.createEl('td', { text: sb.name, cls: 'dse-enc__cell-name' });
-				tr.createEl('td', { text: sb.role ?? '' });
-				tr.createEl('td', { text: sb.organization ?? '' });
-				tr.createEl('td', { text: String(entry.row.count) });
-				tr.createEl('td', { text: String(rowEv) });
+		for (const group of groupRows(resolved)) {
+			if (group.kind === 'plain') {
+				this.renderRosterRow(tbody, group.entry);
+			} else if (group.kind === 'orphan-captain') {
+				this.renderRosterRow(
+					tbody,
+					group.entry,
+					'Orphan captain — no adjacent minion row to lead; hands off as a solo monster, not a squad.',
+				);
 			} else {
-				tr.addClass('dse-enc__row--degraded');
-				const cell = tr.createEl('td', { attr: { colspan: '5' } });
-				cell.createSpan({ cls: 'dse-enc__degrade', text: `${entry.row.code} — ${entry.reason}` });
+				this.renderRosterRow(tbody, group.minion, group.captain ? `Squad captain: ${group.captain.statblock.name}.` : undefined);
+				if (group.captain) {
+					this.renderRosterRow(tbody, group.captain, `Squad captain for ${group.minion.statblock.name}.`);
+				}
 			}
+		}
+	}
+
+	/** One roster `<tr>` (5 cells: Name/Role/Organization/Count/EV) for a resolved row,
+	 *  or the degrade cell for an unresolved one. `note`, when given, adds a SECOND
+	 *  visible row underneath (Task 4 review round 1, Finding 2) — used for the two
+	 *  squad-adjacency cases (a captain-bearing minion row, a captain row itself, or an
+	 *  orphan captain) so squad association and orphan status are always shown, never a
+	 *  silent/inert field. */
+	private renderRosterRow(tbody: HTMLElement, entry: RowResolution, note?: string): void {
+		const tr = tbody.createEl('tr', { cls: 'dse-enc__row' });
+		if (entry.kind === 'resolved') {
+			const sb = entry.statblock;
+			tr.createEl('td', { text: sb.name, cls: 'dse-enc__cell-name' });
+			tr.createEl('td', { text: sb.role ?? '' });
+			tr.createEl('td', { text: sb.organization ?? '' });
+			tr.createEl('td', { text: String(entry.row.count) });
+			tr.createEl('td', { text: String(rowEv(entry.row.count, sb.ev)) });
+		} else {
+			tr.addClass('dse-enc__row--degraded');
+			const cell = tr.createEl('td', { attr: { colspan: '5' } });
+			cell.createSpan({ cls: 'dse-enc__degrade', text: `${entry.row.code} — ${entry.reason}` });
+		}
+		if (note) {
+			tr.addClass('dse-enc__row--squad');
+			const noteRow = tbody.createEl('tr', { cls: 'dse-enc__row-note' });
+			const cell = noteRow.createEl('td', { attr: { colspan: '5' } });
+			cell.createSpan({ cls: 'dse-enc__note', text: note });
 		}
 	}
 
@@ -219,32 +324,77 @@ export class EncounterView extends ElementView<EncounterModel> {
 
 	// ------------------------------------------------------------------- hand-off
 
-	/** spec §2.4: builder rows -> `EncounterData.enemy_groups[]`, one group per row,
-	 *  carrying the SCC ref (never inlined stats) so the tracker stays LIVE. Unresolved
-	 *  rows are excluded (same filter as EV — spec: "the builder never parses statblock
-	 *  files itself"; a row this view couldn't resolve has nothing to hand off). */
+	/** spec §2.4: builder rows -> `EncounterData.enemy_groups[]`, carrying the SCC ref
+	 *  (never inlined stats) so the tracker stays LIVE. Unresolved rows are excluded
+	 *  (same filter as EV — spec: "the builder never parses statblock files itself"; a
+	 *  row this view couldn't resolve has nothing to hand off).
+	 *
+	 *  Task 4 review round 1, Finding 2 (MEDIUM): a `'squad'` group (see `groupRows`)
+	 *  emits ONE `enemy_group` with `is_squad: true` and up to two `creatures[]`
+	 *  entries — the minion (`squad_role: 'minion'`, `amount: count`) plus, when
+	 *  adjacency-paired, the captain (`squad_role: 'captain'`, `amount: count` —
+	 *  usually 1) — matching the exact shape `parseEncounterData` validates (≤2
+	 *  creatures, one minion type, ≤1 captain). An `'orphan-captain'` group still hands
+	 *  off (a resolved row is never dropped) but as an ORDINARY solo group
+	 *  (`is_squad: false`, no `squad_role`) — never an inert `squad_role: 'captain'` on
+	 *  a group the initiative tracker would otherwise ignore. */
 	private buildEncounterData(resolved: RowResolution[]): EncounterData {
 		const enemy_groups: EnemyGroup[] = [];
-		for (const entry of resolved) {
-			if (entry.kind !== 'resolved') continue;
+		const soloGroup = (entry: ResolvedRow): EnemyGroup => {
 			const sb = entry.statblock;
 			const bareCode = normalizeSccTarget(entry.row.code) ?? entry.row.code;
-			const isMinion = isMinionRow(entry.row, sb);
-			const maxStamina = parseInt(sb.stamina, 10) || 0;
-			enemy_groups.push({
+			return {
 				name: sb.name,
-				is_squad: isMinion,
+				is_squad: false,
 				creatures: [
 					{
 						name: sb.name,
 						amount: entry.row.count,
-						max_stamina: maxStamina,
+						max_stamina: parseInt(sb.stamina, 10) || 0,
 						isHero: false,
-						squad_role: isMinion ? 'minion' : entry.row.squad === 'captain' ? 'captain' : undefined,
 						statblock: `scc.v1:${bareCode}`,
 					},
 				],
-			});
+			};
+		};
+
+		for (const group of groupRows(resolved)) {
+			if (group.kind === 'plain') {
+				if (group.entry.kind !== 'resolved') continue;
+				enemy_groups.push(soloGroup(group.entry));
+				continue;
+			}
+			if (group.kind === 'orphan-captain') {
+				enemy_groups.push(soloGroup(group.entry));
+				continue;
+			}
+			// 'squad': the minion always anchors the group; the captain (if adjacency-
+			// paired) rides along as a second creatures[] entry.
+			const minionSb = group.minion.statblock;
+			const minionCode = normalizeSccTarget(group.minion.row.code) ?? group.minion.row.code;
+			const creatures: EnemyGroup['creatures'] = [
+				{
+					name: minionSb.name,
+					amount: group.minion.row.count,
+					max_stamina: parseInt(minionSb.stamina, 10) || 0,
+					isHero: false,
+					squad_role: 'minion',
+					statblock: `scc.v1:${minionCode}`,
+				},
+			];
+			if (group.captain) {
+				const captainSb = group.captain.statblock;
+				const captainCode = normalizeSccTarget(group.captain.row.code) ?? group.captain.row.code;
+				creatures.push({
+					name: captainSb.name,
+					amount: group.captain.row.count,
+					max_stamina: parseInt(captainSb.stamina, 10) || 0,
+					isHero: false,
+					squad_role: 'captain',
+					statblock: `scc.v1:${captainCode}`,
+				});
+			}
+			enemy_groups.push({ name: minionSb.name, is_squad: true, creatures });
 		}
 		return { heroes: [], enemy_groups, malice: { value: 0 } };
 	}
@@ -255,7 +405,11 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 *  codebase yet; building one is out of this task's scope — a reasonable Task 10+
 	 *  follow-up). Appends at end-of-file via the atomic Vault.process read-modify-write
 	 *  (F1 §3.4/§4.2 pattern), never touching the encounter block itself. Returns the
-	 *  note's path on success, null (with a visible Notice — never silent) otherwise. */
+	 *  note's path on success, null (with a visible Notice — never silent) otherwise.
+	 *
+	 *  Task 4 review round 1, Finding 5 (LOW): `vault.process` wrapped in try/catch — an
+	 *  I/O failure now surfaces a Notice instead of an unhandled promise rejection,
+	 *  matching every other "never silent" branch in this method. */
 	private async writeTrackerBlock(resolved: RowResolution[]): Promise<string | null> {
 		const filePath = this.cx.host.sourcePath;
 		const file = this.cx.app.vault.getAbstractFileByPath(filePath);
@@ -266,7 +420,12 @@ export class EncounterView extends ElementView<EncounterModel> {
 		const data = this.buildEncounterData(resolved);
 		const body = serializeInitiative(data);
 		const fenced = `\n\n\`\`\`ds-initiative\n${body}\n\`\`\`\n`;
-		await this.cx.app.vault.process(file, (content) => content.replace(/\s*$/, '') + fenced);
+		try {
+			await this.cx.app.vault.process(file, (content) => content.replace(/\s*$/, '') + fenced);
+		} catch (e) {
+			new Notice(`Draw Steel Elements: failed to write the initiative tracker block — ${errorMessage(e)}`);
+			return null;
+		}
 		new Notice('Draw Steel Elements: initiative tracker block created at the end of this note.');
 		return filePath;
 	}
@@ -275,6 +434,11 @@ export class EncounterView extends ElementView<EncounterModel> {
 		await this.writeTrackerBlock(resolved);
 	}
 
+	/** Task 4 review round 1, Finding 5 (LOW): `sidebarHandoff` wrapped in try/catch —
+	 *  a rejection (I/O failure, a broken Task-10-wired hook) now surfaces a Notice
+	 *  instead of an unhandled promise rejection. The tracker block has already been
+	 *  written by this point (writeTrackerBlock above), so this failure is scoped to
+	 *  "couldn't open it in the sidebar," not "lost the tracker." */
 	private async handleOpenInSidebar(resolved: RowResolution[]): Promise<void> {
 		const filePath = await this.writeTrackerBlock(resolved);
 		if (filePath === null) return;
@@ -285,7 +449,11 @@ export class EncounterView extends ElementView<EncounterModel> {
 			);
 			return;
 		}
-		await sidebarHandoff(filePath, 'ds-initiative');
+		try {
+			await sidebarHandoff(filePath, 'ds-initiative');
+		} catch (e) {
+			new Notice(`Draw Steel Elements: tracker block created, but opening it in the sidebar failed — ${errorMessage(e)}`);
+		}
 	}
 }
 
@@ -310,4 +478,16 @@ function capitalize(s: string): string {
 function computedEqual(a: EncounterComputed | undefined, b: EncounterComputed): boolean {
 	if (!a) return false;
 	return a.spent_ev === b.spent_ev && a.budget === b.budget && a.ratio === b.ratio && a.band === b.band && a.victories === b.victories;
+}
+
+/** Task 4 review round 1, Finding 4: a `Promise.allSettled` rejection reason -> a
+ *  visible per-row degrade message (same NOT_INSTALLED/NOT_SYNCED/NOT_RESOLVED family). */
+function resolveErrorReason(reason: unknown): string {
+	return `Failed to resolve — ${errorMessage(reason)}`;
+}
+
+/** Task 4 review round 1, Finding 5: a normalized message for a Notice, from either a
+ *  real Error or any other thrown value. */
+function errorMessage(e: unknown): string {
+	return e instanceof Error ? e.message : String(e);
 }

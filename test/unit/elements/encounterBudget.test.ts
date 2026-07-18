@@ -1,6 +1,16 @@
 // D8 Task 4 (spec §2.2, OD-2) — pure math tests for the Encounter Builder's budget.ts:
 // no DOM, no compendium, no async — exactly the interfaces the brief pins.
-import { bandTable, budgetTable, computeEncounter, parseEv, spentEv, victoryPayout } from '@/elements/encounter/budget';
+import {
+	bandTable,
+	budgetTable,
+	computeEncounter,
+	parseEv,
+	parseEvInfo,
+	rowEv,
+	spentEv,
+	victoryAdjustment,
+	victoryPayout,
+} from '@/elements/encounter/budget';
 
 describe('D8 Task 4: parseEv (defensive — ev is a STRING on the SDK model, recon delta 5)', () => {
 	test('parses a plain numeric string', () => {
@@ -24,8 +34,42 @@ describe('D8 Task 4: parseEv (defensive — ev is a STRING on the SDK model, rec
 	});
 });
 
-describe('D8 Task 4: spentEv — Σ count × parseEv(ev), every term from real data', () => {
-	test('sums per-row count × ev', () => {
+describe('Task 4 review round 1, Finding 1 (CRITICAL): parseEvInfo/rowEv — "N for four minions" prices a SQUAD of four', () => {
+	test('parseEvInfo flags the real corpus minion convention as perFour (skitterling.md: "3 for four minions")', () => {
+		expect(parseEvInfo('3 for four minions')).toEqual({ value: 3, perFour: true });
+	});
+
+	test('parseEvInfo does NOT flag a plain numeric ev string as perFour (goblin-stinker.md: "3")', () => {
+		expect(parseEvInfo('3')).toEqual({ value: 3, perFour: false });
+	});
+
+	test('parseEvInfo on undefined/non-numeric stays 0, never perFour', () => {
+		expect(parseEvInfo(undefined)).toEqual({ value: 0, perFour: false });
+		expect(parseEvInfo('unknown')).toEqual({ value: 0, perFour: false });
+	});
+
+	test('reviewer repro: 8 Skitterlings @ "3 for four minions" spend 6, not 24 (the pre-fix 4x overcount)', () => {
+		expect(rowEv(8, '3 for four minions')).toBe(6);
+	});
+
+	test('rowEv rounds UP to the next full squad of four (Math.ceil), mirroring sc-encounter-core.js pickCost', () => {
+		expect(rowEv(1, '3 for four minions')).toBe(3); // 1 minion still buys a squad of 4
+		expect(rowEv(4, '3 for four minions')).toBe(3);
+		expect(rowEv(5, '3 for four minions')).toBe(6); // rounds up to 2 squads
+		expect(rowEv(0, '3 for four minions')).toBe(0);
+	});
+
+	test('non-minion control: a plain "3" ev (Horde organization, goblin-stinker.md) still prices per-individual', () => {
+		expect(rowEv(6, '3')).toBe(18); // unaffected by the minion fix — count × ev
+	});
+
+	test('parseEv (bare magnitude) is unaffected by perFour — still returns the raw number', () => {
+		expect(parseEv('3 for four minions')).toBe(3);
+	});
+});
+
+describe('D8 Task 4: spentEv — Σ rowEv(row.count, row.ev), every term from real data', () => {
+	test('sums per-row count × ev for plain (non-minion) rows', () => {
 		expect(
 			spentEv([
 				{ count: 6, ev: '4' },
@@ -36,6 +80,15 @@ describe('D8 Task 4: spentEv — Σ count × parseEv(ev), every term from real d
 
 	test('empty rows spend 0', () => {
 		expect(spentEv([])).toBe(0);
+	});
+
+	test('a mixed roster: a minion squad (perFour) + a solo monster (plain), each priced by its own rule', () => {
+		expect(
+			spentEv([
+				{ count: 8, ev: '3 for four minions' }, // 2 squads of 4 -> 6
+				{ count: 1, ev: '96' }, // solo -> 96
+			]),
+		).toBe(102);
 	});
 });
 
@@ -84,6 +137,22 @@ describe('D8 Task 4: bandTable — ratio -> band (default thresholds, spec §2.5
 	});
 });
 
+describe('Task 4 review round 1, Finding 3 (LOW): victoryAdjustment — sc-encounter-core.js partyES victory term', () => {
+	test('0 or 1 victories add nothing (need 2 to add "one hero")', () => {
+		expect(victoryAdjustment(3, 0)).toBe(0);
+		expect(victoryAdjustment(3, 1)).toBe(0);
+	});
+
+	test('2 victories add one heroEncounterStrength(level) worth of budget', () => {
+		// heroEncounterStrength(3) = 4 + 2*3 = 10
+		expect(victoryAdjustment(3, 2)).toBe(10);
+	});
+
+	test('5 victories floor to 2 extra "heroes" (floor(5/2) = 2)', () => {
+		expect(victoryAdjustment(3, 5)).toBe(20);
+	});
+});
+
 describe('D8 Task 4: computeEncounter — assembles the whole EncounterComputed', () => {
 	test('a configured budget: spent/budget/ratio/band/victories all populated', () => {
 		const computed = computeEncounter(
@@ -118,5 +187,25 @@ describe('D8 Task 4: computeEncounter — assembles the whole EncounterComputed'
 		expect(computed.ratio).toBe(2);
 		expect(computed.band).toBe('extreme');
 		expect(computed.victories).toBe(2);
+	});
+
+	test('an injected table with no victoryAdjustment (pre-Finding-3 shape) still type-checks and applies no adjustment', () => {
+		const computed = computeEncounter([{ count: 1, ev: '10' }], { hero_count: 1, hero_level: 1, victories: 4 }, {
+			budgetTable: () => 5,
+			bandTable: () => 'extreme',
+		});
+		expect(computed.budget).toBe(5); // no victoryAdjustment injected -> +0, not a crash
+	});
+
+	test('Finding 3: party.victories shifts the budget via victoryAdjustment (site core partyES formula)', () => {
+		// heroEncounterStrength(3) = 10; 2 victories -> +10 budget over the unadjusted table cell.
+		const withoutVictories = computeEncounter([{ count: 6, ev: '3' }], { hero_count: 4, hero_level: 3 });
+		const withVictories = computeEncounter([{ count: 6, ev: '3' }], { hero_count: 4, hero_level: 3, victories: 2 });
+		expect(withVictories.budget).toBe((withoutVictories.budget as number) + 10);
+	});
+
+	test("Finding 3: victories never applies to an unset budget — stays null, doesn't fabricate a number", () => {
+		const computed = computeEncounter([{ count: 6, ev: '3' }], { hero_count: 4, hero_level: 99, victories: 10 });
+		expect(computed.budget).toBeNull();
 	});
 });

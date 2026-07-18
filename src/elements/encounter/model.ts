@@ -15,8 +15,9 @@ import { stringifyYaml } from 'obsidian';
 export interface EncounterParty {
 	hero_count?: number;
 	hero_level?: number;
-	/** Feeds a future budget-table victory adjustment (spec §2.2); not consumed by the
-	 *  DEFAULT_BUDGET_TABLE shipped in budget.ts today. */
+	/** Feeds the budget-table victory adjustment (spec §2.2's "+ optional victory
+	 *  adjustment"; budget.ts's `victoryAdjustment`, Task 4 review round 1 Finding 3) —
+	 *  `budgetTable(heroCount, heroLevel) + victoryAdjustment(heroLevel, victories)`. */
 	victories?: number;
 	/** Optional `[[Party]]` link to a ds-party block (D8 spec §6) — not resolved by this
 	 *  task (ds-party doesn't exist yet); kept as an opaque passthrough string. */
