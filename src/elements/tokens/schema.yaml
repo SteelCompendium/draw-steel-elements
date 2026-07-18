@@ -1,0 +1,19 @@
+# D7 Task 6 (spec §4.5, OD-3) — the ds-tokens block schema (AJV, hard-fail per F1 §5).
+# Dialect: 2019-09 like every other element schema (Ajv2019; an unregistered $schema URI
+# throws at compile).
+$schema: "https://json-schema.org/draft/2019-09/schema"
+$id: "https://steelcompendium.io/schemas/dse-tokens-1.0.0"
+type: object
+additionalProperties: false
+required: [tokens]
+properties:
+  label:
+    type: string
+    minLength: 1
+    description: Optional display label for this pool (e.g. a session/table name).
+  tokens:
+    type: integer
+    minimum: 0
+    description: >-
+      The party's current Hero Token count (RR §7 "Tests": spend to reroll any test).
+      Floor 0 at the UI.

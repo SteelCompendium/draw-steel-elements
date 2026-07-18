@@ -46,6 +46,7 @@ import partyDefault from '../src/elements/party/example.yaml';
 import conditionsDefault from '../src/elements/conditions/example.yaml';
 import resourceDefault from '../src/elements/resource/example.yaml';
 import surgesDefault from '../src/elements/surges/example.yaml';
+import tokensDefault from '../src/elements/tokens/example.yaml';
 // D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances. Task 7 adds
 // the remaining seven.
 import kitDefault from '../src/elements/display/kit/example.yaml';
@@ -75,6 +76,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	encounter: { default: encounterDefault },
 	feature: { default: featureDefault },
 	featureblock: { default: featureblockDefault },
+	'hero-tokens': { default: tokensDefault },
 	'heroic-resource': { default: resourceDefault },
 	'horizontal-rule': { default: horizontalRuleDefault },
 	initiative: { default: initiativeDefault },

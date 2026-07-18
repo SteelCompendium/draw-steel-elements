@@ -2725,6 +2725,30 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Hero Tokens party pool (D7 Task 6, spec §4.5, OD-3): .dse-tokens */
+/* ==================== */
+/* A labeled stepper (kit .dse-stepper — its own chrome, no color/geometry redeclared
+   here) with a ♦ token glyph beside the label. Tokens only — no color literals. */
+[data-dse-element="hero-tokens"] .dse-tokens {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25em;
+	padding: var(--dse-pad);
+
+	.dse-tokens__label {
+		display: flex;
+		align-items: center;
+		gap: 0.35em;
+		font-weight: bold;
+		color: var(--dse-heading);
+	}
+
+	.dse-tokens__glyph {
+		color: var(--dse-accent);
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */
