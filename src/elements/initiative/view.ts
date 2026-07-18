@@ -201,7 +201,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Enemies.
 		const enemiesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--enemies' });
 		const enemiesHead = enemiesGroup.createDiv({ cls: 'dse-init__enemies-head' });
-		enemiesHead.createEl('h3', { text: 'Enemy Groups' });
+		enemiesHead.createEl('h3', { text: 'Enemy groups' });
 
 		// Malice panel (D8 spec §3): pool stepper + round/advance + spend-gain log +
 		// quick-add. Deliverable 2 (spendable monster malice features) is gated on
@@ -327,13 +327,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 				type: 'number',
 				attr: { step: '1', placeholder: 'Amount' },
 			});
-			amountInput.setAttribute('aria-label', 'Quick-add Malice amount');
+			amountInput.setAttribute('aria-label', 'Quick-add malice amount');
 			const labelInput = quickAdd.createEl('input', {
 				cls: 'dse-init__malice-quickadd-label',
 				type: 'text',
-				attr: { placeholder: 'e.g. Feytouched' },
+				attr: { placeholder: 'E.g. Feytouched' },
 			});
-			labelInput.setAttribute('aria-label', 'Quick-add Malice label');
+			labelInput.setAttribute('aria-label', 'Quick-add malice label');
 			iconButton(
 				quickAdd,
 				{

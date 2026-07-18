@@ -122,11 +122,11 @@ export class DseSettingTab extends PluginSettingTab {
 	private renderPresetControl(containerEl: HTMLElement, prefs: PreferenceStore): void {
 		new Setting(containerEl)
 			.setName('Preset')
-			.setDesc('A bundle of the statblock options below. Adjusting any single option re-derives "Custom".')
+			.setDesc('A bundle of the statblock options below. Adjusting any single option re-derives "custom".')
 			.addDropdown((dropdown) => {
-				dropdown.addOption('steel', 'Steel Card');
+				dropdown.addOption('steel', 'Steel card');
 				dropdown.addOption('sourcebook', 'Sourcebook');
-				dropdown.addOption('index', 'Index Card');
+				dropdown.addOption('index', 'Index card');
 				dropdown.addOption('custom', 'Custom');
 				dropdown.setValue(deriveSbPreset(prefs));
 				dropdown.onChange((value) => {
@@ -213,6 +213,10 @@ export class DseSettingTab extends PluginSettingTab {
 			.setDesc('Vault folder the compendium is synced into.')
 			.addText((text) =>
 				text
+					// Literal default vault folder name
+					// (DEFAULT_SETTINGS.compendiumDestinationDirectory), not prose;
+					// lowercasing would misrepresent the actual folder created.
+					// eslint-disable-next-line obsidianmd/ui/sentence-case
 					.setPlaceholder('DS Compendium')
 					.setValue(this.plugin.settings.compendiumDestinationDirectory)
 					.onChange(async (value) => {
@@ -236,6 +240,9 @@ export class DseSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Locale')
+			// "English" is a language proper noun; lowercasing it would be a grammar
+			// error, not a fix.
+			// eslint-disable-next-line obsidianmd/ui/sentence-case
 			.setDesc('Compendium language. Only English is published today.')
 			.addDropdown((dropdown) =>
 				dropdown
