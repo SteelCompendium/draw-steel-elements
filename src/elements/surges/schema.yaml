@@ -1,0 +1,23 @@
+# D7 Task 5 (spec §4.3) — the ds-surges block schema (AJV, hard-fail per F1 §5).
+# `highest_characteristic` is a plain integer, not constrained to a floor: Draw Steel
+# characteristic scores range roughly -5..+5 (RR §1 Core Mechanics/Characteristics), so a
+# hero with every characteristic negative could technically author a negative "highest"
+# — the schema doesn't editorialize about that, it just carries the number through.
+# Dialect: 2019-09 like every other element schema (Ajv2019; an unregistered $schema URI
+# throws at compile).
+$schema: "https://json-schema.org/draft/2019-09/schema"
+$id: "https://steelcompendium.io/schemas/dse-surges-1.0.0"
+type: object
+additionalProperties: false
+required: [surges]
+properties:
+  surges:
+    type: integer
+    minimum: 0
+    description: Surge count — bonus damage tokens (AR "Surges"); floor 0 at the UI.
+  highest_characteristic:
+    type: integer
+    description: >-
+      The hero's highest characteristic score. When present, the panel shows
+      "each = +N damage" (AR "Surges": each surge adds extra damage equal to your
+      highest characteristic score). Absent = no hint line.

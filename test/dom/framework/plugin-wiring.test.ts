@@ -68,6 +68,7 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'party',
 	'conditions',
 	'heroic-resource',
+	'surges',
 ];
 
 /**

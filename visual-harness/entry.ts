@@ -45,6 +45,7 @@ import projectDefault from '../src/elements/project/example.yaml';
 import partyDefault from '../src/elements/party/example.yaml';
 import conditionsDefault from '../src/elements/conditions/example.yaml';
 import resourceDefault from '../src/elements/resource/example.yaml';
+import surgesDefault from '../src/elements/surges/example.yaml';
 // D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances. Task 7 adds
 // the remaining seven.
 import kitDefault from '../src/elements/display/kit/example.yaml';
@@ -88,6 +89,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	skills: { default: skillsDefault },
 	'stamina-bar': { default: staminaBarDefault },
 	statblock: { default: statblockDefault },
+	surges: { default: surgesDefault },
 	title: { default: titleDefault },
 	treasure: { default: treasureDefault },
 	'values-row': { default: valuesRowDefault },

@@ -65,6 +65,7 @@ import { projectElement } from '@/elements/project/definition';
 import { partyElement } from '@/elements/party/definition';
 import { conditionsElement } from '@/elements/conditions/definition';
 import { resourceElement } from '@/elements/resource/definition';
+import { surgesElement } from '@/elements/surges/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -293,6 +294,9 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// D7 Task 3 (spec §4.1) — Heroic resource tracker: class-aware via the static
 	// RESOURCE_BY_CLASS map (resourceByClass.ts), no compendium dep, no hard gate.
 	registry.register(resourceElement);
+	// D7 Task 5 (spec §4.3) — Surge tracker: the smallest hero-suite standalone
+	// proving-ground, no compendium dep, no hard gate.
+	registry.register(surgesElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

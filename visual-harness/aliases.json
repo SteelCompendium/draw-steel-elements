@@ -27,5 +27,6 @@
 	"project": "ds-project",
 	"party": "ds-party",
 	"conditions": "ds-conditions",
-	"heroic-resource": "ds-resource"
+	"heroic-resource": "ds-resource",
+	"surges": "ds-surges"
 }

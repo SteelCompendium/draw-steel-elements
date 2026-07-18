@@ -2701,6 +2701,30 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Surges (D7 Task 5, spec §4.3): .dse-surge */
+/* ==================== */
+/* The simplest HeroPanel yet: a label above a stepper (kit .dse-stepper — its own
+   chrome, no color/geometry redeclared here), with an optional "each = +N damage" hint
+   line below (shown only when highest_characteristic is authored). Tokens only — no
+   color literals. */
+[data-dse-element="surges"] .dse-surge {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25em;
+	padding: var(--dse-pad);
+
+	.dse-surge__label {
+		font-weight: bold;
+		color: var(--dse-heading);
+	}
+
+	.dse-surge__hint {
+		font-size: 0.8em;
+		color: var(--dse-fg-faint);
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */
