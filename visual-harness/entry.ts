@@ -43,6 +43,7 @@ import encounterDefault from '../src/elements/encounter/example.yaml';
 import montageDefault from '../src/elements/montage/example.yaml';
 import projectDefault from '../src/elements/project/example.yaml';
 import partyDefault from '../src/elements/party/example.yaml';
+import conditionsDefault from '../src/elements/conditions/example.yaml';
 // D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances. Task 7 adds
 // the remaining seven.
 import kitDefault from '../src/elements/display/kit/example.yaml';
@@ -66,6 +67,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	class: { default: classDefault },
 	complication: { default: complicationDefault },
 	condition: { default: conditionDefault },
+	conditions: { default: conditionsDefault },
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
 	encounter: { default: encounterDefault },

@@ -9,10 +9,22 @@
 // through openManagedModal against THIS modal's lifecycle, so closing the select
 // modal closes an open customize child with it (F1 §4.5). The constructor signature
 // (app, character, conditionManager, onAdd) and the onAdd(Condition[]) contract are
-// the legacy ones, unchanged — Initiative (T9) keeps opening it the same way.
+// the legacy ones, unchanged in SHAPE — Initiative (T9) keeps opening it the same way.
+//
+// D7 Task 2 (spec §4.4, recon delta 7): `character`'s TYPE widened from
+// `Hero | CreatureInstance` to the structural `ConditionHolder` superset (`{
+// conditions?: (string|Condition)[] }`, EncounterData.ts) so `ds-conditions`'s
+// standalone panel can open this modal with a minimal `{conditions}` holder instead
+// of fabricating encounter-only fields (id, statblock ref, initiative order) onto a
+// fake CreatureInstance. This is source-compatible: `character` is stored but never
+// read by this class today, and both `Hero` (required `conditions`) and
+// `CreatureInstance` (optional `conditions?`) structurally satisfy the wider type, so
+// Initiative's existing `Hero | CreatureInstance` call site keeps typechecking
+// unmodified (T9's tests, and this file's own condition-select-modal.test.ts, stay
+// green with no changes).
 import type { App } from 'obsidian';
 import { setIcon } from 'obsidian';
-import { Condition, CreatureInstance, Hero } from '@drawSteelAdmonition/EncounterData';
+import { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager, ConditionConfig } from '@utils/Conditions';
 import { CustomizeConditionModal } from '@views/CustomizeConditionModal';
 import { DseModal, divider, iconButton, openManagedModal } from '@/framework/kit';
@@ -20,14 +32,14 @@ import type { IconButtonHandle } from '@/framework/kit';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 
 export class AddConditionsModal extends DseModal {
-	private character: Hero | CreatureInstance;
+	private character: ConditionHolder;
 	private conditionManager: ConditionManager;
 	private onAdd: (conditions: Condition[]) => void;
 	private selectedConditions: Map<string, Condition>;
 
 	constructor(
 		app: App,
-		character: Hero | CreatureInstance,
+		character: ConditionHolder,
 		conditionManager: ConditionManager,
 		onAdd: (conditions: Condition[]) => void,
 	) {

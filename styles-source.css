@@ -2555,6 +2555,74 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Conditions strip (D7 Task 2, spec §4.4): .dse-cond-panel */
+/* ==================== */
+/* The FIRST real HeroPanel consumer (Task 1 only extracted the contract) — a strip of
+   .dse-cond-chip rows, each reusing the initiative tracker's .dse-cond icon glyph (kit
+   conditionIcons.ts, STATIC mode here — this chip's own remove ✕ handles removal, not a
+   click on the icon, unlike the compact initiative row) alongside a name label, an
+   optional save-ends/EoT/EoE duration badge, and (save-ends only) a roll-save button +
+   inline result. .dse-cond's base 24px/color rule lives scoped under
+   [data-dse-element="initiative"] .dse-init (D2 §3.11) — NOT globally — so it is
+   reproduced here rather than inherited. Tokens only — no color literals; the icon's
+   user-picked color still rides the VALIDATED --dse-condition-color property
+   (applyConditionColor, OD-8/SD-2), same contract as everywhere else .dse-cond appears. */
+[data-dse-element="conditions"] .dse-cond-panel {
+	.dse-cond-strip {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5em;
+	}
+
+	.dse-cond-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.35em;
+		padding: 0.25em 0.5em;
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		background: var(--dse-surface-raised);
+	}
+
+	.dse-cond-chip__icon {
+		display: flex;
+		align-items: center;
+
+		.dse-cond {
+			width: 24px;
+			height: 24px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			color: var(--dse-condition-color, inherit);
+		}
+	}
+
+	.dse-cond-chip__name {
+		font-weight: bold;
+	}
+
+	.dse-cond-chip__duration {
+		font-size: 0.8em;
+		color: var(--dse-fg-muted);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		padding: 0.05em 0.4em;
+	}
+
+	.dse-cond-chip__save-result {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+		min-width: 1.5em;
+		text-align: center;
+	}
+
+	.dse-cond-strip__add {
+		margin-top: 0.5em;
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */

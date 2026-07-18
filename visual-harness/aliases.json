@@ -25,5 +25,6 @@
 	"encounter": "ds-encounter",
 	"montage": "ds-montage",
 	"project": "ds-project",
-	"party": "ds-party"
+	"party": "ds-party",
+	"conditions": "ds-conditions"
 }

@@ -1,0 +1,6 @@
+conditions:
+  - key: bleeding
+    effect: save ends
+  - key: slowed
+    effect: EoT
+  - restrained

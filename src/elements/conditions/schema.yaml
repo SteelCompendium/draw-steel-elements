@@ -1,0 +1,31 @@
+# D7 Task 2 (spec §4.4) — the ds-conditions block schema (AJV, hard-fail per F1 §5).
+# `type` includes "null" so a completely EMPTY ds-conditions block is valid — it starts
+# with no conditions (parse materializes `conditions: []`). Each entry is either a bare
+# string (no duration — spec §4.4) or an object with a required `key` plus optional
+# `color`/`effect` (reusing the initiative tracker's `Condition` shape verbatim,
+# EncounterData.ts).
+# Dialect: 2019-09 like every other element schema — the plugin-scoped AJV is
+# Ajv2019, and an unregistered $schema URI (e.g. draft-07) throws at compile.
+$schema: "https://json-schema.org/draft/2019-09/schema"
+$id: "https://steelcompendium.io/schemas/dse-conditions-1.0.0"
+type: ["object", "null"]
+additionalProperties: false
+properties:
+  conditions:
+    type: array
+    items:
+      oneOf:
+        - type: string
+          minLength: 1
+        - type: object
+          additionalProperties: false
+          required: [key]
+          properties:
+            key:
+              type: string
+              minLength: 1
+            color:
+              type: string
+            effect:
+              type: string
+              description: Duration ("save ends", "EoT", "EoE") — or a customize-modal CSS pulse effect name.

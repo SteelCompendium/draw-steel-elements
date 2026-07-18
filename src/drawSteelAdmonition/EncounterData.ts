@@ -113,6 +113,19 @@ export interface Condition {
     effect?: string;
 }
 
+/** D7 Task 2 (spec §4.4, recon delta 7) — the structural superset of `Hero |
+ *  CreatureInstance` that `AddConditionsModal`'s ctor widens to, so `ds-conditions`'s
+ *  standalone hero-sheet play-state (which is NOT a full CreatureInstance — no id,
+ *  statblock ref, or initiative order) can open the SAME modal without fabricating
+ *  those encounter-only fields. `conditions` is optional (mirroring
+ *  `CreatureInstance.conditions?`) so both existing union members stay assignable —
+ *  widening this parameter is source-compatible, not a breaking change: the
+ *  initiative tracker's `Hero | CreatureInstance` callers keep typechecking
+ *  unmodified. */
+export interface ConditionHolder {
+    conditions?: (string | Condition)[];
+}
+
 export interface EncounterData {
     heroes: Hero[];
     enemy_groups: EnemyGroup[];

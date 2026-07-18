@@ -63,6 +63,7 @@ import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { montageElement } from '@/elements/montage/definition';
 import { projectElement } from '@/elements/project/definition';
 import { partyElement } from '@/elements/party/definition';
+import { conditionsElement } from '@/elements/conditions/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -283,6 +284,11 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// other subsystems read from (encounter's hero_count/hero_level, initiative's
 	// heroes[] seed, victory payouts from encounter/montage) — no hard gate.
 	registry.register(partyElement);
+	// D7 Task 2 (spec §4.4) — Conditions strip: the first hero-suite element and the
+	// first real HeroPanel consumer (Task 1 only extracted the contract); reuses the
+	// initiative tracker's ConditionManager/AddConditionsModal/CustomizeConditionModal
+	// verbatim (§2.4), no compendium dep, no hard gate.
+	registry.register(conditionsElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
