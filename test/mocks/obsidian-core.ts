@@ -273,7 +273,11 @@ export class FakeWorkspace {
 		return null;
 	}
 
-	getRightLeaf(_split: boolean): WorkspaceLeaf {
+	/** D8 Task 1: test hook to force null (simulating no right sidebar available). */
+	__rightLeafUnavailable = false;
+
+	getRightLeaf(_split: boolean): WorkspaceLeaf | null {
+		if (this.__rightLeafUnavailable) return null;
 		const leaf = new WorkspaceLeaf(this);
 		this._track(leaf);
 		return leaf;
@@ -283,13 +287,14 @@ export class FakeWorkspace {
 		return this._leaves.filter((leaf) => leaf.getViewState().type === type);
 	}
 
-	revealLeaf(leaf: WorkspaceLeaf): void {
+	revealLeaf(leaf: WorkspaceLeaf): Promise<void> {
 		this._activeLeaf = leaf;
+		return Promise.resolve();
 	}
 
-	async detachLeavesOfType(type: string): Promise<void> {
+	detachLeavesOfType(type: string): void {
 		for (const leaf of this.getLeavesOfType(type)) {
-			await leaf.detach();
+			leaf.detach();
 		}
 	}
 
@@ -810,7 +815,7 @@ export class WorkspaceLeaf {
 
 	async setViewState(state: { type: string; active?: boolean }): Promise<void> {
 		if (this.view) {
-			await this.view.onClose();
+			await (this.view as any).onClose();
 			this.view.unload();
 		}
 		this.state = state;
@@ -818,7 +823,7 @@ export class WorkspaceLeaf {
 		this.view = factory ? factory(this) : null;
 		if (this.view) {
 			this.view.load();
-			await this.view.onOpen();
+			await (this.view as any).onOpen();
 			this.workspace._track(this);
 		}
 	}
@@ -827,9 +832,10 @@ export class WorkspaceLeaf {
 		return this.state;
 	}
 
-	async detach(): Promise<void> {
+	detach(): void {
 		if (this.view) {
-			await this.view.onClose();
+			// Fire onClose asynchronously but don't block on it (matching real Obsidian).
+			(this.view as any).onClose().catch(() => {});
 			this.view.unload();
 		}
 		this.workspace._untrack(this);
@@ -842,6 +848,7 @@ export class WorkspaceLeaf {
  *  `containerEl` with the `.view-content` child real Obsidian always provides. */
 export class ItemView extends Component {
 	containerEl: HTMLElement;
+	contentEl: HTMLElement;
 
 	constructor(public leaf: WorkspaceLeaf) {
 		super();
@@ -849,7 +856,7 @@ export class ItemView extends Component {
 			throw new Error('ItemView requires the jsdom test environment (put the test under test/dom/)');
 		}
 		this.containerEl = document.createElement('div');
-		(this.containerEl as any).createDiv({ cls: 'view-content' });
+		this.contentEl = (this.containerEl as any).createDiv({ cls: 'view-content' });
 	}
 
 	getViewType(): string {
@@ -861,8 +868,8 @@ export class ItemView extends Component {
 	getIcon(): string {
 		return 'document';
 	}
-	async onOpen(): Promise<void> {}
-	async onClose(): Promise<void> {}
+	protected async onOpen(): Promise<void> {}
+	protected async onClose(): Promise<void> {}
 }
 
 export class MarkdownRenderer {

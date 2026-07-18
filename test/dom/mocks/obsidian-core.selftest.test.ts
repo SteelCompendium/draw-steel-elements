@@ -16,11 +16,11 @@ class ProbeView extends ItemView {
 	getDisplayText() {
 		return 'Probe';
 	}
-	async onOpen() {
+	protected async onOpen() {
 		this.opened++;
-		this.containerEl.querySelector('.view-content')!.textContent = 'up';
+		this.contentEl.textContent = 'up';
 	}
-	async onClose() {
+	protected async onClose() {
 		this.closed++;
 	}
 }
@@ -36,33 +36,34 @@ describe('obsidian-core mock: ItemView/WorkspaceLeaf/workspace view APIs (D8 Tas
 	test('registerView + getRightLeaf + setViewState constructs and opens the view', async () => {
 		const { app } = setup();
 		const leaf = app.workspace.getRightLeaf(false);
-		await leaf.setViewState({ type: VIEW, active: true });
-		const view = leaf.view as ProbeView;
+		expect(leaf).not.toBeNull();
+		await leaf!.setViewState({ type: VIEW, active: true });
+		const view = leaf!.view as ProbeView;
 		expect(view).toBeInstanceOf(ProbeView);
 		expect(view.opened).toBe(1);
-		expect(view.containerEl.querySelector('.view-content')!.textContent).toBe('up');
+		expect(view.contentEl.textContent).toBe('up');
 	});
 	test('getLeavesOfType finds the open leaf; revealLeaf records it', async () => {
 		const { app } = setup();
 		const leaf = app.workspace.getRightLeaf(false);
-		await leaf.setViewState({ type: VIEW });
-		app.workspace.revealLeaf(leaf);
+		await leaf!.setViewState({ type: VIEW });
+		await app.workspace.revealLeaf(leaf!);
 		expect(app.workspace.getLeavesOfType(VIEW)).toEqual([leaf]);
 	});
 	test('detachLeavesOfType calls onClose and removes the leaf', async () => {
 		const { app } = setup();
 		const leaf = app.workspace.getRightLeaf(false);
-		await leaf.setViewState({ type: VIEW });
-		const view = leaf.view as ProbeView;
-		await app.workspace.detachLeavesOfType(VIEW);
+		await leaf!.setViewState({ type: VIEW });
+		const view = leaf!.view as ProbeView;
+		app.workspace.detachLeavesOfType(VIEW);
 		expect(view.closed).toBe(1);
 		expect(app.workspace.getLeavesOfType(VIEW)).toEqual([]);
 	});
 	test('ItemView is a Component — addChild cascades unload', async () => {
 		const { app } = setup();
 		const leaf = app.workspace.getRightLeaf(false);
-		await leaf.setViewState({ type: VIEW });
-		const view = leaf.view as ItemView;
+		await leaf!.setViewState({ type: VIEW });
+		const view = leaf!.view as ItemView;
 		let unloaded = false;
 		const child = new (class extends Component {
 			onunload() {
@@ -70,15 +71,30 @@ describe('obsidian-core mock: ItemView/WorkspaceLeaf/workspace view APIs (D8 Tas
 			}
 		})();
 		view.addChild(child);
-		await app.workspace.detachLeavesOfType(VIEW);
+		app.workspace.detachLeavesOfType(VIEW);
 		expect(unloaded).toBe(true);
 	});
 	test('plugin.unload detaches its registered views', async () => {
 		const { app, plugin } = setup();
 		const leaf = app.workspace.getRightLeaf(false);
-		await leaf.setViewState({ type: VIEW });
-		const view = leaf.view as ProbeView;
+		await leaf!.setViewState({ type: VIEW });
+		const view = leaf!.view as ProbeView;
 		plugin.unload();
 		expect(view.closed).toBe(1);
+	});
+	test('getRightLeaf returns null when __rightLeafUnavailable is set', () => {
+		const { app } = setup();
+		app.workspace.__rightLeafUnavailable = true;
+		const leaf = app.workspace.getRightLeaf(false);
+		expect(leaf).toBeNull();
+	});
+	test('ItemView exposes contentEl property matching .view-content div', async () => {
+		const { app } = setup();
+		const leaf = app.workspace.getRightLeaf(false);
+		await leaf!.setViewState({ type: VIEW });
+		const view = leaf!.view as ProbeView;
+		expect(view.contentEl).toBeDefined();
+		expect(view.contentEl.classList.contains('view-content')).toBe(true);
+		expect(view.contentEl).toBe(view.containerEl.querySelector('.view-content'));
 	});
 });
