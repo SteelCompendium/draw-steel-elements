@@ -58,6 +58,7 @@ import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
 import { displayElements } from '@/elements/display';
+import { encounterElement } from '@/elements/encounter/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -263,6 +264,10 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(characteristicsElement);
 	registry.register(rollElement);
 	for (const el of displayElements) registry.register(el);
+	// D8 Task 4 (spec §2) — hard-gated on F2 OD-1 + D6 (both landed); the "Open in
+	// sidebar" hand-off (spec §2.4/OD-5, encounter/view.ts's setEncounterSidebarHandoff
+	// seam) is wired by Task 10 alongside the rest of the sidebar registration sweep.
+	registry.register(encounterElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

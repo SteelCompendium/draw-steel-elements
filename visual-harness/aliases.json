@@ -21,5 +21,6 @@
 	"title": "ds-title",
 	"perk": "ds-perk",
 	"complication": "ds-complication",
-	"rule": "ds-rule"
+	"rule": "ds-rule",
+	"encounter": "ds-encounter"
 }

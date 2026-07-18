@@ -1997,6 +1997,101 @@ Shared globals
   --stamina-bar-color-dying: var(--dse-stamina-dying);
 }
 
+/* ==================== */
+/* Encounter Builder (D8 Task 4, spec §2): .dse-enc */
+/* ==================== */
+/* Roster table + summary bar for the ds-encounter element — tokens only, no color
+   literals. The head is a kit cardHead; the roster is a plain semantic <table> (no kit
+   grid primitive exists for tabular data yet); the summary is a row of labelled stat
+   chips, with the difficulty band ([data-band]) riding --dse-vp (the existing "victory
+   points" token, reused here — orange reads as an attention/callout color for a
+   difficulty read-out, same intent as its VP usage) and an unresolved-budget state
+   using --dse-warn. Per-row degrade cells use --dse-fg-muted (never a bespoke color) so
+   an unresolved SCC code reads as quiet, not alarming — the row is excluded from math,
+   not an error. */
+[data-dse-element="encounter"] .dse-enc {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+
+	.dse-enc__party {
+		color: var(--dse-fg-muted);
+		font-size: 0.9em;
+	}
+
+	.dse-enc__roster-heading {
+		margin: 0 0 0.25em;
+		color: var(--dse-heading);
+	}
+
+	.dse-enc__empty {
+		color: var(--dse-fg-muted);
+		font-style: italic;
+	}
+
+	.dse-enc__table {
+		width: 100%;
+		border-collapse: collapse;
+
+		th,
+		td {
+			text-align: left;
+			padding: 0.25em 0.5em;
+			border-bottom: 1px solid var(--dse-border);
+		}
+
+		th {
+			color: var(--dse-fg-muted);
+			font-weight: normal;
+			font-size: 0.85em;
+		}
+	}
+
+	.dse-enc__cell-name {
+		font-weight: bold;
+		color: var(--dse-fg);
+	}
+
+	.dse-enc__row--degraded .dse-enc__degrade {
+		color: var(--dse-fg-muted);
+		font-style: italic;
+	}
+
+	.dse-enc__summary {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5em 1.25em;
+		padding: 0.5em 0.75em;
+		border-radius: var(--dse-radius);
+		background: var(--dse-surface-raised);
+	}
+
+	.dse-enc__stat {
+		color: var(--dse-fg);
+	}
+
+	.dse-enc__stat--warn {
+		color: var(--dse-warn);
+	}
+
+	.dse-enc__band {
+		font-weight: bold;
+	}
+
+	.dse-enc__band[data-band="hard"],
+	.dse-enc__band[data-band="extreme"] {
+		color: var(--dse-vp);
+	}
+
+	.dse-enc__vp {
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-enc__actions {
+		margin-top: 0.25em;
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */

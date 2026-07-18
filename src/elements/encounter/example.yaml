@@ -1,0 +1,10 @@
+party:
+  hero_count: 4
+  hero_level: 3
+monsters:
+  - code: scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker
+    count: 6
+    squad: minion
+  - code: scc.v1:mcdm.monsters.v1/monster.dragon.statblock/crucible-dragon
+    count: 1
+label: Ambush at the ford

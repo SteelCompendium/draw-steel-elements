@@ -39,6 +39,7 @@ import skillsDefault from '../src/elements/skills/example.yaml';
 import staminaBarDefault from '../src/elements/stamina-bar/example.yaml';
 import statblockDefault from '../src/elements/statblock/example.yaml';
 import valuesRowDefault from '../src/elements/values-row/example.yaml';
+import encounterDefault from '../src/elements/encounter/example.yaml';
 // D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances. Task 7 adds
 // the remaining seven.
 import kitDefault from '../src/elements/display/kit/example.yaml';
@@ -64,6 +65,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	condition: { default: conditionDefault },
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
+	encounter: { default: encounterDefault },
 	feature: { default: featureDefault },
 	featureblock: { default: featureblockDefault },
 	'horizontal-rule': { default: horizontalRuleDefault },
