@@ -108,6 +108,11 @@ async function runStageAsync<T>(stage: ErrorStage, fn: () => Promise<T>): Promis
  * keeps working exactly as before, and `ds-hero`'s own raw-TEXT `defnRaw` splice
  * (`elements/hero/model.ts`) never looks at the parsed `data` object for the anchor at
  * all — only the schema gate was too narrow.
+ *
+ * LATENT EDGE (review round 2): if a future schema explicitly declares `_dse_anchor` as a
+ * real property, this exclusion would silently hide it from validation, matching the class
+ * of the `prefs:` reserved-key convention (D4 §1.3). This is acceptable: `_dse_anchor` is
+ * framework-owned (author a different field name for any element-specific semantic needs).
  */
 function dataForSchemaValidation(rawData: unknown): unknown {
 	if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return rawData;
