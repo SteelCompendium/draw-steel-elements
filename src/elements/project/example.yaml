@@ -1,0 +1,12 @@
+goal_name: "Craft Teleportation Platform"
+goal_code: "scc.v1:mcdm.heroes.v1/project/craft-teleportation-platform"
+goal_points: 1500
+accrued: 340
+prerequisites:
+  item: "planar lodestone"
+  source: "Aetheric Cartography (Old Vaslorian)"
+rolls:
+  - { respite: 1, roll: 14, points: 14 }
+  - { respite: 2, roll: 20, points: 34, breakthrough: true }
+current_respite: 2
+_dse_anchor: 77aa10

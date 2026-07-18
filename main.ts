@@ -60,6 +60,7 @@ import { rollElement } from '@/elements/roll/definition';
 import { displayElements } from '@/elements/display';
 import { encounterElement } from '@/elements/encounter/definition';
 import { montageElement } from '@/elements/montage/definition';
+import { projectElement } from '@/elements/project/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -272,6 +273,10 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// D8 Task 6 (spec §4) — Montage Test tracker: negotiation-sibling, no compendium dep,
 	// no hard gate (unlike encounter's F2 OD-1 + D6 dependency).
 	registry.register(montageElement);
+	// D8 Task 7 (spec §5) — Project/Downtime tracker: self-contained, OPTIONAL compendium
+	// dep (goal_code resolves live via CompendiumIndex.getEntity when wired; inline
+	// fallback otherwise) — no hard gate, unlike encounter's F2 OD-1 + D6 dependency.
+	registry.register(projectElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

@@ -64,6 +64,7 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'rule',
 	'encounter',
 	'montage',
+	'project',
 ];
 
 /**

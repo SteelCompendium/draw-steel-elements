@@ -23,5 +23,6 @@
 	"complication": "ds-complication",
 	"rule": "ds-rule",
 	"encounter": "ds-encounter",
-	"montage": "ds-montage"
+	"montage": "ds-montage",
+	"project": "ds-project"
 }
