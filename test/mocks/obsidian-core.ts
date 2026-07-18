@@ -259,12 +259,55 @@ export class FakeMetadataCache {
 	}
 }
 
+// D8 Task 1: `FakeWorkspace` widens the old plain-object `App.workspace` (previously just
+// `getActiveViewOfType`, kept identical below) with the sidebar view APIs. `_viewFactories`/
+// `_leaves`/`_activeLeaf`/`_track`/`_untrack` are internal bookkeeping (not part of the real
+// Obsidian API) — `WorkspaceLeaf` reaches into them, and `Plugin.registerView` populates
+// `_viewFactories`.
+export class FakeWorkspace {
+	_viewFactories = new Map<string, (leaf: WorkspaceLeaf) => ItemView>();
+	_leaves: WorkspaceLeaf[] = [];
+	_activeLeaf: WorkspaceLeaf | null = null;
+
+	getActiveViewOfType(_type: any): any {
+		return null;
+	}
+
+	getRightLeaf(_split: boolean): WorkspaceLeaf {
+		const leaf = new WorkspaceLeaf(this);
+		this._track(leaf);
+		return leaf;
+	}
+
+	getLeavesOfType(type: string): WorkspaceLeaf[] {
+		return this._leaves.filter((leaf) => leaf.getViewState().type === type);
+	}
+
+	revealLeaf(leaf: WorkspaceLeaf): void {
+		this._activeLeaf = leaf;
+	}
+
+	async detachLeavesOfType(type: string): Promise<void> {
+		for (const leaf of this.getLeavesOfType(type)) {
+			await leaf.detach();
+		}
+	}
+
+	/** Internal: idempotent add — also re-tracks a leaf whose view was re-opened after detach. */
+	_track(leaf: WorkspaceLeaf): void {
+		if (!this._leaves.includes(leaf)) this._leaves.push(leaf);
+	}
+	/** Internal: drop a detached leaf from the tracked list. */
+	_untrack(leaf: WorkspaceLeaf): void {
+		const index = this._leaves.indexOf(leaf);
+		if (index >= 0) this._leaves.splice(index, 1);
+	}
+}
+
 export class App {
 	vault = new FakeVault();
 	metadataCache = new FakeMetadataCache(this.vault);
-	workspace = {
-		getActiveViewOfType: (_type: any): any => null,
-	};
+	workspace = new FakeWorkspace();
 }
 
 // ---------------------------------------------------------------- components
@@ -437,6 +480,14 @@ export class Plugin extends Component {
 		this.editorSuggests.push(suggest);
 	}
 	registerEditorExtension(_ext: any): void {}
+	// D8 Task 1: real Obsidian registers the factory on the workspace and auto-detaches
+	// registered views when the plugin unloads — the mock records the factory on
+	// `app.workspace._viewFactories` and reuses `Component.register` for the auto-detach
+	// (so `plugin.unload()` in a test closes any leaves left open by that plugin's views).
+	registerView(type: string, factory: (leaf: WorkspaceLeaf) => ItemView): void {
+		this.app.workspace._viewFactories.set(type, factory);
+		this.register(() => void this.app.workspace.detachLeavesOfType(type));
+	}
 }
 
 // ---------------------------------------------------------------- UI classes
@@ -741,10 +792,77 @@ export class PluginSettingTab {
 	hide(): void {}
 }
 
-export class ItemView {
+/** D8 Task 1: minimal sidebar leaf — constructs the registered view via the plugin's
+ *  factory (`Plugin.registerView`) and drives its `onOpen`/`onClose` lifecycle, matching
+ *  real Obsidian's `WorkspaceLeaf.setViewState`/`detach` observable behavior closely enough
+ *  for sidebar tests (never simulates real Electron pane layout). */
+export class WorkspaceLeaf {
+	view: ItemView | null = null;
+	containerEl: HTMLElement;
+	private state: { type: string; active?: boolean } = { type: 'empty' };
+
+	constructor(private workspace: FakeWorkspace) {
+		if (typeof document === 'undefined') {
+			throw new Error('WorkspaceLeaf requires the jsdom test environment (put the test under test/dom/)');
+		}
+		this.containerEl = document.createElement('div');
+	}
+
+	async setViewState(state: { type: string; active?: boolean }): Promise<void> {
+		if (this.view) {
+			await this.view.onClose();
+			this.view.unload();
+		}
+		this.state = state;
+		const factory = this.workspace._viewFactories.get(state.type);
+		this.view = factory ? factory(this) : null;
+		if (this.view) {
+			this.view.load();
+			await this.view.onOpen();
+			this.workspace._track(this);
+		}
+	}
+
+	getViewState(): { type: string; active?: boolean } {
+		return this.state;
+	}
+
+	async detach(): Promise<void> {
+		if (this.view) {
+			await this.view.onClose();
+			this.view.unload();
+		}
+		this.workspace._untrack(this);
+		this.view = null;
+	}
+}
+
+/** D8 Task 1: was a bare `getViewType`-only stub — sidebar work (Task 2) needs the real
+ *  `Component`-derived lifecycle (`load`/`unload`, `addChild` cascading) plus a real jsdom
+ *  `containerEl` with the `.view-content` child real Obsidian always provides. */
+export class ItemView extends Component {
+	containerEl: HTMLElement;
+
+	constructor(public leaf: WorkspaceLeaf) {
+		super();
+		if (typeof document === 'undefined') {
+			throw new Error('ItemView requires the jsdom test environment (put the test under test/dom/)');
+		}
+		this.containerEl = document.createElement('div');
+		(this.containerEl as any).createDiv({ cls: 'view-content' });
+	}
+
 	getViewType(): string {
 		return 'fake-item-view';
 	}
+	getDisplayText(): string {
+		return '';
+	}
+	getIcon(): string {
+		return 'document';
+	}
+	async onOpen(): Promise<void> {}
+	async onClose(): Promise<void> {}
 }
 
 export class MarkdownRenderer {
