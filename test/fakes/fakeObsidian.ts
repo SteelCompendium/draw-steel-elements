@@ -94,6 +94,13 @@ export class FakeVault {
 		if (gate) await gate;
 		return new TextDecoder().decode(await this.bytes(file.path));
 	}
+	/** D8 Task 2: SidebarBlockHost primes/refreshes its synchronous content cache via
+	 *  `Vault.cachedRead` (spec §1.4's "seeded on mount via one await vault.cachedRead").
+	 *  No separate cache layer here — same as obsidian-core.ts's fake — read() is cheap
+	 *  enough at test scale. */
+	async cachedRead(file: TFile): Promise<string> {
+		return this.read(file);
+	}
 	async readBinary(file: TFile): Promise<ArrayBuffer> {
 		const bytes = await this.bytes(file.path);
 		return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
@@ -107,6 +114,22 @@ export class FakeVault {
 	async modifyBinary(file: TFile, data: ArrayBuffer): Promise<void> {
 		if (!this.files.has(file.path)) throw new Error(`ENOENT: ${file.path}`);
 		this.files.set(file.path, new Uint8Array(data));
+	}
+	/** D8 Task 2: SidebarBlockHost's persisted-write path (mirroring
+	 *  ReadingModeBlockHost/obsidian-core's FakeVault) rides on `Vault.process` — atomic
+	 *  by construction (no await between read and write) — and real Obsidian fires a
+	 *  "modify" event after a successful process()/modify() write. This fake previously
+	 *  had neither; added here (rather than only in test/mocks/obsidian-core.ts's FakeVault)
+	 *  because THIS is the fake with real `on`/`emit` event delivery (that one's `.on()` is
+	 *  a deliberate no-op stub — see its file header) — the sidebar's self-echo /
+	 *  external-modify tests need an event that actually fires. */
+	async process(file: TFile, fn: (data: string) => string): Promise<string> {
+		const current = this.text(file.path);
+		if (current === undefined) throw new Error(`ENOENT: ${file.path}`);
+		const next = fn(current);
+		this.setText(file.path, next);
+		this.emit('modify', fakeTFile(file.path));
+		return next;
 	}
 	async createFolder(path: string): Promise<void> {
 		if (this.folders.has(path)) throw new Error(`Folder already exists: ${path}`);
@@ -210,6 +233,13 @@ export function makeFakeApp(): {
 	const fileManager = new FakeFileManager(vault);
 	const app = { vault, metadataCache, fileManager } as unknown as App;
 	return { app, vault, metadataCache, fileManager };
+}
+
+/** D8 Task 2: seeds a note's text content directly (no fixture file on disk needed) and
+ *  returns a matching TFile handle — the sidebar host tests' equivalent of setFile(). */
+export function seedNote(vault: FakeVault, path: string, content: string): TFile {
+	vault.setText(path, content);
+	return fakeTFile(path);
 }
 
 /** Load a real fixture file from disk into the fake vault + metadata cache,

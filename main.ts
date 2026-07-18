@@ -36,6 +36,7 @@ import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
+import { registerDseSidebar } from '@/framework/sidebar/registration';
 import { registerInsertCommands } from '@/authoring/insert';
 import { DsElementSuggest } from '@/authoring/suggest';
 import { DsSchemaSuggest } from '@/authoring/schemaSuggest';
@@ -362,6 +363,15 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // element.
         registerFrameworkElementDefinitions(frameworkV2.registry);
         registerFrameworkElements(this, frameworkV2);
+
+        // D8 Task 2 (spec §1) — minimal wire proving the sidebar host/view registers
+        // through production onload; full command/ribbon polish is Task 10.
+        registerDseSidebar(this, {
+            app: this.app,
+            plugin: this,
+            pipeline: frameworkV2.pipeline,
+            registry: frameworkV2.registry,
+        });
 
         // D9 (Plan 15 Task 3): authoring scaffolders — one Insert command per element and a
         // /ds EditorSuggest, both pure loops over the registry (no per-element code). Editor

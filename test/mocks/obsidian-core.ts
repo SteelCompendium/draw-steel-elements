@@ -471,6 +471,18 @@ export class Plugin extends Component {
 		return handler;
 	}
 	addSettingTab(_tab: any): void {}
+	/** D8 Task 2: registerDseSidebar's ribbon icon — minimal jsdom-backed stub (real
+	 *  Obsidian adds the element to the left ribbon bar and wires the click callback;
+	 *  the mock just returns a detached element with the callback attached, matching the
+	 *  rest of this file's "record what it's asked to do" style). */
+	addRibbonIcon(_icon: string, title: string, callback: (evt: MouseEvent) => any): HTMLElement {
+		const el: HTMLElement = typeof document !== 'undefined' ? document.createElement('div') : ({} as HTMLElement);
+		if (typeof document !== 'undefined') {
+			el.setAttribute('aria-label', title);
+			el.addEventListener('click', callback as EventListener);
+		}
+		return el;
+	}
 	async loadData(): Promise<any> {
 		return {};
 	}
