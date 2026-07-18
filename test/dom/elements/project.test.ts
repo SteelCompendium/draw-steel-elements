@@ -490,6 +490,44 @@ describe('T-7: optional D6 resolution — goal_code resolves goal_name/goal_poin
 		expect(progressText(root)).toBe('5 pts');
 	});
 
+	test('a conditional "Project Goal: N if X, or M if Y" body (hone-career-skills.md-shaped) degrades — never resolves the first number as confidently correct', async () => {
+		const compendium = fakeCompendium({
+			getEntity: async () =>
+				fakeProjectEntity('Hone Career Skills', '240 if your career granted you two skills, or 360 if your career granted you three skills'),
+		});
+		const source = `goal_code: "scc.v1:${GOAL_CODE}"\naccrued: 5`;
+		const { root } = await renderProject(source, {}, { compendium });
+
+		expect(nameEl(root).textContent).toBe('Hone Career Skills');
+		expect(progressText(root)).toBe('5 pts');
+	});
+
+	test('a body with multiple "**Project Goal:**" occurrences (imbue-treasure.md-shaped: one per enhancement tier) degrades — no section/tier awareness to pick the right one', async () => {
+		const entity: CompendiumEntity = {
+			scc: GOAL_CODE,
+			type: 'project',
+			name: 'Imbue Treasure',
+			source: 'mcdm.heroes.v1',
+			file: {} as any,
+			frontmatter: {},
+			body: async () =>
+				'##### Imbue Weapon\n\n' +
+				'###### 1st-Level Weapon Enhancement\n\n' +
+				'**Project Goal:** 150\n\n' +
+				'###### 5th-Level Weapon Enhancement\n\n' +
+				'**Project Goal:** 150\n\n' +
+				'###### 9th-Level Weapon Enhancement\n\n' +
+				'**Project Goal:** 150\n',
+			model: async () => undefined,
+		};
+		const compendium = fakeCompendium({ getEntity: async () => entity });
+		const source = `goal_code: "scc.v1:${GOAL_CODE}"\naccrued: 5`;
+		const { root } = await renderProject(source, {}, { compendium });
+
+		expect(nameEl(root).textContent).toBe('Imbue Treasure');
+		expect(progressText(root)).toBe('5 pts');
+	});
+
 	test('no compendium wired / not available: degrades to the inline goal_code with no resolution, never a crash', async () => {
 		const source = `goal_code: "scc.v1:${GOAL_CODE}"\naccrued: 5`;
 		const { root } = await renderProject(source, {}, {});

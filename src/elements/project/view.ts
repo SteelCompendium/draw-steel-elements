@@ -10,8 +10,11 @@
 // CompendiumIndex.getEntity() directly: `entry.name` (frontmatter item_name/name/
 // basename) for goal_name, and a `**Project Goal:** <points>` regex over the resolved
 // body text for goal_points (the real corpus's own prose shape — see
-// data-unified/en/unified/md-dse/project/*.md; a non-numeric goal, e.g. "Varies", simply
-// leaves goal_points unresolved rather than fabricating a number).
+// data-unified/en/unified/md-dse/project/*.md). Non-numeric ("Varies"), conditional
+// ("240 if X, or 360 if Y" — hone-career-skills.md), and multi-entry ("**Project Goal:**"
+// occurring more than once in one body, e.g. imbue-treasure.md's per-tier sections) goal
+// text all degrade to leaving goal_points unresolved rather than fabricating or
+// guessing a number (task-7-review.md findings 1-2) — see resolveGoalPoints below.
 //
 // Project rolls (REF §10/AGENT 872-908): characteristic + skill, 2d10. `roll` = the
 // natural (pre-modifier) 2d10 sum — RollResult.natural IS this value, and
@@ -30,7 +33,38 @@ import type { RollService } from '@/framework/roll/service';
 import type { ProjectModel, ProjectRoll } from './model';
 import { BREAKTHROUGH_BONUS, progressPercent, hasPendingBreakthroughRoll } from './model';
 
-const PROJECT_GOAL_RE = /\*\*Project Goal:\*\*\s*([\d,]+)/;
+// Matches each `**Project Goal:** <rest-of-line>` occurrence in the body, capturing the
+// rest of the line so callers can inspect it for ambiguity (conditional text, multiple
+// numbers) before trusting a single parsed number.
+const PROJECT_GOAL_LINE_RE = /\*\*Project Goal:\*\*([^\n]*)/g;
+const PROJECT_GOAL_NUMBER_RE = /\d[\d,]*/g;
+
+/** Real-corpus-verified (task-7-review.md findings 1-2): some `project` entities' goal
+ *  text is CONDITIONAL ("240 if X, or 360 if Y" — hone-career-skills.md) or spans multiple
+ *  `**Project Goal:**` occurrences in one body (imbue-treasure.md's three tiered
+ *  enhancement sections, each with their own line) rather than a single unconditional
+ *  number. Taking "the first digit run" in either shape silently returns a
+ *  plausible-but-wrong (or right-by-coincidence) number with no visible degrade. Instead:
+ *  resolve a number ONLY when there is exactly one `**Project Goal:**` line in the body AND
+ *  that line contains exactly one number token — anything else (zero lines, multiple
+ *  lines, or a line with 2+ numbers) degrades to `undefined`, the same "goal unset" visible
+ *  state as the existing `Varies` case (progress renders as `${accrued} pts`, no fabricated
+ *  total; the user can always set `goal_points` inline to override). */
+function resolveGoalPoints(body: string): number | undefined {
+	const lines: string[] = [];
+	PROJECT_GOAL_LINE_RE.lastIndex = 0;
+	let lineMatch: RegExpExecArray | null;
+	while ((lineMatch = PROJECT_GOAL_LINE_RE.exec(body))) {
+		lines.push(lineMatch[1]);
+	}
+	if (lines.length !== 1) return undefined;
+
+	const numbers = lines[0].match(PROJECT_GOAL_NUMBER_RE);
+	if (!numbers || numbers.length !== 1) return undefined;
+
+	const points = Number(numbers[0].replace(/,/g, ''));
+	return Number.isNaN(points) ? undefined : points;
+}
 
 interface ResolvedGoal {
 	name?: string;
@@ -71,9 +105,7 @@ export class ProjectView extends ElementView<ProjectModel> {
 		const entity = await index.getEntity(bareCode);
 		if (!entity) return {};
 		const body = await entity.body();
-		const match = PROJECT_GOAL_RE.exec(body);
-		const points = match ? Number(match[1].replace(/,/g, '')) : undefined;
-		return { name: entity.name, points: points !== undefined && !Number.isNaN(points) ? points : undefined };
+		return { name: entity.name, points: resolveGoalPoints(body) };
 	}
 
 	// ------------------------------------------------------------------------- build
