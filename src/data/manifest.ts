@@ -52,9 +52,10 @@ export class ManifestStore {
 		const path = this.manifestPath();
 		try {
 			if (!(await this.app.vault.adapter.exists(path))) return null;
-			const parsed = JSON.parse(await this.app.vault.adapter.read(path));
-			if (parsed?.schemaVersion !== MANIFEST_SCHEMA_VERSION
-				|| typeof parsed.files !== "object" || parsed.files === null) {
+			const parsed: unknown = JSON.parse(await this.app.vault.adapter.read(path));
+			const candidate = parsed as { schemaVersion?: unknown; files?: unknown } | null | undefined;
+			if (candidate?.schemaVersion !== MANIFEST_SCHEMA_VERSION
+				|| typeof candidate.files !== "object" || candidate.files === null) {
 				console.warn("Draw Steel Elements: unrecognized compendium manifest — treating as absent (fail-safe: nothing will be deleted).");
 				return null;
 			}

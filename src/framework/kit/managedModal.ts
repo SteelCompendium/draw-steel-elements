@@ -52,7 +52,7 @@ export class DseModal extends Modal {
 	 * harness mock only builds containerEl, so fall back to it.
 	 */
 	private dialogEl(): HTMLElement {
-		return (this.modalEl as HTMLElement | undefined) ?? this.containerEl;
+		return this.modalEl ?? this.containerEl;
 	}
 
 	/**

@@ -48,14 +48,14 @@ export class CustomizeConditionModal extends DseModal {
 		// later consumer) goes through the validating helper regardless.
 		const colorRow = tools.createDiv({ cls: 'dse-cust__row' });
 		colorRow.createEl('label', { text: 'Color: ' });
-		const colorInput = colorRow.createEl('input', { type: 'color' }) as HTMLInputElement;
+		const colorInput = colorRow.createEl('input', { type: 'color' });
 		colorInput.setAttribute('aria-label', 'Condition color');
 		colorInput.value = this.conditionData.color || COLOR_INPUT_DEFAULT;
 
 		// Effect selector.
 		const effectRow = tools.createDiv({ cls: 'dse-cust__row' });
 		effectRow.createEl('label', { text: 'Effect: ' });
-		const effectSelect = effectRow.createEl('select') as HTMLSelectElement;
+		const effectSelect = effectRow.createEl('select');
 		effectSelect.setAttribute('aria-label', 'Condition effect');
 		for (const effect of ['static', ...CONDITION_EFFECTS]) {
 			const option = effectSelect.createEl('option', { text: effect, value: effect });

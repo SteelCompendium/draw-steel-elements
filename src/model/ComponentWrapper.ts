@@ -1,5 +1,12 @@
 import {parseYaml} from "obsidian";
-import {Creature, CreatureInstance, Hero} from "@drawSteelAdmonition/EncounterData";
+
+/** Raw YAML shape read by ComponentWrapper.parse — every field optional, matching
+ *  the pre-existing `?? true`/`?? false` default pattern in the constructor (no new
+ *  runtime checks or coercions introduced). */
+interface RawComponentWrapperData {
+    collapsible?: boolean;
+    collapse_default?: boolean;
+}
 
 /**
  * D4 §1.3 amendment (Plan 13 Task 5, blocker resolution — see
@@ -57,19 +64,20 @@ export class ComponentWrapper {
     collapse_default: boolean;
 
     public static parseYaml(source: string) {
-        let data: any;
+        let data: unknown;
         try {
             data = parseYaml(source);
-        } catch (error: any) {
-            throw new Error("Invalid YAML format: " + error.message);
+        } catch (error: unknown) {
+            throw new Error("Invalid YAML format: " + (error instanceof Error ? error.message : String(error)));
         }
         return ComponentWrapper.parse(data);
     }
 
-    public static parse(data: any): ComponentWrapper {
+    public static parse(data: unknown): ComponentWrapper {
+        const raw = data as RawComponentWrapperData;
         return new ComponentWrapper(
-            data.collapsible,
-            data.collapse_default);
+            raw.collapsible as boolean,
+            raw.collapse_default as boolean);
     }
 
     constructor(collapsible: boolean, collapse_default: boolean) {

@@ -201,16 +201,16 @@ export class ProjectView extends ElementView<ProjectModel> {
 	private buildRollForm(parent: HTMLElement, owner: Component, model: ProjectModel): void {
 		const form = parent.createDiv({ cls: 'dse-prj__roll-form' });
 
-		const rollInput = form.createEl('input', { cls: 'dse-prj__roll-input', type: 'number' }) as HTMLInputElement;
+		const rollInput = form.createEl('input', { cls: 'dse-prj__roll-input', type: 'number' });
 		rollInput.setAttribute('aria-label', 'Roll (natural 2d10 total)');
 		rollInput.setAttribute('placeholder', 'Roll');
 
-		const pointsInput = form.createEl('input', { cls: 'dse-prj__points-input', type: 'number' }) as HTMLInputElement;
+		const pointsInput = form.createEl('input', { cls: 'dse-prj__points-input', type: 'number' });
 		pointsInput.setAttribute('aria-label', 'Points earned');
 		pointsInput.setAttribute('placeholder', 'Points');
 
 		const breakthroughLabel = form.createEl('label', { cls: 'dse-prj__breakthrough-label' });
-		const breakthroughInput = breakthroughLabel.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+		const breakthroughInput = breakthroughLabel.createEl('input', { type: 'checkbox' });
 		breakthroughInput.setAttribute('aria-label', 'Breakthrough (natural 19-20)');
 		breakthroughLabel.createSpan({ text: 'Breakthrough' });
 
@@ -242,11 +242,11 @@ export class ProjectView extends ElementView<ProjectModel> {
 			cls: 'dse-prj__char-input',
 			type: 'number',
 			value: '0',
-		}) as HTMLInputElement;
+		});
 		charInput.setAttribute('aria-label', 'Characteristic');
 
 		const skillLabel = parent.createEl('label', { cls: 'dse-prj__skill-label' });
-		const skillInput = skillLabel.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+		const skillInput = skillLabel.createEl('input', { type: 'checkbox' });
 		skillInput.setAttribute('aria-label', 'Applicable skill (+2)');
 		skillLabel.createSpan({ text: 'Skill (+2)' });
 

@@ -123,8 +123,18 @@ export async function sendToSidebar(
 	if (anchorId === null) return; // no matching block found
 
 	if (noticeLine !== null) {
+		// `noticeLine` is only ever assigned inside the `vault.process(file, (content)
+		// => {...})` callback above, which the preceding `await` guarantees has already
+		// run synchronously by this point (Vault.process invokes its callback before
+		// resolving) -- but TS's control-flow narrowing doesn't model that a value
+		// mutated inside a passed-in closure has "already happened" by the time control
+		// returns here, so it infers `noticeLine`'s type in this branch as `never`
+		// (its ONLY value it can see pre-closure, `null`, minus the `!== null` guard)
+		// rather than `number`. The runtime guard just above is what actually makes
+		// this safe; the cast below only corrects the type the checker can't derive.
+		const line = noticeLine as number;
 		new Notice(
-			`Draw Steel Elements: multiple "${alias}" blocks in this note — sent the one starting at line ${noticeLine}.`,
+			`Draw Steel Elements: multiple "${alias}" blocks in this note — sent the one starting at line ${line}.`,
 		);
 	}
 

@@ -170,7 +170,7 @@ export class DseSettingTab extends PluginSettingTab {
 					toggle
 						.setValue(onOff ? prefs.get(descriptor.key) === 'on' : prefs.get(descriptor.key) === true)
 						.onChange((value) =>
-							save((onOff ? (value ? 'on' : 'off') : value) as DsePrefs[keyof DsePrefs]),
+							save(onOff ? (value ? 'on' : 'off') : value),
 						),
 				);
 				break;
@@ -180,7 +180,7 @@ export class DseSettingTab extends PluginSettingTab {
 					for (const option of ui.options ?? []) dropdown.addOption(option.value, option.label);
 					dropdown
 						.setValue(String(prefs.get(descriptor.key)))
-						.onChange((value) => save(value as DsePrefs[keyof DsePrefs]));
+						.onChange((value) => save(value));
 				});
 				break;
 			}
@@ -188,7 +188,7 @@ export class DseSettingTab extends PluginSettingTab {
 				setting.addText((text) =>
 					text
 						.setValue(String(prefs.get(descriptor.key)))
-						.onChange((value) => save(value as DsePrefs[keyof DsePrefs])),
+						.onChange((value) => save(value)),
 				);
 				break;
 			}

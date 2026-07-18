@@ -58,7 +58,7 @@ export function tabs(parent: HTMLElement, opts: TabsOptions, owner: Component): 
 	const panels: Record<string, HTMLElement> = {};
 
 	opts.tabs.forEach((spec, i) => {
-		const tabEl = tablistEl.createEl('button', { cls: 'dse-tabs__tab' }) as HTMLButtonElement;
+		const tabEl = tablistEl.createEl('button', { cls: 'dse-tabs__tab' });
 		tabEl.setAttribute('type', 'button');
 		tabEl.setAttribute('role', 'tab');
 		// Index-based DOM ids: unique per mount, immune to non-id-safe tab ids.

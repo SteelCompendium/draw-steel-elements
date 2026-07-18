@@ -134,7 +134,7 @@ export function powerRollPanel(
 
 	for (const row of opts.rows) {
 		const rowEl = opts.selectable
-			? (rowsEl.createEl('button', { cls: 'dse-pr__row' }) as HTMLButtonElement)
+			? rowsEl.createEl('button', { cls: 'dse-pr__row' })
 			: rowsEl.createDiv({ cls: 'dse-pr__row' });
 		if (opts.selectable) {
 			rowEl.setAttribute('type', 'button'); // never a form submit

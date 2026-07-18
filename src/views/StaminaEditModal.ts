@@ -120,7 +120,7 @@ export function staminaStepperRow(
  * "Gain N Stamina" apply button). DOM text only — no styles involved.
  */
 export function setButtonText(btn: IconButtonHandle, text: string): void {
-	(btn.buttonEl.querySelector('.dse-btn__text') as HTMLElement | null)?.setText(text);
+	btn.buttonEl.querySelector('.dse-btn__text')?.setText(text);
 	btn.setLabel(text);
 }
 
@@ -225,7 +225,7 @@ export class StaminaEditModal extends DseModal {
 		const applyInput = applyRow.createEl('input', {
 			type: 'number',
 			cls: 'dse-sedit__apply-input',
-		}) as HTMLInputElement;
+		});
 		applyInput.value = '0';
 		applyInput.setAttribute('aria-label', 'Amount to apply');
 

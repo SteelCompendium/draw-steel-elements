@@ -35,6 +35,19 @@ export interface SyncReport {
 
 export type RequestUrlFn = (params: RequestUrlParam) => Promise<RequestUrlResponse>;
 
+/** The subset of GitHub's release API JSON body (`response.json`, typed `any` by
+ *  obsidian's `RequestUrlResponse`) that resolveRelease reads — cast once at the
+ *  parse boundary rather than threading `any` through the lookup below. */
+interface GithubReleaseAsset {
+	name: string;
+	url: string;
+}
+
+interface GithubRelease {
+	tag_name: string;
+	assets?: GithubReleaseAsset[];
+}
+
 const BATCH_SIZE = 20; // keep the pre-6.0 batch/yield pattern (mobile-friendly)
 
 /**
@@ -221,9 +234,9 @@ export class CompendiumSyncService {
 		if (response.status !== 200) {
 			throw new Error(`GitHub release lookup failed (HTTP ${response.status}) for ${url}`);
 		}
-		const release = response.json;
+		const release = response.json as GithubRelease;
 		const assetName = `${COMPENDIUM_FORMAT}-unified-${options.locale}.zip`;
-		const asset = (release.assets ?? []).find((a: any) => a.name === assetName);
+		const asset = (release.assets ?? []).find((a) => a.name === assetName);
 		if (!asset) {
 			throw new Error(
 				`Release ${release.tag_name} has no asset named ${assetName}. ` +

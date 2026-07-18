@@ -222,7 +222,7 @@ export class PartyView extends ElementView<PartyModel> {
 	 *  adds the entered amount to EVERY member's victories, rebuilds, persists. */
 	private buildAwardVictories(parent: HTMLElement, owner: Component, model: PartyModel): void {
 		const form = parent.createDiv({ cls: 'dse-party__award-form' });
-		const input = form.createEl('input', { cls: 'dse-party__award-input', type: 'number', value: '1' }) as HTMLInputElement;
+		const input = form.createEl('input', { cls: 'dse-party__award-input', type: 'number', value: '1' });
 		input.setAttribute('aria-label', 'Victories to award');
 
 		iconButton(

@@ -61,7 +61,7 @@ export class ParticipantsView {
 		const skillInput = form.createEl('input', {
 			cls: 'dse-mt__skill-input',
 			type: 'text',
-		}) as HTMLInputElement;
+		});
 		skillInput.setAttribute('placeholder', 'Skill used (optional)');
 		skillInput.setAttribute('aria-label', `${participant.name}'s skill`);
 
@@ -71,7 +71,7 @@ export class ParticipantsView {
 				cls: 'dse-mt__char-input',
 				type: 'number',
 				value: '0',
-			}) as HTMLInputElement;
+			});
 			charInput.setAttribute('aria-label', `${participant.name}'s characteristic`);
 		}
 

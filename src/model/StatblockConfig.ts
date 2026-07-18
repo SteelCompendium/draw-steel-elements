@@ -17,14 +17,14 @@ function toLegacyList(value: unknown): unknown[] {
     return Array.isArray(value) ? value : [value];
 }
 
-export function applyLegacyStatblockKeys(raw: Record<string, any>): Record<string, any> {
+export function applyLegacyStatblockKeys(raw: Record<string, unknown>): Record<string, unknown> {
     const shimRoles = raw.roles !== undefined
         && raw.role === undefined && raw.organization === undefined;
     const shimAncestry = raw.ancestry !== undefined && raw.keywords === undefined;
     const hasLegacyKeys = raw.roles !== undefined || raw.ancestry !== undefined;
     if (!hasLegacyKeys) return raw;
 
-    const out: Record<string, any> = { ...raw };
+    const out: Record<string, unknown> = { ...raw };
     if (shimRoles) {
         // Mirrors the SDK 3.0 MarkdownStatblockReader's classification loop
         // (data-sdk-npm/src/io/markdown/MarkdownStatblockReader.ts:130-141) exactly:
@@ -66,7 +66,7 @@ export class StatblockConfig {
         // shim legacy keys, then feed the SDK's DTO→model adapter directly. This
         // replaces the SDK YamlReader path (which parses with the `yaml` package)
         // so the shim sees the raw object before the DTO is constructed.
-        const raw = (parseYaml(text) ?? {}) as Record<string, any>;
+        const raw = (parseYaml(text) ?? {}) as Record<string, unknown>;
         return new StatblockConfig(Statblock.modelDTOAdapter(applyLegacyStatblockKeys(raw)));
     }
 }

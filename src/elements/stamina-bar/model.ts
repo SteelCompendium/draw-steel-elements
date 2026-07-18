@@ -22,7 +22,7 @@ import { stringifyYaml } from 'obsidian';
 import { StaminaBar } from '@model/StaminaBar';
 
 export function parse(data: unknown, _raw: string): StaminaBar {
-	return StaminaBar.parse(data as any);
+	return StaminaBar.parse(data);
 }
 
 export function serialize(model: StaminaBar): string {

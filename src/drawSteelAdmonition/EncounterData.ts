@@ -2,6 +2,23 @@ import {App, parseYaml} from "obsidian";
 import {DSESettings} from "@model/Settings";
 import {ReferenceResolver} from "@utils/ReferenceResolver";
 
+/** Narrow an unknown `catch` binding down to a displayable message without assuming
+ *  it's an `Error` (thrown values aren't guaranteed to be). Mirrors
+ *  JsonSchemaValidator.ts's helper of the same name (kept file-local, not shared,
+ *  matching wave 1's convention). */
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+/** The fields parseEncounterData reads off a resolved statblock reference payload —
+ *  mirrors resolveInitiativeRefs' StatblockFields (src/elements/initiative/resolveRefs.ts),
+ *  same fallback contract, just still inline here in the legacy sync parse path. */
+interface StatblockFields {
+    name?: unknown;
+    stamina?: unknown;
+    image?: unknown;
+}
+
 /** Per-turn action checklist (D8 spec §7.2/§7.3, additive). "Triggered" is per ROUND
  *  (spec §7.1 — one triggered action per round, AGENT line 780), so it resets on round
  *  advance, not on turn end like the other three. ABSENT on a Hero/CreatureInstance means
@@ -26,7 +43,7 @@ export interface Hero {
      *  default; never fabricated during parse. */
     actions?: ActorActions;
     conditions: (string | Condition)[];
-    statblock?: any; // To allow property fallback
+    statblock?: unknown; // To allow property fallback
 }
 
 export interface CreatureInstance {
@@ -49,7 +66,7 @@ export interface Creature {
     image?: string;
     isHero: boolean;
     squad_role?: "minion" | "captain";
-    statblock?: any; // To allow property fallback
+    statblock?: unknown; // To allow property fallback
 }
 
 export interface EnemyGroup {
@@ -175,8 +192,8 @@ export async function parseEncounterData(source: string, app: App, settings: DSE
     // Try parsing the YAML input
     try {
         data = parseYaml(source) as EncounterData;
-    } catch (error) {
-        throw new Error("Invalid YAML format: " + error.message);
+    } catch (error: unknown) {
+        throw new Error("Invalid YAML format: " + errorMessage(error));
     }
 
     const resolver = new ReferenceResolver(app, settings);
@@ -200,16 +217,16 @@ export async function parseEncounterData(source: string, app: App, settings: DSE
     for (const [index, hero] of data.heroes.entries()) {
         if (typeof hero.statblock === 'string') {
             try {
-                const resolved = await resolver.resolveReferences(hero.statblock);
+                const resolved = await resolver.resolveReferences(hero.statblock) as StatblockFields | null | undefined;
                 if (resolved) {
-                    if (!hero.name && resolved.name) hero.name = resolved.name;
-                    if (!hero.max_stamina && resolved.stamina) hero.max_stamina = +resolved.stamina;
-                    if (!hero.image && resolved.image) hero.image = resolved.image;
+                    if (!hero.name && resolved.name) hero.name = resolved.name as string;
+                    if (!hero.max_stamina && resolved.stamina) hero.max_stamina = +(resolved.stamina as string | number);
+                    if (!hero.image && resolved.image) hero.image = resolved.image as string;
                 }
-            } catch (e) {
+            } catch (e: unknown) {
                 const message = `
 Failed to resolve hero statblock reference at index ${index} (${hero.statblock}):
-    ${e.message}
+    ${errorMessage(e)}
 
 Are there multiple instances of the '${hero.statblock}' file in your vault? If so, please specify the full path.
 `;
@@ -300,16 +317,16 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
         for (const [creatureIndex, creature] of group.creatures.entries()) {
             if (typeof creature.statblock === 'string') {
                 try {
-                    const resolved = await resolver.resolveReferences(creature.statblock);
+                    const resolved = await resolver.resolveReferences(creature.statblock) as StatblockFields | null | undefined;
                     if (resolved) {
-                        if (!creature.name && resolved.name) creature.name = resolved.name;
-                        if (!creature.max_stamina && resolved.stamina) creature.max_stamina = +resolved.stamina;
-                        if (!creature.image && resolved.image) creature.image = resolved.image;
+                        if (!creature.name && resolved.name) creature.name = resolved.name as string;
+                        if (!creature.max_stamina && resolved.stamina) creature.max_stamina = +(resolved.stamina as string | number);
+                        if (!creature.image && resolved.image) creature.image = resolved.image as string;
                     }
-                } catch (e) {
+                } catch (e: unknown) {
                     const message = `
 Failed to resolve creature statblock reference at index ${creatureIndex} (${creature.statblock}):
-    ${e.message}
+    ${errorMessage(e)}
 
 Are there multiple instances of the '${creature.statblock}' file in your vault? If so, please specify the full path.
 `;

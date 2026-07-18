@@ -23,8 +23,11 @@ export interface CompendiumEntity extends CompendiumEntry {
 	frontmatter: Record<string, unknown>;
 	/** Rendered markdown body (frontmatter stripped). */
 	body(): Promise<string>;
-	/** Typed element model when `type` maps to a known family; else undefined. */
-	model(): Promise<ElementModel | undefined>;
+	/** Typed element model when `type` maps to a known family; else undefined.
+	 *  (`ElementModel` is a type alias for `unknown`, which already subsumes
+	 *  `undefined` -- an explicit `| undefined` here is redundant, not a narrower
+	 *  contract; the doc comment still says "or else undefined" for readability.) */
+	model(): Promise<ElementModel>;
 }
 
 export interface CompendiumIndex {
@@ -102,20 +105,25 @@ class DseCompendiumIndex implements CompendiumIndex {
 	async getEntity(code: string): Promise<CompendiumEntity | null> {
 		const entry = this.getEntry(code);
 		if (entry === null) return null;
-		const app = this.app, self = this;
+		const app = this.app;
+		// Arrow functions below close over `this` lexically (the class instance) --
+		// unlike object-literal shorthand methods, which would rebind `this` to the
+		// returned entity object itself, that's why these are `body: async () => ...`
+		// rather than `async body() {...}` (avoids the no-this-alias `self = this`
+		// workaround the shorthand form would otherwise need).
 		return {
 			...entry,
-			frontmatter: (app.metadataCache.getFileCache(entry.file)?.frontmatter ?? {}) as Record<string, unknown>,
-			async body(): Promise<string> {
+			frontmatter: (app.metadataCache.getFileCache(entry.file)?.frontmatter ?? {}),
+			body: async (): Promise<string> => {
 				return (await app.vault.read(entry.file)).replace(FRONTMATTER_RE, "");
 			},
-			async model(): Promise<ElementModel | undefined> {
-				const cached = self.modelCache.get(code);
+			model: async (): Promise<ElementModel> => {
+				const cached = this.modelCache.get(code);
 				if (cached !== undefined) {
 					// Cache hit: touch (delete + re-insert) to move this entry to the
 					// Map's most-recently-used end -- true LRU, not insertion-order FIFO.
-					self.modelCache.delete(code);
-					self.modelCache.set(code, cached);
+					this.modelCache.delete(code);
+					this.modelCache.set(code, cached);
 					return cached.model;
 				}
 				const adapter = adapterForType(entry.type);
@@ -124,9 +132,9 @@ class DseCompendiumIndex implements CompendiumIndex {
 				// fromFile() is genuinely async, so an invalidation can land while this
 				// is in flight. cachePut checks the generation hasn't moved before
 				// committing (see cachePut's comment).
-				const genAtStart = self.generation;
+				const genAtStart = this.generation;
 				const model = await adapter.fromFile(app, entry.file);
-				if (model != null) self.cachePut(code, model, entry.file.path, genAtStart);
+				if (model != null) this.cachePut(code, model, entry.file.path, genAtStart);
 				return model ?? undefined;
 			},
 		};

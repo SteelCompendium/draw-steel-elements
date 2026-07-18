@@ -195,7 +195,7 @@ export class SccResolver {
 	 *  frontmatter yet — harmless; the next lookup just falls back through derivation
 	 *  again rather than reading stale/absent data. */
 	public indexFile(file: TFile): void {
-		const scc = this.app.metadataCache.getFileCache(file)?.frontmatter?.scc;
+		const scc: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.scc;
 		if (typeof scc === 'string' && scc.length > 0) this.index!.set(scc, file.path);
 	}
 

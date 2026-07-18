@@ -84,7 +84,7 @@ export function prefUi(descriptor: PrefDescriptor): PrefUi | undefined {
 function d<K extends keyof DsePrefs>(
 	descriptor: PrefDescriptor<K> & { ui: PrefUi },
 ): PrefDescriptor {
-	return descriptor as PrefDescriptor;
+	return descriptor;
 }
 
 export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
@@ -240,7 +240,7 @@ export function resolveCollapsePrefs(
 	// No side-channel entry (shouldn't happen for a real element model — see the
 	// declaredCollapsePrefs doc comment) is treated as "declared", falling back to the
 	// model's own already-concrete field rather than guessing.
-	const declared = declaredCollapsePrefs(model as object);
+	const declared = declaredCollapsePrefs(model);
 	const collapsibleDeclared = declared?.collapsible ?? true;
 	const collapseDefaultDeclared = declared?.collapseDefault ?? true;
 	return {

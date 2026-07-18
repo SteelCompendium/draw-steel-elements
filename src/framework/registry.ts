@@ -62,16 +62,24 @@ export interface ElementDefinition<M = unknown> {
 	/**
 	 * Model → YAML block body for write-back. REQUIRED when shape === "persisted"
 	 * (registry rejects the definition otherwise). Typically stringifyYaml(dto).
+	 * Declared as a function-typed FIELD (not method shorthand) so consumers can
+	 * extract `def.serialize` into a local (FormModal's withPrefOverrides wrapping)
+	 * without tripping `@typescript-eslint/unbound-method` -- it was never actually
+	 * `this`-bound (element definitions are plain data), method shorthand just reads
+	 * to the linter as if it might be.
 	 */
-	serialize?(model: M): string;
+	serialize?: (model: M) => string;
 	/** View factory; called once per mounted block instance. */
 	createView(cx: RenderContext): ElementView<M>;
 	/**
 	 * Custom reference resolution. If omitted AND autoResolveRefs === true, the pipeline
 	 * deep-resolves @path / [[wikilink]] / scc.vN: strings in the raw data BEFORE parse()
 	 * via ReferenceService.resolveDeep. (Default is OFF — see autoResolveRefs.)
+	 * Function-typed field, not method shorthand -- see `serialize`'s comment above
+	 * (same `unbound-method` rationale; `pipeline.ts` extracts `def.resolveRefs` into a
+	 * local before calling it).
 	 */
-	resolveRefs?(model: M, refs: ReferenceService): Promise<M>;
+	resolveRefs?: (model: M, refs: ReferenceService) => Promise<M>;
 	/** Opt IN (true) to whole-YAML deep ref-resolution. DEFAULT OFF (amended 2026-07-02;
 	 *  was default-ON). Elements doing field-scoped resolution use a custom resolveRefs. */
 	autoResolveRefs?: boolean;

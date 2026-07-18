@@ -109,7 +109,7 @@ export class DsSchemaSuggest extends EditorSuggest<string> {
 			return Object.keys(props).filter((k) => k.toLowerCase().startsWith(q));
 		}
 		const prop = props[this.mode.key];
-		const values = Array.isArray(prop?.enum) ? (prop!.enum as unknown[]).map(String) : [];
+		const values = Array.isArray(prop?.enum) ? prop.enum.map(String) : [];
 		return values.filter((v) => v.toLowerCase().startsWith(q));
 	}
 

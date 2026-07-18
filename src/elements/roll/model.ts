@@ -48,7 +48,7 @@ const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 
 /** Schema-validated data → RollModel. `null` (empty block) ⇒ a bare power roll. */
 export function parseRollModel(data: unknown): RollModel {
-	const raw: RawRoll = (data ?? {}) as RawRoll;
+	const raw: RawRoll = data ?? {};
 	const parsed = raw.roll !== undefined ? parseRollExpression(raw.roll) : undefined;
 
 	const mode: RollMode = raw.mode ?? parsed?.mode ?? 'power-roll';

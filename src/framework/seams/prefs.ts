@@ -118,8 +118,8 @@ class DsePreferenceStore implements PreferenceStore {
 
 	describe(descriptors: readonly PrefDescriptor[]): void {
 		for (const descriptor of descriptors) {
-			const key = descriptor.key as string;
-			this.descriptorMap.set(key, descriptor as PrefDescriptor);
+			const key = descriptor.key;
+			this.descriptorMap.set(key, descriptor);
 			if (!this.values.has(key)) {
 				this.values.set(key, descriptor.default);
 			}
@@ -164,7 +164,7 @@ class DsePreferenceStore implements PreferenceStore {
 			snapshot[key] = value;
 		}
 		this.persistedSnapshot = snapshot;
-		await this.storage.set(snapshot as Partial<DsePrefs>);
+		await this.storage.set(snapshot);
 	}
 
 	private notify(key: string, value: unknown): void {
@@ -183,7 +183,7 @@ class DsePreferenceStore implements PreferenceStore {
 		}
 		const wrapped = (value: unknown) => cb(value as DsePrefs[K]);
 		subs.add(wrapped);
-		owner.register(() => subs!.delete(wrapped));
+		owner.register(() => subs.delete(wrapped));
 	}
 
 	reflect(rootEl: HTMLElement, owner: Component): void {

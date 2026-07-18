@@ -1,5 +1,19 @@
 import {parseYaml} from "obsidian";
 
+/** Raw YAML shape for a `ds-counter` block — every field optional, matching the
+ *  pre-existing truthy-check/default pattern at each call site in `parse` below (no
+ *  new runtime checks or coercions introduced; the interface only documents what was
+ *  already an implicit assumption under `any`). */
+interface RawCounterData {
+	max_value?: number;
+	current_value?: number;
+	min_value?: number;
+	name?: string;
+	value_height?: number;
+	name_height?: number;
+	_dse_anchor?: string;
+}
+
 export class Counter {
 	max_value?: number;
 	current_value: number;
@@ -15,26 +29,27 @@ export class Counter {
 	_dse_anchor?: string;
 
 	public static parseYaml(source: string) {
-		let data: any;
+		let data: unknown;
 		try {
 			data = parseYaml(source);
-		} catch (error: any) {
-			throw new Error("Invalid YAML format: " + error.message);
+		} catch (error: unknown) {
+			throw new Error("Invalid YAML format: " + (error instanceof Error ? error.message : String(error)));
 		}
 		return Counter.parse(data);
 	}
 
-	public static parse(data: any): Counter {
+	public static parse(data: unknown): Counter {
+		const raw = data as RawCounterData;
 		return new Counter(
-			data.max_value,
-			data.current_value ? data.current_value : 0,
-			data.min_value ? data.min_value : 0,
-			data.name,
-			data.value_height ? data.value_height : 3,
-			data.name_height ? data.name_height : 1,
+			raw.max_value,
+			raw.current_value ? raw.current_value : 0,
+			raw.min_value ? raw.min_value : 0,
+			raw.name as string,
+			raw.value_height ? raw.value_height : 3,
+			raw.name_height ? raw.name_height : 1,
 			// FOLLOWUPS #26: passed straight through, never coerced/defaulted — see the
 			// field comment above.
-			data._dse_anchor);
+			raw._dse_anchor);
 	}
 
 	constructor(

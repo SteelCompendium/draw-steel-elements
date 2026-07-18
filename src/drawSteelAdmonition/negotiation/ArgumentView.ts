@@ -54,7 +54,7 @@ export class ArgumentView {
 		onChange: (cb: HTMLInputElement) => void,
 	): { line: HTMLElement; checkbox: HTMLInputElement } {
 		const line = parent.createEl('label', { cls: 'dse-nt__argument-item' });
-		const checkbox = line.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+		const checkbox = line.createEl('input', { type: 'checkbox' });
 		init(checkbox);
 		if (!this.canPersist) checkbox.disabled = true;
 		line.createSpan({ text });

@@ -4,18 +4,29 @@ import { SccResolver } from "@/refs/SccResolver";
 
 const SCC_PREFIX = /^scc(\.v\d+)?:/;
 
+/** Narrow an unknown `catch` binding down to a displayable message without assuming
+ *  it's an `Error` (thrown values aren't guaranteed to be). Mirrors
+ *  JsonSchemaValidator.ts's helper of the same name (kept file-local, not shared,
+ *  matching wave 1's convention). */
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Extract and parse the first `ds-*` fenced code block of a file.
  * Shared by ReferenceResolver (below) and SccRefProvider (F1 seam).
  * Requires the OD-1(A) md-dse shape for compendium statblocks (ds-sb blocks).
+ * Returns the raw parsed YAML payload — shape is caller-defined (statblock DTO,
+ * arbitrary ds-* block, etc.), so callers narrow/cast at their own boundary, same
+ * as `framework/seams/refs.ts`'s `ResolvedRef.data: unknown`.
  */
-export async function extractFirstDsBlock(app: App, file: TFile): Promise<any> {
+export async function extractFirstDsBlock(app: App, file: TFile): Promise<unknown> {
     const content = await app.vault.read(file);
     // Matches ```ds-<something> ... ``` or ~~~ds-<something> ... ~~~
     const blockRegex = /^([`~]{3,})ds-[\w-]+\s*\n([\s\S]+?)\n^\1/m;
     const match = content.match(blockRegex);
     if (!match) {
-        const type = app.metadataCache.getFileCache(file)?.frontmatter?.type;
+        const type: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.type;
         throw new Error(
             `No Draw Steel Elements code block (ds-*) found in ${file.path}` +
             (typeof type === "string" ? ` (frontmatter type: ${type})` : "") +
@@ -23,8 +34,8 @@ export async function extractFirstDsBlock(app: App, file: TFile): Promise<any> {
     }
     try {
         return parseYaml(match[2]);
-    } catch (e) {
-        throw new Error(`Failed to parse YAML in ${file.path}: ${e.message}`);
+    } catch (e: unknown) {
+        throw new Error(`Failed to parse YAML in ${file.path}: ${errorMessage(e)}`);
     }
 }
 
@@ -40,7 +51,18 @@ export class ReferenceResolver {
         this.sccResolver = sccResolver;
     }
 
-    public async resolveReferences(data: any): Promise<any> {
+    // NOTE: return type intentionally stays `any` (not `unknown`) — a genuinely
+    // unsolvable `no-explicit-any` finding, not a silenceable one. Changing it to
+    // `unknown` breaks tsc on test/unit/utils/referenceResolverScc.test.ts's "legacy
+    // @path and nested-object walking are unchanged" case, which chains unnarrowed
+    // property access straight off the resolved result
+    // (`resolved.creature.statblock.name`) — that test is untouchable per this wave's
+    // hard constraint (zero test modifications), and the recursive walk's output shape
+    // is genuinely data-dependent (arbitrary nested YAML), so there is no callable
+    // narrower return type here that keeps it compiling. The input param below is
+    // still `unknown`, narrowed by the `typeof`/`Array.isArray` checks; only the
+    // return keeps the pre-existing `any`. See wave-2 report.
+    public async resolveReferences(data: unknown): Promise<any> {
         if (typeof data === 'string') {
             if (SCC_PREFIX.test(data.trim())) {
                 return await this.resolveScc(data);
@@ -54,13 +76,14 @@ export class ReferenceResolver {
         }
 
         if (Array.isArray(data)) {
-            return await Promise.all(data.map(item => this.resolveReferences(item)));
+            return await Promise.all((data as unknown[]).map(item => this.resolveReferences(item)));
         }
 
         if (typeof data === 'object' && data !== null) {
-            const resolvedData: any = {};
-            for (const key of Object.keys(data)) {
-                resolvedData[key] = await this.resolveReferences(data[key]);
+            const resolvedData: Record<string, unknown> = {};
+            const record = data as Record<string, unknown>;
+            for (const key of Object.keys(record)) {
+                resolvedData[key] = await this.resolveReferences(record[key]);
             }
             return resolvedData;
         }
@@ -69,7 +92,7 @@ export class ReferenceResolver {
     }
 
     /** F2 §4.3(c): scc refs resolve to a TFile via SccResolver, then reuse the ds-* extraction. */
-    private async resolveScc(target: string): Promise<any> {
+    private async resolveScc(target: string): Promise<unknown> {
         const resolution = this.sccResolver.resolve(target);
         if (resolution.kind !== "vault") {
             throw new Error(
@@ -79,7 +102,7 @@ export class ReferenceResolver {
         return await extractFirstDsBlock(this.app, resolution.file);
     }
 
-    public async resolvePath(path: string): Promise<any> {
+    public async resolvePath(path: string): Promise<unknown> {
         const file = this.findFile(path);
 
         if (!file || !(file instanceof TFile)) {

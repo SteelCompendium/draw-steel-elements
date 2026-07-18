@@ -118,7 +118,8 @@ function dataForSchemaValidation(rawData: unknown): unknown {
 	if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return rawData;
 	const record = rawData as Record<string, unknown>;
 	if (!Object.prototype.hasOwnProperty.call(record, ANCHOR_KEY)) return rawData;
-	const { [ANCHOR_KEY]: _omitted, ...rest } = record;
+	const rest = { ...record };
+	delete rest[ANCHOR_KEY];
 	return rest;
 }
 
@@ -235,7 +236,7 @@ export async function prepareModel<M>(
 	// block-reference rescue mirrors run()'s own comment above `parseYaml` verbatim.
 	let rawData: unknown;
 	try {
-		rawData = runStage('parse', () => parseYaml(source));
+		rawData = runStage<unknown>('parse', () => parseYaml(source));
 	} catch (error) {
 		const trimmed = source.trim();
 		if (def.acceptsWholeBlockRef && trimmed.startsWith('@') && !trimmed.includes('\n')) {

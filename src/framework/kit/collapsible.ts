@@ -53,7 +53,7 @@ export function collapsible(
 ): CollapsibleHandle {
 	const rootEl = parent.createDiv({ cls: 'dse-collapse' });
 
-	const headerEl = rootEl.createEl('button', { cls: 'dse-collapse__header' }) as HTMLButtonElement;
+	const headerEl = rootEl.createEl('button', { cls: 'dse-collapse__header' });
 	headerEl.setAttribute('type', 'button'); // never an implicit form submit
 
 	const chevronEl = headerEl.createSpan({ cls: 'dse-collapse__chevron' });

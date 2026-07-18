@@ -34,7 +34,7 @@ export class MotivationsPitfallsView {
 		for (const mot of this.data.motivations) {
 			const label = list.createEl('label', { cls: 'dse-nt__details-item' });
 			tooltip(label, 'Check Motivations that have already been appealed to.');
-			const checkbox = label.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+			const checkbox = label.createEl('input', { type: 'checkbox' });
 			checkbox.checked = mot.hasBeenAppealedTo ?? false;
 			if (!this.canPersist) checkbox.disabled = true;
 			label.createSpan({ cls: 'dse-nt__details-name', text: mot.name + ': ' });

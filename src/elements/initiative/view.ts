@@ -54,7 +54,7 @@ import { Component, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
-import { buttonRow, iconButton, stepper, tooltip, buildConditionIcons as kitBuildConditionIcons } from '@/framework/kit';
+import { buttonRow, iconButton, stepper, buildConditionIcons as kitBuildConditionIcons } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
@@ -112,7 +112,15 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  actually closes (identity-guarded so an older modal can't null a newer one) while
 	 *  still running the modal's own inherited onClose behavior. */
 	private openModal(modal: Modal): void {
-		const inheritedOnClose = modal.onClose.bind(modal);
+		// `.bind(modal)` (not a plain `modal.onClose` reference, which would trip
+		// `@typescript-eslint/unbound-method`) snapshots the ORIGINAL bound function
+		// at definition time -- immune to `modal.onClose` being reassigned two lines
+		// below (so `inheritedOnClose` can never end up calling the wrapper it's
+		// inside of). `Function.prototype.bind` types as `(...) => any` under this
+		// project's `lib` (es5) though, so the result is cast back to onClose's real
+		// signature (`(): void`) once, rather than threading `any` into the call
+		// below.
+		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
 		modal.onClose = () => {
 			inheritedOnClose();
 			if (this.activeModal === modal) this.activeModal = null;
@@ -837,7 +845,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			const currentStamina = character.current_stamina ?? 0;
 			const tempStamina = character.temp_stamina ?? 0;
 			const maxStamina = this.isHero(character)
-				? (character as Hero).max_stamina
+				? character.max_stamina
 				: creature?.max_stamina ?? 0;
 
 			let displayText = `${currentStamina}`;

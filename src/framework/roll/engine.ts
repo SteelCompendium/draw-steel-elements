@@ -59,7 +59,7 @@ export function resolveRoll(input: RollInput, dice: DiceSource): RollResult {
 	let tier: RollTier | undefined;
 	let tierShifted = 0;
 	if (input.mode === 'power-roll' || input.mode === 'test') {
-		const base = (total <= 11 ? 1 : total <= 16 ? 2 : 3) as RollTier;
+		const base = total <= 11 ? 1 : total <= 16 ? 2 : 3;
 		const shift = net === 2 ? 1 : net === -2 ? -1 : 0;
 		tier = clamp(base + shift, 1, 3) as RollTier;
 		if (isNat) tier = 3; // nat 19–20 ALWAYS tier 3, overriding shifts (D5 §1.4)

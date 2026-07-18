@@ -577,11 +577,19 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         if (manifest === null) {
             const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
             if (root instanceof TFolder && root.children.length > 0) {
-                new LegacyCompendiumModal(this.app, options.root, async (trashOldRoot) => {
-                    if (trashOldRoot) {
-                        await this.app.fileManager.trashFile(root);
-                    }
-                    await this.syncService.sync(this.syncOptions());
+                // LegacyCompendiumModal's onChoice callback is declared `(trashOldRoot:
+                // boolean) => void` (fire-and-forget from the modal's own click handler,
+                // never awaited there either) -- an `async` callback passed directly
+                // trips `no-misused-promises`. Wrap in a `void`-discarded async IIFE
+                // instead: identical fire-and-forget execution/ordering/error handling,
+                // just an explicit `void` where it was implicit before.
+                new LegacyCompendiumModal(this.app, options.root, (trashOldRoot) => {
+                    void (async () => {
+                        if (trashOldRoot) {
+                            await this.app.fileManager.trashFile(root);
+                        }
+                        await this.syncService.sync(this.syncOptions());
+                    })();
                 }).open();
                 return;
             }

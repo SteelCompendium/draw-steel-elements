@@ -29,7 +29,7 @@ export async function extractFirstDsBlockText(app: App, file: TFile): Promise<st
 }
 
 function frontmatterOf(app: App, file: TFile): Record<string, unknown> {
-	return (app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<string, unknown>;
+	return app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 }
 
 /** Deliberately opaque -- callers know the concrete shape from the SCC `type` they queried. */
@@ -100,7 +100,7 @@ function dsBlockAdapter(re: RegExp, readYaml: (text: string) => unknown, alias: 
  *  underlying `adapter` call either way -- one place (this map) that knows "this SCC
  *  `type` maps to this SDK reader," per task-2-review.md's binding single-source-of-truth
  *  constraint. */
-function frontmatterAdapter(re: RegExp, adapter: (fm: any) => unknown, alias: string): TypeAdapter {
+function frontmatterAdapter(re: RegExp, adapter: (fm: unknown) => unknown, alias: string): TypeAdapter {
 	return {
 		matches: (type) => re.test(type),
 		alias,

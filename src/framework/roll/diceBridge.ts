@@ -31,7 +31,10 @@ export function detectDiceRoller(app: App): DiceBridge | null {
 		if (!plugins?.enabledPlugins?.has(DICE_ROLLER_ID)) return null;
 		const api = plugins.plugins?.[DICE_ROLLER_ID]?.api;
 		if (!api || typeof api.roll !== 'function') return null;
-		const roll = api.roll.bind(api);
+		// `.bind()` types as `(...) => any` under this project's `lib` (es5) --
+		// cast back to `api.roll`'s real signature once, rather than threading
+		// `any` through every `roll(...)` call below.
+		const roll = api.roll.bind(api) as (formula: string) => unknown;
 		return {
 			async rollDice(count: number, sides: number): Promise<number[]> {
 				const faces: number[] = [];

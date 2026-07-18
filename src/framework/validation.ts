@@ -56,14 +56,14 @@ class AjvValidationService implements ValidationService {
 	}
 
 	addDependencySchema(id: string, yamlSchema: string): void {
-		const schema = parseYaml(yamlSchema);
+		const schema = parseYaml(yamlSchema) as object;
 		this.ajv.addSchema(schema, id);
 	}
 
 	validate(elementId: string, yamlSchema: string, data: unknown): ValidationResult {
 		let validateFn = this.compiled.get(elementId);
 		if (!validateFn) {
-			const schema = parseYaml(yamlSchema);
+			const schema = parseYaml(yamlSchema) as object;
 			validateFn = this.ajv.compile(schema);
 			this.compiled.set(elementId, validateFn);
 		}

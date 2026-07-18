@@ -11,6 +11,24 @@ import {Counter} from "@model/Counter";
 // it does not change what property is read or how.
 type ContextWithEl = MarkdownPostProcessorContext & { el: HTMLElement };
 
+// Obsidian's Canvas internals (canvas view + its selected nodes) are likewise NOT
+// part of the public `obsidian` type declarations — same situation as `ContextWithEl`
+// above. These are type-only aliases documenting the runtime shape already relied on
+// by findCanvasNodeAndUpdate/updateCanvasCard below (a text-node's `.text`, its
+// `getData()`/`setData()` pair, and the parent canvas's `.selection`/`.getData()`/
+// `.view.requestSave()`); no behavior changes, no new fields read or written.
+interface CanvasNode {
+	text?: string;
+	getData(): Record<string, unknown>;
+	setData(data: Record<string, unknown>): void;
+}
+
+interface Canvas {
+	selection: Iterable<CanvasNode>;
+	getData(): unknown;
+	view: { requestSave(): void };
+}
+
 export class CodeBlocks {
 	static async updateInitiativeTracker(app: App, data: EncounterData, ctx: MarkdownPostProcessorContext): Promise<void> {
 		return CodeBlocks.updateCodeBlock(app, data, ctx, "ds-initiative");
@@ -33,7 +51,7 @@ export class CodeBlocks {
 	}
 
 	// TODO - can extract language out from ctx
-	static async updateCodeBlock(app: App, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
+	static async updateCodeBlock(app: App, data: unknown, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		let file: TFile | null = null;
 
 		if (ctx.sourcePath) {
@@ -51,20 +69,20 @@ export class CodeBlocks {
 		}
 	}
 
-	static async findCanvasNodeAndUpdate(app: App, ctx: MarkdownPostProcessorContext, data: any, language: string) {
+	static async findCanvasNodeAndUpdate(app: App, ctx: MarkdownPostProcessorContext, data: unknown, language: string) {
 		const canvasView = app.workspace.getActiveViewOfType(ItemView);
 		if (canvasView?.getViewType() !== 'canvas') {
 			console.warn("Failed to find canvas associated with markdown context.  Change NOT saved.")
 			return;
 		}
-		const canvas = (canvasView as any).canvas;
-		const selection: any = Array.from(canvas.selection);
+		const canvas = (canvasView as unknown as { canvas: Canvas }).canvas;
+		const selection: CanvasNode[] = Array.from(canvas.selection);
 
-		for (let selectionKey in selection) {
-			// console.log(selection[selectionKey].text);
+		for (const node of selection) {
+			// console.log(node.text);
 			// console.log(ctx.getSectionInfo(ctx.el).text);
-			if (selection[selectionKey].text === ctx.getSectionInfo((ctx as ContextWithEl).el)?.text) {
-				await this.updateCanvasCard(app, canvas, selection[selectionKey], data, language);
+			if (node.text === ctx.getSectionInfo((ctx as ContextWithEl).el)?.text) {
+				await this.updateCanvasCard(app, canvas, node, data, language);
 				return;
 			}
 		}
@@ -74,7 +92,7 @@ export class CodeBlocks {
 		return;
 	}
 
-	static async updateCanvasCard(app: App, canvas: any, node: any, data: any, language: string) {
+	static async updateCanvasCard(app: App, canvas: Canvas, node: CanvasNode, data: unknown, language: string) {
 		const newCodeBlockContent = [];
 		newCodeBlockContent.push('```' + language);
 		newCodeBlockContent.push(stringifyYaml(data).trim());
@@ -88,7 +106,7 @@ export class CodeBlocks {
 		return;
 	}
 
-	static async updateMarkdownCodeBlock(app: App, file: TFile, data: any, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
+	static async updateMarkdownCodeBlock(app: App, file: TFile, data: unknown, ctx: MarkdownPostProcessorContext, language: string): Promise<void> {
 		const content = await app.vault.read(file);
 		const lines = content.split('\n');
 

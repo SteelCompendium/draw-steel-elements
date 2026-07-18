@@ -31,6 +31,22 @@ import { DseModal, openManagedModal } from '@/framework/kit/managedModal';
 import { extractPrefOverrides, withPrefOverrides } from '@/framework/prefOverrides';
 import { fieldsFromSchema, type FormField } from './formModel';
 
+/** `renderField`'s non-textarea widgets (toggle/number/select/text) only ever read a
+ *  scalar out of `working` -- the 'textarea' widget (array/object/$ref nodes) returns
+ *  early above and never reaches these branches. `scalarToString` documents that
+ *  pre-existing domain invariant explicitly (a named local narrows `unknown` to this
+ *  type before stringifying), rather than changing what gets displayed for a value
+ *  that violates it. Not inlined as `String(current as FormScalar)` at each call site:
+ *  `String()`'s parameter is `any`, so `no-unnecessary-type-assertion` strips an
+ *  inline cast there right back out, which reopens `no-base-to-string`'s complaint --
+ *  routing through an explicitly `FormScalar`-typed local satisfies both. */
+type FormScalar = string | number | boolean;
+
+function scalarToString(value: unknown): string {
+	const scalar: FormScalar = value as FormScalar;
+	return String(scalar);
+}
+
 class FormModal extends DseModal {
 	private working: Record<string, unknown> = {};
 	private prefOverrides: Partial<DsePrefs> | undefined;
@@ -55,7 +71,7 @@ class FormModal extends DseModal {
 		super.onOpen();
 		this.setDseTitle(`Edit ${this.def.name}`);
 		try {
-			const parsed = parseYaml(this.source);
+			const parsed: unknown = parseYaml(this.source);
 			const rawData = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
 			// Critical 1: pop the reserved `prefs:` override map BEFORE it ever reaches
 			// `working` (validation/def.parse never see it — same contract as the
@@ -126,7 +142,7 @@ class FormModal extends DseModal {
 				break;
 			case 'number':
 				setting.addText((t) =>
-					t.setValue(current == null ? '' : String(current)).onChange((v) => set(v === '' ? undefined : Number(v))),
+					t.setValue(current == null ? '' : scalarToString(current)).onChange((v) => set(v === '' ? undefined : Number(v))),
 				);
 				break;
 			case 'select': {
@@ -135,7 +151,7 @@ class FormModal extends DseModal {
 				// so state matches display (validation/preview/Save all see what the user
 				// sees), instead of silently staying undefined until the user touches it.
 				const fallback = field.enum?.[0];
-				const initial = current == null ? (fallback ?? '') : String(current);
+				const initial = current == null ? (fallback ?? '') : scalarToString(current);
 				if (current == null && fallback !== undefined) this.working[field.key] = fallback;
 				setting.addDropdown((d) => {
 					for (const opt of field.enum ?? []) d.addOption(opt, opt);
@@ -145,7 +161,7 @@ class FormModal extends DseModal {
 			}
 			case 'text':
 			default:
-				setting.addText((t) => t.setValue(current == null ? '' : String(current)).onChange(set));
+				setting.addText((t) => t.setValue(current == null ? '' : scalarToString(current)).onChange(set));
 				break;
 		}
 	}

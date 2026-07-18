@@ -57,7 +57,7 @@ export function extractPrefOverrides(
 		}
 		out[key] = value;
 	}
-	return Object.keys(out).length > 0 ? (out as Partial<DsePrefs>) : undefined;
+	return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**

@@ -169,8 +169,8 @@ export function parseNegotiationData(source: string): NegotiationData {
     let data: Partial<NegotiationData>;
     try {
         data = parseYaml(source) as Partial<NegotiationData>;
-    } catch (error: any) {
-        throw new Error("Invalid YAML format: " + error.message);
+    } catch (error: unknown) {
+        throw new Error("Invalid YAML format: " + (error instanceof Error ? error.message : String(error)));
     }
 
     return new NegotiationData(data);

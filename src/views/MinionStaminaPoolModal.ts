@@ -101,7 +101,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			type: 'number',
 			cls: 'dse-sedit__apply-input',
 			attr: { size: 3 },
-		}) as HTMLInputElement;
+		});
 		damageInput.value = '0';
 		damageInput.setAttribute('aria-label', 'Damage per minion');
 		applyRow.createSpan({ text: 'damage to' });
@@ -109,7 +109,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			type: 'number',
 			cls: 'dse-sedit__apply-input',
 			attr: { size: 3 },
-		}) as HTMLInputElement;
+		});
 		minionCountInput.value = '1';
 		minionCountInput.max = this.creature.instances?.length.toString() ?? '';
 		minionCountInput.min = '0';
@@ -147,7 +147,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			// The checkbox comes FIRST in the row: the `.dse-minion__check:checked ~ *`
 			// CSS rule colors the name/conditions with --dse-danger (the old inline
 			// crimson, evicted — SC-5).
-			const checkbox = minionRow.createEl('input', { type: 'checkbox', cls: 'dse-minion__check' }) as HTMLInputElement;
+			const checkbox = minionRow.createEl('input', { type: 'checkbox', cls: 'dse-minion__check' });
 			checkbox.setAttribute('aria-label', `Kill ${this.creature.name} #${instance.id}`);
 			this.lifecycle.registerDomEvent(checkbox, 'change', () => {
 				this.updateCheckboxes();

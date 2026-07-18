@@ -8,5 +8,5 @@
 import { Skills } from '@model/Skills';
 
 export function parse(data: unknown, _raw: string): Skills {
-	return Skills.parse(data as any);
+	return Skills.parse(data);
 }
