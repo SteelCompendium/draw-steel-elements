@@ -56,8 +56,8 @@ Various Elements are provided to support building [Character Sheets in Canvas](c
 
 ![canvas character sheet](Media/canvas-character-sheet.png)
 
-## Compendium Downloader
+## Compendium Sync
 
-The [Compendium Downloader](compendium-downloader.md) is able to manage a local copy of the 
+[Compendium Sync](compendium-sync.md) manages a local, up-to-date copy of the
 [Draw Steel Compendium](https://steelcompendium.io/compendium) in your Obsidian Vault.   
 

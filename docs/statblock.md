@@ -19,9 +19,9 @@ Example statblock
 type: statblock
 name: Human Bandit Chief
 level: 3
-roles:
-  - Leader
-ancestry:
+organization: Leader
+role: ""
+keywords:
   - Human
   - Humanoid
 ev: "20"
@@ -159,35 +159,45 @@ features:
 
 ## Field Definitions
 
-Below is a detailed description of each field used in the statblock, including their types, default values, and whether they are required.
+Below is a detailed description of each field used in the statblock, including their types
+and whether they are required by the Draw Steel Compendium's data schema. The plugin itself
+does not enforce this client-side — a missing field just renders as its display fallback
+(`N/A`, `-`, "No Role", etc.) instead of an error.
 
-| Property          | Type      | Required | Default     | Description                                                          |
-|-------------------|-----------|----------|-------------|----------------------------------------------------------------------|
-| `name`            | string    | Yes      | -           | The name of the creature.                                            |
-| `type`            | string    | Yes      | "statblock" | Static string "statblock"                                            |
-| `level`           | integer   | No       | 0           | The creature's level.                                                |
-| `roles`           | string[]  | Yes      | []          | Roles assigned to the creature (e.g., Boss, Minion).                 |
-| `ancestry`        | string[]  | Yes      | []          | Ancestries or types the creature belongs to (e.g., Human, Humanoid). |
-| `ev`              | string    | Yes      | "0"         | Encounter Value (EV) of the creature.                                |
-| `stamina`         | string    | Yes      | 0           | The creature's max stamina.                                          |
-| `immunities`      | string[]  | No       | []          | List of immunities (e.g., Magic 2, Psionic 2).                       |
-| `weaknesses`      | string[]  | No       | []          | List of weaknesses (e.g., acid 3, holy 1).                           |
-| `speed`           | integer   | Yes      | ""          | Movement speed of the creature (e.g., 5).                            |
-| `movement`        | string    | No       | ""          | Movement types of the creature (e.g. 'run, fly')                     |
-| `size`            | string    | Yes      | ""          | Size category (e.g., 1M for medium).                                 |
-| `stability`       | integer   | Yes      | 0           | Stability value of the creature.                                     |
-| `free_strike`     | integer   | Yes      | 0           | The free strike value.                                               |
-| `might`           | integer   | Yes      | 0           | Might modifier.                                                      |
-| `agility`         | integer   | Yes      | 0           | Agility modifier.                                                    |
-| `reason`          | integer   | Yes      | 0           | Reason modifier.                                                     |
-| `intuition`       | integer   | Yes      | 0           | Intuition modifier.                                                  |
-| `presence`        | integer   | Yes      | 0           | Presence modifier.                                                   |
-| `with_captain`    | string    | No       | -           | Effect when a captain is present.                                    |
-| `features`        | Feature[] | No       | []          | List of features (see Feature schema).                               |
+| Property       | Type      | Required | Description                                                                                              |
+|----------------|-----------|----------|-----------------------------------------------------------------------------------------------------------|
+| `name`         | string    | Yes      | The name of the creature.                                                                                 |
+| `type`         | string    | Yes      | Static string `"statblock"`.                                                                              |
+| `level`        | integer   | Yes      | The creature's level.                                                                                     |
+| `role`         | string    | Yes      | The creature's combat role (e.g., Ambusher, Artillery, Brute, Controller, Defender, Harrier, Skirmisher). May be `""` — Leader/Solo creatures usually carry their classification in `organization` instead. |
+| `organization` | string    | Yes      | The creature's organizational type (e.g., Minion, Horde, Platoon, Elite, Solo, Leader).                   |
+| `keywords`     | string[]  | Yes      | Keywords for the creature (e.g., Goblin, Humanoid, Undead, Elemental).                                    |
+| `ev`           | string    | Yes      | Encounter Value (EV) of the creature.                                                                     |
+| `stamina`      | string    | Yes      | The creature's max stamina.                                                                                |
+| `immunities`   | string[]  | No       | List of immunities (e.g., Magic 2, Psionic 2).                                                             |
+| `weaknesses`   | string[]  | No       | List of weaknesses (e.g., acid 3, holy 1).                                                                 |
+| `speed`        | integer   | Yes      | Movement speed of the creature (e.g., 5).                                                                  |
+| `movement`     | string    | No       | Movement types of the creature (e.g., 'climb, fly, swim').                                                 |
+| `size`         | string    | Yes      | Size category (e.g., 1M for medium).                                                                       |
+| `stability`    | integer   | Yes      | Stability value of the creature.                                                                           |
+| `free_strike`  | integer   | Yes      | The free strike value.                                                                                     |
+| `might`        | integer   | Yes      | Might modifier.                                                                                             |
+| `agility`      | integer   | Yes      | Agility modifier.                                                                                           |
+| `reason`       | integer   | Yes      | Reason modifier.                                                                                            |
+| `intuition`    | integer   | Yes      | Intuition modifier.                                                                                         |
+| `presence`     | integer   | Yes      | Presence modifier.                                                                                          |
+| `with_captain` | string    | No       | Effect when a captain is present.                                                                          |
+| `features`     | Feature[] | No       | List of features (see Feature schema).                                                                     |
 
 **Notes:**
 
 - Attribute values can be positive or negative integers. You can include a `+` sign for positive values (e.g., `+2`), but it's optional.
+- **Legacy keys:** statblocks written before 6.0.0 used `roles: string[]` and
+  `ancestry: string[]` instead of `role`/`organization`/`keywords`. Those old keys still
+  parse (classified the same way the SDK's own markdown reader does) but log a deprecation
+  warning to the developer console, and are ignored on any axis where the modern key is also
+  present. Support for `roles`/`ancestry` is removed in 7.0.0 — see the
+  [migration guide](migrating-to-6.md) for the conversion rule and a worked example.
 
 ### Features
 
