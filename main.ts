@@ -148,7 +148,7 @@ export function createSaveDataPrefsStorage(
 	plugin: { settings: DSESettings; saveSettings(): Promise<void> },
 	debounceMs = 250,
 ): FlushablePrefsStorage {
-	let timer: ReturnType<typeof setTimeout> | null = null;
+	let timer: number | null = null;
 	const write = (): void => {
 		timer = null;
 		plugin.saveSettings().catch((error) => {
@@ -159,12 +159,12 @@ export function createSaveDataPrefsStorage(
 		get: async () => plugin.settings.prefs,
 		set: async (prefs) => {
 			plugin.settings.prefs = prefs;
-			if (timer !== null) clearTimeout(timer);
-			timer = setTimeout(write, debounceMs);
+			if (timer !== null) window.clearTimeout(timer);
+			timer = window.setTimeout(write, debounceMs);
 		},
 		flush: () => {
 			if (timer === null) return;
-			clearTimeout(timer);
+			window.clearTimeout(timer);
 			write();
 		},
 	};
@@ -343,8 +343,6 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     private prefsStorage?: FlushablePrefsStorage;
 
     async onload() {
-        console.log("Loading Draw Steel Elements Plugin.")
-
         // Initialize schema registry with all common schemas
         this.initializeSchemas();
 
@@ -554,8 +552,6 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // them) degrade back to Task 4's "not wired in this build" Notice, same as before
         // Task 10 wired this at all.
         setEncounterSidebarHandoff(null);
-
-        console.log("Draw Steel Elements Plugin unloaded and schema registry reset");
     }
 
     /** F2 Task 10 — the sync options derived from live settings; also Task 11's
