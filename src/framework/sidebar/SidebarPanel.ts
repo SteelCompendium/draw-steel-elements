@@ -5,12 +5,13 @@
 // mount() drives the SAME ElementPipeline.run() the reading-mode markdown post-processor
 // calls (registerFrameworkElements.ts) — no forked render logic, per spec §1's "reuses F1
 // views unchanged (mode-agnostic)" guardrail.
-import { Component, parseYaml, TFile } from 'obsidian';
+import { Component, TFile } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
-import type { ElementDefinition } from '../registry';
 import type { ElementPipeline } from '../pipeline';
+import { prepareModel } from '../pipeline';
 import type { ElementRegistry } from '../registry';
 import type { ReferenceService } from '../seams/refs';
+import type { PreferenceStore } from '../seams/prefs';
 import type { ValidationService } from '../validation';
 import { ElementView } from '../view';
 import { SidebarBlockHost } from '../host/SidebarBlockHost';
@@ -22,44 +23,13 @@ export interface SidebarPanelDeps {
 	pipeline: ElementPipeline;
 	registry: ElementRegistry;
 	/** D8 Task 3 (spec §1.6) — optional; see DseSidebarServices's field doc (the same
-	 *  bundle DseSidebarView threads through unchanged). */
+	 *  bundle DseSidebarView threads through unchanged). All three of refs/validation/
+	 *  prefs must be present for handleExternalChange's in-place refresh fast path
+	 *  (review round 1, finding #1/#2): prepareModel() needs prefs to pop the reserved
+	 *  `prefs:` key, same as ElementPipeline.run() does. */
 	refs?: ReferenceService;
 	validation?: ValidationService;
-}
-
-/**
- * D8 Task 3 (spec §1.6) — the "parse -> (validate) -> resolveRefs" slice of
- * ElementPipeline.run() (pipeline.ts steps 2-5), reproduced here so handleExternalChange
- * can rebuild a model WITHOUT going through the pipeline's create-view-and-mount (step
- * 6): the whole point is handing the fresh model to the view ALREADY mounted, via
- * ElementView.update(), rather than tearing its root element down. Mirrors pipeline.ts's
- * own resolveRefs / autoResolveRefs precedence exactly, so a body that would parse
- * successfully through the real pipeline parses identically here. Deliberately does NOT
- * reproduce pipeline.ts's error-card rendering, click shield, or theme/pref stamping —
- * any throw here is treated by the caller as "can't refresh in place" and falls back to
- * the pipeline's full mount path, which already owns all of that.
- */
-async function refreshModel(
-	def: ElementDefinition,
-	body: string,
-	refs: ReferenceService,
-	validation: ValidationService,
-	sourcePath: string,
-): Promise<unknown> {
-	const rawData = parseYaml(body);
-	if (def.schema) {
-		const result = validation.validate(def.id, def.schema, rawData ?? null);
-		if (!result.valid) throw new Error(`Schema validation failed for "${def.id}" during sidebar refresh.`);
-	}
-	if (def.resolveRefs) {
-		const model = def.parse(rawData, body);
-		return await def.resolveRefs(model, refs);
-	}
-	if (def.autoResolveRefs === true) {
-		const resolved = await refs.resolveDeep(rawData, sourcePath);
-		return def.parse(resolved, body);
-	}
-	return def.parse(rawData, body);
+	prefs?: PreferenceStore;
 }
 
 export class SidebarPanel extends Component {
@@ -123,33 +93,39 @@ export class SidebarPanel extends Component {
 	 * spec §1.6: an external edit to the same note (e.g. the block also visible in a
 	 * side-by-side markdown view) hands the changed body here. F1's ElementView.update()
 	 * (the onUpdate in-place path) IS the target — the sidebar is spec'd as "the first
-	 * real consumer of onUpdate" — via refreshModel() above, which reproduces just enough
-	 * of the pipeline's parse/resolveRefs to get a fresh model without going through
-	 * step 6 (create-view-and-mount). host.lastMountedChild (SidebarBlockHost's handle on
-	 * whatever the pipeline last addChild'd) is the same ElementView instance the
-	 * pipeline mounted; calling .update(model) on it directly leaves its rootEl —
-	 * `[data-dse-element="<id>"]` — untouched (ElementView.update()'s default path only
-	 * empties/rebuilds the root's CHILDREN, never the root itself), which is what makes
-	 * this an in-place refresh and not a remount.
+	 * real consumer of onUpdate" — via prepareModel() (pipeline.ts, shared with
+	 * ElementPipeline.run() as of review round 1 finding #2), which runs the pipeline's
+	 * exact parse -> pop `prefs:` -> validate -> resolveRefs slice to get a fresh model
+	 * without going through step 6 (create-view-and-mount). host.lastMountedChild
+	 * (SidebarBlockHost's handle on whatever the pipeline last addChild'd) is the same
+	 * ElementView instance the pipeline mounted; calling .update(model) on it directly
+	 * leaves its rootEl — `[data-dse-element="<id>"]` — untouched (ElementView.update()'s
+	 * default path only empties/rebuilds the root's CHILDREN, never the root itself),
+	 * which is what makes this an in-place refresh and not a remount.
 	 *
 	 * Falls back to the pipeline's full unload-and-remount (the original behavior) when
-	 * the fast path isn't available: refs/validation weren't threaded in (D8 Task 2
-	 * callers/tests that don't care about live refresh), nothing is currently mounted
-	 * (e.g. the panel was previously degraded), or refreshModel() throws (schema drift, a
-	 * dangling ref, ...) — in which case the pipeline's own error card is the correct
-	 * outcome, not something to swallow silently here.
+	 * the fast path isn't available: refs/validation/prefs weren't all threaded in (D8
+	 * Task 2 callers/tests that don't care about live refresh), nothing is currently
+	 * mounted (e.g. the panel was previously degraded), or prepareModel() throws (schema
+	 * drift, a dangling ref, ...) — in which case the pipeline's own error card is the
+	 * correct outcome, not something to swallow silently here.
 	 */
 	private async handleExternalChange(body: string): Promise<void> {
 		if (!this.host || !this.panelEl) return;
 		const def = this.deps.registry.get(this.state.alias);
 		if (!def) return;
 
-		const { refs, validation } = this.deps;
-		if (refs && validation) {
+		const { refs, validation, prefs } = this.deps;
+		if (refs && validation && prefs) {
 			const previous = this.host.lastMountedChild;
 			if (previous instanceof ElementView) {
 				try {
-					const model = await refreshModel(def, body, refs, validation, this.host.sourcePath);
+					const { model } = await prepareModel(def, body, {
+						prefs,
+						refs,
+						validation,
+						sourcePath: this.host.sourcePath,
+					});
 					await previous.update(model);
 					return;
 				} catch {

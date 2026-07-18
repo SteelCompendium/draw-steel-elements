@@ -19,6 +19,7 @@ import type { ValidationService, ValidationResult } from './validation';
 import type { SessionStore } from './session';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
+import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -150,6 +151,100 @@ export function renderErrorCard(root: HTMLElement, def: Pick<ElementDefinition, 
 	card.createEl('div', { cls: 'dse-error-card-message', text: message });
 }
 
+/** The dependencies `prepareModel` needs from the pipeline's service bundle — a narrow
+ *  slice (not the full `ElementPipelineDeps`/`RenderContext`), so a caller that only has
+ *  these four things (SidebarPanel.handleExternalChange, D8 Task 3 spec §1.6) doesn't
+ *  need to construct a whole RenderContext just to refresh a model. */
+export interface PrepareModelDeps {
+	prefs: PreferenceStore;
+	refs: ReferenceService;
+	validation: ValidationService;
+	/** `BlockHost.sourcePath` — only consulted for `def.autoResolveRefs`. */
+	sourcePath: string;
+}
+
+/** `prepareModel`'s result: the parsed/validated/ref-resolved model, plus whatever
+ *  per-block `prefs:` override bag `extractPrefOverrides` popped off the raw data (F1
+ *  §2.4 doesn't render/serialize — that's step 6, left to each caller). */
+export interface PreparedModel<M> {
+	readonly model: M;
+	readonly prefOverrides: Partial<DsePrefs> | undefined;
+}
+
+/**
+ * Review round 1 (Task 3 finding #2): F1 §2.4 steps 2-5 — parse -> pop the reserved
+ * `prefs:` key -> validate -> resolve refs -> `def.parse` — extracted from
+ * `ElementPipeline.run` into its own exported function so a second caller
+ * (SidebarPanel.handleExternalChange, D8 Task 3 spec §1.6) can run the EXACT same logic
+ * instead of hand-copying it. The hand-copy that predated this (SidebarPanel's own
+ * `refreshModel`) silently dropped `extractPrefOverrides` (finding #1, MEDIUM) — a
+ * duplicated slice of pipeline logic that could only ever drift back out of sync with
+ * this file. There is now one source of truth; `run()` below is the only other caller.
+ *
+ * Every step still runs through `runStage`/`runStageAsync`, so a thrown error carries
+ * the same `ElementStageError` stage tag callers already rely on. An invalid schema
+ * result is THROWN (not rendered) rather than handled here — step 6 (render/persist) and
+ * error presentation are caller concerns: `run()`'s catch renders it via
+ * `renderErrorCard` exactly as before (`isValidationResult` recognizes a raw
+ * `ValidationResult` thrown as-is, no wrapping needed), while SidebarPanel's caller
+ * treats any throw here as "can't refresh in place" and falls back to a full remount.
+ */
+export async function prepareModel<M>(
+	def: ElementDefinition<M>,
+	source: string,
+	deps: PrepareModelDeps,
+): Promise<PreparedModel<M>> {
+	const { prefs, refs, validation, sourcePath } = deps;
+
+	// Step 2: parse (F1 §2.4.1). Parse failure -> propagate (tagged "parse"); the whole-
+	// block-reference rescue mirrors run()'s own comment above `parseYaml` verbatim.
+	let rawData: unknown;
+	try {
+		rawData = runStage('parse', () => parseYaml(source));
+	} catch (error) {
+		const trimmed = source.trim();
+		if (def.acceptsWholeBlockRef && trimmed.startsWith('@') && !trimmed.includes('\n')) {
+			rawData = trimmed;
+		} else {
+			throw error;
+		}
+	}
+
+	// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
+	// validation (schemas never see the reserved key) and before def.parse (it never
+	// enters the semantic model).
+	const prefOverrides = extractPrefOverrides(rawData, prefs);
+
+	// Step 3: validate (F1 §2.4.2). Invalid -> throw the ValidationResult itself
+	// (self-describing to renderErrorCard — no ElementStageError tag needed, same as
+	// run()'s original early-return-then-renderErrorCard, just routed through the
+	// caller's own catch instead of an inline return).
+	if (def.schema) {
+		const schema = def.schema;
+		const result = runStage('schema', () => validation.validate(def.id, schema, rawData ?? null));
+		if (!result.valid) throw result;
+	}
+
+	// Steps 4-5 (F1 §2.4.3 PROSE — not the simplified §2.2 diagram): resolveRefs takes
+	// the MODEL, so a declared def.resolveRefs runs def.parse FIRST; an explicit
+	// autoResolveRefs: true instead resolves the RAW data BEFORE def.parse runs.
+	// autoResolveRefs is opt-in (default OFF) — omitting both resolveRefs and
+	// autoResolveRefs skips reference resolution entirely.
+	let model: M;
+	if (def.resolveRefs) {
+		const resolveRefs = def.resolveRefs;
+		model = runStage('render', () => def.parse(rawData, source));
+		model = await runStageAsync('reference', () => resolveRefs(model, refs));
+	} else if (def.autoResolveRefs === true) {
+		const resolved = await runStageAsync('reference', () => refs.resolveDeep(rawData, sourcePath));
+		model = runStage('render', () => def.parse(resolved, source));
+	} else {
+		model = runStage('render', () => def.parse(rawData, source));
+	}
+
+	return { model, prefOverrides };
+}
+
 /** Services bundle ElementPipeline needs beyond app/plugin/settings (F1 §2.2's onload
  *  block: "services = { ThemeService, PreferenceStore, ReferenceService,
  *  ValidationService, SessionStore }"). */
@@ -221,74 +316,21 @@ export class ElementPipeline {
 		if (!def.noClickShield) armClickShield(root);
 
 		try {
-			// Step 2: parse (F1 §2.4.1). Parse failure -> error card, stage "parse".
-			//
-			// Fix round 1 (D6 spec §1.1): a bare `@path` whole-block reference
-			// (`@Homebrew/Fireball`) is not valid YAML on its own — the `yaml` package
-			// (which Obsidian's real parseYaml wraps) reserves a leading `@` on a plain
-			// scalar and throws "Plain value cannot start with reserved character @"
-			// BEFORE detectWholeBlockRef ever gets a look at it. The narrowest possible
-			// rescue: only when parseYaml throws, AND the def opted in
-			// (`acceptsWholeBlockRef`, set by withReference()), AND the trimmed source is
-			// a SINGLE LINE starting with `@` (the one YAML-reserved-character case that
-			// differs from every other bare scalar, which already parses fine as a plain
-			// string) — treat rawData as that trimmed string directly instead of
-			// error-carding. Anything else (multi-line garbage, other malformed YAML, a
-			// def that hasn't opted in) still error-cards exactly as before.
-			let rawData: unknown;
-			try {
-				rawData = runStage('parse', () => parseYaml(source));
-			} catch (error) {
-				const trimmed = source.trim();
-				if (def.acceptsWholeBlockRef && trimmed.startsWith('@') && !trimmed.includes('\n')) {
-					rawData = trimmed;
-				} else {
-					throw error;
-				}
-			}
-
-			// D4 §1.3 (Plan 13): pop the reserved per-block `prefs:` map BEFORE schema
-			// validation (schemas never see the reserved key) and before def.parse
-			// (it never enters the semantic model).
-			const prefOverrides = extractPrefOverrides(rawData, prefs);
-
-			// Step 3: validate (F1 §2.4.2). Invalid -> error card, stage "schema", one
-			// `path: message` per error — returned directly (not thrown): a ValidationResult
-			// is self-describing to renderErrorCard, no ElementStageError tag needed.
-			if (def.schema) {
-				const schema = def.schema;
-				// D5 (Plan 14): parseYaml('') is undefined, which no JSON-Schema type
-				// accepts — normalize to null so schemas can OPT IN to empty blocks via
-				// type: ["object","null"] (ds-roll does). Schemas without "null" keep
-				// erroring on empty sources exactly as before.
-				const result = runStage('schema', () => validation.validate(def.id, schema, rawData ?? null));
-				if (!result.valid) {
-					renderErrorCard(root, def, result);
-					return;
-				}
-			}
-
-			// Steps 4-5 (F1 §2.4.3 PROSE — not the simplified §2.2 diagram): resolveRefs
-			// takes the MODEL, so a declared def.resolveRefs runs def.parse FIRST; an
-			// explicit autoResolveRefs: true instead resolves the RAW data BEFORE def.parse
-			// runs. Hardening pass after F1's final review: autoResolveRefs is now OPT-IN
-			// (default OFF) — omitting both resolveRefs and autoResolveRefs skips reference
-			// resolution entirely; an element must ask for it explicitly, either bespoke
-			// (resolveRefs) or the default deep-walk (autoResolveRefs: true).
-			// def.parse() itself is bucketed under stage "render": F1 §3.8 defines exactly
-			// four stages, and model construction isn't YAML syntax (parse), AJV (schema),
-			// or reference resolution (reference) — it's part of building what step 6 renders.
-			let model: M;
-			if (def.resolveRefs) {
-				const resolveRefs = def.resolveRefs;
-				model = runStage('render', () => def.parse(rawData, source));
-				model = await runStageAsync('reference', () => resolveRefs(model, cx.refs));
-			} else if (def.autoResolveRefs === true) {
-				const resolved = await runStageAsync('reference', () => cx.refs.resolveDeep(rawData, host.sourcePath));
-				model = runStage('render', () => def.parse(resolved, source));
-			} else {
-				model = runStage('render', () => def.parse(rawData, source));
-			}
+			// Steps 2-5 (F1 §2.4.1-§2.4.3): parse -> pop the reserved `prefs:` key ->
+			// validate -> resolve refs -> def.parse. Extracted to prepareModel() (above) so
+			// SidebarPanel.handleExternalChange (D8 Task 3 spec §1.6) can share this EXACT
+			// logic instead of hand-copying it (review round 1, finding #2 — the hand-copy
+			// that predated this silently dropped extractPrefOverrides, finding #1). An
+			// invalid schema result is thrown by prepareModel and caught by this try's own
+			// catch below, which renders it via renderErrorCard exactly as the old inline
+			// early-return did (isValidationResult recognizes a raw ValidationResult however
+			// it arrives).
+			const { model, prefOverrides } = await prepareModel(def, source, {
+				prefs,
+				refs: cx.refs,
+				validation,
+				sourcePath: host.sourcePath,
+			});
 
 			// Step 6: render (F1 §2.4.4). theme/prefs are stamped onto root BEFORE
 			// view.mount() (which invokes onMount) so data-dse-theme / data-dse-<attr> are

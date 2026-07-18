@@ -107,6 +107,7 @@ function setup() {
 		registry: frameworkV2.registry,
 		refs: frameworkV2.services.refs,
 		validation: frameworkV2.services.validation,
+		prefs: frameworkV2.services.prefs,
 	} as unknown as DseSidebarServices;
 	plugin.registerView(VIEW_TYPE_DSE_SIDEBAR, ((leaf: any) => new DseSidebarView(leaf, services)) as any);
 	const { fireModify } = withRealModifyEvents(app);
@@ -278,6 +279,58 @@ describe('D8 Task 3: initiative-in-sidebar end-to-end (spec §1 canonical use)',
 		expect(rootAfter).toBe(rootBefore);
 		const staminaAfter = panelElOf(view).querySelector('.dse-init__entry .dse-init__stamina')?.textContent;
 		expect(staminaAfter).toBe('50/80');
+	});
+
+	// Review round 1 (Task 3 finding #1, MEDIUM): SidebarPanel's in-place refresh used to
+	// hand-copy pipeline.ts's parse/validate/resolveRefs slice and silently drop
+	// extractPrefOverrides — so a `prefs:` key introduced by an external edit would ride
+	// into initiative's model as a stray own property (its parse() is a passthrough,
+	// `const data = input as EncounterData; ...; return data;`) and get serialized back
+	// out on the model's NEXT persist, via the ORIGINAL serializer captured at mount
+	// (which never learned about the new override). Fixed by round 1's structural
+	// refactor: handleExternalChange now calls the SAME prepareModel() pipeline.run()
+	// calls, which pops `prefs:` off the raw data before def.parse ever sees it — so the
+	// refreshed model can never carry a stray `prefs` field, and the next persist can't
+	// leak it either.
+	test('an externally-injected prefs: key does not leak into the model on the next persist (finding #1)', async () => {
+		const { app, services, fireModify } = setup();
+		app.vault.setFile('Session.md', sessionNote());
+		await sendToSidebar(services, 'Session.md', 'ds-initiative');
+		await flushAsync();
+		const { view } = await openSidebarLeaf(app);
+
+		const panelEl = panelElOf(view);
+		const rootBefore = panelEl.querySelector('[data-dse-element="initiative"]');
+		expect(rootBefore).not.toBeNull();
+
+		// Externally edit the block to add a reserved `prefs:` override map (as if the
+		// block were also open side-by-side and a user added it by hand).
+		const current = app.vault.getContent('Session.md')!;
+		const { body: bodyBefore } = splitOnBlock(current);
+		const editedBody = `prefs:\n  portraits: off\n${bodyBefore}`;
+		const edited = current.replace(bodyBefore, editedBody);
+		expect(edited).not.toBe(current); // sanity: the replace actually matched
+		app.vault.setFile('Session.md', edited);
+		fireModify(app.vault.getAbstractFileByPath('Session.md') as TFile);
+		await flushAsync();
+
+		// Same root node — proves the in-place refresh path (prepareModel + update())
+		// engaged rather than falling back to a full remount.
+		const rootAfter = panelElOf(view).querySelector('[data-dse-element="initiative"]');
+		expect(rootAfter).toBe(rootBefore);
+
+		// A self-write (malice stepper) forces persist() -> serialize(this.model) against
+		// the REFRESHED model. Byte-stable contract: the model must never have picked up
+		// the injected `prefs` key, so it cannot appear in what gets written back out.
+		jest.useFakeTimers();
+		malicePlusBtn(view).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		jest.useRealTimers();
+
+		const persisted = app.vault.getContent('Session.md')!;
+		const parsed = parseYaml(splitOnBlock(persisted).body);
+		expect(parsed.malice.value).toBe(6); // the stepper mutation still landed
+		expect(Object.prototype.hasOwnProperty.call(parsed, 'prefs')).toBe(false);
 	});
 
 	// D8 Task 3 — "Send initiative tracker to sidebar": the thin main.ts wire proving

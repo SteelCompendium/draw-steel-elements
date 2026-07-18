@@ -378,6 +378,7 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             registry: frameworkV2.registry,
             refs: frameworkV2.services.refs,
             validation: frameworkV2.services.validation,
+            prefs: frameworkV2.services.prefs,
         };
         registerDseSidebar(this, dseSidebarServices);
 
