@@ -47,6 +47,7 @@ export class PartyView extends ElementView<PartyModel> {
 			await this.buildMember(membersEl, cycleOwner, member, canPersist);
 		}
 
+		this.buildPartyPool(container, cycleOwner, model, canPersist);
 		this.buildPartyActions(container, cycleOwner, model, canPersist);
 	}
 
@@ -167,9 +168,38 @@ export class PartyView extends ElementView<PartyModel> {
 
 	// -------------------------------------------------------------------- party actions
 
-	/** F1 §4.4: no dead-end write affordance on a read-only host — per-member stats above
-	 *  still render (visible, real-disabled), the party-wide action bar just never
-	 *  mounts. */
+	/** Party-wide pool data: hero_tokens stepper (always visible, real-disabled when
+	 *  read-only). Unlike actions below, this is data (not a write affordance), so it stays
+	 *  visible per F1 §4.4 — matching the per-member stat convention above. */
+	private buildPartyPool(container: HTMLElement, owner: Component, model: PartyModel, canPersist: boolean): void {
+		const tokensWrap = container.createDiv({ cls: 'dse-party__tokens' });
+		tokensWrap.createDiv({ cls: 'dse-party__stat-label', text: 'Hero tokens' });
+		const handle = stepper(
+			tokensWrap,
+			{
+				value: model.party?.hero_tokens ?? 0,
+				min: 0,
+				editable: canPersist,
+				integer: true,
+				label: 'Hero tokens',
+				onChange: (value) => {
+					this.model.party = { ...(this.model.party ?? {}), hero_tokens: value };
+					void this.persist();
+				},
+			},
+			owner,
+		);
+		// F1 §4.4: read-only hosts REAL-disable every stepper button
+		if (!canPersist) {
+			handle.rootEl.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
+				btn.disabled = true;
+			});
+		}
+	}
+
+	/** F1 §4.4: no dead-end write affordance on a read-only host — action buttons (award,
+	 *  convert) do not mount; per-member + pool data (stats, hero_tokens) still render
+	 *  above, visible-but-disabled. */
 	private buildPartyActions(container: HTMLElement, owner: Component, model: PartyModel, canPersist: boolean): void {
 		if (!canPersist) return;
 		const bar = container.createDiv({ cls: 'dse-party__actions' });
@@ -183,24 +213,6 @@ export class PartyView extends ElementView<PartyModel> {
 				label: 'Convert victories to XP (respite)',
 				text: 'Convert victories to XP (respite)',
 				onClick: () => this.convertVictoriesToXp(),
-			},
-			owner,
-		);
-
-		const tokensWrap = bar.createDiv({ cls: 'dse-party__tokens' });
-		tokensWrap.createDiv({ cls: 'dse-party__stat-label', text: 'Hero tokens' });
-		stepper(
-			tokensWrap,
-			{
-				value: model.party?.hero_tokens ?? 0,
-				min: 0,
-				editable: true,
-				integer: true,
-				label: 'Hero tokens',
-				onChange: (value) => {
-					this.model.party = { ...(this.model.party ?? {}), hero_tokens: value };
-					void this.persist();
-				},
 			},
 			owner,
 		);
@@ -220,7 +232,7 @@ export class PartyView extends ElementView<PartyModel> {
 				label: 'Award victories to the party',
 				text: 'Award victories',
 				onClick: () => {
-					const amount = Number(input.value) || 0;
+					const amount = Math.max(0, Math.floor(Number(input.value) || 0));
 					if (amount === 0) return;
 					for (const member of model.members) {
 						member.victories = (member.victories ?? 0) + amount;
