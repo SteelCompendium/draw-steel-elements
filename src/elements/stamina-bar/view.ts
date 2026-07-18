@@ -6,52 +6,41 @@
 // fill widths via --dse-fill/--dse-temp-fill setProperty geometry (SC-5 — zero inline
 // colors/widths; the only .style use is `setProperty("--dse-*", …)`).
 //
+// D7 Task 1 (spec §2.1/§2.3): the actual `.dse-stamina` DOM construction + targeted
+// update now live in the shared kit core (framework/kit/StaminaBarPanel.ts,
+// renderStaminaBar/updateStaminaBar) — this view is a thin delegator that maps the
+// StaminaBar model onto the kit's neutral {current, temp, max} shape. Zero behavior
+// change: same DOM, same click/tooltip wiring, same targeted-update semantics.
+//
 // Clicking opens the unified managedModal StaminaEditModal (D2 §3.5b); the modal
 // mutates `this.model` in place (it is handed the SAME object reference) and its
 // updateCallback both refreshes the bar in place (targeted update, no rebuild) and
 // schedules persist(). The serialize path (model.ts) is untouched — persisted YAML
 // stays byte-compatible (F1 §6).
-import { setTooltip } from 'obsidian';
 import { ElementView } from '@/framework/view';
-import { collapsible, openManagedModal } from '@/framework/kit';
+import { collapsible, openManagedModal, renderStaminaBar, updateStaminaBar } from '@/framework/kit';
+import type { StaminaBarValues } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { resolveCollapsePrefs } from '@/prefs/catalog';
 
-const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
 
 /** Title shown in the whole-element collapsible header (the old ComponentWrapper
  *  componentName, previously visible only in the collapsed rail). */
 const WRAPPER_TITLE = 'Stamina Bar';
 
-/** Ports StaminaBar.vue's `calculatePercentFromStamina` 1:1. */
-function calculatePercentFromStamina(model: StaminaBar, stamina: number, ignoreDying = false): number {
-	const dyingStamina = Math.floor((model.max_stamina ?? 0) / 2);
-	const totalStamina = (model.max_stamina ?? 0) + dyingStamina;
-	const absoluteStamina = ignoreDying ? stamina : stamina + dyingStamina;
-	return (absoluteStamina / totalStamina) * 100;
-}
-
-/** The SFC's `barColor` computed, re-expressed as the [data-state] value (D2 §3.5):
- *  the state names the condition; the COLOR lives in CSS on the --dse-stamina-* tokens. */
-function staminaState(model: StaminaBar): 'healthy' | 'winded' | 'dying' {
-	const current = model.current_stamina ?? 0;
-	if (current <= 0) return 'dying';
-	if (current < Math.floor((model.max_stamina ?? 0) / 2)) return 'winded';
-	return 'healthy';
-}
-
-/** Ports StaminaBar.vue's `overlayWidth` computed 1:1 (the dying/winded zone width). */
-function overlayWidthPercent(model: StaminaBar): number {
-	return calculatePercentFromStamina(model, Math.floor((model.max_stamina ?? 0) / 2), true);
+/** Maps the StaminaBar model's fields onto the kit's neutral value shape. */
+function staminaValues(model: StaminaBar): StaminaBarValues {
+	return {
+		current: model.current_stamina ?? 0,
+		temp: model.temp_stamina ?? 0,
+		max: model.max_stamina ?? 0,
+	};
 }
 
 export class StaminaBarView extends ElementView<StaminaBar> {
-	private trackEl!: HTMLElement;
-	private fillEl!: HTMLElement;
-	private tempEl!: HTMLElement;
-	private numPillEl!: HTMLElement;
+	private barEl: HTMLElement | null = null;
 
 	protected onMount(root: HTMLElement, model: StaminaBar): void {
 		// Whole-element wrapper: ONE kit collapsible (replaces the old kit
@@ -72,67 +61,32 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 
 	private renderBar(container: HTMLElement, model: StaminaBar): void {
 		// Destructured (not `model.style`) so the SC-5 style guard's `.style` scan sees
-		// only the sanctioned setProperty calls — this is the YAML `style` FIELD.
+		// only the sanctioned setProperty calls (now inside the kit core) — this is the
+		// YAML `style` FIELD, not a DOM style access.
 		const { style: renderStyle } = model;
-		if (renderStyle === 'sheet') {
-			container.createDiv({ cls: 'dse-stamina__notice', text: SHEET_STYLE_NOTICE });
-			return;
-		}
-
 		const canPersist = this.cx.host.canPersist;
-		const bar = container.createDiv({
-			cls: canPersist ? 'dse-stamina dse-stamina--clickable' : 'dse-stamina',
-		});
-		// Sanctioned --dse-* geometry (D2 §5): the YAML height feeds the track height.
-		bar.style.setProperty('--dse-bar-h', `${model.height ?? 1}em`);
-
-		this.trackEl = bar.createDiv({ cls: 'dse-stamina__track' });
-		this.fillEl = this.trackEl.createDiv({ cls: 'dse-stamina__fill' });
-		this.tempEl = this.trackEl.createDiv({ cls: 'dse-stamina__temp' });
-		const dying = this.trackEl.createDiv({ cls: 'dse-stamina__threshold dse-stamina__threshold--dying' });
-		dying.createSpan({ cls: 'dse-stamina__pill', text: 'Dying' });
-		const winded = this.trackEl.createDiv({ cls: 'dse-stamina__threshold dse-stamina__threshold--winded' });
-		winded.createSpan({ cls: 'dse-stamina__pill', text: 'Winded' });
-		const num = this.trackEl.createDiv({ cls: 'dse-stamina__num' });
-		this.numPillEl = num.createSpan({ cls: 'dse-stamina__pill' });
-
-		this.updateBarDisplay(model);
-
 		// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, unresolvable
 		// canvas nodes) -> render read-only (visible but inert) instead of a dead-end click.
 		// collapsible hides (never rebuilds) its region, so the bar mounts exactly once
 		// per onMount and view-bound listeners are correct (the old per-expand-cycle
 		// contentOwner machinery is gone — same shift as Skills, Plan 09 Task 2).
-		if (canPersist) {
-			this.registerDomEvent(bar, 'click', () => this.openEditModal());
-		} else {
-			setTooltip(bar, READ_ONLY_TOOLTIP);
-		}
+		this.barEl = renderStaminaBar(container, staminaValues(model), {
+			height: model.height,
+			style: renderStyle,
+			canPersist,
+			owner: this,
+			onClick: canPersist ? () => this.openEditModal() : undefined,
+			readOnlyTooltip: READ_ONLY_TOOLTIP,
+		});
 	}
 
 	/**
-	 * Targeted DOM update (F1 §6 "explicit targeted update methods", no reactivity lib) —
-	 * re-expresses the SFC's barColor/overlayWidth/calculatePercentFromStamina computeds
-	 * in place, without rebuilding the DOM: widths as --dse-* custom properties, the
-	 * state color as [data-state]. Called once at mount and again after every modal edit.
+	 * Targeted DOM update (F1 §6 "explicit targeted update methods", no reactivity lib),
+	 * delegated to the kit core. Called once at mount (inside renderStaminaBar) and
+	 * again after every modal edit.
 	 */
 	private updateBarDisplay(model: StaminaBar): void {
-		const current = model.current_stamina ?? 0;
-		const temp = model.temp_stamina ?? 0;
-		const max = model.max_stamina ?? 0;
-
-		this.fillEl.style.setProperty('--dse-fill', `${calculatePercentFromStamina(model, current)}%`);
-		this.fillEl.setAttribute('data-state', staminaState(model));
-		this.tempEl.style.setProperty('--dse-temp-fill', `${calculatePercentFromStamina(model, temp, true)}%`);
-		// ONE zone width on the track feeds both threshold regions and the numeric
-		// region (inherited custom property).
-		this.trackEl.style.setProperty('--dse-zone', `${overlayWidthPercent(model)}%`);
-
-		// Fixes CB-17 (D1 spec): the SFC wrote `model?.temp_stamina??0 > 0`, which — due to
-		// `??` binding looser than `>` — actually parses as `model?.temp_stamina ?? (0 > 0)`
-		// i.e. `model?.temp_stamina ?? false`, NOT the intended "> 0" comparison. Replaced
-		// here with the correct, explicit check.
-		this.numPillEl.setText(`(${current}/${max}${temp > 0 ? ' + ' + temp : ''})`);
+		if (this.barEl) updateStaminaBar(this.barEl, staminaValues(model));
 	}
 
 	private openEditModal(): void {

@@ -54,7 +54,7 @@ import { Component, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
-import { buttonRow, iconButton, stepper, tooltip } from '@/framework/kit';
+import { buttonRow, iconButton, stepper, tooltip, buildConditionIcons as kitBuildConditionIcons } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
@@ -63,10 +63,8 @@ import { StaminaEditModal } from '@views/StaminaEditModal';
 import { ResetEncounterModal } from '@views/ResetEncounterModal';
 import { AddConditionsModal } from '@views/ConditionSelectModal';
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
-import { applyConditionColor, applyConditionEffect } from '../conditionColor';
 import { appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import {
-	Condition,
 	Creature,
 	CreatureInstance,
 	EncounterData,
@@ -862,51 +860,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 	): void {
 		const conditions = character.conditions || [];
 
-		conditions.forEach((conditionEntry) => {
-			let conditionKey: string;
-			let conditionData: Condition | null = null;
-			if (typeof conditionEntry === 'string') {
-				conditionKey = conditionEntry;
-			} else if (typeof conditionEntry === 'object' && conditionEntry.key) {
-				conditionKey = conditionEntry.key;
-				conditionData = conditionEntry;
-			} else {
-				return;
-			}
-
-			const condition = this.conditionManager.getAnyConditionByKey(conditionKey);
-			if (!condition) return;
-
-			// Click-to-remove is a write — read-only renders a static state glyph.
-			let iconEl: HTMLElement;
-			if (this.canWrite) {
-				iconEl = iconButton(
-					container,
-					{
-						icon: condition.iconName,
-						label: `Remove condition: ${condition.displayName}`,
-						tooltip: condition.displayName,
-						onClick: () => {
-							character.conditions = conditions.filter((entry) => entry !== conditionEntry);
-							container.empty();
-							this.buildConditionIcons(container, character, owner);
-							void this.persist();
-						},
-					},
-					owner,
-				).buttonEl;
-			} else {
-				iconEl = container.createSpan();
-				setIcon(iconEl, condition.iconName);
-				tooltip(iconEl, condition.displayName);
-			}
-			iconEl.addClass('dse-cond');
-
-			// Color and effect customizations ride the T8 validated helpers: the color
-			// arrives as the CSS.supports-gated --dse-condition-color custom property
-			// (never el.style.color), the effect as a known-vocabulary class.
-			applyConditionColor(iconEl, conditionData?.color);
-			applyConditionEffect(iconEl, conditionData?.effect);
+		// D7 Task 1 (spec §2.1/§2.3): the per-entry icon rendering (interactive
+		// iconButton in write mode, static span + applyConditionColor/Effect in
+		// read-only mode) is now the shared kit core, framework/kit/conditionIcons.ts —
+		// identical DOM/click/color/effect behavior, just relocated. The "Add Condition"
+		// affordance below (element-specific: opens AddConditionsModal, a src/views/ UI
+		// shell) stays here.
+		kitBuildConditionIcons(container, conditions, this.conditionManager, {
+			owner,
+			canRemove: this.canWrite,
+			onRemove: (conditionEntry) => {
+				character.conditions = conditions.filter((entry) => entry !== conditionEntry);
+				container.empty();
+				this.buildConditionIcons(container, character, owner);
+				void this.persist();
+			},
 		});
 
 		// The add-condition affordance is pure write UI — not built when read-only.

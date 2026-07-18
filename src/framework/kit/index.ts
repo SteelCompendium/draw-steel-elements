@@ -52,5 +52,15 @@ export type { RollBarState, RollBarOptions, RollBarHandle } from './rollBar';
 export { rollResultCard } from './rollResultCard';
 export type { RollResultCardOptions, RollResultCardHandle } from './rollResultCard';
 
+// -- Hero panel contract + panel render cores (D7 §2.1/§2.3, Task 1) --
+export { HeroPanel } from './HeroPanel';
+export type { PanelHost } from './HeroPanel';
+export { renderStaminaBar, updateStaminaBar } from './StaminaBarPanel';
+export type { StaminaBarValues, StaminaBarRenderOptions } from './StaminaBarPanel';
+export { renderCharacteristicsGrid } from './CharacteristicsGrid';
+export type { CharacteristicsValues, CharacteristicsGridOptions } from './CharacteristicsGrid';
+export { buildConditionIcons } from './conditionIcons';
+export type { ConditionIconEntry, ConditionIconInput, ConditionIconsOptions } from './conditionIcons';
+
 // The F1-era helpers (mountCollapsibleHeading / mountComponentWrapper) are gone —
 // retired by Plan 09 Task 10 once every element had moved onto the D2 widgets above.

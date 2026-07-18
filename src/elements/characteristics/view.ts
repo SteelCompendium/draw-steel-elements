@@ -8,6 +8,10 @@
 // what scopes/distinguishes it at the CSS level (styles-source.css scopes `.dse-statgrid`
 // under both element roots).
 //
+// D7 Task 1 (spec §2.1/§2.3): the grid builder now lives in the shared kit core
+// (framework/kit/CharacteristicsGrid.ts, renderCharacteristicsGrid) — zero behavior
+// change: identical DOM, identical --dse-value-scale/--dse-label-scale geometry.
+//
 // SC-5 eviction (D2 §5): the value_height/name_height YAML knobs no longer become inline
 // `font-size` — they arrive as the --dse-value-scale / --dse-label-scale custom
 // properties (sanctioned `--dse-*` geometry via setProperty), consumed by the
@@ -15,26 +19,21 @@
 // color anywhere in code. Static element: no persistence, no listeners (the legacy
 // processor's manual capture-phase click shield stays replaced by the pipeline default).
 import { ElementView } from '@/framework/view';
+import { renderCharacteristicsGrid } from '@/framework/kit';
 import type { Characteristics } from '@model/Characteristics';
 
 export class CharacteristicsElementView extends ElementView<Characteristics> {
 	protected onMount(root: HTMLElement, model: Characteristics): void {
-		const grid = root.createDiv({ cls: 'dse-statgrid' });
-		grid.style.setProperty('--dse-value-scale', String(model.value_height));
-		grid.style.setProperty('--dse-label-scale', String(model.name_height));
-
-		const characteristics = [
-			{ name: 'Might', value: model.might },
-			{ name: 'Agility', value: model.agility },
-			{ name: 'Reason', value: model.reason },
-			{ name: 'Intuition', value: model.intuition },
-			{ name: 'Presence', value: model.presence },
-		];
-
-		for (const char of characteristics) {
-			const cell = grid.createDiv({ cls: 'dse-statgrid__cell' });
-			cell.createDiv({ cls: 'dse-statgrid__value', text: String(char.value) });
-			cell.createDiv({ cls: 'dse-statgrid__label', text: char.name });
-		}
+		renderCharacteristicsGrid(
+			root,
+			{
+				might: model.might,
+				agility: model.agility,
+				reason: model.reason,
+				intuition: model.intuition,
+				presence: model.presence,
+			},
+			{ valueHeight: model.value_height, nameHeight: model.name_height },
+		);
 	}
 }

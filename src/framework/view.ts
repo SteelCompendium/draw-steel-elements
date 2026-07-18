@@ -1,7 +1,6 @@
 // F1 §3.3 — ElementView<M>: the view lifecycle base every DSE element renders through.
 // Also implements the persisted write path (§4.2) and the cleanup semantics (§4.5) that
-// bind to it. Plus a HeroPanel<S> stub (D7 OD-7; additive, kept here per Plan 02's file
-// layout — "view.ts: ElementView (+ HeroPanel stub)").
+// bind to it.
 //
 // Design note — serializer injection (deliberate decoupling from Task 8/registry.ts):
 // ElementDefinition (framework/registry.ts) does not exist yet at this point in the
@@ -15,7 +14,7 @@
 // keeps view.ts's import graph free of registry.ts while matching F1 §3.3's runtime
 // intent verbatim ("persist(): def.serialize(model) → host.replaceSource()").
 import { Component, MarkdownRenderer } from 'obsidian';
-import type { RenderContext, RollService } from './context';
+import type { RenderContext } from './context';
 import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
@@ -189,40 +188,10 @@ export abstract class ElementView<M> extends Component {
 }
 
 // ---------------------------------------------------------------------------------
-// HeroPanel<S> stub (additive, D7 OD-7). A presentational sub-view a container
-// ElementView (D7's HeroSheetView, or a standalone element wanting to share panel code)
-// mounts for one read-only slice of its model. Deliberately mirrors ElementView's
-// onMount/onUpdate split minus the container's model/persist/refs concerns, so moving an
-// existing element's render code into a panel is mechanical (D7 §2.1). F1 ships only the
-// shape; D7 fills real panels (Characteristics/Stamina/Resource/…) and wires onChange.
-
-/**
- * What a HeroPanel is handed down from its owning container (D7 §2.1).
- *
- * Note: `readOnly` mirrors the *negation* of the owning container's
- * `RenderContext.host.canPersist` (i.e. true when the container CANNOT persist, so the
- * panel should render its controls inert) — the D7 spec's inline comment on this field
- * reads "true when the owning container can persist", which is inverted from the field's
- * own name and from how BlockHost.canPersist is used everywhere else in F1; documented
- * here as the corrected intent for whoever (D7) wires a real PanelHost.
- */
-export interface PanelHost {
-	readonly readOnly: boolean;
-	/** Optional roll seam handed down from the container (D5 fills RollService). Absent ⇒ no roll affordances. */
-	readonly roll?: RollService;
-}
-
-export abstract class HeroPanel<S> extends Component {
-	constructor(
-		protected readonly cx: RenderContext,
-		protected readonly host: PanelHost,
-	) {
-		super();
-	}
-
-	/** Build DOM into `root`; call `onChange(patch)` when the user mutates the slice. */
-	abstract mountPanel(root: HTMLElement, slice: S, onChange: (patch: Partial<S>) => void): void;
-
-	/** Apply an externally-changed slice in place (no rebuild). */
-	abstract updatePanel(slice: S): void;
-}
+// HeroPanel<S> / PanelHost (D7 OD-7, Task 1): RELOCATED to framework/kit/HeroPanel.ts
+// (the D7 spec's file layout puts the contract in the kit, alongside the panel cores
+// that implement it). Re-exported here so the pre-existing import path
+// (`from '.../framework/view'`; see test/dom/framework/element-view.test.ts) keeps
+// resolving to the exact same class/interface — zero behavior change.
+export { HeroPanel } from './kit/HeroPanel';
+export type { PanelHost } from './kit/HeroPanel';

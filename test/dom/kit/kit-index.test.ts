@@ -29,6 +29,14 @@ import type {
 	SessionPersist,
 	RollBarHandle,
 	RollResultCardHandle,
+	PanelHost,
+	StaminaBarValues,
+	StaminaBarRenderOptions,
+	CharacteristicsValues,
+	CharacteristicsGridOptions,
+	ConditionIconEntry,
+	ConditionIconInput,
+	ConditionIconsOptions,
 } from '@/framework/kit';
 
 const repoRoot = path.join(__dirname, '../../..');
@@ -157,6 +165,12 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 		// …the D5 rolling widgets (Plan 14 Task 3)…
 		expect(typeof kit.rollBar).toBe('function');
 		expect(typeof kit.rollResultCard).toBe('function');
+		// …the D7 Task 1 hero-panel contract + extracted render cores…
+		expect(typeof kit.HeroPanel).toBe('function'); // abstract class
+		expect(typeof kit.renderStaminaBar).toBe('function');
+		expect(typeof kit.updateStaminaBar).toBe('function');
+		expect(typeof kit.renderCharacteristicsGrid).toBe('function');
+		expect(typeof kit.buildConditionIcons).toBe('function');
 		// …and the retired F1 helpers are no longer on the barrel (Plan 09 Task 10).
 		expect((kit as Record<string, unknown>).mountCollapsibleHeading).toBeUndefined();
 		expect((kit as Record<string, unknown>).mountComponentWrapper).toBeUndefined();
@@ -174,6 +188,10 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 			l?: SessionPersist;
 			// The D5 rolling widget handles (Plan 14 Task 3).
 			m?: RollBarHandle; n?: RollResultCardHandle;
+			// The D7 Task 1 hero-panel contract + extracted render core option/value types.
+			o?: PanelHost; p?: StaminaBarValues; q?: StaminaBarRenderOptions;
+			r?: CharacteristicsValues; s?: CharacteristicsGridOptions;
+			t?: ConditionIconEntry; u?: ConditionIconInput; v?: ConditionIconsOptions;
 		} = {};
 		expect(probe).toEqual({});
 	});
