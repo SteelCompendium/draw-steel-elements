@@ -15,6 +15,12 @@ export class NegotiationData {
     i2: string;
     i1: string;
     i0: string;
+    /** FOLLOWUPS #26 (D8 spec §1.5) — sidebar block anchor passthrough. Round-trips
+     *  untouched (assigned LAST in the constructor so it serializes last); ignored by
+     *  every piece of game logic in this element. `undefined` when the block never
+     *  declared `_dse_anchor:` — never coerced, so a block without one round-trips
+     *  through serialize() without the key materializing. */
+    _dse_anchor?: string;
 
     private static readonly default_patience: number = 5;
     private static readonly default_interest: number = 0;
@@ -34,6 +40,9 @@ export class NegotiationData {
         this.i2 = data.i2 ?? "Interest 2 result";
         this.i1 = data.i1 ?? "Interest 1 result";
         this.i0 = data.i0 ?? "Interest 0 result";
+        // FOLLOWUPS #26: assigned LAST so it serializes last when present; passed
+        // straight through, never coerced/defaulted (see the field comment above).
+        this._dse_anchor = data._dse_anchor;
     }
 
     setMotivationUsed(motivationName: string, used: boolean) {

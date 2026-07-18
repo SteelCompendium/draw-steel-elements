@@ -131,12 +131,18 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 		expect(panelEl?.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
 	});
 
-	// D8 Task 2 review fix round 1 (finding #1, HIGH) — end-to-end reproduction of the exact
-	// failure the reviewer flagged: Counter.serialize() doesn't pass `_dse_anchor` through
-	// (the passthrough-field gap SidebarBlockHost.ts's header documents), so the FIRST real
-	// persist() through the sidebar silently drops the anchor line. Before the fix, nothing
-	// ever told the user; the read-only degrade card must now appear immediately.
-	test('when a real persist drops the `_dse_anchor` line, the degrade card appears immediately and further edits are visibly read-only (finding #1)', async () => {
+	// D8 Task 2 review fix round 1 (finding #1, HIGH) originally reproduced end-to-end here:
+	// Counter.serialize() dropped `_dse_anchor` (the passthrough-field gap
+	// SidebarBlockHost.ts's header used to document), so the FIRST real persist() through
+	// the sidebar silently lost the anchor line and nothing told the user. FOLLOWUPS #26
+	// fixed the root cause — Counter (and NegotiationData/StaminaBar) now carry an
+	// `_dse_anchor` passthrough field, so a real persist through the sidebar keeps the
+	// anchor and the panel stays live. (SidebarBlockHost.ts's own onAnchorLost safety net —
+	// kept as defense in depth for any future persisted element that forgets the
+	// passthrough — is unit-tested directly against a synthetic anchor-dropping write in
+	// test/dom/framework/sidebarBlockHost.test.ts's "review fix round 1, finding #1" suite,
+	// independent of any real element's serialize().)
+	test('FOLLOWUPS #26 (fixed): a real persist through the sidebar preserves `_dse_anchor` — the panel stays mounted and interactive', async () => {
 		const { app } = setup();
 		app.vault.setFile('Note.md', counterBlock(ANCHOR_A, 3));
 		const { view } = await openView(app);
@@ -154,17 +160,21 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 		expect(panelEl().getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
 
 		plusBtn()!.click(); // mutates the model + schedules the debounced persist()
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // flush -> replaceSource -> anchor dropped
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // flush -> replaceSource
 
-		// The degrade card is now showing instead of the counter.
-		expect(panelEl().getAttribute('data-dse-sidebar-unavailable')).toBe('true');
-		expect(panelEl().querySelector('.dse-error-card-message')?.textContent).toBe(
-			'Backing block not found — re-link this panel from the note.',
-		);
-		// Visibly read-only: the stepper (and its input) is gone entirely, replaced by the
-		// static error card — never a silently-inert control sitting there unexplained.
-		expect(panelEl().querySelector('.dse-stepper')).toBeNull();
-		expect(panelEl().querySelector('input')).toBeNull();
+		// The panel is still live — no degrade card, no dropped anchor.
+		expect(panelEl().getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
+		expect(panelEl().querySelector('.dse-error-card-message')).toBeNull();
+		expect(app.vault.getContent('Note.md')).toContain(`_dse_anchor: ${ANCHOR_A}`);
+
+		// The panel remains interactive: a second edit still works (proves the anchor
+		// survived the first persist and getBlockInfo can still locate the block).
+		const valueEl = () => panelEl().querySelector<HTMLInputElement>('input.dse-counter__value')!;
+		expect(valueEl().value).toBe('4');
+		plusBtn()!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(panelEl().getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
+		expect(valueEl().value).toBe('5');
 
 		jest.useRealTimers();
 	});

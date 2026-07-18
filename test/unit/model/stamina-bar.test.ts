@@ -1,5 +1,6 @@
 import { StaminaBar } from '@model/StaminaBar';
 import { Hero } from '@drawSteelAdmonition/EncounterData';
+import { stringifyYaml } from '../../mocks/obsidian';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
 import componentWrapperSchema from '@model/schemas/ComponentWrapperSchema.yaml';
 import basic from '../../fixtures/stamina/basic.yaml';
@@ -48,6 +49,28 @@ describe('T-6: StaminaBar.parseYaml', () => {
 		expect(bar.current_stamina).toBe(0);
 		expect(bar.temp_stamina).toBe(0);
 		expect(bar.height).toBe(1);
+	});
+});
+
+// FOLLOWUPS #26: `_dse_anchor` passthrough (D8 spec §1.5) — StaminaBar is one of the
+// three class-based persisted models (with Counter/NegotiationData) that previously
+// dropped unknown top-level keys on parse -> serialize, so a sidebar-sent block's
+// anchor line was lost the first time the block was persisted.
+describe('FOLLOWUPS #26: _dse_anchor passthrough', () => {
+	test('parse -> mutate -> serialize preserves an existing anchor byte-stable, emitted LAST', () => {
+		const bar = StaminaBar.parseYaml(basic + '\n_dse_anchor: 4c19ff');
+		expect(bar._dse_anchor).toBe('4c19ff');
+
+		bar.current_stamina = 20;
+		const out = stringifyYaml(bar).trim();
+
+		expect(out.endsWith('\n_dse_anchor: 4c19ff')).toBe(true);
+	});
+
+	test('no anchor in the source: serialize never materializes the key', () => {
+		const bar = StaminaBar.parseYaml(basic);
+		expect(bar._dse_anchor).toBeUndefined();
+		expect(stringifyYaml(bar).trim()).not.toMatch(/_dse_anchor/);
 	});
 });
 

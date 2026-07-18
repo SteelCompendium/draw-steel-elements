@@ -21,6 +21,12 @@ export class StaminaBar extends ComponentWrapper{
 	recoveries_max?: number;
 	height: number;
     style: string;
+	/** FOLLOWUPS #26 (D8 spec §1.5) — sidebar block anchor passthrough. Round-trips
+	 *  untouched (assigned LAST so it serializes last); ignored by every piece of game
+	 *  logic in this element. `undefined` when the block never declared
+	 *  `_dse_anchor:` — never coerced, so a block without one round-trips through
+	 *  serialize() without the key materializing. */
+	_dse_anchor?: string;
 
 	public static parseYaml(source: string) {
 		try {
@@ -54,7 +60,9 @@ export class StaminaBar extends ComponentWrapper{
             // that never declared these keys gets `undefined` on both, which is the
             // "no materialization" contract (see the field comments above).
             data.recoveries,
-            data.recoveries_max);
+            data.recoveries_max,
+            // FOLLOWUPS #26: same "passed straight through" convention.
+            data._dse_anchor);
 	}
 
 	// TODO - should this be in Hero and CreatureInstance instead?  probably, but those are interfaces
@@ -81,6 +89,12 @@ export class StaminaBar extends ComponentWrapper{
         // serialized key order — see the comment there.
         recoveries?: number,
         recoveries_max?: number,
+        // FOLLOWUPS #26: appended at the END of the parameter list (never inserted
+        // before an existing param) so every existing positional call site (fromHero/
+        // fromCreature, the byte-compat suite, StaminaEditModal's test fixture) keeps
+        // passing its args unchanged. Assignment ORDER (last) controls serialized key
+        // order — see the comment there.
+        _dse_anchor?: string,
     ) {
         super(collapsible, collapse_default);
 		this.max_stamina = max_stamina;
@@ -94,6 +108,9 @@ export class StaminaBar extends ComponentWrapper{
         this.recoveries_max = recoveries_max;
 		this.height = height;
         this.style = style
+        // Assigned LAST so it serializes last when present; a no-op (contributes no
+        // key) when absent, same convention as recoveries/recoveries_max above.
+        this._dse_anchor = _dse_anchor;
 	}
 
 	public updateHero(hero: Hero) {

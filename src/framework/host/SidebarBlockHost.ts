@@ -18,20 +18,23 @@
 // listener below both keep fresh. getBlockInfo()/canPersist read that cache synchronously;
 // nothing here ever awaits inside a BlockHost interface member.
 //
-// KNOWN GAP (narrow; see workspace FOLLOWUPS #26): a block's `_dse_anchor: <id>` line only
+// FORMER GAP (FIXED, workspace FOLLOWUPS #26): a block's `_dse_anchor: <id>` line only
 // round-trips through a persisted element's serialize() if that element's parse() preserves
 // it. The sidebar-relevant elements DO: initiative (the canonical sidebar element — proven
 // by sidebarInitiative.test.ts's anchor-preservation assertion), all four D8 trackers
 // (encounter/montage/project/party), and (D7 Task 10, plan-18 spec §5) `ds-hero` — its
 // raw-TEXT `defnRaw` splice (elements/hero/model.ts) carries the anchor through independently
-// of the typed `defn`/`state` model, proven by heroInSidebar.test.ts — carry the anchor
-// through parse/serialize. The gap is limited to counter, negotiation, and stamina-bar
-// (fixed-field parse() drops unknown keys) — none of which have a sidebar mount today. If
-// one is ever sent to the sidebar, the FIRST persist() drops the anchor line; the safety net
-// below covers that case: replaceSource notices the resulting canPersist true->false flip
-// immediately (the self-echo guard means the normal external-modify path would never catch
-// it — see replaceSource's inline comment) and calls onAnchorLost, which SidebarPanel wires
-// to the same read-only degrade card handleExternalChange's "block vanished" path already
+// of the typed `defn`/`state` model, proven by heroInSidebar.test.ts. The three remaining
+// class-based persisted models — counter (`@model/Counter`), negotiation
+// (`@model/NegotiationData`), and stamina-bar (`@model/StaminaBar`) — used fixed-arity
+// constructors that dropped unknown keys; each now carries an optional `_dse_anchor`
+// passthrough field (appended last, assigned last) per D8 spec §1.5's own convention, so
+// all persisted elements now round-trip the anchor. The safety net below is kept
+// regardless (defense in depth for any FUTURE persisted element that forgets the
+// passthrough): replaceSource notices a canPersist true->false flip immediately (the
+// self-echo guard means the normal external-modify path would never catch it — see
+// replaceSource's inline comment) and calls onAnchorLost, which SidebarPanel wires to the
+// same read-only degrade card handleExternalChange's "block vanished" path already
 // renders — so the failure is surfaced right away instead of edits silently no-op'ing
 // forever.
 //

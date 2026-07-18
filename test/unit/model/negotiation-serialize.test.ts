@@ -94,6 +94,32 @@ describe('T-4: round-trip stability', () => {
 	});
 });
 
+// FOLLOWUPS #26: `_dse_anchor` passthrough (D8 spec §1.5) — NegotiationData is one of
+// the three class-based persisted models (with Counter/StaminaBar) that previously
+// dropped unknown top-level keys on parse -> serialize, so a sidebar-sent block's
+// anchor line was lost the first time the block was persisted.
+describe('FOLLOWUPS #26: _dse_anchor passthrough', () => {
+	test('parse -> mutate -> serialize preserves an existing anchor byte-stable, emitted LAST (after i0)', () => {
+		const source = frodoYaml.trimEnd() + '\n_dse_anchor: 4c19ff';
+		const model = parseLikePipeline(source);
+		expect(model._dse_anchor).toBe('4c19ff');
+
+		model.current_patience = 1;
+		const out = serialize(model);
+
+		expect(out.endsWith('\n_dse_anchor: 4c19ff')).toBe(true);
+		const m2 = parseLikePipeline(out);
+		expect(m2._dse_anchor).toBe('4c19ff');
+		expect(m2.current_patience).toBe(1);
+	});
+
+	test('no anchor in the source: serialize never materializes the key', () => {
+		const model = parseLikePipeline(frodoYaml);
+		expect(model._dse_anchor).toBeUndefined();
+		expect(serialize(model)).not.toMatch(/_dse_anchor/);
+	});
+});
+
 describe('T-4: free-text byte-compat (yaml-pkg folding, Plan 05 T-2)', () => {
 	// Past the default lineWidth of 80, so the `yaml` package folds it across
 	// continuation lines as a PLAIN scalar (js-yaml would have emitted `>-` instead).

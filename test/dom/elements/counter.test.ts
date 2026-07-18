@@ -671,3 +671,26 @@ describe('Plan 07 Task 4: byte-compat — serialize(parse(data)) === legacy stri
 		expect(frameworkSerialize(model)).toBe(stringifyYaml(legacyEquivalent).trim());
 	});
 });
+
+// FOLLOWUPS #26: `_dse_anchor` passthrough (D8 spec §1.5) — Counter is one of the three
+// class-based persisted models (with NegotiationData/StaminaBar) that previously dropped
+// unknown top-level keys on parse -> serialize, so a sidebar-sent block's anchor line was
+// lost the first time the block was persisted (e.g. an in-note edit).
+describe('FOLLOWUPS #26: _dse_anchor passthrough', () => {
+	test('parse -> mutate -> serialize preserves an existing anchor byte-stable, emitted LAST', () => {
+		const yaml = counterYaml.trimEnd() + '\n_dse_anchor: 4c19ff';
+		const model = counterElement.parse(parseYaml(yaml), yaml);
+		expect(model._dse_anchor).toBe('4c19ff');
+
+		model.current_value = 11;
+		const out = frameworkSerialize(model);
+
+		expect(out).toBe(healthSerialized(11) + '\n_dse_anchor: 4c19ff');
+	});
+
+	test('no anchor in the source: serialize never materializes the key', () => {
+		const model = counterElement.parse(parseYaml(counterYaml), counterYaml);
+		expect(model._dse_anchor).toBeUndefined();
+		expect(frameworkSerialize(model)).not.toMatch(/_dse_anchor/);
+	});
+});
