@@ -81,6 +81,14 @@
   Catch Breath action. The hero sheet works from inline YAML or resolves
   class/ancestry/kit live from your synced compendium; it can also be pinned
   to the Draw Steel sidebar like any other tracker.
+- [BUGFIX] Stamina: the bar's winded coloring now matches the rules (winded at
+  half Stamina **or below** — it previously flipped one point late), and the
+  Stamina modal's "Spend Recovery" button now spends from your tracked
+  Recoveries (heals your recovery value, disables with a reason at zero)
+  instead of silently healing without spending one.
+- [BUGFIX] A freshly-synced compendium file is now immediately resolvable by
+  reference blocks (no more transient "found but not renderable — re-sync"
+  card right after a sync).
 
 ## 5.1.1
 
