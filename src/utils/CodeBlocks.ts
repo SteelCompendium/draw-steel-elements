@@ -38,11 +38,12 @@ export class CodeBlocks {
 
 		if (ctx.sourcePath) {
 			// For regular Markdown notes
-			file = app.vault.getAbstractFileByPath(ctx.sourcePath) as TFile;
-			if (!file || !(file instanceof TFile)) {
+			const abstractFile = app.vault.getAbstractFileByPath(ctx.sourcePath);
+			if (!(abstractFile instanceof TFile)) {
 				console.warn("Unable to find the file to update.");
 				return;
 			}
+			file = abstractFile;
 			await this.updateMarkdownCodeBlock(app, file, data, ctx, language);
 		} else {
 			// Attempt to find the canvas file that contains the node with this ctx
@@ -53,7 +54,7 @@ export class CodeBlocks {
 	static async findCanvasNodeAndUpdate(app: App, ctx: MarkdownPostProcessorContext, data: any, language: string) {
 		const canvasView = app.workspace.getActiveViewOfType(ItemView);
 		if (canvasView?.getViewType() !== 'canvas') {
-			console.log("Failed to find canvas associated with markdown context.  Change NOT saved.")
+			console.warn("Failed to find canvas associated with markdown context.  Change NOT saved.")
 			return;
 		}
 		const canvas = (canvasView as any).canvas;
@@ -69,7 +70,7 @@ export class CodeBlocks {
 		}
 
 		// No canvas file contains the node
-		console.log("Failed to find canvas associated with markdown context.  Change NOT saved.");
+		console.warn("Failed to find canvas associated with markdown context.  Change NOT saved.");
 		return;
 	}
 
