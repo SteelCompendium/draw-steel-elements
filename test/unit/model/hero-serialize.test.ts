@@ -221,6 +221,173 @@ describe('D7 Task 7: serialize is the state-scoped splice (spec §3.4/OD-2)', ()
 	});
 });
 
+describe('D7 Task 7 fix round 1: splitter is a structural scan, not "state: is last/block"', () => {
+	test('MUST-FIX 1: state: before other definition fields — the fields after it survive, not dropped', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.defn.characteristics).toEqual({ might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 });
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		// state always serializes LAST (documented normalization) — the non-state fields
+		// keep their authored order/bytes, just with state's span removed and re-appended.
+		const expectedDefnRegion = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		].join('\n');
+		expect(out.startsWith(`${expectedDefnRegion}\nstate:\n`)).toBe(true);
+		expect(out.slice(0, expectedDefnRegion.length)).toBe(expectedDefnRegion);
+		// the old (buggy) contract dropped characteristics entirely — assert it is present
+		// in the output at all, not just recoverable from `model.defn` in memory.
+		expect(out).toContain('characteristics:');
+	});
+
+	test('MUST-FIX 1 (round-trip): re-parsing the serialized output succeeds and is stable on a second write', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		const out = serialize(model);
+		const reparsed = parseLikePipeline(out);
+		expect(reparsed.defn.characteristics).toEqual({ might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 });
+		expect(reparsed.state).toEqual(model.state);
+
+		// serializing the reparsed model again is stable (state having moved to the end
+		// once doesn't keep drifting on subsequent writes).
+		const out2 = serialize(reparsed);
+		expect(out2).toBe(out);
+	});
+
+	test('MUST-FIX 2: CRLF source round-trips without manufacturing a duplicate state: key', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+		].join('\r\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		// exactly one top-level state: key in the output
+		expect(out.match(/^state:/gm)?.length).toBe(1);
+		// the fresh output preserves the source's CRLF dominant EOL
+		expect(out).toContain('\r\n');
+		expect(out.split('\r\n').some((line) => line.includes('\n'))).toBe(false);
+
+		const reparsed = parseLikePipeline(out);
+		expect(reparsed.defn.name).toBe('X');
+		expect(reparsed.state.stamina).toEqual({ current: 5, temp: 0 });
+	});
+
+	test('MUST-FIX 3: inline flow-style state: ({ ... } on one line) round-trips without a duplicate key', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state: { stamina: { current: 7, temp: 0 } }',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.state.stamina).toEqual({ current: 7, temp: 0 });
+
+		const out = serialize(model);
+		expect(out.match(/^state:/gm)?.length).toBe(1);
+
+		const reparsed = parseLikePipeline(out);
+		expect(reparsed.state.stamina).toEqual({ current: 7, temp: 0 });
+		expect(reparsed.defn.name).toBe('X');
+	});
+
+	test('duplicate top-level state: keys in raw source are rejected with a clear parse error', () => {
+		const validData = {
+			name: 'X',
+			level: 1,
+			characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 },
+		};
+		const rawWithDupes = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  a: 1',
+			'state:',
+			'  b: 2',
+		].join('\n');
+
+		expect(() => parse(validData, rawWithDupes)).toThrow(/duplicate/i);
+		expect(() => parse(validData, rawWithDupes)).toThrow(/state/i);
+	});
+
+	test('block-scalar description containing a "state:"-looking line is still never mistaken for the split point (regression guard for the fix)', () => {
+		const raw = [
+			'name: Block Scalar Test',
+			'level: 2',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'complication: |',
+			'  This description mentions state: right here, mid-paragraph.',
+			'  It should never be mistaken for the real state: key below.',
+			'state:',
+			'  stamina: { current: 8, temp: 0 }',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.defn.complication).toBe(
+			'This description mentions state: right here, mid-paragraph.\n' +
+				'It should never be mistaken for the real state: key below.\n',
+		);
+		expect(model.state.stamina).toEqual({ current: 8, temp: 0 });
+
+		const defnRegion = expectedDefnRegion(raw);
+		const out = serialize(model);
+		expect(out.slice(0, defnRegion.length)).toBe(defnRegion);
+	});
+
+	test('no trailing newline in source: state: last, no EOL at EOF — still byte-stable', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  stamina: { current: 9, temp: 0 }',
+		].join('\n'); // deliberately no trailing \n
+
+		const model = parseLikePipeline(raw);
+		const defnRegion = expectedDefnRegion(raw);
+		const out = serialize(model);
+		expect(out.slice(0, defnRegion.length)).toBe(defnRegion);
+		expect(out.startsWith(`${defnRegion}\nstate:\n`)).toBe(true);
+	});
+});
+
+describe('D7 Task 7 fix round 1 (LOW 4): parseState throws on type-mismatched scalar fields, like parseStamina', () => {
+	const baseHero = {
+		name: 'X',
+		level: 1,
+		characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 },
+	};
+
+	test.each(['resource', 'surges', 'recoveries', 'victories'])('state.%s must throw when present and non-numeric', (field) => {
+		const data = { ...baseHero, state: { [field]: 'oops' } };
+		expect(() => HeroModel.parse(data, 'name: X')).toThrow(new RegExp(field, 'i'));
+	});
+});
+
 describe('D7 Task 7: schema.yaml (AJV, drives Task 9 D9 form-editor reuse)', () => {
 	let service: ValidationService;
 

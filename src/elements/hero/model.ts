@@ -12,6 +12,12 @@
 //
 //   serialize(model) = defnRaw + "\nstate:\n" + indent(stringifyYaml(model.state))
 //
+// (the source's dominant EOL replaces the two literal "\n"s above when it's CRLF — fix
+// round 1, see `detectEol`.) Finding `defnRaw`'s exact boundary is a REAL structural
+// line-scan over `raw` (`findStateSpan`/`splitDefnRaw`, below) — not a regex assuming
+// `state:` is the last top-level key written in block style; see those functions' docs
+// (task-7-review.md MUST-FIX 1-3) for why that assumption used to be corruption-prone.
+//
 // The `hero:`/`state:` "split" is conceptual, not a literal YAML key — spec §3.1's own
 // example shows definition fields flat at the document root (`name:`, `level:`, …) with a
 // single `state:` sub-map alongside them, NOT a `hero:` wrapper key (confirmed by OD-1:
@@ -211,6 +217,19 @@ function defaultState(defn: HeroDefn): HeroState {
 	};
 }
 
+/** Throws when `value` is present but not a `number` — mirrors `parseStamina`'s and
+ *  `parseDefn`'s own convention (Task 7 review LOW finding #4). Before this, the
+ *  scalar `state:` fields silently fell back to the seeded default on a type mismatch,
+ *  inconsistent with every other typed field in this file; shielded in practice by AJV
+ *  schema validation on the standard `prepareModel()` pipeline path, but not for direct
+ *  `HeroModel.parse`/`parse` callers (future tooling, tests, a different host). */
+function parseRequiredNumber(value: unknown, label: string): number {
+	if (typeof value !== 'number') {
+		throw new Error(`${label} must be a number.`);
+	}
+	return value;
+}
+
 /** Merges authored `state:` fields over the seeded defaults — a hand-authored PARTIAL
  *  `state:` block (e.g. only `stamina:` written) still gets the rest defaulted, matching
  *  the schema's "typed optional sub-fields" contract (spec §3.1). `value === undefined`
@@ -223,10 +242,15 @@ function parseState(value: unknown, defn: HeroDefn): HeroState {
 	const data = asRecord(value, "'state'");
 	const state: HeroState = {
 		stamina: data.stamina !== undefined ? parseStamina(data.stamina) : defaults.stamina,
-		resource: typeof data.resource === 'number' ? data.resource : defaults.resource,
-		surges: typeof data.surges === 'number' ? data.surges : defaults.surges,
-		recoveries: typeof data.recoveries === 'number' ? data.recoveries : defaults.recoveries,
-		victories: typeof data.victories === 'number' ? data.victories : defaults.victories,
+		resource:
+			data.resource !== undefined ? parseRequiredNumber(data.resource, "'state.resource'") : defaults.resource,
+		surges: data.surges !== undefined ? parseRequiredNumber(data.surges, "'state.surges'") : defaults.surges,
+		recoveries:
+			data.recoveries !== undefined
+				? parseRequiredNumber(data.recoveries, "'state.recoveries'")
+				: defaults.recoveries,
+		victories:
+			data.victories !== undefined ? parseRequiredNumber(data.victories, "'state.victories'") : defaults.victories,
 		conditions: Array.isArray(data.conditions)
 			? data.conditions.map((entry, index) => parseCondition(entry, index))
 			: defaults.conditions,
@@ -235,35 +259,210 @@ function parseState(value: unknown, defn: HeroDefn): HeroState {
 	return state;
 }
 
-/** Structural (column-0-anchored, whole-line) match for the top-level `state:` key —
- *  NOT a substring search. A `state:` written by the author inside an indented block
- *  scalar (a multi-line description) or embedded in a same-line string value on some
- *  OTHER key's line can never match this: YAML requires block-scalar content to be
- *  indented relative to its owning key, and an inline string value never starts a line
- *  with the next key's name. Only a REAL top-level `state:` key line — indent 0, nothing
- *  else on the line but an optional trailing comment — matches. */
-const TOP_LEVEL_STATE_KEY_RE = /^state:[ \t]*(#.*)?$/;
+// ---------------------------------------------------------------------------------------
+// Fix round 1 (Task 7 review MUST-FIX 1-3): the splitter is a REAL structural line-scan,
+// not a regex that assumes `state:` is the LAST top-level key written in BLOCK style.
+// Neither assumption is enforceable from the schema (`additionalProperties: false`
+// constrains key *set*, not key *order* or *style*) or documented anywhere a user would
+// see it, and violating either one used to actively corrupt a previously-valid file
+// (silently dropping fields authored after `state:`, or manufacturing a duplicate
+// `state:` key on CRLF/inline-flow sources — see task-7-review.md findings 1-3).
+//
+// This scanner (structural, not a full YAML parse — same precedent as
+// `sidebar/anchor.ts`'s fence scanner: bracket/quote/comment-aware, one pass, no CST)
+// finds the top-level `state:` key's REAL source span — wherever it sits, whatever style
+// it's written in — and `splitDefnRaw` REMOVES that exact byte range from `raw`, rather
+// than assuming "everything after the first match is disposable". That's what makes
+// out-of-order placement, and definition content authored AFTER `state:`, survive.
+//
+// Only obsidian's `parseYaml`/`stringifyYaml` (the `yaml` npm package's `parse(src, null,
+// {})`/`stringify(value, null, {})` at defaults) are available to `src/` code — the full
+// `yaml` package (Document/CST API) is a devDependency only (used by the test mocks to
+// mirror Obsidian's real implementation), not bundled into the plugin. A hand-rolled
+// structural scanner is therefore the shape this fix takes, not a CST walk.
+// ---------------------------------------------------------------------------------------
 
-function findStateLineIndex(lines: string[]): number {
-	for (let i = 0; i < lines.length; i++) {
-		if (TOP_LEVEL_STATE_KEY_RE.test(lines[i])) return i;
-	}
-	return -1;
+interface RawLine {
+	/** Byte offset of this line's first character. */
+	start: number;
+	/** This line's text, with its EOL (if any) stripped. */
+	text: string;
 }
 
 /**
- * Splits `raw` (the block's original source text) into the authored definition region,
- * preserved BYTE-FOR-BYTE (comments, unusual indentation, quoted strings, trailing
- * whitespace, key order — spec §3.4). When no top-level `state:` line exists, the whole
- * block IS the definition (trailing whitespace trimmed only — matching the trimmed-output
- * convention every other persisted element's serialize follows, since `serialize` appends
- * a fresh `state:` section right after this text with no intervening blank line).
+ * Splits `raw` into lines, EOL-agnostic (`\r\n`, bare `\n`, or a lone `\r`) — MUST-FIX #2:
+ * the old `raw.split('\n')` left a trailing `\r` on every line of a CRLF source, which
+ * silently broke the old `$`-anchored regex (a CRLF `state:` line was never recognized).
+ * Every `RawLine.text` here is EOL-free regardless of source line-ending style, and
+ * `start` is a real byte offset into `raw` (not a line index), so callers can slice `raw`
+ * itself rather than rejoining lines (which would normalize/lose the original EOLs).
+ * `raw` with no trailing EOL still produces a correct, non-duplicated final entry.
+ */
+function splitRawLines(raw: string): RawLine[] {
+	const lines: RawLine[] = [];
+	const eolRe = /\r\n|\r|\n/g;
+	let cursor = 0;
+	let match: RegExpExecArray | null;
+	while ((match = eolRe.exec(raw))) {
+		lines.push({ start: cursor, text: raw.slice(cursor, match.index) });
+		cursor = match.index + match[0].length;
+	}
+	lines.push({ start: cursor, text: raw.slice(cursor) });
+	return lines;
+}
+
+/** A plain top-level YAML key line: an identifier at column 0 immediately followed by
+ *  `:`. Leading whitespace fails the `^` anchor, so this never matches an indented
+ *  block-style continuation line or a block-scalar body line (YAML requires both to be
+ *  indented relative to their owning key) — only a REAL top-level key line matches. */
+const TOP_LEVEL_KEY_RE = /^([A-Za-z_][\w.-]*):(.*)$/;
+
+/**
+ * Net YAML flow-collection bracket depth contributed by one line of source text —
+ * quote- and comment-aware, mirroring `anchor.ts`'s fence-scanner precedent (structural,
+ * not a full parse). Single- and double-quoted scalars are skipped whole (respecting
+ * YAML's `''`/`\"` escaping), so a brace/bracket INSIDE a quoted string (or the literal
+ * substring `state:`, spec-legal per the existing "state: inside a string value" test)
+ * is never miscounted; a `#` only opens a comment when it is line-initial or preceded by
+ * whitespace and not inside a string (YAML's own comment rule), so it never truncates the
+ * scan early on a glued-together token. Used both to recognize a single-line inline flow
+ * `state: { ... }` (MUST-FIX #3 — net depth 0, no continuation) and to correctly skip
+ * through some OTHER key's multi-line flow value without miscounting a `state:`-looking
+ * line inside it as a new top-level key.
+ */
+function computeFlowDelta(text: string): number {
+	let depth = 0;
+	let i = 0;
+	const n = text.length;
+	while (i < n) {
+		const ch = text[i];
+		if (ch === "'") {
+			i++;
+			while (i < n) {
+				if (text[i] === "'") {
+					if (text[i + 1] === "'") {
+						i += 2;
+						continue;
+					}
+					i++;
+					break;
+				}
+				i++;
+			}
+			continue;
+		}
+		if (ch === '"') {
+			i++;
+			while (i < n) {
+				if (text[i] === '\\') {
+					i += 2;
+					continue;
+				}
+				if (text[i] === '"') {
+					i++;
+					break;
+				}
+				i++;
+			}
+			continue;
+		}
+		if (ch === '#' && (i === 0 || /\s/.test(text[i - 1]))) break;
+		if (ch === '{' || ch === '[') depth++;
+		else if (ch === '}' || ch === ']') depth--;
+		i++;
+	}
+	return depth;
+}
+
+/**
+ * Finds the top-level `state:` entry's exact line span [startLine, endLine] (inclusive) —
+ * MUST-FIX 1-3's core: a REAL structural scan, not "assume state is last and block-style".
+ * Walks every line once, tracking which top-level key "owns" each non-key line (an
+ * indented block-style continuation, a blank line, or a line inside an unclosed flow
+ * bracket all belong to whichever top-level key line most recently opened) and the
+ * running flow-bracket depth for multi-line flow collections.
+ *
+ * A second top-level `state:` key line is a hard parse error: YAML requires unique keys.
+ * `parseYaml` already enforces this for anything that reaches it through the normal
+ * pipeline (`prepareModel` calls `parseYaml(source)` before `def.parse`), but this
+ * scanner walks `raw` independently of whatever `data` the caller passed as `input` —
+ * `HeroModel.parse`/the exported `parse` are directly importable with the two arguments
+ * out of sync (see this task's regression test), so this is the authoritative check for
+ * THIS scanner's own contract, not a redundant re-check of the caller's parseYaml.
+ */
+function findStateSpan(lines: RawLine[]): { startLine: number; endLine: number } | null {
+	let span: { startLine: number; endLine: number } | null = null;
+	let currentKeyIsState = false;
+	let flowDepth = 0;
+	let inFlow = false;
+
+	for (let i = 0; i < lines.length; i++) {
+		const text = lines[i].text;
+		if (!inFlow) {
+			const keyMatch = TOP_LEVEL_KEY_RE.exec(text);
+			if (keyMatch) {
+				const key = keyMatch[1];
+				if (key === 'state') {
+					if (span) {
+						throw new Error("ds-hero: duplicate top-level 'state:' key in source — YAML keys must be unique.");
+					}
+					span = { startLine: i, endLine: i };
+				}
+				currentKeyIsState = key === 'state';
+				flowDepth = Math.max(0, computeFlowDelta(keyMatch[2]));
+				inFlow = flowDepth > 0;
+				continue;
+			}
+			if (currentKeyIsState && span) span.endLine = i;
+			continue;
+		}
+		flowDepth += computeFlowDelta(text);
+		if (currentKeyIsState && span) span.endLine = i;
+		if (flowDepth <= 0) {
+			flowDepth = 0;
+			inFlow = false;
+		}
+	}
+	return span;
+}
+
+/**
+ * Splits `raw` into the authored definition region, preserved BYTE-FOR-BYTE (comments,
+ * unusual indentation, quoted strings, trailing whitespace, key order — spec §3.4) —
+ * AND now (MUST-FIX 1-3), preserved regardless of the top-level `state:` key's layout:
+ * before/after other fields, CRLF-terminated, or inline flow style. `state:`'s own
+ * source span is REMOVED from `raw` (via `findStateSpan`) rather than assumed to be
+ * "everything from the first match to EOF" — that's what makes out-of-order placement,
+ * and definition content authored AFTER `state:`, survive untouched. `state:` always
+ * serializes LAST (documented normalization, spec unaffected): an authored mid-document
+ * `state:` moves to the end the first time this model round-trips, then stays stable.
+ * When no top-level `state:` key exists, the whole block IS the definition (trailing
+ * whitespace trimmed only, matching every other persisted element's trimmed-output
+ * convention).
  */
 function splitDefnRaw(raw: string): string {
-	const lines = raw.split('\n');
-	const stateIndex = findStateLineIndex(lines);
-	if (stateIndex === -1) return raw.replace(/\s+$/u, '');
-	return lines.slice(0, stateIndex).join('\n');
+	const lines = splitRawLines(raw);
+	const span = findStateSpan(lines);
+	if (!span) return raw.replace(/\s+$/u, '');
+
+	const removeStart = lines[span.startLine].start;
+	const removeEnd = span.endLine + 1 < lines.length ? lines[span.endLine + 1].start : raw.length;
+	const spliced = raw.slice(0, removeStart) + raw.slice(removeEnd);
+	return spliced.replace(/\s+$/u, '');
+}
+
+/**
+ * The raw source's dominant end-of-line style — CRLF only when EVERY line break in `raw`
+ * is `\r\n` (a mixed-EOL source defaults to LF, the safer/spec-standard choice). This
+ * only ever affects the FRESH `state:` block's own newlines and the joiner between it and
+ * `defnRaw` on serialize (MUST-FIX #2) — `defnRaw` itself is sliced verbatim from `raw`
+ * and keeps whatever EOLs its bytes already had, untouched.
+ */
+function detectEol(raw: string): '\r\n' | '\n' {
+	const totalNewlines = (raw.match(/\n/g) ?? []).length;
+	if (totalNewlines === 0) return '\n';
+	const crlfNewlines = (raw.match(/\r\n/g) ?? []).length;
+	return crlfNewlines === totalNewlines ? '\r\n' : '\n';
 }
 
 /** Indents every non-blank line of `text` by two spaces — yaml's own default nesting
@@ -281,25 +480,34 @@ function indent(text: string): string {
  * `defnRaw` is the private byte-exact authored text `serializeStateSplice` splices back
  * on every write. `defnRaw` is intentionally NOT exposed as a public field — the only
  * thing that should ever reconstruct a block from it is this class's own serializer, so a
- * consumer can't accidentally treat it as swappable/derivable state.
+ * consumer can't accidentally treat it as swappable/derivable state. `eol` (fix round 1,
+ * MUST-FIX #2) is the source's dominant line-ending style, applied only to the FRESH
+ * `state:` block this class re-emits — `defnRaw`'s own bytes (and their EOLs) are never
+ * touched. Defaults to `'\n'` for any caller that constructs a `HeroModel` directly
+ * without going through `parse` (matching this file's pre-fix hardcoded behavior).
  */
 export class HeroModel {
 	defn: HeroDefn;
 	state: HeroState;
 	private readonly defnRaw: string;
+	private readonly eol: '\r\n' | '\n';
 
-	constructor(defn: HeroDefn, state: HeroState, defnRaw: string) {
+	constructor(defn: HeroDefn, state: HeroState, defnRaw: string, eol: '\r\n' | '\n' = '\n') {
 		this.defn = defn;
 		this.state = state;
 		this.defnRaw = defnRaw;
+		this.eol = eol;
 	}
 
 	/** OD-2 — the state-scoped splice: re-emit ONLY `state:`, splice the untouched
 	 *  authored definition back verbatim. `serialize(model) = defnRaw + "\nstate:\n" +
-	 *  indent(stringifyYaml(model.state))`, verbatim from spec §3.4. */
+	 *  indent(stringifyYaml(model.state))`, verbatim from spec §3.4 — with the source's
+	 *  dominant EOL (fix round 1, MUST-FIX #2) applied to the joiner and the fresh
+	 *  `state:` block itself; `defnRaw` keeps whatever EOLs its own bytes already had. */
 	serializeStateSplice(): string {
-		const stateYaml = indent(stringifyYaml(this.state).replace(/\n+$/u, ''));
-		return `${this.defnRaw}\nstate:\n${stateYaml}`;
+		const stateYamlLf = indent(stringifyYaml(this.state).replace(/\n+$/u, ''));
+		const stateYaml = this.eol === '\r\n' ? stateYamlLf.replace(/\n/g, '\r\n') : stateYamlLf;
+		return `${this.defnRaw}${this.eol}state:${this.eol}${stateYaml}`;
 	}
 
 	static parse(input: unknown, raw: string): HeroModel {
@@ -307,7 +515,8 @@ export class HeroModel {
 		const defn = parseDefn(data);
 		const state = parseState(data.state, defn);
 		const defnRaw = splitDefnRaw(raw);
-		return new HeroModel(defn, state, defnRaw);
+		const eol = detectEol(raw);
+		return new HeroModel(defn, state, defnRaw, eol);
 	}
 }
 
