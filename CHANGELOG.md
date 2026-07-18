@@ -68,6 +68,19 @@
   gains (e.g. "+3 Feytouched").
 - New: heroes and creatures in the initiative tracker get a per-turn action
   checklist (Main / Maneuver / Move / Triggered).
+- New: **Hero suite** — a flagship **hero sheet** (`ds-hero`) composing
+  characteristics, stamina (with recoveries and a winded/dying badge), heroic
+  resource, surges, conditions, skills, and abilities (with click-to-expand
+  ability cards and dice rolling) over one persisted block; your authored
+  definition (name, class, ancestry, kit, abilities, …) stays byte-stable —
+  only the small play-state churns as you use the sheet. Also ships as four
+  standalone trackers you can use on their own: **Heroic resource**
+  (`ds-resource`, class-aware), **Surge tracker** (`ds-surges`), **Conditions
+  strip** (`ds-conditions`), and **Hero Tokens** (`ds-tokens`, a shared
+  party-wide pool). The Stamina tracker (`ds-stamina`) gains recoveries and a
+  Catch Breath action. The hero sheet works from inline YAML or resolves
+  class/ancestry/kit live from your synced compendium; it can also be pinned
+  to the Draw Steel sidebar like any other tracker.
 
 ## 5.1.1
 

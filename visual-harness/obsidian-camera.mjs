@@ -459,6 +459,24 @@ async function main() {
 			}
 		};
 
+		// D7 Task 11 fix: DseSidebarView is a MULTI-panel host (D8 spec §1.3/§1.7) —
+		// openSidebarView reuses an existing `dse-sidebar` leaf and addPanel APPENDS to it
+		// (production behavior, by design: one sidebar can host several blocks at once).
+		// Steps 3c (initiative) and 3d (hero) run back-to-back in the SAME Obsidian
+		// session and both go through sendToSidebar/openSidebarView, so without this,
+		// step 3d's capture inherited step 3c's still-mounted initiative panel: the hero
+		// panel DID mount (the `[data-dse-element="hero"]` waitFor genuinely passed), but
+		// got appended BELOW the initiative panel inside the same leaf, so the leaf-clip
+		// (fixed sidebar height, scrolled to top) captured the initiative panel's content
+		// instead of hero's — a silent wrong-screenshot bug (no thrown error; visible only
+		// by looking at the image, not the console log). Detaching any existing
+		// `dse-sidebar` leaves before EACH ground-truth capture below guarantees
+		// openSidebarView opens a brand-new, empty leaf every time, so the leaf-clip
+		// always shows exactly the one panel that capture is proving — independent of
+		// --element ordering or which specials run in a given invocation.
+		const closeDseSidebarLeaves = () =>
+			evaluate(cdp, "window.app.workspace.getLeavesOfType('dse-sidebar').forEach((l) => l.detach())");
+
 		for (const id of elements) {
 			// Element roots carry data-dse-element="<def.id>" (stamped by the pipeline);
 			// scoping the selector to the id kills any race with the previous note's DOM.
@@ -665,6 +683,10 @@ async function main() {
 			const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="initiative"]')`;
 			let emulated = false;
 			try {
+				// Start from a panel-free sidebar (see closeDseSidebarLeaves' comment above)
+				// so this leaf-clip shows ONLY the initiative panel, regardless of what ran
+				// before it in this invocation.
+				await closeDseSidebarLeaves();
 				// source mode (not preview, unlike the rest of this file): the "send to
 				// sidebar" command is an editorCheckCallback (main.ts), which resolves its
 				// active-file context off the workspace's active EDITOR — spike-verified
@@ -777,6 +799,11 @@ async function main() {
 			const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="hero"]')`;
 			let emulated = false;
 			try {
+				// Start from a panel-free sidebar (see closeDseSidebarLeaves' comment above)
+				// — without this, step 3c's initiative panel (still mounted in the SAME
+				// reused dse-sidebar leaf) sits above hero's in the DOM, and the leaf-clip
+				// silently captures ITS content instead of hero's.
+				await closeDseSidebarLeaves();
 				await evaluate(
 					cdp,
 					`(async () => {

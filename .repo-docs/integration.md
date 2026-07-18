@@ -58,10 +58,15 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-montage` | Montage/Test tracker — negotiation-sibling, derived outcome bands (D8) |
 | `ds-project` | Project/Downtime tracker — points, breakthroughs, respite log (D8) |
 | `ds-party` | Party tracker — victories/renown/wealth, respite XP conversion, follower hints (D8) |
+| `ds-conditions`, `ds-cond` | Conditions strip (single-actor) — reuses the initiative tracker's condition engine, decoupled (D7) |
+| `ds-resource`, `ds-hr` | Heroic resource tracker — class-aware (D7) |
+| `ds-surges`, `ds-surge` | Surge tracker (D7) |
+| `ds-tokens`, `ds-hero-tokens` | Hero Tokens — canonical party-wide pool (D7) |
+| `ds-hero` | Hero sheet — the flagship: composes the four D7 panels above + Characteristics/Stamina/Skills/Abilities over one persisted block (D7) |
 
 Users interact by writing YAML inside these fenced code blocks in Obsidian notes. The 11
 D6 elements above, plus `ds-sb`/`ds-ft`/`ds-fb`, additionally accept a **whole-block
-reference** instead of inline YAML — see "Compendium reference (by-SCC)" below. All 27
+reference** instead of inline YAML — see "Compendium reference (by-SCC)" below. All 32
 elements register through the SAME `registerFrameworkElementDefinitions` (`main.ts`) —
 there is no longer a legacy (non-framework) element in this plugin.
 
@@ -209,6 +214,111 @@ three ADDITIVE-OPTIONAL fields (never emitted unless set, never materialized by 
   a long campaign's log can never grow the note without bound; it trims the OLDEST
   entries first. Monster malice-feature spends (spec §3.2, OD-7) parse the existing
   `cost: "N Malice"` string (`/^\s*(\d+)\s+Malice/i`) — no new typed SDK field.
+
+### Hero suite (D7)
+
+Five new elements (27→32) implementing `D7-hero-suite-spec.md`: four small standalone
+trackers that each prove one composition seam, then the flagship `ds-hero` sheet that
+composes all of them plus three extracted presentational cores over a single persisted
+block.
+
+- **`HeroPanel<S>` contract + the three extracted kit cores** (`src/framework/kit/`,
+  spec §2.1/§2.3, OD-7 — "yes, factor into `framework/kit/`"): `HeroPanel` is the
+  presentational-sub-view abstraction (`mountPanel(root, slice, onChange)` /
+  `updatePanel(slice)`, an `obsidian.Component` with no model/persist/refs of its own —
+  mirrors `ElementView`'s `onMount`/`onUpdate` split minus the container concerns).
+  `CharacteristicsGrid` and `StaminaBarPanel` are raw render-function extractions (not
+  `HeroPanel` subclasses — the spec's own fallback for panels with "no reusable
+  `HeroPanel` wrapper," since the sheet's `HeroState` shape isn't the standalone
+  `ds-characteristics`/`ds-stamina` model); `conditionIcons` is the third extraction. The
+  container/presentational split is the load-bearing rule: **persistence and model
+  ownership live in the container** (`HeroSheetView`, the standalone elements'
+  `*PanelContainer`s); **rendering + mutation-intent live in the panels**, which only
+  emit `onChange(patch)` upward. This extraction changed **no** rendered DOM (Task 1's
+  neutrality proof: every existing `stamina-bar`/`characteristics`/`initiative` golden
+  and DOM test passed unmodified).
+- **The five new elements:** `conditions` (`ds-conditions`/`ds-cond`), `heroic-resource`
+  (`ds-resource`/`ds-hr`), `surges` (`ds-surges`/`ds-surge`), `hero-tokens`
+  (`ds-tokens`/`ds-hero-tokens`), and `hero` (`ds-hero`, the flagship). **Note:** for the
+  two multi-word elements, the registered `id` (aliases.json key, registry identity) is
+  NOT the source directory's basename — `heroic-resource`'s code lives in
+  `src/elements/resource/` and `hero-tokens`'s in `src/elements/tokens/` (shorter names
+  used by every production import site and ~10 test files). `visual-harness/notes-gen.mjs`
+  bridges this id→dirname exception via a small `DIRNAME_OVERRIDES` lookup (Task 11 fix —
+  see "Known breaks fixed this task" below).
+- **The `hero:`/`state:` split + byte-stable state-scoped splice serialize** (spec §3.1/
+  §3.4, OD-1/OD-2): a `ds-hero` block has authored **definition** fields (name, level,
+  class/ancestry/kits refs, characteristics, abilities, …) at the block's top level, plus
+  a nested `state:` map (the volatile play surface: stamina, resource, surges,
+  recoveries, victories, conditions). OD-1's "`hero:`/`state:` split" is conceptual, not
+  a literal `hero:` wrapper key — the definition fields sit flat alongside `state:` (spec
+  §3.6's `ElementDefinition` sketch, confirmed in `hero/model.ts`). `HeroModel.parse`
+  captures the definition region **verbatim** as `defnRaw` (a real structural scan for
+  `state:`'s exact source span, not a naive regex — handles CRLF, out-of-order
+  placement, and a `state:` substring inside a string value); `serializeStateSplice`
+  re-emits `defnRaw + "\nstate:\n" + indent(stringifyYaml(model.state))`, splicing the
+  untouched authored definition back byte-for-byte. Result: hand-authored content
+  (comments, key order, ability list) never gets re-emitted by a stamina click — only the
+  small `state:` map churns.
+- **The `setCharacteristicProvider` roll bridge** (spec §3.5/§7, OD-6, recon delta 1):
+  the D7 spec's own proposed `RollService.rollPower(req)` seam is superseded — D5's
+  actual roll bridge already existed (`feature/view.ts`'s `setCharacteristicProvider`).
+  `HeroSheetView` reuses it as-is: each expanded ability row mounts a real
+  `FeatureElementView` (`this.addChild` + `.mount`) and calls
+  `view.setCharacteristicProvider(this.provider)` — no new roll interface. Surges are
+  spent **only** by explicit player choice via `SurgePanel`'s own stepper (never
+  auto-decremented on a roll result) — a MUST-FIX correction from the spec's suggested
+  "decrement `state.surges` by `result.surgesSpent`" auto-spend, which would have
+  fabricated a tier≥2 rule Draw Steel doesn't specify.
+- **View-level compendium resolution, not `def.resolveRefs`** (spec §3.5, `hero/
+  resolve.ts`): `ds-hero` sets `autoResolveRefs: false` and has no `resolveRefs` at all.
+  Resolution of `class`/`ancestry`/`kits[]` happens in the VIEW (`resolve.ts`,
+  mirroring `RefUnwrapView`'s seam) because the sheet needs the **typed SDK model**
+  (`Class`/`Kit`/`Ancestry`, for `deriveHeroStats`' math), not a whole-block mount —
+  `def.resolveRefs`/`cx.refs` is only right for bare vault paths, and `SccRefProvider`
+  throws on web/unresolved. Each ref degrades independently (a per-field `RefIssue`
+  ladder: unresolved → inline overrides + a "not found in compendium — sync
+  compendium?" notice, never a hard failure) — this is the degrade-per-ref behavior
+  visible in the camera shots when the demo vault's small seeded compendium subtree
+  doesn't cover a hero's specific refs. `abilities[]` SCC codes are explicitly out of
+  this scope — left unresolved, rendered lazily per-row on expand via the existing
+  by-SCC path.
+- **Loosened conditions modals** (`ConditionSelectModal`/`CustomizeConditionModal`, spec
+  §2.4, recon delta 7): `character`'s parameter type widened from the encounter-specific
+  `Hero | CreatureInstance` to the structural `ConditionHolder` superset (`{
+  conditions?: (string|Condition)[] }`, `EncounterData.ts`) — source-compatible (the
+  field is stored but never read), so `ds-conditions`'s standalone panel can open the
+  SAME modal with a minimal `{conditions}` holder instead of fabricating encounter-only
+  fields (id, statblock ref, initiative order) onto a fake `CreatureInstance`. Both
+  `Hero` and `CreatureInstance` structurally satisfy the wider type, so the initiative
+  tracker's existing call site keeps typechecking unmodified.
+- **Known break fixed this task:** `npm run obsidian-shots`'s full chain
+  (`notes-gen.mjs && build-no-check && obsidian-camera.mjs`) failed at `notes-gen.mjs`
+  before this task — its `examplePathFor(id)` assumed `src/elements/<id>/` (the id→
+  dirname assumption above), which broke for `heroic-resource`/`hero-tokens`. Fixed via
+  `DIRNAME_OVERRIDES`. Separately, the hero-in-sidebar ground-truth capture (step 3d,
+  D7 Task 10) produced a **silently wrong screenshot** once run after step 3c
+  (initiative-sidebar) in the same sweep: `DseSidebarView` is a multi-panel host
+  (D8 spec §1.3/§1.7) that reuses/APPENDS to an existing `dse-sidebar` leaf rather than
+  opening a fresh one, so step 3d's hero panel mounted correctly but below step 3c's
+  still-present initiative panel — the leaf-clip (fixed sidebar height, scrolled to top)
+  silently captured the wrong (initiative) content. Fixed by detaching any existing
+  `dse-sidebar` leaves before each ground-truth sidebar capture
+  (`closeDseSidebarLeaves`), so each starts from a clean, single-panel leaf.
+
+### Adopted open decisions (D7, spec §8)
+
+| OD | Decision |
+|----|----------|
+| OD-1 | In-block `hero:`/`state:` split (conceptual, not a literal `hero:` wrapper key) — definition fields flat, `state:` nested. |
+| OD-2 | State-scoped splice serialize (byte-stable authored definition) over a full re-serialize. |
+| OD-3 | Canonical standalone `ds-tokens` party pool now; true cross-note live sync deferred to a party tracker (landed as D8's `ds-party`). |
+| OD-4 | Derived stats (max Stamina/recoveries/resource) derive from class+kit+level when compendium-resolved; always allow explicit override. |
+| OD-5 | Compact ability rows, lazy-expand to a full card, with a cost/type tab filter. |
+| OD-6 | D5 owns the roll + edge/bane resolver; the sheet only supplies context and reacts (realized via the existing `setCharacteristicProvider` bridge, not a new `RollService`). |
+| OD-7 | `HeroPanel` lives in `framework/kit/`; Characteristics/Stamina/Skills factor render into panels (or a documented raw-extraction fallback where a full panel wrapper doesn't fit). |
+| OD-8 | Minimal `[respite]` action (restore Stamina+Recoveries, clear surges+temp+EoE conditions); Victories→XP conversion prompt deferred. |
+| OD-9 | Multi-hero/party-in-one-note + initiative import: out of D7 core, a cross-effort follow-up. |
 
 ### Adopted open decisions (D8, spec §0)
 

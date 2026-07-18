@@ -30,10 +30,24 @@ fs.mkdirSync(outDir, { recursive: true });
 // genericCard() elements (kit/condition/treasure/ancestry/culture/career/class/title/
 // perk/complication/rule) — they share one parent directory (src/elements/display/) whose
 // own top level has no example.yaml of its own.
+//
+// D7 (plan-18) exception: the registered element `id` (aliases.json key, registry identity,
+// pinned by aliases.test.ts/fixtures.test.ts) is the canonical name and is NOT always the
+// source directory's basename — two hero-suite elements were given longer, spec-faithful
+// ids (`heroic-resource`, `hero-tokens`) than their directories (`resource/`, `tokens/`),
+// which every production import site (main.ts, view.ts cross-imports, ~10 test files) and
+// visual-harness/entry.ts already use verbatim. Renaming the directories to match would
+// ripple across all of those; instead this harness-only lookup bridges id -> dirname for
+// the known exceptions, same spirit as the flat/nested probe above.
+const DIRNAME_OVERRIDES = {
+	'heroic-resource': 'resource',
+	'hero-tokens': 'tokens',
+};
 function examplePathFor(id) {
-	const flat = path.join(elementsDir, id, 'example.yaml');
+	const dirName = DIRNAME_OVERRIDES[id] ?? id;
+	const flat = path.join(elementsDir, dirName, 'example.yaml');
 	if (fs.existsSync(flat)) return flat;
-	const nested = path.join(elementsDir, 'display', id, 'example.yaml');
+	const nested = path.join(elementsDir, 'display', dirName, 'example.yaml');
 	if (fs.existsSync(nested)) return nested;
 	return null;
 }

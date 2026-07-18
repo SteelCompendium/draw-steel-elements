@@ -35,14 +35,15 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`). ALL 27 elements live on the framework (11 migrated + `ds-roll` (D5) +
+  `src/elements/`). ALL 32 elements live on the framework (11 migrated + `ds-roll` (D5) +
   11 D6 `displayFamily()`/`genericCard()` compendium-reference elements —
   `ds-kit`/`ds-condition`/`ds-treasure`/`ds-ancestry`/`ds-culture`/`ds-career`/`ds-class`/
   `ds-title`/`ds-perk`/`ds-complication`/`ds-rule` — + 4 D8 GM-subsystem elements —
-  `ds-encounter`/`ds-montage`/`ds-project`/`ds-party`); every legacy processor is retired
-  (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation sub-views the
-  framework reuses). Framework v2 replaced Vue 3 (2026-04-06 revert decision, executed
-  by D1) — see `.repo-docs/architecture.md` for the full picture.
+  `ds-encounter`/`ds-montage`/`ds-project`/`ds-party` — + 5 D7 hero-suite elements —
+  `ds-hero`/`ds-conditions`/`ds-resource`/`ds-surges`/`ds-tokens`); every legacy processor
+  is retired (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation
+  sub-views the framework reuses). Framework v2 replaced Vue 3 (2026-04-06 revert
+  decision, executed by D1) — see `.repo-docs/architecture.md` for the full picture.
 - **Sidebar host (D8)**: `src/framework/sidebar/` + `src/framework/host/
   SidebarBlockHost.ts` give any element a persistent `ItemView` leaf mount
   (`mode: "sidebar"`), zero element-code changes required — a running-session tracker
