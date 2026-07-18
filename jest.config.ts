@@ -64,7 +64,11 @@ const config: Config = {
 			testMatch: ['<rootDir>/test/dom/**/*.test.ts'],
 			moduleNameMapper: aliases,
 			transform: transform as any,
-			setupFiles: ['<rootDir>/test/setup/polyfills.ts', '<rootDir>/test/setup/dom-setup.ts'],
+			setupFiles: [
+				'<rootDir>/test/setup/polyfills.ts',
+				'<rootDir>/test/setup/text-encoding-polyfill.ts',
+				'<rootDir>/test/setup/dom-setup.ts',
+			],
 		},
 	],
 };
