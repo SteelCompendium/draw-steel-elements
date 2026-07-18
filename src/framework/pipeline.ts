@@ -299,6 +299,7 @@ export class ElementPipeline {
 			roll,
 			sccAnchors,
 			compendium,
+			validation,
 		});
 
 		// The root must exist before ANY step below: renderErrorCard (F1 §3.8) needs
@@ -354,8 +355,11 @@ export class ElementPipeline {
 			// D9 (Plan 15 Task 5): opt-in reading-mode edit affordance. Default OFF
 			// (authoringControls) ⇒ this branch never runs ⇒ rendered DOM is unchanged.
 			// Gated on canPersist (never on embeds/exports); writes go through the SAME
-			// host.replaceSource path (no parallel writer).
-			if (cx.host.canPersist && isAuthoringControlsOn(prefs)) {
+			// host.replaceSource path (no parallel writer). D7 Task 9: also gated on
+			// `!def.noAuthoringButton` — `ds-hero` opts out because it mounts its OWN
+			// "Edit definition" header affordance (same openFormEditor/schema, placed next
+			// to `[respite]` per spec §3.2, not a redundant trailing pencil).
+			if (cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs)) {
 				iconButton(
 					root,
 					{

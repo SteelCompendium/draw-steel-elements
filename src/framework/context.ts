@@ -18,6 +18,7 @@ import type { SessionStore } from './session';
 import type { DSESettings } from '@model/Settings';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
+import type { ValidationService } from './validation';
 
 // D5 (Plan 14): the F1-era stub is gone — the REAL RollService lives in
 // framework/roll/service.ts and is re-exported here so F1-era importers
@@ -73,6 +74,17 @@ export interface RenderContext {
 	 * installed" card when absent.
 	 */
 	readonly compendium?: CompendiumIndex;
+	/**
+	 * D7 Task 9 (spec §3.3, recon delta 5) — the D9 form-editor's schema validator.
+	 * Threaded through, symmetric with `compendium`/`sccAnchors`, so a view (the hero
+	 * sheet's own "Edit definition" header affordance) can call `openFormEditor`
+	 * directly instead of only getting it for free via the pipeline's generic
+	 * `authoringControls` pencil icon (`ElementPipeline.run`, which already has
+	 * `deps.validation` in scope and needs no `cx` field). Optional so bare
+	 * `createRenderContext` callers (tests, and any harness that doesn't care about
+	 * authoring) stay valid; a view gates its own affordance on this being present.
+	 */
+	readonly validation?: ValidationService;
 }
 
 /**
@@ -94,6 +106,7 @@ export function createRenderContext(args: {
 	roll?: RollService;
 	sccAnchors?: SccAnchorResolver;
 	compendium?: CompendiumIndex;
+	validation?: ValidationService;
 }): RenderContext {
 	const context: RenderContext = {
 		app: args.app,
@@ -108,6 +121,7 @@ export function createRenderContext(args: {
 		roll: args.roll,
 		sccAnchors: args.sccAnchors,
 		compendium: args.compendium,
+		validation: args.validation,
 	};
 
 	// Freeze to enforce immutability at runtime.

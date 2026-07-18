@@ -70,6 +70,7 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'heroic-resource',
 	'surges',
 	'hero-tokens',
+	'hero',
 ];
 
 /**

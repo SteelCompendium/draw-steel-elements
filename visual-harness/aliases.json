@@ -29,5 +29,6 @@
 	"conditions": "ds-conditions",
 	"heroic-resource": "ds-resource",
 	"surges": "ds-surges",
-	"hero-tokens": "ds-tokens"
+	"hero-tokens": "ds-tokens",
+	"hero": "ds-hero"
 }

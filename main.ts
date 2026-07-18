@@ -67,6 +67,7 @@ import { conditionsElement } from '@/elements/conditions/definition';
 import { resourceElement } from '@/elements/resource/definition';
 import { surgesElement } from '@/elements/surges/definition';
 import { tokensElement } from '@/elements/tokens/definition';
+import { heroElement } from '@/elements/hero/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -302,6 +303,11 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// party-wide pool a table keeps; no cross-block wiring to ds-party's own hero_tokens
 	// stepper or a future ds-hero's tokens_ref read-through (deferred), no hard gate.
 	registry.register(tokensElement);
+	// D7 Task 9 (spec §3.2/§3.3, OD-5/6/8, recon delta 1/5/7) — the flagship: composes
+	// the four hero-suite panels above + the extracted kit cores (Task 1) + the existing
+	// setCharacteristicProvider roll bridge + D9's openFormEditor for the definition
+	// half. 31 -> 32.
+	registry.register(heroElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

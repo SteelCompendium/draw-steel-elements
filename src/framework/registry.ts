@@ -78,6 +78,16 @@ export interface ElementDefinition<M = unknown> {
 	/** Suppress the reading-mode click shield. Default false (shield on). */
 	noClickShield?: boolean;
 	/**
+	 * D7 Task 9 — suppress the pipeline's generic `authoringControls` "Edit <name>"
+	 * pencil icon (`ElementPipeline.run`, appended after `view.mount()`). Default false
+	 * (shown, mirroring `noClickShield`'s convention). `ds-hero` sets this: the sheet
+	 * mounts its OWN "Edit definition" header affordance (next to `[respite]`, spec
+	 * §3.2's mockup placement) that opens the SAME `openFormEditor`/schema — a second,
+	 * generically-placed pencil at the end of `root` would be redundant and confusing on
+	 * an already-composed sheet.
+	 */
+	noAuthoringButton?: boolean;
+	/**
 	 * D9 authoring-tool hints (curated example, importer sdk model, per-field form UI).
 	 * Additive + optional — absence changes nothing; every tool falls back to the schema.
 	 */

@@ -2749,6 +2749,154 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Hero sheet (D7 Task 9, spec §3.2): .dse-hero */
+/* ==================== */
+/* The flagship composition — every child class below (.dse-statgrid/.dse-stamina/
+   .dse-res/.dse-surge/.dse-cond-panel/.dse-stamina-rec) already carries its OWN scoped
+   rule elsewhere in this file (characteristics/stamina-bar/heroic-resource/surges/
+   conditions); this block is ONLY the sheet's own container chrome (header, the
+   responsive region grid, region card framing, skill chips, ability rows) — a minimal,
+   legible layout, not a full design pass (that stays a follow-up, spec §3.2's ASCII
+   mockup is the fuller target). Tokens only — no color literals. */
+[data-dse-element="hero"] .dse-hero {
+	display: flex;
+	flex-direction: column;
+	gap: 1em;
+
+	.dse-hero__header {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 0.75em;
+	}
+
+	.dse-hero__name {
+		margin: 0;
+		color: var(--dse-heading);
+	}
+
+	.dse-hero__meta,
+	.dse-hero__class-line {
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-hero__actions {
+		display: flex;
+		gap: 0.5em;
+	}
+
+	.dse-hero__issues {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25em;
+	}
+
+	.dse-hero-ref-issue {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		padding: 0.25em 0.5em;
+	}
+
+	/* spec §3.2: a wide multi-column grid that collapses to one column on narrow width —
+	   a container query (no JS), matching F1 §1.4's "responsive by CSS" convention. */
+	.dse-hero__grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1em;
+		container-type: inline-size;
+	}
+
+	@container (max-width: 480px) {
+		.dse-hero__grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	.dse-hero__region {
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		padding: var(--dse-pad);
+	}
+
+	.dse-hero__region--abilities {
+		grid-column: 1 / -1;
+	}
+
+	.dse-hero__region-title {
+		margin: 0 0 0.5em;
+		color: var(--dse-heading);
+	}
+
+	.dse-hero__wound-badge {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+		min-height: 1.2em;
+	}
+
+	.dse-hero__wound-badge--active {
+		color: var(--dse-accent);
+		font-weight: bold;
+	}
+
+	.dse-hero__skill-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4em;
+	}
+
+	.dse-hero__skill-chip {
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		padding: 0.15em 0.5em;
+	}
+
+	.dse-hero__ability-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.dse-hero__ability-row {
+		border-top: 1px solid var(--dse-border);
+		padding: 0.5em 0;
+	}
+
+	.dse-hero__ability-row-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+	}
+
+	.dse-hero__ability-name {
+		font-weight: bold;
+	}
+
+	.dse-hero__ability-cost,
+	.dse-hero__ability-type {
+		font-size: 0.8em;
+		color: var(--dse-fg-muted);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		padding: 0.05em 0.4em;
+	}
+
+	.dse-hero__ability-issue {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-hero__ability-body {
+		margin-top: 0.5em;
+	}
+
+	.dse-hero__stamina-stepper {
+		margin-top: 0.5em;
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */
