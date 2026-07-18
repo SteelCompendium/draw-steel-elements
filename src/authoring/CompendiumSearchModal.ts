@@ -23,6 +23,10 @@ function syncCtaEntry(): CompendiumEntry {
 		source: '',
 		// Never dereferenced: renderSuggestion/onChooseSuggestion both branch on
 		// isSyncCtaEntry() before touching any other field, including this one.
+		// Intentional synthetic sentinel row; CompendiumEntry.file is non-optional
+		// everywhere else in the app, and narrowing it to optional would ripple across
+		// every real consumer for the sake of this one never-dereferenced placeholder.
+		// eslint-disable-next-line obsidianmd/no-tfile-tfolder-cast
 		file: undefined as unknown as TFile,
 	};
 }

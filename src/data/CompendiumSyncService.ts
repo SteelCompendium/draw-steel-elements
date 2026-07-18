@@ -119,6 +119,9 @@ export class CompendiumSyncService {
 				}
 			}));
 			onProgress?.(Math.min(i + BATCH_SIZE, entries.length), entries.length);
+			// This service is unit-tested under the plain Node jest project (no DOM
+			// `window` global); the yield here isn't popout-window-sensitive UI work.
+			// eslint-disable-next-line obsidianmd/prefer-window-timers
 			await new Promise((resolve) => setTimeout(resolve, 0)); // yield to the UI thread
 		}
 
