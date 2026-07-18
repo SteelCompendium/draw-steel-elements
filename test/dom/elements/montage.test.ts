@@ -389,14 +389,14 @@ describe('T-6: the deterministic roll-driven test row (D5 RollService.resolve, i
 	});
 });
 
-describe('T-6: reset menu — Reset Progress clears successes/failures/round/skills_used, keeps config', () => {
+describe('T-6: reset menu — Reset progress clears successes/failures/round/skills_used, keeps config', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 		Notice.notices.length = 0;
 		Menu.lastMenu = null;
 	});
 
-	test('the options button opens exactly Reset Progress; clicking it zeroes progress, clears skill history, rebuilds, and persists', async () => {
+	test('the options button opens exactly Reset progress; clicking it zeroes progress, clears skill history, rebuilds, and persists', async () => {
 		jest.useFakeTimers();
 		let { root, host } = await renderMontage();
 
@@ -410,7 +410,7 @@ describe('T-6: reset menu — Reset Progress clears successes/failures/round/ski
 		button.click();
 		const menu = Menu.lastMenu!;
 		expect(menu.items).toHaveLength(1);
-		expect(menu.items[0].title).toBe('Reset Progress');
+		expect(menu.items[0].title).toBe('Reset progress');
 
 		menu.items[0].onClickCallback!();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);

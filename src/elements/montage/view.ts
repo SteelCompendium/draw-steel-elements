@@ -71,7 +71,7 @@ export class MontageView extends ElementView<MontageModel> {
 					const m = new Menu();
 					m.addItem((item) =>
 						item
-							.setTitle('Reset Progress')
+							.setTitle('Reset progress')
 							.setIcon('rotate-ccw')
 							.onClick(() => void this.resetProgress()),
 					);

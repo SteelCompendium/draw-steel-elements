@@ -97,7 +97,7 @@ export class NegotiationView extends ElementView<NegotiationData> {
 					const m = new Menu();
 					m.addItem((item) =>
 						item
-							.setTitle('Reset Negotiation')
+							.setTitle('Reset negotiation')
 							.setIcon('rotate-ccw')
 							// CB-4: bound to THIS view instance (one per block) — never a
 							// shared processor field.

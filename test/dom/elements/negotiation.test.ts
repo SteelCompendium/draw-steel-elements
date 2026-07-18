@@ -613,7 +613,7 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 		Menu.lastMenu = null;
 	});
 
-	test('the options button is a REAL labelled button; its menu offers exactly Reset Negotiation; clicking resets the model, rebuilds the DOM, and persists the reset bytes', async () => {
+	test('the options button is a REAL labelled button; its menu offers exactly Reset negotiation; clicking resets the model, rebuilds the DOM, and persists the reset bytes', async () => {
 		jest.useFakeTimers();
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
@@ -631,7 +631,7 @@ describe('T-7: reset menu — per-instance (CB-4), resetData + rebuild + persist
 		button.click();
 		const menu = Menu.lastMenu!;
 		expect(menu.items).toHaveLength(1);
-		expect(menu.items[0].title).toBe('Reset Negotiation');
+		expect(menu.items[0].title).toBe('Reset negotiation');
 		expect(menu.items[0].icon).toBe('rotate-ccw');
 
 		menu.items[0].onClickCallback!();
