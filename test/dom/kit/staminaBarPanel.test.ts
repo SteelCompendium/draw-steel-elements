@@ -76,6 +76,25 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		expect(winded.querySelector('.dse-stamina__fill')!.getAttribute('data-state')).toBe('winded');
 	});
 
+	test('FOLLOWUPS #28 LOW: max=0 (full-degrade, no authored max) renders a defined empty bar, never a NaN width', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 0, temp: 0, max: 0 }, { canPersist: false })!;
+
+		const fill = bar.querySelector('.dse-stamina__fill') as HTMLElement;
+		const temp = bar.querySelector('.dse-stamina__temp') as HTMLElement;
+		const track = bar.querySelector('.dse-stamina__track') as HTMLElement;
+		const pill = bar.querySelector('.dse-stamina__num .dse-stamina__pill') as HTMLElement;
+
+		expect(fill.style.getPropertyValue('--dse-fill')).toBe('0%');
+		expect(temp.style.getPropertyValue('--dse-temp-fill')).toBe('0%');
+		expect(track.style.getPropertyValue('--dse-zone')).toBe('0%');
+		for (const el of [fill, temp, track]) {
+			expect(el.getAttribute('style') ?? '').not.toMatch(/NaN/);
+		}
+		expect(fill.getAttribute('data-state')).toBe('dying');
+		expect(pill.textContent).toBe('(0/0)');
+	});
+
 	test('canPersist: false — no clickable modifier, applies the read-only tooltip, no click listener registered', () => {
 		const root = document.createElement('div');
 		const owner = fakeOwner();

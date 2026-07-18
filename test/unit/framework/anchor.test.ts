@@ -7,6 +7,7 @@
 //   2. An earlier fence that never finds a valid close before EOF must NOT blind the
 //      scanner to a real, well-formed block later in the note.
 import {
+	ANCHOR_KEY,
 	ensureAnchor,
 	findAnchoredBlock,
 	findFenceAtLine,
@@ -107,5 +108,23 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 		const { body, id } = ensureAnchor('current_value: 1');
 		expect(readAnchor(body)).toBe(id);
 		expect(ensureAnchor(body)).toEqual({ body, id }); // idempotent once anchored
+	});
+
+	test('FOLLOWUPS #28 LOW: a CRLF-authored body stays all-CRLF after stamping — the appended anchor line does not mix EOLs', () => {
+		const crlfBody = ['current_value: 1', 'label: Foo'].join('\r\n');
+		const { body, id } = ensureAnchor(crlfBody);
+
+		expect(readAnchor(body)).toBe(id);
+		// The whole stamped body — including the joiner in front of the fresh anchor line —
+		// uses the source's own dominant CRLF EOL, not a bare `\n`.
+		expect(body).toBe(`${crlfBody}\r\n${ANCHOR_KEY}: ${id}`);
+		expect(body.split('\r\n').some((line) => line.includes('\n'))).toBe(false);
+	});
+
+	test('ensureAnchor is idempotent on an already-anchored CRLF body (no re-mixing on a second stamp)', () => {
+		const crlfBody = ['current_value: 1', 'label: Foo'].join('\r\n');
+		const first = ensureAnchor(crlfBody);
+		const second = ensureAnchor(first.body);
+		expect(second).toEqual(first);
 	});
 });

@@ -2623,7 +2623,19 @@ Shared globals
    reproduced here rather than inherited. Tokens only — no color literals; the icon's
    user-picked color still rides the VALIDATED --dse-condition-color property
    (applyConditionColor, OD-8/SD-2), same contract as everywhere else .dse-cond appears. */
-[data-dse-element="conditions"] .dse-cond-panel {
+/* FOLLOWUPS #28 LOW fix: unscoped (was ancestor-scoped under the "conditions"
+   data-dse-element attribute selector, joined to .dse-cond-panel by a descendant
+   combinator that can never match, since the pipeline stamps that attribute and
+   `mountPanel` adds `.dse-cond-panel` to the SAME root element, not a descendant. That
+   silently dropped every rule below — chip border/background/
+   padding, the flex `gap` that separates the icon/name/duration/✕ (the visible "chips
+   run together" symptom) — for BOTH the standalone ds-conditions element and the ds-hero
+   sheet's embedded Conditions region (whose root carries `data-dse-element="hero"`, so
+   the old scoped selector would have missed it even fixed to a real descendant guard).
+   `.dse-cond-panel`/`.dse-cond-chip`/`.dse-cond-strip` are already DSE-namespaced class
+   names — unscoped matches the sibling `.dse-stepper` kit convention (styles-source.css
+   ~3318), which never needed a `[data-dse-element]` guard either. */
+.dse-cond-panel {
 	.dse-cond-strip {
 		display: flex;
 		flex-wrap: wrap;

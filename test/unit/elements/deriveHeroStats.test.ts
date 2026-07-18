@@ -111,6 +111,27 @@ describe('D7 Task 8: deriveHeroStats (spec §1.1)', () => {
 		expect(stats.resource).toEqual({ value: { type: 'Custom Points', min: -2, gainHint: '' }, source: 'authored' });
 	});
 
+	test('FOLLOWUPS #28 LOW: an authored resource override WITH a resolved class — override wins but gainHint still reflects the resolved class', () => {
+		const defn = baseDefn({ resource: { type: 'Custom Points', min: -2 } });
+		const stats = deriveHeroStats(
+			defn,
+			resolved({ class: { code: 'mcdm.heroes.v1/class/fury', name: 'Fury', model: FURY } }),
+		);
+
+		// The override's type/min win…
+		expect(stats.resource).toEqual({
+			value: {
+				type: 'Custom Points',
+				min: -2,
+				// …but gainHint is never an authorable field (resolveResource's own contract) —
+				// it still surfaces Fury's class-table gain rule, not the generic '' fallback.
+				gainHint:
+					'1d3/turn; +1 on taking damage; +1d3 first winded/dying; Growing Ferocity thresholds 2/4/6/8/10/12 (RR §4, AR)',
+			},
+			source: 'authored',
+		});
+	});
+
 	test('missing class + no override -> every class-dependent stat is null/"unavailable"', () => {
 		const defn = baseDefn();
 		const withIssue = resolved({

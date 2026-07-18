@@ -192,6 +192,39 @@ describe('D7 Task 9: ability roll bridge (recon delta 1) — expand, roll, react
 	}, 10000);
 });
 
+describe('FOLLOWUPS #28 LOW: sheet-level roll-disabled fallback (Task 9 coverage gap)', () => {
+	test('cx.roll gated off (rollingEnabled default false) — ability rows render static full cards, no roll button, sheet stays fully usable', async () => {
+		// makeDeps()'s prefs default (rollingEnabled unset -> false) — the same gate
+		// featureRollHooks checks (`!cx.roll || !cx.prefs.get('rollingEnabled')`), so this
+		// exercises the same undefined-hooks degrade path the roll-absent case would.
+		const { root, host } = await renderHero();
+
+		const rows = region(root, 'abilities')!.querySelectorAll('.dse-hero__ability-row');
+		expect(rows.length).toBe(2);
+		const intoTheFrayRow = Array.from(rows).find((r) => r.textContent?.includes('Into the Fray'))!;
+		intoTheFrayRow.querySelector<HTMLButtonElement>('.dse-hero__ability-toggle')!.click();
+		await flushAsync(2);
+
+		// The card body still fully renders (static — no roll affordance, not a hole).
+		expect(intoTheFrayRow.textContent).toContain('Tier one outcome.');
+		expect(intoTheFrayRow.textContent).toContain('Tier two outcome.');
+		expect(intoTheFrayRow.textContent).toContain('Tier three outcome.');
+		expect(intoTheFrayRow.querySelector('button[aria-label^="Roll "]')).toBeNull();
+		expect(intoTheFrayRow.querySelector('.dse-rollcard__headline')).toBeNull();
+
+		// The rest of the sheet stays fully interactive — the degrade is scoped to the
+		// roll affordance only, not the whole sheet.
+		jest.useFakeTimers();
+		const surgeValue = region(root, 'surges')!.querySelector<HTMLInputElement>('.dse-surge__stepper .dse-stepper__input')!;
+		expect(surgeValue.value).toBe('1');
+		region(root, 'surges')!.querySelector<HTMLButtonElement>('.dse-surge__stepper button[aria-label^="Increase"]')!.click();
+		expect(surgeValue.value).toBe('2');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalled();
+		jest.useRealTimers();
+	});
+});
+
 describe('D7 Task 9: [respite] (OD-8)', () => {
 	test('restores Stamina + Recoveries to derived max, clears Surges/temp/EoE conditions', async () => {
 		jest.useFakeTimers();

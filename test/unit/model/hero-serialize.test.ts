@@ -375,6 +375,134 @@ describe('D7 Task 7 fix round 1: splitter is a structural scan, not "state: is l
 	});
 });
 
+describe('FOLLOWUPS #28 MED-1: trailing comment/blank lines after a state-last block survive', () => {
+	test('a trailing comment after state: is preserved, not silently dropped on first persist', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'# remember to bump level after next respite',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		const expectedDefn = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'# remember to bump level after next respite',
+		].join('\n');
+		expect(out.startsWith(`${expectedDefn}\nstate:\n`)).toBe(true);
+		expect(out).toContain('# remember to bump level after next respite');
+	});
+
+	test('trailing blank lines after state: do not corrupt the output (whitespace-only, trimmed)', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'',
+			'',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		const expectedDefn = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		].join('\n');
+		// no stray blank-line gap between the last real defn field and the re-appended
+		// state: — exactly the "\nstate:\n" joiner, nothing else.
+		expect(out.startsWith(`${expectedDefn}\nstate:\n`)).toBe(true);
+		expect(out.slice(0, expectedDefn.length)).toBe(expectedDefn);
+	});
+
+	test('a blank line then a trailing comment after state: — both survive together', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'',
+			'# a trailing note, separated from state by a blank line',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		const expectedDefn = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'',
+			'# a trailing note, separated from state by a blank line',
+		].join('\n');
+		expect(out.startsWith(`${expectedDefn}\nstate:\n`)).toBe(true);
+	});
+
+	test('CRLF source: trailing comment after state: survives with the CRLF joiner intact', () => {
+		const raw = [
+			'name: X',
+			'level: 1',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'# a CRLF-sourced trailing comment',
+		].join('\r\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		expect(out).toContain('# a CRLF-sourced trailing comment');
+		expect(out.match(/^state:/gm)?.length).toBe(1);
+		// the source's dominant CRLF EOL is preserved throughout the output
+		expect(out.split('\r\n').some((line) => line.includes('\n'))).toBe(false);
+
+		const reparsed = parseLikePipeline(out);
+		expect(reparsed.defn.name).toBe('X');
+		expect(reparsed.state.stamina).toEqual({ current: 5, temp: 0 });
+	});
+
+	test('a comment sandwiched between state: and a following definition key still ends up above state on re-serialize', () => {
+		// state: appearing mid-document (not last) with a trailing comment right after its
+		// own indented content, before the next top-level key — the comment is not part of
+		// state's span and should re-surface with the other definition fields.
+		const raw = [
+			'name: X',
+			'level: 1',
+			'state:',
+			'  stamina: { current: 5, temp: 0 }',
+			'# a note about the next field',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		].join('\n');
+
+		const model = parseLikePipeline(raw);
+		expect(model.defn.characteristics).toEqual({ might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 });
+		expect(model.state.stamina).toEqual({ current: 5, temp: 0 });
+
+		const out = serialize(model);
+		const expectedDefn = [
+			'name: X',
+			'level: 1',
+			'# a note about the next field',
+			'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		].join('\n');
+		expect(out.startsWith(`${expectedDefn}\nstate:\n`)).toBe(true);
+	});
+});
+
 describe('D7 Task 7 fix round 1 (LOW 4): parseState throws on type-mismatched scalar fields, like parseStamina', () => {
 	const baseHero = {
 		name: 'X',

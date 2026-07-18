@@ -310,11 +310,24 @@ describe('D7 Task 2: canPersist=false — read-only renders WITHOUT write afford
 });
 
 describe('D7 Task 2: source hygiene + CSS contract', () => {
-	test('CSS contract: .dse-cond-panel scoped under [data-dse-element="conditions"], tokens only', () => {
+	test('FOLLOWUPS #28 LOW fix: .dse-cond-panel is UNSCOPED, not ancestor-scoped under [data-dse-element="conditions"] — tokens only', () => {
+		// Regression pin for the "chip text runs together" bug: `mountPanel` adds the
+		// `.dse-cond-panel` class to the SAME root element the pipeline already stamped
+		// `data-dse-element="conditions"` onto (panel.ts's `root.addClass('dse-cond-panel')`
+		// receives the exact `root` ElementView.onMount got) — a descendant-combinator
+		// selector between the two can therefore never match anything, so the whole chip
+		// block (border/background/padding, the flex gap that separates icon/name/
+		// duration/✕) silently never applied, for both the standalone ds-conditions
+		// element AND the ds-hero sheet's embedded Conditions region (whose root carries
+		// `data-dse-element="hero"`, not "conditions", so even a CORRECTED same-node guard
+		// wouldn't have reached it). Unscoped matches the sibling `.dse-stepper` kit
+		// convention, which never needed a `[data-dse-element]` guard either.
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-		const block = sheet.match(/\[data-dse-element="conditions"\]\s+\.dse-cond-panel\s*\{[\s\S]*?\n\}\n\n/);
+		expect(sheet).not.toMatch(/\[data-dse-element="conditions"\]\s+\.dse-cond-panel/);
+		const block = sheet.match(/(?:^|\n)\.dse-cond-panel\s*\{[\s\S]*?\n\}\n\n/);
 		expect(block).not.toBeNull();
 		expect(block![0]).toMatch(/var\(--dse-/);
+		expect(block![0]).toMatch(/\.dse-cond-chip\s*\{[^}]*gap:/);
 	});
 
 	test('source hygiene: panel.ts/view.ts pass the shared kit style guard (no inline color, no color literals)', () => {

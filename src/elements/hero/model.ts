@@ -413,7 +413,20 @@ function findStateSpan(lines: RawLine[]): { startLine: number; endLine: number }
 				inFlow = flowDepth > 0;
 				continue;
 			}
-			if (currentKeyIsState && span) span.endLine = i;
+			// FOLLOWUPS #28 MED-1: a column-0 blank line or bare `#comment` is NOT
+			// necessarily owned by `state:` — YAML requires genuine block-style
+			// continuation content to be indented (see TOP_LEVEL_KEY_RE's own doc
+			// comment), so only an indented line (or other non-blank, non-comment
+			// content, preserving prior behavior for that unusual case) extends the
+			// span. Skipping a buffer-worthy line does NOT drop it from the span
+			// forever: if a later indented continuation line follows, `span.endLine`
+			// jumps straight to it and the contiguous removal range still swallows the
+			// gap (it really was mid-block content). If instead `state:` ends here
+			// (next top-level key or EOF), the trailing blank/comment is simply never
+			// absorbed, so it survives in `defnRaw` — landing just above the
+			// re-appended `state:` block on serialize.
+			const ownedByState = /^[ \t]/.test(text) || (text.trim() !== '' && !text.startsWith('#'));
+			if (currentKeyIsState && span && ownedByState) span.endLine = i;
 			continue;
 		}
 		flowDepth += computeFlowDelta(text);

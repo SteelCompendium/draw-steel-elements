@@ -30,15 +30,31 @@ function generateAnchorId(): string {
 	return Math.random().toString(16).slice(2, 8).padEnd(6, '0');
 }
 
+/** `body`'s dominant end-of-line style — CRLF only when every line break in `body` is
+ *  `\r\n` (a mixed-EOL body, or one with no line breaks at all, defaults to LF). Mirrors
+ *  `hero/model.ts`'s `detectEol` exactly (same rule, same rationale): the ONLY thing this
+ *  feeds is the joiner in front of the freshly-appended anchor line below — `body`'s own
+ *  bytes are never rewritten. FOLLOWUPS #28 LOW fix: without this, a CRLF-authored body
+ *  got a bare `\n` joiner, leaving the stamped body mixed-EOL. */
+function detectEol(body: string): '\r\n' | '\n' {
+	const totalNewlines = (body.match(/\n/g) ?? []).length;
+	if (totalNewlines === 0) return '\n';
+	const crlfNewlines = (body.match(/\r\n/g) ?? []).length;
+	return crlfNewlines === totalNewlines ? '\r\n' : '\n';
+}
+
 /** Finds an existing `_dse_anchor:` line in `body`, or appends a fresh one. Pure string
- *  op — `body` is a fenced block's BODY text (no fences), never the whole note. */
+ *  op — `body` is a fenced block's BODY text (no fences), never the whole note). The
+ *  joiner in front of the fresh anchor line matches `body`'s own dominant EOL (FOLLOWUPS
+ *  #28 LOW), so a CRLF-authored block doesn't turn mixed-EOL on first stamp. */
 export function ensureAnchor(body: string): { body: string; id: string } {
 	const existing = readAnchor(body);
 	if (existing) return { body, id: existing };
 
 	const id = generateAnchorId();
+	const eol = detectEol(body);
 	const trimmed = body.replace(/\s+$/, '');
-	const newBody = trimmed.length > 0 ? `${trimmed}\n${ANCHOR_KEY}: ${id}` : `${ANCHOR_KEY}: ${id}`;
+	const newBody = trimmed.length > 0 ? `${trimmed}${eol}${ANCHOR_KEY}: ${id}` : `${ANCHOR_KEY}: ${id}`;
 	return { body: newBody, id };
 }
 

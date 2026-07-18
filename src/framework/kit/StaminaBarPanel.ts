@@ -42,10 +42,17 @@ export interface StaminaBarRenderOptions {
 const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
 
 /** Ports StaminaBar.vue's `calculatePercentFromStamina` 1:1, re-expressed against
- *  `max` rather than a `StaminaBar` model. */
+ *  `max` rather than a `StaminaBar` model.
+ *
+ *  FOLLOWUPS #28 LOW: full-degrade (every ref fails, no authored `max_stamina`
+ *  override) leaves `max=0`, so `totalStamina` is also 0 — the SFC's original
+ *  division-by-zero would feed `NaN%` to a `--dse-*` CSS custom property (silently
+ *  ignored by CSS, but not a defined value). Guard `totalStamina === 0` and return a
+ *  defined 0% (empty bar) instead. */
 function calculatePercentFromStamina(max: number, stamina: number, ignoreDying = false): number {
 	const dyingStamina = Math.floor((max ?? 0) / 2);
 	const totalStamina = (max ?? 0) + dyingStamina;
+	if (totalStamina === 0) return 0;
 	const absoluteStamina = ignoreDying ? stamina : stamina + dyingStamina;
 	return (absoluteStamina / totalStamina) * 100;
 }
