@@ -2,37 +2,32 @@
 // wiring. Wired into main.ts's onload (a minimal, compile-proving call — full
 // command/ribbon polish + the real per-block "send to sidebar" context-menu action is
 // Task 10).
-import { TFile } from 'obsidian';
+import { Notice, TFile } from 'obsidian';
 import type { Editor, MarkdownFileInfo, MarkdownView, Plugin } from 'obsidian';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from './DseSidebarView';
 import type { DseSidebarServices } from './DseSidebarView';
-import { ensureAnchor, findFirstFence } from './anchor';
+import { ensureAnchor, findFenceAtLine, listFences, matchFenceLine, isFenceClose } from './anchor';
 
-/** A fence-marker line: 3+ backticks/tildes then the info string. Deliberately a small
- *  standalone copy (not shared with src/authoring/fenceScan.ts's identical scanner) —
- *  framework/ stays dependency-free of authoring/ (mirrors the F1 §2.5 "framework is the
- *  dependency-free keystone" principle the OD-8 lint enforces one-directionally against
- *  src/elements/; this keeps it true in spirit for src/authoring/ too). */
-const FENCE_LINE = /^([`~]{3,})(.*)$/;
-
-/** Top-down scan (fences don't nest — same rationale as anchor.ts's scanner): the alias
- *  of whichever fence is open at `line`, or null if `line` isn't inside one. */
+/** Top-down scan (fences don't nest — same rationale as anchor.ts's scanner, whose exact
+ *  `matchFenceLine`/`isFenceClose` primitives this reuses rather than re-testing "is this
+ *  a fence marker" a second way): the alias of whichever fence is open at `line`, or null
+ *  if `line` isn't inside one. Deliberately its own traversal (not a call into anchor.ts's
+ *  `iterateFences`/`findFenceAtLine`): those only recognize a fence once it has a matching
+ *  CLOSE, whereas a command's `editorCheckCallback` must also recognize a fence the user is
+ *  still typing (cursor inside an opened-but-not-yet-closed block) — a live Editor has no
+ *  "rest of the note" to look ahead into for a close that may not exist yet. */
 function aliasAtLine(editor: Editor, line: number): string | null {
-	let alias: string | null = null;
-	let fenceChar = '';
-	let fenceLen = 0;
+	let open: { fenceChar: string; fenceLen: number; alias: string } | null = null;
 	for (let i = 0; i < line; i++) {
-		const match = editor.getLine(i).match(FENCE_LINE);
+		const match = matchFenceLine(editor.getLine(i));
 		if (!match) continue;
-		if (alias === null) {
-			fenceChar = match[1][0];
-			fenceLen = match[1].length;
-			alias = match[2].trim();
-		} else if (match[1][0] === fenceChar && match[1].length >= fenceLen && match[2].trim() === '') {
-			alias = null;
+		if (open === null) {
+			open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: match.rest };
+		} else if (isFenceClose(open, editor.getLine(i))) {
+			open = null;
 		}
 	}
-	return alias;
+	return open?.alias ?? null;
 }
 
 /** Registers the view type, a ribbon icon, and the "Open Draw Steel sidebar" /
@@ -53,18 +48,20 @@ export function registerDseSidebar(plugin: Plugin, services: DseSidebarServices)
 		},
 	});
 
-	// MVP "send to sidebar": cursor must sit inside a ds-* fence; binds the FIRST block of
-	// that alias in the note (multi-instance-per-note disambiguation — which ds-counter,
-	// if there are three — is deferred to the real per-block action, Task 10, which has a
-	// live BlockHost in hand and doesn't need to guess; see findFirstFence's doc).
+	// MVP "send to sidebar": cursor must sit inside a ds-* fence; binds the occurrence at
+	// (or nearest) the cursor when the note has more than one block of that alias, falling
+	// back to the first with a Notice when the cursor's own block can't be pinpointed (spec
+	// §1.7 / review finding #3 — the real per-block context-menu action with a live
+	// BlockHost in hand is Task 10).
 	plugin.addCommand({
 		id: 'send-block-to-sidebar',
 		name: 'Send block to sidebar',
 		editorCheckCallback: (checking: boolean, editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 			const file = ctx.file;
-			const alias = aliasAtLine(editor, editor.getCursor().line);
+			const cursorLine = editor.getCursor().line;
+			const alias = aliasAtLine(editor, cursorLine);
 			if (!file || !alias) return false;
-			if (!checking) void sendToSidebar(services, file.path, alias);
+			if (!checking) void sendToSidebar(services, file.path, alias, cursorLine);
 			return true;
 		},
 	});
@@ -87,15 +84,32 @@ async function openSidebarView(services: DseSidebarServices): Promise<DseSidebar
  * D8's other trackers reuse this). Ensures the target block carries a `_dse_anchor`
  * (stamping one via an atomic Vault.process splice if it doesn't already), then opens/
  * reveals the sidebar and adds a panel for it.
+ *
+ * `cursorLine` (optional — callers with no live cursor, e.g. a future non-editor caller,
+ * simply omit it) picks WHICH block gets bound when the note has more than one `alias`
+ * fence: the one containing the cursor, when there is one. Falls back to the first
+ * occurrence in the note — and, only when that fallback was actually ambiguous (more than
+ * one candidate existed), surfaces a `Notice` naming the chosen block so the user isn't
+ * left guessing which one just got wired up silently (review finding #3).
  */
-export async function sendToSidebar(services: DseSidebarServices, filePath: string, alias: string): Promise<void> {
+export async function sendToSidebar(
+	services: DseSidebarServices,
+	filePath: string,
+	alias: string,
+	cursorLine?: number,
+): Promise<void> {
 	const file = services.app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) return;
 
 	let anchorId: string | null = null;
+	let noticeLine: number | null = null;
 	await services.app.vault.process(file, (content) => {
-		const info = findFirstFence(content, alias);
-		if (!info) return content; // no such block in this note — no-op, nothing to bind
+		const fences = listFences(content, alias);
+		if (fences.length === 0) return content; // no such block in this note — no-op, nothing to bind
+
+		const atCursor = cursorLine === undefined ? null : findFenceAtLine(content, alias, cursorLine);
+		const info = atCursor ?? fences[0];
+		if (!atCursor && fences.length > 1) noticeLine = info.lineStart + 1; // 1-based, for the user
 
 		const lines = content.split('\n');
 		const body = lines.slice(info.lineStart + 1, info.lineEnd).join('\n');
@@ -107,6 +121,12 @@ export async function sendToSidebar(services: DseSidebarServices, filePath: stri
 		return lines.join('\n');
 	});
 	if (anchorId === null) return; // no matching block found
+
+	if (noticeLine !== null) {
+		new Notice(
+			`Draw Steel Elements: multiple "${alias}" blocks in this note — sent the one starting at line ${noticeLine}.`,
+		);
+	}
 
 	const view = await openSidebarView(services);
 	view?.addPanel({ filePath, alias, anchorId });

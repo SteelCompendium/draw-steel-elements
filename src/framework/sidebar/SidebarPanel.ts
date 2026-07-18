@@ -58,6 +58,7 @@ export class SidebarPanel extends Component {
 			this.panelEl,
 			this,
 			(body) => void this.handleExternalChange(body),
+			() => this.handleAnchorLost(),
 		);
 		this.host = host;
 		await host.refresh();
@@ -96,6 +97,22 @@ export class SidebarPanel extends Component {
 		if (previous) this.removeChild(previous);
 		this.panelEl.empty();
 		await this.deps.pipeline.run(def, body, this.host);
+	}
+
+	/**
+	 * Safety net (spec §1.6 / review finding #1, HIGH): SidebarBlockHost calls this the
+	 * moment ITS OWN write (persist() -> replaceSource()) discovers the anchored block is
+	 * gone — which the self-echo guard would otherwise hide forever, since a self-write
+	 * never fires handleExternalChange above. Tears down whatever's currently mounted (same
+	 * as handleExternalChange) and renders the SAME "backing block not found" degrade card
+	 * mount() itself shows when the block can't be located up front — never a silent,
+	 * permanently-broken save.
+	 */
+	private handleAnchorLost(): void {
+		if (!this.host || !this.panelEl) return;
+		const previous = this.host.lastMountedChild;
+		if (previous) this.removeChild(previous);
+		this.renderUnavailable('Backing block not found — re-link this panel from the note.');
 	}
 
 	private renderUnavailable(message: string): void {

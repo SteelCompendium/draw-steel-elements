@@ -24,7 +24,12 @@ function setup(content = fencedNote()) {
 	return { app, vault, file };
 }
 
-function makeHost(app: App, file: TFile, onExternalChange: (body: string) => void = () => {}) {
+function makeHost(
+	app: App,
+	file: TFile,
+	onExternalChange: (body: string) => void = () => {},
+	onAnchorLost: () => void = () => {},
+) {
 	// Structural stub: SidebarBlockHost only ever touches plugin.app.vault.{on,cachedRead,
 	// process} (registerEvent is called against `owner`, not `plugin` — see that file's
 	// ctor doc). A real mock Plugin instance would need its OWN `.app` reassigned to this
@@ -33,7 +38,7 @@ function makeHost(app: App, file: TFile, onExternalChange: (body: string) => voi
 	const plugin = { app } as unknown as Plugin;
 	const owner = new Component();
 	const containerEl = document.createElement('div');
-	const host = new SidebarBlockHost(plugin, file, ALIAS, ANCHOR_ID, containerEl, owner, onExternalChange);
+	const host = new SidebarBlockHost(plugin, file, ALIAS, ANCHOR_ID, containerEl, owner, onExternalChange, onAnchorLost);
 	return { host, owner, containerEl };
 }
 
@@ -128,5 +133,79 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		};
 		owner.removeChild(child);
 		expect(unloaded).toBe(true);
+	});
+
+	// D8 Task 2 review fix round 1 (finding #1, HIGH) — the safety net: the self-echo guard
+	// means a self-write that drops the `_dse_anchor` line (the passthrough-field gap this
+	// file's header documents) would otherwise never tell anyone canPersist just flipped
+	// false. replaceSource must detect that flip on its OWN write and call onAnchorLost.
+	describe('review fix round 1, finding #1 (HIGH): anchor-lost safety net on self-persist', () => {
+		test('replaceSource whose newSource drops `_dse_anchor` flips canPersist false and fires onAnchorLost exactly once', async () => {
+			const { vault, file, app } = setup();
+			const onAnchorLost = jest.fn();
+			const { host } = makeHost(app, file, undefined, onAnchorLost);
+			await host.refresh();
+			expect(host.canPersist).toBe(true);
+
+			// Simulates the real failure mode: a persisted element's serialize() (e.g.
+			// Counter's) doesn't pass the `_dse_anchor` key through — the write still
+			// succeeds (the fence is found and replaced), but the new body has no anchor.
+			const ok = await host.replaceSource('current_value: 99'); // no _dse_anchor line
+
+			expect(ok).toBe(true); // the write itself succeeded — not a corruption/abort case
+			expect(onAnchorLost).toHaveBeenCalledTimes(1);
+			expect(host.canPersist).toBe(false); // the panel must now treat this as unaddressable
+
+			// And the safety net doesn't re-fire on every subsequent read of the same state.
+			vault.emit('modify', fakeTFile('Note.md'));
+			await flushAsync();
+			expect(onAnchorLost).toHaveBeenCalledTimes(1);
+		});
+
+		test('a normal replaceSource that PRESERVES the anchor never calls onAnchorLost', async () => {
+			const { file, app } = setup();
+			const onAnchorLost = jest.fn();
+			const { host } = makeHost(app, file, undefined, onAnchorLost);
+			await host.refresh();
+
+			await host.replaceSource(`current_value: 5\n_dse_anchor: ${ANCHOR_ID}`);
+
+			expect(onAnchorLost).not.toHaveBeenCalled();
+			expect(host.canPersist).toBe(true);
+		});
+	});
+
+	// D8 Task 2 review fix round 1 (finding #5, MEDIUM) — the vault "modify" listener must
+	// not go live until the initial cachedContent priming read (refresh()) has resolved, so
+	// a genuine external edit landing in that window can't race a not-yet-mounted panel.
+	describe('review fix round 1, finding #5 (MEDIUM): listener registered only after refresh() resolves', () => {
+		test('a "modify" emitted while refresh() is still pending is NOT delivered; the listener goes live only once refresh() resolves', async () => {
+			const { vault, file, app } = setup();
+			const onExternalChange = jest.fn();
+			const { host } = makeHost(app, file, onExternalChange);
+
+			const gate = vault.gateRead('Note.md');
+			const refreshing = host.refresh(); // cachedRead is now blocked on the gate
+
+			// A genuine external modify lands WHILE the priming read is still in flight —
+			// pre-fix, the ctor had already registered the listener synchronously, so this
+			// would race a second mount in through onExternalChange before the panel's own
+			// first pipeline.run() had even happened.
+			vault.emit('modify', fakeTFile('Note.md'));
+			await flushAsync();
+			expect(onExternalChange).not.toHaveBeenCalled(); // no listener yet — event is a no-op
+
+			gate.release();
+			await refreshing;
+
+			// NOW the listener is live: a subsequent external edit is delivered normally.
+			const edited = fencedNote().replace('current_value: 1', 'current_value: 77');
+			vault.setText('Note.md', edited);
+			vault.emit('modify', fakeTFile('Note.md'));
+			await flushAsync();
+
+			expect(onExternalChange).toHaveBeenCalledTimes(1);
+			expect(onExternalChange).toHaveBeenCalledWith(`current_value: 77\n_dse_anchor: ${ANCHOR_ID}`);
+		});
 	});
 });

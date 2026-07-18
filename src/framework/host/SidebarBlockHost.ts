@@ -25,8 +25,14 @@
 // §1.5 calls this out ("persisted-element models add an optional passthrough field for
 // it"), but wiring that through every persisted model's schema/model is out of this task's
 // scope. Until that lands, the FIRST persist() through a real element view after "send to
-// sidebar" will silently drop the anchor line, and the panel will read back as
-// !canPersist on the next external-modify refresh. Tracked for a FOLLOWUPS entry.
+// sidebar" WILL drop the anchor line. What this task DOES fix (review finding #1, HIGH): the
+// safety net. replaceSource notices the resulting canPersist true->false flip immediately
+// (the self-echo guard means the normal external-modify path would never catch it — see
+// replaceSource's inline comment) and calls onAnchorLost, which SidebarPanel wires to the
+// same read-only degrade card handleExternalChange's "block vanished" path already renders
+// — so the failure is surfaced right away instead of every subsequent edit silently no-op'ing
+// forever. Tracked for a FOLLOWUPS entry (the root fix: passthrough fields on the 4 migrated
+// persisted models).
 import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import { findAnchoredBlock } from '../sidebar/anchor';
@@ -77,6 +83,10 @@ export class SidebarBlockHost implements BlockHost {
 	 *  hand back what it mounted. */
 	private mountedChild: Component | null = null;
 
+	/** Guards registerModifyListener so it only ever runs once, even if refresh() were
+	 *  ever called again — see that method's doc. */
+	private listenerRegistered = false;
+
 	constructor(
 		private readonly plugin: Plugin,
 		private readonly backingFile: TFile,
@@ -85,18 +95,13 @@ export class SidebarBlockHost implements BlockHost {
 		readonly containerEl: HTMLElement,
 		private readonly owner: Component,
 		private readonly onExternalChange: (body: string) => void,
+		private readonly onAnchorLost: () => void,
 	) {
-		// Registered against `owner` (the SidebarPanel), not `plugin` — cleanup must be
-		// scoped to THIS panel's lifecycle (torn down on removePanel), not the whole
-		// plugin's unload; a plugin-scoped registration would leak one live listener per
-		// note-modify per panel for as long as the plugin stays loaded, even after the
-		// panel closes.
-		this.owner.registerEvent(
-			this.plugin.app.vault.on('modify', (file) => {
-				if (file.path !== this.backingFile.path) return;
-				void this.handleExternalModify();
-			}),
-		);
+		// Deliberately does NOT register the vault listener here — see registerModifyListener,
+		// called from refresh() instead (review finding #5, MEDIUM: a listener live before the
+		// initial cachedContent priming read resolves can fire handleExternalModify -> the
+		// panel's onExternalChange -> a full pipeline.run() remount BEFORE mount()'s own first
+		// pipeline.run() has run, racing two mounts into the same panelEl).
 	}
 
 	get sourcePath(): string {
@@ -121,10 +126,34 @@ export class SidebarBlockHost implements BlockHost {
 	 *  snapshot. Must be awaited once by the caller (SidebarPanel.mount) right after
 	 *  construction, before canPersist/getBlockInfo/currentBody are relied on: the
 	 *  constructor can't itself await a vault read, so this is the one explicit priming
-	 *  step that seeds cachedContent for the first time. */
+	 *  step that seeds cachedContent for the first time. Also the point at which the vault
+	 *  "modify" listener goes live (see registerModifyListener) — deliberately AFTER the
+	 *  priming read resolves, not before (review finding #5). */
 	async refresh(): Promise<void> {
 		const content = await this.plugin.app.vault.cachedRead(this.backingFile);
 		this.applyFreshContent(content, false);
+		this.registerModifyListener();
+	}
+
+	/** Registers the live vault.on("modify") listener, scoped to `owner` (the SidebarPanel)
+	 *  — cleanup must be scoped to THIS panel's lifecycle (torn down on removePanel), not the
+	 *  whole plugin's unload; a plugin-scoped registration would leak one live listener per
+	 *  note-modify per panel for as long as the plugin stays loaded, even after the panel
+	 *  closes. Called once, from the end of refresh() (guard makes a second call a no-op):
+	 *  registering only once the initial cachedContent priming read has resolved closes the
+	 *  double-mount race a synchronous, constructor-time registration would otherwise open
+	 *  (review finding #5, MEDIUM) — a genuine external modify landing in that window would
+	 *  otherwise fire onExternalChange -> a full remount through the panel BEFORE mount()'s
+	 *  own first pipeline.run() has even happened. */
+	private registerModifyListener(): void {
+		if (this.listenerRegistered) return;
+		this.listenerRegistered = true;
+		this.owner.registerEvent(
+			this.plugin.app.vault.on('modify', (file) => {
+				if (file.path !== this.backingFile.path) return;
+				void this.handleExternalModify();
+			}),
+		);
 	}
 
 	/** Not part of BlockHost — extracts the anchored block's current body text (between
@@ -165,7 +194,21 @@ export class SidebarBlockHost implements BlockHost {
 			return finalContent;
 		});
 
-		if (wrote && finalContent !== null) this.cachedContent = finalContent;
+		if (wrote && finalContent !== null) {
+			this.cachedContent = finalContent;
+			// Safety net (review finding #1, HIGH): the self-echo guard (lastWritten, above)
+			// deliberately suppresses onExternalChange for our OWN write — but that means if
+			// THIS write's serialized body dropped the `_dse_anchor` line (a persisted
+			// element's model not yet passing the anchor field through — the passthrough
+			// gap flagged in this file's header), nothing else will ever notice the block
+			// became unaddressable. replaceSource only reaches this branch when canPersist
+			// was true a moment ago (the early return above) and the write itself is atomic
+			// (no await inside the Vault.process callback, so nothing external could have
+			// raced it) — so `getBlockInfo() === null` here can only mean OUR write just
+			// dropped the anchor. Tell the panel immediately, rather than leaving every
+			// subsequent interaction silently failing to save forever.
+			if (this.getBlockInfo() === null) this.onAnchorLost();
+		}
 		return wrote;
 	}
 

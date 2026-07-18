@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { initializeElementFrameworkV2, registerFrameworkElementDefinitions } from 'main';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices, SidebarPanelState } from '@/framework/sidebar/DseSidebarView';
+import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
 
 const ANCHOR_A = 'aaa111';
 const ANCHOR_B = 'bbb222';
@@ -128,5 +129,43 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 
 		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel');
 		expect(panelEl?.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+	});
+
+	// D8 Task 2 review fix round 1 (finding #1, HIGH) — end-to-end reproduction of the exact
+	// failure the reviewer flagged: Counter.serialize() doesn't pass `_dse_anchor` through
+	// (the passthrough-field gap SidebarBlockHost.ts's header documents), so the FIRST real
+	// persist() through the sidebar silently drops the anchor line. Before the fix, nothing
+	// ever told the user; the read-only degrade card must now appear immediately.
+	test('when a real persist drops the `_dse_anchor` line, the degrade card appears immediately and further edits are visibly read-only (finding #1)', async () => {
+		const { app } = setup();
+		app.vault.setFile('Note.md', counterBlock(ANCHOR_A, 3));
+		const { view } = await openView(app);
+
+		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		await flushAsync(); // real timers for the initial mount's vault.cachedRead
+
+		// Fake timers only from here — replaceSource rides Vault.process (no macrotask
+		// delay in the fake), so only the persist debounce itself needs advancing.
+		jest.useFakeTimers();
+
+		const panelEl = () => view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
+		const plusBtn = () => panelEl().querySelector<HTMLButtonElement>('.dse-stepper__btn[aria-label^="Increase"]');
+		expect(plusBtn()).not.toBeNull();
+		expect(panelEl().getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
+
+		plusBtn()!.click(); // mutates the model + schedules the debounced persist()
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS); // flush -> replaceSource -> anchor dropped
+
+		// The degrade card is now showing instead of the counter.
+		expect(panelEl().getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+		expect(panelEl().querySelector('.dse-error-card-message')?.textContent).toBe(
+			'Backing block not found — re-link this panel from the note.',
+		);
+		// Visibly read-only: the stepper (and its input) is gone entirely, replaced by the
+		// static error card — never a silently-inert control sitting there unexplained.
+		expect(panelEl().querySelector('.dse-stepper')).toBeNull();
+		expect(panelEl().querySelector('input')).toBeNull();
+
+		jest.useRealTimers();
 	});
 });

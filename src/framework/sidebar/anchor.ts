@@ -12,10 +12,13 @@ import type { BlockInfo } from '../host/BlockHost';
 const ANCHOR_KEY = '_dse_anchor';
 const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:\\s*['"]?([A-Za-z0-9_-]+)['"]?\\s*$`, 'm');
 
-/** A fence-open line: 3+ backticks/tildes (captured), then the info-string language token. */
-const FENCE_OPEN = /^([`~]{3,})(\S*)\s*$/;
-/** A fence-close line: 3+ backticks/tildes, nothing else on the line. */
-const FENCE_CLOSE = /^([`~]{3,})\s*$/;
+/** A fence-marker line: 3+ backticks/tildes (captured), then the rest of the line — the
+ *  info string for an opener, or (after trimming) empty for a closer. Exported so
+ *  registration.ts's `aliasAtLine` (a live-Editor, prefix-scan variant of the same
+ *  open/close matching — see that function's doc for why it can't just call the
+ *  content-string scanner below) shares this single regex instead of carrying its own
+ *  copy; the two files must never test "is this a fence marker line" two different ways. */
+export const FENCE_LINE = /^([`~]{3,})(.*)$/;
 
 /** Small non-crypto id generator (Math.random-based — mobile-safe, no `crypto` node
  *  module; F1/D8 convention for anything that doesn't need cryptographic uniqueness). */
@@ -62,40 +65,97 @@ export function findAnchoredBlock(content: string, alias: string, id: string): B
 
 /**
  * The un-anchored counterpart: the FIRST ```` ```<alias> ```` (or `~~~`) block in `content`,
- * regardless of whether it already carries an anchor. Used by "send to sidebar" (spec
- * §1.7) to pick a block to stamp an id onto in the common case of one block per alias per
- * note; disambiguating multiple same-alias blocks in one note is deferred to the real
- * per-block "send to sidebar" UI action (Task 10 — that one has a live BlockHost/lineStart
- * in hand and doesn't need to guess).
+ * regardless of whether it already carries an anchor — `listFences(content, alias)[0]`.
+ * `sendToSidebar` (spec §1.7) computes `listFences` itself for the ambiguity check and reuses
+ * that array rather than calling this a second time, but this is the small standalone form
+ * for any caller that just wants "the first one" (e.g. a future no-cursor entry point).
  */
 export function findFirstFence(content: string, alias: string): BlockInfo | null {
-	const first = iterateFences(content, alias).next();
-	return first.done ? null : first.value.info;
+	return listFences(content, alias)[0] ?? null;
 }
 
-/** Shared fence scanner: yields every ```` ```<alias> ```` (or `~~~`-fenced) block found
- *  in `content`, top-down, with its position and body text. See findAnchoredBlock's doc
- *  for why this must thread state top-down rather than walk upward from a target line. */
+/**
+ * Every ```` ```<alias> ```` (or `~~~`) block in `content`, top-down, in encounter order.
+ * `sendToSidebar` uses the length of this to decide whether picking "first" is actually
+ * ambiguous (worth a `Notice`) — see registration.ts.
+ */
+export function listFences(content: string, alias: string): BlockInfo[] {
+	return [...iterateFences(content, alias)].map((block) => block.info);
+}
+
+/**
+ * The ```` ```<alias> ```` (or `~~~`) block whose fence lines (inclusive) contain `line`,
+ * or null when `line` doesn't sit inside one. Used by `sendToSidebar` (spec §1.7 / review
+ * finding #3) to bind the occurrence nearest the cursor rather than always the first, when
+ * a note has multiple blocks sharing the same alias.
+ */
+export function findFenceAtLine(content: string, alias: string, line: number): BlockInfo | null {
+	for (const info of listFences(content, alias)) {
+		if (line >= info.lineStart && line <= info.lineEnd) return info;
+	}
+	return null;
+}
+
+/** Matches a fence-marker line, trimming the rest-of-line into either the info string or
+ *  empty. Null when `line` isn't a fence marker at all. Exported (with `isFenceClose`
+ *  below) so registration.ts's `aliasAtLine` — a live-Editor, prefix-scan variant of this
+ *  same open/close matching, needed because it must recognize a fence that's open but
+ *  not yet closed (the cursor sitting inside a block the user is still typing) — builds
+ *  its open/close test on the exact same primitives instead of a second hand-rolled copy. */
+export function matchFenceLine(line: string): { marker: string; rest: string } | null {
+	const match = FENCE_LINE.exec(line);
+	return match ? { marker: match[1], rest: match[2].trim() } : null;
+}
+
+/** True when `line` is a valid CLOSE for a fence opened with `open` — same character,
+ *  at least as long, and carrying no info string of its own (a bare close). */
+export function isFenceClose(open: { fenceChar: string; fenceLen: number }, line: string): boolean {
+	const match = matchFenceLine(line);
+	return !!match && match.rest === '' && match.marker[0] === open.fenceChar && match.marker.length >= open.fenceLen;
+}
+
+/**
+ * Shared fence scanner: yields every CLOSED fence block found in `content`, top-down, with
+ * its alias/position/body text, regardless of alias — `findAnchoredBlock`/`listFences`
+ * filter by alias afterward. Uniform bracket matching (review finding #4, CRITICAL): opens
+ * on ANY fence-marker line, whatever its language token, and only treats the region as
+ * closed when a bracket-matching close (same char, length >= open length, no info string)
+ * is found — mirroring registration.ts's `aliasAtLine`. This is what makes a
+ * fence-marker-looking line INSIDE an already-open region (wrong char, too short, or
+ * carrying an info string — e.g. a `_dse_anchor`-lookalike nested in an unrelated
+ * ` ```md ` example fence) correctly opaque body content instead of being individually
+ * tested and matched: the forward search below only ever calls `isFenceClose` on body
+ * lines, never `matchFenceLine`-as-an-opener, so a nested "```ds-counter" body line can
+ * never re-open state mid-region.
+ *
+ * A fence-open that never finds a valid close before EOF is NOT treated as opaque through
+ * to EOF (that would let one malformed/truncated fence anywhere earlier in the note
+ * permanently hide every real block after it — the second consequence flagged by finding
+ * #4). Instead that single candidate open is abandoned (treated as ordinary content) and
+ * the scan resumes on the very next line, so a later well-formed block is still found.
+ */
 function* iterateFences(content: string, alias: string): Generator<{ info: BlockInfo; body: string }> {
 	const lines = content.split('\n');
 	let i = 0;
 	while (i < lines.length) {
-		const open = lines[i].match(FENCE_OPEN);
-		if (!open || open[2] !== alias) {
+		const openMatch = matchFenceLine(lines[i]);
+		if (!openMatch) {
 			i++;
 			continue;
 		}
-		const fenceChar = open[1][0];
-		const fenceLen = open[1].length;
+		const open = { fenceChar: openMatch.marker[0], fenceLen: openMatch.marker.length, alias: openMatch.rest };
 		let j = i + 1;
-		while (j < lines.length) {
-			const close = lines[j].match(FENCE_CLOSE);
-			if (close && close[1][0] === fenceChar && close[1].length >= fenceLen) break;
-			j++;
+		while (j < lines.length && !isFenceClose(open, lines[j])) j++;
+		if (j >= lines.length) {
+			// Unterminated — lenient recovery, see doc above: don't abandon the whole
+			// scan, just this one candidate open.
+			i++;
+			continue;
 		}
-		if (j >= lines.length) return; // unterminated fence — nothing valid past here
 
-		yield { info: { language: alias, lineStart: i, lineEnd: j }, body: lines.slice(i + 1, j).join('\n') };
+		if (open.alias === alias) {
+			yield { info: { language: open.alias, lineStart: i, lineEnd: j }, body: lines.slice(i + 1, j).join('\n') };
+		}
 		i = j + 1;
 	}
 }
