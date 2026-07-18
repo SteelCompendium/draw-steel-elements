@@ -1,4 +1,5 @@
 import {App, Notice, Plugin, TFolder, normalizePath} from 'obsidian';
+import type {Editor, MarkdownFileInfo, MarkdownView} from 'obsidian';
 import {DseSettingTab} from "@views/SettingsTab";
 import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
@@ -36,7 +37,8 @@ import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
-import { registerDseSidebar } from '@/framework/sidebar/registration';
+import { registerDseSidebar, sendToSidebar } from '@/framework/sidebar/registration';
+import { listFences } from '@/framework/sidebar/anchor';
 import { registerInsertCommands } from '@/authoring/insert';
 import { DsElementSuggest } from '@/authoring/suggest';
 import { DsSchemaSuggest } from '@/authoring/schemaSuggest';
@@ -366,11 +368,49 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 
         // D8 Task 2 (spec §1) — minimal wire proving the sidebar host/view registers
         // through production onload; full command/ribbon polish is Task 10.
-        registerDseSidebar(this, {
+        // D8 Task 3: refs/validation threaded in too, so SidebarPanel's in-place
+        // onUpdate refresh (spec §1.6) is live in production, not just in a harness that
+        // opts in — see DseSidebarServices's field doc.
+        const dseSidebarServices = {
             app: this.app,
             plugin: this,
             pipeline: frameworkV2.pipeline,
             registry: frameworkV2.registry,
+            refs: frameworkV2.services.refs,
+            validation: frameworkV2.services.validation,
+        };
+        registerDseSidebar(this, dseSidebarServices);
+
+        // D8 Task 3 (spec §1's canonical use) — a thin, initiative-specific "send to
+        // sidebar" affordance proving sendToSidebar(services, path, alias) end to end
+        // through production wiring: the generic "Send block to sidebar" command
+        // (registerDseSidebar, above) requires the cursor to sit inside the block, but the
+        // running-session tracker is meant to be grabbed from anywhere in the note — so
+        // this one only needs an active file, not a cursor position. Scans for whichever
+        // of initiative's FOUR aliases (ds-it/ds-init/ds-initiative/ds-initiative-tracker)
+        // actually appears in the note — hardcoding the canonical "ds-initiative" would
+        // silently no-op on a note written with a different alias (e.g. the visual-harness
+        // fixture uses ds-it); listFences' emptiness IS the signal, no extra plumbing
+        // needed. Falls back to the canonical alias so sendToSidebar's own
+        // "no matching block" no-op still applies when the note has none of them at all.
+        // The full per-block context-menu sweep for every element is Task 10's job.
+        this.addCommand({
+            id: 'send-initiative-to-sidebar',
+            name: 'Send initiative tracker to sidebar',
+            editorCheckCallback: (checking: boolean, editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
+                const file = ctx.file;
+                if (!file) return false;
+                if (!checking) {
+                    void (async () => {
+                        const content = await this.app.vault.cachedRead(file);
+                        const alias =
+                            initiativeElement.aliases.find((a) => listFences(content, a).length > 0) ??
+                            initiativeElement.aliases[0];
+                        await sendToSidebar(dseSidebarServices, file.path, alias, editor.getCursor().line);
+                    })();
+                }
+                return true;
+            },
         });
 
         // D9 (Plan 15 Task 3): authoring scaffolders — one Insert command per element and a

@@ -87,6 +87,15 @@ export class SidebarBlockHost implements BlockHost {
 	 *  ever called again — see that method's doc. */
 	private listenerRegistered = false;
 
+	/** D8 Task 3: idempotency guard for notifyAnchorLost (see that method) — the block
+	 *  becoming unaddressable can be discovered from TWO places that can both fire for
+	 *  the SAME loss (replaceSource's own post-write check, AND that same write's
+	 *  Vault.process call auto-emitting "modify", which re-enters here via
+	 *  handleExternalModify) — without this flag that's a guaranteed double-notify on
+	 *  every self-write anchor drop, on top of a true external deletion re-notifying on
+	 *  every subsequent unrelated "modify" while the block stays gone. */
+	private anchorLostNotified = false;
+
 	constructor(
 		private readonly plugin: Plugin,
 		private readonly backingFile: TFile,
@@ -207,7 +216,7 @@ export class SidebarBlockHost implements BlockHost {
 			// raced it) — so `getBlockInfo() === null` here can only mean OUR write just
 			// dropped the anchor. Tell the panel immediately, rather than leaving every
 			// subsequent interaction silently failing to save forever.
-			if (this.getBlockInfo() === null) this.onAnchorLost();
+			if (this.getBlockInfo() === null) this.notifyAnchorLost();
 		}
 		return wrote;
 	}
@@ -221,12 +230,43 @@ export class SidebarBlockHost implements BlockHost {
 		this.applyFreshContent(content, true);
 	}
 
+	/**
+	 * D8 Task 3: the single, GUARDED entry point to onAnchorLost — see
+	 * anchorLostNotified's field doc for why a guard is required (both call sites of
+	 * "the block is unaddressable" can otherwise fire for the exact same loss: this
+	 * write's own post-write check above, AND that same write's Vault.process call
+	 * auto-emitting "modify", which re-enters applyFreshContent via
+	 * handleExternalModify). No-ops after the first call until the block is found
+	 * addressable again (applyFreshContent's "found" branch resets the flag), so a
+	 * genuinely NEW loss (block re-added, then deleted again) still notifies.
+	 */
+	private notifyAnchorLost(): void {
+		if (this.anchorLostNotified) return;
+		this.anchorLostNotified = true;
+		this.onAnchorLost();
+	}
+
 	private applyFreshContent(content: string, notify: boolean): void {
 		this.cachedContent = content;
 		if (!notify) return;
 
 		const info = findAnchoredBlock(content, this.alias, this.anchorId);
-		if (!info) return; // block gone — canPersist reflects it; nothing to hand a view
+		if (!info) {
+			// D8 Task 3 fix: an EXTERNAL edit (user deletes the block, or edits it out
+			// from under the panel) that leaves the anchor unfindable used to update
+			// cachedContent (so canPersist/getBlockInfo were internally correct) but
+			// never told the panel — the mounted view stayed on-screen, fully
+			// interactive, silently no-op'ing every write forever (persist() already
+			// resolves false when !canPersist, but nothing ever surfaced that to the
+			// user). onAnchorLost is the same "block vanished" signal replaceSource's
+			// self-write safety net (see that method) already uses to drive
+			// SidebarPanel to the read-only degrade card — reusing it here closes the
+			// external-edit half of the same gap: ANY path that discovers the block is
+			// gone degrades the panel immediately, not just our own write.
+			this.notifyAnchorLost();
+			return;
+		}
+		this.anchorLostNotified = false; // addressable again — a future loss should re-notify
 		const body = extractBody(content, info);
 		if (body === this.lastWritten) return; // self-echo: our own write, not an external edit
 		this.onExternalChange(body);

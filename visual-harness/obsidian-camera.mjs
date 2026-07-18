@@ -6,10 +6,11 @@
 //   plugin theme (legacy|steel — frameworkV2.services.theme.setActive, the DSE skin)
 // × chrome bg  (dark|light  — app.changeTheme, Obsidian's own moonstone/obsidian theme)
 // to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (23 × 2 × 2 = 92 shots, as
-// of D6's 11 new displayFamily()/genericCard() elements) — plus ONE more: a dedicated
-// ground-truth capture (D6 Task 11) proving a by-SCC `ds-kit` reference card renders its
-// REAL nested `ds-feature` card through Obsidian's own markdown pipeline (see "step 3b"
-// below) — 93 shots total.
+// of D6's 11 new displayFamily()/genericCard() elements) — plus TWO more ground-truth
+// captures: (D6 Task 11) a by-SCC `ds-kit` reference card rendering its REAL nested
+// `ds-feature` card through Obsidian's own markdown pipeline (see "step 3b" below), and
+// (D8 Task 3) the initiative tracker mounted as a real SIDEBAR leaf via the plugin's
+// "Send initiative tracker to sidebar" command (see "step 3c" below) — 94 shots total.
 // These are two INDEPENDENT axes: the plugin theme re-stamps data-dse-theme on element
 // roots; the chrome theme flips body.theme-dark/light. Both are awaited before each shot.
 //
@@ -74,12 +75,22 @@ const aliases = JSON.parse(fs.readFileSync(path.join(dir, 'aliases.json'), 'utf8
 // happened at all, not to sweep every visual combo).
 const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'kit' };
 
+// D8 Task 3 — the sidebar-leaf ground-truth capture (see "step 3c" below and the header
+// comment). Same convention as SPECIAL_NOTE above: not an element id, selected via
+// --element=sidebar-initiative, runs its OWN single capture (steel/dark only — this
+// proves the sidebar leaf itself is capturable, not a full theme×bg sweep).
+const SIDEBAR_SPECIAL_ID = 'sidebar-initiative';
+
 let elements = Object.keys(aliases).sort();
 let onlySpecial = false;
+let onlySidebarSpecial = false;
 if (args.element) {
 	if (args.element === SPECIAL_NOTE.id) {
 		elements = [];
 		onlySpecial = true;
+	} else if (args.element === SIDEBAR_SPECIAL_ID) {
+		elements = [];
+		onlySidebarSpecial = true;
 	} else if (!elements.includes(args.element)) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -88,6 +99,7 @@ if (args.element) {
 	}
 }
 const runSpecial = !args.element || onlySpecial;
+const runSidebarSpecial = !args.element || onlySidebarSpecial;
 let themes = THEMES;
 if (args.theme) {
 	if (!THEMES.includes(args.theme)) {
@@ -122,6 +134,15 @@ if (runSpecial) {
 	const seedRoot = path.join(vaultPath, 'DS Compendium', 'kit', 'panther.md');
 	if (!fs.existsSync(seedRoot)) {
 		throw new Error(`missing ${seedRoot} — run \`npm run obsidian-shots\` (it seeds the compendium subtree first)`);
+	}
+}
+if (runSidebarSpecial) {
+	// Reuses Harness/initiative.md (already required above when the full sweep includes
+	// 'initiative') — only needs an explicit check here because --element=sidebar-initiative
+	// alone leaves `elements` empty.
+	const note = path.join(vaultPath, 'Harness', 'initiative.md');
+	if (!fs.existsSync(note)) {
+		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
 	}
 }
 if (!fs.existsSync(path.join(repo, 'main.js'))) {
@@ -599,6 +620,115 @@ async function main() {
 			}
 		}
 
+		// -- step 3c: D8 Task 3 sidebar-leaf ground-truth capture --------------------------
+		// Investigated per the D8 Task 3 brief: can the camera drive a SIDEBAR leaf (an
+		// ItemView, not a reading-mode markdown leaf)? Yes, with exactly the extra
+		// Runtime.evaluate the brief anticipated: invoking the plugin's real "Send
+		// initiative tracker to sidebar" command (app.commands.executeCommandById — the
+		// SAME affordance a user triggers via the command palette, main.ts D8 Task 3)
+		// opens the right-split leaf and mounts the SAME InitiativeView the reading-mode
+		// shots above exercise. `.dse-sidebar__panel [data-dse-element="initiative"]`
+		// appears deterministically, and the leaf's own `.closest('.workspace-leaf')`
+		// bounding rect is a stable, non-degenerate clip region under the headless
+		// --user-data-dir (spike-verified: x=1140 y=40 w=300 h=1013 in a 1440x1053
+		// window — Obsidian's default right-sidebar width; NOT the geometry concern the
+		// brief flagged as a possible blocker). ONE shot (steel/dark only — a ground-truth
+		// existence proof, matching step 3b's by-SCC recursion shot's own scope, not a
+		// full theme×bg sweep).
+		if (runSidebarSpecial) {
+			const outName = 'initiative--obsidian-sidebar-steel-dark';
+			const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="initiative"]')`;
+			let emulated = false;
+			try {
+				// source mode (not preview, unlike the rest of this file): the "send to
+				// sidebar" command is an editorCheckCallback (main.ts), which resolves its
+				// active-file context off the workspace's active EDITOR — spike-verified
+				// present under source mode; not re-verified under preview.
+				await evaluate(
+					cdp,
+					`(async () => {
+						await window.app.workspace.openLinkText('Harness/initiative', '', false);
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						await leaf.setViewState({
+							type: 'markdown',
+							state: { file: 'Harness/initiative.md', mode: 'source' },
+							active: true,
+						});
+					})()`,
+				);
+				await waitFor(
+					cdp,
+					`window.app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Harness/initiative.md'`,
+					{ what: 'Harness/initiative.md open (source mode, for the editor command)' },
+				);
+
+				const exec = await evaluate(
+					cdp,
+					`(() => {
+						try {
+							return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-initiative-to-sidebar') };
+						} catch (e) {
+							return { ok: false, error: String(e) };
+						}
+					})()`,
+				);
+				if (!exec.ok) {
+					throw new Error(
+						`send-initiative-to-sidebar did not run: ${exec.error ?? '(returned false — no active editor context?)'}`,
+					);
+				}
+
+				await waitFor(cdp, `!!${elSel}`, { what: 'sidebar panel mounted [data-dse-element="initiative"]' });
+				await sleep(500); // settle: portrait image resolution + late layout, same as the main sweep
+
+				await setPluginTheme(elSel, 'steel');
+				await setChromeBg('dark');
+				await sleep(300);
+				await clearNotices();
+
+				// Clip to the LEAF, not the element root: unlike a reading-mode element
+				// (clipped tightly to [data-dse-element]), the sidebar shot's whole point is
+				// showing the panel IN its leaf chrome — the ground truth is "this mounts as
+				// a real sidebar leaf," not just "this element renders."
+				const rectExpr = `(() => {
+					const leafEl = ${elSel}.closest('.workspace-leaf');
+					const r = leafEl.getBoundingClientRect();
+					return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+				})()`;
+				let rect = await evaluate(cdp, rectExpr);
+				if (rect.y + rect.height > rect.vh) {
+					await cdp.call('Emulation.setDeviceMetricsOverride', {
+						width: rect.vw,
+						height: Math.ceil(rect.y + rect.height + 100),
+						deviceScaleFactor: 0,
+						mobile: false,
+					});
+					emulated = true;
+					await sleep(500);
+					await clearNotices();
+					rect = await evaluate(cdp, rectExpr);
+				}
+				const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+				const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+				console.log(
+					`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''}) — sidebar leaf confirmed`,
+				);
+			} catch (e) {
+				failures.push({ outName, errors: [String(e)] });
+				await errorShot(outName);
+				console.log(`FAIL ${outName}: ${String(e)}`);
+			} finally {
+				if (emulated) {
+					try {
+						await cdp.call('Emulation.clearDeviceMetricsOverride');
+						await sleep(300);
+					} catch {
+						/* socket may already be down; killChild still runs */
+					}
+				}
+			}
+		}
+
 		// -- step 4: restore persisted defaults, then quit cleanly --------------------------
 		// The plugin theme pref (data.json, git-ignored) and the vault's appearance.json
 		// (tracked) both persist whatever the sweep last set — put them back to the
@@ -631,7 +761,7 @@ async function main() {
 		for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
 		process.exit(1);
 	}
-	const total = elements.length * combos.length + (runSpecial ? 1 : 0);
+	const total = elements.length * combos.length + (runSpecial ? 1 : 0) + (runSidebarSpecial ? 1 : 0);
 	console.log(`\nall ${total} shots written to ${shotsDir}`);
 }
 

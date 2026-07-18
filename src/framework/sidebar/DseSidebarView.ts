@@ -7,6 +7,8 @@ import { ItemView } from 'obsidian';
 import type { App, Plugin, WorkspaceLeaf } from 'obsidian';
 import type { ElementPipeline } from '../pipeline';
 import type { ElementRegistry } from '../registry';
+import type { ReferenceService } from '../seams/refs';
+import type { ValidationService } from '../validation';
 import { SidebarPanel } from './SidebarPanel';
 
 export const VIEW_TYPE_DSE_SIDEBAR = 'dse-sidebar';
@@ -36,6 +38,18 @@ export interface DseSidebarServices {
 	plugin: Plugin;
 	pipeline: ElementPipeline;
 	registry: ElementRegistry;
+	/**
+	 * D8 Task 3 (spec §1.6) — optional: lets SidebarPanel rebuild a changed model
+	 * itself (mirroring ElementPipeline.run()'s parse -> resolveRefs steps) and hand
+	 * it to the ALREADY-mounted ElementView's update() (F1 §3.3 onUpdate in-place
+	 * path) on an external vault edit, instead of tearing the view's root element
+	 * down and mounting a fresh one through the pipeline. Omitted by any caller/test
+	 * that only cares about the mount/persist/degrade paths — those keep working via
+	 * the pipeline's full remount (SidebarPanel's existing fallback), just without
+	 * the in-place refresh.
+	 */
+	refs?: ReferenceService;
+	validation?: ValidationService;
 }
 
 export class DseSidebarView extends ItemView {
