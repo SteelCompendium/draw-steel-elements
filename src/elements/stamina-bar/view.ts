@@ -17,9 +17,21 @@
 // updateCallback both refreshes the bar in place (targeted update, no rebuild) and
 // schedules persist(). The serialize path (model.ts) is untouched — persisted YAML
 // stays byte-compatible (F1 §6).
+//
+// D7 Task 4 (spec §4.2): the Recoveries/Winded extension, ADDITIVE and gated entirely
+// on `model.recoveries_max !== undefined` (HARD INVARIANT: a legacy block with no
+// recoveries* fields renders none of this — same DOM as before this task, byte for
+// byte). renderRecoveries mounts a `.dse-stamina-rec` strip under the bar: a pip row
+// (recoveries_max pips, the first `recoveries` filled), a winded/dying status badge,
+// and a Catch Breath kit iconButton (RR §8 "Catch Breath (spend Recovery)": -1
+// recovery, +recoveryValue Stamina, clamped to max; disabled when dying or no
+// recoveries remain, per RR §8's "Can't Catch Breath [while dying]" and the obvious
+// floor at 0). Every edit (Catch Breath, or a stamina change via the existing modal)
+// funnels through the SAME targeted-update + persist() path as the base bar — no new
+// write path.
 import { ElementView } from '@/framework/view';
-import { collapsible, openManagedModal, renderStaminaBar, updateStaminaBar } from '@/framework/kit';
-import type { StaminaBarValues } from '@/framework/kit';
+import { collapsible, iconButton, openManagedModal, renderStaminaBar, tooltip, updateStaminaBar } from '@/framework/kit';
+import type { IconButtonHandle, StaminaBarValues } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { resolveCollapsePrefs } from '@/prefs/catalog';
@@ -41,6 +53,12 @@ function staminaValues(model: StaminaBar): StaminaBarValues {
 
 export class StaminaBarView extends ElementView<StaminaBar> {
 	private barEl: HTMLElement | null = null;
+	// D7 Task 4: only populated when model.recoveries_max is defined (renderRecoveries's
+	// early-return guard) — null on every legacy block, which is also how
+	// updateRecoveries no-ops for them.
+	private pipsEl: HTMLElement | null = null;
+	private statusEl: HTMLElement | null = null;
+	private catchBreathHandle: IconButtonHandle | null = null;
 
 	protected onMount(root: HTMLElement, model: StaminaBar): void {
 		// Whole-element wrapper: ONE kit collapsible (replaces the old kit
@@ -78,15 +96,24 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 			onClick: canPersist ? () => this.openEditModal() : undefined,
 			readOnlyTooltip: READ_ONLY_TOOLTIP,
 		});
+
+		// D7 Task 4: gated entirely on recoveries_max presence — a legacy block (no
+		// recoveries* fields) mounts none of this, matching the pre-Task-4 DOM exactly.
+		if (model.recoveries_max !== undefined) {
+			this.renderRecoveries(container, model);
+		}
 	}
 
 	/**
 	 * Targeted DOM update (F1 §6 "explicit targeted update methods", no reactivity lib),
 	 * delegated to the kit core. Called once at mount (inside renderStaminaBar) and
-	 * again after every modal edit.
+	 * again after every modal edit / Catch Breath click. Also refreshes the D7 Task 4
+	 * recoveries strip (winded/dying badge + Catch Breath disabled state track
+	 * current_stamina too, not just Catch Breath's own edits).
 	 */
 	private updateBarDisplay(model: StaminaBar): void {
 		if (this.barEl) updateStaminaBar(this.barEl, staminaValues(model));
+		this.updateRecoveries(model);
 	}
 
 	private openEditModal(): void {
@@ -100,5 +127,85 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 				void this.persist();
 			}),
 		);
+	}
+
+	// -- D7 Task 4 (spec §4.2): the additive Recoveries/Winded strip --------------------
+
+	/** Mounts the `.dse-stamina-rec` strip under the bar: recoveries pips, the
+	 *  winded/dying status badge, and the Catch Breath control. Only ever called when
+	 *  `model.recoveries_max !== undefined` (onMount's guard above). */
+	private renderRecoveries(container: HTMLElement, model: StaminaBar): void {
+		const canPersist = this.cx.host.canPersist;
+		const wrap = container.createDiv({ cls: 'dse-stamina-rec' });
+
+		this.statusEl = wrap.createDiv({ cls: 'dse-stamina-rec__status' });
+
+		this.pipsEl = wrap.createDiv({ cls: 'dse-stamina-rec__pips' });
+		for (let i = 0; i < (model.recoveries_max ?? 0); i++) {
+			this.pipsEl.createDiv({ cls: 'dse-stamina-rec__pip' });
+		}
+
+		this.catchBreathHandle = iconButton(
+			wrap,
+			{
+				icon: 'wind',
+				label: 'Catch Breath',
+				text: 'Catch Breath',
+				onClick: () => this.catchBreath(),
+			},
+			this,
+		);
+		// F1 §4.4: canPersist === false renders read-only (visible but inert), same
+		// convention as the bar's own click gate above.
+		if (!canPersist) tooltip(this.catchBreathHandle.buttonEl, READ_ONLY_TOOLTIP);
+
+		this.updateRecoveries(model);
+	}
+
+	/** Targeted, in-place refresh of the recoveries strip (pips fill state, badge
+	 *  text/[data-state]/hidden, Catch Breath's real `disabled`) — no rebuild, matching
+	 *  updateStaminaBar's convention. No-ops on a legacy block (renderRecoveries never
+	 *  ran, so every element stays null). */
+	private updateRecoveries(model: StaminaBar): void {
+		if (!this.pipsEl || !this.statusEl || !this.catchBreathHandle) return;
+
+		const remaining = model.recoveries ?? 0;
+		this.pipsEl.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip').forEach((pip, i) => {
+			pip.toggleClass('dse-stamina-rec__pip--filled', i < remaining);
+		});
+
+		// RR §8: winded takes the "at half max or below" wording (`<=`); dying (`<= 0`)
+		// implies winded too and takes display priority. See StaminaBar's isWinded/
+		// isDying getters for the citation + the note on the pre-existing bar-fill
+		// color threshold's separate (untouched) `<` convention.
+		const state = model.isDying ? 'dying' : model.isWinded ? 'winded' : null;
+		this.statusEl.hidden = state === null;
+		if (state) {
+			this.statusEl.setText(state === 'dying' ? 'Dying' : 'Winded');
+			this.statusEl.setAttribute('data-state', state);
+		} else {
+			this.statusEl.setText('');
+			this.statusEl.removeAttribute('data-state');
+		}
+
+		const canPersist = this.cx.host.canPersist;
+		this.catchBreathHandle.setDisabled(!canPersist || model.isDying || remaining <= 0);
+	}
+
+	/** RR §8 "Catch Breath (spend Recovery)": -1 recovery, heal recoveryValue Stamina
+	 *  (clamped to max_stamina — a heal never overshoots, same convention as
+	 *  StaminaEditModal's amountToMaxStamina). Persists via the SAME debounced write
+	 *  path as every other stamina edit. */
+	private catchBreath(): void {
+		const model = this.model;
+		const remaining = model.recoveries ?? 0;
+		if (remaining <= 0 || model.isDying) return; // defensive: the button is disabled too
+
+		model.recoveries = remaining - 1;
+		const heal = Math.max(Math.min(model.recoveryValue, model.max_stamina - model.current_stamina), 0);
+		model.current_stamina += heal;
+
+		this.updateBarDisplay(model);
+		void this.persist();
 	}
 }

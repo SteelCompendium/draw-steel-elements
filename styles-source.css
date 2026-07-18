@@ -1103,6 +1103,61 @@ code.dsa {
 	display: none;
 }
 
+/* ============================================================== */
+/*  Stamina Recoveries / Winded (D7 Task 4, spec §4.2): .dse-stamina-rec  */
+/* ============================================================== */
+/* Additive companion strip under the .dse-stamina bar — rendered ONLY when the block
+   sets recoveries_max (a legacy block with none of this renders no .dse-stamina-rec at
+   all, HARD INVARIANT). Pips reuse the existing --dse-stamina-* tokens (SC-5: zero new
+   inline colors); the status badge follows .dse-card__badge's pill shape, tone keyed to
+   the same tokens via [data-state]. */
+.dse-stamina-rec {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.6em;
+	margin-top: 0.5em;
+}
+
+.dse-stamina-rec__pips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25em;
+}
+
+.dse-stamina-rec__pip {
+	width: 0.85em;
+	height: 0.85em;
+	border-radius: 50%;
+	border: 1.5px solid var(--dse-border-strong);
+	background-color: var(--dse-stamina-track);
+}
+
+.dse-stamina-rec__pip--filled {
+	background-color: var(--dse-stamina-temp);
+	border-color: var(--dse-stamina-temp);
+}
+
+/* Winded/dying badge — hidden (native [hidden]) while healthy. */
+.dse-stamina-rec__status {
+	display: inline-flex;
+	align-items: center;
+	line-height: 1.2;
+	padding: 0.1em 0.5em;
+	border-radius: var(--dse-radius);
+	background: var(--dse-chip-bg);
+	border: 1px solid var(--dse-border);
+	font-size: 0.85em;
+}
+.dse-stamina-rec__status[data-state="winded"] {
+	border-color: var(--dse-stamina-winded);
+	color: var(--dse-stamina-winded);
+}
+.dse-stamina-rec__status[data-state="dying"] {
+	border-color: var(--dse-stamina-dying);
+	color: var(--dse-stamina-dying);
+}
+
 /* ============================================================ */
 /*  The unified stamina modal chrome (.dse-sedit, D2 §3.5b/OD-6) */
 /* ============================================================ */

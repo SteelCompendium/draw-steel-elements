@@ -30,6 +30,22 @@ allOf:
                   An amount of extra stamina in addition to current_stamina.
                   If the take-damage feature is used, temp_stamina will be used first.
               errorMessage: temp_stamina must be a whole number.
+          recoveries:
+              type: integer
+              description: |
+                  D7 §4.2 (additive, optional): Recoveries remaining in the pool. Omit
+                  (along with recoveries_max) for a bar with no Recoveries tracking —
+                  the legacy display.
+              errorMessage: recoveries must be a whole number.
+              minimum: 0
+          recoveries_max:
+              type: integer
+              description: |
+                  D7 §4.2 (additive, optional): the size of the Recoveries pool. When
+                  omitted, the recoveries pip row and Catch Breath control are not
+                  rendered at all (byte-stable legacy shape).
+              errorMessage: recoveries_max must be a whole, non-negative number.
+              minimum: 0
           height:
               type: number
               description: |

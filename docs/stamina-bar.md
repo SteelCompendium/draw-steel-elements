@@ -41,6 +41,8 @@ default values, and whether they are required.
 | `max_stamina`     | `integer` | The maximum stamina value of the character.                   | **Yes**  | N/A                    |
 | `current_stamina` | `integer` | The current stamina value of the character.                   | No       | Value of `max_stamina` |
 | `temp_stamina`    | `integer` | Temporary stamina added to the character (e.g., from buffs).  | No       | `0`                    |
+| `recoveries`      | `integer` | Recoveries remaining in the pool.                              | No       | Not tracked if omitted |
+| `recoveries_max`  | `integer` | The size of the Recoveries pool.                               | No       | Not tracked if omitted |
 | `height`          | `number`  | Adjusts the height of the stamina bar in the rendered output. | No       | `1`                    |
 
 ### Notes:
@@ -48,6 +50,27 @@ default values, and whether they are required.
 - **`current_stamina`** defaults to the value of **`max_stamina`** if not specified.
 - **`temp_stamina`** represents any temporary stamina the character has gained and is added on top of the current stamina.
 - **`height`** allows you to customize the visual height of the stamina bar to suit your preferences.
+- **`recoveries`** / **`recoveries_max`** are both optional and additive: set `recoveries_max` (with `recoveries` for the starting count) to add a Recoveries pip row and a **Catch Breath** button under the bar. Omit both and the bar renders exactly as before — no pips, no button.
+
+## Recoveries & Winded
+
+When `recoveries_max` is set, the bar gains:
+
+- A row of pips showing Recoveries remaining out of the pool.
+- A **Catch Breath** button that spends one Recovery to heal 1/3 of max Stamina (rounded
+  down), capped at `max_stamina`. Disabled while Dying or with no Recoveries left.
+- A **Winded**/**Dying** badge, per the core rules ("Stamina and Death"): Winded at half
+  Stamina max or below, Dying at 0 Stamina or below.
+
+```
+~~~ds-stamina-bar
+max_stamina: 48
+current_stamina: 31
+temp_stamina: 0
+recoveries: 6
+recoveries_max: 10
+~~~
+```
 
 ## Interaction
 

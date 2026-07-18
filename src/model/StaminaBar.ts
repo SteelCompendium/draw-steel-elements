@@ -8,6 +8,17 @@ export class StaminaBar extends ComponentWrapper{
 	max_stamina: number;
 	current_stamina: number;
 	temp_stamina: number;
+	/** D7 Task 4 (spec §4.2, additive/optional): Recoveries remaining in the pool.
+	 *  `undefined` when the block never declared `recoveries:` — never coerced to 0,
+	 *  so a legacy/unconfigured block round-trips through serialize() without this key
+	 *  materializing (yaml's stringify drops own-properties whose value is `undefined`,
+	 *  same convention StaminaBarSchema/ComponentWrapper's header documents). */
+	recoveries?: number;
+	/** D7 Task 4 (spec §4.2, additive/optional): the size of the Recoveries pool.
+	 *  `undefined` unless the block declares `recoveries_max:` — this is also the
+	 *  presence gate the view uses to decide whether to render the recoveries pip
+	 *  row / Catch Breath control / winded-dying badge at all. */
+	recoveries_max?: number;
 	height: number;
     style: string;
 
@@ -38,7 +49,12 @@ export class StaminaBar extends ComponentWrapper{
 			data.current_stamina ? data.current_stamina : 0,
 			data.temp_stamina ? data.temp_stamina : 0,
 			data.height ? data.height : 1,
-            data.style);       
+            data.style,
+            // D7 Task 4: passed straight through, never coerced/defaulted — a block
+            // that never declared these keys gets `undefined` on both, which is the
+            // "no materialization" contract (see the field comments above).
+            data.recoveries,
+            data.recoveries_max);
 	}
 
 	// TODO - should this be in Hero and CreatureInstance instead?  probably, but those are interfaces
@@ -50,11 +66,32 @@ export class StaminaBar extends ComponentWrapper{
 		return new StaminaBar(false, false, creature.max_stamina, being.current_stamina ?? 0, being.temp_stamina ?? 0, 1);
 	}
 
-	constructor(collapsible: boolean, collapse_default: boolean, max_stamina: number, current_stamina: number, temp_stamina: number, height: number, style: string = "default") {
+	constructor(
+        collapsible: boolean,
+        collapse_default: boolean,
+        max_stamina: number,
+        current_stamina: number,
+        temp_stamina: number,
+        height: number,
+        style: string = "default",
+        // D7 Task 4: appended at the END of the parameter list (never inserted before
+        // `height`) so every existing positional call site (fromHero/fromCreature, the
+        // byte-compat suite, StaminaEditModal's test fixture) keeps passing `height` as
+        // its 6th arg unchanged. Assignment ORDER below (not param order) controls the
+        // serialized key order — see the comment there.
+        recoveries?: number,
+        recoveries_max?: number,
+    ) {
         super(collapsible, collapse_default);
 		this.max_stamina = max_stamina;
 		this.current_stamina = current_stamina;
 		this.temp_stamina = temp_stamina;
+        // Assigned here (right after temp_stamina, before height/style) purely to match
+        // the doc/spec's YAML field order when these DO serialize; when both are
+        // `undefined` (the legacy/absent case) they contribute no key at all, so this
+        // placement is a no-op for every existing byte-compat fixture.
+        this.recoveries = recoveries;
+        this.recoveries_max = recoveries_max;
 		this.height = height;
         this.style = style
 	}
@@ -68,5 +105,51 @@ export class StaminaBar extends ComponentWrapper{
 	public updateCreature(creature: CreatureInstance) {
 		creature.current_stamina = this.current_stamina;
 		creature.temp_stamina = this.temp_stamina;
+	}
+
+	// -- D7 Task 4 (spec §4.2): derived Stamina/Recoveries thresholds -------------------
+	// DERIVED, never stored (HARD INVARIANT): these are `get` accessors on the
+	// prototype, so `Object.keys`/yaml's stringify never see them as own properties —
+	// verified against the `yaml` package directly (a class with a getter serializes
+	// only its own assigned fields). Formulas per the Draw Steel core rules,
+	// "Stamina and Death" (reference/draw-steel-reference.md lines 274-279, cited here
+	// as RR §8 per the task brief's convention):
+	//   "Winded: At half Stamina max or below."
+	//   "Dying: At 0 Stamina or below. ... Can't Catch Breath."
+	//   "Death: Stamina reaches negative of the winded value."
+	//   "Recovery value: 1/3 of Stamina max."
+	// NOTE: this is a slightly stricter "at or below" (`<=`) than the pre-existing
+	// StaminaBarPanel kit core's `staminaState` fill-color threshold (`current <
+	// floor(max/2)`, framework/kit/StaminaBarPanel.ts) — that function is untouched by
+	// this task (byte/behavior-stable HARD INVARIANT on the base bar) and this task's
+	// own badge/Catch-Breath-gating logic follows the reference doc's `<=` wording
+	// instead. A one-Stamina-point boundary divergence between the two is a known,
+	// accepted consequence of not touching the pre-existing kit core.
+
+	/** RR §8 "Winded": half of max_stamina, floored. */
+	get windedThreshold(): number {
+		return Math.floor(this.max_stamina / 2);
+	}
+
+	/** RR §8 "Winded: At half Stamina max or below." */
+	get isWinded(): boolean {
+		return this.current_stamina <= this.windedThreshold;
+	}
+
+	/** RR §8 "Dying: At 0 Stamina or below." */
+	get isDying(): boolean {
+		return this.current_stamina <= 0;
+	}
+
+	/** RR §8 "Death: Stamina reaches negative of the winded value." */
+	get deathThreshold(): number {
+		return -this.windedThreshold;
+	}
+
+	/** RR §8 "Recovery value: 1/3 of Stamina max." (Matches StaminaEditModal's
+	 *  pre-existing "Spend Recovery" quick action, which computes the same
+	 *  `Math.floor(maxStamina / 3)` inline.) */
+	get recoveryValue(): number {
+		return Math.floor(this.max_stamina / 3);
 	}
 }
