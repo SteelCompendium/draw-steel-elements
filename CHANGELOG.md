@@ -45,6 +45,29 @@
   of any compendium entry, without leaving the editor.
 - The `/ds` autocomplete and the per-element "Insert Draw Steel: …" commands
   automatically cover every new card above.
+- New: **Draw Steel sidebar** — pin any tracker (initiative, encounter, montage,
+  project, party) to a persistent right-sidebar panel that survives navigating
+  between notes, via the new sword icon in the ribbon ("Open Draw Steel
+  sidebar") or the "Send block to sidebar" / "Send initiative tracker to
+  sidebar" commands. Edits made in the sidebar and edits made in the note stay
+  in sync.
+- New: **Encounter Builder** (`ds-encounter`) — plan an encounter against your
+  synced compendium: add monsters by reference, see live EV/budget/difficulty
+  computed from the real statblocks (never inlined stats), then hand off to a
+  ready-to-run tracker with one click ("Create tracker block" or "Open in
+  sidebar").
+- New: **Montage tracker** (`ds-montage`), **Project/Downtime tracker**
+  (`ds-project`), and **Party tracker** (`ds-party`) — trackers for Draw
+  Steel's other GM subsystems (montage tests, downtime projects, and
+  party-level victories/renown/wealth), following the same interactive,
+  persisted-block model as the initiative tracker.
+- New: the initiative tracker's **Malice panel** is now first-class — a
+  keyboard-accessible pool stepper, a round counter with "Reset turns (this
+  round)" vs. "Advance round" (advancing can apply a configured per-round
+  Malice gain), a spend/gain log, and a labeled quick-add for trigger-based
+  gains (e.g. "+3 Feytouched").
+- New: heroes and creatures in the initiative tracker get a per-turn action
+  checklist (Main / Maneuver / Move / Triggered).
 
 ## 5.1.1
 

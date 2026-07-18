@@ -191,12 +191,22 @@ Additionally, you can add another `creature` object to the Enemy group (squad) a
 #### Fields
 
 - `value` (number, required): The current villain power level.
+- `round_gain` (number, optional): Malice automatically added to the pool (and logged)
+	each time you press "Advance round". Leave unset for no auto-gain — there's no
+	built-in default, since the amount depends on your table/adventure. Trigger-based
+	gains (e.g. a monster feature that grants +3 Malice) stay manual via the quick-add
+	below instead.
+- `log` (list, managed): The spend/gain log (`{round, amount, label}`, oldest first).
+	Managed by the tracker — populated by "Advance round" (when `round_gain` is set) and
+	the quick-add control. Capped at the 50 most recent entries; older entries drop off
+	automatically.
 
 #### Example
 
 ```yaml
-malice:   
+malice:
   value: 3
+  round_gain: 2
 ```
 
 ## Interacting with the Tracker
@@ -228,9 +238,27 @@ When the Stamina Pool of minions gets reduced to thresholds that would kill a mi
 
 ![minion-stamina-pool-modal](Media/minion-stamina-pool-modal.png)
 
+### Action Checklist
+
+Each hero and each creature instance shows a small [Main] [Maneuver] [Move] [Triggered]
+checklist below its name — click a chip to toggle it on/off as that actor spends the
+action during their turn. "Triggered" is per-round rather than per-turn (a creature gets
+at most one triggered action each round), so it clears on "Advance round" but not on
+"Reset turns (this round)". The checklist is purely a bookkeeping aid; nothing else in
+the tracker reads it.
+
 ### Malice
 
-**Adjusting**: Use the up and down arrows next to the villain power display to increase or decrease the value.
+**Adjusting the pool**: Use the up and down arrows next to the villain power display to
+increase or decrease the value.
+
+**Malice log**: A small read-only list under the pool shows every gain/spend
+(`R<round>: +/-<amount> — <label>`), most recent additions preserved, oldest entries
+dropped once the log exceeds 50 entries.
+
+**Quick-add**: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" to
+log a manual, trigger-based Malice gain (or spend, using a negative amount) without
+waiting for a round to advance.
 
 ### Round / Turn Controls
 
@@ -302,3 +330,12 @@ Removing a Condition:
 ### Data Persistence
 
 All interactions with the tracker update the underlying YAML data in the code block. This ensures that your encounter state is preserved even after closing and reopening the note.
+
+### Pinning to the Sidebar
+
+Running a session across several notes? Use the "Send initiative tracker to sidebar"
+command (or, with your cursor inside the block, the generic "Send block to sidebar"
+command) to pin the tracker to a persistent panel in Obsidian's right sidebar — it stays
+visible and interactive as you navigate to other notes, and edits made in the sidebar or
+in the note stay in sync. Open the sidebar directly at any time via the sword icon in the
+ribbon ("Open Draw Steel sidebar").

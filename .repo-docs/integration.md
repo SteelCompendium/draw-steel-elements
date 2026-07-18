@@ -54,10 +54,16 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-perk` | Perk reference card (D6) |
 | `ds-complication` | Complication reference card (D6) |
 | `ds-rule` | Rule/glossary reference card (D6; model-less — `genericCard()`, not `displayFamily()`) |
+| `ds-encounter` | Encounter Builder — live EV via the compendium, budget/difficulty, hand-off to a tracker (D8) |
+| `ds-montage` | Montage/Test tracker — negotiation-sibling, derived outcome bands (D8) |
+| `ds-project` | Project/Downtime tracker — points, breakthroughs, respite log (D8) |
+| `ds-party` | Party tracker — victories/renown/wealth, respite XP conversion, follower hints (D8) |
 
 Users interact by writing YAML inside these fenced code blocks in Obsidian notes. The 11
 D6 elements above, plus `ds-sb`/`ds-ft`/`ds-fb`, additionally accept a **whole-block
-reference** instead of inline YAML — see "Compendium reference (by-SCC)" below.
+reference** instead of inline YAML — see "Compendium reference (by-SCC)" below. All 27
+elements register through the SAME `registerFrameworkElementDefinitions` (`main.ts`) —
+there is no longer a legacy (non-framework) element in this plugin.
 
 ## Data Contracts
 
@@ -120,6 +126,103 @@ insert and a full-code inline insert.
 
 Deferred (recorded, not shipped): hover-preview on an `scc.v1:` link (OD-D6-5) and
 autocomplete for by-SCC block bodies (OD-D6-4) — both future work, not blocking.
+
+### Sidebar host (D8)
+
+`src/framework/sidebar/` + `src/framework/host/SidebarBlockHost.ts` give any registered
+element a THIRD mount surface — a persistent `ItemView` leaf — alongside the existing
+reading-mode and live-preview `BlockHost`s, with **zero element-code changes** (the D7
+consumer contract, spec §1.9: "element-agnostic — `onUpdate` works for any view"). This
+is the running-session tracker use case: pin a `ds-initiative`/`ds-encounter`/… block so
+it survives navigating between notes.
+
+- **`DseSidebarView`** (`VIEW_TYPE_DSE_SIDEBAR = "dse-sidebar"`) is the `ItemView` shell.
+  It owns a list of `SidebarPanel` children (`panels[]` from day one, OD-4 — a
+  multi-panel GM dashboard is a pure additive follow-up on top of today's one-panel MVP).
+  `getState()`/`setState()` serialize `{ panels: SidebarPanelState[] }`
+  (`{ filePath, alias, anchorId, collapsed? }`) so panels survive an Obsidian restart.
+- **`SidebarBlockHost`** is the third concrete `BlockHost` (`mode: "sidebar"` — the
+  **already-reserved** `RenderMode` member from F1, OD-1: no union widening needed).
+  Unlike a markdown-leaf host it isn't tied to the active editor — it reads/writes the
+  backing file **directly by path** via `Vault.process`, so it keeps persisting correctly
+  no matter which note has focus.
+- **`_dse_anchor` contract (OD-9):** a sidebar panel can't rely on `getSectionInfo` (no
+  live editor). Block identity is instead a reserved YAML key, `_dse_anchor: <id>`,
+  stamped into the block body on first hand-off (`anchor.ts`'s `ensureAnchor`) and
+  round-tripped by every element's `serialize()` like any other passthrough field —
+  durable across line drift, greppable, never an Obsidian `^block-id`.
+- **`onUpdate` live-refresh + self-echo guard:** `SidebarBlockHost` watches the backing
+  file for external edits. On a genuine external change it calls the mounted view's
+  `update(newModel)` (F1's in-place `onUpdate` path, §1.6) — the sidebar is the first
+  real consumer of that path. Its OWN writes (`replaceSource`) must not re-trigger this:
+  `SidebarBlockHost` records the body it just wrote (`lastWritten`) and a vault `modify`
+  event that matches it is treated as **self-echo** and dropped (`host/SidebarBlockHost.ts`
+  — "self-echo: our own write, not an external edit") — only a body that differs fires
+  `onUpdate`.
+- **D7 consumer contract (spec §1.9):** any caller — a future hero-sheet element, not
+  just the D8 trackers — pins a block the same way: ensure `_dse_anchor` (`ensureAnchor`),
+  then `view.addPanel({ filePath, alias, anchorId })`. `sendToSidebar(services, filePath,
+  alias, cursorLine?)` (`framework/sidebar/registration.ts`) is the shared entry point
+  every caller in this repo uses: the generic "Send block to sidebar" command (cursor
+  inside a `ds-*` fence), the initiative-specific "Send initiative tracker to sidebar"
+  command (scans the note's `ds-it`/`ds-init`/`ds-initiative`/`ds-initiative-tracker`
+  aliases), and the encounter builder's "Open in sidebar" hand-off (below) all resolve to
+  this one function — no bespoke second path.
+- **Encounter's "Open in sidebar" hand-off (spec §2.4/OD-5):** `encounter/view.ts` writes
+  a fresh `ds-initiative` tracker block from the resolved roster ("Create tracker block"),
+  then — via a late-bound module hook (`setEncounterSidebarHandoff`, wired to
+  `sendToSidebar` in `main.ts`'s `onload`, cleared in `onunload`) — opens it straight in
+  the sidebar. The hand-off is optional at the type level (defaults to `null`) precisely
+  so a caller that never wires it (an older test harness, a future build before this
+  wiring lands) degrades to a visible Notice instead of a silent no-op.
+- **Sidebar-width layout:** the sidebar leaf is ~300 CSS px (Obsidian's default
+  right-sidebar width) — narrower than any note column the base element CSS assumes. A
+  `@media (max-width: …)` query can't reach this (it queries the whole Obsidian window,
+  which stays wide even when a side leaf is narrow); layout adaptations are DOM-scoped
+  instead, under `.dse-sidebar [data-dse-element="…"] …` in `styles-source.css` (see its
+  own "Sidebar-width layout adaptations" section, D8 Task 10 — currently covers the
+  initiative tracker; any tracker sharing `.dse-init` inherits it for free).
+
+### Turn/round economy + Malice panel (D8)
+
+`EncounterData` (shared by `ds-initiative` and the encounter hand-off above) gained
+three ADDITIVE-OPTIONAL fields (never emitted unless set, never materialized by `parse`):
+
+- **`round`** — the encounter's round counter. `advanceRound(data)` (initiative model)
+  is the round-boundary transition: increments `round`, clears every `has_taken_turn` +
+  materialized per-actor `actions`, and (if `malice.round_gain` is configured) applies +
+  logs the auto-gain. `resetRound(data)` is a DISTINCT, narrower control — the same
+  turn/action clear WITHOUT touching `round` or re-granting the auto-gain — for a
+  mid-round correction (a misclick, re-running the current round).
+- **`actions`** (on `Hero` and `CreatureInstance`) — a per-turn action checklist
+  (`{ main, maneuver, move, triggered }`, spec §7.2). Absent means "nothing tracked yet";
+  materialized on the actor only on the first toggle. "Triggered" resets on `advanceRound`
+  (per-round, spec §7.1), not on a per-turn clear.
+- **`malice.round_gain`** / **`malice.log`** — the Malice panel (an `ds-initiative`
+  sub-view, OD-6: no standalone `ds-malice` element) adds a keyboard-accessible pool
+  stepper, the round display + its two controls above, a read-only spend/gain log
+  (`{ round, amount, label }`, oldest-first), and a labeled quick-add for manual
+  trigger-based gains (spec §3.3). `round_gain` absent means no configured auto-gain
+  (OD-3 — never a fabricated Director's-guide default). **The log is capped** at
+  `MALICE_LOG_MAX_ENTRIES` (50, `EncounterData.ts`) via the single sanctioned
+  `appendMaliceLogEntry` helper — both the round-gain and quick-add call sites use it, so
+  a long campaign's log can never grow the note without bound; it trims the OLDEST
+  entries first. Monster malice-feature spends (spec §3.2, OD-7) parse the existing
+  `cost: "N Malice"` string (`/^\s*(\d+)\s+Malice/i`) — no new typed SDK field.
+
+### Adopted open decisions (D8, spec §0)
+
+| OD | Decision |
+|----|----------|
+| OD-1 | Sidebar mode reuses the already-reserved `"sidebar"` `RenderMode` member — no F1 union widening. |
+| OD-2 | Encounter budget/band/payout are parameterized, user-editable tables with defaults flagged for verification; shows spent EV vs. an "unset" budget before configured. |
+| OD-3 | Malice per-round gain is a configurable value (`malice.round_gain`); absent → manual-only. |
+| OD-4 | Sidebar ships single-panel MVP; `panels[]` is a list from day one. |
+| OD-5 | Encounter hand-off offers both "Create tracker block" and "Open in sidebar". |
+| OD-6 | Malice tracker is an initiative sub-view (single source of truth); standalone `ds-malice` deferred. |
+| OD-7 | Malice-feature spend parses the existing `cost: "N Malice"` string; no cross-repo typed-field request. |
+| OD-8 | Party↔hero linkage is ref-by-link (`hero_ref`); inline fields are the fallback. |
+| OD-9 | Sidebar block anchoring is the reserved YAML key `_dse_anchor`, never an Obsidian `^block-id`. |
 
 ### Compendium release format
 
