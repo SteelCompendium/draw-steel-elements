@@ -76,6 +76,12 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		expect(winded.querySelector('.dse-stamina__fill')!.getAttribute('data-state')).toBe('winded');
 	});
 
+	test('FOLLOWUPS #27a: current === floor(max/2) (exactly half): [data-state="winded"], not "healthy" (RR §8 "at half Stamina max OR BELOW"; matches the winded badge\'s <= convention, StaminaBar.isWinded)', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 10, temp: 0, max: 20 }, { canPersist: true })!;
+		expect(bar.querySelector('.dse-stamina__fill')!.getAttribute('data-state')).toBe('winded');
+	});
+
 	test('FOLLOWUPS #28 LOW: max=0 (full-degrade, no authored max) renders a defined empty bar, never a NaN width', () => {
 		const root = document.createElement('div');
 		const bar = renderStaminaBar(root, { current: 0, temp: 0, max: 0 }, { canPersist: false })!;

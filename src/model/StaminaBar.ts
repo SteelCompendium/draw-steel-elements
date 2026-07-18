@@ -118,13 +118,11 @@ export class StaminaBar extends ComponentWrapper{
 	//   "Dying: At 0 Stamina or below. ... Can't Catch Breath."
 	//   "Death: Stamina reaches negative of the winded value."
 	//   "Recovery value: 1/3 of Stamina max."
-	// NOTE: this is a slightly stricter "at or below" (`<=`) than the pre-existing
-	// StaminaBarPanel kit core's `staminaState` fill-color threshold (`current <
-	// floor(max/2)`, framework/kit/StaminaBarPanel.ts) — that function is untouched by
-	// this task (byte/behavior-stable HARD INVARIANT on the base bar) and this task's
-	// own badge/Catch-Breath-gating logic follows the reference doc's `<=` wording
-	// instead. A one-Stamina-point boundary divergence between the two is a known,
-	// accepted consequence of not touching the pre-existing kit core.
+	// FOLLOWUPS #27a (fixed): the StaminaBarPanel kit core's `staminaState` fill-color
+	// threshold (framework/kit/StaminaBarPanel.ts) originally used a stricter `current <
+	// floor(max/2)`, disagreeing with this getter's `<=` at exactly half stamina. The
+	// kit core now also uses `<=`, so the bar-fill color and this getter (and the
+	// winded badge) agree at the boundary.
 
 	/** RR §8 "Winded": half of max_stamina, floored. */
 	get windedThreshold(): number {

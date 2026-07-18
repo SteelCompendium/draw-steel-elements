@@ -20,7 +20,7 @@
 // updateCallback contract are unchanged, so the YAML any caller persists after an edit
 // is byte-identical to what the legacy modal produced for the same edit.
 import type { App, Component } from 'obsidian';
-import { DseModal, iconButton, stepper } from '@/framework/kit';
+import { DseModal, iconButton, stepper, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 
@@ -124,6 +124,11 @@ export function setButtonText(btn: IconButtonHandle, text: string): void {
 	btn.setLabel(text);
 }
 
+/** FOLLOWUPS #27b: the visible reason (house rule — never a silent disable, same
+ *  convention as the bar's own read-only tooltip) shown on Spend Recovery when no
+ *  Recoveries remain. */
+const NO_RECOVERIES_TOOLTIP = 'No Recoveries remaining';
+
 // ---------------------------------------------------------------------------------
 // The single-stamina modal (hero / creature)
 
@@ -137,6 +142,11 @@ export class StaminaEditModal extends DseModal {
 	// (byte-compat-load-bearing: every Apply funnels through clampStamina below).
 	private pendingStaminaChange: number = 0;
 	private pendingTempStaminaChange: number = 0;
+	// FOLLOWUPS #27b: pending Recoveries spend, same bookkeeping shape as the two
+	// above — only ever touched (non-zero) when the model carries `recoveries`
+	// (D7 §4.2). Applied to `staminaBar.recoveries` on Apply, alongside the stamina
+	// fields; reset back to 0 by Reset.
+	private pendingRecoveriesChange: number = 0;
 
 	constructor(
 		app: App,
@@ -161,6 +171,12 @@ export class StaminaEditModal extends DseModal {
 		const currentStamina = this.staminaBar.current_stamina ?? maxStamina;
 		const currentTempStamina = this.staminaBar.temp_stamina ?? 0;
 		const negativeStaminaLimit = this.isHero ? Math.ceil(-0.5 * maxStamina) : 0;
+		// FOLLOWUPS #27b: gated entirely on the model carrying `recoveries` (D7 §4.2) —
+		// a legacy block (field absent) leaves this false and pendingRecoveriesChange
+		// stays 0 forever, so Spend Recovery's disable gate and recoveries write-back
+		// below are both no-ops for it (behavior unchanged, per the followup).
+		const recoveriesTracked = this.staminaBar.recoveries !== undefined;
+		const currentRecoveries = this.staminaBar.recoveries ?? 0;
 
 		// -- The preview bar (shared template) --------------------------------------
 		const bar = staminaPreviewBar(this.body, { dyingZone: this.isHero });
@@ -324,22 +340,29 @@ export class StaminaEditModal extends DseModal {
 			},
 			this.lifecycle,
 		).buttonEl.classList.add('dse-sedit__btn');
-		iconButton(
+		const spendRecoveryBtn = iconButton(
 			quickSection,
 			{
 				icon: 'syringe',
 				label: 'Spend Recovery',
 				text: 'Spend Recovery',
 				onClick: () => {
-					const adjustment = Math.min(Math.floor(maxStamina / 3), maxStamina);
+					// Defensive (CB-8): the button is real-disabled at zero remaining too.
+					if (recoveriesTracked && currentRecoveries + this.pendingRecoveriesChange <= 0) return;
+					// RR §8 "Recovery value: 1/3 of Stamina max" — the model's OWN derived
+					// value (StaminaBar.recoveryValue), not a re-derived literal; it is the
+					// same floor(max/3) math, just sourced from one place (FOLLOWUPS #27b).
+					const adjustment = this.staminaBar.recoveryValue;
 					if (!isNaN(adjustment)) {
 						this.pendingStaminaChange += adjustment;
+						if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
 						refresh();
 					}
 				},
 			},
 			this.lifecycle,
-		).buttonEl.classList.add('dse-sedit__btn');
+		);
+		spendRecoveryBtn.buttonEl.classList.add('dse-sedit__btn');
 
 		// -- Footer: Reset + the dynamic apply button (accent) ----------------------
 		const [, actionBtn] = this.footer([
@@ -350,6 +373,7 @@ export class StaminaEditModal extends DseModal {
 				onClick: () => {
 					this.pendingStaminaChange = 0;
 					this.pendingTempStaminaChange = 0;
+					this.pendingRecoveriesChange = 0;
 					refresh();
 				},
 			},
@@ -367,6 +391,11 @@ export class StaminaEditModal extends DseModal {
 					);
 					this.staminaBar.current_stamina = newCurrentStamina;
 					this.staminaBar.temp_stamina = currentTempStamina + this.pendingTempStaminaChange;
+					// FOLLOWUPS #27b: floored at 0 defensively (the disable gate already
+					// prevents overspend via the UI) — never persist a negative pool.
+					if (recoveriesTracked) {
+						this.staminaBar.recoveries = Math.max(0, currentRecoveries + this.pendingRecoveriesChange);
+					}
 					this.updateCallback();
 					this.close();
 				},
@@ -375,12 +404,23 @@ export class StaminaEditModal extends DseModal {
 		// Reset left / apply right (the legacy space-between footer).
 		actionBtn.buttonEl.parentElement?.classList.add('dse-sedit__footer');
 
-		/** One targeted refresh after every edit: steppers, bar, apply button — in place. */
+		/** One targeted refresh after every edit: steppers, bar, apply button, and (D7
+		 *  #27b) Spend Recovery's own disabled state — in place. */
 		const refresh = (): void => {
 			staminaStepper.setValue(currentStamina + this.pendingStaminaChange);
 			tempStepper.setValue(currentTempStamina + this.pendingTempStaminaChange);
 			updateBar();
 			this.updateActionButton(actionBtn);
+			if (recoveriesTracked) {
+				const remaining = currentRecoveries + this.pendingRecoveriesChange;
+				const noneLeft = remaining <= 0;
+				spendRecoveryBtn.setDisabled(noneLeft);
+				// House rule: never a silent disable — a visible reason tooltip
+				// accompanies the real `disabled` (CB-8), cleared once Recoveries are
+				// available again (e.g. after Reset).
+				if (noneLeft) tooltip(spendRecoveryBtn.buttonEl, NO_RECOVERIES_TOOLTIP);
+				else spendRecoveryBtn.buttonEl.removeAttribute('data-tooltip');
+			}
 		};
 		refresh();
 	}

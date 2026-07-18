@@ -58,11 +58,18 @@ function calculatePercentFromStamina(max: number, stamina: number, ignoreDying =
 }
 
 /** The SFC's `barColor` computed, re-expressed as the [data-state] value: the state
- *  names the condition; the COLOR lives in CSS on the --dse-stamina-* tokens. */
+ *  names the condition; the COLOR lives in CSS on the --dse-stamina-* tokens.
+ *
+ *  FOLLOWUPS #27a fix: winded is "at half Stamina max OR BELOW"
+ *  (reference/draw-steel-reference.md:274-278, "Stamina and Death" — cited as RR §8 by
+ *  StaminaBar.isWinded's own comment) — an inclusive `<=`, matching the winded badge
+ *  (stamina-bar/view.ts's renderRecoveries) which already used `<=`. This was
+ *  previously a strict `<`, so the two indicators disagreed at exactly half stamina;
+ *  now both sides of the boundary agree. */
 function staminaState(s: StaminaBarValues): 'healthy' | 'winded' | 'dying' {
 	const current = s.current ?? 0;
 	if (current <= 0) return 'dying';
-	if (current < Math.floor((s.max ?? 0) / 2)) return 'winded';
+	if (current <= Math.floor((s.max ?? 0) / 2)) return 'winded';
 	return 'healthy';
 }
 

@@ -141,6 +141,92 @@ describe('T-5: StaminaEditModal — temp stamina absorbs damage first', () => {
 	});
 });
 
+// FOLLOWUPS #27b — Spend Recovery synced with the D7 `recoveries` model: the heal
+// amount comes from StaminaBar.recoveryValue (RR §8's derived "1/3 of Stamina max",
+// floor(max/3) — the same math, now sourced from the model instead of re-derived
+// inline), the recoveries counter decrements per press, and the button real-disables
+// (CB-8) at zero remaining, with a visible reason tooltip (house rule: never silent —
+// see stamina-bar/view.ts's Catch Breath, the other consumer of `recoveries`). A block
+// that never declares `recoveries`/`recoveries_max` (legacy shape) is unaffected: the
+// button never disables and `recoveries` stays undefined through Apply.
+describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recoveries', () => {
+	function makeRecoveryModal(max: number, current: number, recoveries: number, recoveriesMax: number) {
+		const app = new App();
+		const bar = new StaminaBar(false, false, max, current, 0, 1, 'default', recoveries, recoveriesMax);
+		const updateCallback = jest.fn();
+		const modal = new StaminaEditModal(app as any, bar, true, 'Frodo', updateCallback);
+		modal.open();
+		const content = (modal as any).contentEl as HTMLElement;
+		return { modal: modal as any, bar, content, updateCallback };
+	}
+
+	test('heal amount is the model\'s derived recoveryValue (RR §8: floor(max/3))', () => {
+		const { content, bar } = makeRecoveryModal(21, 10, 3, 5);
+		btn(content, 'Spend Recovery').click();
+		apply(content);
+		expect(bar.current_stamina).toBe(17); // 10 + floor(21/3)=7
+	});
+
+	test('decrements the recoveries counter on Apply when the model carries one', () => {
+		const { content, bar } = makeRecoveryModal(21, 10, 3, 5);
+		btn(content, 'Spend Recovery').click();
+		apply(content);
+		expect(bar.recoveries).toBe(2);
+	});
+
+	test('two presses before Apply: heals twice, decrements recoveries twice', () => {
+		const { content, bar } = makeRecoveryModal(21, 0, 3, 5);
+		btn(content, 'Spend Recovery').click();
+		btn(content, 'Spend Recovery').click();
+		apply(content);
+		expect(bar.current_stamina).toBe(14); // 0 + 7 + 7
+		expect(bar.recoveries).toBe(1);
+	});
+
+	test('real-disables at zero remaining recoveries, with a visible reason tooltip', () => {
+		const { content } = makeRecoveryModal(21, 0, 1, 5);
+		const spend = btn(content, 'Spend Recovery');
+		expect(spend.disabled).toBe(false);
+		spend.click(); // remaining 1 -> 0
+		expect(spend.disabled).toBe(true);
+		expect(spend.getAttribute('data-tooltip')).toMatch(/no recoveries/i);
+	});
+
+	test('mounts already at 0 recoveries: Spend Recovery starts disabled', () => {
+		const { content } = makeRecoveryModal(21, 10, 0, 5);
+		expect(btn(content, 'Spend Recovery').disabled).toBe(true);
+	});
+
+	test('a disabled button swallows further clicks (CB-8): no extra heal, recoveries never negative', () => {
+		const { content, bar } = makeRecoveryModal(21, 0, 1, 5);
+		const spend = btn(content, 'Spend Recovery');
+		spend.click(); // 1 -> 0, heals 7
+		spend.click(); // disabled: no-op
+		apply(content);
+		expect(bar.current_stamina).toBe(7);
+		expect(bar.recoveries).toBe(0);
+	});
+
+	test('Reset restores the pending recoveries change and re-enables the button (clears the reason tooltip)', () => {
+		const { content } = makeRecoveryModal(21, 0, 1, 5);
+		const spend = btn(content, 'Spend Recovery');
+		spend.click();
+		expect(spend.disabled).toBe(true);
+		btn(content, 'Reset').click();
+		expect(spend.disabled).toBe(false);
+		expect(spend.getAttribute('data-tooltip')).toBeNull();
+	});
+
+	test('legacy block (no recoveries field): Spend Recovery never disables and recoveries stays undefined through Apply', () => {
+		const { content, bar } = makeModal(21, 10, 0);
+		const spend = btn(content, 'Spend Recovery');
+		for (let i = 0; i < 5; i++) spend.click();
+		expect(spend.disabled).toBe(false);
+		apply(content);
+		expect(bar.recoveries).toBeUndefined();
+	});
+});
+
 describe('D2 §3.5b: the managedModal template (kit scaffold, CB-8, SC-5)', () => {
 	test('modal is a kit DseModal: .dse-modal on the dialog, the "<name> Stamina" title wired via aria-labelledby, sections in .dse-modal__body', () => {
 		const { modal } = makeModal(20, 10, 0);
