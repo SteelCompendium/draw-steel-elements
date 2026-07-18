@@ -26,10 +26,9 @@
 // + `.mount`), matching spec §3.3's "row -> expand -> the migrated Feature/Ability view".
 // Each expanded card gets its OWN namespaced SessionStore view (distinct roll-bar/
 // history slots per ability row, since `featureRollHooks` keys off a single blockKey and
-// a per-row `renderFeature` call always restarts its own rollable-effect ordinal at 0)
-// and a `RollService` wrapper that lets the sheet react to a result (OD-6: "the sheet
-// only supplies context and reacts") — see `onAbilityRollResult`'s doc comment for the
-// exact, disclosed surge-nudge contract (NOT an authoritative "surges spent" rule).
+// a per-row `renderFeature` call always restarts its own rollable-effect ordinal at 0).
+// Surges are spent only by explicit player choice via the SurgePanel's own stepper
+// (spec §1.4) — rolling never auto-decrements `state.surges`.
 //
 // Definition editor (recon delta 5): "Edit definition" reuses D9's `openFormEditor`
 // directly (`cx.validation`, threaded through by this task — see framework/context.ts)
@@ -54,8 +53,7 @@ import { SurgePanel } from '@/elements/surges/panel';
 import type { SurgeSlice } from '@/elements/surges/panel';
 import { ConditionsPanel } from '@/elements/conditions/panel';
 import type { CharacteristicProvider } from '@/framework/roll/binding';
-import type { RollService } from '@/framework/roll/service';
-import type { CharacteristicName, RollInput, RollResult } from '@/framework/roll/types';
+import type { CharacteristicName } from '@/framework/roll/types';
 import type { SessionStore } from '@/framework/session';
 import { resolveHeroDefinition } from './resolve';
 import type { ResolvedHeroDefinition } from './resolve';
@@ -631,8 +629,9 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	/** A per-row RenderContext: same services, except a NAMESPACED SessionStore (each
 	 *  `renderFeature` call restarts its own rollable-effect ordinal at 0, so two ability
 	 *  rows sharing the sheet's one blockKey would otherwise collide on
-	 *  `roll.history.0`/`roll.lastInput.0`) and a `roll` wrapped to let the sheet react
-	 *  to results (onAbilityRollResult) without D5's rollController needing any change. */
+	 *  `roll.history.0`/`roll.lastInput.0`). `roll` passes through unwrapped — OD-6 ("the
+	 *  sheet only supplies context and reacts") means the sheet does not react to roll
+	 *  results at all; surges are spent only via the SurgePanel's own stepper. */
 	private abilityRenderContext(index: number): RenderContext {
 		const ns = `ability-${index}`;
 		const baseSession = this.cx.session;
@@ -641,46 +640,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 			set: (blockKey, slot, value) => baseSession.set(blockKey, `${ns}::${slot}`, value),
 			clear: () => baseSession.clear(),
 		};
-		const roll = this.cx.roll ? this.wrapRollForSurgeNudge(this.cx.roll) : undefined;
-		return { ...this.cx, session, roll };
-	}
-
-	private wrapRollForSurgeNudge(base: RollService): RollService {
-		const onResult = (result: RollResult): void => this.onAbilityRollResult(result);
-		return {
-			resolve: (input, dice) => base.resolve(input, dice),
-			roll: async (input: RollInput) => {
-				const result = await base.roll(input);
-				onResult(result);
-				return result;
-			},
-			get dice() {
-				return base.dice;
-			},
-			get delegate() {
-				return base.delegate;
-			},
-		};
-	}
-
-	/**
-	 * OD-6 ("the sheet only supplies context and reacts"): a disclosed, minimal
-	 * convenience — a hit (tier >= 2, i.e. mid or high) nudges `state.surges` down by 1
-	 * when the hero has any to spend. This is NOT an authoritative "surges spent"
-	 * computation (Draw Steel leaves surge spending to the player — AR: "each surge
-	 * adds extra damage equal to your highest characteristic score", never a fixed count
-	 * per tier); the SurgePanel's own stepper remains the full manual control (undo, or
-	 * spend more, after a roll). Rolling always computes/displays a result even
-	 * read-only (F1 §4.4); this write-side nudge never fires read-only.
-	 */
-	private onAbilityRollResult(result: RollResult): void {
-		if (this.readOnly) return;
-		if (result.tier === undefined || result.tier < 2) return;
-		const current = this.model.state.surges ?? 0;
-		if (current <= 0) return;
-		this.model.state.surges = current - 1;
-		this.surgePanel?.updatePanel(this.surgeSlice(this.model));
-		void this.persist();
+		return { ...this.cx, session };
 	}
 
 	// ---------------------------------------------------------------- shared

@@ -1,9 +1,11 @@
 // D7 Task 9 (spec §3.2/§3.3, OD-5/6/8, recon delta 1/5/7) — HeroSheetView through the
 // REAL ElementPipeline: every region mounts, the stamina/conditions cross-refresh, the
 // existing setCharacteristicProvider roll bridge (feature/view.ts) drives an ability
-// card's roll and the sheet reacts (a hit nudges Surges), [respite] resets play state,
-// "Edit definition" reuses D9's openFormEditor with the play surface hidden from the
-// form, and read-only mounts real-disable every write affordance (F1 §4.4).
+// card's roll (the sheet only supplies context and reacts — OD-6 — it never mutates
+// state.surges: surges are spent only by explicit player choice via the SurgePanel's
+// own stepper, spec §1.4), [respite] resets play state, "Edit definition" reuses D9's
+// openFormEditor with the play surface hidden from the form, and read-only mounts
+// real-disable every write affordance (F1 §4.4).
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
@@ -162,7 +164,7 @@ describe('D7 Task 9: ability roll bridge (recon delta 1) — expand, roll, react
 	// the click -> async roll() microtask chain via a real setTimeout(…,0), which a
 	// jest.useFakeTimers() clock never advances on its own — the persist debounce below
 	// is instead awaited with a real wait, not jest.advanceTimersByTimeAsync.
-	test('expanding "Into the Fray" and rolling uses the hero\'s Might via the provider; a tier-2 hit nudges Surges down', async () => {
+	test('expanding "Into the Fray" and rolling uses the hero\'s Might via the provider; surges are left untouched (player-spent only)', async () => {
 		const deps = makeDeps();
 		await deps.prefs.set('rollingEnabled', true);
 		const { root, host } = await renderHero(HERO_SOURCE, {}, deps);
@@ -180,12 +182,13 @@ describe('D7 Task 9: ability roll bridge (recon delta 1) — expand, roll, react
 		// [5,6] -> natural 11 + Might(+2) = 13 -> tier 2 (12-16).
 		expect(intoTheFrayRow.querySelector('.dse-rollcard__headline')?.textContent).toBe('Tier 2 · 13');
 
+		// Surges are spent only by explicit player choice (spec §1.4) — a tier-2 roll
+		// result must not auto-decrement or persist state.surges.
 		const surgeValue = region(root, 'surges')!.querySelector<HTMLInputElement>('.dse-surge__stepper .dse-stepper__input')!;
-		expect(surgeValue.value).toBe('0'); // 1 -> 0
+		expect(surgeValue.value).toBe('1'); // unchanged
 
 		await new Promise((resolve) => setTimeout(resolve, PERSIST_DEBOUNCE_MS + 50));
-		const lastCall = host.replaceSource.mock.calls[host.replaceSource.mock.calls.length - 1];
-		expect(lastCall?.[0]).toContain('surges: 0');
+		expect(host.replaceSource).not.toHaveBeenCalled();
 	}, 10000);
 });
 
