@@ -97,12 +97,8 @@ export class SccResolver {
 		if (code === null) return { kind: 'unresolved', code: rawTarget.trim() };
 
 		// 1. Path derivation against the managed root (covers a fresh sync, O(1)).
-		const relative = sccToFilePath(code);
-		if (relative !== null) {
-			const derived = normalizePath(`${this.settings.compendiumDestinationDirectory}/${relative}`);
-			const file = this.app.vault.getAbstractFileByPath(derived);
-			if (file instanceof TFile) return { kind: 'vault', file, linkpath: file.path };
-		}
+		const derivedFile = this.resolveByDerivation(code);
+		if (derivedFile !== null) return { kind: 'vault', file: derivedFile, linkpath: derivedFile.path };
 
 		// 2. Frontmatter-`scc` index (codes are forever; paths are not).
 		const indexed = this.lookupIndex(code);
@@ -132,6 +128,23 @@ export class SccResolver {
 	public codeToPath(code: string): string | null {
 		if (this.index === null) this.seedIndex();
 		return this.index!.get(code) ?? null;
+	}
+
+	/** FOLLOWUPS #24 — the O(1) path-derivation step resolve() uses (step 1 of its
+	 *  ladder), exposed standalone so CompendiumIndex.getEntry can retry it as a
+	 *  fallback: `codeToPath` above is the (lazily-seeded, one-time-scanned) frontmatter
+	 *  index, which does NOT re-scan itself when a compendium sync lands new files —
+	 *  a file that shows up after the index's seed resolves `vault` here (this needs
+	 *  no index at all, just the derived path) but stays invisible to `codeToPath`
+	 *  until something re-indexes it (handleChanged/handleRename, or a fresh seed).
+	 *  Deterministic — no timing/settle waits, just "is a file sitting at the derived
+	 *  path right now." */
+	public resolveByDerivation(code: string): TFile | null {
+		const relative = sccToFilePath(code);
+		if (relative === null) return null;
+		const derived = normalizePath(`${this.settings.compendiumDestinationDirectory}/${relative}`);
+		const file = this.app.vault.getAbstractFileByPath(derived);
+		return file instanceof TFile ? file : null;
 	}
 
 	/** Wire incremental index maintenance to vault/metadata events (plugin lifetime). */
@@ -173,7 +186,15 @@ export class SccResolver {
 		for (const file of this.app.vault.getMarkdownFiles()) this.indexFile(file);
 	}
 
-	private indexFile(file: TFile): void {
+	/** Reads `file`'s frontmatter `scc` and (re-)indexes it if present. Public so
+	 *  FOLLOWUPS #24's CompendiumIndex.getEntry fallback can opportunistically seed a
+	 *  file it found via resolveByDerivation, making the NEXT codeToPath/entries() call
+	 *  a direct hit. Requires the index to already be seeded (non-null) — true for any
+	 *  caller that reached this via a prior codeToPath()/entries() call, which always
+	 *  seeds first. A no-op (silently) if metadataCache hasn't parsed `file`'s
+	 *  frontmatter yet — harmless; the next lookup just falls back through derivation
+	 *  again rather than reading stale/absent data. */
+	public indexFile(file: TFile): void {
 		const scc = this.app.metadataCache.getFileCache(file)?.frontmatter?.scc;
 		if (typeof scc === 'string' && scc.length > 0) this.index!.set(scc, file.path);
 	}

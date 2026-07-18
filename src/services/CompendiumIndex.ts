@@ -66,9 +66,28 @@ class DseCompendiumIndex implements CompendiumIndex {
 
 	getEntry(code: string): CompendiumEntry | null {
 		const path = this.resolver.codeToPath(code);
-		if (path === null) return null;
-		const file = this.app.vault.getAbstractFileByPath(path);
-		if (!(file instanceof TFile)) return null;
+		const indexed = path !== null ? this.app.vault.getAbstractFileByPath(path) : null;
+		let file: TFile;
+		if (indexed instanceof TFile) {
+			file = indexed;
+		} else {
+			// FOLLOWUPS #24 — resolver-vs-index freshness gap: `codeToPath` is the
+			// frontmatter index, which is lazily seeded ONCE and never re-scans itself
+			// when a compendium sync lands new files. `SccResolver.resolve()` (what
+			// classifies cx.sccAnchors) sidesteps that entirely with an O(1) path
+			// derivation, so a freshly-synced file can classify "vault" there while
+			// staying invisible here — RefUnwrapView then shows "found but not
+			// renderable — re-sync", and re-syncing fixes nothing since the file was
+			// already correct. Mirror that same derivation as a fallback so getEntry
+			// can find it too. Deterministic (no timing/settle waits): the file either
+			// sits at its derived path right now, or it doesn't.
+			const derived = this.resolver.resolveByDerivation(code);
+			if (derived === null) return null;
+			file = derived;
+			// Opportunistic: seed the resolver's own index so the next lookup (and
+			// entries()/query()/resolveSlug(), which all walk it) is a direct hit too.
+			this.resolver.indexFile(file);
+		}
 		const fm = (this.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<string, unknown>;
 		return {
 			scc: code,

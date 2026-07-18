@@ -208,3 +208,124 @@ describe("CompendiumIndex model cache (review findings: race, LRU, scoped invali
         expect(readSpy).not.toHaveBeenCalled();
     });
 });
+
+// FOLLOWUPS #24 -- resolver-vs-index freshness gap: SccResolver.resolve() classifies
+// `vault` via O(1) path-derivation against the managed compendium root and never
+// consults its own frontmatter index for that; CompendiumIndex.getEntry/getEntity was
+// index-only (resolver.codeToPath), so a file that lands AFTER the index's one-time
+// lazy seed (a real "just synced" ordering -- the index doesn't re-scan on its own)
+// resolved `vault` for cx.sccAnchors but came back null here, producing RefUnwrapView's
+// "found but not renderable -- re-sync" card even though re-syncing changes nothing.
+// Fix: getEntry falls back to the SAME path-derivation SccResolver.resolve() uses.
+describe("getEntry path-derivation fallback (FOLLOWUPS #24: resolver-vs-index freshness gap)", () => {
+    test("a freshly-synced file resolves via getEntry even though the frontmatter index was seeded before it existed", () => {
+        const { app, vault, metadataCache } = makeFakeApp();
+        const resolver = new SccResolver(app, DEFAULT_SETTINGS);
+        const index = createCompendiumIndex(app, resolver);
+
+        // Seed the resolver's frontmatter index NOW, before the "sync" below lands.
+        // SccResolver.resolve()'s path-derivation step never consults this index, so it
+        // is unaffected by when it was built -- that's the whole point of the gap.
+        resolver.entries();
+
+        // The "sync" lands after the index was already seeded.
+        const freshCode = seedCondition(vault, metadataCache, "fresh-sync");
+        const freshPath = "DS Compendium/condition/fresh-sync.md";
+
+        // cx.sccAnchors' classification (SccResolver.resolve) already finds it -- that
+        // part was never broken; only the index-only CompendiumIndex lookup was.
+        expect(resolver.resolve(`scc:${freshCode}`).kind).toBe("vault");
+        // The stale index genuinely misses it (proves this test reproduces the gap).
+        expect(resolver.codeToPath(freshCode)).toBeNull();
+
+        const entry = index.getEntry(freshCode);
+        expect(entry).not.toBeNull();
+        expect(entry!.file.path).toBe(freshPath);
+        expect(entry!.type).toBe("condition");
+        expect(entry!.name).toBe("fresh-sync");
+    });
+
+    test("the fallback opportunistically seeds the resolver's index -- a second lookup is a direct index hit", () => {
+        const { app, vault, metadataCache } = makeFakeApp();
+        const resolver = new SccResolver(app, DEFAULT_SETTINGS);
+        const index = createCompendiumIndex(app, resolver);
+        resolver.entries(); // seed (empty)
+        const freshCode = seedCondition(vault, metadataCache, "fresh-sync-2");
+
+        expect(resolver.codeToPath(freshCode)).toBeNull(); // not yet indexed
+        expect(index.getEntry(freshCode)).not.toBeNull(); // fallback finds + seeds it
+        expect(resolver.codeToPath(freshCode))
+            .toBe("DS Compendium/condition/fresh-sync-2.md"); // now a direct index hit
+    });
+
+    test("no false positive: getEntry stays null when neither the index nor path-derivation find anything", () => {
+        const { index } = setup();
+        expect(index.getEntry("mcdm.heroes.v1/condition/does-not-exist")).toBeNull();
+    });
+
+    test("getEntity/getStatblock/model() work end-to-end off a fallback-derived entry (not just getEntry)", async () => {
+        const { app, vault, metadataCache } = makeFakeApp();
+        const resolver = new SccResolver(app, DEFAULT_SETTINGS);
+        const index = createCompendiumIndex(app, resolver);
+        resolver.entries(); // seed (empty), BEFORE the goblin file exists
+        loadFixtureIntoVault(vault, metadataCache,
+            path.join(F, "monster/goblin/statblock/goblin-stinker.md"), GOBLIN_PATH);
+        expect(resolver.codeToPath(GOBLIN)).toBeNull(); // confirms the gap is real here
+
+        const sb = await index.getStatblock(GOBLIN);
+        expect(sb!.name).toBe("Goblin Stinker");
+        expect(sb!.role).toBe("Controller");
+    });
+
+    test("cache-poisoning race guard still applies to a fallback-derived entry (does not regress D6 Task 2's fix)", async () => {
+        const { app, vault, metadataCache } = makeFakeApp();
+        const resolver = new SccResolver(app, DEFAULT_SETTINGS);
+        const index = createCompendiumIndex(app, resolver);
+        const plugin = new Plugin();
+        index.registerWatchers(plugin as never);
+
+        resolver.entries(); // seed (empty), BEFORE the goblin file exists
+        loadFixtureIntoVault(vault, metadataCache,
+            path.join(F, "monster/goblin/statblock/goblin-stinker.md"), GOBLIN_PATH);
+        expect(resolver.codeToPath(GOBLIN)).toBeNull(); // getEntity below can only find
+        // this via the fallback, not the (stale) index.
+
+        const gate = vault.gateRead(GOBLIN_PATH);
+        const entity = await index.getEntity(GOBLIN);
+        expect(entity).not.toBeNull();
+        const modelPromise = entity!.model();
+
+        // The invalidation lands WHILE the read is in flight -- D6 Task 2's guarded race,
+        // now exercised against a fallback-derived (not index-hit) entry.
+        vault.emit("modify", fakeTFile(GOBLIN_PATH));
+        gate.release();
+
+        const firstModel = await modelPromise;
+        expect(firstModel).toBeDefined();
+        const secondModel = await entity!.model();
+        expect(secondModel).not.toBe(firstModel); // not silently poisoned into the cache
+    });
+
+    test("a later sync (vault modify event) evicts a fallback-derived entry's cached model, same as an indexed one", async () => {
+        const { app, vault, metadataCache } = makeFakeApp();
+        const resolver = new SccResolver(app, DEFAULT_SETTINGS);
+        const index = createCompendiumIndex(app, resolver);
+        const plugin = new Plugin();
+        index.registerWatchers(plugin as never);
+
+        resolver.entries(); // seed (empty), BEFORE the goblin file exists
+        loadFixtureIntoVault(vault, metadataCache,
+            path.join(F, "monster/goblin/statblock/goblin-stinker.md"), GOBLIN_PATH);
+
+        const entity1 = await index.getEntity(GOBLIN);
+        const model1 = await entity1!.model();
+
+        // A later re-sync overwrites the file -- the (opportunistically-seeded-or-not)
+        // derived entry must NOT keep serving the stale cached model.
+        vault.emit("modify", fakeTFile(GOBLIN_PATH));
+
+        const entity2 = await index.getEntity(GOBLIN);
+        const model2 = await entity2!.model();
+        expect(model2).not.toBe(model1);
+    });
+});
