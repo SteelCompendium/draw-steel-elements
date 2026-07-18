@@ -26,5 +26,6 @@
 	"montage": "ds-montage",
 	"project": "ds-project",
 	"party": "ds-party",
-	"conditions": "ds-conditions"
+	"conditions": "ds-conditions",
+	"heroic-resource": "ds-resource"
 }

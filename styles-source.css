@@ -2623,6 +2623,29 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Heroic resource (D7 Task 3, spec §4.1): .dse-res */
+/* ==================== */
+/* A class-aware, signed stepper (kit .dse-stepper — its own chrome, no color/geometry
+   redeclared here) with a label (the resolved resource name, e.g. "Ferocity") above and
+   a gain-rule hint line below. Tokens only — no color literals. */
+[data-dse-element="heroic-resource"] .dse-res {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25em;
+	padding: var(--dse-pad);
+
+	.dse-res__label {
+		font-weight: bold;
+		color: var(--dse-heading);
+	}
+
+	.dse-res__hint {
+		font-size: 0.8em;
+		color: var(--dse-fg-faint);
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */

@@ -64,6 +64,7 @@ import { montageElement } from '@/elements/montage/definition';
 import { projectElement } from '@/elements/project/definition';
 import { partyElement } from '@/elements/party/definition';
 import { conditionsElement } from '@/elements/conditions/definition';
+import { resourceElement } from '@/elements/resource/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -289,6 +290,9 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// initiative tracker's ConditionManager/AddConditionsModal/CustomizeConditionModal
 	// verbatim (§2.4), no compendium dep, no hard gate.
 	registry.register(conditionsElement);
+	// D7 Task 3 (spec §4.1) — Heroic resource tracker: class-aware via the static
+	// RESOURCE_BY_CLASS map (resourceByClass.ts), no compendium dep, no hard gate.
+	registry.register(resourceElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

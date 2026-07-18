@@ -67,6 +67,7 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'project',
 	'party',
 	'conditions',
+	'heroic-resource',
 ];
 
 /**
