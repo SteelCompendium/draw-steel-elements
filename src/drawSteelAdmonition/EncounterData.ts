@@ -97,9 +97,10 @@ export interface EncounterData {
     malice: Malice;
     /** Encounter round counter (D8 spec §7.3, additive). ABSENT → treated as round 1;
      *  advanced only via the initiative model's exported `advanceRound()` helper (Task 9,
-     *  spec §7.2), which is the ONE control shared by the round display, the Malice panel's
-     *  auto-gain, and per-actor `actions` reset — "Reset Round" was folded into it (a
-     *  separate turn-only reset diverged the round counter from has_taken_turn). */
+     *  spec §7.2), which is the round-boundary control shared by the round display and the
+     *  Malice panel's auto-gain — a strict superset of the sibling `resetRound()` helper
+     *  (task-9-review.md HIGH finding: "Reset Round" stays as its own turn-only control,
+     *  clearing has_taken_turn/actions WITHOUT touching this counter). */
     round?: number;
 }
 

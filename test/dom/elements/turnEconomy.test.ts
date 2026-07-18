@@ -1,9 +1,11 @@
 // D8 Task 9 (spec §7.2/§7.3) — the per-actor turn/round action economy: a keyboard-
 // accessible [Main][Maneuver][Move][Triggered] checklist on every hero row AND every
-// enemy creature instance's detail row, plus the round-boundary reset ("Advance round",
-// spec §7.2 — now the ONE control; Task 5's separate "Reset Round" was folded into it,
-// see initiative.test.ts's T-9 structure test). Driven through the REAL ElementPipeline,
-// same harness convention as malicePanel.test.ts (file-local per the brief's file list).
+// enemy creature instance's detail row, plus TWO distinct round-state controls
+// (task-9-review.md HIGH finding — the brief requires both to stay, non-interchangeably):
+// "Advance round" (round-boundary transition: round++, turn/checklist clear, Malice
+// round_gain) and "Reset turns (this round)" (mid-round correction: turn/checklist clear
+// ONLY, no round/Malice side effects). Driven through the REAL ElementPipeline, same
+// harness convention as malicePanel.test.ts (file-local per the brief's file list).
 //
 // HARD INVARIANT: `round` / `Hero.actions` / `CreatureInstance.actions` /
 // `malice.round_gain` / `malice.log` are ADDITIVE-OPTIONAL EncounterData fields —
@@ -331,6 +333,87 @@ describe('D8 T-9: "Advance round" resets the checklist (spec §7.2 — Triggered
 	});
 });
 
+describe('D8 T-9: "Reset turns (this round)" — turn-only correction, distinct from Advance round (task-9-review.md HIGH finding)', () => {
+	test('clears has_taken_turn and materialized actions WITHOUT bumping round or re-granting malice.round_gain', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(withGainSource);
+
+		// Take a turn and touch a checklist slot so the reset is observable.
+		(root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement).click();
+		(heroActions(root).querySelector(
+			'button[aria-label="Toggle Main action: Frodo Baggins"]',
+		) as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+
+		(root.querySelector('button[aria-label="Reset turns (this round)"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// Turn indicator + checklist cleared …
+		expect(root.querySelectorAll('.dse-init__turn[data-taken]')).toHaveLength(0);
+		heroActions(root)
+			.querySelectorAll('button.dse-init__action-toggle')
+			.forEach((t) => expect(t.getAttribute('aria-pressed')).toBe('false'));
+		// … but round and Malice are untouched — the whole point of this control.
+		expect(root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 1');
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+		expect(root.querySelectorAll('.dse-init__malice-log-entry')).toHaveLength(0);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(2);
+		expect(host.replaceSource.mock.calls[1][0]).toBe(
+			bytesAfter(withGainSource, (m) => {
+				m.heroes[0].actions = { main: false, maneuver: false, move: false, triggered: false };
+			}),
+		);
+	});
+
+	test('an actor never toggled stays untouched by Reset turns (no fabricated `actions`)', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(baseSource);
+
+		(root.querySelector('button[aria-label="Reset turns (this round)"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const written = host.replaceSource.mock.calls[0][0];
+		expect(written).not.toMatch(/actions:/);
+		const reparsed = parse(parseYaml(written), written);
+		expect(reparsed.heroes[0].actions).toBeUndefined();
+		expect(reparsed.heroes[1].actions).toBeUndefined();
+	});
+
+	test('Reset turns vs Advance round from identical starting states: only Advance round bumps round/malice', async () => {
+		jest.useFakeTimers();
+
+		// Two independent renders of the same source; one drives Reset, the other Advance.
+		const resetRun = await renderInit(withGainSource);
+		const advanceRun = await renderInit(withGainSource);
+
+		(heroActions(resetRun.root).querySelector(
+			'button[aria-label="Toggle Triggered action: Frodo Baggins"]',
+		) as HTMLElement).click();
+		(heroActions(advanceRun.root).querySelector(
+			'button[aria-label="Toggle Triggered action: Frodo Baggins"]',
+		) as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		(resetRun.root.querySelector('button[aria-label="Reset turns (this round)"]') as HTMLElement).click();
+		(advanceRun.root.querySelector('button[aria-label="Advance round"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// Both clear the checklist identically …
+		[resetRun.root, advanceRun.root].forEach((root) => {
+			heroActions(root)
+				.querySelectorAll('button.dse-init__action-toggle')
+				.forEach((t) => expect(t.getAttribute('aria-pressed')).toBe('false'));
+		});
+		// … but only Advance round moved the round counter and granted round_gain Malice.
+		expect(resetRun.root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 1');
+		expect(resetRun.root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+		expect(advanceRun.root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 2');
+		expect(advanceRun.root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 8');
+	});
+});
+
 describe('D8 T-9: read-only (canPersist=false, F1 §4.4)', () => {
 	test('the checklist renders as inert static state — labels + pressed state, no buttons', async () => {
 		const seededSource = [
@@ -352,8 +435,9 @@ describe('D8 T-9: read-only (canPersist=false, F1 §4.4)', () => {
 		expect(spans[1].hasAttribute('data-pressed')).toBe(false); // maneuver: false
 		expect(spans[3].hasAttribute('data-pressed')).toBe(true); // triggered: true
 
-		// No Advance-round affordance either (no dead-end write control).
+		// No Advance-round / Reset-turns affordance either (no dead-end write control).
 		expect(root.querySelector('button[aria-label="Advance round"]')).toBeNull();
+		expect(root.querySelector('button[aria-label="Reset turns (this round)"]')).toBeNull();
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 });

@@ -270,27 +270,13 @@ export function serialize(model: EncounterData): string {
 }
 
 /**
- * D8 Task 9 (spec §7.2) — the ONE round-boundary transition, shared by the round display,
- * the Malice panel's per-round auto-gain (spec §3.3/OD-3), and the per-actor `actions`
- * checklist. Supersedes the old turn-only "Reset Round" affordance — Task 5's review
- * flagged the two as overlapping (both cleared `has_taken_turn`), and per spec §7.2
- * "Advance round" is the superset (round++, has_taken_turn clear, actions clear, Malice
- * gain), so InitiativeView now exposes only this control (D8-gm-subsystems-spec.md §7.2).
- *
- * - `round` defaults from absent (treated as 1) so the first press produces 2.
- * - `has_taken_turn` clears on every hero/enemy group, exactly like the old Reset Round.
- * - Per-actor `actions` (Hero + every enemy CreatureInstance) resets to all-false IF
- *   already materialized; an actor that has never had a slot toggled stays untouched
- *   (absent), preserving the additive-optional / never-fabricated contract. "Triggered" is
- *   per-round (spec §7.1), so this is precisely where it resets — not on turn end.
- * - `malice.round_gain`, when configured (non-zero), is added to the pool and logged
- *   (`{round, amount, label: 'Round gain'}`) at the NEW round number — same log shape as
- *   the quick-add (spec §3.1/§3.3). Absent/0 stays manual-only (OD-3: never a fabricated
- *   default).
+ * Shared by `advanceRound` and `resetRound` (D8 Task 9, spec §7.2): clears every actor's
+ * `has_taken_turn` and, IF already materialized, resets its per-actor `actions` to
+ * all-false. An actor that has never had a slot toggled stays untouched (absent),
+ * preserving the additive-optional / never-fabricated contract — see `advanceRound`'s
+ * own doc comment for why this specific reset shape (all-false, not deletion) is correct.
  */
-export function advanceRound(data: EncounterData): void {
-	data.round = (data.round ?? 1) + 1;
-
+function clearTurnState(data: EncounterData): void {
 	data.heroes.forEach((hero) => {
 		hero.has_taken_turn = false;
 		if (hero.actions) {
@@ -308,6 +294,29 @@ export function advanceRound(data: EncounterData): void {
 			});
 		});
 	});
+}
+
+/**
+ * D8 Task 9 (spec §7.2) — the round-boundary transition, shared by the round display,
+ * the Malice panel's per-round auto-gain (spec §3.3/OD-3), and the per-actor `actions`
+ * checklist reset. Per the brief, this is a SUPERSET of `resetRound` below (round++ +
+ * Malice gain, on top of the same turn/action clear) — the two controls are NOT
+ * interchangeable: `resetRound` exists precisely for the mid-round correction where
+ * bumping `round` / re-granting `malice.round_gain` would be wrong (task-9-review.md HIGH
+ * finding).
+ *
+ * - `round` defaults from absent (treated as 1) so the first press produces 2.
+ * - `has_taken_turn` / per-actor `actions` clear via `clearTurnState` (identical to
+ *   `resetRound`'s behavior). "Triggered" is per-round (spec §7.1), so this is precisely
+ *   where it resets — not on turn end.
+ * - `malice.round_gain`, when configured (non-zero), is added to the pool and logged
+ *   (`{round, amount, label: 'Round gain'}`) at the NEW round number — same log shape as
+ *   the quick-add (spec §3.1/§3.3). Absent/0 stays manual-only (OD-3: never a fabricated
+ *   default).
+ */
+export function advanceRound(data: EncounterData): void {
+	data.round = (data.round ?? 1) + 1;
+	clearTurnState(data);
 
 	const gain = data.malice.round_gain;
 	if (typeof gain === 'number' && gain !== 0) {
@@ -315,4 +324,18 @@ export function advanceRound(data: EncounterData): void {
 		data.malice.log = data.malice.log ?? [];
 		data.malice.log.push({ round: data.round, amount: gain, label: 'Round gain' });
 	}
+}
+
+/**
+ * "Reset Round" (pre-D8 affordance, restored per task-9-review.md HIGH finding — the
+ * task-9 brief's Interfaces section says verbatim "the existing 'Reset Round' ... stays").
+ * A pure turn-only correction: clears `has_taken_turn` and materialized per-actor
+ * `actions` exactly like `advanceRound` (via the same `clearTurnState` helper, so the two
+ * can never drift on what "clear turn state" means) — but does NOT touch `round` and does
+ * NOT apply/log `malice.round_gain`. This is the control a GM reaches for to correct a
+ * misclick or re-run the current round from the top without spuriously advancing the
+ * round counter or double-dipping the per-round Malice auto-gain.
+ */
+export function resetRound(data: EncounterData): void {
+	clearTurnState(data);
 }

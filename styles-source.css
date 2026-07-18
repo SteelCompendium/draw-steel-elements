@@ -660,7 +660,9 @@ code.dsa {
         user-select: none;
     }
 
-    /* D8 §7.2/§3.1: round counter + the shared "Advance round" control. */
+    /* D8 §7.2/§3.1: round counter + the two round-state controls, "Reset turns (this
+       round)" (turn-only correction) and "Advance round" (full round-boundary
+       transition) — task-9-review.md HIGH finding: distinct, non-interchangeable controls. */
     .dse-init__round {
         display: flex;
         align-items: center;
@@ -669,6 +671,7 @@ code.dsa {
         color: var(--dse-fg-muted);
     }
 
+    .dse-init__round-reset,
     .dse-init__round-advance {
         min-width: 0;
         min-height: 0;

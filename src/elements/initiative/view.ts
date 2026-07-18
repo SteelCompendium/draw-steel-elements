@@ -21,9 +21,11 @@
 //  - D8 Task 9 (spec §7.2): each hero row / enemy detail row gains a per-turn action
 //    checklist -> four kit iconButton toggles ([Main][Maneuver][Move][Triggered]) bound to
 //    `actor.actions.<slot>`, materialized on the actor only on first toggle (additive-
-//    optional). The round display + "Advance round" (spec §7.2/§3.1) live in the Malice
-//    panel (Task 5) and now also drive this checklist's reset via `advanceRound()` in
-//    `./model` — "Reset Round" was folded into it (Task 5 review's overlap note).
+//    optional). The round display + both round-state controls — "Reset turns (this
+//    round)" (turn-only correction) and "Advance round" (full round-boundary transition)
+//    — live in the Malice panel (Task 5) and drive this checklist's reset via
+//    `resetRound()` / `advanceRound()` in `./model` (task-9-review.md HIGH finding:
+//    "Reset Round" must stay as its own control, distinct from "Advance round").
 // The portraits preference (D4 owns the descriptor) arrives on the element root as
 // data-dse-portraits via the pipeline's prefs.reflect(); the stylesheet hides
 // .dse-init__portrait/.dse-init__cell-portrait when it is "off" — nothing to wire here.
@@ -71,6 +73,7 @@ import {
 	Hero,
 	advanceRound as advanceRoundModel,
 	resetEncounter,
+	resetRound as resetRoundModel,
 } from './model';
 import type { ActorActions, MaliceLogEntry } from './model';
 
@@ -133,16 +136,27 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 	}
 
-	/** "Advance round" (D8 spec §7.2/§3.1, Task 9) — the ONE control shared by the round
+	/** "Advance round" (D8 spec §7.2/§3.1, Task 9) — the control shared by the round
 	 *  display, the Malice panel's auto-gain, and the per-actor `actions` checklist reset,
 	 *  so none of the three surfaces can diverge. The transition itself lives in the model
 	 *  (`advanceRound()` in `./model`, Task 9) — mutate, then the one whole-model rebuild
-	 *  path. `has_taken_turn` clearing (formerly the separate "Reset Round" action bar
-	 *  button) is folded in here too: Task 5's review flagged the two controls as
-	 *  overlapping, and per spec §7.2 "Advance round" is a strict superset, so the action
-	 *  bar no longer exposes a standalone Reset Round. */
+	 *  path. round++ and (if configured) the Malice round_gain make this a strict SUPERSET
+	 *  of `resetRound()` below — see that method's doc comment for the mid-round-correction
+	 *  case it exists for instead. */
 	private advanceRound(): void {
 		advanceRoundModel(this.model);
+		void this.rebuildAndPersist();
+	}
+
+	/** "Reset Round" (restored per task-9-review.md HIGH finding — the brief's Interfaces
+	 *  section says verbatim "the existing 'Reset Round' ... stays"). Clears
+	 *  `has_taken_turn` and materialized per-actor `actions` (via the model's
+	 *  `resetRound()`, which shares its clear logic with `advanceRound()` so the two can
+	 *  never disagree on what "clear turn state" means) WITHOUT incrementing `round` or
+	 *  re-applying `malice.round_gain` — the mid-round correction "Advance round" cannot
+	 *  serve without spuriously advancing the round / double-granting Malice. */
+	private resetRound(): void {
+		resetRoundModel(this.model);
 		void this.rebuildAndPersist();
 	}
 
@@ -152,10 +166,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Top action bar: both children are write actions — gated off entirely when
 		// read-only (F1 §4.4: no dead-end write affordances).
 		if (this.canWrite) {
-			// D8 Task 9: "Reset Round" used to live here (cleared has_taken_turn only). It
-			// now folds into the Malice panel's "Advance round" control (spec §7.2 — a
-			// strict superset: round++, has_taken_turn clear, actions clear, Malice gain),
-			// so the action bar keeps only the destructive whole-encounter reset.
+			// D8 Task 9: "Reset Round" moved out of this bar and lives alongside "Advance
+			// round" in the Malice panel's round row (spec §7.2 — both are round-state
+			// controls, so they belong next to the round counter they act on), so the
+			// action bar keeps only the destructive whole-encounter reset.
 			const bar = buttonRow(
 				container,
 				[
@@ -239,9 +253,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 			malice.createDiv({ cls: 'dse-init__malice-value', text: 'Malice: ' + data.malice.value });
 		}
 
-		// Round counter (always shown — a state display) + "Advance round" (write-only;
-		// calls the SAME advanceRound() the round control elsewhere would call, so the
-		// two surfaces can't diverge, per the brief).
+		// Round counter (always shown — a state display) + two distinct write controls
+		// (task-9-review.md HIGH finding — these are NOT interchangeable):
+		//  - "Reset turns (this round)": mid-round correction — clears has_taken_turn +
+		//    materialized per-actor actions only, via the SAME resetRound() the model
+		//    exposes, so this surface can't diverge from the model's contract.
+		//  - "Advance round": the full round-boundary transition (round++, turn/action
+		//    clear, Malice round_gain) — calls the SAME advanceRound() the round control
+		//    elsewhere would call, so the two surfaces can't diverge, per the brief.
 		const roundRow = panel.createDiv({ cls: 'dse-init__round' });
 		const roundValueEl = roundRow.createSpan({
 			cls: 'dse-init__round-value',
@@ -249,6 +268,18 @@ export class InitiativeView extends ElementView<EncounterData> {
 		});
 		roundValueEl.setAttribute('aria-live', 'polite');
 		if (this.canWrite) {
+			iconButton(
+				roundRow,
+				{
+					icon: 'rotate-ccw',
+					text: 'Reset turns (this round)',
+					label: 'Reset turns (this round)',
+					tooltip: 'Reset turns (this round)',
+					onClick: () => this.resetRound(),
+				},
+				owner,
+			).buttonEl.addClass('dse-init__round-reset');
+
 			const gain = data.malice.round_gain;
 			iconButton(
 				roundRow,

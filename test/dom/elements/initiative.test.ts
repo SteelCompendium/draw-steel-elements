@@ -212,9 +212,10 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 		expect(root.querySelector('.dse-init')).not.toBeNull();
 
 		// Action bar (writable host): a kit buttonRow of REAL labelled buttons. D8 Task 9:
-		// "Reset Round" was folded into the Malice panel's "Advance round" (spec §7.2 — a
-		// strict superset), so the action bar now carries only the destructive whole-
-		// encounter reset (see turnEconomy.test.ts for Advance round's own coverage).
+		// "Reset Round" lives in the Malice panel's round row (alongside "Advance round"),
+		// not this action bar, which carries only the destructive whole-encounter reset
+		// (see turnEconomy.test.ts / the "reset flows" describe block below for Reset
+		// Round's and Advance round's own coverage).
 		const actionbar = root.querySelector('.dse-init__actionbar') as HTMLElement;
 		expect(actionbar).not.toBeNull();
 		expect(actionbar.classList.contains('dse-btn-row')).toBe(true);
@@ -223,6 +224,15 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 		expect(resetEnc).not.toBeNull();
 		expect(resetEnc.getAttribute('type')).toBe('button');
 		expect(resetEnc.querySelector('.dse-btn__text')!.textContent).toBe('Reset Encounter State');
+
+		// Round row (Malice panel): both round-state controls are present and distinct.
+		const resetRoundBtn = root.querySelector(
+			'button[aria-label="Reset turns (this round)"]',
+		) as HTMLButtonElement;
+		const advanceRoundBtn = root.querySelector('button[aria-label="Advance round"]') as HTMLButtonElement;
+		expect(resetRoundBtn).not.toBeNull();
+		expect(advanceRoundBtn).not.toBeNull();
+		expect(resetRoundBtn).not.toBe(advanceRoundBtn);
 
 		// Heroes.
 		expect(root.querySelectorAll('.dse-init__group--heroes .dse-init__entry')).toHaveLength(2);
@@ -758,12 +768,35 @@ describe('T-9: minion stamina pool — the Task-3 decoupled modal through the vi
 });
 
 describe('T-9: reset flows — model mutation -> framework update() rebuild -> persist', () => {
-	// D8 Task 9: the standalone "Reset Round" button (clear-has_taken_turn-only) was folded
-	// into the Malice panel's "Advance round" (spec §7.2 — a strict superset: round++,
-	// has_taken_turn clear, actions clear, Malice gain). Its former coverage here
-	// (has_taken_turn clears via the coarse rebuild -> persist path) now lives on Advance
-	// round instead — see malicePanel.test.ts's "round counter + Advance round" describe
-	// block and turnEconomy.test.ts's own Advance-round coverage.
+	// D8 Task 9 (task-9-review.md HIGH finding): "Reset Round" (clear-has_taken_turn +
+	// materialized-actions-only) is restored here as its own control, distinct from
+	// "Advance round" — it now lives in the Malice panel's round row (not this action
+	// bar), labelled "Reset turns (this round)". See turnEconomy.test.ts's dedicated
+	// "Reset turns" describe block for the fuller per-actor `actions` coverage and the
+	// Reset-vs-Advance distinguishing test; this test pins the has_taken_turn/byte-compat
+	// path the way the original pre-D8 "Reset Round" test did.
+	test('Reset Round: clears every has_taken_turn, rebuilds, persists the cleared state — round/malice untouched', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(quickStart);
+
+		// Take a turn first so the reset is observable (write #1).
+		(root.querySelector('.dse-init__group--heroes .dse-init__turn') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+
+		(root.querySelector('button[aria-label="Reset turns (this round)"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		// Rebuilt DOM: no indicator marked anymore.
+		expect(root.querySelectorAll('.dse-init__turn[data-taken]')).toHaveLength(0);
+		expect(root.querySelectorAll('.dse-init__turn[aria-pressed="true"]')).toHaveLength(0);
+		// Round / Malice are untouched — the defining difference from Advance round.
+		expect(root.querySelector('.dse-init__round-value')!.textContent).toBe('Round 1');
+		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
+		// Write #2 = every has_taken_turn false — byte-identical to a fresh parse.
+		expect(host.replaceSource).toHaveBeenCalledTimes(2);
+		expect(host.replaceSource.mock.calls[1][0]).toBe(legacyBytes(quickStart));
+	});
 
 	test('Reset Encounter: confirm modal -> resetEncounter -> rebuild -> one write with the RESET bytes (not re-materialized)', async () => {
 		jest.useFakeTimers();

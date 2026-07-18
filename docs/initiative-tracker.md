@@ -232,9 +232,19 @@ When the Stamina Pool of minions gets reduced to thresholds that would kill a mi
 
 **Adjusting**: Use the up and down arrows next to the villain power display to increase or decrease the value.
 
-### Reset Round
+### Round / Turn Controls
 
-Click the "Reset Round" button to clear all turn indicators and start a new round.
+Next to the round counter, the tracker offers two distinct controls — they are **not**
+interchangeable:
+
+- **"Reset turns (this round)"**: Clears every turn indicator and per-actor action
+	checklist (Main/Maneuver/Move/Triggered) back to unmarked, **without** advancing the
+	round counter or granting any configured Malice round gain. Use this for a mid-round
+	correction — e.g. undoing a misclick, or re-running the current round from the top.
+- **"Advance round"**: The full round-boundary transition — increments the round counter,
+	clears every turn indicator and action checklist (same as "Reset turns"), and (if a
+	Malice round gain is configured) adds it to the villain power pool and logs it. Use
+	this when the round has actually ended.
 
 ### Reset Encounter State
 
