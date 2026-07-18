@@ -1,4 +1,5 @@
 import Ajv2019 from 'ajv/dist/2019';
+import type { ErrorObject } from 'ajv/dist/2019';
 import addKeywords from 'ajv-keywords';
 import addErrors from 'ajv-errors';
 import { parseYaml } from 'obsidian';
@@ -9,12 +10,18 @@ type AjvInstance = InstanceType<typeof Ajv2019>;
 export interface ValidationError {
     message: string;
     path: string;
-    value?: any;
+    value?: unknown;
 }
 
 export interface ValidationResult {
     valid: boolean;
     errors: ValidationError[];
+}
+
+/** Narrow an unknown `catch` binding down to a displayable message without assuming
+ *  it's an `Error` (thrown values aren't guaranteed to be). */
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 // NOTE (F2 §2.1 B2): steel-compendium-sdk 3.x schemas moved to JSON Schema draft
@@ -41,23 +48,23 @@ export function initializeSchemaRegistry(schemas: Array<{ id: string, schema: ob
  * Create a fresh AJV instance with all registered schemas
  */
 function createFreshAjvInstance(): AjvInstance {
-    const ajv = new Ajv2019({ 
+    const ajv = new Ajv2019({
         allErrors: true,
         strict: false // Allow modern features
     });
     addKeywords(ajv);
     addErrors(ajv);
-    
+
     // Register dependency schemas
     for (const { id, schema } of registeredSchemas) {
         try {
-            const parsedSchema = typeof schema === 'string' ? parseYaml(schema) : schema;
+            const parsedSchema: object = typeof schema === 'string' ? (parseYaml(schema) as object) : schema;
             ajv.addSchema(parsedSchema, id);
-        } catch (error: any) {
-            console.warn(`Failed to register schema ${id}:`, error.message);
+        } catch (error: unknown) {
+            console.warn(`Failed to register schema ${id}:`, errorMessage(error));
         }
     }
-    
+
     return ajv;
 }
 
@@ -83,24 +90,24 @@ export function resetSchemaRegistry(): void {
  * Generic JSON Schema validator using AJV with keywords support
  * Creates a fresh AJV instance for each validation to avoid conflicts
  */
-export function validateJsonSchema(data: any, schema: object): ValidationResult {
+export function validateJsonSchema(data: unknown, schema: object): ValidationResult {
     const ajv = createFreshAjvInstance();
-    
+
     const validate = ajv.compile(schema);
-    
+
     const isValid = validate(data);
-    
+
     if (isValid) {
         return { valid: true, errors: [] };
     }
 
     const errors: ValidationError[] = [];
-    
+
     if (validate.errors) {
-        validate.errors.forEach((error: any) => {
+        validate.errors.forEach((error: ErrorObject) => {
             const path = error.instancePath || error.schemaPath || 'root';
             const message = error.message || 'Unknown validation error';
-            
+
             errors.push({
                 message: `${error.keyword}: ${message}`,
                 path: path.replace(/^\//, ''), // Remove leading slash
@@ -119,18 +126,19 @@ export function validateJsonSchema(data: any, schema: object): ValidationResult 
  * Validates YAML data against a YAML schema
  * Parses both the YAML data and YAML schema first, then validates
  */
-export function validateYamlWithYamlSchema(yamlData: any, yamlSchema: string): ValidationResult {
+export function validateYamlWithYamlSchema(yamlData: string, yamlSchema: string): ValidationResult {
     try {
-        const schema = parseYaml(yamlSchema);
-        const data = parseYaml(yamlData);
+        const schema = parseYaml(yamlSchema) as object;
+        const data: unknown = parseYaml(yamlData);
         return validateJsonSchema(data, schema);
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = errorMessage(error);
         return {
             valid: false,
             errors: [{
-                message: `YAML parsing error: ${error.message}`,
+                message: `YAML parsing error: ${message}`,
                 path: 'schema',
-                value: error.message.includes('schema') ? yamlSchema : yamlData
+                value: message.includes('schema') ? yamlSchema : yamlData
             }]
         };
     }
@@ -140,15 +148,15 @@ export function validateYamlWithYamlSchema(yamlData: any, yamlSchema: string): V
  * Validates JSON data against a YAML schema
  * Parses the YAML schema first, then validates JSON data against it
  */
-export function validateJsonWithYamlSchema(data: any, yamlSchema: string): ValidationResult {
+export function validateJsonWithYamlSchema(data: unknown, yamlSchema: string): ValidationResult {
     try {
-        const schema = parseYaml(yamlSchema);
+        const schema = parseYaml(yamlSchema) as object;
         return validateJsonSchema(data, schema);
-    } catch (error: any) {
+    } catch (error: unknown) {
         return {
             valid: false,
             errors: [{
-                message: `YAML schema parsing error: ${error.message}`,
+                message: `YAML schema parsing error: ${errorMessage(error)}`,
                 path: 'schema',
                 value: yamlSchema
             }]
@@ -162,16 +170,17 @@ export function validateJsonWithYamlSchema(data: any, yamlSchema: string): Valid
  */
 export function validateJsonWithJsonSchema(jsonData: string, jsonSchema: string): ValidationResult {
     try {
-        const schema = JSON.parse(jsonSchema);
-        const data = JSON.parse(jsonData);
-        return validateJsonSchema(data, schema);
-    } catch (error: any) {
+        const schema: unknown = JSON.parse(jsonSchema);
+        const data: unknown = JSON.parse(jsonData);
+        return validateJsonSchema(data, schema as object);
+    } catch (error: unknown) {
+        const message = errorMessage(error);
         return {
             valid: false,
             errors: [{
-                message: `JSON parsing error: ${error.message}`,
+                message: `JSON parsing error: ${message}`,
                 path: 'schema',
-                value: error.message.includes('schema') ? jsonSchema : jsonData
+                value: message.includes('schema') ? jsonSchema : jsonData
             }]
         };
     }
@@ -183,16 +192,17 @@ export function validateJsonWithJsonSchema(jsonData: string, jsonSchema: string)
  */
 export function validateYamlWithJsonSchema(yamlData: string, jsonSchema: string): ValidationResult {
     try {
-        const schema = JSON.parse(jsonSchema);
-        const data = parseYaml(yamlData);
-        return validateJsonSchema(data, schema);
-    } catch (error: any) {
+        const schema: unknown = JSON.parse(jsonSchema);
+        const data: unknown = parseYaml(yamlData);
+        return validateJsonSchema(data, schema as object);
+    } catch (error: unknown) {
+        const message = errorMessage(error);
         return {
             valid: false,
             errors: [{
-                message: `Parsing error: ${error.message}`,
+                message: `Parsing error: ${message}`,
                 path: 'schema',
-                value: error.message.includes('JSON') ? jsonSchema : yamlData
+                value: message.includes('JSON') ? jsonSchema : yamlData
             }]
         };
     }
@@ -208,32 +218,33 @@ export function validateDataWithSchema(data: string | object, schema: string | o
         if (typeof data === 'object' && typeof schema === 'object') {
             return validateJsonSchema(data, schema);
         }
-        
+
         // Parse schema if it's a string
         let parsedSchema: object;
         if (typeof schema === 'string') {
-            parsedSchema = isJsonString(schema) ? JSON.parse(schema) : parseYaml(schema);
+            parsedSchema = (isJsonString(schema) ? JSON.parse(schema) : parseYaml(schema)) as object;
         } else {
             parsedSchema = schema;
         }
-        
-        // Parse data if it's a string  
-        let parsedData: any;
+
+        // Parse data if it's a string
+        let parsedData: unknown;
         if (typeof data === 'string') {
             parsedData = isJsonString(data) ? JSON.parse(data) : parseYaml(data);
         } else {
             parsedData = data;
         }
-        
+
         return validateJsonSchema(parsedData, parsedSchema);
-        
-    } catch (error: any) {
+
+    } catch (error: unknown) {
+        const message = errorMessage(error);
         return {
             valid: false,
             errors: [{
-                message: `Auto-parsing error: ${error.message}`,
+                message: `Auto-parsing error: ${message}`,
                 path: 'auto-detect',
-                value: error.message
+                value: message
             }]
         };
     }

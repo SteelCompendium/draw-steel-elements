@@ -4,6 +4,23 @@ import { ComponentWrapper } from "@model/ComponentWrapper";
 import { validateYamlWithYamlSchema, ValidationError } from "@utils/JsonSchemaValidator";
 import staminaBarSchemaYaml from "@model/schemas/StaminaBarSchema.yaml";
 
+/** Raw YAML shape after AJV validation against StaminaBarSchema.yaml (see parseYaml
+ *  below) — every field stays optional here and is still read with a truthy-check/
+ *  default (or passed straight through) below, same as the pre-existing `any`-typed
+ *  code. */
+interface RawStaminaBarData {
+	collapsible?: boolean;
+	collapse_default?: boolean;
+	max_stamina?: number;
+	current_stamina?: number;
+	temp_stamina?: number;
+	height?: number;
+	style?: string;
+	recoveries?: number;
+	recoveries_max?: number;
+	_dse_anchor?: string;
+}
+
 export class StaminaBar extends ComponentWrapper{
 	max_stamina: number;
 	current_stamina: number;
@@ -40,29 +57,30 @@ export class StaminaBar extends ComponentWrapper{
 			}
 
 			// Parse the YAML after validation
-			const data = parseYaml(source);
+			const data: unknown = parseYaml(source);
 			return StaminaBar.parse(data);
-		} catch (error: any) {
-			throw new Error("Invalid YAML format: " + error.message);
+		} catch (error: unknown) {
+			throw new Error("Invalid YAML format: " + (error instanceof Error ? error.message : String(error)));
 		}
 	}
 
-	public static parse(data: any): StaminaBar {
+	public static parse(data: unknown): StaminaBar {
+		const raw = data as RawStaminaBarData;
 		return new StaminaBar(
-            data.collapsible,
-            data.collapse_default,
-			data.max_stamina,
-			data.current_stamina ? data.current_stamina : 0,
-			data.temp_stamina ? data.temp_stamina : 0,
-			data.height ? data.height : 1,
-            data.style,
+            raw.collapsible as boolean,
+            raw.collapse_default as boolean,
+			raw.max_stamina as number,
+			raw.current_stamina ? raw.current_stamina : 0,
+			raw.temp_stamina ? raw.temp_stamina : 0,
+			raw.height ? raw.height : 1,
+            raw.style,
             // D7 Task 4: passed straight through, never coerced/defaulted — a block
             // that never declared these keys gets `undefined` on both, which is the
             // "no materialization" contract (see the field comments above).
-            data.recoveries,
-            data.recoveries_max,
+            raw.recoveries,
+            raw.recoveries_max,
             // FOLLOWUPS #26: same "passed straight through" convention.
-            data._dse_anchor);
+            raw._dse_anchor);
 	}
 
 	// TODO - should this be in Hero and CreatureInstance instead?  probably, but those are interfaces
