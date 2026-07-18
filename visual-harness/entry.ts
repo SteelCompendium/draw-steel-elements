@@ -40,6 +40,7 @@ import staminaBarDefault from '../src/elements/stamina-bar/example.yaml';
 import statblockDefault from '../src/elements/statblock/example.yaml';
 import valuesRowDefault from '../src/elements/values-row/example.yaml';
 import encounterDefault from '../src/elements/encounter/example.yaml';
+import montageDefault from '../src/elements/montage/example.yaml';
 // D6 Task 6 (plan 16, spec §2) — the first three displayFamily() instances. Task 7 adds
 // the remaining seven.
 import kitDefault from '../src/elements/display/kit/example.yaml';
@@ -71,6 +72,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	'horizontal-rule': { default: horizontalRuleDefault },
 	initiative: { default: initiativeDefault },
 	kit: { default: kitDefault },
+	montage: { default: montageDefault },
 	negotiation: { default: negotiationDefault },
 	perk: { default: perkDefault },
 	roll: { default: rollDefault },

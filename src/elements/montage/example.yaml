@@ -1,0 +1,13 @@
+title: Cross the Ashfall Wastes
+rounds: 2
+success_limit: 5
+failure_limit: 3
+successes: 0
+failures: 0
+participants:
+  - name: Kira
+    skills_used:
+      - Nature
+      - Endurance
+current_round: 1
+_dse_anchor: 4c19ff

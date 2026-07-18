@@ -22,5 +22,6 @@
 	"perk": "ds-perk",
 	"complication": "ds-complication",
 	"rule": "ds-rule",
-	"encounter": "ds-encounter"
+	"encounter": "ds-encounter",
+	"montage": "ds-montage"
 }

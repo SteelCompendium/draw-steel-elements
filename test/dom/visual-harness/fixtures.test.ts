@@ -18,7 +18,7 @@ describe('F4 visual-harness fixtures', () => {
 		}
 	});
 
-	test('FIXTURES covers every registered element (all 24)', () => {
+	test('FIXTURES covers every registered element (all 25)', () => {
 		const registered = registry
 			.all()
 			.map((d) => d.id)

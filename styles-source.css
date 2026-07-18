@@ -2158,6 +2158,147 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Montage Test tracker (D8 Task 6, spec §4): .dse-mt */
+/* ==================== */
+/* Negotiation-sibling head (cardHead + a canPersist-gated Reset iconButton/Menu, same
+   grammar as .dse-nt__head) over a round-track (successes/failures/round kit steppers +
+   a live outcome-band chip, [data-outcome] keying total/partial/failure to the shared
+   accent/vp/warn semantic tokens — same reuse-intent as encounter's difficulty band) and
+   a participants list (skill-used chips + a record-test row). Tokens only (D2 §5) — no
+   color literals. */
+[data-dse-element="montage"] .dse-mt {
+	padding: var(--dse-pad);
+
+	.dse-mt__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.5em;
+
+		/* the kit head grid (the row's first child) grows; the menu button hugs the
+		   right edge — same convention as negotiation's .dse-nt__head. */
+		> :first-child {
+			flex: 1 1 auto;
+		}
+
+		.dse-mt__menu {
+			flex: 0 0 auto;
+		}
+	}
+
+	.dse-mt__round-track {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 1.25em;
+		margin-top: 0.75em;
+		margin-bottom: 0.75em;
+	}
+
+	.dse-mt__tallies {
+		display: flex;
+		gap: 1.5em;
+	}
+
+	.dse-mt__tally,
+	.dse-mt__round {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.25em;
+	}
+
+	.dse-mt__tally-label {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-mt__tally-limit {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-mt__outcome {
+		margin-left: auto;
+		padding: 0.25em 0.75em;
+		border-radius: var(--dse-radius);
+		background: var(--dse-surface-raised);
+		font-weight: bold;
+	}
+
+	.dse-mt__outcome[data-outcome="total"] {
+		color: var(--dse-accent);
+	}
+
+	.dse-mt__outcome[data-outcome="partial"] {
+		color: var(--dse-vp);
+	}
+
+	.dse-mt__outcome[data-outcome="failure"] {
+		color: var(--dse-warn);
+	}
+
+	.dse-mt__participants {
+		margin-top: 1em;
+	}
+
+	.dse-mt__participants-header {
+		font-weight: bold;
+		margin-bottom: 0.5em;
+		color: var(--dse-heading);
+	}
+
+	.dse-mt__participant {
+		padding: 0.5em 0;
+		border-top: 1px solid var(--dse-border);
+	}
+
+	.dse-mt__participant-name {
+		font-weight: bold;
+		color: var(--dse-fg);
+	}
+
+	.dse-mt__skills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35em;
+		margin: 0.35em 0;
+	}
+
+	.dse-mt__skill-chip {
+		padding: 0.1em 0.5em;
+		border-radius: var(--dse-radius);
+		background: var(--dse-chip-bg);
+		color: var(--dse-fg-muted);
+		font-size: 0.85em;
+	}
+
+	.dse-mt__record {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5em;
+	}
+
+	.dse-mt__skill-input,
+	.dse-mt__char-input {
+		background: var(--dse-surface);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		color: var(--dse-fg);
+		padding: 0.25em 0.5em;
+	}
+
+	.dse-mt__skill-input {
+		flex: 1 1 8em;
+	}
+
+	.dse-mt__char-input {
+		width: 4em;
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */

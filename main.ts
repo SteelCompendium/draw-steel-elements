@@ -59,6 +59,7 @@ import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
 import { displayElements } from '@/elements/display';
 import { encounterElement } from '@/elements/encounter/definition';
+import { montageElement } from '@/elements/montage/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -268,6 +269,9 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// sidebar" hand-off (spec §2.4/OD-5, encounter/view.ts's setEncounterSidebarHandoff
 	// seam) is wired by Task 10 alongside the rest of the sidebar registration sweep.
 	registry.register(encounterElement);
+	// D8 Task 6 (spec §4) — Montage Test tracker: negotiation-sibling, no compendium dep,
+	// no hard gate (unlike encounter's F2 OD-1 + D6 dependency).
+	registry.register(montageElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {
