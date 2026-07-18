@@ -16,6 +16,8 @@
 import { parseYaml } from '../../mocks/obsidian';
 import { advanceRound, parse, serialize } from '../../../src/elements/initiative/model';
 import type { EncounterData } from '../../../src/elements/initiative/model';
+import { MALICE_LOG_MAX_ENTRIES, appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
+import type { Malice } from '@drawSteelAdmonition/EncounterData';
 
 const parseLikePipeline = (source: string): EncounterData => parse(parseYaml(source), source);
 
@@ -219,5 +221,54 @@ describe('T-9: advanceRound()', () => {
 			{ round: 1, amount: 3, label: 'Feytouched' },
 			{ round: 2, amount: 1, label: 'Round gain' },
 		]);
+	});
+});
+
+// D8 Task 10 (Task 5 review carry-forward: "malice.log unbounded (cap policy)"). A long
+// campaign's round-gain + quick-add events would otherwise grow this array (and the note's
+// byte size) forever — appendMaliceLogEntry is the ONLY sanctioned way to push onto
+// `malice.log` (both call sites: advanceRound's round-gain above, and the quick-add handler
+// in initiative/view.ts), and it trims from the FRONT (oldest-first drop) once the log
+// exceeds MALICE_LOG_MAX_ENTRIES.
+describe('T-10: malice.log cap (appendMaliceLogEntry)', () => {
+	test('does not trim while at or under the cap', () => {
+		const malice: Malice = { value: 0 };
+		for (let i = 0; i < MALICE_LOG_MAX_ENTRIES; i++) {
+			appendMaliceLogEntry(malice, { round: 1, amount: 1, label: `e${i}` });
+		}
+		expect(malice.log).toHaveLength(MALICE_LOG_MAX_ENTRIES);
+		expect(malice.log![0].label).toBe('e0');
+		expect(malice.log![MALICE_LOG_MAX_ENTRIES - 1].label).toBe(`e${MALICE_LOG_MAX_ENTRIES - 1}`);
+	});
+
+	test('trims the OLDEST entries once the cap is exceeded, keeping the newest', () => {
+		const malice: Malice = { value: 0 };
+		const total = MALICE_LOG_MAX_ENTRIES + 5;
+		for (let i = 0; i < total; i++) {
+			appendMaliceLogEntry(malice, { round: 1, amount: 1, label: `e${i}` });
+		}
+		expect(malice.log).toHaveLength(MALICE_LOG_MAX_ENTRIES);
+		// The 5 oldest (e0..e4) are gone; the log starts at e5 and ends at the last pushed.
+		expect(malice.log![0].label).toBe('e5');
+		expect(malice.log![MALICE_LOG_MAX_ENTRIES - 1].label).toBe(`e${total - 1}`);
+	});
+
+	test('materializes an absent log on first use', () => {
+		const malice: Malice = { value: 0 };
+		expect(malice.log).toBeUndefined();
+		appendMaliceLogEntry(malice, { round: 1, amount: 1, label: 'first' });
+		expect(malice.log).toEqual([{ round: 1, amount: 1, label: 'first' }]);
+	});
+
+	test('advanceRound repeated past the cap trims oldest round-gain entries too', () => {
+		let model = parseLikePipeline(
+			['heroes: []', 'enemy_groups: []', 'malice:', '  value: 0', '  round_gain: 1'].join('\n'),
+		);
+		for (let i = 0; i < MALICE_LOG_MAX_ENTRIES + 3; i++) {
+			advanceRound(model);
+		}
+		expect(model.malice.log).toHaveLength(MALICE_LOG_MAX_ENTRIES);
+		// Oldest surviving entry is the 4th round-gain logged (rounds 1..3 trimmed away).
+		expect(model.malice.log![0].round).toBe(5);
 	});
 });

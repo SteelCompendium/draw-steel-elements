@@ -64,6 +64,7 @@ import { ResetEncounterModal } from '@views/ResetEncounterModal';
 import { AddConditionsModal } from '@views/ConditionSelectModal';
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
 import { applyConditionColor, applyConditionEffect } from '../conditionColor';
+import { appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import {
 	Condition,
 	Creature,
@@ -346,8 +347,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 						const label = labelInput.value.trim();
 						if (!Number.isFinite(amount) || amount === 0 || label.length === 0) return;
 						data.malice.value = Math.max(0, data.malice.value + amount);
-						data.malice.log = data.malice.log ?? [];
-						data.malice.log.push({ round: data.round ?? 1, amount, label });
+						appendMaliceLogEntry(data.malice, { round: data.round ?? 1, amount, label });
 						amountInput.value = '';
 						labelInput.value = '';
 						void this.rebuildAndPersist();

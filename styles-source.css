@@ -3716,3 +3716,99 @@ button.dse-pr__row:hover {
 	-webkit-print-color-adjust: exact;
 	print-color-adjust: exact;
 }
+
+/* ================================================================== */
+/*   Sidebar-width layout adaptations (D8 Task 10)                    */
+/* ================================================================== */
+/*
+   D8 Task 3's visual investigation (task-3 note, carried in progress.md) found
+   the initiative tracker's .dse-init grammar above assumes a normal note-width
+   column (>= ~400px): mounted in the DseSidebarView leaf (.dse-sidebar, ~300px
+   CSS px — Obsidian's default right-sidebar width, spike-verified by the
+   obsidian-camera sidebar shot), the SAME markup collapses — the 60px portrait
+   crowds the info column down to nothing, the per-turn action checklist has no
+   room to wrap two-per-line, the enemies header squeezes the heading against
+   the Malice panel, and the round/quick-add controls overflow past the leaf
+   edge instead of wrapping. A `@media (max-width: 599px)` rule (see the
+   creature-grid tweak above) does NOT help here — that queries the whole
+   Obsidian WINDOW, which stays wide even when a side leaf is narrow; only a
+   DOM-scoped selector reaches "this element is mounted in the sidebar."
+
+   These .dse-sidebar-scoped overrides are a deliberate narrow layout, not a
+   patch: portraits are dropped (matches the existing [data-dse-portraits="off"]
+   precedent — there is no room for a 60px image at this width), each character
+   row stacks its info column above its stamina control instead of forcing a
+   doomed single line, and every control row that used to assume one line now
+   wraps. Scoped by the SAME [data-dse-element="initiative"] .dse-init ancestor
+   as the base grammar above, so any tracker sharing that root inherits this for
+   free automatically.
+*/
+.dse-sidebar [data-dse-element="initiative"] .dse-init {
+
+	.dse-init__portrait {
+		display: none;
+	}
+
+	/* Row: was [portrait | info | right] in one line; now info takes the full
+	   width on its own line and stamina right-aligns on the line below it. */
+	.dse-init__row {
+		flex-wrap: wrap;
+		row-gap: 4px;
+	}
+
+	.dse-init__info {
+		flex-basis: 100%;
+	}
+
+	.dse-init__right {
+		flex-basis: 100%;
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	/* Denser chips so two fit per line at this width more often. */
+	.dse-init__actions {
+		font-size: 0.7em;
+	}
+
+	/* Was a single space-between row (heading vs. Malice panel) that squeezed
+	   both down to their min-content width and overlapped; stack instead. */
+	.dse-init__enemies-head {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 6px;
+	}
+
+	.dse-init__malice-panel {
+		max-width: 100%;
+		align-items: flex-start;
+	}
+
+	.dse-init__malice-log,
+	.dse-init__round,
+	.dse-init__malice-quickadd {
+		text-align: left;
+	}
+
+	/* Reset/Advance round buttons and the quick-add inputs were clipped at the
+	   leaf edge (no wrap, fixed input widths) — let them wrap and shrink. */
+	.dse-init__round,
+	.dse-init__malice-quickadd {
+		flex-wrap: wrap;
+	}
+
+	.dse-init__malice-quickadd-amount,
+	.dse-init__malice-quickadd-label {
+		width: auto;
+		flex: 1 1 60px;
+		min-width: 0;
+	}
+
+	.dse-init__grid {
+		grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+	}
+
+	.dse-init__cell {
+		min-width: 60px;
+	}
+}

@@ -44,6 +44,7 @@
 // unchanged legacy parseEncounterData on ref-free inputs.
 import { stringifyYaml } from 'obsidian';
 import type { Condition, EncounterData } from '@drawSteelAdmonition/EncounterData';
+import { appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 
 export type {
 	ActorActions,
@@ -321,8 +322,7 @@ export function advanceRound(data: EncounterData): void {
 	const gain = data.malice.round_gain;
 	if (typeof gain === 'number' && gain !== 0) {
 		data.malice.value += gain;
-		data.malice.log = data.malice.log ?? [];
-		data.malice.log.push({ round: data.round, amount: gain, label: 'Round gain' });
+		appendMaliceLogEntry(data.malice, { round: data.round, amount: gain, label: 'Round gain' });
 	}
 }
 

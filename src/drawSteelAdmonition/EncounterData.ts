@@ -80,8 +80,31 @@ export interface Malice {
      *  fabricated (reference-math honesty note, D8 spec header). */
     round_gain?: number;
     /** Spend/gain log ({round, amount, label}), oldest-first. Absent/empty until the
-     *  first quick-add or malice-feature spend (D8 spec §3.1/§3.2). */
+     *  first quick-add or malice-feature spend (D8 spec §3.1/§3.2). Capped at
+     *  `MALICE_LOG_MAX_ENTRIES` — see `appendMaliceLogEntry`, the ONLY sanctioned way to
+     *  push onto this array (D8 Task 5 review carry-forward: an unbounded log grows the
+     *  note forever across a long campaign). */
     log?: MaliceLogEntry[];
+}
+
+/** D8 Task 10 (Task 5 review carry-forward, "malice.log unbounded (cap policy)"): the
+ *  most recent `MALICE_LOG_MAX_ENTRIES` entries are kept, oldest-first — a long-running
+ *  campaign's round-gain + quick-add events would otherwise grow this array (and the
+ *  note's byte size) forever. 50 is a generous multi-session buffer (the log is a
+ *  "where did Malice go" readout, not an audit trail) with no reference-math basis to
+ *  fabricate a different number from — a plain configurable constant, not a spec value. */
+export const MALICE_LOG_MAX_ENTRIES = 50;
+
+/** The ONLY sanctioned way to add a `MaliceLogEntry` (advanceRound's round-gain log and
+ *  the quick-add handler both call this instead of pushing directly): materializes `log`
+ *  on first use, appends, then trims from the front so the array never exceeds
+ *  `MALICE_LOG_MAX_ENTRIES` (oldest entries drop first — newest/most-relevant survive). */
+export function appendMaliceLogEntry(malice: Malice, entry: MaliceLogEntry): void {
+    const log = malice.log ?? (malice.log = []);
+    log.push(entry);
+    if (log.length > MALICE_LOG_MAX_ENTRIES) {
+        log.splice(0, log.length - MALICE_LOG_MAX_ENTRIES);
+    }
 }
 
 export interface Condition {

@@ -59,6 +59,7 @@ import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
 import { displayElements } from '@/elements/display';
 import { encounterElement } from '@/elements/encounter/definition';
+import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { montageElement } from '@/elements/montage/definition';
 import { projectElement } from '@/elements/project/definition';
 import { partyElement } from '@/elements/party/definition';
@@ -401,6 +402,17 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         };
         registerDseSidebar(this, dseSidebarServices);
 
+        // D8 Task 10 (spec §2.4/OD-5) — wires the encounter builder's "Open in sidebar"
+        // hand-off (encounter/view.ts's setEncounterSidebarHandoff seam, left null by
+        // Task 4 so the button degrades to a Notice instead of a silent no-op before this
+        // wiring existed) to the SAME sendToSidebar/dseSidebarServices bundle every other
+        // sidebar entry point uses — one production wiring, not a second bespoke path.
+        // Cleared in onunload (below) so a stale plugin-instance closure can never survive
+        // a reload/disable and fire against a torn-down services bundle.
+        setEncounterSidebarHandoff((filePath, alias, cursorLine) =>
+            sendToSidebar(dseSidebarServices, filePath, alias, cursorLine),
+        );
+
         // D8 Task 3 (spec §1's canonical use) — a thin, initiative-specific "send to
         // sidebar" affordance proving sendToSidebar(services, path, alias) end to end
         // through production wiring: the generic "Send block to sidebar" command
@@ -509,6 +521,14 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         this.prefsStorage?.flush();
         this.prefsStorage = undefined;
         this.frameworkV2 = undefined;
+
+        // D8 Task 10 (Task 4 review carry-forward): drop the encounter hand-off closure
+        // over this instance's dseSidebarServices — a stale plugin instance (reload/
+        // disable/re-enable) must never fire against a torn-down services bundle. Encounter
+        // views that outlive this unload (unlikely — the framework's own unload sweeps
+        // them) degrade back to Task 4's "not wired in this build" Notice, same as before
+        // Task 10 wired this at all.
+        setEncounterSidebarHandoff(null);
 
         console.log("Draw Steel Elements Plugin unloaded and schema registry reset");
     }
