@@ -1,9 +1,9 @@
 type: statblock
 name: Human Bandit Chief
 level: 3
-roles:
-  - Leader
-ancestry:
+role: ""
+organization: Leader
+keywords:
   - Human
   - Humanoid
 ev: "20"
