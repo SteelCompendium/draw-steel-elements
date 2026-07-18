@@ -23,6 +23,7 @@ import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
+import { ANCHOR_KEY } from './sidebar/anchor';
 
 /** The four failure stages renderErrorCard can report (F1 §3.8). */
 export type ErrorStage = 'parse' | 'schema' | 'reference' | 'render';
@@ -85,6 +86,35 @@ async function runStageAsync<T>(stage: ErrorStage, fn: () => Promise<T>): Promis
 	} catch (cause) {
 		throw cause instanceof ElementStageError ? cause : new ElementStageError(stage, cause);
 	}
+}
+
+/**
+ * D7 Task 10 (plan-18, spec §5) found bug: `sendToSidebar` stamps a `_dse_anchor: <id>`
+ * line directly into a block's raw YAML body (`sidebar/anchor.ts`), entirely independent
+ * of any element's own schema. Every schema'd persisted element built so far
+ * (hero/resource/tokens/roll/surges/conditions) declares `additionalProperties: false` at
+ * the document root (F1 §5's own convention) — which would hard-fail AJV validation the
+ * FIRST time such an element is ever sent to the sidebar (`ds-hero` is that first time;
+ * the elements already proven in the sidebar — initiative/encounter/montage/project/party
+ * — have NO schema at all, so none of them ever hit this). This is a framework-level gap,
+ * not a per-element one: any future schema'd element would hit it identically the day
+ * it's first sidebar-mounted.
+ *
+ * The fix excludes `_dse_anchor` from what SCHEMA VALIDATION sees only — a shallow clone,
+ * never mutating `rawData` itself (unlike `extractPrefOverrides`, which permanently pops
+ * `prefs:` before BOTH validation and `def.parse`). `def.parse` still receives the
+ * unmodified `rawData` AND the untouched raw `source` text, so an element whose `parse()`
+ * passes `_dse_anchor` through as an ordinary field (e.g. initiative's passthrough parse)
+ * keeps working exactly as before, and `ds-hero`'s own raw-TEXT `defnRaw` splice
+ * (`elements/hero/model.ts`) never looks at the parsed `data` object for the anchor at
+ * all — only the schema gate was too narrow.
+ */
+function dataForSchemaValidation(rawData: unknown): unknown {
+	if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return rawData;
+	const record = rawData as Record<string, unknown>;
+	if (!Object.prototype.hasOwnProperty.call(record, ANCHOR_KEY)) return rawData;
+	const { [ANCHOR_KEY]: _omitted, ...rest } = record;
+	return rest;
 }
 
 function isValidationResult(error: unknown): error is ValidationResult {
@@ -221,7 +251,10 @@ export async function prepareModel<M>(
 	// caller's own catch instead of an inline return).
 	if (def.schema) {
 		const schema = def.schema;
-		const result = runStage('schema', () => validation.validate(def.id, schema, rawData ?? null));
+		// D7 Task 10 found bug (dataForSchemaValidation's own doc) — validate a clone with
+		// the sidebar's `_dse_anchor` key excluded, never `rawData` itself.
+		const forValidation = dataForSchemaValidation(rawData);
+		const result = runStage('schema', () => validation.validate(def.id, schema, forValidation ?? null));
 		if (!result.valid) throw result;
 	}
 

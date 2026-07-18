@@ -5,14 +5,17 @@
 // clip-screenshots the rendered [data-dse-element] once per combo of
 //   plugin theme (legacy|steel — frameworkV2.services.theme.setActive, the DSE skin)
 // × chrome bg  (dark|light  — app.changeTheme, Obsidian's own moonstone/obsidian theme)
-// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (23 × 2 × 2 = 92 shots, as
-// of D6's 11 new displayFamily()/genericCard() elements) — plus TWO more ground-truth
+// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (elements.length × 2 × 2
+// shots — see aliases.json for the current element count) — plus THREE more ground-truth
 // captures: (D6 Task 11) a by-SCC `ds-kit` reference card rendering its REAL nested
-// `ds-feature` card through Obsidian's own markdown pipeline (see "step 3b" below), and
-// (D8 Task 3) the initiative tracker mounted as a real SIDEBAR leaf via the plugin's
-// "Send initiative tracker to sidebar" command (see "step 3c" below) — 94 shots total.
-// These are two INDEPENDENT axes: the plugin theme re-stamps data-dse-theme on element
-// roots; the chrome theme flips body.theme-dark/light. Both are awaited before each shot.
+// `ds-feature` card through Obsidian's own markdown pipeline (see "step 3b" below), (D8
+// Task 3) the initiative tracker mounted as a real SIDEBAR leaf via the plugin's "Send
+// initiative tracker to sidebar" command (see "step 3c" below), and (D7 Task 10, plan-18
+// spec §5) the hero sheet mounted as a real SIDEBAR leaf via the GENERIC "Send block to
+// sidebar" command (see "step 3d" below — deliberately not a hero-specific command; spec
+// §5's "sidebar opt-in is universal"). These are two INDEPENDENT axes: the plugin theme
+// re-stamps data-dse-theme on element roots; the chrome theme flips
+// body.theme-dark/light. Both are awaited before each shot.
 //
 // WHY RAW CDP (not Playwright): playwright's chromium.connectOverCDP() fails against
 // Obsidian's Electron with "Browser.setDownloadBehavior: Browser context management is
@@ -81,9 +84,18 @@ const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'kit' };
 // proves the sidebar leaf itself is capturable, not a full theme×bg sweep).
 const SIDEBAR_SPECIAL_ID = 'sidebar-initiative';
 
+// D7 Task 10 (plan-18, spec §5) — the hero-in-sidebar ground-truth capture (see "step 3d"
+// below). Same convention as SIDEBAR_SPECIAL_ID above, but drives the GENERIC "Send block
+// to sidebar" command (registerDseSidebar, main.ts) instead of a dedicated per-element
+// command — ds-hero has none, deliberately: spec §5's "sidebar opt-in is universal ...
+// no new production plumbing," so this capture proves the SAME affordance every other
+// ds-* block gets, not a hero-specific one.
+const HERO_SIDEBAR_SPECIAL_ID = 'sidebar-hero';
+
 let elements = Object.keys(aliases).sort();
 let onlySpecial = false;
 let onlySidebarSpecial = false;
+let onlyHeroSidebarSpecial = false;
 if (args.element) {
 	if (args.element === SPECIAL_NOTE.id) {
 		elements = [];
@@ -91,6 +103,9 @@ if (args.element) {
 	} else if (args.element === SIDEBAR_SPECIAL_ID) {
 		elements = [];
 		onlySidebarSpecial = true;
+	} else if (args.element === HERO_SIDEBAR_SPECIAL_ID) {
+		elements = [];
+		onlyHeroSidebarSpecial = true;
 	} else if (!elements.includes(args.element)) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -100,6 +115,7 @@ if (args.element) {
 }
 const runSpecial = !args.element || onlySpecial;
 const runSidebarSpecial = !args.element || onlySidebarSpecial;
+const runHeroSidebarSpecial = !args.element || onlyHeroSidebarSpecial;
 let themes = THEMES;
 if (args.theme) {
 	if (!THEMES.includes(args.theme)) {
@@ -141,6 +157,15 @@ if (runSidebarSpecial) {
 	// 'initiative') — only needs an explicit check here because --element=sidebar-initiative
 	// alone leaves `elements` empty.
 	const note = path.join(vaultPath, 'Harness', 'initiative.md');
+	if (!fs.existsSync(note)) {
+		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
+	}
+}
+if (runHeroSidebarSpecial) {
+	// Reuses Harness/hero.md (already required above when the full sweep includes
+	// 'hero') — only needs an explicit check here because --element=sidebar-hero alone
+	// leaves `elements` empty.
+	const note = path.join(vaultPath, 'Harness', 'hero.md');
 	if (!fs.existsSync(note)) {
 		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
 	}
@@ -729,6 +754,124 @@ async function main() {
 			}
 		}
 
+		// -- step 3d: D7 Task 10 (plan-18, spec §5) hero-in-sidebar ground-truth capture ---
+		// Investigated per the Task 10 brief: same question step 3c already answered for
+		// initiative ("can the camera drive a SIDEBAR leaf"), but exercised through the
+		// GENERIC "Send block to sidebar" command (registration.ts's `send-block-to-sidebar`,
+		// an `editorCheckCallback` keyed off the cursor's position inside a `ds-*` fence —
+		// `aliasAtLine`) instead of a dedicated per-element command, because `ds-hero` has
+		// none (spec §5: "sidebar opt-in is universal ... no new production plumbing" — this
+		// capture proves the SAME affordance every other block gets, not a hero-specific
+		// one). The only NEW wrinkle vs step 3c: the generic command requires the cursor to
+		// actually sit inside the fence, so it's set explicitly (via the live editor, scanned
+		// for the fence line rather than hardcoded — Harness/hero.md's body is generated from
+		// src/elements/hero/example.yaml and can grow/shrink lines independently of this
+		// file). Feasible (spike-verified): the source-mode open + editor.setCursor +
+		// executeCommandById('draw-steel-elements:send-block-to-sidebar') sequence mounts the
+		// SAME `.dse-sidebar__panel [data-dse-element="hero"]` step 3c proves for initiative,
+		// and the leaf's own bounding rect is just as stable a clip region. ONE shot
+		// (steel/dark only, same ground-truth-existence scope as step 3b/3c), gated the same
+		// way (`--element=sidebar-hero`, runs by default alongside the full sweep).
+		if (runHeroSidebarSpecial) {
+			const outName = 'hero--obsidian-sidebar-steel-dark';
+			const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="hero"]')`;
+			let emulated = false;
+			try {
+				await evaluate(
+					cdp,
+					`(async () => {
+						await window.app.workspace.openLinkText('Harness/hero', '', false);
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						await leaf.setViewState({
+							type: 'markdown',
+							state: { file: 'Harness/hero.md', mode: 'source' },
+							active: true,
+						});
+					})()`,
+				);
+				await waitFor(
+					cdp,
+					`window.app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Harness/hero.md'`,
+					{ what: 'Harness/hero.md open (source mode, for the editor command)' },
+				);
+
+				const exec = await evaluate(
+					cdp,
+					`(() => {
+						try {
+							const editor = window.app.workspace.getMostRecentLeaf().view.editor;
+							const fence = String.fromCharCode(96, 96, 96) + 'ds-hero';
+							const lines = editor.getValue().split('\\n');
+							const fenceLine = lines.findIndex((l) => l.trim() === fence);
+							if (fenceLine === -1) {
+								return { ok: false, error: 'no ds-hero fence found in Harness/hero.md' };
+							}
+							// One line INSIDE the fence (aliasAtLine's scan is exclusive of the
+							// cursor's own line — registration.ts) — the fence-open line's next
+							// line is always the block's first body line.
+							editor.setCursor({ line: fenceLine + 1, ch: 0 });
+							return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar') };
+						} catch (e) {
+							return { ok: false, error: String(e) };
+						}
+					})()`,
+				);
+				if (!exec.ok) {
+					throw new Error(
+						`send-block-to-sidebar did not run: ${exec.error ?? '(returned false — cursor not inside a ds-* fence?)'}`,
+					);
+				}
+
+				await waitFor(cdp, `!!${elSel}`, { what: 'sidebar panel mounted [data-dse-element="hero"]' });
+				await sleep(500); // settle: late layout, same as step 3c
+
+				await setPluginTheme(elSel, 'steel');
+				await setChromeBg('dark');
+				await sleep(300);
+				await clearNotices();
+
+				// Clip to the LEAF, not the element root — same rationale as step 3c: the
+				// ground truth is "this mounts as a real sidebar leaf," not just "this
+				// element renders."
+				const rectExpr = `(() => {
+					const leafEl = ${elSel}.closest('.workspace-leaf');
+					const r = leafEl.getBoundingClientRect();
+					return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+				})()`;
+				let rect = await evaluate(cdp, rectExpr);
+				if (rect.y + rect.height > rect.vh) {
+					await cdp.call('Emulation.setDeviceMetricsOverride', {
+						width: rect.vw,
+						height: Math.ceil(rect.y + rect.height + 100),
+						deviceScaleFactor: 0,
+						mobile: false,
+					});
+					emulated = true;
+					await sleep(500);
+					await clearNotices();
+					rect = await evaluate(cdp, rectExpr);
+				}
+				const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+				const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+				console.log(
+					`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''}) — sidebar leaf confirmed`,
+				);
+			} catch (e) {
+				failures.push({ outName, errors: [String(e)] });
+				await errorShot(outName);
+				console.log(`FAIL ${outName}: ${String(e)}`);
+			} finally {
+				if (emulated) {
+					try {
+						await cdp.call('Emulation.clearDeviceMetricsOverride');
+						await sleep(300);
+					} catch {
+						/* socket may already be down; killChild still runs */
+					}
+				}
+			}
+		}
+
 		// -- step 4: restore persisted defaults, then quit cleanly --------------------------
 		// The plugin theme pref (data.json, git-ignored) and the vault's appearance.json
 		// (tracked) both persist whatever the sweep last set — put them back to the
@@ -761,7 +904,11 @@ async function main() {
 		for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
 		process.exit(1);
 	}
-	const total = elements.length * combos.length + (runSpecial ? 1 : 0) + (runSidebarSpecial ? 1 : 0);
+	const total =
+		elements.length * combos.length +
+		(runSpecial ? 1 : 0) +
+		(runSidebarSpecial ? 1 : 0) +
+		(runHeroSidebarSpecial ? 1 : 0);
 	console.log(`\nall ${total} shots written to ${shotsDir}`);
 }
 

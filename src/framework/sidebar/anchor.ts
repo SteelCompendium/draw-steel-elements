@@ -9,7 +9,11 @@
 // alongside it.
 import type { BlockInfo } from '../host/BlockHost';
 
-const ANCHOR_KEY = '_dse_anchor';
+/** Exported so `framework/pipeline.ts`'s `prepareModel` can exclude this exact key from
+ *  what SCHEMA VALIDATION sees (D7 Task 10 finding — see that file's own doc for the
+ *  full rationale: an `additionalProperties: false` element schema has no way to "know"
+ *  about this sidebar-only key, so the two files must never drift on its spelling). */
+export const ANCHOR_KEY = '_dse_anchor';
 const ANCHOR_LINE = new RegExp(`^${ANCHOR_KEY}:\\s*['"]?([A-Za-z0-9_-]+)['"]?\\s*$`, 'm');
 
 /** A fence-marker line: 3+ backticks/tildes (captured), then the rest of the line — the
