@@ -24,5 +24,6 @@
 	"rule": "ds-rule",
 	"encounter": "ds-encounter",
 	"montage": "ds-montage",
-	"project": "ds-project"
+	"project": "ds-project",
+	"party": "ds-party"
 }

@@ -2421,6 +2421,106 @@ Shared globals
 	}
 }
 
+/* ==================== */
+/* Party tracker (D8 Task 8, spec §6): .dse-party */
+/* ==================== */
+/* cardHead ("Party") over a member list — each row: name/deck/optional hero_ref link,
+   then Victories/XP/Renown/Wealth steppers (kit stepper) with derived follower-threshold
+   (Renown) and echelon/wealth-bound (Wealth) hint text — plus a canPersist-gated
+   party-wide action bar (award victories, convert-to-XP, hero_tokens pool). Tokens only —
+   no color literals. */
+[data-dse-element="party"] .dse-party {
+	padding: var(--dse-pad);
+
+	.dse-party__members {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75em;
+		margin-top: 0.5em;
+	}
+
+	.dse-party__member {
+		padding: 0.5em 0.75em;
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		background: var(--dse-surface-raised);
+	}
+
+	.dse-party__member-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.5em;
+	}
+
+	.dse-party__member-name {
+		font-weight: bold;
+		color: var(--dse-heading);
+	}
+
+	.dse-party__member-deck,
+	.dse-party__member-ref {
+		font-size: 0.85em;
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-party__stats {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 1em;
+		margin-top: 0.5em;
+	}
+
+	.dse-party__stat {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15em;
+	}
+
+	.dse-party__stat-label {
+		font-size: 0.8em;
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-party__hint {
+		font-size: 0.8em;
+		color: var(--dse-fg-faint);
+		align-self: flex-end;
+	}
+
+	.dse-party__actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 1em;
+		margin-top: 1em;
+		padding-top: 0.75em;
+		border-top: 1px solid var(--dse-border);
+	}
+
+	.dse-party__award-form {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+	}
+
+	.dse-party__award-input {
+		background: var(--dse-surface);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		color: var(--dse-fg);
+		padding: 0.25em 0.5em;
+		width: 4em;
+	}
+
+	.dse-party__tokens {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15em;
+	}
+}
+
 /* ================================================================== */
 /*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
 /* ================================================================== */

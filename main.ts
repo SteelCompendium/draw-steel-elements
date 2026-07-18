@@ -61,6 +61,7 @@ import { displayElements } from '@/elements/display';
 import { encounterElement } from '@/elements/encounter/definition';
 import { montageElement } from '@/elements/montage/definition';
 import { projectElement } from '@/elements/project/definition';
+import { partyElement } from '@/elements/party/definition';
 import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
@@ -277,6 +278,10 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	// dep (goal_code resolves live via CompendiumIndex.getEntity when wired; inline
 	// fallback otherwise) — no hard gate, unlike encounter's F2 OD-1 + D6 dependency.
 	registry.register(projectElement);
+	// D8 Task 8 (spec §6) — Party tracker: self-contained, no compendium dep. The hub
+	// other subsystems read from (encounter's hero_count/hero_level, initiative's
+	// heroes[] seed, victory payouts from encounter/montage) — no hard gate.
+	registry.register(partyElement);
 }
 
 export default class DrawSteelAdmonitionPlugin extends Plugin {

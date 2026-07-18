@@ -1,0 +1,20 @@
+members:
+  - name: Kira
+    level: 3
+    class: Shadow
+    ancestry: Wode Elf
+    victories: 1
+    xp: 24
+    renown: 3
+    wealth: 1
+    hero_ref: "[[Kira]]"
+  - name: Doran
+    level: 3
+    class: Tactician
+    ancestry: Human
+    victories: 1
+    renown: 2
+    wealth: 1
+party:
+  hero_tokens: 2
+_dse_anchor: a01b22
