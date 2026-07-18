@@ -224,6 +224,9 @@ describe('D8 T-5: Malice panel — round counter + "Advance round" (spec §7.2/�
 			bytesAfter(withGainSource, (m) => {
 				m.round = 2;
 				m.malice.value = 8;
+				// D8 Task 9: advanceRound() now logs an automatic round_gain the same way
+				// the quick-add logs a manual one (spec §3.1/§7.2), at the NEW round number.
+				m.malice.log = [{ round: 2, amount: 3, label: 'Round gain' }];
 			}),
 		);
 	});
@@ -245,6 +248,10 @@ describe('D8 T-5: Malice panel — round counter + "Advance round" (spec §7.2/�
 			bytesAfter(withGainSource, (m) => {
 				m.round = 3;
 				m.malice.value = 11;
+				m.malice.log = [
+					{ round: 2, amount: 3, label: 'Round gain' },
+					{ round: 3, amount: 3, label: 'Round gain' },
+				];
 			}),
 		);
 	});

@@ -2,6 +2,18 @@ import {App, parseYaml} from "obsidian";
 import {DSESettings} from "@model/Settings";
 import {ReferenceResolver} from "@utils/ReferenceResolver";
 
+/** Per-turn action checklist (D8 spec §7.2/§7.3, additive). "Triggered" is per ROUND
+ *  (spec §7.1 — one triggered action per round, AGENT line 780), so it resets on round
+ *  advance, not on turn end like the other three. ABSENT on a Hero/CreatureInstance means
+ *  "nothing tracked yet" — the view reads `?? false` per slot and materializes this object
+ *  onto the actor only on the first user toggle (never during parse). */
+export interface ActorActions {
+    main: boolean;
+    maneuver: boolean;
+    move: boolean;
+    triggered: boolean;
+}
+
 export interface Hero {
     name: string;
     max_stamina: number;
@@ -10,6 +22,9 @@ export interface Hero {
     image?: string;
     isHero: boolean;
     has_taken_turn?: boolean;
+    /** Per-turn action checklist (D8 spec §7.2, additive). ABSENT → all-false render-time
+     *  default; never fabricated during parse. */
+    actions?: ActorActions;
     conditions: (string | Condition)[];
     statblock?: any; // To allow property fallback
 }
@@ -20,6 +35,10 @@ export interface CreatureInstance {
     temp_stamina?: number;
     conditions?: (string | Condition)[];
     isDead?: boolean;
+    /** Per-turn action checklist (D8 spec §7.2/§7.3, additive) — same contract as
+     *  Hero.actions. Tracked per INSTANCE (not per creature type), matching the schema's
+     *  `enemy_groups[].creatures[].instances[]` placement. */
+    actions?: ActorActions;
 }
 
 export interface Creature {
@@ -77,7 +96,10 @@ export interface EncounterData {
     // REVIEW: should we make this into a number since Malice is only {value: number}?
     malice: Malice;
     /** Encounter round counter (D8 spec §7.3, additive). ABSENT → treated as round 1;
-     *  advanced only via InitiativeView's shared advanceRound() control. */
+     *  advanced only via the initiative model's exported `advanceRound()` helper (Task 9,
+     *  spec §7.2), which is the ONE control shared by the round display, the Malice panel's
+     *  auto-gain, and per-actor `actions` reset — "Reset Round" was folded into it (a
+     *  separate turn-only reset diverged the round counter from has_taken_turn). */
     round?: number;
 }
 
@@ -86,6 +108,7 @@ export function resetEncounter(data: EncounterData) {
         hero.current_stamina = undefined;
         hero.temp_stamina = undefined;
         hero.has_taken_turn = undefined;
+        hero.actions = undefined;
         hero.conditions = Array<Condition | string>();
     });
     data.enemy_groups.forEach((group) => {
@@ -95,6 +118,9 @@ export function resetEncounter(data: EncounterData) {
             group.minion_stamina_pool = undefined;
         }
         group.creatures.forEach((creatureType) => {
+            // Instances (and any per-instance `actions` they carried, D8 spec §7.3) are
+            // dropped wholesale here — parse() rebuilds them fresh, unmaterialized, exactly
+            // like a brand-new encounter.
             creatureType.instances = undefined;
         });
     });

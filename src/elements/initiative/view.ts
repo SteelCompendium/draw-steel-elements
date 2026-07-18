@@ -18,6 +18,12 @@
 //  - condition icons -> .dse-cond kit iconButtons riding the T8 validated helpers
 //    (applyConditionColor — CSS.supports-gated --dse-condition-color custom property,
 //    never el.style.color — and applyConditionEffect's known-vocabulary classes).
+//  - D8 Task 9 (spec §7.2): each hero row / enemy detail row gains a per-turn action
+//    checklist -> four kit iconButton toggles ([Main][Maneuver][Move][Triggered]) bound to
+//    `actor.actions.<slot>`, materialized on the actor only on first toggle (additive-
+//    optional). The round display + "Advance round" (spec §7.2/§3.1) live in the Malice
+//    panel (Task 5) and now also drive this checklist's reset via `advanceRound()` in
+//    `./model` — "Reset Round" was folded into it (Task 5 review's overlap note).
 // The portraits preference (D4 owns the descriptor) arrives on the element root as
 // data-dse-portraits via the pipeline's prefs.reflect(); the stylesheet hides
 // .dse-init__portrait/.dse-init__cell-portrait when it is "off" — nothing to wire here.
@@ -63,9 +69,10 @@ import {
 	EncounterData,
 	EnemyGroup,
 	Hero,
+	advanceRound as advanceRoundModel,
 	resetEncounter,
 } from './model';
-import type { MaliceLogEntry } from './model';
+import type { ActorActions, MaliceLogEntry } from './model';
 
 export class InitiativeView extends ElementView<EncounterData> {
 	/** Same construction site as the legacy processor's constructor (:31). */
@@ -126,27 +133,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 	}
 
-	/** "Advance round" (D8 spec §7.2/§3.1) — the ONE control shared by the round display
-	 *  and the Malice panel, so the two surfaces can't diverge. Increments `round`
-	 *  (absent → treated as 1, so the first press produces 2), clears `has_taken_turn`
-	 *  exactly like "Reset Round", and applies the Malice per-round gain when the GM has
-	 *  configured one (`malice.round_gain` — absent/0 means no auto-gain, manual-only,
-	 *  OD-3: never a fabricated default). Scope note: the per-actor action checklist
-	 *  (Main/Maneuver/Move/Triggered, spec §7.2) is a separate, not-yet-built turn-economy
-	 *  deliverable — this method does not touch a per-actor `actions` field because no UI
-	 *  produces one yet; it will gain that reset once that field exists. */
+	/** "Advance round" (D8 spec §7.2/§3.1, Task 9) — the ONE control shared by the round
+	 *  display, the Malice panel's auto-gain, and the per-actor `actions` checklist reset,
+	 *  so none of the three surfaces can diverge. The transition itself lives in the model
+	 *  (`advanceRound()` in `./model`, Task 9) — mutate, then the one whole-model rebuild
+	 *  path. `has_taken_turn` clearing (formerly the separate "Reset Round" action bar
+	 *  button) is folded in here too: Task 5's review flagged the two controls as
+	 *  overlapping, and per spec §7.2 "Advance round" is a strict superset, so the action
+	 *  bar no longer exposes a standalone Reset Round. */
 	private advanceRound(): void {
-		this.model.round = (this.model.round ?? 1) + 1;
-		this.model.heroes.forEach((hero) => {
-			hero.has_taken_turn = false;
-		});
-		this.model.enemy_groups.forEach((group) => {
-			group.has_taken_turn = false;
-		});
-		const gain = this.model.malice.round_gain;
-		if (typeof gain === 'number' && gain !== 0) {
-			this.model.malice.value += gain;
-		}
+		advanceRoundModel(this.model);
 		void this.rebuildAndPersist();
 	}
 
@@ -156,23 +152,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Top action bar: both children are write actions — gated off entirely when
 		// read-only (F1 §4.4: no dead-end write affordances).
 		if (this.canWrite) {
+			// D8 Task 9: "Reset Round" used to live here (cleared has_taken_turn only). It
+			// now folds into the Malice panel's "Advance round" control (spec §7.2 — a
+			// strict superset: round++, has_taken_turn clear, actions clear, Malice gain),
+			// so the action bar keeps only the destructive whole-encounter reset.
 			const bar = buttonRow(
 				container,
 				[
-					{
-						icon: 'rotate-ccw',
-						text: 'Reset Round',
-						label: 'Reset Round',
-						onClick: () => {
-							this.model.heroes.forEach((hero) => {
-								hero.has_taken_turn = false;
-							});
-							this.model.enemy_groups.forEach((group) => {
-								group.has_taken_turn = false;
-							});
-							void this.rebuildAndPersist();
-						},
-					},
 					{
 						icon: 'refresh-cw',
 						text: 'Reset Encounter State',
@@ -388,6 +374,65 @@ export class InitiativeView extends ElementView<EncounterData> {
 		if (glyph) setIcon(glyph, taken ? 'check' : 'dot');
 	}
 
+	// ------------------------------------------------------- per-turn action checklist
+
+	/** The four slot definitions, in the order the spec lists them (§7.2): "[Main]
+	 *  [Maneuver] [Move] [Triggered]". Shared by both hero rows and enemy creature
+	 *  instance detail rows (D8 spec §7.3 puts `actions` on Hero AND CreatureInstance). */
+	private static readonly ACTION_SLOTS: ReadonlyArray<{ key: keyof ActorActions; label: string }> = [
+		{ key: 'main', label: 'Main' },
+		{ key: 'maneuver', label: 'Maneuver' },
+		{ key: 'move', label: 'Move' },
+		{ key: 'triggered', label: 'Triggered' },
+	];
+
+	/** The per-turn action checklist (D8 spec §7.2): four keyboard-accessible toggles bound
+	 *  to `actor.actions.<slot>`. `actor.actions` is materialized onto the object ONLY on
+	 *  the first user toggle — that first press is the "user touched the new control"
+	 *  moment that legitimately makes it start serializing (additive-optional contract,
+	 *  Task 9 brief); every read before that falls back to `?? false` per slot, never
+	 *  writing a default. "Triggered" resets on round advance, not turn end (spec §7.1) —
+	 *  handled by `advanceRound()` in `./model`, not here. Read-only renders static state
+	 *  glyphs (F1 §4.4: no dead-end write affordance), matching the turn indicator's
+	 *  button/span split. */
+	private buildActionChecklist(
+		container: HTMLElement,
+		actor: Hero | CreatureInstance,
+		name: string,
+		owner: Component,
+	): void {
+		InitiativeView.ACTION_SLOTS.forEach(({ key, label }) => {
+			const pressed = actor.actions?.[key] ?? false;
+			if (this.canWrite) {
+				const handle = iconButton(
+					container,
+					{
+						text: label,
+						label: `Toggle ${label} action: ${name}`,
+						pressed,
+						tooltip: `Toggle ${label} action`,
+						onClick: () => {
+							actor.actions = actor.actions ?? {
+								main: false,
+								maneuver: false,
+								move: false,
+								triggered: false,
+							};
+							actor.actions[key] = !actor.actions[key];
+							handle.setPressed(actor.actions[key]);
+							void this.persist();
+						},
+					},
+					owner,
+				);
+				handle.buttonEl.addClass('dse-init__action-toggle');
+			} else {
+				const el = container.createSpan({ cls: 'dse-init__action-toggle', text: label });
+				el.toggleAttribute('data-pressed', pressed);
+			}
+		});
+	}
+
 	// -------------------------------------------------------------- stamina control
 
 	/** The clickable stamina number: a kit iconButton (opens the edit modal) when
@@ -448,6 +493,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		infoEl.createDiv({ cls: 'dse-init__name', text: character.name });
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionIcons(conditionsEl, character, owner);
+		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), character, name, owner);
 
 		// Right: Health Info
 		const rightEl = rowEl.createDiv({ cls: 'dse-init__right' });
@@ -664,6 +710,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		infoEl.createDiv({ cls: 'dse-init__name', text: name });
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionIcons(conditionsEl, instance, owner);
+		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner);
 
 		// Right: Health Info
 		const healthEl = container.createDiv({ cls: 'dse-init__health' });

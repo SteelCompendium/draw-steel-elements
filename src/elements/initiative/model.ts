@@ -22,8 +22,16 @@
 // The EncounterData interfaces + resetEncounter live in EncounterData.ts and are re-exported
 // below (never duplicated). D8 Task 5 (Malice panel) added `round` + `Malice.round_gain`/`log`
 // there as additive optional fields (and taught resetEncounter to clear the runtime ones,
-// `round`/`log` — `round_gain` is a configured default and survives a reset) — parse()/
-// serialize() below needed no changes: unset optional fields simply pass through untouched.
+// `round`/`log` — `round_gain` is a configured default and survives a reset); Task 9 (turn/
+// round economy, spec §7) added `ActorActions` + `Hero.actions`/`CreatureInstance.actions`
+// the same way, and taught resetEncounter to clear `Hero.actions` (enemy-side `actions`
+// dies with the instances it lives on). parse()/serialize() below needed NO changes for
+// either: unset optional fields simply pass through untouched — the additive contract holds
+// because nothing here ever reads or writes `round`/`actions`/`malice.round_gain`/`.log`.
+// Task 9 DOES add one new export below: `advanceRound()`, the round-boundary transition
+// that both the round display and the per-actor `actions` reset share (moved out of
+// InitiativeView, which previously held an equivalent private method for `round`/
+// `has_taken_turn` only — see advanceRound's own doc comment for the full contract).
 //
 // serialize(model): the BYTE-COMPAT boundary. The legacy write path
 // (CodeBlocks.updateInitiativeTracker -> updateCodeBlock -> updateMarkdownCodeBlock,
@@ -38,6 +46,7 @@ import { stringifyYaml } from 'obsidian';
 import type { Condition, EncounterData } from '@drawSteelAdmonition/EncounterData';
 
 export type {
+	ActorActions,
 	Condition,
 	Creature,
 	CreatureInstance,
@@ -258,4 +267,52 @@ export function parse(input: unknown, _raw: string): EncounterData {
 
 export function serialize(model: EncounterData): string {
 	return stringifyYaml(model).trim();
+}
+
+/**
+ * D8 Task 9 (spec §7.2) — the ONE round-boundary transition, shared by the round display,
+ * the Malice panel's per-round auto-gain (spec §3.3/OD-3), and the per-actor `actions`
+ * checklist. Supersedes the old turn-only "Reset Round" affordance — Task 5's review
+ * flagged the two as overlapping (both cleared `has_taken_turn`), and per spec §7.2
+ * "Advance round" is the superset (round++, has_taken_turn clear, actions clear, Malice
+ * gain), so InitiativeView now exposes only this control (D8-gm-subsystems-spec.md §7.2).
+ *
+ * - `round` defaults from absent (treated as 1) so the first press produces 2.
+ * - `has_taken_turn` clears on every hero/enemy group, exactly like the old Reset Round.
+ * - Per-actor `actions` (Hero + every enemy CreatureInstance) resets to all-false IF
+ *   already materialized; an actor that has never had a slot toggled stays untouched
+ *   (absent), preserving the additive-optional / never-fabricated contract. "Triggered" is
+ *   per-round (spec §7.1), so this is precisely where it resets — not on turn end.
+ * - `malice.round_gain`, when configured (non-zero), is added to the pool and logged
+ *   (`{round, amount, label: 'Round gain'}`) at the NEW round number — same log shape as
+ *   the quick-add (spec §3.1/§3.3). Absent/0 stays manual-only (OD-3: never a fabricated
+ *   default).
+ */
+export function advanceRound(data: EncounterData): void {
+	data.round = (data.round ?? 1) + 1;
+
+	data.heroes.forEach((hero) => {
+		hero.has_taken_turn = false;
+		if (hero.actions) {
+			hero.actions = { main: false, maneuver: false, move: false, triggered: false };
+		}
+	});
+
+	data.enemy_groups.forEach((group) => {
+		group.has_taken_turn = false;
+		group.creatures.forEach((creature) => {
+			creature.instances?.forEach((instance) => {
+				if (instance.actions) {
+					instance.actions = { main: false, maneuver: false, move: false, triggered: false };
+				}
+			});
+		});
+	});
+
+	const gain = data.malice.round_gain;
+	if (typeof gain === 'number' && gain !== 0) {
+		data.malice.value += gain;
+		data.malice.log = data.malice.log ?? [];
+		data.malice.log.push({ round: data.round, amount: gain, label: 'Round gain' });
+	}
 }

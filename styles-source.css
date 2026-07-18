@@ -779,6 +779,37 @@ code.dsa {
         }
     }
 
+    /* D8 §7.2: the per-turn action checklist ([Main][Maneuver][Move][Triggered]) — small
+       toggles under the name/conditions line. Pressed = the kit's own .dse-btn[data-pressed]
+       accent fill (real buttons); the read-only static-span twin repeats it locally since a
+       plain span never picks up .dse-btn rules. */
+    .dse-init__actions {
+        margin-top: 4px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        font-size: 0.75em;
+    }
+
+    button.dse-init__action-toggle {
+        padding: 1px 6px;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    span.dse-init__action-toggle {
+        padding: 1px 6px;
+        border: 1px solid var(--dse-rule);
+        border-radius: 4px;
+        color: var(--dse-fg-muted);
+    }
+
+    span.dse-init__action-toggle[data-pressed] {
+        background: var(--dse-accent);
+        color: var(--dse-accent-fg);
+        border-color: var(--dse-accent);
+    }
+
     /* -- condition icons: kit buttons on the VALIDATED per-condition color -- */
     .dse-cond,
     .dse-cond--add {
