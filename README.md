@@ -6,6 +6,8 @@ Some helper elements for the MCDM Draw Steel TTRPG
 
 Please use this [form to report bugs](https://docs.google.com/forms/d/e/1FAIpQLSc6m-pZ0NLt2EArE-Tcxr-XbAPMyhu40ANHJKtyRvvwBd2LSw/viewform?usp=sharing&ouid=105036387964900154878) if you find them!
 
+**Upgrading from a 5.x install?** See the [5.x → 6.0.0 migration guide](./docs/migrating-to-6.md).
+
 ![sample](./docs/Media/sample.png)
 
 ## Elements

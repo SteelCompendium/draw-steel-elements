@@ -2,6 +2,9 @@
 
 ## 6.0.0
 
+Upgrading from 5.x? See the [migration guide](docs/migrating-to-6.md) for what
+needs action.
+
 - [BREAKING] Compendium source moved from the retired `data-md-dse` repo to
   `data-unified` releases (unified Browse layout, `md-dse` format). Run
   "Sync compendium" after updating — your old release-tag setting is reset
