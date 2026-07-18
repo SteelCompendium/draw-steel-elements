@@ -18,21 +18,19 @@
 // listener below both keep fresh. getBlockInfo()/canPersist read that cache synchronously;
 // nothing here ever awaits inside a BlockHost interface member.
 //
-// KNOWN GAP (flagged, not fixed by this task): a block's `_dse_anchor: <id>` line only
-// round-trips through a persisted element's serialize() if that element's parse() passes
-// unknown keys through untouched. None of the currently migrated persisted elements do
-// (Counter.parse, e.g., builds a fixed-field class instance and drops anything else) — spec
-// §1.5 calls this out ("persisted-element models add an optional passthrough field for
-// it"), but wiring that through every persisted model's schema/model is out of this task's
-// scope. Until that lands, the FIRST persist() through a real element view after "send to
-// sidebar" WILL drop the anchor line. What this task DOES fix (review finding #1, HIGH): the
-// safety net. replaceSource notices the resulting canPersist true->false flip immediately
-// (the self-echo guard means the normal external-modify path would never catch it — see
-// replaceSource's inline comment) and calls onAnchorLost, which SidebarPanel wires to the
-// same read-only degrade card handleExternalChange's "block vanished" path already renders
-// — so the failure is surfaced right away instead of every subsequent edit silently no-op'ing
-// forever. Tracked for a FOLLOWUPS entry (the root fix: passthrough fields on the 4 migrated
-// persisted models).
+// KNOWN GAP (narrow; see workspace FOLLOWUPS #26): a block's `_dse_anchor: <id>` line only
+// round-trips through a persisted element's serialize() if that element's parse() preserves
+// it. The sidebar-relevant elements DO: initiative (the canonical sidebar element — proven
+// by sidebarInitiative.test.ts's anchor-preservation assertion) and all four D8 trackers
+// (encounter/montage/project/party) carry the anchor through parse/serialize. The gap is
+// limited to counter, negotiation, and stamina-bar (fixed-field parse() drops unknown keys)
+// — none of which have a sidebar mount today. If one is ever sent to the sidebar, the FIRST
+// persist() drops the anchor line; the safety net below covers that case: replaceSource
+// notices the resulting canPersist true->false flip immediately (the self-echo guard means
+// the normal external-modify path would never catch it — see replaceSource's inline
+// comment) and calls onAnchorLost, which SidebarPanel wires to the same read-only degrade
+// card handleExternalChange's "block vanished" path already renders — so the failure is
+// surfaced right away instead of edits silently no-op'ing forever.
 import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
 import { findAnchoredBlock } from '../sidebar/anchor';
