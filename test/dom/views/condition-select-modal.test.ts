@@ -66,11 +66,21 @@ describe('Task 8 (D2 §3.x): AddConditionsModal — managedModal scaffold', () =
 		expect(container.querySelector('.dse-modal__body .dse-cond-list')).not.toBeNull();
 	});
 
-	test('renders all 24 conditions as .dse-cond-item[aria-selected] rows with a kit divider between real and pseudo', () => {
+	test('the list is a real listbox: role="listbox" + aria-multiselectable (SC-4)', () => {
+		const { container } = makeModal();
+		const listEl = container.querySelector('.dse-cond-list') as HTMLElement;
+		expect(listEl.getAttribute('role')).toBe('listbox');
+		expect(listEl.getAttribute('aria-multiselectable')).toBe('true');
+	});
+
+	test('renders all 24 conditions as .dse-cond-item[role="option"][aria-selected] rows with a kit divider between real and pseudo', () => {
 		const { container } = makeModal();
 		const rows = container.querySelectorAll('.dse-cond-item');
 		expect(rows).toHaveLength(24); // 8 conditions + 16 pseudo-conditions
-		rows.forEach((r) => expect(r.getAttribute('aria-selected')).toBe('false'));
+		rows.forEach((r) => {
+			expect(r.getAttribute('role')).toBe('option'); // SC-4: aria-selected needs a real role
+			expect(r.getAttribute('aria-selected')).toBe('false');
+		});
 
 		// The divider is a kit .dse-hr separator sitting after the 8 real conditions.
 		const list = container.querySelector('.dse-cond-list') as HTMLElement;

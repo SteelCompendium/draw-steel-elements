@@ -1,15 +1,18 @@
 // Plan 09 Task 8 (D2 §3.x) — AddConditionsModal on the kit managedModal. Every
-// condition is a .dse-cond-item[aria-selected] row of REAL kit <button>s (CB-8/MP-1):
-// a ghost toggle carrying the icon + name (aria-pressed = the checkbox state) and a
-// customize-cog revealed by CSS on hover AND focus (:hover / :focus-within — a11y;
-// the legacy mouseenter-only inline display toggle is gone). Row icons are colored
-// through the VALIDATED --dse-condition-color property (applyConditionColor,
-// OD-8/SD-2) — never el.style.color — with the shared applyConditionEffect replacing
-// the duplicated effect-class block. The child CustomizeConditionModal is opened
-// through openManagedModal against THIS modal's lifecycle, so closing the select
-// modal closes an open customize child with it (F1 §4.5). The constructor signature
-// (app, character, conditionManager, onAdd) and the onAdd(Condition[]) contract are
-// the legacy ones, unchanged in SHAPE — Initiative (T9) keeps opening it the same way.
+// condition is a .dse-cond-item[role="option"][aria-selected] row of REAL kit
+// <button>s (CB-8/MP-1): a ghost toggle carrying the icon + name (aria-pressed = the
+// checkbox state) and a customize-cog revealed by CSS on hover AND focus (:hover /
+// :focus-within — a11y; the legacy mouseenter-only inline display toggle is gone).
+// The list itself is role="listbox"/aria-multiselectable (SC-4): aria-selected is
+// only meaningful on a role that supports it, so both the list and its rows carry
+// real ARIA roles instead of being role-less divs. Row icons are colored through the
+// VALIDATED --dse-condition-color property (applyConditionColor, OD-8/SD-2) — never
+// el.style.color — with the shared applyConditionEffect replacing the duplicated
+// effect-class block. The child CustomizeConditionModal is opened through
+// openManagedModal against THIS modal's lifecycle, so closing the select modal
+// closes an open customize child with it (F1 §4.5). The constructor signature (app,
+// character, conditionManager, onAdd) and the onAdd(Condition[]) contract are the
+// legacy ones, unchanged in SHAPE — Initiative (T9) keeps opening it the same way.
 //
 // D7 Task 2 (spec §4.4, recon delta 7): `character`'s TYPE widened from
 // `Hero | CreatureInstance` to the structural `ConditionHolder` superset (`{
@@ -54,7 +57,11 @@ export class AddConditionsModal extends DseModal {
 		this.setDseTitle('Add Conditions');
 
 		const listEl = this.body.createDiv({ cls: 'dse-cond-list' });
-		listEl.setAttribute('role', 'group');
+		// SC-4: aria-selected is only meaningful on a role that supports it (option,
+		// row, tab, treeitem, …) — a bare div silently dropped it from the a11y tree.
+		// The list is a real multi-select listbox; each row below gets role="option".
+		listEl.setAttribute('role', 'listbox');
+		listEl.setAttribute('aria-multiselectable', 'true');
 		listEl.setAttribute('aria-label', 'Conditions');
 
 		this.conditionManager.getConditions().forEach((condition) => {
@@ -84,6 +91,7 @@ export class AddConditionsModal extends DseModal {
 
 	private addConditionRow(listEl: HTMLElement, condition: ConditionConfig): void {
 		const rowEl = listEl.createDiv({ cls: 'dse-cond-item' });
+		rowEl.setAttribute('role', 'option'); // SC-4: aria-selected needs a real role
 		rowEl.setAttribute('aria-selected', 'false');
 
 		// The selection toggle: a real button owning the icon + name; aria-pressed is
