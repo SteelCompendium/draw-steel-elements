@@ -247,10 +247,24 @@ export function renderFeature(
 	function renderEffect(parentEl: HTMLElement, effect: Effect): void {
 		// Named/plain effect text -> a titled .dse-section; the effect's roll panel and
 		// nested features mount INSIDE it (the legacy per-effect container semantics).
+		// Title composition is UNCHANGED (byte-stable in every theme — statblock's own
+		// example.yaml already exercises the cost-only, no-name shape, so touching this
+		// would drift statblock's Legacy shots, out of Task 3's scope/LEGACY-FREEZE).
 		const cost = effect.cost ? ` (${String(effect.cost).trim()})` : '';
 		const title = (effect.name ? effect.name + cost : cost).trim();
+		// The keyword-spend clause (Draw Steel's "Spend X [Resource]:" grammar — RR
+		// "Spend Heroic Resource", steel-etl's own labelRe detects it the same way,
+		// ability_cards.go: `strings.HasPrefix(strings.ToLower(label), "spend")`) gets
+		// its own modifier so Steel can render the site's dashed enhancement box
+		// (styles-source.css `.dse-section--spend`), keyed off the RAW cost field (not
+		// the composed, possibly-parenthesized title) — theme-agnostic DOM; Legacy has
+		// no unscoped rule keying off it, so the class is inert there (today's "Title:
+		// body" line, unchanged).
+		const isSpend = !!effect.cost && /^spend\b/i.test(String(effect.cost).trim());
 		const hostEl =
-			title || effect.effect ? section(parentEl, title || undefined, effect.effect) : parentEl;
+			title || effect.effect
+				? section(parentEl, title || undefined, effect.effect, isSpend ? 'spend' : undefined)
+				: parentEl;
 
 		// Power roll: one STATIC kit panel per rolling effect (no radiogroup — features
 		// are not selectable; tier outcomes flow through the renderMd callback). The

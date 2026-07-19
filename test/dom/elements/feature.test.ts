@@ -371,6 +371,39 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		);
 	});
 
+	// SC-10 Task 3: the keyword-spend clause (Draw Steel's "Spend X [Resource]:" grammar,
+	// e.g. real content's black-ash-teleport.json effect #2: no `name`, cost:"Spend 1+
+	// Insight") gets a `.dse-section--spend` modifier so Steel can render the site's
+	// dashed enhancement box — THEME-AGNOSTIC DOM (mounted regardless of theme; Legacy has
+	// no unscoped rule keying off it, so this is additive only, no Legacy drift).
+	test('.dse-section--spend: an effect whose cost starts with "Spend" (case-insensitive) gets the spend modifier; title composition is untouched (still cost-only, parenthesized)', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: Black Ash Teleport',
+			'effects:',
+			'  - cost: Spend 1+ Insight',
+			'    effect: You teleport 1 additional square for each insight spent.',
+		].join('\n');
+		const { root } = await renderBlock(source);
+
+		const spendSection = root.querySelector('.dse-section--spend') as HTMLElement;
+		expect(spendSection).not.toBeNull();
+		expect(spendSection.querySelector('.dse-section__title')!.textContent).toBe('(Spend 1+ Insight)');
+		expect(spendSection.querySelector('.dse-section__body')!.textContent).toBe(
+			'You teleport 1 additional square for each insight spent.',
+		);
+	});
+
+	test('.dse-section--spend: a non-spend cost (e.g. "2 Malice") does NOT get the modifier', async () => {
+		const { root } = await renderBlock(FULL);
+
+		const special = Array.from(root.querySelectorAll(':scope > .dse-feature > .dse-section')).find(
+			(s) => s.querySelector('.dse-section__title')!.textContent === 'Special (2 Malice)',
+		)!;
+		expect(special.classList.contains('dse-section--spend')).toBe(false);
+	});
+
 	test.each([
 		['Main action', 'main'],
 		['Maneuver', 'maneuver'],

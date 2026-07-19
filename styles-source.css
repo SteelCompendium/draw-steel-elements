@@ -3350,6 +3350,152 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	text-decoration: underline;
 }
 
+/* -- SC-10 Task 3: boxed Distance/Target rail + eyebrow-chip Keywords/Type --
+   .dse-feature__meta is a 2-col grid (D2 §3.6); Keywords/Type occupy row 1,
+   Distance/Target row 2 (DOM/creation order — no restructuring needed). The
+   site boxes ONLY the Distance/Targets rail (`02-ability-card--site-dark.png`,
+   .sc-ability__rail/__cell); Keywords/Type stay compact forged-chip eyebrows
+   (reusing the same --dse-metal-faint wash as the cardHead's own --chip
+   slots, ~3247). SCREEN-ONLY (print frozen, SC-4); Legacy never reveals
+   .dse-feature__meta-key (base rule, ~141) so both treatments are inert
+   there. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-key {
+	display: inline;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35em;
+	width: fit-content;
+	padding: 0.15em 0.65em;
+	border-radius: var(--dse-radius);
+	background: var(--dse-metal-faint);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords .dse-feature__meta-key,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type .dse-feature__meta-key {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.06em;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target {
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: center;
+	justify-content: center;
+	justify-self: stretch;
+	gap: 0.2em;
+	text-align: center;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	padding: 0.5em 0.75em;
+	min-height: 3em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance .dse-feature__meta-key,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target .dse-feature__meta-key {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.08em;
+	font-size: 0.78em;
+	font-weight: normal;
+	color: var(--dse-fg-faint);
+}
+/* The boxed rail reads value-over-label (site: "Self" / "DISTANCE"), not the
+   inline "Label: value" the shared base rule (~146) bakes the colon for. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance .dse-feature__meta-key::after,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target .dse-feature__meta-key::after {
+	content: "";
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance .dse-feature__meta-value,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target .dse-feature__meta-value {
+	font-weight: 700;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+
+/* -- SC-10 Task 3: finish the Task-2 ◆-marked title into the site's boxed
+   panel (steel-ability-cards.css .sc-ability__section: a raised header strip
+   over a sunken/bordered body). Applies to every .dse-section alike (Effect/
+   Trigger/Special/Aftermath) EXCEPT --spend, which gets the dashed clause
+   look below (higher-specificity override, same cascade layer). SCREEN-ONLY,
+   print frozen (SC-4); Legacy's .dse-section has no border/background rule
+   of its own, so this is purely additive there being scoped to Steel. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section {
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken);
+	overflow: hidden;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title {
+	padding: 0.45em 0.75em;
+	border-bottom: 1px solid var(--dse-border);
+	background: var(--dse-surface-raised);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body {
+	padding: 0.6em 0.75em;
+}
+
+/* -- SC-10 Task 3: dashed keyword-spend box — the "SPEND 1+ INSIGHT" clause
+   (`02-ability-card--site-dark.png` bottom, site's .sc-ability__enh). The
+   --spend modifier (renderFeature.ts renderEffect, theme-agnostic — mounted
+   in EVERY theme) swaps the raised panel above for a dashed border + the
+   title as its own forged chip beside (not above) the body text. Legacy has
+   no unscoped rule reading `--spend`, so it renders identically to any other
+   .dse-section there (today's inline "Title: body" line). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section--spend {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6em;
+	border: 1px dashed var(--dse-border-strong);
+	background: var(--dse-surface-sunken);
+	padding: 0.5em 0.7em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section--spend .dse-section__title {
+	flex: none;
+	padding: 0.2em 0.6em;
+	border: 1px solid var(--dse-border);
+	border-bottom: none;
+	border-radius: var(--dse-radius);
+	background: var(--dse-metal-faint);
+	color: var(--dse-fg);
+	font-weight: 700;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section--spend .dse-section__title::before {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section--spend .dse-section__body {
+	flex: 1 1 auto;
+	padding: 0;
+	color: var(--dse-fg-muted);
+}
+
+/* -- SC-10 Task 3: tier-badge strikethrough fix (ledger note) — the shared
+   .dse-pr__badge (~3894, UNSCOPED — both themes) caps its box at
+   `max-height:1em` but never resets the inherited UI line-height, so
+   .dse-pr__badge-text's line box (line-height ~1.5 × its own font-size)
+   overflows the capped box; the ::before bracket/chevron outline (sized to
+   the CAPPED box via inset:0) then cuts across the vertical middle of the
+   overflowing glyphs, reading as a strikethrough THROUGH the tier text. This
+   has always been true in Legacy too — but Legacy's fill token
+   (--dse-tier-*: var(--text-normal), same rule ~2994) is the same brightness
+   as the text it crosses, so the cut line disappears into the glyph
+   anti-aliasing there (pixel-confirmed: feature--legacy-dark.png shows no
+   artifact). Steel's saturated tier hues (red/amber/green/gold) make the
+   same geometry bug plainly visible (task1-after--steel-dark.png). Legacy
+   must stay untouched (LEGACY-FREEZE) — the fix is Steel-scoped only:
+   line-height:1 shrinks the badge's own content box to match its font-size,
+   closing the overflow instead of resizing the shared clip-path shapes. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__badge {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+}
+
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
 /* ================================================================== */
