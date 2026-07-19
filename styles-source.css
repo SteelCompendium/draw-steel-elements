@@ -2031,7 +2031,7 @@ code.dsa {
 /* Statgrid — Values Row + Characteristics (D2 §3.2/3.3, Plan 09 Task 1) */
 /* ==================== */
 
-/* ONE shared grammar for the two static stat-row elements — the root's
+/* ONE shared grammar for the static stat-row elements — the root's
    [data-dse-element] attr is what distinguishes them (and lets the Steel theme, D3,
    re-skin per element). Layout is the Legacy-faithful port of the old
    .ds-values-row-* / .ds-characteristics-* block: a flex row of centered cells, big
@@ -2039,9 +2039,15 @@ code.dsa {
    value_height/name_height YAML knobs arrive as the --dse-value-scale /
    --dse-label-scale custom properties set by the views (SC-5: sanctioned --dse-*
    geometry via setProperty — never inline font-size); --dse-surface is the Steel
-   theme's "engraved plate" hook (D3), Legacy stays the bare row. */
+   theme's "engraved plate" hook (D3), Legacy stays the bare row.
+   [data-dse-element="hero"] (D7 Task 9) reuses the SAME kit builder
+   (renderCharacteristicsGrid, framework/kit/CharacteristicsGrid.ts) for its
+   Characteristics region — added here so that region gets this same flex grid instead
+   of falling through to an unstyled div stack (bug fix, SC-10 task 6: the hero sheet's
+   root carries [data-dse-element="hero"], which this rule never matched). */
 [data-dse-element="values-row"] .dse-statgrid,
-[data-dse-element="characteristics"] .dse-statgrid {
+[data-dse-element="characteristics"] .dse-statgrid,
+[data-dse-element="hero"] .dse-statgrid {
 	width: 100%;
 	overflow-x: auto;
 	display: flex;
@@ -2073,7 +2079,8 @@ code.dsa {
    which older Chromium drops. */
 @media (max-width: 600px) {
 	[data-dse-element="values-row"] .dse-statgrid,
-	[data-dse-element="characteristics"] .dse-statgrid {
+	[data-dse-element="characteristics"] .dse-statgrid,
+	[data-dse-element="hero"] .dse-statgrid {
 		flex-direction: column;
 		align-items: center;
 

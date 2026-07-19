@@ -225,16 +225,19 @@ describe('Plan 09 Task 1: values-row rendered through the REAL ElementPipeline (
 		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
-	test('CSS contract: .dse-statgrid is scoped under BOTH element roots, consumes --dse-fg/--dse-fg-muted + the scale properties, and keeps the @media column flip', () => {
+	test('CSS contract: .dse-statgrid is scoped under ALL THREE element roots (incl. hero, SC-10 task 6), consumes --dse-fg/--dse-fg-muted + the scale properties, and keeps the @media column flip', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-		// One shared block scoped under both [data-dse-element] roots (D2 §3.2/3.3).
+		// One shared block scoped under all three [data-dse-element] roots (D2 §3.2/3.3;
+		// [data-dse-element="hero"] added SC-10 task 6 — the hero sheet reuses the same
+		// kit builder for its Characteristics region and needs the same flex grid, not an
+		// unstyled div stack).
 		expect(sheet).toMatch(
-			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid\s*\{/,
+			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="hero"\]\s+\.dse-statgrid\s*\{/,
 		);
 
 		const block = sheet.match(
-			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
+			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="hero"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
 		);
 		expect(block).not.toBeNull();
 		expect(block![0]).toMatch(/var\(--dse-fg\)/);
@@ -243,10 +246,10 @@ describe('Plan 09 Task 1: values-row rendered through the REAL ElementPipeline (
 		expect(block![0]).toMatch(/calc\(var\(--dse-label-scale/);
 
 		// Today's <=600px column flip, preserved (D2 §3.2 "today's @media column flip") —
-		// a top-level media rule re-selecting both statgrid roots (see the CSS comment:
-		// a nested `& {}` inside @media gets mangled by esbuild's minifier).
+		// a top-level media rule re-selecting all three statgrid roots (see the CSS
+		// comment: a nested `& {}` inside @media gets mangled by esbuild's minifier).
 		const media = sheet.match(
-			/@media\s*\(max-width:\s*600px\)\s*\{\s*\n\s*\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
+			/@media\s*\(max-width:\s*600px\)\s*\{\s*\n\s*\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="hero"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
 		);
 		expect(media).not.toBeNull();
 		expect(media![0]).toMatch(/flex-direction:\s*column/);
