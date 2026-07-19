@@ -51,6 +51,18 @@ export interface RenderFeatureOptions {
 	 *  the pre-D5 grammar (the fidelity bar); present ⇒ each rolling effect gains
 	 *  a roll controller. Built by featureRollHooks(cx) in the element views. */
 	roll?: FeatureRollHooks;
+	/** SC-10 Task 5: featureblock's per-option glyph. When true, the cardHead's
+	 *  leading column carries the SDK's OWN `Feature.icon` glyph verbatim (the
+	 *  site's `fb__feat-icon` — a literal emoji classifier: ⭐ passive, ☠ villain,
+	 *  🔳 area, …; steel-etl's featureblock_page.go does the exact same thing —
+	 *  embeds `f.Icon` raw, no derived icon) in a theme-agnostic `.dse-fb__feat-icon`
+	 *  span, REPLACING the act-derived Lucide crest (crestIconFor) for this list —
+	 *  matching the site, which never falls back to an act glyph inside a
+	 *  featureblock. Absent icon ⇒ no crest AND no glyph (site parity: an
+	 *  icon-less option gets an empty leading column, not an invented one).
+	 *  Only featureblock/view.ts sets this; every other renderFeatureList caller
+	 *  keeps the pre-existing act-based crest untouched. */
+	featBlockIcon?: boolean;
 }
 
 /**
@@ -191,6 +203,10 @@ export function renderFeature(
 	// "◆ ABILITY" eyebrow); crest = a Lucide glyph keyed to the SAME act spine
 	// below. Neither slot invents wording the SDK data doesn't already imply.
 	if (feature.name || feature.cost || feature.ability_type) {
+		// SC-10 Task 5: inside a featureblock, the SDK's own icon glyph (if any)
+		// REPLACES the act-based crest entirely (site parity — see the option
+		// doc comment above); every other caller keeps today's crestIconFor(act).
+		const featIcon = opts.featBlockIcon ? feature.icon?.trim() || undefined : undefined;
 		const head = cardHead(
 			rootEl,
 			{
@@ -198,11 +214,15 @@ export function renderFeature(
 				name: '',
 				rightEyebrow: feature.cost ? '' : undefined,
 				rightPrimary: feature.ability_type ? '' : undefined,
-				crest: { icon: crestIconFor(act), size: 'lg' },
+				crest: opts.featBlockIcon ? undefined : { icon: crestIconFor(act), size: 'lg' },
 				level,
 			},
 			owner,
 		);
+		if (featIcon) {
+			const iconEl = head.rootEl.createSpan({ cls: 'dse-fb__feat-icon', text: featIcon });
+			head.rootEl.prepend(iconEl);
+		}
 		if (feature.name) md(feature.name, head.nameEl, true);
 		if (feature.cost) md(String(feature.cost).trim(), head.slots.rightEyebrow!, true);
 		if (feature.ability_type) md(feature.ability_type.trim(), head.slots.rightPrimary!, true);
@@ -311,8 +331,8 @@ export function renderFeature(
 			// collide with each other likewise); acceptable for best-effort dice
 			// state (F1 §4.3 key drift is already documented) — not a bug.
 			renderFeatureList(hostEl, FeatureConfig.allFrom(effect.features), owner, renderMd, {
+				...opts,
 				headingLevel: Math.min(level + 1, 6),
-				roll: opts.roll,
 			});
 		}
 	}

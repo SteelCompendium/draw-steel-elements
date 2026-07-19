@@ -150,6 +150,9 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 			}
 			renderFeatureList(host, FeatureConfig.allFrom(run.features), this, renderMd, {
 				roll: featureRollHooks(this.cx),
+				// SC-10 Task 5: featureblock options carry the SDK's own icon glyph
+				// (site's fb__feat-icon) instead of the generic act-based crest.
+				featBlockIcon: true,
 			});
 		}
 	}

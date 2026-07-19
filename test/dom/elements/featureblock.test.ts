@@ -343,6 +343,23 @@ describe('Plan 09 Task 6a: featureblock re-cast onto the D2 kit card grammar (§
 		expect(cards[0].querySelector('.dse-head__primary--left')!.getAttribute('aria-level')).toBe('3');
 	});
 
+	test('SC-10 Task 5: per-option glyph — each option carries its own SDK icon verbatim in .dse-fb__feat-icon, NOT the generic act-based crest', async () => {
+		const { root } = await renderFeatureblock(angulotlMalice);
+
+		const cards = root.querySelectorAll('.dse-fb > .dse-feature__nested > .dse-feature');
+		expect(cards).toHaveLength(3);
+		const glyphs = Array.from(cards).map(
+			(c) => c.querySelector('.dse-head > .dse-fb__feat-icon')!.textContent,
+		);
+		// angulotl-malice.yaml's own icon field, per feature (⭐️/❇️/🌀) — verbatim,
+		// not the uniform act='trait' Lucide star every option would otherwise share.
+		expect(glyphs).toEqual(['⭐️', '❇️', '🌀']);
+		// The glyph REPLACES the crest entirely (site parity) — no .dse-crest at all.
+		for (const card of Array.from(cards)) {
+			expect(card.querySelector('.dse-crest')).toBeNull();
+		}
+	});
+
 	test('no features -> no divider and no feature list (renderFeatures guard)', async () => {
 		const { root } = await renderFeatureblock('type: featureblock\nname: Bare Block\n');
 		expect(root.querySelector('.dse-hr')).toBeNull();

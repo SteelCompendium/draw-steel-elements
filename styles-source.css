@@ -1971,6 +1971,15 @@ code.dsa {
 	margin-bottom: 0.25em;
 }
 
+/* -- per-option glyph (SC-10 Task 5, site's fb__feat-icon twin): the SDK's own
+   Feature.icon (⭐/☠/🔳/…), mounted THEME-AGNOSTICALLY by renderFeature.ts
+   (opts.featBlockIcon) in cardHead's leading column. Legacy-hidden here — the
+   emoji glyph is a Steel-only classifier, so today's look (no crest at all for
+   these options) is unchanged; the Steel skin below reveals it. */
+.dse-fb__feat-icon {
+	display: none;
+}
+
 /* ==================== */
 /* Counter			    */
 /* ==================== */
@@ -3305,6 +3314,23 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	height: 1.5em;
 }
 
+/* Per-option glyph show-override (SC-10 Task 5): the site's fb__feat-icon twin
+   (steel-cardhead.css: "grid-column:1; grid-row:1/-1" — the SAME leading
+   column the crest would otherwise occupy; renderFeature.ts never mounts both
+   for a featureblock option, see opts.featBlockIcon). A literal emoji glyph,
+   not a Lucide icon — so no font/svg sizing hook is needed, just placement +
+   a size bump matching the site's 1.1rem. SCREEN-ONLY, print frozen (SC-4). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head > .dse-fb__feat-icon {
+	display: flex;
+	grid-column: 1;
+	grid-row: 1 / -1;
+	align-self: center;
+	align-items: center;
+	margin-right: 0.9em;
+	font-size: 1.1em;
+	line-height: 1;
+}
+
 /* Boxed "◆ EFFECT" section header — the SHARED hook (SC-10 Task 2; the full
    boxed PANEL chrome — sunken background, border, padding — is Task 3). Steel
    drops the Legacy inline "Title: body" colon and turns the title into its own
@@ -3542,6 +3568,27 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 		color-mix(in srgb, var(--dse-role) 9%, var(--dse-surface))
 	);
 	border-bottom: 1px solid color-mix(in srgb, var(--dse-role) 38%, transparent);
+}
+
+/* -- Featureblock header band (SC-10 Task 5): the SAME recipe as the statblock
+   band above, but UNCONDITIONAL — most featureblocks (malice/terrain/fixture
+   blocks) never map a combat role at all (roleTint's vocabulary is combat
+   roles only; "Malice Features" carries none), yet the site still bands them
+   in a neutral grey (palette.css --sc-role-malice: #9aa2a8 — "grey — malice &
+   named feature blocks"). var(--dse-role, var(--dse-rule)) supplies that same
+   grey when no role mapped (--dse-rule resolves to the site's --sc-steel
+   #8e959a in Steel dark — the same family), and the real role hue whenever
+   one IS mapped (a "Hazard Hexer" fixture, WITH_ROLE-style). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head {
+	margin: -0.5rem calc(-1 * var(--dse-pad)) 0.75rem;
+	padding: 0.75rem var(--dse-pad) 0.85rem;
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	background: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--dse-role, var(--dse-rule)) 40%, var(--dse-surface)),
+		color-mix(in srgb, var(--dse-role, var(--dse-rule)) 9%, var(--dse-surface))
+	);
+	border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-rule)) 38%, transparent);
 }
 
 /* -- Boxed 5-stat row (Size/Speed/Stamina/Stability/Free Strike): the site's
