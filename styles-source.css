@@ -3454,6 +3454,14 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	letter-spacing: 0.06em;
 	color: var(--dse-fg-muted);
 }
+/* SC-10 Task 8 polish: drop the whole Keywords/Type chip when its value is the
+   book's lone-dash "none" placeholder (renderFeature.ts's --empty modifier,
+   theme-agnostic DOM) — matches the site dropping the same placeholder
+   (statblock_page.go / keyword_filter.go). Legacy has no rule referencing
+   --empty, so its existing unlabeled dash text is unchanged (LEGACY-FREEZE). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--empty {
+	display: none;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target {
 	display: flex;

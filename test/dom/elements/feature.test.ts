@@ -285,6 +285,42 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		expect(cellText('target', 'value')).toBe('One creature or object');
 	});
 
+	// SC-10 Task 8 polish: villain-action-style features carry a lone-dash "none"
+	// placeholder for an unset Keywords/Type (steel-etl's own book convention —
+	// statblock_page.go `usage != "-"`, keyword_filter.go). The cell still mounts
+	// (theme-agnostic DOM, Legacy's existing unlabeled dash text untouched) but
+	// gets the --empty modifier so Steel's CSS can drop the chip.
+	test('.dse-feature__meta: a lone-dash Keywords/Type value is flagged --empty (chip dropped in Steel only)', async () => {
+		const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Lead From the Front
+keywords:
+  - "-"
+usage: "-"
+distance: Self
+target: Self
+`);
+
+		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
+		const hasEmpty = (mod: string) =>
+			meta.querySelector(`.dse-feature__meta-cell--${mod}`)!.classList.contains('dse-feature__meta-cell--empty');
+		expect(hasEmpty('keywords')).toBe(true);
+		expect(hasEmpty('type')).toBe(true);
+		// Distance/Target are real values — never flagged empty.
+		expect(hasEmpty('distance')).toBe(false);
+		expect(hasEmpty('target')).toBe(false);
+	});
+
+	test('.dse-feature__meta: a real Keywords/Type value is never flagged --empty', async () => {
+		const { root } = await renderBlock(magmaTitan);
+
+		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
+		const hasEmpty = (mod: string) =>
+			meta.querySelector(`.dse-feature__meta-cell--${mod}`)!.classList.contains('dse-feature__meta-cell--empty');
+		expect(hasEmpty('keywords')).toBe(false);
+		expect(hasEmpty('type')).toBe(false);
+	});
+
 	test('.dse-feature__flavor renders the italic flavor text', async () => {
 		const { root } = await renderBlock(magmaTitan);
 		expect(root.querySelector('.dse-feature__flavor')!.textContent).toContain(

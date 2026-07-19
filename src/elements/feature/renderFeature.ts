@@ -238,17 +238,27 @@ export function renderFeature(
 	// label-less look is unchanged until D3's Steel layer reveals them.
 	if (feature.keywords || feature.usage || feature.distance || feature.target) {
 		const metaEl = rootEl.createDiv({ cls: 'dse-feature__meta' });
-		const cell = (modifier: string, label: string, value: string): void => {
+		// SC-10 Task 8 polish: a lone dash is the book's "none" placeholder (site:
+		// statblock_page.go `usage != "-"`, keyword_filter.go) — never a real value.
+		// The --empty modifier is THEME-AGNOSTIC DOM (mounted in every theme, like
+		// every other slot here); Steel drops the whole chip (styles-source.css),
+		// Legacy has no rule keying off it so its existing unlabeled dash text is
+		// pixel-unchanged (LEGACY-FREEZE).
+		const isEmptyValue = (value: string): boolean => /^[-–—]+$/.test(value.trim());
+		const cell = (modifier: string, label: string, value: string, isEmpty = false): void => {
 			const cellEl = metaEl.createSpan({
-				cls: `dse-feature__meta-cell dse-feature__meta-cell--${modifier}`,
+				cls:
+					`dse-feature__meta-cell dse-feature__meta-cell--${modifier}` +
+					(isEmpty ? ' dse-feature__meta-cell--empty' : ''),
 			});
 			cellEl.createSpan({ cls: 'dse-feature__meta-key', text: label });
 			md(value, cellEl.createSpan({ cls: 'dse-feature__meta-value' }), true);
 		};
 		if (feature.keywords) {
-			cell('keywords', 'Keywords', feature.keywords.length > 0 ? feature.keywords.join(', ') : '');
+			const kwEmpty = feature.keywords.length === 0 || feature.keywords.every(isEmptyValue);
+			cell('keywords', 'Keywords', feature.keywords.length > 0 ? feature.keywords.join(', ') : '', kwEmpty);
 		}
-		if (feature.usage) cell('type', 'Type', feature.usage);
+		if (feature.usage) cell('type', 'Type', feature.usage, isEmptyValue(feature.usage));
 		if (feature.distance) cell('distance', 'Distance', feature.distance);
 		if (feature.target) cell('target', 'Target', feature.target);
 	}
