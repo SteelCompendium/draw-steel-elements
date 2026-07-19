@@ -40,6 +40,20 @@
 	position: relative;
 	letter-spacing: 0.03em;
 }
+/* SC-10 Task 2: the cardHead left-eyebrow now carries a real "Ability"/"Trait"
+   kind-noun (renderFeature.ts kindNounOf) — THEME-AGNOSTIC DOM, mounted in every
+   theme. Feature cards showed NO eyebrow before this task; unconditionally
+   hiding it here keeps that today's-look unchanged in Legacy. Scoped to
+   `--left` specifically — `.dse-head__eyebrow` alone is the base class SHARED
+   by the right eyebrow chip too (e.g. this feature grammar's own cost slot),
+   which must stay visible in Legacy exactly as before. Steel re-reveals the
+   left slot: `.dse-head__eyebrow--line` (only ever the left/"line" style)
+   already forces `display:inline-flex` under `[data-dse-theme='steel']`
+   (Task 1), and that rule's equal selector specificity + later source
+   position wins the cascade over this one. */
+.dse-feature .dse-head__eyebrow--left {
+	display: none;
+}
 /* Action-type spine: --dse-act is the ELEMENT-SET alias
    (--dse-act: var(--dse-act-<type>), set beside [data-dse-act]). Keyed as a
    background (not a border-color) so Legacy's `none` value is a valid no-op. */
@@ -3260,6 +3274,58 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	transform: rotate(45deg);
 	background: var(--dse-metal-line);
 	flex: none;
+}
+
+/* Crest show-override (SC-10 Task 2): kit/crest.ts's .dse-crest shield ships
+   Legacy-hidden (display:none, below) and was inert until a view actually
+   passed `crest:` to cardHead — renderFeature.ts now does (THEME-AGNOSTIC DOM;
+   the crest degrades to nothing without an icon, so an unmappable action type
+   still emits no crest span, in EVERY theme). This is the one missing piece:
+   the shield's metal-grad/-line/-bevel/-crest-shape tokens already resolve
+   real values in the Steel layer above. SCREEN-ONLY like Task 1's additions —
+   :not([data-dse-print="on"]) keeps <id>--steel-print.png frozen (SC-4). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest {
+	display: grid;
+}
+/* Glyph scale: the site crest reads as a bold central icon (02-ability-card
+   --site-dark.png) — Obsidian's default Lucide size reads too small inside the
+   --lg shield without this. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest__glyph svg {
+	width: 1.5em;
+	height: 1.5em;
+}
+
+/* Boxed "◆ EFFECT" section header — the SHARED hook (SC-10 Task 2; the full
+   boxed PANEL chrome — sunken background, border, padding — is Task 3). Steel
+   drops the Legacy inline "Title: body" colon and turns the title into its own
+   small-caps ◆-marked line (site's steel-ability-cards.css
+   .sc-ability__section-head .tag: font-variant:small-caps + text-transform:
+   lowercase — NOT uppercase; uppercase source text defeats small-caps
+   rendering) with the body as its own block below, matching
+   `02-ability-card--site-dark.png`'s "◆ EFFECT" band. SCREEN-ONLY, print
+   frozen (SC-4). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title {
+	display: flex;
+	align-items: center;
+	gap: 0.32em;
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.07em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title::after {
+	content: "";
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title::before {
+	content: "";
+	display: inline-block;
+	width: 0.36rem;
+	height: 0.36rem;
+	transform: rotate(45deg);
+	background: var(--dse-metal-line);
+	flex: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body {
+	display: block;
 }
 
 /* In-card link color (SC-10 Task 1, recon breakdown #2): markdown links

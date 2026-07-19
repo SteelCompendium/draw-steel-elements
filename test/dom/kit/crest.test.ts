@@ -1,8 +1,10 @@
 // Plan 08 Task 4 (D2 §2.9) — kit/crest: the Steel-only heraldic shield (mirrors the
 // site's .sc-crest). A decorative <span> holding a setIcon glyph. STEEL-ONLY: the
-// Legacy base hides it via display:none so today's look is unchanged — the
-// show-override ships with D3's [data-dse-theme="steel"] skin layer, not here.
-// Degrades to nothing when no icon is given.
+// Legacy base hides it via display:none so today's look is unchanged. The
+// show-override shipped with SC-10 Task 2 (styles-source.css), the same task that
+// first wires `crest:` into a view (renderFeature.ts) — print-guarded so the
+// on-screen print-preview twin (SC-4) stays frozen. Degrades to nothing when no
+// icon is given.
 import * as fs from 'fs';
 import * as path from 'path';
 import { crest } from '../../../src/framework/kit/crest';
@@ -62,11 +64,17 @@ describe('Plan 08 Task 4: kit/crest (D2 §2.9)', () => {
 			expect(base![1]).toMatch(/display:\s*none/);
 		});
 
-		test('no premature show-override: this sheet ships NO theme-scoped .dse-crest display rule (D3 owns it)', () => {
-			// The active theme id is already "steel" (DEFAULT_THEME_ID) while the Steel
-			// SKIN layer doesn't exist until D3 — a [data-dse-theme="steel"] display
-			// override here would flash bare glyphs today. It must ship WITH D3's layer.
-			expect(rules).not.toMatch(/\[data-dse-theme[^\]]*\][^{]*\.dse-crest/);
+		test('Steel show-override (SC-10 Task 2): now that a view (renderFeature.ts) actually wires crest:, the Steel skin layer reveals the shield — print-guarded so <id>--steel-print.png stays frozen (SC-4)', () => {
+			// D3's Steel skin layer landed (SC-10 Task 1) and Task 2 is the first
+			// consumer to pass `crest:` to cardHead — so the premature-show risk this
+			// test used to guard against (a display override with no skin behind it,
+			// "flashing bare glyphs") no longer applies. The override must still be
+			// SCOPED away from the on-screen print-preview twin (SC-4 parked).
+			const show = rules.match(
+				/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\)\s*\.dse-crest\s*\{([^}]*)\}/,
+			);
+			expect(show).not.toBeNull();
+			expect(show![1]).toMatch(/display:\s*(?!none\b)\S+/);
 		});
 
 		test('the shield consumes the Steel ornament tokens (inert while hidden)', () => {

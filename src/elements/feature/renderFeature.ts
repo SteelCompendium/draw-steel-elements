@@ -8,7 +8,8 @@
 // statblock/featureblock will embed them with no [data-dse-element="feature"] ancestor):
 //
 //   .dse-feature[data-dse-act]           ← the action-type spine root (+ .indent-N)
-//     .dse-head                          ← kit cardHead: name(heading) · cost · ability_type
+//     .dse-head                          ← kit cardHead: crest · Ability/Trait eyebrow ·
+//                                            name(heading) · cost · ability_type
 //     .dse-feature__flavor               ← italic flavor
 //     .dse-feature__meta                 ← Keywords/Type/Distance/Target grid
 //     .dse-section--trigger              ← titled "Trigger" panel
@@ -20,6 +21,13 @@
 // carry the Steel-only action accent: the Legacy base maps every --dse-act-* token to
 // `none` and the CSS consumes the alias as a background, so the accent fails safe to
 // monochrome — and an unmappable action type sets neither attribute nor alias.
+//
+// SC-10 Task 2: cardHead's crest + left-eyebrow slots are THEME-AGNOSTIC DOM — the
+// crest <span> (kit/crest.ts) and the "Ability"/"Trait" kind-noun eyebrow mount in
+// EVERY theme; styles-source.css's Legacy base neutralizes both (`.dse-crest` is
+// already unconditionally `display:none`; a feature-scoped `.dse-head__eyebrow`
+// hide rule keeps the newly-filled eyebrow invisible there too), so Legacy's look
+// is unchanged and only the Steel skin layer reveals them.
 //
 // Markdown renders through the caller-supplied `renderMd` callback ONLY (ML-1): the
 // element passes its view-parented this.renderMarkdown, so this module never imports
@@ -63,6 +71,47 @@ export function actionTypeOf(config: FeatureConfig): ActionType | undefined {
 	if (source.includes('no action')) return 'none';
 	if (source.includes('action')) return 'main';
 	return undefined;
+}
+
+/**
+ * SC-10 Task 2: the cardHead crest's glyph, keyed to the SAME action-type spine
+ * `actionTypeOf` already computes (person/sword/etc — Lucide thin-line per
+ * DESIGN.md Iconography "Material thin-line second"; glyph-font-parity with the
+ * site's DrawSteelGlyphs codepoints is explicitly NOT required, plan Task 2).
+ * Undefined (unmappable action type) -> kit/crest.ts degrades to no crest at all,
+ * in EVERY theme — the same fail-safe the act spine itself already follows.
+ */
+export function crestIconFor(act: ActionType | undefined): string | undefined {
+	switch (act) {
+		case 'main':
+			return 'sword';
+		case 'maneuver':
+			return 'user';
+		case 'triggered':
+			return 'zap';
+		case 'move':
+			return 'footprints';
+		case 'none':
+			return 'circle-dashed';
+		case 'trait':
+			return 'star';
+		default:
+			return undefined;
+	}
+}
+
+/**
+ * SC-10 Task 2: the cardHead left-eyebrow kind-noun (DESIGN.md "Card header
+ * system" fill guideline — "…is a ___"). The SDK's Feature model carries no
+ * generic third "Feature" bucket (`feature_type` is Ability/Trait/Subtrait, and
+ * `isTrait()` is itself the "no combat rigor" heuristic `actionTypeOf` already
+ * keys its own 'trait' act-type off) — so this binary mirrors that existing
+ * split rather than gating on the `ability_type` STRING field, which is often
+ * absent on genuine abilities (e.g. a Main-action power-roll ability with no
+ * villain-action/echelon descriptor still IS an Ability).
+ */
+export function kindNounOf(config: FeatureConfig): 'Ability' | 'Trait' {
+	return config.feature.isTrait() ? 'Trait' : 'Ability';
 }
 
 /**
@@ -135,13 +184,21 @@ export function renderFeature(
 	// -- cardHead (§3.6 slot mapping): name = the heading; cost -> right eyebrow chip;
 	// ability_type -> right primary chip. Slots mount empty and fill via renderMd so
 	// SDK text renders exactly as the legacy markdown path did.
+	//
+	// SC-10 Task 2 (theme-agnostic DOM — both the crest <span> and the filled
+	// left-eyebrow mount in EVERY theme; Legacy neutralizes both via CSS, see
+	// styles-source.css): leftEyebrow = the "Ability"/"Trait" kind-noun (site's
+	// "◆ ABILITY" eyebrow); crest = a Lucide glyph keyed to the SAME act spine
+	// below. Neither slot invents wording the SDK data doesn't already imply.
 	if (feature.name || feature.cost || feature.ability_type) {
 		const head = cardHead(
 			rootEl,
 			{
+				leftEyebrow: kindNounOf(config),
 				name: '',
 				rightEyebrow: feature.cost ? '' : undefined,
 				rightPrimary: feature.ability_type ? '' : undefined,
+				crest: { icon: crestIconFor(act), size: 'lg' },
 				level,
 			},
 			owner,

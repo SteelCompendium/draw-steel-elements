@@ -232,6 +232,31 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		expect(head.querySelector('.dse-head__primary--right')!.textContent).toBe('Villain Action 1');
 	});
 
+	test('SC-10 Task 2: cardHead left-eyebrow is the "Ability" kind-noun + a crest keyed to the main-action glyph (THEME-AGNOSTIC DOM — present regardless of theme)', async () => {
+		const { root } = await renderBlock(HEADER);
+
+		const head = root.querySelector('.dse-feature > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Ability');
+
+		const crestEl = head.querySelector<HTMLElement>(':scope > .dse-crest');
+		expect(crestEl).not.toBeNull();
+		expect(crestEl!.hasClass('dse-crest--lg')).toBe(true);
+		expect(crestEl!.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('sword');
+	});
+
+	test('SC-10 Task 2: a trait (no combat rigor) gets the "Trait" kind-noun + the trait crest glyph, matching its [data-dse-act="trait"] spine', async () => {
+		const { root } = await renderBlock(NESTED); // outer: feature_type trait, no keywords/usage/distance/target
+
+		const outer = root.querySelector('.dse-feature') as HTMLElement;
+		expect(outer.getAttribute('data-dse-act')).toBe('trait');
+
+		const head = outer.querySelector(':scope > .dse-head') as HTMLElement;
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Trait');
+		expect(head.querySelector(':scope > .dse-crest .dse-crest__glyph')!.getAttribute('data-icon')).toBe(
+			'star',
+		);
+	});
+
 	test('cardHead: omitted slots are GAPS — no ability_type means no right-primary element at all', async () => {
 		const { root } = await renderBlock(magmaTitan);
 
@@ -369,13 +394,16 @@ describe('Plan 09 Task 5: feature re-cast onto the D2 kit card grammar (§3.6)',
 		expect(root.querySelector('.dse-feature')!.getAttribute('data-dse-act')).toBe('trait');
 	});
 
-	test('[data-dse-act]: an unmappable action type sets NOTHING (accent fails safe, no alias)', async () => {
+	test('[data-dse-act]: an unmappable action type sets NOTHING (accent fails safe, no alias); SC-10 Task 2: the crest likewise degrades to nothing (no icon to map), but the "Ability" kind-noun eyebrow still fills — it does not depend on the act spine resolving', async () => {
 		const source = ['type: feature', 'feature_type: ability', 'name: X', 'usage: Gibberish ritual'].join('\n');
 		const { root } = await renderBlock(source);
 
 		const card = root.querySelector('.dse-feature') as HTMLElement;
 		expect(card.hasAttribute('data-dse-act')).toBe(false);
 		expect(card.style.getPropertyValue('--dse-act')).toBe('');
+
+		expect(card.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Ability');
+		expect(card.querySelector('.dse-crest')).toBeNull();
 	});
 
 	test('nesting: effect.features recurse as .dse-feature cards inside .dse-feature__nested; nested heading aria-level bumps', async () => {
