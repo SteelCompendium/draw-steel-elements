@@ -112,7 +112,10 @@ const STEEL_DARK: Record<string, string> = {
 	'stamina-healthy': 'var(--sc-role-hexer, #5cc98a)',
 	'stamina-winded': '#f0b429',
 	'stamina-dying': '#e74c3c',
-	'stamina-temp': '#5dade2',
+	// SC-10 Task 6 (taste #1, "match the site" 2026-07-19): flipped from the
+	// D3 draft blue to purple — frees blue for --sc-act-maneuver, the site's
+	// reserved action-type hue.
+	'stamina-temp': '#7c5cd6',
 	'stamina-track': 'rgba(220,226,230,0.06)',
 	// encounter
 	'turn-done': 'var(--sc-role-hexer, #5cc98a)',

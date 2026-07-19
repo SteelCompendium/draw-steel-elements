@@ -3150,7 +3150,7 @@ Shared globals
 	--dse-stamina-healthy: var(--sc-role-hexer, #5cc98a);
 	--dse-stamina-winded: #f0b429;
 	--dse-stamina-dying: #e74c3c;
-	--dse-stamina-temp: #5dade2; /* PROPOSED blue (cont. w/ shipped deepskyblue); spec purple #7c5cd6 (map fn 11; Scott review) */
+	--dse-stamina-temp: #7c5cd6; /* purple (SC-10 Task 6, taste #1 resolved "match the site" 2026-07-19): the site has no temp-stamina bar, but reserves blue for --sc-act-maneuver — purple frees blue and sits outside the HP ramp */
 	--dse-stamina-track: rgba(220,226,230,0.06);
 
 	/* -- Semantic: encounter -- */
@@ -3662,6 +3662,82 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
    byte-identical LEGACY-FREEZE gate. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char {
 	padding: 0.35rem 0.2rem;
+}
+
+/* ================================================================== */
+/*   SC-10 Task 6 — hero-sheet Steel chrome: sheet frame + region      */
+/*   header bands, matching the vocabulary already shipped for the     */
+/*   feature/statblock/featureblock plates (Tasks 1-5). The hero sheet */
+/*   (src/elements/hero/view.ts) mounts no cardHead/dse-section of its  */
+/*   own — it's a bespoke .dse-hero__* layout — so none of this is     */
+/*   inherited "for free"; every rule below is additive Steel-only     */
+/*   polish on the EXISTING classes (no DOM/serialize change). Legacy's */
+/*   .dse-hero has no border/background rule of its own (2788), so all */
+/*   of this is purely additive there being scoped to Steel. Print is  */
+/*   untouched (SC-4 parked). */
+/* ================================================================== */
+
+/* -- Sheet frame: the same forged card-ground recipe as .dse-sb/       */
+/*    feature/featureblock (~3204) — the whole hero sheet reads as ONE  */
+/*    plate rather than a stack of bare region boxes. .dse-hero has no  */
+/*    padding of its own in any theme (the regions carry their own), so */
+/*    Steel adds it here to keep the frame from touching the content.  */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
+	background: var(--dse-card-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+	padding: var(--dse-pad);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
+	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* -- Hero name: the flagship title, embossed + display-face uppercase  */
+/*    the same way every other card's primary title reads (shared rule  */
+/*    ~3239/~3258) — .dse-hero__name isn't part of that shared selector */
+/*    list because it isn't cardHead-built, so it's added here instead. */
+[data-dse-theme='steel'] .dse-hero__name {
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__name {
+	font-family: var(--dse-font-display);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.01em;
+}
+
+/* -- Region panels: sunken plate + a raised, embossed header strip —   */
+/*    the same "boxed panel" grammar as .dse-section (~3462), ported to */
+/*    a region that has no separate title/body wrapper split (the title */
+/*    bleeds to the panel edges via negative margin, then re-applies    */
+/*    the padding it just canceled, same recipe as the statblock/       */
+/*    featureblock header bands ~3561/~3582). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region {
+	background: var(--dse-surface-sunken);
+}
+[data-dse-theme='steel'] .dse-hero__region-title {
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region-title {
+	font-family: var(--dse-font-display);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.01em;
+	margin: calc(-1 * var(--dse-pad)) calc(-1 * var(--dse-pad)) 0.6em;
+	padding: 0.45em var(--dse-pad);
+	background: var(--dse-surface-raised);
+	border-bottom: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+}
+
+/* -- Forged chips: skill chips + ability cost/type chips pick up the   */
+/*    same metal-faint wash as the cardHead's own chip slots (~3266),   */
+/*    instead of the flat outline they render with today. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__skill-chip,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__ability-cost,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__ability-type {
+	background: var(--dse-metal-faint);
 }
 
 /* ================================================================== */
