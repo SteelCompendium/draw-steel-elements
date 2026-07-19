@@ -643,11 +643,13 @@ describe('Plan 09 Task 6b: source + CSS hygiene', () => {
 			expect(sheet).toContain(scopedRule);
 		}
 		// The shared emboss rule now also covers the statblock's own big 5-stat
-		// numeral and the (merged-text) characteristics cell.
+		// numeral and the (merged-text) characteristics cell (SC-10 Task 7 further
+		// extends the same shared rule to the D6 reference-card family's own
+		// title, .dse-card__title — the last selector in the list).
 		const emboss = sheet.match(/text-shadow: var\(--dse-emboss\);\s*\}/);
 		expect(emboss).not.toBeNull();
 		expect(sheet).toMatch(
-			/\[data-dse-theme='steel'\] \.dse-sb__item-v,\s*\n\[data-dse-theme='steel'\] \.dse-sb__char\s*\{/,
+			/\[data-dse-theme='steel'\] \.dse-sb__item-v,\s*\n\[data-dse-theme='steel'\] \.dse-sb__char,\s*\n\[data-dse-theme='steel'\] \.dse-card__title\s*\{/,
 		);
 	});
 });

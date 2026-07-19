@@ -3242,13 +3242,18 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
    value, matching .sb__char-v) was tried and reverted (see the renderChars
    comment, src/elements/statblock/view.ts) because it shifted Chromium's
    sub-pixel text shaping enough to fail the byte-identical LEGACY-FREEZE
-   gate, even though the concatenated text stayed identical. */
+   gate, even though the concatenated text stayed identical. SC-10 Task 7
+   extends the same shared rule to the D6 reference-card family's own title
+   (.dse-card__title — kit/condition/treasure/ancestry/... via CardLayout),
+   so a card's name embosses like every other card's primary title instead
+   of reading as a plain bolded label. */
 [data-dse-theme='steel'] .dse-head__primary--left,
 [data-dse-theme='steel'] .dse-section__title,
 [data-dse-theme='steel'] .dse-pr__head,
 [data-dse-theme='steel'] .dse-statgrid__value,
 [data-dse-theme='steel'] .dse-sb__item-v,
-[data-dse-theme='steel'] .dse-sb__char {
+[data-dse-theme='steel'] .dse-sb__char,
+[data-dse-theme='steel'] .dse-card__title {
 	text-shadow: var(--dse-emboss);
 }
 /* letter-spacing is pre-existing (D3, unscoped from print already — kept
@@ -3371,10 +3376,35 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	display: block;
 }
 
+/* SC-10 Task 7: the D6 reference-card family's title (.dse-card__title —
+   kit/condition/treasure/ancestry/... via CardLayout/genericCard) picks up
+   the same display-face/uppercase treatment as every other card's primary
+   title (.dse-head__primary--left/.dse-hero__name above) — the shared list
+   at ~3246 only carries the text-shadow half of that split (same reason:
+   the print layer resets nothing of its own for --dse-font-display/
+   text-transform, so the face+case change needs its own screen-only rule).
+   This is the "clipping of the site's prose in a small frame" the term
+   card should read as: a term's name renders like the site's own H2, not a
+   plain bolded label. SCREEN-ONLY: :not([data-dse-print="on"]) keeps
+   <id>--steel-print.png frozen (SC-4 parked). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__title {
+	font-family: var(--dse-font-display);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.01em;
+}
+
 /* In-card link color (SC-10 Task 1, recon breakdown #2): markdown links
    rendered inside Steel card bodies default to Obsidian's --link-color
    (violet) — retarget to the steel-teal accent everywhere a card renders
    prose, matching the site (02/04-*--site: teal `teleport`/`echelon`).
+   SC-10 Task 7 extends this to `.dse-card` (the D6 reference-card family's
+   own root — kit/condition/treasure/ancestry/... — CardLayout.ts's outer
+   `.dse-card` div wraps flavor/rows/features/body alike, so one descendant
+   selector covers all of them, same as `.dse-feature`/`.dse-sb`/`.dse-fb`
+   already do for their own card families): the kit-card top matter's
+   "+N per echelon" row link was still rendering Obsidian violet even after
+   Task 1, since `.dse-card` was never in this list.
    SCREEN-ONLY: the print layer already forces --dse-accent to black for its
    own reasons (untouched by this task, SC-4 parked) — :not([data-dse-print])
    keeps this task's rule from repainting print links and drifting
@@ -3382,13 +3412,15 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature a,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb a,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb a,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a {
 	color: var(--dse-accent);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb a:hover,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb a:hover,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a:hover {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body a:hover,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card a:hover {
 	color: var(--dse-accent);
 	text-decoration: underline;
 }
