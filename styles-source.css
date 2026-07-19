@@ -3218,11 +3218,21 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 
 /* Embossed headings (SC-10): the site's fx-emboss treatment on card titles,
    section keys and the power-roll head; the primary title takes the display
-   face (Source Serif 4 fallback per D3 OD-4). */
+   face (Source Serif 4 fallback per D3 OD-4). SC-10 Task 4 extends the same
+   shared rule to the statblock's own big 5-stat numeral (.dse-sb__item-v,
+   the site's .sb__stat .v treatment) AND the characteristics cell
+   (.dse-sb__char) — the latter embosses the WHOLE merged "Might +2" text run
+   rather than just the numeral: a label/value DOM split (to isolate just the
+   value, matching .sb__char-v) was tried and reverted (see the renderChars
+   comment, src/elements/statblock/view.ts) because it shifted Chromium's
+   sub-pixel text shaping enough to fail the byte-identical LEGACY-FREEZE
+   gate, even though the concatenated text stayed identical. */
 [data-dse-theme='steel'] .dse-head__primary--left,
 [data-dse-theme='steel'] .dse-section__title,
 [data-dse-theme='steel'] .dse-pr__head,
-[data-dse-theme='steel'] .dse-statgrid__value {
+[data-dse-theme='steel'] .dse-statgrid__value,
+[data-dse-theme='steel'] .dse-sb__item-v,
+[data-dse-theme='steel'] .dse-sb__char {
 	text-shadow: var(--dse-emboss);
 }
 /* letter-spacing is pre-existing (D3, unscoped from print already — kept
@@ -3494,6 +3504,117 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	align-items: center;
 	justify-content: center;
 	line-height: 1;
+}
+
+/* ================================================================== */
+/*   SC-10 Task 4 — statblock forged plate: role-tinted header band,   */
+/*   boxed stat/kv/characteristics rows, crest (see crestIconForRole   */
+/*   in src/elements/statblock/view.ts). SCREEN-ONLY throughout        */
+/*   (:not([data-dse-print="on"]), SC-4 parked); Legacy's .dse-head/    */
+/*   .dse-sb__item/.dse-sb__kv/.dse-sb__chars carry none of these       */
+/*   rules, so <id>--legacy-{dark,light}.png stay pixel-identical.      */
+/*   Single-plate hygiene: the statblock ROOT's background is already   */
+/*   zeroed to transparent in Steel (~3211, "Single-layer plates") so   */
+/*   the band below reads as part of the ONE .dse-sb plate, not a       */
+/*   second nested box.                                                 */
+/* ================================================================== */
+
+/* -- Header band: role-tinted gradient strip behind .dse-head (site's
+   .sb__head recipe, steel-statblock.css) — the pink "Horde Harrier" band of
+   01-statblock--site-dark.png. Only fires when a role actually mapped
+   ([data-dse-role], set together with the --dse-role alias by
+   applyRoleTint — see the existing spine rule at ~1771), so an unmapped role
+   keeps the flat card ground (OD-2: the accent is Steel-only AND
+   fails-safe). The band bleeds edge-to-edge by canceling .dse-sb's own
+   padding (negative margin) and re-applying it as the band's own padding, so
+   the header content doesn't shift; its top corners share --dse-radius with
+   the card so it tucks under the card's own rounded top edge without a
+   separate overflow:hidden clip on .dse-sb. --dse-surface stands in for the
+   site's bespoke --sb-plate-solid (no plugin token for that one-off mix
+   base) — same hex family, already verbatim-matched to the site (D3). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb[data-dse-role] > .dse-head {
+	margin: -0.5rem calc(-1 * var(--dse-pad)) 0.75rem;
+	padding: 0.75rem var(--dse-pad) 0.85rem;
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	background: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface)),
+		color-mix(in srgb, var(--dse-role) 9%, var(--dse-surface))
+	);
+	border-bottom: 1px solid color-mix(in srgb, var(--dse-role) 38%, transparent);
+}
+
+/* -- Boxed 5-stat row (Size/Speed/Stamina/Stability/Free Strike): the site's
+   .sb__stat framed cell — sunken box + hairline + small-caps label under the
+   already-embossed big value (emboss shared rule above). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item {
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken);
+	padding: 0.45rem 0.3rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item-l {
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
+}
+
+/* -- Boxed Immunity/Weakness/Movement/With Captain kv cells: the site's
+   "grid" field cell — label top-left small-caps (no colon), value below,
+   left-aligned box (--dse-surface-sunken, hairline). Steel resets the base
+   rule's alternating right-align (~1808, a Legacy-only inline-pair layout)
+   since the boxed grid reads every cell the same way. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__grid {
+	gap: 0.5rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv {
+	display: flex;
+	flex-direction: column;
+	gap: 0.1rem;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken);
+	padding: 0.42rem 0.65rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv:nth-child(even) {
+	justify-self: stretch;
+	text-align: left;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv-l {
+	font-variant: small-caps;
+	letter-spacing: 0.05em;
+	font-size: 0.8em;
+	font-weight: normal;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv-l::after {
+	content: '';
+}
+
+/* -- Boxed characteristics row: the site's .sb__chars gradient-bordered
+   strip holding five value-over-label cells. The gradient is a one-off
+   translucent highlight/shade (no site token either), so it's the one
+   raw-rgba pair in this section — mirrors the already-shipped card-ground
+   shadow literal (~3201) for the same reason. Light needs its OWN (much
+   fainter) mix, same as the site's [data-md-color-scheme="default"]
+   companion rule, since a dark-tuned white/black wash reads wrong on a
+   light plate. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__chars {
+	border: 1px solid var(--dse-metal-line);
+	border-radius: var(--dse-radius);
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.16));
+	padding: 0.55rem 0.4rem;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__chars {
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0.05));
+}
+/* Each cell reads as ONE embossed line ("Might +2", shared emboss rule
+   above) — the site's two-line value-over-label .sb__char-v/-l split isn't
+   reproduced: it needs a label/value DOM split, which was tried and
+   reverted (renderChars comment, src/elements/statblock/view.ts) because it
+   shifted Chromium's sub-pixel text shaping enough to fail the
+   byte-identical LEGACY-FREEZE gate. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char {
+	padding: 0.35rem 0.2rem;
 }
 
 /* ================================================================== */

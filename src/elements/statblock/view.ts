@@ -50,7 +50,7 @@ import { cardHead, divider } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
 import { featureRollHooks } from '@/elements/feature/rollController';
-import { applyRoleTint } from '@/elements/roleTint';
+import { applyRoleTint, type DseRole } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
 import type { Statblock } from 'steel-compendium-sdk';
@@ -61,6 +61,54 @@ function formatCharacteristic(value?: number): string {
 		return 'N/A';
 	}
 	return value >= 0 ? `+${value}` : `${value}`;
+}
+
+/**
+ * SC-10 Task 4 — the cardHead crest's glyph for the statblock's OWN head, keyed to
+ * the SAME combat-role spine that already drives the role tint + header band
+ * (Lucide thin-line per DESIGN.md Iconography "Material thin-line second";
+ * glyph-font-parity with the site's DrawSteelGlyphs is explicitly not required,
+ * same precedent as feature/renderFeature.ts's crestIconFor keying the ability
+ * crest to action type). An unmapped role -> kit/crest.ts degrades to no crest at
+ * all, in EVERY theme — the same fail-safe idiom applyRoleTint already follows.
+ *
+ * NOTE: the shipped site (steel-statblock.css / statblock_card.go
+ * renderStatblockHead) does NOT put a shield crest on its own top-level card
+ * head today (only nested sub-feature glyphs, and even those are the small
+ * inline icon, not a shield) — this is a plugin-side extension of the crest
+ * system DESIGN.md already establishes for every other entity card, consistent
+ * with the "Crest is the one true wiring gap" framing (plan 19 preamble #3) and
+ * this task's explicit brief ("wires the crest into the statblock head").
+ */
+function crestIconForRole(role: DseRole | undefined): string | undefined {
+	switch (role) {
+		case 'ambusher':
+			return 'eye-off';
+		case 'harrier':
+			return 'wind';
+		case 'artillery':
+			return 'target';
+		case 'brute':
+			return 'hammer';
+		case 'controller':
+			return 'brain';
+		case 'hexer':
+			return 'sparkles';
+		case 'mount':
+			return 'footprints';
+		case 'support':
+			return 'heart-pulse';
+		case 'defender':
+			return 'shield';
+		case 'leader':
+			return 'crown';
+		case 'solo':
+			return 'skull';
+		case 'minion':
+			return 'users';
+		default:
+			return undefined;
+	}
 }
 
 /**
@@ -125,10 +173,13 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const header = statblockHeaderParts(sb);
 
 		// Role spine + header tint from the SDK combat role (fails-safe unmapped).
-		applyRoleTint(card, header.role);
+		const role = applyRoleTint(card, header.role);
 
 		// -- cardHead (§3.8 fill; legacy header wording preserved verbatim — the
 		// fallback strings always rendered in the legacy header, so no slot is a gap) --
+		// SC-10 Task 4 (theme-agnostic DOM): crest mounts in EVERY theme; kit/crest.ts
+		// degrades to nothing without an icon (unmapped role), and the Legacy base
+		// keeps `.dse-crest { display: none }` — see crestIconForRole above.
 		cardHead(
 			card,
 			{
@@ -137,6 +188,7 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 				rightEyebrow: header.rightEyebrow,
 				rightPrimary: header.rightPrimary,
 				rightDeck: header.rightDeck,
+				crest: { icon: crestIconForRole(role), size: 'lg' },
 				level: 2, // the block heading; feature cards default to 3
 			},
 			this,
@@ -181,7 +233,20 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		if (sb.withCaptain) kv('captain', 'With Captain', sb.withCaptain);
 	}
 
-	/** The .dse-sb__chars row: five verbatim "Name +N" pairs, legacy order. */
+	/** The .dse-sb__chars row: five verbatim "Name +N" pairs, legacy order.
+	 *
+	 * SC-10 Task 4 tried splitting each pair into -l/-v sub-spans (to match
+	 * .dse-sb__item/.dse-sb__kv's two-tier boxed-cell look) and reverted it: even
+	 * though the concatenated textContent stayed identical, wrapping the SAME text
+	 * in two inline <span>s shifted Chromium's sub-pixel text shaping/hinting by a
+	 * hair — pixel-diffed against the pre-task baseline as a 6×24px patch (62
+	 * pixels) inside the word "Agility" itself (nowhere near the label/value
+	 * split point), i.e. the mere presence of a sibling inline box changed
+	 * anti-aliasing on GLYPHS the split didn't touch. That fails the LEGACY-FREEZE
+	 * gate (`<id>--legacy-*.png` must be byte-identical), so the single merged
+	 * text node stays — .dse-sb__char is boxed as ONE cell in Steel below (no
+	 * per-glyph value/label split), unlike the item/kv rows, which already had a
+	 * label/value structure to key off before this task touched anything. */
 	private renderChars(card: HTMLElement, model: StatblockConfig): void {
 		const chars = model.statblock.characteristics;
 		const row = card.createDiv({ cls: 'dse-sb__chars' });

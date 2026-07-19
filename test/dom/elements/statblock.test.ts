@@ -270,6 +270,25 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		}
 	});
 
+	test('SC-10 Task 4: cardHead crest is keyed to the SAME resolved role as the tint/band (organization fallback included) — .dse-crest--lg with the role glyph', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
+		const crestEl = head.querySelector<HTMLElement>(':scope > .dse-crest');
+		expect(crestEl).not.toBeNull();
+		expect(crestEl!.hasClass('dse-crest--lg')).toBe(true);
+		// role: "" / organization: "Leader" -> resolved role "leader" -> 'crown'.
+		expect(crestEl!.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('crown');
+	});
+
+	test('SC-10 Task 4: an unmapped/missing role renders NO crest at all (kit/crest.ts degrades to nothing, same fail-safe as the tint/band)', async () => {
+		for (const source of [WITH_META, NO_FEATURES]) {
+			const { root } = await renderStatblock(source);
+			const head = root.querySelector('.dse-sb > .dse-head') as HTMLElement;
+			expect(head.querySelector(':scope > .dse-crest')).toBeNull();
+		}
+	});
+
 	test('pref-attr hooks (D4 Plan 13 Task 3): reflected onto the ELEMENT ROOT with catalog defaults; the .dse-sb card carries none of them', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 		const card = root.querySelector('.dse-sb') as HTMLElement;
@@ -331,6 +350,14 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 			(el) => el.textContent,
 		);
 		expect(chars).toEqual(['Might -1', 'Agility +2', 'Reason +0', 'Intuition +1', 'Presence N/A']);
+	});
+
+	test('SC-10 Task 4: .dse-sb__char stays ONE merged text node (a label/value DOM split was tried and reverted — see the renderChars comment; splitting shifted Chromium sub-pixel text shaping enough to fail the byte-identical LEGACY-FREEZE gate)', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const cell = root.querySelector('.dse-sb__chars > .dse-sb__char') as HTMLElement;
+		expect(cell.children).toHaveLength(0);
+		expect(cell.textContent).toBe('Might +2');
 	});
 
 	test("features render through Task 5's renderFeatureList: ◆ divider, then .dse-feature__nested > .dse-feature cards (shared grammar)", async () => {
@@ -596,6 +623,32 @@ describe('Plan 09 Task 6b: source + CSS hygiene', () => {
 		expect(sheet).not.toMatch(/\.ds-sb-container/);
 		expect(sheet).not.toMatch(/\.ds-sb-stats/);
 		expect(sheet).not.toMatch(/\.ds-sb-characteristics/);
+	});
+
+	test('SC-10 Task 4: forged-plate CSS (role band, boxed item/kv/chars cells) is entirely Steel-scoped + screen-only, so Legacy/print never see it', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		// Role-tinted header band: only fires with a mapped role, print-excluded.
+		expect(sheet).toMatch(
+			/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-sb\[data-dse-role\] > \.dse-head\s*\{/,
+		);
+		// Boxed stat/kv/chars cells, all Steel + screen-only scoped.
+		for (const selector of [
+			".dse-sb__item {",
+			".dse-sb__kv {",
+			".dse-sb__chars {",
+			".dse-sb__char {",
+		]) {
+			const scopedRule = `[data-dse-theme='steel']:not([data-dse-print="on"]) ${selector}`;
+			expect(sheet).toContain(scopedRule);
+		}
+		// The shared emboss rule now also covers the statblock's own big 5-stat
+		// numeral and the (merged-text) characteristics cell.
+		const emboss = sheet.match(/text-shadow: var\(--dse-emboss\);\s*\}/);
+		expect(emboss).not.toBeNull();
+		expect(sheet).toMatch(
+			/\[data-dse-theme='steel'\] \.dse-sb__item-v,\s*\n\[data-dse-theme='steel'\] \.dse-sb__char\s*\{/,
+		);
 	});
 });
 
