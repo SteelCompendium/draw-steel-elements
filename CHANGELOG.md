@@ -92,6 +92,10 @@ needs action.
 - [BUGFIX] A freshly-synced compendium file is now immediately resolvable by
   reference blocks (no more transient "found but not renderable — re-sync"
   card right after a sync).
+- New: the **Steel theme** now matches the steelcompendium.io High-Fantasy
+  Steel look — forged cards, embossed serif titles, crest badges, role-tinted
+  statblock plates; the original look remains available as the **Legacy**
+  style. Switch themes in Settings → Appearance.
 
 ## 5.1.1
 
