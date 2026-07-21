@@ -98,6 +98,13 @@ const STEEL_DARK: Record<string, string> = {
 	'metal-grad': 'linear-gradient(180deg, #e3e7e9 0%, #a9b0b5 48%, #686f74 100%)',
 	'metal-line': 'rgba(176,183,187,.5)',
 	'metal-faint': 'rgba(176,183,187,.16)',
+	// Plan 20 Task 3 — the material layer (site steel-redesign.css:15-16 +
+	// steel-ability-cards.css:117/118/160).
+	metal: '#a9b0b5',
+	'metal-bright': '#d9dee1',
+	sheen: 'linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.14))',
+	'sheen-soft': 'linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0))',
+	'chip-bevel': 'inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.3)',
 	bevel: 'inset 0 1px 0 rgba(255,255,255,.07)',
 	emboss: '0 1px 0 rgba(0,0,0,.55), 0 -1px 0 rgba(255,255,255,.04)',
 	'card-bg': 'linear-gradient(160deg, #232a2e, #181c1f)',
@@ -191,8 +198,9 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 			(n) => steelValue(n) === undefined && !(THEME_INVARIANT as readonly string[]).includes(n),
 		);
 		expect(uncovered).toEqual([]);
-		// The map's exact split: 58 overridden + 6 theme-invariant = 64 union tokens (SC-10: badge-fg → invariant).
-		expect(overridden.length).toBe(58);
+		// The map's exact split: 63 overridden + 6 theme-invariant = 69 union tokens
+		// (SC-10: badge-fg → invariant; Plan 20 Task 3: +5 material tokens).
+		expect(overridden.length).toBe(63);
 		expect(THEME_INVARIANT.length).toBe(6);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
@@ -283,6 +291,13 @@ const STEEL_LIGHT: Record<string, string> = {
 	'metal-grad': 'linear-gradient(180deg, #9aa1a6 0%, #6a7176 48%, #474d51 100%)',
 	'metal-line': 'rgba(95,103,108,.45)',
 	'metal-faint': 'rgba(95,103,108,.14)',
+	// Plan 20 Task 3: only these three of the five material tokens shift for the
+	// light scheme — the site overrides just the cost chip's gradient
+	// (steel-ability-cards.css:119) and the two metal text colours
+	// (steel-redesign.css:26-27); sheen-soft and chip-bevel have no light rule.
+	metal: '#5f676c',
+	'metal-bright': '#2c3338',
+	sheen: 'linear-gradient(180deg, rgba(255,255,255,.9), rgba(0,0,0,.04))',
 	bevel: 'inset 0 1px 0 rgba(255,255,255,.8)',
 	emboss: 'none', // site: no light emboss
 	'card-bg': 'linear-gradient(160deg, #ffffff, #eef1f1)',
@@ -333,11 +348,11 @@ describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])
 		}
 	});
 
-	test('the light block overrides EXACTLY the shifting tokens (31) — none extra, none twice', () => {
+	test('the light block overrides EXACTLY the shifting tokens (34) — none extra, none twice', () => {
 		const defs = steelLightDefinitions();
 		expect(new Set(defs)).toEqual(new Set(Object.keys(STEEL_LIGHT)));
-		expect(defs.length).toBe(31); // SC-10: badge-fg no longer light-overridden
-		expect(Object.keys(STEEL_LIGHT).length).toBe(31); // SC-10: badge-fg removed
+		expect(defs.length).toBe(34); // SC-10: badge-fg no longer light-overridden; Plan 20: +metal/-bright/sheen
+		expect(Object.keys(STEEL_LIGHT).length).toBe(34);
 		const seen = new Set<string>();
 		expect(defs.filter((n) => (seen.has(n) ? true : (seen.add(n), false)))).toEqual([]);
 	});

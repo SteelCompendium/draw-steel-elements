@@ -42,6 +42,14 @@ export const DSE_TOKEN_NAMES = [
 	'metal-grad',
 	'metal-line',
 	'metal-faint',
+	// -- The material layer (Plan 20 Task 3): flat metal TEXT colours + the two
+	//    translucent overlays + the cost chip's inset bevel. `bevel` below is a
+	//    DIFFERENT thing (the site's --fx-bevel, consumed by the card plates). --
+	'metal',
+	'metal-bright',
+	'sheen',
+	'sheen-soft',
+	'chip-bevel',
 	'bevel',
 	'emboss',
 	'card-bg',

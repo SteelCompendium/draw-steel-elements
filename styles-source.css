@@ -2995,6 +2995,15 @@ Shared globals
 	--dse-metal-grad: none;
 	--dse-metal-line: none;
 	--dse-metal-faint: none;
+	/* Plan 20 Task 3 — the material layer (flat metal TEXT colours + the two
+	   translucent overlays + the chip's inset bevel). Inert here: `inherit`
+	   makes `color: var(--dse-metal)` a no-op and `none` makes the overlays
+	   absent, so Legacy resolves to today's flat look. */
+	--dse-metal: inherit;
+	--dse-metal-bright: inherit;
+	--dse-sheen: none;
+	--dse-sheen-soft: none;
+	--dse-chip-bevel: none;
 	--dse-bevel: none;
 	--dse-emboss: none;
 	--dse-card-bg: none;
@@ -3141,6 +3150,23 @@ Shared globals
 	--dse-metal-grad: linear-gradient(180deg, #e3e7e9 0%, #a9b0b5 48%, #686f74 100%);
 	--dse-metal-line: rgba(176,183,187,.5);
 	--dse-metal-faint: rgba(176,183,187,.16);
+	/* Flat metal TEXT colours — the site's --fx-metal / --fx-metal-bright
+	   (steel-redesign.css:15-16). Chip text, section tags and the ◆ markers
+	   read as brushed metal instead of body grey. */
+	--dse-metal: #a9b0b5;
+	--dse-metal-bright: #d9dee1;
+	/* The two material overlays. Translucent, so they COMPOSE over whatever
+	   surface token a rule already paints (site technique — the gradient is
+	   layered as `background`, never a solid fill):
+	     --dse-sheen       steel-ability-cards.css:117 (.sc-ability__cost)
+	     --dse-sheen-soft  steel-ability-cards.css:160/184 (pr-head / section-head)
+	   --dse-chip-bevel is the cost chip's two-part shadow (…:118) and is
+	   deliberately a SEPARATE token from --dse-bevel, which already carries the
+	   site's --fx-bevel (steel-redesign.css:21) and is consumed by the card
+	   plates (~3217/3736, ~4387) — redefining it would restyle those. */
+	--dse-sheen: linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.14));
+	--dse-sheen-soft: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0));
+	--dse-chip-bevel: inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.3);
 	--dse-bevel: inset 0 1px 0 rgba(255,255,255,.07);
 	--dse-emboss: 0 1px 0 rgba(0,0,0,.55), 0 -1px 0 rgba(255,255,255,.04);
 	--dse-card-bg: linear-gradient(160deg, #232a2e, #181c1f);
@@ -3280,6 +3306,50 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	background: var(--dse-metal-faint);
 }
 
+/* --- Plan 20 Task 3: chips match the site PER SURFACE ---------------------
+   The site has TWO chip surfaces, not one, and the plugin's three --chip
+   modifiers are the FIRST of them:
+
+   1. `.sc-head__slot--chip` (steel-cardhead.css:123-130) — the card-head RIGHT
+      RAIL chip ("Level 1", "EV 3"). It is FLAT: a 1px hairline + .35em radius
+      + small-caps tracked text, NO background and NO box-shadow. The plugin's
+      --chip modifiers ARE this slot (kit/cardHead.ts:60,97-99), so they take
+      the flat treatment — `background: none` deliberately drops the SC-10
+      metal-faint wash above (that wash has no site counterpart).
+   2. `.sc-ability__cost` — handled by the next block.
+
+   Screen-only (:not([data-dse-print="on"])): the SC-10 wash rule above is
+   print-visible, so this override stays out of <id>--steel-print.png. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(
+	.dse-head__eyebrow--chip,
+	.dse-head__primary--chip,
+	.dse-head__deck--chip
+) {
+	background: none;
+	border: 1px solid var(--dse-border);
+	border-radius: 0.35em;
+	color: var(--dse-fg-muted); /* site: --md-default-fg-color--light (…:127) */
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.04em;
+}
+
+/* The SECOND chip surface: the ability COST corner chip, `.sc-ability__cost`
+   (steel-ability-cards.css:113-119) — the one place the site actually forges a
+   chip (sheen gradient + inset bevel + metal-line hairline + 7px radius +
+   metal-bright text). In the plugin that content is written into the feature
+   card's right EYEBROW slot (elements/feature/renderFeature.ts:215,227), so
+   the forged treatment is scoped to `.dse-feature` and does NOT leak to every
+   head chip. The light-scheme background swap rides on --dse-sheen (site
+   …:119), so no separate light rule is needed here. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature .dse-head__eyebrow--chip {
+	background-image: var(--dse-sheen);
+	border: 1px solid var(--dse-metal-line);
+	border-radius: 7px;
+	box-shadow: var(--dse-chip-bevel);
+	color: var(--dse-metal-bright);
+}
+
 /* Small-caps ◆ eyebrow (SC-10 Task 1): the site's steel-cardhead.css eyebrow
    treatment for the left "line"-style eyebrow slot (kind-noun context, e.g.
    "Ability" / "Feature") — small-caps + tracked letter-spacing + a leading
@@ -3303,7 +3373,11 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	width: 0.36rem;
 	height: 0.36rem;
 	transform: rotate(45deg);
-	background: var(--dse-metal-line);
+	/* Plan 20 Task 3: the site fills this ◆ with --fx-metal, not the hairline
+	   colour (steel-cardhead.css:90 — .sc-head__left-eyebrow…::before). The
+	   eyebrow TEXT itself stays muted body grey there (…:85), so it is
+	   deliberately NOT re-coloured to metal-bright. */
+	background: var(--dse-metal);
 	flex: none;
 }
 
@@ -3369,7 +3443,9 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	width: 0.36rem;
 	height: 0.36rem;
 	transform: rotate(45deg);
-	background: var(--dse-metal-line);
+	/* Plan 20 Task 3: the site's section-head ◆ is --fx-metal
+	   (steel-ability-cards.css:185, `.sc-ability__section-head .sc-ability__dia`). */
+	background: var(--dse-metal);
 	flex: none;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body {
@@ -3512,13 +3588,50 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	background: var(--dse-surface-sunken);
 	overflow: hidden;
 }
+/* Plan 20 Task 3 folds the site's MATERIAL onto this strip. Note there is no
+   `.dse-section__head` element in the plugin — renderFeature.ts:182-193 emits
+   only __title + __body — so `.dse-section__title` IS the head strip and the
+   treatment is merged here rather than duplicated into a dead selector.
+   Site source: `.sc-ability__section-head` (steel-ability-cards.css:183-184)
+   = soft top-light sheen + a --fx-metal-faint hairline; the tag inside it is
+   --fx-metal-bright (…:187). The sheen is layered as background-IMAGE over the
+   raised plate, so the surface colour survives (both must be set separately —
+   the `background` shorthand would reset the image). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title {
 	padding: 0.45em 0.75em;
-	border-bottom: 1px solid var(--dse-border);
-	background: var(--dse-surface-raised);
+	border-bottom: 1px solid var(--dse-metal-faint);
+	background-color: var(--dse-surface-raised);
+	background-image: var(--dse-sheen-soft);
+	color: var(--dse-metal-bright);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body {
 	padding: 0.6em 0.75em;
+}
+
+/* --- Plan 20 Task 3: the other two head strips ----------------------------
+   The same material the section head just got, on the two remaining "head
+   strip" surfaces the kit emits:
+
+     .dse-pr__head      (kit/powerRollPanel.ts:113) — the site's
+                        `.sc-ability__pr-head` (steel-ability-cards.css:158-160):
+                        soft sheen + a --fx-metal-faint bottom hairline. It is a
+                        bare <div> today (only font-weight/colour, ~4204), so it
+                        needs padding for the band to read at all; the values
+                        mirror .dse-section__title above rather than the site's
+                        rem figures, keeping the plugin's em rhythm.
+     .dse-fb__adv-head  (elements/featureblock/view.ts:149) — a PLUGIN-ONLY
+                        surface with no site counterpart. It plays the identical
+                        role (a titled band opening a panel), so it reuses the
+                        same two tokens; no new colour is invented.
+
+   `.dse-section__head` from the plan draft does NOT exist and is not styled. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(
+	.dse-pr__head,
+	.dse-fb__adv-head
+) {
+	background-image: var(--dse-sheen-soft);
+	border-bottom: 1px solid var(--dse-metal-faint);
+	padding: 0.45em 0.5em;
 }
 
 /* -- SC-10 Task 3: dashed keyword-spend box — the "SPEND 1+ INSIGHT" clause
@@ -3824,6 +3937,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	--dse-metal-grad: linear-gradient(180deg, #9aa1a6 0%, #6a7176 48%, #474d51 100%);
 	--dse-metal-line: rgba(95,103,108,.45);
 	--dse-metal-faint: rgba(95,103,108,.14);
+	--dse-metal: #5f676c; /* site --fx-metal, steel-redesign.css:26 */
+	--dse-metal-bright: #2c3338; /* site --fx-metal-bright, steel-redesign.css:27 */
+	/* Light-scheme sheen: the site overrides ONLY the cost chip's gradient for
+	   [data-md-color-scheme="default"] (steel-ability-cards.css:119). The soft
+	   head-strip sheen (…:160/184) and the chip bevel (…:118) have NO light
+	   override on the site, so they are deliberately not re-listed here and
+	   inherit the dark Steel value — same convention as --dse-hairline-fade. */
+	--dse-sheen: linear-gradient(180deg, rgba(255,255,255,.9), rgba(0,0,0,.04));
 	--dse-bevel: inset 0 1px 0 rgba(255,255,255,.8);
 	--dse-emboss: none; /* site: no light emboss */
 	--dse-card-bg: linear-gradient(160deg, #ffffff, #eef1f1);
@@ -4487,6 +4608,11 @@ button.dse-pr__row:hover {
 		--dse-metal-grad: none;
 		--dse-metal-line: none;
 		--dse-metal-faint: none;
+		--dse-metal: inherit;
+		--dse-metal-bright: inherit;
+		--dse-sheen: none;
+		--dse-sheen-soft: none;
+		--dse-chip-bevel: none;
 		--dse-bevel: none;
 		--dse-emboss: none;
 		--dse-card-bg: none;
@@ -4535,6 +4661,11 @@ button.dse-pr__row:hover {
 	--dse-metal-grad: none;
 	--dse-metal-line: none;
 	--dse-metal-faint: none;
+	--dse-metal: inherit;
+	--dse-metal-bright: inherit;
+	--dse-sheen: none;
+	--dse-sheen-soft: none;
+	--dse-chip-bevel: none;
 	--dse-bevel: none;
 	--dse-emboss: none;
 	--dse-card-bg: none;

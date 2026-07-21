@@ -180,6 +180,13 @@ const LEGACY_MAP: Record<string, string> = {
 	'metal-grad': 'none',
 	'metal-line': 'none',
 	'metal-faint': 'none',
+	// Plan 20 Task 3 — the material layer. `inherit` makes `color: var(--dse-metal)`
+	// a no-op in Legacy; the overlays/bevel are absent.
+	metal: 'inherit',
+	'metal-bright': 'inherit',
+	sheen: 'none',
+	'sheen-soft': 'none',
+	'chip-bevel': 'none',
 	bevel: 'none',
 	emboss: 'none',
 	'card-bg': 'none',
@@ -230,7 +237,7 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		expect(steelGaps(DSE_TOKEN_NAMES)).toEqual([]);
 		// The map's exact split: 58 overridden + 6 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inSteel.has(n));
-		expect(overridden.length).toBe(58);
+		expect(overridden.length).toBe(63); // Plan 20 Task 3: +5 material tokens
 		expect(STEEL_INVARIANT.size).toBe(6);
 	});
 
@@ -238,7 +245,7 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		expect(printGaps(DSE_TOKEN_NAMES)).toEqual([]);
 		// 47 overridden (41 neutral + 6 Steel-scoped act) + 17 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inPrint.has(n));
-		expect(overridden.length).toBe(47);
+		expect(overridden.length).toBe(52); // Plan 20 Task 3: +5 material tokens
 		expect(PRINT_INVARIANT.size).toBe(17); // SC-10: +badge-fg
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});

@@ -65,9 +65,11 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(sheet).not.toMatch(/\[data-dse-theme="legacy"\]/);
 	});
 
-	test('the union covers the full D2 §6 sheet (64 tokens: ~47 core + 12 roles + 6 actions)', () => {
-		// 62 from Task 1 + the two Task-5 gap-closes (page-bg, badge-fg).
-		expect(DSE_TOKEN_NAMES.length).toBe(64);
+	test('the union covers the full D2 §6 sheet (69 tokens: ~52 core + 12 roles + 6 actions)', () => {
+		// 62 from Task 1 + the two Task-5 gap-closes (page-bg, badge-fg)
+		// + Plan 20 Task 3's five material tokens
+		// (metal, metal-bright, sheen, sheen-soft, chip-bevel).
+		expect(DSE_TOKEN_NAMES.length).toBe(69);
 		// One representative per §6 group, so a whole group can't silently vanish.
 		for (const key of [
 			'surface', // structure / surface

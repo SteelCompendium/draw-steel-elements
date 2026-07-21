@@ -87,6 +87,12 @@ const PRINT_NEUTRAL: Record<string, string> = {
 	'metal-grad': 'none',
 	'metal-line': 'none',
 	'metal-faint': 'none',
+	// Plan 20 Task 3 — the material layer is OFF on paper (ink on white).
+	metal: 'inherit',
+	'metal-bright': 'inherit',
+	sheen: 'none',
+	'sheen-soft': 'none',
+	'chip-bevel': 'none',
 	bevel: 'none',
 	emboss: 'none',
 	'card-bg': 'none',
@@ -146,10 +152,10 @@ describe('D3 Task 5: print / export value layer', () => {
 		}
 	});
 
-	test('the neutral twin defines EXACTLY the 41 neutral tokens (none invariant, none act)', () => {
+	test('the neutral twin defines EXACTLY the 46 neutral tokens (none invariant, none act)', () => {
 		const defs = defsIn(printNeutralBody());
 		expect(new Set(defs)).toEqual(new Set(Object.keys(PRINT_NEUTRAL)));
-		expect(defs.length).toBe(41); // SC-10: badge-fg no longer print-overridden
+		expect(defs.length).toBe(46); // SC-10: badge-fg no longer print-overridden; Plan 20 Task 3: +5 material
 		// The Steel-scoped act tokens are NOT in the neutral block…
 		for (const act of Object.keys(PRINT_STEEL)) expect(defs).not.toContain(act);
 		// …nor are the print-invariant tokens.
