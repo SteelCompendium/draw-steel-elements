@@ -4,6 +4,40 @@ This directory holds the **style parity contract** between the live
 [steelcompendium.io/v2](https://steelcompendium.io/v2/) site and the `draw-steel-elements`
 plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
+## The workflow in one screen
+
+| When you… | Run | Notes |
+|---|---|---|
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs / 0 WARNs, exit 0**. Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it. |
+| Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
+| Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
+| Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
+
+`npm run parity` is the *computed-style* half of the gate (it renders the plugin and diffs
+`getComputedStyle()` against the committed site baseline). `test/dom/theme/steelMaterial.test.ts`
+is the *source-text* half: it reads `styles-source.css` and asserts that the Steel material
+tokens carry live values and that each primitive is forged or flat as the site is. The two
+catch different failures — the diff has documented blind spots (typography, colour, pseudo
+elements — see below) and only fires on selectors that are in `selector-map.json`, while the
+jest test pins named declarations regardless of whether anything renders. Keep both green.
+
+Both exist for one reason: plan 19 shipped structurally-correct Steel markup with completely
+flat surfaces and **passed human review**, because reviewers compared layout against
+screenshots and said "close match." Nothing could mechanically fail. If you add a material
+surface, add it to *both* — a pair here and an assertion there.
+
+Two gotchas when extending the jest test:
+
+- **Strip CSS comments before matching.** `styles-source.css` documents its own selectors in
+  prose; a naive text match can bind to a comment instead of a rule (this already broke
+  `test/dom/kit/powerRollPanel.test.ts` once, which locates rules by first textual occurrence).
+- **The Steel scope is written two ways** — `[data-dse-theme='steel']` (single quotes) on
+  component rules, `[data-dse-element][data-dse-theme="steel"]` (double quotes) on the token
+  blocks. Match both, or the assertion silently matches nothing and passes vacuously.
+
+And after writing an assertion, **break the rule it pins, confirm the test fails, restore it.**
+An assertion that cannot fail is worse than no assertion.
+
 ## What's here
 
 - **`urls.json`** — the list of live site pages to crawl, one per element family/variant
