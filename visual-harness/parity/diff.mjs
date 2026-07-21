@@ -20,6 +20,12 @@ const firstPlug = (sel) => {
 	return null;
 };
 
+// Pair ids with a FILED deferral (see selector-map.json's expectedGapsNote): a real
+// difference that cannot be closed in CSS. Reported, but downgraded to WARN so the gate
+// stays green on known work. NEVER add an id here without the FOLLOWUPS entry.
+const expectedGaps = new Set(map.expectedGaps || []);
+const sevFor = (pair) => (expectedGaps.has(pair.id) ? 'WARN' : 'GAP');
+
 const rows = [];
 for (const pair of map.pairs) {
 	const s = firstSite(pair.site);
@@ -39,17 +45,17 @@ for (const pair of map.pairs) {
 	// 1. Material: site has a gradient, plugin is flat.
 	if (!isFlat(s['background-image']) && isFlat(p['background-image']))
 		rows.push({
-			sev: 'GAP',
+			sev: sevFor(pair),
 			pair,
 			msg: `flat surface: site background-image="${s['background-image']}", plugin="none"`,
 		});
 	// 2. Material: site has a bevel/shadow, plugin has none.
 	if (!isFlat(s['box-shadow']) && isFlat(p['box-shadow']))
-		rows.push({ sev: 'GAP', pair, msg: `no bevel: site box-shadow="${s['box-shadow']}", plugin="none"` });
+		rows.push({ sev: sevFor(pair), pair, msg: `no bevel: site box-shadow="${s['box-shadow']}", plugin="none"` });
 	// 3. Material: site has a visible hairline, plugin has none.
 	if (s['border-top-style'] !== 'none' && p['border-top-style'] === 'none')
 		rows.push({
-			sev: 'GAP',
+			sev: sevFor(pair),
 			pair,
 			msg: `no hairline: site border-top ${s['border-top-width']} ${s['border-top-color']}`,
 		});

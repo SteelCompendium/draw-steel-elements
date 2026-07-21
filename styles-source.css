@@ -3903,6 +3903,21 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
 }
 
+/* -- Level>0 advancement rail: same fallback correction as the band above.
+   The BASE rule (~1963) falls back to --dse-rule, which in Steel drifts away
+   from the head band's neutral (--dse-rule is #8e959a dark / #5a6368 light,
+   ~3180/~4109) — so a malice/named-feature block with Level>0 features paints a
+   grey rail that visibly disagrees with the #9aa2a8 band directly above it
+   inside the SAME card. --dse-role-leader is the site-exact, light/dark-stable
+   grey (var(--sc-role-leader, #9aa2a8), ~3206; site source
+   v2/docs/stylesheets/palette.css --sc-role-malice/#9aa2a8 "grey — malice &
+   named feature blocks"). Steel/screen-scoped: the base rule is shared with
+   Legacy (where --dse-role-leader is deliberately fg-muted monochrome) and the
+   print layer is frozen. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb__band--adv {
+	border-left-color: var(--dse-role, var(--dse-role-leader));
+}
+
 /* -- Boxed 5-stat row (Size/Speed/Stamina/Stability/Free Strike): the site's
    .sb__stat framed cell — sunken box + hairline + small-caps label under the
    already-embossed big value (emboss shared rule above). */
@@ -4050,6 +4065,148 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__ability-cost,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__ability-type {
 	background: var(--dse-metal-faint);
+}
+
+/* ================================================================== */
+/*   Plugin-ONLY surfaces: trackers, sidebar, modals (SC-10 Task 6)   */
+/* ================================================================== */
+/*
+   Trackers (initiative / encounter / negotiation / montage / project /
+   party / counter), the sidebar leaf and the managed modals have NO live
+   steelcompendium.io counterpart, so the parity harness cannot check
+   them — which is exactly where a theme silently stays flat while the
+   monitored card family gets the material. Every rule below therefore only
+   REUSES tokens the parity-checked families already proved; not one new
+   colour is introduced. Token provenance (all site-sourced, see the Steel
+   token block ~3120-3175):
+     --dse-card-bg      site --fx-card-bg      (steel-redesign.css)
+     --dse-bevel        site --fx-bevel        (steel-redesign.css)
+     --dse-sheen        steel-ability-cards.css:117 (.sc-ability__cost)
+     --dse-sheen-soft   steel-ability-cards.css:160/184 (pr-head / section-head)
+     --dse-chip-bevel   steel-ability-cards.css:118 (cost-chip shadow)
+     --dse-metal-line / --dse-metal-faint  site --fx-metal-* (steel-redesign.css:24-27)
+     --dse-emboss       site fx-emboss text-shadow
+   Steel + screen only: LEGACY-FREEZE keeps the un-themed shots byte-identical
+   and :not([data-dse-print="on"]) keeps *--steel-print.png byte-identical.
+*/
+
+/* -- 1. Tracker plates: the SAME forged card ground the parity gate checks on
+      feature/featureblock/.dse-sb (~3237) and .dse-hero (~4012), so a tracker
+      reads as a plate on the page instead of loose controls floating on the bare
+      note background. These roots carry no padding of their own (their inner
+      regions do), so the frame gets its own like .dse-hero's. */
+[data-dse-theme='steel']:not([data-dse-print="on"]):is(
+		[data-dse-element='initiative'],
+		[data-dse-element='encounter'],
+		[data-dse-element='negotiation'],
+		[data-dse-element='montage'],
+		[data-dse-element='project'],
+		[data-dse-element='party'],
+		[data-dse-element='counter']
+	):not([data-dse-error-stage]) {
+	background: var(--dse-card-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+	padding: var(--dse-pad);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):is(
+		[data-dse-element='initiative'],
+		[data-dse-element='encounter'],
+		[data-dse-element='negotiation'],
+		[data-dse-element='montage'],
+		[data-dse-element='project'],
+		[data-dse-element='party'],
+		[data-dse-element='counter']
+	):not([data-dse-error-stage]) {
+	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* -- 2. Forged controls: the kit's buttons/tabs are the shared vocabulary of
+      EVERY plugin-only surface (trackers, sidebar, every modal footer), so one
+      rule here harmonizes all three at once — the raised control picks up the
+      cost chip's sheen + bevel + metal hairline instead of a flat fill. The
+      filled and chromeless variants are excluded: --accent / [data-pressed] own
+      their fill as a state signal, and --ghost / --danger are deliberately
+      chromeless, so a sheen would read as a phantom button. */
+[data-dse-theme='steel']:not([data-dse-print="on"])
+	:is(.dse-btn, .dse-tabs__tab):not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger):not(
+		[data-pressed]
+	):not([aria-selected='true']) {
+	background-image: var(--dse-sheen);
+	border-color: var(--dse-metal-line);
+	box-shadow: var(--dse-chip-bevel);
+}
+
+/* -- 3. Sunken cells: the tracker's data cells get the SAME boxed-cell grammar
+      as the statblock's .dse-sb__item / .dse-sb__kv (~3924/~3943) — sunken wash
+      inside a hairline. .dse-init__cell is also the one place in the plugin
+      still painting a raw Obsidian variable (--color-base-30, ~891); Steel
+      routes it back onto the token set. */
+[data-dse-theme='steel']:not([data-dse-print="on"])
+	:is(.dse-init__cell, .dse-init__groupbody, .dse-enc__summary, .dse-modal__section) {
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+}
+
+/* -- 4. Tracker/modal headings: the plugin-only families' section headings are
+      plain bold text today, while every monitored card title is embossed in the
+      display face (shared rule ~3276) and every section head carries the soft
+      sheen strip (~3493). Same treatment here — .dse-hero__region-title's
+      recipe (~4049) applied to the headings the trackers/modals actually emit.
+      Selected STRUCTURALLY (every heading level inside a tracker plate) rather
+      than by class: most tracker headings carry no class of their own
+      (initiative's "Heroes"/"Enemy groups" h3s and the group-name h4 are bare
+      elements, view.ts:204/212/578), and naming only the classed ones would
+      leave the display face on one heading and plain sans on its siblings
+      inside the same card. No DOM change is needed either way. */
+[data-dse-theme='steel']:is(
+		[data-dse-element='initiative'],
+		[data-dse-element='encounter'],
+		[data-dse-element='negotiation'],
+		[data-dse-element='montage'],
+		[data-dse-element='project'],
+		[data-dse-element='party'],
+		[data-dse-element='counter']
+	) :is(h3, h4, h5, h6),
+[data-dse-theme='steel'] .dse-modal__title {
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]):is(
+		[data-dse-element='initiative'],
+		[data-dse-element='encounter'],
+		[data-dse-element='negotiation'],
+		[data-dse-element='montage'],
+		[data-dse-element='project'],
+		[data-dse-element='party'],
+		[data-dse-element='counter']
+	) :is(h3, h4, h5, h6),
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-modal__title {
+	font-family: var(--dse-font-display);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.01em;
+}
+/* The roster table's header row is a section head in table clothing: give it
+   the section-head sheen strip + hairline rather than leaving it bare. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-enc__table th {
+	background-image: var(--dse-sheen-soft);
+	border-bottom-color: var(--dse-border-strong);
+	font-variant: small-caps;
+	letter-spacing: 0.05em;
+}
+
+/* -- 5. Sidebar leaf: the narrow initiative mount is a plate inside another
+      plate (the workspace leaf already supplies a surface), so it drops the
+      outer lift shadow and keeps only the hairline + bevel — same "single-layer
+      plate" reasoning as the statblock root (~3253). */
+/* NOTE the selector shape: .dse-sidebar WRAPS the mount, and data-dse-theme is
+   stamped on the mount itself (seams/theme.ts), so the theme attribute has to be
+   part of the descendant's own compound — not an ancestor of .dse-sidebar. */
+.dse-sidebar [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] {
+	box-shadow: var(--dse-bevel);
 }
 
 /* ================================================================== */

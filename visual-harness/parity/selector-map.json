@@ -1,14 +1,18 @@
 {
   "note": "site selector <-> plugin selector. The parity contract. Add a pair when a surface is ported.",
+  "expectedGaps": [],
+  "expectedGapsNote": "pair ids whose GAP is a KNOWN, FILED deferral (it needs a DOM/TS change, so it cannot be closed in CSS). diff.mjs downgrades these to WARN instead of GAP. Every id listed here MUST cite a workspace FOLLOWUPS.md number in this note. Empty = no deferrals outstanding.",
   "pairs": [
-    { "id": "card",          "site": ".sc-ability",              "plugin": ".dse-feature",            "why": "card surface + border/radius" },
-    { "id": "section",       "site": ".sc-ability__section",     "plugin": ".dse-section",            "why": "boxed panel surface" },
-    { "id": "section-head",  "site": ".sc-ability__section-head","plugin": ".dse-section__title",     "why": "sheen gradient + hairline" },
-    { "id": "chip",          "site": ".sc-head__slot--chip",     "plugin": ".dse-head__deck--chip",   "why": "flat right-rail slot: hairline + .35em radius + small-caps, no fill/shadow" },
-    { "id": "pr-head",       "site": ".sc-ability__pr-head",     "plugin": ".dse-pr__head",           "why": "power-roll head sheen" },
-    { "id": "tier-row",      "site": ".sc-ability__tier",        "plugin": ".dse-pr__row",            "why": "tier-coloured wash" },
-    { "id": "head",          "site": ".sc-head",                 "plugin": ".dse-head",               "why": "card head typography" },
-    { "id": "statblock",     "site": ".sb-wrap",                 "plugin": ".dse-sb",                 "why": "statblock plate + role tint" },
-    { "id": "featureblock",  "site": ".fb-wrap",                 "plugin": ".dse-fb",                 "why": "featureblock band" }
+    { "id": "card",             "site": ".sc-ability",              "plugin": "[data-dse-element='feature']",      "why": "card plate: gradient + bevel + hairline. The plugin side is the HOST div — pipeline.ts stamps data-dse-element on the same root theme.ts stamps data-dse-theme on, and styles-source.css puts the plate there; .dse-feature is an inner content div with no plate." },
+    { "id": "section",          "site": ".sc-ability__section",     "plugin": ".dse-section",                      "why": "boxed panel surface" },
+    { "id": "section-head",     "site": ".sc-ability__section-head","plugin": ".dse-section__title",               "why": "sheen gradient + hairline" },
+    { "id": "chip",             "site": ".sc-head__slot--chip",     "plugin": ".dse-head__deck--chip",             "why": "flat right-rail slot: hairline + .35em radius + small-caps, no fill/shadow" },
+    { "id": "pr-head",          "site": ".sc-ability__pr-head",     "plugin": ".dse-pr__head",                     "why": "power-roll head sheen" },
+    { "id": "tier-row",         "site": ".sc-ability__tier",        "plugin": ".dse-pr__row",                      "why": "tier-coloured wash" },
+    { "id": "head",             "site": ".sc-head",                 "plugin": ".dse-head",                         "why": "card head typography" },
+    { "id": "statblock",        "site": ".md-typeset.sb",           "plugin": ".dse-sb",                           "why": "statblock plate. The site plate is .md-typeset.sb (steel-statblock.css:76) — .sb-wrap is an unstyled positioning wrapper, so pairing it monitored nothing. Plugin plate is .dse-sb (the statblock host is deliberately transparent)." },
+    { "id": "statblock-band",   "site": ".sb__head",                "plugin": ".dse-sb > .dse-head",               "why": "role-gradient header band (steel-statblock.css:90)" },
+    { "id": "featureblock",     "site": ".md-typeset.fb",           "plugin": "[data-dse-element='featureblock']", "why": "featureblock plate. The site plate is .md-typeset.fb (steel-featureblock.css:44) — .fb-wrap is an unstyled positioning wrapper. Plugin plate is the HOST div; .dse-fb is the inner content div." },
+    { "id": "featureblock-band","site": ".fb__head",                "plugin": ".dse-fb > .dse-head",               "why": "role/malice-gradient header band (steel-featureblock.css:57)" }
   ]
 }

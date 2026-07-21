@@ -98,9 +98,24 @@ Two severities:
 - **Pseudo-element material is invisible to the diff.** `getComputedStyle(el)` is sampled
   without a pseudo-element argument, so e.g. `.sc-ability::before`'s decorative SVG flourish
   is not represented on either side.
-- **Wrapper-vs-plate mismatches read as clean.** `.sb-wrap` / `.fb-wrap` are unstyled
-  positioning wrappers on the live site (the plate lives on an inner node), so their pairs
-  can never produce a `GAP` even though the plugin's `.dse-sb` / `.dse-fb` carry the plate.
+- **Only the three "site is richer" checks above are asserted.** A surface can differ
+  materially in ways the diff does not model — e.g. the site's statblock plate lifts with
+  `0 10px 26px rgba(0,0,0,.36)` and rounds at `13px` while the plugin's shared card ground
+  uses `0 8px 22px rgba(0,0,0,.34)` at `--dse-radius` (6.4px). Both are non-flat, so the
+  pair passes. Read the inventories directly when the exact value matters.
+- **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
+  clean here (see "Selector corrections already applied"); the same trap applies to any new
+  pair, so verify against the real DOM on both sides before adding one.
+
+## Documented deferrals (`expectedGaps`)
+
+`selector-map.json` carries an `expectedGaps` array of pair `id`s. `diff.mjs` downgrades
+those pairs' findings from `GAP` to `WARN`, so the gate stays green. This exists for the
+one legitimate case: a real difference that **cannot be closed in CSS** because it needs a
+DOM/TS change. Every id in the array must cite a numbered workspace `FOLLOWUPS.md` item in
+the sibling `expectedGapsNote`, naming the selector, the site value, the plugin value, and
+why DOM is required. It is **never** a way to silence a gap that CSS could close — and
+deleting or weakening a pair is never acceptable either. The array is currently empty.
 
 ## Adding a new surface to the contract
 
@@ -130,3 +145,20 @@ they aren't reintroduced:
   there is no `.dse-section__head` node in the DOM or rule in `styles-source.css`.
   `.dse-section__title` is the node that must carry the site's
   `.sc-ability__section-head` sheen.
+- **`card` (plugin side): `.dse-feature` → `[data-dse-element='feature']`.** The plugin's
+  card plate (gradient + bevel + hairline) is applied to the **host** element —
+  `pipeline.ts` stamps `data-dse-element` on the same root `seams/theme.ts` stamps
+  `data-dse-theme` on, and `styles-source.css`'s card-ground rule targets that compound.
+  `.dse-feature` is an inner content `<div>` created by `renderFeature.ts` and carries no
+  plate, so the pair reported three phantom GAPs (flat surface / no bevel / no hairline)
+  against a plate that was already byte-identical to the site's.
+- **`statblock` / `featureblock` (site side): `.sb-wrap` / `.fb-wrap` → `.md-typeset.sb` /
+  `.md-typeset.fb`.** The `*-wrap` nodes are unstyled positioning wrappers
+  (`steel-statblock.css:58`, `steel-featureblock.css:38` — `position`/`max-width`/`margin`
+  and a couple of custom properties, nothing material), so those pairs could **never**
+  produce a `GAP` and the plugin's plate was unmonitored. The plate lives on
+  `.md-typeset.sb` / `.md-typeset.fb`. The `featureblock` **plugin** side moved to
+  `[data-dse-element='featureblock']` for the same host-vs-inner reason as `card`.
+- **Added `statblock-band` / `featureblock-band`** (`.sb__head` / `.fb__head` →
+  `.dse-sb > .dse-head` / `.dse-fb > .dse-head`): the role/malice gradient band was
+  likewise unmonitored once the `*-wrap` pairs are discounted.
