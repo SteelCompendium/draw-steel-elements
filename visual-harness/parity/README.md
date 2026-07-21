@@ -8,8 +8,9 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 - **`urls.json`** — the list of live site pages to crawl, one per element family/variant
   (power-roll ability, effect-only ability, minion/leader/solo/companion statblocks,
-  malice featureblock, kit, and the plain-prose reference pages: condition, ancestry,
-  class, treasure). Each entry is `{ id, url, waitFor, note }` — `waitFor` is the selector
+  malice featureblock, kit, the plain-prose reference pages — condition, ancestry, class,
+  treasure — and the `kit`/`perk` **index** pages, which are the only place the site emits
+  the `.sc-card` reference tile). Each entry is `{ id, url, waitFor, note }` — `waitFor` is the selector
   the capture script waits for before sampling, so a broken URL or a page that never
   finishes loading fails loudly instead of silently capturing garbage.
 - **`selector-map.json`** — the parity contract itself: pairs of `{ site, plugin }`
@@ -103,6 +104,15 @@ Two severities:
   `0 10px 26px rgba(0,0,0,.36)` and rounds at `13px` while the plugin's shared card ground
   uses `0 8px 22px rgba(0,0,0,.34)` at `--dse-radius` (6.4px). Both are non-flat, so the
   pair passes. Read the inventories directly when the exact value matters.
+- **Colour is not asserted either — only "flat vs. non-flat".** Checks 1 and 2 fire on
+  `none` vs. *anything*, so two surfaces can pass while being different colours. Concretely:
+  the `statblock-band` site baseline is **role-tinted** — `.sb__head` samples
+  `linear-gradient(… color(srgb .421961 .275294 .355294) …)` on the leader page — while the
+  plugin's `.dse-sb > .dse-head` is a neutral grey ramp
+  (`color(srgb .3027 .3247 .3412) → color(srgb .1471 .1642 .1771)`). Both are gradients, so
+  the pair reads clean. Same trap for `background-color`, `color`, and hairline *colour*
+  (only `border-top-style` is checked, never `border-top-color`). Read the inventories
+  directly when the hue matters.
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
@@ -162,3 +172,14 @@ they aren't reintroduced:
 - **Added `statblock-band` / `featureblock-band`** (`.sb__head` / `.fb__head` →
   `.dse-sb > .dse-head` / `.dse-fb > .dse-head`): the role/malice gradient band was
   likewise unmonitored once the `*-wrap` pairs are discounted.
+- **Added `card-ref`** (`.md-typeset .sc-card` → `.dse-card`): the whole reference-card
+  family (kit/condition/ancestry/treasure/perk/… via `CardLayout`) had **no pair at all**,
+  so the gate was blind to it even though `urls.json` already crawled four of its pages.
+  Note *why* those pages were not enough: the site's **detail** pages are not the
+  counterpart — a kit detail page is a single `.sc-kit` page-plate (`steel-kit.css:19`) and
+  the condition / ancestry / treasure detail pages emit no `sc-` card node at all (they are
+  plain typeset). `.sc-card` only exists on **index** pages, which is why `urls.json` gained
+  `kit-index` and `perk-index`. `perk-index` is the `.sc-card--wide` variant, included to
+  prove `--wide` only re-lays-out the tile (`steel-redesign.css:331-338` sets
+  `grid-template-columns`/`padding` and nothing material) — both index captures sample
+  byte-identical values, so the single pair covers both.

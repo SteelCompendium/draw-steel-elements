@@ -10,5 +10,7 @@
   { "id": "condition",          "url": "https://steelcompendium.io/v2/Browse/condition/bleeding/",                             "waitFor": ".md-content", "note": "reference/glossary card" },
   { "id": "ancestry",           "url": "https://steelcompendium.io/v2/Browse/ancestry/devil/",                                 "waitFor": ".md-content", "note": "trait tree, nested sections" },
   { "id": "class",              "url": "https://steelcompendium.io/v2/Browse/class/fury/",                                     "waitFor": ".md-content", "note": "class page, stats strip, act spines" },
-  { "id": "treasure",           "url": "https://steelcompendium.io/v2/Browse/treasure/leveled/armor/rampant-shield/",          "waitFor": ".md-content", "note": "leveled treasure rows" }
+  { "id": "treasure",           "url": "https://steelcompendium.io/v2/Browse/treasure/leveled/armor/rampant-shield/",          "waitFor": ".md-content", "note": "leveled treasure rows" },
+  { "id": "kit-index",          "url": "https://steelcompendium.io/v2/Browse/kit/",                                           "waitFor": ".sc-card",    "note": "reference-card TILES (.sc-card) — the counterpart of the plugin's .dse-card. The DETAIL pages captured above (kit/condition/ancestry/treasure) emit .sc-kit or plain typeset, never .sc-card, so the family was invisible to the gate until this page was added." },
+  { "id": "perk-index",         "url": "https://steelcompendium.io/v2/Browse/perk/",                                          "waitFor": ".sc-card",    "note": "the .sc-card--wide variant. Included to prove --wide only re-lays-out the tile (grid-template/padding, steel-redesign.css:331-338) — the plate recipe stays on .md-typeset .sc-card, so one pair covers both." }
 ]
