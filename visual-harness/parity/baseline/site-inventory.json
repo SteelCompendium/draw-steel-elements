@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-07-21T20:34:09.622Z",
+  "capturedAt": "2026-07-21T20:44:15.931Z",
   "note": "Reference captured from the LIVE site. Regenerate deliberately; review the diff.",
   "entries": {
     "ability-powerroll--dark": {
@@ -50,6 +50,22 @@
         "font-variant-caps": "normal",
         "letter-spacing": "normal",
         "text-transform": "none"
+      },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
       },
       ".sc-head": {
         "background-image": "none",
@@ -117,6 +133,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-head": {
         "background-image": "none",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -150,6 +182,22 @@
         "font-variant-caps": "normal",
         "letter-spacing": "normal",
         "text-transform": "none"
+      },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
       },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
@@ -265,6 +313,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -379,6 +443,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -492,6 +572,22 @@
         "font-variant-caps": "normal",
         "letter-spacing": "normal",
         "text-transform": "none"
+      },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
       },
       ".sc-head": {
         "background-image": "linear-gradient(color(srgb 0.312157 0.336471 0.355294), color(srgb 0.161412 0.182078 0.198471))",
@@ -641,6 +737,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -758,6 +870,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgba(220, 226, 230, 0.12)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgba(220, 226, 230, 0.62)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -857,6 +985,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-head": {
         "background-image": "none",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -923,6 +1067,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-head": {
         "background-image": "none",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -956,6 +1116,22 @@
         "font-variant-caps": "normal",
         "letter-spacing": "normal",
         "text-transform": "none"
+      },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
       },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
@@ -1071,6 +1247,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -1185,6 +1377,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -1298,6 +1506,22 @@
         "font-variant-caps": "normal",
         "letter-spacing": "normal",
         "text-transform": "none"
+      },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
       },
       ".sc-head": {
         "background-image": "linear-gradient(color(srgb 0.815686 0.832941 0.842353), color(srgb 0.925098 0.935059 0.937176))",
@@ -1447,6 +1671,22 @@
         "letter-spacing": "normal",
         "text-transform": "none"
       },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
+      },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",
         "background-color": "rgba(0, 0, 0, 0)",
@@ -1563,6 +1803,22 @@
         "font-variant-caps": "normal",
         "letter-spacing": "normal",
         "text-transform": "none"
+      },
+      ".sc-head__slot--chip": {
+        "background-image": "none",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "box-shadow": "none",
+        "border-top-color": "rgb(200, 205, 208)",
+        "border-top-width": "1px",
+        "border-top-style": "solid",
+        "border-radius": "6.3px",
+        "color": "rgb(85, 89, 96)",
+        "font-family": "\"Test Newzald\"",
+        "font-size": "18px",
+        "font-weight": "400",
+        "font-variant-caps": "small-caps",
+        "letter-spacing": "0.72px",
+        "text-transform": "lowercase"
       },
       ".sc-ability__pr-head": {
         "background-image": "linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0))",

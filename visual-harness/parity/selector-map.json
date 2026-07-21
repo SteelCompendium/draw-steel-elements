@@ -3,8 +3,8 @@
   "pairs": [
     { "id": "card",          "site": ".sc-ability",              "plugin": ".dse-feature",            "why": "card surface + border/radius" },
     { "id": "section",       "site": ".sc-ability__section",     "plugin": ".dse-section",            "why": "boxed panel surface" },
-    { "id": "section-head",  "site": ".sc-ability__section-head","plugin": ".dse-section__head",      "why": "sheen gradient + hairline" },
-    { "id": "chip",          "site": ".sc-ability__cost",        "plugin": ".dse-head__deck--chip",   "why": "forged chip: sheen + inset bevel" },
+    { "id": "section-head",  "site": ".sc-ability__section-head","plugin": ".dse-section__title",     "why": "sheen gradient + hairline" },
+    { "id": "chip",          "site": ".sc-head__slot--chip",     "plugin": ".dse-head__deck--chip",   "why": "forged chip: sheen + inset bevel" },
     { "id": "pr-head",       "site": ".sc-ability__pr-head",     "plugin": ".dse-pr__head",           "why": "power-roll head sheen" },
     { "id": "tier-row",      "site": ".sc-ability__tier",        "plugin": ".dse-pr__row",            "why": "tier-coloured wash" },
     { "id": "head",          "site": ".sc-head",                 "plugin": ".dse-head",               "why": "card head typography" },
