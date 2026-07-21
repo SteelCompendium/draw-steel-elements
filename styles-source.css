@@ -3707,6 +3707,58 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	overflow: hidden;
 }
 
+/* -- SC-10 Task 4: tier-coloured row washes — the single most visible colour
+   gap (parity `tier-row`: site background-image is a tier gradient, plugin was
+   flat "none"). Site source: steel-ability-cards.css:166-171 (.sc-ability__tier)
+
+     --t: var(--sc-tier-low);                      → --dse-tier-low (default)
+     padding: .55rem .9rem;                        → verbatim
+     border-left: 3px solid var(--t);              → verbatim
+     border-top: 1px solid var(--fx-metal-faint);  → --dse-metal-faint
+     background: linear-gradient(90deg,
+       color-mix(in srgb, var(--t) 8%, transparent), transparent 60%);
+     .sc-ability__tier:first-child { border-top: none; }
+     [data-tier="mid"|"high"] { --t: … }
+
+   No DOM change is needed and no `:has()` is involved: powerRollPanel.ts
+   already writes `data-tier="low|mid|high|crit"` on every .dse-pr__row
+   (rowEl.setAttribute('data-tier', row.tier)) — the SAME attribute channel the
+   site keys off. The plugin has a fourth tier the site's ability cards don't
+   (`crit`); it takes the plugin's own existing --dse-tier-crit (the same token
+   that already fills the crit tier badge, ~4556), so no colour is invented
+   here. (Do NOT name the badge modifier classes in this comment: the badge
+   clip-path tests locate a rule by the FIRST textual occurrence of its
+   selector in this file, so a mention above the real rule mis-anchors them.)
+   The tier BADGE is already tier-coloured in both places (the site tints its
+   glyph with --t; the plugin fills the badge clip-path shape with the matching
+   --dse-tier-* token, ~4544), so only the row wash was missing.
+   `background-image` (not `background`) so the selectable-row state colours
+   (button hover / aria-checked) keep painting their own background-color under
+   the wash. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row {
+	--t: var(--dse-tier-low);
+	padding: 0.55rem 0.9rem;
+	border-left: 3px solid var(--t);
+	border-top: 1px solid var(--dse-metal-faint);
+	background-image: linear-gradient(
+		90deg,
+		color-mix(in srgb, var(--t) 8%, transparent),
+		transparent 60%
+	);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row:first-child {
+	border-top: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row[data-tier='mid'] {
+	--t: var(--dse-tier-mid);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row[data-tier='high'] {
+	--t: var(--dse-tier-high);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row[data-tier='crit'] {
+	--t: var(--dse-tier-crit);
+}
+
 /* -- SC-10 Task 3: dashed keyword-spend box — the "SPEND 1+ INSIGHT" clause
    (`02-ability-card--site-dark.png` bottom, site's .sc-ability__enh). The
    --spend modifier (renderFeature.ts renderEffect, theme-agnostic — mounted
