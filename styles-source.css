@@ -3446,6 +3446,24 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	height: 1.5em;
 }
 
+/* Crest glyph accent (Plan 20 Task 5): the site tints the crest's inner glyph
+   with the ACTION accent — steel-ability-cards.css:86,
+   `.sc-ability__glyph { color: var(--act) }`, where --act is the action-type
+   hue (`.sc-ability[data-action="maneuver"]{--act:var(--sc-act-maneuver)}` →
+   blue, etc.). The plugin's feature root already carries the matching
+   --dse-act alias (renderFeature.ts:168-169 sets data-dse-act +
+   `--dse-act: var(--dse-act-<type>)`; --dse-act-* lit in the Steel block above),
+   and it inherits down to the crest glyph. The shield itself stays brushed
+   metal (unchanged --dse-metal-grad). Fallback --dse-metal so a crest with NO
+   action type (a statblock/featureblock role crest — the site does NOT
+   accent-tint those) shows brushed metal rather than a stray colour: --dse-act
+   is set ONLY inline on feature roots, so it is undefined in the statblock/
+   featureblock crest context and the fallback fires. SCREEN-ONLY, print frozen
+   (SC-4) — Legacy leaves the glyph the base --dse-fg-muted (below, ~4638). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest__glyph {
+	color: var(--dse-act, var(--dse-metal));
+}
+
 /* Per-option glyph show-override (SC-10 Task 5): the site's fb__feat-icon twin
    (steel-cardhead.css: "grid-column:1; grid-row:1/-1" — the SAME leading
    column the crest would otherwise occupy; renderFeature.ts never mounts both
@@ -3863,21 +3881,26 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
    band above, but UNCONDITIONAL — most featureblocks (malice/terrain/fixture
    blocks) never map a combat role at all (roleTint's vocabulary is combat
    roles only; "Malice Features" carries none), yet the site still bands them
-   in a neutral grey (palette.css --sc-role-malice: #9aa2a8 — "grey — malice &
-   named feature blocks"). var(--dse-role, var(--dse-rule)) supplies that same
-   grey when no role mapped (--dse-rule resolves to the site's --sc-steel
-   #8e959a in Steel dark — the same family), and the real role hue whenever
-   one IS mapped (a "Hazard Hexer" fixture, WITH_ROLE-style). */
+   in a neutral grey (palette.css:26 --sc-role-malice: #9aa2a8 — "grey — malice &
+   named feature blocks"). var(--dse-role, var(--dse-role-leader)) supplies that
+   EXACT grey when no role mapped: --dse-role-leader resolves to
+   var(--sc-role-leader, #9aa2a8) verbatim (~3206) and, like every combat-role
+   hue, is light/dark-STABLE (it is deliberately NOT re-listed in the Steel-light
+   block, ~4040 comment), so the malice band is #9aa2a8-based in BOTH schemes —
+   matching the site's light/dark-locked malice colour. (--dse-rule was close in
+   dark, #8e959a, but drifts dark in light, #5a6368; --dse-role-leader is the
+   site-exact grey the launcher pinned.) When a role IS mapped (a "Hazard Hexer"
+   fixture, WITH_ROLE-style) --dse-role wins and the real hue shows. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head {
 	margin: -0.5rem calc(-1 * var(--dse-pad)) 0.75rem;
 	padding: 0.75rem var(--dse-pad) 0.85rem;
 	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
 	background: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--dse-role, var(--dse-rule)) 40%, var(--dse-surface)),
-		color-mix(in srgb, var(--dse-role, var(--dse-rule)) 9%, var(--dse-surface))
+		color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface)),
+		color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 9%, var(--dse-surface))
 	);
-	border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-rule)) 38%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
 }
 
 /* -- Boxed 5-stat row (Size/Speed/Stamina/Stability/Free Strike): the site's
