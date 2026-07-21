@@ -3299,13 +3299,6 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	text-transform: uppercase;
 }
 
-/* Chips read forged (SC-10): metal-faint wash instead of the tag background
-   (the raised primary plate keeps --dse-surface-raised). */
-[data-dse-theme='steel'] .dse-head__eyebrow--chip,
-[data-dse-theme='steel'] .dse-head__deck--chip {
-	background: var(--dse-metal-faint);
-}
-
 /* --- Plan 20 Task 3: chips match the site PER SURFACE ---------------------
    The site has TWO chip surfaces, not one, and the plugin's three --chip
    modifiers are the FIRST of them:
@@ -3314,12 +3307,18 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
       RAIL chip ("Level 1", "EV 3"). It is FLAT: a 1px hairline + .35em radius
       + small-caps tracked text, NO background and NO box-shadow. The plugin's
       --chip modifiers ARE this slot (kit/cardHead.ts:60,97-99), so they take
-      the flat treatment — `background: none` deliberately drops the SC-10
-      metal-faint wash above (that wash has no site counterpart).
+      the flat treatment — `background: none` overrides the base plate
+      (.dse-head__primary--chip → --dse-surface-raised, ~4187/4320) and the
+      chip-bg tag background, neither of which the site's rail slot has. (An
+      SC-10 "chips read forged" --dse-metal-faint wash used to sit here; this
+      block fully supersedes it, so it was deleted — that wash had no site
+      counterpart, and for print --dse-metal-faint resolves to `none`.)
    2. `.sc-ability__cost` — handled by the next block.
+   3. The CARD-HEAD role slot (`.sc-head__slot--mini`) is a THIRD surface and is
+      NOT flat — see the --mini block further down (§card-head role line).
 
-   Screen-only (:not([data-dse-print="on"])): the SC-10 wash rule above is
-   print-visible, so this override stays out of <id>--steel-print.png. */
+   Screen-only (:not([data-dse-print="on"])): the print layer is untouched
+   (SC-4 parked), so this stays out of <id>--steel-print.png. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) :is(
 	.dse-head__eyebrow--chip,
 	.dse-head__primary--chip,
@@ -3332,6 +3331,53 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.04em;
+}
+
+/* §card-head role line — the THIRD slot surface: `.sc-head__slot--mini`
+   (steel-cardhead.css:111-114). On the site the statblock card head's
+   right-primary is NOT the flat rail chip; live markup is
+   `<div class="sc-head__slot sc-head__right-primary sc-head__slot--mini"
+   data-role="harrier">Horde Harrier</div>` and --mini is:
+       font-family: var(--md-large-header-font);   → --dse-font-display
+       text-transform: uppercase;
+       font-size: 1.35rem;                         → see the em note below
+       line-height: 1.04;
+       color: var(--role, var(--md-default-fg-color));  → --dse-role hook
+   i.e. role-TINTED, no border, no background, no small-caps.
+
+   The plugin routes both roles through one class (kit/cardHead.ts:99 always
+   renders rightPrimary as --chip), so the flat-chip block above — specificity
+   (0,3,0) — was outranking the base role hook `.dse-head__primary--right
+   { color: var(--dse-role, var(--dse-heading)) }` (0,1,0) and killing the tint
+   on the card head. That is a regression AND a site divergence: it only looks
+   harmless in the harness because the fixture's role is `leader`, whose token
+   is a grey (#9aa2a8); a `controller` (#e0584b) / `harrier` (#e07ba8) statblock
+   visibly lost its colour.
+
+   Scope: the card head is the head that is a DIRECT child of a .dse-sb / .dse-fb
+   root (statblock/view.ts:184 and featureblock/view.ts:76 both call
+   cardHead(card, …)). Sub-feature primaries ("Signature Ability", "Villain
+   Action 1") live at `.dse-sb > .dse-feature__nested > .dse-feature > .dse-head`
+   and are correctly excluded by the child combinators — those DO stay on the
+   flat rail-chip surface, matching the site's `sc-head__slot--chip`
+   sub-feature heads. Specificity (0,5,0) > the flat block's (0,3,0).
+
+   Font-size: the site's 1.35rem is 0.9× its name slot (1.5rem,
+   steel-cardhead.css:100-102); the plugin's name slot is 1.25em
+   (.dse-head__primary--left, ~4292), so the same ratio is 1.125em. Kept in em
+   for the plugin's rhythm — the same deviation Task 3 already took on the head
+   strips' padding. font-weight has no --mini counterpart on the site, so the
+   base 600 (.dse-head__primary--right) is left alone. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip {
+	background: none;
+	border: none;
+	font-family: var(--dse-font-display);
+	font-size: 1.125em;
+	line-height: 1.04;
+	text-transform: uppercase;
+	font-variant: normal;
+	letter-spacing: normal;
+	color: var(--dse-role, var(--dse-heading));
 }
 
 /* The SECOND chip surface: the ability COST corner chip, `.sc-ability__cost`
@@ -3583,7 +3629,11 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
    print frozen (SC-4); Legacy's .dse-section has no border/background rule
    of its own, so this is purely additive there being scoped to Steel. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section {
-	border: 1px solid var(--dse-border);
+	/* Plan 20 Task 3: the site's `.sc-ability__section` frames the box with
+	   --fx-metal-faint (steel-ability-cards.css:181), the SAME hairline its head
+	   strip uses (…:184) — so the outline and the head rule must share the token
+	   (this was --dse-border, which is a different grey). */
+	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
 	background: var(--dse-surface-sunken);
 	overflow: hidden;
@@ -3618,7 +3668,9 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
                         bare <div> today (only font-weight/colour, ~4204), so it
                         needs padding for the band to read at all; the values
                         mirror .dse-section__title above rather than the site's
-                        rem figures, keeping the plugin's em rhythm.
+                        rem figures, keeping the plugin's em rhythm. (The site
+                        agrees the two bands share horizontal padding: pr-head
+                        .55rem .9rem [:158] vs section-head .5rem .9rem [:183].)
      .dse-fb__adv-head  (elements/featureblock/view.ts:149) — a PLUGIN-ONLY
                         surface with no site counterpart. It plays the identical
                         role (a titled band opening a panel), so it reuses the
@@ -3631,7 +3683,28 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 ) {
 	background-image: var(--dse-sheen-soft);
 	border-bottom: 1px solid var(--dse-metal-faint);
-	padding: 0.45em 0.5em;
+	padding: 0.45em 0.75em;
+}
+
+/* …and the FRAME that band opens. Without this the .dse-pr__head hairline above
+   floats in open card space: on the site the head sits inside the power-roll
+   container `.sc-ability__pr` (steel-ability-cards.css:155-156) —
+     border: 1px solid var(--fx-metal-faint);  → --dse-metal-faint
+     border-radius: 9px;                       → --dse-radius (the plugin's
+       card radius; the sibling .dse-section maps the SAME site 9px to this
+       token, and they must stay flush)
+     overflow: hidden;                         → clips the head strip's corners
+     background: rgba(0,0,0,.18);              → --dse-surface-sunken, again the
+       token .dse-section already maps this exact site value to. The site's
+       light-scheme override (rgba(0,0,0,.02), …:157) rides on the token's own
+       light value, so no separate light rule is needed.
+   `margin-top: .9rem` is NOT ported: the plugin already owns that rhythm
+   (.dse-feature .dse-pr, ~170). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr {
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken);
+	overflow: hidden;
 }
 
 /* -- SC-10 Task 3: dashed keyword-spend box — the "SPEND 1+ INSIGHT" clause
@@ -3656,6 +3729,10 @@ body.theme-light [data-dse-theme='steel'] .dse-sb {
 	border: 1px solid var(--dse-border);
 	border-bottom: none;
 	border-radius: var(--dse-radius);
+	/* `background` shorthand ON PURPOSE: it resets the head strip's
+	   background-image: var(--dse-sheen-soft) set above — the spend title is a
+	   standalone chip beside the body text, not a head strip over a panel, so it
+	   must not carry the strip's sheen. */
 	background: var(--dse-metal-faint);
 	color: var(--dse-fg);
 	font-weight: 700;
