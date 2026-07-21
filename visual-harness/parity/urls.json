@@ -1,0 +1,14 @@
+[
+  { "id": "ability-powerroll",  "url": "https://steelcompendium.io/v2/Browse/feature/ability/tactician/level-1/mark/",        "waitFor": ".sc-ability", "note": "power roll + tier rows (tier wash)" },
+  { "id": "ability-noroll",     "url": "https://steelcompendium.io/v2/Browse/feature/ability/shadow/level-1/black-ash-teleport/", "waitFor": ".sc-ability", "note": "effect-only card, spend clause" },
+  { "id": "statblock-minion",   "url": "https://steelcompendium.io/v2/Browse/monster/goblin/goblin-warrior/",                  "waitFor": ".sb-wrap",    "note": "horde/harrier role tint" },
+  { "id": "statblock-leader",   "url": "https://steelcompendium.io/v2/Browse/monster/human/human-bandit-chief/",               "waitFor": ".sb-wrap",    "note": "leader, no-org role fallback" },
+  { "id": "statblock-solo",     "url": "https://steelcompendium.io/v2/Browse/monster/ashen-hoarder/ashen-hoarder/",            "waitFor": ".sb-wrap",    "note": "solo; villain actions band" },
+  { "id": "statblock-companion","url": "https://steelcompendium.io/v2/Browse/monster/companion/beastheart/bear/",              "waitFor": ".sb-wrap",    "note": "companion + class back-link" },
+  { "id": "featureblock-malice","url": "https://steelcompendium.io/v2/Browse/monster/devil/devil-malice/",                     "waitFor": ".fb-wrap",    "note": "malice band + per-option glyphs" },
+  { "id": "kit",                "url": "https://steelcompendium.io/v2/Browse/kit/panther/",                                    "waitFor": ".sc-card, .sc-kit", "note": "kit card + signature ability" },
+  { "id": "condition",          "url": "https://steelcompendium.io/v2/Browse/condition/bleeding/",                             "waitFor": ".md-content", "note": "reference/glossary card" },
+  { "id": "ancestry",           "url": "https://steelcompendium.io/v2/Browse/ancestry/devil/",                                 "waitFor": ".md-content", "note": "trait tree, nested sections" },
+  { "id": "class",              "url": "https://steelcompendium.io/v2/Browse/class/fury/",                                     "waitFor": ".md-content", "note": "class page, stats strip, act spines" },
+  { "id": "treasure",           "url": "https://steelcompendium.io/v2/Browse/treasure/leveled/armor/rampant-shield/",          "waitFor": ".md-content", "note": "leveled treasure rows" }
+]

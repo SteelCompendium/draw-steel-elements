@@ -13,7 +13,8 @@
     "obsidian-shots": "node visual-harness/notes-gen.mjs && npm run build-no-check && node visual-harness/obsidian-camera.mjs",
     "test": "jest",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "parity:site": "node visual-harness/parity/site-capture.mjs"
   },
   "keywords": [],
   "author": "Steel Compendium",
