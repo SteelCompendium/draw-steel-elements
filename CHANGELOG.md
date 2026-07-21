@@ -92,10 +92,16 @@ needs action.
 - [BUGFIX] A freshly-synced compendium file is now immediately resolvable by
   reference blocks (no more transient "found but not renderable — re-sync"
   card right after a sync).
-- New: the **Steel theme** now matches the steelcompendium.io High-Fantasy
-  Steel look — forged cards, embossed serif titles, crest badges, role-tinted
-  statblock plates; the original look remains available as the **Legacy**
-  style. Switch themes in Settings → Appearance.
+- New: the **Steel theme** brings the steelcompendium.io High-Fantasy Steel look
+  into Obsidian — forged cards, embossed serif titles, crest badges, role-tinted
+  statblock plates; the original look remains available as the **Legacy** style.
+  Switch themes in Settings → Appearance.
+- The Steel theme now matches the site's **material treatment**: the metal sheen,
+  bevel and hairline on card plates, section heads and the ability cost chip;
+  tier-coloured washes on power-roll rows; role/malice gradient header bands on
+  statblocks and featureblocks; and the crest accent. Parity is held by an
+  automated site-vs-plugin gate that samples the live site's computed styles and
+  fails the build on any flat surface, so the two can no longer drift silently.
 
 ## 5.1.1
 

@@ -152,7 +152,9 @@ describe('Steel material contract', () => {
 		});
 
 		it('the rail chips are never forged (no sheen, no bevel)', () => {
-			for (const body of steelBlocksFor('.dse-head__deck--chip')) {
+			const blocks = steelBlocksFor('.dse-head__deck--chip');
+			expect(blocks.length).toBeGreaterThan(0);
+			for (const body of blocks) {
 				expect(body).not.toMatch(/var\(--dse-sheen/);
 				expect(body).not.toMatch(/var\(--dse-chip-bevel\)/);
 			}
