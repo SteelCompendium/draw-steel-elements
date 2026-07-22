@@ -13,7 +13,8 @@ const harness = `file://${path.join(dir, '..', 'index.html')}`;
 // inventories are no longer comparable and the diff silently compares nothing.
 const PROPS = [
 	'background-image', 'background-color', 'box-shadow',
-	'border-top-color', 'border-top-width', 'border-top-style', 'border-radius',
+	'border-top-color', 'border-top-width', 'border-top-style',
+	'border-bottom-color', 'border-bottom-width', 'border-bottom-style', 'border-radius',
 	'color', 'font-family', 'font-size', 'font-weight', 'font-variant-caps',
 	'letter-spacing', 'text-transform',
 ];

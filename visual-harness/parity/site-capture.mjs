@@ -16,7 +16,8 @@ fs.mkdirSync(shotDir, { recursive: true });
 // The property set that defines "material". Extend here, never per-selector.
 const PROPS = [
   'background-image', 'background-color', 'box-shadow',
-  'border-top-color', 'border-top-width', 'border-top-style', 'border-radius',
+  'border-top-color', 'border-top-width', 'border-top-style',
+  'border-bottom-color', 'border-bottom-width', 'border-bottom-style', 'border-radius',
   'color', 'font-family', 'font-size', 'font-weight', 'font-variant-caps',
   'letter-spacing', 'text-transform',
 ];

@@ -3273,6 +3273,42 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):is(
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
 }
+/* The statblock/featureblock family's own deviation from the shared plate: the site
+   gives BOTH a heavier, rounder plate than the ability card —
+   `border-radius: .65rem` (13px) and `box-shadow: var(--fx-bevel), 0 10px 26px
+   rgba(0,0,0,.36)` (steel-statblock.css `.md-typeset.sb`, steel-featureblock.css
+   `.md-typeset.fb`), against the card's 12px / `0 8px 22px rgba(0,0,0,.34)`. The
+   shared ground above carries the card's values, and both are non-flat, so the
+   parity diff's flat-vs-forged rules cannot see the difference (README blind spot
+   3) — hence this explicit override rather than a note.
+   SCOPED two ways on purpose: (a) to sb/fb only, so the feature and reference-card
+   plates keep the site values that are right for *them*; (b) :not(print), because
+   the shared ground deliberately applies in print for these families and their
+   *--steel-print.png shots are LEGACY-FROZEN. Light values are the site's own light
+   twin (`[data-md-color-scheme="default"] .md-typeset.sb/.fb` — `0 5px 14px
+   rgba(0,0,0,.09)`); the bevel keeps coming from --dse-bevel, which is already the
+   light/dark-correct --fx-bevel counterpart.
+   RADIUS UNIT, deliberately the site's own `.65rem` and not its computed 13px: the
+   site's rem is 20px (Material runs a 125% base — see the `--sticky-top` note in
+   steel-statblock.css), so the same declaration computes ~10.4px against Obsidian's
+   16px root. Copying 13px absolutely would make the sb/fb plate 2× the plugin card's
+   6.4px — a far bigger family-to-family jump than the site itself has (12px card vs
+   13px sb) — and would stop scaling with the user's font size, unlike --dse-radius
+   (0.4em). The shadows ARE copied px-for-px, because the site authors them in px. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not(
+		[data-dse-error-stage]
+	),
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
+	border-radius: 0.65rem;
+	box-shadow: var(--dse-bevel), 0 10px 26px rgba(0, 0, 0, 0.36);
+}
+body.theme-light
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not(
+		[data-dse-error-stage]
+	),
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
+	box-shadow: var(--dse-bevel), 0 5px 14px rgba(0, 0, 0, 0.09);
+}
 /* The reference-card family's own deviation from the shared plate: the site tile
    pads itself (steel-redesign.css:159-166 — `padding: 1rem 1.1rem`) because the
    grid it sits in supplies no inset, and the plugin's .dse-card root is likewise
@@ -4232,12 +4268,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 /* NOTE the selector shape: .dse-sidebar WRAPS the mount, and data-dse-theme is
    stamped on the mount itself (seams/theme.ts), so the theme attribute has to be
    part of the descendant's own compound — not an ancestor of .dse-sidebar.
-   SPECIFICITY (review fix): this must beat the shared card ground (~3243), whose
-   tracker branch is (0,4,0). The :not([data-dse-error-stage]) below is what makes
-   this (0,5,0) — an explicit win, not a source-order accident. Keep it even though
-   the sidebar mount is never in an error stage; without it the two rules tie and
-   the override survives only because it appears later in the file. */
+   SPECIFICITY (review fix): this must outrank BOTH plate rules that set the lift
+   shadow on the tracker branch —
+     (a) the shared dark card ground (~3243), tracker branch (0,4,0); and
+     (b) its light twin (~3262), `body.theme-light …:is(…):not([data-dse-error-stage])`,
+         which is (0,5,1) because of the leading `body` type selector.
+   The :not([data-dse-error-stage]) below takes the dark-scoped rule to (0,5,0), which
+   beats (a) explicitly rather than by source order — but it LOSES to (b), so in light
+   mode the sidebar mount kept the `0 4px 12px` lift the override exists to drop. The
+   `body.theme-light` twin that follows is (0,6,1) and is what actually wins there.
+   Keep both, and keep the :not() even though the sidebar mount is never in an error
+   stage; without it the dark pair ties and survives only by appearing later. */
 .dse-sidebar
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not(
+		[data-dse-error-stage]
+	) {
+	box-shadow: var(--dse-bevel);
+}
+body.theme-light
+	.dse-sidebar
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not(
 		[data-dse-error-stage]
 	) {

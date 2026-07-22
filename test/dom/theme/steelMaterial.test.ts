@@ -181,6 +181,79 @@ describe('Steel material contract', () => {
 		});
 	});
 
+	describe('plates', () => {
+		// The site forges the statblock/featureblock plate HEAVIER than the ability card:
+		// `.65rem` + `0 10px 26px rgba(0,0,0,.36)` (steel-statblock.css `.md-typeset.sb`,
+		// steel-featureblock.css `.md-typeset.fb`) against the card's `0 8px 22px
+		// rgba(0,0,0,.34)`. Both are non-flat, so `npm run parity` cannot see the difference
+		// (README "Known blind spots" 3) — this is the mechanism that holds it.
+		const plateBlocks = (): string[] =>
+			rules
+				.filter(
+					(r) =>
+						STEEL_SCOPE.test(r.selector) &&
+						/\[data-dse-element='featureblock'\]/.test(r.selector) &&
+						/\.dse-sb(?![\w-])/.test(r.selector),
+				)
+				.map((r) => r.body);
+
+		it('the sb/fb plate takes the site’s heavier lift, not the card’s', () => {
+			const blocks = plateBlocks();
+			expect(blocks.length).toBeGreaterThan(0);
+			expect(
+				blocks.some((b) =>
+					/box-shadow:\s*var\(--dse-bevel\),\s*0 10px 26px rgba\(0,\s*0,\s*0,\s*0?\.36\)/.test(b),
+				),
+			).toBe(true);
+		});
+
+		it('the sb/fb plate keeps a light-scheme lift of its own', () => {
+			const blocks = rules
+				.filter(
+					(r) =>
+						STEEL_SCOPE.test(r.selector) &&
+						/body\.theme-light/.test(r.selector) &&
+						/\.dse-sb(?![\w-])/.test(r.selector),
+				)
+				.map((r) => r.body);
+			expect(blocks.length).toBeGreaterThan(0);
+			expect(
+				blocks.some((b) =>
+					/box-shadow:\s*var\(--dse-bevel\),\s*0 5px 14px rgba\(0,\s*0,\s*0,\s*0?\.09\)/.test(b),
+				),
+			).toBe(true);
+		});
+
+		it('the sb/fb plate rounds at the site’s .65rem', () => {
+			expect(plateBlocks().some((b) => /border-radius:\s*0?\.65rem/.test(b))).toBe(true);
+		});
+
+		// The sidebar initiative mount drops the OUTER lift (plate-inside-a-plate) and keeps
+		// only the bevel. It needs a rule per scheme: the dark override is (0,5,0), which beats
+		// the dark shared ground (0,4,0) but LOSES to the light shared ground's (0,5,1) — so
+		// without a `body.theme-light` twin the override is dead in light mode.
+		const sidebarBlocks = (light: boolean): string[] =>
+			rules
+				.filter(
+					(r) =>
+						STEEL_SCOPE.test(r.selector) &&
+						/\.dse-sidebar/.test(r.selector) &&
+						/body\.theme-light/.test(r.selector) === light,
+				)
+				.map((r) => r.body);
+
+		it.each([
+			['dark', false],
+			['light', true],
+		])('the sidebar plate drops the outer lift in %s', (_scheme, light) => {
+			const blocks = sidebarBlocks(light as boolean);
+			expect(blocks.length).toBeGreaterThan(0);
+			expect(blocks.some((b) => /box-shadow:\s*var\(--dse-bevel\)\s*;/.test(b))).toBe(true);
+			// bevel ONLY — any second shadow layer is the lift this rule exists to remove.
+			for (const b of blocks) expect(b).not.toMatch(/box-shadow:[^;]*rgba\([^;]*\)\s*;/);
+		});
+	});
+
 	describe('dead selectors', () => {
 		// `.dse-section__head` is a plan-draft name that never existed in the DOM
 		// (renderFeature.ts emits only `__title` + `__body`). It is named in the CSS prose,

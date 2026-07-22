@@ -104,8 +104,11 @@ npm run parity
 
 This builds the harness, samples the `plugin` side of every pair in `selector-map.json`,
 and diffs each `plugin` selector's computed styles against its paired `site` selector's
-values in `baseline/site-inventory.json`. It compares the **first dark-scheme occurrence**
-of each selector on either side.
+values in `baseline/site-inventory.json`. It compares the first occurrence of each selector
+on either side **in each colour scheme — dark and light are both checked**, and every
+reported row names its scheme. (Dark-only comparison was a real hole: a light-scheme-only
+flat surface — plan 19's exact failure mode, surviving in half the theme — passed both this
+gate and jest.)
 
 Two severities:
 
@@ -114,7 +117,12 @@ Two severities:
   that shipped a flat theme before:
   1. site has a `background-image` (gradient/sheen), plugin has `none`;
   2. site has a `box-shadow` (bevel/lift), plugin has `none`;
-  3. site has a visible `border-top` hairline, plugin has `border-top-style: none`.
+  3. site has a visible hairline on an edge — `border-top` **or `border-bottom`** — and the
+     plugin has `border-<edge>-style: none` there. Both edges matter: nearly every head
+     strip on these surfaces (`.sc-ability__section-head`, `.sc-ability__pr-head`,
+     `.sb__head`, `.fb__head`) is `border-top-style: none` with a `border-bottom` hairline,
+     so while the rule checked only `border-top` it was inert on all of them.
+  Each rule runs per scheme, so the same pair can report in `dark`, `light`, or both.
   A `GAP` is closed by **fixing `styles-source.css`** — never by deleting or weakening the
   pair that reports it.
 - **`WARN`** — one side of the pair never rendered/was never captured, so the comparison
@@ -134,19 +142,35 @@ Two severities:
   without a pseudo-element argument, so e.g. `.sc-ability::before`'s decorative SVG flourish
   is not represented on either side.
 - **Only the three "site is richer" checks above are asserted.** A surface can differ
-  materially in ways the diff does not model — e.g. the site's statblock plate lifts with
-  `0 10px 26px rgba(0,0,0,.36)` and rounds at `13px` while the plugin's shared card ground
-  uses `0 8px 22px rgba(0,0,0,.34)` at `--dse-radius` (6.4px). Both are non-flat, so the
-  pair passes. Read the inventories directly when the exact value matters.
+  materially in ways the diff does not model: any two non-flat values pass, however far
+  apart they are, and `border-radius` is captured but never compared at all. This is not
+  hypothetical — the statblock/featureblock plate sat at the plugin's card values
+  (`0 8px 22px rgba(0,0,0,.34)`, `--dse-radius`) while the site forges a heavier, rounder
+  plate (`0 10px 26px rgba(0,0,0,.36)`, `.65rem`), and the pair passed clean throughout.
+  It was found by reading the inventories, not by the gate, and closed by hand
+  (`styles-source.css`, the sb/fb plate deviation after the shared ground). Read the
+  inventories directly when the exact value matters.
 - **Colour is not asserted either — only "flat vs. non-flat".** Checks 1 and 2 fire on
-  `none` vs. *anything*, so two surfaces can pass while being different colours. Concretely:
-  the `statblock-band` site baseline is **role-tinted** — `.sb__head` samples
-  `linear-gradient(… color(srgb .421961 .275294 .355294) …)` on the leader page — while the
-  plugin's `.dse-sb > .dse-head` is a neutral grey ramp
-  (`color(srgb .3027 .3247 .3412) → color(srgb .1471 .1642 .1771)`). Both are gradients, so
-  the pair reads clean. Same trap for `background-color`, `color`, and hairline *colour*
-  (only `border-top-style` is checked, never `border-top-color`). Read the inventories
-  directly when the hue matters.
+  `none` vs. *anything*, so two surfaces can pass while being different colours; check 3
+  looks at `border-<edge>-style`, never `border-<edge>-color`. Concretely: the
+  `statblock-band` pair compares whichever page/element the diff samples **first**, which is
+  `statblock-minion` (a harrier, `.sb__head` = `linear-gradient(… color(srgb .421961 .275294
+  .355294) …)`, pink) against the plugin's statblock fixture — whose role is **leader**, so
+  its `.dse-sb > .dse-head` grey ramp is the *correct* tint for that role
+  (`--dse-role-leader: var(--sc-role-leader, #9aa2a8)`, `styles-source.css:3206`), not an
+  untinted band. Both sides are role-tinted gradients of different roles, and the pair reads
+  clean either way: the diff would equally not notice if the plugin band really were
+  untinted. Same trap for `background-color` and `color`. Read the inventories directly when
+  the hue matters — and note that a like-for-like hue comparison would need the two sides
+  pinned to the same role, which the current fixture/URL sets do not guarantee.
+- **Some pairs are structurally inert.** A pair only fails if the *site* side is forged on
+  one of the three checked properties, so a pair whose site node is bare can never report.
+  Today that is the `head` pair: `.sc-head` samples `background-image: none`,
+  `box-shadow: none`, and both `border-top-style` and `border-bottom-style` `none`, in both
+  schemes — its real divergence is typographic, which nothing asserts. So "12 pairs" is
+  **11 live pairs + 1 inert one**. (Re-checked after check 3 was widened to `border-bottom`:
+  still inert.) Keep it — it costs nothing and starts working the day the site forges that
+  node — but do not count it as coverage.
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
@@ -158,7 +182,9 @@ those pairs' findings from `GAP` to `WARN`, so the gate stays green. This exists
 one legitimate case: a real difference that **cannot be closed in CSS** because it needs a
 DOM/TS change. Every id in the array must cite a numbered workspace `FOLLOWUPS.md` item in
 the sibling `expectedGapsNote`, naming the selector, the site value, the plugin value, and
-why DOM is required. It is **never** a way to silence a gap that CSS could close — and
+why DOM is required. **`diff.mjs` enforces the citation mechanically**: if an id in
+`expectedGaps` does not appear anywhere in `expectedGapsNote`, the run exits 1 before any
+comparison — so the array cannot quietly become a mute button. It is **never** a way to silence a gap that CSS could close — and
 deleting or weakening a pair is never acceptable either. The array is currently empty.
 
 ## Adding a new surface to the contract

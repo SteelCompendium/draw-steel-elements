@@ -99,9 +99,16 @@ needs action.
 - The Steel theme now matches the site's **material treatment**: the metal sheen,
   bevel and hairline on card plates, section heads and the ability cost chip;
   tier-coloured washes on power-roll rows; role/malice gradient header bands on
-  statblocks and featureblocks; and the crest accent. Parity is held by an
-  automated site-vs-plugin gate that samples the live site's computed styles and
-  fails the build on any flat surface, so the two can no longer drift silently.
+  statblocks and featureblocks; and the crest accent. A developer-run parity check
+  (`npm run parity`) compares 12 selector pairs against computed styles captured
+  from the live site, in both the light and dark scheme, and fails if a surface the
+  site forges (gradient, bevel, hairline) renders flat in the plugin. Its reach is
+  deliberately narrow: it is **not** part of CI, it covers 5 of the 32 element
+  families, and it asserts only flat-vs-forged — never exact colour, typography or
+  pseudo-element decoration. A jest material contract
+  (`test/dom/theme/steelMaterial.test.ts`) pins the same declarations offline and
+  *does* run in the normal test suite. Together they catch a wholesale flattening
+  like the one this release fixes; they do not prove pixel parity with the site.
 
 ## 5.1.1
 
