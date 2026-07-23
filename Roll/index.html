@@ -1,0 +1,1209 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://steelCompendium.io/Roll/">
+      
+      
+        <link rel="prev" href="../Features/">
+      
+      
+        <link rel="next" href="../canvas-character-sheet/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../Media/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Roll Element - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Serif+4:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Serif 4";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#roll-element" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-header__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Steel Compendium: Draw Steel Elements Obsidian Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Roll Element
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-nav__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    Steel Compendium: Draw Steel Elements Obsidian Plugin
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Draw Steel Elements Plugin for Obsidian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roll Element
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roll Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-an-ability-style-roll-with-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: an ability-style roll with tiers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: a test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-a-flat-dice-roll" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: a flat dice roll
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Definitions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rolling-rules-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rolling rules applied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results-are-session-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results are session-only
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-plugin-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related plugin settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../canvas-character-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build a Character Sheet in Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../characteristics-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Characteristics Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-element-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Element Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compendium Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../counter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Counter Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../featureblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Featureblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../horizontal-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Horizontal Rule Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../initiative-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initiative Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrating-to-6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 5.x to 6.0.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../negotiation-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Negotiation Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skills-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skills Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stamina-bar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stamina Bar Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../statblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../values-row-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Values Row Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-an-ability-style-roll-with-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: an ability-style roll with tiers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-a-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: a test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-a-flat-dice-roll" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: a flat dice roll
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Definitions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rolling-rules-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rolling rules applied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results-are-session-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results are session-only
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-plugin-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related plugin settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="roll-element">Roll Element<a class="headerlink" href="#roll-element" title="Permanent link">&para;</a></h1>
+<p>The Roll Element renders a standalone Draw Steel dice roller: a Power Roll (2d10 +
+characteristic, resolved to tier 1/2/3), a test, an opposed power roll, or a flat dice
+roll (damage, saving throws, etc.). It shows a modifier bar (characteristic, skill,
+edges, banes), rolls with one click, highlights the matching tier row, and shows a
+result card with the full breakdown plus Reroll/Clear actions.</p>
+<p>Unlike the roller on ability cards (which is off until you turn on <strong>Enable rolling</strong>
+in the plugin settings), the Roll Element always rolls — writing the block into your
+note is the opt-in.</p>
+<p><img alt="roll" src="../Media/roll.png" /></p>
+<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
+<p>Insert a code block with the language identifier <code>ds-roll</code> (aliases: <code>ds-r</code>,
+<code>ds-power-roll</code>) and define the roll using YAML syntax. An empty block is valid and
+renders a bare 2d10 power roll.</p>
+<h3 id="example-an-ability-style-roll-with-tiers">Example: an ability-style roll with tiers<a class="headerlink" href="#example-an-ability-style-roll-with-tiers" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>~~~ds-roll
+name: Fireball
+roll: &quot;Power Roll + Reason&quot;
+edges: 1
+tiers:
+  t1: &quot;5 fire damage&quot;
+  t2: &quot;9 fire damage&quot;
+  t3: &quot;13 fire damage&quot;
+crit: &quot;The target is also burning (save ends)&quot;
+~~~
+</code></pre></div>
+<h3 id="example-a-test">Example: a test<a class="headerlink" href="#example-a-test" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>~~~ds-roll
+name: Climb the cliff
+roll: &quot;Might test&quot;
+difficulty: hard
+~~~
+</code></pre></div>
+<h3 id="example-a-flat-dice-roll">Example: a flat dice roll<a class="headerlink" href="#example-a-flat-dice-roll" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>~~~ds-roll
+name: Falling damage
+mode: flat
+dice: &quot;3d6+2&quot;
+~~~
+</code></pre></div>
+<h2 id="field-definitions">Field Definitions<a class="headerlink" href="#field-definitions" title="Permanent link">&para;</a></h2>
+<p>All fields are optional.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+<th>Default Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>Card title.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>roll</code></td>
+<td><code>string</code></td>
+<td>Free-text expression (<code>"Power Roll + Reason"</code>, <code>"Might test"</code>, <code>"2d10 + 5"</code>). Parsed leniently and shown as the caption. A characteristic keyword here beats the <code>characteristic:</code> field; an explicit <code>mode:</code> field beats the expression.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>string</code></td>
+<td><code>power-roll</code>, <code>test</code>, <code>opposed</code>, or <code>flat</code>.</td>
+<td><code>power-roll</code></td>
+</tr>
+<tr>
+<td><code>characteristic</code></td>
+<td><code>number</code> or <code>string</code></td>
+<td>A number is used directly (shown read-only); a keyword (<code>"Reason"</code>) labels a manual −5..+5 stepper in the bar.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>skill</code></td>
+<td><code>boolean</code> or <code>string</code></td>
+<td><code>true</code> — or a skill name — starts the bar with the skill (+2) toggle on.</td>
+<td><code>false</code></td>
+</tr>
+<tr>
+<td><code>edges</code></td>
+<td><code>integer</code></td>
+<td>Starting edge count in the bar (adjustable before rolling).</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>banes</code></td>
+<td><code>integer</code></td>
+<td>Starting bane count in the bar (adjustable before rolling).</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>bonus</code></td>
+<td><code>number</code></td>
+<td>A flat modifier applied to every roll (shown in the breakdown, not in the bar).</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>difficulty</code></td>
+<td><code>string</code></td>
+<td><code>easy</code>, <code>medium</code>, or <code>hard</code>. Display only — shown in the caption; the plugin does not judge success.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>main_action</code></td>
+<td><code>boolean</code></td>
+<td>Starts the "Main action" (crit-eligible) toggle on. Only main-action power rolls can crit on a natural 19–20.</td>
+<td><code>false</code></td>
+</tr>
+<tr>
+<td><code>dice</code></td>
+<td><code>string</code></td>
+<td>Flat mode only: the dice expression (<code>"1d6+2"</code>).</td>
+<td><code>1d10</code></td>
+</tr>
+<tr>
+<td><code>tiers</code></td>
+<td><code>object</code></td>
+<td>Optional tier rows: <code>t1</code>/<code>t2</code>/<code>t3</code> strings (markdown). Rendered like an ability's power-roll table; the rolled tier is highlighted.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>crit</code></td>
+<td><code>string</code></td>
+<td>Optional critical row (markdown), highlighted on a natural 19–20 main-action power roll.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>auto_roll</code></td>
+<td><code>boolean</code></td>
+<td>Roll once automatically when the block renders.</td>
+<td><code>false</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="rolling-rules-applied">Rolling rules applied<a class="headerlink" href="#rolling-rules-applied" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Tiered rolls are always 2d10 + modifiers; tier 1 is a total of 11 or lower, tier 2
+  is 12–16, tier 3 is 17+.</li>
+<li>Edges and banes are capped at two per side first, then cancel. A single net
+  edge/bane is ±2; a double edge/bane shifts the tier by ±1 instead (in <code>opposed</code>
+  mode a double is ±4). The bar shows the live net effect before you roll.</li>
+<li>A natural 19–20 (the two faces before modifiers) is always tier 3, and is a
+  critical when the roll is a main-action power roll.</li>
+</ul>
+<h2 id="results-are-session-only">Results are session-only<a class="headerlink" href="#results-are-session-only" title="Permanent link">&para;</a></h2>
+<p>Roll results and your last bar settings are kept in memory for the current Obsidian
+session only (the last 10 results per block). Rolling never writes to your note, and
+everything resets when Obsidian restarts or the plugin reloads.</p>
+<h2 id="related-plugin-settings">Related plugin settings<a class="headerlink" href="#related-plugin-settings" title="Permanent link">&para;</a></h2>
+<p>Under <strong>Settings → Draw Steel Elements → Rolling</strong>:</p>
+<ul>
+<li><strong>Enable rolling</strong> (default off) — adds a dice roller to rendered ability cards
+  (feature, featureblock, statblock). The Roll Element ignores this switch and always
+  rolls.</li>
+<li><strong>Roller</strong> (default "Draw Steel native") — optionally delegates the raw dice to the
+  community <a href="https://github.com/javalent/dice-roller">Dice Roller</a> plugin when it is
+  installed and enabled. Draw Steel tier/edge/bane math always stays native, and the
+  plugin falls back to the built-in roller automatically if Dice Roller is missing or
+  fails. The result card notes "rolled with Dice Roller" when the bridge rolled the
+  faces.</li>
+<li><strong>Click ability to roll</strong> (default on) — when rolling is enabled, clicking a
+  power-roll tier row on an ability card rolls it. This setting does not affect the
+  Roll Element.</li>
+</ul>
+<h2 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Dice notation inside the <code>roll:</code> string does not drive the dice — <code>roll:</code> sets the
+  caption (and mode/characteristic/trailing bonus), but the dice themselves come from
+  <code>mode: flat</code> + <code>dice:</code>. For example, <code>roll: "3d6"</code> alone still rolls a 2d10 power
+  roll; write <code>mode: flat</code> and <code>dice: "3d6"</code> to roll 3d6.</li>
+<li>Reading mode only (like the rest of the plugin — no Live Preview support).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The Draw Steel Compendium is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../javascripts/tablesort.js"></script>
+      
+    
+  </body>
+</html>
