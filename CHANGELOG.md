@@ -109,6 +109,22 @@ needs action.
   (`test/dom/theme/steelMaterial.test.ts`) pins the same declarations offline and
   *does* run in the normal test suite. Together they catch a wholesale flattening
   like the one this release fixes; they do not prove pixel parity with the site.
+- The Steel theme now also matches the site's **typography, spacing and ink** on
+  those same card families: body and label text is set in a serif face, opened to
+  the site's line-height and card/head/row/band spacing, and given the site's
+  cooler ink — so the Steel card families read like the site rather than like
+  default Obsidian prose. The parity check was extended to measure these too (it
+  now covers type, spacing, ink, letter-spacing and material across the same 12
+  selector pairs / ~5 of 32 element families, both schemes), and a second jest
+  contract (`test/dom/theme/steelTypography.test.ts`) pins the serif route, the
+  open line-height and the roomier card inset offline. Two honest limits: the
+  site's licensed slab face can't be bundled, so the plugin uses a free serif
+  (Source Serif 4) — a serif, not that exact slab, and only its 600/700 weights
+  ship, so body copy reads slightly heavier than the site's; and this covers only
+  the shared card families — the plugin-only surfaces and the deferred structural
+  rebuilds (the kit stat-tile grid, the featureblock option layout, the feature
+  action spine, the statblock notch) are **not** part of it. Bundling the slab as
+  a future upgrade would close the face gap.
 
 ## 5.1.1
 
