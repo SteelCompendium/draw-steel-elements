@@ -3312,10 +3312,48 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 /* The reference-card family's own deviation from the shared plate: the site tile
    pads itself (steel-redesign.css:159-166 — `padding: 1rem 1.1rem`) because the
    grid it sits in supplies no inset, and the plugin's .dse-card root is likewise
-   unpadded. --dse-pad is 1rem (~2970), the plugin's existing card inset. */
+   unpadded. Plan 21 Task 2: match the site tile's inset exactly — `1rem 1.1rem`
+   at the site's 20px rem base computes to 20px vertical / 22px horizontal
+   (parity `card-ref`: site 20/22/20/22, plugin was --dse-pad = 16 all round).
+   Authored at the plugin's 16px base: 1.25rem = 20px, 1.375rem = 22px. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
-	padding: var(--dse-pad);
+	padding: 1.25rem 1.375rem;
 }
+
+/* Plan 21 Task 2 — card plate inset + block rhythm. The site's ability card is
+   roomier than the plugin's --dse-pad (16px) default and separates from its
+   neighbours by a full 24px:
+     .sc-ability { margin: 1.2rem 0; padding: 1.15rem 1.25rem 1.25rem }
+     (steel-ability-cards.css:39,41) — at the site's 20px rem base that is
+     margin 24px and padding 23/25/25/25 (parity `card`).
+   A single 24px inset is the best fit the plugin's 16px base allows against the
+   site's asymmetric 23/25/25/25 (residual ≤ 1px, inside the 1.5px gate tol —
+   p21 controller C5); 1.5rem = 24px. Margin stays in em (1.5em = 24px) to keep
+   scaling with the card's own text, and collapses card-to-card to 24px exactly
+   as the site's `margin: 1.2rem 0` does. Screen-only: the base rule (~74) still
+   supplies 16px in Legacy/print, which the frozen *--steel-print.png rely on. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature']:not(
+		[data-dse-error-stage]
+	) {
+	padding: 1.5rem;
+	margin-top: 1.5em;
+	margin-bottom: 1.5em;
+}
+
+/* Plan 21 Task 2 — open body rhythm. The site sets its card body copy to a 1.36
+   ratio on its 20px base = 27.2px computed line-height (parity `line-height`:
+   site 27.2px on every card/section/head/band/row pair, plugin was 24px). At the
+   plugin's 16px base, 1.7 reproduces 27.2px exactly. Set on the four plate roots
+   and inherited down; the tight heads/badges/chips keep their own explicit
+   line-height (title 1.15/1.04, badge 1, chip set to 1 below), so only the body
+   copy and the strip nodes (which the site also runs at 27.2) open up. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature']:not([data-dse-error-stage]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not([data-dse-error-stage]),
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
+	line-height: 1.7;
+}
+
 /* Single-layer plates: the statblock root's flat surface would peek through
    .dse-sb's rounded corners; the feature root's legacy corner hairlines would
    double the new real border. Steel neutralizes both (review findings). */
@@ -3400,6 +3438,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.04em;
+}
+/* Plan 21 Task 2 — the rail chip's SIZE. The site's `.sc-head__slot--chip`
+   (steel-cardhead.css:127) is `font-size: .9rem; line-height: 1` = 18px text on
+   an 18px line at its 20px base (parity `chip`: font-size site 18 / plugin 13.6,
+   line-height site 18 / plugin 16.32). The plugin authors the chip's metrics in
+   em, so this ONE font-size correction is load-bearing for the whole chip: at
+   18px the em-authored padding (0.14em/0.5em, ~4770) computes 2.52/9.0 against the
+   site's 2.8/9.2 (both inside the 1.5px gate tol) and the 0.04em tracking above
+   computes 0.72px = the site's exactly — all close for free. Line-height must be
+   set in the SAME rule: the plugin authors ratio 1.2 (16.32/13.6) where the site
+   uses 1.0, so at 18px an unchanged 1.2 would swing to 21.6 vs 18 and OPEN a
+   line-height gap; 1 matches the site. 1.125em = 18px at the head's 16px base. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__deck--chip {
+	font-size: 1.125em;
+	line-height: 1;
 }
 
 /* §card-head role line — the THIRD slot surface: `.sc-head__slot--mini`
@@ -3724,6 +3777,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	border-radius: var(--dse-radius);
 	background: var(--dse-surface-sunken);
 	overflow: hidden;
+	/* Plan 21 Task 2 — section rhythm. The site gives each section a top-only
+	   gap and no bottom margin (`.sc-ability__section { margin-top: .65rem }`,
+	   steel-ability-cards.css:180; bottom defaults to 0) = 13px at its 20px base
+	   (parity `section`: margin-top site 13 / plugin 8, margin-bottom site 0 /
+	   plugin 12). The plugin's base rule (~2988) splits it .5em/.75em; override to
+	   top-only. 0.8125em = 13px at the plugin's 16px base; between sections that
+	   single top margin is the whole gap (no collapse against a bottom margin),
+	   matching the site. */
+	margin-top: 0.8125em;
+	margin-bottom: 0;
 }
 /* Plan 20 Task 3 folds the site's MATERIAL onto this strip. Note there is no
    `.dse-section__head` element in the plugin — renderFeature.ts:182-193 emits
@@ -3735,7 +3798,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    raised plate, so the surface colour survives (both must be set separately —
    the `background` shorthand would reset the image). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__title {
-	padding: 0.45em 0.75em;
+	/* Plan 21 Task 2 — head-strip inset to the site's figures. The site's
+	   section-head is `.sc-ability__section-head { padding: .5rem .9rem }`
+	   (steel-ability-cards.css:183) = 10px/18px at its 20px base (parity
+	   `section-head`: site 10×18, plugin was 0.45em 0.75em = 7.2×12). At the
+	   plugin's 16px base 0.625rem = 10px and 1.125rem = 18px. */
+	padding: 0.625rem 1.125rem;
 	border-bottom: 1px solid var(--dse-metal-faint);
 	background-color: var(--dse-surface-raised);
 	background-image: var(--dse-sheen-soft);
@@ -3770,7 +3838,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 ) {
 	background-image: var(--dse-sheen-soft);
 	border-bottom: 1px solid var(--dse-metal-faint);
-	padding: 0.45em 0.75em;
+	/* Plan 21 Task 2 — inset to the site's power-roll head figures:
+	   `.sc-ability__pr-head { padding: .55rem .9rem }` (steel-ability-cards.css:159)
+	   = 11px/18px at the site's 20px base (parity `pr-head`: site 11×18, plugin was
+	   0.45em 0.75em = 7.2×12). 0.6875rem = 11px, 1.125rem = 18px at the plugin's
+	   16px base. .dse-fb__adv-head is plugin-only and rides the same band figures. */
+	padding: 0.6875rem 1.125rem;
 }
 
 /* …and the FRAME that band opens. Without this the .dse-pr__head hairline above
@@ -3824,7 +3897,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    the wash. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row {
 	--t: var(--dse-tier-low);
-	padding: 0.55rem 0.9rem;
+	/* Plan 21 Task 2 — the site authors this row `.55rem .9rem` too
+	   (steel-ability-cards.css:167) = 11px/18px at its 20px base, but the plugin
+	   copied the rem LITERAL, so at 16px it computed 8.8×14.4 (parity `tier-row`:
+	   site 11×18). Re-author at the plugin base: 0.6875rem = 11px, 1.125rem = 18px. */
+	padding: 0.6875rem 1.125rem;
 	border-left: 3px solid var(--t);
 	border-top: 1px solid var(--dse-metal-faint);
 	background-image: linear-gradient(
@@ -3921,22 +3998,65 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 /*   second nested box.                                                 */
 /* ================================================================== */
 
+/* -- Plan 21 Task 2 — statblock/featureblock box model: flush plate + self-
+   insetting children (the SITE's idiom). The site's block plates carry NO
+   padding — `.md-typeset.sb` / `.md-typeset.fb { padding: 0 0 .35rem }`
+   (steel-statblock.css:77, steel-featureblock.css:44) = 0/0/7/0 at its 20px
+   base — and every child self-insets by `var(--pad)` (1.2rem = 24px). The
+   plugin previously did the OPPOSITE (plate carried var(--dse-pad) = 16px and
+   the header band cancelled it with a negative margin), which read as
+   plate-padding 8/16/16/16 (sb) & 16/16/16/16 (fb) against the site's 0/0/7/0
+   (parity `statblock` / `featureblock` padding) and forced the band's -8px pull
+   (parity `*-band` margin-top: site 0 / plugin -8). Adopting the site idiom
+   closes all of those together: the plate goes flush and each content child
+   takes the 24px inset the band already uses, so band and body align at one
+   gutter exactly as the site does. 0.4375rem = 7px / 1.5rem = 24px at the
+   plugin's 16px base. Screen-only: the base rules (~1764 / ~1919) still pad
+   16px in Legacy/print, which the frozen *--steel-{legacy,print}.png rely on. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
+	padding: 0 0 0.4375rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not(
+		[data-dse-error-stage]
+	) {
+	padding: 0 0 0.4375rem;
+}
+/* The content children take the 24px gutter (the band, excluded here, pads
+   itself below). Margin — not padding — so bordered children (.dse-sb__chars,
+   the meta cells) inset their whole box, matching the site's
+   `.sb__chars { margin: 0 var(--pad) }` (steel-statblock.css:200). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb > :not(.dse-head),
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > :not(.dse-head) {
+	margin-left: 1.5rem;
+	margin-right: 1.5rem;
+}
+/* Fail-safe: an unmapped statblock (no combat role) draws no role band, so its
+   plain head is not covered by the self-padding band rule below — inset it like
+   any other child so it can't butt against the now-flush plate edge. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb:not([data-dse-role]) > .dse-head {
+	padding-left: 1.5rem;
+	padding-right: 1.5rem;
+}
+
 /* -- Header band: role-tinted gradient strip behind .dse-head (site's
    .sb__head recipe, steel-statblock.css) — the pink "Horde Harrier" band of
    01-statblock--site-dark.png. Only fires when a role actually mapped
    ([data-dse-role], set together with the --dse-role alias by
    applyRoleTint — see the existing spine rule at ~1771), so an unmapped role
    keeps the flat card ground (OD-2: the accent is Steel-only AND
-   fails-safe). The band bleeds edge-to-edge by canceling .dse-sb's own
-   padding (negative margin) and re-applying it as the band's own padding, so
-   the header content doesn't shift; its top corners share --dse-radius with
-   the card so it tucks under the card's own rounded top edge without a
-   separate overflow:hidden clip on .dse-sb. --dse-surface stands in for the
-   site's bespoke --sb-plate-solid (no plugin token for that one-off mix
-   base) — same hex family, already verbatim-matched to the site (D3). */
+   fails-safe). Plan 21 Task 2: with the plate now flush (above) the band no
+   longer cancels plate padding — it sits at margin-top 0 (parity site 0) and
+   spans the flush plate edge-to-edge on its own, self-padding to the site's
+   `.sb__head { padding: 1rem var(--pad) 1.05rem }` (steel-statblock.css:91) =
+   20/24/21/24 at the site's 20px base (parity `statblock-band` padding). Its
+   top corners share --dse-radius with the card so it tucks under the card's own
+   rounded top edge without a separate overflow:hidden clip on .dse-sb.
+   --dse-surface stands in for the site's bespoke --sb-plate-solid (no plugin
+   token for that one-off mix base) — same hex family, already verbatim-matched
+   to the site (D3). 1.25rem = 20px, 1.5rem = 24px, 1.3125rem = 21px @16px. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb[data-dse-role] > .dse-head {
-	margin: -0.5rem calc(-1 * var(--dse-pad)) 0.75rem;
-	padding: 0.75rem var(--dse-pad) 0.85rem;
+	margin: 0 0 0.75rem;
+	padding: 1.25rem 1.5rem 1.3125rem;
 	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
 	background: linear-gradient(
 		180deg,
@@ -3960,9 +4080,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    dark, #8e959a, but drifts dark in light, #5a6368; --dse-role-leader is the
    site-exact grey the launcher pinned.) When a role IS mapped (a "Hazard Hexer"
    fixture, WITH_ROLE-style) --dse-role wins and the real hue shows. */
+/* Plan 21 Task 2: same flush-plate migration as the statblock band — margin-top
+   0 (parity `featureblock-band` site 0 / plugin was -8), self-padding to the
+   site's `.fb__head { padding: 1rem var(--pad) 1.05rem }` (steel-featureblock.css:57)
+   = 20/24/21/24 @20px (parity `featureblock-band` padding). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head {
-	margin: -0.5rem calc(-1 * var(--dse-pad)) 0.75rem;
-	padding: 0.75rem var(--dse-pad) 0.85rem;
+	margin: 0 0 0.75rem;
+	padding: 1.25rem 1.5rem 1.3125rem;
 	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
 	background: linear-gradient(
 		180deg,
