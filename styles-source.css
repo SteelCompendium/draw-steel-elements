@@ -3406,6 +3406,54 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	text-transform: uppercase;
 }
 
+/* ================================================================== */
+/*   Plan 21 Task 3 — body IDENTITY: serif face, cooler ink, open      */
+/*   tracking (match steelcompendium.io/v2)                            */
+/* ================================================================== */
+/*
+   Body FONT (A1). The site paints ONE slab face (BerlingskeSlab) on titles AND
+   body prose; that licensed face can't be bundled, so body/label text routes to
+   the SAME serif the titles already use — --dse-font-display, which under Steel
+   is "Source Serif 4" (embedded @font-face ~3089). Routed directly to
+   --dse-font-display (NOT a new --dse-font-body token: the token vocabulary is
+   pinned by src/framework/tokens.ts' DSE_TOKEN_NAMES / token-coverage tests, and
+   a CSS-only task cannot register a new one — the alias would be functionally
+   identical anyway). Set on the four Steel plate HOSTS so it inherits to every
+   prose container + label the harness samples (.dse-section / .dse-pr__head /
+   .dse-pr__row / .dse-head / chip / sb+fb band heads). Titles set
+   --dse-font-display explicitly (same face) — unaffected. Only weights 600/700
+   are bundled, so body (≈400) maps up to the 600 face — real serif pixels,
+   slightly heavier than the site's 400 (verify in the shots).
+
+   Body INK (A6). These hosts otherwise fall to Obsidian's --text-normal (parity
+   plugin rgb(218,218,218) dark / rgb(34,34,34) light); the site body ink is the
+   cooler rgba(220,226,230,0.88) dark / rgb(44,46,48) light, which --dse-fg
+   ALREADY carries verbatim (:3141 dark, :4451 light). Routing `color` to
+   --dse-fg matches both the RGB and the alpha in both schemes. Emphasised
+   children keep their own ink (section title --dse-metal-bright, pr-head
+   --dse-heading, chip --dse-fg-muted; .dse-head is already --dse-fg :4767).
+
+   SCREEN-ONLY (:not([data-dse-print="on"])) — the print/export shots are
+   LEGACY-FROZEN (SC-4) and must not gain the serif face or the cooler ink.
+*/
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature']:not([data-dse-error-stage]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not([data-dse-error-stage]),
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
+	font-family: var(--dse-font-display);
+	color: var(--dse-fg);
+}
+/* Body TRACKING (A7). The site body is `letter-spacing: normal`; the Legacy base
+   gives .dse-feature 0.03em (:41), inherited by every card-body node the harness
+   samples (section / pr-head / tier-row / head → parity plugin 0.48px vs site
+   normal). Reset to normal under Steel only — the base rule is untouched so
+   Legacy is unchanged. The section title's own 0.07em small-caps tracking
+   (:3629) and the chip's 0.04em (:3448) are deliberate small-caps treatments and
+   keep their rules (their pairs are handled as per-rule deferrals, not stripped). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature {
+	letter-spacing: normal;
+}
+
 /* --- Plan 20 Task 3: chips match the site PER SURFACE ---------------------
    The site has TWO chip surfaces, not one, and the plugin's three --chip
    modifiers are the FIRST of them:
