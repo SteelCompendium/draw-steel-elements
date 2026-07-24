@@ -20,6 +20,8 @@ const PROPS = [
   'border-bottom-color', 'border-bottom-width', 'border-bottom-style', 'border-radius',
   'color', 'font-family', 'font-size', 'font-weight', 'font-variant-caps',
   'letter-spacing', 'text-transform',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-bottom', 'line-height',
 ];
 
 const siteSelectors = [...new Set(map.pairs.map(p => p.site))];

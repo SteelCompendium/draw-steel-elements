@@ -54,7 +54,10 @@ An assertion that cannot fail is worse than no assertion.
 - **`site-capture.mjs`** — a Playwright script that visits every URL in `urls.json`, in
   both the `dark` and `light` colour scheme, and records `getComputedStyle()` for every
   distinct `site` selector in `selector-map.json`, for the fixed property list baked into
-  the script (background/border/shadow/color/typography — see `PROPS` in the script).
+  the script (background/border/shadow/color/typography/spacing — see `PROPS` in the
+  script). `plugin-capture.mjs`'s `PROPS` array must stay a byte-identical *property-name
+  sequence* to this one (whitespace/indent style may differ between the two files — p21
+  constraint C2 — but the ordered list of property-name strings must match exactly).
 - **`baseline/site-inventory.json`** (generated, committed) — **the reference of record.**
   Shaped `{ capturedAt, note, entries: { "<pageId>--<scheme>": { "<selector>": { "<prop>":
   "<computed value>" } } } }`. A selector absent from a given page/scheme entry means it
@@ -112,9 +115,12 @@ gate and jest.)
 
 Two severities:
 
-- **`GAP`** — a real material difference. The diff deliberately checks only three things,
-  all in the "site is richer than the plugin" direction, because that is the failure mode
-  that shipped a flat theme before:
+- **`GAP`** — a real difference. Rules 1–3 are the original **material** checks, all in the
+  "site is richer than the plugin" direction, because that is the failure mode that shipped a
+  flat theme before. Rules 4–5 are the **type/space** checks added in plan 21 task 1, which
+  catch the *other* failure mode the material checks are blind to: a surface that is already
+  forged (gradient + bevel + hairline all present) but still reads cramped and sans because
+  nothing measured padding, line-height, or the body font.
   1. site has a `background-image` (gradient/sheen), plugin has `none`;
   2. site has a `box-shadow` (bevel/lift), plugin has `none`;
   3. site has a visible hairline on an edge — `border-top` **or `border-bottom`** — and the
@@ -122,6 +128,30 @@ Two severities:
      strip on these surfaces (`.sc-ability__section-head`, `.sc-ability__pr-head`,
      `.sb__head`, `.fb__head`) is `border-top-style: none` with a `border-bottom` hairline,
      so while the rule checked only `border-top` it was inert on all of them.
+  4. **type/space tolerance misses** — `font-size`, `line-height`, and each of
+     `padding-top/right/bottom/left` are parsed as px and compared with a per-property
+     tolerance (sub-pixel rounding noise, not a real gap, must not fire):
+     | property | tolerance |
+     |---|---|
+     | `font-size` | 1.5px |
+     | `line-height` | 2px |
+     | `padding-{top,right,bottom,left}` | 3px |
+     A GAP fires only when **both** sides parsed to a px value and the miss exceeds the
+     tolerance — a non-px value (e.g. `normal` line-height) on either side is silently
+     skipped, not flagged, because it isn't comparable. The plugin's rem base is 16px against
+     the site's 20px (Material's 125% base); since both inventories capture **computed px**,
+     comparing px is coherent and correct — do not "correct" for the ratio (p21 constraint
+     C4). Fix a miss in `styles-source.css` using whatever authored unit keeps the plugin's
+     own scale intact, and cite the target computed px in a comment.
+  5. **`body-font`** — GAP when the site selector's `font-family` first-listed face is *not* a
+     known sans (i.e. it's serif/slab) and the plugin's first-listed face **is** a known sans
+     (`-apple-system`/`system-ui`/`BlinkMac`/`Segoe`/`Roboto`/`Helvetica`/`Arial`/
+     `sans-serif`/`Inter`). This asserts the plugin is routing that text through **a** serif
+     token, never that it matches the site's exact licensed face — the site's body/label face
+     (`BerlingskeSlab-DBd`) and its chip face (`Newzald`) are both licensed and
+     un-bundleable (see the gap-inventory doc's font-licensing caveat), so pinning the exact
+     name would be unfixable by design. Comparing family *names* for equality is deliberately
+     out of scope for this rule.
   Each rule runs per scheme, so the same pair can report in `dark`, `light`, or both.
   A `GAP` is closed by **fixing `styles-source.css`** — never by deleting or weakening the
   pair that reports it.
@@ -133,11 +163,15 @@ Two severities:
 
 ### Known blind spots of the current diff
 
-- **Typography is sampled but not asserted.** `font-family` / `font-size` / `font-weight` /
-  `font-variant-caps` / `letter-spacing` / `text-transform` are in `PROPS` and land in both
-  inventories, but no rule compares them, so e.g. the `chip` pair reports clean while the
-  site chip is `"Test Newzald"` 18px small-caps and the plugin's is 13.6px system-sans.
-  Read the inventories directly when working a typographic surface.
+- **Typography is *partially* asserted (plan 21 task 1).** `font-size`, `line-height`, and the
+  "serif vs sans" shape of `font-family` are now compared (rules 4–5 above). Still **not**
+  compared: `font-weight`, `font-variant-caps`, `letter-spacing`, `text-transform`, and the
+  exact `font-family` name/stack beyond its first entry's serif-vs-sans shape — all sampled
+  into `PROPS` and present in both inventories, but read by hand, not asserted. Concretely:
+  the `chip` pair's small-caps rendering (`font-variant-caps: small-caps` on the site) and
+  `margin-top`/`margin-bottom` (sampled, never compared — no site card family currently uses
+  a bare block margin the way `.sc-ability` uses `0.5em`-class spacing, see A4 in the gap
+  inventory) are still blind spots. Read the inventories directly when one of those matters.
 - **Pseudo-element material is invisible to the diff.** `getComputedStyle(el)` is sampled
   without a pseudo-element argument, so e.g. `.sc-ability::before`'s decorative SVG flourish
   is not represented on either side.
@@ -163,29 +197,41 @@ Two severities:
   untinted. Same trap for `background-color` and `color`. Read the inventories directly when
   the hue matters — and note that a like-for-like hue comparison would need the two sides
   pinned to the same role, which the current fixture/URL sets do not guarantee.
-- **Some pairs are structurally inert.** A pair only fails if the *site* side is forged on
-  one of the three checked properties, so a pair whose site node is bare can never report.
-  Today that is the `head` pair: `.sc-head` samples `background-image: none`,
-  `box-shadow: none`, and both `border-top-style` and `border-bottom-style` `none`, in both
-  schemes — its real divergence is typographic, which nothing asserts. So "12 pairs" is
-  **11 live pairs + 1 inert one**. (Re-checked after check 3 was widened to `border-bottom`:
-  still inert.) Keep it — it costs nothing and starts working the day the site forges that
-  node — but do not count it as coverage.
+- **Material-only pairs can still be structurally inert on rules 1–3.** A pair only fails
+  rules 1–3 if the *site* side is forged on one of those three properties, so a pair whose
+  site node is bare on all three can never report a material gap. The `head` pair
+  (`.sc-head` → `.dse-head`) is exactly this: `.sc-head` samples `background-image: none`,
+  `box-shadow: none`, and both `border-top-style`/`border-bottom-style` `none`, in both
+  schemes. **It is no longer inert overall as of plan 21 task 1** — rules 4–5 (type/space,
+  body-font) fire on it normally (`line-height` and `body-font` both GAP for `head` in both
+  schemes at time of writing), so "material-inert" is not the same as "untested."
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
 
 ## Documented deferrals (`expectedGaps`)
 
-`selector-map.json` carries an `expectedGaps` array of pair `id`s. `diff.mjs` downgrades
-those pairs' findings from `GAP` to `WARN`, so the gate stays green. This exists for the
+`selector-map.json` carries an `expectedGaps` array of entries. `diff.mjs` downgrades the
+matching findings from `GAP` to `WARN`, so the gate stays green. This exists for the
 one legitimate case: a real difference that **cannot be closed in CSS** because it needs a
-DOM/TS change. Every id in the array must cite a numbered workspace `FOLLOWUPS.md` item in
+DOM/TS change. Every entry in the array must cite a numbered workspace `FOLLOWUPS.md` item in
 the sibling `expectedGapsNote`, naming the selector, the site value, the plugin value, and
-why DOM is required. **`diff.mjs` enforces the citation mechanically**: if an id in
+why DOM is required. **`diff.mjs` enforces the citation mechanically**: if an entry in
 `expectedGaps` does not appear anywhere in `expectedGapsNote`, the run exits 1 before any
 comparison — so the array cannot quietly become a mute button. It is **never** a way to silence a gap that CSS could close — and
 deleting or weakening a pair is never acceptable either. The array is currently empty.
+
+Two entry shapes are accepted (as of plan 21 task 1, p21 constraint C3):
+
+- **A bare pair id** (e.g. `"chip"`) downgrades *every* rule on that pair — the original,
+  coarser behaviour. Kept for back-compat; prefer the scoped form below for any new
+  deferral so a filed DOM gap doesn't also mute unrelated CSS-fixable rules on the same
+  pair.
+- **`"<pairId>:<rule>"`** (e.g. `"kit:body-font"`) downgrades only the named rule on that
+  pair. Valid `rule` names: `bg`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
+  `line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,
+  `body-font` — i.e. the same string `diff.mjs` passes to `sevFor(pair, rule)` at each call
+  site. This is a **widening** (more precise deferrals), never a narrowing of coverage.
 
 ## Adding a new surface to the contract
 
