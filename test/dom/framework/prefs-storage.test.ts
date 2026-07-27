@@ -15,7 +15,7 @@ import { flushAsync } from '../../mocks/obsidian';
 describe('D4 §5.3 / F2 Task 10 §6 — migrateSettings (v0/v1 → v2, additive except the dead-repo tag reset)', () => {
 	test('a v0 on-disk object carries compendiumDestinationDirectory/defaultImagePath over, gains prefs {} + settingsVersion 2, but its dead-repo release tag is wiped', () => {
 		const v0 = {
-			compendiumReleaseTag: 'v2.0.0', // a pre-6.0.0 data-md-dse tag — must never replay against data-unified
+			compendiumReleaseTag: 'v2.0.0', // a pre-7.0.0 data-md-dse tag — must never replay against data-unified
 			compendiumDestinationDirectory: 'My Compendium',
 			defaultImagePath: 'img/tok.png',
 		};

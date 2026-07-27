@@ -3,7 +3,7 @@
 // ResetEncounterModal): title via aria-labelledby, message in .dse-modal__body, a
 // footer of REAL kit <button>s (CB-8). Shown before the FIRST sync when the
 // compendium root already has files but no sync manifest — most likely a folder from
-// a pre-6.0.0 CompendiumDownloader install (destructive: wiped the directory clean on
+// a pre-7.0.0 CompendiumDownloader install (destructive: wiped the directory clean on
 // every download), or any homebrew a user happened to keep at that path.
 //
 // The safe default is "do nothing automatically": Keep everything takes initial focus

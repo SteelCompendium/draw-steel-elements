@@ -192,12 +192,12 @@ does not enforce this client-side — a missing field just renders as its displa
 **Notes:**
 
 - Attribute values can be positive or negative integers. You can include a `+` sign for positive values (e.g., `+2`), but it's optional.
-- **Legacy keys:** statblocks written before 6.0.0 used `roles: string[]` and
+- **Legacy keys:** statblocks written before 7.0.0 used `roles: string[]` and
   `ancestry: string[]` instead of `role`/`organization`/`keywords`. Those old keys still
   parse (classified the same way the SDK's own markdown reader does) but log a deprecation
   warning to the developer console, and are ignored on any axis where the modern key is also
-  present. Support for `roles`/`ancestry` is removed in 7.0.0 — see the
-  [migration guide](migrating-to-6.md) for the conversion rule and a worked example.
+  present. Support for `roles`/`ancestry` is removed in 8.0.0 — see the
+  [migration guide](migrating-to-7.md) for the conversion rule and a worked example.
 
 ### Features
 

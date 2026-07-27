@@ -17,7 +17,7 @@ draw-steel-elements (this repo)
 
 | Dependency | Type | How used |
 |-----------|------|----------|
-| `steel-compendium-sdk` (`data-sdk-npm`) | npm devDependency (bundled) | Provides TypeScript model classes and YAML parsing for Draw Steel data structures. Used by model classes in `src/model/`. Pinned to 3.2.0 (`"file:../data-sdk-npm"` until it's published to npm — see the ADR). Version changes can be breaking (6.0.0's statblock field rename required a compat shim; see `src/model/StatblockConfig.ts`). |
+| `steel-compendium-sdk` (`data-sdk-npm`) | npm devDependency (bundled) | Provides TypeScript model classes and YAML parsing for Draw Steel data structures. Used by model classes in `src/model/`. Pinned to 3.2.0 (`"file:../data-sdk-npm"` until it's published to npm — see the ADR). Version changes can be breaking (7.0.0's statblock field rename required a compat shim; see `src/model/StatblockConfig.ts`). |
 | `data-unified` | Runtime data (GitHub releases) | Markdown files with Draw Steel reference content, `md-dse` format. Synced (not wiped-and-replaced) via `CompendiumSyncService`. Not a build dependency. |
 | Obsidian Plugin API | Runtime host | Provides `Plugin`, `App`, `Vault`, `parseYaml`, `MarkdownPostProcessorContext`, modal APIs. Externalized in esbuild config. |
 
@@ -338,7 +338,7 @@ block.
 
 `CompendiumSyncService` resolves a `data-unified` GitHub release (latest, or a pinned tag), downloads its `md-dse-unified-{locale}.zip` asset, and diffs the archive against a manifest before writing anything into the configured destination directory (default: `DS Compendium`) — see the "Compendium data source" section below.
 
-### Compendium data source (6.0.0+)
+### Compendium data source (7.0.0+)
 
 - **Repo:** `SteelCompendium/data-unified`, GitHub Releases (timestamp tags, `v4.<UTC>`).
 - **Asset contract:** `{format}-unified-{locale}.zip` — the plugin downloads

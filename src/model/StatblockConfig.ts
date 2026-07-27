@@ -5,10 +5,10 @@ import { Statblock } from "steel-compendium-sdk";
 const ORGANIZATIONS = new Set(["MINION", "HORDE", "PLATOON", "ELITE", "SOLO", "LEADER"]);
 
 /**
- * OD-4 (F2 §2.1 B1): one-cycle compat shim for pre-6.0.0 homebrew `ds-sb` YAML.
+ * OD-4 (F2 §2.1 B1): one-cycle compat shim for pre-7.0.0 homebrew `ds-sb` YAML.
  * `roles: string[]` → `organization` (entries in the organization-name set) + `role`
  * (the rest); `ancestry: string[]` → `keywords`. Modern keys always win per-axis.
- * DEPRECATED — remove in 7.0.0.
+ * DEPRECATED — remove in 8.0.0.
  */
 /** A legacy key may be a list (the documented shape) or a bare scalar (a plausible
  * hand-authoring mistake, e.g. `roles: Horde`). Coerce either into a one-entry list
@@ -49,8 +49,8 @@ export function applyLegacyStatblockKeys(raw: Record<string, unknown>): Record<s
     delete out.ancestry;
     console.warn(
         "Draw Steel Elements: `roles:` / `ancestry:` in ds-sb/ds-statblock blocks are " +
-        "deprecated since 6.0.0 — use `role:`, `organization:`, and `keywords:` instead. " +
-        "Support will be removed in 7.0.0.");
+        "deprecated since 7.0.0 — use `role:`, `organization:`, and `keywords:` instead. " +
+        "Support will be removed in 8.0.0.");
     return out;
 }
 

@@ -1,6 +1,11 @@
-# Migrating from 5.x to 6.0.0
+# Migrating from 5.x to 7.0.0
 
-6.0.0 changes two things that need action, plus adds a large set of new
+> This guide was written for the release originally numbered **6.0.0**; that
+> number was retired after a release-candidate mishap (see the changelog's 6.0.1
+> entry) and the release ships as **7.0.0**. 6.0.1 is identical to 5.1.1, so
+> everything here applies to 6.0.1 installs too.
+
+7.0.0 changes two things that need action, plus adds a large set of new
 features. **Everyone** should re-sync their compendium. Only people who
 hand-write their own statblocks need to touch any YAML.
 
@@ -15,7 +20,7 @@ against the new one.
 **Sync compendium** (this also works as a command-palette command of the
 same name).
 
-If you already have a compendium folder from before 6.0.0, the first sync
+If you already have a compendium folder from before 7.0.0, the first sync
 asks whether to move that old folder to the trash or keep it in place —
 either choice is safe. Files you keep are never overwritten or deleted, and
 anything moved to the trash is recoverable through Obsidian like any other
@@ -31,10 +36,10 @@ two keys were renamed:
 | `roles:`   | `role:` + `organization:`   |
 | `ancestry:`| `keywords:`                 |
 
-Old blocks keep working through the whole 6.x series — the plugin still
+Old blocks keep working through the whole 7.x series — the plugin still
 reads `roles:`/`ancestry:` and sorts them into `organization:`/`role:` /
 `keywords:` for you, with a warning logged to Obsidian's developer console —
-but support is removed in 7.0.0, so it's worth updating them now. If a block
+but support is removed in 8.0.0, so it's worth updating them now. If a block
 has both an old and a new key for the same value, the new key always wins.
 
 Before:
@@ -58,7 +63,7 @@ keywords:
   - Humanoid
 ```
 
-## What's new in 6.0.0, at a glance
+## What's new in 7.0.0, at a glance
 
 - **Hero suite** — a full hero sheet (`ds-hero`) in one block: stamina with
   recoveries, heroic resource, surges, conditions, and clickable abilities
@@ -81,4 +86,4 @@ keywords:
   element text, and as references — checking your local compendium first,
   with an optional fallback to steelcompendium.io.
 
-See the [changelog](../CHANGELOG.md) for the full list of 6.0.0 changes.
+See the [changelog](../CHANGELOG.md) for the full list of 7.0.0 changes.

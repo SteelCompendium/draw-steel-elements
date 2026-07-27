@@ -57,7 +57,7 @@ sync date (or "No compendium synced yet.").
 ### First sync into an existing folder
 
 If the destination folder already contains files but has never been synced by this plugin
-(for example, a compendium copy from a pre-6.0.0 install of this plugin, or your own
+(for example, a compendium copy from a pre-7.0.0 install of this plugin, or your own
 homebrew at that path), the first sync asks you to either move that folder to the trash
 first or keep everything in place. Nothing is touched automatically either way; files you
 keep are still never overwritten if they don't collide with a compendium path, and any that

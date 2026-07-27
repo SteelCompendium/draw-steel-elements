@@ -45,7 +45,7 @@ export const DEFAULT_SETTINGS: DSESettings = {
  * the current default), so an old on-disk object with no settingsVersion field at
  * all is never mistaken for "already migrated".
  *
- * v1 → v2 (F2 Task 10, the 6.0.0 data-unified switch): pre-2.x `compendiumReleaseTag`
+ * v1 → v2 (F2 Task 10, the 7.0.0 data-unified switch): pre-2.x `compendiumReleaseTag`
  * values are release tags from the now-retired `data-md-dse` repo (the legacy
  * CompendiumDownloader's `repo.zip` asset) — meaningless, and potentially
  * resolution-breaking, against data-unified's own tag series. Never replayed:

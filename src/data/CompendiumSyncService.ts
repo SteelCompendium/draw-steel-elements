@@ -48,7 +48,7 @@ interface GithubRelease {
 	assets?: GithubReleaseAsset[];
 }
 
-const BATCH_SIZE = 20; // keep the pre-6.0 batch/yield pattern (mobile-friendly)
+const BATCH_SIZE = 20; // keep the pre-7.0 batch/yield pattern (mobile-friendly)
 
 /**
  * F2 §3.4 — non-destructive, manifest-driven compendium sync.

@@ -1,9 +1,19 @@
 # Changelog
 
-## 6.0.0
+## 6.0.1
 
-Upgrading from 5.x? See the [migration guide](docs/migrating-to-6.md) for what
-needs action.
+Identical to 5.1.1. This release exists to recover from `6.0.0-rc1`, a release
+candidate accidentally published (2026-07-07) as a regular GitHub release:
+Obsidian offered it to existing users as an automatic update, and the plugin was
+delisted from the community store because `6.0.0-rc1` is not a valid plugin
+version. If your install says 6.0.0-rc1, update to 6.0.1 to get back to the
+latest stable build. The 6.0.0 version number is retired — the major release
+below ships as 7.0.0.
+
+## 7.0.0 (unreleased; previously numbered 6.0.0)
+
+Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
+for what needs action.
 
 - [BREAKING] Compendium source moved from the retired `data-md-dse` repo to
   `data-unified` releases (unified Browse layout, `md-dse` format). Run
@@ -11,16 +21,16 @@ needs action.
   because old tags belong to the retired repo.
 - [BREAKING] Statblock YAML follows SDK 3.x: `roles:` is now `role:` +
   `organization:`, and `ancestry:` is now `keywords:`. Legacy keys in your own
-  `ds-sb`/`ds-statblock` blocks keep working for the 6.x cycle — classified the
+  `ds-sb`/`ds-statblock` blocks keep working for the 7.x cycle — classified the
   same way the SDK's own reader does (last entry matching a known organization
   name wins that axis, everything else becomes the role) — with a console
-  deprecation warning; support is removed in 7.0.0.
+  deprecation warning; support is removed in 8.0.0.
 - Compendium sync is now non-destructive and manifest-driven: only files the
   plugin installed are updated or removed (removals go to the trash, never a
   hard delete), any incoming path that isn't safely inside the destination
   folder is rejected outright, and your own notes inside the compendium folder
   are never touched. The first sync offers — and never forces — moving a
-  pre-6.0 compendium folder to the trash.
+  pre-7.0 compendium folder to the trash.
 - New: `scc.v1:` links resolve everywhere — in compendium notes, inside element
   text, and as references (e.g. initiative tracker
   `statblock: scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker`).
@@ -32,7 +42,7 @@ needs action.
   Sync/Check-for-updates buttons.
 - New commands: "Sync compendium" (the old command id remains as a hidden
   "Sync compendium (legacy alias)" so hotkeys keep working; it will be removed
-  in 7.0.0).
+  in 8.0.0).
 - Updates `steel-compendium-sdk` to 3.x.
 - New: compendium reference cards — `ds-kit`, `ds-condition`, `ds-treasure`,
   `ds-ancestry`, `ds-culture`, `ds-career`, `ds-class`, `ds-title`, `ds-perk`,
