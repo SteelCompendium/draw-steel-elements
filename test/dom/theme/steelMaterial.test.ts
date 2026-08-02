@@ -60,19 +60,24 @@ const steelBlocksFor = (selector: string): string[] =>
 		.map((r) => r.body);
 
 /**
- * The dark Steel token block. `[data-dse-element][data-dse-theme="steel"]` appears again in
- * the print `@media` override (where every ornament token is reset to `none`/`inherit`), so
- * the FIRST textual occurrence — the live definitions — is the one under contract.
+ * The dark Steel token block. `:is([data-dse-element], .dse-modal)[data-dse-theme="steel"]`
+ * appears again in the print `@media` override (where every ornament token is reset to
+ * `none`/`inherit`), so the FIRST textual occurrence — the live definitions — is the one
+ * under contract. Selector widened by SC-104 / FOLLOWUPS #31 (from the bare-presence
+ * `[data-dse-element]`) so modals, which never carry data-dse-element, also resolve
+ * Steel token values now that DseModal.open() stamps data-dse-theme on the dialog root.
  */
 const steelTokenBlock = (): string => {
-	const rule = rules.find((r) => r.selector === '[data-dse-element][data-dse-theme="steel"]');
+	const rule = rules.find(
+		(r) => r.selector === ':is([data-dse-element], .dse-modal)[data-dse-theme="steel"]',
+	);
 	expect(rule).toBeDefined();
 	return (rule as Rule).body;
 };
 
 const lightSteelTokenBlock = (): string => {
 	const rule = rules.find(
-		(r) => r.selector === '.theme-light [data-dse-element][data-dse-theme="steel"]',
+		(r) => r.selector === '.theme-light :is([data-dse-element], .dse-modal)[data-dse-theme="steel"]',
 	);
 	expect(rule).toBeDefined();
 	return (rule as Rule).body;

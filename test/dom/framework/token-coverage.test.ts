@@ -113,12 +113,17 @@ const legacyBase = (() => {
 	for (const b of styleSheet.matchAll(/:root\s*\{([^}]*)\}/g)) all += b[1] + '\n';
 	return all;
 })();
+// SC-104 / FOLLOWUPS #31: the Steel dark/light/print value gates widened from the
+// bare-presence `[data-dse-element]` to `:is([data-dse-element], .dse-modal)` so
+// modals (which never carry data-dse-element) can also resolve Steel token
+// values, now that DseModal.open() stamps data-dse-theme on the dialog root
+// (kit/managedModal.ts). The extraction regexes below match that widened text.
 const steelDark = blockBody(
-	/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
+	/(?:^|\n)[ \t]*:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
 	'Steel dark',
 );
 const steelLight = blockBody(
-	/(?:^|\n)[ \t]*\.theme-light\s+\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
+	/(?:^|\n)[ \t]*\.theme-light\s+:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
 	'Steel light',
 );
 const printNeutral = blockBody(
@@ -126,7 +131,7 @@ const printNeutral = blockBody(
 	'print neutral twin',
 );
 const printSteel = blockBody(
-	/\[data-dse-element\]\[data-dse-theme="steel"\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
+	/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
 	'print Steel twin',
 );
 

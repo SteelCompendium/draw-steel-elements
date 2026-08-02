@@ -3120,7 +3120,7 @@ Shared globals
    Tokens deliberately ABSENT (they inherit the Legacy base — the map marks them
    "= Legacy, theme-invariant"): page-bg, pad, touch-min, font-mono, rule-fade.
 */
-[data-dse-element][data-dse-theme="steel"] {
+:is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 	/* -- Structure / surface -- */
 	--dse-surface: #1a1e21;
 	--dse-surface-raised: #22272b;
@@ -4384,12 +4384,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
       filled and chromeless variants are excluded: --accent / [data-pressed] own
       their fill as a state signal, and --ghost / --danger are deliberately
       chromeless, so a sheen would read as a phantom button.
-      SCOPE LIMIT (review fix): this does NOT reach modal footer buttons. Obsidian
-      Modals mount into .modal-container on document.body (kit/managedModal.ts:45-47),
-      and data-dse-theme is only ever stamped on a per-element render root
-      (seams/theme.ts:80 — "document.body is never touched"), so a modal's buttons
-      are outside every [data-dse-theme] subtree. Theming modals needs the attribute
-      stamped on the modal root in TS — deferred, workspace FOLLOWUPS.md #31. */
+      SCOPE LIMIT (review fix) — RESOLVED by SC-104 / FOLLOWUPS #31: this
+      previously did NOT reach modal footer buttons, because Obsidian Modals
+      mount into .modal-container on document.body (kit/managedModal.ts:45-47)
+      and data-dse-theme was only ever stamped on a per-element render root
+      (seams/theme.ts — "document.body is never touched"), leaving a modal's
+      buttons outside every [data-dse-theme] subtree. DseModal.open() now stamps
+      data-dse-theme on the modal's own dialog root (kit/managedModal.ts,
+      SC-104), so this selector — scoped only by the [data-dse-theme='steel']
+      ancestor, with no [data-dse-element] requirement — reaches modal footer
+      buttons with no CSS change of its own. */
 [data-dse-theme='steel']:not([data-dse-print="on"])
 	:is(.dse-btn, .dse-tabs__tab):not(.dse-btn--accent):not(.dse-btn--ghost):not(.dse-btn--danger):not(
 		[data-pressed]
@@ -4403,9 +4407,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
       as the statblock's .dse-sb__item / .dse-sb__kv (~3924/~3943) — sunken wash
       inside a hairline. .dse-init__cell is also the one place in the plugin
       still painting a raw Obsidian variable (--color-base-30, ~891); Steel
-      routes it back onto the token set. */
+      routes it back onto the token set. .dse-modal__section rejoined here
+      (SC-104 / FOLLOWUPS #31): it was dropped as dead CSS (e458bf6) because
+      .dse-modal never carried [data-dse-theme] at all; now that DseModal.open()
+      stamps it (managedModal.ts) AND the Steel token gates reach .dse-modal
+      (styles-source.css ~3123/~4508/~5287/~5296), the selector is live again. */
 [data-dse-theme='steel']:not([data-dse-print="on"])
-	:is(.dse-init__cell, .dse-init__groupbody, .dse-enc__summary) {
+	:is(.dse-init__cell, .dse-init__groupbody, .dse-enc__summary, .dse-modal__section) {
 	background: var(--dse-surface-sunken);
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
@@ -4423,10 +4431,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
       elements, view.ts:204/212/578), and naming only the classed ones would
       leave the display face on one heading and plain sans on its siblings
       inside the same card. No DOM change is needed either way.
-      Modal titles are deliberately NOT here: .dse-modal__title lives on Obsidian's
-      titleEl inside .modal-container on document.body, outside every
-      [data-dse-theme] subtree (see the scope-limit note on rule 2) — the selector
-      would be dead CSS. Deferred: workspace FOLLOWUPS.md #31. */
+      Modal titles REJOINED here (SC-104 / FOLLOWUPS #31 — RESOLVED): .dse-modal__title
+      lives on Obsidian's titleEl inside .modal-container on document.body, which was
+      outside every [data-dse-theme] subtree (see the resolved scope-limit note on rule
+      2) — the selector was dead CSS and was dropped (e458bf6). DseModal.open() now
+      stamps data-dse-theme on the modal's own dialog root (kit/managedModal.ts), so
+      `[data-dse-theme='steel'] .dse-modal__title` is reachable again; restored
+      verbatim as its own compound (titles aren't inside a [data-dse-element] host, so
+      they can't join the :is(...) list above — same reasoning e458bf6 documented). */
 [data-dse-theme='steel']:is(
 		[data-dse-element='initiative'],
 		[data-dse-element='encounter'],
@@ -4435,7 +4447,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='project'],
 		[data-dse-element='party'],
 		[data-dse-element='counter']
-	) :is(h3, h4, h5, h6) {
+	) :is(h3, h4, h5, h6),
+[data-dse-theme='steel'] .dse-modal__title {
 	text-shadow: var(--dse-emboss);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]):is(
@@ -4446,7 +4459,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='project'],
 		[data-dse-element='party'],
 		[data-dse-element='counter']
-	) :is(h3, h4, h5, h6) {
+	) :is(h3, h4, h5, h6),
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-modal__title {
 	font-family: var(--dse-font-display);
 	font-weight: 700;
 	text-transform: uppercase;
@@ -4505,7 +4519,7 @@ body.theme-light
    light/dark-STABLE (palette.css locks them) and therefore inherit the dark
    Steel value. Values transcribed VERBATIM from the map (OD-6 manual sync).
 */
-.theme-light [data-dse-element][data-dse-theme="steel"] {
+.theme-light :is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 	/* -- Structure / surface (light steel-white) -- */
 	--dse-surface: #f6f8f8;
 	--dse-surface-raised: #edf0f0;
@@ -5284,7 +5298,7 @@ button.dse-pr__row:hover {
       Steel hue (= Steel exact, so no override). Scoped to Steel so a Legacy
       print never gains a colored spine (map caveat). -- */
 @media print {
-	[data-dse-element][data-dse-theme="steel"] {
+	:is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 		--dse-act-main: #c0392b;
 		--dse-act-maneuver: #2874a6;
 		--dse-act-triggered: #1e8449;
@@ -5293,7 +5307,7 @@ button.dse-pr__row:hover {
 		--dse-act-trait: #7d3c98;
 	}
 }
-[data-dse-element][data-dse-theme="steel"][data-dse-print="on"] {
+:is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-print="on"] {
 	--dse-act-main: #c0392b;
 	--dse-act-maneuver: #2874a6;
 	--dse-act-triggered: #1e8449;

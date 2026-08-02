@@ -32,10 +32,12 @@ function printNeutralBody(): string {
 	return m[1];
 }
 
-/** Body of the STEEL-scoped preview twin (role/act spines print only under Steel). */
+/** Body of the STEEL-scoped preview twin (role/act spines print only under Steel).
+ *  Selector widened by SC-104 / FOLLOWUPS #31 (from the bare-presence
+ *  `[data-dse-element]`) so modals also resolve these Steel print values. */
 function printSteelBody(): string {
 	const m = sheet.match(
-		/\[data-dse-element\]\[data-dse-theme="steel"\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
+		/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
 	);
 	if (!m) throw new Error('steel-scoped print twin not found in styles-source.css');
 	return m[1];

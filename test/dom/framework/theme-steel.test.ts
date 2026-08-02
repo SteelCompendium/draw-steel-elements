@@ -32,9 +32,13 @@ function baseValue(name: string): string | undefined {
  * T4 light variant (`.theme-light [data-dse-element][data-dse-theme="steel"]`),
  * which shares the trailing selector, is NOT captured here.
  */
+// SC-104 / FOLLOWUPS #31 widened this block's selector from the bare-presence
+// `[data-dse-element]` to `:is([data-dse-element], .dse-modal)` so modals (which
+// never carry data-dse-element) can also resolve Steel token values, now that
+// DseModal.open() stamps data-dse-theme on the dialog root (kit/managedModal.ts).
 function steelBlockBody(): string {
 	const m = sheet.match(
-		/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
+		/(?:^|\n)[ \t]*:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
 	);
 	if (!m) throw new Error('Steel override block [data-dse-theme="steel"] not found in styles-source.css');
 	return m[1];
@@ -148,10 +152,11 @@ const STEEL_DARK: Record<string, string> = {
 
 describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => {
 	test('the scoped Steel override block exists after the Legacy base', () => {
-		expect(sheet).toMatch(/\[data-dse-element\]\[data-dse-theme="steel"\]\s*\{/);
+		// Widened by SC-104 / FOLLOWUPS #31: :is([data-dse-element], .dse-modal).
+		expect(sheet).toMatch(/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/);
 		// It comes AFTER the :root Legacy base (override layering).
 		const base = sheet.search(/:root\s*\{[^}]*--dse-surface\s*:/);
-		const steel = sheet.search(/\[data-dse-element\]\[data-dse-theme="steel"\]\s*\{/);
+		const steel = sheet.search(/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/);
 		expect(base).toBeGreaterThan(-1);
 		expect(steel).toBeGreaterThan(base);
 	});
@@ -237,10 +242,11 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 // select, encounter markers are light/dark-STABLE → deliberately NOT re-listed.
 // Same parse-the-declaration strategy as the dark block above.
 
-/** Body of the `.theme-light [data-dse-element][data-dse-theme="steel"]` block. */
+/** Body of the `.theme-light :is([data-dse-element], .dse-modal)[data-dse-theme="steel"]`
+ *  block (widened by SC-104 / FOLLOWUPS #31 — see steelBlockBody() above). */
 function steelLightBlockBody(): string {
 	const m = sheet.match(
-		/(?:^|\n)[ \t]*\.theme-light\s+\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
+		/(?:^|\n)[ \t]*\.theme-light\s+:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\][ \t]*\{([^}]*)\}/,
 	);
 	if (!m)
 		throw new Error(
@@ -336,8 +342,13 @@ const STEEL_LIGHT_STABLE = [
 
 describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])', () => {
 	test('the light-variant block exists AFTER the dark Steel block', () => {
-		const dark = sheet.search(/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-theme="steel"\][ \t]*\{/);
-		const light = sheet.search(/\.theme-light\s+\[data-dse-element\]\[data-dse-theme="steel"\]\s*\{/);
+		// Widened by SC-104 / FOLLOWUPS #31: :is([data-dse-element], .dse-modal).
+		const dark = sheet.search(
+			/(?:^|\n)[ \t]*:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\][ \t]*\{/,
+		);
+		const light = sheet.search(
+			/\.theme-light\s+:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/,
+		);
 		expect(dark).toBeGreaterThan(-1);
 		expect(light).toBeGreaterThan(dark);
 	});
