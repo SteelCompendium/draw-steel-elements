@@ -154,6 +154,16 @@ for what needs action.
   failing the suite. Same honest limits as above: screen-only (print/export and
   the Legacy style are untouched), serif-not-slab, and only the 600/700 weights
   ship.
+- The Steel theme now reaches DSE's modals too — stamina edit / Spend Recovery,
+  condition pickers, the form editor, and other modal dialogs now follow the
+  active theme: under Steel they render the forged treatment (title emboss,
+  sunken sections, forged footer buttons) instead of unstyled app defaults;
+  Legacy modals are unchanged. (Verified by DOM contract tests asserting the
+  theme attribute stamps, re-stamps live, and tears down on close — not a
+  rendered screenshot, since no frozen harness shot opens a modal.)
+- [INTERNAL] Featureblock advancement bands and the sidebar panel's
+  light-scheme render now have dedicated visual-harness fixtures with frozen
+  golden-PNG coverage (freeze set widened 98 → 101).
 
 ## 5.1.1
 
