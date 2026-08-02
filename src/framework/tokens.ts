@@ -30,9 +30,9 @@ export const DSE_TOKEN_NAMES = [
 	'fg',
 	'fg-muted',
 	'fg-faint',
-	'font-display',
 	'font-mono',
-	// -- SC-105 Task 1: the six-slot font vocabulary (font-display retires in Task 2) --
+	// -- SC-105: the six-slot font vocabulary (Task 2 retired font-display; every
+	// consumer is re-pointed to one of these five) --
 	'font-title',
 	'font-body',
 	'font-card-body',

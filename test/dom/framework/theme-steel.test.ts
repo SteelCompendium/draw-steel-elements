@@ -95,8 +95,19 @@ const STEEL_DARK: Record<string, string> = {
 	'fg-muted': 'rgba(220,226,230,0.62)',
 	'fg-faint': 'rgba(220,226,230,0.38)',
 	'chip-bg': 'rgba(220,226,230,0.06)',
-	// fonts (OD-4: Source Serif 4 fallback)
-	'font-display': '"Source Serif 4", var(--font-text)',
+	// fonts (OD-4: Source Serif 4 fallback; SC-105 Task 2 re-pointed every
+	// consumer from the single font-display slot to these two independent
+	// literals — font-controls stays invariant, below). font-card-body/
+	// font-label are DELIBERATELY excluded from this dict even though they
+	// ARE overridden in the Steel block: their chained declaration text
+	// (`var(--dse-font-body)` / `var(--dse-font-title)`) is IDENTICAL in
+	// both Legacy and Steel by design (only what the chain resolves to
+	// differs per theme), so they'd fail the "every overridden token
+	// DIFFERS from Legacy" invariant below, which assumes a literal
+	// per-theme value. Covered instead by the dedicated slot-chain contract
+	// in test/dom/theme/steelTypography.test.ts.
+	'font-title': '"Source Serif 4", var(--font-text)',
+	'font-body': '"Source Serif 4", var(--font-text)',
 	// accent
 	accent: '#4db8c7',
 	'accent-fg': '#0f1214',
@@ -171,8 +182,9 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		}
 	});
 
-	test('Source Serif 4 is the Steel display-font fallback (OD-4)', () => {
-		expect(steelValue('font-display')).toBe('"Source Serif 4", var(--font-text)');
+	test('Source Serif 4 is the Steel title/body fallback (OD-4; SC-105 slots)', () => {
+		expect(steelValue('font-title')).toBe('"Source Serif 4", var(--font-text)');
+		expect(steelValue('font-body')).toBe('"Source Serif 4", var(--font-text)');
 	});
 
 	test('WITHOUT the theme attr, tokens resolve to the UNCHANGED Legacy base', () => {
@@ -180,7 +192,8 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		expect(baseValue('surface')).toBe('var(--code-background)');
 		expect(baseValue('fg')).toBe('var(--text-normal)');
 		expect(baseValue('accent')).toBe('var(--interactive-accent)');
-		expect(baseValue('font-display')).toBe('var(--font-text)');
+		expect(baseValue('font-title')).toBe('var(--font-text)');
+		expect(baseValue('font-body')).toBe('var(--font-text)');
 		expect(baseValue('radius')).toBe('5px');
 		expect(baseValue('crest-shape')).toBe('none');
 		// role/act accents stay Legacy-monochrome in the base.
@@ -215,7 +228,10 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// design doc's Task-1 file list (only token-coverage.test.ts + tokens.test.ts
 		// were) — it needed the identical fix for the identical reason. Flagged as a
 		// discrepancy in the Task 1 report.
-		expect(overridden.length).toBe(67);
+		// SC-105 Task 2: font-display's OWN Steel-dark definition is removed along
+		// with the token itself (no longer in the union to cover) — 67 → 66; the
+		// invariant count is untouched (font-controls stays 7; union 74 → 73).
+		expect(overridden.length).toBe(66);
 		expect(THEME_INVARIANT.length).toBe(7);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
@@ -346,8 +362,10 @@ const STEEL_LIGHT_STABLE = [
 	// stamina fills + crit + encounter markers + select: fills, no contrast pressure
 	'stamina-healthy', 'stamina-winded', 'stamina-dying', 'stamina-temp',
 	'tier-crit', 'turn-done', 'malice', 'vp', 'warn', 'danger', 'select',
-	// geometry / typography carried from dark (radius, crest-shape, font-display …)
-	'radius', 'crest-shape', 'font-display', 'hairline-fade',
+	// geometry / typography carried from dark (radius, crest-shape, the SC-105
+	// font slots …)
+	'radius', 'crest-shape', 'hairline-fade',
+	'font-title', 'font-body', 'font-card-body', 'font-label',
 ] as const;
 
 describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])', () => {

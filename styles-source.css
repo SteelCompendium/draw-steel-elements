@@ -2981,15 +2981,14 @@ Shared globals
 	--dse-fg: var(--text-normal);
 	--dse-fg-muted: var(--text-muted);
 	--dse-fg-faint: var(--text-faint);
-	--dse-font-display: var(--font-text); /* OD-4: Steel may map to a serif stack (D3) */
 	--dse-font-mono: var(--font-monospace);
-	/* SC-105 Task 1: the six-slot font vocabulary, introduced as a pure no-op —
-	   font-display keeps every one of its 7 consumers until Task 2 re-points
-	   them and retires it. Title/Body/Controls are INDEPENDENT literals (never
+	/* SC-105: the six-slot font vocabulary. font-display (OD-4's original single
+	   token) is retired as of Task 2 — every consumer now targets one of these
+	   five slots directly. Title/Body/Controls are INDEPENDENT literals (never
 	   var()-chain to each other: SC-112 needs to move Title without dragging
 	   Body); Card-body/Label are var() CHAINS to Body/Title respectively (Scott's
 	   "same as Body"/"same as Title" ruling) so SC-112 can offer just 3
-	   user-facing controls. Values reproduce font-display's per-theme
+	   user-facing controls. Values reproduce font-display's former per-theme
 	   resolution exactly (see the Steel-dark block below + D3-token-map.md). */
 	--dse-font-title: var(--font-text);
 	--dse-font-body: var(--font-text);
@@ -3090,11 +3089,12 @@ Shared globals
    Bundles the OFL-licensed Source Serif 4 static weights (SemiBold 600,
    Bold 700; Latin-subsetted via pyftsubset from the official
    adobe-fonts/source-serif 4.005R WOFF2 release) as base64 `data:` URIs so
-   --dse-font-display: "Source Serif 4", … (defined in the Steel override
-   layer below) actually resolves — no CDN/runtime fetch (obsidianmd rule
-   32 / mobile-safe). @font-face is technically global, but the family name
-   is only ever referenced by Steel-scoped rules, so Legacy never resolves
-   it (Legacy's --dse-font-display stays var(--font-text)). Full license
+   --dse-font-title/--dse-font-body: "Source Serif 4", … (defined in the Steel
+   override layer below, SC-105) actually resolve — no CDN/runtime fetch
+   (obsidianmd rule 32 / mobile-safe). @font-face is technically global, but
+   the family name is only ever referenced by Steel-scoped rules, so Legacy
+   never resolves it (Legacy's --dse-font-title/--dse-font-body stay
+   var(--font-text)). Full license
    text: assets/fonts/OFL.txt (SIL OFL 1.1); raw woff2 + OFL.txt are
    committed under assets/fonts/ as the compliance record even though the
    bytes below are the copy that actually ships (single-file styles.css).
@@ -3132,7 +3132,7 @@ Shared globals
 
    Tokens deliberately ABSENT (they inherit the Legacy base — the map marks them
    "= Legacy, theme-invariant"): page-bg, pad, touch-min, font-mono, rule-fade,
-   font-controls (SC-105 Task 1).
+   font-controls (SC-105).
 */
 :is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 	/* -- Structure / surface -- */
@@ -3151,11 +3151,10 @@ Shared globals
 	--dse-fg: rgba(220,226,230,0.88);
 	--dse-fg-muted: rgba(220,226,230,0.62);
 	--dse-fg-faint: rgba(220,226,230,0.38);
-	--dse-font-display: "Source Serif 4", var(--font-text); /* OD-4 free-serif fallback */
-	/* SC-105 Task 1: same no-op vocabulary as the Legacy base above — Title/Body
-	   get the same literal font-display already resolves to under Steel;
-	   Card-body/Label chain to Body/Title. font-controls is deliberately ABSENT
-	   here (Steel-invariant, joins font-mono) — no consumer re-points in Task 1. */
+	/* SC-105: the six-slot font vocabulary. font-display is retired (Task 2) —
+	   Title/Body carry the OFL free-serif fallback it used to resolve to under
+	   Steel; Card-body/Label chain to Body/Title. font-controls is deliberately
+	   ABSENT here (Steel-invariant, joins font-mono). */
 	--dse-font-title: "Source Serif 4", var(--font-text);
 	--dse-font-body: "Source Serif 4", var(--font-text);
 	--dse-font-card-body: var(--dse-font-body);
@@ -3418,12 +3417,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 }
 /* Display face + uppercase/bold-weight treatment is SCREEN-ONLY, NEW in
    SC-10 Task 1: the print/export layer (D3 Plan 10 Task 5, untouched by
-   this task — SC-4 parked) resets --dse-font-display nowhere of its own,
+   this task — SC-4 parked) resets --dse-font-title nowhere of its own,
    so without :not([data-dse-print="on"]) the (now-real) serif face +
    uppercase would leak into <id>--steel-print.png, which must stay
    byte-identical. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__primary--left {
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
 	font-weight: 700;
 	text-transform: uppercase;
 }
@@ -3435,20 +3434,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 /*
    Body FONT (A1). The site paints ONE slab face (BerlingskeSlab) on titles AND
    body prose; that licensed face can't be bundled, so body/label text routes to
-   the SAME serif the titles already use — --dse-font-display, which under Steel
-   is "Source Serif 4" (embedded @font-face ~3089). Routed directly to
-   --dse-font-display (NOT a new --dse-font-body token: at the time this was
-   written the token vocabulary was pinned by src/framework/tokens.ts'
-   DSE_TOKEN_NAMES / token-coverage tests, and a CSS-only task couldn't register
-   a new one — the alias would have been functionally identical anyway).
-   SC-105 Task 1 has since added --dse-font-body/--dse-font-card-body to the
-   vocabulary with byte-identical values, but this rule is NOT re-pointed to
-   them yet — that's SC-105 Task 2's job (re-pointing consumers is explicitly
-   out of scope for Task 1's no-op). Set on the four Steel plate HOSTS so it
-   inherits to every
+   the SAME serif the titles already use, which under Steel is "Source Serif 4"
+   (embedded @font-face ~3089). Originally routed directly to the (now-retired)
+   single display token (NOT a --dse-font-body token: at the time this was
+   written the token vocabulary was pinned by src/framework/tokens.ts' DSE_TOKEN_NAMES /
+   token-coverage tests, and a CSS-only task couldn't register a new one — the
+   alias would have been functionally identical anyway). SC-105 Task 2
+   re-points this rule to --dse-font-body and retires font-display entirely;
+   values are byte-identical, so this is a no-op re-point, not a visual change.
+   Set on the four Steel plate HOSTS so it inherits to every
    prose container + label the harness samples (.dse-section / .dse-pr__head /
    .dse-pr__row / .dse-head / chip / sb+fb band heads). Titles set
-   --dse-font-display explicitly (same face) — unaffected. Only weights 600/700
+   --dse-font-title explicitly (same face) — unaffected. Only weights 600/700
    are bundled, so body (≈400) maps up to the 600 face — real serif pixels,
    slightly heavier than the site's 400 (verify in the shots).
 
@@ -3462,11 +3459,35 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 
    SCREEN-ONLY (:not([data-dse-print="on"])) — the print/export shots are
    LEGACY-FROZEN (SC-4) and must not gain the serif face or the cooler ink.
-*/
+
+   SC-105 Task 2 NOTE: this rule's selector list still includes .dse-sb/
+   .dse-card (kept AS-IS per Scott's ruling, not narrowed) even though a
+   separate, higher-specificity Card-body rule immediately below now targets
+   those same card-shaped hosts (plus feature/featureblock) with
+   --dse-font-card-body. Because --dse-font-card-body chains to
+   --dse-font-body, both rules resolve to the identical value today, so which
+   one "wins" the cascade for any given host moves zero pixels — but the two
+   rules' selectors do NOT form a clean mutual-exclusion split (the bare
+   `[data-dse-element]:not([data-dse-error-stage])` alternative here has
+   specificity (0,4,0), which beats the Card-body rule's :is(...) form
+   (0,3,0) for `[data-dse-element='feature']`/`['featureblock']`, while
+   `.dse-sb`/`.dse-card` tie at (0,3,0) and fall to source order instead).
+   Specificity must be re-verified/reworked once SC-112 lets Body and
+   Card-body diverge in value — tracked as a known, deferred nuance, not a
+   Task-2 blocker (design doc §3). */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage]),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-body); /* SC-105 Task 2: re-pointed from font-display */
+	color: var(--dse-fg);
+}
+/* Card-body (SC-105 Task 2): the card-shaped hosts (statblock/feature/
+   featureblock/D6-reference-card) get their own slot, --dse-font-card-body,
+   distinct from the bare element-root Body rule above — see the note above
+   for why this is a no-op today (chained default, values identical) and what
+   still needs re-verifying once SC-112 lets the two diverge. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-card, [data-dse-element='feature'], [data-dse-element='featureblock']) {
+	font-family: var(--dse-font-card-body);
 	color: var(--dse-fg);
 }
 /* Body TRACKING (A7). The site body is `letter-spacing: normal`; the Legacy base
@@ -3529,18 +3550,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    OLD selector list didn't name, and none of them wear .dse-sb/.dse-card
    either. So before this task these values inherited straight through to
    Obsidian's ambient --font-text; the broadened routing above now sets
-   --dse-font-display (Steel: the serif face) on every element root instead,
-   and the steppers silently inherit THAT. A Global Constraint explicitly
-   requires the broadened routing not change numeric <input>s/steppers.
-   Restore the pre-existing ambient font explicitly, Steel-scoped only —
-   Legacy's --dse-font-display already equals var(--font-text), so Legacy
-   was never at risk either way — WITHOUT narrowing the broadened
-   body-routing selector above (same targeted-exclusion pattern as the
-   EV-chip fix just above). Covers hero/party/montage/initiative/counter and
-   any other stepper instance uniformly (one shared kit component). */
+   --dse-font-body/--dse-font-card-body (Steel: the serif face) on every
+   element root instead, and the steppers silently inherit THAT. A Global
+   Constraint explicitly requires the broadened routing not change numeric
+   <input>s/steppers. Restore the pre-existing ambient font explicitly,
+   Steel-scoped only — WITHOUT narrowing the broadened body-routing selector
+   above (same targeted-exclusion pattern as the EV-chip fix just above).
+   Covers hero/party/montage/initiative/counter and any other stepper
+   instance uniformly (one shared kit component).
+   SC-105 Task 2: re-pointed from the literal var(--font-text) to the
+   Controls slot token, --dse-font-controls — byte-identical value (Controls
+   is Steel/Print-invariant at var(--font-text) in every theme block), so
+   this is a pure rename, not a visual change. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__input,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__value {
-	font-family: var(--font-text);
+	font-family: var(--dse-font-controls);
 }
 /* Plan 21 Task 2 — the rail chip's SIZE. The site's `.sc-head__slot--chip`
    (steel-cardhead.css:127) is `font-size: .9rem; line-height: 1` = 18px text on
@@ -3563,7 +3587,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    right-primary is NOT the flat rail chip; live markup is
    `<div class="sc-head__slot sc-head__right-primary sc-head__slot--mini"
    data-role="harrier">Horde Harrier</div>` and --mini is:
-       font-family: var(--md-large-header-font);   → --dse-font-display
+       font-family: var(--md-large-header-font);   → --dse-font-title
        text-transform: uppercase;
        font-size: 1.35rem;                         → see the em note below
        line-height: 1.04;
@@ -3596,7 +3620,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip {
 	background: none;
 	border: none;
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display — it's a card head per Scott's ruling */
 	font-size: 1.125em;
 	line-height: 1.04;
 	text-transform: uppercase;
@@ -3746,14 +3770,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    the same display-face/uppercase treatment as every other card's primary
    title (.dse-head__primary--left/.dse-hero__name above) — the shared list
    at ~3246 only carries the text-shadow half of that split (same reason:
-   the print layer resets nothing of its own for --dse-font-display/
+   the print layer resets nothing of its own for --dse-font-title/
    text-transform, so the face+case change needs its own screen-only rule).
    This is the "clipping of the site's prose in a small frame" the term
    card should read as: a term's name renders like the site's own H2, not a
    plain bolded label. SCREEN-ONLY: :not([data-dse-print="on"]) keeps
    <id>--steel-print.png frozen (SC-4 parked). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__title {
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -4324,7 +4348,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	text-shadow: var(--dse-emboss);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__name {
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -4342,8 +4366,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 [data-dse-theme='steel'] .dse-hero__region-title {
 	text-shadow: var(--dse-emboss);
 }
+/* SC-105 Task 2: classified Label, not Title, despite the uppercase/bold/
+   embossed treatment matching the primary titles rather than the small-caps
+   treatment every other section head gets — it functions as a section/panel
+   header (design doc §1, "Scott's ruling: Label governs ... section heads").
+   Zero pixel effect either way today (Label's default chains to Title), so
+   this only matters once SC-112 lets Title/Label diverge. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region-title {
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-label); /* re-pointed from font-display */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -4488,7 +4518,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='counter']
 	) :is(h3, h4, h5, h6),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-modal__title {
-	font-family: var(--dse-font-display);
+	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -5209,9 +5239,9 @@ button.dse-pr__row:hover {
    because it carries intentional color literals (like the theme blocks above).
 
    Tokens intentionally NOT overridden in print (inherit the active theme):
-   touch-min, font-display, font-mono, rule-fade, and role-* ("= Steel exact"),
-   plus font-title/font-body/font-card-body/font-label/font-controls
-   (SC-105 Task 1 — the whole vocabulary is print-invariant, same as font-display).
+   touch-min, font-mono, rule-fade, and role-* ("= Steel exact"), plus
+   font-title/font-body/font-card-body/font-label/font-controls (SC-105 — the
+   whole vocabulary, formerly font-display, is print-invariant).
 */
 
 /* -- NEUTRAL print value block (both themes) — @media print surface -- */

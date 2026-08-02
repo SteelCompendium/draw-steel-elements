@@ -137,18 +137,18 @@ const printSteel = blockBody(
 
 // Map-declared "intentionally not overridden" sets (mirror the map's columns).
 // SC-10: badge-fg is theme-invariant (hollow frame → ink-on-surface everywhere).
-// SC-105 Task 1: font-controls joins the Steel-invariant set (defined in Legacy
-// only; the vocabulary's "always sans, never diverges" slot per theme block).
+// SC-105: font-controls joins the Steel-invariant set (defined in Legacy only;
+// the vocabulary's "always sans, never diverges" slot per theme block).
 const STEEL_INVARIANT = new Set([
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg', 'font-controls',
 ]);
-// SC-105 Task 1: the whole new font vocabulary (title/body/card-body/label/
-// controls) is print-invariant — none of the 5 new tokens are overridden in a
-// print block, same as font-display today (Task 2 removes font-display from
-// this set when it retires the token).
+// SC-105: the whole font vocabulary (title/body/card-body/label/controls) is
+// print-invariant — none of these 5 tokens are overridden in a print block,
+// same as font-display was before Task 2 retired it (removed from this set,
+// along with the union, LEGACY_MAP, and its 3 direct test pins elsewhere).
 const PRINT_INVARIANT = new Set([
-	'touch-min', 'font-display', 'font-mono', 'rule-fade', 'badge-fg', // badge-fg: SC-10 invariant
-	'font-title', 'font-body', 'font-card-body', 'font-label', 'font-controls', // SC-105 Task 1
+	'touch-min', 'font-mono', 'rule-fade', 'badge-fg', // badge-fg: SC-10 invariant
+	'font-title', 'font-body', 'font-card-body', 'font-label', 'font-controls', // SC-105
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')), // "= Steel (exact)"
 ]);
 
@@ -184,11 +184,11 @@ const LEGACY_MAP: Record<string, string> = {
 	fg: 'var(--text-normal)',
 	'fg-muted': 'var(--text-muted)',
 	'fg-faint': 'var(--text-faint)',
-	'font-display': 'var(--font-text)',
 	'font-mono': 'var(--font-monospace)',
-	// SC-105 Task 1: the six-slot font vocabulary. Title/Body/Controls are
-	// independent literals (never chain to each other); Card-body/Label are
-	// var() chains to Body/Title (Scott's "same as Body"/"same as Title" ruling).
+	// SC-105: the six-slot font vocabulary (font-display retired in Task 2).
+	// Title/Body/Controls are independent literals (never chain to each
+	// other); Card-body/Label are var() chains to Body/Title (Scott's "same
+	// as Body"/"same as Title" ruling).
 	'font-title': 'var(--font-text)',
 	'font-body': 'var(--font-text)',
 	'font-card-body': 'var(--dse-font-body)',
@@ -259,9 +259,12 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		expect(steelGaps(DSE_TOKEN_NAMES)).toEqual([]);
 		// The map's exact split: 58 overridden + 6 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inSteel.has(n));
-		// SC-105 Task 1: +4 overridden (font-title/font-body/font-card-body/font-label
-		// defined in the Steel dark block) + 1 invariant (font-controls) = 63 → 67 / 6 → 7.
-		expect(overridden.length).toBe(67);
+		// SC-105 Task 1 added +4 overridden (font-title/font-body/font-card-body/
+		// font-label defined in the Steel dark block) + 1 invariant (font-controls)
+		// = 63 → 67 / 6 → 7. Task 2 then retired font-display's OWN Steel-dark
+		// definition (it's no longer in the union to be covered at all) = 67 → 66;
+		// invariant count is unaffected (font-controls stays 7).
+		expect(overridden.length).toBe(66);
 		expect(STEEL_INVARIANT.size).toBe(7);
 	});
 
@@ -269,10 +272,11 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		expect(printGaps(DSE_TOKEN_NAMES)).toEqual([]);
 		// 47 overridden (41 neutral + 6 Steel-scoped act) + 17 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inPrint.has(n));
-		expect(overridden.length).toBe(52); // Plan 20 Task 3: +5 material tokens
+		expect(overridden.length).toBe(52); // Plan 20 Task 3: +5 material tokens; unchanged by SC-105 (no print block ever defined a font token)
 		// SC-105 Task 1: +5 invariant (the whole new font vocabulary is print-invariant,
-		// none of it overridden in a print block) = 17 → 22.
-		expect(PRINT_INVARIANT.size).toBe(22);
+		// none of it overridden in a print block) = 17 → 22. Task 2 removes font-display
+		// from this set (retired from the union entirely) = 22 → 21.
+		expect(PRINT_INVARIANT.size).toBe(21);
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});
 

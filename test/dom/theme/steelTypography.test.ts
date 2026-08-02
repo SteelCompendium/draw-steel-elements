@@ -21,11 +21,15 @@ import path from 'path';
  *     (`[data-dse-theme='steel']`); a double-quote-only matcher matches almost nothing in this
  *     file and every assertion would pass vacuously. The matcher accepts either quoting style.
  *
- * NOTE (C6 / Plan 21): there is deliberately **no `--dse-font-body` token**. Registering a
- * `--dse-*` token needs a `src/framework/tokens.ts` edit the plan forbids, so Task 3 routed the
- * body `font-family` directly to the existing `--dse-font-display` (which under Steel is the
- * embedded "Source Serif 4"). This suite asserts that real implementation, not a token that
- * does not exist.
+ * NOTE (SC-105): Plan 21/22 originally routed body/label `font-family` directly to the single
+ * "font-display" token (C6: `--dse-font-body` couldn't be registered without a
+ * `src/framework/tokens.ts` edit those plans forbade). SC-105 replaced that one token with a
+ * six-slot vocabulary (title/body/card-body/label/controls/mono) and Task 2 re-pointed every
+ * consumer to its classified slot, retiring "font-display" entirely. This suite now asserts
+ * the real, post-retirement implementation: the bare element-root Body rule targets
+ * `--dse-font-body`, a separate higher-specificity Card-body rule targets
+ * `--dse-font-card-body`, and a dedicated slot-chain contract locks the "Card-body = same as
+ * Body" / "Label = same as Title" `var()`-chain default the SC-112 prefs UI depends on.
  */
 
 const rawCss = fs.readFileSync(
@@ -68,15 +72,18 @@ const CARD_HOST = "[data-dse-element='feature']";
 // Plan 22 Task 1 broadened the Task 3 body-font/ink rule from the four per-family selectors
 // (`[data-dse-element='feature']`, `'featureblock'`, `.dse-sb`, `.dse-card`) to a single
 // attribute-presence selector covering EVERY Steel element root — `[data-dse-element]` (the
-// card families are subsumed, not parallel-ruled). CARD_HOST's literal `='feature'` substring no
-// longer appears in that rule's selector list, so the font-identity assertion below looks it up
-// via the broadened selector text instead.
+// card families are subsumed, not parallel-ruled). SC-105 Task 2 re-pointed this rule from the
+// old "font-display" token to `--dse-font-body` — it's now the Body rule specifically, with a
+// separate, higher-specificity Card-body rule (matched via CARD_HOST below) layered on top for
+// the card-shaped hosts. CARD_HOST's literal `='feature'` substring does not appear in this
+// rule's selector list, so the Body-font-identity assertion below looks it up via the
+// broadened selector text instead.
 const BODY_FONT_HOST = '[data-dse-element]:not([data-dse-error-stage])';
 
 // Plan 22 Task 2 (Step 1): the bare attribute-presence form, with no `='<family>'` value. Used
 // by the dedicated element-root contract test below, which locks the SHAPE of the selector
 // (every element root, not an allow-list of card families) independently of the font-identity
-// test above — a future edit could keep `font-family: var(--dse-font-display)` correct while
+// test above — a future edit could keep `font-family: var(--dse-font-body)` correct while
 // re-scoping it back down to named families (e.g. reintroducing `[data-dse-element='feature']`
 // alongside `.dse-sb`/`.dse-card`), which would still satisfy the font-identity assertion but
 // silently reintroduce the C1 sans-body regression on every plugin-only family (hero, encounter,
@@ -92,12 +99,13 @@ describe('Steel typography & spacing contract', () => {
 		expect(steelBlocksFor(CARD_HOST).length).toBeGreaterThan(0);
 	});
 
-	describe('body type identity (Task 3)', () => {
+	describe('body type identity (Task 3; SC-105 Task 2 re-pointed Body/Card-body)', () => {
 		// (a) The site paints ONE slab face on title AND body; that licensed face can't be
-		// bundled, so the plugin routes body/label text to the SAME serif the titles use —
-		// --dse-font-display (Steel → embedded "Source Serif 4"). Asserted against the real
-		// implementation: NO `--dse-font-body` token exists (C6). If this ever reverts to a sans
-		// stack or an Obsidian text var, the card body stops being a serif and this fails.
+		// bundled, so the plugin routes body/label text to the SAME serif the titles use. SC-105
+		// Task 2 re-pointed this from the single "font-display" slot to --dse-font-body (the
+		// bare element-root Body rule) — asserted against the real implementation. If this ever
+		// reverts to a sans stack or an Obsidian text var, the body stops being a serif and this
+		// fails.
 		// Plan 22 Task 2 (Step 1): lock the CONTRACT that this routing lives on the element-root
 		// selector — every `[data-dse-element]` host — not on an allow-list of the four original
 		// card families. This is the guard the C1/C2 coherence fix (Plan 22 Task 1) exists to
@@ -115,23 +123,45 @@ describe('Steel typography & spacing contract', () => {
 			);
 			expect(rootBlocks.length).toBeGreaterThan(0);
 			expect(
-				rootBlocks.some((r) => /font-family:\s*var\(--dse-font-display\)\s*;/.test(r.body)),
+				rootBlocks.some((r) => /font-family:\s*var\(--dse-font-body\)\s*;/.test(r.body)),
 			).toBe(true);
 		});
 
-		it('routes the Steel card body font to var(--dse-font-display)', () => {
+		it('routes the Steel Body font (bare element roots) to var(--dse-font-body)', () => {
 			const blocks = steelBlocksFor(BODY_FONT_HOST);
 			expect(blocks.length).toBeGreaterThan(0);
 			const withFont = blocks.filter((b) => /font-family:\s*[^;]+;/.test(b));
 			expect(withFont.length).toBeGreaterThan(0);
-			// The one font-family the Steel card host declares is --dse-font-display, and nothing
-			// else (no sans stack, no --font-text/--font-ui override).
+			// The one font-family the Steel Body rule declares is --dse-font-body, and nothing
+			// else (no sans stack, no --font-text/--font-ui override, no font-display).
 			expect(
-				withFont.some((b) => /font-family:\s*var\(--dse-font-display\)\s*;/.test(b)),
+				withFont.some((b) => /font-family:\s*var\(--dse-font-body\)\s*;/.test(b)),
 			).toBe(true);
 			for (const b of withFont) {
 				const decl = b.match(/font-family:\s*([^;]+);/);
-				if (decl) expect(decl[1].trim()).toBe('var(--dse-font-display)');
+				if (decl) expect(decl[1].trim()).toBe('var(--dse-font-body)');
+			}
+		});
+
+		// SC-105 Task 2: the card-shaped hosts (statblock/feature/featureblock/D6-reference-card)
+		// get their OWN, higher-specificity rule pointing at --dse-font-card-body — distinct from
+		// the bare element-root Body rule above (see the styles-source.css comment at the Body
+		// rule for the specificity nuance this split doesn't yet fully resolve, deferred to
+		// SC-112). CARD_HOST (`[data-dse-element='feature']`) appears verbatim inside that rule's
+		// `:is(...)` selector list, so steelBlocksFor(CARD_HOST) also picks up the line-height/
+		// padding rules from the "body spacing" suite below — filtered out here by requiring a
+		// font-family declaration, which only the Card-body rule has.
+		it('routes the Steel Card-body font (statblock/feature/featureblock/card hosts) to var(--dse-font-card-body)', () => {
+			const blocks = steelBlocksFor(CARD_HOST);
+			expect(blocks.length).toBeGreaterThan(0);
+			const withFont = blocks.filter((b) => /font-family:\s*[^;]+;/.test(b));
+			expect(withFont.length).toBeGreaterThan(0);
+			expect(
+				withFont.some((b) => /font-family:\s*var\(--dse-font-card-body\)\s*;/.test(b)),
+			).toBe(true);
+			for (const b of withFont) {
+				const decl = b.match(/font-family:\s*([^;]+);/);
+				if (decl) expect(decl[1].trim()).toBe('var(--dse-font-card-body)');
 			}
 		});
 
@@ -179,5 +209,44 @@ describe('Steel typography & spacing contract', () => {
 				}),
 			).toBe(true);
 		});
+	});
+});
+
+// SC-105 Task 2 — the slot CHAIN contract. `--dse-font-card-body` and `--dse-font-label` are
+// deliberately `var()`-chained to `--dse-font-body`/`--dse-font-title` (Scott's "same as
+// Body"/"same as Title" ruling), NOT independent literals, so a future prefs UI (SC-112) can
+// offer just 3 user-facing controls (Title/Body/Controls) while Card-body/Label track them
+// automatically. This asserts the chain SHAPE directly against the raw CSS text — a future
+// edit that accidentally hardcodes Card-body/Label to a literal value (e.g. copy-pasting the
+// resolved font stack instead of the var() reference) breaks the "same as X" contract SC-112
+// depends on, and this suite fails loudly instead of silently.
+describe('font slot chain contract (SC-105 Task 2)', () => {
+	const rootBodies = rules.filter((r) => r.selector === ':root').map((r) => r.body);
+	const steelDarkBody = rules.find(
+		(r) => r.selector === ':is([data-dse-element], .dse-modal)[data-dse-theme="steel"]',
+	)?.body;
+
+	const CARD_BODY_CHAIN = /--dse-font-card-body:\s*var\(--dse-font-body\)\s*;/;
+	const LABEL_CHAIN = /--dse-font-label:\s*var\(--dse-font-title\)\s*;/;
+
+	it('parses both value blocks (guard against a vacuous pass)', () => {
+		expect(rootBodies.length).toBeGreaterThan(0);
+		expect(steelDarkBody).toBeDefined();
+	});
+
+	it('Legacy root: --dse-font-card-body chains to var(--dse-font-body)', () => {
+		expect(rootBodies.some((b) => CARD_BODY_CHAIN.test(b))).toBe(true);
+	});
+
+	it('Steel block: --dse-font-card-body chains to var(--dse-font-body)', () => {
+		expect(CARD_BODY_CHAIN.test(steelDarkBody ?? '')).toBe(true);
+	});
+
+	it('Legacy root: --dse-font-label chains to var(--dse-font-title)', () => {
+		expect(rootBodies.some((b) => LABEL_CHAIN.test(b))).toBe(true);
+	});
+
+	it('Steel block: --dse-font-label chains to var(--dse-font-title)', () => {
+		expect(LABEL_CHAIN.test(steelDarkBody ?? '')).toBe(true);
 	});
 });

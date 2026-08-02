@@ -65,13 +65,14 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(sheet).not.toMatch(/\[data-dse-theme="legacy"\]/);
 	});
 
-	test('the union covers the full D2 §6 sheet (74 tokens: ~57 core + 12 roles + 6 actions)', () => {
+	test('the union covers the full D2 §6 sheet (73 tokens: ~56 core + 12 roles + 6 actions)', () => {
 		// 62 from Task 1 + the two Task-5 gap-closes (page-bg, badge-fg)
 		// + Plan 20 Task 3's five material tokens
 		// (metal, metal-bright, sheen, sheen-soft, chip-bevel)
-		// + SC-105 Task 1's five font-vocabulary tokens
-		// (font-title, font-body, font-card-body, font-label, font-controls).
-		expect(DSE_TOKEN_NAMES.length).toBe(74);
+		// + SC-105's five font-vocabulary tokens
+		// (font-title, font-body, font-card-body, font-label, font-controls)
+		// - SC-105 Task 2's retirement of font-display (net +4 over pre-SC-105).
+		expect(DSE_TOKEN_NAMES.length).toBe(73);
 		// One representative per §6 group, so a whole group can't silently vanish.
 		for (const key of [
 			'surface', // structure / surface
@@ -92,9 +93,10 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(rootValue('surface')).toBe('var(--code-background)');
 		expect(rootValue('surface-raised')).toBe('var(--color-base-25)');
 		expect(rootValue('fg')).toBe('var(--text-normal)');
-		expect(rootValue('font-display')).toBe('var(--font-text)');
-		// SC-105 Task 1: independent literals for title/body/controls; card-body/
+		// SC-105: independent literals for title/body/controls; card-body/
 		// label are var() chains to body/title (Scott's "same as" ruling).
+		// font-display retired in Task 2 — every consumer now targets one of
+		// these five slots directly.
 		expect(rootValue('font-title')).toBe('var(--font-text)');
 		expect(rootValue('font-body')).toBe('var(--font-text)');
 		expect(rootValue('font-card-body')).toBe('var(--dse-font-body)');

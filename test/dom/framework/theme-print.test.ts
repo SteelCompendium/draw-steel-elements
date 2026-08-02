@@ -133,7 +133,10 @@ const PRINT_STEEL: Record<string, string> = {
 /** Tokens intentionally NOT overridden in print (= Legacy / = active theme / = Steel exact). */
 const PRINT_INVARIANT = [
 	'touch-min', // = Legacy (print rules hide the controls it sizes)
-	'font-display', // = active theme (no font override in print)
+	// SC-105 Task 2: font-display retired — the whole six-slot font vocabulary
+	// (bar font-mono, listed separately below) is print-invariant, same as
+	// font-display was (= active theme, no font override in print).
+	'font-title', 'font-body', 'font-card-body', 'font-label', 'font-controls',
 	'font-mono', // = Legacy
 	'rule-fade', // = Legacy (theme-invariant)
 	'badge-fg', // = Legacy ink-on-surface (hollow frame; print --dse-fg is #000) — SC-10
