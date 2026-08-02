@@ -72,8 +72,13 @@ try {
 	await page.waitForFunction(() => window.__dseHarnessManifest !== undefined);
 	const manifest = await page.evaluate(() => window.__dseHarnessManifest);
 
-	let elements = manifest.elements.map((e) => e.id);
-	if (args.element) elements = elements.filter((id) => id === args.element);
+	// SC-108 / FOLLOWUPS #37: keep the manifest's per-element `fixtures` list (not just
+	// ids) so the sweep can shoot every named fixture, not only 'default'. Naming rule
+	// (design §6): default-fixture output stays `${id}--${combo}` byte-for-byte unchanged
+	// for every element; a NON-default fixture gets `${id}-${fixtureName}--${combo}` so it
+	// can never collide with — and overwrite — a frozen default-fixture golden.
+	let elements = manifest.elements;
+	if (args.element) elements = elements.filter((e) => e.id === args.element);
 	if (args.element && elements.length === 0) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -89,13 +94,26 @@ try {
 		process.exit(2);
 	}
 
-	for (const id of elements) {
-		for (const c of combos) {
-			const params = { element: id, fixture: args.fixture ?? 'default', theme: c.theme, bg: c.bg };
-			if (c.print) params.print = '1';
-			if (args.readonly) params.readonly = '1';
-			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${id}--${comboName(c)}${suffix}`);
+	for (const e of elements) {
+		// Mirrors entry.ts's own `fixtures[fixtureName] ?? fixtures['default']` fallback:
+		// an explicit --fixture that this element doesn't have falls back to 'default'
+		// (zero behavior change for any pre-existing invocation). With no --fixture flag,
+		// shoot every fixture the element declares (still just ['default'] for 31 of 32
+		// elements today).
+		const fixtureNames = args.fixture
+			? e.fixtures.includes(args.fixture)
+				? [args.fixture]
+				: ['default']
+			: e.fixtures;
+		for (const fixtureName of fixtureNames) {
+			const outId = fixtureName === 'default' ? e.id : `${e.id}-${fixtureName}`;
+			for (const c of combos) {
+				const params = { element: e.id, fixture: fixtureName, theme: c.theme, bg: c.bg };
+				if (c.print) params.print = '1';
+				if (args.readonly) params.readonly = '1';
+				const suffix = args.readonly ? '--readonly' : '';
+				await snap(page, params, `${outId}--${comboName(c)}${suffix}`);
+			}
 		}
 	}
 	if (!args.element) {

@@ -679,9 +679,8 @@ async function main() {
 		// existence proof, matching step 3b's by-SCC recursion shot's own scope, not a
 		// full theme×bg sweep).
 		if (runSidebarSpecial) {
-			const outName = 'initiative--obsidian-sidebar-steel-dark';
 			const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="initiative"]')`;
-			let emulated = false;
+			let openErr;
 			try {
 				// Start from a panel-free sidebar (see closeDseSidebarLeaves' comment above)
 				// so this leaf-clip shows ONLY the initiative panel, regardless of what ran
@@ -728,49 +727,70 @@ async function main() {
 				await waitFor(cdp, `!!${elSel}`, { what: 'sidebar panel mounted [data-dse-element="initiative"]' });
 				await sleep(500); // settle: portrait image resolution + late layout, same as the main sweep
 
+				// Doesn't change between bg iterations below — set once here (unlike the
+				// main sweep's per-combo setPluginTheme, which also varies theme).
 				await setPluginTheme(elSel, 'steel');
-				await setChromeBg('dark');
-				await sleep(300);
-				await clearNotices();
-
-				// Clip to the LEAF, not the element root: unlike a reading-mode element
-				// (clipped tightly to [data-dse-element]), the sidebar shot's whole point is
-				// showing the panel IN its leaf chrome — the ground truth is "this mounts as
-				// a real sidebar leaf," not just "this element renders."
-				const rectExpr = `(() => {
-					const leafEl = ${elSel}.closest('.workspace-leaf');
-					const r = leafEl.getBoundingClientRect();
-					return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
-				})()`;
-				let rect = await evaluate(cdp, rectExpr);
-				if (rect.y + rect.height > rect.vh) {
-					await cdp.call('Emulation.setDeviceMetricsOverride', {
-						width: rect.vw,
-						height: Math.ceil(rect.y + rect.height + 100),
-						deviceScaleFactor: 0,
-						mobile: false,
-					});
-					emulated = true;
-					await sleep(500);
-					await clearNotices();
-					rect = await evaluate(cdp, rectExpr);
-				}
-				const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-				const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
-				console.log(
-					`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''}) — sidebar leaf confirmed`,
-				);
 			} catch (e) {
-				failures.push({ outName, errors: [String(e)] });
-				await errorShot(outName);
-				console.log(`FAIL ${outName}: ${String(e)}`);
-			} finally {
-				if (emulated) {
-					try {
-						await cdp.call('Emulation.clearDeviceMetricsOverride');
-						await sleep(300);
-					} catch {
-						/* socket may already be down; killChild still runs */
+				openErr = e;
+			}
+
+			// SC-108 / FOLLOWUPS #37: dark+light sweep — retains the styles-source.css §5
+			// `body.theme-light .dse-sidebar ...` override rule (bevel box-shadow vs. the
+			// dark-lift shadow), which only the light iteration exercises.
+			for (const bg of ['dark', 'light']) {
+				const outName = `initiative--obsidian-sidebar-steel-${bg}`;
+				if (openErr) {
+					failures.push({ outName, errors: [`sidebar open/command failed: ${String(openErr)}`] });
+					await errorShot(outName);
+					console.log(`FAIL ${outName} (sidebar open/command)`);
+					continue;
+				}
+				let emulated = false;
+				try {
+					await setChromeBg(bg);
+					await sleep(300);
+					await clearNotices();
+
+					// Clip to the LEAF, not the element root: unlike a reading-mode element
+					// (clipped tightly to [data-dse-element]), the sidebar shot's whole point
+					// is showing the panel IN its leaf chrome — the ground truth is "this
+					// mounts as a real sidebar leaf," not just "this element renders."
+					// Fresh rect EVERY shot — theme flips can resize the element.
+					const rectExpr = `(() => {
+						const leafEl = ${elSel}.closest('.workspace-leaf');
+						const r = leafEl.getBoundingClientRect();
+						return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+					})()`;
+					let rect = await evaluate(cdp, rectExpr);
+					if (rect.y + rect.height > rect.vh) {
+						await cdp.call('Emulation.setDeviceMetricsOverride', {
+							width: rect.vw,
+							height: Math.ceil(rect.y + rect.height + 100),
+							deviceScaleFactor: 0,
+							mobile: false,
+						});
+						emulated = true;
+						await sleep(500);
+						await clearNotices();
+						rect = await evaluate(cdp, rectExpr);
+					}
+					const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+					const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+					console.log(
+						`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''}) — sidebar leaf confirmed`,
+					);
+				} catch (e) {
+					failures.push({ outName, errors: [String(e)] });
+					await errorShot(outName);
+					console.log(`FAIL ${outName}: ${String(e)}`);
+				} finally {
+					if (emulated) {
+						try {
+							await cdp.call('Emulation.clearDeviceMetricsOverride');
+							await sleep(300);
+						} catch {
+							/* socket may already be down; killChild still runs */
+						}
 					}
 				}
 			}
@@ -934,7 +954,7 @@ async function main() {
 	const total =
 		elements.length * combos.length +
 		(runSpecial ? 1 : 0) +
-		(runSidebarSpecial ? 1 : 0) +
+		(runSidebarSpecial ? 2 : 0) +
 		(runHeroSidebarSpecial ? 1 : 0);
 	console.log(`\nall ${total} shots written to ${shotsDir}`);
 }

@@ -64,6 +64,41 @@ import complicationDefault from '../src/elements/display/complication/example.ya
 // reference-only, raw-markdown inline fallback per OD-D6-7).
 import ruleDefault from '../src/elements/display/rule/example.yaml';
 
+// SC-108 / FOLLOWUPS #37 (design recon 2026-08-02): a second, harness-local fixture for
+// featureblock's advancement-band gate (view.ts's `run.level > 0` branch), which had never
+// been rendered by any fixture. Verbatim from test/dom/elements/featureblock.test.ts's
+// proven `WITH_ADVANCEMENT` constant — not sourced from example.yaml, since this is a
+// harness-only variant, not the single-sourced authoring example (D9). Deliberately carries
+// no top-level `level`/`ev` so the shot proves the advancement band in isolation.
+const featureblockAdvancement = `type: featureblock
+featureblock_type: Fixture
+name: Tiered Idol
+features:
+  - type: feature
+    feature_type: trait
+    name: Base Glow
+    effects:
+      - effect: Sheds light 2.
+  - type: feature
+    feature_type: trait
+    name: Blinding Flare
+    level: 3
+    effects:
+      - effect: Each enemy within 3 squares is dazzled.
+  - type: feature
+    feature_type: trait
+    name: Searing Beam
+    level: 3
+    effects:
+      - effect: One enemy within 5 squares takes 5 fire damage.
+  - type: feature
+    feature_type: trait
+    name: Solar Crown
+    level: 6
+    effects:
+      - effect: Allies within 2 squares gain an edge.
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -76,7 +111,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	culture: { default: cultureDefault },
 	encounter: { default: encounterDefault },
 	feature: { default: featureDefault },
-	featureblock: { default: featureblockDefault },
+	featureblock: { default: featureblockDefault, advancement: featureblockAdvancement },
 	hero: { default: heroDefault },
 	'hero-tokens': { default: tokensDefault },
 	'heroic-resource': { default: resourceDefault },
