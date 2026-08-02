@@ -60,9 +60,18 @@ const steelBlocksFor = (selector: string): string[] =>
 		.map((r) => r.body);
 
 // The card body node. Plan 21's parity `card` pair maps the site ability card to the plugin's
-// `[data-dse-element='feature']` host; Tasks 2–3 set the font/line-height/padding on that host
-// and let them inherit to the prose the harness samples.
+// `[data-dse-element='feature']` host; Task 2's line-height/padding rules still carry that exact
+// per-family selector text (untouched by Plan 22 Task 1), so CARD_HOST stays a literal match for
+// them.
 const CARD_HOST = "[data-dse-element='feature']";
+
+// Plan 22 Task 1 broadened the Task 3 body-font/ink rule from the four per-family selectors
+// (`[data-dse-element='feature']`, `'featureblock'`, `.dse-sb`, `.dse-card`) to a single
+// attribute-presence selector covering EVERY Steel element root — `[data-dse-element]` (the
+// card families are subsumed, not parallel-ruled). CARD_HOST's literal `='feature'` substring no
+// longer appears in that rule's selector list, so the font-identity assertion below looks it up
+// via the broadened selector text instead.
+const BODY_FONT_HOST = '[data-dse-element]:not([data-dse-error-stage])';
 
 describe('Steel typography & spacing contract', () => {
 	// Sanity: if the parser or the scope matcher ever stops finding Steel rules, every
@@ -80,7 +89,7 @@ describe('Steel typography & spacing contract', () => {
 		// implementation: NO `--dse-font-body` token exists (C6). If this ever reverts to a sans
 		// stack or an Obsidian text var, the card body stops being a serif and this fails.
 		it('routes the Steel card body font to var(--dse-font-display)', () => {
-			const blocks = steelBlocksFor(CARD_HOST);
+			const blocks = steelBlocksFor(BODY_FONT_HOST);
 			expect(blocks.length).toBeGreaterThan(0);
 			const withFont = blocks.filter((b) => /font-family:\s*[^;]+;/.test(b));
 			expect(withFont.length).toBeGreaterThan(0);
