@@ -179,8 +179,8 @@ for what needs action.
   slightly heavier than the site's" gap called out above. Titles are
   unaffected (they set 600/700 explicitly). Screen-only, same as the rest of
   the Steel typography work: Legacy and print/export shots don't reference
-  the family and are untouched. Adds ~20KB (base64-embedded woff2) to the
-  plugin bundle.
+  the family and are untouched. Adds ~27KB to the built stylesheet (a 20KB
+  woff2, base64-embedded).
 
 ## 5.1.1
 
