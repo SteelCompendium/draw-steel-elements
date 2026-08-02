@@ -73,6 +73,16 @@ const CARD_HOST = "[data-dse-element='feature']";
 // via the broadened selector text instead.
 const BODY_FONT_HOST = '[data-dse-element]:not([data-dse-error-stage])';
 
+// Plan 22 Task 2 (Step 1): the bare attribute-presence form, with no `='<family>'` value. Used
+// by the dedicated element-root contract test below, which locks the SHAPE of the selector
+// (every element root, not an allow-list of card families) independently of the font-identity
+// test above — a future edit could keep `font-family: var(--dse-font-display)` correct while
+// re-scoping it back down to named families (e.g. reintroducing `[data-dse-element='feature']`
+// alongside `.dse-sb`/`.dse-card`), which would still satisfy the font-identity assertion but
+// silently reintroduce the C1 sans-body regression on every plugin-only family (hero, encounter,
+// negotiation, montage, initiative, project, party, …). This test exists to catch that case too.
+const ELEMENT_ROOT_SELECTOR = '[data-dse-element]';
+
 describe('Steel typography & spacing contract', () => {
 	// Sanity: if the parser or the scope matcher ever stops finding Steel rules, every
 	// assertion below would pass vacuously. Fail loudly instead. (Mirrors steelMaterial.test.ts.)
@@ -88,6 +98,27 @@ describe('Steel typography & spacing contract', () => {
 		// --dse-font-display (Steel → embedded "Source Serif 4"). Asserted against the real
 		// implementation: NO `--dse-font-body` token exists (C6). If this ever reverts to a sans
 		// stack or an Obsidian text var, the card body stops being a serif and this fails.
+		// Plan 22 Task 2 (Step 1): lock the CONTRACT that this routing lives on the element-root
+		// selector — every `[data-dse-element]` host — not on an allow-list of the four original
+		// card families. This is the guard the C1/C2 coherence fix (Plan 22 Task 1) exists to
+		// protect: if the selector is ever narrowed back to named families
+		// (`[data-dse-element='feature']`, `'featureblock'`, `.dse-sb`, `.dse-card`), the
+		// plugin-only families (hero, encounter, negotiation, montage, initiative, project,
+		// party, …) silently regress to a sans body again, even though the font-identity test
+		// below would still pass for the families that remained covered.
+		it('targets the body-font rule at the element-root selector, not an allow-list of card families', () => {
+			const rootBlocks = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					/:not\(\[data-dse-print="on"\]\)/.test(r.selector) &&
+					r.selector.includes(ELEMENT_ROOT_SELECTOR),
+			);
+			expect(rootBlocks.length).toBeGreaterThan(0);
+			expect(
+				rootBlocks.some((r) => /font-family:\s*var\(--dse-font-display\)\s*;/.test(r.body)),
+			).toBe(true);
+		});
+
 		it('routes the Steel card body font to var(--dse-font-display)', () => {
 			const blocks = steelBlocksFor(BODY_FONT_HOST);
 			expect(blocks.length).toBeGreaterThan(0);
