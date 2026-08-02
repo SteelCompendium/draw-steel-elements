@@ -173,6 +173,14 @@ for what needs action.
   pixel-identical, freeze and parity gates stayed green throughout. This is
   groundwork only: it lays the vocabulary for user-customizable fonts
   (SC-112), which is not part of this change.
+- The Steel theme now bundles Source Serif 4's Regular (400) weight, so body
+  and label prose render at their true book weight instead of being mapped up
+  to the bundled 600 (SemiBold) face for lack of a 400 — closing the "reads
+  slightly heavier than the site's" gap called out above. Titles are
+  unaffected (they set 600/700 explicitly). Screen-only, same as the rest of
+  the Steel typography work: Legacy and print/export shots don't reference
+  the family and are untouched. Adds ~20KB (base64-embedded woff2) to the
+  plugin bundle.
 
 ## 5.1.1
 
