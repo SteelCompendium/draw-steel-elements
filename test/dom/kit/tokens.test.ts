@@ -65,11 +65,13 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(sheet).not.toMatch(/\[data-dse-theme="legacy"\]/);
 	});
 
-	test('the union covers the full D2 §6 sheet (69 tokens: ~52 core + 12 roles + 6 actions)', () => {
+	test('the union covers the full D2 §6 sheet (74 tokens: ~57 core + 12 roles + 6 actions)', () => {
 		// 62 from Task 1 + the two Task-5 gap-closes (page-bg, badge-fg)
 		// + Plan 20 Task 3's five material tokens
-		// (metal, metal-bright, sheen, sheen-soft, chip-bevel).
-		expect(DSE_TOKEN_NAMES.length).toBe(69);
+		// (metal, metal-bright, sheen, sheen-soft, chip-bevel)
+		// + SC-105 Task 1's five font-vocabulary tokens
+		// (font-title, font-body, font-card-body, font-label, font-controls).
+		expect(DSE_TOKEN_NAMES.length).toBe(74);
 		// One representative per §6 group, so a whole group can't silently vanish.
 		for (const key of [
 			'surface', // structure / surface
@@ -91,6 +93,13 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(rootValue('surface-raised')).toBe('var(--color-base-25)');
 		expect(rootValue('fg')).toBe('var(--text-normal)');
 		expect(rootValue('font-display')).toBe('var(--font-text)');
+		// SC-105 Task 1: independent literals for title/body/controls; card-body/
+		// label are var() chains to body/title (Scott's "same as" ruling).
+		expect(rootValue('font-title')).toBe('var(--font-text)');
+		expect(rootValue('font-body')).toBe('var(--font-text)');
+		expect(rootValue('font-card-body')).toBe('var(--dse-font-body)');
+		expect(rootValue('font-label')).toBe('var(--dse-font-title)');
+		expect(rootValue('font-controls')).toBe('var(--font-text)');
 		expect(rootValue('accent')).toBe('var(--interactive-accent)');
 		expect(rootValue('select')).toBe('#D50000');
 		expect(rootValue('radius')).toBe('5px');

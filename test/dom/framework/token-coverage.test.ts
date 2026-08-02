@@ -137,9 +137,18 @@ const printSteel = blockBody(
 
 // Map-declared "intentionally not overridden" sets (mirror the map's columns).
 // SC-10: badge-fg is theme-invariant (hollow frame → ink-on-surface everywhere).
-const STEEL_INVARIANT = new Set(['page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg']);
+// SC-105 Task 1: font-controls joins the Steel-invariant set (defined in Legacy
+// only; the vocabulary's "always sans, never diverges" slot per theme block).
+const STEEL_INVARIANT = new Set([
+	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg', 'font-controls',
+]);
+// SC-105 Task 1: the whole new font vocabulary (title/body/card-body/label/
+// controls) is print-invariant — none of the 5 new tokens are overridden in a
+// print block, same as font-display today (Task 2 removes font-display from
+// this set when it retires the token).
 const PRINT_INVARIANT = new Set([
 	'touch-min', 'font-display', 'font-mono', 'rule-fade', 'badge-fg', // badge-fg: SC-10 invariant
+	'font-title', 'font-body', 'font-card-body', 'font-label', 'font-controls', // SC-105 Task 1
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')), // "= Steel (exact)"
 ]);
 
@@ -177,6 +186,14 @@ const LEGACY_MAP: Record<string, string> = {
 	'fg-faint': 'var(--text-faint)',
 	'font-display': 'var(--font-text)',
 	'font-mono': 'var(--font-monospace)',
+	// SC-105 Task 1: the six-slot font vocabulary. Title/Body/Controls are
+	// independent literals (never chain to each other); Card-body/Label are
+	// var() chains to Body/Title (Scott's "same as Body"/"same as Title" ruling).
+	'font-title': 'var(--font-text)',
+	'font-body': 'var(--font-text)',
+	'font-card-body': 'var(--dse-font-body)',
+	'font-label': 'var(--dse-font-title)',
+	'font-controls': 'var(--font-text)',
 	'chip-bg': 'var(--tag-background)',
 	accent: 'var(--interactive-accent)',
 	'accent-fg': 'var(--text-on-accent)',
@@ -242,8 +259,10 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		expect(steelGaps(DSE_TOKEN_NAMES)).toEqual([]);
 		// The map's exact split: 58 overridden + 6 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inSteel.has(n));
-		expect(overridden.length).toBe(63); // Plan 20 Task 3: +5 material tokens
-		expect(STEEL_INVARIANT.size).toBe(6);
+		// SC-105 Task 1: +4 overridden (font-title/font-body/font-card-body/font-label
+		// defined in the Steel dark block) + 1 invariant (font-controls) = 63 → 67 / 6 → 7.
+		expect(overridden.length).toBe(67);
+		expect(STEEL_INVARIANT.size).toBe(7);
 	});
 
 	test('EVERY union token is overridden in a Print block OR map-marked print-invariant', () => {
@@ -251,7 +270,9 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// 47 overridden (41 neutral + 6 Steel-scoped act) + 17 invariant = 64 (SC-10: badge-fg → invariant).
 		const overridden = DSE_TOKEN_NAMES.filter((n) => inPrint.has(n));
 		expect(overridden.length).toBe(52); // Plan 20 Task 3: +5 material tokens
-		expect(PRINT_INVARIANT.size).toBe(17); // SC-10: +badge-fg
+		// SC-105 Task 1: +5 invariant (the whole new font vocabulary is print-invariant,
+		// none of it overridden in a print block) = 17 → 22.
+		expect(PRINT_INVARIANT.size).toBe(22);
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});
 

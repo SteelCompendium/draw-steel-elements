@@ -67,7 +67,11 @@ function steelDefinitions(): string[] {
 // clip-path whose interior is the card surface, so its ink is ink-on-surface
 // (var(--dse-fg)) in EVERY theme; the old per-theme overrides assumed solid
 // fills and rendered invisible (ground-truth-confirmed, Plan 12).
-const THEME_INVARIANT = ['page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg'] as const;
+// SC-105 Task 1: font-controls joins the invariant set (Legacy-only; never
+// overridden in the Steel block — the vocabulary's "always sans" slot).
+const THEME_INVARIANT = [
+	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg', 'font-controls',
+] as const;
 
 /**
  * The authoritative Steel (dark) values — transcribed from D3-token-map.md. A
@@ -205,8 +209,14 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		expect(uncovered).toEqual([]);
 		// The map's exact split: 63 overridden + 6 theme-invariant = 69 union tokens
 		// (SC-10: badge-fg → invariant; Plan 20 Task 3: +5 material tokens).
-		expect(overridden.length).toBe(63);
-		expect(THEME_INVARIANT.length).toBe(6);
+		// SC-105 Task 1: +4 overridden (font-title/body/card-body/label, defined in
+		// the Steel block) + 1 invariant (font-controls) = 63 → 67 / 6 → 7 (union 74).
+		// NOTE: this file's own union-coverage guard was not called out by the SC-105
+		// design doc's Task-1 file list (only token-coverage.test.ts + tokens.test.ts
+		// were) — it needed the identical fix for the identical reason. Flagged as a
+		// discrepancy in the Task 1 report.
+		expect(overridden.length).toBe(67);
+		expect(THEME_INVARIANT.length).toBe(7);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
 

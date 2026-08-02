@@ -2983,6 +2983,19 @@ Shared globals
 	--dse-fg-faint: var(--text-faint);
 	--dse-font-display: var(--font-text); /* OD-4: Steel may map to a serif stack (D3) */
 	--dse-font-mono: var(--font-monospace);
+	/* SC-105 Task 1: the six-slot font vocabulary, introduced as a pure no-op —
+	   font-display keeps every one of its 7 consumers until Task 2 re-points
+	   them and retires it. Title/Body/Controls are INDEPENDENT literals (never
+	   var()-chain to each other: SC-112 needs to move Title without dragging
+	   Body); Card-body/Label are var() CHAINS to Body/Title respectively (Scott's
+	   "same as Body"/"same as Title" ruling) so SC-112 can offer just 3
+	   user-facing controls. Values reproduce font-display's per-theme
+	   resolution exactly (see the Steel-dark block below + D3-token-map.md). */
+	--dse-font-title: var(--font-text);
+	--dse-font-body: var(--font-text);
+	--dse-font-card-body: var(--dse-font-body);
+	--dse-font-label: var(--dse-font-title);
+	--dse-font-controls: var(--font-text); /* Steel/Print invariant — join font-mono */
 	--dse-chip-bg: var(--tag-background);
 
 	/* -- Accent / interaction -- */
@@ -3118,7 +3131,8 @@ Shared globals
    forward-compat, spec §2.4).
 
    Tokens deliberately ABSENT (they inherit the Legacy base — the map marks them
-   "= Legacy, theme-invariant"): page-bg, pad, touch-min, font-mono, rule-fade.
+   "= Legacy, theme-invariant"): page-bg, pad, touch-min, font-mono, rule-fade,
+   font-controls (SC-105 Task 1).
 */
 :is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 	/* -- Structure / surface -- */
@@ -3138,6 +3152,14 @@ Shared globals
 	--dse-fg-muted: rgba(220,226,230,0.62);
 	--dse-fg-faint: rgba(220,226,230,0.38);
 	--dse-font-display: "Source Serif 4", var(--font-text); /* OD-4 free-serif fallback */
+	/* SC-105 Task 1: same no-op vocabulary as the Legacy base above — Title/Body
+	   get the same literal font-display already resolves to under Steel;
+	   Card-body/Label chain to Body/Title. font-controls is deliberately ABSENT
+	   here (Steel-invariant, joins font-mono) — no consumer re-points in Task 1. */
+	--dse-font-title: "Source Serif 4", var(--font-text);
+	--dse-font-body: "Source Serif 4", var(--font-text);
+	--dse-font-card-body: var(--dse-font-body);
+	--dse-font-label: var(--dse-font-title);
 	--dse-chip-bg: rgba(220,226,230,0.06);
 
 	/* -- Accent / interaction -- */
@@ -3415,10 +3437,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    body prose; that licensed face can't be bundled, so body/label text routes to
    the SAME serif the titles already use — --dse-font-display, which under Steel
    is "Source Serif 4" (embedded @font-face ~3089). Routed directly to
-   --dse-font-display (NOT a new --dse-font-body token: the token vocabulary is
-   pinned by src/framework/tokens.ts' DSE_TOKEN_NAMES / token-coverage tests, and
-   a CSS-only task cannot register a new one — the alias would be functionally
-   identical anyway). Set on the four Steel plate HOSTS so it inherits to every
+   --dse-font-display (NOT a new --dse-font-body token: at the time this was
+   written the token vocabulary was pinned by src/framework/tokens.ts'
+   DSE_TOKEN_NAMES / token-coverage tests, and a CSS-only task couldn't register
+   a new one — the alias would have been functionally identical anyway).
+   SC-105 Task 1 has since added --dse-font-body/--dse-font-card-body to the
+   vocabulary with byte-identical values, but this rule is NOT re-pointed to
+   them yet — that's SC-105 Task 2's job (re-pointing consumers is explicitly
+   out of scope for Task 1's no-op). Set on the four Steel plate HOSTS so it
+   inherits to every
    prose container + label the harness samples (.dse-section / .dse-pr__head /
    .dse-pr__row / .dse-head / chip / sb+fb band heads). Titles set
    --dse-font-display explicitly (same face) — unaffected. Only weights 600/700
@@ -5182,7 +5209,9 @@ button.dse-pr__row:hover {
    because it carries intentional color literals (like the theme blocks above).
 
    Tokens intentionally NOT overridden in print (inherit the active theme):
-   touch-min, font-display, font-mono, rule-fade, and role-* ("= Steel exact").
+   touch-min, font-display, font-mono, rule-fade, and role-* ("= Steel exact"),
+   plus font-title/font-body/font-card-body/font-label/font-controls
+   (SC-105 Task 1 — the whole vocabulary is print-invariant, same as font-display).
 */
 
 /* -- NEUTRAL print value block (both themes) — @media print surface -- */
