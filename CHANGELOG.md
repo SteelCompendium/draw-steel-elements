@@ -161,9 +161,11 @@ for what needs action.
   Legacy modals are unchanged. (Verified by DOM contract tests asserting the
   theme attribute stamps, re-stamps live, and tears down on close — not a
   rendered screenshot, since no frozen harness shot opens a modal.)
-- [INTERNAL] Featureblock advancement bands and the sidebar panel's
-  light-scheme render now have dedicated visual-harness fixtures with frozen
-  golden-PNG coverage (freeze set widened 98 → 101).
+- [INTERNAL] Featureblock advancement bands and the sidebar panel now have
+  dedicated visual-harness fixtures: the featureblock fixture's legacy/print
+  renders joined the frozen golden-PNG set (98 → 101), while its Steel-scheme
+  shots and both new sidebar shots are regenerated (unfrozen) goldens
+  verified by eye.
 
 ## 5.1.1
 
