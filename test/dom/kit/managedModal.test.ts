@@ -5,14 +5,51 @@
 // registers the F1 §4.5 view-unload-closes-modal contract via owner.register().
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
 import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
+import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import type { PrefsStorage } from '../../../src/framework/seams/prefs';
+import { createThemeService, registerThemeServiceForApp } from '../../../src/framework/seams/theme';
+import type { ThemeServiceInternal } from '../../../src/framework/seams/theme';
 import { App, Component } from '../../mocks/obsidian';
 
 function fakeOwner(): any {
 	return new Component();
 }
 
-function makeModal(): DseModal {
-	return new DseModal(new App() as any);
+function makeModal(app: any = new App() as any): DseModal {
+	return new DseModal(app);
+}
+
+// -------------------------------------------------- theme-stamping test helpers
+
+/** In-memory fake standing in for the injected saveData-like storage backend
+ *  (mirrors test/dom/framework/seams.test.ts's makeStorage). */
+function makeStorage(initial?: Record<string, unknown>): PrefsStorage {
+	let data: Record<string, unknown> | undefined = initial;
+	return {
+		async get() {
+			return data as any;
+		},
+		async set(prefs: any) {
+			data = prefs;
+		},
+	};
+}
+
+/** Prefs-backed ThemeService (mirrors seams.test.ts's makeTheme), registered against
+ *  `app` so DseModal.open() can find it via themeServiceForApp(this.app). */
+function makeRegisteredTheme(app: any, initial?: Record<string, unknown>): ThemeServiceInternal {
+	const prefs = createPreferenceStore(makeStorage(initial));
+	const pluginOwner = fakeOwner();
+	pluginOwner.load();
+	const theme = createThemeService(prefs, pluginOwner);
+	registerThemeServiceForApp(app, theme);
+	return theme;
+}
+
+/** setActive persists via a fire-and-forget prefs.set (notify lands after the async
+ *  storage write) — settle those microtasks before asserting fan-out effects. */
+async function flushAsync(): Promise<void> {
+	await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 afterEach(() => {
@@ -209,6 +246,56 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 
 			expect(onApply).not.toHaveBeenCalled();
 			owner.unload();
+		});
+	});
+
+	describe('theme stamping (SC-104 / FOLLOWUPS #31)', () => {
+		test('open() stamps data-dse-theme on the dialog root from the app-registered ThemeService', () => {
+			const app = new App() as any;
+			makeRegisteredTheme(app);
+			const modal = makeModal(app);
+
+			modal.open();
+
+			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('steel');
+			modal.close();
+		});
+
+		test('a live theme change re-stamps the open modal (onChange fan-out, D3 §2.2)', async () => {
+			const app = new App() as any;
+			const theme = makeRegisteredTheme(app);
+			const modal = makeModal(app);
+			modal.open();
+			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('steel');
+
+			theme.setActive('legacy');
+			await flushAsync();
+
+			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('legacy');
+			modal.close();
+		});
+
+		test('close() tears down the re-stamp subscription (modal-scoped lifecycle)', async () => {
+			const app = new App() as any;
+			const theme = makeRegisteredTheme(app);
+			const modal = makeModal(app);
+			modal.open();
+			modal.close(); // unloads this.lifecycle, which owns apply()'s onChange unsubscribe
+
+			theme.setActive('legacy');
+			await flushAsync();
+
+			// Stayed at the value from when it was open — never re-stamped after close.
+			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('steel');
+		});
+
+		test('no registered ThemeService for the app: open() is a graceful no-op (no attribute, no throw)', () => {
+			const app = new App() as any; // deliberately never registered
+			const modal = makeModal(app);
+
+			expect(() => modal.open()).not.toThrow();
+			expect(modal.containerEl.hasAttribute('data-dse-theme')).toBe(false);
+			modal.close();
 		});
 	});
 });

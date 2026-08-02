@@ -17,6 +17,7 @@ import { Component, Modal } from 'obsidian';
 import type { App } from 'obsidian';
 import { iconButton } from './iconButton';
 import type { IconButtonHandle, IconButtonOptions } from './iconButton';
+import { themeServiceForApp } from '../seams/theme';
 
 let titleCounter = 0;
 
@@ -87,6 +88,18 @@ export class DseModal extends Modal {
 		if (this.dseOpen) return;
 		this.dseOpen = true;
 		this.lifecycle.load();
+		// SC-104 / FOLLOWUPS #31 (Gap A): modals are constructed with only `app` at
+		// 6 of 7 call sites (no `cx`/`theme` in scope — design recon
+		// .superpowers/sdd/sc104-modal-theming-design.md §1/§3), so look the live
+		// ThemeService up by `this.app` via the seam's WeakMap registry rather than
+		// threading it through every constructor. Graceful no-op when nothing is
+		// registered (bare test/harness Apps) — zero behavior change there. apply()
+		// stamps data-dse-theme on the dialog root AND re-stamps it for the
+		// lifetime of `this.lifecycle` (torn down in close(), same as the footer/
+		// body widget listeners), so a live theme switch while the modal is open
+		// re-themes it for free (D3 §2.2's onChange fan-out).
+		const theme = themeServiceForApp(this.app);
+		if (theme) theme.apply(this.dialogEl(), this.lifecycle);
 		super.open();
 		// §2.6: initial focus to the first control. Escape + the focus trap stay
 		// Obsidian Modal defaults — only the entry focus is DSE's.

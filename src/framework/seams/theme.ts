@@ -15,7 +15,7 @@
 //
 // Popout safety (D3 §2.5): state is per-root, not per-document — apply() stamps the
 // element's OWN root in whatever window it lives; document.body is never touched.
-import type { Component } from 'obsidian';
+import type { App, Component } from 'obsidian';
 import type { DseTokenName } from '../tokens';
 import type { PreferenceStore } from './prefs';
 
@@ -115,4 +115,31 @@ class DseThemeService implements ThemeServiceInternal {
  *  `owner` = the plugin: it owns the service's one long-lived pref subscription. */
 export function createThemeService(prefs: PreferenceStore, owner: Component): ThemeServiceInternal {
 	return new DseThemeService(prefs, owner);
+}
+
+// SC-104 / FOLLOWUPS #31 — Gap A: DseModal.open() (kit/managedModal.ts) needs to reach
+// the live ThemeService to stamp data-dse-theme on the modal's dialog root, but modals
+// are constructed with only `app: App` at 6 of 7 call sites (no `cx`/`theme` in scope —
+// see the design recon at .superpowers/sdd/sc104-modal-theming-design.md §1/§3).
+// Threading `theme` through every modal constructor would churn 6 subclasses + ~10 call
+// sites for one lookup. Instead: a WeakMap<App, ThemeService> registry, keyed by the
+// same `App` instance every modal already carries — App is a stable per-plugin-instance
+// singleton, so the registry entry outlives any one modal and is reclaimed automatically
+// once the App itself is (WeakMap precedent: src/model/ComponentWrapper.ts:47). The
+// plugin registers its service once (main.ts, right after createThemeService); no
+// unregister is needed — a reload's fresh App gets its own key, and re-registering the
+// SAME app id (as tests do per-case) simply overwrites the prior entry.
+const themeServiceByApp = new WeakMap<App, ThemeService>();
+
+/** Register `service` as the live ThemeService for `app` (main.ts, once, right after
+ *  createThemeService). Last write wins — safe to call again on reload. */
+export function registerThemeServiceForApp(app: App, service: ThemeService): void {
+	themeServiceByApp.set(app, service);
+}
+
+/** Look up the ThemeService registered for `app`, or `undefined` if none was (e.g. a
+ *  bare test/harness App that never called registerThemeServiceForApp). Callers must
+ *  treat the miss as a graceful no-op — see DseModal.open(). */
+export function themeServiceForApp(app: App): ThemeService | undefined {
+	return themeServiceByApp.get(app);
 }

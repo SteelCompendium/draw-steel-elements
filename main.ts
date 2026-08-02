@@ -24,7 +24,7 @@ import { createValidationService } from '@/framework/validation';
 import type { ValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
 import type { SessionStore } from '@/framework/session';
-import { createThemeService } from '@/framework/seams/theme';
+import { createThemeService, registerThemeServiceForApp } from '@/framework/seams/theme';
 import type { ThemeService } from '@/framework/seams/theme';
 import { createPreferenceStore } from '@/framework/seams/prefs';
 import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
@@ -203,6 +203,11 @@ export function initializeElementFrameworkV2(
 	// active theme IS the persisted `theme` pref. The plugin owns the service's
 	// single long-lived upstream subscription, so prefs must be built first.
 	const theme = createThemeService(prefs, plugin);
+	// SC-104 / FOLLOWUPS #31 — Gap A: register the live service against `app` so
+	// DseModal.open() (kit/managedModal.ts, constructed with only `app` at 6 of 7
+	// call sites) can look it up and stamp data-dse-theme on the modal's dialog
+	// root. No unregister: superseded by the next onload's fresh App/service pair.
+	registerThemeServiceForApp(app, theme);
 	const refs = createReferenceService(app, settings);
 	// D5 (Plan 14 Task 2): the roll seam — native RNG by default; the rollerEngine
 	// pref + live capability detection can delegate raw dice to the Dice Roller
