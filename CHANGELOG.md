@@ -142,8 +142,12 @@ for what needs action.
   the card families, so a note reads as one coherent type system instead of a
   serif card sitting next to a sans tracker. The routing moved from a four-family
   allow-list to a single Steel-theme-root selector; numeric stepper/counter values
-  and the encounter's `EV n / n` chip are deliberately excluded and keep their
-  prior, non-serif rendering. `steelTypography.test.ts` gained a contract test
+  are excluded and keep their prior, non-serif rendering. The encounter head's
+  `EV n / n` chip does adopt the serif face like everything else, but is excluded
+  from the small-caps treatment so its digits render solid and natural-size instead
+  of collapsing under Source Serif 4's small-caps digit-shrink (its old
+  label-vs-value size emphasis isn't reproducible without a DOM change).
+  `steelTypography.test.ts` gained a contract test
   that locks the shape of the selector itself — every element root, not a named
   list — so a future edit can't quietly narrow the routing back down without
   failing the suite. Same honest limits as above: screen-only (print/export and
