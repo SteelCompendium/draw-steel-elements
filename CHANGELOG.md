@@ -166,6 +166,13 @@ for what needs action.
   renders joined the frozen golden-PNG set (98 → 101), while its Steel-scheme
   shots and both new sidebar shots are regenerated (unfrozen) goldens
   verified by eye.
+- [INTERNAL] The font system's single `--dse-font-display` token is retired,
+  replaced by six semantic slots (title/body/card-body/label/controls/mono),
+  each independently themeable. Every consumer was re-pointed to its
+  classified slot with zero rendering change — Legacy/Steel/Print all render
+  pixel-identical, freeze and parity gates stayed green throughout. This is
+  groundwork only: it lays the vocabulary for user-customizable fonts
+  (SC-112), which is not part of this change.
 
 ## 5.1.1
 

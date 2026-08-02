@@ -172,13 +172,14 @@ Two severities:
      **Known limit — this rule asserts the *declared* family, not the *rendered* face.**
      `getComputedStyle().fontFamily` returns the resolved *declaration string*, not the face
      the browser actually painted with. If the plugin routes body text to
-     `--dse-font-display` ("Source Serif 4") and that face is **not installed/loaded in the
-     harness browser**, the computed string still reads `"Source Serif 4", serif`, this rule
-     goes green, and the pixels stay whatever the fallback resolves to. Nothing in this gate
-     can catch that. Its only backstop is a **human shot-read** — the golden PNGs in
-     `visual-harness/shots/` under the Steel schemes, checked by eye when the body face
-     changes. Treat a green `body-font` row as "the declaration is right", never as "the
-     glyphs are right".
+     `--dse-font-body` ("Source Serif 4" under Steel — one of the six font slots added by
+     SC-105; body/card-body/title text all resolve to the same face today) and that face is
+     **not installed/loaded in the harness browser**, the computed string still reads
+     `"Source Serif 4", serif`, this rule goes green, and the pixels stay whatever the
+     fallback resolves to. Nothing in this gate can catch that. Its only backstop is a
+     **human shot-read** — the golden PNGs in `visual-harness/shots/` under the Steel schemes,
+     checked by eye when the body face changes. Treat a green `body-font` row as "the
+     declaration is right", never as "the glyphs are right".
   6. **`letter-spacing`** — computed `normal` **is** zero tracking, so it is normalised to `0`
      and compared in px like any other length, with tolerance **0.25px**. Gap-inventory
      **A7**: the plugin tracks body text at `.03em` (0.48px at its 16px base) where the site
