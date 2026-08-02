@@ -3508,6 +3508,28 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	font-variant-caps: normal;
 	text-transform: none;
 }
+/* Plan 22 Task 1 (fix round, Finding 2) — numeric stepper/counter controls.
+   .dse-stepper__input / .dse-stepper__value (~4643) use `font: inherit` — the
+   same unscoped kit convention as .dse-btn/.dse-collapse__header/.dse-tabs__tab
+   (interactive controls always match whatever font their container sets) —
+   and were NEVER covered by the pre-broadening card-family selector: hero/
+   party/montage/initiative/counter roots carry [data-dse-element] values the
+   OLD selector list didn't name, and none of them wear .dse-sb/.dse-card
+   either. So before this task these values inherited straight through to
+   Obsidian's ambient --font-text; the broadened routing above now sets
+   --dse-font-display (Steel: the serif face) on every element root instead,
+   and the steppers silently inherit THAT. A Global Constraint explicitly
+   requires the broadened routing not change numeric <input>s/steppers.
+   Restore the pre-existing ambient font explicitly, Steel-scoped only —
+   Legacy's --dse-font-display already equals var(--font-text), so Legacy
+   was never at risk either way — WITHOUT narrowing the broadened
+   body-routing selector above (same targeted-exclusion pattern as the
+   EV-chip fix just above). Covers hero/party/montage/initiative/counter and
+   any other stepper instance uniformly (one shared kit component). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__input,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__value {
+	font-family: var(--font-text);
+}
 /* Plan 21 Task 2 — the rail chip's SIZE. The site's `.sc-head__slot--chip`
    (steel-cardhead.css:127) is `font-size: .9rem; line-height: 1` = 18px text on
    an 18px line at its 20px base (parity `chip`: font-size site 18 / plugin 13.6,
