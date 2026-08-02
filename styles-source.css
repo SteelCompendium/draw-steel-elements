@@ -3486,28 +3486,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	text-transform: lowercase;
 	letter-spacing: 0.04em;
 }
-/* Plan 22 Task 1 (Step 3 fix) — the encounter head's NUMERIC value chip.
-   .dse-head__primary--chip is small-caps-treated by the flat rail-chip rule
-   above, which is correct for TEXT primaries (featureblock's type label,
-   statblock's role line — excluded separately below —, sub-feature
-   "Signature Ability" headings). encounter/view.ts:187's rightPrimary is
-   uniquely NUMERIC ("EV n / n") and Source Serif 4's embedded @font-face has
-   a REAL smcp OpenType feature whose small-caps substitution also shrinks
-   digit glyphs to cap-height (unlike the plugin's prior sans fallback, which
-   had no smcp and left digits full-size under synthesis — verified: with
-   `font-family: Arial` the size split returns, and disabling the `smcp`
-   feature outright removes the caps rendering entirely, confirming the
-   shrink is the SAME GSUB lookup, not a separate `onum`/`lnum` toggle
-   `font-variant-numeric` can override). That collapsed "EV 0 / 40" to one
-   uniform small size, losing the value's numeric emphasis
-   (…/shots-c1-ab/{before,after}). Dropping small-caps for the encounter's
-   value chip specifically restores solid, equally-weighted caps at natural
-   size — scoped to encounter only so featureblock/feature/statblock's TEXT
-   primaries keep the small-caps treatment. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='encounter'] .dse-head__primary--chip {
-	font-variant-caps: normal;
-	text-transform: none;
-}
+/* Plan 22 Task 1 briefly carved the encounter head's NUMERIC value chip
+   ("EV n / n") out of the small-caps treatment above, on the theory that
+   Source Serif 4's smcp feature shrinking digits to cap-height lost the
+   value's numeric emphasis. Scott's consistency ruling (2026-08-02): no
+   sibling chip gets a numeric-content exemption, so this one doesn't either
+   — the carve-out is removed and the smcp digit-shrink on "EV 0 / 40" is
+   accepted as the uniform chip treatment. */
 /* Plan 22 Task 1 (fix round, Finding 2) — numeric stepper/counter controls.
    .dse-stepper__input / .dse-stepper__value (~4643) use `font: inherit` — the
    same unscoped kit convention as .dse-btn/.dse-collapse__header/.dse-tabs__tab

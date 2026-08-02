@@ -143,10 +143,11 @@ for what needs action.
   serif card sitting next to a sans tracker. The routing moved from a four-family
   allow-list to a single Steel-theme-root selector; numeric stepper/counter values
   are excluded and keep their prior, non-serif rendering. The encounter head's
-  `EV n / n` chip does adopt the serif face like everything else, but is excluded
-  from the small-caps treatment so its digits render solid and natural-size instead
-  of collapsing under Source Serif 4's small-caps digit-shrink (its old
-  label-vs-value size emphasis isn't reproducible without a DOM change).
+  `EV n / n` chip now takes the exact same serif small-caps treatment as every
+  other chip in the kit — a fully uniform chip family, with no numeric-content
+  exemption. Its digits render at small-caps cap height, a Source Serif 4 `smcp`
+  behavior; this is accepted as the correct, uniform look, and the old sans
+  rendering's big-digit emphasis is gone by design.
   `steelTypography.test.ts` gained a contract test
   that locks the shape of the selector itself — every element root, not a named
   list — so a future edit can't quietly narrow the routing back down without
