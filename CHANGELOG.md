@@ -135,6 +135,20 @@ for what needs action.
   rebuilds (the kit stat-tile grid, the featureblock option layout, the feature
   action spine, the statblock notch) are **not** part of it. Bundling the slab as
   a future upgrade would close the face gap.
+- The Steel theme's body typography now reaches **every** element family, not just
+  the shared card families above: the hero sheet, encounter/negotiation/montage/
+  initiative/project/party trackers, and every other plugin-only surface now set
+  body and label text in the same serif face, open line-height and cooler ink as
+  the card families, so a note reads as one coherent type system instead of a
+  serif card sitting next to a sans tracker. The routing moved from a four-family
+  allow-list to a single Steel-theme-root selector; numeric stepper/counter values
+  and the encounter's `EV n / n` chip are deliberately excluded and keep their
+  prior, non-serif rendering. `steelTypography.test.ts` gained a contract test
+  that locks the shape of the selector itself — every element root, not a named
+  list — so a future edit can't quietly narrow the routing back down without
+  failing the suite. Same honest limits as above: screen-only (print/export and
+  the Legacy style are untouched), serif-not-slab, and only the 600/700 weights
+  ship.
 
 ## 5.1.1
 
