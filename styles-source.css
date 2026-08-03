@@ -3894,13 +3894,38 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    already established for the feature card's Distance/Target rail
    (`.dse-feature__meta-cell--distance/target`, ~3900) rather than inventing a
    second one. `--dmg` brightens the value the way the site's `.is-dmg`
-   modifier does for the Melee/Ranged Dmg cells (steel-redesign.css:207). */
+   modifier does for the Melee/Ranged Dmg cells (steel-redesign.css:207).
+   FIX ROUND (Scott gate feedback, Plan 24/SC-100): the tile fill is a
+   HARDCODED translucent black (site: `.sc-card__stat { background:
+   rgba(0,0,0,.25) }`, steel-redesign.css:195), NOT `var(--dse-surface-sunken)`
+   (Steel-dark's 6%-WHITE wash, ~3149 — deliberately the opposite direction,
+   built for a generic "inset panel" read shared by many other widgets, not
+   this cell). A translucent BLACK cell sinks into `.dse-card`'s own
+   `--dse-card-bg` diagonal gradient (~3285) and lets it bleed through per
+   cell — the site's actual "gradient" richness Scott saw in dark mode; the
+   white wash flattened every tile to the same pale grey regardless of
+   position, erasing that bleed-through. Site's light twin
+   (`[data-md-color-scheme="default"] .sc-card__stat`, steel-redesign.css:197)
+   is `rgba(0,0,0,.04)` — see the `body.theme-light` override below, same
+   `body.theme-light [data-dse-theme='steel']...` convention as the card/sb
+   plate shadows above (~3290/3334). Border stays on `--dse-metal-faint`:
+   already an exact match to the site's border-top-color in BOTH schemes
+   (dark rgba(176,183,187,.16) = steel-redesign.css:19; light
+   rgba(95,103,108,.14) = steel-redesign.css:29), confirmed via live
+   getComputedStyle against https://steelcompendium.io/v2/Browse/kit/panther/. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles {
 	margin-top: 0.2em;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__cell {
-	background: var(--dse-surface-sunken);
+	background: rgba(0, 0, 0, 0.25);
 	border: 1px solid var(--dse-metal-faint);
+}
+/* Light twin — site's `[data-md-color-scheme="default"] .sc-card__stat`
+   (steel-redesign.css:197). Same `body.theme-light [data-dse-theme='steel']
+   :not([data-dse-print="on"]) …` convention already used for the card/sb
+   plate shadows (~3290/3334) rather than a token override. */
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__cell {
+	background: rgba(0, 0, 0, 0.04);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__value {
 	font-family: var(--dse-font-mono);
