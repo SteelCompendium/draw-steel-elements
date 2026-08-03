@@ -3457,7 +3457,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    uppercase would leak into <id>--steel-print.png, which must stay
    byte-identical. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__primary--left {
-	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. */
 	font-weight: 700;
 	text-transform: uppercase;
 }
@@ -3522,7 +3523,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage]),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
-	font-family: var(--dse-font-body); /* SC-105 Task 2: re-pointed from font-display */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. Ink stays
+	   Steel-only (the site's cooler body ink, unrelated to font choice). */
 	color: var(--dse-fg);
 }
 /* Card-body (SC-105 Task 2; root-compound arm added SC-112 Task 4): the
@@ -3549,7 +3552,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 		[data-dse-element='feature'],
 		[data-dse-element='featureblock']
 	):not([data-dse-error-stage]) {
-	font-family: var(--dse-font-card-body);
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. Ink stays
+	   Steel-only (same rationale as Body above). */
 	color: var(--dse-fg);
 }
 /* Label graduation (SC-112 Task 4; sc105-font-tokens-design.md §1.B). These ~9
@@ -3567,19 +3572,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    chip`/`.dse-head__deck--chip` below — it is the card-head ROLE slot, pinned
    to --dse-font-title at its own higher-specificity rule (~3678), and is not
    in the design doc's §1.B Label list. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) :is(
-	.dse-head__eyebrow--chip,
-	.dse-head__eyebrow--line,
-	.dse-head__deck--chip,
-	.dse-section__title,
-	.dse-sb__item-l,
-	.dse-sb__kv-l,
-	.dse-enc__table th,
-	.dse-pr__head,
-	.dse-pr__badge-text
-) {
-	font-family: var(--dse-font-label);
-}
+/* SC-112 Task 5: this rule used to live here as a Steel-only,
+   single-property font-family pin. It carried no properties other than
+   font-family, so widening it to Legacy is a straight fold into the
+   consolidated theme-agnostic font-family block, ~:3678 (same 9 selectors
+   plus .dse-hero__region-title, which used to be pinned separately below). */
 /* Body TRACKING (A7). The site body is `letter-spacing: normal`; the Legacy base
    gives .dse-feature 0.03em (:41), inherited by every card-body node the harness
    samples (section / pr-head / tier-row / head → parity plugin 0.48px vs site
@@ -3666,15 +3663,133 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    token explicitly instead of merely inheriting the ambient ancestor font —
    also pixel-neutral at the default (sc105-font-tokens-design.md §1B) — so
    the Controls picker actually governs all six once slot values can diverge
-   (SC-112 Task 6+). */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__input,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__value,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-btn,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__header,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tabs__tab,
-[data-dse-theme='steel']:not([data-dse-print="on"]) button.dse-pr__row {
+   (SC-112 Task 6+).
+   SC-112 Task 5 (Legacy font gate, SHIP): this rule was Steel-only and
+   single-property (font-family), so it folds straight into the consolidated
+   theme-agnostic font-family block below (~:3678) — under Legacy the
+   kit-base `font: inherit` declarations (~:4715,4847,4886,5062, still
+   untouched) already deliver the identical ambient font, and --dse-font-
+   controls stays :root-only (invalid at computed-value time) under Legacy,
+   so the widened rule computes to `inherit` there too — a true no-op,
+   proven by freeze (see the ledger). */
+
+/* ================================================================== */
+/*   SC-112 Task 5 — Legacy font-slot gate: SHIP                       */
+/* ================================================================== */
+/* Scott's ruling (2026-08-02): every font picker gets "Default (Obsidian
+   vault fonts)" as its first option — Legacy's permanent, unconditional
+   behavior, already delivered by plain inheritance, untouched by anything
+   below. The open question this block answers: should a NON-default picker
+   choice ALSO move Legacy pixels? Investigation (SC-112 Task 5 ledger,
+   docs/superpowers/dse-overhaul/build-ledgers/sc112-legacy-font-gate.md)
+   verdict: SHIP. The five slots below (Title/Body/Card-body/Label/Controls
+   — Mono excluded, see note at the end) split cleanly along a seam that
+   already existed in every consumer rule: each one bundled its
+   font-family declaration together with a Steel-only VISUAL treatment
+   (uppercase/weight/letter-spacing/color/background/border — the "serif
+   display" identity, unrelated to font CHOICE). That visual treatment
+   stays Steel-scoped at its original rule, above. Only font-family itself
+   widens here, dropping the `[data-dse-theme='steel']` qualifier and
+   keeping `:not([data-dse-print="on"])`.
+   Why this is a no-op at DEFAULT prefs under Legacy: --dse-font-title/
+   -body/-card-body/-label/-controls are declared at :root (~:3002)
+   chained through var(--font-text)/var(--dse-font-body|title) — a chain
+   that is invalid at computed-value time EVERYWHERE (var() substitutes on
+   the declaring element, <html>, which has no --font-text; Obsidian
+   defines it on body) except where the Steel block (~:3192) re-declares
+   the same names on the Steel root itself. Under Legacy no such
+   re-declaration exists, so the widened rule's var() is still
+   guaranteed-invalid; per the CSS custom-properties spec that computes as
+   if the declaration were `unset`, and for an inherited property like
+   font-family, `unset` IS `inherit` — exactly what Legacy already
+   rendered before this rule existed (no explicit font-family, plain
+   inheritance from body). Freeze 101/101 with these rules live is the
+   empirical proof (ledger). Once SC-112 Task 6 wires a real per-root
+   override (Task 2's reflect(), which writes an inline custom property
+   directly on the target element — resolves fine regardless of theme,
+   unlike a :root chain), these same widened rules pick it up under Legacy
+   too: that is the entire point of shipping this.
+   FOOTGUN CAUGHT BY THE FREEZE (record this — it nearly shipped wrong): a bare
+   `:not([data-dse-print="on"]) X` descendant selector does NOT mean "X is not
+   inside a print-marked root" — it means "X has SOME ancestor lacking that
+   attribute", which is trivially true via <html>/<body>/the harness mount div
+   (none of which ever carry data-dse-print) regardless of whether X's REAL
+   element root has it. The original Steel-scoped rules never hit this because
+   `[data-dse-theme='steel']:not([data-dse-print="on"])` is a COMPOUND on the
+   theme root itself — only that specific element is checked, and it is the
+   same element the harness stamps. Dropping the theme qualifier removed the
+   only thing anchoring the check to the right node. Fix: anchor every
+   descendant-form arm to `:is([data-dse-element], .dse-modal)` (the same
+   root-or-modal union D3/SC-104 already uses for the token value blocks,
+   :3192/token-coverage.test.ts) — this is the same element the harness stamps
+   `data-dse-print="on"` on, so the compound now checks the right node whether
+   or not it also carries `[data-dse-theme]`. Arms that were already compound
+   on the root itself (Body's bare-root arm, Card-body's feature/featureblock
+   arm, Title's initiative-family h3-h6 arm) never had this bug and are
+   unchanged. Caught by an actual freeze failure (22 *--steel-print.png bytes
+   moved — title/body text rendered serif instead of the frozen sans) during
+   this task's own Step 3 proof; fixed and re-verified at 101/101 before this
+   was shipped, per the ledger. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-head__primary--left,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-card__title,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__name,
+:not([data-dse-print="on"]):is(
+		[data-dse-element='initiative'],
+		[data-dse-element='encounter'],
+		[data-dse-element='negotiation'],
+		[data-dse-element='montage'],
+		[data-dse-element='project'],
+		[data-dse-element='party'],
+		[data-dse-element='counter']
+	) :is(h3, h4, h5, h6),
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-modal__title {
+	font-family: var(--dse-font-title);
+}
+:not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage]),
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-sb,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-card {
+	font-family: var(--dse-font-body);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(.dse-sb, .dse-card),
+:not([data-dse-print="on"]):is(
+		[data-dse-element='feature'],
+		[data-dse-element='featureblock']
+	):not([data-dse-error-stage]) {
+	font-family: var(--dse-font-card-body);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(
+	.dse-head__eyebrow--chip,
+	.dse-head__eyebrow--line,
+	.dse-head__deck--chip,
+	.dse-section__title,
+	.dse-sb__item-l,
+	.dse-sb__kv-l,
+	.dse-enc__table th,
+	.dse-pr__head,
+	.dse-pr__badge-text,
+	.dse-hero__region-title
+) {
+	font-family: var(--dse-font-label);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__value,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-btn,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-collapse__header,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-tabs__tab,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row {
 	font-family: var(--dse-font-controls);
 }
+/* Mono (--dse-font-mono) is DELIBERATELY NOT touched here. Its consumer
+   rule (.dse-rollcard__breakdown, ~:5180) was ALREADY unscoped — no
+   `[data-dse-theme='steel']` qualifier, ever — so it already applies
+   under both themes today; there is nothing to widen. But --dse-font-mono
+   has no Steel-block re-declaration (unlike the five slots above), so it
+   stays invalid-at-computed-value-time under BOTH themes, not just
+   Legacy — a separate, pre-existing wiring gap outside this gate's scope
+   (flagged for the orchestrator/FOLLOWUPS, not fixed here: fixing it is a
+   Steel-rendering task, not a Legacy-support one). */
+
 /* Plan 21 Task 2 — the rail chip's SIZE. The site's `.sc-head__slot--chip`
    (steel-cardhead.css:127) is `font-size: .9rem; line-height: 1` = 18px text on
    an 18px line at its 20px base (parity `chip`: font-size site 18 / plugin 13.6,
@@ -3729,7 +3844,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip {
 	background: none;
 	border: none;
-	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display — it's a card head per Scott's ruling */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. */
 	font-size: 1.125em;
 	line-height: 1.04;
 	text-transform: uppercase;
@@ -3886,7 +4002,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    plain bolded label. SCREEN-ONLY: :not([data-dse-print="on"]) keeps
    <id>--steel-print.png frozen (SC-4 parked). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__title {
-	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -4596,7 +4713,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	text-shadow: var(--dse-emboss);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__name {
-	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -4621,7 +4739,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
    Zero pixel effect either way today (Label's default chains to Title), so
    this only matters once SC-112 lets Title/Label diverge. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region-title {
-	font-family: var(--dse-font-label); /* re-pointed from font-display */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — folded into
+	   the consolidated theme-agnostic font-family block, ~:3678. */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;
@@ -4766,7 +4885,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='counter']
 	) :is(h3, h4, h5, h6),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-modal__title {
-	font-family: var(--dse-font-title); /* SC-105 Task 2: re-pointed from font-display */
+	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
+	   consolidated theme-agnostic font-family block, ~:3678. */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.01em;

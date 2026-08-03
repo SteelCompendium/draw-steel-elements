@@ -63,6 +63,14 @@ const steelBlocksFor = (selector: string): string[] =>
 		.filter((r) => r.selector.includes(selector) && STEEL_SCOPE.test(r.selector))
 		.map((r) => r.body);
 
+/**
+ * Every rule body whose selector list mentions `selector`, regardless of theme scope. Used
+ * for the font-family CONSUMER rules SC-112 Task 5 widened to theme-agnostic (dropped
+ * `[data-dse-theme='steel']`) — steelBlocksFor would no longer find them.
+ */
+const blocksFor = (selector: string): string[] =>
+	rules.filter((r) => r.selector.includes(selector)).map((r) => r.body);
+
 // The card body node. Plan 21's parity `card` pair maps the site ability card to the plugin's
 // `[data-dse-element='feature']` host; Task 2's line-height/padding rules still carry that exact
 // per-family selector text (untouched by Plan 22 Task 1), so CARD_HOST stays a literal match for
@@ -114,10 +122,12 @@ describe('Steel typography & spacing contract', () => {
 		// plugin-only families (hero, encounter, negotiation, montage, initiative, project,
 		// party, …) silently regress to a sans body again, even though the font-identity test
 		// below would still pass for the families that remained covered.
+		// SC-112 Task 5 (Legacy font gate, SHIP): the font-family declaration itself moved to a
+		// theme-agnostic rule (no `[data-dse-theme='steel']`), so this no longer filters on
+		// STEEL_SCOPE — the element-root SHAPE contract holds regardless of theme scope.
 		it('targets the body-font rule at the element-root selector, not an allow-list of card families', () => {
 			const rootBlocks = rules.filter(
 				(r) =>
-					STEEL_SCOPE.test(r.selector) &&
 					/:not\(\[data-dse-print="on"\]\)/.test(r.selector) &&
 					r.selector.includes(ELEMENT_ROOT_SELECTOR),
 			);
@@ -127,12 +137,15 @@ describe('Steel typography & spacing contract', () => {
 			).toBe(true);
 		});
 
-		it('routes the Steel Body font (bare element roots) to var(--dse-font-body)', () => {
-			const blocks = steelBlocksFor(BODY_FONT_HOST);
+		// SC-112 Task 5 (Legacy font gate, SHIP): font-family moved to a theme-agnostic rule, so
+		// this uses blocksFor (no STEEL_SCOPE filter) — the Steel-scoped BODY_FONT_HOST rule
+		// that remains only carries `color` now (asserted in the Legacy font-slot gate suite).
+		it('routes the Body font (bare element roots) to var(--dse-font-body)', () => {
+			const blocks = blocksFor(BODY_FONT_HOST);
 			expect(blocks.length).toBeGreaterThan(0);
 			const withFont = blocks.filter((b) => /font-family:\s*[^;]+;/.test(b));
 			expect(withFont.length).toBeGreaterThan(0);
-			// The one font-family the Steel Body rule declares is --dse-font-body, and nothing
+			// The one font-family the Body rule declares is --dse-font-body, and nothing
 			// else (no sans stack, no --font-text/--font-ui override, no font-display).
 			expect(
 				withFont.some((b) => /font-family:\s*var\(--dse-font-body\)\s*;/.test(b)),
@@ -148,11 +161,12 @@ describe('Steel typography & spacing contract', () => {
 		// the bare element-root Body rule above (see the styles-source.css comment at the Body
 		// rule for the specificity nuance this split doesn't yet fully resolve, deferred to
 		// SC-112). CARD_HOST (`[data-dse-element='feature']`) appears verbatim inside that rule's
-		// `:is(...)` selector list, so steelBlocksFor(CARD_HOST) also picks up the line-height/
+		// `:is(...)` selector list, so blocksFor(CARD_HOST) also picks up the line-height/
 		// padding rules from the "body spacing" suite below — filtered out here by requiring a
-		// font-family declaration, which only the Card-body rule has.
-		it('routes the Steel Card-body font (statblock/feature/featureblock/card hosts) to var(--dse-font-card-body)', () => {
-			const blocks = steelBlocksFor(CARD_HOST);
+		// font-family declaration, which only the Card-body rule has. SC-112 Task 5 (SHIP): no
+		// STEEL_SCOPE filter, same reason as the Body test above.
+		it('routes the Card-body font (statblock/feature/featureblock/card hosts) to var(--dse-font-card-body)', () => {
+			const blocks = blocksFor(CARD_HOST);
 			expect(blocks.length).toBeGreaterThan(0);
 			const withFont = blocks.filter((b) => /font-family:\s*[^;]+;/.test(b));
 			expect(withFont.length).toBeGreaterThan(0);
@@ -303,24 +317,28 @@ describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
 // Label-shaped nodes (chip/eyebrow, section titles, statgrid labels, the roster header row,
 // pr-head, tier-badge text, the EV/cost chip) rode the Body/Card-body ambient by inheritance
 // with no explicit `font-family` of their own (sc105-font-tokens-design.md §1.B) — they now
-// carry an explicit Steel-scoped `font-family: var(--dse-font-label)` pin. Both are pixel
-// no-ops at defaults (the chains resolve identically today) but without them the Task 6
-// pickers would silently do nothing for these nodes. Same comment-stripped/quote-tolerant
-// source-text assertion style as the suites above.
+// carry an explicit `font-family: var(--dse-font-label)` pin. Both are pixel no-ops at
+// defaults (the chains resolve identically today) but without them the Task 6 pickers would
+// silently do nothing for these nodes.
+// SC-112 Task 5 (Legacy font gate, SHIP) moved BOTH consumer rules from Steel-scoped to
+// theme-agnostic (dropped `[data-dse-theme='steel']`, kept `:not([data-dse-print="on"])`) —
+// see the "Legacy font-slot gate" describe block below for that contract. This block's
+// lookups no longer require STEEL_SCOPE for that reason; the shape assertions themselves
+// (root-compound arm, descendant-form coverage, which selectors are pinned) are otherwise
+// unchanged from Task 4. Same comment-stripped/quote-tolerant source-text assertion style
+// as the suites above.
 describe('slot independence — Card-body root compound + Label pins (SC-112 Task 4)', () => {
 	// The Card-body rule: the one whose body sets `--dse-font-card-body`'s CONSUMER
 	// (font-family: var(--dse-font-card-body)), not the :root/Steel-block VALUE declarations
-	// asserted above.
-	const cardBodyRule = rules.find(
-		(r) =>
-			STEEL_SCOPE.test(r.selector) &&
-			/font-family:\s*var\(--dse-font-card-body\)\s*;/.test(r.body),
+	// asserted above. Theme-agnostic since SC-112 Task 5 (SHIP) — no STEEL_SCOPE filter.
+	const cardBodyRule = rules.find((r) =>
+		/font-family:\s*var\(--dse-font-card-body\)\s*;/.test(r.body),
 	);
 
 	// The Label rule: the one whose body sets font-family to var(--dse-font-label).
-	const labelRule = rules.find(
-		(r) =>
-			STEEL_SCOPE.test(r.selector) && /font-family:\s*var\(--dse-font-label\)\s*;/.test(r.body),
+	// Theme-agnostic since SC-112 Task 5 (SHIP) — no STEEL_SCOPE filter.
+	const labelRule = rules.find((r) =>
+		/font-family:\s*var\(--dse-font-label\)\s*;/.test(r.body),
 	);
 
 	it('parses both rules (guard against a vacuous pass)', () => {
@@ -334,13 +352,13 @@ describe('slot independence — Card-body root compound + Label pins (SC-112 Tas
 		// carrying data-dse-element) and can never match a node that carries both attributes on
 		// itself — which every `[data-dse-element='feature']`/`'featureblock'` root does (theme.ts's
 		// apply() and the pipeline both stamp the SAME root). The fix's compound arm has NO space
-		// between the theme-scope prefix and `:is(...)`/`[data-dse-element=...]` — same shape as the
-		// Body rule's own bare-root arm — so it matches the root directly.
+		// between the print-exclusion prefix and `:is(...)`/`[data-dse-element=...]` — same shape
+		// as the Body rule's own bare-root arm — so it matches the root directly.
 		const selector = cardBodyRule!.selector;
-		// The compound form: STEEL_SCOPE immediately followed (no descendant space) by something
-		// that names both 'feature' and 'featureblock', and carries the same error-stage exclusion
-		// the Body rule's bare-root arm uses.
-		expect(/\[data-dse-theme=['"]steel['"]\](?::not\([^)]*\))*:is\(/.test(selector)).toBe(true);
+		// The compound form: the print-exclusion prefix immediately followed (no descendant
+		// space) by something that names both 'feature' and 'featureblock', and carries the
+		// same error-stage exclusion the Body rule's bare-root arm uses.
+		expect(/:not\(\[data-dse-print="on"\]\):is\(/.test(selector)).toBe(true);
 		expect(selector).toMatch(/\[data-dse-element=['"]feature['"]\]/);
 		expect(selector).toMatch(/\[data-dse-element=['"]featureblock['"]\]/);
 		expect(selector).toMatch(/:not\(\[data-dse-error-stage\]\)/);
@@ -359,7 +377,94 @@ describe('slot independence — Card-body root compound + Label pins (SC-112 Tas
 		expect(/\.dse-sb__item-l|\.dse-sb__kv-l/.test(labelRule!.selector)).toBe(true);
 	});
 
-	it('Label rule is Steel screen-only (excludes print)', () => {
+	it('Label rule is print-excluded', () => {
 		expect(labelRule!.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+	});
+});
+
+// SC-112 Task 5 — Legacy font-slot gate: SHIP. Investigation ledger:
+// docs/superpowers/dse-overhaul/build-ledgers/sc112-legacy-font-gate.md (workspace repo).
+// Verdict: the five font-family CONSUMER rules for Title/Body/Card-body/Label/Controls
+// widen from Steel-only to theme-agnostic — drop `[data-dse-theme='steel']`, keep
+// `:not([data-dse-print="on"])` — so Legacy also receives whatever SC-112 Task 6's picker
+// writes via reflect()'s per-root inline override. jsdom can't resolve custom properties
+// (same limitation this whole file works around), so the actual "is it a no-op at
+// defaults" claim is proven empirically by the freeze check (101/101, recorded in the
+// ledger), not here. What THIS suite locks is the CSS SHAPE the freeze proof depends on:
+// (1) the five widened rules carry no Steel-theme qualifier, only the print exclusion;
+// (2) every Steel-only VISUAL property that used to ride along with font-family in the
+// SAME rule (weight/uppercase/letter-spacing/color) is still Steel-scoped and the old
+// rule no longer declares font-family itself — if a future edit put font-family back in
+// the Steel-scoped rule, this would silently re-narrow Legacy support without any of the
+// rules above catching it. (3) Mono is untouched — it was already theme-agnostic before
+// this task (no `[data-dse-theme]` ever gated it), so nothing widened there.
+describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
+	const fontFamilyRulesFor = (slot: string): Rule[] =>
+		rules.filter((r) => new RegExp(`font-family:\\s*var\\(--dse-font-${slot}\\)\\s*;`).test(r.body));
+
+	const WIDENED_SLOTS = ['title', 'body', 'card-body', 'label', 'controls'];
+
+	it('parses at least one theme-agnostic rule per widened slot (guard against a vacuous pass)', () => {
+		for (const slot of WIDENED_SLOTS) {
+			const matches = fontFamilyRulesFor(slot).filter((r) => !STEEL_SCOPE.test(r.selector));
+			expect(matches.length).toBeGreaterThan(0);
+		}
+	});
+
+	it('every widened slot\'s font-family consumer(s) carry no [data-dse-theme] qualifier at all', () => {
+		for (const slot of WIDENED_SLOTS) {
+			const matches = fontFamilyRulesFor(slot);
+			expect(matches.length).toBeGreaterThan(0);
+			expect(matches.every((r) => !/data-dse-theme/.test(r.selector))).toBe(true);
+		}
+	});
+
+	it('every widened slot\'s font-family consumer(s) stay print-excluded', () => {
+		for (const slot of WIDENED_SLOTS) {
+			const matches = fontFamilyRulesFor(slot);
+			expect(matches.every((r) => /:not\(\[data-dse-print="on"\]\)/.test(r.selector))).toBe(true);
+		}
+	});
+
+	it('Title\'s Steel-only display treatment (.dse-head__primary--left) keeps weight/uppercase Steel-scoped and no longer declares font-family itself', () => {
+		// `.dse-head__primary--left` appears in THREE Steel-scoped rules (a shared text-shadow
+		// list, a letter-spacing rule, and the display/weight/case rule this test targets) — find
+		// the one that actually carries font-weight, not just the first selector-text match.
+		const titleDisplay = rules.find(
+			(r) =>
+				STEEL_SCOPE.test(r.selector) &&
+				r.selector.includes('.dse-head__primary--left') &&
+				/font-weight:\s*700\s*;/.test(r.body),
+		);
+		expect(titleDisplay).toBeDefined();
+		expect(titleDisplay!.body).toMatch(/font-weight:\s*700\s*;/);
+		expect(titleDisplay!.body).toMatch(/text-transform:\s*uppercase\s*;/);
+		expect(titleDisplay!.body).not.toMatch(/font-family:/);
+	});
+
+	it('Body\'s Steel-only ink rule keeps color Steel-scoped and no longer declares font-family itself', () => {
+		const bodyInk = rules.find(
+			(r) => STEEL_SCOPE.test(r.selector) && r.selector.includes(BODY_FONT_HOST),
+		);
+		expect(bodyInk).toBeDefined();
+		expect(bodyInk!.body).toMatch(/color:\s*var\(--dse-fg\)\s*;/);
+		expect(bodyInk!.body).not.toMatch(/font-family:/);
+	});
+
+	it('Card-body\'s Steel-only ink rule keeps color Steel-scoped and no longer declares font-family itself', () => {
+		const cardBodyInk = rules.find(
+			(r) =>
+				STEEL_SCOPE.test(r.selector) &&
+				/\[data-dse-element=['"]feature['"]\]/.test(r.selector) &&
+				/color:\s*var\(--dse-fg\)\s*;/.test(r.body),
+		);
+		expect(cardBodyInk).toBeDefined();
+		expect(cardBodyInk!.body).not.toMatch(/font-family:/);
+	});
+
+	it('Mono is untouched: its consumer rule carries no [data-dse-theme] qualifier, same as before this task', () => {
+		const monoRule = rules.find((r) => /font-family:\s*var\(--dse-font-mono\)\s*;/.test(r.body));
+		expect(monoRule).toBeDefined();
+		expect(monoRule!.selector).not.toMatch(/data-dse-theme/);
 	});
 });
