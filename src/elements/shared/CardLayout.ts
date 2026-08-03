@@ -63,6 +63,7 @@ import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
 import { cardHead } from '@/framework/kit/cardHead';
+import type { CrestSize } from '@/framework/kit/crest';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { RefSource, SourceAware } from './withReference';
 
@@ -113,6 +114,14 @@ export interface SteelCardComposition<M> {
 	/** cardHead's crest icon id (a Lucide icon name, e.g. "backpack"); undefined omits
 	 *  the crest entirely (crest() itself already degrades to nothing without one). */
 	crestIcon: (m: M, source?: RefSource) => string | undefined;
+	/**
+	 * Review fix (Task 2 M1): crest() size ('md' | 'lg' — src/framework/kit/crest.ts).
+	 * Optional; `renderSteel()` defaults to 'lg' (the tall card-header shield every
+	 * current display card wants) when omitted, so existing/simple compositions don't
+	 * need to specify it — but a future adopter that wants 'md' can, without touching
+	 * `CardLayout.ts` again.
+	 */
+	crestSize?: (m: M, source?: RefSource) => CrestSize | undefined;
 	/** Ordered content bands, rendered after the head (equipment / stat-tiles / features /
 	 *  body policy — semantics owned by each band's own `render()`, not this seam). */
 	bands: (m: M, source?: RefSource) => SteelBand[];
@@ -190,6 +199,19 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 	 *  notification so a same-branch fire (e.g. legacy -> some other non-steel snippet
 	 *  id) is correctly a no-op rather than a needless rebuild. */
 	private renderedBranch?: 'legacy' | 'steel';
+	/**
+	 * Review fix (Task 2 I1): `onMount` is RE-ENTERABLE — `ElementView.update()`'s default
+	 * path (no `onUpdate` override here) is `unloadOwnedChildren(); rootEl.empty();
+	 * onMount(rootEl, model)`, and `SidebarPanel.handleExternalChange` calls
+	 * `previous.update(model)` directly on an already-mounted view as its live-preview
+	 * refresh fast path. Without this guard, every re-entry into `onMount` would register
+	 * ANOTHER `theme.onChange` closure — distinct closures never dedupe by content, so the
+	 * listener count would grow unboundedly (1 -> 2 -> 3 -> ... across repeated updates),
+	 * each one a permanent leak until the view itself unloads. Set true the first time the
+	 * subscription is registered; checked (not re-derived) on every subsequent `onMount`
+	 * re-entry, so exactly one subscription exists per view instance for its whole life.
+	 */
+	private themeChangeRegistered = false;
 
 	constructor(
 		cx: RenderContext,
@@ -208,8 +230,13 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 		// Re-render on theme change (Task 2 Step 2): ONLY subscribe when this layout
 		// actually HAS a Steel composition — a steel-less layout always takes the
 		// renderLegacy() branch regardless of theme (byte-identical DOM in every theme,
-		// invariant 1), so a subscription here could never do anything useful.
-		if (this.layout.steel) {
+		// invariant 1), so a subscription here could never do anything useful. Guarded by
+		// `themeChangeRegistered` (review fix I1, above) so a re-entrant onMount (via
+		// update()'s default rebuild path) never registers a second subscription — `root`
+		// is safe to capture once here because ElementView.mount() assigns `this.rootEl`
+		// exactly once and update() always re-invokes onMount against that SAME reference.
+		if (this.layout.steel && !this.themeChangeRegistered) {
+			this.themeChangeRegistered = true;
 			this.register(
 				this.cx.theme.onChange(() => {
 					void this.onThemeChange(root);
@@ -367,12 +394,16 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 		const card = root.createDiv({ cls: 'dse-card' });
 
 		const crestIcon = composition.crestIcon(model, this.source);
+		// Review fix (Task 2 M1): size is composition-sourced (defaulting to 'lg'), not a
+		// hardcoded literal — a future adopter can vary it via SteelCardComposition.crestSize
+		// without editing this view.
+		const crestSize = composition.crestSize?.(model, this.source) ?? 'lg';
 		cardHead(
 			card,
 			{
 				name: this.layout.title(model),
 				leftEyebrow: composition.eyebrow(model, this.source),
-				crest: crestIcon ? { icon: crestIcon, size: 'lg' } : undefined,
+				crest: crestIcon ? { icon: crestIcon, size: crestSize } : undefined,
 			},
 			this,
 		);

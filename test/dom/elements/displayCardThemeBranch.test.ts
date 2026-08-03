@@ -299,3 +299,52 @@ describe('SC-100 Task 2: re-render lifecycle guards', () => {
 		expect(root.querySelector('.dse-head')).toBeNull();
 	});
 });
+
+// Review fix (Task 2 I1, task-2-review.md): `onMount` is re-enterable — ElementView.update()'s
+// default path (no onUpdate override here) re-invokes onMount on every model change, and
+// SidebarPanel.handleExternalChange calls `previous.update(model)` directly as its
+// live-preview refresh fast path. Pins that the theme.onChange subscription registers
+// EXACTLY ONCE per view instance no matter how many times onMount re-enters via update() —
+// distinct closures never dedupe by content, so without a guard this count grows unboundedly
+// (1 -> 2 -> 3 -> ..., reviewer's empirical finding) and none is ever unsubscribed until the
+// view itself unloads.
+describe('SC-100 Task 2 fix (I1): the theme.onChange subscription registers exactly once per view instance, even across repeated update() calls', () => {
+	test('mount + two update() calls: theme.onChange is called exactly once total', async () => {
+		const host = makeHost();
+		const { cx, theme } = makeCx(host);
+		theme.setActive('legacy');
+		const onChangeSpy = jest.spyOn(theme, 'onChange');
+		const view = new DisplayCardView(cx, steelLayout());
+		const root = document.createElement('div');
+
+		await view.mount(root, MODEL);
+		expect(onChangeSpy).toHaveBeenCalledTimes(1);
+
+		await view.update({ ...MODEL, note: 'Updated once.' });
+		expect(onChangeSpy).toHaveBeenCalledTimes(1);
+
+		await view.update({ ...MODEL, note: 'Updated twice.' });
+		expect(onChangeSpy).toHaveBeenCalledTimes(1);
+
+		// And the single surviving subscription still works: a live theme switch after
+		// two updates still re-renders correctly (the guard didn't accidentally break
+		// re-render, it only de-duplicated registration).
+		theme.setActive('steel');
+		await flush();
+		expect(root.querySelector('.dse-head')).not.toBeNull();
+	});
+
+	test('a steel-less layout across mount + update() never registers a subscription at all', async () => {
+		const host = makeHost();
+		const { cx, theme } = makeCx(host);
+		theme.setActive('legacy');
+		const onChangeSpy = jest.spyOn(theme, 'onChange');
+		const view = new DisplayCardView(cx, steellessLayout());
+		const root = document.createElement('div');
+
+		await view.mount(root, MODEL);
+		await view.update({ ...MODEL, note: 'Updated.' });
+
+		expect(onChangeSpy).not.toHaveBeenCalled();
+	});
+});
