@@ -152,6 +152,69 @@ registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the
 `serialize` wrapper around the pre-existing `@model/*` class, kept renderer-agnostic so
 the same model classes still back the legacy validator/schemas).
 
+### Theme-conditional Steel compositions (`CardLayout.steel`, plan 24 / SC-100)
+
+The display-card family (the eleven D6 reference cards — kit, condition, treasure,
+ancestry, culture, career, class, title, perk, complication, rule — all rendered by the
+shared `DisplayCardView` driven by a declarative `CardLayout<M>`,
+`src/elements/shared/CardLayout.ts`) historically built **one theme-agnostic DOM**, themed
+purely in CSS. SC-100 added the sanctioned pattern for theme-aware DOM — a theme-scoped
+composition slot, branched at mount. This is THE reference for any future view that needs
+different DOM per theme; do not invent a second mechanism.
+
+- **The slot.** `CardLayout<M>` has an optional `steel?: SteelCardComposition<M>`
+  (eyebrow + crest for the shared `cardHead`, an optional `crestSize`, and ordered
+  `SteelBand`s — each band an optional small-caps head plus its own `render()` into a
+  positioned container). Absent (every layout except kit today) ⇒ zero behavior change:
+  the view never takes the Steel branch, in any theme.
+- **Branch condition.** `DisplayCardView.onMount` branches **once, at mount**:
+  `cx.theme.active === 'steel' && !!layout.steel` ⇒ `renderSteel()`; anything else ⇒
+  `renderLegacy()`. The legacy branch is the pre-seam `onMount` body **moved verbatim**
+  (same statements, same order) — it is the old code relocated, not a copy, so the legacy
+  DOM cannot drift.
+- **Legacy is the canonical fallback.** `DseThemeId` is an open union
+  (`'steel' | 'legacy' | (string & {})`); any future snippet theme id renders the legacy
+  DOM. Only the literal `'steel'` theme takes the composition.
+- **Re-render on live theme change.** Only when `layout.steel` exists, the view registers
+  a `cx.theme.onChange` subscription (owner-registered via `this.register`, so teardown is
+  automatic and popout-safe). On a branch change it unloads its **own** owned children and
+  removes the **tracked** `.dse-card` node — never `rootEl.empty()`, which would also
+  destroy pipeline-owned siblings appended after mount (e.g. the authoring pencil) — then
+  re-renders the new branch. A per-instance `themeChangeRegistered` boolean guards the
+  registration: `ElementView.update()`'s default path re-invokes `onMount` (and
+  `SidebarPanel.handleExternalChange` calls `update()` directly as its live-preview
+  refresh), so an unguarded registration would stack one leaked closure per update.
+- **The four invariants** (contract-tested in
+  `test/dom/elements/displayCardThemeBranch.test.ts`):
+  1. A layout without `steel` renders byte-identical DOM under every theme.
+  2. A layout with `steel` renders the legacy DOM verbatim under every non-steel theme.
+  3. A live theme switch swaps the DOM in both directions without touching pipeline-owned
+     siblings, and unloads the outgoing branch's owned children (no listener leaks).
+  4. Print never branches the render — `data-dse-print` stays a pure CSS attribute over
+     whichever DOM the active theme built. Corollary: a Steel composition for a family
+     necessarily changes that family's frozen `*--steel-print.png`, which needs its own
+     sanctioned single-line rebaseline sign-off (see the workspace `dse-verify` skill's
+     freeze section; SC-100's `kit--steel-print.png` was the first).
+- **First consumer: kit** (`kitLayout.steel`, `src/elements/display/layouts.ts`): crest +
+  kind-eyebrow head via `cardHead`, a boxed Equipment band, "Kit Bonuses" as two rows of
+  four **fixed-slot** stat tiles via the generic `statTiles()` primitive
+  (`src/framework/kit/statTiles.ts`, its own `.dse-tiles*` class grammar — an absent bonus
+  renders its slot as an em dash, never an omitted cell), then the signature ability
+  through the existing `renderFeatureList` sub-render (deliberately richer than the site's
+  tile). Remaining display families are sequenced as SC-120 — the seam + primitive make
+  each one layout-data + CSS + one sanctioned rebaseline.
+- **Dark-mode material rule** (SC-100 visual-gate finding — read before styling any sunken
+  surface inside a Steel card): the site's "rich" dark tiles carry **no gradient of their
+  own**; the richness is the parent card's diagonal gradient bleeding through
+  **translucent-black** fills (`.sc-card__stat` `rgba(0,0,0,.25)` dark / `.04` light;
+  `.sc-kit__equip` `rgba(0,0,0,.22)` dark / `.04` light). The plugin's
+  `--dse-surface-sunken` token resolves under Steel dark to a **6%-white wash** — the
+  opposite direction — which occludes the card gradient and flattens the surface. Two
+  selectors (`.dse-tiles__cell`, `.dse-kit__equip`) had exactly this bug and now carry the
+  site's literal translucent-black values with light-mode twins. This is the reference
+  finding for SC-117's dark-mode audit: sweep other `--dse-surface-sunken` consumers
+  before assuming a sunken surface should be washed lighter.
+
 ### Preferences (`src/prefs/`, D4)
 
 Descriptor-driven: one `PrefDescriptor` list drives storage, CSS reflection, the

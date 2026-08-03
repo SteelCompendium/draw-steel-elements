@@ -181,6 +181,17 @@ for what needs action.
   the Steel typography work: Legacy and print/export shots don't reference
   the family and are untouched. Adds ~27KB to the built stylesheet (a 20KB
   woff2, base64-embedded).
+- The Steel theme's kit card (`ds-kit`) is rebuilt to the site's composition: a crest
+  and small-caps kind eyebrow ("Martial Kit" / "Magic Kit" / "Psionic Kit") over the
+  name, a boxed Equipment panel, and Kit Bonuses as the site's fixed two-row stat-tile
+  grid (Stamina per Echelon / Speed / Stability / Disengage, then Melee Dmg / Ranged
+  Dmg / Melee Dist / Ranged Dist) — an absent bonus renders a "—" dash tile instead of
+  dropping the slot, so every kit reads uniformly at a glance. The tiles and the
+  Equipment panel sink into the card's dark gradient the way the site's do. The
+  signature ability keeps the plugin's full inline ability card (keywords, action chip,
+  power-roll tiers, effects — richer than the site's tile). The Legacy style's kit card
+  is unchanged byte-for-byte, and switching themes in Settings re-renders open kit
+  cards live.
 
 ## 5.1.1
 
