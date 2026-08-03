@@ -67,8 +67,12 @@ function steelDefinitions(): string[] {
 // clip-path whose interior is the card surface, so its ink is ink-on-surface
 // (var(--dse-fg)) in EVERY theme; the old per-theme overrides assumed solid
 // fills and rendered invisible (ground-truth-confirmed, Plan 12).
-// SC-105 Task 1: font-controls joins the invariant set (Legacy-only; never
-// overridden in the Steel block — the vocabulary's "always sans" slot).
+// SC-105 Task 1: font-controls joins the invariant set (never overridden in
+// the Steel block). SC-112 Task 3: it STAYS invariant here — the Controls
+// flip re-points its :root chain to --dse-font-body instead of adding a
+// Steel-block entry, so the serif value still arrives via inheritance, not
+// an explicit override (see the dedicated slot-chain contract in
+// test/dom/theme/steelTypography.test.ts for the actual resolved value).
 const THEME_INVARIANT = [
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg', 'font-controls',
 ] as const;

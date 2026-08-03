@@ -79,6 +79,10 @@ const PRINT_NEUTRAL: Record<string, string> = {
 	fg: '#000',
 	'fg-muted': '#333',
 	'fg-faint': '#666',
+	// SC-112 Task 3: pinned explicitly so the Controls-slot serif flip (Steel
+	// screen) can't leak into the frozen *--steel-print.png set — no longer
+	// print-invariant (moved out of PRINT_INVARIANT below).
+	'font-controls': 'var(--font-text)',
 	'chip-bg': 'transparent',
 	// accent → ink
 	accent: '#000',
@@ -133,10 +137,11 @@ const PRINT_STEEL: Record<string, string> = {
 /** Tokens intentionally NOT overridden in print (= Legacy / = active theme / = Steel exact). */
 const PRINT_INVARIANT = [
 	'touch-min', // = Legacy (print rules hide the controls it sizes)
-	// SC-105 Task 2: font-display retired — the whole six-slot font vocabulary
-	// (bar font-mono, listed separately below) is print-invariant, same as
-	// font-display was (= active theme, no font override in print).
-	'font-title', 'font-body', 'font-card-body', 'font-label', 'font-controls',
+	// SC-105 Task 2: font-display retired — the remaining print-invariant font
+	// slots (bar font-mono, listed separately below) stay = active theme, no
+	// font override in print. SC-112 Task 3: font-controls LEAVES this set — it
+	// now gets an explicit print pin (PRINT_NEUTRAL above) to hold the freeze.
+	'font-title', 'font-body', 'font-card-body', 'font-label',
 	'font-mono', // = Legacy
 	'rule-fade', // = Legacy (theme-invariant)
 	'badge-fg', // = Legacy ink-on-surface (hollow frame; print --dse-fg is #000) — SC-10
@@ -157,10 +162,12 @@ describe('D3 Task 5: print / export value layer', () => {
 		}
 	});
 
-	test('the neutral twin defines EXACTLY the 46 neutral tokens (none invariant, none act)', () => {
+	test('the neutral twin defines EXACTLY the 47 neutral tokens (none invariant, none act)', () => {
 		const defs = defsIn(printNeutralBody());
 		expect(new Set(defs)).toEqual(new Set(Object.keys(PRINT_NEUTRAL)));
-		expect(defs.length).toBe(46); // SC-10: badge-fg no longer print-overridden; Plan 20 Task 3: +5 material
+		// SC-10: badge-fg no longer print-overridden; Plan 20 Task 3: +5 material;
+		// SC-112 Task 3: +1 (font-controls print pin) = 46 → 47.
+		expect(defs.length).toBe(47);
 		// The Steel-scoped act tokens are NOT in the neutral block…
 		for (const act of Object.keys(PRINT_STEEL)) expect(defs).not.toContain(act);
 		// …nor are the print-invariant tokens.

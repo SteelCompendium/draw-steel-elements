@@ -250,3 +250,34 @@ describe('font slot chain contract (SC-105 Task 2)', () => {
 		expect(LABEL_CHAIN.test(steelDarkBody ?? '')).toBe(true);
 	});
 });
+
+// SC-112 Task 3 — the Controls default flip. `--dse-font-controls` now `var()`-chains to
+// `--dse-font-body` (Scott's site-consistency ruling: Controls defaults to "same as Body"),
+// re-pointing the plan-22 stepper exclusion so numeric steppers/buttons/tabs/collapse-headers
+// join the serif face under Steel screen. Legacy resolves byte-identically (Body is
+// var(--font-text) there too — one extra hop, same value). Print is explicitly pinned back to
+// var(--font-text) in the neutral print block so the frozen *--steel-print.png set never moves.
+// This suite locks the CHAIN + the PIN directly against the raw CSS text, same "prove it can
+// fail" discipline as the Card-body/Label chains above.
+describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
+	const rootBodies = rules.filter((r) => r.selector === ':root').map((r) => r.body);
+	const printNeutralBody = rules.find(
+		(r) => r.selector === '[data-dse-element][data-dse-print="on"]',
+	)?.body;
+
+	const CONTROLS_CHAIN = /--dse-font-controls:\s*var\(--dse-font-body\)\s*;/;
+	const CONTROLS_PRINT_PIN = /--dse-font-controls:\s*var\(--font-text\)\s*;/;
+
+	it('parses both value blocks (guard against a vacuous pass)', () => {
+		expect(rootBodies.length).toBeGreaterThan(0);
+		expect(printNeutralBody).toBeDefined();
+	});
+
+	it(':root — --dse-font-controls chains to var(--dse-font-body)', () => {
+		expect(rootBodies.some((b) => CONTROLS_CHAIN.test(b))).toBe(true);
+	});
+
+	it('neutral print block — --dse-font-controls is pinned to var(--font-text)', () => {
+		expect(CONTROLS_PRINT_PIN.test(printNeutralBody ?? '')).toBe(true);
+	});
+});

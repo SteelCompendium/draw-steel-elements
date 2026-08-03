@@ -93,15 +93,16 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(rootValue('surface')).toBe('var(--code-background)');
 		expect(rootValue('surface-raised')).toBe('var(--color-base-25)');
 		expect(rootValue('fg')).toBe('var(--text-normal)');
-		// SC-105: independent literals for title/body/controls; card-body/
-		// label are var() chains to body/title (Scott's "same as" ruling).
-		// font-display retired in Task 2 — every consumer now targets one of
-		// these five slots directly.
+		// SC-105: independent literals for title/body; card-body/label/controls
+		// are var() chains to body/title/body (Scott's "same as" ruling —
+		// SC-112 Task 3 joined Controls to the chain group). font-display
+		// retired in Task 2 — every consumer now targets one of these five
+		// slots directly.
 		expect(rootValue('font-title')).toBe('var(--font-text)');
 		expect(rootValue('font-body')).toBe('var(--font-text)');
 		expect(rootValue('font-card-body')).toBe('var(--dse-font-body)');
 		expect(rootValue('font-label')).toBe('var(--dse-font-title)');
-		expect(rootValue('font-controls')).toBe('var(--font-text)');
+		expect(rootValue('font-controls')).toBe('var(--dse-font-body)');
 		expect(rootValue('accent')).toBe('var(--interactive-accent)');
 		expect(rootValue('select')).toBe('#D50000');
 		expect(rootValue('radius')).toBe('5px');
