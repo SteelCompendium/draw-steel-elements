@@ -65,14 +65,15 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(sheet).not.toMatch(/\[data-dse-theme="legacy"\]/);
 	});
 
-	test('the union covers the full D2 §6 sheet (73 tokens: ~56 core + 12 roles + 6 actions)', () => {
+	test('the union covers the full D2 §6 sheet (75 tokens: ~58 core + 12 roles + 6 actions)', () => {
 		// 62 from Task 1 + the two Task-5 gap-closes (page-bg, badge-fg)
 		// + Plan 20 Task 3's five material tokens
 		// (metal, metal-bright, sheen, sheen-soft, chip-bevel)
 		// + SC-105's five font-vocabulary tokens
 		// (font-title, font-body, font-card-body, font-label, font-controls)
-		// - SC-105 Task 2's retirement of font-display (net +4 over pre-SC-105).
-		expect(DSE_TOKEN_NAMES.length).toBe(73);
+		// - SC-105 Task 2's retirement of font-display (net +4 over pre-SC-105)
+		// + SC-112 Task 7's two user-scale tokens (text-scale, card-scale) = 75.
+		expect(DSE_TOKEN_NAMES.length).toBe(75);
 		// One representative per §6 group, so a whole group can't silently vanish.
 		for (const key of [
 			'surface', // structure / surface
@@ -116,6 +117,10 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(rootValue('stamina-track')).toBe('var(--code-background)');
 		expect(rootValue('turn-done')).toBe('limegreen');
 		expect(rootValue('danger')).toBe('crimson');
+		// SC-112 Task 7: the user-scale multipliers default to the inert 1
+		// (the freeze bar — their consumer rules compute to no-ops at 1).
+		expect(rootValue('text-scale')).toBe('1');
+		expect(rootValue('card-scale')).toBe('1');
 	});
 
 	test('Task-5 gap-close tokens carry their Legacy values (page-bg, badge-fg)', () => {

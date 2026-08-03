@@ -143,8 +143,12 @@ const printSteel = blockBody(
 // --dse-font-body (it is invalid on <html> anyway — --font-text lives on body),
 // so the Steel block now re-declares the chain itself, exactly like
 // card-body/label. font-controls is Steel-OVERRIDDEN, not Steel-invariant.
+// SC-112 Task 7: text-scale/card-scale are USER-scale multipliers, not theme
+// values — no theme block ever overrides them (their consumer rules are
+// print-excluded instead), so they are invariant in BOTH sets below.
 const STEEL_INVARIANT = new Set([
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
+	'text-scale', 'card-scale',
 ]);
 // SC-105: the whole font vocabulary (title/body/card-body/label/controls) was
 // print-invariant — none of these 5 tokens were overridden in a print block,
@@ -156,6 +160,7 @@ const STEEL_INVARIANT = new Set([
 const PRINT_INVARIANT = new Set([
 	'touch-min', 'font-mono', 'rule-fade', 'badge-fg', // badge-fg: SC-10 invariant
 	'font-title', 'font-body', 'font-card-body', 'font-label', // SC-105
+	'text-scale', 'card-scale', // SC-112 Task 7: print-excluded CONSUMERS, no print value override
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')), // "= Steel (exact)"
 ]);
 
@@ -257,6 +262,9 @@ const LEGACY_MAP: Record<string, string> = {
 	'act-move': 'none',
 	'act-none': 'none',
 	'act-trait': 'none',
+	// SC-112 Task 7: user-scale multipliers — 1 = inert default (freeze bar).
+	'text-scale': '1',
+	'card-scale': '1',
 };
 
 describe('D3 Task 6: build guard — every token covered by base + Steel + Print (§7.3)', () => {
@@ -277,8 +285,10 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// the Steel block now declares `--dse-font-controls: var(--dse-font-body)`
 		// (a :root chain flattens on <html> and cannot carry the theme swap)
 		// = 66 → 67 overridden / 7 → 6 invariant.
+		// SC-112 Task 7: +2 invariant (text-scale/card-scale — user-scale
+		// multipliers, never theme-overridden) = 6 → 8; overridden stays 67.
 		expect(overridden.length).toBe(67);
-		expect(STEEL_INVARIANT.size).toBe(6);
+		expect(STEEL_INVARIANT.size).toBe(8);
 	});
 
 	test('EVERY union token is overridden in a Print block OR map-marked print-invariant', () => {
@@ -292,7 +302,9 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// none of it overridden in a print block) = 17 → 22. Task 2 removes font-display
 		// from this set (retired from the union entirely) = 22 → 21. SC-112 Task 3
 		// removes font-controls too (now overridden, not invariant) = 21 → 20.
-		expect(PRINT_INVARIANT.size).toBe(20);
+		// SC-112 Task 7: +2 (text-scale/card-scale — the scale CONSUMER rules are
+		// print-excluded, so no print block ever overrides the tokens) = 20 → 22.
+		expect(PRINT_INVARIANT.size).toBe(22);
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});
 

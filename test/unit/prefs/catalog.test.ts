@@ -42,6 +42,10 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('fontCardBody')).toBe('');
 	expect(store.get('fontLabel')).toBe('');
 	expect(store.get('fontMono')).toBe('');
+	// SC-112 Task 7: both size scales default to the inert 1 (toCss(1) is null →
+	// no inline custom property; the :root token default of 1 governs).
+	expect(store.get('textScale')).toBe(1);
+	expect(store.get('cardScale')).toBe(1);
 });
 
 // —— SC-112 (Plan 23 Task 6): the six css-bearing font-slot descriptors ——
@@ -87,6 +91,49 @@ test('font slots: Typography rows with the font control, the uniform default opt
 	expect(prefUi(byKey.get('fontTitle')!)!.options!.some((o) => o.value === 'Source Serif 4')).toBe(true);
 });
 
+// —— SC-112 (Plan 23 Task 7): the two css-bearing size-scale descriptors ——
+
+const SCALE_CASES = [
+	// [key, varName, min, max, an out-of-range sample and its clamp]
+	['textScale', '--dse-text-scale', 0.6, 1.4, 2, 1.4],
+	['cardScale', '--dse-card-scale', 0.8, 1.2, 0.5, 0.8],
+] as const;
+
+test('size scales: css-bearing (right varName), attr-less, snapped default 1 → null (remove-at-default)', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const [key, varName, , , outOfRange, clamped] of SCALE_CASES) {
+		const descriptor = byKey.get(key)!;
+		expect(descriptor).toBeDefined();
+		expect(descriptor.default).toBe(1);             // primitive — persist()'s sparse check holds
+		expect(descriptor.attr).toBeUndefined();        // never data-dse-* reflected; global-only
+		expect(descriptor.css!.varName).toBe(varName);
+		expect(descriptor.css!.toCss(1 as never)).toBeNull();      // default = remove-the-override
+		expect(descriptor.css!.toCss(1.1 as never)).toBe('1.1');
+		// toCss SNAPS before emitting: out-of-range clamps, off-step rounds,
+		// junk falls back to the default (null — i.e. remove).
+		expect(descriptor.css!.toCss(outOfRange as never)).toBe(String(clamped));
+		expect(descriptor.css!.toCss(1.001 as never)).toBeNull();  // snaps back to 1
+		expect(descriptor.css!.toCss(NaN as never)).toBeNull();    // default → remove
+	}
+});
+
+test('size scales: Typography slider rows carrying the site ranges on the ui shape', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const [key, , min, max] of SCALE_CASES) {
+		const ui = prefUi(byKey.get(key)!)!;
+		expect(ui.group).toBe('Typography');
+		expect(ui.control).toBe('slider');
+		// Task 8 renders straight from these — no per-key knowledge needed.
+		expect(ui.min).toBe(min);
+		expect(ui.max).toBe(max);
+		expect(ui.step).toBe(0.05);
+		// The consumer rules are print-excluded; the help says so.
+		expect(ui.help).toContain('print and export always use 100%');
+	}
+	expect(prefUi(byKey.get('textScale')!)!.label).toBe('Text size');
+	expect(prefUi(byKey.get('cardScale')!)!.label).toBe('Card size');
+});
+
 test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs have none', () => {
 	const attrs = Object.fromEntries(
 		DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d.attr ?? null]),
@@ -102,6 +149,9 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		fontCardBody: null,
 		fontLabel: null,
 		fontMono: null,
+		// SC-112 Task 7 size scales: css-bearing, never attr-reflected (global-only)
+		textScale: null,
+		cardScale: null,
 		sbFeatureStyle: 'sb-featstyle',
 		sbDensity: 'density',         // BUILT name (spec draft said sb-density; built wins)
 		sbColumns: 'sb-columns',

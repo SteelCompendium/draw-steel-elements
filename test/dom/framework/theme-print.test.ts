@@ -145,6 +145,10 @@ const PRINT_INVARIANT = [
 	'font-mono', // = Legacy
 	'rule-fade', // = Legacy (theme-invariant)
 	'badge-fg', // = Legacy ink-on-surface (hollow frame; print --dse-fg is #000) — SC-10
+	// SC-112 Task 7: the scale tokens need no print VALUE override — their
+	// consumer rules are print-excluded (:not([data-dse-print="on"])), so print
+	// always renders 1:1 whatever the sliders say.
+	'text-scale', 'card-scale',
 	// role-* (12): "= Steel (exact)" — keep the Steel hue, no darkening (added below)
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')),
 ] as const;

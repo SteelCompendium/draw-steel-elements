@@ -74,8 +74,11 @@ function steelDefinitions(): string[] {
 // itself (like card-body/label) — font-controls is overridden, not invariant
 // (see the dedicated slot-chain contract in
 // test/dom/theme/steelTypography.test.ts for the chain shape).
+// SC-112 Task 7: text-scale/card-scale join — user-scale multipliers (the
+// prefs stamp them inline per root), never overridden by any theme block.
 const THEME_INVARIANT = [
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
+	'text-scale', 'card-scale',
 ] as const;
 
 /**
@@ -238,8 +241,10 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// invariant (union 74 → 73). SC-112 root-cause fix: font-controls moves
 		// invariant → overridden (the Steel block must re-declare the chain; a
 		// :root chain flattens on <html>) — 66 → 67 / 7 → 6.
+		// SC-112 Task 7: +2 invariant (text-scale/card-scale, union 73 → 75) —
+		// 67 overridden / 6 → 8 invariant.
 		expect(overridden.length).toBe(67);
-		expect(THEME_INVARIANT.length).toBe(6);
+		expect(THEME_INVARIANT.length).toBe(8);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
 
@@ -373,6 +378,9 @@ const STEEL_LIGHT_STABLE = [
 	// font slots …)
 	'radius', 'crest-shape', 'hairline-fade',
 	'font-title', 'font-body', 'font-card-body', 'font-label',
+	// SC-112 Task 7: user-scale multipliers — theme-invariant everywhere, so
+	// certainly never light-overridden.
+	'text-scale', 'card-scale',
 ] as const;
 
 describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])', () => {

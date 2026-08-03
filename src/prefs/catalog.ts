@@ -16,12 +16,13 @@
 // theme is NOT here: it is the builtin descriptor in seams/prefs.ts (attr-omitted
 // — ThemeService.apply is the single writer of data-dse-theme; D3 §7.1).
 //
-// Invariant: every default below MUST be a primitive (boolean/string), never an
-// object/array — DsePreferenceStore.persist() sparse-checks via strict equality
-// (`value === descriptor.default`), which is only correct for primitives.
+// Invariant: every default below MUST be a primitive (boolean/string/number),
+// never an object/array — DsePreferenceStore.persist() sparse-checks via strict
+// equality (`value === descriptor.default`), which is only correct for primitives.
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '../framework/seams/prefs';
 import { declaredCollapsePrefs } from '@model/ComponentWrapper';
 import { CURATED_FONTS, DEFAULT_FONT_OPTION, fontCss } from './fontStacks';
+import { CARD_SCALE, TEXT_SCALE, snap } from './scale';
 
 declare module '../framework/seams/prefs' {
 	interface DsePrefs {
@@ -37,6 +38,10 @@ declare module '../framework/seams/prefs' {
 		fontCardBody: string;
 		fontLabel: string;
 		fontMono: string;
+		// —— Typography size scales (SC-112 Task 7 — css-reflected multipliers;
+		// snap()-normalized, 1 is the inert default → toCss null → no inline var) ——
+		textScale: number;
+		cardScale: number;
 		// —— Statblock display (presentation; OD-D4-6 curated four) ——
 		sbFeatureStyle: 'card' | 'flat';
 		sbDensity: 'comfortable' | 'compact';
@@ -78,10 +83,18 @@ export interface PrefUi {
 	label: string;
 	help?: string;
 	/** 'toggle' over a string-typed pref means the 'on'|'off' mapping (checked ⇔ 'on').
-	 *  'font' (SC-112) is the curated-list-plus-custom-entry font picker — control
-	 *  rendered by Task 8; until then SettingsTab renders the row without a control. */
-	control: 'toggle' | 'select' | 'text' | 'font';
+	 *  'font' (SC-112) is the curated-list-plus-custom-entry font picker; 'slider'
+	 *  (SC-112 Task 7) is the numeric range slider over min/max/step below — both
+	 *  controls rendered by Task 8; until then SettingsTab renders the row without
+	 *  a control. */
+	control: 'toggle' | 'select' | 'text' | 'font' | 'slider';
 	options?: readonly { value: string; label: string }[];
+	/** 'slider' only (SC-112 Task 7): the range Task 8 renders. Mirrors the
+	 *  descriptor's snap() range (src/prefs/scale.ts) — kept on the ui shape so
+	 *  the settings tab needs no per-key knowledge. */
+	min?: number;
+	max?: number;
+	step?: number;
 	/** Statblock preset-bundle member (§3.2). */
 	inPreset?: boolean;
 	/** Row not rendered (consumer not shipped: D5 rolling, F2 references). */
@@ -182,6 +195,35 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Typography', label: 'Monospace font', control: 'font', options: MONO_FONT_OPTIONS, advanced: true,
 			help: 'Font for monospaced text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault monospace font. A chosen font applies under both the Steel and Legacy themes.',
+		},
+	}),
+
+	// —— Typography size scales (SC-112 Task 7 — css-bearing like the font slots
+	// above; snap() normalizes to the site's ranges/step, and the snapped default
+	// 1 maps to toCss null → removeProperty (site remove-on-default semantics,
+	// settings-panel.js:92-103) so DEFAULTS ARE INERT (the freeze bar). ——
+	d({
+		key: 'textScale', default: 1,
+		css: {
+			varName: '--dse-text-scale',
+			toCss: (v) => { const n = snap(v, TEXT_SCALE); return n === TEXT_SCALE.default ? null : String(n); },
+		},
+		ui: {
+			group: 'Typography', label: 'Text size', control: 'slider',
+			min: TEXT_SCALE.min, max: TEXT_SCALE.max, step: TEXT_SCALE.step,
+			help: 'Scale the text inside Draw Steel elements (60%–140%). Applies under both the Steel and Legacy themes; print and export always use 100%.',
+		},
+	}),
+	d({
+		key: 'cardScale', default: 1,
+		css: {
+			varName: '--dse-card-scale',
+			toCss: (v) => { const n = snap(v, CARD_SCALE); return n === CARD_SCALE.default ? null : String(n); },
+		},
+		ui: {
+			group: 'Typography', label: 'Card size', control: 'slider',
+			min: CARD_SCALE.min, max: CARD_SCALE.max, step: CARD_SCALE.step,
+			help: 'Scale whole statblock and ability cards (80%–120%). Applies under both the Steel and Legacy themes; print and export always use 100%.',
 		},
 	}),
 

@@ -40,3 +40,31 @@ test('set(fontTitle) stamps the inline --dse-font-title on a reflected root; bac
 	await store.set('fontTitle', '');
 	expect(root.style.getPropertyValue('--dse-font-title')).toBe('');
 });
+
+// SC-112 Task 7: the size-scale descriptors ride the same css-reflection chain.
+test('set(textScale/cardScale) stamps snapped inline scale vars; back to 1 removes them', async () => {
+	const store = makeStore();
+	const root = document.createElement('div');
+	const owner: any = new Component();
+	owner.load();
+	store.reflect(root, owner);
+
+	// Defaults are INERT — no inline scale override at 1 (the :root default rules).
+	expect(root.style.getPropertyValue('--dse-text-scale')).toBe('');
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('');
+
+	await store.set('textScale', 1.4);
+	expect(root.style.getPropertyValue('--dse-text-scale')).toBe('1.4');
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe(''); // independent
+
+	// Off-step / out-of-range values are SNAPPED before stamping (site snap()).
+	await store.set('cardScale', 0.79);
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('0.8');
+	await store.set('cardScale', 99);
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('1.2');
+
+	await store.set('textScale', 1);
+	await store.set('cardScale', 1);
+	expect(root.style.getPropertyValue('--dse-text-scale')).toBe('');
+	expect(root.style.getPropertyValue('--dse-card-scale')).toBe('');
+});

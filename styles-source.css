@@ -3095,6 +3095,18 @@ Shared globals
 	--dse-act-move: none;
 	--dse-act-none: none;
 	--dse-act-trait: none;
+
+	/* -- SC-112 Task 7: user size scales (NOT theme values) -- */
+	/* Multipliers, default 1 = inert (the freeze bar). The textScale/cardScale
+	   prefs (catalog.ts) stamp a snapped non-1 value INLINE per element root and
+	   REMOVE it at default (site remove-on-default semantics,
+	   settings-panel.js:92-103), so these :root declarations are what every root
+	   resolves at defaults. Theme-invariant (no theme/print block overrides them
+	   — STEEL_INVARIANT/PRINT_INVARIANT in token-coverage.test.ts); their
+	   consumer rules (~"SC-112 Task 7 — user size scales" below) are
+	   print-excluded — print/export always renders 1:1. */
+	--dse-text-scale: 1;
+	--dse-card-scale: 1;
 }
 
 /* ================================================================== */
@@ -3789,6 +3801,56 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    Legacy — a separate, pre-existing wiring gap outside this gate's scope
    (flagged for the orchestrator/FOLLOWUPS, not fixed here: fixing it is a
    Steel-rendering task, not a Legacy-support one). */
+
+/* ================================================================== */
+/*   SC-112 Task 7 — user size scales (text & card)                    */
+/* ================================================================== */
+/* Theme-UNSCOPED (both Steel and Legacy honor the sliders), print-EXCLUDED
+   (print/export always renders 1:1; the :not() is a COMPOUND on the element
+   root / modal itself — the Task 5 footgun: a bare descendant `:not(...) X`
+   is trivially true via <html>). At the default scale of 1 both rules are
+   INERT — text computes to the inherited size (audit found no element-root-
+   level font-size declaration to override; freeze 101/101 is the proof) and
+   `zoom: 1` is the property's initial value.
+
+   TEXT: a multiplier on the element root's font-size — everything inside is
+   authored in em/rem-free kit units, so the whole element tracks it. */
+[data-dse-element]:not([data-dse-print="on"]) {
+	font-size: calc(1em * var(--dse-text-scale));
+}
+/* Nested element roots (by-SCC kit → its real nested ds-feature card) would
+   COMPOUND the multiplier — the inner root's 1em is the outer root's ALREADY
+   scaled size — so nested roots reset to plain inheritance (font-size: 1em);
+   the outermost root applies the scale exactly once. Source-ordered after the
+   scale rule AND higher specificity (0,3,0 > 0,2,0): wins either way. */
+[data-dse-element] [data-dse-element]:not([data-dse-print="on"]) {
+	font-size: 1em;
+}
+/* CARD: the site zooms exactly ONE wrapper (v2 extra.css:61 —
+   `.sb-wrap, .ds-card-wrap { zoom: var(--sc-card-scale, 1) }`). The plugin's
+   card hosts are the same set the Card-body font rule targets (Task 4):
+   `.dse-sb`/`.dse-card` host DIVs inside an element root or modal, plus the
+   feature/featureblock roots, which ARE their own card (root-compound arm). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(.dse-sb, .dse-card),
+:not([data-dse-print="on"]):is(
+		[data-dse-element='feature'],
+		[data-dse-element='featureblock']
+	):not([data-dse-error-stage]) {
+	zoom: var(--dse-card-scale);
+}
+/* Nested reset: a card host whose element root sits INSIDE another element
+   root already lives inside a zoomed wrapper — zoom it again and a referenced
+   card (by-SCC kit body mounting a real nested feature/statblock) renders
+   double-scaled. Zoom exactly one wrapper, like the site. Arm 1 (0,4,0)
+   outranks the descendant zoom arm (0,3,0); arm 2 ties the root-compound arm
+   at (0,3,0) and wins on source order. */
+[data-dse-element] [data-dse-element]:not([data-dse-print="on"]) :is(.dse-sb, .dse-card),
+[data-dse-element] :is(
+		[data-dse-element='feature'],
+		[data-dse-element='featureblock']
+	):not([data-dse-print="on"]) {
+	zoom: 1;
+}
 
 /* Plan 21 Task 2 — the rail chip's SIZE. The site's `.sc-head__slot--chip`
    (steel-cardhead.css:127) is `font-size: .9rem; line-height: 1` = 18px text on

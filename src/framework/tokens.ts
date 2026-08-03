@@ -100,6 +100,15 @@ export const DSE_TOKEN_NAMES = [
 	'act-move',
 	'act-none',
 	'act-trait',
+	// -- SC-112 Task 7: USER-SCALE tokens (not theme values). Multipliers with a
+	//    :root default of 1; the scale prefs stamp them inline per element root
+	//    (catalog.ts textScale/cardScale via snap(), src/prefs/scale.ts). They are
+	//    theme-INVARIANT (no theme block ever overrides them) and their CONSUMER
+	//    rules are print-excluded (:not([data-dse-print="on"]) — print/export
+	//    always renders 1:1), so they sit in STEEL_INVARIANT + PRINT_INVARIANT in
+	//    the coverage guards. --
+	'text-scale',
+	'card-scale',
 ] as const;
 
 /** The narrowed token-name union (D2 §6 / F1 §3.5). `cssVar(name)` → `var(--dse-<name>)`. */
