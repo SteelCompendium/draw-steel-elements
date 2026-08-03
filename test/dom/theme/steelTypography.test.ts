@@ -404,6 +404,17 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 
 	const WIDENED_SLOTS = ['title', 'body', 'card-body', 'label', 'controls'];
 
+	// SC-100 (Steel kit stat-tile rebuild) landed on main mid-SC-112 and added three
+	// Steel-scoped DECORATIVE consumers of the slot vars: `.dse-card__band-head` (label),
+	// `.dse-tiles__label` (label), and `.dse-tiles__value` (mono). Those are kit-composition
+	// rules on kit-only elements and MUST stay `[data-dse-theme='steel']`-scoped (the freeze
+	// rule — otherwise they'd leak into the frozen legacy/print shots). They do not
+	// re-narrow Legacy routing: the theme-agnostic routing block still carries every slot's
+	// base consumer (the tests around this allowlist keep proving that). So the "no theme
+	// qualifier" gates below EXEMPT exactly these selectors and nothing else — any OTHER
+	// Steel-scoped consumer of a slot var is still a failure.
+	const SC100_STEEL_CONSUMERS = /\.dse-card__band-head|\.dse-tiles__(?:value|label)/;
+
 	it('parses at least one theme-agnostic rule per widened slot (guard against a vacuous pass)', () => {
 		for (const slot of WIDENED_SLOTS) {
 			const matches = fontFamilyRulesFor(slot).filter((r) => !STEEL_SCOPE.test(r.selector));
@@ -411,9 +422,11 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		}
 	});
 
-	it('every widened slot\'s font-family consumer(s) carry no [data-dse-theme] qualifier at all', () => {
+	it('every widened slot\'s font-family consumer(s) carry no [data-dse-theme] qualifier (SC-100 kit decorative consumers exempt)', () => {
 		for (const slot of WIDENED_SLOTS) {
-			const matches = fontFamilyRulesFor(slot);
+			const matches = fontFamilyRulesFor(slot).filter(
+				(r) => !SC100_STEEL_CONSUMERS.test(r.selector),
+			);
 			expect(matches.length).toBeGreaterThan(0);
 			expect(matches.every((r) => !/data-dse-theme/.test(r.selector))).toBe(true);
 		}
@@ -528,9 +541,17 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		expect(cardBodyInk!.body).not.toMatch(/font-family:/);
 	});
 
-	it('Mono is untouched: its consumer rule carries no [data-dse-theme] qualifier, same as before this task', () => {
-		const monoRule = rules.find((r) => /font-family:\s*var\(--dse-font-mono\)\s*;/.test(r.body));
-		expect(monoRule).toBeDefined();
-		expect(monoRule!.selector).not.toMatch(/data-dse-theme/);
+	it('Mono is untouched: its pre-existing consumer rule carries no [data-dse-theme] qualifier; the only Steel-scoped mono consumer is SC-100\'s kit tile value', () => {
+		const monoRules = rules.filter((r) =>
+			/font-family:\s*var\(--dse-font-mono\)\s*;/.test(r.body),
+		);
+		// The pre-existing consumer (.dse-rollcard__breakdown) is still theme-agnostic.
+		const legacyMono = monoRules.filter((r) => !STEEL_SCOPE.test(r.selector));
+		expect(legacyMono.length).toBeGreaterThan(0);
+		expect(legacyMono.some((r) => r.selector.includes('.dse-rollcard__breakdown'))).toBe(true);
+		// Any Steel-scoped mono consumer must be the SC-100 kit tile value — nothing else.
+		for (const r of monoRules.filter((r) => STEEL_SCOPE.test(r.selector))) {
+			expect(r.selector).toMatch(SC100_STEEL_CONSUMERS);
+		}
 	});
 });
