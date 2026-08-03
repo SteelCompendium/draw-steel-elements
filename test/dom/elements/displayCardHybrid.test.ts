@@ -44,6 +44,14 @@ import type { CardLayout } from '@/elements/shared/CardLayout';
 import type { Kit } from 'steel-compendium-sdk';
 import kitExample from '@/elements/display/kit/example.yaml';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
+import type { ThemeServiceInternal } from '@/framework/seams/theme';
+
+// Plan 24 / SC-100 Task 3: kitLayout now declares a `.steel` composition, and
+// DEFAULT_THEME_ID is 'steel' — every test in this file asserts the LEGACY hybrid DOM
+// (Task 9's original contract, unchanged), so each pins `deps.theme` to 'legacy'
+// explicitly (Task 2's invariant 2: a layout WITH `steel` still renders the legacy DOM
+// verbatim under every non-steel theme). The Steel-branch hybrid render gets its own
+// coverage in kitSteel.test.ts.
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
 const KIT_REL = 'kit/panther.md';
@@ -61,6 +69,7 @@ function rowByLabel(card: HTMLElement, label: string): HTMLElement | null {
 describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (spec §2.3, §9)', () => {
 	test('(a) frontmatter-driven rows render in by-SCC mode', async () => {
 		const { vault, deps } = makeCompendiumDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 		const host = makeHost('ds-kit');
 
@@ -83,6 +92,7 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 
 	test('(b) the resolved source body — including its nested ```ds-feature fence — reaches renderMarkdown; real nested-card recursion is real-Obsidian-only (jest mock can\'t execute code-block processors)', async () => {
 		const { vault, deps } = makeCompendiumDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 		const host = makeHost('ds-kit');
 
@@ -132,6 +142,7 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		});
 
 		const { vault, deps } = makeCompendiumDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 
 		const inlineHost = makeHost('ds-kit-hybrid-omit-test');
@@ -152,6 +163,7 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 
 	test('(d) depth guard: a code already resolving in the SAME block is refused, not infinitely recursed', async () => {
 		const { vault, deps } = makeCompendiumDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, SELF_REF_REL);
 		const host = makeHost('ds-kit');
 		const pipeline = new ElementPipeline(deps);
@@ -200,6 +212,7 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		// text. This test asserts `.dse-card__flavor` is absent, proving the guard fires
 		// on this real-content path.
 		const { vault, deps } = makeCompendiumDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 		const host = makeHost('ds-kit');
 

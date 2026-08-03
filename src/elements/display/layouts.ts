@@ -23,7 +23,96 @@
 // fixture in the corpus today; not a bug.
 import type { Ancestry, Culture, Career, Class, Title, Perk, Complication } from 'steel-compendium-sdk';
 import type { Kit, Condition, Treasure } from 'steel-compendium-sdk';
-import type { Badge, CardLayout } from '@/elements/shared/CardLayout';
+import type { Badge, CardLayout, SteelBand } from '@/elements/shared/CardLayout';
+import { normalizeForDuplicateCheck } from '@/elements/shared/CardLayout';
+import type { RefSource } from '@/elements/shared/withReference';
+import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { FeatureConfig } from '@model/FeatureConfig';
+import { statTiles } from '@/framework/kit/statTiles';
+
+// Plan 24 / SC-100 Task 3 — kit's Steel composition helpers. Ported from steel-etl's
+// `internal/site/kit_page.go`/`cards.go` (kitKind/kitBonus), verified against the LANDED
+// Go source (Task 1's recon), not from memory.
+
+/**
+ * Ported from `kitKind` (kit_page.go) / `kitCard` (cards.go): sniff the signature
+ * ability's keywords for "Psionic"/"Magic", else "Martial" — the plan's stated stand-in
+ * until SC-116 emits a real `kit_type` field (the v2-site ticket 2 the same plan files).
+ * Inline mode reads the model's own `signature_ability.keywords` array directly. Hybrid
+ * mode has no such field — `signature_ability` isn't a frontmatter key (frontmatterAdapter
+ * is frontmatter-only, Task 1 corpus fact) — so it sniffs the resolved source BODY
+ * instead: every real kit's keyword list is literal, un-linked text inside the nested
+ * ```ds-feature fence's `keywords:` YAML block (verified against the corpus — "Magic"/
+ * "Psionic"/"Weapon" never appear wrapped in an `scc.v1:` link), so a case-sensitive
+ * word-boundary search of the whole body finds the SAME text the site's narrower
+ * keyword-line sniff would, without this file needing its own YAML-fence parser.
+ */
+function kitKindOf(m: Kit, source?: RefSource): 'Martial' | 'Magic' | 'Psionic' {
+	const haystack = source ? source.body : (m.signature_ability?.keywords ?? []).join(' ');
+	if (/\bPsionic\b/.test(haystack)) return 'Psionic';
+	if (/\bMagic\b/.test(haystack)) return 'Magic';
+	return 'Martial';
+}
+
+/**
+ * Ported from `kitBonus` (kit_page.go): strip a trailing " per …" qualifier — the tile
+ * grid's Stamina label carries "per Echelon" itself (hardcoded, like the site's own
+ * `{stam, "Stamina per Echelon", ""}` — no OTHER bonus field has ever carried a qualifier
+ * in the real corpus, Task 1 recon) — and return '' for an absent bonus. `statTiles()`
+ * itself owns the '' -> "—" dash fallback (the primitive's fixed-slot semantics), so this
+ * function only does the value-string transform, not the display fallback.
+ */
+function kitBonusValue(raw: string | undefined): string {
+	const s = (raw ?? '').trim();
+	if (!s) return '';
+	const idx = s.toLowerCase().indexOf(' per ');
+	return idx >= 0 ? s.slice(0, idx).trim() : s;
+}
+
+const KIT_BODY_STRIP_HEADING_RE = /^#{1,6}\s*(equipment|kit bonuses)\s*$/i;
+
+/**
+ * Hybrid mode's Signature Ability band renders the resolved source file's own trailing
+ * body — the ONLY place a by-SCC kit's nested ```ds-feature fence lives (frontmatter has
+ * no `signature_ability` key) — but the Equipment/Kit Bonuses information is now shown
+ * STRUCTURALLY by their own bands above, so this strips the matching HEADED sections back
+ * out of that body first (Design §6) rather than showing them twice. Everything else is
+ * untouched: the flavor-duplicate lead paragraph (the flavor band's own dedup guard,
+ * below, handles that independently) and, load-bearing, the ```ds-feature fence itself —
+ * `renderMarkdown` recursing that fence into a real nested Signature Ability card in real
+ * Obsidian is the whole point of keeping it (the `by-scc-kit--obsidian-recursion` ground-
+ * truth shot proves this path).
+ *
+ * Corpus fact (verified against every real md-dse kit fixture in data-unified, Task 1/3
+ * recon): "Kit Bonuses" never actually appears in a real compendium file's BODY — those
+ * bonuses are frontmatter-only fields, never body prose — so in practice this only ever
+ * strips "Equipment". The second heading is matched per the plan's Design §6 wording
+ * (defensively, for a hand-authored vault note that might still carry it), not because
+ * real pipeline-generated data needs it.
+ */
+function stripKitBodySections(md: string): string {
+	const lines = md.split('\n');
+	const kept: string[] = [];
+	let skipping = false;
+	for (const line of lines) {
+		if (KIT_BODY_STRIP_HEADING_RE.test(line.trim())) {
+			skipping = true;
+			continue;
+		}
+		if (skipping) {
+			if (/^#{1,6}\s/.test(line) || line.trimStart().startsWith('```')) {
+				skipping = false;
+			} else {
+				continue;
+			}
+		}
+		kept.push(line);
+	}
+	return kept
+		.join('\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+}
 
 export const kitLayout: CardLayout<Kit> = {
 	title: (m) => m.name,
@@ -60,6 +149,95 @@ export const kitLayout: CardLayout<Kit> = {
 	// the source body instead (Task 9, implemented in CardLayout.ts).
 	body: (m) => (m.signature_ability ? undefined : m.content),
 	useSourceBody: true,
+
+	// Plan 24 / SC-100 Task 3 — the Steel composition: the site's head grammar (backpack
+	// crest + kind eyebrow) + boxed Equipment band + the 2x4 dash-aware stat-tile grid +
+	// the kept (richer) signature-ability sub-render. Mirrors `renderKitPlate`
+	// (kit_page.go) point-for-point (Design section, plan 24).
+	steel: {
+		eyebrow: (m, source) => `${kitKindOf(m, source)} Kit`,
+		crestIcon: () => 'backpack',
+		bands: (m, source) => {
+			const hybrid = source !== undefined;
+			const bands: SteelBand[] = [];
+
+			// Flavor — the SAME duplicate-text guard renderLegacy applies (D6 Task 7
+			// review fix), using the SAME "whichever markdown will actually render as the
+			// trailing body" selection: the resolved source body in hybrid mode, else the
+			// inline fallback `m.content` (this file's OWN `body` field's ternary, two
+			// properties up — mirrored inline here rather than self-referenced, since a
+			// band closure can't reach back into the object literal it's still being
+			// constructed inside). Suppressing a knowingly-empty band here (rather than
+			// pushing one that renders nothing) keeps `renderSteel()`'s generic
+			// `.dse-card__band` wrapper from ever leaving a stray empty div in the DOM.
+			const bodyForDedup = hybrid ? source!.body : m.signature_ability ? undefined : m.content;
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Equipment — boxed panel, always rendered (site parity: an nbsp reserves the
+			// box when a kit has no equipment_text, matching kit_page.go/cards.go).
+			bands.push({
+				head: 'Equipment',
+				render: async (container, renderMarkdown) => {
+					const equipEl = container.createDiv({ cls: 'dse-kit__equip' });
+					const equip = (m.equipment_text ?? '').trim();
+					if (equip) await renderMarkdown(equip, equipEl);
+					else equipEl.setText(' ');
+				},
+			});
+
+			// Kit Bonuses — two fixed rows of 4 tiles (ported kitBonus() dash/qualifier
+			// semantics; labels are the site's own hardcoded set, kit_page.go:120-126).
+			bands.push({
+				head: 'Kit Bonuses',
+				render: (container) => {
+					statTiles(container, [
+						{ value: kitBonusValue(m.stamina_bonus), label: 'Stamina per Echelon' },
+						{ value: kitBonusValue(m.speed_bonus), label: 'Speed' },
+						{ value: kitBonusValue(m.stability_bonus), label: 'Stability' },
+						{ value: kitBonusValue(m.disengage_bonus), label: 'Disengage' },
+					]);
+					statTiles(container, [
+						{ value: kitBonusValue(m.melee_damage_bonus), label: 'Melee Dmg', accent: 'dmg' },
+						{ value: kitBonusValue(m.ranged_damage_bonus), label: 'Ranged Dmg', accent: 'dmg' },
+						{ value: kitBonusValue(m.melee_distance_bonus), label: 'Melee Dist' },
+						{ value: kitBonusValue(m.ranged_distance_bonus), label: 'Ranged Dist' },
+					]);
+				},
+			});
+
+			// Signature Ability — kept plugin-is-richer sub-render (Design §5): inline
+			// mode renders the REAL feature card via the shared renderFeatureList grammar
+			// (same mechanism the legacy `features` slot uses); hybrid mode has no
+			// `signature_ability` frontmatter field, so it renders the resolved source
+			// body instead (Equipment/Kit Bonuses sections stripped, fence kept — see
+			// stripKitBodySections above) so the nested ```ds-feature fence can recurse
+			// into a real card via renderMarkdown, exactly as it always has.
+			if (hybrid || m.signature_ability) {
+				bands.push({
+					head: 'Signature Ability',
+					render: (container, renderMarkdown, owner) => {
+						if (hybrid) {
+							const stripped = stripKitBodySections(source!.body);
+							if (!stripped.trim()) return undefined;
+							return renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' }));
+						}
+						renderFeatureList(container, FeatureConfig.allFrom([m.signature_ability!]), owner, renderMarkdown);
+						return undefined;
+					},
+				});
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const conditionLayout: CardLayout<Condition> = {

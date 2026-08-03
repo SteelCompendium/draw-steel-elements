@@ -13,6 +13,7 @@ import { ElementPipeline } from '@/framework/pipeline';
 import type { ElementPipelineDeps } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { createThemeService } from '@/framework/seams/theme';
+import type { ThemeServiceInternal } from '@/framework/seams/theme';
 import { createPreferenceStore } from '@/framework/seams/prefs';
 import { createRollService } from '@/framework/roll/service';
 import type { PrefsStorage } from '@/framework/seams/prefs';
@@ -93,9 +94,16 @@ function inlineHost(language: string): BlockHost & { containerEl: HTMLElement } 
 }
 
 describe('D6 Task 6: displayFamily inline rendering', () => {
+	// Plan 24 / SC-100 Task 3: kitLayout now declares a `.steel` composition, and
+	// DEFAULT_THEME_ID is 'steel' — so every ds-kit assertion below is now pinned to
+	// `setActive('legacy')` to keep proving the OLD row-list DOM still renders
+	// byte-identically (Task 2's invariant 2). Assertions themselves are UNCHANGED; the
+	// new Steel-branch composition gets its own coverage in kitSteel.test.ts.
 	test('ds-kit: inline example.yaml renders title/subtitle/badges/rows/body', async () => {
 		const host = inlineHost('ds-kit');
-		await new ElementPipeline(makeInlineDeps()).run(kitElement, kitExample, host);
+		const deps = makeInlineDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
+		await new ElementPipeline(deps).run(kitElement, kitExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -126,7 +134,9 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 	test('ds-kit: Stamina (and other *_bonus rows) render their inline SCC link through renderMarkdown', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-kit');
-		await new ElementPipeline(makeInlineDeps()).run(kitElement, kitExample, host);
+		const deps = makeInlineDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
+		await new ElementPipeline(deps).run(kitElement, kitExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		const staminaRow = Array.from(root.querySelectorAll('.dse-card__row')).find(
@@ -473,6 +483,9 @@ describe('D6 Task 7 review fix: previously-duplicated flavor/row text appears ex
 describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 	test('ds-kit: full scc.v1: code and bare slug both resolve, no error card', async () => {
 		const { vault, deps } = makeCompendiumDeps();
+		// Plan 24 / SC-100 Task 3: pin to the legacy branch (see the Task 6 describe
+		// block above for why).
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 
 		const codeHost = makeHost('ds-kit');
@@ -652,9 +665,15 @@ const ALL_TEN: {
 ];
 
 describe('D6 Task 7: all ten displayFamily elements mount inline and by-SCC with no error card', () => {
+	// Plan 24 / SC-100 Task 3: this table asserts the shared LEGACY `.dse-card__title`
+	// shape uniformly across all ten families — pin every entry to 'legacy' explicitly
+	// (a no-op for the nine families with no `.steel` composition; load-bearing for
+	// ds-kit, the sole family that has one as of this task).
 	test.each(ALL_TEN)('$id: inline example.yaml mounts with the expected title, no error card', async ({ id, element, example, inlineTitle }) => {
 		const host = inlineHost(id);
-		await new ElementPipeline(makeInlineDeps()).run(element, example, host);
+		const deps = makeInlineDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
+		await new ElementPipeline(deps).run(element, example, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe(inlineTitle);
@@ -662,6 +681,7 @@ describe('D6 Task 7: all ten displayFamily elements mount inline and by-SCC with
 
 	test.each(ALL_TEN)('$id: full scc.v1: code and bare slug both resolve, no error card', async ({ id, element, refTitle, code, rel, slug }) => {
 		const { vault, deps } = makeCompendiumDeps();
+		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, rel);
 
 		const codeHost = makeHost(id);

@@ -45,6 +45,8 @@ export type {
 } from './powerRollPanel';
 export { crest } from './crest';
 export type { CrestSize, CrestOptions, CrestHandle } from './crest';
+export { statTiles } from './statTiles';
+export type { StatTile } from './statTiles';
 
 // -- Rolling (D5 §3.5/§4, Plan 14) --
 export { rollBar } from './rollBar';

@@ -3823,6 +3823,101 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	text-decoration: underline;
 }
 
+/* ================================================================== */
+/*  Plan 24 / SC-100 Task 3 — the Steel kit composition (material)    */
+/* ================================================================== */
+/* Everything below mounts EXCLUSIVELY through kitLayout.steel's bands()
+   (CardLayout.ts renderSteel()) — renderLegacy() never creates a `.dse-head`
+   INSIDE `.dse-card`, a `.dse-card__band[-head]`, a `.dse-kit__equip`, or a
+   `.dse-tiles*` node, so none of this can leak into a legacy shot by
+   construction. Every rule still carries the project's standing
+   [data-dse-theme='steel']:not([data-dse-print="on"]) guard (dse-verify skill's
+   "every new Steel CSS rule" convention) for consistency with the rest of the
+   file — kit--steel-print stays flat because print's global token-flip
+   ([data-dse-print="on"], ~5316 — --dse-metal-faint/-grad -> none,
+   --dse-surface-sunken -> #fff, --dse-heading/-fg -> #000, --dse-emboss -> none)
+   already does the work once the screen-only material below is excluded there. */
+
+/* -- Head-in-card separator: the site's `.sc-kit__head` full-bleed border under
+   the header (steel-kit.css:36-39). cardHead() mounts `.dse-head` as `.dse-card`'s
+   first child ONLY on the Steel branch (renderSteel(), CardLayout.ts) — this
+   selector is exclusively Steel by construction, not just by this guard. The
+   literal rem figures mirror `.dse-card`'s own Steel inset (`1.25rem 1.375rem`,
+   Plan 21 Task 2, ~3348) so the separator bleeds exactly to the card's padded
+   edge, the same "cancel-then-reapply" recipe `.dse-hero__region-title` uses
+   (~4385) for its own edge-to-edge head strip. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card > .dse-head {
+	margin: 0 -1.375rem 0.9em;
+	padding: 0 1.375rem 1.05em;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+
+/* -- Bands (Equipment / Kit Bonuses / Signature Ability): the site's
+   `.sc-kit__band`/`.sc-kit__band-head` (steel-kit.css:50-56) — small-caps
+   tracked label + a hairline rule, NOT a full boxed/sheen panel (only the
+   Equipment box below gets that). Small-caps recipe matches the established
+   DSE convention (lowercase text-transform + font-variant:small-caps —
+   `.dse-head__eyebrow--line`/`.dse-section__title` above), not the site's own
+   literal uppercase-transform (which, paired with small-caps, defeats true
+   small-caps rendering — the site's own ability-card section-heads use the
+   SAME lowercase-transform recipe this ports, so this follows the more
+   internally-consistent site precedent, not the kit page's own outlier). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band {
+	margin-top: 1em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band-head {
+	font-family: var(--dse-font-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.07em;
+	font-size: 0.8em;
+	color: var(--dse-metal);
+	margin-bottom: 0.45em;
+	padding-bottom: 0.25em;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+
+/* -- Equipment box: the site's `.sc-kit__equip` sunken panel (steel-kit.css:61-65). -- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-kit__equip {
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	padding: 0.65em 0.8em;
+	font-size: 0.92em;
+	line-height: 1.5;
+	color: var(--dse-fg);
+}
+
+/* -- Kit Bonuses tiles: the site's `.sc-card__stats`/`.sc-card__stat`
+   (steel-redesign.css:192-207) — sunken boxed cell, monospace value (site: the
+   code font), small-caps label. Reuses the SAME boxed value-over-label recipe
+   already established for the feature card's Distance/Target rail
+   (`.dse-feature__meta-cell--distance/target`, ~3900) rather than inventing a
+   second one. `--dmg` brightens the value the way the site's `.is-dmg`
+   modifier does for the Melee/Ranged Dmg cells (steel-redesign.css:207). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles {
+	margin-top: 0.2em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__cell {
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__value {
+	font-family: var(--dse-font-mono);
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__cell--dmg .dse-tiles__value {
+	color: var(--dse-metal-bright);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__label {
+	font-family: var(--dse-font-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.05em;
+	color: var(--dse-fg-faint);
+}
+
 /* -- SC-10 Task 3: boxed Distance/Target rail + eyebrow-chip Keywords/Type --
    .dse-feature__meta is a 2-col grid (D2 §3.6); Keywords/Type occupy row 1,
    Distance/Target row 2 (DOM/creation order — no restructuring needed). The
@@ -5198,6 +5293,41 @@ button.dse-pr__row:hover {
 	position: relative;
 	display: grid;
 	place-items: center;
+}
+
+/* -- statTiles (Plan 24 / SC-100 Task 3): the kit stat-tile primitive -- */
+/* Structural SHAPE only — the same split crest() uses above (bare geometry here,
+   Steel's material/color in the Steel theme block, ~3980). Only kitLayout.steel's
+   bands() ever calls statTiles() (renderSteel()-only, CardLayout.ts) so these
+   classes can never appear in ANY legacy shot regardless of scoping — kept
+   unguarded/theme-agnostic here (like .dse-card__* above) because the geometry
+   itself has nothing Steel-specific to hide; the color/wash rules that DO need
+   the standing Steel+not-print guard live with the rest of Task 3's material. */
+.dse-tiles {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 0.35em;
+}
+.dse-tiles + .dse-tiles {
+	margin-top: 0.35em;
+}
+.dse-tiles__cell {
+	text-align: center;
+	padding: 0.4em 0.25em;
+	border-radius: var(--dse-radius);
+}
+.dse-tiles__value {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 1.15em;
+	line-height: 1.1;
+	font-weight: bold;
+}
+.dse-tiles__label {
+	margin-top: 0.1em;
+	line-height: 1.05;
+	font-size: 0.68em;
 }
 
 /* -- The framework-default focus ring (D2 §4.5, Plan 08 Task 5) -- */

@@ -58,6 +58,7 @@
 // re-renders. It deliberately never calls `rootEl.empty()`: the pipeline appends
 // pipeline-owned siblings to root AFTER mount() returns (e.g. the authoring pencil,
 // pipeline.ts), and emptying root would destroy those too.
+import type { Component } from 'obsidian';
 import type { Feature } from 'steel-compendium-sdk';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
@@ -97,9 +98,19 @@ export interface SteelBand {
 	 * Builds this band's content into `container`. `renderMarkdown` is the SAME
 	 * view-lifecycle-bound helper (`this.renderMarkdown`) the legacy branch uses — pass
 	 * markdown through it (not raw text) so scc-anchor rewriting and owned-child
-	 * bookkeeping stay uniform between the two branches.
+	 * bookkeeping stay uniform between the two branches. `owner` (Task 3, SC-100) is the
+	 * mounted `DisplayCardView` itself — a band that needs to recurse through the shared
+	 * `renderFeature`/`renderFeatureList` grammar (e.g. kit's Signature Ability band, the
+	 * same real-feature-card mechanism the legacy branch's `features` slot uses) needs a
+	 * `Component` owner for THAT grammar's own child registration; existing band literals
+	 * that don't need it can simply omit the third parameter (TS function-type
+	 * compatibility — Task 2's own contract test band does exactly this).
 	 */
-	render: (container: HTMLElement, renderMarkdown: (markdown: string, el: HTMLElement) => Promise<void>) => void | Promise<void>;
+	render: (
+		container: HTMLElement,
+		renderMarkdown: (markdown: string, el: HTMLElement) => Promise<void>,
+		owner: Component,
+	) => void | Promise<void>;
 }
 
 /**
@@ -170,7 +181,13 @@ export interface CardLayout<M> {
 // (e.g. "One language") coincidentally appearing as a substring of a long body.
 const DUPLICATE_ROW_MIN_LENGTH = 20;
 
-function normalizeForDuplicateCheck(s: string): string {
+/**
+ * Exported (Task 3, SC-100): kit's Steel composition (`layouts.ts`) needs the SAME
+ * flavor/body duplicate-text check for its own headless flavor band — a card-family
+ * concern, so it lives in the layout's `bands()` closure, not duplicated view logic here
+ * — rather than re-deriving an equivalent normalize routine that could drift from this one.
+ */
+export function normalizeForDuplicateCheck(s: string): string {
 	return s
 		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links -> link text
 		.replace(/[*_`]/g, '') // emphasis/code markers
@@ -411,7 +428,7 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 		for (const band of composition.bands(model, this.source)) {
 			const bandEl = card.createDiv({ cls: 'dse-card__band' });
 			if (band.head) bandEl.createDiv({ cls: 'dse-card__band-head', text: band.head });
-			await band.render(bandEl, (markdown, el) => this.renderMarkdown(markdown, el));
+			await band.render(bandEl, (markdown, el) => this.renderMarkdown(markdown, el), this);
 		}
 
 		return card;
