@@ -180,7 +180,14 @@ export abstract class ElementView<M> extends Component {
 		return super.removeChild(child);
 	}
 
-	private unloadOwnedChildren(): void {
+	/**
+	 * Tear down exactly the children THIS view added (via addChild) without touching
+	 * rootEl or the view itself. `protected` (not `private`) so a subclass that owns a
+	 * finer-grained re-render than the default update() — e.g. DisplayCardView's
+	 * theme-conditional branch swap (SC-100) — can reuse the same owned-children
+	 * bookkeeping instead of re-deriving it.
+	 */
+	protected unloadOwnedChildren(): void {
 		for (const child of this.ownedChildren.slice()) {
 			this.removeChild(child);
 		}
