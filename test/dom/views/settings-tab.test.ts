@@ -42,9 +42,8 @@ describe('D4 §4 — DseSettingTab', () => {
 		// Authoring group (authoringControls, default OFF — row is NOT hidden, so it
 		// renders a heading). F2 Task 11 appends the operational headings (Compendium,
 		// Links, Initiative tracker) after the generated pref sections. SC-112
-		// (Plan 23 Task 6) inserts Typography after Appearance — until Task 8 ships
-		// the 'font' control case, its rows render label+help with no control
-		// (accepted mid-plan state).
+		// (Plan 23 Task 6) inserts Typography after Appearance; Task 8 renders its
+		// 'font'/'slider' controls (covered by the SC-112 describe block below).
 		expect(headings).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
@@ -339,5 +338,188 @@ describe('F2 Task 11 — Compendium operational section', () => {
 		rowByName('Default creature image path').texts[0].trigger('token.png');
 		await flushAsync(1);
 		expect(plugin.settings.defaultImagePath).toBe('token.png');
+	});
+});
+
+// —— SC-112 Task 8: the Typography section — 'font' pickers (3 primary + 3 behind
+// the Advanced disclosure) and the two 'slider' size scales. Same real-class,
+// recording-Setting-mock harness as the D4 suite above. ——
+describe('SC-112 Task 8 — Typography controls', () => {
+	beforeEach(() => {
+		Setting.created.length = 0;
+	});
+	afterEach(() => {
+		delete (window as { queryLocalFonts?: unknown }).queryLocalFonts;
+	});
+
+	test('font row: default-sentinel-first dropdown + trailing Custom…; change persists and reflects; \'\' round-trips', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const owner: any = new Component();
+		owner.load();
+		const root = document.createElement('div');
+		prefs.reflect(root, owner);
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const dd = rowByName('Title font').dropdowns[0];
+		// Order: the uniform default sentinel, the curated entries, Custom… last.
+		expect(dd.options[0]).toEqual({ value: '', label: 'Default (Obsidian vault fonts)' });
+		expect(dd.options.map((o) => o.value)).toContain('Georgia');
+		expect(dd.options[dd.options.length - 1]).toEqual({ value: '__custom__', label: 'Custom…' });
+		expect(dd.value).toBe(''); // default selected
+		// Help text comes from the descriptor (Task 6 SHIP clause), not renderer copy.
+		expect(rowByName('Title font').desc).toContain('Steel and Legacy');
+		dd.trigger('Georgia');
+		await flushAsync(1);
+		expect(prefs.get('fontTitle')).toBe('Georgia');
+		// Live-apply: the reflected root re-stamps the slot property synchronously.
+		expect(root.style.getPropertyValue('--dse-font-title')).toBe('"Georgia", var(--font-text)');
+		dd.trigger('');
+		await flushAsync(1);
+		expect(prefs.get('fontTitle')).toBe('');
+		expect(root.style.getPropertyValue('--dse-font-title')).toBe(''); // removed — default is inert
+	});
+
+	test('custom font value: dropdown lands on Custom…, text input revealed with the raw value; edits save; empty rejects to default', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		await prefs.set('fontBody', 'Comic Sans MS'); // not in the curated list
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const row = rowByName('Body font');
+		expect(row.dropdowns[0].value).toBe('__custom__');
+		const text = row.texts[0];
+		expect(text.value).toBe('Comic Sans MS');
+		expect(text.inputEl.classList.contains('dse-hidden')).toBe(false); // revealed
+		// A listed-value row keeps its custom input hidden.
+		expect(rowByName('Title font').texts[0].inputEl.classList.contains('dse-hidden')).toBe(true);
+		text.trigger('Papyrus');
+		await flushAsync(1);
+		expect(prefs.get('fontBody')).toBe('Papyrus');
+		text.trigger('   '); // obviously empty → reject to default
+		await flushAsync(1);
+		expect(prefs.get('fontBody')).toBe('');
+	});
+
+	test('picking Custom… only reveals the input (no save); picking a listed value saves and hides it', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const row = rowByName('Title font');
+		row.dropdowns[0].trigger('__custom__');
+		await flushAsync(1);
+		expect(prefs.get('fontTitle')).toBe(''); // untouched
+		expect(row.texts[0].inputEl.classList.contains('dse-hidden')).toBe(false);
+		row.dropdowns[0].trigger('Inter');
+		await flushAsync(1);
+		expect(prefs.get('fontTitle')).toBe('Inter');
+		expect(row.texts[0].inputEl.classList.contains('dse-hidden')).toBe(true);
+	});
+
+	test('advanced font rows render inside a collapsed <details>; the group reset still covers them', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const details = tab.containerEl.querySelector('details.dse-settings-advanced') as HTMLDetailsElement;
+		expect(details).not.toBeNull();
+		expect(details.open).toBe(false); // collapsed by default
+		expect(details.querySelector('summary')?.textContent).toBe('Advanced');
+		// The three advanced slots live inside; the three primary slots do not.
+		for (const name of ['Card body font', 'Label font', 'Monospace font']) {
+			expect(details.querySelector(`[data-setting-name="${name}"]`)).not.toBeNull();
+		}
+		for (const name of ['Title font', 'Body font', 'Controls font', 'Text size', 'Card size']) {
+			expect(details.querySelector(`[data-setting-name="${name}"]`)).toBeNull();
+		}
+		// Mono slot gets ITS curated list, not the text one.
+		const mono = rowByName('Monospace font').dropdowns[0];
+		expect(mono.options.map((o) => o.value)).toContain('JetBrains Mono');
+		expect(mono.options.map((o) => o.value)).not.toContain('Georgia');
+		// Group reset (heading extra-button) resets advanced members too.
+		mono.trigger('Fira Code');
+		await flushAsync(1);
+		expect(prefs.get('fontMono')).toBe('Fira Code');
+		const heading = Setting.created.find((s) => s.heading && s.name === 'Typography')!;
+		heading.extraButtons[0].click();
+		await flushAsync(2);
+		expect(prefs.get('fontMono')).toBe('');
+	});
+
+	test('slider rows: site limits + dynamic tooltip; values snap before save; percent readout tracks', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const owner: any = new Component();
+		owner.load();
+		const root = document.createElement('div');
+		prefs.reflect(root, owner);
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const textRow = rowByName('Text size');
+		const slider = textRow.sliders[0];
+		expect(slider.limits).toEqual({ min: 0.6, max: 1.4, step: 0.05 });
+		expect(slider.dynamicTooltip).toBe(true);
+		expect(slider.value).toBe(1);
+		expect(textRow.controlEl!.querySelector('.dse-slider-value')!.textContent).toBe('100%');
+		slider.trigger(0.837); // off-step → snaps to 0.85
+		await flushAsync(1);
+		expect(prefs.get('textScale')).toBe(0.85);
+		expect(textRow.controlEl!.querySelector('.dse-slider-value')!.textContent).toBe('85%');
+		expect(root.style.getPropertyValue('--dse-text-scale')).toBe('0.85'); // live-apply
+		expect(rowByName('Card size').sliders[0].limits).toEqual({ min: 0.8, max: 1.2, step: 0.05 });
+	});
+
+	test('List installed fonts: user-activation fetch populates every font dropdown (deduped, before Custom…), then the affordance retires', async () => {
+		(window as any).queryLocalFonts = jest.fn(async () => [
+			{ family: 'Zilla Slab' },
+			{ family: 'Aptos' },
+			{ family: 'Aptos' }, // style-variant duplicate — must dedupe
+			{ family: 'Georgia' }, // curated overlap — must dedupe
+		]);
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const before = rowByName('Title font');
+		expect(before.dropdowns[0].options.map((o) => o.value)).not.toContain('Aptos'); // never called at render time
+		expect(before.extraButtons).toHaveLength(1);
+		Setting.created.length = 0; // the click re-renders; read the fresh rows
+		before.extraButtons[0].click();
+		await flushAsync(2);
+		expect((window as any).queryLocalFonts).toHaveBeenCalledTimes(1);
+		const values = rowByName('Title font').dropdowns[0].options.map((o) => o.value);
+		expect(values.filter((v) => v === 'Aptos')).toHaveLength(1);
+		expect(values.filter((v) => v === 'Zilla Slab')).toHaveLength(1);
+		expect(values.filter((v) => v === 'Georgia')).toHaveLength(1); // curated copy only
+		expect(values[values.length - 1]).toBe('__custom__'); // Custom… stays last
+		// Mono row shares the fetch.
+		expect(rowByName('Monospace font').dropdowns[0].options.map((o) => o.value)).toContain('Aptos');
+		// One fetch per tab lifetime — the affordance is gone after population.
+		expect(rowByName('Title font').extraButtons).toHaveLength(0);
+	});
+
+	test('queryLocalFonts failure falls back to the curated list silently', async () => {
+		(window as any).queryLocalFonts = jest.fn(async () => {
+			throw new Error('denied');
+		});
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const before = rowByName('Title font');
+		Setting.created.length = 0;
+		before.extraButtons[0].click();
+		await flushAsync(2);
+		const dd = rowByName('Title font').dropdowns[0];
+		// default sentinel + 7 curated + Custom… — nothing else, no thrown rejection.
+		expect(dd.options).toHaveLength(9);
+		expect(rowByName('Title font').extraButtons).toHaveLength(0); // no retry loop
+	});
+
+	test('no queryLocalFonts (feature-detect miss): font rows render without the affordance', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		expect(rowByName('Title font').extraButtons).toHaveLength(0);
+		expect(rowByName('Title font').dropdowns).toHaveLength(1); // picker still renders
 	});
 });

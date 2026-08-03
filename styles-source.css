@@ -481,6 +481,26 @@ code.dsa {
 	max-width: 40rem;
 }
 
+/* SC-112 Task 8 — Typography settings controls (settings tab only; never matches
+   inside a rendered [data-dse-element], so the element freeze is untouched). */
+.dse-settings-advanced > summary {
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	padding: 0.5em 0;
+}
+/* The Custom… free-text input of a 'font' row while a listed value is selected. */
+.dse-hidden {
+	display: none !important;
+}
+/* The slider rows' percent readout (the site's set-scale-val affordance). */
+.dse-slider-value {
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+	min-width: 3.2em;
+	text-align: right;
+}
+
 /* Condition icons in the MinionStaminaPoolModal (T3) — deliberately GLOBAL: the
    modal mounts in document.body. The TRACKER's own condition icons are the .dse-cond
    kit buttons under [data-dse-element="initiative"] below (D2 §3.11). */

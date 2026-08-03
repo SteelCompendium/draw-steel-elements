@@ -85,8 +85,7 @@ export interface PrefUi {
 	/** 'toggle' over a string-typed pref means the 'on'|'off' mapping (checked ⇔ 'on').
 	 *  'font' (SC-112) is the curated-list-plus-custom-entry font picker; 'slider'
 	 *  (SC-112 Task 7) is the numeric range slider over min/max/step below — both
-	 *  controls rendered by Task 8; until then SettingsTab renders the row without
-	 *  a control. */
+	 *  rendered by SettingsTab.renderRow (Task 8). */
 	control: 'toggle' | 'select' | 'text' | 'font' | 'slider';
 	options?: readonly { value: string; label: string }[];
 	/** 'slider' only (SC-112 Task 7): the range Task 8 renders. Mirrors the

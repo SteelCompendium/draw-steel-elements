@@ -691,15 +691,43 @@ export class FakeDropdown extends FakeSettingComponent {
 export class FakeText extends FakeSettingComponent {
 	value = '';
 	placeholder = '';
+	/** Real TextComponent exposes its <input> — SC-112 Task 8's font renderer toggles
+	 *  a visibility class on it (Custom… reveal), so the fake carries a real jsdom node. */
+	inputEl: HTMLInputElement = (
+		typeof document !== 'undefined' ? document.createElement('input') : null
+	) as HTMLInputElement;
 	setPlaceholder(placeholder: string): this {
 		this.placeholder = placeholder;
 		return this;
 	}
 	setValue(value: string): this {
 		this.value = value;
+		if (this.inputEl) this.inputEl.value = value;
 		return this;
 	}
 	trigger(value: string): void {
+		this.value = value;
+		if (this.inputEl) this.inputEl.value = value;
+		this.changeCb?.(value);
+	}
+}
+export class FakeSlider extends FakeSettingComponent {
+	value = 0;
+	limits: { min: number; max: number; step: number } | null = null;
+	dynamicTooltip = false;
+	setLimits(min: number, max: number, step: number): this {
+		this.limits = { min, max, step };
+		return this;
+	}
+	setValue(value: number): this {
+		this.value = value;
+		return this;
+	}
+	setDynamicTooltip(): this {
+		this.dynamicTooltip = true;
+		return this;
+	}
+	trigger(value: number): void {
 		this.value = value;
 		this.changeCb?.(value);
 	}
@@ -737,6 +765,9 @@ export class Setting {
 	 *  (reset with Setting.created.length = 0 in beforeEach). */
 	static created: Setting[] = [];
 	settingEl: HTMLElement | null;
+	/** Real Setting exposes the right-hand control container — SC-112 Task 8's slider
+	 *  renderer createSpans its percent readout into it. */
+	controlEl: HTMLElement | null;
 	name = '';
 	desc = '';
 	heading = false;
@@ -745,11 +776,15 @@ export class Setting {
 	readonly texts: FakeText[] = [];
 	readonly buttons: FakeButton[] = [];
 	readonly extraButtons: FakeButton[] = [];
+	readonly sliders: FakeSlider[] = [];
 	constructor(containerEl: any) {
 		this.settingEl =
 			typeof document !== 'undefined' && containerEl?.createDiv
 				? containerEl.createDiv({ cls: 'setting-item' })
 				: null;
+		this.controlEl = this.settingEl
+			? (this.settingEl as any).createDiv({ cls: 'setting-item-control' })
+			: null;
 		Setting.created.push(this);
 	}
 	setName(name: string): this {
@@ -792,6 +827,12 @@ export class Setting {
 	addDropdown(cb?: (dropdown: FakeDropdown) => any): this {
 		const c = new FakeDropdown();
 		this.dropdowns.push(c);
+		cb?.(c);
+		return this;
+	}
+	addSlider(cb?: (slider: FakeSlider) => any): this {
+		const c = new FakeSlider();
+		this.sliders.push(c);
 		cb?.(c);
 		return this;
 	}

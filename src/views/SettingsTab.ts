@@ -12,7 +12,7 @@
 // element root and CSS reflows behind the open settings dialog — no Apply button,
 // no re-render. This replaces the D3 temporary commands (dse-cycle-theme,
 // dse-toggle-print-preview), deleted from main.ts in this same task.
-import { App, Component, Notice, PluginSettingTab, Setting } from 'obsidian';
+import { App, Component, Notice, PluginSettingTab, Setting, type TextComponent } from 'obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '@/framework/seams/prefs';
 import {
@@ -20,9 +20,26 @@ import {
 	applySbPreset,
 	deriveSbPreset,
 	prefUi,
+	type PrefUi,
 	type SbPresetId,
 } from '@/prefs/catalog';
+import { snap, type ScaleRange } from '@/prefs/scale';
 import { mountSettingsPreview } from '@views/SettingsPreview';
+
+// Local Font Access API (SC-112 Task 1 spike, Outcome A): queryLocalFonts() works
+// unconditionally in Obsidian's Electron — no permission prompt — but it still
+// requires a user-activation gesture, hence the explicit "List installed fonts"
+// click affordance on the font rows (never called at render time). Not yet in
+// lib.dom, so declared here; optional for feature detection.
+declare global {
+	interface Window {
+		queryLocalFonts?: () => Promise<{ family: string }[]>;
+	}
+}
+
+/** Dropdown value reserved for the free-text "Custom…" entry of a 'font' row —
+ *  never persisted (the text input's raw value is what saves). */
+const CUSTOM_FONT = '__custom__';
 
 /** Structural slice of DropdownComponent the preset re-derivation needs. */
 interface ValueControl {
@@ -35,6 +52,11 @@ export class DseSettingTab extends PluginSettingTab {
 	 *  recycled on every display(), unloaded on hide(). */
 	private displayOwner: Component | null = null;
 	private presetDropdown: ValueControl | null = null;
+	/** SC-112 Task 8: families fetched by "List installed fonts" (null = never
+	 *  fetched — the affordance is still offered; [] = fetch failed/denied — the
+	 *  curated list silently stands). Kept for the tab's lifetime: the installed
+	 *  set doesn't change mid-session, and every font row shares one fetch. */
+	private installedFonts: readonly string[] | null = null;
 
 	constructor(app: App, plugin: DrawSteelAdmonitionPlugin) {
 		super(app, plugin);
@@ -87,7 +109,17 @@ export class DseSettingTab extends PluginSettingTab {
 						.onClick(() => void this.resetDescriptors(prefs, members)),
 				);
 			if (groupName === 'Statblock display') this.renderPresetControl(containerEl, prefs);
-			for (const descriptor of members) this.renderRow(containerEl, prefs, descriptor);
+			// SC-112 Task 8: secondary rows (ui.advanced) collapse behind a <details>
+			// disclosure AFTER the primary rows. The group reset button above still
+			// resets ALL of `members` — advanced included.
+			const primary = members.filter((descriptor) => !prefUi(descriptor)?.advanced);
+			const advanced = members.filter((descriptor) => prefUi(descriptor)?.advanced);
+			for (const descriptor of primary) this.renderRow(containerEl, prefs, descriptor);
+			if (advanced.length) {
+				const details = containerEl.createEl('details', { cls: 'dse-settings-advanced' });
+				details.createEl('summary', { text: 'Advanced' });
+				for (const descriptor of advanced) this.renderRow(details, prefs, descriptor);
+			}
 			if (groupName === 'Statblock display' && this.displayOwner) {
 				mountSettingsPreview(containerEl, this.plugin, this.displayOwner);
 			}
@@ -192,7 +224,117 @@ export class DseSettingTab extends PluginSettingTab {
 				);
 				break;
 			}
+			case 'font': {
+				this.renderFontControl(setting, prefs, descriptor, ui, save);
+				break;
+			}
+			case 'slider': {
+				// The range rides the descriptor's ui (Task 7 mirrored snap()'s
+				// min/max/step there) + the descriptor's own numeric default — no
+				// per-key knowledge here. Values pass through snap() before save().
+				const fallback = typeof descriptor.default === 'number' ? descriptor.default : 1;
+				const range: ScaleRange = {
+					min: ui.min ?? fallback,
+					max: ui.max ?? fallback,
+					step: ui.step ?? 1,
+					default: fallback,
+				};
+				const current = snap(prefs.get(descriptor.key), range);
+				const pct = (value: number): string => `${Math.round(value * 100)}%`;
+				// The site's set-scale-val percent readout (settings-panel.js:531-541),
+				// created before the slider so it sits to its left in the control cell.
+				const valueEl = setting.controlEl.createSpan({
+					cls: 'dse-slider-value',
+					text: pct(current),
+				});
+				setting.addSlider((slider) =>
+					slider
+						.setLimits(range.min, range.max, range.step)
+						.setValue(current)
+						.setDynamicTooltip()
+						.onChange((value) => {
+							const snapped = snap(value, range);
+							valueEl.setText(pct(snapped));
+							save(snapped);
+						}),
+				);
+				break;
+			}
 		}
+	}
+
+	// —— SC-112 Task 8: the 'font' control — curated dropdown + Custom… free text
+	// + the user-activation "List installed fonts" affordance (Task 1 Outcome A) ——
+	private renderFontControl(
+		setting: Setting,
+		prefs: PreferenceStore,
+		descriptor: PrefDescriptor,
+		ui: PrefUi,
+		save: (value: DsePrefs[keyof DsePrefs]) => void,
+	): void {
+		// ui.options already leads with the uniform "Default (Obsidian vault fonts)"
+		// sentinel ('') followed by the slot's curated entries (catalog.ts); installed
+		// families (once listed) append after those, deduped; Custom… is always last.
+		const options = [...(ui.options ?? [])];
+		const known = new Set(options.map((option) => option.value));
+		for (const family of this.installedFonts ?? []) {
+			if (known.has(family)) continue;
+			known.add(family);
+			options.push({ value: family, label: family });
+		}
+		const current = String(prefs.get(descriptor.key));
+		const isListed = known.has(current);
+		let customText: TextComponent | null = null;
+		const showCustom = (show: boolean): void =>
+			customText?.inputEl.toggleClass('dse-hidden', !show);
+		setting.addDropdown((dropdown) => {
+			for (const option of options) dropdown.addOption(option.value, option.label);
+			dropdown.addOption(CUSTOM_FONT, 'Custom…');
+			dropdown.setValue(isListed ? current : CUSTOM_FONT);
+			dropdown.onChange((value) => {
+				if (value === CUSTOM_FONT) {
+					// Nothing saves yet — the revealed text input's edits do.
+					showCustom(true);
+					return;
+				}
+				showCustom(false);
+				customText?.setValue(value);
+				save(value);
+			});
+		});
+		setting.addText((text) => {
+			customText = text;
+			text.setPlaceholder('Font family');
+			text.setValue(current);
+			text.inputEl.toggleClass('dse-hidden', isListed);
+			// Raw value saves through the normal path — sanitization happens in
+			// toCss (fontStacks.sanitizeFamily); obviously-empty input rejects to
+			// the '' default.
+			text.onChange((value) => save(value.trim() === '' ? '' : value));
+		});
+		if (this.installedFonts === null && 'queryLocalFonts' in window) {
+			setting.addExtraButton((button) =>
+				button
+					.setIcon('type')
+					.setTooltip('List installed fonts')
+					.onClick(() => void this.listInstalledFonts()),
+			);
+		}
+	}
+
+	/** Fetches the local font families (inside the click's user activation) and
+	 *  re-renders so every font row's dropdown includes them. Failure or denial
+	 *  falls back to the curated list silently (installedFonts = []). */
+	private async listInstalledFonts(): Promise<void> {
+		try {
+			const fonts = (await window.queryLocalFonts?.()) ?? [];
+			this.installedFonts = [...new Set(fonts.map((font) => font.family))].sort((a, b) =>
+				a.localeCompare(b),
+			);
+		} catch {
+			this.installedFonts = [];
+		}
+		this.display();
 	}
 
 	// —— Operational sections: F2 §3.4 rework (Task 11) — sentence case throughout,
