@@ -50,6 +50,8 @@ export function extractPrefOverrides(
 			continue;
 		}
 		if (!descriptor.attr) {
+			// Also lands here by design: css-bearing keys (SC-112 font/scale prefs) are
+			// intentionally GLOBAL-ONLY — per-block prefs: supports attr-reflected keys only.
 			console.warn(
 				`Draw Steel Elements: "${key}" is not a presentation preference — per-block prefs: only supports attribute-reflected keys (use the block's own keys, e.g. collapsible:, for behavioral overrides).`,
 			);

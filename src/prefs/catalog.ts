@@ -21,6 +21,7 @@
 // (`value === descriptor.default`), which is only correct for primitives.
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '../framework/seams/prefs';
 import { declaredCollapsePrefs } from '@model/ComponentWrapper';
+import { CURATED_FONTS, DEFAULT_FONT_OPTION, fontCss } from './fontStacks';
 
 declare module '../framework/seams/prefs' {
 	interface DsePrefs {
@@ -28,6 +29,14 @@ declare module '../framework/seams/prefs' {
 		reduceMotion: boolean;
 		printPreview: 'on' | 'off';
 		portraits: 'on' | 'off';
+		// —— Typography (SC-112 — css-reflected, no attr; '' is the "Default
+		// (Obsidian vault fonts)" sentinel → toCss null → no inline override) ——
+		fontTitle: string;
+		fontBody: string;
+		fontControls: string;
+		fontCardBody: string;
+		fontLabel: string;
+		fontMono: string;
 		// —— Statblock display (presentation; OD-D4-6 curated four) ——
 		sbFeatureStyle: 'card' | 'flat';
 		sbDensity: 'comfortable' | 'compact';
@@ -47,6 +56,7 @@ declare module '../framework/seams/prefs' {
 
 export type PrefGroup =
 	| 'Appearance'
+	| 'Typography'
 	| 'Statblock display'
 	| 'Element defaults'
 	| 'Rolling'
@@ -55,6 +65,7 @@ export type PrefGroup =
 /** Section order in the settings tab. */
 export const GROUP_ORDER: readonly PrefGroup[] = [
 	'Appearance',
+	'Typography',
 	'Statblock display',
 	'Element defaults',
 	'Rolling',
@@ -66,13 +77,17 @@ export interface PrefUi {
 	group: PrefGroup;
 	label: string;
 	help?: string;
-	/** 'toggle' over a string-typed pref means the 'on'|'off' mapping (checked ⇔ 'on'). */
-	control: 'toggle' | 'select' | 'text';
+	/** 'toggle' over a string-typed pref means the 'on'|'off' mapping (checked ⇔ 'on').
+	 *  'font' (SC-112) is the curated-list-plus-custom-entry font picker — control
+	 *  rendered by Task 8; until then SettingsTab renders the row without a control. */
+	control: 'toggle' | 'select' | 'text' | 'font';
 	options?: readonly { value: string; label: string }[];
 	/** Statblock preset-bundle member (§3.2). */
 	inPreset?: boolean;
 	/** Row not rendered (consumer not shipped: D5 rolling, F2 references). */
 	hidden?: boolean;
+	/** SC-112: secondary row — Task 8 renders these behind an "Advanced" disclosure. */
+	advanced?: boolean;
 }
 
 /** Typed accessor for the `unknown`-typed ui at the F1 seam. */
@@ -86,6 +101,12 @@ function d<K extends keyof DsePrefs>(
 ): PrefDescriptor {
 	return descriptor;
 }
+
+// —— SC-112 Typography dropdown choices: the uniform "Default (Obsidian vault
+// fonts)" sentinel first (Scott's 2026-08-02 ruling), then the curated list.
+// Values are BARE family names ('' = sentinel); fontCss builds the stack. ——
+const TEXT_FONT_OPTIONS = [DEFAULT_FONT_OPTION, ...CURATED_FONTS.text] as const;
+const MONO_FONT_OPTIONS = [DEFAULT_FONT_OPTION, ...CURATED_FONTS.mono] as const;
 
 export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 	// —— Appearance ——
@@ -108,6 +129,59 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Appearance', label: 'Initiative portraits', control: 'toggle',
 			help: 'Show creature portraits in the initiative tracker.',
+		},
+	}),
+
+	// —— Typography (SC-112 — css-bearing: no attr, reflected as an inline
+	// --dse-font-<slot> custom property per element root; '' → toCss null →
+	// removeProperty, so DEFAULTS ARE INERT (the freeze bar). Global-only:
+	// per-block `prefs:` rejects attr-less keys (prefOverrides.ts). ——
+	d({
+		key: 'fontTitle', default: '',
+		css: { varName: '--dse-font-title', toCss: (v) => (v === '' ? null : fontCss('title', v)) },
+		ui: {
+			group: 'Typography', label: 'Title font', control: 'font', options: TEXT_FONT_OPTIONS,
+			help: 'Font for titles and headings in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault text font (the Steel theme layers its bundled serif on top). A chosen font applies under both the Steel and Legacy themes.',
+		},
+	}),
+	d({
+		key: 'fontBody', default: '',
+		css: { varName: '--dse-font-body', toCss: (v) => (v === '' ? null : fontCss('body', v)) },
+		ui: {
+			group: 'Typography', label: 'Body font', control: 'font', options: TEXT_FONT_OPTIONS,
+			help: 'Font for body text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault text font (the Steel theme layers its bundled serif on top). A chosen font applies under both the Steel and Legacy themes.',
+		},
+	}),
+	d({
+		key: 'fontControls', default: '',
+		css: { varName: '--dse-font-controls', toCss: (v) => (v === '' ? null : fontCss('controls', v)) },
+		ui: {
+			group: 'Typography', label: 'Controls font', control: 'font', options: TEXT_FONT_OPTIONS,
+			help: 'Font for interactive controls (buttons, steppers, inputs) in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Body font. A chosen font applies under both the Steel and Legacy themes.',
+		},
+	}),
+	d({
+		key: 'fontCardBody', default: '',
+		css: { varName: '--dse-font-card-body', toCss: (v) => (v === '' ? null : fontCss('cardBody', v)) },
+		ui: {
+			group: 'Typography', label: 'Card body font', control: 'font', options: TEXT_FONT_OPTIONS, advanced: true,
+			help: 'Font for text inside ability and feature cards. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Body font. A chosen font applies under both the Steel and Legacy themes.',
+		},
+	}),
+	d({
+		key: 'fontLabel', default: '',
+		css: { varName: '--dse-font-label', toCss: (v) => (v === '' ? null : fontCss('label', v)) },
+		ui: {
+			group: 'Typography', label: 'Label font', control: 'font', options: TEXT_FONT_OPTIONS, advanced: true,
+			help: 'Font for small labels, captions, and chips in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Title font. A chosen font applies under both the Steel and Legacy themes.',
+		},
+	}),
+	d({
+		key: 'fontMono', default: '',
+		css: { varName: '--dse-font-mono', toCss: (v) => (v === '' ? null : fontCss('mono', v)) },
+		ui: {
+			group: 'Typography', label: 'Monospace font', control: 'font', options: MONO_FONT_OPTIONS, advanced: true,
+			help: 'Font for monospaced text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault monospace font. A chosen font applies under both the Steel and Legacy themes.',
 		},
 	}),
 

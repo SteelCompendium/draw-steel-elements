@@ -33,6 +33,58 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('collapseDefault')).toBe(false);       // old ComponentWrapper ?? false
 	expect(store.get('rollingEnabled')).toBe(false);        // D5 master switch — OFF is the fidelity bar
 	expect(store.get('rollClickToRoll')).toBe(true);        // OD-5: gated by rollingEnabled, shipped default kept
+	// SC-112: all six font slots default to the '' sentinel — toCss('') is null,
+	// so reflect() stamps NO inline override (the theme-block chains govern; the
+	// visual-freeze bar depends on this inertness).
+	expect(store.get('fontTitle')).toBe('');
+	expect(store.get('fontBody')).toBe('');
+	expect(store.get('fontControls')).toBe('');
+	expect(store.get('fontCardBody')).toBe('');
+	expect(store.get('fontLabel')).toBe('');
+	expect(store.get('fontMono')).toBe('');
+});
+
+// —— SC-112 (Plan 23 Task 6): the six css-bearing font-slot descriptors ——
+
+const FONT_SLOT_CASES = [
+	// [key, varName, fallback tail, advanced?]
+	['fontTitle', '--dse-font-title', 'var(--font-text)', false],
+	['fontBody', '--dse-font-body', 'var(--font-text)', false],
+	['fontControls', '--dse-font-controls', 'var(--dse-font-body)', false],
+	['fontCardBody', '--dse-font-card-body', 'var(--dse-font-body)', true],
+	['fontLabel', '--dse-font-label', 'var(--dse-font-title)', true],
+	['fontMono', '--dse-font-mono', 'var(--font-monospace)', true],
+] as const;
+
+test('font slots: css-bearing (right varName), attr-less, sentinel default → null, slot-correct fallback tail', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const [key, varName, tail] of FONT_SLOT_CASES) {
+		const descriptor = byKey.get(key)!;
+		expect(descriptor).toBeDefined();
+		expect(descriptor.default).toBe('');            // primitive — persist()'s sparse check holds
+		expect(descriptor.attr).toBeUndefined();        // never data-dse-* reflected; global-only
+		expect(descriptor.css!.varName).toBe(varName);
+		expect(descriptor.css!.toCss('' as never)).toBeNull(); // default = remove-the-override
+		expect(descriptor.css!.toCss('Georgia' as never)).toBe(`"Georgia", ${tail}`);
+	}
+});
+
+test('font slots: Typography rows with the font control, the uniform default option FIRST, advanced flags on the three secondary slots', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const [key, , , advanced] of FONT_SLOT_CASES) {
+		const ui = prefUi(byKey.get(key)!)!;
+		expect(ui.group).toBe('Typography');
+		expect(ui.control).toBe('font');
+		// Scott's 2026-08-02 ruling: every dropdown's first/default option is
+		// uniformly '' / "Default (Obsidian vault fonts)".
+		expect(ui.options![0]).toEqual({ value: '', label: 'Default (Obsidian vault fonts)' });
+		expect(ui.advanced ?? false).toBe(advanced);
+		// SHIP verdict (Task 5): the help names the cross-theme reach explicitly.
+		expect(ui.help).toContain('applies under both the Steel and Legacy themes');
+	}
+	// Mono gets the mono curated list; the five text slots share the text list.
+	expect(prefUi(byKey.get('fontMono')!)!.options!.some((o) => o.value === 'JetBrains Mono')).toBe(true);
+	expect(prefUi(byKey.get('fontTitle')!)!.options!.some((o) => o.value === 'Source Serif 4')).toBe(true);
 });
 
 test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs have none', () => {
@@ -43,6 +95,13 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		reduceMotion: 'reduce-motion',
 		printPreview: 'print',        // theme-print.test.ts pins [data-dse-print="on"]
 		portraits: 'portraits',       // initiative CSS pins [data-dse-portraits="off"]
+		// SC-112 font slots: css-bearing, never attr-reflected (global-only)
+		fontTitle: null,
+		fontBody: null,
+		fontControls: null,
+		fontCardBody: null,
+		fontLabel: null,
+		fontMono: null,
 		sbFeatureStyle: 'sb-featstyle',
 		sbDensity: 'density',         // BUILT name (spec draft said sb-density; built wins)
 		sbColumns: 'sb-columns',

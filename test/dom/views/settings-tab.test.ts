@@ -41,9 +41,12 @@ describe('D4 §4 — DseSettingTab', () => {
 		// 'References' heading ever appears here. D9 (Plan 15 Task 5) adds the
 		// Authoring group (authoringControls, default OFF — row is NOT hidden, so it
 		// renders a heading). F2 Task 11 appends the operational headings (Compendium,
-		// Links, Initiative tracker) after the generated pref sections.
+		// Links, Initiative tracker) after the generated pref sections. SC-112
+		// (Plan 23 Task 6) inserts Typography after Appearance — until Task 8 ships
+		// the 'font' control case, its rows render label+help with no control
+		// (accepted mid-plan state).
 		expect(headings).toEqual([
-			'Appearance', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 		const names = Setting.created.map((s) => s.name);
