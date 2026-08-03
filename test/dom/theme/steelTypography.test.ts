@@ -426,6 +426,72 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		}
 	});
 
+	// Review finding I1: the tests above only check THAT `:not([data-dse-print="on"])`
+	// appears somewhere in the selector — they do NOT check that it is anchored correctly,
+	// so they pass just as happily on the buggy first-pass form this task's own freeze run
+	// caught (22/22 *--steel-print.png shots broke — see the ledger). A bare
+	// `:not([data-dse-print="on"]) X` descendant selector does not mean "X's real element
+	// root lacks print" — ANY ancestor lacking that attribute (`<html>`, `<body>`, the
+	// harness mount div) trivially satisfies it. The fix anchors every such arm directly
+	// onto `:is([data-dse-element], .dse-modal)` (the same root-or-modal union already used
+	// for the token value blocks, SC-104/FOLLOWUPS #31) — the exact element the harness
+	// stamps `data-dse-print="on"` on. This test locks THAT shape, not just the exclusion's
+	// presence: every occurrence of `:not([data-dse-print="on"])` used as a descendant-
+	// combinator ancestor (i.e. immediately followed by whitespace, not compounded further)
+	// must be immediately preceded by `:is([data-dse-element], .dse-modal)` with no space —
+	// a compound-on-the-same-element arm (Body's bare-root arm, Card-body's feature/
+	// featureblock arm, Title's initiative-family h3-h6 arm — where `:not(print)` is
+	// followed immediately by more compound selector text, not whitespace) is unaffected by
+	// this bug and is correctly exempted by the "followed by whitespace" test.
+	function findUnanchoredPrintExclusions(selectorText: string): string[] {
+		const violations: string[] = [];
+		const NOT_PRINT = /:not\(\[data-dse-print="on"\]\)/g;
+		const ANCHOR_SUFFIX = /:is\(\[data-dse-element\],\s*\.dse-modal\)$/;
+		let m: RegExpExecArray | null;
+		while ((m = NOT_PRINT.exec(selectorText))) {
+			const after = selectorText.slice(m.index + m[0].length);
+			// Only a concern when used as a descendant-combinator ancestor (followed by
+			// whitespace) — a `:not(print)` immediately compounded with more selector text
+			// (`:is(...)`, `[data-dse-element=...]`) is a same-element check, always safe.
+			if (!/^\s/.test(after)) continue;
+			const before = selectorText.slice(0, m.index);
+			if (!ANCHOR_SUFFIX.test(before)) {
+				violations.push(selectorText.slice(Math.max(0, m.index - 40), m.index + 30).trim());
+			}
+		}
+		return violations;
+	}
+
+	it('every widened slot\'s descendant-form print exclusion is anchored to :is([data-dse-element], .dse-modal), not a bare ancestor', () => {
+		for (const slot of WIDENED_SLOTS) {
+			const matches = fontFamilyRulesFor(slot).filter((r) => !STEEL_SCOPE.test(r.selector));
+			expect(matches.length).toBeGreaterThan(0);
+			for (const r of matches) {
+				expect(findUnanchoredPrintExclusions(r.selector)).toEqual([]);
+			}
+		}
+	});
+
+	it('the anchor guard HAS TEETH: an unanchored bare descendant form is reported as a violation', () => {
+		// Guard against a vacuous pass: the detector must actually flag the exact buggy
+		// pattern this task's freeze run caught, not just always return [].
+		expect(
+			findUnanchoredPrintExclusions(':not([data-dse-print="on"]) .dse-head__primary--left'),
+		).not.toEqual([]);
+		// And must NOT flag the correctly anchored form.
+		expect(
+			findUnanchoredPrintExclusions(
+				':is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-head__primary--left',
+			),
+		).toEqual([]);
+		// And must NOT flag a same-element compound (no descendant combinator involved).
+		expect(
+			findUnanchoredPrintExclusions(
+				':not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage])',
+			),
+		).toEqual([]);
+	});
+
 	it('Title\'s Steel-only display treatment (.dse-head__primary--left) keeps weight/uppercase Steel-scoped and no longer declares font-family itself', () => {
 		// `.dse-head__primary--left` appears in THREE Steel-scoped rules (a shared text-shadow
 		// list, a letter-spacing rule, and the display/weight/case rule this test targets) — find
