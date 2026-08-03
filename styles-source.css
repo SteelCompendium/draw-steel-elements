@@ -2990,15 +2990,26 @@ Shared globals
 	   "same as Body"/"same as Title"/"same as Body" ruling — the Controls chain is
 	   SC-112 Task 3) so SC-112 can offer just 3 primary user-facing controls.
 	   Values reproduce font-display's former per-theme resolution exactly (see the
-	   Steel-dark block below + D3-token-map.md). */
+	   Steel-dark block below + D3-token-map.md).
+	   CAVEAT (SC-112 root-cause find): every var(--font-text) chain declared HERE
+	   is invalid at computed-value time — var() substitutes on the DECLARING
+	   element, and <html> has no --font-text (Obsidian defines it on body) — so
+	   these :root custom properties compute to guaranteed-invalid everywhere.
+	   Consumers still render the intended Legacy look because font-family's own
+	   IACVT fallback is its inherited value (body's var(--font-text)). Any slot
+	   value that must DIFFER from plain inheritance (the Steel serif) therefore
+	   NEEDS a scoped re-declaration on the element roots (the Steel block). */
 	--dse-font-title: var(--font-text);
 	--dse-font-body: var(--font-text);
 	--dse-font-card-body: var(--dse-font-body);
 	--dse-font-label: var(--dse-font-title);
 	--dse-font-controls: var(--dse-font-body); /* SC-112: Controls defaults to "same as
-	   Body" — serif under Steel screen (the deliberate visible change), ambient under
-	   Legacy (chains to var(--font-text) there, byte-identical), pinned sans in print
-	   (:5363) to hold the frozen *--steel-print.png set. */
+	   Body" — serif under Steel screen, ambient under Legacy, pinned sans in print
+	   (~:5383) to hold the frozen *--steel-print.png set. NB this :root entry is the
+	   vocabulary CONTRACT, not the live Steel value: var() substitutes at
+	   computed-value time on the DECLARING element (<html>), so a :root chain can
+	   never see the Steel block's --dse-font-body — the Steel block re-declares
+	   this chain itself (~:3196), exactly like card-body/label. */
 	--dse-chip-bg: var(--tag-background);
 
 	/* -- Accent / interaction -- */
@@ -3144,11 +3155,13 @@ Shared globals
 
    Tokens deliberately ABSENT (they inherit the Legacy base — the map marks them
    "= Legacy, theme-invariant"): page-bg, pad, touch-min, font-mono, rule-fade.
-   font-controls (SC-105) is ALSO absent from this block, but NOT theme-invariant
-   as of SC-112: its :root definition chains to --dse-font-body (`:2998`), so it
-   resolves to whatever --dse-font-body is in scope — the Steel override below
-   for Steel screens (the deliberate serif flip), the Legacy literal for Legacy.
-   No Steel-block entry is needed because the chain alone carries the theme swap.
+   font-controls JOINED this block in SC-112 (root-cause fix): the earlier "the
+   :root chain alone carries the theme swap" model was WRONG — var() substitutes
+   at computed-value time on the element a custom property is DECLARED on, so a
+   :root-declared chain flattens on <html> (where it is invalid anyway:
+   --font-text lives on body) and can never see this block's --dse-font-body.
+   Every chained slot must be re-declared per themed scope — card-body/label
+   already were; controls now is too.
 */
 :is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 	/* -- Structure / surface -- */
@@ -3169,15 +3182,18 @@ Shared globals
 	--dse-fg-faint: rgba(220,226,230,0.38);
 	/* SC-105: the six-slot font vocabulary. font-display is retired (Task 2) —
 	   Title/Body carry the OFL free-serif fallback it used to resolve to under
-	   Steel; Card-body/Label chain to Body/Title. font-controls has no entry
-	   here either — SC-112 Task 3 points its :root definition at
-	   var(--dse-font-body), so it picks up THIS block's Steel --dse-font-body
-	   override (the serif face) automatically; print pins it back to sans
-	   (`:5363`). */
+	   Steel; Card-body/Label/Controls chain to Body/Title/Body. Controls MUST
+	   be declared here (SC-112 root-cause fix): its :root chain flattens on
+	   <html> at computed-value time and is invalid there (--font-text lives on
+	   body), so only this scoped re-declaration makes the token actually
+	   resolve on Steel roots — before it, `font-family: var(--dse-font-controls)`
+	   consumers rendered serif only via the IACVT inherit fallback. Print pins
+	   Controls back to sans (~:5383, later at equal specificity, so it wins). */
 	--dse-font-title: "Source Serif 4", var(--font-text);
 	--dse-font-body: "Source Serif 4", var(--font-text);
 	--dse-font-card-body: var(--dse-font-body);
 	--dse-font-label: var(--dse-font-title);
+	--dse-font-controls: var(--dse-font-body);
 	--dse-chip-bg: rgba(220,226,230,0.06);
 
 	/* -- Accent / interaction -- */
@@ -3580,19 +3596,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    instance uniformly (one shared kit component).
    SC-105 Task 2: re-pointed from the literal var(--font-text) to the
    Controls slot token, --dse-font-controls.
-   SC-112 Task 3: the "byte-identical value … pure rename" note above is now
-   STALE — --dse-font-controls chains to --dse-font-body (`:2998`) and is no
-   longer Steel-invariant, so this rule is what RE-JOINS the steppers to the
-   serif flip deliberately (the whole point of the exclusion is "steppers
-   read Controls, not the broadened Body/Card-body routing directly" — moving
-   Controls moves them too, by design). The same rule is extended to
-   .dse-btn/.dse-collapse__header/.dse-tabs__tab/button.dse-pr__row: their
-   kit-base `font: inherit` (`:4695,4827,4866,5042`) is untouched (Legacy
-   unaffected), but under Steel they now read the Controls token explicitly
-   instead of merely inheriting the ambient ancestor font. Pixel-neutral at
-   the flipped default — inherit already resolved to the same serif face
-   (sc105-font-tokens-design.md §1B) — this exists so the Controls picker
-   actually governs these four once slot values can diverge (SC-112 Task 6+). */
+   SC-112 root-cause postmortem: that Task-2 "pure rename" was NOT pixel-pure.
+   The old literal var(--font-text) RESOLVED on the input (inherited from
+   body) = sans; the renamed token was :root-declared-only, hence invalid at
+   computed-value time (see the :root block caveat, ~:2994), so font-family
+   fell back to its inherited value — the Steel container's serif — and the
+   steppers silently went serif at SC-105 already. SC-112 declares the token
+   in the Steel block (~:3196) with that same serif value, so this rule now
+   GENUINELY reads Controls ("steppers read Controls, not the broadened
+   Body/Card-body routing" — moving Controls moves them, by design) —
+   pixel-identical to the accidental inherit fallback at defaults. The same
+   rule is extended to .dse-btn/.dse-collapse__header/.dse-tabs__tab/
+   button.dse-pr__row: their kit-base `font: inherit` (~:4715,4847,4886,5062)
+   is untouched (Legacy unaffected), but under Steel they read the Controls
+   token explicitly instead of merely inheriting the ambient ancestor font —
+   also pixel-neutral at the default (sc105-font-tokens-design.md §1B) — so
+   the Controls picker actually governs all six once slot values can diverge
+   (SC-112 Task 6+). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__input,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stepper__value,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-btn,

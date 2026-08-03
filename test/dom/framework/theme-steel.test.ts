@@ -67,14 +67,15 @@ function steelDefinitions(): string[] {
 // clip-path whose interior is the card surface, so its ink is ink-on-surface
 // (var(--dse-fg)) in EVERY theme; the old per-theme overrides assumed solid
 // fills and rendered invisible (ground-truth-confirmed, Plan 12).
-// SC-105 Task 1: font-controls joins the invariant set (never overridden in
-// the Steel block). SC-112 Task 3: it STAYS invariant here — the Controls
-// flip re-points its :root chain to --dse-font-body instead of adding a
-// Steel-block entry, so the serif value still arrives via inheritance, not
-// an explicit override (see the dedicated slot-chain contract in
-// test/dom/theme/steelTypography.test.ts for the actual resolved value).
+// SC-105 Task 1 put font-controls here (never overridden in the Steel block).
+// SC-112's root-cause fix REMOVES it: a :root-declared var() chain substitutes
+// at computed-value time on <html> and can never pick up the Steel block's
+// --dse-font-body, so the Steel block now re-declares the Controls chain
+// itself (like card-body/label) — font-controls is overridden, not invariant
+// (see the dedicated slot-chain contract in
+// test/dom/theme/steelTypography.test.ts for the chain shape).
 const THEME_INVARIANT = [
-	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg', 'font-controls',
+	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
 ] as const;
 
 /**
@@ -101,15 +102,15 @@ const STEEL_DARK: Record<string, string> = {
 	'chip-bg': 'rgba(220,226,230,0.06)',
 	// fonts (OD-4: Source Serif 4 fallback; SC-105 Task 2 re-pointed every
 	// consumer from the single font-display slot to these two independent
-	// literals — font-controls stays invariant, below). font-card-body/
-	// font-label are DELIBERATELY excluded from this dict even though they
-	// ARE overridden in the Steel block: their chained declaration text
-	// (`var(--dse-font-body)` / `var(--dse-font-title)`) is IDENTICAL in
-	// both Legacy and Steel by design (only what the chain resolves to
-	// differs per theme), so they'd fail the "every overridden token
-	// DIFFERS from Legacy" invariant below, which assumes a literal
-	// per-theme value. Covered instead by the dedicated slot-chain contract
-	// in test/dom/theme/steelTypography.test.ts.
+	// literals). font-card-body/font-label/font-controls are DELIBERATELY
+	// excluded from this dict even though they ARE overridden in the Steel
+	// block (font-controls since SC-112's root-cause fix): their chained
+	// declaration text (`var(--dse-font-body)` / `var(--dse-font-title)` /
+	// `var(--dse-font-body)`) is IDENTICAL in both Legacy and Steel by design
+	// (only what the chain resolves to differs per theme), so they'd fail the
+	// "every overridden token DIFFERS from Legacy" invariant below, which
+	// assumes a literal per-theme value. Covered instead by the dedicated
+	// slot-chain contract in test/dom/theme/steelTypography.test.ts.
 	'font-title': '"Source Serif 4", var(--font-text)',
 	'font-body': '"Source Serif 4", var(--font-text)',
 	// accent
@@ -233,10 +234,12 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// were) — it needed the identical fix for the identical reason. Flagged as a
 		// discrepancy in the Task 1 report.
 		// SC-105 Task 2: font-display's OWN Steel-dark definition is removed along
-		// with the token itself (no longer in the union to cover) — 67 → 66; the
-		// invariant count is untouched (font-controls stays 7; union 74 → 73).
-		expect(overridden.length).toBe(66);
-		expect(THEME_INVARIANT.length).toBe(7);
+		// with the token itself (no longer in the union to cover) — 67 → 66 / 7
+		// invariant (union 74 → 73). SC-112 root-cause fix: font-controls moves
+		// invariant → overridden (the Steel block must re-declare the chain; a
+		// :root chain flattens on <html>) — 66 → 67 / 7 → 6.
+		expect(overridden.length).toBe(67);
+		expect(THEME_INVARIANT.length).toBe(6);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
 

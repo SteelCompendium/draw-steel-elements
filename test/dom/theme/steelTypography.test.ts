@@ -251,16 +251,22 @@ describe('font slot chain contract (SC-105 Task 2)', () => {
 	});
 });
 
-// SC-112 Task 3 — the Controls default flip. `--dse-font-controls` now `var()`-chains to
-// `--dse-font-body` (Scott's site-consistency ruling: Controls defaults to "same as Body"),
-// re-pointing the plan-22 stepper exclusion so numeric steppers/buttons/tabs/collapse-headers
-// join the serif face under Steel screen. Legacy resolves byte-identically (Body is
-// var(--font-text) there too — one extra hop, same value). Print is explicitly pinned back to
-// var(--font-text) in the neutral print block so the frozen *--steel-print.png set never moves.
-// This suite locks the CHAIN + the PIN directly against the raw CSS text, same "prove it can
-// fail" discipline as the Card-body/Label chains above.
+// SC-112 Task 3 — the Controls default flip. `--dse-font-controls` `var()`-chains to
+// `--dse-font-body` (Scott's site-consistency ruling: Controls defaults to "same as Body").
+// ROOT-CAUSE ADDENDUM: the :root chain ALONE cannot carry the theme swap — var() substitutes
+// at computed-value time on the DECLARING element, so a :root chain flattens on <html> (and
+// is invalid there: --font-text lives on body) and never sees the Steel block's
+// --dse-font-body. The Steel block therefore re-declares the Controls chain itself, exactly
+// like Card-body/Label — THAT declaration is what makes the token resolve on Steel roots.
+// Print is explicitly pinned back to var(--font-text) in the neutral print block (later at
+// equal specificity, so it beats the Steel-block chain) so the frozen *--steel-print.png set
+// never moves. This suite locks the ROOT CHAIN + the STEEL CHAIN + the PIN directly against
+// the raw CSS text, same "prove it can fail" discipline as the Card-body/Label chains above.
 describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
 	const rootBodies = rules.filter((r) => r.selector === ':root').map((r) => r.body);
+	const steelDarkBody = rules.find(
+		(r) => r.selector === ':is([data-dse-element], .dse-modal)[data-dse-theme="steel"]',
+	)?.body;
 	const printNeutralBody = rules.find(
 		(r) => r.selector === '[data-dse-element][data-dse-print="on"]',
 	)?.body;
@@ -268,13 +274,18 @@ describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
 	const CONTROLS_CHAIN = /--dse-font-controls:\s*var\(--dse-font-body\)\s*;/;
 	const CONTROLS_PRINT_PIN = /--dse-font-controls:\s*var\(--font-text\)\s*;/;
 
-	it('parses both value blocks (guard against a vacuous pass)', () => {
+	it('parses all three value blocks (guard against a vacuous pass)', () => {
 		expect(rootBodies.length).toBeGreaterThan(0);
+		expect(steelDarkBody).toBeDefined();
 		expect(printNeutralBody).toBeDefined();
 	});
 
 	it(':root — --dse-font-controls chains to var(--dse-font-body)', () => {
 		expect(rootBodies.some((b) => CONTROLS_CHAIN.test(b))).toBe(true);
+	});
+
+	it('Steel block — --dse-font-controls RE-DECLARES the var(--dse-font-body) chain (the :root chain flattens on <html> and cannot carry the theme swap)', () => {
+		expect(CONTROLS_CHAIN.test(steelDarkBody ?? '')).toBe(true);
 	});
 
 	it('neutral print block — --dse-font-controls is pinned to var(--font-text)', () => {

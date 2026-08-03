@@ -137,13 +137,14 @@ const printSteel = blockBody(
 
 // Map-declared "intentionally not overridden" sets (mirror the map's columns).
 // SC-10: badge-fg is theme-invariant (hollow frame → ink-on-surface everywhere).
-// SC-105: font-controls joins the Steel-invariant set (no Steel-block definition
-// of its own). SC-112 Task 3: it STAYS in this set — the flip re-points its
-// :root definition to chain through --dse-font-body, so the Steel value still
-// resolves without an explicit Steel-block override, it just no longer resolves
-// to a Legacy-identical value while doing so (see the Legacy-fidelity note below).
+// SC-105 put font-controls here (no Steel-block definition of its own); SC-112's
+// root-cause fix REMOVES it: a :root-declared var() chain substitutes at
+// computed-value time on <html> and can never see the Steel block's
+// --dse-font-body (it is invalid on <html> anyway — --font-text lives on body),
+// so the Steel block now re-declares the chain itself, exactly like
+// card-body/label. font-controls is Steel-OVERRIDDEN, not Steel-invariant.
 const STEEL_INVARIANT = new Set([
-	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg', 'font-controls',
+	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
 ]);
 // SC-105: the whole font vocabulary (title/body/card-body/label/controls) was
 // print-invariant — none of these 5 tokens were overridden in a print block,
@@ -272,10 +273,12 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// = 63 → 67 / 6 → 7. Task 2 then retired font-display's OWN Steel-dark
 		// definition (it's no longer in the union to be covered at all) = 67 → 66;
 		// invariant count is unaffected (font-controls stays 7).
-		// SC-112 Task 3: unchanged by the Controls flip — font-controls still has
-		// no Steel-block definition of its own (66 overridden / 7 invariant holds).
-		expect(overridden.length).toBe(66);
-		expect(STEEL_INVARIANT.size).toBe(7);
+		// SC-112 root-cause fix: font-controls MOVES from invariant to overridden —
+		// the Steel block now declares `--dse-font-controls: var(--dse-font-body)`
+		// (a :root chain flattens on <html> and cannot carry the theme swap)
+		// = 66 → 67 overridden / 7 → 6 invariant.
+		expect(overridden.length).toBe(67);
+		expect(STEEL_INVARIANT.size).toBe(6);
 	});
 
 	test('EVERY union token is overridden in a Print block OR map-marked print-invariant', () => {
