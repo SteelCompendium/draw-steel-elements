@@ -3496,35 +3496,89 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    SCREEN-ONLY (:not([data-dse-print="on"])) — the print/export shots are
    LEGACY-FROZEN (SC-4) and must not gain the serif face or the cooler ink.
 
-   SC-105 Task 2 NOTE: this rule's selector list still includes .dse-sb/
-   .dse-card (kept AS-IS per Scott's ruling, not narrowed) even though a
-   separate, higher-specificity Card-body rule immediately below now targets
-   those same card-shaped hosts (plus feature/featureblock) with
+   SC-105 Task 2 NOTE, PAID OFF by SC-112 Task 4: this rule's selector list
+   still includes .dse-sb/.dse-card (kept AS-IS per Scott's ruling, not
+   narrowed) even though a separate, higher-specificity Card-body rule
+   immediately below now targets those same card-shaped hosts (plus
+   feature/featureblock, via its own root-compound arm — see that rule) with
    --dse-font-card-body. Because --dse-font-card-body chains to
    --dse-font-body, both rules resolve to the identical value today, so which
-   one "wins" the cascade for any given host moves zero pixels — but the two
-   rules' selectors do NOT form a clean mutual-exclusion split (the bare
-   `[data-dse-element]:not([data-dse-error-stage])` alternative here has
-   specificity (0,4,0), which beats the Card-body rule's :is(...) form
-   (0,3,0) for `[data-dse-element='feature']`/`['featureblock']`, while
-   `.dse-sb`/`.dse-card` tie at (0,3,0) and fall to source order instead).
-   Specificity must be re-verified/reworked once SC-112 lets Body and
-   Card-body diverge in value — tracked as a known, deferred nuance, not a
-   Task-2 blocker (design doc §3). */
+   one "wins" the cascade for any given host still moves zero pixels — but
+   now every host resolves the race cleanly, not just .dse-sb/.dse-card:
+   `.dse-sb`/`.dse-card` keep tying at (0,3,0) and falling to source order
+   (Card-body is later, so it still wins there, unchanged since Task 2); the
+   `[data-dse-element='feature']`/`['featureblock']` ROOTS — standalone AND
+   nested by-SCC recursion (e.g. a `ds-feature` block embedded in a `ds-kit`
+   note body, test/fixtures' kit/panther.md) — stamp `data-dse-theme` on the
+   SAME node as `data-dse-element` (apply() stamps theme on every element
+   root, the pipeline stamps data-dse-element on that same root), so the OLD
+   Card-body descendant form `[data-dse-theme='steel'] :is(...)` could never
+   match them (a descendant combinator needs two different elements) and the
+   bare `[data-dse-element]:not([data-dse-error-stage])` compound here
+   (0,4,0) always won by default. Card-body now carries its own matching
+   compound arm for those two roots — same shape, same specificity, placed
+   after this rule so it wins the tie. Body and Card-body can diverge in
+   value for every host now, not just .dse-sb/.dse-card. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage]),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	font-family: var(--dse-font-body); /* SC-105 Task 2: re-pointed from font-display */
 	color: var(--dse-fg);
 }
-/* Card-body (SC-105 Task 2): the card-shaped hosts (statblock/feature/
-   featureblock/D6-reference-card) get their own slot, --dse-font-card-body,
-   distinct from the bare element-root Body rule above — see the note above
-   for why this is a no-op today (chained default, values identical) and what
-   still needs re-verifying once SC-112 lets the two diverge. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-card, [data-dse-element='feature'], [data-dse-element='featureblock']) {
+/* Card-body (SC-105 Task 2; root-compound arm added SC-112 Task 4): the
+   card-shaped hosts (statblock/feature/featureblock/D6-reference-card) get
+   their own slot, --dse-font-card-body, distinct from the bare element-root
+   Body rule above — see the note above for why this is a no-op today
+   (chained default, values identical). The two selector arms below split by
+   DOM shape: `.dse-sb`/`.dse-card` are host DIVs nested inside a separately
+   theme-stamped root, so the plain descendant form still matches them (ties
+   Body's .dse-sb/.dse-card arms at (0,3,0), source order decides, unchanged
+   since Task 2); `[data-dse-element='feature']`/`['featureblock']` roots
+   carry `data-dse-theme` on themselves, so they need the SAME compound shape
+   Body's bare-root arm uses (including the identical
+   `:not([data-dse-error-stage])` exclusion) to match at all, tie Body's
+   (0,4,0), and win on source order (this rule follows Body's). Verified
+   against the by-scc-kit fixture (test/fixtures' kit/panther.md, whose body
+   embeds a nested `ds-feature` block): the nested feature root ALSO carries
+   both attributes on itself, so it needs this compound arm too — the plain
+   descendant form would still match it via the outer `.dse-card` ancestor,
+   but at (0,3,0) it still loses Body's (0,4,0), which is the exact bug this
+   arm closes. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-card),
+[data-dse-theme='steel']:not([data-dse-print="on"]):is(
+		[data-dse-element='feature'],
+		[data-dse-element='featureblock']
+	):not([data-dse-error-stage]) {
 	font-family: var(--dse-font-card-body);
 	color: var(--dse-fg);
+}
+/* Label graduation (SC-112 Task 4; sc105-font-tokens-design.md §1.B). These ~9
+   small-caps/chrome nodes are Label-shaped (Scott's classification: eyebrows/
+   chips, section heads, statgrid field labels, table headers, the power-roll
+   head strip, tier-badge text, the EV/cost chip) but rode the Body/Card-body
+   ambient by inheritance with no explicit `font-family` of their own — SC-105
+   Task 2 registered `--dse-font-label` and classified them, but explicitly
+   deferred the pin (design doc §1.B: "0 explicit today, ~9 candidates for
+   future explicit pins"). Without this rule the Label picker (SC-112 Task 6)
+   would silently do nothing for any of them. No-op at defaults: --dse-font-
+   label chains to --dse-font-title, and Title==Body face today (the slot-chain
+   contract above). `.dse-head__primary--chip` is deliberately EXCLUDED even
+   though it shares the flat-chip surface (~3560) with `.dse-head__eyebrow--
+   chip`/`.dse-head__deck--chip` below — it is the card-head ROLE slot, pinned
+   to --dse-font-title at its own higher-specificity rule (~3678), and is not
+   in the design doc's §1.B Label list. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(
+	.dse-head__eyebrow--chip,
+	.dse-head__eyebrow--line,
+	.dse-head__deck--chip,
+	.dse-section__title,
+	.dse-sb__item-l,
+	.dse-sb__kv-l,
+	.dse-enc__table th,
+	.dse-pr__head,
+	.dse-pr__badge-text
+) {
+	font-family: var(--dse-font-label);
 }
 /* Body TRACKING (A7). The site body is `letter-spacing: normal`; the Legacy base
    gives .dse-feature 0.03em (:41), inherited by every card-body node the harness

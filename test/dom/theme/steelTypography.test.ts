@@ -292,3 +292,74 @@ describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
 		expect(CONTROLS_PRINT_PIN.test(printNeutralBody ?? '')).toBe(true);
 	});
 });
+
+// SC-112 Task 4 — slot independence. Two CSS debts deferred at SC-105 Task 2, paid off here:
+// (a) the Body/Card-body specificity race meant the bare element-root Body rule's (0,4,0)
+// compound always beat the Card-body rule's (0,3,0) `:is(...)` descendant form on the
+// `[data-dse-element='feature']`/`'featureblock'` ROOTS (a descendant combinator can never
+// match a root that carries `data-dse-theme` on itself) — Card-body now carries its own
+// root-compound arm, the SAME shape as the Body rule's bare-root arm (including the
+// `:not([data-dse-error-stage])` exclusion), placed after Body so it wins the tie; (b) ~9
+// Label-shaped nodes (chip/eyebrow, section titles, statgrid labels, the roster header row,
+// pr-head, tier-badge text, the EV/cost chip) rode the Body/Card-body ambient by inheritance
+// with no explicit `font-family` of their own (sc105-font-tokens-design.md §1.B) — they now
+// carry an explicit Steel-scoped `font-family: var(--dse-font-label)` pin. Both are pixel
+// no-ops at defaults (the chains resolve identically today) but without them the Task 6
+// pickers would silently do nothing for these nodes. Same comment-stripped/quote-tolerant
+// source-text assertion style as the suites above.
+describe('slot independence — Card-body root compound + Label pins (SC-112 Task 4)', () => {
+	// The Card-body rule: the one whose body sets `--dse-font-card-body`'s CONSUMER
+	// (font-family: var(--dse-font-card-body)), not the :root/Steel-block VALUE declarations
+	// asserted above.
+	const cardBodyRule = rules.find(
+		(r) =>
+			STEEL_SCOPE.test(r.selector) &&
+			/font-family:\s*var\(--dse-font-card-body\)\s*;/.test(r.body),
+	);
+
+	// The Label rule: the one whose body sets font-family to var(--dse-font-label).
+	const labelRule = rules.find(
+		(r) =>
+			STEEL_SCOPE.test(r.selector) && /font-family:\s*var\(--dse-font-label\)\s*;/.test(r.body),
+	);
+
+	it('parses both rules (guard against a vacuous pass)', () => {
+		expect(cardBodyRule).toBeDefined();
+		expect(labelRule).toBeDefined();
+	});
+
+	it('Card-body rule carries a root-compound arm that matches the feature/featureblock ROOTS directly (not just as a descendant)', () => {
+		// The old descendant-only form `[data-dse-theme='steel'] :is(...[data-dse-element='feature']...)`
+		// requires TWO elements (an ancestor carrying data-dse-theme, a separate descendant
+		// carrying data-dse-element) and can never match a node that carries both attributes on
+		// itself — which every `[data-dse-element='feature']`/`'featureblock'` root does (theme.ts's
+		// apply() and the pipeline both stamp the SAME root). The fix's compound arm has NO space
+		// between the theme-scope prefix and `:is(...)`/`[data-dse-element=...]` — same shape as the
+		// Body rule's own bare-root arm — so it matches the root directly.
+		const selector = cardBodyRule!.selector;
+		// The compound form: STEEL_SCOPE immediately followed (no descendant space) by something
+		// that names both 'feature' and 'featureblock', and carries the same error-stage exclusion
+		// the Body rule's bare-root arm uses.
+		expect(/\[data-dse-theme=['"]steel['"]\](?::not\([^)]*\))*:is\(/.test(selector)).toBe(true);
+		expect(selector).toMatch(/\[data-dse-element=['"]feature['"]\]/);
+		expect(selector).toMatch(/\[data-dse-element=['"]featureblock['"]\]/);
+		expect(selector).toMatch(/:not\(\[data-dse-error-stage\]\)/);
+	});
+
+	it('Card-body rule still covers .dse-sb/.dse-card via the pre-existing descendant form', () => {
+		expect(cardBodyRule!.selector).toMatch(/\.dse-sb/);
+		expect(cardBodyRule!.selector).toMatch(/\.dse-card/);
+	});
+
+	it('Label rule pins .dse-section__title to var(--dse-font-label)', () => {
+		expect(labelRule!.selector).toMatch(/\.dse-section__title/);
+	});
+
+	it('Label rule pins at least one statgrid label (.dse-sb__item-l or .dse-sb__kv-l) to var(--dse-font-label)', () => {
+		expect(/\.dse-sb__item-l|\.dse-sb__kv-l/.test(labelRule!.selector)).toBe(true);
+	});
+
+	it('Label rule is Steel screen-only (excludes print)', () => {
+		expect(labelRule!.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+	});
+});
