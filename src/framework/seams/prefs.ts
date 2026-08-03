@@ -14,7 +14,7 @@
 // built-in `theme` PrefDescriptor below carries NO `attr`. reflect() only stamps
 // attr-bearing descriptors, so data-dse-theme is never double-stamped here —
 // ThemeService.apply() owns that attribute exclusively.
-import type { Component } from 'obsidian';
+import type { App, Component } from 'obsidian';
 import { DEFAULT_THEME_ID, type DseThemeId } from './theme';
 
 export interface DsePrefs {
@@ -27,6 +27,21 @@ export interface PrefDescriptor<K extends keyof DsePrefs = keyof DsePrefs> {
 	default: DsePrefs[K];
 	/** Reflected onto element roots as data-dse-<attr>="<value>" when set. */
 	attr?: string;
+	/**
+	 * SC-112 (Plan 23 Task 2): reflected onto element roots as an inline custom
+	 * property, in parallel with (independent of) `attr` — a descriptor may carry
+	 * either, both, or neither. `varName` is the full custom-property name (e.g.
+	 * `'--dse-font-title'`); `toCss(value)` returns the string to
+	 * `rootEl.style.setProperty(varName, …)`, or `null` to mean "default — remove
+	 * the override" (`rootEl.style.removeProperty(varName)`), matching the site's
+	 * remove-on-default semantics (`v2/docs/javascripts/settings-panel.js:80-103`).
+	 * Written per element root, never `document.documentElement` — same popout-safe
+	 * stamping discipline as `attr` and `ThemeService.apply()` (`theme.ts:16-17`).
+	 */
+	css?: {
+		varName: string;
+		toCss(value: DsePrefs[K]): string | null;
+	};
 	/** Settings-tab metadata (label, control type, options) — shape finalized by D4. */
 	ui?: unknown;
 }
@@ -39,6 +54,16 @@ export interface PreferenceStore {
 	/** Stamp all attr-bearing prefs on rootEl as data-dse-* and keep them current
 	 *  for owner's lifetime. Called by the pipeline on every element root. */
 	reflect(rootEl: HTMLElement, owner: Component): void;
+	/**
+	 * SC-112 (Plan 23 Task 2): stamp all CSS-bearing prefs on rootEl as inline
+	 * custom properties and keep them current for owner's lifetime — the modal
+	 * twin of `reflect()`, restricted to `css`-bearing descriptors only (no
+	 * `data-dse-*` attrs). Called from `DseModal.open()` via the `prefsForApp`
+	 * registry below, since `.dse-modal` is a first-class Steel token scope
+	 * member (`styles-source.css:3144`) that never runs through the pipeline's
+	 * own `reflect()` call (`pipeline.ts:381`).
+	 */
+	reflectCss(rootEl: HTMLElement, owner: Component): void;
 	/** D4: register descriptors (defaults, attrs, settings UI rows). */
 	describe(descriptors: readonly PrefDescriptor[]): void;
 	/** All registered descriptors, in registration order (D4: drives the settings
@@ -188,16 +213,77 @@ class DsePreferenceStore implements PreferenceStore {
 
 	reflect(rootEl: HTMLElement, owner: Component): void {
 		for (const descriptor of this.descriptorMap.values()) {
-			if (!descriptor.attr) continue; // e.g. `theme` — ThemeService.apply() owns it
-			const attrName = `data-dse-${descriptor.attr}`;
-			const stamp = (value: unknown) => rootEl.setAttribute(attrName, String(value));
-			stamp(this.get(descriptor.key));
-			this.subscribe(descriptor.key, owner, stamp);
+			if (descriptor.attr) {
+				const attrName = `data-dse-${descriptor.attr}`;
+				const stamp = (value: unknown) => rootEl.setAttribute(attrName, String(value));
+				stamp(this.get(descriptor.key));
+				this.subscribe(descriptor.key, owner, stamp);
+			}
+			// SC-112: attr and css are independent — a descriptor may carry either,
+			// both, or neither, so this is a second `if`, not an `else if`.
+			if (descriptor.css) {
+				this.stampCss(rootEl, owner, descriptor);
+			}
 		}
+	}
+
+	reflectCss(rootEl: HTMLElement, owner: Component): void {
+		for (const descriptor of this.descriptorMap.values()) {
+			if (!descriptor.css) continue;
+			this.stampCss(rootEl, owner, descriptor);
+		}
+	}
+
+	/** Shared by reflect() and reflectCss(): stamp (and keep current) one
+	 *  css-bearing descriptor's inline custom property on rootEl. */
+	private stampCss(rootEl: HTMLElement, owner: Component, descriptor: PrefDescriptor): void {
+		const css = descriptor.css;
+		if (!css) return;
+		const stamp = (value: unknown) => {
+			const cssValue = css.toCss(value as never);
+			if (cssValue === null) {
+				rootEl.style.removeProperty(css.varName);
+			} else {
+				rootEl.style.setProperty(css.varName, cssValue);
+			}
+		};
+		stamp(this.get(descriptor.key));
+		this.subscribe(descriptor.key, owner, stamp);
 	}
 }
 
 /** Construct a fresh PreferenceStore bound to an injected storage backend. */
 export function createPreferenceStore(storage: PrefsStorage): PreferenceStore {
 	return new DsePreferenceStore(storage);
+}
+
+// SC-112 (Plan 23 Task 2) — mirrors theme.ts:120-145 verbatim (same doc-comment
+// rationale): DseModal.open() needs to reach the live PreferenceStore to stamp
+// css-bearing prefs (font/scale custom properties) on the modal's dialog root, but
+// modals are constructed with only `app: App` at 6 of 7 call sites (no `cx`/`prefs`
+// in scope — see the SC-104 design recon this reuses,
+// .superpowers/sdd/sc104-modal-theming-design.md §1/§3). Threading `prefs` through
+// every modal constructor would churn 6 subclasses + ~10 call sites for one lookup.
+// Instead: a WeakMap<App, PreferenceStore> registry, keyed by the same `App`
+// instance every modal already carries — App is a stable per-plugin-instance
+// singleton, so the registry entry outlives any one modal and is reclaimed
+// automatically once the App itself is (WeakMap precedent:
+// src/model/ComponentWrapper.ts:47, and theme.ts's themeServiceByApp). The plugin
+// registers its store once (main.ts, right beside registerThemeServiceForApp); no
+// unregister is needed — a reload's fresh App gets its own key, and re-registering
+// the SAME app id (as tests do per-case) simply overwrites the prior entry.
+const prefsByApp = new WeakMap<App, PreferenceStore>();
+
+/** Register `store` as the live PreferenceStore for `app` (main.ts, once, right
+ *  beside registerThemeServiceForApp). Last write wins — safe to call again on
+ *  reload. */
+export function registerPrefsForApp(app: App, store: PreferenceStore): void {
+	prefsByApp.set(app, store);
+}
+
+/** Look up the PreferenceStore registered for `app`, or `undefined` if none was
+ *  (e.g. a bare test/harness App that never called registerPrefsForApp). Callers
+ *  must treat the miss as a graceful no-op — see DseModal.open(). */
+export function prefsForApp(app: App): PreferenceStore | undefined {
+	return prefsByApp.get(app);
 }

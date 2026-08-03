@@ -18,6 +18,7 @@ import type { App } from 'obsidian';
 import { iconButton } from './iconButton';
 import type { IconButtonHandle, IconButtonOptions } from './iconButton';
 import { themeServiceForApp } from '../seams/theme';
+import { prefsForApp } from '../seams/prefs';
 
 let titleCounter = 0;
 
@@ -100,6 +101,15 @@ export class DseModal extends Modal {
 		// re-themes it for free (D3 §2.2's onChange fan-out).
 		const theme = themeServiceForApp(this.app);
 		if (theme) theme.apply(this.dialogEl(), this.lifecycle);
+		// SC-112 (Plan 23 Task 2): mirrors the theme lookup immediately above via the
+		// twin WeakMap<App, PreferenceStore> registry (seams/prefs.ts) — stamps
+		// css-bearing prefs (font/scale custom properties) on the dialog root, kept
+		// current for this.lifecycle's lifetime. Graceful no-op on a bare test/
+		// harness App that never registered a store, same contract as the theme
+		// lookup. Deliberately reflectCss(), not reflect() — modals must NOT receive
+		// the attr-bearing prefs (e.g. data-dse-density is pipeline-owned).
+		const prefs = prefsForApp(this.app);
+		if (prefs) prefs.reflectCss(this.dialogEl(), this.lifecycle);
 		super.open();
 		// §2.6: initial focus to the first control. Escape + the focus trap stay
 		// Obsidian Modal defaults — only the entry focus is DSE's.

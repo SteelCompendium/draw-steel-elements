@@ -5,8 +5,8 @@
 // registers the F1 §4.5 view-unload-closes-modal contract via owner.register().
 // Escape-close + focus trap stay Obsidian Modal defaults (not reimplemented here).
 import { DseModal, openManagedModal } from '../../../src/framework/kit/managedModal';
-import { createPreferenceStore } from '../../../src/framework/seams/prefs';
-import type { PrefsStorage } from '../../../src/framework/seams/prefs';
+import { createPreferenceStore, registerPrefsForApp } from '../../../src/framework/seams/prefs';
+import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src/framework/seams/prefs';
 import { createThemeService, registerThemeServiceForApp } from '../../../src/framework/seams/theme';
 import type { ThemeServiceInternal } from '../../../src/framework/seams/theme';
 import { App, Component } from '../../mocks/obsidian';
@@ -50,6 +50,39 @@ function makeRegisteredTheme(app: any, initial?: Record<string, unknown>): Theme
  *  storage write) — settle those microtasks before asserting fan-out effects. */
 async function flushAsync(): Promise<void> {
 	await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// ---------------------------------------------------- SC-112 prefs-css test helpers
+
+/** Same widen-cast convention as test/dom/framework/seams.test.ts: exercise a
+ *  test-only css-bearing key without augmenting the real DsePrefs interface. */
+type WidePreferenceStore = {
+	set(key: string, value: unknown): Promise<void>;
+	describe(descriptors: readonly PrefDescriptor[]): void;
+};
+function widen(store: PreferenceStore): WidePreferenceStore {
+	return store as unknown as WidePreferenceStore;
+}
+
+/** css-only descriptor (mirrors a real font pref: default `''` → `toCss` returns
+ *  `null`, i.e. "remove the override"; any other value passes through as-is). */
+function fontTitleDescriptor(attr?: string): PrefDescriptor {
+	return {
+		key: 'fontTitle',
+		default: '',
+		attr,
+		css: { varName: '--dse-font-title', toCss: (v: unknown) => (v === '' ? null : String(v)) },
+	} as unknown as PrefDescriptor;
+}
+
+/** PreferenceStore registered against `app` (mirrors makeRegisteredTheme above) —
+ *  DseModal.open() looks it up via prefsForApp(this.app) to call reflectCss(). */
+function makeRegisteredPrefs(app: any, descriptor: PrefDescriptor = fontTitleDescriptor()): WidePreferenceStore {
+	const store = createPreferenceStore(makeStorage());
+	const wide = widen(store);
+	wide.describe([descriptor]);
+	registerPrefsForApp(app, store);
+	return wide;
 }
 
 afterEach(() => {
@@ -295,6 +328,72 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 
 			expect(() => modal.open()).not.toThrow();
 			expect(modal.containerEl.hasAttribute('data-dse-theme')).toBe(false);
+			modal.close();
+		});
+	});
+
+	describe('prefs css stamping (SC-112 / Plan 23 Task 2) — the reflectCss() twin of theme stamping', () => {
+		test('open() stamps a css-bearing pref as an inline custom property on the dialog root', async () => {
+			const app = new App() as any;
+			const prefs = makeRegisteredPrefs(app);
+			await prefs.set('fontTitle', 'Georgia');
+			const modal = makeModal(app);
+
+			modal.open();
+
+			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+			modal.close();
+		});
+
+		test('open() stamps the css var but NEVER the data-dse-* attr, even for a descriptor carrying both', async () => {
+			const app = new App() as any;
+			const prefs = makeRegisteredPrefs(app, fontTitleDescriptor('font-title'));
+			await prefs.set('fontTitle', 'Georgia');
+			const modal = makeModal(app);
+
+			modal.open();
+
+			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+			// Modals go through reflectCss(), not reflect() — attrs like data-dse-density
+			// are pipeline-owned and must never reach a modal.
+			expect(modal.containerEl.hasAttribute('data-dse-font-title')).toBe(false);
+			modal.close();
+		});
+
+		test('a live pref change re-stamps the open modal (subscription fan-out, same as theme)', async () => {
+			const app = new App() as any;
+			const prefs = makeRegisteredPrefs(app);
+			const modal = makeModal(app);
+			modal.open();
+			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('');
+
+			await prefs.set('fontTitle', 'Georgia');
+			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+
+			await prefs.set('fontTitle', ''); // back to default → removeProperty
+			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('');
+			modal.close();
+		});
+
+		test('close() tears down the re-stamp subscription (modal-scoped lifecycle)', async () => {
+			const app = new App() as any;
+			const prefs = makeRegisteredPrefs(app);
+			const modal = makeModal(app);
+			modal.open();
+			modal.close(); // unloads this.lifecycle, which owns reflectCss()'s subscription
+
+			await prefs.set('fontTitle', 'Georgia');
+
+			// Stayed at the value from when it was open — never re-stamped after close.
+			expect(modal.containerEl.style.getPropertyValue('--dse-font-title')).toBe('');
+		});
+
+		test('no registered PreferenceStore for the app: open() is a graceful no-op (no style write, no throw)', () => {
+			const app = new App() as any; // deliberately never registered
+			const modal = makeModal(app);
+
+			expect(() => modal.open()).not.toThrow();
+			expect(modal.containerEl.style.cssText).toBe('');
 			modal.close();
 		});
 	});

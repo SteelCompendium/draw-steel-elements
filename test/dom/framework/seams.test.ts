@@ -15,9 +15,14 @@
 // (single-writer). It DOES carry the D4 settings-picker `ui` (OD-5 labels).
 import { createThemeService } from '../../../src/framework/seams/theme';
 import type { ThemeServiceInternal } from '../../../src/framework/seams/theme';
-import { BUILTIN_DESCRIPTORS, createPreferenceStore } from '../../../src/framework/seams/prefs';
+import {
+	BUILTIN_DESCRIPTORS,
+	createPreferenceStore,
+	prefsForApp,
+	registerPrefsForApp,
+} from '../../../src/framework/seams/prefs';
 import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src/framework/seams/prefs';
-import { Component } from '../../mocks/obsidian';
+import { App, Component } from '../../mocks/obsidian';
 
 // ---------------------------------------------------------------- prefs test helpers
 
@@ -55,6 +60,7 @@ type WidePreferenceStore = {
 	set(key: string, value: unknown): Promise<void>;
 	subscribe(key: string, owner: Component, cb: (value: unknown) => void): void;
 	reflect(rootEl: HTMLElement, owner: Component): void;
+	reflectCss(rootEl: HTMLElement, owner: Component): void;
 	describe(descriptors: readonly PrefDescriptor[]): void;
 };
 function widen(store: PreferenceStore): WidePreferenceStore {
@@ -62,6 +68,20 @@ function widen(store: PreferenceStore): WidePreferenceStore {
 }
 function fakeDescriptor(key: string, def: unknown, attr?: string): PrefDescriptor {
 	return { key, default: def, attr } as unknown as PrefDescriptor;
+}
+
+// SC-112 (Plan 23 Task 2): a css-bearing descriptor, stub `toCss` mirroring the
+// real remove-on-default contract — the sentinel default value maps to `null`
+// ("remove the override"), anything else passes through as-is (real descriptors
+// build a font stack / snap a scale; the sentinel-vs-not distinction is what these
+// tests exercise, not any particular formatting).
+function fakeCssDescriptor(key: string, def: unknown, varName: string, attr?: string): PrefDescriptor {
+	return {
+		key,
+		default: def,
+		attr,
+		css: { varName, toCss: (v: unknown) => (v === def ? null : String(v)) },
+	} as unknown as PrefDescriptor;
 }
 
 // --------------------------------------------------------------- theme test helpers
@@ -331,5 +351,176 @@ describe('T-4 (Plan 02): PreferenceStore (F1 §3.6)', () => {
 			await store.set('cardStyle', 'ornate');
 			expect(root.getAttribute('data-dse-card-style')).toBe('plain');
 		});
+
+		describe('css-bearing descriptors (SC-112, Plan 23 Task 2)', () => {
+			test('at the default value, the inline custom property is absent (toCss → null → no setProperty)', () => {
+				const store = widen(createPreferenceStore(makeStorage()));
+				store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title')]);
+
+				const root = document.createElement('div');
+				store.reflect(root, fakeOwner());
+
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('');
+				expect(root.hasAttribute('style')).toBe(false);
+			});
+
+			test('a non-default value is stamped as an inline custom property, and updates on change', async () => {
+				const store = widen(createPreferenceStore(makeStorage()));
+				store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title')]);
+
+				const root = document.createElement('div');
+				const owner = fakeOwner();
+				owner.load();
+				store.reflect(root, owner);
+
+				await store.set('fontTitle', 'Georgia');
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+
+				await store.set('fontTitle', 'Times New Roman');
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('Times New Roman');
+			});
+
+			test('setting back to the default removes the property (style attribute goes clean)', async () => {
+				const store = widen(createPreferenceStore(makeStorage()));
+				store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title')]);
+
+				const root = document.createElement('div');
+				const owner = fakeOwner();
+				owner.load();
+				store.reflect(root, owner);
+
+				await store.set('fontTitle', 'Georgia');
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+
+				await store.set('fontTitle', '');
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('');
+				// removeProperty (not just setProperty('', '')) leaves an empty inline
+				// style — the site's exact remove-on-default semantics
+				// (settings-panel.js:80-103). Assert via cssText, not
+				// hasAttribute('style'): jsdom leaves a bare `style=""` attribute behind
+				// once one has ever been written (verified against jsdom directly —
+				// setProperty then removeProperty yields `<div style="">`), so
+				// hasAttribute('style') would report true even though nothing is set.
+				expect(root.style.cssText).toBe('');
+			});
+
+			test('stops updating the css var once owner unloads (auto-unsubscribe, same lifecycle as attrs)', async () => {
+				const store = widen(createPreferenceStore(makeStorage()));
+				store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title')]);
+
+				const root = document.createElement('div');
+				const owner = fakeOwner();
+				owner.load();
+				store.reflect(root, owner);
+
+				owner.unload();
+				await store.set('fontTitle', 'Georgia');
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('');
+			});
+
+			test('attr and css are independent: a descriptor carrying both gets both stamped', () => {
+				const store = widen(createPreferenceStore(makeStorage()));
+				store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title', 'font-title')]);
+
+				const root = document.createElement('div');
+				store.reflect(root, fakeOwner());
+
+				// Default: attr is always stamped (String('') === ''); css is absent
+				// (toCss('') === null).
+				expect(root.getAttribute('data-dse-font-title')).toBe('');
+				expect(root.style.getPropertyValue('--dse-font-title')).toBe('');
+			});
+		});
+	});
+
+	describe('reflectCss(rootEl, owner) — SC-112 (Plan 23 Task 2): the css-only twin of reflect()', () => {
+		test('stamps css-bearing descriptors but does NOT stamp attr-only descriptors', () => {
+			const store = widen(createPreferenceStore(makeStorage()));
+			store.describe([
+				fakeDescriptor('cardStyle', 'plain', 'card-style'), // attr-only
+				fakeCssDescriptor('fontTitle', '', '--dse-font-title'), // css-only
+			]);
+
+			const root = document.createElement('div');
+			store.reflectCss(root, fakeOwner());
+
+			expect(root.hasAttribute('data-dse-card-style')).toBe(false);
+			expect(root.hasAttribute('style')).toBe(false); // css descriptor at default → no-op
+		});
+
+		test('for a descriptor carrying BOTH attr and css, reflectCss stamps only the css var, never the attr', async () => {
+			const store = widen(createPreferenceStore(makeStorage()));
+			store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title', 'font-title')]);
+
+			const root = document.createElement('div');
+			const owner = fakeOwner();
+			owner.load();
+			store.reflectCss(root, owner);
+
+			await store.set('fontTitle', 'Georgia');
+			expect(root.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+			expect(root.hasAttribute('data-dse-font-title')).toBe(false);
+		});
+
+		test('re-stamps on change and stops once owner unloads (same subscription lifecycle as reflect())', async () => {
+			const store = widen(createPreferenceStore(makeStorage()));
+			store.describe([fakeCssDescriptor('fontTitle', '', '--dse-font-title')]);
+
+			const root = document.createElement('div');
+			const owner = fakeOwner();
+			owner.load();
+			store.reflectCss(root, owner);
+
+			await store.set('fontTitle', 'Georgia');
+			expect(root.style.getPropertyValue('--dse-font-title')).toBe('Georgia');
+
+			owner.unload();
+			await store.set('fontTitle', 'Times New Roman');
+			expect(root.style.getPropertyValue('--dse-font-title')).toBe('Georgia'); // frozen at unload
+		});
+	});
+});
+
+describe('SC-112 (Plan 23 Task 2): registerPrefsForApp / prefsForApp — the WeakMap<App, PreferenceStore> registry', () => {
+	// Mirrors theme.ts's themeServiceByApp registry test coverage pattern
+	// (test/dom/kit/managedModal.test.ts's "theme stamping" describe block) — same
+	// registry shape, one level down the seam.
+
+	test('prefsForApp returns undefined for an App that never registered a store', () => {
+		const app = new App() as any;
+		expect(prefsForApp(app)).toBeUndefined();
+	});
+
+	test('registerPrefsForApp registers the store; prefsForApp retrieves the SAME instance', () => {
+		const app = new App() as any;
+		const store = createPreferenceStore(makeStorage());
+
+		registerPrefsForApp(app, store);
+
+		expect(prefsForApp(app)).toBe(store);
+	});
+
+	test('re-registering the same App overwrites the prior entry (last write wins, safe on reload)', () => {
+		const app = new App() as any;
+		const first = createPreferenceStore(makeStorage());
+		const second = createPreferenceStore(makeStorage());
+
+		registerPrefsForApp(app, first);
+		registerPrefsForApp(app, second);
+
+		expect(prefsForApp(app)).toBe(second);
+	});
+
+	test('two distinct Apps get independently registered stores', () => {
+		const appA = new App() as any;
+		const appB = new App() as any;
+		const storeA = createPreferenceStore(makeStorage());
+		const storeB = createPreferenceStore(makeStorage());
+
+		registerPrefsForApp(appA, storeA);
+		registerPrefsForApp(appB, storeB);
+
+		expect(prefsForApp(appA)).toBe(storeA);
+		expect(prefsForApp(appB)).toBe(storeB);
 	});
 });

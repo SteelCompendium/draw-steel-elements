@@ -26,7 +26,7 @@ import { createSessionStore } from '@/framework/session';
 import type { SessionStore } from '@/framework/session';
 import { createThemeService, registerThemeServiceForApp } from '@/framework/seams/theme';
 import type { ThemeService } from '@/framework/seams/theme';
-import { createPreferenceStore } from '@/framework/seams/prefs';
+import { createPreferenceStore, registerPrefsForApp } from '@/framework/seams/prefs';
 import type { PreferenceStore, PrefsStorage } from '@/framework/seams/prefs';
 import { DSE_PREF_DESCRIPTORS } from '@/prefs/catalog';
 import { createReferenceService } from '@/framework/seams/refs';
@@ -199,6 +199,12 @@ export function initializeElementFrameworkV2(
 	// tests, visual harness) gets the same descriptor set. describe() is
 	// idempotent-safe for late persisted loads (persistedSnapshot re-apply).
 	prefs.describe(DSE_PREF_DESCRIPTORS);
+	// SC-112 (Plan 23 Task 2) — mirrors the ThemeService registration immediately
+	// below: register the live PreferenceStore against `app` so DseModal.open()
+	// can look it up and stamp css-bearing prefs (font/scale custom properties) on
+	// the modal's dialog root via reflectCss(). No unregister: superseded by the
+	// next onload's fresh App/store pair.
+	registerPrefsForApp(app, prefs);
 	// D3 §2.2 (Plan 10 Task 2): the ThemeService is PreferenceStore-backed — the
 	// active theme IS the persisted `theme` pref. The plugin owns the service's
 	// single long-lived upstream subscription, so prefs must be built first.
