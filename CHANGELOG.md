@@ -233,6 +233,25 @@ for what needs action.
   placeholder value. The action-type spine hues and the temp-stamina purple
   were reviewed against the canonical color reference and confirmed unchanged —
   this closes out the last provisional Steel color values (SC-106).
+- [STEEL] Buttons and steppers are compact. Every `+`/`−` and icon button used
+  to render as a 44×44 box around a 16px glyph — a touch-sized target applied
+  on desktop, where it read as roughly 3× too big — on counters, the hero
+  sheet, heroic resource, surges, hero tokens, rolls, montage, party and
+  conditions. Controls now sit at a compact 28px on a mouse/trackpad and switch
+  back to the full 44px target on touch devices (Obsidian mobile, tablets), so
+  nothing gets harder to tap where tapping is how you use it. Control size also
+  follows your text/card size settings now instead of being frozen at one pixel
+  figure (SC-121).
+- [STEEL] The negotiation card's checkboxes are themed: they were bare
+  operating-system squares whose glyph touched the first letter of the label
+  ("☐Higher Authority"). They now use the same mark the skills list uses — a
+  small rounded box that fills with the accent color when checked — with a
+  proper gap to the label. The Interest ladder also tightened up: six rungs of
+  one text line each no longer stack into a screen of mostly empty space
+  (SC-121).
+- [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
+  beside the recovery dots on a healthy character. The winded/dying badge was
+  meant to hide itself and never did (SC-121).
 - [BUGFIX] Trackers and other interactive elements (initiative, negotiation,
   hero, montage, party, project, encounter) now render correctly on Obsidian
   installs whose bundled Electron ships an older Chromium: the built
