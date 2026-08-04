@@ -5905,6 +5905,34 @@ body.theme-light
 	gap: 0.5em;
 	margin-top: var(--dse-pad);
 }
+/* -- FormModal (D9 §3.2): the raw-YAML editor's own two slots. --------------------
+   SC-121 Batch 4 (catalog D-5): `.dse-form__label` and `.dse-form__raw` were created by
+   FormModal.ts but NEVER styled — no rule anywhere in this file matched either class. Its
+   own comment reads "A full-width real <textarea> (not Setting.addTextArea) so raw YAML
+   gets room," and that intent was simply never implemented: a bare `<label>` is inline and
+   a bare `<textarea>` is inline-block at the UA default `rows=2`/`cols=20`, so the editor
+   rendered as a ~330x60px box sitting ON TOP of its own label, with the live preview below
+   it a dozen times taller. Invisible until D-5's modal fixture rendered the surface for the
+   first time — the exact class of defect that batch predicted. Theme-agnostic (structure,
+   not skin): the form editor is equally broken under Legacy, and no frozen shot renders a
+   modal, so this needs no Steel scoping. */
+.dse-form__label {
+	display: block;
+	margin: var(--dse-pad) 0 0.3em;
+	font-size: 0.85em;
+	color: var(--dse-fg-muted);
+}
+.dse-form__raw {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 10em;
+	resize: vertical;
+	font-family: var(--dse-font-mono);
+	font-size: 0.9em;
+	line-height: 1.45;
+}
+
 /* Side-by-side apply/quick-mod panels: flex-ready so a flexed body row splits them. */
 .dse-modal__section {
 	flex: 1 1 0;
