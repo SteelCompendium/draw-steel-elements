@@ -249,6 +249,28 @@ for what needs action.
   proper gap to the label. The Interest ladder also tightened up: six rungs of
   one text line each no longer stack into a screen of mostly empty space
   (SC-121).
+- [STEEL] Ability and feature cards lay their Keywords / Type / Distance /
+  Target block out the way the website does. Keywords and Type were forced into
+  the same two-column grid as Distance and Target, which stranded the Keywords
+  chip across a wide empty gap from the Type chip and left Distance three times
+  wider than Target. They are now two separate bands — the keyword and type
+  chips pack together on one line and wrap, and Distance/Target sit as an even
+  pair of boxes below — matching the site's ability cards (SC-121).
+- [STEEL] Power-roll tier badges (`≤11` / `12-16` / `17+` / `crit`) have room to
+  breathe. Their text used to touch the top and bottom of the badge outline,
+  leaving the badge a fifth of the height of its own row; they are now larger
+  with even padding on all sides, and each badge is centered against its outcome
+  text. Row heights are unchanged (SC-121).
+- [STEEL] Section panels (Effect / Trigger / Special / Aftermath) line their
+  header up with their body text. The header strip sat a few pixels to the right
+  of the paragraph beneath it; both now share one left edge (SC-121).
+- [BUGFIX] The tier-1 power-roll badge reads `≤11` again instead of `²11`. The
+  bundled Source Serif 4 has no "less than or equal to" glyph, so the character
+  fell through to whatever text font you have configured in Obsidian — and many
+  decorative fonts (the harness vault's own Bookinsanity, for one) draw a
+  superscript "2" there, turning the tier threshold into a power of two. That one
+  character is now drawn in your monospace font, which always has it; the digits
+  stay in the card's serif (SC-121).
 - [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
   beside the recovery dots on a healthy character. The winded/dying badge was
   meant to hide itself and never did (SC-121).
