@@ -413,7 +413,18 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	// base consumer (the tests around this allowlist keep proving that). So the "no theme
 	// qualifier" gates below EXEMPT exactly these selectors and nothing else — any OTHER
 	// Steel-scoped consumer of a slot var is still a failure.
-	const SC100_STEEL_CONSUMERS = /\.dse-card__band-head|\.dse-tiles__(?:value|label)/;
+	// SC-121 B-3 adds a FOURTH such consumer, on the same terms: the tier-1 power-roll
+	// badge re-homes ONLY its leading "≤" (via ::first-letter) onto the mono slot,
+	// because the bundled Source Serif 4 subset has no U+2264 and the reader's own text
+	// font substitutes a superscript-two glyph for it. It is decorative-scoped in exactly
+	// the SC-100 sense — one Steel-only selector on one character, print-excluded, and it
+	// re-narrows nothing (the theme-agnostic mono consumer is still `.dse-rollcard__breakdown`,
+	// which the gate below still proves). It is allow-listed here for the day
+	// --dse-font-mono is re-homed to a scope where it resolves: today that rule writes the
+	// slot in its `var(--dse-font-mono, <literal monospace stack>)` fallback form, which the
+	// bare-token matcher below does not even see.
+	const SC100_STEEL_CONSUMERS =
+		/\.dse-card__band-head|\.dse-tiles__(?:value|label)|\.dse-pr__badge--t1 \.dse-pr__badge-text::first-letter/;
 
 	it('parses at least one theme-agnostic rule per widened slot (guard against a vacuous pass)', () => {
 		for (const slot of WIDENED_SLOTS) {

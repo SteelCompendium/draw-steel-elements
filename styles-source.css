@@ -4659,6 +4659,55 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	font-size: 0.9em;
 	padding: 0.32em 0.28em;
 }
+/* SC-121 B-3 — the tier-1 badge reads "²11" in real Obsidian (content-breaking:
+   the threshold is misread as a power of two). ROOT CAUSE, measured in the real
+   app, not guessed — TWO facts compound:
+     1. The Latin subset of Source Serif 4 this plugin bundles (@font-face ~3154)
+        carries NO glyph for U+2264. Probed in Chromium against the shipped base64
+        face: "≤" set in `"Source Serif 4", serif` renders at exactly the width of
+        bare `serif`, while "1" set the same way renders 2px wider than serif's —
+        the digits come from our face, the ≤ does not.
+     2. So the character falls through to the NEXT family in Obsidian's --font-text
+        chain, which is the user's own configured text font. Read off the running
+        app, the badge computes to
+        `"Source Serif 4", Bookinsanity, "Mr. Eaves Small Caps", …` — decorative
+        TTRPG display faces (exactly the kind this plugin's audience picks), and
+        the first of them maps U+2264 to a superscript-two-shaped glyph.
+   The browser harness never showed it because its own fallback chain lands on a
+   system serif that draws ≤ correctly — this class of bug is invisible there and
+   must be verified in the app.
+   FIX: keep the digits in Source Serif and re-home ONLY the leading "≤" — the
+   badge text is a block box in Steel (a blockified flex item), so ::first-letter
+   addresses exactly that one character, with no DOM change (the badge string
+   "≤11" is emitted by powerRollPanel.ts and is LEGACY-FROZEN — it may not be
+   rewritten to "11 or lower" or the like) and no loss to copy/paste or the
+   accessibility tree. The target is the mono slot, whose stacks terminate in the
+   generic `monospace`: U+2264 is core coverage for monospace faces (DejaVu Sans
+   Mono / Consolas / Menlo all carry it), so it resolves in a face that HAS it on
+   every platform, and a decorative text font can never capture it again.
+   The literal stack is a FALLBACK, not a preference: --dse-font-mono is declared
+   on :root as `var(--font-monospace)`, but Obsidian (and the harness's vars.css)
+   declare --font-monospace on `body` — one level DOWN — so at :root it is
+   unresolvable and the token computes to the guaranteed-invalid value everywhere,
+   which is precisely why the first cut of this fix rendered "²11" unchanged. The
+   var() fallback is what makes the slot usable today; if the token is ever
+   re-homed so it actually resolves (workspace FOLLOWUPS — it also silently kills
+   SC-100's monospace kit-tile value), this rule picks the real slot back up with
+   no edit.
+   (Housekeeping: this rule names a badge modifier ABOVE the shape rules, which the
+   clip-path tests locate by first textual occurrence — safe only because it declares
+   no clip-path of its own. Never add one here.) */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__badge--t1 .dse-pr__badge-text::first-letter {
+	font-family: var(
+		--dse-font-mono,
+		ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		Consolas,
+		"DejaVu Sans Mono",
+		monospace
+	);
+}
 
 /* ================================================================== */
 /*   SC-10 Task 4 — statblock forged plate: role-tinted header band,   */

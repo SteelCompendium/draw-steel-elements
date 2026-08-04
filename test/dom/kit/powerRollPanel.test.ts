@@ -414,6 +414,38 @@ describe('Plan 08 Task 4: badge CSS keeps the legacy clip-path shapes verbatim (
 		expect(firstClipPathAfter(dseSel)).toBe(polygon);
 	});
 
+	// SC-121 B-3 — the tier-1 badge read "²11" in real Obsidian: the bundled Source
+	// Serif 4 subset has no U+2264, so the character escaped into the user's own
+	// configured text font (the harness vault's Bookinsanity / Mr. Eaves Small Caps —
+	// decorative TTRPG faces), which maps it to a superscript-two-shaped glyph. The
+	// badge STRING is legacy-frozen (powerRollPanel.ts emits "≤11" and the Legacy PNGs
+	// pin it), so the fix may only re-home the character, never rewrite it:
+	// ::first-letter puts exactly that one glyph on the mono slot, whose stacks
+	// terminate in the generic `monospace` (universal U+2264 coverage). The literal
+	// stack inside the var() is the FALLBACK that makes it work today — --dse-font-mono
+	// is declared at :root off a --font-monospace that Obsidian declares on `body`, so
+	// the token is unresolvable there; the first cut of this fix, without the fallback,
+	// changed nothing in the app. Both halves are asserted: drop either and the badge
+	// silently goes back to whatever the reader's text font draws for U+2264. Pinned
+	// here because the failure mode is invisible to the browser harness — nothing else
+	// in the battery can catch a regression of it.
+	test('the tier-1 badge re-homes its "≤" onto a font with U+2264 coverage, Steel-scoped and print-excluded', () => {
+		const rule = sheet.match(
+			/^[^\n{}]*\.dse-pr__badge--t1 \.dse-pr__badge-text::first-letter\s*\{[\s\S]*?\n\}/m,
+		);
+		expect(rule).not.toBeNull();
+		expect(rule![0]).toMatch(/font-family:\s*var\(\s*--dse-font-mono\s*,/);
+		// …and the fallback half actually terminates in a monospace face.
+		expect(rule![0]).toMatch(/monospace\s*\)?\s*;/);
+		expect(rule![0]).toMatch(/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\)/);
+		// The literal the fix protects is still the one the panel emits.
+		const panel = fs.readFileSync(
+			path.join(__dirname, '../../../src/framework/kit/powerRollPanel.ts'),
+			'utf8',
+		);
+		expect(panel).toMatch(/low:\s*\{\s*mod:\s*'t1',\s*range:\s*'≤11'\s*\}/);
+	});
+
 	test('badge fills consume the --dse-tier-* tokens (no color literals)', () => {
 		expect(sheet).toMatch(/\.dse-pr__badge--t1[^{]*\{[^}]*var\(--dse-tier-low\)/);
 		expect(sheet).toMatch(/\.dse-pr__badge--t2[^{]*\{[^}]*var\(--dse-tier-mid\)/);
