@@ -277,6 +277,36 @@ for what needs action.
 - [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
   beside the recovery dots on a healthy character. The winded/dying badge was
   meant to hide itself and never did (SC-121).
+- [BUGFIX] A treasure's Project line shows real links again instead of printing
+  the link source. The characteristics it lists (Reason, Intuition, …) are
+  links in the compendium data, and the row rendered them as literal text —
+  `[Reason](scc.v1:mcdm.heroes.v1/rule.character/reason) or [Intuition](…)` —
+  brackets, parentheses and address included. Fixed in every theme, including
+  PDF/print export (SC-121).
+- [BUGFIX] Values that are meant to be monospace finally are. The plugin asked
+  for your configured monospace font in a place where the request could never
+  be answered, so it silently fell back to whatever face surrounded it: the
+  kit card's stat readouts (`+6`, `+0/+0/+4`) rendered in the card serif rather
+  than the aligned fixed-width figures they are designed around, and dice
+  breakdowns on roll results did the same. Both now use your Obsidian monospace
+  font, under both themes (SC-121).
+- [BUGFIX] Role-tinted statblock and feature-block header bands, and the
+  power-roll tier row tints, now render on Obsidian installs whose bundled
+  Electron ships an older Chromium. They were built with a color function that
+  only newer Chromium understands, and the whole declaration was discarded
+  where it isn't supported — so those installs saw a header band with no tint
+  and no bottom edge at all. Same class of failure as the tracker-layout bug
+  above, and now guarded by a build test so it cannot come back (SC-121).
+- [STEEL] The kit card's Equipment panel is no longer twice as tall as the line
+  it holds — invisible paragraph spacing inside the box was doubling its height
+  (SC-121).
+- [STEEL] Tables written in compendium prose look like tables. The book's inline
+  mini-statblocks (a perk's "Familiar Statblock", for example) had no styling at
+  all: no borders, no cell padding, no column grouping, so the rows ran together
+  into one block of text. They now get a bordered, rounded frame with a header
+  band and a hairline under each row, matching the website's tables. Steel
+  screen theme only for now — the Legacy theme and PDF/print export still show
+  the unstyled table (SC-121).
 - [BUGFIX] Trackers and other interactive elements (initiative, negotiation,
   hero, montage, party, project, encounter) now render correctly on Obsidian
   installs whose bundled Electron ships an older Chromium: the built
