@@ -313,6 +313,11 @@ for what needs action.
   narrow — in a sidebar, for instance. The table now sits in its own scrolling
   frame, so it stays inside the card and you can swipe/scroll across it. At full
   width nothing changes (SC-121).
+- [STEEL] On ability and feature cards, the action type sits at the right end of
+  the keyword line, the way the website lays it out. The rebuilt keyword band
+  (above) packed the type chip immediately after the keywords instead; it is now
+  pushed to the far right of the same line, with the keyword chips still packed
+  left and still wrapping (SC-121).
 - [STEEL] The heraldic crest shields read correctly in both color schemes. The
   shield's inner face was painted with the hairline/rule color, which by design
   runs opposite the scheme — so the face inverted: under the dark scheme the

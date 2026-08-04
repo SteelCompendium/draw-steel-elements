@@ -4477,6 +4477,34 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	color: var(--dse-fg-muted);
 	text-align: left;
 }
+/* Type chip → the RIGHT end of the chip band (SC-121 Scott round: "the type is
+   supposed to be right-aligned"). The B-1 recomposition above got the band's
+   structure from the site's `.sc-ability__kw` — but that row is keywords-ONLY
+   on the site (steel-ability-cards.js:92-96 maps data.keywords and nothing
+   else; a standalone ability card carries its action type up in the head
+   eyebrow instead). The band that composes the SAME two fields the plugin does
+   — keywords AND type on one line — is the site's statblock feature block,
+   `.sb__ku`, and at the site's DEFAULT keyword-display setting
+   (`kwusage: "crest"`, settings-panel.js:31 SB_DEFAULTS, = the default "Steel
+   Card" preset) it lays them out as:
+     [data-sb-kwusage="crest"] .sb__ku            { display:flex; flex-wrap:wrap;
+                                                    align-items:center; gap:.4rem }
+     [data-sb-kwusage="crest"] .sb__field--usage  { margin-left: auto }
+   (steel-statblock.css:347/353) — i.e. keyword chips pack left, the action-type
+   pill is pushed to the far right of the same line. The band already matches
+   the first rule; this is the missing second one.
+   `margin-left:auto` (the site's own mechanism) rather than
+   `justify-content:space-between` on the band: with flex-wrap, space-between
+   would also spread the KEYWORD chips apart from each other whenever the band
+   wraps to two lines, and would collapse to no effect on a single-child band
+   (the --empty case, where the keywords chip is dropped). auto-margin is
+   per-item, so it right-aligns the type and leaves everything else packed.
+   Steel/screen-scoped, so Legacy's 2-col grid placement of the same cell
+   (grid-column:2 / justify-self:end, base rule ~137) is untouched — and the
+   band wrappers keep their `display:contents` pass-through either way. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
+	margin-left: auto;
+}
 /* Label-less chips, site-style (see the block comment) — kept audible, not
    removed: position/clip is the standard visually-hidden recipe, and it also
    neutralises the base rule's `::after { content: ': ' }` colon by taking the
