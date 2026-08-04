@@ -14,8 +14,11 @@
 // Career.inciting_incidents/Culture.skill_options+quick_build_skill get it prophylactically
 // (never populated in the corpus today, but structurally identical to fields that do carry
 // links once populated — no downside, per kit's row-uniformity rationale). Treasure's
-// non-linking rows (Prerequisite/Project) are the control: real data confirms 0 links there,
-// so they correctly stay plain. (2) Several spec fields are simply DEAD in the current
+// Prerequisite row is the control: real data confirms 0 links there, so it correctly stays
+// plain. (Task 7 originally put Project in that same "control" bucket; that was WRONG and
+// SC-121 C-5 corrects it — `project_roll_characteristic` links its characteristics in every
+// real treasure that has a project, and the row was printing the raw markdown source.)
+// (2) Several spec fields are simply DEAD in the current
 // corpus — Ancestry.{signature_trait_description,ancestry_points,purchased_traits} (0/12),
 // Career.inciting_incidents (0/17), Class.heroic_resource (0/13), Title.benefits (0/66),
 // Perk.{perk_group,prerequisites} (0/55), and every Culture row field (0/13) — kept as
@@ -259,7 +262,17 @@ export const treasureLayout: CardLayout<Treasure> = {
 	rows: [
 		{ label: 'Prerequisite', value: (m) => m.item_prerequisite },
 		{
+			// SC-121 C-5: `markdown: true` is REQUIRED here, not decorative.
+			// `project_roll_characteristic` carries inline SCC links straight out of the
+			// compendium data (every real treasure with a project has them — e.g.
+			// "[Reason](scc.v1:mcdm.heroes.v1/rule.character/reason) or [Intuition](…)"),
+			// and without this flag renderLegacy() calls setText() on the joined value, so
+			// the whole link — brackets, parens, URI — printed verbatim in the card. The
+			// file header's old claim that "Treasure's non-linking rows (Prerequisite/
+			// Project) are the control: real data confirms 0 links there" was wrong for
+			// Project specifically; Prerequisite remains genuinely link-free.
 			label: 'Project',
+			markdown: true,
 			value: (m) =>
 				[
 					m.project_source,

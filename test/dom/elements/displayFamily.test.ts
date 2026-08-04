@@ -165,6 +165,7 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 	});
 
 	test('ds-treasure: inline example.yaml renders title/badges/rows/body', async () => {
+		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-treasure');
 		await new ElementPipeline(makeInlineDeps()).run(treasureElement, treasureExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
@@ -183,6 +184,22 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 			(el) => el.querySelector('.dse-card__row-label')!.textContent === 'Project',
 		)!;
 		expect(projectRow.querySelector('.dse-card__row-value')!.textContent).toContain('150');
+
+		// SC-121 C-5: the Project row joins `project_roll_characteristic`, which carries
+		// inline SCC links straight out of the compendium data. Without `markdown: true` the
+		// row took renderLegacy()'s setText() path and printed the raw link syntax —
+		// "[Reason](scc.v1:mcdm.heroes.v1/rule.character/reason)", brackets and URI and all —
+		// verbatim in the card. Same dispatch-recorder idiom as the ds-kit Stamina test
+		// above: under the jest mock the markdown and setText paths are indistinguishable by
+		// DOM text, so the spy is the only reliable proof the flag is actually set.
+		// Matched against the EXACT joined row value (verbatim from example.yaml), not a
+		// loose substring: `content` also mentions the project, so a substring match would
+		// pass on the body's own markdown render even with the flag off.
+		const projectMarkdown =
+			'[Reason](scc.v1:mcdm.heroes.v1/rule.character/reason) or ' +
+			'[Intuition](scc.v1:mcdm.heroes.v1/rule.character/intuition) · 150';
+		expect(projectRow.querySelector('.dse-card__row-value')!.textContent).toBe(projectMarkdown);
+		expect(renderSpy.mock.calls.some((c) => c[1] === projectMarkdown)).toBe(true);
 
 		// D6 Task 7 review fix (Finding 2): the Effect row's value re-states verbatim as a
 		// labeled sentence in `content` (`m.effect` === the "**Effect:**" line's text once
