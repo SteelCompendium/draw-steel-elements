@@ -190,3 +190,86 @@ describe('A-2: Steel control density — one knob, pointer-aware', () => {
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// D-2: negotiation Interest ladder pitch
+// ---------------------------------------------------------------------------
+describe('D-2: the Interest ladder re-derives from the shared control size', () => {
+	const NT_SCOPE = "[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print=\"on\"])";
+
+	test('the bubble diameter follows --dse-control-min, not the raw touch-min', () => {
+		const r = one(`${NT_SCOPE} .dse-nt__bubble`);
+		expect(r.body).toMatch(/width:\s*var\(--dse-control-min/);
+	});
+
+	test('the rung block margin drops to 0.2em (the inline 0.5em the connector is keyed to stays)', () => {
+		const r = one('.dse-nt__interest-row .dse-nt__bubble', '');
+		expect(r.selector).toBe(`${NT_SCOPE} .dse-nt__interest-row .dse-nt__bubble`);
+		expect(r.body).toMatch(/margin:\s*0\.2em\s+0\.5em/);
+	});
+
+	test('the connector line re-derives from the same knob, so both pointer modes stay aligned', () => {
+		const r = one(`${NT_SCOPE} .dse-nt__interest-ladder::before`);
+		for (const prop of ['height', 'top', 'left']) {
+			expect(r.body).toMatch(new RegExp(`${prop}:\\s*calc\\([^;]*--dse-control-min`));
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// D-3: themed checkbox
+// ---------------------------------------------------------------------------
+describe('D-3: negotiation checkboxes wear the plugin mark idiom + a real label gap', () => {
+	const boxRules = rules.filter((r) => r.selector.includes("input[type='checkbox']"));
+
+	test('every checkbox rule is Steel-scoped, print-excluded, and skips Obsidian task-list boxes', () => {
+		// 3 dedicated rules (base / :checked / :disabled) + the arm inside the kit's
+		// shared focus ring. The sheet is loaded app-wide, so an unscoped
+		// `input[type='checkbox']` arm would restyle every checkbox in Obsidian.
+		expect(boxRules.length).toBe(4);
+		for (const r of boxRules) {
+			expect(r.selector).toContain(STEEL_PRINT_SCOPE);
+			expect(r.selector).toContain(':not(.task-list-item-checkbox)');
+		}
+	});
+
+	test('the box replaces the OS control and matches .dse-skills__mark (1em, 0.2em radius, muted hairline)', () => {
+		const base = boxRules.find((r) => r.body.includes('appearance: none'));
+		expect(base).toBeDefined();
+		expect(base!.body).toMatch(/width:\s*1em/);
+		expect(base!.body).toMatch(/height:\s*1em/);
+		expect(base!.body).toMatch(/border-radius:\s*0\.2em/);
+		expect(base!.body).toMatch(/border:\s*1px solid var\(--dse-fg-muted\)/);
+	});
+
+	test('the label gap the defect was about is a real 0.5em, matching the skills mark', () => {
+		const base = boxRules.find((r) => r.body.includes('appearance: none'))!;
+		expect(base.body).toMatch(/margin:\s*0\s+0\.5em\s+0\s+0/);
+		// The idiom this is copied from carries the same gap — pin it so the two
+		// cannot silently drift apart.
+		const mark = exact('.dse-skills__mark');
+		expect(mark.body).toMatch(/margin-right:\s*0\.5em/);
+	});
+
+	test(':checked fills solid --dse-accent (the skills mark\'s [data-on] state)', () => {
+		const checked = boxRules.find((r) => r.selector.endsWith(':checked'));
+		expect(checked).toBeDefined();
+		expect(checked!.body).toMatch(/background-color:\s*var\(--dse-accent\)/);
+	});
+
+	test('appearance:none drops the UA ring, so the box JOINS the kit\'s one focus rule', () => {
+		// Not a second ring declaration (kit-index.test.ts guards against exactly that):
+		// the checkbox is an extra arm on the kit's shared :focus-visible selector list.
+		const focusArm = boxRules.filter((r) => r.selector.includes(':focus-visible'));
+		expect(focusArm).toHaveLength(1);
+		expect(focusArm[0].selector).toContain('.dse-btn:focus-visible');
+		expect(focusArm[0].body).toMatch(/outline:\s*2px solid var\(--dse-focus-ring\)/);
+		expect(focusArm[0].body).toMatch(/outline-offset:\s*2px/);
+	});
+
+	test('disabled rows keep an affordance (the UA graying went with appearance:none)', () => {
+		const disabled = boxRules.find((r) => r.selector.endsWith(':disabled'));
+		expect(disabled).toBeDefined();
+		expect(disabled!.body).toMatch(/opacity:\s*0\.5/);
+	});
+});

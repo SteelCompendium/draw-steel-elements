@@ -5018,7 +5018,7 @@ body.theme-light
 	box-shadow: var(--dse-bevel);
 }
 
-/* -- 6. Control DENSITY (SC-121 Batch 1 / catalog A-2) ---------------
+/* -- 6. Control DENSITY (SC-121 Batch 1 / catalog A-2 + D-2) ---------------
    Scott's seed defect: "+/- buttons for steppers (and others) are massive with a
    ton of unnecessary padding." Measured (browser harness, CSS px — the shots are
    2x device pixels, so the catalog's "88x86" is 44x44): every kit .dse-btn is a
@@ -5077,6 +5077,66 @@ body.theme-light
 	padding: 0.15em;
 	gap: 0;
 }
+
+/* D-2 — the negotiation Interest ladder inherits (a): its rungs are .dse-btn
+   bubbles whose diameter WAS pinned to the touch-min (~:1588/1642), and each rung
+   carried a 0.5em block margin on top of that, giving a ~60px row pitch for one
+   ~19px line of text. Diameter now follows the shared control size and the block
+   margin drops to 0.2em (the inline 0.5em is kept — it is what the ladder's
+   connector line is positioned against). Pitch 60px -> ~34px, and the connector
+   calcs re-derive from the same knob so both pointer modes stay aligned. */
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__bubble {
+	width: var(--dse-control-min, var(--dse-touch-min));
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest-row .dse-nt__bubble {
+	margin: 0.2em 0.5em;
+}
+[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__interest-ladder::before {
+	height: calc(100% - var(--dse-control-min, var(--dse-touch-min)) - 0.4em);
+	top: calc(0.2em + var(--dse-control-min, var(--dse-touch-min)) / 2);
+	left: calc(0.5em + var(--dse-control-min, var(--dse-touch-min)) / 2);
+}
+
+/* -- 7. Themed checkbox (SC-121 Batch 1 / catalog D-3) --------------------
+   The negotiation card's motivation / pitfall / modifier rows are the plugin's
+   only native <input type="checkbox">es (ArgumentView.ts, MotivationsPitfallsView.ts)
+   and were the only unstyled OS control left in an otherwise fully themed card —
+   bare square, no accent, and the glyph touching its label ("[ ]Higher Authority",
+   native margin-right is 3px).
+   The plugin ALREADY has a mark idiom — .dse-skills__mark (~:2160): a 1em box,
+   0.2em radius, --dse-fg-muted hairline, filled solid --dse-accent when on. This
+   is that same mark, wearing the checkbox's own :checked state instead of
+   [data-on], so the two read as one control language. Plus the 0.5em label gap the
+   skills mark already carries.
+   Scoped by the theme compound rather than by negotiation, so any future Steel
+   surface that emits a checkbox is themed by construction; Obsidian's own markdown
+   task-list checkboxes are excluded — they are the host's chrome inside rendered
+   note content, not a plugin control. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox) {
+	appearance: none;
+	-webkit-appearance: none;
+	box-sizing: border-box;
+	width: 1em;
+	height: 1em;
+	flex: 0 0 auto;
+	margin: 0 0.5em 0 0;
+	vertical-align: -0.125em;
+	border: 1px solid var(--dse-fg-muted);
+	border-radius: 0.2em;
+	background-color: var(--dse-surface-sunken);
+	cursor: pointer;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):checked {
+	background-color: var(--dse-accent);
+	border-color: var(--dse-accent);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+/* The focus ring is NOT restated here: `appearance: none` drops the UA ring, so this
+   checkbox JOINS the kit's one shared :focus-visible rule (~:5689) as an extra arm —
+   see the note there. §4.5's contract is one ring rule for the whole sheet. */
 
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
@@ -5746,12 +5806,21 @@ button.dse-pr__row:hover {
    selectable power-roll rows) plus the stepper's editable <input>. There were
    ZERO focus styles before the kit — this is the a11y default; new focusable
    kit controls must join this selector list. */
+/* SC-121 (D-3) adds the ONE arm in this list that carries a scope: Steel's themed
+   checkbox (~"7. Themed checkbox") replaces the native box with `appearance: none`,
+   which takes the UA focus ring with it, so the ring has to be restated for exactly
+   that case — under Legacy the UA control (and its own ring) is untouched, and the
+   selector must stay inside a DSE subtree because this sheet is loaded app-wide and a
+   bare `input[type='checkbox']` would reach every checkbox in Obsidian. It joins THIS
+   rule rather than declaring a second ring, per §4.5's "one rule" contract (and
+   kit-index.test.ts's no-duplicate-ring guard). */
 .dse-btn:focus-visible,
 .dse-stepper__btn:focus-visible,
 .dse-stepper__input:focus-visible,
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
-.dse-pr__row[aria-checked]:focus-visible {
+.dse-pr__row[aria-checked]:focus-visible,
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):focus-visible {
 	outline: 2px solid var(--dse-focus-ring);
 	outline-offset: 2px;
 }
