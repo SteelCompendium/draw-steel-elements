@@ -3265,19 +3265,19 @@ Shared globals
 	--dse-tier-low: var(--sc-tier-low, #e74c3c);
 	--dse-tier-mid: var(--sc-tier-mid, #f0b429);
 	--dse-tier-high: var(--sc-tier-high, #4caf6a);
-	--dse-tier-crit: #e3c14a; /* PROPOSED gold — no site --sc-tier-crit (map fn 9; Scott review) */
+	--dse-tier-crit: #e0b050; /* RESOLVED (SC-106, 2026-08-03): adopted verbatim from the site's own crit-highlight gold (v2/docs/stylesheets/steel-dice.css:11, `.sc-dice-pop .crit`) — the site DOES style crits with a specific gold, so no invented hue was needed. Single value for both Steel dark/light (a fill, not text — no contrast pressure; same pattern as stamina-temp/vp). */
 
 	/* -- Semantic: stamina / HP -- */
 	--dse-stamina-healthy: var(--sc-role-hexer, #5cc98a);
 	--dse-stamina-winded: #f0b429;
 	--dse-stamina-dying: #e74c3c;
-	--dse-stamina-temp: #7c5cd6; /* purple (SC-10 Task 6, taste #1 resolved "match the site" 2026-07-19): the site has no temp-stamina bar, but reserves blue for --sc-act-maneuver — purple frees blue and sits outside the HP ramp */
+	--dse-stamina-temp: #7c5cd6; /* purple (SC-10 Task 6, taste #1 resolved "match the site" 2026-07-19; RE-CONFIRMED SC-106, 2026-08-03): the site has no temp-stamina bar, but reserves blue for --sc-act-maneuver — purple frees blue, stays outside the green/amber/red HP ramp, and sits far enough from role-artillery/act-trait's purples (different context, never co-located) to read as its own "shield" signal. */
 	--dse-stamina-track: rgba(220,226,230,0.06);
 
 	/* -- Semantic: encounter -- */
 	--dse-turn-done: var(--sc-role-hexer, #5cc98a);
 	--dse-malice: #e0584b;
-	--dse-vp: #e3c14a; /* PROPOSED victory-gold (shared w/ tier-crit; map fn 12; Scott review) */
+	--dse-vp: #e0b050; /* RESOLVED (SC-106): shares tier-crit's site-sourced gold — both are "triumph" semantics, never co-located in one widget */
 	--dse-warn: #e8954a;
 	--dse-danger: #e74c3c;
 
@@ -3295,12 +3295,16 @@ Shared globals
 	--dse-role-solo: var(--sc-role-solo, #9aa2a8);
 	--dse-role-minion: var(--sc-role-minion, #9aa2a8);
 
-	/* -- Ability action-type accents (data-dse-act spine; --sc-ability-* slots; Scott review) -- */
+	/* -- Ability action-type accents (data-dse-act spine; --sc-ability-* slots) -- */
 	/* SC-10 realignment: chained to the site's CANONICAL action-type tokens
 	   (--sc-act-* in steel-ability-cards.css — Main red / Maneuver blue /
 	   Triggered green / Move orange / None white / Trait purple). The D3 draft
 	   chained the --sc-ability-* CLASSIFICATION hues instead — a different
-	   taxonomy that disagreed with the site's action-type semantics. */
+	   taxonomy that disagreed with the site's action-type semantics.
+	   CONFIRMED (SC-106, 2026-08-03): this scheme matches reference/colors.md's
+	   canonical Ability Colors exactly (Main=Red, Maneuver=Blue, Triggered=Green,
+	   Move=Orange/Yellow, No Action=Black/white theme-based, Traits/Other=Purple)
+	   — no value changes needed. */
 	--dse-act-main: var(--sc-act-main, #e74c3c);
 	--dse-act-maneuver: var(--sc-act-maneuver, #5dade2);
 	--dse-act-triggered: var(--sc-act-triggered, #4caf6a);
