@@ -1586,7 +1586,9 @@ code.dsa {
 
 	/* -- the shared bubble control: a round kit iconButton (aria-pressed) -- */
 	/* The kit's --dse-touch-min min-size IS the bubble diameter (§4.6); the pressed
-	   fill comes from the kit's .dse-btn[data-pressed] accent rule. */
+	   fill comes from the kit's .dse-btn[data-pressed] accent rule.
+	   Under Steel this `width` is overridden (deliberately, without :where() — see
+	   ~:5111) to --dse-control-min; background/border/z-index above stay untouched. */
 	.dse-nt__bubble {
 		width: var(--dse-touch-min);
 		padding: 0;
@@ -1636,6 +1638,9 @@ code.dsa {
 	.dse-nt__interest-ladder {
 		position: relative;
 
+		/* Under Steel, height/top/left below are overridden to re-derive from
+		   --dse-control-min (~:5117); width/transform/background/position here
+		   are NOT touched by that override and stay owned by this rule. */
         &:before {
             content: "";
             position: absolute;
@@ -5057,7 +5062,11 @@ body.theme-light
    so it outranks the kit base (0,1,0) while LOSING to every component-level
    override — initiative's compact glyph buttons (~:527, (0,3,0)) keep winning
    without needing a single change. New per-component sizing keeps working the
-   same way. */
+   same way.
+   Contrast the D-2 ladder rules just below (~:5090): those deliberately OMIT
+   :where() because there the new rule must WIN, not lose — see the note at
+   that block for why. The asymmetry is intentional in both directions; do not
+   "harmonize" the two by adding or removing :where() to match. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) {
 	--dse-control-min: 1.75em;
 }
@@ -5084,7 +5093,21 @@ body.theme-light
    ~19px line of text. Diameter now follows the shared control size and the block
    margin drops to 0.2em (the inline 0.5em is kept — it is what the ladder's
    connector line is positioned against). Pitch 60px -> ~34px, and the connector
-   calcs re-derive from the same knob so both pointer modes stay aligned. */
+   calcs re-derive from the same knob so both pointer modes stay aligned.
+
+   NOT :where()-wrapped, unlike §6's shared rules above — deliberately. The
+   original `.dse-nt__bubble { width: var(--dse-touch-min) }` is nested under
+   `[data-dse-element="negotiation"] .dse-nt` (~:1590), which flattens to
+   (0,3,0). This rule must WIN, so it is written at bare
+   `[data-dse-theme='steel'][data-dse-element='negotiation']:not(…) .dse-nt__bubble`
+   = (0,4,0). Wrapping the class in :where() would drop it to (0,2,0), lose to
+   the (0,3,0) original, and the bubble would render as a 44px-wide x 28px-tall
+   ELLIPSE instead of a circle. Do not "harmonize" this with §6's :where() usage.
+
+   The ::before rule below only overrides height/top/left; width, background,
+   transform and position stay on the original nested rule at ~:1642 (see the
+   pointer comment there) — the connector's ownership is split across this
+   ~3,500-line gap by design, not oversight. */
 [data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"]) .dse-nt__bubble {
 	width: var(--dse-control-min, var(--dse-touch-min));
 }
@@ -5105,8 +5128,12 @@ body.theme-light
    native margin-right is 3px).
    The plugin ALREADY has a mark idiom — .dse-skills__mark (~:2160): a 1em box,
    0.2em radius, --dse-fg-muted hairline, filled solid --dse-accent when on. This
-   is that same mark, wearing the checkbox's own :checked state instead of
-   [data-on], so the two read as one control language. Plus the 0.5em label gap the
+   checkbox is derived from that mark, not identical to it: it adds a
+   --dse-surface-sunken fill at rest (the skills mark is transparent there) and an
+   --dse-accent border-color when checked (the skills mark keeps its
+   --dse-fg-muted hairline when on). It wears the checkbox's own :checked state
+   instead of [data-on], so the two read as close kin in the same control
+   language rather than one mark reused verbatim. Plus the 0.5em label gap the
    skills mark already carries.
    Scoped by the theme compound rather than by negotiation, so any future Steel
    surface that emits a checkbox is themed by construction; Obsidian's own markdown
@@ -5234,7 +5261,10 @@ body.theme-light
    The shared kit :focus-visible ring (§4.5) lives at the end of the kit CSS.
 */
 
-/* -- iconButton (§2.1): real <button>, ≥44px hit area via padding (§4.6) -- */
+/* -- iconButton (§2.1): real <button>, ≥44px hit area via padding (§4.6) —
+   kit-layer default only: SC-121 Batch 1's Steel density rule (§6, ~:5026)
+   overrides this to a 28px box (--dse-control-min) on a fine pointer, restoring
+   the full 44px only under `pointer: coarse`. -- */
 .dse-btn {
 	display: inline-flex;
 	align-items: center;

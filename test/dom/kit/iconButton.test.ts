@@ -244,7 +244,7 @@ describe('Plan 08 Task 2: kit hygiene guard (D2 §5 — no inline color, tokens 
 		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
-	test('.dse-btn CSS derives its ≥44px hit area from var(--dse-touch-min) (§4.6)', () => {
+	test('.dse-btn CSS derives its kit-layer ≥44px hit area from var(--dse-touch-min) (§4.6) — Steel overrides to 28px on a fine pointer, restoring 44px under pointer:coarse (see controlDensity.test.ts)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 		const block = sheet.match(/\.dse-btn\s*\{([^}]*)\}/);
 		expect(block).not.toBeNull();
