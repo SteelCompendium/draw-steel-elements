@@ -228,6 +228,19 @@ for what needs action.
     users already see rather than changing it; there is no new visual change
     at defaults. Print keeps controls in the non-serif rendering, preserving
     print/export output byte-for-byte.
+- [BUGFIX] Trackers and other interactive elements (initiative, negotiation,
+  hero, montage, party, project, encounter) now render correctly on Obsidian
+  installs whose bundled Electron ships an older Chromium: the built
+  `styles.css` used native CSS nesting, which those older Chromiums silently
+  drop, collapsing the affected layouts to plain unstyled stacks (e.g. the
+  initiative tracker's compact touch-target buttons, the negotiation ladder's
+  badge row). esbuild now flattens all nesting at build time. Be aware this
+  had been shipping broken since `styles-source.css` was introduced (~5.1.0):
+  the plugin's own visual-harness gates all run on a modern bundled Chromium
+  that renders nesting fine and so never saw the breakage — only a real
+  Obsidian install did. `npm run obsidian-shots` (spawns the real Obsidian
+  binary) now stands as the regression coverage that browser-only gates
+  structurally cannot provide for this class of bug.
 
 ## 5.1.1
 

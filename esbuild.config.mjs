@@ -70,7 +70,15 @@ const context = await esbuild.context({
     ...builtins
   ],
   format: "cjs",
-  target: "es2018",
+  // JS target stays es2018 (unrelated to this fix — Obsidian's plugin runtime already
+  // requires es2018+). "chrome106" is added purely to give esbuild's CSS pipeline a browser
+  // target: esbuild keys its CSS-nesting downleveling off browser-target entries, not JS
+  // version strings, so without a browser target native CSS nesting in styles-source.css
+  // passes through the bundle unflattened. Chrome 106 matches Obsidian's actual bundled
+  // Electron/Chromium floor on older desktop installs (SC-122; see
+  // .superpowers/sdd/sc121-audit/nesting-verification.md), which has zero CSS-nesting
+  // support and silently drops nested rules at parse time.
+  target: ["es2018", "chrome106"],
   logLevel: "info",
   sourcemap: prod ? false : true,
   treeShaking: true,
