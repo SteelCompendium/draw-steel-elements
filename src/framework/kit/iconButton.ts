@@ -70,6 +70,13 @@ export function iconButton(
 	if (opts.icon) {
 		const iconEl = buttonEl.createSpan({ cls: 'dse-btn__icon' });
 		setIcon(iconEl, opts.icon);
+		// SC-121 (A-2) — STRUCTURAL modifier, orthogonal to the visual `variant`
+		// modifiers above: "this button carries a glyph and no visible label", the one
+		// case where the kit's uniform label-button padding is pure dead space. Emitted
+		// here (not sniffed in CSS via :has()) so the distinction is explicit, testable,
+		// and independent of selector-engine support in older Obsidian Electrons. No
+		// rule targets it under Legacy — the compact treatment is Steel-only.
+		if (opts.text === undefined) buttonEl.addClass('dse-btn--icon');
 	}
 	if (opts.text !== undefined) {
 		buttonEl.createSpan({ cls: 'dse-btn__text', text: opts.text });

@@ -5018,6 +5018,66 @@ body.theme-light
 	box-shadow: var(--dse-bevel);
 }
 
+/* -- 6. Control DENSITY (SC-121 Batch 1 / catalog A-2) ---------------
+   Scott's seed defect: "+/- buttons for steppers (and others) are massive with a
+   ton of unnecessary padding." Measured (browser harness, CSS px — the shots are
+   2x device pixels, so the catalog's "88x86" is 44x44): every kit .dse-btn is a
+   44x44 raised box around a 16x16 Lucide glyph, because the kit derives its hit
+   area from VISIBLE padding + var(--dse-touch-min) (kit §4.6). At reading-mode
+   density that reads ~3x too generous next to the site's compact control language.
+
+   ONE treatment, not eight per-family overrides. Two decisions:
+
+   (a) THE BOX FOLLOWS THE POINTER. --dse-touch-min (44px) is a TOUCH ergonomic,
+       so it is applied where the pointer is actually coarse. On a fine pointer
+       the Steel control box is --dse-control-min (1.75em = 28px at the default
+       card size) — still above WCAG 2.5.8 AA (24x24), and `em` so it tracks the
+       user's text/card size prefs (SC-112 Task 7) instead of freezing at one px
+       figure. `@media (pointer: coarse)` (Obsidian mobile, tablets) restores the
+       full 44px box — VISIBLY, not as an invisible ::after overlay.
+       Why not initiative's ::after-overlay pattern (~:527) here: that pattern is
+       correct where a component controls its own neighbours' geometry (initiative
+       deliberately makes the condition-icon overlay vertical-only so adjacent
+       icons can't shadow each other). As a PLUGIN-WIDE default it would silently
+       overhang whatever sits beside each control — most concretely the stamina
+       stepper's editable <input>, whose left edge would fall under the minus
+       button's 44px overlay and stop taking clicks. A media query has no such
+       cross-component failure mode. TRADE-OFF, stated honestly: a touchscreen
+       laptop reports `pointer: fine` and gets the 28px box, so finger-driving a
+       hybrid device is tighter than before (still AA-conformant). That is the
+       right default for a device whose PRIMARY input is a mouse.
+
+   (b) --dse-control-min IS A LAYOUT KNOB, NOT A D3 TOKEN. It has no per-theme /
+       per-print value axis (Legacy never reads it; print excludes it), so it is
+       deliberately NOT added to DSE_TOKEN_NAMES / the D3 token map — it exists so
+       the ONE size decision has ONE edit point that every consumer below reads.
+
+   Every consumer selector below targets `:where(.dse-btn)` etc. ON PURPOSE: the
+   shared density default sits at exactly the theme compound's specificity (0,2,0),
+   so it outranks the kit base (0,1,0) while LOSING to every component-level
+   override — initiative's compact glyph buttons (~:527, (0,3,0)) keep winning
+   without needing a single change. New per-component sizing keeps working the
+   same way. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) {
+	--dse-control-min: 1.75em;
+}
+@media (pointer: coarse) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) {
+		--dse-control-min: var(--dse-touch-min);
+	}
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) :where(.dse-btn) {
+	min-width: var(--dse-control-min, var(--dse-touch-min));
+	min-height: var(--dse-control-min, var(--dse-touch-min));
+}
+/* Icon-only buttons (kit .dse-btn--icon, iconButton.ts): the kit's label padding
+   (0.25em 0.6em) is dead space around a glyph, so the box IS --dse-control-min.
+   No coarse-pointer twin is needed — at 44px the min-size already dominates. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :where(.dse-btn--icon) {
+	padding: 0.15em;
+	gap: 0;
+}
+
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
 /* ================================================================== */
