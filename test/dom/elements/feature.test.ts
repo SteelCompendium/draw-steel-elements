@@ -697,6 +697,64 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 		// (Statblock/Featureblock) onto this grammar and Task 10 evicted the block.
 		expect(sheet).not.toMatch(/\.ds-feature-container\s*\{/);
 	});
+
+	// SC-121 B-1. This is the LOAD-BEARING invariant of the meta recomposition: the two
+	// band wrappers are new theme-agnostic DOM inside a family whose Legacy and
+	// steel-print PNGs are frozen. They stay invisible to those themes ONLY because the
+	// BASE rule is `display: contents`, which hands the four cells straight back to
+	// .dse-feature__meta's own grid. If that declaration is ever narrowed, re-scoped, or
+	// dropped, the bands become real boxes in Legacy/print and the freeze breaks.
+	test('CSS contract (SC-121 B-1): the meta bands are `display: contents` in the BASE — the mechanism that keeps Legacy/print byte-identical', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		const base = sheet.match(
+			/\.dse-feature__meta-chips,\n\.dse-feature__meta-rail\s*\{[\s\S]*?\n\}/,
+		);
+		expect(base).not.toBeNull();
+		expect(base![0]).toMatch(/display:\s*contents\s*;/);
+		// …and the base rule is genuinely UNSCOPED (no theme/print qualifier of its own).
+		expect(base![0]).not.toMatch(/data-dse-(?:theme|print)/);
+
+		// Every rule that gives a band a real layout is Steel-scoped AND print-excluded.
+		const bandRules = sheet.match(
+			/^[^\n{}]*\.dse-feature__meta-(?:chips|rail)[^\n{}]*\{[\s\S]*?\n\}/gm,
+		)!;
+		const layoutRules = bandRules.filter((r) => !/display:\s*contents/.test(r));
+		expect(layoutRules.length).toBeGreaterThan(0);
+		for (const rule of layoutRules) {
+			expect(rule).toMatch(/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\)/);
+		}
+	});
+
+	// SC-121 B-5. The head strip and the body under it were authored independently
+	// against different figures and drifted 6px apart at the left edge. They now share
+	// one gutter; pin it so a future edit to either one can't silently re-open the gap.
+	test('CSS contract (SC-121 B-5): the Steel .dse-section head strip and body share one horizontal gutter', () => {
+		// Comments stripped first: both of these rules QUOTE the site's own
+		// `padding: .5rem .9rem` figures in their doc comments, which would otherwise
+		// match ahead of the real declaration.
+		const sheet = fs
+			.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8')
+			.replace(/\/\*[\s\S]*?\*\//g, '');
+
+		// Each of these has MORE than one Steel-scoped rule (display, ink, …); the one
+		// that matters is whichever declares the `padding` shorthand.
+		const gutterOf = (cls: string): string => {
+			const rules = sheet.match(
+				new RegExp(
+					`\\[data-dse-theme='steel'\\]:not\\(\\[data-dse-print="on"\\]\\) \\.${cls}\\s*\\{[\\s\\S]*?\\n\\}`,
+					'g',
+				),
+			);
+			expect(rules).not.toBeNull();
+			const padded = rules!.map((r) => /padding:\s*([^;]+);/.exec(r)).filter((m) => m !== null);
+			expect(padded).toHaveLength(1);
+			// `padding: <block> <inline>` — the inline (horizontal) half is the gutter.
+			return padded[0]![1].trim().split(/\s+/)[1];
+		};
+
+		expect(gutterOf('dse-section__body')).toBe(gutterOf('dse-section__title'));
+	});
 });
 
 describe('T-5: registered EXACTLY ONCE — framework registry owns ds-ft*, RegisterElements.ts does not', () => {

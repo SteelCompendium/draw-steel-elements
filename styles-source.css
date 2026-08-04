@@ -4461,8 +4461,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	background-image: var(--dse-sheen-soft);
 	color: var(--dse-metal-bright);
 }
+/* SC-121 B-5: the head strip and the body under it must share ONE left edge.
+   They were authored independently against different figures — head
+   `0.625rem 1.125rem` (10/18px, the site's .5rem .9rem above) vs body
+   `0.6em 0.75em` (9.6/12px) — leaving the body text inset 6px LESS than its own
+   header (12px vs 18px; ~12 device px in the 2x shots, the ~10px the audit
+   measured). The site authors both off the same .9rem gutter:
+   `.sc-ability__section-body { padding: .65rem .9rem }` (steel-ability-cards.css:190)
+   = 13/18px at its 20px rem base. Re-author in the same rem the head uses so the
+   two can never drift again: 0.8125rem = 13px, 1.125rem = 18px. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-section__body {
-	padding: 0.6em 0.75em;
+	padding: 0.8125rem 1.125rem;
 }
 
 /* --- Plan 20 Task 3: the other two head strips ----------------------------
