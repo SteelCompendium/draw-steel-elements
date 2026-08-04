@@ -78,8 +78,11 @@ try {
 	// for every element; a NON-default fixture gets `${id}-${fixtureName}--${combo}` so it
 	// can never collide with — and overwrite — a frozen default-fixture golden.
 	let elements = manifest.elements;
+	const narrowShots = manifest.narrowShots ?? [];
 	if (args.element) elements = elements.filter((e) => e.id === args.element);
-	if (args.element && elements.length === 0) {
+	// A narrow-shot id (e.g. `perk-narrow`) is a legal --element value even though it is
+	// not a registered element — it selects only that capture below.
+	if (args.element && elements.length === 0 && !narrowShots.some((n) => n.id === args.element)) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
 	}
@@ -114,6 +117,21 @@ try {
 				const suffix = args.readonly ? '--readonly' : '';
 				await snap(page, params, `${outId}--${comboName(c)}${suffix}`);
 			}
+		}
+	}
+	// SC-121 Batch 4 (batch-3 review L-5): narrow-width captures, declared by the page
+	// (manifest.narrowShots — entry.ts NARROW_SHOTS). Same combo matrix as an element,
+	// output under the entry's own id so it can never overwrite the full-width golden.
+	// Filtered by --element like everything else: --element=perk shoots perk AND the
+	// narrow entries derived from it, so a narrowed run still sees them.
+	for (const n of narrowShots) {
+		if (args.element && args.element !== n.element && args.element !== n.id) continue;
+		for (const c of combos) {
+			const params = { element: n.element, fixture: n.fixture, theme: c.theme, bg: c.bg, width: String(n.width) };
+			if (c.print) params.print = '1';
+			if (args.readonly) params.readonly = '1';
+			const suffix = args.readonly ? '--readonly' : '';
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
 		}
 	}
 	if (!args.element) {

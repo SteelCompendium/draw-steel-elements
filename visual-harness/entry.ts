@@ -99,6 +99,43 @@ features:
       - effect: Allies within 2 squares gain an edge.
 `;
 
+// SC-121 Batch 4 / batch-1 review M-4: no fixture anywhere renders a CHECKED checkbox, so
+// Batch 1's themed `input[type=checkbox]:checked` rule (accent fill + accent border) was
+// asserted only in rule text. This variant of the negotiation fixture pre-checks state in
+// BOTH places the element draws a checkbox: `hasBeenAppealedTo` on a motivation (the
+// Motivations details list, and the `--used` line class in the argument panel) and
+// `currentArgument.motivationsUsed` / `lieUsed` (the "Appeals to Motivation" + modifier
+// checkboxes). Keys are camelCase because NegotiationData's own serializer round-trips the
+// class instance verbatim (model.ts) — that IS the persisted shape. A separate fixture, not
+// an edit to example.yaml: example.yaml is the single-sourced AUTHORING example (D9) and
+// its shots are freeze-pinned, so a checked-state variant belongs beside it, not inside it.
+const negotiationChecked = `name: "Convincing Frodo to remember the taste of strawberries"
+initial_interest: 3
+initial_patience: 3
+motivations:
+  - name: "Higher Authority"
+    reason: "It's Frodo's duty to destroy the ring"
+    hasBeenAppealedTo: true
+  - name: "Peace"
+    reason: "The Shire is life"
+pitfalls:
+  - name: "Power"
+    reason: "The ring is too powerful to ignore"
+currentArgument:
+  motivationsUsed:
+    - "Higher Authority"
+  pitfallsUsed: []
+  lieUsed: true
+  reusedMotivation: true
+  sameArgumentUsed: false
+i5: "Remembers the taste of strawberries and cream!"
+i4: "Remembers the taste of strawberries"
+i3: "Remembers the taste of unripe strawberries"
+i2: "Remembers the smell of strawberries"
+i1: "Doesn't remember the taste of strawberries"
+i0: "Thinks you're after the ring; becomes hostile"
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -119,7 +156,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	initiative: { default: initiativeDefault },
 	kit: { default: kitDefault },
 	montage: { default: montageDefault },
-	negotiation: { default: negotiationDefault },
+	negotiation: { default: negotiationDefault, checked: negotiationChecked },
 	party: { default: partyDefault },
 	perk: { default: perkDefault },
 	project: { default: projectDefault },
@@ -142,10 +179,13 @@ export interface HarnessParams {
 	print: boolean;
 	readonly: boolean;
 	gallery: boolean;
+	/** SC-121 Batch 4: constrain #mount to this many CSS px (narrow-width coverage). */
+	width?: number;
 }
 
 export function parseParams(search: string): HarnessParams {
 	const q = new URLSearchParams(search);
+	const width = Number(q.get('width'));
 	return {
 		element: q.get('element') ?? undefined,
 		fixture: q.get('fixture') ?? 'default',
@@ -154,8 +194,25 @@ export function parseParams(search: string): HarnessParams {
 		print: q.get('print') === '1',
 		readonly: q.get('readonly') === '1',
 		gallery: q.get('gallery') === '1',
+		width: Number.isFinite(width) && width > 0 ? width : undefined,
 	};
 }
+
+/**
+ * SC-121 Batch 4 (batch-3 review L-5): narrow-width captures. The harness page is a fixed
+ * 900px viewport, so nothing in the sweep has ever rendered an element at the width of an
+ * Obsidian SIDEBAR leaf (~300px) — where a wide markdown table or a multi-column row can
+ * clip or collapse. Each entry re-shoots an existing element/fixture with #mount pinned to
+ * `width`, under its own `id` so it never collides with the full-width golden. Declared on
+ * the page (not in shoot.mjs) so the manifest stays the sweep's single source of truth.
+ */
+export const NARROW_SHOTS: { id: string; element: string; fixture: string; width: number }[] = [
+	// The perk's "Familiar Statblock" is the plugin's only 5-column markdown pipe-table
+	// (Batch 3 C-6 gave `table:not([class])` its baseline styling, incl. `overflow: hidden`
+	// for the radius). 300px = Obsidian's default right-sidebar leaf width, the narrowest
+	// place a reading-mode element realistically renders.
+	{ id: 'perk-narrow', element: 'perk', fixture: 'default', width: 300 },
+];
 
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
@@ -261,6 +318,10 @@ export async function mountFromParams(
 	const errors: string[] = [];
 	if (!mount) return { errors: ['no #mount element'] };
 	mount.empty();
+	// Narrow captures pin #mount's own box; the shot is the #mount locator, so this is
+	// what makes the element lay out at sidebar width. Always reset it (the page is
+	// re-navigated per shot, but mountFromParams is also called directly by tests).
+	mount.style.width = params.width ? `${params.width}px` : '';
 	const ids = params.gallery ? Object.keys(FIXTURES) : [params.element ?? 'feature'];
 	for (const id of ids) {
 		await mountOne(pipeline, registry, mount, id, params.fixture, params, errors);
@@ -274,7 +335,10 @@ export async function mountFromParams(
 
 declare global {
 	interface Window {
-		__dseHarnessManifest?: { elements: { id: string; fixtures: string[] }[] };
+		__dseHarnessManifest?: {
+			elements: { id: string; fixtures: string[] }[];
+			narrowShots: { id: string; element: string; fixture: string; width: number }[];
+		};
 		__dseHarnessDone?: { errors: string[] };
 	}
 }
@@ -283,6 +347,7 @@ declare global {
 if (typeof window !== 'undefined') {
 	window.__dseHarnessManifest = {
 		elements: Object.keys(FIXTURES).map((id) => ({ id, fixtures: Object.keys(FIXTURES[id]) })),
+		narrowShots: NARROW_SHOTS,
 	};
 	if (document.getElementById('mount')) {
 		void mountFromParams(document, parseParams(window.location.search)).then(async (r) => {

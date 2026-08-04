@@ -26,9 +26,14 @@ One-time setup: `npx playwright install chromium`.
 
 ## Pieces
 
-- `entry.ts` — mounts elements per URL params (`?element=&fixture=&theme=&bg=&print=1&readonly=1&gallery=1`)
-  through the real pipeline + seams; element list comes from `main.ts`'s
-  `registerFrameworkElementDefinitions` (can't drift).
+- `entry.ts` — mounts elements per URL params
+  (`?element=&fixture=&theme=&bg=&print=1&readonly=1&gallery=1&width=<px>`) through the real
+  pipeline + seams; element list comes from `main.ts`'s
+  `registerFrameworkElementDefinitions` (can't drift). `width=` pins `#mount` to a fixed
+  CSS width — the NARROW-shot axis (`NARROW_SHOTS`, published on the manifest and swept by
+  `shoot.mjs` as `<id>--<combo>`): the fixed 900px page could never show what an element
+  does at Obsidian sidebar-leaf width, where wide markdown tables and multi-column rows
+  break (SC-121 Batch 4).
 - `shim/obsidian.ts` — browser `obsidian` module: jest-free mock core + real Lucide icons +
   `marked` markdown + toast Notice. Aliased in by `esbuild.mjs` for this bundle only.
 - `vars.css` — vendored Obsidian default-theme variables (only what `styles-source.css` uses).
@@ -44,8 +49,12 @@ the shim doesn't move that gate at all, so after editing `shim/obsidian.ts` re-r
 
 ## v1 limits (spec §"Out of scope")
 
-Static states only — no modals/hover/focus scripting, no CI pixel gates, default Obsidian
-theme only. Steel shots show the **fallback-hex palette**: `styles-source.css` chains its
+Static states only in THIS (browser) camera — no modals/hover/focus scripting, no CI pixel
+gates, default Obsidian theme only. **Modals, the settings tab, sidebar leaves and canvas
+are covered by the Obsidian camera instead** (SC-121 Batch 4, catalog D-5..D-8): this page
+vendors only the Obsidian variables `styles-source.css` reads, not Obsidian's own
+`.modal-container`/`.modal`/`.setting-item`/canvas chrome, so a browser shot of those
+surfaces would pin a box that does not exist in the product. See "Obsidian camera" below. Steel shots show the **fallback-hex palette**: `styles-source.css` chains its
 Steel vars as `var(--sc-*, #hex)`, and `vars.css` deliberately doesn't vendor `--sc-*` (that
 palette lives in the v2 site's snippet), so every Steel shot renders the inline hex fallbacks
 — the no-palette-snippet default-install look. The harness can't show Steel-with-`--sc-*`, so
@@ -66,6 +75,19 @@ note per element (`demo-vault/Harness/` — git-ignored, regenerated every run b
 over CDP, once per plugin-theme (`legacy`/`steel`) × chrome-bg (`dark`/`light`) combo. Before
 quitting it restores plugin theme=`steel` / chrome=`dark` so the vault's persisted state
 matches the committed baseline.
+
+Beyond the element×theme×bg sweep it takes a set of **special captures** — surfaces the
+sweep structurally cannot reach, each steel/dark only (existence/behaviour proofs, not
+visual combo sweeps), each selectable as its own `--element=` value:
+
+| `--element=` | What it proves |
+|---|---|
+| `by-scc-kit` | a by-SCC `ds-kit` card recursing into a real nested `ds-feature` card |
+| `sidebar-initiative` | the dedicated "Send initiative tracker to sidebar" command |
+| `sidebar-hero` / `sidebar-statblock` / `sidebar-perk` / `sidebar-negotiation` | the GENERIC "Send block to sidebar" command — and narrow-width behaviour in a real 300px leaf |
+| `modal-stamina` / `modal-stamina-recovery` / `modal-conditions` / `modal-form` | the four interactive modals, opened by clicking their REAL affordances |
+| `settings` | the plugin settings tab, over a 2nd CDP connection to Obsidian 1.13's Settings POPOUT window |
+| `canvas` | the canvas read-only quarantine (`data-dse-readonly` asserted, not just eyeballed) |
 
 `npm run obsidian-shots` runs `notes-gen.mjs` and a `build-no-check` build before the camera
 itself — no separate setup step. Output: `shots/<element>--obsidian-<theme>-<bg>.png`, named

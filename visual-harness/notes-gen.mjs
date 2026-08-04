@@ -99,6 +99,65 @@ for (const rel of COMPENDIUM_SEED_FILES) {
 }
 console.log(`seeded ${COMPENDIUM_SEED_FILES.length} compendium fixture(s) into DS Compendium/`);
 
+// -- SC-121 Batch 4 harness-coverage notes (catalog D-5 / D-6) ------------------------
+// Two extra generated notes the obsidian camera's new specials need. Same convention as
+// by-scc-kit.md below: harness-only, git-ignored with the rest of Harness/, and NOT an
+// element's authoring example (example.yaml stays the single-sourced D9 example).
+
+// D-5's stamina/Spend Recovery modal capture needs a stamina block that actually HAS
+// recoveries: src/elements/stamina-bar/example.yaml deliberately carries none (the
+// pre-D7-Task-4 legacy shape), so the modal's Spend Recovery quick action would be
+// permanently disabled and the state D-5 names could never be shot. Figures mirror the
+// hero example's (max 48 / recoveries 6 of 10) so the modal shows a mid-fight hero.
+fs.writeFileSync(
+	path.join(outDir, 'modal-stamina.md'),
+	`# modal-stamina\n\n\`\`\`ds-stam\nmax_stamina: 48\ncurrent_stamina: 22\ntemp_stamina: 0\nrecoveries_max: 10\nrecoveries: 6\n\`\`\`\n`,
+);
+console.log('wrote Harness/modal-stamina.md (stamina block WITH recoveries — Spend Recovery modal state)');
+
+// D-6's canvas read-only capture. Canvas TEXT nodes are the quarantined path
+// (ctx.sourcePath === '' -> canPersist false -> data-dse-readonly); two interactive
+// elements side by side, at fixed coordinates so the capture's clip is deterministic.
+const CANVAS_NOTE = 'canvas';
+const canvasNode = (id, text, x, width, height) => ({
+	id,
+	type: 'text',
+	text,
+	styleAttributes: {},
+	x,
+	y: 0,
+	width,
+	height,
+});
+fs.writeFileSync(
+	path.join(outDir, `${CANVAS_NOTE}.canvas`),
+	JSON.stringify(
+		{
+			nodes: [
+				canvasNode(
+					'dsecanvasstam0001',
+					'```ds-stam\nmax_stamina: 48\ncurrent_stamina: 22\nrecoveries_max: 10\nrecoveries: 6\n```',
+					0,
+					480,
+					260,
+				),
+				canvasNode(
+					'dsecanvascond0001',
+					'```ds-conditions\nconditions:\n  - key: bleeding\n    effect: save ends\n  - key: slowed\n    effect: EoT\n```',
+					520,
+					420,
+					260,
+				),
+			],
+			edges: [],
+			metadata: {},
+		},
+		null,
+		'\t',
+	) + '\n',
+);
+console.log(`wrote Harness/${CANVAS_NOTE}.canvas (2 interactive elements in canvas TEXT nodes — read-only quarantine)`);
+
 const BY_SCC_KIT_NOTE = 'by-scc-kit';
 fs.writeFileSync(
 	path.join(outDir, `${BY_SCC_KIT_NOTE}.md`),

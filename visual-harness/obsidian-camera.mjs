@@ -6,16 +6,24 @@
 //   plugin theme (legacy|steel — frameworkV2.services.theme.setActive, the DSE skin)
 // × chrome bg  (dark|light  — app.changeTheme, Obsidian's own moonstone/obsidian theme)
 // to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (elements.length × 2 × 2
-// shots — see aliases.json for the current element count) — plus THREE more ground-truth
-// captures: (D6 Task 11) a by-SCC `ds-kit` reference card rendering its REAL nested
-// `ds-feature` card through Obsidian's own markdown pipeline (see "step 3b" below), (D8
-// Task 3) the initiative tracker mounted as a real SIDEBAR leaf via the plugin's "Send
-// initiative tracker to sidebar" command (see "step 3c" below), and (D7 Task 10, plan-18
-// spec §5) the hero sheet mounted as a real SIDEBAR leaf via the GENERIC "Send block to
-// sidebar" command (see "step 3d" below — deliberately not a hero-specific command; spec
-// §5's "sidebar opt-in is universal"). These are two INDEPENDENT axes: the plugin theme
-// re-stamps data-dse-theme on element roots; the chrome theme flips
-// body.theme-dark/light. Both are awaited before each shot.
+// shots — see aliases.json for the current element count) — plus the ground-truth SPECIAL
+// captures, each of which drives a surface the theme×bg sweep structurally cannot reach:
+//   step 3b  (D6 Task 11)      a by-SCC `ds-kit` card rendering its REAL nested `ds-feature`
+//                              card through Obsidian's own markdown pipeline
+//   step 3c  (D8 Task 3)       the initiative tracker in a real SIDEBAR leaf, via the
+//                              plugin's "Send initiative tracker to sidebar" command
+//   step 3d  (D7 T10 / D-7)    four elements in a real SIDEBAR leaf via the GENERIC "Send
+//                              block to sidebar" command (narrow-width coverage)
+//   step 3e  (SC-121 D-5)      the four MODALS — stamina edit, its Spend Recovery state,
+//                              the condition picker, the generic form editor
+//   step 3f  (SC-121 D-8)      the plugin SETTINGS tab, over a second CDP connection to
+//                              Obsidian 1.13's Settings POPOUT window
+//   step 3g  (SC-121 D-6)      the CANVAS read-only quarantine (canvas text nodes render
+//                              with sourcePath '' -> canPersist false -> data-dse-readonly)
+// The sweep's own two axes are INDEPENDENT: the plugin theme re-stamps data-dse-theme on
+// element roots; the chrome theme flips body.theme-dark/light. Both are awaited before each
+// shot. The specials are steel/dark only — they are existence/behaviour proofs, not visual
+// combo sweeps.
 //
 // WHY RAW CDP (not Playwright): playwright's chromium.connectOverCDP() fails against
 // Obsidian's Electron with "Browser.setDownloadBehavior: Browser context management is
@@ -84,28 +92,120 @@ const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'kit' };
 // proves the sidebar leaf itself is capturable, not a full theme×bg sweep).
 const SIDEBAR_SPECIAL_ID = 'sidebar-initiative';
 
-// D7 Task 10 (plan-18, spec §5) — the hero-in-sidebar ground-truth capture (see "step 3d"
-// below). Same convention as SIDEBAR_SPECIAL_ID above, but drives the GENERIC "Send block
-// to sidebar" command (registerDseSidebar, main.ts) instead of a dedicated per-element
-// command — ds-hero has none, deliberately: spec §5's "sidebar opt-in is universal ...
-// no new production plumbing," so this capture proves the SAME affordance every other
-// ds-* block gets, not a hero-specific one.
-const HERO_SIDEBAR_SPECIAL_ID = 'sidebar-hero';
+// D7 Task 10 (plan-18, spec §5) — the sidebar captures driven through the GENERIC "Send
+// block to sidebar" command (registration.ts's `send-block-to-sidebar`, an
+// editorCheckCallback keyed off the cursor's position inside a `ds-*` fence) rather than a
+// dedicated per-element command — most elements have none, deliberately: spec §5's
+// "sidebar opt-in is universal ... no new production plumbing," so these captures prove the
+// SAME affordance every ds-* block gets.
+//
+// SC-121 Batch 4 (catalog D-7) generalized this from the single hero capture to a LIST.
+// D-7's finding was that sidebar coverage was 2 of ~32 elements — and where it did exist it
+// immediately surfaced a real narrow-width defect (the hero Characteristics row collapsing
+// into concatenated text). The four here are chosen for what narrow width can break:
+//   hero        — the D-7 defect itself, re-verified post-SC-122 (the catalog's open question)
+//   statblock   — the densest multi-column grammar in the plugin
+//   perk        — the only markdown pipe-table (batch-3 review L-5's exact scenario)
+//   negotiation — a control-heavy tracker (checkboxes, ladder, steppers) at 300px
+// `hero` keeps its original output name (`hero--obsidian-sidebar-steel-dark.png`) so the
+// existing baseline shot is not orphaned.
+const GENERIC_SIDEBAR_IDS = ['hero', 'statblock', 'perk', 'negotiation'];
+
+// SC-121 Batch 4 (catalog D-5) — the modal captures. NOTHING in either camera had ever
+// rendered a modal (the F4 spec's v1 limits explicitly excluded "modals/hover/focus
+// scripting"), so the four most-used interactive surfaces in the plugin shipped unaudited —
+// including through Batch 1's control-density change, which resizes every kit button inside
+// them (batch-1 review I-1). Each entry opens the modal the way a USER does: open the
+// note, click the real affordance, wait for the real modal DOM.
+//   note      Harness note to open (reading mode unless `mode` says otherwise)
+//   trigger   CSS selector to click inside the mounted element (the production affordance)
+//   ready     selector that must appear inside the modal before the shot
+//   then      optional second click INSIDE the modal (state variants — e.g. Spend Recovery)
+//   pref      optional [key, value] pref to set before opening (and restore after)
+const MODAL_SHOTS = [
+	{
+		id: 'modal-stamina',
+		note: 'modal-stamina',
+		trigger: '[data-dse-element="stamina-bar"] .dse-stamina--clickable',
+		ready: '.dse-modal .dse-modal__body',
+	},
+	{
+		id: 'modal-stamina-recovery',
+		note: 'modal-stamina',
+		trigger: '[data-dse-element="stamina-bar"] .dse-stamina--clickable',
+		ready: '.dse-modal .dse-modal__body',
+		// The Spend Recovery quick action (StaminaEditModal, SPEND_RECOVERY_LABEL): a
+		// PENDING edit, so the shot shows the preview bar's heal delta + the changed
+		// Apply state — the state D-5 named separately from the modal's resting state.
+		then: '.dse-modal button[aria-label="Spend Recovery"]',
+	},
+	{
+		id: 'modal-conditions',
+		note: 'conditions',
+		trigger: '[data-dse-element="conditions"] button[aria-label="Add condition"]',
+		ready: '.dse-modal .dse-cond-list',
+		// Select one row so the shot carries the aria-pressed/selected styling, not just
+		// the resting grid (the icon grid is batch-1 review I-1's density worry).
+		then: '.dse-cond-list .dse-cond-item button',
+	},
+	{
+		id: 'modal-form',
+		note: 'feature',
+		// D9's reading-mode edit affordance is default-OFF; the pencil only mounts when
+		// `authoringControls` is on, so the capture turns the REAL pref on (and back off
+		// afterwards) rather than calling openFormEditor directly — same principle as
+		// driving the sidebar through its command instead of openSidebarView.
+		pref: ['authoringControls', true],
+		trigger: '[data-dse-element="feature"] button[aria-label^="Edit "]',
+		ready: '.dse-modal .dse-modal__body',
+	},
+];
+
+// SC-121 Batch 4 (catalog D-8) — the settings-tab capture. Obsidian 1.13 opens Settings as
+// a POPOUT WINDOW (its own CDP page target, url about:blank, title "Settings - <vault> -
+// …"), so this one is driven from the main target but screenshotted over a SECOND CDP
+// connection (pattern established by SC-112 Task 8; see "step 3f").
+const SETTINGS_SPECIAL_ID = 'settings';
+
+// SC-121 Batch 4 (catalog D-6) — the canvas read-only capture. Canvas text nodes render
+// with `ctx.sourcePath === ''`, which ReadingModeBlockHost quarantines to canPersist:false,
+// which the pipeline stamps as `data-dse-readonly` (the CSS-only "Read-only" badge). That
+// whole path is real-Obsidian-only — the browser harness's `--readonly` variants MIMIC it
+// via a fabricated host, but nothing had ever rendered an actual canvas.
+const CANVAS_SPECIAL_ID = 'canvas';
 
 let elements = Object.keys(aliases).sort();
+let genericSidebarIds = GENERIC_SIDEBAR_IDS;
+let modalShots = MODAL_SHOTS;
 let onlySpecial = false;
 let onlySidebarSpecial = false;
-let onlyHeroSidebarSpecial = false;
+let onlyGenericSidebar = false;
+let onlyModal = false;
+let onlySettings = false;
+let onlyCanvas = false;
 if (args.element) {
+	const sidebarMatch = GENERIC_SIDEBAR_IDS.find((id) => args.element === `sidebar-${id}`);
+	const modalMatch = MODAL_SHOTS.find((m) => m.id === args.element);
 	if (args.element === SPECIAL_NOTE.id) {
 		elements = [];
 		onlySpecial = true;
 	} else if (args.element === SIDEBAR_SPECIAL_ID) {
 		elements = [];
 		onlySidebarSpecial = true;
-	} else if (args.element === HERO_SIDEBAR_SPECIAL_ID) {
+	} else if (sidebarMatch) {
 		elements = [];
-		onlyHeroSidebarSpecial = true;
+		genericSidebarIds = [sidebarMatch];
+		onlyGenericSidebar = true;
+	} else if (modalMatch) {
+		elements = [];
+		modalShots = [modalMatch];
+		onlyModal = true;
+	} else if (args.element === SETTINGS_SPECIAL_ID) {
+		elements = [];
+		onlySettings = true;
+	} else if (args.element === CANVAS_SPECIAL_ID) {
+		elements = [];
+		onlyCanvas = true;
 	} else if (!elements.includes(args.element)) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -115,7 +215,10 @@ if (args.element) {
 }
 const runSpecial = !args.element || onlySpecial;
 const runSidebarSpecial = !args.element || onlySidebarSpecial;
-const runHeroSidebarSpecial = !args.element || onlyHeroSidebarSpecial;
+const runGenericSidebar = !args.element || onlyGenericSidebar;
+const runModals = !args.element || onlyModal;
+const runSettings = !args.element || onlySettings;
+const runCanvas = !args.element || onlyCanvas;
 let themes = THEMES;
 if (args.theme) {
 	if (!THEMES.includes(args.theme)) {
@@ -161,15 +264,17 @@ if (runSidebarSpecial) {
 		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
 	}
 }
-if (runHeroSidebarSpecial) {
-	// Reuses Harness/hero.md (already required above when the full sweep includes
-	// 'hero') — only needs an explicit check here because --element=sidebar-hero alone
-	// leaves `elements` empty.
-	const note = path.join(vaultPath, 'Harness', 'hero.md');
+// Every remaining capture reuses (or adds) a Harness note; check each explicitly, since a
+// narrowed --element leaves `elements` empty and the loop above checks nothing.
+const requireNote = (name) => {
+	const note = path.join(vaultPath, 'Harness', name);
 	if (!fs.existsSync(note)) {
 		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
 	}
-}
+};
+if (runGenericSidebar) for (const id of genericSidebarIds) requireNote(`${id}.md`);
+if (runModals) for (const m of modalShots) requireNote(`${m.note}.md`);
+if (runCanvas) requireNote(`${CANVAS_SPECIAL_ID}.canvas`);
 if (!fs.existsSync(path.join(repo, 'main.js'))) {
 	throw new Error(`missing ${path.join(repo, 'main.js')} — run \`npm run obsidian-shots\` (it builds the plugin first)`);
 }
@@ -476,6 +581,65 @@ async function main() {
 		// --element ordering or which specials run in a given invocation.
 		const closeDseSidebarLeaves = () =>
 			evaluate(cdp, "window.app.workspace.getLeavesOfType('dse-sidebar').forEach((l) => l.detach())");
+
+		// SC-121 Batch 4: the emulate-if-taller-than-the-window / clip / screenshot dance,
+		// verbatim from the per-combo sweep above and steps 3b–3d, hoisted so the SIX new
+		// captures below don't each re-copy it a fourth time. `rectExpr` is a JS expression
+		// returning {x,y,width,height,vh,vw}; everything else is identical to the inline
+		// copies (kept as-is so this refactor cannot move any existing shot's bytes).
+		const captureClip = async (outName, rectExpr, note = '') => {
+			let emulated = false;
+			try {
+				let rect = await evaluate(cdp, rectExpr);
+				if (rect.y + rect.height > rect.vh) {
+					await cdp.call('Emulation.setDeviceMetricsOverride', {
+						width: rect.vw,
+						height: Math.ceil(rect.y + rect.height + 100),
+						deviceScaleFactor: 0,
+						mobile: false,
+					});
+					emulated = true;
+					await sleep(500);
+					await clearNotices();
+					rect = await evaluate(cdp, rectExpr);
+				}
+				const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+				const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+				console.log(
+					`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''})${note ? ' — ' + note : ''}`,
+				);
+			} finally {
+				if (emulated) {
+					try {
+						await cdp.call('Emulation.clearDeviceMetricsOverride');
+						await sleep(300);
+					} catch {
+						/* socket may already be down; killChild still runs */
+					}
+				}
+			}
+		};
+
+		/** Open a Harness note in the given mode and wait for it to be the active file. */
+		const openNote = async (name, mode) => {
+			await evaluate(
+				cdp,
+				`(async () => {
+					await window.app.workspace.openLinkText('Harness/${name}', '', false);
+					const leaf = window.app.workspace.getMostRecentLeaf();
+					await leaf.setViewState({
+						type: 'markdown',
+						state: { file: 'Harness/${name}.md', mode: '${mode}' },
+						active: true,
+					});
+				})()`,
+			);
+			await waitFor(
+				cdp,
+				`window.app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Harness/${name}.md'`,
+				{ what: `Harness/${name}.md open (${mode} mode)` },
+			);
+		};
 
 		for (const id of elements) {
 			// Element roots carry data-dse-element="<def.id>" (stamped by the pipeline);
@@ -796,126 +960,345 @@ async function main() {
 			}
 		}
 
-		// -- step 3d: D7 Task 10 (plan-18, spec §5) hero-in-sidebar ground-truth capture ---
-		// Investigated per the Task 10 brief: same question step 3c already answered for
-		// initiative ("can the camera drive a SIDEBAR leaf"), but exercised through the
-		// GENERIC "Send block to sidebar" command (registration.ts's `send-block-to-sidebar`,
-		// an `editorCheckCallback` keyed off the cursor's position inside a `ds-*` fence —
-		// `aliasAtLine`) instead of a dedicated per-element command, because `ds-hero` has
-		// none (spec §5: "sidebar opt-in is universal ... no new production plumbing" — this
-		// capture proves the SAME affordance every other block gets, not a hero-specific
-		// one). The only NEW wrinkle vs step 3c: the generic command requires the cursor to
-		// actually sit inside the fence, so it's set explicitly (via the live editor, scanned
-		// for the fence line rather than hardcoded — Harness/hero.md's body is generated from
-		// src/elements/hero/example.yaml and can grow/shrink lines independently of this
-		// file). Feasible (spike-verified): the source-mode open + editor.setCursor +
-		// executeCommandById('draw-steel-elements:send-block-to-sidebar') sequence mounts the
-		// SAME `.dse-sidebar__panel [data-dse-element="hero"]` step 3c proves for initiative,
-		// and the leaf's own bounding rect is just as stable a clip region. ONE shot
-		// (steel/dark only, same ground-truth-existence scope as step 3b/3c), gated the same
-		// way (`--element=sidebar-hero`, runs by default alongside the full sweep).
-		if (runHeroSidebarSpecial) {
-			const outName = 'hero--obsidian-sidebar-steel-dark';
-			const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="hero"]')`;
-			let emulated = false;
-			try {
-				// Start from a panel-free sidebar (see closeDseSidebarLeaves' comment above)
-				// — without this, step 3c's initiative panel (still mounted in the SAME
-				// reused dse-sidebar leaf) sits above hero's in the DOM, and the leaf-clip
-				// silently captures ITS content instead of hero's.
-				await closeDseSidebarLeaves();
+		// -- step 3d: sidebar-leaf captures via the GENERIC "Send block to sidebar" --------
+		// Same question step 3c answered for initiative ("can the camera drive a SIDEBAR
+		// leaf"), but exercised through the GENERIC command (registration.ts's
+		// `send-block-to-sidebar`, an `editorCheckCallback` keyed off the cursor's position
+		// inside a `ds-*` fence — `aliasAtLine`) rather than a dedicated per-element one,
+		// because most elements have none (spec §5: "sidebar opt-in is universal ... no new
+		// production plumbing"). The wrinkle vs step 3c: the generic command requires the
+		// cursor to actually sit inside the fence, so it is set explicitly via the live
+		// editor, SCANNED for the fence line rather than hardcoded — every Harness note's
+		// body is generated from the element's example.yaml and can grow/shrink lines
+		// independently of this file.
+		//
+		// SC-121 Batch 4 (catalog D-7): generalized from the single `hero` capture to
+		// GENERIC_SIDEBAR_IDS (see that constant for why these four). `hero`'s output name
+		// is unchanged. One shot each (steel/dark), same ground-truth-existence scope as
+		// steps 3b/3c; gated the same way (`--element=sidebar-<id>`).
+		if (runGenericSidebar) {
+			for (const id of genericSidebarIds) {
+				const outName = `${id}--obsidian-sidebar-steel-dark`;
+				const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="${id}"]')`;
+				const alias = aliases[id];
+				try {
+					// Start from a panel-free sidebar (see closeDseSidebarLeaves' comment
+					// above) — without this, the PREVIOUS capture's panel (still mounted in
+					// the SAME reused dse-sidebar leaf) sits above this one in the DOM and
+					// the leaf-clip silently captures ITS content instead.
+					await closeDseSidebarLeaves();
+					// source mode: the command is an editorCheckCallback and resolves its
+					// context off the workspace's active EDITOR.
+					await openNote(id, 'source');
+
+					const exec = await evaluate(
+						cdp,
+						`(() => {
+							try {
+								const editor = window.app.workspace.getMostRecentLeaf().view.editor;
+								const fence = String.fromCharCode(96, 96, 96) + '${alias}';
+								const lines = editor.getValue().split('\\n');
+								const fenceLine = lines.findIndex((l) => l.trim() === fence);
+								if (fenceLine === -1) {
+									return { ok: false, error: 'no ${alias} fence found in Harness/${id}.md' };
+								}
+								// One line INSIDE the fence (aliasAtLine's scan is exclusive of
+								// the cursor's own line — registration.ts).
+								editor.setCursor({ line: fenceLine + 1, ch: 0 });
+								return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar') };
+							} catch (e) {
+								return { ok: false, error: String(e) };
+							}
+						})()`,
+					);
+					if (!exec.ok) {
+						throw new Error(
+							`send-block-to-sidebar did not run: ${exec.error ?? '(returned false — cursor not inside a ds-* fence?)'}`,
+						);
+					}
+
+					await waitFor(cdp, `!!${elSel}`, { what: `sidebar panel mounted [data-dse-element="${id}"]` });
+					await sleep(500); // settle: late layout, same as step 3c
+
+					await setPluginTheme(elSel, 'steel');
+					await setChromeBg('dark');
+					await sleep(300);
+					await clearNotices();
+
+					// Clip to the LEAF, not the element root — same rationale as step 3c: the
+					// ground truth is "this mounts as a real sidebar leaf," not just "this
+					// element renders."
+					await captureClip(
+						outName,
+						`(() => {
+							const leafEl = ${elSel}.closest('.workspace-leaf');
+							const r = leafEl.getBoundingClientRect();
+							return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+						})()`,
+						'sidebar leaf confirmed',
+					);
+				} catch (e) {
+					failures.push({ outName, errors: [String(e)] });
+					await errorShot(outName);
+					console.log(`FAIL ${outName}: ${String(e)}`);
+				}
+			}
+		}
+
+		// -- step 3e: SC-121 Batch 4 (catalog D-5) modal captures --------------------------
+		// The gap this closes: no fixture, alias or shot in EITHER camera had ever opened a
+		// modal, so the stamina editor, its Spend Recovery state, the condition picker and
+		// the generic form editor were four frequently-used interactive surfaces with zero
+		// visual gate — and Batch 1's control-density rules resize every kit button inside
+		// them (batch-1 review I-1). Driven the way a user drives them: open the note, click
+		// the REAL affordance, wait for the REAL modal DOM. Steel/dark only, same
+		// ground-truth-existence scope as steps 3b–3d.
+		//
+		// Modals are NOT in the browser harness: the F4 page vendors only the Obsidian
+		// variables styles-source.css reads, not Obsidian's `.modal-container`/`.modal`
+		// chrome, so a browser modal shot would pin a box that doesn't exist in the product.
+		// Real Obsidian is the only honest vehicle here.
+		if (runModals) {
+			// Always leave a modal-free window behind: a modal left open would overlay the
+			// next capture's clip region (and the settings popout below opens on top of it).
+			const dismissModals = async () => {
 				await evaluate(
 					cdp,
-					`(async () => {
-						await window.app.workspace.openLinkText('Harness/hero', '', false);
-						const leaf = window.app.workspace.getMostRecentLeaf();
-						await leaf.setViewState({
-							type: 'markdown',
-							state: { file: 'Harness/hero.md', mode: 'source' },
-							active: true,
-						});
-					})()`,
+					`document.querySelectorAll('.modal-container .modal-close-button').forEach((b) => b.click())`,
 				);
-				await waitFor(
-					cdp,
-					`window.app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Harness/hero.md'`,
-					{ what: 'Harness/hero.md open (source mode, for the editor command)' },
-				);
+				await evaluate(cdp, `document.querySelectorAll('.modal-container').forEach((c) => c.remove())`);
+			};
+			const prefsExpr = `window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs`;
+			for (const m of modalShots) {
+				const outName = `${m.id}--obsidian-steel-dark`;
+				const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element]')`;
+				try {
+					await dismissModals();
+					if (m.pref) {
+						await evaluate(cdp, `${prefsExpr}.set('${m.pref[0]}', ${JSON.stringify(m.pref[1])})`);
+					}
+					await openNote(m.note, 'preview');
+					await waitFor(cdp, `!!${elSel}`, { what: `rendered element in Harness/${m.note}.md` });
+					// Theme BEFORE opening: DseModal.open() stamps data-dse-theme on the
+					// dialog root from the live ThemeService (managedModal.ts), so the modal
+					// inherits whatever the note's element is already showing.
+					await setPluginTheme(elSel, 'steel');
+					await setChromeBg('dark');
+					await sleep(300);
+					await waitFor(cdp, `!!document.querySelector('.workspace-leaf.mod-active ${m.trigger}')`, {
+						what: `modal trigger ${m.trigger}`,
+					});
+					await evaluate(cdp, `document.querySelector('.workspace-leaf.mod-active ${m.trigger}').click()`);
+					await waitFor(cdp, `!!document.querySelector('${m.ready}')`, {
+						what: `open modal (${m.ready})`,
+					});
+					if (m.then) {
+						await sleep(300);
+						const clicked = await evaluate(
+							cdp,
+							`(() => { const b = document.querySelector('${m.then}'); if (!b) return false; if (b.disabled) return 'disabled'; b.click(); return true; })()`,
+						);
+						if (clicked !== true) {
+							throw new Error(`follow-up click ${m.then} not available (${clicked})`);
+						}
+					}
+					await sleep(400); // settle: preview-bar geometry / icon paint
+					await clearNotices();
+					const themed = await evaluate(cdp, `document.querySelector('.dse-modal')?.dataset.dseTheme ?? '(none)'`);
+					if (themed !== 'steel') throw new Error(`modal not Steel-themed (data-dse-theme=${themed})`);
 
-				const exec = await evaluate(
+					// Clip the DIALOG box (`.dse-modal` is stamped on Obsidian's `.modal`),
+					// not the full-window `.modal-container` overlay — the subject is the
+					// modal's own layout and control density.
+					await captureClip(
+						outName,
+						`(() => {
+							const r = document.querySelector('.dse-modal').getBoundingClientRect();
+							return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+						})()`,
+						'modal confirmed',
+					);
+				} catch (e) {
+					failures.push({ outName, errors: [String(e)] });
+					await errorShot(outName);
+					console.log(`FAIL ${outName}: ${String(e)}`);
+				} finally {
+					await dismissModals().catch(() => {});
+					if (m.pref) {
+						// data.json is git-ignored, but leave no pref churn behind.
+						await evaluate(cdp, `${prefsExpr}.set('${m.pref[0]}', ${JSON.stringify(!m.pref[1])})`).catch(
+							() => {},
+						);
+					}
+				}
+			}
+		}
+
+		// -- step 3f: SC-121 Batch 4 (catalog D-8) settings-tab capture ---------------------
+		// Obsidian 1.13 opens Settings as a POPOUT WINDOW — a separate CDP page target (url
+		// about:blank, title "Settings - <vault> - Obsidian …"), not a modal in the main
+		// workspace document. So: drive `app.setting.open()` + `openTabById` from the MAIN
+		// target, then attach a SECOND CDP connection to the popout and do all DOM work and
+		// the screenshot THERE. (Pattern established by SC-112 Task 8, which needed exactly
+		// this for the typography evidence; D-8 asked for it to become a standard fixture
+		// instead of leftover ad-hoc evidence.) Steel/dark only.
+		if (runSettings) {
+			const outName = 'settings--obsidian-steel-dark';
+			let scdp;
+			try {
+				await evaluate(
+					cdp,
+					`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.theme.setActive('steel')`,
+				);
+				await setChromeBg('dark');
+				await evaluate(
 					cdp,
 					`(() => {
-						try {
-							const editor = window.app.workspace.getMostRecentLeaf().view.editor;
-							const fence = String.fromCharCode(96, 96, 96) + 'ds-hero';
-							const lines = editor.getValue().split('\\n');
-							const fenceLine = lines.findIndex((l) => l.trim() === fence);
-							if (fenceLine === -1) {
-								return { ok: false, error: 'no ds-hero fence found in Harness/hero.md' };
-							}
-							// One line INSIDE the fence (aliasAtLine's scan is exclusive of the
-							// cursor's own line — registration.ts) — the fence-open line's next
-							// line is always the block's first body line.
-							editor.setCursor({ line: fenceLine + 1, ch: 0 });
-							return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar') };
-						} catch (e) {
-							return { ok: false, error: String(e) };
-						}
+						window.app.setting.open();
+						window.app.setting.openTabById('draw-steel-elements');
 					})()`,
 				);
-				if (!exec.ok) {
-					throw new Error(
-						`send-block-to-sidebar did not run: ${exec.error ?? '(returned false — cursor not inside a ds-* fence?)'}`,
+				let settingsTarget = null;
+				const ts0 = Date.now();
+				while (!settingsTarget) {
+					if (Date.now() - ts0 > 15000) throw new Error('no Settings popout target within 15s');
+					settingsTarget = ((await jsonList()) ?? []).find(
+						(t) => t.type === 'page' && /^Settings /.test(t.title ?? ''),
 					);
+					if (!settingsTarget) await sleep(250);
 				}
-
-				await waitFor(cdp, `!!${elSel}`, { what: 'sidebar panel mounted [data-dse-element="hero"]' });
-				await sleep(500); // settle: late layout, same as step 3c
-
-				await setPluginTheme(elSel, 'steel');
-				await setChromeBg('dark');
-				await sleep(300);
-				await clearNotices();
-
-				// Clip to the LEAF, not the element root — same rationale as step 3c: the
-				// ground truth is "this mounts as a real sidebar leaf," not just "this
-				// element renders."
-				const rectExpr = `(() => {
-					const leafEl = ${elSel}.closest('.workspace-leaf');
-					const r = leafEl.getBoundingClientRect();
-					return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
-				})()`;
-				let rect = await evaluate(cdp, rectExpr);
-				if (rect.y + rect.height > rect.vh) {
-					await cdp.call('Emulation.setDeviceMetricsOverride', {
-						width: rect.vw,
-						height: Math.ceil(rect.y + rect.height + 100),
-						deviceScaleFactor: 0,
-						mobile: false,
-					});
-					emulated = true;
-					await sleep(500);
-					await clearNotices();
-					rect = await evaluate(cdp, rectExpr);
-				}
-				const clip = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-				const bytes = await screenshot(cdp, path.join(shotsDir, `${outName}.png`), clip);
+				scdp = await Cdp.connect(settingsTarget.webSocketDebuggerUrl);
+				await waitFor(scdp, `!!document.querySelector('.vertical-tab-content .setting-item')`, {
+					what: 'DSE settings tab content in the popout',
+				});
+				// Tall emulated viewport so the whole tab lays out without internal
+				// scrolling, and the Advanced disclosure open so no control is hidden.
+				await scdp.call('Emulation.setDeviceMetricsOverride', {
+					width: 1200,
+					height: 2400,
+					deviceScaleFactor: 0,
+					mobile: false,
+				});
+				await sleep(600);
+				await evaluate(
+					scdp,
+					`(() => {
+						document.querySelectorAll('details').forEach((d) => d.setAttribute('open', ''));
+						document.querySelectorAll('.notice').forEach((n) => n.remove());
+					})()`,
+				);
+				await sleep(400);
+				const rect = await evaluate(
+					scdp,
+					`(() => {
+						const content = document.querySelector('.vertical-tab-content');
+						content.scrollTop = 0;
+						const r = content.getBoundingClientRect();
+						return { x: r.x, y: r.y, width: r.width, height: Math.min(content.scrollHeight, window.innerHeight - r.y) };
+					})()`,
+				);
+				const bytes = await screenshot(scdp, path.join(shotsDir, `${outName}.png`), rect);
 				console.log(
-					`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''}) — sidebar leaf confirmed`,
+					`  ok ${outName}.png (${bytes} bytes, clip ${Math.round(rect.width)}x${Math.round(rect.height)}) — settings popout confirmed`,
 				);
 			} catch (e) {
 				failures.push({ outName, errors: [String(e)] });
 				await errorShot(outName);
 				console.log(`FAIL ${outName}: ${String(e)}`);
 			} finally {
-				if (emulated) {
-					try {
-						await cdp.call('Emulation.clearDeviceMetricsOverride');
-						await sleep(300);
-					} catch {
-						/* socket may already be down; killChild still runs */
-					}
+				try {
+					await scdp?.call('Emulation.clearDeviceMetricsOverride');
+				} catch {
+					/* popout may already be gone */
 				}
+				scdp?.close();
+				// Close the popout from the main target so it can't overlay later captures
+				// or block the quit below.
+				await evaluate(cdp, 'window.app.setting.close()').catch(() => {});
+				await sleep(400);
+			}
+		}
+
+		// -- step 3g: SC-121 Batch 4 (catalog D-6) canvas read-only capture -----------------
+		// Canvas text nodes render with `ctx.sourcePath === ''`; ReadingModeBlockHost
+		// quarantines that to `canPersist: false` (see its file header), and the pipeline
+		// stamps `data-dse-readonly` on the element root — the CSS-only "Read-only" badge,
+		// plus every element's own read-only affordances (an inert stamina bar with its
+		// tooltip instead of a click-to-edit one, no write footers). D-6's finding was that
+		// this entire path had ZERO shots: the browser harness's `--readonly` variants
+		// FABRICATE the host (entry.ts's makeHarnessHost passes sourcePath: ''), which
+		// proves the affordance renders but not that canvas actually takes that path.
+		// Harness/canvas.canvas (notes-gen.mjs) is a generated 2-node canvas whose text
+		// nodes are ds-stam / ds-conditions blocks — interactive elements, so read-only is
+		// visible rather than a no-op.
+		if (runCanvas) {
+			const outName = 'canvas--obsidian-readonly-steel-dark';
+			const elSel = `document.querySelector('.canvas-node [data-dse-element="stamina-bar"]')`;
+			try {
+				await evaluate(
+					cdp,
+					`(async () => {
+						await window.app.workspace.openLinkText('Harness/${CANVAS_SPECIAL_ID}.canvas', '', false);
+						const leaf = window.app.workspace.getMostRecentLeaf();
+						await leaf.setViewState({
+							type: 'canvas',
+							state: { file: 'Harness/${CANVAS_SPECIAL_ID}.canvas' },
+							active: true,
+						});
+					})()`,
+				);
+				await waitFor(
+					cdp,
+					`window.app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Harness/${CANVAS_SPECIAL_ID}.canvas'`,
+					{ what: `Harness/${CANVAS_SPECIAL_ID}.canvas open` },
+				);
+				// Canvas renders nodes lazily by viewport; frame the whole (small) canvas so
+				// both nodes mount regardless of the window's size.
+				await evaluate(cdp, `window.app.workspace.getMostRecentLeaf().view.canvas?.zoomToFit?.()`).catch(
+					() => {},
+				);
+				await waitFor(cdp, `!!${elSel}`, { what: 'a DSE element rendered inside a canvas node' });
+				await sleep(700); // settle: canvas transform + element mount
+				await setPluginTheme(elSel, 'steel');
+				await setChromeBg('dark');
+				await sleep(300);
+				await clearNotices();
+
+				// The whole point of the capture — assert the quarantine actually happened,
+				// loudly, rather than leaving it to whoever looks at the PNG.
+				const proof = await evaluate(
+					cdp,
+					`(() => {
+						const roots = [...document.querySelectorAll('.canvas-node [data-dse-element]')];
+						if (!roots.length) return { ok: false, reason: 'no element roots inside canvas nodes' };
+						const unquarantined = roots.filter((r) => r.getAttribute('data-dse-readonly') !== 'true');
+						if (unquarantined.length) {
+							return { ok: false, reason: 'canvas element root(s) NOT read-only: ' + unquarantined.map((r) => r.dataset.dseElement).join(', ') };
+						}
+						return { ok: true, n: roots.length };
+					})()`,
+				);
+				if (!proof.ok) throw new Error(`canvas read-only proof failed: ${proof.reason}`);
+
+				// Clip the two canvas nodes together (the canvas is generated with them
+				// side by side), so the shot shows the read-only badge in its real context.
+				await captureClip(
+					outName,
+					`(() => {
+						const nodes = [...document.querySelectorAll('.canvas-node')].filter((n) => n.querySelector('[data-dse-element]'));
+						const rs = nodes.map((n) => n.getBoundingClientRect());
+						const x = Math.min(...rs.map((r) => r.x)) - 8;
+						const y = Math.min(...rs.map((r) => r.y)) - 8;
+						const right = Math.max(...rs.map((r) => r.right)) + 8;
+						const bottom = Math.max(...rs.map((r) => r.bottom)) + 8;
+						return { x, y, width: right - x, height: bottom - y, vh: window.innerHeight, vw: window.innerWidth };
+					})()`,
+					`${proof.n} canvas node(s), all data-dse-readonly`,
+				);
+			} catch (e) {
+				failures.push({ outName, errors: [String(e)] });
+				await errorShot(outName);
+				console.log(`FAIL ${outName}: ${String(e)}`);
 			}
 		}
 
@@ -955,7 +1338,10 @@ async function main() {
 		elements.length * combos.length +
 		(runSpecial ? 1 : 0) +
 		(runSidebarSpecial ? 2 : 0) +
-		(runHeroSidebarSpecial ? 1 : 0);
+		(runGenericSidebar ? genericSidebarIds.length : 0) +
+		(runModals ? modalShots.length : 0) +
+		(runSettings ? 1 : 0) +
+		(runCanvas ? 1 : 0);
 	console.log(`\nall ${total} shots written to ${shotsDir}`);
 }
 
