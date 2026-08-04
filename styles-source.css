@@ -4554,6 +4554,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	   copied the rem LITERAL, so at 16px it computed 8.8×14.4 (parity `tier-row`:
 	   site 11×18). Re-author at the plugin base: 0.6875rem = 11px, 1.125rem = 18px. */
 	padding: 0.6875rem 1.125rem;
+	/* SC-121 SEED2: centre the badge on the outcome text instead of sitting the
+	   two on a shared BASELINE (the base rule, ~5614) — against a badge whose
+	   text is 0.81em of the row's, baseline alignment floated it high in the row.
+	   The site's tier row is `align-items: center` (steel-ability-cards.css:166).
+	   Geometry only: no parity-measured property (padding/font/line-height/ink)
+	   moves on this pair. */
+	align-items: center;
 	border-left: 3px solid var(--t);
 	border-top: 1px solid var(--dse-metal-faint);
 	background-image: linear-gradient(
@@ -4635,6 +4642,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	align-items: center;
 	justify-content: center;
 	line-height: 1;
+	/* SC-121 SEED2 (Scott seed defect #2, merged B-2/C-4/D-4) — badge breathing
+	   room. The line-height:1 reset above closed the strikethrough, but it also
+	   pinned the badge's content box to EXACTLY its text height: measured on the
+	   feature/kit fixtures the box was 38.4 x 11.5px around 11.5px of text — zero
+	   internal padding on all four tiers (the t1 chevron notch and, in Obsidian,
+	   the substituted ≤ glyph just made t1 read worst), and only 23% of the 49px
+	   tier row it sits in. The site gives its badge a 2.5rem (50px) column and a
+	   1.35rem (27px) glyph inside a ~47px row (steel-ability-cards.css:166,172)
+	   — a badge that carries the row, not a footnote in it. `max-height` is what
+	   capped the box (base rule, ~5566), so it is released here and replaced with
+	   real padding; the size bump is one step (0.8em -> 0.9em) so the badge stays
+	   INSIDE the row's own 27.2px text line box and the row height is unchanged.
+	   All em-based, so SC-112's text-scale extremes ride it unchanged. */
+	max-height: none;
+	font-size: 0.9em;
+	padding: 0.32em 0.28em;
 }
 
 /* ================================================================== */
