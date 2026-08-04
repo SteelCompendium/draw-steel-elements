@@ -54,7 +54,9 @@ gates, default Obsidian theme only. **Modals, the settings tab, sidebar leaves a
 are covered by the Obsidian camera instead** (SC-121 Batch 4, catalog D-5..D-8): this page
 vendors only the Obsidian variables `styles-source.css` reads, not Obsidian's own
 `.modal-container`/`.modal`/`.setting-item`/canvas chrome, so a browser shot of those
-surfaces would pin a box that does not exist in the product. See "Obsidian camera" below. Steel shots show the **fallback-hex palette**: `styles-source.css` chains its
+surfaces would pin a box that does not exist in the product. See "Obsidian camera" below.
+
+Steel shots show the **fallback-hex palette**: `styles-source.css` chains its
 Steel vars as `var(--sc-*, #hex)`, and `vars.css` deliberately doesn't vendor `--sc-*` (that
 palette lives in the v2 site's snippet), so every Steel shot renders the inline hex fallbacks
 — the no-palette-snippet default-install look. The harness can't show Steel-with-`--sc-*`, so

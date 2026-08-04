@@ -46,10 +46,13 @@ import path from 'path';
 //     declaration-sized SEGMENTS on `;`/`{`/`}` — so it is insensitive to how many
 //     declarations share a line — and reads `prop:` at a segment's start, `@name` at an
 //     at-rule prelude's start, and listed function/keyword tokens in a value (at an
-//     identifier boundary, so `lch(` does not match inside `oklch(`). What it still does
-//     NOT understand: the cascade, `@supports` (a feature correctly wrapped in
-//     `@supports` would still be flagged — tag it `floor-ok(...)` and say so), or which
-//     rules actually apply to any element.
+//     identifier boundary, so `lch(` does not match inside `oklch(`). A row whose token can
+//     never sit at that boundary (relative-color syntax's `(from `, always glued to a
+//     function name's last letter) instead carries an explicit `pattern` that matches the
+//     whole function-call shape (`[a-zA-Z-]+\(\s*from\s`) — see `AboveFloorToken.pattern`.
+//     What it still does NOT understand: the cascade, `@supports` (a feature correctly
+//     wrapped in `@supports` would still be flagged — tag it `floor-ok(...)` and say so), or
+//     which rules actually apply to any element.
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const SOURCE = path.join(repoRoot, 'styles-source.css');
@@ -153,6 +156,14 @@ export interface AboveFloorToken {
 	/** Chromium version the feature shipped in. */
 	since: number;
 	why: string;
+	/**
+	 * Value rows only. Overrides `valueHasToken`'s identifier-boundary match when a row's
+	 * `token` can never sit at an identifier boundary in real syntax — e.g. relative-color
+	 * syntax's `(from `, which is always immediately preceded by a function name's last
+	 * letter (`rgb(from …`), so the boundary check rejects every real instance. Match the
+	 * whole function-call shape instead.
+	 */
+	pattern?: RegExp;
 }
 
 export const ABOVE_FLOOR_TOKENS: AboveFloorToken[] = [
@@ -227,6 +238,10 @@ export const ABOVE_FLOOR_TOKENS: AboveFloorToken[] = [
 		kind: 'value',
 		since: 119,
 		why: 'relative color syntax (`rgb(from …)`, `hsl(from …)`, `oklch(from …)`) — precede with a static literal of the same property',
+		// The bare `(from ` token can never sit at an identifier boundary — in real syntax
+		// it is always glued to the preceding function name's last letter (`rgb(from …`).
+		// Match the whole `<func>(from ` shape instead.
+		pattern: /[a-zA-Z-]+\(\s*from\s/,
 	},
 	{
 		token: 'anchor(',
@@ -352,6 +367,7 @@ export function findTokenViolations(rawCss: string): TokenViolation[] {
 			let hit = false;
 			if (entry.kind === 'property') hit = declProp === entry.token;
 			else if (entry.kind === 'at-rule') hit = seg.text.startsWith(entry.token);
+			else if (entry.pattern) hit = declProp !== undefined && entry.pattern.test(valuePart);
 			else hit = declProp !== undefined && valueHasToken(valuePart, entry.token);
 			if (!hit) continue;
 			// Limit 4: a custom property's value isn't parsed until substitution.
@@ -463,6 +479,25 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		expect(findTokenViolations(atRule)).toHaveLength(1);
 		// The SAFE pair must not be flagged — this is the borderline the brief called out.
 		expect(findTokenViolations(safeContainer)).toHaveLength(0);
+	});
+
+	it('detector sanity: the relative-color row actually fires (review M-1)', () => {
+		// The bare `(from ` token can never match at an identifier boundary in real syntax —
+		// it is always glued to the preceding function name (`rgb(from …`), so a naive
+		// substring/boundary scan reports zero violations on every real instance. This is
+		// the can-fail proof for that fix: each of the four relative-color functions must be
+		// flagged, and an unrelated `background: rgb(255, 0, 0)` must NOT be a false positive.
+		expect(findTokenViolations(`.a { background: rgb(from red r g b); }`)).toHaveLength(1);
+		expect(findTokenViolations(`.b { background: hsl(from red h s l); }`)).toHaveLength(1);
+		// hwb(), not oklch()/oklab()/lch() — those are separately denied rows and would
+		// double-report (correctly — a `oklch(from …)` is above-floor two ways over).
+		expect(findTokenViolations(`.c { color: hwb(from red h w b); }`)).toHaveLength(1);
+		expect(findTokenViolations(`.d { color: color(from red srgb r g b); }`)).toHaveLength(1);
+		expect(findTokenViolations(`.e { background: rgb(255, 0, 0); }`)).toHaveLength(0);
+		// A same-property static fallback still clears it (remediation (a)).
+		expect(
+			findTokenViolations(`.f { background: #ff0000;\n\tbackground: rgb(from red r g b); }`),
+		).toHaveLength(0);
 	});
 
 	it('detector sanity: flags an unguarded color-mix() in a synthetic sample', () => {

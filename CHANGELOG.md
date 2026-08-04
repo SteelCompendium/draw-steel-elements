@@ -313,12 +313,12 @@ for what needs action.
   narrow — in a sidebar, for instance. The table now sits in its own scrolling
   frame, so it stays inside the card and you can swipe/scroll across it. At full
   width nothing changes (SC-121).
-- [BUGFIX] The hero sheet fits a sidebar. Its two-column region grid was supposed
-  to fold to a single column when the sheet gets narrow, but the rule was
-  attached to the grid itself — an element can't measure itself that way, so the
-  fold never happened and the sheet ran off the right edge of a narrow leaf,
-  cutting off Presence in the Characteristics row and half of every panel below
-  it. It now folds as intended (SC-121).
+- [BUGFIX] The hero sheet folds to one column in a sidebar. Its two-column
+  region grid was supposed to fold to a single column when the sheet gets
+  narrow, but the rule was attached to the grid itself — an element can't
+  measure itself that way, so the fold never happened at all. It now folds as
+  intended; a real 300px sidebar leaf is still tight and can still clip
+  Presence (tracked as FOLLOWUPS #48) (SC-121).
 - [BUGFIX] The element editor's raw-YAML box has a usable size. Opening "Edit"
   on an element without a form schema showed a two-line text box sitting on top
   of its own label, with the preview below it taking the whole dialog. The box
