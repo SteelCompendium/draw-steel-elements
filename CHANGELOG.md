@@ -270,9 +270,9 @@ for what needs action.
   in Obsidian — and many decorative fonts (the harness vault's own Bookinsanity,
   for one) draw a superscript "2" there, turning the tier threshold into a power
   of two. That one character is now drawn in a monospace face, which always has
-  it (a fixed-font fallback stack, not necessarily your own configured monospace
-  font — a separate open bug keeps that setting from taking effect everywhere);
-  the digits stay in the card's serif. Fixed on the Steel screen theme only —
+  it — your configured Obsidian monospace font, with a fixed-font fallback
+  stack for the rare case that setting is empty; the digits stay in the card's
+  serif. Fixed on the Steel screen theme only —
   the Legacy theme and PDF/print export still show `²11` for now (SC-121).
 - [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
   beside the recovery dots on a healthy character. The winded/dying badge was

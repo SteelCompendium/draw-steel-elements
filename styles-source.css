@@ -357,8 +357,16 @@ code.dsa {
 
 .error-message {
 	font-family: monospace;
-	white-space: pre;
-	text-wrap: wrap;
+	/* `white-space: pre` alone sets text-wrap-mode: nowrap (no wrapping, whitespace
+	   preserved). This block wants wrapping WITH preserved whitespace — i.e. `pre-wrap`.
+	   That used to be spelled `white-space: pre;` + `text-wrap: wrap;` (the latter
+	   overriding the wrap-mode `pre` implies), but `text-wrap` is Chromium 114 — above
+	   the SC-121 batch 3 support floor (106) — so on a floor engine that declaration was
+	   silently dropped, leaving text-wrap-mode at `nowrap` and this error card
+	   horizontally overflowing instead of wrapping (SC-121 batch 3 fix-round, L-1).
+	   `pre-wrap` is the single, ancient (CSS2.1) keyword for the same computed result
+	   and needs no floor guard. */
+	white-space: pre-wrap;
 	background-color: var(--code-background);
 	padding: 1em;
 	position: relative;
@@ -4245,16 +4253,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    line, i.e. 25.3px of visible space above the text and the same below, against
    the site's ~1.0x ratio on the same panel.
    The padding was NOT the culprit — 0.65em against this box's own 0.92em font is
-   9.57px, essentially the site's `.65rem` (10.4px). The extra ~29px was the
+   9.57px, in the same ballpark as the padding figure below (10.4px; see that
+   comment for why this is a plugin-context value, not a site-px match). The
+   extra ~29px was the
    markdown paragraph: the Equipment prose renders through renderMarkdown, which
    emits a real <p>, and <p>'s default `margin: 1em 0` (14.7px at this font size)
    stacks INSIDE the panel at both ends. The site's `.sc-kit__equip` holds inline
    content with no paragraph wrapper, so it never paid that cost.
    Fix = the standard first/last-child block-margin reset, so the panel's own
-   padding is the only vertical space, plus re-basing the padding to the site's
-   literal `rem` figures (0.65rem/0.8rem = 10.4/12.8px) so it no longer drifts
-   with this box's font-size the way the `em` form did. Result: 44.9px box, ratio
-   ~1.0. Steel-scoped and print-excluded like every other rule in this band. */
+   padding is the only vertical space, plus switching the padding from `em` to
+   `rem` so it no longer drifts with this box's own font-size the way the `em`
+   form did — `0.65rem 0.8rem` computes to 10.4/12.8px at the PLUGIN's 16px root.
+   NOTE this is not a site-px match, despite echoing the site's `.65rem .8rem`
+   literal: the site's rem base is 20px, so its own rule renders 13/16px (same
+   rem-literal-vs-rem-base gap the Plan 21 Task 2 comment on `.dse-pr__row`'s
+   `padding` below calls out and re-authors around). Here the plugin-base
+   10.4/12.8px is a deliberate plugin-context value, not an attempted site
+   match — what was measured and matched against the site is the ~1.0 box/text
+   RATIO (via the margin reset above), not the absolute padding. Result: 44.9px
+   box, ratio ~1.0. Steel-scoped and print-excluded like every other rule in
+   this band. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-kit__equip {
 	background: rgba(0, 0, 0, 0.22);
 	border: 1px solid var(--dse-metal-faint);
@@ -5321,7 +5339,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	text-align: left;
 	vertical-align: top;
 }
-/* Header row = a section head in table clothing, exactly like .dse-enc__table's. */
+/* Header row = a section head in table clothing, same sheen-strip + hairline treatment as
+   .dse-enc__table's (:5291) above — but NOT identical: this rule adds `color:
+   var(--dse-fg-muted)` (the roster table doesn't touch color) and deliberately DROPS
+   `font-variant: small-caps`. The book's mini-statblock header cells (e.g. the perk's
+   "Familiar Statblock" — Label/Value, not roster-style ALL-CAPS column names) would be
+   mangled by forcing small-caps on prose-authored header text, so this variant leaves case
+   alone. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) table:not([class]) thead th {
 	background-image: var(--dse-sheen-soft);
 	border-bottom-color: var(--dse-border-strong);

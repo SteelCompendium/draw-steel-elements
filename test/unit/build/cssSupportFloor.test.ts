@@ -28,11 +28,17 @@ import path from 'path';
 //     a different rule, a different specificity, or a later @media block would be
 //     invisible here and would fail this test even if it worked. That is deliberate:
 //     same-rule adjacency is the only form that is obviously correct at a glance.
-//  3. It knows about `color-mix()` and nothing else. Other above-floor features
-//     (`@container` style queries, relative color syntax `rgb(from …)`, `@property`,
-//     `text-wrap: balance`, subgrid, `:has()` — note :has() shipped in Chromium 105 and IS
-//     below the floor, so it is fine) are not scanned. When one is introduced, add it to
-//     ABOVE_FLOOR_FUNCS or write a sibling check. CSS NESTING is deliberately not covered
+//  3. It knows about `color-mix()` and nothing else — it is a FUNCTION-TOKEN scan, not a
+//     property-level check, so a bare property/value pair like `text-wrap: balance` (no
+//     parens) would slip through even if it were added here by name alone. Other above-floor
+//     features (`@container` style queries, relative color syntax `rgb(from …)`, `@property`,
+//     `text-wrap`, subgrid, `:has()` — note :has() shipped in Chromium 105 and IS below the
+//     floor, so it is fine) are not scanned. Swept the file as of the SC-121 batch 3
+//     fix-round (2026-08-04): none of the above are present outside color-mix() today. (One
+//     `text-wrap: wrap` instance did exist, on the legacy `.error-message` rule — it was
+//     restructured to `white-space: pre-wrap`, which is CSS2.1 and needs no floor guard,
+//     rather than added as an exemption here.) When a real instance is introduced, either add
+//     a property-level check or write a sibling check. CSS NESTING is deliberately not covered
 //     here: cssNesting.test.ts already guards it, and it does so against the BUILT
 //     styles.css, which is the stronger check for that particular feature.
 //  4. Custom-property declarations (`--x: color-mix(…)`) are exempt: a custom property's
