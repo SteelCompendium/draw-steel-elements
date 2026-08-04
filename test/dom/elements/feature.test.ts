@@ -311,6 +311,44 @@ target: Self
 		expect(hasEmpty('target')).toBe(false);
 	});
 
+	// SC-121 B-1: the meta region is two BANDS (site grammar: .sc-ability__kw chip row
+	// over the .sc-ability__rail spec pair). The bands are theme-agnostic DOM and are
+	// `display: contents` in the Legacy base — the mechanism that lets Steel recompose
+	// the layout while Legacy's grid placement (and its frozen pixels) stay untouched.
+	test('.dse-feature__meta: Keywords/Type mount in the chips band, Distance/Target in the rail band', async () => {
+		const { root } = await renderBlock(magmaTitan);
+
+		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
+		const chips = meta.querySelector(':scope > .dse-feature__meta-chips') as HTMLElement;
+		const rail = meta.querySelector(':scope > .dse-feature__meta-rail') as HTMLElement;
+		expect(chips).not.toBeNull();
+		expect(rail).not.toBeNull();
+		// Band order: chips first, rail second (the site stacks kw over rail).
+		expect([...meta.children].indexOf(chips)).toBeLessThan([...meta.children].indexOf(rail));
+
+		const mods = (bandEl: HTMLElement) =>
+			[...bandEl.children].map(
+				(c) =>
+					[...c.classList]
+						.find((cl) => cl.startsWith('dse-feature__meta-cell--'))!
+						.replace('dse-feature__meta-cell--', ''),
+			);
+		expect(mods(chips)).toEqual(['keywords', 'type']);
+		expect(mods(rail)).toEqual(['distance', 'target']);
+	});
+
+	test('.dse-feature__meta: a band mounts only when it has a cell (no empty rail/chips box)', async () => {
+		const { root } = await renderBlock(`type: feature
+feature_type: ability
+name: Bare Trait
+keywords:
+  - Magic
+`);
+		const meta = root.querySelector('.dse-feature__meta') as HTMLElement;
+		expect(meta.querySelector('.dse-feature__meta-chips')).not.toBeNull();
+		expect(meta.querySelector('.dse-feature__meta-rail')).toBeNull();
+	});
+
 	test('.dse-feature__meta: a real Keywords/Type value is never flagged --empty', async () => {
 		const { root } = await renderBlock(magmaTitan);
 

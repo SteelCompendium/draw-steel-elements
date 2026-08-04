@@ -126,6 +126,14 @@
 	margin-top: 0.5em;
 	margin-bottom: 0.75em;
 }
+/* SC-121 B-1: the two meta BANDS (renderFeature.ts) are inert pass-throughs in the
+   base — `display: contents` hands the four cells straight back to this grid, so
+   Legacy's 2-col placement (and its pixels) are unchanged; only the Steel screen
+   layer (~4285) turns them into the site's chip row + spec rail. */
+.dse-feature__meta-chips,
+.dse-feature__meta-rail {
+	display: contents;
+}
 .dse-feature__meta-cell--keywords,
 .dse-feature__meta-cell--distance {
 	grid-column: 1;
@@ -4278,7 +4286,47 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
    (reusing the same --dse-metal-faint wash as the cardHead's own --chip
    slots, ~3247). SCREEN-ONLY (print frozen, SC-4); Legacy never reveals
    .dse-feature__meta-key (base rule, ~141) so both treatments are inert
-   there. */
+   there.
+
+   SC-121 B-1 RECOMPOSITION (Scott seed defect #3, "horribly misaligned"): the
+   Task-3 layout above kept the base's SINGLE 2-col grid for both rows, so the
+   fit-content Keywords chip sat in a 1fr track sized by the Distance box under
+   it — measured on the feature fixture: a 245px chip inside a 510px track, i.e.
+   265px of dead gap before the Type chip, over a rail whose own two cells were
+   510px / 164px (the base's `minmax(0,1fr) auto`). That pairing has no site
+   counterpart at all. The site composes the SAME four fields as two independent
+   bands (steel-ability-cards.css):
+     .sc-ability__kw   { display:flex; flex-wrap:wrap; gap:.4rem }   (:134)
+     .sc-ability__chip { padding:.02rem .6rem; border:1px solid --fx-metal-faint;
+                         small-caps/lowercase, .04em, .88rem }       (:135-138)
+                         — chips are LABEL-LESS on the site
+     .sc-ability__rail { display:grid; grid-template-columns:1fr 1fr; gap:.5rem } (:141)
+     .sc-ability__cell { padding:.5rem .75rem; min-height:3.4rem }    (:142-143)
+   So Steel now drops the grid for a plain block and lets each band own its own
+   layout: chips pack tight-left and wrap; the rail is a true even 2-col box pair.
+   The site's rem figures convert at its 20px base to the plugin's 16px one the
+   same way the rest of this file does (.4rem=8px→0.5rem, .5rem=10px→0.625rem,
+   .75rem=15px→0.9375rem, 3.4rem=68px→4.25rem); type sizes ride the site's ratio
+   against its own 16px body text (.88rem/16px = 0.88em).
+   The KEYS in the chip band go visually-hidden (not display:none) — the site
+   prints no "KEYWORDS:"/"TYPE:" label at all, but the words stay in the
+   accessibility tree so the chips are not two unlabelled strings to a screen
+   reader. The rail keeps its labels: the site labels those cells too (`.l`). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta {
+	display: block;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-rail {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.625rem;
+	margin-top: 0.5rem;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-key {
 	display: inline;
 }
@@ -4286,18 +4334,32 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	display: inline-flex;
 	align-items: baseline;
-	gap: 0.35em;
-	width: fit-content;
-	padding: 0.15em 0.65em;
+	padding: 0.1em 0.6em;
+	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
-	background: var(--dse-metal-faint);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords .dse-feature__meta-key,
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type .dse-feature__meta-key {
+	background: var(--dse-chip-bg);
+	font-size: 0.88em;
 	font-variant: small-caps;
 	text-transform: lowercase;
-	letter-spacing: 0.06em;
+	letter-spacing: 0.04em;
 	color: var(--dse-fg-muted);
+	text-align: left;
+}
+/* Label-less chips, site-style (see the block comment) — kept audible, not
+   removed: position/clip is the standard visually-hidden recipe, and it also
+   neutralises the base rule's `::after { content: ': ' }` colon by taking the
+   whole key out of the visual flow. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords .dse-feature__meta-key,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type .dse-feature__meta-key {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
 /* SC-10 Task 8 polish: drop the whole Keywords/Type chip when its value is the
    book's lone-dash "none" placeholder (renderFeature.ts's --empty modifier,
@@ -4319,8 +4381,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	background: var(--dse-surface-sunken);
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
-	padding: 0.5em 0.75em;
-	min-height: 3em;
+	/* SC-121 B-1: the site's own cell inset/height — `.sc-ability__cell
+	   { padding: .5rem .75rem; min-height: 3.4rem }` (steel-ability-cards.css:142-143)
+	   = 10/15px and 68px at its 20px rem base. The site figure is a BORDER-box
+	   height (Material sets box-sizing globally; the plugin does not), so the box
+	   model is pinned here too — otherwise the same number means 68 + 20 padding
+	   + 2 border = 90px and the cell reads as dead space, not a floor. */
+	box-sizing: border-box;
+	padding: 0.625rem 0.9375rem;
+	min-height: 4.25rem;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance .dse-feature__meta-key,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target .dse-feature__meta-key {

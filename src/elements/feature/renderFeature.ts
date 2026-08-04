@@ -11,7 +11,10 @@
 //     .dse-head                          ← kit cardHead: crest · Ability/Trait eyebrow ·
 //                                            name(heading) · cost · ability_type
 //     .dse-feature__flavor               ← italic flavor
-//     .dse-feature__meta                 ← Keywords/Type/Distance/Target grid
+//     .dse-feature__meta                 ← Keywords/Type/Distance/Target
+//       .dse-feature__meta-chips         ←   band 1: Keywords + Type chips
+//       .dse-feature__meta-rail          ←   band 2: boxed Distance/Target rail
+//                                            (both `display: contents` in Legacy)
 //     .dse-section--trigger              ← titled "Trigger" panel
 //     per effect: .dse-section (title = name (+cost), body = effect md)
 //                 .dse-pr (kit powerRollPanel, STATIC — features are not selectable)
@@ -238,6 +241,22 @@ export function renderFeature(
 	// label-less look is unchanged until D3's Steel layer reveals them.
 	if (feature.keywords || feature.usage || feature.distance || feature.target) {
 		const metaEl = rootEl.createDiv({ cls: 'dse-feature__meta' });
+		// SC-121 B-1: the meta region is TWO bands, matching the site's ability card
+		// (steel-ability-cards.css): a wrapping chip row (.sc-ability__kw — Keywords,
+		// plus the plugin's extra Type classifier) over the boxed 2-col spec rail
+		// (.sc-ability__rail — Distance/Targets). The bands are THEME-AGNOSTIC DOM
+		// (mounted in every theme, like every other slot here) and are `display: contents`
+		// in the Legacy base, which hands the four cells straight back to
+		// .dse-feature__meta's own 2-col grid — so Legacy's placement, and its pixels,
+		// are byte-unchanged (LEGACY-FREEZE). Print rides the base too (every Steel meta
+		// rule is :not([data-dse-print="on"])), so *--steel-print.png is unchanged as well.
+		let chipsEl: HTMLElement | undefined;
+		let railEl: HTMLElement | undefined;
+		const band = (which: 'chips' | 'rail'): HTMLElement => {
+			if (which === 'chips')
+				return (chipsEl ??= metaEl.createSpan({ cls: 'dse-feature__meta-chips' }));
+			return (railEl ??= metaEl.createSpan({ cls: 'dse-feature__meta-rail' }));
+		};
 		// SC-10 Task 8 polish: a lone dash is the book's "none" placeholder (site:
 		// statblock_page.go `usage != "-"`, keyword_filter.go) — never a real value.
 		// The --empty modifier is THEME-AGNOSTIC DOM (mounted in every theme, like
@@ -245,8 +264,14 @@ export function renderFeature(
 		// Legacy has no rule keying off it so its existing unlabeled dash text is
 		// pixel-unchanged (LEGACY-FREEZE).
 		const isEmptyValue = (value: string): boolean => /^[-–—]+$/.test(value.trim());
-		const cell = (modifier: string, label: string, value: string, isEmpty = false): void => {
-			const cellEl = metaEl.createSpan({
+		const cell = (
+			modifier: string,
+			label: string,
+			value: string,
+			which: 'chips' | 'rail',
+			isEmpty = false,
+		): void => {
+			const cellEl = band(which).createSpan({
 				cls:
 					`dse-feature__meta-cell dse-feature__meta-cell--${modifier}` +
 					(isEmpty ? ' dse-feature__meta-cell--empty' : ''),
@@ -256,11 +281,17 @@ export function renderFeature(
 		};
 		if (feature.keywords) {
 			const kwEmpty = feature.keywords.length === 0 || feature.keywords.every(isEmptyValue);
-			cell('keywords', 'Keywords', feature.keywords.length > 0 ? feature.keywords.join(', ') : '', kwEmpty);
+			cell(
+				'keywords',
+				'Keywords',
+				feature.keywords.length > 0 ? feature.keywords.join(', ') : '',
+				'chips',
+				kwEmpty,
+			);
 		}
-		if (feature.usage) cell('type', 'Type', feature.usage, isEmptyValue(feature.usage));
-		if (feature.distance) cell('distance', 'Distance', feature.distance);
-		if (feature.target) cell('target', 'Target', feature.target);
+		if (feature.usage) cell('type', 'Type', feature.usage, 'chips', isEmptyValue(feature.usage));
+		if (feature.distance) cell('distance', 'Distance', feature.distance, 'rail');
+		if (feature.target) cell('target', 'Target', feature.target, 'rail');
 	}
 
 	// -- trigger: a titled section, before the effects (legacy order). --
