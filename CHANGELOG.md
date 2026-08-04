@@ -307,6 +307,23 @@ for what needs action.
   band and a hairline under each row, matching the website's tables. Steel
   screen theme only for now — the Legacy theme and PDF/print export still show
   the unstyled table (SC-121).
+- [STEEL] Those same prose tables now scroll sideways instead of running off the
+  edge. A wide book table (the perk's five-column familiar statblock) put its
+  last columns outside the card with no way to reach them once the card was
+  narrow — in a sidebar, for instance. The table now sits in its own scrolling
+  frame, so it stays inside the card and you can swipe/scroll across it. At full
+  width nothing changes (SC-121).
+- [BUGFIX] The hero sheet fits a sidebar. Its two-column region grid was supposed
+  to fold to a single column when the sheet gets narrow, but the rule was
+  attached to the grid itself — an element can't measure itself that way, so the
+  fold never happened and the sheet ran off the right edge of a narrow leaf,
+  cutting off Presence in the Characteristics row and half of every panel below
+  it. It now folds as intended (SC-121).
+- [BUGFIX] The element editor's raw-YAML box has a usable size. Opening "Edit"
+  on an element without a form schema showed a two-line text box sitting on top
+  of its own label, with the preview below it taking the whole dialog. The box
+  is now full-width, ten lines tall, resizable, and in a monospace face
+  (SC-121).
 - [BUGFIX] Trackers and other interactive elements (initiative, negotiation,
   hero, montage, party, project, encounter) now render correctly on Obsidian
   installs whose bundled Electron ships an older Chromium: the built
