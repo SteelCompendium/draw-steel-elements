@@ -2885,12 +2885,28 @@ Shared globals
 	}
 
 	/* spec §3.2: a wide multi-column grid that collapses to one column on narrow width —
-	   a container query (no JS), matching F1 §1.4's "responsive by CSS" convention. */
+	   a container query (no JS), matching F1 §1.4's "responsive by CSS" convention.
+
+	   SC-121 Batch 4 (catalog D-7): `container-type` used to sit on `.dse-hero__grid`
+	   itself, which made the query DEAD. A query container is a container for its
+	   DESCENDANTS — an element can never match a size query against itself, so
+	   `@container (max-width: 480px) { .dse-hero__grid { … } }` resolved against the
+	   grid's nearest ANCESTOR container, of which there was none, and never applied.
+	   Measured in the harness at 300px before the fix: the grid stayed two columns
+	   (`370px 180px`) and its scroll width was 566px inside a 266px box — the sheet
+	   overflowing its own leaf, which is what D-7 saw as the sidebar Characteristics row
+	   collapsing into concatenated text. Moving the containment ONE level up, to the
+	   sheet root, makes the grid a descendant of the container it queries: at 300px it
+	   now resolves to a single `370px` column (scroll width 566 -> 370) and at full width
+	   it is byte-identical (`370px 340px`, query does not match) — which is why no
+	   frozen shot moves. `inline-size` containment on the root is also what keeps the
+	   sheet's own width from being pushed out by its contents. */
+	container-type: inline-size;
+
 	.dse-hero__grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
 		gap: 1em;
-		container-type: inline-size;
 	}
 
 	@container (max-width: 480px) {
