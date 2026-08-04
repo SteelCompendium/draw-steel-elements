@@ -273,3 +273,66 @@ describe('D-3: negotiation checkboxes wear the plugin mark idiom + a real label 
 		expect(disabled!.body).toMatch(/opacity:\s*0\.5/);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// A-3: the winded/dying badge hidden-state guard
+// ---------------------------------------------------------------------------
+describe('A-3: .dse-stamina-rec__status honors [hidden]', () => {
+	const base = exact('.dse-stamina-rec__status');
+	const guard = exact(`${STEEL_PRINT_SCOPE} .dse-stamina-rec__status[hidden]`);
+
+	test('the base rule STILL declares display: inline-flex — the guard is load-bearing, not vestigial', () => {
+		expect(base.body).toMatch(/display:\s*inline-flex/);
+	});
+
+	test('the guard exists, is Steel-scoped + print-excluded, and sets display: none', () => {
+		expect(guard.body).toMatch(/display:\s*none/);
+	});
+
+	test('the guard is source-ordered AFTER the display it has to beat', () => {
+		expect(guard.at).toBeGreaterThan(base.at);
+	});
+
+	test('the guard matches the two [hidden] guards the codebase already ships', () => {
+		expect(exact('.dse-sedit__warn[hidden]').body).toMatch(/display:\s*none/);
+		expect(exact('.dse-collapse__region[hidden]').body).toMatch(/display:\s*none/);
+	});
+
+	/**
+	 * CAN-FAIL PROOF, in a real cascade rather than in rule text: feed jsdom the two
+	 * REAL rule bodies extracted above and assert a `hidden` badge under a Steel root
+	 * computes to display:none — and that WITHOUT the guard the same DOM computes to
+	 * inline-flex (that is the shipped defect: an empty pill on a healthy character).
+	 */
+	describe('cascade proof (jsdom)', () => {
+		function computeDisplay(withGuard: boolean): string {
+			const style = document.createElement('style');
+			style.textContent =
+				`.dse-stamina-rec__status{${base.body}}` +
+				(withGuard ? `${guard.selector}{${guard.body}}` : '');
+			const root = document.createElement('div');
+			root.setAttribute('data-dse-theme', 'steel');
+			root.setAttribute('data-dse-element', 'hero');
+			const badge = document.createElement('span');
+			badge.className = 'dse-stamina-rec__status';
+			badge.toggleAttribute('hidden', true);
+			root.appendChild(badge);
+			document.head.appendChild(style);
+			document.body.appendChild(root);
+			try {
+				return getComputedStyle(badge).display;
+			} finally {
+				style.remove();
+				root.remove();
+			}
+		}
+
+		test('with the guard, a hidden badge is display:none', () => {
+			expect(computeDisplay(true)).toBe('none');
+		});
+
+		test('WITHOUT the guard it renders — the empty-pill defect, reproduced', () => {
+			expect(computeDisplay(false)).toBe('inline-flex');
+		});
+	});
+});

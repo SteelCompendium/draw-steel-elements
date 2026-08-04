@@ -5138,6 +5138,23 @@ body.theme-light
    checkbox JOINS the kit's one shared :focus-visible rule (~:5689) as an extra arm —
    see the note there. §4.5's contract is one ring rule for the whole sheet. */
 
+/* -- 8. Winded/dying badge hidden-state guard (SC-121 Batch 1 / catalog A-3) --
+   Straight bug, not density. .dse-stamina-rec__status (~:1176) declares
+   `display: inline-flex` unconditionally and its own comment claims the badge is
+   "hidden (native [hidden]) while healthy" — but the UA's `[hidden]{display:none}`
+   and a plain class selector are BOTH (0,1,0), and the plugin sheet loads later,
+   so the class wins and a healthy character renders an empty ~16x5px pill beside
+   the recovery pips. The codebase already guards exactly this footgun twice
+   (.dse-sedit__warn[hidden] ~:1266, .dse-collapse__region[hidden] ~:5262); this
+   spot was missed.
+   SCOPE, stated honestly: the bug is theme-agnostic, but the un-themed
+   *--legacy-{dark,light}.png shots are FROZEN and render the same stray pill, so an
+   unscoped guard would move frozen bytes. Fixed under Steel (the shipping theme)
+   here; Legacy keeps the stray pill until a freeze widening is separately approved. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__status[hidden] {
+	display: none;
+}
+
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
 /* ================================================================== */
