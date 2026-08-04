@@ -141,7 +141,10 @@ const STEEL_DARK: Record<string, string> = {
 	'tier-low': 'var(--sc-tier-low, #e74c3c)',
 	'tier-mid': 'var(--sc-tier-mid, #f0b429)',
 	'tier-high': 'var(--sc-tier-high, #4caf6a)',
-	'tier-crit': '#e3c14a',
+	// SC-106 (2026-08-03, commit b3dff05): the provisional gold was RESOLVED to the
+	// site's own crit-highlight gold (v2 steel-dice.css `.sc-dice-pop .crit`). This
+	// map was left on the old value by that commit; corrected under SC-121 Batch 1.
+	'tier-crit': '#e0b050',
 	// stamina / HP
 	'stamina-healthy': 'var(--sc-role-hexer, #5cc98a)',
 	'stamina-winded': '#f0b429',
@@ -154,7 +157,7 @@ const STEEL_DARK: Record<string, string> = {
 	// encounter
 	'turn-done': 'var(--sc-role-hexer, #5cc98a)',
 	malice: '#e0584b',
-	vp: '#e3c14a',
+	vp: '#e0b050', // SC-106: shares tier-crit's site-sourced gold (see above)
 	warn: '#e8954a',
 	danger: '#e74c3c',
 	// combat-role accents (--sc-role-* verbatim)
