@@ -3014,6 +3014,12 @@ Shared globals
 	--dse-fg: var(--text-normal);
 	--dse-fg-muted: var(--text-muted);
 	--dse-fg-faint: var(--text-faint);
+	/* The vocabulary CONTRACT entry (the token map's Legacy column — pinned by
+	   token-coverage.test.ts's LEGACY_MAP). It is NOT the live value: --font-monospace
+	   is declared by Obsidian on `body`, one level DOWN from <html>, so this :root
+	   chain is guaranteed-invalid at computed-value time everywhere — exactly the
+	   SC-112 disease. The reachable re-declaration lives on the element roots right
+	   below this block (workspace FOLLOWUPS #45 / SC-121 batch 3). */
 	--dse-font-mono: var(--font-monospace);
 	/* SC-105: the six-slot font vocabulary. font-display (OD-4's original single
 	   token) is retired as of Task 2 — every consumer now targets one of these
@@ -3140,6 +3146,33 @@ Shared globals
 	   print-excluded — print/export always renders 1:1. */
 	--dse-text-scale: 1;
 	--dse-card-scale: 1;
+}
+
+/* -- Mono slot: the reachable re-home (SC-121 batch 3 / workspace FOLLOWUPS #45) --
+   `--dse-font-mono: var(--font-monospace)` in the :root base above can never
+   resolve: var() substitutes at COMPUTED-VALUE time on the element the custom
+   property is DECLARED on, and Obsidian (like the harness's vars.css) declares
+   --font-monospace on `body`, one level below <html>. So the :root entry computes
+   to the guaranteed-invalid value on every page, in every theme — every consumer
+   silently fell back to its inherited font-family instead of a monospace face.
+   Empirically confirmed before this fix: getComputedStyle(cardRoot)
+   .getPropertyValue('--dse-font-mono') === '' while '--font-monospace' resolved
+   normally on the same node, and `.dse-tiles__value` (SC-100's kit stat tile)
+   rendered in "Source Serif 4", not mono.
+
+   Same disease, same shape of fix as SC-112's font-controls root-cause pass — but
+   deliberately NOT copied into the per-theme Steel blocks, because mono is
+   theme-INVARIANT (the token map's "= Legacy, theme-invariant" row; STEEL_INVARIANT
+   in token-coverage.test.ts) and one of its three consumers is theme-agnostic by
+   design: `.dse-rollcard__breakdown` (~:5870) carries no [data-dse-theme] qualifier
+   and must render mono under Legacy too. Re-declaring per theme would leave the
+   Legacy path dead and would contradict the token map. One element-root
+   declaration is BELOW body, so --font-monospace resolves here, and it serves
+   Legacy, Steel, and print (which intentionally does not override font-mono)
+   alike. Specificity (0,1,0) sits under every theme/print block, none of which
+   declares font-mono, so nothing is shadowed. */
+:is([data-dse-element], .dse-modal) {
+	--dse-font-mono: var(--font-monospace);
 }
 
 /* ================================================================== */
@@ -3829,15 +3862,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row {
 	font-family: var(--dse-font-controls);
 }
-/* Mono (--dse-font-mono) is DELIBERATELY NOT touched here. Its consumer
+/* Mono (--dse-font-mono) is DELIBERATELY NOT widened here. Its consumer
    rule (.dse-rollcard__breakdown, ~:5180) was ALREADY unscoped — no
    `[data-dse-theme='steel']` qualifier, ever — so it already applies
-   under both themes today; there is nothing to widen. But --dse-font-mono
-   has no Steel-block re-declaration (unlike the five slots above), so it
-   stays invalid-at-computed-value-time under BOTH themes, not just
-   Legacy — a separate, pre-existing wiring gap outside this gate's scope
-   (flagged for the orchestrator/FOLLOWUPS, not fixed here: fixing it is a
-   Steel-rendering task, not a Legacy-support one). */
+   under both themes; there is nothing to widen. The separate wiring gap this
+   comment used to flag (no reachable declaration, so the slot was
+   invalid-at-computed-value-time under BOTH themes) is FIXED as of SC-121
+   batch 3 / workspace FOLLOWUPS #45: the element-root re-home just after the
+   :root base block (~:3152) makes the slot resolve, theme-agnostically, which
+   is why it still needs no per-theme declaration. */
 
 /* ================================================================== */
 /*   SC-112 Task 7 — user size scales (text & card)                    */
@@ -4703,15 +4736,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
    generic `monospace`: U+2264 is core coverage for monospace faces (DejaVu Sans
    Mono / Consolas / Menlo all carry it), so it resolves in a face that HAS it on
    every platform, and a decorative text font can never capture it again.
-   The literal stack is a FALLBACK, not a preference: --dse-font-mono is declared
-   on :root as `var(--font-monospace)`, but Obsidian (and the harness's vars.css)
-   declare --font-monospace on `body` — one level DOWN — so at :root it is
-   unresolvable and the token computes to the guaranteed-invalid value everywhere,
-   which is precisely why the first cut of this fix rendered "²11" unchanged. The
-   var() fallback is what makes the slot usable today; if the token is ever
-   re-homed so it actually resolves (workspace FOLLOWUPS — it also silently kills
-   SC-100's monospace kit-tile value), this rule picks the real slot back up with
-   no edit.
+   The literal stack is now a BELT-AND-BRACES fallback, not the load-bearing path.
+   History: --dse-font-mono was declared only on :root as `var(--font-monospace)`,
+   but Obsidian (and the harness's vars.css) declare --font-monospace on `body` —
+   one level DOWN — so at :root it was unresolvable and the token computed to the
+   guaranteed-invalid value everywhere, which is precisely why the first cut of this
+   fix rendered "²11" unchanged; the literal stack was what made the slot usable at
+   all. SC-121 batch 3 (workspace FOLLOWUPS #45) re-homed the token to the element
+   roots (~:3152) where it actually resolves, so this rule now picks up the real
+   slot — with no edit, exactly as predicted. The literal stack is deliberately
+   KEPT: it costs nothing and it is the only thing standing between a future
+   re-breakage of the token chain and "²11" silently returning to the badge.
    SCOPE, stated honestly (fix-round M-1, mirroring Batch 1 A-3's disclosure):
    this rule is Steel-scoped AND print-excluded, forced by the same LEGACY-FREEZE
    constraint — the *--legacy-{dark,light}.png and *--steel-print.png shots render

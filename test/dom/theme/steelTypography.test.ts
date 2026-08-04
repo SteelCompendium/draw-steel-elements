@@ -420,8 +420,9 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	// the SC-100 sense — one Steel-only selector on one character, print-excluded, and it
 	// re-narrows nothing (the theme-agnostic mono consumer is still `.dse-rollcard__breakdown`,
 	// which the gate below still proves). It is allow-listed here for the day
-	// --dse-font-mono is re-homed to a scope where it resolves: today that rule writes the
-	// slot in its `var(--dse-font-mono, <literal monospace stack>)` fallback form, which the
+	// --dse-font-mono is re-homed to a scope where it resolves — which SC-121 batch 3
+	// (workspace FOLLOWUPS #45) has now done; that rule still writes the slot in its
+	// `var(--dse-font-mono, <literal monospace stack>)` belt-and-braces form, which the
 	// bare-token matcher below does not even see.
 	const SC100_STEEL_CONSUMERS =
 		/\.dse-card__band-head|\.dse-tiles__(?:value|label)|\.dse-pr__badge--t1 \.dse-pr__badge-text::first-letter/;
@@ -564,5 +565,32 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		for (const r of monoRules.filter((r) => STEEL_SCOPE.test(r.selector))) {
 			expect(r.selector).toMatch(SC100_STEEL_CONSUMERS);
 		}
+	});
+
+	// SC-121 batch 3 / workspace FOLLOWUPS #45 — the mono slot must be REACHABLE.
+	//
+	// `--dse-font-mono: var(--font-monospace)` declared on :root can never resolve: var()
+	// substitutes at computed-value time on the element the property is DECLARED on, and
+	// Obsidian declares --font-monospace on `body`, below <html>. So the slot computed to
+	// the guaranteed-invalid value in every theme and every consumer silently inherited a
+	// non-mono face instead. The fix re-declares the chain on the element roots (below
+	// body), theme-agnostically — mono is theme-INVARIANT in the token map, and one of its
+	// consumers (.dse-rollcard__breakdown) is theme-agnostic, so a per-theme Steel-block
+	// declaration à la SC-112's font-controls would have left the Legacy path dead.
+	//
+	// Honest limit: this is a source-text assertion, so it proves the declaration EXISTS on
+	// a body-descendant scope — it cannot prove the browser resolves it. That half is
+	// covered by a real-browser computed-style probe (see the SC-121 batch-3 evidence).
+	it('the mono slot is re-declared on a body-DESCENDANT scope, not only on :root (FOLLOWUPS #45)', () => {
+		const monoDecls = rules.filter((r) => /--dse-font-mono:\s*var\(--font-monospace\)/.test(r.body));
+		// The :root vocabulary-contract entry is still there (token-coverage's LEGACY_MAP pins it)…
+		expect(monoDecls.some((r) => r.selector.trim() === ':root')).toBe(true);
+		// …but it is no longer the ONLY one: an element-root declaration must exist, and it
+		// must be theme-agnostic so Legacy's .dse-rollcard__breakdown resolves it too.
+		const reachable = monoDecls.filter(
+			(r) => r.selector.trim() !== ':root' && /\[data-dse-element\]/.test(r.selector),
+		);
+		expect(reachable.length).toBeGreaterThan(0);
+		for (const r of reachable) expect(STEEL_SCOPE.test(r.selector)).toBe(false);
 	});
 });
