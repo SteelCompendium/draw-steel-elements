@@ -4306,8 +4306,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
    layout: chips pack tight-left and wrap; the rail is a true even 2-col box pair.
    The site's rem figures convert at its 20px base to the plugin's 16px one the
    same way the rest of this file does (.4rem=8px→0.5rem, .5rem=10px→0.625rem,
-   .75rem=15px→0.9375rem, 3.4rem=68px→4.25rem); type sizes ride the site's ratio
-   against its own 16px body text (.88rem/16px = 0.88em).
+   .75rem=15px→0.9375rem, 3.4rem=68px→4.25rem). The chip's own two figures
+   (SC-121 M-2 fix-round correction — the first cut took the site's `.88rem`/
+   `.6rem` as bare numbers, the exact rem-as-em slip this file calls out for
+   `.dse-pr__row` (~4563) and `.dse-section__title`): `.88rem` is 17.6px at the
+   site's 20px base, and against the plugin's OWN 16px local em context (chips
+   inherit body text size, confirmed live) that is `1.1em`, not `0.88em` — the
+   first cut computed 14.08px, smaller than both the site's chip and the
+   plugin's pre-change one. `.6rem` is 12px at the site's base; authored as a
+   flat `0.75rem` (root-relative, like `.dse-pr__row`'s conversions) rather than
+   em, so the horizontal padding stays 12px regardless of the font-size fix
+   above instead of compounding against it.
    The KEYS in the chip band go visually-hidden (not display:none) — the site
    prints no "KEYWORDS:"/"TYPE:" label at all, but the words stay in the
    accessibility tree so the chips are not two unlabelled strings to a screen
@@ -4334,11 +4343,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	display: inline-flex;
 	align-items: baseline;
-	padding: 0.1em 0.6em;
+	padding: 0.1em 0.75rem;
 	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
 	background: var(--dse-chip-bg);
-	font-size: 0.88em;
+	font-size: 1.1em;
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.04em;
@@ -4703,6 +4712,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
    re-homed so it actually resolves (workspace FOLLOWUPS — it also silently kills
    SC-100's monospace kit-tile value), this rule picks the real slot back up with
    no edit.
+   SCOPE, stated honestly (fix-round M-1, mirroring Batch 1 A-3's disclosure):
+   this rule is Steel-scoped AND print-excluded, forced by the same LEGACY-FREEZE
+   constraint — the *--legacy-{dark,light}.png and *--steel-print.png shots render
+   this exact badge and are frozen byte-for-byte, so an unscoped fix would move
+   them. A Legacy-theme reader, and ANY reader exporting to PDF/print, still sees
+   "²11" — this fix reaches only the shipping Steel screen theme. Freeze-widening
+   candidate, same list as A-3's stray pill.
    (Housekeeping: this rule names a badge modifier ABOVE the shape rules, which the
    clip-path tests locate by first textual occurrence — safe only because it declares
    no clip-path of its own. Never add one here.) */

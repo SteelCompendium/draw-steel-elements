@@ -264,13 +264,16 @@ for what needs action.
 - [STEEL] Section panels (Effect / Trigger / Special / Aftermath) line their
   header up with their body text. The header strip sat a few pixels to the right
   of the paragraph beneath it; both now share one left edge (SC-121).
-- [BUGFIX] The tier-1 power-roll badge reads `≤11` again instead of `²11`. The
-  bundled Source Serif 4 has no "less than or equal to" glyph, so the character
-  fell through to whatever text font you have configured in Obsidian — and many
-  decorative fonts (the harness vault's own Bookinsanity, for one) draw a
-  superscript "2" there, turning the tier threshold into a power of two. That one
-  character is now drawn in your monospace font, which always has it; the digits
-  stay in the card's serif (SC-121).
+- [BUGFIX] The tier-1 power-roll badge reads `≤11` again instead of `²11`, under
+  the Steel theme. The bundled Source Serif 4 has no "less than or equal to"
+  glyph, so the character fell through to whatever text font you have configured
+  in Obsidian — and many decorative fonts (the harness vault's own Bookinsanity,
+  for one) draw a superscript "2" there, turning the tier threshold into a power
+  of two. That one character is now drawn in a monospace face, which always has
+  it (a fixed-font fallback stack, not necessarily your own configured monospace
+  font — a separate open bug keeps that setting from taking effect everywhere);
+  the digits stay in the card's serif. Fixed on the Steel screen theme only —
+  the Legacy theme and PDF/print export still show `²11` for now (SC-121).
 - [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
   beside the recovery dots on a healthy character. The winded/dying badge was
   meant to hide itself and never did (SC-121).

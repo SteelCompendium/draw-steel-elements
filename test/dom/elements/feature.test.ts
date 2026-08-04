@@ -707,8 +707,15 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 	test('CSS contract (SC-121 B-1): the meta bands are `display: contents` in the BASE — the mechanism that keeps Legacy/print byte-identical', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
+		// Anchored to the START of a line (SC-121 fix-round L-1): an earlier unanchored
+		// version of this regex matched as a substring, so Steel-scoping ONLY the first
+		// of the two selectors (a prefix prepended before `.dse-feature__meta-chips,`)
+		// still matched starting at the literal class name, capturing text that never
+		// contained the prefix — the `not.toMatch(/data-dse-.../)` assertion below then
+		// passed on a mutation that breaks Legacy. `^`+`m` requires the base rule's
+		// selector line to start with NO qualifier at all.
 		const base = sheet.match(
-			/\.dse-feature__meta-chips,\n\.dse-feature__meta-rail\s*\{[\s\S]*?\n\}/,
+			/^\.dse-feature__meta-chips,\n\.dse-feature__meta-rail\s*\{[\s\S]*?\n\}/m,
 		);
 		expect(base).not.toBeNull();
 		expect(base![0]).toMatch(/display:\s*contents\s*;/);
