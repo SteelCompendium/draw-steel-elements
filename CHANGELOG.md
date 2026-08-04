@@ -228,6 +228,11 @@ for what needs action.
     users already see rather than changing it; there is no new visual change
     at defaults. Print keeps controls in the non-serif rendering, preserving
     print/export output byte-for-byte.
+- [STEEL] The crit / Victory-Point gold now uses the site's own crit gold
+  (`#e0b050`, from steelcompendium.io's dice styling) instead of a provisional
+  placeholder value. The action-type spine hues and the temp-stamina purple
+  were reviewed against the canonical color reference and confirmed unchanged —
+  this closes out the last provisional Steel color values (SC-106).
 - [BUGFIX] Trackers and other interactive elements (initiative, negotiation,
   hero, montage, party, project, encounter) now render correctly on Obsidian
   installs whose bundled Electron ships an older Chromium: the built
