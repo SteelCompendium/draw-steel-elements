@@ -116,7 +116,7 @@ lifecycle cleanup, persistence write-back).
 | `host/ReadingModeBlockHost.ts` | The only implemented `BlockHost` (D1 ships reading mode only, matching the standing 2024-08-18 reading-mode-only decision). Fixes two legacy bugs on top of `src/utils/CodeBlocks.ts`'s approach: atomic read-modify-write via `Vault.process` (no lost updates from concurrent edits) and fence-language preservation on write-back (no silent alias-to-canonical rewriting). |
 | `host/LivePreviewBlockHost.ts` | Deliberately unimplemented stub — every member throws. Documents the CM6 realization of each `BlockHost` member for a future Live Preview effort; not to be constructed until that effort supersedes the reading-mode-only decision. |
 | `seams/theme.ts` | `ThemeService` — stamps `data-dse-theme="<active>"` on every element root, token → CSS var resolution (`cssVar()`). Minimal in D1 (effectively one constant theme); the token/theme value space is a later effort's scope. |
-| `seams/prefs.ts` | `PreferenceStore` — a typed preference store (`DsePrefs`, built-in `theme` key only) backed by an injected `PrefsStorage` adapter, with `reflect()` stamping any `attr`-bearing preference as `data-dse-<attr>` on element roots. The preference catalog, settings tab, and per-block overrides are D4's scope — see "Preferences (`src/prefs/`, D4)" below. |
+| `seams/prefs.ts` | `PreferenceStore` — a typed preference store (`DsePrefs`, built-in `theme` key only) backed by an injected `PrefsStorage` adapter, with `reflect()` stamping any `attr`-bearing preference as `data-dse-<attr>` on element roots and writing any `css`-bearing preference (SC-112) as an inline `--dse-*` custom property (`reflectCss()` is the css-only twin for roots outside the pipeline, e.g. managed modals). The preference catalog, settings tab, and per-block overrides are D4's scope — see "Preferences (`src/prefs/`, D4)" below. |
 | `seams/refs.ts` | `ReferenceService` — generalizes `src/utils/ReferenceResolver.ts` into a provider chain (`RefProvider`). Ships `at-path` (`@Creatures/Goblin`) and `wikilink` (`[[Thorn Dragon]]`) providers ported verbatim from the legacy resolver, plus a reserved, always-failing `scc`/`scc.vN:` provider placeholder for a future effort to supersede. `resolveDeep()` walks arbitrary parsed YAML. Does **not** replace `ReferenceResolver.ts`, which stays live for legacy elements. |
 | `session.ts` | `SessionStore` — plugin-scoped, in-memory, best-effort UI state (e.g. collapse open/closed) keyed by `(blockKey, slot)`. Cleared on plugin `onunload`. Pure — no Obsidian imports. Never used for document state. |
 | `validation.ts` | `ValidationService` — a plugin-scoped AJV wrapper (2019 dialect, `ajv-keywords` + `ajv-errors`, ported from `src/utils/JsonSchemaValidator.ts`) that compiles and caches one validator per element id (fixing the legacy validator's recompile-on-every-call cost). One instance per plugin load, dropped on unload — no module-global singleton (unlike the legacy validator, which stays a singleton for its own unmigrated clients). |
@@ -240,8 +240,30 @@ hand-wiring four call sites.
   calls it once per block, after `def.createView()` and before `view.mount()`. `theme` is
   deliberately attr-less in the catalog: `ThemeService.apply()` is the sole writer of
   `data-dse-theme` (D3 §7.1); double-stamping here would race.
+  **`css`-bearing descriptors (SC-112)** are the second, independent reflection channel —
+  same principle, different sink: a descriptor may carry
+  `css: { varName: '--dse-…', toCss(value) }`, and the same `reflect()` subscription writes
+  `toCss(value)` as an **inline custom property on the element root**
+  (`style.setProperty(varName, …)`); a `toCss` return of `null` calls `removeProperty`
+  instead, so **defaults are inert** — a root at defaults carries no inline style and the
+  stylesheet's `:root` values win (the freeze bar). A descriptor may carry `attr`, `css`,
+  both, or neither. The Typography prefs (six `font<Slot>` keys whose `''` sentinel means
+  "Default (Obsidian vault fonts)" → `null`, plus `textScale`/`cardScale` whose site-mirrored
+  `snap()` maps the 1.0 default → `null`) are all css-bearing and attr-less. Adding a
+  font/scale pref is still just adding a descriptor — no new wiring. Managed modals
+  (`framework/kit/managedModal.ts`) call `reflectCss()`, the css-only twin — deliberately
+  not `reflect()`, since modals must not receive the element-root attr stamps; per-block
+  `prefs:` overrides reject attr-less keys (`prefOverrides.ts`), so css-bearing prefs are
+  global-only by design.
 - **Settings tab** (`src/views/SettingsTab.ts`): groups descriptors by `PrefUi.group` in
   `GROUP_ORDER` and renders one `Setting` row per descriptor — no per-pref branching.
+  SC-112 additions: `ui.advanced` rows collapse behind a per-group `<details>` ("Advanced";
+  the group reset still resets them), and the `'font'` control renders a curated dropdown
+  led by the uniform "Default (Obsidian vault fonts)" option, a "Custom…" free-text entry
+  (sanitized via `prefs/fontStacks.ts`), and a user-activation "List installed fonts"
+  affordance (`queryLocalFonts`, feature-detected — curated+Custom is the unconditional
+  fallback). Sliders (`textScale`/`cardScale`) use `prefs/scale.ts`'s site-mirrored
+  ranges/step/snap.
   `onChange` calls `prefs.set()` directly (no Apply button): `set()` notifies `reflect()`'s
   subscribers synchronously, so open elements reflow live behind the dialog. Per-group and
   whole-tab reset actions write descriptor defaults (sparse storage then drops them). The

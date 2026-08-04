@@ -67,11 +67,16 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
   shared by both strategies
 - **SDK**: `steel-compendium-sdk` bundled at build time for data model parsing
 - **Preferences (D4)**: descriptor-driven — `src/prefs/catalog.ts` owns the `DsePrefs`
-  augmentation, the `PrefDescriptor` list (attrs = the `data-dse-*` vocabulary CSS reflows
-  on), and the statblock presets; storage is a SPARSE `prefs` slice on `DSESettings`
-  (debounced `saveData`, `main.ts createSaveDataPrefsStorage`). The settings tab
-  (`src/views/SettingsTab.ts`) renders FROM the descriptors — adding a pref = adding a
-  descriptor. Per-block `prefs:` YAML overrides: `src/framework/prefOverrides.ts`.
+  augmentation, the `PrefDescriptor` list, and the statblock presets; storage is a SPARSE
+  `prefs` slice on `DSESettings` (debounced `saveData`, `main.ts
+  createSaveDataPrefsStorage`). A descriptor reflects through either or both of two
+  channels: `attr` (the `data-dse-*` vocabulary CSS reflows on) and, since SC-112, `css`
+  (`{ varName, toCss }` — `reflect()`/`reflectCss()` write an inline `--dse-*` custom
+  property on the root; `toCss` → `null` removes it, so defaults are inert). The Typography
+  prefs (6 font slots + text/card size scales) are css-bearing and attr-less. The settings
+  tab (`src/views/SettingsTab.ts`) renders FROM the descriptors — adding a pref = adding a
+  descriptor. Per-block `prefs:` YAML overrides: `src/framework/prefOverrides.ts`
+  (attr-less keys rejected — css-bearing prefs are global-only).
   Defaults must always reproduce the current look (legacy-fidelity bar).
 - **Rolling (D5)**: `src/framework/roll/` — pure engine (`engine.ts resolveRoll`:
   2d10/tiers/edges/banes/crit, injected `DiceSource`), lenient `parse.ts`, and the

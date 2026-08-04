@@ -141,8 +141,11 @@ for what needs action.
   body and label text in the same serif face, open line-height and cooler ink as
   the card families, so a note reads as one coherent type system instead of a
   serif card sitting next to a sans tracker. The routing moved from a four-family
-  allow-list to a single Steel-theme-root selector; numeric stepper/counter values
-  are excluded and keep their prior, non-serif rendering. The encounter head's
+  allow-list to a single Steel-theme-root selector. (An exclusion keeping numeric
+  stepper/counter values in their prior, non-serif rendering was part of this
+  change but was later found to have quietly stopped working during the font-slot
+  groundwork below; it is now removed deliberately — controls follow the Body
+  font, see the typography settings entry below.) The encounter head's
   `EV n / n` chip now takes the exact same serif small-caps treatment as every
   other chip in the kit — a fully uniform chip family, with no numeric-content
   exemption. Its digits render at small-caps cap height, a Source Serif 4 `smcp`
@@ -169,10 +172,16 @@ for what needs action.
 - [INTERNAL] The font system's single `--dse-font-display` token is retired,
   replaced by six semantic slots (title/body/card-body/label/controls/mono),
   each independently themeable. Every consumer was re-pointed to its
-  classified slot with zero rendering change — Legacy/Steel/Print all render
-  pixel-identical, freeze and parity gates stayed green throughout. This is
-  groundwork only: it lays the vocabulary for user-customizable fonts
-  (SC-112), which is not part of this change.
+  classified slot, intended as a zero-rendering-change migration — which held
+  for Legacy and print (both pixel-identical; freeze and parity gates stayed
+  green throughout, though they cover legacy+print shots only), but not quite
+  for one Steel region: the rename left the stepper/counter sans exclusion
+  inoperative (its token chain resolved to nothing at the root), so those
+  digits silently began rendering serif under Steel. That accidental state
+  matches the ruling later made for the typography settings below — controls
+  default to the Body font — so it was kept and made deliberate there, not
+  reverted. This is groundwork only: it lays the vocabulary for the
+  user-customizable fonts entry below.
 - The Steel theme now bundles Source Serif 4's Regular (400) weight, so body
   and label prose render at their true book weight instead of being mapped up
   to the bundled 600 (SemiBold) face for lack of a 400 — closing the "reads
@@ -192,6 +201,33 @@ for what needs action.
   power-roll tiers, effects — richer than the site's tile). The Legacy style's kit card
   is unchanged byte-for-byte, and switching themes in Settings re-renders open kit
   cards live.
+- New: **Typography settings** — a Typography section in the plugin settings lets
+  you choose the fonts and sizes Draw Steel elements render with:
+  - **Six font pickers** — Title, Body, and Controls, plus Card body, Label, and
+    Monospace behind an "Advanced" fold. Each offers a curated list, a "Custom…"
+    free-text entry for any family you know by name, and a "List installed
+    fonts" button that fills the dropdown with every font on your machine
+    (where the platform supports it; the curated list and Custom entry always
+    work regardless). Every picker defaults to **"Default (Obsidian vault
+    fonts)"** — exactly the plugin's previous behavior, so you see zero change
+    until you pick something. The advanced slots' defaults follow the primary
+    ones (Card body and Controls track Body; Label tracks Title).
+  - **Two size sliders** — Text size (60%–140%) and Card size (80%–120%), in 5%
+    steps: the same ranges, steps, and snap behavior as steelcompendium.io's own
+    site settings. Text size scales the type inside elements; Card size zooms
+    whole statblock/ability cards. Print and export always render at 100%.
+  - Font and size choices apply under **both the Steel and Legacy themes** —
+    Legacy users get the pickers too, and at the defaults Legacy is
+    byte-for-byte unchanged (verified against the frozen legacy screenshot
+    set; that check covers legacy and print renders, not Steel-screen ones).
+  - One deliberate rendering decision under Steel, made while wiring the
+    Controls slot: interactive controls (steppers, buttons, tabs) **default to
+    the Body font** — serif under Steel. Stepper/counter digits were already
+    rendering serif in practice (the old sans exemption had quietly stopped
+    working during the font-slot groundwork above), so this ratifies what
+    users already see rather than changing it; there is no new visual change
+    at defaults. Print keeps controls in the non-serif rendering, preserving
+    print/export output byte-for-byte.
 
 ## 5.1.1
 
