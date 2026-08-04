@@ -4240,14 +4240,35 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    tiles' literal). Border stays on `--dse-metal-faint`: already an exact match to the
    site's border-top-color in both schemes (dark rgba(176,183,187,.16), light
    rgba(95,103,108,.14)), same as the tiles. */
+/* SC-121 C-2 — the box was ~2x taller than the text it holds. Measured before the
+   fix (harness, 900px viewport, Steel dark): a 72.6px box around a single 22.1px
+   line, i.e. 25.3px of visible space above the text and the same below, against
+   the site's ~1.0x ratio on the same panel.
+   The padding was NOT the culprit — 0.65em against this box's own 0.92em font is
+   9.57px, essentially the site's `.65rem` (10.4px). The extra ~29px was the
+   markdown paragraph: the Equipment prose renders through renderMarkdown, which
+   emits a real <p>, and <p>'s default `margin: 1em 0` (14.7px at this font size)
+   stacks INSIDE the panel at both ends. The site's `.sc-kit__equip` holds inline
+   content with no paragraph wrapper, so it never paid that cost.
+   Fix = the standard first/last-child block-margin reset, so the panel's own
+   padding is the only vertical space, plus re-basing the padding to the site's
+   literal `rem` figures (0.65rem/0.8rem = 10.4/12.8px) so it no longer drifts
+   with this box's font-size the way the `em` form did. Result: 44.9px box, ratio
+   ~1.0. Steel-scoped and print-excluded like every other rule in this band. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-kit__equip {
 	background: rgba(0, 0, 0, 0.22);
 	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
-	padding: 0.65em 0.8em;
+	padding: 0.65rem 0.8rem;
 	font-size: 0.92em;
 	line-height: 1.5;
 	color: var(--dse-fg);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-kit__equip > :first-child {
+	margin-top: 0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-kit__equip > :last-child {
+	margin-bottom: 0;
 }
 /* Light twin — site's `[data-md-color-scheme="default"] .sc-kit__equip`
    (steel-kit.css:65). Same `body.theme-light [data-dse-theme='steel']
