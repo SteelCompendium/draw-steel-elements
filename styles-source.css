@@ -5079,7 +5079,32 @@ body.theme-light
 
 /* -- Boxed 5-stat row (Size/Speed/Stamina/Stability/Free Strike): the site's
    .sb__stat framed cell — sunken box + hairline + small-caps label under the
-   already-embossed big value (emboss shared rule above). */
+   already-embossed big value (emboss shared rule above).
+   SC-121 Scott round ("the stat row in a statblock is missing margins between
+   each chip"): the row itself needs the gap too. The base .dse-sb__items
+   (~1822) is Legacy's UNBOXED rhythm — `justify-content: space-around` over
+   `flex: 1 1 0` items, where the separation is optical (centered text inside
+   equal tracks) and a gap would be redundant. Boxing the items here turned
+   that same layout into five bordered tiles sharing edges with zero space
+   between them. The site's equivalent row carries a real gap:
+     .sb__defenses { display:grid; grid-template-columns:repeat(5,1fr); gap:.4rem }
+   (steel-statblock.css:149). Adopted as gap on the flex row — same computed
+   separation, and it leaves the base's space-around/flex sizing alone.
+   Scoped with the box rule it belongs to, so Legacy/print keep the gapless
+   unboxed row byte-for-byte. The `ledger` stats preference flips this row to
+   `display:block` (~1917), where gap is inert — no interaction.
+   Swept for the same defect elsewhere; this row was the only one. The other
+   repeated-cell rows either already carry a gap — .dse-sb__grid (0.5rem,
+   ~5057), .dse-fb__stats (column-gap 1.5em, ~1977; Steel never boxes its
+   cells), .dse-tiles (0.35em, ~6270, the kit stat-tile primitive) — or box
+   the WHOLE strip rather than each cell, so no two borders ever meet:
+   .dse-sb__chars gets one border around the row and its .dse-sb__char cells
+   carry padding only (~5092). Encounter/featureblock heads box no repeated
+   sibling at all. .dse-sb__chars is in fact the only other space-around row
+   in the sheet, and it is the strip case. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__items {
+	gap: 0.4rem;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item {
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);

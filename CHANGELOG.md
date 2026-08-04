@@ -313,6 +313,12 @@ for what needs action.
   narrow — in a sidebar, for instance. The table now sits in its own scrolling
   frame, so it stays inside the card and you can swipe/scroll across it. At full
   width nothing changes (SC-121).
+- [STEEL] The statblock's Size / Speed / Stamina / Stability / Free Strike row
+  has gaps between its tiles again. Steel gives each of those five stats its own
+  bordered box, but the row underneath was still Legacy's unboxed layout, which
+  spaced the stats optically rather than with a real gap — so the boxes rendered
+  edge to edge as one undivided strip. The row now uses the same gap the website
+  puts between the same five tiles (SC-121).
 - [STEEL] On ability and feature cards, the action type sits at the right end of
   the keyword line, the way the website lays it out. The rebuilt keyword band
   (above) packed the type chip immediately after the keywords instead; it is now
