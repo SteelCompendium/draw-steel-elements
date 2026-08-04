@@ -4084,14 +4084,49 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    --dse-act alias (renderFeature.ts:168-169 sets data-dse-act +
    `--dse-act: var(--dse-act-<type>)`; --dse-act-* lit in the Steel block above),
    and it inherits down to the crest glyph. The shield itself stays brushed
-   metal (unchanged --dse-metal-grad). Fallback --dse-metal so a crest with NO
+   metal (unchanged --dse-metal-grad). The fallback covers a crest with NO
    action type (a statblock/featureblock role crest — the site does NOT
-   accent-tint those) shows brushed metal rather than a stray colour: --dse-act
-   is set ONLY inline on feature roots, so it is undefined in the statblock/
-   featureblock crest context and the fallback fires. SCREEN-ONLY, print frozen
-   (SC-4) — Legacy leaves the glyph the base --dse-fg-muted (below, ~4638). */
+   accent-tint those): --dse-act is set ONLY inline on feature roots, so it is
+   undefined in the statblock/featureblock crest context and the fallback fires.
+   SC-121 Scott round: the fallback is --dse-metal-BRIGHT, not --dse-metal. The
+   site's un-tinted crest ink is `.sc-crest .twemoji, .sc-crest svg { color:
+   var(--fx-metal-bright) }` (steel-redesign.css:52) — the ink grade that reads
+   AGAINST the shield's inner face, one step up from --fx-metal (the flat body
+   grade used for eyebrows/labels). With the face now correctly scheme-following
+   (below), --dse-metal was the dimmer of the two everywhere and made role
+   crests read washed-out next to the site's. SCREEN-ONLY, print frozen (SC-4)
+   — Legacy leaves the glyph the base --dse-fg-muted (below, ~4638). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest__glyph {
-	color: var(--dse-act, var(--dse-metal));
+	color: var(--dse-act, var(--dse-metal-bright));
+}
+
+/* -- Crest INNER FACE (SC-121 Scott round: "the dark theme crest is too bright
+   and the light-theme is too dark") --
+   The base rule (~6232) paints the shield's inset face with --dse-metal-line.
+   That token is the site's --fx-metal-LINE: a hairline/rule colour, which by
+   construction runs OPPOSITE the scheme (light rgba(176,183,187,.5) on dark,
+   dark rgba(95,103,108,.45) on light) so a 1px rule stays visible against the
+   ground. Used as a FACE it inverts the whole shield: Steel dark got a pale
+   wash over the bright --dse-metal-grad rim (a near-white shield), Steel light
+   got a dark wash over its darker rim (a near-black shield) — exactly Scott's
+   two complaints, and the reason it reads as "flipped".
+   The site never used a token here at all: it hardcodes a per-scheme radial
+   face on .sc-crest::before that FOLLOWS the scheme (dark face on dark, light
+   face on light) so only the rim gradient carries the metal contrast —
+     steel-redesign.css:45  radial-gradient(circle at 42% 30%, #2b3137, #14181b)
+     steel-redesign.css:53  radial-gradient(circle at 42% 30%, #f6f8f8, #dfe4e5)
+   Adopted verbatim, as literals, for the same reason .dse-sb__chars' strip
+   gradient (~5074) is a literal: there is no site token to key off. Both crest
+   SIZES and every crest SURFACE (statblock head, kit head, featureblock role,
+   ability action) come from the one .dse-crest primitive (src/framework/kit/
+   crest.ts) — nothing hardcodes a face of its own, so these two rules move all
+   of them. SCREEN-ONLY: print keeps --dse-metal-line (= `none` there), so
+   *--steel-print.png is frozen (SC-4), and Legacy hides the crest outright. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest::before {
+	background: radial-gradient(circle at 42% 30%, #2b3137, #14181b);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest::before {
+	background: radial-gradient(circle at 42% 30%, #f6f8f8, #dfe4e5);
 }
 
 /* Per-option glyph show-override (SC-10 Task 5): the site's fb__feat-icon twin
@@ -6228,7 +6263,10 @@ button.dse-pr__row:hover {
 	height: 3.4em;
 }
 /* The shield's inner face/rim (the site's .sc-crest::before inset), keyed to
-   --dse-metal-line (Legacy: none). */
+   --dse-metal-line (Legacy AND print: none — so this declaration is inert in
+   every frozen shot). Steel/screen replaces it with the site's per-scheme
+   radial face (SC-121 Scott round, ~4104) — --dse-metal-line was the wrong
+   token for a face and inverted the shield per scheme; see that comment. */
 .dse-crest::before {
 	content: '';
 	position: absolute;

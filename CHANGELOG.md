@@ -313,6 +313,16 @@ for what needs action.
   narrow — in a sidebar, for instance. The table now sits in its own scrolling
   frame, so it stays inside the card and you can swipe/scroll across it. At full
   width nothing changes (SC-121).
+- [STEEL] The heraldic crest shields read correctly in both color schemes. The
+  shield's inner face was painted with the hairline/rule color, which by design
+  runs opposite the scheme — so the face inverted: under the dark scheme the
+  crest came out a pale, near-white shield, and under the light scheme a dark,
+  near-black one. Both now use the website's own per-scheme crest face (a dark
+  face on dark, a light face on light, with the polished-metal rim carrying the
+  contrast), and the crest's un-tinted glyph uses the site's brighter ink grade.
+  This moves every crest at once — statblock headers, kit headers, featureblock
+  role crests and ability action crests all come from one shield primitive
+  (SC-121).
 - [BUGFIX] The hero sheet folds to one column in a sidebar. Its two-column
   region grid was supposed to fold to a single column when the sheet gets
   narrow, but the rule was attached to the grid itself — an element can't
