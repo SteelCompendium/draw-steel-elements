@@ -52,11 +52,14 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 
 const FONT_SLOT_CASES = [
 	// [key, varName, fallback tail, advanced?]
+	// I1: the three chained tails carry a nested var(--font-text) fallback so an
+	// inline override survives on Legacy roots where the parent slot token is
+	// IACVT-dead (fontStacks.ts has the full story + its own regression gate).
 	['fontTitle', '--dse-font-title', 'var(--font-text)', false],
 	['fontBody', '--dse-font-body', 'var(--font-text)', false],
-	['fontControls', '--dse-font-controls', 'var(--dse-font-body)', false],
-	['fontCardBody', '--dse-font-card-body', 'var(--dse-font-body)', true],
-	['fontLabel', '--dse-font-label', 'var(--dse-font-title)', true],
+	['fontControls', '--dse-font-controls', 'var(--dse-font-body, var(--font-text))', false],
+	['fontCardBody', '--dse-font-card-body', 'var(--dse-font-body, var(--font-text))', true],
+	['fontLabel', '--dse-font-label', 'var(--dse-font-title, var(--font-text))', true],
 	['fontMono', '--dse-font-mono', 'var(--font-monospace)', true],
 ] as const;
 

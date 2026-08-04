@@ -16,6 +16,15 @@
 // the three chained slots (Controls/Card-body → Body, Label → Title) fall back to
 // their PARENT SLOT token — so overriding Body alone still carries Controls and
 // Card-body with it, exactly like the default chains do.
+//
+// SC-112 final-review I1: the three chained tails carry a NESTED var() fallback to
+// --font-text. Without it, an inline override on a LEGACY root silently no-ops
+// unless the parent slot is also set: Legacy's --dse-font-body/--dse-font-title
+// live only in the (IACVT-dead) :root chain set — the Task 3 root cause — so the
+// bare var() is invalid at computed-value time and one invalid var() invalidates
+// the WHOLE inline font-family. With the fallback, the chain degrades to the vault
+// font instead of dying; under Steel (block-scoped chains valid) and under
+// Legacy-with-parent-set the extra fallback never fires, so behavior is unchanged.
 
 /** The six font slots, keyed to their pref (`font<Slot>`) and token (`--dse-font-<slot>`). */
 export type FontSlot = 'title' | 'body' | 'controls' | 'cardBody' | 'label' | 'mono';
@@ -24,9 +33,9 @@ export type FontSlot = 'title' | 'body' | 'controls' | 'cardBody' | 'label' | 'm
 const SLOT_FALLBACK: Record<FontSlot, string> = {
 	title: 'var(--font-text)',
 	body: 'var(--font-text)',
-	controls: 'var(--dse-font-body)',
-	cardBody: 'var(--dse-font-body)',
-	label: 'var(--dse-font-title)',
+	controls: 'var(--dse-font-body, var(--font-text))',
+	cardBody: 'var(--dse-font-body, var(--font-text))',
+	label: 'var(--dse-font-title, var(--font-text))',
 	mono: 'var(--font-monospace)',
 };
 

@@ -63,13 +63,31 @@ describe('fontCss — sanitized family + the slot\'s §5 fallback tail', () => {
 	test.each<[FontSlot, string]>([
 		['title', 'var(--font-text)'],
 		['body', 'var(--font-text)'],
-		['controls', 'var(--dse-font-body)'],
-		['cardBody', 'var(--dse-font-body)'],
-		['label', 'var(--dse-font-title)'],
+		['controls', 'var(--dse-font-body, var(--font-text))'],
+		['cardBody', 'var(--dse-font-body, var(--font-text))'],
+		['label', 'var(--dse-font-title, var(--font-text))'],
 		['mono', 'var(--font-monospace)'],
 	])('slot %s → "<family>", %s', (slot, tail) => {
 		expect(fontCss(slot, 'Georgia')).toBe(`"Georgia", ${tail}`);
 	});
+
+	// SC-112 final-review I1 regression gate. The three chained slots' tails MUST
+	// carry a nested var() fallback to --font-text: on a Legacy root the parent
+	// slot token only exists in the IACVT-dead :root chain set, so a BARE
+	// var(--dse-font-body|title) is invalid at computed-value time — and one
+	// invalid var() invalidates the whole inline font-family, silently dropping
+	// the user's pick. jsdom cannot resolve var() chains, so the fontCss OUTPUT
+	// STRING is the source of truth this gate pins (string-level is the right
+	// altitude; the reviewer's Chromium repro validated the computed behavior).
+	test.each<FontSlot>(['controls', 'cardBody', 'label'])(
+		'chained slot %s: tail degrades via a nested var() fallback (never a bare parent-token var)',
+		(slot) => {
+			const out = fontCss(slot, 'Georgia')!;
+			expect(out).toMatch(/var\(--dse-font-(body|title), var\(--font-text\)\)$/);
+			// Belt: the parent token never appears WITHOUT its fallback.
+			expect(out).not.toMatch(/var\(--dse-font-(body|title)\)/);
+		},
+	);
 
 	test('a family that sanitizes away yields null (treated as default)', () => {
 		expect(fontCss('title', '')).toBeNull();
