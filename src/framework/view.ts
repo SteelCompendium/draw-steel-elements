@@ -16,6 +16,7 @@
 import { Component, MarkdownRenderer } from 'obsidian';
 import type { RenderContext } from './context';
 import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
+import { wrapMarkdownTables } from './mdTableWrap';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -109,10 +110,16 @@ export abstract class ElementView<M> extends Component {
 	 * cover it — this call is async and fire-and-forget from the caller's perspective,
 	 * so the anchors don't exist yet when that synchronous post-processor runs. No-ops
 	 * when cx.sccAnchors isn't wired (bare test/harness contexts).
+	 *
+	 * SC-121 Batch 4 (batch-3 review L-5): the same seam also wraps bare markdown tables
+	 * in a `.dse-md-table` horizontal scroll container (mdTableWrap.ts) — the plugin's
+	 * equivalent of the site's Material `.md-typeset__table`, without which a wide book
+	 * table overflows its card unreachably at sidebar width.
 	 */
 	protected async renderMarkdown(markdown: string, el: HTMLElement): Promise<void> {
 		await MarkdownRenderer.render(this.cx.app, markdown, el, this.cx.host.sourcePath, this);
 		if (this.cx.sccAnchors) rewriteSccAnchors(el, this.cx.sccAnchors);
+		wrapMarkdownTables(el);
 	}
 
 	/**

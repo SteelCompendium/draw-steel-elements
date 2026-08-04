@@ -5320,15 +5320,33 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
    and `perk--steel-print.png` render this exact table and are frozen
    byte-for-byte. A Legacy-theme reader, and anyone exporting to PDF/print, still
    sees the unstyled table. Freeze-widening candidate, same list as A-3/B-3. */
+/* SC-121 Batch 4 (batch-3 review L-5): the FRAME (margin + hairline + radius) lives on the
+   `.dse-md-table` wrapper the render seam inserts (src/framework/mdTableWrap.ts), not on
+   the table, and the wrapper scrolls horizontally. This is the plugin's equivalent of the
+   site's Material `.md-typeset__table { display: block; overflow-x: auto }`, which C-6's
+   port silently assumed: without it, `overflow: hidden` on the table alone did NOT clip
+   (the table box just grows to its min-content width) — a 5-column book table measured
+   467px wide inside a 254px card body at Obsidian sidebar width, spilling past the card's
+   own border with no way to reach the last two columns. `overflow-y: hidden` keeps the pair
+   from computing back to `visible` and never scrolls vertically (row height is content). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-md-table {
+	margin: 0.5em 0;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+/* `width: 100%` is doing double duty and is why the table keeps `display: table`: it
+   STRETCHES a short table to the wrapper's width (the pre-L-5 look, preserved), and is
+   simply outgrown by a table whose min-content is wider — which is exactly the overflow the
+   wrapper now scrolls. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) table:not([class]) {
 	display: table;
 	width: 100%;
-	margin: 0.5em 0;
+	margin: 0;
 	border-collapse: separate;
 	border-spacing: 0;
-	border: 1px solid var(--dse-border);
-	border-radius: var(--dse-radius);
-	overflow: hidden;
+	border: none;
 	font-size: 0.92em;
 	line-height: 1.5;
 }
