@@ -5137,6 +5137,48 @@ body.theme-light
 	border-bottom: 1px solid color-mix(in srgb, var(--dse-role) 38%, transparent);
 }
 
+/* -- Statblock diamond notch (SC-103): the legacy ◆ divider (kit/divider.ts) mounts as a
+   flat DOM sibling AFTER .dse-sb__chars (statblock/view.ts:272) — a real node, unconditional
+   across every theme, asserted by three tests (statblock.test.ts, divider.test.ts,
+   kit-index.test.ts). D4: it cannot be moved or removed in TS without breaking Legacy and
+   those tests, so it stays mounted and Steel hides it here, painting the site's notch
+   (steel-statblock.css:97-103) as a ::after on the head band instead. S-2(a) (full site
+   fidelity): 9px, role-hued, no flanking lines, and — since the site draws no
+   chars/features divider at all — nothing else replaces it; the Steel gutter rule
+   (~:4979-4983) and the framed feature cards carry the section break instead.
+   Scoped EXACTLY to `.dse-sb > .dse-hr` — never bare `.dse-hr`, which is a shared kit
+   primitive also used by the featureblock (featureblock/view.ts:133), the condition list
+   (~:1359) and ds-horizontal-rule, all with their own frozen shots. */
+[data-dse-theme='steel'] .dse-sb > .dse-hr {
+	display: none;
+}
+/* Structure tier (S-1(a), print follows structure): "which node draws what" — the notch's
+   PLACEMENT reaches print, so this is a SEPARATE twin from the band rule above, which stays
+   `:not([data-dse-print="on"])` because its background/border are material. `position:
+   relative` has to live on this twin too, since the ::after anchors to it. --dse-surface
+   stands in for the site's --sb-plate-solid — the same substitution the band rule documents
+   above (~:5000-5007). */
+[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head {
+	position: relative;
+}
+[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	width: 9px;
+	height: 9px;
+	transform: translate(-50%, 50%) rotate(45deg);
+	background: var(--dse-role);
+	/* SUPPORT-FLOOR FALLBACK (SC-121 M-1) — same discipline as the band rule above: a flat
+	   halo (both rings solid --dse-role) for pre-111 engines, then the color-mix()-enhanced
+	   halo for the rest. Pre-111 engines lose only the outer ring's 40% hue mix. */
+	box-shadow: 0 0 0 4px var(--dse-surface), 0 0 0 5px var(--dse-role);
+	box-shadow:
+		0 0 0 4px var(--dse-surface),
+		0 0 0 5px color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface));
+}
+
 /* -- Featureblock header band (SC-10 Task 5): the SAME recipe as the statblock
    band above, but UNCONDITIONAL — most featureblocks (malice/terrain/fixture
    blocks) never map a combat role at all (roleTint's vocabulary is combat

@@ -259,6 +259,90 @@ describe('Steel material contract', () => {
 		});
 	});
 
+	describe('statblock notch (SC-103)', () => {
+		// D4: the ◆ divider (kit/divider.ts) is a real DOM node mounted unconditionally by
+		// statblock/view.ts:272 and asserted by three other test files (statblock.test.ts,
+		// kit/divider.test.ts, kit/kit-index.test.ts). It cannot move in TS without breaking
+		// Legacy, so Steel hides the node here and paints the site's role-hued notch
+		// (steel-statblock.css:97-103) as a ::after on the head band instead.
+
+		it('suppresses .dse-hr EXACTLY under .dse-sb, and nowhere else in the sheet', () => {
+			// A whole-file scan (not merely a Steel-scoped one) so a stray legacy/global
+			// suppression — which would break the three divider-asserting test files — fails
+			// this test too, not just the wrong one.
+			const suppressions = rules.filter(
+				(r) => /display:\s*none\s*;/.test(r.body) && /\.dse-hr\b/.test(r.selector),
+			);
+			expect(suppressions).toHaveLength(1);
+			const [rule] = suppressions;
+			expect(rule.selector.replace(/\s+/g, ' ').trim()).toBe(
+				"[data-dse-theme='steel'] .dse-sb > .dse-hr",
+			);
+			expect(STEEL_SCOPE.test(rule.selector)).toBe(true);
+		});
+
+		it('leaves the shared .dse-hr kit primitive\'s base rule alone — Legacy stays display:flex', () => {
+			const base = rules.find((r) => r.selector.trim() === '.dse-hr');
+			expect(base).toBeDefined();
+			expect(base!.body).toMatch(/display:\s*flex\s*;/);
+		});
+
+		it('gives the head band position:relative on a structure-tier twin (S-1(a): reaches print)', () => {
+			const twin = rules.find(
+				(r) =>
+					r.selector.trim() === "[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head",
+			);
+			expect(twin).toBeDefined();
+			expect(twin!.body).toMatch(/position:\s*relative\s*;/);
+
+			// the pre-existing MATERIAL twin (background/border) keeps its print exclusion —
+			// this notch work must not loosen that rule's tier.
+			const material = rules.find(
+				(r) =>
+					r.selector.trim() ===
+					'[data-dse-theme=\'steel\']:not([data-dse-print="on"]) .dse-sb[data-dse-role] > .dse-head',
+			);
+			expect(material).toBeDefined();
+			expect(material!.body).not.toMatch(/position:\s*relative/);
+		});
+
+		it('paints a 9px role-hued ::after notch, structure tier, under Steel only', () => {
+			const afters = rules.filter((r) => r.selector.includes('.dse-head::after'));
+			expect(afters).toHaveLength(1);
+			const [rule] = afters;
+			expect(rule.selector.replace(/\s+/g, ' ').trim()).toBe(
+				"[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after",
+			);
+			expect(STEEL_SCOPE.test(rule.selector)).toBe(true);
+
+			const body = rule.body;
+			expect(body).toMatch(/content:\s*''\s*;/);
+			expect(body).toMatch(/position:\s*absolute\s*;/);
+			expect(body).toMatch(/width:\s*9px\s*;/);
+			expect(body).toMatch(/height:\s*9px\s*;/);
+			expect(body).toMatch(/rotate\(45deg\)/);
+			// role-hued (S-2(a) full site fidelity) — not the neutral --dse-rule the old
+			// .dse-hr diamond used.
+			expect(body).toMatch(/background:\s*var\(--dse-role\)\s*;/);
+			expect(body).not.toMatch(/var\(--dse-rule\)/);
+		});
+
+		it('the notch halo carries a flat fallback before its color-mix() enhancement (support floor, SC-121 M-1)', () => {
+			const rule = rules.find(
+				(r) =>
+					r.selector.trim() ===
+					"[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after",
+			);
+			expect(rule).toBeDefined();
+			const boxShadows = Array.from(rule!.body.matchAll(/box-shadow:[^;]+;/g)).map((m) => m[0]);
+			expect(boxShadows).toHaveLength(2);
+			expect(boxShadows[0]).not.toMatch(/color-mix/);
+			expect(boxShadows[1]).toMatch(
+				/color-mix\(in srgb, var\(--dse-role\) 40%, var\(--dse-surface\)\)/,
+			);
+		});
+	});
+
 	describe('dead selectors', () => {
 		// `.dse-section__head` is a plan-draft name that never existed in the DOM
 		// (renderFeature.ts emits only `__title` + `__body`). It is named in the CSS prose,
