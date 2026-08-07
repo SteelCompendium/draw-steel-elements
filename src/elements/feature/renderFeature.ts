@@ -57,6 +57,39 @@ function isDashPlaceholder(value: string): boolean {
 	return /^[-–—]+$/.test(value.trim());
 }
 
+/** Markdown link → its display text ("[Villain Action](scc.v1:…)" → "Villain Action").
+ *  Mirrors steel-etl's `mdLinkRe` / `linkText` (ability_cards.go) verbatim. */
+const MD_LINK_RE = /\[([^\]]*)\]\(([^)]*)\)/g;
+
+/**
+ * SC-102 fix round (H-1): the SHIPPED villain signal is `cost`, not `ability_type`.
+ * steel-etl emits every villain action as `cost: "Villain Action N"` + the lone-dash
+ * `usage: "-"` and NO `ability_type` at all (the string `ability_type: Villain` does
+ * not occur anywhere in data-unified; all 156 dash-usage features in the books are
+ * villain-by-cost). The site — the parity reference — keys off exactly this cost
+ * prefix: `sbActionKind` (statblock_page.go) and `fbFeatureAction`
+ * (featureblock_page.go) both do `HasPrefix(lower(trim(linkText(cost))), "villain
+ * action")`, stripping links first because a resolved cost can read
+ * "[Villain Action](scc.v1:…) 3". This is that check, verbatim.
+ *
+ * LEGACY VAULTS (data-unified history, verified): this cost shape arrived with the
+ * 2026-07-16 regen. Compendium content synced BEFORE that carries villain actions as
+ * BODY MARKDOWN only — a `> ☠️ **Name ([Villain Action](scc…) N)**` blockquote callout
+ * with no structured YAML feature at all — so there is nothing here to classify and
+ * nothing to parse: those notes keep rendering as prose, exactly as they do today. No
+ * intermediate shape ever existed (`usage: Villain` / `ability_type: Villain` have zero
+ * hits anywhere in that history), so cost + ability_type cover the whole structured
+ * universe. A compendium re-sync (which 7.0.0 already asks for) brings the structured
+ * shape, and with it the spine and crest.
+ */
+function isVillainCost(cost: string | undefined): boolean {
+	return (cost ?? '')
+		.replace(MD_LINK_RE, '$1')
+		.trim()
+		.toLowerCase()
+		.startsWith('villain action');
+}
+
 export interface RenderFeatureOptions {
 	/** aria-level for the cardHead name heading. Default 3; nested abilities get +1. */
 	headingLevel?: number;
@@ -86,17 +119,26 @@ export interface RenderFeatureOptions {
  *
  * SC-102 root cause: this used `usage ?? ability_type`, but villain actions in the
  * books carry the lone-dash placeholder `usage: "-"` — TRUTHY, so `??` short-circuited
- * and `ability_type: "Villain Action N"` was never read, leaving villain cards with no
- * spine and no crest. A dash-only usage is the book's "no usage line", so it must fall
- * THROUGH to ability_type. Precedence is otherwise untouched: a REAL usage still wins
- * over ability_type, which is why `feature/example.yaml` (`ability_type: Villain Action
- * 1` + `usage: Main action`) deliberately stays `main` and its frozen shots never move.
+ * and the villain descriptor was never read, leaving villain cards with no spine and no
+ * crest. A dash-only usage is the book's "no usage line", so it must fall THROUGH.
+ *
+ * SC-102 fix round (H-1): what it falls through TO is `cost` first (the shipped
+ * steel-etl shape — see isVillainCost above), then `ability_type` (hand-authored notes,
+ * e.g. this element's own example.yaml). Precedence is otherwise untouched: a REAL
+ * usage still wins over both, which is why `feature/example.yaml` (`ability_type:
+ * Villain Action 1` + `usage: Main action`) deliberately stays `main` and its frozen
+ * shots never move.
  */
 export function actionTypeOf(config: FeatureConfig): ActionType | undefined {
 	if (config.feature.isTrait()) return 'trait';
 	const usage = (config.feature.usage ?? '').trim();
-	const usable = usage && !isDashPlaceholder(usage) ? usage : (config.feature.ability_type ?? '');
-	const source = usable.toLowerCase();
+	// L-2: an EMPTY/whitespace usage also falls through here (pre-SC-102 it
+	// short-circuited to undefined); no corpus feature carries one, so no live effect.
+	const realUsage = usage && !isDashPlaceholder(usage) ? usage : '';
+	// H-1: with no real usage line, a "Villain Action N" cost decides — the shape the
+	// pipeline actually emits, and the one the site itself classifies on.
+	if (!realUsage && isVillainCost(config.feature.cost)) return 'villain';
+	const source = (realUsage || (config.feature.ability_type ?? '')).toLowerCase();
 	if (!source) return undefined;
 	// Order matters: "Move action" / "No action" / "Triggered action" / "Villain
 	// Action 1" all contain "action", so the generic main-action match must come

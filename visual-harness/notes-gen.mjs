@@ -158,6 +158,24 @@ fs.writeFileSync(
 );
 console.log(`wrote Harness/${CANVAS_NOTE}.canvas (2 interactive elements in canvas TEXT nodes — read-only quarantine)`);
 
+// SC-102 fix round (task-3 review M-1) — the corpus-shaped villain statblock, so the REAL
+// Obsidian ground truth also renders what steel-etl emits (`cost: Villain Action N` +
+// `usage: '-'`, no ability_type) and not only the plugin's hand-authored `ability_type`
+// shape. Single-sourced with the browser fixture + the DOM catcher:
+// test/fixtures/statblock/villain-corpus.yaml (visual-harness/entry.ts FIXTURES.statblock
+// 'villain-corpus'; test/dom/elements/statblock.test.ts). Harness-only, like the notes
+// above — statblock's example.yaml stays the single-sourced D9 authoring example.
+const VILLAIN_CORPUS_NOTE = 'statblock-villain-corpus';
+const villainCorpusBody = fs.readFileSync(
+	path.join(repo, 'test', 'fixtures', 'statblock', 'villain-corpus.yaml'),
+	'utf8',
+);
+fs.writeFileSync(
+	path.join(outDir, `${VILLAIN_CORPUS_NOTE}.md`),
+	`# ${VILLAIN_CORPUS_NOTE}\n\n\`\`\`${aliases['statblock']}\n${villainCorpusBody.replace(/\n?$/, '\n')}\`\`\`\n`,
+);
+console.log(`wrote Harness/${VILLAIN_CORPUS_NOTE}.md (corpus-shaped villain statblock — cost + dash usage)`);
+
 const BY_SCC_KIT_NOTE = 'by-scc-kit';
 fs.writeFileSync(
 	path.join(outDir, `${BY_SCC_KIT_NOTE}.md`),

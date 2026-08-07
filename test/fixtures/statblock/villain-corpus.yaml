@@ -1,0 +1,75 @@
+# SC-102 fix round (task-3 review M-1) — the CORPUS-SHAPED villain statblock.
+#
+# Every other villain fixture in this repo (src/elements/statblock/example.yaml,
+# human-bandit-chief.yaml, the SettingsPreview embed) writes `ability_type: Villain
+# Action N` — a HAND-AUTHORED shape steel-etl never emits. The pipeline emits
+# `cost: Villain Action N` + the lone-dash `usage: '-'` + `icon: ☠️` and NO
+# ability_type at all; the site's own classifier keys off exactly that cost prefix
+# (statblock_page.go sbActionKind / featureblock_page.go fbFeatureAction). Shape is
+# verbatim from
+# data-unified/en/books/monsters/md-dse/monster/human/statblock/human-bandit-chief.md.
+#
+# A SEPARATE fixture, deliberately NOT an edit to the existing statblock fixtures:
+# adding an ability to those would change the FROZEN statblock--legacy-{dark,light}.png.
+type: statblock
+name: Human Bandit Chief
+level: 3
+role: ""
+organization: Leader
+keywords:
+  - Human
+  - Humanoid
+ev: "20"
+stamina: "120"
+speed: 5
+size: 1M
+stability: 2
+free_strike: 5
+might: 2
+agility: 3
+reason: 2
+intuition: 3
+presence: 2
+features:
+  - type: feature
+    feature_type: ability
+    name: Whip and Magic Longsword
+    icon: 🗡
+    ability_type: Signature Ability
+    keywords:
+      - Magic
+      - Melee
+      - Strike
+      - Weapon
+    usage: Main action
+    distance: Melee 2
+    target: Two enemies or objects
+    effects:
+      - roll: Power Roll + 2
+        tier1: 8 damage; pull 1
+        tier2: 12 damage; pull 2
+        tier3: 15 damage; pull 3
+  - type: feature
+    feature_type: ability
+    name: Shoot!
+    icon: ☠️
+    cost: Villain Action 1
+    keywords:
+      - Area
+    usage: '-'
+    distance: 10 burst
+    target: Each artillery ally in the area
+    effects:
+      - effect: "**Effect:** Each target makes a ranged free strike."
+  - type: feature
+    feature_type: ability
+    name: Form Up!
+    icon: ☠️
+    cost: Villain Action 2
+    keywords:
+      - Area
+    usage: '-'
+    distance: 10 burst
+    target: Each ally in the area
+    effects:
+      - effect: "**Effect:** Each target shifts up to their speed. Additionally, until the end of the encounter, while the bandit chief or any ally is adjacent to a target, they have damage immunity 2."

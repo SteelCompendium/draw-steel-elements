@@ -174,7 +174,22 @@ const SETTINGS_SPECIAL_ID = 'settings';
 // via a fabricated host, but nothing had ever rendered an actual canvas.
 const CANVAS_SPECIAL_ID = 'canvas';
 
+// SC-102 fix round (task-3 review M-1) — EXTRA fixture notes: a generated Harness note that
+// is NOT an element's own example.yaml, but whose mounted element is an ordinary registered
+// element, so it can ride the normal theme×bg sweep below instead of needing its own special
+// capture. `id` names the note AND the output file; `element` is the data-dse-element value
+// to select and wait on. (The by-SCC / sidebar / modal / canvas specials below stay special:
+// each proves a MECHANISM, not a fixture.)
+const EXTRA_NOTES = [
+	// The shape steel-etl actually emits for villain actions — `cost: Villain Action N` +
+	// the lone-dash `usage: '-'`, no ability_type (see notes-gen.mjs and
+	// test/fixtures/statblock/villain-corpus.yaml). Its output names are new, so it cannot
+	// collide with any frozen shot.
+	{ id: 'statblock-villain-corpus', element: 'statblock' },
+];
+
 let elements = Object.keys(aliases).sort();
+let extraNotes = EXTRA_NOTES;
 let genericSidebarIds = GENERIC_SIDEBAR_IDS;
 let modalShots = MODAL_SHOTS;
 let onlySpecial = false;
@@ -186,7 +201,12 @@ let onlyCanvas = false;
 if (args.element) {
 	const sidebarMatch = GENERIC_SIDEBAR_IDS.find((id) => args.element === `sidebar-${id}`);
 	const modalMatch = MODAL_SHOTS.find((m) => m.id === args.element);
-	if (args.element === SPECIAL_NOTE.id) {
+	const extraMatch = EXTRA_NOTES.find((n) => n.id === args.element);
+	extraNotes = [];
+	if (extraMatch) {
+		elements = [];
+		extraNotes = [extraMatch];
+	} else if (args.element === SPECIAL_NOTE.id) {
 		elements = [];
 		onlySpecial = true;
 	} else if (args.element === SIDEBAR_SPECIAL_ID) {
@@ -237,9 +257,13 @@ if (args.bg) {
 }
 const combos = themes.flatMap((theme) => bgs.map((bg) => ({ theme, bg })));
 
+// Every note the theme×bg sweep opens: one per registered element (note name = element id)
+// plus the EXTRA_NOTES entries (note name != element id).
+const noteTargets = [...elements.map((id) => ({ id, element: id })), ...extraNotes];
+
 // The Harness notes are generated (notes-gen.mjs) and the vault loads the plugin via a
 // symlink to this repo's build output — both must exist before launching Obsidian.
-for (const id of elements) {
+for (const { id } of noteTargets) {
 	const note = path.join(vaultPath, 'Harness', `${id}.md`);
 	if (!fs.existsSync(note)) {
 		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
@@ -641,10 +665,12 @@ async function main() {
 			);
 		};
 
-		for (const id of elements) {
+		for (const { id, element } of noteTargets) {
 			// Element roots carry data-dse-element="<def.id>" (stamped by the pipeline);
 			// scoping the selector to the id kills any race with the previous note's DOM.
-			const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${id}"]')`;
+			// `id` names the NOTE and the output file, `element` the mounted element — the
+			// two differ only for EXTRA_NOTES entries.
+			const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${element}"]')`;
 			let openErr = null;
 			try {
 				await evaluate(
@@ -671,7 +697,7 @@ async function main() {
 						const r = el.getBoundingClientRect();
 						return r.width > 0 && r.height > 0;
 					})()`,
-					{ what: `rendered [data-dse-element="${id}"] in Harness/${id}.md` },
+					{ what: `rendered [data-dse-element="${element}"] in Harness/${id}.md` },
 				);
 				await sleep(500); // settle: fonts/images/late layout
 			} catch (e) {
@@ -1335,7 +1361,7 @@ async function main() {
 		process.exit(1);
 	}
 	const total =
-		elements.length * combos.length +
+		noteTargets.length * combos.length +
 		(runSpecial ? 1 : 0) +
 		(runSidebarSpecial ? 2 : 0) +
 		(runGenericSidebar ? genericSidebarIds.length : 0) +

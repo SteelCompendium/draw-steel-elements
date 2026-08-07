@@ -3398,8 +3398,12 @@ Shared globals
 	   statblock rule for .sb__feat[data-action="villain"] hard-codes --act:
 	   #e0584b (steel-statblock.css) and its featureblock twin chains
 	   --sc-role-controller, which IS #e0584b — so the dark value is that
-	   literal, verbatim. NB no braces anywhere in this comment: the token-guard
-	   tests slice each value block with a brace-terminated body regex. */
+	   literal, verbatim. It is also SCHEME-INVARIANT site-side, so this token is
+	   light/dark-stable here too: no light override, same treatment as
+	   --dse-role-controller which carries the same hue. Print alone darkens it
+	   (see the Steel print twins) — a paper ink-economy call, not a site value.
+	   NB no braces anywhere in this comment: the token-guard tests slice each
+	   value block with a brace-terminated body regex. */
 	--dse-act-villain: #e0584b;
 }
 
@@ -5919,9 +5923,11 @@ body.theme-light
 	--dse-act-move: #b9770e;
 	--dse-act-none: #5a6368;
 	--dse-act-trait: #7d3c98;
-	/* SC-102 (S-3b): darkened light twin of #e0584b, following the same
-	   act-family convention as act-main #e74c3c → #c0392b. */
-	--dse-act-villain: #b03a2e;
+	/* SC-102: act-villain is deliberately NOT re-listed here — it is
+	   light/dark-STABLE, exactly like --dse-role-controller, which carries the
+	   identical #e0584b hue. The act family's light values are verbatim copies of
+	   the site's light --sc-act-* column, and the site has no light villain value
+	   to copy: its villain red is a scheme-invariant literal. */
 }
 
 /* ================================================================== */
@@ -6731,7 +6737,10 @@ button.dse-pr__row:hover {
 
 /* -- STEEL-composed print semantics: act spines darken; role spines keep the
       Steel hue (= Steel exact, so no override). Scoped to Steel so a Legacy
-      print never gains a colored spine (map caveat). -- */
+      print never gains a colored spine (map caveat). SC-102: act-villain's
+      #b03a2e is the ONE print twin with no site value behind it (the site's
+      villain red is scheme-invariant) — a deliberate ink-economy darkening for
+      paper, which is why it appears here but NOT in the Steel light block. -- */
 @media print {
 	:is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 		--dse-act-main: #c0392b;

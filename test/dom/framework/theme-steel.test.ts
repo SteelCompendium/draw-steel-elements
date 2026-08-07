@@ -20,6 +20,8 @@ const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css')
 
 /** Declared value of --dse-<name> in the unscoped :root Legacy base (or undefined). */
 function baseValue(name: string): string | undefined {
+	// FOOTGUN: `[^}]*` stops at the FIRST brace, so a CSS COMMENT containing `{` or `}`
+	// inside any token block silently truncates that block's body (values → undefined).
 	for (const block of sheet.matchAll(/:root\s*\{([^}]*)\}/g)) {
 		const m = block[1].match(new RegExp(`(?:^|[\\s{;])--dse-${name}\\s*:\\s*([^;]+);`));
 		if (m) return m[1].trim();
@@ -178,7 +180,8 @@ const STEEL_DARK: Record<string, string> = {
 	'act-none': 'var(--sc-act-none, #cdd1d4)',
 	'act-trait': 'var(--sc-act-trait, #bb8fce)',
 	// SC-102: no --sc-act-villain exists site-side — the site hard-codes #e0584b
-	// (= --sc-role-controller), so the plugin carries the literal.
+	// (= --sc-role-controller), so the plugin carries the literal. Scheme-invariant
+	// site-side, hence light-stable here too (STEEL_LIGHT_STABLE below).
 	'act-villain': '#e0584b',
 };
 
@@ -372,8 +375,7 @@ const STEEL_LIGHT: Record<string, string> = {
 	'act-move': '#b9770e',
 	'act-none': '#5a6368',
 	'act-trait': '#7d3c98',
-	// SC-102: darkened light twin of the site's #e0584b (family convention).
-	'act-villain': '#b03a2e',
+	// SC-102: act-villain is NOT here — see STEEL_LIGHT_STABLE below.
 };
 
 /**
@@ -385,6 +387,12 @@ const STEEL_LIGHT_STABLE = [
 	'role-ambusher', 'role-harrier', 'role-artillery', 'role-brute', 'role-controller',
 	'role-hexer', 'role-mount', 'role-support', 'role-defender', 'role-leader',
 	'role-solo', 'role-minion',
+	// SC-102: the seventh act spine is the one act token that does NOT shift for
+	// light — the act family's light column is a verbatim copy of the site's light
+	// --sc-act-* values, and the site has no light villain value to copy: its
+	// villain red is the scheme-invariant literal #e0584b, the same hue (and the
+	// same treatment) as role-controller two lines up. Print still darkens it.
+	'act-villain',
 	// stamina fills + crit + encounter markers + select: fills, no contrast pressure
 	'stamina-healthy', 'stamina-winded', 'stamina-dying', 'stamina-temp',
 	'tier-crit', 'turn-done', 'malice', 'vp', 'warn', 'danger', 'select',
@@ -416,13 +424,14 @@ describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])
 		}
 	});
 
-	test('the light block overrides EXACTLY the shifting tokens (35) — none extra, none twice', () => {
+	test('the light block overrides EXACTLY the shifting tokens (34) — none extra, none twice', () => {
 		const defs = steelLightDefinitions();
 		expect(new Set(defs)).toEqual(new Set(Object.keys(STEEL_LIGHT)));
-		// SC-10: badge-fg no longer light-overridden; Plan 20: +metal/-bright/sheen;
-		// SC-102: +act-villain (34 → 35).
-		expect(defs.length).toBe(35);
-		expect(Object.keys(STEEL_LIGHT).length).toBe(35);
+		// SC-10: badge-fg no longer light-overridden; Plan 20: +metal/-bright/sheen.
+		// SC-102 fix round (review M-2): act-villain is light-STABLE, so it never
+		// entered this block — the count is unchanged at 34.
+		expect(defs.length).toBe(34);
+		expect(Object.keys(STEEL_LIGHT).length).toBe(34);
 		const seen = new Set<string>();
 		expect(defs.filter((n) => (seen.has(n) ? true : (seen.add(n), false)))).toEqual([]);
 	});

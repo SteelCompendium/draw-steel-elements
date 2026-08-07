@@ -563,6 +563,71 @@ keywords:
 		expect(card.style.getPropertyValue('--dse-act')).toBe('');
 	});
 
+	// ---- SC-102 fix round (review H-1): the SHIPPED signal is `cost` -------------
+	//
+	// steel-etl emits villain actions as `cost: "Villain Action N"` + `usage: '-'`
+	// with NO ability_type at all — the plugin's ability_type-only derivation was a
+	// no-op on every generated statblock. The site's own classifier keys off exactly
+	// this cost prefix (statblock_page.go sbActionKind / featureblock_page.go
+	// fbFeatureAction), links stripped first.
+	test('[data-dse-act]: SC-102/H-1 — a "Villain Action N" COST with a dash usage and NO ability_type maps to "villain" (+ skull crest)', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: Shoot!',
+			'cost: Villain Action 1',
+			'usage: "-"',
+			'distance: 10 burst',
+			'target: Each artillery ally in the area',
+		].join('\n');
+		const { root } = await renderBlock(source);
+
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.getAttribute('data-dse-act')).toBe('villain');
+		expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-villain)');
+		expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('skull');
+	});
+
+	test('[data-dse-act]: SC-102/H-1 — a LINKIFIED villain cost ("[Villain Action](scc.v1:…) 3") still matches (links stripped, like the site)', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: Lead From the Front',
+			'cost: "[Villain Action](scc.v1:mcdm.monsters.v1/rule/villain-action) 3"',
+			'usage: "-"',
+		].join('\n');
+		const { root } = await renderBlock(source);
+
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.getAttribute('data-dse-act')).toBe('villain');
+	});
+
+	test('[data-dse-act]: SC-102/H-1 — an ordinary cost ("2 Malice") is NOT a villain signal, even on the fall-through path', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: X',
+			'cost: 2 Malice',
+			'usage: "-"',
+		].join('\n');
+		const { root } = await renderBlock(source);
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.hasAttribute('data-dse-act')).toBe(false);
+		expect(card.style.getPropertyValue('--dse-act')).toBe('');
+	});
+
+	test('[data-dse-act]: SC-102/H-1 — precedence unchanged: a REAL usage still wins over a villain cost', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: X',
+			'cost: Villain Action 1',
+			'usage: Main action',
+		].join('\n');
+		const { root } = await renderBlock(source);
+		expect(root.querySelector('.dse-feature')!.getAttribute('data-dse-act')).toBe('main');
+	});
+
 	test('[data-dse-act]: a trait (feature_type: trait) maps to "trait"', async () => {
 		const { root } = await renderBlock(NESTED);
 		expect(root.querySelector('.dse-feature')!.getAttribute('data-dse-act')).toBe('trait');

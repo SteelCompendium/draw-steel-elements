@@ -43,6 +43,10 @@ import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import humanBanditChief from '../../fixtures/statblock/human-bandit-chief.yaml';
+// SC-102 fix round (task-3 review M-1/H-1): the shape steel-etl actually emits. Shared
+// verbatim with the visual harness (visual-harness/entry.ts FIXTURES.statblock
+// 'villain-corpus'), so the DOM catcher below and the shots render the same bytes.
+import statblockVillainCorpus from '../../fixtures/statblock/villain-corpus.yaml';
 
 const SB_ALIASES = ['ds-sb', 'ds-statblock'] as const;
 
@@ -425,6 +429,42 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 			expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-villain)');
 			expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('skull');
 		}
+	});
+
+	// SC-102 fix round — THE H-1 CATCHER. The test above renders the plugin's
+	// hand-authored `ability_type: Villain Action N` shape; steel-etl emits something
+	// else entirely: `cost: Villain Action N` + the lone-dash `usage: '-'` and NO
+	// ability_type (the string "ability_type: Villain" occurs ZERO times in the whole
+	// shipped corpus; all 156 dash-usage features are villain-by-cost). With only the
+	// ability_type path implemented, SC-102 was a no-op on every generated statblock
+	// while the suite and every screenshot showed it working. This test renders the
+	// corpus shape, so that can never silently recur.
+	test('SC-102 (H-1): the CORPUS shape — cost + dash usage, no ability_type — maps to villain + skull', async () => {
+		// Pin the fixture's own shape first, so this test cannot stop being the catcher:
+		// a villain COST, a lone-dash usage, and NOT ONE ability_type villain descriptor.
+		expect(statblockVillainCorpus).toMatch(/^\s+cost: Villain Action 1$/m);
+		expect(statblockVillainCorpus).toMatch(/^\s+usage: '-'$/m);
+		// (anchored: the fixture's own header COMMENT names the shape it is not)
+		expect(statblockVillainCorpus).not.toMatch(/^\s*ability_type:.*[Vv]illain/m);
+
+		const { root } = await renderStatblock(statblockVillainCorpus);
+
+		const villains = Array.from(
+			root.querySelectorAll<HTMLElement>('.dse-feature[data-dse-act="villain"]'),
+		);
+		expect(villains.map((el) => el.querySelector('.dse-head__primary--left')!.textContent)).toEqual([
+			'Shoot!',
+			'Form Up!',
+		]);
+		for (const card of villains) {
+			expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-villain)');
+			expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('skull');
+		}
+		// …and the ordinary Main-action ability in the same statblock is untouched.
+		const main = root.querySelector<HTMLElement>('.dse-feature[data-dse-act="main"]')!;
+		expect(main.querySelector('.dse-head__primary--left')!.textContent).toBe(
+			'Whip and Magic Longsword',
+		);
 	});
 
 	test('no features -> no divider and no feature list; head + meta + chars still render', async () => {

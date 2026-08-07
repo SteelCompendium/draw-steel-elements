@@ -89,6 +89,8 @@ describe('D3 Task 1: token reconciliation map covers the DSE_TOKEN_NAMES union',
 
 const styleSheet = fs.readFileSync(path.join(repoRoot, 'styles-source.css'), 'utf8');
 
+// FOOTGUN (shared by every block regex below): `[^}]*` stops at the FIRST brace, so a CSS
+// COMMENT containing `{` or `}` inside a token block silently truncates that block's body.
 /** All --dse-* definitions inside the given block body. */
 function defsIn(body: string): string[] {
 	const defs: string[] = [];

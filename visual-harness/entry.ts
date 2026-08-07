@@ -64,6 +64,19 @@ import complicationDefault from '../src/elements/display/complication/example.ya
 // reference-only, raw-markdown inline fallback per OD-D6-7).
 import ruleDefault from '../src/elements/display/rule/example.yaml';
 
+// SC-102 fix round (task-3 review M-1): the CORPUS-SHAPED villain statblock — the shape
+// steel-etl ACTUALLY emits (`cost: Villain Action N` + the lone-dash `usage: '-'` + no
+// `ability_type`), as opposed to the hand-authored `ability_type: Villain Action N` every
+// other villain fixture here carries. Before the fix round the villain action type was a
+// NO-OP on all 156 shipped villain actions while the suite showed it working; this fixture
+// makes the sweep forever render what the pipeline emits. Single-sourced with
+// statblock.test.ts's DOM catcher (both import this same file). Deliberately a SEPARATE
+// fixture rather than an edit to the existing statblock fixtures: adding an ability to
+// those would change the FROZEN statblock--legacy-{dark,light}.png. Its own shots
+// (`statblock-villain-corpus--*`) are new filenames — invisible to the freeze baseline by
+// construction (sha256sum -c only checks names it lists), widen-eligible later.
+import statblockVillainCorpus from '../test/fixtures/statblock/villain-corpus.yaml';
+
 // SC-108 / FOLLOWUPS #37 (design recon 2026-08-02): a second, harness-local fixture for
 // featureblock's advancement-band gate (view.ts's `run.level > 0` branch), which had never
 // been rendered by any fixture. Verbatim from test/dom/elements/featureblock.test.ts's
@@ -207,7 +220,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	rule: { default: ruleDefault },
 	skills: { default: skillsDefault },
 	'stamina-bar': { default: staminaBarDefault },
-	statblock: { default: statblockDefault },
+	statblock: { default: statblockDefault, 'villain-corpus': statblockVillainCorpus },
 	surges: { default: surgesDefault },
 	title: { default: titleDefault },
 	treasure: { default: treasureDefault },

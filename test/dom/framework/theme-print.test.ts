@@ -25,6 +25,8 @@ const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css')
 
 /** Body of the NEUTRAL preview twin `[data-dse-element][data-dse-print="on"]`. */
 function printNeutralBody(): string {
+	// FOOTGUN: `[^}]*` stops at the FIRST brace, so a CSS COMMENT containing `{` or `}`
+	// inside any token block silently truncates that block's body (values → undefined).
 	const m = sheet.match(
 		/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
 	);
@@ -132,7 +134,12 @@ const PRINT_STEEL: Record<string, string> = {
 	'act-move': '#b9770e',
 	'act-none': '#5a6368',
 	'act-trait': '#7d3c98',
-	// SC-102: the seventh act spine — print twin of the site's villain #e0584b.
+	// SC-102: the seventh act spine, and the ONE print twin with no site value
+	// behind it — the other six copy the site's light --sc-act-* column, but the
+	// site's villain red (#e0584b) is scheme-invariant, so there is nothing to
+	// copy. #b03a2e is the plugin's own contrast/ink-economy darkening for paper,
+	// recorded here as the deliberate divergence it is. In LIGHT the token stays
+	// #e0584b (light-stable, like --dse-role-controller) — see theme-steel.test.ts.
 	'act-villain': '#b03a2e',
 };
 
