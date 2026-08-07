@@ -8,7 +8,7 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 | When you… | Run | Notes |
 |---|---|---|
-| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs, exit 0**, and **no WARN except the documented deferrals** in `selector-map.json`'s `expectedGaps` (4 rows today — see "Documented deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, and never by loosening a tolerance. |
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (8 today — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
 | Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
 | Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
 | Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
@@ -95,10 +95,17 @@ half-loaded page.
 - **`plugin-inventory.json`** (generated, **gitignored**) — same shape as the site
   inventory, keyed `"<elementId>--<bg>"`. Regenerated on every `npm run parity`; nothing
   reviews its diff, so it is not committed.
-- **`diff.mjs`** — pairs `baseline/site-inventory.json` against `plugin-inventory.json`
-  through `selector-map.json` and writes `parity-report.md`. Exits 1 while any `GAP`
-  remains.
-- **`parity-report.md`** (generated, **gitignored**) — the current gap list.
+- **`compare.cjs`** — the **pure core**: map validation (`validateMap`), the stale-baseline
+  check (`checkBaselineCoverage`) and the comparison itself (`compare`). No `fs`, no
+  `process`, so it is unit-testable — and it is, by `test/unit/parity/compare.test.ts`, which
+  is the can-fail proof that the declared-deferrals mechanism is a gate and not a mute button.
+  CommonJS on purpose: the jest projects transpile to `module: commonjs` and cannot `require`
+  an `.mjs`. Node's ESM loader imports it into `diff.mjs` fine.
+- **`diff.mjs`** — the thin CLI over `compare.cjs`: reads the three JSON files, writes
+  `parity-report.md`, sets the exit code. **Exits 1 on any GAP, any undeclared WARN, any
+  invalid contract, a stale baseline, or a declaration that matched nothing.**
+- **`parity-report.md`** (generated, **gitignored**) — the current findings, in three
+  sections (gaps / undeclared warnings / declared deferrals with their rationales).
 
 ## Checking the plugin against the reference
 
@@ -220,20 +227,22 @@ Two severities:
   Each rule runs per scheme, so the same pair can report in `dark`, `light`, or both.
   A `GAP` is closed by **fixing `styles-source.css`** — never by deleting or weakening the
   pair that reports it.
-- **`WARN`** — the comparison did not happen, or happened and was deliberately downgraded.
-  Three causes, and they are **not** interchangeable:
+- **`WARN`** — **the comparison did not happen.** Two causes, both defects, and **both fail
+  the run** (SC-110):
   1. **One side never rendered / was never captured.** **This is a bug in the selector map,
      not a passing pair**: a wrong selector silently reports "absent" instead of the gap it
      was meant to catch. Fix the selector against the real markup (live site DOM for `site`,
      rendered harness DOM for `plugin`) and re-run.
   2. **A value could not be parsed** — a non-px length (rule 4) or a non-`rgb()` colour
-     (rule 7). Also a defect: make both sides compute to a comparable value.
-  3. **A documented deferral** listed in `selector-map.json`'s `expectedGaps` — a real
-     difference that cannot be closed on the node the pair names, each citing a numbered
-     workspace `FOLLOWUPS.md` item. **4 rows today** (`featureblock:margin-top` /
-     `:margin-bottom` × 2 schemes, FOLLOWUPS #39).
+     (rule 7). Make both sides compute to a comparable value.
 
-  **Every WARN that is not cause 3 must be driven to zero before the report is trustworthy.**
+  Until SC-110 a WARN was printed and **ignored** — the gate exited 0 regardless — so a pair
+  could go blind (a renamed class, a page that stopped emitting the node) with the report
+  still reading green. It is now fatal. Regression test:
+  `test/unit/parity/compare.test.ts` → "an UNDECLARED warn … FLIPS the gate to failing".
+- **`DECLARED`** — a `GAP` or `WARN` that a `declaredDeferrals` entry has explicitly excused.
+  This is the **only** thing that keeps a finding from failing the run; see "Declared
+  deferrals" below.
 
 ### Known blind spots of the current diff
 
@@ -246,15 +255,17 @@ Two severities:
   small-caps rendering (`font-variant-caps: small-caps` on the site) is still a blind spot.
   Read the inventories directly when one of those matters. See also the "declared family, not
   rendered face" limit under rule 5.
-- **Block margin is asserted, but only on the node each pair names.** Rule 4 covers
-  `margin-top`/`margin-bottom`, which is what makes gap-inventory **A4** visible: the site's
-  `.sc-ability` computes `margin: 24px` (authored `1.2rem 0`, `steel-ability-cards.css:39`)
-  against the plugin's `0.5em`/8px — the plugin is the tight one. The blind spot that remains
-  is *which node* carries it: for `statblock`/`featureblock` the site's block rhythm lives on
-  the `.sb-wrap`/`.fb-wrap` positioning wrapper (`margin: 1.7rem auto` = 34px), which no pair
-  names, while the pairs compare the site's inner plate (`margin: 0`) to the plugin's
-  outermost host. That mismatch is deferred and filed — **FOLLOWUPS #39**, which also records
-  the real 34px-vs-8px number so it is not lost.
+- **Block margin is asserted on the node that actually carries it** (as of SC-110 — this used
+  to be a blind spot). Rule 4 covers `margin-top`/`margin-bottom`, which is what makes
+  gap-inventory **A4** visible: the site's `.sc-ability` computes `margin: 24px` (authored
+  `1.2rem 0`, `steel-ability-cards.css:39`) against the plugin's host, which Plan 21 Task 2
+  brought to the same 24px. For `statblock`/`featureblock` the site's block rhythm lives one
+  level up on the `.sb-wrap`/`.fb-wrap` positioning wrapper (`margin: 1.7rem auto` = 34px),
+  which **no pair named** — so the contract compared the site's inner plate (`margin: 0`) to
+  the plugin's outermost host and demanded a shrink to 0, the opposite of the real miss
+  (FOLLOWUPS #39). The `statblock-wrap` / `featureblock-wrap` pairs now compare wrapper to
+  host directly; the residual (site 34px vs plugin 8px, both families, both schemes) is a
+  declared pixel decision, no longer an invisible one.
 - **Pseudo-element material is invisible to the diff.** `getComputedStyle(el)` is sampled
   without a pseudo-element argument, so e.g. `.sc-ability::before`'s decorative SVG flourish
   is not represented on either side.
@@ -293,47 +304,81 @@ Two severities:
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
 
-## Documented deferrals (`expectedGaps`)
+## Splitting a collapsed node (`owns`)
 
-`selector-map.json` carries an `expectedGaps` array of entries. `diff.mjs` downgrades the
-matching findings from `GAP` to `WARN`, so the gate stays green. This exists for the
-one legitimate case: a real difference that **cannot be closed in CSS** because it needs a
-DOM/TS change. Every entry in the array must cite a numbered workspace `FOLLOWUPS.md` item in
-the sibling `expectedGapsNote`, naming the selector, the site value, the plugin value, and
-why DOM is required. **`diff.mjs` enforces the citation mechanically**: if an entry in
-`expectedGaps` does not appear anywhere in `expectedGapsNote`, the run exits 1 before any
-comparison — so the array cannot quietly become a mute button. It is **never** a way to silence a gap that CSS could close — and
-deleting or weakening a pair is never acceptable either.
+The plugin frequently collapses two site nodes into one. The site's section head is a
+text-**less** flex wrapper (`.sc-ability__section-head`) holding a `.tag` span; the plugin's
+`.dse-section__title` is *both* the strip and the text. A single pair therefore cannot be
+honest: aim it at the wrapper and the ink/tracking rules read the wrapper's inherited body
+defaults (values describing glyphs nobody paints); aim it at the `.tag` and the padding/sheen
+rules read a bare span. That mis-aim is what produced FOLLOWUPS #39/#40's six-row deferral
+list — deferrals for *measurement artifacts*, not for real differences.
 
-Two entry shapes are accepted (as of plan 21 task 1, p21 constraint C3):
+The fix is two pairs on the same plugin node, each with an **`owns`** allowlist naming the
+rules it is authoritative for:
 
-- **A bare pair id** (e.g. `"chip"`) downgrades *every* rule on that pair — the original,
-  coarser behaviour. Kept for back-compat; prefer the scoped form below for any new
-  deferral so a filed DOM gap doesn't also mute unrelated CSS-fixable rules on the same
-  pair.
-- **`"<pairId>:<rule>"`** (e.g. `"kit:body-font"`) downgrades only the named rule on that
-  pair. Valid `rule` names: `bg`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
-  `line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,
-  `margin-top`, `margin-bottom`, `body-font`, `letter-spacing`, `ink` — i.e. the same string
-  `diff.mjs` passes to `sevFor(pair, rule)` at each call site. This is a **widening** (more
-  precise deferrals), never a narrowing of coverage.
+```jsonc
+{ "id": "section-head", "site": ".sc-ability__section-head",      "plugin": ".dse-section__title",
+  "owns": ["bg","shadow","hairline-top","hairline-bottom","padding-*","margin-*"] },
+{ "id": "section-tag",  "site": ".sc-ability__section-head .tag", "plugin": ".dse-section__title",
+  "owns": ["font-size","line-height","body-font","letter-spacing","ink"] }
+```
 
-**Currently deferred: `featureblock:margin-top`, `featureblock:margin-bottom`** (workspace
-FOLLOWUPS #39). The `featureblock` pair maps the site's *inner plate* `.md-typeset.fb`
-(deliberately `margin: 0`) to the plugin's *outermost host*
-`[data-dse-element='featureblock']` (`margin: 0.5em` = 8px), so the rule prints "site 0px,
-plugin 8px" and demands a shrink to 0 — which would be the **wrong** fix. The site's block
-rhythm lives one level up on `.fb-wrap` (`margin: 1.7rem auto` = 34px at the site's 20px rem
-base, `steel-featureblock.css:40`), so the real miss runs in the opposite direction. Closing
-it needs new `sb-wrap`/`fb-wrap` pairs plus a live-site baseline regeneration — a change to
-the shape of the contract, not to CSS.
+`owns` **never adds or removes coverage — it only moves a rule to the pair that measures it
+honestly.** `compare.cjs` enforces that mechanically: for every plugin selector named by more
+than one pair, each pair must declare `owns`, the sets must be **pairwise disjoint**, and
+their **union must be the full rule list**. Drop a rule and the run dies before comparing
+anything. A pair naming a plugin node no other pair names may narrow (e.g. `statblock-wrap`
+owns only `margin-top`/`margin-bottom`, because the plate rules live on the `statblock` pair
+against `.dse-sb`); its `why` must say so.
 
-**Deliberately NOT deferred**, for contrast, so the bar is legible:
+Valid rule names: `bg`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
+`line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,
+`margin-top`, `margin-bottom`, `body-font`, `letter-spacing`, `ink`.
+
+## Declared deferrals (`declaredDeferrals`)
+
+**The only thing that keeps a finding from failing the run.** `selector-map.json` carries a
+`declaredDeferrals` array of `{ pair, rule, scheme?, why }`. A matching row — `GAP` *or*
+`WARN` — becomes `DECLARED` and stops counting against the gate. Everything else is fatal, so
+the contract is exactly:
+
+> **exit 0 ⟺ 0 GAPs and 0 undeclared WARNs.**
+
+This exists for one legitimate case: a real difference that cannot be closed here — either a
+**deliberate divergence** (the plugin is right and the site is different on purpose) or a
+**pixel decision** that belongs to Scott, not to whoever is holding the gate. It is **never**
+a way to silence something CSS could close, and deleting or weakening a pair is never
+acceptable either.
+
+Five things are enforced mechanically, so the array cannot quietly become a mute button:
+
+1. the `pair` must exist;
+2. the `rule` must be a real rule name (`capture` for the "never rendered/captured" row);
+3. the pair must actually **own** that rule — otherwise the declaration could never match;
+4. `why` must cite a workspace `FOLLOWUPS.md` number or a Linear ticket
+   (`/FOLLOWUPS #\d+|SC-\d+/`), and should carry the site value, the plugin value, and why
+   this is not a CSS fix;
+5. **a declaration that matches nothing this run fails the run** — a stale excuse for a
+   finding that has since been fixed or renamed gets deleted, not inherited.
+
+All of the above is unit-tested in `test/unit/parity/compare.test.ts`, including the shipped
+`selector-map.json` itself (a typo in the contract breaks jest, not just parity).
+
+**Currently declared: 8 entries / 16 rows** (both schemes each), in three findings:
+
+| Finding | Rows | Site | Plugin | Status |
+|---|---|---|---|---|
+| `pr-chars:ink` (FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
+| `section-tag:font-size` / `:line-height` / `:letter-spacing` (FOLLOWUPS #51) | 6 | 18px / 30.6px / 1.8px (`.9rem`, `.1em`) | 16px / 27.2px / 1.12px (`.07em`) | **pixel decision** — one type-scale call; line-height is a pure consequence of font-size |
+| `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` Legacy base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
+
+**Deliberately NOT declared**, for contrast, so the bar is legible:
 `statblock-band` / `featureblock-band` `margin-top` (site `0px` vs plugin `-8px`) stay
 **GAPs**. The plugin band's negative pull exists only to cancel `.dse-sb`/`.dse-fb`'s own
 plate padding (`styles-source.css` ~3937/~3963), and that padding is *itself* on the
 worklist — the site's plate carries none. The two move together, so whoever changes the plate
-padding owns the band pull; pre-deferring it would delete that information.
+padding owns the band pull; pre-declaring it would delete that information.
 
 ## Adding a new surface to the contract
 

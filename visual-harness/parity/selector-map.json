@@ -1,18 +1,86 @@
 {
   "note": "site selector <-> plugin selector. The parity contract. Add a pair when a surface is ported.",
-  "expectedGaps": ["featureblock:margin-top", "featureblock:margin-bottom", "section-head:ink", "section-head:letter-spacing", "pr-head:ink"],
-  "expectedGapsNote": "Entries whose GAP is a KNOWN, FILED deferral (it cannot be closed in CSS on the node this pair names). diff.mjs downgrades these to WARN instead of GAP, and REFUSES TO RUN unless every entry is named here with a workspace FOLLOWUPS.md number. Two shapes: a bare pair id (downgrades every rule on the pair) or \"<pairId>:<rule>\" (downgrades one rule; preferred). --- \"featureblock:margin-top\" / \"featureblock:margin-bottom\" (workspace FOLLOWUPS #39): the pair maps the site's INNER plate .md-typeset.fb (deliberately margin:0) to the plugin's OUTERMOST host [data-dse-element='featureblock'] (margin:0.5em = 8px), so the rule prints \"site 0px, plugin 8px\" and demands a shrink to 0 -- which is the wrong fix. The site's block rhythm lives on .fb-wrap (margin: 1.7rem auto = 34px at the site's 20px rem base, v2/docs/stylesheets/steel-featureblock.css:40), one level above the pair, so the real miss is 34px vs 8px in the OPPOSITE direction. Closing it needs new .sb-wrap/.fb-wrap pairs plus a live-site baseline regeneration -- a DOM-of-the-contract change, not a CSS one. NOT deferred, deliberately: statblock-band/featureblock-band margin-top (site 0px vs plugin -8px) stays a GAP -- the plugin band's negative pull only exists to cancel .dse-sb/.dse-fb's own plate padding, and that padding is itself on the worklist, so the two move together and Task 2 owns the decision. --- \"section-head:ink\" / \"section-head:letter-spacing\" / \"pr-head:ink\" (workspace FOLLOWUPS #40): these pairs map the plugin's title/header CONTENT node to the site's text-less flex WRAPPER (.sc-ability__section-head / .sc-ability__pr-head), which computes the inherited body ink and no tracking. The plugin's .dse-section__title IS the site's .tag (renderFeature emits no separate wrapper+tag): it is color var(--dse-metal-bright) = rgb(217,222,225) dark / rgb(44,51,56) light, EXACTLY the site tag's --fx-metal-bright (steel-ability-cards.css:186), and tracks 0.07em small-caps to the site tag's .1em -- so matching the wrapper's body ink / normal tracking would DE-match the site's real visible title and strip a deliberate small-caps treatment. Likewise .dse-pr__head is deliberately heading-emphasised (color var(--dse-heading)) to mirror the site's --sc-steel-lighter focus text (.chars, the roll readout), not the wrapper's body-ink default. The clean fix is to split the two pairs (add section-tag / pr-chars pairs comparing like-for-like) + a baseline regeneration, per FOLLOWUPS #40 -- a contract-DOM change, not a CSS one.",
+  "ownsNote": "A pair with no \"owns\" compares EVERY rule. \"owns\" exists for one situation: the plugin collapses two site nodes into one node, so different rule families have different honest counterparts (e.g. the site's section head is a text-less flex WRAPPER holding a .tag; the plugin's .dse-section__title is BOTH). Splitting the pair lets the box/material rules aim at the wrapper and the type/ink rules aim at the real text. It is NOT a mute button: compare.cjs REFUSES TO RUN unless, for every plugin selector named by more than one pair, the owned sets PARTITION the full rule list -- a rule may be moved, never dropped, never double-counted. Valid rule names: bg, shadow, hairline-top, hairline-bottom, font-size, line-height, padding-top, padding-right, padding-bottom, padding-left, margin-top, margin-bottom, body-font, letter-spacing, ink.",
+  "declaredDeferralsNote": "THE ONLY thing that keeps a finding from failing the gate. Shape: { pair, rule, scheme?, why }. A declaration converts a matching GAP or WARN row into a DECLARED row; everything else is fatal, so the contract is exit 0 iff 0 GAPs AND 0 undeclared WARNs. compare.cjs enforces four things mechanically: the pair must exist, the rule must be a real rule name, the pair must actually OWN that rule (or the declaration could never match), and \"why\" must cite a workspace FOLLOWUPS number or a Linear ticket. diff.mjs additionally FAILS on a declaration that matched nothing this run -- a stale excuse for a finding that has since been fixed. A declaration is never a way to silence something CSS can close; deleting or weakening a pair is never acceptable either.",
+  "declaredDeferrals": [
+    {
+      "pair": "pr-chars",
+      "rule": "ink",
+      "why": "FOLLOWUPS #40 / SC-110 -- DELIBERATE divergence, not a measurement artifact. The site splits its power-roll caption into .pre (dim metal, 'Power Roll +') and .chars (the bright roll readout); the plugin's .dse-pr__head is ONE node carrying the whole caption, painted at var(--dse-heading) so the line reads as a heading. That is brighter than the site's .chars in dark (220,226,230 @.95 vs 205,209,212) and darker in light (26,29,32 vs 95,104,109) -- more emphasis, both schemes, by design. Matching .chars exactly would de-emphasise the plugin's only power-roll heading. Changing it is a PIXEL decision for Scott, not a CSS catch-up."
+    },
+    {
+      "pair": "section-tag",
+      "rule": "font-size",
+      "why": "FOLLOWUPS #51 -- the section title's TYPE SCALE, now honestly measured for the first time (SC-110 retargeted this rule off the site's text-less wrapper onto its real .tag). Site .tag is .9rem = 18px at the site's 20px rem base; the plugin authors 16px. One coherent decision with :line-height and :letter-spacing below -- a visible 12.5% enlargement of every Steel section title, i.e. a PIXEL decision for Scott, not an exact-value catch-up a gate ticket may make unilaterally."
+    },
+    {
+      "pair": "section-tag",
+      "rule": "line-height",
+      "why": "FOLLOWUPS #51 -- a pure CONSEQUENCE of the :font-size entry above, not an independent miss. Both sides run the same 1.7 ratio (site 1.7 x 18px = 30.6px; plugin 1.7 x 16px = 27.2px, inherited from the Plan 21 card-root rule). Fixing font-size closes this row automatically; it is listed separately only because the gate reports per rule."
+    },
+    {
+      "pair": "section-tag",
+      "rule": "letter-spacing",
+      "why": "FOLLOWUPS #51 (descends from #40) -- the plugin tracks its small-caps section title at 0.07em (1.12px); the site's .tag tracks .1em (1.8px). #40 deferred this against the WRAPPER's `normal`, arguing that matching it would strip a deliberate small-caps treatment -- retargeting onto the real .tag vindicates that reasoning and inverts the direction: the plugin under-tracks rather than over-tracks. The residual is part of the same type-scale decision as :font-size."
+    },
+    {
+      "pair": "statblock-wrap",
+      "rule": "margin-top",
+      "why": "FOLLOWUPS #39 -- the site's statblock block rhythm is 34px (.sb-wrap margin: 1.7rem auto at the 20px rem base); the plugin's host carries the Legacy base 0.5em = 8px. SC-110 fixed the half of #39 the gate owned (this pair did not exist, so the site's block margin was invisible to the contract); the residual 34-vs-8 is the real miss #39 recorded and it is a PIXEL decision. Plan 21 Task 2 set the precedent for closing it (it ported the site's 24px .sc-ability margin onto the feature host, Steel-scoped and screen-only, styles-source.css ~3497), but 26px of new air around every statblock and featureblock in an Obsidian note is Scott's call, not a gate ticket's."
+    },
+    {
+      "pair": "statblock-wrap",
+      "rule": "margin-bottom",
+      "why": "FOLLOWUPS #39 -- same finding as statblock-wrap:margin-top (site 34px, plugin 8px); listed separately only because the gate reports per rule."
+    },
+    {
+      "pair": "featureblock-wrap",
+      "rule": "margin-top",
+      "why": "FOLLOWUPS #39 -- same finding as statblock-wrap:margin-top, on the featureblock family (site .fb-wrap margin: 1.7rem auto = 34px, steel-featureblock.css:41; plugin host 0.5em = 8px). This is the pair that replaces the old `featureblock:margin-*` deferral, which compared the site's margin:0 inner PLATE against the host and so demanded a shrink to 0 -- the opposite of the real miss."
+    },
+    {
+      "pair": "featureblock-wrap",
+      "rule": "margin-bottom",
+      "why": "FOLLOWUPS #39 -- same finding as featureblock-wrap:margin-top (site 34px, plugin 8px); listed separately only because the gate reports per rule."
+    }
+  ],
   "pairs": [
     { "id": "card",             "site": ".sc-ability",              "plugin": "[data-dse-element='feature']",      "why": "card plate: gradient + bevel + hairline. The plugin side is the HOST div — pipeline.ts stamps data-dse-element on the same root theme.ts stamps data-dse-theme on, and styles-source.css puts the plate there; .dse-feature is an inner content div with no plate." },
     { "id": "section",          "site": ".sc-ability__section",     "plugin": ".dse-section",                      "why": "boxed panel surface" },
-    { "id": "section-head",     "site": ".sc-ability__section-head","plugin": ".dse-section__title",               "why": "sheen gradient + hairline" },
+
+    { "id": "section-head",     "site": ".sc-ability__section-head","plugin": ".dse-section__title",
+      "owns": ["bg", "shadow", "hairline-top", "hairline-bottom", "padding-top", "padding-right", "padding-bottom", "padding-left", "margin-top", "margin-bottom"],
+      "why": "sheen gradient + hairline + the strip's INSET. The site's .sc-ability__section-head is a text-LESS flex wrapper (a .sc-ability__dia diamond + a .tag span); the plugin emits no wrapper at all, so .dse-section__title is simultaneously the strip AND the text. This pair therefore owns only the BOX/MATERIAL rules, which are the ones the wrapper really carries (padding .5rem .9rem = 10/18px, the sheen, the --fx-metal-faint bottom hairline). The type/ink rules are owned by `section-tag` against the site's real text node — reading them off a wrapper that paints no glyphs was FOLLOWUPS #40." },
+    { "id": "section-tag",      "site": ".sc-ability__section-head .tag", "plugin": ".dse-section__title",
+      "owns": ["font-size", "line-height", "body-font", "letter-spacing", "ink"],
+      "why": "the TEXT the site actually paints in the section head (steel-ability-cards.css:186-187: Newzald small-caps, lowercase, .1em tracking, .9rem, --fx-metal-bright). The plugin's .dse-section__title IS this node's counterpart — it carries the same --dse-metal-bright ink and the same small-caps/lowercase treatment — so the type and ink rules belong here, against glyphs, not against the wrapper's inherited body defaults (FOLLOWUPS #40)." },
+
     { "id": "chip",             "site": ".sc-head__slot--chip",     "plugin": ".dse-head__deck--chip",             "why": "flat right-rail slot: hairline + .35em radius + small-caps, no fill/shadow" },
-    { "id": "pr-head",          "site": ".sc-ability__pr-head",     "plugin": ".dse-pr__head",                     "why": "power-roll head sheen" },
+
+    { "id": "pr-head",          "site": ".sc-ability__pr-head",     "plugin": ".dse-pr__head",
+      "owns": ["bg", "shadow", "hairline-top", "hairline-bottom", "font-size", "line-height", "padding-top", "padding-right", "padding-bottom", "padding-left", "margin-top", "margin-bottom", "body-font", "letter-spacing"],
+      "why": "power-roll head sheen + inset. Like `section-head` this site node is a text-less flex wrapper (a diamond + .pre + .chars) and the plugin's .dse-pr__head is one node holding the whole caption. The caption LINE's metrics (size, leading, tracking, inset) are the wrapper's, so they stay here; only `ink` moves to `pr-chars`, because the plugin paints the whole caption at the emphasis the site reserves for .chars." },
+    { "id": "pr-chars",         "site": ".sc-ability__pr-head .chars", "plugin": ".dse-pr__head",
+      "owns": ["ink"],
+      "why": "the roll readout — the site's focus text in the power-roll head (steel-ability-cards.css:163). The plugin's single-node caption is deliberately painted at heading emphasis to mirror THIS node rather than the wrapper's inherited body ink, so this is the only honest node to compare its colour against (FOLLOWUPS #40). The residual difference is declared, not measured away." },
+
     { "id": "tier-row",         "site": ".sc-ability__tier",        "plugin": ".dse-pr__row",                      "why": "tier-coloured wash" },
     { "id": "head",             "site": ".sc-head",                 "plugin": ".dse-head",                         "why": "card head typography" },
+
     { "id": "statblock",        "site": ".md-typeset.sb",           "plugin": ".dse-sb",                           "why": "statblock plate. The site plate is .md-typeset.sb (steel-statblock.css:76) — .sb-wrap is an unstyled positioning wrapper, so pairing it monitored nothing. Plugin plate is .dse-sb (the statblock host is deliberately transparent)." },
+    { "id": "statblock-wrap",   "site": ".sb-wrap",                 "plugin": "[data-dse-element='statblock']",
+      "owns": ["margin-top", "margin-bottom"],
+      "why": "BLOCK RHYTHM only (FOLLOWUPS #39). The site's statblock separates from its neighbours on .sb-wrap (margin: 1.7rem auto, steel-statblock.css:68), one level ABOVE the plate the `statblock` pair compares — so until this pair existed no selector in the contract could see the site's block margin at all. Everything else on .sb-wrap is unstyled positioning (position/max-width/custom props), and the plugin's counterpart node is its transparent host; the plate rules stay on `statblock` where the material actually lives." },
+
     { "id": "statblock-band",   "site": ".sb__head",                "plugin": ".dse-sb > .dse-head",               "why": "role-gradient header band (steel-statblock.css:90)" },
-    { "id": "featureblock",     "site": ".md-typeset.fb",           "plugin": "[data-dse-element='featureblock']", "why": "featureblock plate. The site plate is .md-typeset.fb (steel-featureblock.css:44) — .fb-wrap is an unstyled positioning wrapper. Plugin plate is the HOST div; .dse-fb is the inner content div." },
+
+    { "id": "featureblock",     "site": ".md-typeset.fb",           "plugin": "[data-dse-element='featureblock']",
+      "owns": ["bg", "shadow", "hairline-top", "hairline-bottom", "font-size", "line-height", "padding-top", "padding-right", "padding-bottom", "padding-left", "body-font", "letter-spacing", "ink"],
+      "why": "featureblock PLATE. The site plate is .md-typeset.fb (steel-featureblock.css:44, deliberately margin:0); the plugin collapses wrap+plate into the HOST div, so the plate rules compare here and the block margin moves to `featureblock-wrap`. Comparing the site plate's margin:0 against the host's block margin was the wrong-node reading filed as FOLLOWUPS #39 (it demanded a shrink to 0, the opposite of the real miss)." },
+    { "id": "featureblock-wrap","site": ".fb-wrap",                 "plugin": "[data-dse-element='featureblock']",
+      "owns": ["margin-top", "margin-bottom"],
+      "why": "BLOCK RHYTHM only (FOLLOWUPS #39). The site's featureblock separates from its neighbours on .fb-wrap (margin: 1.7rem auto, steel-featureblock.css:41). The plugin has no wrap node — the host is both — so the margin rules aim here while every other rule stays on the `featureblock` plate pair." },
+
     { "id": "featureblock-band","site": ".fb__head",                "plugin": ".dse-fb > .dse-head",               "why": "role/malice-gradient header band (steel-featureblock.css:57)" },
     { "id": "card-ref",         "site": ".md-typeset .sc-card",     "plugin": ".dse-card",                         "why": "reference-card plate (kit/condition/ancestry/treasure/... via CardLayout). The site node is the .sc-card tile (steel-redesign.css:159-166: --fx-card-bg + --fx-bevel + lift shadow + hairline); its field grammar (__head/__name/__type/__flavor/__stats/__body) is the same one DisplayCardView emits as __title/__subtitle/__badges/__flavor/__rows/__body. Verified against the live pages: the detail pages are NOT the counterpart — a kit detail page is one .sc-kit page-plate and condition/ancestry/treasure detail pages carry no sc- card node at all — so urls.json gained the kit index (tiles) + the perk index (the .sc-card--wide variant, which only re-lays-out the same plate)." }
   ]
