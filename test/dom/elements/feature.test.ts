@@ -485,6 +485,10 @@ keywords:
 		['Free triggered action', 'triggered'],
 		['Move action', 'move'],
 		['No action', 'none'],
+		// SC-102: a REAL usage of "Villain Action N" maps to the new villain type
+		// too — villain is matched BEFORE the generic "action" catch-all, which
+		// would otherwise swallow it as `main`.
+		['Villain Action 2', 'villain'],
 	])('[data-dse-act]: usage %j -> data-dse-act=%j + the --dse-act element-set alias', async (usage, act) => {
 		const source = ['type: feature', 'feature_type: ability', 'name: X', `usage: ${usage}`].join('\n');
 		const { root } = await renderBlock(source);
@@ -494,6 +498,69 @@ keywords:
 		// Element-set alias (Steel-only accent): --dse-act -> var(--dse-act-<type>).
 		// Legacy maps every --dse-act-* token to `none`, so the spine fails safe.
 		expect(card.style.getPropertyValue('--dse-act')).toBe(`var(--dse-act-${act})`);
+	});
+
+	// ---- SC-102: the villain action type + the `usage: "-"` shadow bug ----------
+	//
+	// Root cause: actionTypeOf read `usage ?? ability_type`. Every villain action in
+	// the books carries the lone-dash placeholder `usage: "-"` (steel-etl's own
+	// convention — statblock_page.go gates on `usage != "-"`), which is TRUTHY, so
+	// `??` short-circuited and `ability_type: "Villain Action N"` was never read:
+	// no spine, no crest, no data-dse-act at all.
+	test('[data-dse-act]: SC-102 — a lone-dash usage falls THROUGH to ability_type, so a villain action maps to "villain" (+ the skull crest)', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: Shoot!',
+			'ability_type: Villain Action 1',
+			'usage: "-"',
+			'distance: 10 burst',
+			'target: Each artillery ally in the area',
+		].join('\n');
+		const { root } = await renderBlock(source);
+
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.getAttribute('data-dse-act')).toBe('villain');
+		expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-villain)');
+		// The crest mounts (theme-agnostic DOM; Legacy hides .dse-crest outright).
+		expect(card.querySelector('.dse-crest')).not.toBeNull();
+		expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('skull');
+	});
+
+	// THE ADVERSARIAL CASE — src/elements/feature/example.yaml (the D9 single-sourced
+	// authoring example, whose legacy shots are FROZEN) is a FALSE villain: it carries
+	// `ability_type: Villain Action 1` alongside a REAL `usage: Main action`. Precedence
+	// is unchanged by the dash fix — a real usage still wins — so it must stay `main`.
+	// If this flips, feature--legacy-{dark,light}.png move for the wrong reason.
+	test('[data-dse-act]: SC-102 — the false villain (real usage + villain ability_type) still maps to "main", NOT villain', async () => {
+		const exampleYaml = fs.readFileSync(
+			path.join(__dirname, '../../../src/elements/feature/example.yaml'),
+			'utf8',
+		);
+		// Pin the fixture's own shape so this test cannot silently stop being adversarial.
+		expect(exampleYaml).toMatch(/^ability_type: Villain Action 1$/m);
+		expect(exampleYaml).toMatch(/^usage: Main action$/m);
+
+		const { root } = await renderBlock(exampleYaml);
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.getAttribute('data-dse-act')).toBe('main');
+		expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-main)');
+		expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('sword');
+	});
+
+	test('[data-dse-act]: SC-102 — a lone dash with NO ability_type still maps to nothing (the fall-through has no target)', async () => {
+		const source = [
+			'type: feature',
+			'feature_type: ability',
+			'name: X',
+			'usage: "-"',
+			'distance: Self',
+			'target: Self',
+		].join('\n');
+		const { root } = await renderBlock(source);
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card.hasAttribute('data-dse-act')).toBe(false);
+		expect(card.style.getPropertyValue('--dse-act')).toBe('');
 	});
 
 	test('[data-dse-act]: a trait (feature_type: trait) maps to "trait"', async () => {

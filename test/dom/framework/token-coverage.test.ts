@@ -262,6 +262,7 @@ const LEGACY_MAP: Record<string, string> = {
 	'act-move': 'none',
 	'act-none': 'none',
 	'act-trait': 'none',
+	'act-villain': 'none', // SC-102
 	// SC-112 Task 7: user-scale multipliers — 1 = inert default (freeze bar).
 	'text-scale': '1',
 	'card-scale': '1',
@@ -287,7 +288,8 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// = 66 → 67 overridden / 7 → 6 invariant.
 		// SC-112 Task 7: +2 invariant (text-scale/card-scale — user-scale
 		// multipliers, never theme-overridden) = 6 → 8; overridden stays 67.
-		expect(overridden.length).toBe(67);
+		// SC-102: +1 overridden (act-villain, union 75 → 76) = 67 → 68.
+		expect(overridden.length).toBe(68);
 		expect(STEEL_INVARIANT.size).toBe(8);
 	});
 
@@ -297,7 +299,8 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// Plan 20 Task 3: +5 material tokens; unchanged by SC-105 (no print block ever
 		// defined a font token). SC-112 Task 3: +1 — the neutral print block now pins
 		// font-controls explicitly (the freeze guard for the Controls flip) = 52 → 53.
-		expect(overridden.length).toBe(53);
+		// SC-102: +1 (act-villain, overridden in both Steel-scoped print blocks) = 54.
+		expect(overridden.length).toBe(54);
 		// SC-105 Task 1: +5 invariant (the whole new font vocabulary is print-invariant,
 		// none of it overridden in a print block) = 17 → 22. Task 2 removes font-display
 		// from this set (retired from the union entirely) = 22 → 21. SC-112 Task 3

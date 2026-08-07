@@ -45,7 +45,17 @@ import { attachRollControls } from './rollController';
 import type { FeatureRollHooks } from './rollController';
 
 /** D2 §3.6's action-type spine vocabulary (matches the --dse-act-* token family). */
-export type ActionType = 'main' | 'maneuver' | 'triggered' | 'move' | 'none' | 'trait';
+export type ActionType = 'main' | 'maneuver' | 'triggered' | 'move' | 'none' | 'trait' | 'villain';
+
+/**
+ * SC-10 Task 8 / SC-102: the book's "none" placeholder for an unset field is a
+ * LONE DASH, not an empty string (steel-etl's own convention — statblock_page.go
+ * gates on `usage != "-"`, keyword_filter.go likewise). Treated as ABSENT
+ * everywhere a real value is required.
+ */
+function isDashPlaceholder(value: string): boolean {
+	return /^[-–—]+$/.test(value.trim());
+}
 
 export interface RenderFeatureOptions {
 	/** aria-level for the cardHead name heading. Default 3; nested abilities get +1. */
@@ -73,13 +83,25 @@ export interface RenderFeatureOptions {
  * their own accent; otherwise the usage line (falling back to ability_type) decides.
  * Returns undefined when nothing maps — the caller then sets NO attribute/alias, so
  * the accent fails safe (D2 §3.6).
+ *
+ * SC-102 root cause: this used `usage ?? ability_type`, but villain actions in the
+ * books carry the lone-dash placeholder `usage: "-"` — TRUTHY, so `??` short-circuited
+ * and `ability_type: "Villain Action N"` was never read, leaving villain cards with no
+ * spine and no crest. A dash-only usage is the book's "no usage line", so it must fall
+ * THROUGH to ability_type. Precedence is otherwise untouched: a REAL usage still wins
+ * over ability_type, which is why `feature/example.yaml` (`ability_type: Villain Action
+ * 1` + `usage: Main action`) deliberately stays `main` and its frozen shots never move.
  */
 export function actionTypeOf(config: FeatureConfig): ActionType | undefined {
 	if (config.feature.isTrait()) return 'trait';
-	const source = (config.feature.usage ?? config.feature.ability_type ?? '').toLowerCase();
+	const usage = (config.feature.usage ?? '').trim();
+	const usable = usage && !isDashPlaceholder(usage) ? usage : (config.feature.ability_type ?? '');
+	const source = usable.toLowerCase();
 	if (!source) return undefined;
-	// Order matters: "Move action" / "No action" / "Triggered action" all contain
-	// "action", so the generic main-action match must come LAST.
+	// Order matters: "Move action" / "No action" / "Triggered action" / "Villain
+	// Action 1" all contain "action", so the generic main-action match must come
+	// LAST — a villain branch placed after it would be dead code.
+	if (source.includes('villain')) return 'villain';
 	if (source.includes('maneuver')) return 'maneuver';
 	if (source.includes('trigger')) return 'triggered';
 	if (source.includes('move')) return 'move';
@@ -110,6 +132,12 @@ export function crestIconFor(act: ActionType | undefined): string | undefined {
 			return 'circle-dashed';
 		case 'trait':
 			return 'star';
+		case 'villain':
+			// SC-102 (S-3): the site's own villain classifier glyph is ☠
+			// (v2/docs/javascripts/ability-cards.js) — Lucide's `skull` is its
+			// thin-line twin (already used by Conditions.ts 'dead' + the solo
+			// role crest, so it is a known-good name in Obsidian's icon set).
+			return 'skull';
 		default:
 			return undefined;
 	}
@@ -263,7 +291,7 @@ export function renderFeature(
 		// every other slot here); Steel drops the whole chip (styles-source.css),
 		// Legacy has no rule keying off it so its existing unlabeled dash text is
 		// pixel-unchanged (LEGACY-FREEZE).
-		const isEmptyValue = (value: string): boolean => /^[-–—]+$/.test(value.trim());
+		const isEmptyValue = isDashPlaceholder;
 		const cell = (
 			modifier: string,
 			label: string,

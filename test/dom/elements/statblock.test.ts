@@ -404,6 +404,29 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		);
 	});
 
+	// SC-102: the bandit chief's three villain actions carry `ability_type: Villain
+	// Action N` + the lone-dash placeholder `usage: "-"`. Before the fix the truthy
+	// dash short-circuited `usage ?? ability_type`, so these three cards resolved to
+	// NO action type at all — no spine, no crest. The DOM change is theme-agnostic
+	// (Legacy hides .dse-crest and maps --dse-act-villain to `none`, so its shots are
+	// byte-identical; only Steel paints it).
+	test('SC-102: the three villain actions map to [data-dse-act="villain"] + the skull crest', async () => {
+		const { root } = await renderStatblock(humanBanditChief);
+
+		const villains = Array.from(
+			root.querySelectorAll<HTMLElement>('.dse-feature[data-dse-act="villain"]'),
+		);
+		expect(villains.map((el) => el.querySelector('.dse-head__primary--left')!.textContent)).toEqual([
+			'Shoot!',
+			'Form Up!',
+			'Lead From the Front',
+		]);
+		for (const card of villains) {
+			expect(card.style.getPropertyValue('--dse-act')).toBe('var(--dse-act-villain)');
+			expect(card.querySelector('.dse-crest__glyph')!.getAttribute('data-icon')).toBe('skull');
+		}
+	});
+
 	test('no features -> no divider and no feature list; head + meta + chars still render', async () => {
 		const { root } = await renderStatblock(NO_FEATURES);
 		expect(root.querySelector('.dse-hr')).toBeNull();

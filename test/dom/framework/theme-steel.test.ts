@@ -177,6 +177,9 @@ const STEEL_DARK: Record<string, string> = {
 	'act-move': 'var(--sc-act-move, #e8a13a)',
 	'act-none': 'var(--sc-act-none, #cdd1d4)',
 	'act-trait': 'var(--sc-act-trait, #bb8fce)',
+	// SC-102: no --sc-act-villain exists site-side — the site hard-codes #e0584b
+	// (= --sc-role-controller), so the plugin carries the literal.
+	'act-villain': '#e0584b',
 };
 
 describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => {
@@ -249,7 +252,8 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// :root chain flattens on <html>) — 66 → 67 / 7 → 6.
 		// SC-112 Task 7: +2 invariant (text-scale/card-scale, union 73 → 75) —
 		// 67 overridden / 6 → 8 invariant.
-		expect(overridden.length).toBe(67);
+		// SC-102: +1 overridden (act-villain, union 75 → 76) — 67 → 68.
+		expect(overridden.length).toBe(68);
 		expect(THEME_INVARIANT.length).toBe(8);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
@@ -368,6 +372,8 @@ const STEEL_LIGHT: Record<string, string> = {
 	'act-move': '#b9770e',
 	'act-none': '#5a6368',
 	'act-trait': '#7d3c98',
+	// SC-102: darkened light twin of the site's #e0584b (family convention).
+	'act-villain': '#b03a2e',
 };
 
 /**
@@ -410,11 +416,13 @@ describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])
 		}
 	});
 
-	test('the light block overrides EXACTLY the shifting tokens (34) — none extra, none twice', () => {
+	test('the light block overrides EXACTLY the shifting tokens (35) — none extra, none twice', () => {
 		const defs = steelLightDefinitions();
 		expect(new Set(defs)).toEqual(new Set(Object.keys(STEEL_LIGHT)));
-		expect(defs.length).toBe(34); // SC-10: badge-fg no longer light-overridden; Plan 20: +metal/-bright/sheen
-		expect(Object.keys(STEEL_LIGHT).length).toBe(34);
+		// SC-10: badge-fg no longer light-overridden; Plan 20: +metal/-bright/sheen;
+		// SC-102: +act-villain (34 → 35).
+		expect(defs.length).toBe(35);
+		expect(Object.keys(STEEL_LIGHT).length).toBe(35);
 		const seen = new Set<string>();
 		expect(defs.filter((n) => (seen.has(n) ? true : (seen.add(n), false)))).toEqual([]);
 	});

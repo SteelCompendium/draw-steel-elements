@@ -3158,6 +3158,7 @@ Shared globals
 	--dse-act-move: none;
 	--dse-act-none: none;
 	--dse-act-trait: none;
+	--dse-act-villain: none;
 
 	/* -- SC-112 Task 7: user size scales (NOT theme values) -- */
 	/* Multipliers, default 1 = inert (the freeze bar). The textScale/cardScale
@@ -3393,6 +3394,13 @@ Shared globals
 	--dse-act-move: var(--sc-act-move, #e8a13a);
 	--dse-act-none: var(--sc-act-none, #cdd1d4);
 	--dse-act-trait: var(--sc-act-trait, #bb8fce);
+	/* SC-102 (S-3b): villain actions. The site has NO --sc-act-villain — its
+	   statblock rule for .sb__feat[data-action="villain"] hard-codes --act:
+	   #e0584b (steel-statblock.css) and its featureblock twin chains
+	   --sc-role-controller, which IS #e0584b — so the dark value is that
+	   literal, verbatim. NB no braces anywhere in this comment: the token-guard
+	   tests slice each value block with a brace-terminated body regex. */
+	--dse-act-villain: #e0584b;
 }
 
 /* -- Steel STRUCTURAL rules (SC-10): layout the skin needs beyond token values -- */
@@ -5911,6 +5919,9 @@ body.theme-light
 	--dse-act-move: #b9770e;
 	--dse-act-none: #5a6368;
 	--dse-act-trait: #7d3c98;
+	/* SC-102 (S-3b): darkened light twin of #e0584b, following the same
+	   act-family convention as act-main #e74c3c → #c0392b. */
+	--dse-act-villain: #b03a2e;
 }
 
 /* ================================================================== */
@@ -6729,6 +6740,7 @@ button.dse-pr__row:hover {
 		--dse-act-move: #b9770e;
 		--dse-act-none: #5a6368;
 		--dse-act-trait: #7d3c98;
+		--dse-act-villain: #b03a2e;
 	}
 }
 :is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-print="on"] {
@@ -6738,6 +6750,7 @@ button.dse-pr__row:hover {
 	--dse-act-move: #b9770e;
 	--dse-act-none: #5a6368;
 	--dse-act-trait: #7d3c98;
+	--dse-act-villain: #b03a2e;
 }
 
 /* -- Print RULES (structure, not values): §5.1 rules 3-5 -- */

@@ -123,7 +123,7 @@ const PRINT_NEUTRAL: Record<string, string> = {
 	danger: '#a11',
 };
 
-/** The 6 STEEL-scoped print tokens (act spines darkened, Steel-composed). */
+/** The 7 STEEL-scoped print tokens (act spines darkened, Steel-composed). */
 const PRINT_STEEL: Record<string, string> = {
 	// SC-10 realignment: print act twins = the site's light --sc-act-* values.
 	'act-main': '#c0392b',
@@ -132,6 +132,8 @@ const PRINT_STEEL: Record<string, string> = {
 	'act-move': '#b9770e',
 	'act-none': '#5a6368',
 	'act-trait': '#7d3c98',
+	// SC-102: the seventh act spine — print twin of the site's villain #e0584b.
+	'act-villain': '#b03a2e',
 };
 
 /** Tokens intentionally NOT overridden in print (= Legacy / = active theme / = Steel exact). */
@@ -178,12 +180,13 @@ describe('D3 Task 5: print / export value layer', () => {
 		for (const inv of PRINT_INVARIANT) expect(defs).not.toContain(inv);
 	});
 
-	test('the Steel-scoped twin darkens the 6 act spines (Steel-composed, exact)', () => {
+	test('the Steel-scoped twin darkens the 7 act spines (Steel-composed, exact)', () => {
 		const body = printSteelBody();
 		for (const [name, expected] of Object.entries(PRINT_STEEL)) {
 			expect(valueIn(body, name)).toBe(expected);
 		}
-		expect(defsIn(body).length).toBe(6);
+		// SC-102: +act-villain (6 → 7).
+		expect(defsIn(body).length).toBe(7);
 	});
 
 	test('the @media print neutral block MIRRORS the twin (representative decls)', () => {

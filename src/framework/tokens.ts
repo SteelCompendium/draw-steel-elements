@@ -100,6 +100,9 @@ export const DSE_TOKEN_NAMES = [
 	'act-move',
 	'act-none',
 	'act-trait',
+	// SC-102: villain actions are their own action type (the site tints them with
+	// --sc-role-controller #e0584b; there is no --sc-act-villain to chain to).
+	'act-villain',
 	// -- SC-112 Task 7: USER-SCALE tokens (not theme values). Multipliers with a
 	//    :root default of 1; the scale prefs stamp them inline per element root
 	//    (catalog.ts textScale/cardScale via snap(), src/prefs/scale.ts). They are
