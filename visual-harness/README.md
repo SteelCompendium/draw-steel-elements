@@ -33,7 +33,9 @@ One-time setup: `npx playwright install chromium`.
   CSS width — the NARROW-shot axis (`NARROW_SHOTS`, published on the manifest and swept by
   `shoot.mjs` as `<id>--<combo>`): the fixed 900px page could never show what an element
   does at Obsidian sidebar-leaf width, where wide markdown tables and multi-column rows
-  break (SC-121 Batch 4).
+  break (SC-121 Batch 4). `INTERACTION_SHOTS` (same manifest/sweep convention, own `<id>`)
+  re-shoots an element/fixture after one real click on a production affordance — for a
+  state (e.g. a radiogroup selection) no static fixture can express (SC-117 Batch 6).
 - `shim/obsidian.ts` — browser `obsidian` module: jest-free mock core + real Lucide icons +
   `marked` markdown + toast Notice. Aliased in by `esbuild.mjs` for this bundle only.
 - `vars.css` — vendored Obsidian default-theme variables (only what `styles-source.css` uses).
@@ -49,12 +51,19 @@ the shim doesn't move that gate at all, so after editing `shim/obsidian.ts` re-r
 
 ## v1 limits (spec §"Out of scope")
 
-Static states only in THIS (browser) camera — no modals/hover/focus scripting, no CI pixel
+Static states only in THIS (browser) camera — no hover/focus scripting, no CI pixel
 gates, default Obsidian theme only. **Modals, the settings tab, sidebar leaves and canvas
 are covered by the Obsidian camera instead** (SC-121 Batch 4, catalog D-5..D-8): this page
 vendors only the Obsidian variables `styles-source.css` reads, not Obsidian's own
 `.modal-container`/`.modal`/`.setting-item`/canvas chrome, so a browser shot of those
 surfaces would pin a box that does not exist in the product. See "Obsidian camera" below.
+
+One narrow exception (SC-117 Batch 6, catalog consumer #16): `INTERACTION_SHOTS` on the
+manifest re-shoots an existing element/fixture with a single REAL click performed by
+`shoot.mjs` on a production affordance, between mount-done and the screenshot — for states
+(e.g. a radiogroup selection) that exist entirely within this page's own DOM but have no
+static-fixture expression. Not general scripting: one click, declared per entry, same
+"own id, never overwrites the resting golden" discipline as `NARROW_SHOTS`.
 
 Steel shots show the **fallback-hex palette**: `styles-source.css` chains its
 Steel vars as `var(--sc-*, #hex)`, and `vars.css` deliberately doesn't vendor `--sc-*` (that

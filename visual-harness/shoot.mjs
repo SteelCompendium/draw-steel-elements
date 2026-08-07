@@ -35,7 +35,7 @@ const comboName = (c) => (c.print ? `${c.theme}-print` : `${c.theme}-${c.bg}`);
 
 const failures = [];
 
-async function snap(page, params, outName) {
+async function snap(page, params, outName, opts = {}) {
 	const pageErrors = [];
 	const onErr = (e) => pageErrors.push(String(e));
 	page.on('pageerror', onErr);
@@ -44,6 +44,11 @@ async function snap(page, params, outName) {
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
 			timeout: 15000,
 		});
+		// SC-117 Batch 6 (catalog consumer #16): interaction shots fire a REAL click on
+		// the production affordance after mount settles but before the shot, so a
+		// state that's only reachable by user action (e.g. a radiogroup selection) gets
+		// captured. `opts.click` is a CSS selector, always inside #mount.
+		if (opts.click) await page.locator(opts.click).click();
 		const done = await page.evaluate(() => window.__dseHarnessDone);
 		const errors = [...done.errors, ...pageErrors];
 		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
@@ -79,10 +84,20 @@ try {
 	// can never collide with — and overwrite — a frozen default-fixture golden.
 	let elements = manifest.elements;
 	const narrowShots = manifest.narrowShots ?? [];
+	// SC-117 Batch 6: interaction shots (manifest.interactionShots — entry.ts
+	// INTERACTION_SHOTS), same "legal --element value, not a registered element"
+	// treatment as narrowShots.
+	const interactionShots = manifest.interactionShots ?? [];
 	if (args.element) elements = elements.filter((e) => e.id === args.element);
-	// A narrow-shot id (e.g. `perk-narrow`) is a legal --element value even though it is
-	// not a registered element — it selects only that capture below.
-	if (args.element && elements.length === 0 && !narrowShots.some((n) => n.id === args.element)) {
+	// A narrow-shot/interaction-shot id (e.g. `perk-narrow`, `negotiation-pr-checked`)
+	// is a legal --element value even though it is not a registered element — it
+	// selects only that capture below.
+	if (
+		args.element &&
+		elements.length === 0 &&
+		!narrowShots.some((n) => n.id === args.element) &&
+		!interactionShots.some((n) => n.id === args.element)
+	) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
 	}
@@ -132,6 +147,20 @@ try {
 			if (args.readonly) params.readonly = '1';
 			const suffix = args.readonly ? '--readonly' : '';
 			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
+		}
+	}
+	// SC-117 Batch 6 (catalog consumer #16): interaction shots, declared by the page
+	// (manifest.interactionShots — entry.ts INTERACTION_SHOTS). Same combo matrix and
+	// --element filtering as narrowShots; the click happens inside snap() between
+	// mount-done and the screenshot.
+	for (const n of interactionShots) {
+		if (args.element && args.element !== n.element && args.element !== n.id) continue;
+		for (const c of combos) {
+			const params = { element: n.element, fixture: n.fixture, theme: c.theme, bg: c.bg };
+			if (c.print) params.print = '1';
+			if (args.readonly) params.readonly = '1';
+			const suffix = args.readonly ? '--readonly' : '';
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { click: n.click });
 		}
 	}
 	if (!args.element) {

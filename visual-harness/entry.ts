@@ -136,6 +136,49 @@ i1: "Doesn't remember the taste of strawberries"
 i0: "Thinks you're after the ring; becomes hostile"
 `;
 
+// SC-117 Batch 6 (catalog D9): `.dse-section--spend` never renders in the sweep —
+// renderFeature.ts's `isSpend` gate only fires when an effect's RAW `cost` field starts
+// with "Spend" (Draw Steel's "Spend Heroic Resource"/"Spend a Recovery" grammar, RR §—),
+// and no fixture anywhere uses that wording. Verbatim copy of feature/example.yaml with
+// the "Special" effect's cost changed from "2 Malice" to "Spend Heroic Resource" — the
+// single-sourced default (D9-elsewhere: the authoring example) stays byte-identical and
+// freeze-pinned; this is a harness-only variant, same convention as featureblockAdvancement
+// above.
+const featureSpend = `type: feature
+feature_type: ability
+name: Coverage Strike
+cost: 5 Malice
+ability_type: Villain Action 1
+flavor: A sweeping flourish of steel.
+keywords:
+  - Attack
+  - Weapon
+usage: Main action
+distance: Melee 1
+target: One creature
+trigger: A creature ends its turn adjacent to the target.
+effects:
+  - name: Effect
+    effect: The primary effect text.
+  - roll: Power Roll + Might
+    tier1: Tier one outcome.
+    tier2: Tier two outcome.
+    tier3: Tier three outcome.
+    crit: Crit outcome.
+  - name: Special
+    cost: Spend Heroic Resource
+    effect: Special clause text.
+  - name: Aftermath
+    effect: Wrapper text.
+    features:
+      - type: feature
+        feature_type: trait
+        name: Inner Feature
+        effects:
+          - name: Inner Effect
+            effect: Inner effect text.
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -147,7 +190,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
 	encounter: { default: encounterDefault },
-	feature: { default: featureDefault },
+	feature: { default: featureDefault, spend: featureSpend },
 	featureblock: { default: featureblockDefault, advancement: featureblockAdvancement },
 	hero: { default: heroDefault },
 	'hero-tokens': { default: tokensDefault },
@@ -213,6 +256,33 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// place a reading-mode element realistically renders.
 	{ id: 'perk-narrow', element: 'perk', fixture: 'default', width: 300 },
 ];
+
+/**
+ * SC-117 Batch 6 (catalog consumer #16): `.dse-pr__row[aria-checked='true']` never
+ * renders in the sweep — negotiation's power-roll radiogroup (powerRollPanel's ONLY
+ * `selectable: true` call site, ArgumentView.buildPowerRoll) only reaches a checked
+ * state on real user selection; no `selected` prop exists to express it statically in a
+ * fixture. Each entry re-shoots an existing element/fixture with a REAL click on
+ * `click` (the production affordance — the row's own button) performed by shoot.mjs
+ * between mount-done and the screenshot, under its own `id` so it never collides with
+ * the resting golden. Declared on the page (not shoot.mjs), same convention as
+ * NARROW_SHOTS.
+ */
+export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; click: string }[] =
+	[
+		// Selects the mid tier (12-16, data-tier="mid") — feature/statblock/featureblock/
+		// kit's power-roll panels are all static (`selectable` defaults false), so
+		// negotiation is the only element anywhere this state can be reached from. The
+		// `button.` prefix is load-bearing: negotiation ALSO mounts a second, always-static
+		// powerRollPanel (LearnMoreView's rules-text panel, a `<div>` row) with the same
+		// `data-tier="mid"`, so an unscoped selector hits two elements.
+		{
+			id: 'negotiation-pr-checked',
+			element: 'negotiation',
+			fixture: 'default',
+			click: "button.dse-pr__row[data-tier='mid']",
+		},
+	];
 
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
@@ -338,6 +408,7 @@ declare global {
 		__dseHarnessManifest?: {
 			elements: { id: string; fixtures: string[] }[];
 			narrowShots: { id: string; element: string; fixture: string; width: number }[];
+			interactionShots: { id: string; element: string; fixture: string; click: string }[];
 		};
 		__dseHarnessDone?: { errors: string[] };
 	}
@@ -348,6 +419,7 @@ if (typeof window !== 'undefined') {
 	window.__dseHarnessManifest = {
 		elements: Object.keys(FIXTURES).map((id) => ({ id, fixtures: Object.keys(FIXTURES[id]) })),
 		narrowShots: NARROW_SHOTS,
+		interactionShots: INTERACTION_SHOTS,
 	};
 	if (document.getElementById('mount')) {
 		void mountFromParams(document, parseParams(window.location.search)).then(async (r) => {
