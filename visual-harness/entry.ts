@@ -192,6 +192,33 @@ effects:
             effect: Inner effect text.
 `;
 
+// SC-102 part 2 (Task 4, S-5 = (a), the recommended option): a REAL standalone villain
+// card. `src/elements/feature/example.yaml` (the `feature` element's D9 single-sourced
+// authoring example) is a permanent FALSE villain (D5): it carries `ability_type:
+// Villain Action 1` alongside `usage: Main action`, and a real usage line always wins,
+// so it renders — correctly — as a main-action card and cannot be "fixed" without either
+// editing the D9 example (which would move its frozen `feature--legacy-*` shots) or
+// breaking the precedence rule the false-villain case exists to pin (task-3 review H-1).
+// This harness-local literal (SC-108's pattern, `featureblockAdvancement` above) is the
+// same shape MINUS `usage`, so `actionTypeOf` falls through to the real `ability_type`
+// ladder and actually resolves 'villain' — the only way to golden-shot the standalone
+// villain card (spine-less crest + eyebrow tint, no bar, per D3) without touching D9's
+// single-sourced example. New shot names (`feature-villain--*`) cannot collide with a
+// frozen name (`sha256sum -c` only checks names the baseline lists), so this fixture is
+// invisible to the freeze check by construction.
+const featureVillain = `type: feature
+feature_type: ability
+name: Rally the Line
+ability_type: Villain Action 2
+flavor: A booming command echoes across the battlefield.
+keywords:
+  - Command
+distance: Aura 5
+target: Each ally in the aura
+effects:
+  - effect: Each affected ally can shift 2 squares as a free action.
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -203,7 +230,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
 	encounter: { default: encounterDefault },
-	feature: { default: featureDefault, spend: featureSpend },
+	feature: { default: featureDefault, spend: featureSpend, villain: featureVillain },
 	featureblock: { default: featureblockDefault, advancement: featureblockAdvancement },
 	hero: { default: heroDefault },
 	'hero-tokens': { default: tokensDefault },

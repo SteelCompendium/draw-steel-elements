@@ -3417,6 +3417,34 @@ Shared globals
 	padding-left: calc(3px + 0.55em);
 }
 
+/* SC-102 part 2 (D3): the spine is a NESTED-CARD FRAME, not a standalone ornament.
+   The site draws the identical .sb__feat/.fb__feat border-left ONLY inside a
+   statblock/featureblock feature list — .sc-ability (the standalone ability page) has
+   NO border-left anywhere; --act there only tints the crest glyph and the eyebrow
+   text (steel-ability-cards.css:87,94). The plugin's standalone/top-level card is the
+   ONLY .dse-feature whose ancestor chain includes the pipeline root
+   [data-dse-element='feature'] (mounted by FeatureElementView — see renderFeature.ts's
+   header comment); a nested card is always `.dse-feature__nested > .dse-feature` under
+   .dse-sb/.dse-fb, which never carries that attribute anywhere in its ancestry.
+   COMPOUND, no space, on the first selector segment: the pipeline stamps
+   data-dse-theme AND data-dse-element on the SAME root node (pipeline.ts), not on
+   ancestor/descendant nodes — a space there would ask for [data-dse-element='feature']
+   to be its own descendant and never match (same trap the pre-existing lift-shadow
+   rule at :6679 already avoids). Structure tier (S-1(a): reaches print, matching S-1's
+   "print follows structure" — the standalone card loses its spine in print too).
+   Suppresses the bar AND its reserved lane; the --dse-act alias itself is left
+   untouched so any consumer that DOES tint off it (today: the crest glyph,
+   styles-source.css:4112) keeps working. GAP (not invented here, D3's remaining
+   half): the standalone card's eyebrow text does not yet consume --dse-act the way
+   the site's does (steel-ability-cards.css:94) — filed for Task 6/FOLLOWUPS, not
+   fixed in this rule. */
+[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before {
+	display: none;
+}
+[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act] {
+	padding-left: 0;
+}
+
 /* Card ground (SC-10): the site's steel-kit recipe — forged card gradient +
    bevel + lift shadow + hairline — on the top-level element panels
    (steel-kit.css / steel-ability-cards.css port; Legacy stays flat).

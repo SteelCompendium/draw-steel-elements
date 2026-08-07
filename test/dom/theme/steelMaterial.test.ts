@@ -343,6 +343,105 @@ describe('Steel material contract', () => {
 		});
 	});
 
+	describe('standalone spine removed (SC-102 part 2)', () => {
+		// D3: the site draws the accent spine ONLY inside a nested statblock/featureblock
+		// feature list (.sb__feat / .fb__feat) — the standalone ability page (.sc-ability)
+		// has NO border-left anywhere. The plugin's discriminator is the pipeline-root
+		// attribute [data-dse-element='feature'], present ONLY on the standalone Feature
+		// element's mount and never on a card nested under .dse-sb/.dse-fb (those pipeline
+		// roots carry data-dse-element="statblock"/"featureblock" instead — see
+		// renderFeature.ts's header comment and statblock/featureblock view.ts's
+		// renderFeatureList calls).
+
+		it('suppresses the spine bar EXACTLY under the standalone pipeline root, and nowhere else in the sheet', () => {
+			// A whole-file scan (not merely Steel-scoped), so a stray suppression that
+			// ALSO reached the nested/nested-list context — which would break Task 3's
+			// villain statblock spines — fails this test too, not just the wrong one.
+			const suppressions = rules.filter(
+				(r) =>
+					/display:\s*none\s*;/.test(r.body) &&
+					/\.dse-feature\[data-dse-act\]::before/.test(r.selector),
+			);
+			expect(suppressions).toHaveLength(1);
+			const [rule] = suppressions;
+			// COMPOUND, no space, between the theme and element attribute selectors — the
+			// pipeline stamps data-dse-theme AND data-dse-element on the SAME root node
+			// (pipeline.ts), never on ancestor/descendant nodes. A descendant-combinator
+			// form (a space there) asks the root to be its own descendant and matches
+			// NOTHING — a real regression this repo hit once already (ground-truth
+			// verified with a live Playwright DOM dump, not assumed).
+			expect(rule.selector.replace(/\s+/g, ' ').trim()).toBe(
+				"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before",
+			);
+			expect(STEEL_SCOPE.test(rule.selector)).toBe(true);
+		});
+
+		it('never regresses to the descendant-combinator form (theme/element attrs share ONE node, not two)', () => {
+			// The footgun this guards: pipeline.ts stamps data-dse-theme and
+			// data-dse-element on the same createDiv() root, so
+			// "[data-dse-theme='steel'] [data-dse-element='feature']" (WITH a space) is
+			// syntactically valid CSS that silently matches zero elements — the freeze
+			// check would report NO mismatch (the rule is a no-op), not a failure, so this
+			// must be asserted directly rather than left to visual review.
+			const broken = rules.filter((r) =>
+				/\[data-dse-theme=['"]steel['"]\]\s+\[data-dse-element=['"]feature['"]\]/.test(
+					r.selector,
+				),
+			);
+			expect(broken).toHaveLength(0);
+		});
+
+		it('leaves the shared spine base rule alone — nested cards (statblock/featureblock) still draw it', () => {
+			const base = rules.find(
+				(r) => r.selector.trim() === '.dse-feature[data-dse-act]::before',
+			);
+			expect(base).toBeDefined();
+			expect(base!.body).toMatch(/background:\s*var\(--dse-act,\s*none\)\s*;/);
+			// The base rule itself carries no display suppression — only the
+			// standalone-scoped twin (asserted above) does.
+			expect(base!.body).not.toMatch(/display:\s*none/);
+		});
+
+		it('drops the reserved lane for the standalone card ONLY — the general nested-lane rule is untouched', () => {
+			const nestedLane = rules.find(
+				(r) => r.selector.trim() === "[data-dse-theme='steel'] .dse-feature[data-dse-act]",
+			);
+			expect(nestedLane).toBeDefined();
+			expect(nestedLane!.body).toMatch(/padding-left:\s*calc\(3px \+ 0\.55em\)\s*;/);
+
+			const standaloneLane = rules.find(
+				(r) =>
+					r.selector.trim() ===
+					"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]",
+			);
+			expect(standaloneLane).toBeDefined();
+			expect(standaloneLane!.body).toMatch(/padding-left:\s*0\s*;/);
+		});
+
+		it('is structure tier — no print exclusion, so it reaches print (S-1(a))', () => {
+			const standalone = rules.filter(
+				(r) =>
+					r.selector.includes("[data-dse-element='feature']") &&
+					/\.dse-feature\[data-dse-act\]/.test(r.selector),
+			);
+			expect(standalone.length).toBeGreaterThan(0);
+			for (const r of standalone) {
+				expect(r.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
+			}
+		});
+
+		it('the --dse-act alias itself is untouched — only the bar is removed, not the tint', () => {
+			// Nothing in this change may set --dse-act to none/unset under the standalone
+			// scope; the crest glyph (styles-source.css ~4112) still keys off it.
+			const standaloneRules = rules.filter((r) =>
+				r.selector.includes("[data-dse-element='feature']"),
+			);
+			for (const r of standaloneRules) {
+				expect(r.body).not.toMatch(/--dse-act\s*:/);
+			}
+		});
+	});
+
 	describe('dead selectors', () => {
 		// `.dse-section__head` is a plan-draft name that never existed in the DOM
 		// (renderFeature.ts emits only `__title` + `__body`). It is named in the CSS prose,
