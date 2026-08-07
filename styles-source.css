@@ -3445,6 +3445,128 @@ Shared globals
 	padding-left: 0;
 }
 
+/* ── SC-101 / D3 / S-4: THE NESTED-CARD FRAME — ONE mechanism, BOTH families ──
+   The other half of SC-102's finding. The site's spine is not an ornament, it is
+   the left edge of a per-feature CARD, and the site draws that card with ONE
+   byte-identical recipe in two sheets:
+       [data-sb-featstyle="card"] .sb__feat   (steel-statblock.css:301-306)
+       [data-fb-featstyle="card"] .fb__feat   (steel-featureblock.css:161-162)
+         background: rgba(0,0,0,.16);  border-left: 3px solid var(--act);
+         border-radius: 9px;  padding: .7rem .85rem .78rem;
+   plus a real gap on the list that holds them (.sb__features / .fb__feats
+   `gap: .65rem`, steel-statblock.css:239 / steel-featureblock.css:122). `card` is
+   the shipped DEFAULT for both (settings-panel.js:36,45), so this IS the site's
+   statblock AND featureblock look, not an opt-in.
+
+   The plugin drew only the bar and separated the options with padding, so N
+   discrete cards fused into one continuous rail. S-4 (Scott, recommended) =
+   SHARED: implement the frame ONCE for both families rather than forking a
+   per-family copy that would drift. `:is(.dse-sb, .dse-fb)` is that single
+   mechanism; test/dom/theme/steelMaterial.test.ts pins the shape so a future
+   per-family fork fails loudly.
+
+   SCOPE / non-reach. The anchor is the CARD root (.dse-sb / .dse-fb), not the
+   pipeline root, so:
+     • the standalone Feature element ([data-dse-element='feature']) is untouched
+       — it wears neither class, which is exactly SC-102 part 2's finding above;
+     • the kit / display-card families are untouched — CardLayout.ts:382 and
+       layouts.ts:235 mount the same renderFeatureList into a `.dse-card`, so
+       `kit--steel-print.png` cannot move. Asserted, not assumed (steelMaterial
+       "the frame does not reach the kit/display card family" + the freeze gate).
+   Descendant (not child) combinator on purpose: an fb nested INSIDE a statblock
+   feature frames its options too, which is what the site does (a Malice Features
+   block inside Angulotl Daybringer's villain action — site capture
+   evidence-task1/site-refs/monster-statblock--dark.png).
+
+   FAIL-SAFE. The FRAME keys on `.dse-feature`; the BAR keys on `[data-dse-act]`
+   (renderFeature.ts:240 sets neither attribute nor --dse-act alias when the
+   action type does not map). So an unmapped option still gets its card, just with
+   no coloured edge — matching the site, which always frames and lets `--act` fall
+   back. The bar stays the existing ::before (background: var(--dse-act, none)),
+   which is Legacy-safe by construction; it only gains the card's left radius so
+   each bar reads as a discrete rounded edge instead of a square nub poking out of
+   the rounded corner.
+
+   TIERS. Structure (gap / radius / padding / bar radius) carries NO print
+   exclusion — S-1(a) "print follows structure", and the site agrees: its own
+   @media print block kills only the background (`.fb__feat { background: none
+   !important }`, steel-featureblock.css:236) and keeps the border-left, the 9px
+   radius and the padding. The fill is the material tier and is screen-only. */
+[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested {
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+}
+[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature {
+	border-radius: 9px;
+	/* Longhands, not the `padding` shorthand: the act-lane rule below and the
+	   `flat` mode rules further down each override ONE side, and a shorthand
+	   here would make those overrides order-fragile. Site: .7rem .85rem .78rem. */
+	padding-top: 0.7rem;
+	padding-right: 0.85rem;
+	padding-bottom: 0.78rem;
+	padding-left: 0.85rem;
+}
+/* The bar is INSIDE the padding box here (an absolutely-positioned ::before at
+   left:0) where the site's is an outside border-left, so the option's left inset
+   is the site's .85rem PLUS the 3px the bar occupies — same optical result. This
+   supersedes the general nested-lane reservation (`calc(3px + 0.55em)`, ~:3403)
+   for framed cards only; unframed contexts keep it. */
+[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature[data-dse-act] {
+	padding-left: calc(3px + 0.85rem);
+}
+[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature[data-dse-act]::before {
+	border-top-left-radius: 9px;
+	border-bottom-left-radius: 9px;
+}
+/* Material tier — the fill. HARDCODED translucent black, NOT
+   `var(--dse-surface-sunken)`: this is the same dark-mode material finding SC-100
+   recorded (.repo-docs/architecture.md "Dark-mode material rule", and the
+   .dse-tiles__cell precedent ~:4415). The site's richness in dark mode is the
+   parent card's own forged gradient BLEEDING THROUGH a translucent-black fill;
+   Steel-dark's --dse-surface-sunken is a 6%-WHITE wash, which occludes that
+   gradient and flattens every option to the same pale grey. (The token's own
+   audit/flip is SC-117 B1 on a different branch — deliberately not consumed
+   here.) Light twin = the site's `[data-md-color-scheme="default"]` variant,
+   rgba(0,0,0,.022), via the established `body.theme-light [data-dse-theme='steel']`
+   convention. Screen-only: print drops the fill exactly like the site's does. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature {
+	background: rgba(0, 0, 0, 0.16);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature {
+	background: rgba(0, 0, 0, 0.022);
+}
+/* …and the statblock `flat` FEATURE-STYLE mode keeps its dense, frameless run.
+   The site has the identical hazard and solves it by ordering ("Keep ALL featstyle
+   mode rules AFTER this block", steel-statblock.css:258) — here the mode rules win
+   on SPECIFICITY instead, so they cannot be broken by a later insertion. Only the
+   sb pref exists (catalog.ts:231; there is no fb twin), and per the sheet's
+   default-value convention the `card` value is never named in a selector
+   (pref-reflection.test.ts asserts that). The act lane reverts to the general
+   unframed reservation, and the light twin is restated because the frame's own
+   light rule out-specifies the plain mode rule. */
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested {
+	gap: 0;
+}
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature,
+body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature {
+	background: none;
+	border-radius: 0;
+	padding-top: 0.25rem;
+	padding-right: 0;
+	padding-bottom: 0.25rem;
+	padding-left: 0;
+}
+/* Both arms again, and for the same reason: the `body.theme-light` arm above is
+   (0,6,1) and would otherwise out-specify a single (0,6,0) lane restore, leaving the
+   spine overlapping the first character in light+flat. (Caught by a live
+   getComputedStyle probe, not by reading the cascade — light `padding-left` came back
+   0px while dark came back 11.8px.) */
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act],
+body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act] {
+	padding-left: calc(3px + 0.55em);
+}
+
 /* Card ground (SC-10): the site's steel-kit recipe — forged card gradient +
    bevel + lift shadow + hairline — on the top-level element panels
    (steel-kit.css / steel-ability-cards.css port; Legacy stays flat).
@@ -3900,6 +4022,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    was shipped, per the ledger. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-head__primary--left,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip,
+/* SC-101: the featureblock OPTION's cost is the site's other `.sc-head__slot--mini`
+   (steel-cardhead.css:111 `font-family: var(--md-large-header-font)`), so it joins the
+   Title slot here rather than declaring font-family inside its own Steel rule (~:4254)
+   — the SC-112 Task 5 contract, enforced by steelTypography.test.ts's Legacy font-slot
+   gate. No-op at defaults (Label, which this slot rode before via the --chip routing,
+   chains to Title), so the Legacy featureblock shots stay byte-identical — proven by the
+   freeze check, not asserted. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-card__title,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__name,
 :not([data-dse-print="on"]):is(
@@ -4086,6 +4216,87 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	border-radius: 7px;
 	box-shadow: var(--dse-chip-bevel);
 	color: var(--dse-metal-bright);
+}
+
+/* ── SC-101: a FEATUREBLOCK option's cost is DISPLAY TEXT, not a chip ─────────
+   Which surface a cost takes is a per-FAMILY decision on the site, and the site
+   makes it in the generator, not the CSS:
+     statblock feature   RightPrimary: hChip(richSb(f.Cost))   (statblock_card.go:120)
+     featureblock option RightPrimary: hMini(…f.Cost)          (featureblock_page.go:389)
+     standalone ability  RightPrimary: hMini(…cost)            (ability_cards.go:306)
+   i.e. the forged pill above is the STATBLOCK treatment; the featureblock renders
+   the cost big, uppercase and unboxed on the same line as the name, with the
+   usage/type descriptor demoted to the deck lane below it. Site reference:
+   evidence-task1/site-refs/featureblock-malice--dark.png ("3 MALICE").
+
+   The plugin's DOM already carries everything needed (D2 — no TS in this task):
+   renderFeature.ts:288,300 writes the cost into the right EYEBROW slot and
+   ability_type into the right PRIMARY slot, so this is a CSS re-placement of two
+   grid areas plus a surface swap:
+     cost         eyebrow lane (1/3) → primary lane (2/3), beside the name
+     ability_type primary lane (2/3) → deck    lane (3/3)
+   No collision is possible on the deck lane: renderFeature.ts never mounts a
+   rightDeck slot (cardHead.ts:97-99 only creates the slots a caller provides).
+
+   SCOPE — `.dse-fb … .dse-feature > .dse-head >` — is deliberately three things
+   at once: (a) featureblock only, so statblock sub-features and the standalone
+   Feature element keep the forged pill directly above; (b) the OPTION head only,
+   never the featureblock's own card head (whose right eyebrow is the "Level N"
+   chip, view.ts:86 — its parent is .dse-fb, not a .dse-feature); (c) still true
+   for an fb embedded in a statblock, which the site frames identically.
+   Specificity (0,5,0) clears every competing rule: the base slot placement
+   (0,1,0), the base chip chrome (0,1,0), the Steel flat-chip block (0,3,0), the
+   Steel label font-family routing (0,3,0) and the forged pill above (0,4,0).
+   VERIFIED by live getComputedStyle in the harness, not by reading specificity —
+   the Task-4 lesson (a no-op selector produces byte-identical shots, so freeze
+   silence proves nothing).
+
+   TIERS. The re-placement AND the un-boxing are structure (S-1(a): they reach
+   print — a cost that has moved lane but kept a chip box would be a half-state
+   the site has no version of). The display TYPOGRAPHY is the material/display
+   tier, screen-only, exactly like the sibling card-head --mini block (~:4155)
+   and the primary title's own uppercase treatment (~:3720). */
+[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right {
+	grid-area: 2 / 3;
+	align-self: center;
+	/* un-box: the base --chip chrome (~:6329) is a pill; the site's mini is bare
+	   text. `display: block` because the site's slot is a <div>; the slot is
+	   already justify-self:end + text-align:right from the shared right-rail rule. */
+	display: block;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+}
+[data-dse-theme='steel'] .dse-fb .dse-feature > .dse-head > .dse-head__primary--right {
+	grid-area: 3 / 3;
+}
+/* Display tier — the site's `.sc-head__slot--mini` (steel-cardhead.css:111-114):
+       font-family: var(--md-large-header-font);  → --dse-font-title
+       text-transform: uppercase;
+       font-size: 1.35rem;                        → see below
+       line-height: 1.04;
+       color: var(--role, var(--md-default-fg-color));  → --dse-role hook
+   font-size is the ONE figure that is not a literal port. Per the gap inventory
+   §A the site's rem base is 20px and the plugin's is 16px, so the site's 1.35rem
+   is matched by RATIO against the name slot it sits beside, not by transcribing
+   the number (the same method the card-head --mini block used to land on
+   1.125em). Site sub-feature head: name .fb__feat-name 1.25rem = 25px, mini
+   1.35rem = 27px → 1.08×. Plugin sub-feature head: name .dse-head__primary--left
+   1.25em = 20px → 21.6px, which is 1.35em against the head's own 16px base.
+   font-variant/letter-spacing are reset because the Steel flat-chip block sets
+   small-caps + 0.04em tracking on every --chip slot; the mini is neither. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right {
+	/* font-family: NOT declared here — the Title slot's consumers must be
+	   theme-agnostic (SC-112 Task 5's Legacy font-slot gate), so this selector is an
+	   arm of the consolidated font-family block instead (~:3996). Same treatment the
+	   sibling card-head --mini block already takes. */
+	font-size: 1.35em;
+	line-height: 1.04;
+	text-transform: uppercase;
+	font-variant: normal;
+	letter-spacing: normal;
+	color: var(--dse-role, var(--dse-heading));
 }
 
 /* Small-caps ◆ eyebrow (SC-10 Task 1): the site's steel-cardhead.css eyebrow

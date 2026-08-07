@@ -442,6 +442,259 @@ describe('Steel material contract', () => {
 		});
 	});
 
+	/**
+	 * SC-101 — the nested-card FRAME (S-4 = SHARED) and the featureblock option COST.
+	 *
+	 * Two halves of one site look, both reachable as Steel-scoped CSS (plan-25 D2):
+	 *  • every statblock/featureblock option is its own card (`[data-sb-featstyle="card"]
+	 *    .sb__feat` / `[data-fb-featstyle="card"] .fb__feat` — byte-identical recipes,
+	 *    `card` is the shipped default for both), separated by a real `gap` on the list;
+	 *  • a FEATUREBLOCK option's cost is display text on the name's row (`hMini`), where a
+	 *    STATBLOCK option's cost is a chip (`hChip`) — a per-family split the site makes in
+	 *    its generator, so the plugin must not "unify" it.
+	 *
+	 * These assertions exist because the earlier plugin look (one continuous accent rail,
+	 * costs in outlined pills) was structurally wrong in a way no gate could see: N discrete
+	 * per-option spines fused by padding-only rhythm read as a single bar, and the freeze
+	 * gate is byte-comparison, so it cannot tell "correct" from "plausible".
+	 */
+	describe('nested-card frame + featureblock option cost (SC-101)', () => {
+		const FRAME_ANCHOR = ":is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature";
+		/** Every rule whose selector targets a nested option card (any family shape). */
+		const nestedOptionRules = rules.filter((r) =>
+			/\.dse-feature__nested\s*>\s*\.dse-feature/.test(r.selector),
+		);
+
+		it('draws the frame with ONE shared mechanism naming BOTH families (S-4)', () => {
+			// The frame's geometry lives in exactly one rule, and that rule's anchor is the
+			// two-family :is() — not a per-family copy. A future fork ("just add a
+			// .dse-fb-only frame") produces either two rules or a single-family anchor, and
+			// fails here.
+			const frame = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(FRAME_ANCHOR) &&
+					/border-radius:\s*9px/.test(r.body),
+			);
+			expect(frame).toHaveLength(1);
+			expect(frame[0].selector).toContain(':is(.dse-sb, .dse-fb)');
+			// site: padding .7rem .85rem .78rem (written as longhands here so the act-lane
+			// and flat-mode overrides can each move one side without order fragility).
+			expect(frame[0].body).toMatch(/padding-top:\s*0\.7rem/);
+			expect(frame[0].body).toMatch(/padding-right:\s*0\.85rem/);
+			expect(frame[0].body).toMatch(/padding-bottom:\s*0\.78rem/);
+		});
+
+		it('never forks the frame into a single-family rule', () => {
+			// Any Steel rule that paints frame geometry/fill on a nested option must go
+			// through the shared :is() anchor. A `.dse-fb .dse-feature__nested > .dse-feature`
+			// (or `.dse-sb …`) rule carrying the recipe is the fork this pins against.
+			const forks = nestedOptionRules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					!r.selector.includes(':is(.dse-sb, .dse-fb)') &&
+					/(border-radius:\s*9px|background:\s*rgba\(0,\s*0,\s*0,\s*0\.(16|022)\))/.test(r.body),
+			);
+			expect(forks).toHaveLength(0);
+		});
+
+		it('separates consecutive options with a REAL gap on the list, not padding rhythm', () => {
+			const list = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					/:is\(\.dse-sb, \.dse-fb\) \.dse-feature__nested$/.test(r.selector.trim()),
+			);
+			expect(list).toHaveLength(1);
+			expect(list[0].body).toMatch(/display:\s*flex/);
+			expect(list[0].body).toMatch(/gap:\s*0\.65rem/); // site .sb__features/.fb__feats
+		});
+
+		it('frames on .dse-feature but bars on [data-dse-act] — an unmapped option still gets its card', () => {
+			// renderFeature.ts sets neither attribute nor --dse-act alias when the action type
+			// does not map, so keying the FRAME on [data-dse-act] would silently un-card those
+			// options. The site always frames and lets --act fall back.
+			const frame = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(FRAME_ANCHOR) &&
+					/border-radius:\s*9px/.test(r.body),
+			);
+			expect(frame!.selector).not.toContain('.dse-feature[data-dse-act]');
+			// …while the bar's own radius (so it hugs the rounded corner) IS act-keyed.
+			const bar = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes('.dse-feature[data-dse-act]::before') &&
+					/border-top-left-radius:\s*9px/.test(r.body),
+			);
+			expect(bar).toBeDefined();
+			expect(bar!.selector).toContain(':is(.dse-sb, .dse-fb)');
+		});
+
+		it('fills with translucent BLACK (the bleed-through material), never --dse-surface-sunken', () => {
+			const fill = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(FRAME_ANCHOR) &&
+					/^\s*background:/m.test(r.body),
+			);
+			// dark + the body.theme-light twin
+			expect(fill).toHaveLength(2);
+			const dark = fill.find((r) => !r.selector.includes('theme-light'))!;
+			const light = fill.find((r) => r.selector.includes('theme-light'))!;
+			expect(dark.body).toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*0\.16\)/);
+			expect(light.body).toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*0\.022\)/);
+			// SC-100's dark-mode material finding: the sunken WHITE wash occludes the parent
+			// card's gradient, which is the whole point of the translucent-black fill.
+			for (const r of fill) expect(r.body).not.toContain('--dse-surface-sunken');
+		});
+
+		it('tiers correctly: fill is screen-only, geometry reaches print (S-1(a))', () => {
+			const PRINT_GUARD = /:not\(\[data-dse-print="on"\]\)/;
+			const frameRules = nestedOptionRules.filter(
+				(r) => STEEL_SCOPE.test(r.selector) && r.selector.includes(':is(.dse-sb, .dse-fb)'),
+			);
+			expect(frameRules.length).toBeGreaterThan(2);
+			for (const r of frameRules) {
+				const paintsFill = /^\s*background:/m.test(r.body);
+				expect(PRINT_GUARD.test(r.selector)).toBe(paintsFill);
+			}
+		});
+
+		it('does not reach the kit / display card family or the standalone Feature element', () => {
+			// CardLayout.ts:382 + layouts.ts:235 mount the SAME renderFeatureList into a
+			// `.dse-card`; the standalone element root wears neither .dse-sb nor .dse-fb.
+			// Both must miss the frame by construction — this is what keeps
+			// kit--steel-print.png frozen.
+			// Rules that PAINT a frame — the `flat` mode rules below cancel one
+			// (background: none / border-radius: 0) and are deliberately not in scope.
+			const frameRules = nestedOptionRules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					/border-radius:\s*9px|background:\s*rgba\(/.test(r.body),
+			);
+			expect(frameRules.length).toBeGreaterThan(0);
+			for (const r of frameRules) {
+				expect(r.selector).toContain(':is(.dse-sb, .dse-fb)');
+				expect(r.selector).not.toContain('.dse-card');
+				expect(r.selector).not.toContain("[data-dse-element='feature']");
+			}
+		});
+
+		it("the statblock 'flat' feature-style pref still flattens (no frame, no gap)", () => {
+			const flat = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) && r.selector.includes("[data-dse-sb-featstyle='flat']"),
+			);
+			expect(flat.length).toBeGreaterThanOrEqual(3);
+			expect(flat.some((r) => /gap:\s*0\s*;/.test(r.body))).toBe(true);
+			const card = flat.find((r) => /background:\s*none/.test(r.body));
+			expect(card).toBeDefined();
+			expect(card!.body).toMatch(/border-radius:\s*0\s*;/);
+			// …and the light twin is restated, because the frame's own light rule
+			// out-specifies a plain mode rule.
+			expect(card!.selector).toContain('body.theme-light');
+			// The act lane needs the SAME light arm for the SAME reason — a single-arm
+			// restore is out-specified by the light twin above and the spine lands on top
+			// of the first character in light + flat. (Found by a live computed-style
+			// probe; this assertion is what keeps it found.)
+			const lane = flat.find((r) => /padding-left:\s*calc\(3px \+ 0\.55em\)/.test(r.body));
+			expect(lane).toBeDefined();
+			expect(lane!.selector).toContain('body.theme-light');
+			// Sheet convention (pref-reflection.test.ts): the DEFAULT value is never named.
+			expect(css).not.toContain("data-dse-sb-featstyle='card'");
+		});
+
+		it("a featureblock option's cost moves to the name's row and loses the chip box", () => {
+			const cost = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(
+						".dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right",
+					) &&
+					/grid-area:/.test(r.body),
+			);
+			expect(cost).toBeDefined();
+			expect(cost!.body).toMatch(/grid-area:\s*2 \/ 3/); // primary lane, right column
+			// un-boxed: every piece of the base --chip chrome is cancelled
+			expect(cost!.body).toMatch(/background:\s*none/);
+			expect(cost!.body).toMatch(/border:\s*none/);
+			expect(cost!.body).toMatch(/box-shadow:\s*none/);
+			expect(cost!.body).toMatch(/padding:\s*0\s*;/);
+			// Structure tier — the re-placement and the un-boxing reach print together;
+			// a lane-moved cost still wearing a box is a half-state the site has no version of.
+			expect(cost!.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
+
+			// …and the descriptor it displaced drops to the deck lane.
+			const descriptor = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(".dse-fb .dse-feature > .dse-head > .dse-head__primary--right"),
+			);
+			expect(descriptor).toBeDefined();
+			expect(descriptor!.body).toMatch(/grid-area:\s*3 \/ 3/);
+		});
+
+		it("renders that cost as the site's --mini display text (uppercase title face, role-tinted)", () => {
+			const mini = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(
+						".dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right",
+					) &&
+					/text-transform:/.test(r.body),
+			);
+			expect(mini).toBeDefined();
+			// The site's mini rides the LARGE-HEADER face. In the plugin that is the Title
+			// slot, and SC-112 Task 5's Legacy font-slot gate requires every Title consumer
+			// to be theme-agnostic — so the face is routed from the consolidated block, not
+			// declared here. (steelTypography.test.ts fails if this ever moves back inline.)
+			expect(mini!.body).not.toMatch(/font-family:/);
+			const titleRouting = rules.find(
+				(r) =>
+					/font-family:\s*var\(--dse-font-title\)\s*;/.test(r.body) &&
+					r.selector.includes(
+						'.dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right',
+					),
+			);
+			expect(titleRouting).toBeDefined();
+			expect(STEEL_SCOPE.test(titleRouting!.selector)).toBe(false);
+			expect(mini!.body).toMatch(/text-transform:\s*uppercase/);
+			expect(mini!.body).toMatch(/line-height:\s*1\.04/);
+			expect(mini!.body).toMatch(/color:\s*var\(--dse-role,\s*var\(--dse-heading\)\)/);
+			// em, not the site's rem literal — the site's rem base is 20px, the plugin's 16px
+			// (gap inventory §A); 1.35em holds the site's mini/name RATIO at the plugin's scale.
+			expect(mini!.body).toMatch(/font-size:\s*1\.35em/);
+			// The Steel flat-chip block small-caps + tracks every --chip slot; the mini is neither.
+			expect(mini!.body).toMatch(/font-variant:\s*normal/);
+			expect(mini!.body).toMatch(/letter-spacing:\s*normal/);
+			// Display tier: screen-only, like every other Steel display-face treatment.
+			expect(mini!.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+		});
+
+		it('leaves the STATBLOCK and standalone cost on the site\'s forged pill', () => {
+			// The site splits this per family in its generator (statblock_card.go hChip vs
+			// featureblock_page.go hMini), so the cost-as-text rules must name .dse-fb ONLY…
+			const costRules = rules.filter(
+				(r) => STEEL_SCOPE.test(r.selector) && r.selector.includes('.dse-head__eyebrow--right'),
+			);
+			expect(costRules.length).toBeGreaterThan(0);
+			for (const r of costRules) {
+				expect(r.selector).toContain('.dse-fb ');
+				expect(r.selector).not.toContain('.dse-sb');
+			}
+			// …and the forged pill itself must survive untouched for everyone else.
+			const pill = rules.find(
+				(r) =>
+					r.selector.trim() ===
+					'[data-dse-theme=\'steel\']:not([data-dse-print="on"]) .dse-feature .dse-head__eyebrow--chip',
+			);
+			expect(pill).toBeDefined();
+			expect(pill!.body).toMatch(/background-image:\s*var\(--dse-sheen\)/);
+			expect(pill!.body).toMatch(/box-shadow:\s*var\(--dse-chip-bevel\)/);
+		});
+	});
+
 	describe('dead selectors', () => {
 		// `.dse-section__head` is a plan-draft name that never existed in the DOM
 		// (renderFeature.ts emits only `__title` + `__body`). It is named in the CSS prose,
