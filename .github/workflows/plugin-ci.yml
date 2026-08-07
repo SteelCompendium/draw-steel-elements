@@ -34,3 +34,47 @@ jobs:
 
       - name: Bundle must build
         run: npm run build-no-check
+
+      # ── Steel parity gate (SC-109 / FOLLOWUPS #36) ─────────────────────────────────
+      # Half of the anti-drift mechanism (the jest material contract,
+      # test/dom/theme/steelMaterial.test.ts) already ran under "Test". This is the other
+      # half: the computed-style diff of the plugin's Steel theme against the live v2
+      # site. It used to run only when a human remembered to — and human discipline is
+      # exactly what failed before (plan 19 shipped a wholly flat Steel theme and PASSED
+      # human review).
+      #
+      # `npm run parity` is OFFLINE. It builds the harness bundle, renders it from a
+      # file:// URL with Playwright, and diffs against the COMMITTED baseline at
+      # visual-harness/parity/baseline/site-inventory.json. No step in that chain
+      # (esbuild.mjs -> plugin-capture.mjs -> diff.mjs -> compare.cjs) contains a URL.
+      #
+      # FAILURE POLICY — the baseline is NEVER refreshed here. `npm run parity:site` is
+      # the only script that touches the live site, and it is a deliberate human action:
+      # letting CI regenerate the reference of record would silently re-point the
+      # contract at whatever the site happens to look like today, which is the one thing
+      # this gate exists to prevent. A baseline that no longer covers the contract
+      # therefore FAILS the build with an explicit "STALE BASELINE" message naming
+      # `npm run parity:site` as the fix (compare.cjs `checkBaselineCoverage`).
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          # Keyed on the lockfile: a playwright version bump needs a fresh download,
+          # anything else reuses it and keeps this step to a few seconds.
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-playwright-
+
+      # Chromium only — the harness never launches firefox/webkit. `--with-deps` adds the
+      # shared libraries the runner image does not guarantee; it is a no-op apt run when
+      # they are already present, and the browser download itself is skipped on a cache hit.
+      - name: Install Chromium for the parity harness
+        run: npx playwright install --with-deps chromium
+
+      # No WARN special-casing: since SC-110 the contract is
+      #   exit 0  <=>  0 GAPs AND 0 undeclared WARNs
+      # so the exit code is the whole story. A finding is excused only by an explicit
+      # `declaredDeferrals` entry in selector-map.json citing its FOLLOWUPS/ticket number,
+      # which prints as DECLARED and is itself validated (and fails if it goes stale).
+      # diff.mjs echoes the full report to stdout, so a failure is readable in the log.
+      - name: Steel parity (plugin vs the committed v2 site baseline)
+        run: npm run parity
