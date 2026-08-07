@@ -8,7 +8,7 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 | When you… | Run | Notes |
 |---|---|---|
-| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (8 today — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (9 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
 | Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
 | Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
 | Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
@@ -242,7 +242,8 @@ Two severities:
   `test/unit/parity/compare.test.ts` → "an UNDECLARED warn … FLIPS the gate to failing".
 - **`DECLARED`** — a `GAP` or `WARN` that a `declaredDeferrals` entry has explicitly excused.
   This is the **only** thing that keeps a finding from failing the run; see "Declared
-  deferrals" below.
+  deferrals" below. **Material rules (1–3) can never be declared** — see "Which classes are
+  declarable".
 
 ### Known blind spots of the current diff
 
@@ -325,12 +326,35 @@ rules it is authoritative for:
 ```
 
 `owns` **never adds or removes coverage — it only moves a rule to the pair that measures it
-honestly.** `compare.cjs` enforces that mechanically: for every plugin selector named by more
-than one pair, each pair must declare `owns`, the sets must be **pairwise disjoint**, and
-their **union must be the full rule list**. Drop a rule and the run dies before comparing
-anything. A pair naming a plugin node no other pair names may narrow (e.g. `statblock-wrap`
-owns only `margin-top`/`margin-bottom`, because the plate rules live on the `statblock` pair
-against `.dse-sb`); its `why` must say so.
+honestly.** `compare.cjs` enforces that mechanically **on every plugin selector, shared or
+not**: each rule must be owned by **exactly one** pair naming that selector, so the owned sets
+are pairwise disjoint and their union is the full rule list. Drop a rule and the run dies
+before comparing anything. (A pair sharing a selector with another must additionally declare
+`owns` at all — an implicit "everything" would collide.)
+
+> **This invariant used to hold only for *shared* selectors** (`if (group.length < 2)
+> continue`), which left every pair naming a plugin node nobody else named free to narrow
+> `owns` to anything and drop the rest with **no error, no dead declaration, exit 0** — a
+> second mute button that bypassed all five declaration checks. It was live: `statblock-wrap`
+> narrowed to `margin-top`/`margin-bottom` and was hiding two real `line-height` rows (site
+> 27.2px vs plugin 24px, both schemes) that are now declared as FOLLOWUPS #52. Fixed in the
+> SC-110 fix round; regression tests in `test/unit/parity/compare.test.ts` →
+> "narrowing `owns` on an UNSHARED plugin node cannot drop rules", including the erasure
+> attack replayed against the shipped map.
+
+**Dropping a rule needs an `excludes` entry**, priced exactly like a declared deferral:
+
+```jsonc
+{ "id": "solo", "site": ".s", "plugin": ".p",
+  "owns":     ["margin-top", "margin-bottom"],
+  "excludes": [{ "rule": "ink", "why": "SC-nnn — the site node paints no glyphs" }] }
+```
+
+Each entry names one rule and must cite a workspace `FOLLOWUPS.md` number or a Linear ticket;
+a rule may be owned or excluded, never both, and `excludes` without `owns` is an error (it
+would be inert). **Nothing in the shipped map uses `excludes` today** — the honest shapes are
+"add the sibling pair that measures the rule" or "drop `owns` and declare the rows that
+surfaces", which is what `statblock-wrap` now does.
 
 Valid rule names: `bg`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
 `line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,
@@ -351,27 +375,59 @@ This exists for one legitimate case: a real difference that cannot be closed her
 a way to silence something CSS could close, and deleting or weakening a pair is never
 acceptable either.
 
-Five things are enforced mechanically, so the array cannot quietly become a mute button:
+Six things are enforced mechanically, so the array cannot quietly become a mute button:
 
 1. the `pair` must exist;
-2. the `rule` must be a real rule name (`capture` for the "never rendered/captured" row);
-3. the pair must actually **own** that rule — otherwise the declaration could never match;
-4. `why` must cite a workspace `FOLLOWUPS.md` number or a Linear ticket
-   (`/FOLLOWUPS #\d+|SC-\d+/`), and should carry the site value, the plugin value, and why
-   this is not a CSS fix;
-5. **a declaration that matches nothing this run fails the run** — a stale excuse for a
+2. the `rule` must be a real rule name — including the two **directional** capture rules,
+   `capture-site` ("the site page legitimately does not carry this node") and
+   `capture-plugin` ("the plugin never rendered it"). They are separate on purpose: one
+   undirected `capture` meant a declaration filed for a missing *site* page also silenced
+   *"plugin selector … never rendered"*, which is the exact "a pair went blind" failure
+   SC-110 made fatal;
+3. the rule must be **declarable** — see "Which classes are declarable" below;
+4. the pair must actually **own** that rule — otherwise the declaration could never match;
+5. `why` must cite a workspace `FOLLOWUPS.md` number or a Linear ticket
+   (`/FOLLOWUPS #[1-9]\d*|SC-[1-9]\d*/` — `SC-0` and `FOLLOWUPS #0` are shape-valid noise and
+   are rejected), and should carry the site value, the plugin value, and why this is not a
+   CSS fix;
+6. **a declaration that matches nothing this run fails the run** — a stale excuse for a
    finding that has since been fixed or renamed gets deleted, not inherited.
 
 All of the above is unit-tested in `test/unit/parity/compare.test.ts`, including the shipped
 `selector-map.json` itself (a typo in the contract breaks jest, not just parity).
 
-**Currently declared: 8 entries / 16 rows** (both schemes each), in three findings:
+### Which classes are declarable
+
+Every rule carries a **property class** (`RULE_CLASS` in `compare.cjs`), and the class decides
+whether a divergence in it may ever be excused:
+
+| Class | Rules | Declarable? |
+|---|---|---|
+| **material** | `bg`, `shadow`, `hairline-top`, `hairline-bottom` | **NEVER** |
+| geometry | `padding-top/right/bottom/left`, `margin-top`, `margin-bottom` | yes |
+| typography | `font-size`, `line-height`, `body-font`, `letter-spacing` | yes |
+| ink | `ink` | yes |
+| capture | `capture-site`, `capture-plugin` | yes |
+
+**Material is non-declarable because it is the failure this gate was built to catch.** Plan
+19 shipped a wholly flat Steel theme that passed human review — someone looked at screenshots
+and said "close match". A missing gradient, a missing bevel, a missing hairline is *always*
+closable in `styles-source.css`, so there is no such thing as a material divergence that is a
+pixel decision. A declaration naming one is a hard contract error with the reason attached, and
+the run dies before comparing anything. Geometry, typography and ink stay declarable because
+that is where real pixel decisions live (a 12.5% type enlargement, 26px of new block rhythm) —
+calls that belong to Scott, not to whoever is holding the gate.
+
+Deliberately conservative. Relaxing it is a one-line change to `NON_DECLARABLE_CLASSES`.
+
+**Currently declared: 9 entries / 18 rows** (both schemes each), in four findings:
 
 | Finding | Rows | Site | Plugin | Status |
 |---|---|---|---|---|
 | `pr-chars:ink` (FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
 | `section-tag:font-size` / `:line-height` / `:letter-spacing` (FOLLOWUPS #51) | 6 | 18px / 30.6px / 1.8px (`.9rem`, `.1em`) | 16px / 27.2px / 1.12px (`.07em`) | **pixel decision** — one type-scale call; line-height is a pure consequence of font-size |
 | `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` Legacy base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
+| `statblock-wrap:line-height` (FOLLOWUPS #52) | 2 | `.sb-wrap` 27.2px (16px × 1.7) | host 24px (Obsidian's 1.5) | **one-line CSS fix, deferred** — the Plan 21 Task 2 `line-height: 1.7` group (`styles-source.css` ~3512) lists the feature host, the featureblock host, `.dse-sb` and `.dse-card` but **not** the statblock host. Surfaced by the SC-110 fix round; declared only because that round changes no plugin CSS |
 
 **Deliberately NOT declared**, for contrast, so the bar is legible:
 `statblock-band` / `featureblock-band` `margin-top` (site `0px` vs plugin `-8px`) stay
