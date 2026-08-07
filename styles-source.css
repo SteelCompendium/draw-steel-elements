@@ -3544,12 +3544,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb
    default-value convention the `card` value is never named in a selector
    (pref-reflection.test.ts asserts that). The act lane reverts to the general
    unframed reservation, and the light twin is restated because the frame's own
-   light rule out-specifies the plain mode rule. */
-[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested {
+   light rule out-specifies the plain mode rule.
+
+   `:not(.dse-fb *)` (SC-101 fix round, L-2): the frame's own descendant combinator is
+   deliberate — it lets an fb NESTED inside a statblock feature frame its options too
+   (~:3464-3467 above, the Angulotl Daybringer villain-action composition) — but that same
+   descendant reach means these `[data-element='statblock'][…-featstyle='flat'] …` mode
+   rules, unqualified, would ALSO flatten that nested fb's own option cards. The site keeps
+   them separate keys (`data-fb-featstyle`, its own default `card`, settings-panel.js:44-45);
+   the plugin has no fb-side pref yet (catalog.ts:231, sb only), so the fix is to stop the
+   sb's flat mode at its OWN options and never let it reach inside a nested `.dse-fb`. Every
+   arm below excludes any option with a `.dse-fb` ancestor. */
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested:not(.dse-fb *) {
 	gap: 0;
 }
-[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature,
-body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature {
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature:not(.dse-fb *),
+body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature:not(.dse-fb *) {
 	background: none;
 	border-radius: 0;
 	padding-top: 0.25rem;
@@ -3562,9 +3572,20 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
    spine overlapping the first character in light+flat. (Caught by a live
    getComputedStyle probe, not by reading the cascade — light `padding-left` came back
    0px while dark came back 11.8px.) */
-[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act],
-body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act] {
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *),
+body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *) {
 	padding-left: calc(3px + 0.55em);
+}
+/* SC-101 fix round, L-1: the arms above cancel the frame's own background/border-radius/
+   padding, but not the BAR's `::before` left radii (~:3506-3509) — a 3px-wide bar under a
+   9px `border-top/bottom-left-radius` that the UA clamps to ~1.5px, cosmetically negligible
+   but a card-only ornament surviving into the explicitly frameless mode (the site's flat
+   mode uses a plain square `border-left`). Cancelled here on the same specificity footing;
+   no `body.theme-light` twin needed — the bar radius carries no light/dark divergence, so
+   there is no out-specified light arm to restate. */
+[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *)::before {
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
 }
 
 /* Card ground (SC-10): the site's steel-kit recipe — forged card gradient +
@@ -4028,7 +4049,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    — the SC-112 Task 5 contract, enforced by steelTypography.test.ts's Legacy font-slot
    gate. No-op at defaults (Label, which this slot rode before via the --chip routing,
    chains to Title), so the Legacy featureblock shots stay byte-identical — proven by the
-   freeze check, not asserted. */
+   freeze check, not asserted.
+   HONEST CAVEAT (fix round, L-3): "no-op" is a defaults-only claim. This slot MOVED from
+   Label to Title, not merely restated — so a user who overrides ONLY the Label face (not
+   Title) will see a Legacy featureblock's cost switch from their Label face to Title,
+   where before this task it followed Label. Site-correct (the site's mini rides the
+   large-header face, same as every other Title-slot consumer) and the move is required by
+   the SC-112 contract this rule already cites — but it IS a Legacy-visible behavior change
+   under that one non-default preference, not a pure no-op in every configuration. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-card__title,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__name,
@@ -5461,6 +5489,50 @@ body.theme-light
 	);
 	border-bottom: 1px solid var(--dse-role, var(--dse-role-leader));
 	border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
+}
+
+/* -- Featureblock head-band notch twin (SC-101 fix round, M-1): Task 2 gave the statblock
+   this notch (~:5283-5323) and explicitly deferred the featureblock twin to "if S-4 = (a)"
+   (task-2-report.md); S-4 IS (a) — the nested-card frame above is SHARED — so the twin was
+   in scope for this task and is closed here. Same site precedent as the band rule above
+   (steel-featureblock.css:65-69 .fb__head::after), ported onto the featureblock's own head.
+   Two differences from the statblock twin, both because the fb band is UNCONDITIONAL (no
+   [data-dse-role] gate — a malice/unmapped-type block still bands via
+   var(--dse-role, var(--dse-role-leader)), ~:5330-5338 above):
+     - neither the suppression nor the notch is gated on [data-dse-role]; the notch's hue
+       uses the SAME fallback chain as the band it sits on, so an unmapped block still gets
+       a (grey) notch instead of silently losing it.
+     - .dse-fb's own .dse-hr divider is a DIFFERENT node from the statblock's — the
+       stat-header/features rule mounted at featureblock/view.ts:133 — so this is its own
+       suppression, scoped EXACTLY to `.dse-fb > .dse-hr` (never bare .dse-hr — see the
+       statblock suppression's comment above for the shared-primitive rationale: the class is
+       also used by the condition list and ds-horizontal-rule, each with its own frozen shots).
+   Structure tier, no print guard (S-1(a), print follows structure) — matches the statblock
+   twin's tier exactly; the band's background/border above keeps its own
+   :not([data-dse-print="on"]) material guard untouched. Freeze note: `featureblock--steel-
+   print.png` and `featureblock-advancement--steel-print.png` already moved earlier in this
+   task (the S-4 frame), so this notch adds no NEW lines to the freeze union — it changes
+   the bytes of those two lines again. */
+[data-dse-theme='steel'] .dse-fb > .dse-hr {
+	display: none;
+}
+[data-dse-theme='steel'] .dse-fb > .dse-head {
+	position: relative;
+}
+[data-dse-theme='steel'] .dse-fb > .dse-head::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	width: 9px;
+	height: 9px;
+	transform: translate(-50%, 50%) rotate(45deg);
+	background: var(--dse-role, var(--dse-role-leader));
+	/* SUPPORT-FLOOR FALLBACK (SC-121 M-1) — same discipline as the statblock notch above. */
+	box-shadow: 0 0 0 4px var(--dse-surface), 0 0 0 5px var(--dse-role, var(--dse-role-leader));
+	box-shadow:
+		0 0 0 4px var(--dse-surface),
+		0 0 0 5px color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface));
 }
 
 /* -- Level>0 advancement rail: same fallback correction as the band above.

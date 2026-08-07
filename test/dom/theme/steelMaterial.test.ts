@@ -269,9 +269,15 @@ describe('Steel material contract', () => {
 		it('suppresses .dse-hr EXACTLY under .dse-sb, and nowhere else in the sheet', () => {
 			// A whole-file scan (not merely a Steel-scoped one) so a stray legacy/global
 			// suppression — which would break the three divider-asserting test files — fails
-			// this test too, not just the wrong one.
+			// this test too, not just the wrong one. Scoped to .dse-sb specifically: the
+			// SC-101 fix round (M-1) added the featureblock's OWN `.dse-fb > .dse-hr`
+			// suppression (asserted in its own describe block below), so an unscoped filter
+			// now matches two rules.
 			const suppressions = rules.filter(
-				(r) => /display:\s*none\s*;/.test(r.body) && /\.dse-hr\b/.test(r.selector),
+				(r) =>
+					/display:\s*none\s*;/.test(r.body) &&
+					/\.dse-hr\b/.test(r.selector) &&
+					r.selector.includes('.dse-sb'),
 			);
 			expect(suppressions).toHaveLength(1);
 			const [rule] = suppressions;
@@ -307,7 +313,12 @@ describe('Steel material contract', () => {
 		});
 
 		it('paints a 9px role-hued ::after notch, structure tier, under Steel only', () => {
-			const afters = rules.filter((r) => r.selector.includes('.dse-head::after'));
+			// Scoped to .dse-sb specifically: the SC-101 fix round (M-1) gave the featureblock
+			// its own twin (`.dse-fb > .dse-head::after`, below), so a bare '.dse-head::after'
+			// filter now matches two rules — one per family.
+			const afters = rules.filter(
+				(r) => r.selector.includes('.dse-sb') && r.selector.includes('.dse-head::after'),
+			);
 			expect(afters).toHaveLength(1);
 			const [rule] = afters;
 			expect(rule.selector.replace(/\s+/g, ' ').trim()).toBe(
@@ -340,6 +351,93 @@ describe('Steel material contract', () => {
 			expect(boxShadows[1]).toMatch(
 				/color-mix\(in srgb, var\(--dse-role\) 40%, var\(--dse-surface\)\)/,
 			);
+		});
+	});
+
+	describe('featureblock notch twin (SC-101 fix round, M-1)', () => {
+		// Task 2 deferred this twin to "if S-4 = (a)"; Task 5 made S-4 = (a) (the nested-card
+		// frame is SHARED) but shipped without it — closed here. Unlike the statblock twin,
+		// the fb band is UNCONDITIONAL (no [data-dse-role] gate, unmapped types still band via
+		// the var(--dse-role, var(--dse-role-leader)) fallback), so the suppression/notch here
+		// must NOT be gated on [data-dse-role] either — gating it would silently drop the notch
+		// on every malice/unmapped-type block.
+
+		it('suppresses .dse-hr EXACTLY under .dse-fb, and nowhere else in the sheet', () => {
+			const suppressions = rules.filter(
+				(r) => /display:\s*none\s*;/.test(r.body) && /\.dse-hr\b/.test(r.selector),
+			);
+			// Exactly two suppressions in the whole sheet: the statblock's (above) and this one.
+			expect(suppressions).toHaveLength(2);
+			const fb = suppressions.find((r) => r.selector.includes('.dse-fb'));
+			expect(fb).toBeDefined();
+			expect(fb!.selector.replace(/\s+/g, ' ').trim()).toBe(
+				"[data-dse-theme='steel'] .dse-fb > .dse-hr",
+			);
+			expect(STEEL_SCOPE.test(fb!.selector)).toBe(true);
+		});
+
+		it('gives the fb head band position:relative on a structure-tier twin, UNGATED on [data-dse-role]', () => {
+			const twin = rules.find(
+				(r) => r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-head",
+			);
+			expect(twin).toBeDefined();
+			expect(twin!.body).toMatch(/position:\s*relative\s*;/);
+
+			// the pre-existing MATERIAL twin (background/border) keeps its print exclusion.
+			const material = rules.find(
+				(r) =>
+					r.selector.trim() ===
+					'[data-dse-theme=\'steel\']:not([data-dse-print="on"]) .dse-fb > .dse-head',
+			);
+			expect(material).toBeDefined();
+			expect(material!.body).not.toMatch(/position:\s*relative/);
+		});
+
+		it('paints a 9px notch on .dse-fb, hue-chained to the same fallback as the band, structure tier', () => {
+			// Exactly two `.dse-head::after` rules total: the statblock's (role-gated) and this
+			// one (ungated) — a future per-family fork or a third copy fails here.
+			const afters = rules.filter((r) => r.selector.includes('.dse-head::after'));
+			expect(afters).toHaveLength(2);
+
+			const fb = afters.find((r) => r.selector.includes('.dse-fb'));
+			expect(fb).toBeDefined();
+			expect(fb!.selector.replace(/\s+/g, ' ').trim()).toBe(
+				"[data-dse-theme='steel'] .dse-fb > .dse-head::after",
+			);
+			expect(STEEL_SCOPE.test(fb!.selector)).toBe(true);
+			// NOT gated on [data-dse-role] — the fb band isn't either.
+			expect(fb!.selector).not.toContain('[data-dse-role]');
+
+			const body = fb!.body;
+			expect(body).toMatch(/content:\s*''\s*;/);
+			expect(body).toMatch(/position:\s*absolute\s*;/);
+			expect(body).toMatch(/width:\s*9px\s*;/);
+			expect(body).toMatch(/height:\s*9px\s*;/);
+			expect(body).toMatch(/rotate\(45deg\)/);
+			// Same hue fallback chain as the band above it, not the statblock's bare --dse-role.
+			expect(body).toMatch(/background:\s*var\(--dse-role,\s*var\(--dse-role-leader\)\)\s*;/);
+			expect(body).not.toMatch(/var\(--dse-rule\)/);
+
+			const boxShadows = Array.from(body.matchAll(/box-shadow:[^;]+;/g)).map((m) => m[0]);
+			expect(boxShadows).toHaveLength(2);
+			expect(boxShadows[0]).not.toMatch(/color-mix/);
+			expect(boxShadows[1]).toMatch(
+				/color-mix\(in srgb, var\(--dse-role,\s*var\(--dse-role-leader\)\) 40%, var\(--dse-surface\)\)/,
+			);
+		});
+
+		it('no rule reaches print (S-1(a): structure tier, no print exclusion needed)', () => {
+			const fbNotchRules = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					(r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-hr" ||
+						r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-head" ||
+						r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-head::after"),
+			);
+			expect(fbNotchRules).toHaveLength(3);
+			for (const r of fbNotchRules) {
+				expect(r.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
+			}
 		});
 	});
 
@@ -603,6 +701,38 @@ describe('Steel material contract', () => {
 			expect(lane!.selector).toContain('body.theme-light');
 			// Sheet convention (pref-reflection.test.ts): the DEFAULT value is never named.
 			expect(css).not.toContain("data-dse-sb-featstyle='card'");
+		});
+
+		it('flat mode also cancels the BAR\'s card-only left radius (fix round, L-1)', () => {
+			const barReset = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes("[data-dse-sb-featstyle='flat']") &&
+					r.selector.includes('[data-dse-act]') &&
+					r.selector.trim().endsWith('::before'),
+			);
+			expect(barReset).toBeDefined();
+			expect(barReset!.body).toMatch(/border-top-left-radius:\s*0\s*;/);
+			expect(barReset!.body).toMatch(/border-bottom-left-radius:\s*0\s*;/);
+		});
+
+		it("flat mode stops at the statblock's OWN options — a nested featureblock keeps its card frame (fix round, L-2)", () => {
+			// Every sb `flat` mode rule that reaches into `.dse-feature__nested` must exclude
+			// anything with a `.dse-fb` ancestor, or a nested fb's own options (a real
+			// composition — a villain action containing a Malice Features block, per the
+			// frame rule's own comment above) lose their card frame to the OUTER statblock's
+			// pref, even though the site keys sb/fb featstyle independently
+			// (settings-panel.js:44-45, fb default `card`).
+			const flatOptionRules = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes("[data-dse-sb-featstyle='flat']") &&
+					r.selector.includes('.dse-feature__nested'),
+			);
+			expect(flatOptionRules.length).toBeGreaterThanOrEqual(4); // gap, card+light, act-lane+light, bar radius
+			for (const r of flatOptionRules) {
+				expect(r.selector).toMatch(/:not\(\.dse-fb \*\)/);
+			}
 		});
 
 		it("a featureblock option's cost moves to the name's row and loses the chip box", () => {
