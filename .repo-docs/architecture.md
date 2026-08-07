@@ -219,6 +219,89 @@ different DOM per theme; do not invent a second mechanism.
   surface inside a Steel card: reach for the token, and only hardcode a literal when the
   site measurably uses a different step of its ladder.
 
+### The action spine: a nested-card frame, not a standalone ornament (plan 25 / SC-101–103)
+
+The Steel action-type accent (the coloured left bar on an ability/feature card, keyed off
+`[data-dse-act]`) had drifted from the site's actual rule for years — read this before
+touching `.dse-feature[data-dse-act]`, `renderFeature.ts`'s `actionTypeOf`, or the statblock/
+featureblock head band. **The rule the site actually draws:** the spine is not a standalone
+card ornament, it is the left edge of a per-option **card** inside a nested feature list, and
+the site paints the *identical* declaration in two sheets and *nothing* in the third:
+
+| context | selector (site) | selector (plugin, Steel) | spine? |
+|---|---|---|---|
+| standalone ability/feature card | `.sc-ability` (no `border-left` anywhere; `--act` only tints the crest + eyebrow) | `[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]` | **no** — bar `display: none`, lane collapsed to 0 |
+| nested in a statblock or featureblock list | `[data-sb-featstyle="card"] .sb__feat` / `[data-fb-featstyle="card"] .fb__feat` (byte-identical recipe in both sheets) | `[data-dse-theme='steel'] :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature` (ONE shared rule, not a per-family fork) | **yes** — a full per-option card (fill, `9px` radius, real list `gap`) with the bar as its rounded left edge |
+| kit / display-card family (`CardLayout`'s `.dse-card`) | — | untouched by either rule above (anchored on `.dse-sb`/`.dse-fb`/`[data-dse-element='feature']`, none of which `.dse-card` carries) | unchanged (plain bar, no frame) — verified structurally, not assumed, and pinned by `kit--steel-print.png` staying in the freeze OK set |
+
+Both rules are **structure tier** (`[data-dse-theme='steel']`, no print exclusion — "print
+follows structure"; only the nested card's *fill* is `:not([data-dse-print="on"])`, matching
+the site's own `@media print` which keeps the border/radius/padding and drops only the
+background). The fail-safe: the **frame** keys on `.dse-feature`, the **bar** keys on
+`[data-dse-act]`, so an option whose action type doesn't map still gets a card, just with no
+coloured edge — matching the site, which always frames and lets `--act` fall back. Full
+selectors, fixture-shaped fill values and the flat-mode interaction: `styles-source.css`
+`~3408–3610` (inline comments there are the authoritative reference, this section is the map).
+
+**A future contributor's most likely mistake:** styling only the featureblock (or only the
+statblock) when a new nested-card concern comes up. Don't — it's one mechanism for both
+families (`:is(.dse-sb, .dse-fb)`), and `test/dom/theme/steelMaterial.test.ts` pins the shape
+so a per-family fork fails loudly.
+
+**The `villain` action type (SC-102).** `ActionType` (`src/elements/feature/renderFeature.ts`)
+is `'main' | 'maneuver' | 'triggered' | 'move' | 'none' | 'trait' | 'villain'` — the 7th and
+newest member. `actionTypeOf` resolves it in this order: `isTrait()` → `trait`; a real
+(non-blank, non-dash) `usage` line wins outright; otherwise a `cost` field starting with
+"villain action" (`isVillainCost`, links stripped, case-insensitive) → `villain`; otherwise the
+`ability_type` string ladder (villain matched **before** the generic "action" catch-all, since
+"Villain Action 1" contains "action"). `crestIconFor` maps it to Lucide's `skull`. Token:
+`--dse-act-villain` — `none` in Legacy, `#e0584b` in Steel dark (the site's literal, scheme-
+invariant — it is **not** re-listed in the Steel-light block on purpose, matching the site
+having no light variant), `#b03a2e` in both print blocks (a deliberate ink-economy darkening
+with no site value behind it). Full token-block-by-block reasoning and the guard-test
+arithmetic: workspace `docs/superpowers/dse-overhaul/D3-token-map.md`.
+
+**Why the classifier reads `cost`, not `ability_type` (the compendium-format archaeology).**
+steel-etl emits every villain action as `cost: "Villain Action N"` + the lone-dash
+`usage: "-"` and **no `ability_type` field at all** — `ability_type: Villain…` occurs zero
+times anywhere in `data-unified`. `isVillainCost` mirrors steel-etl's own classifier verbatim
+(`HasPrefix(lower(trim(linkText(cost))), "villain action")`, `statblock_page.go`/
+`featureblock_page.go`), including the markdown-link strip. Exactly **two** compendium shapes
+have ever existed for villain actions (verified against `data-unified` history):
+
+- **Legacy (vaults synced before the 2026-07-16 regen):** villain actions ship as **body
+  markdown only** — a `> ☠️ **Name ([Villain Action](scc…) N)**` blockquote callout, no
+  structured YAML feature at all. There is nothing to classify; these notes render as plain
+  prose, unchanged, until the user re-syncs (which 7.0.0 already prompts for).
+- **Current (2026-07-16 regen onward):** `cost: "Villain Action N"` + `usage: '-'`, no
+  `ability_type` — the shape `isVillainCost` classifies.
+
+No intermediate shape ever existed (`usage: Villain` / `ability_type: Villain` both have zero
+hits in the whole history), so `cost` + the `ability_type` fallback (for hand-authored notes,
+e.g. this element's own `example.yaml`) cover the entire structured universe — no compatibility
+branch was needed. `renderFeature.ts`'s `isVillainCost` doc comment carries this same note.
+
+**The statblock/featureblock diamond notch (SC-103).** The legacy ◆ divider
+(`kit/divider.ts`) mounts as a real, theme-agnostic DOM node — `statblock/view.ts` inserts it
+unconditionally after the characteristics strip, and three test files assert it in every
+theme. It therefore **cannot move or disappear in TS** without breaking Legacy. Steel instead
+hides it (`[data-dse-theme='steel'] .dse-sb > .dse-hr { display: none }` / the `.dse-fb`
+twin) and paints the site's real notch — `.sb__head::after` / `.fb__head::after`, a 9px
+role-hued diamond straddling the head band's bottom edge — as a Steel-scoped `::after` on
+`.dse-sb[data-dse-role] > .dse-head` / `.dse-fb > .dse-head` instead (`position: relative` +
+the `::after`, both structure tier so the notch's *placement* reaches print; the band's own
+background/border stay `:not([data-dse-print="on"])`). This is the general pattern for any
+future "the site draws X where the plugin's DOM node lives at Y" fix: hide the old node under
+Steel, paint the site's version as new Steel-scoped CSS on an existing anchor — never relocate
+or delete the shared DOM node itself.
+
+Deliberately **not** built here (scope boundary, not an oversight): villain-action **banding**
+(the site's default `<details>` grouping of villain actions into their own collapsible
+section, `.sb__band--villain`) — the plugin has no band concept at all today, it is a named
+setting in SC-123's inventory, and shipping only the inline presentation of an attribute whose
+site-default value is "banded" would make the attribute a lie. Filed as a FOLLOWUPS item
+linked from SC-102 and SC-123.
+
 ### Preferences (`src/prefs/`, D4)
 
 Descriptor-driven: one `PrefDescriptor` list drives storage, CSS reflection, the

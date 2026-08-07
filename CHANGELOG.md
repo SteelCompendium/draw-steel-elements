@@ -358,6 +358,36 @@ for what needs action.
   Obsidian install did. `npm run obsidian-shots` (spawns the real Obsidian
   binary) now stands as the regression coverage that browser-only gates
   structurally cannot provide for this class of bug.
+- [STEEL] Villain actions now render as their own action type instead of
+  flush left with no accent at all. A villain action's usage line is always a
+  placeholder dash, and the plugin's mapper was treating that placeholder as
+  a real value and never looking past it — so every villain action (Shoot!,
+  Form Up!, Lead From the Front, and every "Villain Action N" ability in your
+  synced compendium) fell through with no colour, no crest, nothing to mark
+  it as a villain action at a glance. It now carries its own red accent and a
+  skull crest, matching the site. Vault notes synced before 2026-07-16 still
+  show villain actions as plain prose (that's how they were written at the
+  time) — re-sync your compendium to get the new structured rendering
+  (SC-102).
+- [STEEL] An ability/feature card's coloured action-type bar no longer runs
+  down cards where the site never draws one. The site only puts that bar on
+  an option nested inside a statblock or featureblock's feature list — a
+  standalone ability page has no such bar, only a tinted crest and label.
+  The plugin drew the bar everywhere; it's now confined to nested lists,
+  matching the site (SC-102).
+- [STEEL] Featureblock and statblock feature lists now render each entry as
+  its own bordered, filled card — matching the site — instead of a single
+  unbroken accent line down the whole list with padding standing in for
+  separation. A malice block's options (or a statblock's abilities) now read
+  as visually discrete cards, each with its own rounded accent edge (SC-101).
+- [STEEL] A featureblock option's cost now renders as plain large display
+  text beside its name, matching the site, instead of a small outlined chip.
+  Statblock and standalone ability cards keep the existing forged cost pill
+  — the site itself only uses display text inside featureblocks (SC-101).
+- [STEEL] The statblock and featureblock's diamond notch now sits where the
+  site puts it — straddling the bottom edge of the head band, role-hued —
+  instead of appearing as a larger neutral divider further down the card,
+  between the characteristics strip and the feature list (SC-103).
 
 ## 5.1.1
 

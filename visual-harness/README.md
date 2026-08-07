@@ -49,6 +49,23 @@ One-time setup: `npx playwright install chromium`.
 the shim doesn't move that gate at all, so after editing `shim/obsidian.ts` re-run
 `npm run shots` yourself — CI won't catch a shim regression.
 
+**Fixture-authoring convention (plan 25 / SC-102 H-1 lesson).** A hand-authored fixture can
+pass every gate — tsc, jest, freeze, parity, a clean visual read — while the shipped content it
+claims to represent is still broken. SC-102's `feature`/`statblock` fixtures used
+`ability_type: Villain Action N` to exercise the villain classifier; every gate was green, but
+the real compendium pipeline (steel-etl) never emits `ability_type` for a villain action at all
+— it emits `cost: "Villain Action N"` + `usage: '-'`, so all 156 real villain actions in the
+books were still rendering with no spine, no crest, nothing. The fixture was corpus-**shaped**
+in the loose sense (a plausible villain ability) but not corpus-**exact** (the literal field
+shape the pipeline produces). **When a feature is classified from a pipeline-emitted field**
+(anything the classifier reads off parsed YAML — `cost`, `usage`, `ability_type`, etc., not a
+DOM/CSS structural concern), its fixture needs to be corpus-shaped: copy the field shape
+verbatim from a real `data-unified` source file (or as close as the harness's hand-authored
+fixtures get — a literal transcription, not an invented approximation), not just "shaped like
+a plausible example." A hand-authored approximation is fine for structural/CSS fixtures (kit,
+statblock layout, etc.) where there's no derivation logic to fool — it is NOT fine for
+anything a classifier branches on.
+
 ## v1 limits (spec §"Out of scope")
 
 Static states only in THIS (browser) camera — no hover/focus scripting, no CI pixel
