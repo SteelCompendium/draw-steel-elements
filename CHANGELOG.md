@@ -22,6 +22,17 @@ for what needs action.
   moment it rendered. The tracker now resolves SCC codes through the compendium
   reference system; hand-written file-path references are untouched, and
   encounters you generated before the fix start working with no edits (SC-134).
+- [BUGFIX] The stamina edit modal's math no longer runs backwards or overspends
+  (SC-133). Three fixes: a negative number typed into the Apply box inverted the
+  operation ("Damage -3" *granted* 3 temp stamina and saved it) — amounts are
+  now magnitudes; Spend Recovery near full stamina burned Recoveries for a
+  capped gain while the preview promised the full amount — the preview now
+  shows the real gain, a press that would heal nothing is a visibly disabled
+  button with the reason, and a Recovery is never consumed for zero gain; and
+  granting temp stamina now follows the book's take-higher rule instead of
+  stacking, correctly tracking temp already spent absorbing damage in the same
+  session. (How temp stamina is *drawn* — in the bar and the modal preview —
+  is the SC-132 redesign's job and unchanged here.)
 - [BREAKING] Compendium source moved from the retired `data-md-dse` repo to
   `data-unified` releases (unified Browse layout, `md-dse` format). Run
   "Sync compendium" after updating — your old release-tag setting is reset
