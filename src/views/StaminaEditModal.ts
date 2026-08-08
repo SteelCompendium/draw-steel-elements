@@ -22,7 +22,7 @@
 import type { App, Component } from 'obsidian';
 import { DseModal, iconButton, stepper, tooltip } from '@/framework/kit';
 import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
-import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
+import { StaminaBar } from '@model/StaminaBar';
 
 // ---------------------------------------------------------------------------------
 // Shared §3.5b template primitives (composed by BOTH stamina modals)
@@ -128,6 +128,11 @@ export function setButtonText(btn: IconButtonHandle, text: string): void {
  *  convention as the bar's own read-only tooltip) shown on Spend Recovery when no
  *  Recoveries remain. */
 const NO_RECOVERIES_TOOLTIP = 'No Recoveries remaining';
+/** SC-133 I3 (fix-round-1): same house rule, for the OTHER reason Spend Recovery
+ *  disables — Recoveries remain, but the next press would heal 0. Under the
+ *  rebased gain calc (see StaminaEditModal.recoverySpendResult) this can only
+ *  happen at the max-side cap, so the reason is always accurate. */
+const NO_GAIN_TOOLTIP = 'Already at maximum Stamina';
 /** The Spend Recovery button's own accessible name/tooltip (FOLLOWUPS #27-fix-round
  *  finding 1) — re-asserted whenever the button re-enables, so the reason tooltip
  *  above never sticks past the state it describes (native setTooltip stamps
@@ -299,11 +304,14 @@ export class StaminaEditModal extends DseModal {
 		// unbounded stepper walks 22 → 23 → 20 and Apply's clamp persists 20. A
 		// deliberate, no-corruption deviation (both persist in-range values) — PENDING
 		// maintainer sign-off on strict byte-compat vs. this cleaner behavior.
-		// (SC-133 RC-4: Spend Recovery below no longer contributes to this corridor —
-		// it now caps its own per-press amount at the remaining headroom to max, so
-		// stacked presses can no longer push the pending value past max in the first
-		// place. The corridor still exists via this stepper's own typed/± overshoot,
-		// illustrated above.)
+		// (SC-133 RC-4/I2: Spend Recovery below is now itself a MEMBER of this
+		// corridor, not just a non-contributor — recoverySpendResult heals from the
+		// CLAMPED position, so a press while the pending sum sits outside [floor, max]
+		// (from this stepper's own overshoot, illustrated above, or several stacked
+		// Damage clicks past the floor) snaps it back into range exactly like the
+		// stepper's own corrective "+". Stacked presses can no longer push the
+		// pending value further past either clamp, and the preview always matches
+		// what Apply persists.)
 		const staminaStepper = staminaStepperRow(
 			adjustSection,
 			{
@@ -332,27 +340,19 @@ export class StaminaEditModal extends DseModal {
 				integer: true, // typed "2.5" commits 2 (legacy parseInt semantics)
 				label: 'Temporary Stamina',
 				onChange: (value) => {
-					// SC-133 RC-5 — RAW (reference/draw-steel-reference.md:279):
-					// "Temporary Stamina: … doesn't stack (take higher) …". A grant
-					// entered through this control can never leave the character with
-					// LESS temp than they already had — take the higher of the value
-					// being set vs. the temp stamina the modal opened with. This is the
-					// correct, unambiguous read for a single atomic entry (typing "the
-					// ability grants N" — the natural GM gesture for applying a
-					// specific ability's stated temp amount) and, as a side effect,
-					// also blocks the minus button from walking a nonzero temp below
-					// its starting value (RAW has no "partial fade" mechanism — temp
-					// only reduces via Damage absorption or fully clearing via
-					// Kill/Full Heal/encounter end, none of which go through this
-					// control). NOT fully solved by this: a run of individual "+"
-					// presses starting AT the current value still climbs past it one
-					// step at a time (the first press's result already exceeds the
-					// baseline, so this comparison is a no-op for that path) — doing
-					// so would require decoupling "amount granted this session" from
-					// the displayed resulting total, a genuine affordance change
-					// deferred to the SC-132 stamina redesign (see the SC-133 fix
-					// report for the full reasoning).
-					const granted = Math.max(value, currentTempStamina);
+					// SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp
+					// doesn't stack, take higher) + fix-round-1 C1: floor against the
+					// CURRENT session position (currentTempStamina +
+					// pendingTempStaminaChange), NOT the stale onOpen snapshot —
+					// Damage absorption (:255 above), Kill, and Full Heal all move
+					// pendingTempStaminaChange DOWN mid-session, so flooring against
+					// the snapshot let a later grant snap temp back UP to a value
+					// already spent (e.g. temp 5, Damage absorbs 3 → running 2, then a
+					// single "+" incorrectly jumped back to 5 instead of 3). Fixes
+					// typed grants and the minus button; does NOT retrofit take-higher
+					// onto a run of "+" clicks from the SAME position — I4 pins that
+					// gap as a characterization test for SC-132, not fixed here.
+					const granted = Math.max(value, currentTempStamina + this.pendingTempStaminaChange);
 					this.pendingTempStaminaChange = granted - currentTempStamina;
 					refresh();
 				},
@@ -398,33 +398,23 @@ export class StaminaEditModal extends DseModal {
 				label: SPEND_RECOVERY_LABEL,
 				text: SPEND_RECOVERY_LABEL,
 				onClick: () => {
-					// Defensive (CB-8): the button is real-disabled at zero remaining too.
+					// Defensive (CB-8): the button is real-disabled at zero remaining,
+					// and (SC-133 I3) at zero true gain too — see refresh() below; this
+					// early-return is a backstop in case onClick fires anyway.
 					if (recoveriesTracked && currentRecoveries + this.pendingRecoveriesChange <= 0) return;
-					// RR §8 "Recovery value: 1/3 of Stamina max" — the model's OWN derived
-					// value (StaminaBar.recoveryValue), not a re-derived literal; it is the
-					// same floor(max/3) math, sourced from the shared recoveryHealAmount
-					// helper (FOLLOWUPS #27-fix-round finding 3 — also used by both
-					// elements' Catch Breath).
-					// SC-133 RC-4 (was `capped: false`): a Recovery heals UP TO
-					// recoveryValue, capped at the REMAINING headroom to max — this now
-					// passes `capped: true` (the default) with `current` advanced by
-					// every pending change so far this session (the same accounting
-					// amountToMaxStamina already uses for Healing), so pendingStaminaChange
-					// is always the ACTUAL amount Apply will persist — the preview can
-					// never promise more than it delivers. A press with zero headroom
-					// heals nothing, so it must not burn a Recovery for nothing either:
-					// bail out before mutating pendingStaminaChange/pendingRecoveriesChange.
-					// (Design nuance, flagged in the SC-133 fix report: RAW has no rule
-					// against spending a Recovery for zero gain, so a table that wants
-					// "spending a Recovery" as its own trigger independent of the heal
-					// would need a different control than this one — refusing the
-					// zero-gain press here is a deliberate UX call, not a RAW mandate.)
-					const adjustment = recoveryHealAmount(this.staminaBar.recoveryValue, currentStamina + this.pendingStaminaChange, maxStamina);
-					if (!isNaN(adjustment) && adjustment > 0) {
-						this.pendingStaminaChange += adjustment;
-						if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
-						refresh();
-					}
+					// RR §8 "Recovery value: 1/3 of Stamina max" — StaminaBar.recoveryValue,
+					// the model's own derived floor(max/3) math (FOLLOWUPS #27-fix-round
+					// finding 3 — also used by both elements' Catch Breath).
+					// SC-133 RC-4 / I2 (fix-round-1): heal from the REBASED (clamped)
+					// position (recoverySpendResult below), never onto the raw pending
+					// sum — see its doc for why a plain += would still lie once the raw
+					// sum sits outside [floor, max]. A zero-gain result (only possible at
+					// the max-side cap) neither heals nor spends a Recovery.
+					const { gain, newStamina } = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina);
+					if (gain <= 0) return;
+					this.pendingStaminaChange = newStamina - currentStamina;
+					if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
+					refresh();
 				},
 			},
 			this.lifecycle,
@@ -481,16 +471,23 @@ export class StaminaEditModal extends DseModal {
 			if (recoveriesTracked) {
 				const remaining = currentRecoveries + this.pendingRecoveriesChange;
 				const noneLeft = remaining <= 0;
-				spendRecoveryBtn.setDisabled(noneLeft);
+				// SC-133 I3 (fix-round-1): CB-8 — never a silent no-op. A press that
+				// would heal 0 (only possible at the max-side cap under the rebased
+				// gain calc — see recoverySpendResult) must show as a REAL disabled
+				// button, exactly like running out of Recoveries does, not just be
+				// swallowed in onClick.
+				const noGain = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain <= 0;
+				spendRecoveryBtn.setDisabled(noneLeft || noGain);
 				// House rule: never a silent disable — a visible reason tooltip
-				// accompanies the real `disabled` (CB-8), cleared once Recoveries are
-				// available again (e.g. after Reset). FOLLOWUPS #27-fix-round finding 1:
-				// Obsidian's native setTooltip stamps `aria-label` as a side effect (§2.5),
-				// so "clearing" the reason means RE-ASSERTING the button's own label, not
+				// accompanies the real `disabled` (CB-8), cleared once available again
+				// (e.g. after Reset). FOLLOWUPS #27-fix-round finding 1: Obsidian's
+				// native setTooltip stamps `aria-label` as a side effect (§2.5), so
+				// "clearing" the reason means RE-ASSERTING the button's own label, not
 				// removing an attribute (`data-tooltip`) real Obsidian never sets — the
-				// old removeAttribute left "No Recoveries remaining" as the permanent
-				// accessible name once the button had ever been disabled.
+				// old removeAttribute left the reason as the permanent accessible name
+				// once the button had ever been disabled.
 				if (noneLeft) tooltip(spendRecoveryBtn.buttonEl, NO_RECOVERIES_TOOLTIP);
+				else if (noGain) tooltip(spendRecoveryBtn.buttonEl, NO_GAIN_TOOLTIP);
 				else tooltip(spendRecoveryBtn.buttonEl, SPEND_RECOVERY_LABEL);
 			}
 		};
@@ -501,6 +498,45 @@ export class StaminaEditModal extends DseModal {
 		stamina = Math.min(stamina, maxPossibleStamina); // Cannot exceed max STAMINA
 		stamina = Math.max(stamina, negativeStaminaLimit); // Cannot go below negative STAMINA limit
 		return stamina;
+	}
+
+	/** SC-133 RC-4 / I2 (fix-round-1): what a single Spend Recovery press would
+	 *  ACTUALLY deliver right now, computed from the CLAMPED (Apply-would-persist)
+	 *  position rather than the raw pending sum.
+	 *
+	 *  A raw sum can already sit past either clamp before this press — several
+	 *  stacked Damage clicks past the death floor, or a typed value miles past max
+	 *  (the stepper is deliberately unbounded; see the KNOWN DEVIATION comment
+	 *  above). Adding recoveryValue to that RAW sum and re-clamping (what the first
+	 *  RC-4 pass did, headroom-to-max only) can report a gain that doesn't match
+	 *  what Apply will actually persist — either silently zero when the two clamped
+	 *  values happen to coincide, or, worse, a PARTIAL number that still doesn't
+	 *  match Apply's own single clamp (verified by hand-tracing a straddling case:
+	 *  raw 4 below the floor, +6 recovery -> raw only 2 back inside range -> this
+	 *  method would report "+2", but pendingStaminaChange += 2 leaves the raw sum
+	 *  STILL below the floor, so Apply persists the SAME floor value as before —
+	 *  the preview would have lied again, the exact class of bug RC-4 exists to
+	 *  close).
+	 *
+	 *  The fix computes and returns the REBASED absolute position: clamp the
+	 *  CURRENT position first (`before`), heal from THAT, clamp again (`after`).
+	 *  The caller assigns `pendingStaminaChange = after - currentStamina` (never
+	 *  `+= gain`), so a pending sum that was sitting outside [floor, max] before
+	 *  this press is snapped into range by it — the only way the preview and
+	 *  Apply can agree on every press, not just ones that started in range. Under
+	 *  this model a Recovery healing from ANY floor position always helps (gain is
+	 *  only ever 0 at the max-side cap — recoveryValue can't be negative), so the
+	 *  net effect is that Spend Recovery, like the stepper's own "+", becomes
+	 *  another documented member of the corrective corridor above rather than a
+	 *  route to a silently-zero OR dishonest partial spend. */
+	private recoverySpendResult(
+		currentStamina: number,
+		negativeStaminaLimit: number,
+		maxStamina: number,
+	): { gain: number; newStamina: number } {
+		const before = this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
+		const after = this.clampStamina(before + this.staminaBar.recoveryValue, negativeStaminaLimit, maxStamina);
+		return { gain: after - before, newStamina: after };
 	}
 
 	private amountToMaxStamina(currentStamina: number, maxStamina: number) {

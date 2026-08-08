@@ -334,31 +334,55 @@ describe('SC-133 RC-3: negative Apply input is clamped to a magnitude (0), never
 		expect(input.getAttribute('min')).toBe('0');
 	});
 
+	// M6 (fix-round-1): this test previously claimed to cover both Damage AND
+	// Healing but never invoked Healing — two independent modal sessions (apply()
+	// closes the modal) now actually exercise both buttons with a positive input.
 	test('a positive Apply input still works normally for both Damage and Healing', () => {
-		const { content, bar } = makeModal(20, 10, 0);
-		clickDamage(content, 4);
-		apply(content);
-		expect(bar.current_stamina).toBe(6);
+		{
+			const { content, bar } = makeModal(20, 10, 0);
+			clickDamage(content, 4);
+			apply(content);
+			expect(bar.current_stamina).toBe(6);
+		}
+		document.body.innerHTML = '';
+		{
+			const { content, bar } = makeModal(20, 10, 0);
+			clickHealing(content, 4);
+			apply(content);
+			expect(bar.current_stamina).toBe(14);
+		}
 	});
 });
 
-// SC-133 RC-4: Spend Recovery must never burn a Recovery for zero additional
-// Stamina, and the preview (pendingStaminaChange, which drives both the action
-// button text and the preview bar) must always equal what Apply will actually
-// persist. Fix: the per-press heal amount is capped at the REMAINING headroom to
-// max (accounting for prior pending presses this session, same accounting
-// amountToMaxStamina already uses for Healing) via the shared recoveryHealAmount
-// helper's `capped: true` path; a press that would heal 0 is a no-op — no
-// pendingStaminaChange change, no Recovery decremented.
+// SC-133 RC-4 / I2 / I3 (fix-round-1): Spend Recovery must never burn a Recovery
+// for zero additional Stamina, and the preview (pendingStaminaChange, which drives
+// both the action-button text and the preview bar) must always equal what Apply
+// will actually persist. Fix: each press heals from the REBASED (clamped)
+// position — see StaminaEditModal.recoverySpendResult — checked against BOTH the
+// max and the negative death floor, not just headroom to max (the RC-4 first
+// pass's gap, closed by I2: a raw pending sum already sitting deep past the floor
+// could report a nonzero "gain" that didn't match what Apply would actually
+// persist). I3: a press that would heal 0 (only reachable at the max-side cap
+// under the rebased calc) real-disables the button (CB-8) with a visible reason,
+// instead of being a silent no-op.
 describe('SC-133 RC-4: Spend Recovery never over-burns Recoveries, and the preview is never a lie', () => {
-	function makeRecoveryModal(max: number, current: number, recoveries: number, recoveriesMax: number) {
+	function makeRecoveryModal(max: number, current: number, recoveries: number, recoveriesMax: number, isHero = true) {
 		const app = new App();
 		const bar = new StaminaBar(false, false, max, current, 0, 1, 'default', recoveries, recoveriesMax);
 		const updateCallback = jest.fn();
-		const modal = new StaminaEditModal(app as any, bar, true, 'Frodo', updateCallback);
+		const modal = new StaminaEditModal(app as any, bar, isHero, 'Frodo', updateCallback);
 		modal.open();
 		const content = (modal as any).contentEl as HTMLElement;
 		return { modal: modal as any, bar, content, updateCallback };
+	}
+
+	/** Types an absolute value into the (deliberately unbounded) STAMINA stepper's
+	 *  input and commits via Enter — the same idiom as RC-5's typeTemp below, for
+	 *  the other stepper. */
+	function typeStamina(content: HTMLElement, v: string): void {
+		const input = content.querySelectorAll<HTMLElement>('.dse-stepper')[0].querySelector('.dse-stepper__input') as HTMLInputElement;
+		input.value = v;
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
 	}
 
 	test('18/20, recoveryValue 6: x3 presses only consume 1 Recovery (2nd/3rd heal 0)', () => {
@@ -392,23 +416,68 @@ describe('SC-133 RC-4: Spend Recovery never over-burns Recoveries, and the previ
 		expect(bar.current_stamina).toBe(17); // 10 + floor(21/3)=7
 		expect(bar.recoveries).toBe(2);
 	});
+
+	// I3: the button real-disables (CB-8) — not just a silent onClick no-op — the
+	// instant a further press would heal 0, with a visible reason distinct from
+	// "no Recoveries remain".
+	test('I3: real-disables with "Already at maximum Stamina" once a press would heal 0, even with Recoveries still remaining', () => {
+		const { content } = makeRecoveryModal(20, 18, 8, 8);
+		const spend = spendRecoveryBtn(content);
+		expect(spend.disabled).toBe(false);
+		spend.click(); // 18 -> 20 (full heal), 7 Recoveries left
+		expect(spend.disabled).toBe(true); // disabled: NOT because Recoveries ran out
+		expect(spend.getAttribute('aria-label')).toBe('Already at maximum Stamina');
+	});
+
+	test('I3: a click on the auto-disabled button is a no-op (CB-8) — no further heal, no further Recovery spent', () => {
+		const { content, bar } = makeRecoveryModal(20, 18, 8, 8);
+		const spend = spendRecoveryBtn(content);
+		spend.click(); // 18 -> 20, disables
+		spend.click(); // disabled: swallowed
+		apply(content);
+		expect(bar.current_stamina).toBe(20);
+		expect(bar.recoveries).toBe(7);
+	});
+
+	// I2: a raw pending sum can already sit deep past the NEGATIVE floor before
+	// Spend Recovery is ever pressed (here, via the stamina stepper's own
+	// deliberately-unbounded typed path — see the KNOWN DEVIATION comment in the
+	// source). The press must heal from the REBASED (clamped-at-the-floor)
+	// position, honestly, rather than reporting a gain the raw sum's arithmetic
+	// doesn't back up once Apply's own single clamp runs.
+	test('I2: Spend Recovery after a deep negative overshoot heals honestly from the clamped floor — preview matches Apply exactly', () => {
+		const { modal, content, bar } = makeRecoveryModal(20, 10, 8, 8); // hero: floor = ceil(-10) = -10
+		typeStamina(content, '-50'); // pendingStaminaChange = -50-10 = -60; raw = 10-60 = -50, far past floor -10
+		const spend = spendRecoveryBtn(content);
+		spend.click();
+		const promisedFinal = 10 + modal.pendingStaminaChange; // what the preview claims Apply will persist
+		apply(content);
+		expect(bar.current_stamina).toBe(promisedFinal); // preview and Apply agree EXACTLY
+		expect(bar.current_stamina).toBe(-10 + 6); // floor -10, + recoveryValue floor(20/3)=6 -> -4
+		expect(bar.recoveries).toBe(7); // exactly one Recovery spent, for a REAL gain
+	});
+
+	test('I2: a second press after the floor-rebase heals normally from the new (rebased) position', () => {
+		const { content, bar } = makeRecoveryModal(20, 10, 8, 8);
+		typeStamina(content, '-50');
+		const spend = spendRecoveryBtn(content);
+		spend.click(); // rebases to -10, heals to -4
+		spend.click(); // heals normally from -4 -> 2
+		apply(content);
+		expect(bar.current_stamina).toBe(2);
+		expect(bar.recoveries).toBe(6);
+	});
 });
 
-// SC-133 RC-5: RAW (reference/draw-steel-reference.md:279) — "Temporary Stamina: …
-// doesn't stack (take higher) …". Granting temp through the modal must never
-// reduce it below what the character already carries. Implemented for the
-// explicit/typed entry gesture (the natural way to apply "this ability grants N
-// temp stamina" — type N) via Math.max(typed, currentTempStamina); this also
-// blocks the ± stepper's minus button from walking a nonzero temp below its
-// starting value (RAW has no "partial fade" mechanism — temp only reduces via
-// Damage absorption or fully clearing via Kill/Full Heal/encounter end). NOTE
-// (flagged in the fix report): this does NOT retrofit take-higher onto a run of
-// individual "+" clicks past the starting value (e.g. +1 x3 from a temp of 5 still
-// reaches 8) — each single step's resulting value already exceeds the baseline
-// the instant the first click lands, so a per-edit comparison against the fixed
-// baseline is structurally a no-op for that path; a true fix needs a "grant
-// amount" affordance distinct from the "resulting total" display, which is
-// SC-132 territory, not a handler-level bugfix.
+// SC-133 RC-5 (RAW reference/draw-steel-reference.md:279 — temp doesn't stack,
+// take higher) + fix-round-1 C1: granting temp through the modal must never
+// reduce it below the character's CURRENT session position — floored against
+// currentTempStamina + pendingTempStaminaChange, not the stale onOpen snapshot,
+// since Damage absorption / Kill / Full Heal all move the running position DOWN
+// mid-session (C1's "damage-then-stepper" tests below pin exactly this). Covers
+// typed grants and blocks the minus button from walking below that position.
+// I4 pins the still-open, documented gap: a run of individual "+" clicks from the
+// SAME position still walks past it one step at a time (SC-132 territory).
 describe('SC-133 RC-5: granting temp does not stack — take the higher of current vs granted (RAW)', () => {
 	function tempInput(content: HTMLElement): HTMLInputElement {
 		return content.querySelectorAll<HTMLElement>('.dse-stepper')[1].querySelector('.dse-stepper__input') as HTMLInputElement;
@@ -457,6 +526,96 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 		expect(modal.pendingTempStaminaChange).toBe(4);
 		apply(content);
 		expect(bar.temp_stamina).toBe(4);
+	});
+
+	test('a later, larger typed grant still takes the higher against the running position (9 then 3 stays 9)', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		typeTemp(content, '9'); // 9 > 5 -> running becomes 9
+		expect(modal.pendingTempStaminaChange).toBe(4);
+		typeTemp(content, '3'); // 3 < running 9 -> blocked, stays 9 (NOT re-floored to the stale 5)
+		expect(modal.pendingTempStaminaChange).toBe(4);
+		apply(content);
+		expect(bar.temp_stamina).toBe(9);
+	});
+
+	// C1 (CRITICAL, fix-round-1): the floor must track the RUNNING session
+	// position, not the stale onOpen snapshot — damage absorption, Kill, and Full
+	// Heal all move pendingTempStaminaChange DOWN mid-session, and a later grant
+	// must floor against THAT, not snap back up to a value already spent.
+	describe('C1: the temp floor tracks the running position, not the stale onOpen snapshot', () => {
+		function clickDamageHere(content: HTMLElement, amount: number): void {
+			(content.querySelector('.dse-sedit__apply-input') as HTMLInputElement).value = String(amount);
+			(content.querySelector('button[aria-label="Damage"]') as HTMLButtonElement).click();
+		}
+
+		test('A1: Damage absorbs 3 of 5 temp (running -> 2), then one "+" grants up to 3, not back to 5', () => {
+			const { modal, content, bar } = makeModal(20, 20, 5);
+			clickDamageHere(content, 3); // temp absorbs 3: running 5 -> 2
+			expect(modal.pendingTempStaminaChange).toBe(-3);
+			const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+				.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
+			plus.click(); // running 2 -> 3, NOT a snap back to 5
+			expect(modal.pendingTempStaminaChange).toBe(-2);
+			apply(content);
+			expect(bar.temp_stamina).toBe(3);
+		});
+
+		test('A2: Damage absorbs 3 of 5 temp (running -> 2), then minus is blocked at the running position, not the stale 5', () => {
+			const { modal, content, bar } = makeModal(20, 20, 5);
+			clickDamageHere(content, 3); // running 5 -> 2
+			const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+				.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+			minus.click(); // blocked: stays at running 2, does NOT jump to 5
+			expect(modal.pendingTempStaminaChange).toBe(-3);
+			apply(content);
+			expect(bar.temp_stamina).toBe(2);
+		});
+
+		test('A4: Damage absorbs 3 of 5 temp (running -> 2), then typing 4 grants to 4 (RAW: take higher of running 2 vs granted 4), not the stale 5', () => {
+			const { modal, content, bar } = makeModal(20, 20, 5);
+			clickDamageHere(content, 3); // running 5 -> 2
+			typeTemp(content, '4'); // 4 > running 2 -> grants to 4
+			expect(modal.pendingTempStaminaChange).toBe(-1);
+			apply(content);
+			expect(bar.temp_stamina).toBe(4);
+		});
+	});
+
+	// I4 (fix-round-1): pins the documented, still-open gap as a characterization
+	// test (asserted, not just narrated) — a run of individual "+" clicks from the
+	// SAME position still walks past a higher existing value one step at a time.
+	// SC-132 owns closing this (needs a "grant amount" affordance distinct from
+	// the "resulting total" display — see the block comment above).
+	test('I4 (characterization, NOT a spec — SC-132 must resolve): "+" x3 from a virgin temp of 5 still walks to 8, not 5', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+			.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
+		plus.click();
+		plus.click();
+		plus.click();
+		expect(modal.pendingTempStaminaChange).toBe(3);
+		apply(content);
+		expect(bar.temp_stamina).toBe(8);
+	});
+});
+
+// SC-133 fix-round-1 I5: pinning the two behaviors the diagnosis verified as
+// already RAW-correct and explicitly out of scope to "fix" — regression coverage
+// so a future change to this file can't silently break them.
+describe('SC-133 fix-round-1 I5: pinning must-not-change behaviors', () => {
+	test('healing never touches temp stamina', () => {
+		const { content, bar } = makeModal(20, 10, 5);
+		clickHealing(content, 6);
+		apply(content);
+		expect(bar.current_stamina).toBe(16);
+		expect(bar.temp_stamina).toBe(5);
+	});
+
+	test('winded/dying/deathThreshold are computed off REAL max and ignore temp entirely', () => {
+		const b = new StaminaBar(false, false, 20, 3, 15, 1);
+		expect(b.isWinded).toBe(true);
+		expect(b.isDying).toBe(false);
+		expect(b.deathThreshold).toBe(-10);
 	});
 });
 

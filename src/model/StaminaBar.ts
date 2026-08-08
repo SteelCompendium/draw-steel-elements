@@ -189,24 +189,22 @@ export class StaminaBar extends ComponentWrapper{
 
 // FOLLOWUPS #27-fix-round finding 3 (LOW): the "-1 Recovery, +recoveryValue Stamina"
 // spend formula (RR §8 "Catch Breath (spend Recovery)") was duplicated verbatim in
-// three places: stamina-bar/view.ts's catchBreath(), hero/view.ts's catchBreath(), and
-// StaminaEditModal's Spend Recovery quick action. Free function (not a StaminaBar
-// method) because hero/view.ts spends against HeroState's stamina/recoveries fields,
-// not a StaminaBar instance — only the plain numbers are shared.
+// stamina-bar/view.ts's catchBreath() and hero/view.ts's catchBreath() — both
+// IMMEDIATE-apply call sites (the mutation lands on the model the instant Catch Breath
+// is clicked), which is what `capped` (default true, never overshoots `max` headroom)
+// is built for. Free function (not a StaminaBar method) because hero/view.ts spends
+// against HeroState's stamina/recoveries fields, not a StaminaBar instance — only the
+// plain numbers are shared.
 //
-// `capped` (default true) is the convention of the two IMMEDIATE-apply call sites
-// (stamina-bar/view.ts, hero/view.ts): the heal never overshoots `max` headroom, since
-// the mutation lands on the model the instant Catch Breath is clicked.
-//
-// SC-133 RC-4 (2026-08-08): StaminaEditModal's Spend Recovery USED TO pass
-// `capped: false`, deferring all clamping to its own Apply-time clampStamina and
-// deliberately not bounding the per-press amount (see the modal's "KNOWN DEVIATION"
-// comment). That let stacked presses burn Recoveries the Apply clamp then discarded —
-// e.g. 18/20 stamina, Spend Recovery ×3 burned 3 Recoveries for 2 total Stamina while
-// the preview promised "Gain 18". The modal now passes `capped: true` (the default),
-// with `current` advanced by the pending stamina change so far this session — same
-// per-press capping Healing already applies via amountToMaxStamina — and refuses the
-// press entirely (no Recovery decremented) when the capped amount is 0.
+// SC-133 RC-4/I2 (fix-round-1, 2026-08-08): StaminaEditModal's Spend Recovery USED TO
+// be this function's third call site (`capped: false`, deferring all clamping to its
+// own Apply-time clampStamina) — that let stacked presses burn Recoveries the clamp
+// then discarded, and a raw pending sum already sitting past a clamp could report a
+// "gain" that didn't match what Apply would persist. Its DEFERRED, possibly-already-
+// out-of-range bookkeeping doesn't fit this function's "current is the live, in-range
+// model value" contract, so the modal now computes its own rebased result instead
+// (`StaminaEditModal.recoverySpendResult` — see its doc) rather than stretching this
+// one to cover a case the IMMEDIATE-apply sites never have to handle.
 export function recoveryHealAmount(recoveryValue: number, current: number, max: number, capped = true): number {
 	return capped ? Math.max(Math.min(recoveryValue, max - current), 0) : recoveryValue;
 }
