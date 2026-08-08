@@ -4549,8 +4549,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	justify-content: center;
 	justify-self: stretch;
 	gap: 0.2em;
+	/* SC-117 B2 — the site steps this cell ONE notch deeper than the shared token:
+	   `.sc-ability__cell { background: rgba(0,0,0,.2) }` vs the `.18` that
+	   `.sc-ability__section`/`.sc-ability__pr` use (measured live, both schemes;
+	   light twin `rgba(0,0,0,.03)` in the theme-light rule below). Hardcoded per surface
+	   rather than adding a second sunken token — the SC-100 precedent for exactly this
+	   ladder (`.dse-tiles__cell` .25, `.dse-kit__equip` .22). */
 	text-align: center;
-	background: var(--dse-surface-sunken);
+	background: rgba(0, 0, 0, 0.2);
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
 	/* SC-121 B-1: the site's own cell inset/height — `.sc-ability__cell
@@ -4562,6 +4568,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	box-sizing: border-box;
 	padding: 0.625rem 0.9375rem;
 	min-height: 4.25rem;
+}
+/* SC-117 B2 light twin — same `body.theme-light [data-dse-theme='steel']…` convention the
+   SC-100 kit surfaces use (~4400/4440). Site light `.sc-ability__cell` = rgba(0,0,0,.03). */
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance,
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target {
+	background: rgba(0, 0, 0, 0.03);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--distance .dse-feature__meta-key,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--target .dse-feature__meta-key {
@@ -4847,7 +4859,17 @@ body.theme-light
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 0.6em;
-	border: 1px dashed var(--dse-border-strong);
+	/* SC-117 B2 — the dashed-border half of the batch, now that B6's `feature/spend`
+	   fixture finally RENDERS this class (audit D9: it was styled but unrendered, so the
+	   values were never checked against anything). Site `.sc-ability__enh` is
+	   `1px dashed var(--fx-metal-faint)` = rgba(176,183,187,.16) dark / rgba(95,103,108,.14)
+	   light — exactly `--dse-metal-faint`, the same hairline `.dse-section` and every head
+	   strip already use. This carried `--dse-border-strong` (rgba(220,226,230,.24) dark /
+	   #8e959a light), roughly half again as heavy as the site's and a different grey, which
+	   made the spend clause the loudest outline on the card instead of the faintest. The
+	   FILL stays on the token: the site's `.sc-ability__enh` is `.18`/`.02`, i.e. the token's
+	   own value, so nothing to hardcode here. */
+	border: 1px dashed var(--dse-metal-faint);
 	background: var(--dse-surface-sunken);
 	padding: 0.5em 0.7em;
 }
@@ -5143,8 +5165,14 @@ body.theme-light
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item {
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
-	background: var(--dse-surface-sunken);
+	/* SC-117 B2 — the site's `.sb__stat` is the DEEPEST body step on a statblock,
+	   `rgba(0,0,0,.22)` (the same notch `.sc-kit__equip` takes), not the shared `.18`.
+	   Measured live, both schemes; light twin below. */
+	background: rgba(0, 0, 0, 0.22);
 	padding: 0.45rem 0.3rem;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item {
+	background: rgba(0, 0, 0, 0.03);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item-l {
 	font-variant: small-caps;
@@ -5165,8 +5193,15 @@ body.theme-light
 	gap: 0.1rem;
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
-	background: var(--dse-surface-sunken);
+	/* SC-117 B2 — the site's `.sb__field` sits one notch SHALLOWER than the shared token,
+	   `rgba(0,0,0,.16)` (the same step `.sb__feat`/`.fb__feat` use), so the kv grid reads
+	   lighter than the stat row above it. Measured live, both schemes; light twin below —
+	   note the site's light value here is `.024`, not the `.03` its stat row takes. */
+	background: rgba(0, 0, 0, 0.16);
 	padding: 0.42rem 0.65rem;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv {
+	background: rgba(0, 0, 0, 0.024);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv:nth-child(even) {
 	justify-self: stretch;
