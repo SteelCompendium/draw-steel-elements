@@ -4481,13 +4481,28 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	padding: 0.1em 0.75rem;
 	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
-	background: var(--dse-chip-bg);
+	/* SC-117 B4 (audit D10) — the ONE dark-mode surface where the site really does use a
+	   faint WHITE wash: `.sc-ability__chip { background: rgba(255,255,255,.02) }`. These two
+	   cells were therefore deliberately EXCLUDED from B1/B2's translucent-black flip — they
+	   were already the right direction, just ~3x too strong (`--dse-chip-bg` resolves to
+	   `rgba(220,226,230,.06)` under Steel dark, `#eaeeef` under Steel light). Site light
+	   inverts to `rgba(0,0,0,.02)`, per the twin below. Measured live on the chip band SC-121
+	   B-1 shipped (keywords packed left, type pushed right by `margin-left:auto`), both
+	   schemes. Hardcoded here rather than re-tinting `--dse-chip-bg`: that token also feeds
+	   `.dse-card__badge`, `.dse-head__*--chip`, the montage skill chip, the project log badge,
+	   the stamina-recovery status and the roll bar's fixed-char pill — none of which the audit
+	   sampled against a site counterpart. */
+	background: rgba(255, 255, 255, 0.02);
 	font-size: 1.1em;
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.04em;
 	color: var(--dse-fg-muted);
 	text-align: left;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--keywords,
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
+	background: rgba(0, 0, 0, 0.02);
 }
 /* Type chip → the RIGHT end of the chip band (SC-121 Scott round: "the type is
    supposed to be right-aligned"). The B-1 recomposition above got the band's
