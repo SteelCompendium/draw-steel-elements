@@ -8325,4 +8325,472 @@ button.dse-pr__row:hover {
 		linear-gradient(100deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.95)),
 		var(--dse-stamina-dying);
 }
+/* ==================================================================== */
+/*  SC-132 ROUND 3 — per-COMPONENT option variants                       */
+/* ==================================================================== */
+/*  Scott declined to pick a layout in round 2 and asked for the COMPONENTS to be
+    settled first, so this layer is not a fifth candidate: it is the option set for
+    each component question, keyed by a per-instance `data-dse-stamina-var` token so a
+    single page can show every option of one component side by side.
+
+    GATING, unchanged and doubled: every rule still starts with the `[data-dse-stamina-cand]`
+    root attribute (harness-only), and additionally needs a `data-dse-stamina-var` token
+    that ONLY visual-harness/entry.ts's strip renderer ever stamps. Production, jest and
+    the swept/frozen shots carry neither.
+
+    `~=` and not `=`: options COMPOSE (a Catch Breath option is shown on top of a chosen
+    marker shape and labelling, `data-dse-stamina-var="cb1 r2 l1"`), so each rule matches
+    one TOKEN of the list rather than the whole value.
+
+    SPECIFICITY, the round-1 trap restated: `[data-dse-stamina-cand]` sits on <html>, so
+    the root attribute must come FIRST and `body.theme-light` second. And because a light
+    twin gains a class (`body.theme-light`), a base light twin OUT-SPECIFIES a dark
+    variant rule here — so every variant that restates a property the base light twins
+    also set carries its own light twin below it. Verified by probing computed styles per
+    scheme, not by reading the cascade.                                                */
+
+/* -------------------------------------------------------------------- */
+/*  E — the temp-stamina BOUNDARY (Scott: "the left and right edges of    */
+/*      temp stamina make no sense")                                      */
+/* -------------------------------------------------------------------- */
+/*  Diagnosis (measured): the shipped shield carries
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0.22rem 50%)
+    which bites a 3.5px CONCAVE WEDGE out of its own left edge — so the boundary shows a
+    triangular hole of bare channel rather than a join — and, because clip-path clips an
+    element's whole rendered output, it also throws away the `-1px 0 0 rgba(0,0,0,.5)`
+    OUTER shadow that was supposed to be the separator. The intended dark edge is
+    therefore never painted, while the pour's own `inset -1px 0 0 rgba(255,255,255,.42)`
+    meniscus still draws a bright line right beside the hole. Both edges are accidents.
+
+    E1 replaces all of it with the vocabulary the zero bulkhead already uses: ONE forged
+    two-tone seam at the join — shadow face on the pour side, catch-light face on the
+    temp side — drawn on the CHANNEL (so it stays crisp and opaque no matter what
+    material the temp plate is given below), and a plain rail closing the far end. The
+    pour's meniscus stands down while temp is present: one boundary, one mark.          */
+[data-dse-stamina-cand] [data-dse-stamina-var~='e1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	clip-path: none;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset -1px 0 0 rgba(255, 255, 255, 0.45);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='e1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='on'] .dse-stamina__gpour {
+	box-shadow: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='e1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='on'] .dse-stamina__gchannel::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	/* `--dse-cap-x` is set on .dse-stamina__cand and INHERITS down to the channel, so the
+	   seam tracks the pour's end without the panel emitting another node. */
+	left: var(--dse-cap-x, 0%);
+	width: 2px;
+	margin-left: -1px;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, rgba(255, 255, 255, 0.42) 1px);
+	z-index: 4;
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='e1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='on'] .dse-stamina__gchannel::before {
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.5) 0 1px, rgba(255, 255, 255, 0.75) 1px);
+}
+
+/* -------------------------------------------------------------------- */
+/*  M — the base-max index mark (Scott: "some kind of separator on it     */
+/*      that doesnt match any marker that im familiar with")              */
+/* -------------------------------------------------------------------- */
+/*  It is the BASE-MAX index: when temp widens the scale to `max + temp`, this marks
+    where the hero's real ceiling still sits. At 24/30 +6 it lands exactly on the temp
+    plate's far edge; at 8/30 +40 it lands in the MIDDLE of the temp plate. Same mark,
+    two completely different-looking jobs — which is why it reads as random.            */
+
+/* M1 — drop it while temp is active. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='m1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--max {
+	display: none;
+}
+/* M2 — let the MATERIAL say it: no mark at all, and the temp region becomes visibly a
+   different substance, so the boundary between "your stamina" and "borrowed stamina" is
+   the change of material rather than a line drawn on top of it. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='m2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--max {
+	display: none;
+}
+/* M3 — keep it, in the established grammar: the same ◆ the zero bulkhead uses, threaded
+   on the gauge, so it self-identifies as an INDEX MARK rather than a divider. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='m3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--max {
+	top: calc(var(--g-pad) + 1px + var(--ch-h) / 2);
+	width: 0.3rem;
+	height: 0.3rem;
+	margin-left: -0.15rem;
+	transform: translateY(-50%) rotate(45deg);
+	color: var(--dse-metal-bright);
+}
+
+/* -------------------------------------------------------------------- */
+/*  H — candidate C's gauge height (Scott: "left a bit wanting… maybe its */
+/*      too short? …which is causing the gradient to appear weaker?")     */
+/* -------------------------------------------------------------------- */
+/*  He read it right: at 0.30rem the pour is ~5px of a three-stop vertical sheen, so the
+    gradient has nowhere to happen and the band flattens to a colour. H2/H3 give the rule
+    real depth and, with it, A's milled-channel treatment — the previously-RECOMMENDED
+    hybrid (C's banner + A's channel), now shown instead of described.                  */
+[data-dse-stamina-cand] [data-dse-stamina-var~='h2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	--ch-h: 0.62rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='h3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	--ch-h: 1.05rem;
+}
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='h2'], [data-dse-stamina-var~='h3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	border-radius: 3px;
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+[data-dse-stamina-cand] body.theme-light :is([data-dse-stamina-var~='h2'], [data-dse-stamina-var~='h3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	background: rgba(0, 0, 0, 0.07);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+}
+/* With depth, the engraved dying reserve reads again (C flattens it because a 5px rule
+   cannot carry a hatch). */
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='h2'], [data-dse-stamina-var~='h3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 7px),
+		rgba(0, 0, 0, 0.22);
+}
+[data-dse-stamina-cand] body.theme-light :is([data-dse-stamina-var~='h2'], [data-dse-stamina-var~='h3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.055) 0 1px, transparent 1px 7px),
+		rgba(0, 0, 0, 0.05);
+}
+
+/* -------------------------------------------------------------------- */
+/*  T — temp-stamina MATERIALS (Scott: "make the temp stamina appear more */
+/*      ephemeral or 'different'")                                        */
+/* -------------------------------------------------------------------- */
+/*  Placement is unchanged in all five — appended at the end, sharing the pour's origin
+    and scale, positive region scaled to `max + temp`. That is the SC-133 invariant and
+    it is not on the table; only the MATERIAL differs across T1-T5.
+
+    Translucency is `opacity` on the plate rather than an alpha colour because the temp
+    hue arrives as an opaque token (`--dse-stamina-temp`) and color-mix() is below this
+    plugin's support floor. The E1 seam is drawn on the CHANNEL, so it stays fully opaque
+    underneath every one of these.                                                      */
+
+/* T2 / M2 — SPECTRAL GLASS: the recess, its hatch and the plate behind read straight
+   through the plate. Borrowed stamina you can see is not really there. */
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='t2'], [data-dse-stamina-var~='t5'], [data-dse-stamina-var~='m2']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	opacity: 0.52;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, 0.18)),
+		var(--dse-stamina-temp);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+/* T3 — HOLLOW VESSEL: walls, no substance. The clearest statement that temp is capacity
+   rather than stamina, at the cost of being the quietest at a glance. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='t3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	background: repeating-linear-gradient(
+		115deg,
+		rgba(124, 92, 214, 0.34) 0 1px,
+		transparent 1px 6px
+	);
+	box-shadow: inset 0 0 0 1px var(--dse-stamina-temp);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='t3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	background: repeating-linear-gradient(
+		115deg,
+		rgba(124, 92, 214, 0.26) 0 1px,
+		transparent 1px 6px
+	);
+}
+
+/* T4 — CRYSTALLINE: faceted shards bolted past max, each one a piece that can break off.
+   Opaque like T1, but unmistakably a different substance from the molten pour. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='t4'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	background:
+		repeating-linear-gradient(
+			118deg,
+			rgba(255, 255, 255, 0.26) 0 2px,
+			rgba(255, 255, 255, 0.06) 2px 7px,
+			rgba(0, 0, 0, 0.22) 7px 9px,
+			rgba(0, 0, 0, 0.04) 9px 15px
+		),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(0, 0, 0, 0.24)),
+		var(--dse-stamina-temp);
+}
+
+/* T5 — SHIMMER: T2's glass with a slow travelling gleam, so temp is the one part of the
+   gauge that is never quite still. The harness kills animation for deterministic shots,
+   so what you see is the declared resting frame; `prefers-reduced-motion` pins it there
+   permanently for anyone who asks for that. */
+@keyframes dse-temp-shimmer {
+	from {
+		background-position: -70% 0, 0 0, 0 0;
+	}
+	to {
+		background-position: 170% 0, 0 0, 0 0;
+	}
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='t5'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	background:
+		linear-gradient(102deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.62) 50%, rgba(255, 255, 255, 0) 62%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, 0.18)),
+		var(--dse-stamina-temp);
+	background-size: 200% 100%, auto, auto;
+	background-position: 50% 0, 0 0, 0 0;
+	animation: dse-temp-shimmer 3.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-dse-stamina-cand] [data-dse-stamina-var~='t5'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+		animation: none;
+	}
+}
+
+/* -------------------------------------------------------------------- */
+/*  R — recovery marker SHAPE (Scott: "they look more like some kind of   */
+/*      HR design element than an interactive checkbox-style element")    */
+/* -------------------------------------------------------------------- */
+/*  The material logic is kept in all four — a remaining recovery is a PROUD stud, a
+    spent one is an engraved SOCKET, so the pair survives a grayscale glance — and only
+    the silhouette changes. R2-R4 additionally strengthen the empty socket's outline,
+    because "unchecked box" is a shape a reader already knows and a faint recess is not. */
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='r2'], [data-dse-stamina-var~='r3'], [data-dse-stamina-var~='r4']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	transform: none;
+	border-color: var(--dse-metal-line);
+}
+/* R2 — square cell: the checkbox convention, forged. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='r2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	width: 0.78em;
+	height: 0.78em;
+	border-radius: 2px;
+}
+/* R3 — round pip: a tally token. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='r3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	width: 0.72em;
+	height: 0.72em;
+	border-radius: 50%;
+}
+/* R4 — ingot: a chamfered mini-plate. The only one of the four whose silhouette says
+   "a thing you spend" rather than "a state indicator". */
+[data-dse-stamina-cand] [data-dse-stamina-var~='r4'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	width: 1.25em;
+	height: 0.62em;
+	border-radius: 1px;
+	clip-path: polygon(0.16em 0, calc(100% - 0.16em) 0, 100% 50%, calc(100% - 0.16em) 100%, 0.16em 100%, 0 50%);
+}
+
+/* -------------------------------------------------------------------- */
+/*  L — recovery marker LABELLING (Scott: "Having 8 random elements that  */
+/*      are unlabeled doesnt help users")                                 */
+/* -------------------------------------------------------------------- */
+/*  The plugin emits no label node today; the strip injects one (harness chrome, see
+    entry.ts decorateStripCell) so the option can be judged before anything is committed
+    to the renderer. Small-caps eyebrow + numeral is the site's stat-tile grammar. */
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
+	display: none;
+	align-items: baseline;
+	gap: 0.34em;
+	margin-right: 0.15rem;
+}
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='l1'], [data-dse-stamina-var~='l2']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
+	display: inline-flex;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='l2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow-word {
+	display: none;
+}
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow-word {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	font-size: 0.8em;
+	color: var(--dse-fg-muted);
+}
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow-count {
+	font-weight: 600;
+	font-size: 0.92em;
+	color: var(--dse-metal-bright);
+	font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------------- */
+/*  CB — the Catch Breath control (Scott: "Do you click that and it       */
+/*       'unchecks' one of the markers?")                                 */
+/* -------------------------------------------------------------------- */
+/*  CB1 — the markers ARE the control: no chip at all, each remaining marker is the
+    button that spends it. Shown here with the leftmost remaining marker under hover,
+    since a still cannot otherwise show an affordance that only exists on pointer-over. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='cb1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn {
+	display: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='cb1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip--filled {
+	cursor: pointer;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='cb1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip--filled:is(:hover, [data-demo='hover']) {
+	outline: 1px solid var(--dse-stamina-healthy);
+	outline-offset: 1px;
+	filter: brightness(1.28);
+}
+/* CB2 — D's icon-only control, at full-cluster scale. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='cb2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn__text {
+	display: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='cb2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn {
+	min-width: 1.75rem;
+	padding: 0;
+	justify-content: center;
+}
+
+/* -------------------------------------------------------------------- */
+/*  Y — the DYING treatment (Scott: "the red border in Candidate A and D, */
+/*      or the entire red background in Candidate C are really nice")     */
+/* -------------------------------------------------------------------- */
+/*  One vocabulary at three intensities, on the same plate, so the keeper can be chosen
+    per context later (a 28px rail may want Y1 where the hero sheet wants Y3) without the
+    two contexts drifting into different reds. */
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='y1'], [data-dse-stamina-var~='y2'], [data-dse-stamina-var~='y3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand {
+	padding: 0.55rem 0.7rem 0.6rem;
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+}
+[data-dse-stamina-cand] body.theme-light :is([data-dse-stamina-var~='y1'], [data-dse-stamina-var~='y2'], [data-dse-stamina-var~='y3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.02));
+}
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='y1'], [data-dse-stamina-var~='y3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] {
+	border-color: var(--dse-stamina-dying);
+}
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='y2'], [data-dse-stamina-var~='y3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] {
+	background:
+		linear-gradient(104deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0.86)),
+		var(--dse-stamina-dying);
+}
+[data-dse-stamina-cand] body.theme-light :is([data-dse-stamina-var~='y2'], [data-dse-stamina-var~='y3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] {
+	background:
+		linear-gradient(104deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
+		var(--dse-stamina-dying);
+}
+
+/* -------------------------------------------------------------------- */
+/*  F — two FRESH directions (Scott: "there have been lots of HP bar      */
+/*      designs over the years… im willing to consider")                  */
+/* -------------------------------------------------------------------- */
+
+/*  F1 "RECOVERY LEDGER" — the gauge stops being an abstract percentage and becomes an
+    instrument graduated in the unit the RULES use: one division = one recovery's worth
+    of stamina (RR §8, floor(max/3)). A hero at 24/30 is "two and a bit Catch Breaths
+    from empty", and the recovery markers below stop being a second unrelated counter —
+    the bar and the strip finally measure the same thing. Divisions run the full depth
+    because the pour genuinely IS divided there, which is the objection that kept the
+    winded/base-max lines off the fill in candidate A.
+
+    The step arrives as `--dse-recstep`, derived by the harness from the numbers the
+    panel already published (`--dse-max-x` minus `--dse-zone` spans exactly `max`), not
+    from a second copy of the geometry. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='f1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge::after {
+	content: '';
+	position: absolute;
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	left: var(--dse-zone, 33%);
+	right: 1px;
+	pointer-events: none;
+	background: repeating-linear-gradient(
+		90deg,
+		rgba(0, 0, 0, 0.62) 0 1px,
+		rgba(255, 255, 255, 0.3) 1px 2px,
+		transparent 2px var(--dse-recstep, 33%)
+	);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='f1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge::after {
+	background: repeating-linear-gradient(
+		90deg,
+		rgba(0, 0, 0, 0.42) 0 1px,
+		rgba(255, 255, 255, 0.6) 1px 2px,
+		transparent 2px var(--dse-recstep, 33%)
+	);
+}
+
+/*  F2 "FORGE HEAT" — the metaphor inverts. Every other direction here is a vessel that
+    empties; this one is a bar of steel that is always fully present and simply goes
+    COLD. Losing stamina is heat leaving the metal from the far end back toward the
+    bulkhead, so the object never looks broken or absent — it looks spent, which is what
+    a winded hero is. The channel is therefore PROUD (a bar lying on the plate), not
+    recessed, and the dying reserve is the one place the metal is actually breached. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='f2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	/* Deliberately DIMMED gunmetal, not bright steel: the cold remainder has to stay
+	   visibly part of the same bar without competing with the hot region for the eye —
+	   an undimmed --dse-metal-grad reads as a second, brighter fill. */
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 46%, rgba(0, 0, 0, 0.42)),
+		linear-gradient(0deg, rgba(0, 0, 0, 0.46), rgba(0, 0, 0, 0.46)),
+		var(--dse-metal-grad);
+	border-color: var(--dse-metal-line);
+	box-shadow: var(--dse-chip-bevel);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='f2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.14)),
+		var(--dse-metal-grad);
+	box-shadow: var(--dse-chip-bevel);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='f2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gpour {
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.06) 48%, rgba(0, 0, 0, 0.22)),
+		linear-gradient(90deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0)),
+		var(--st);
+	box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.7);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='f2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gpour {
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 54%, rgba(0, 0, 0, 0.14)),
+		linear-gradient(90deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0)),
+		var(--st);
+}
+/* The breach: the only genuinely hollow part of the bar. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='f2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 6px),
+		rgba(0, 0, 0, 0.42);
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='f2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 6px),
+		rgba(0, 0, 0, 0.16);
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+
+/* -------------------------------------------------------------------- */
+/*  X — conditions as an optional cluster member (Scott: "where are       */
+/*      conditions in this? Are conditions expected to be managed in      */
+/*      another UI?")                                                     */
+/* -------------------------------------------------------------------- */
+/*  Net-new either way: no `[data-dse-theme='steel']` rule in this file touches any
+    `.dse-cond*` selector today, so conditions have no Steel treatment at all. X1 mocks
+    the lightest version that could work — a third register under the recoveries strip,
+    same forged-chip vocabulary, duration carried as a quiet suffix. */
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__conds {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+	margin-top: 0.4rem;
+}
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cond {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.32em;
+	padding: 0.06rem 0.42rem;
+	background: rgba(0, 0, 0, 0.26);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 2px;
+	font-size: 0.86em;
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cond {
+	background: rgba(0, 0, 0, 0.05);
+}
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cond-name {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.05em;
+}
+[data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cond-dur {
+	font-size: 0.82em;
+	opacity: 0.6;
+}
+/* END SC-132 round 3 */
+
 /* END SC-132 candidate region */

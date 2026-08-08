@@ -20,6 +20,28 @@
 .dse-cand-cap { font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; opacity: .45; margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px dashed currentColor; }
 body.theme-dark #mount:has(.dse-cand-head) { color: #dce2e6; }
 body.theme-light #mount:has(.dse-cand-head) { color: #22272b; }
+
+/* SC-132 round 3 — per-component option strips. Rows are OPTIONS, columns are STATES.
+   Still harness chrome only: present exclusively on `?strip=` pages. */
+.dse-cand-strip { display: grid; grid-template-columns: 210px repeat(var(--cols, 2), 1fr); gap: 14px 18px; align-items: center; }
+.dse-cand-colcap { font: 500 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; opacity: .45; padding-bottom: 5px; border-bottom: 1px dashed currentColor; align-self: end; }
+.dse-cand-optlab { font: 600 12px/1.35 ui-sans-serif, system-ui, sans-serif; }
+.dse-cand-optlab--corner { border-bottom: 1px dashed currentColor; padding-bottom: 5px; align-self: end; }
+.dse-cand-optlab-note { font: 400 10.5px/1.4 ui-sans-serif, system-ui, sans-serif; opacity: .5; margin-top: 3px; }
+.dse-cand-cell { min-width: 0; }
+/* Trim the cluster to the component under discussion, so a comparison is not padded
+   out by parts that are identical across every option in the strip. */
+/* `!important` because these fight the plugin's own (more specific) candidate rules;
+   this block is harness chrome that only ever exists on `?strip=` pages. */
+#mount:has(.dse-cand-strip) { max-width: none; }
+.dse-cand-strip .dse-collapse__header { display: none !important; }
+.dse-cand-strip[data-focus="gauge"] .dse-stamina-rec,
+.dse-cand-strip[data-focus="gauge"] .dse-stamina__chead { display: none !important; }
+.dse-cand-strip[data-focus="rec"] .dse-stamina__gauge,
+.dse-cand-strip[data-focus="rec"] .dse-stamina__chead { display: none !important; }
+/* candidate C draws its banner open-bottomed (the recoveries strip IS the foot); when
+   the foot is trimmed for a gauge-focused strip the plate has to be closed again. */
+.dse-cand-strip[data-strip="max-mark"] .dse-stamina__cand { border-bottom: 1px solid var(--dse-metal-faint) !important; border-radius: var(--dse-radius) !important; padding-bottom: .5rem !important; }
 </style>
 </head>
 <body class="theme-dark">

@@ -295,8 +295,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
    space is [-max/2 … +max]), and read-only (canPersist false — driven by the
    existing `?readonly=1` param, not a fixture).
 */
-const staminaState = (current: number, temp: number): string =>
-	`max_stamina: 30\ncurrent_stamina: ${current}\ntemp_stamina: ${temp}\nrecoveries: 5\nrecoveries_max: 8\n`;
+const staminaState = (current: number, temp: number, recoveries = 5): string =>
+	`max_stamina: 30\ncurrent_stamina: ${current}\ntemp_stamina: ${temp}\nrecoveries: ${recoveries}\nrecoveries_max: 8\n`;
 
 /** Hero-sheet context: the same states inside the flagship composition. */
 const heroState = (current: number, temp: number, recoveries: number): string => `name: Torin Stonefist
@@ -322,6 +322,10 @@ export const CANDIDATE_FIXTURES: Record<string, Record<string, string>> = {
 		'temp-full': staminaState(30, 6),
 		'temp-over': staminaState(8, 40),
 		'temp-dying': staminaState(-4, 5),
+		// SC-132 round 3 (component option strips).
+		'winded-temp': staminaState(11, 6),
+		'rec-none': staminaState(24, 0, 0),
+		'rec-full': staminaState(24, 0, 8),
 	},
 	hero: {
 		healthy: heroState(24, 0, 5),
@@ -352,6 +356,236 @@ const BOARD_ROWS_TEMP: { fixture: string; caption: string }[] = [
 	{ fixture: 'temp-dying', caption: 'SC-133 · Temp while dying — -4/30 +5 (old bar draws temp inside the hatch)' },
 ];
 
+/* ------------------------------------------------------------------ */
+/* SC-132 ROUND 3 — per-COMPONENT option strips                         */
+/* ------------------------------------------------------------------ */
+/*
+   Round 2 asked Scott to pick a LAYOUT (A/B/C/D). He deliberately declined and asked
+   for the appearance of the individual COMPONENTS to be nailed first. So round 3's
+   artifact is not another four whole-cluster boards: it is one strip per component
+   question, each showing the SAME state(s) rendered under every option side by side,
+   so the only variable in a comparison is the thing being decided.
+
+   Mechanics, and why they stay clear of production:
+     * A strip mounts the real element N times (once per option) and stamps
+       `data-dse-stamina-var="<option>"` on a WRAPPER around each mount. The variant is
+       per-instance rather than on <html> precisely because a strip has to show several
+       variants on ONE page; the candidate attribute stays on <html> as before, so every
+       round-3 CSS rule is still double-gated (`[data-dse-stamina-cand]` root attr +
+       the variant attr) and still matches nothing in production.
+     * Anything a strip needs that the plugin does not emit (marker labels, condition
+       chips, the ledger's step) is injected HERE, by `decorateStripCell`, not by
+       src/. Round 3 therefore touches zero plugin DOM: `src/` is unchanged, so jest,
+       the swept shots and the freeze surface cannot move by construction.
+*/
+interface StripState {
+	fixture: string;
+	caption: string;
+	readonly?: boolean;
+}
+interface StripOption {
+	/** Stamped as `data-dse-stamina-var`; also the label's leading code (T1, R2, …). */
+	id: string;
+	label: string;
+	note?: string;
+}
+interface StripDef {
+	title: string;
+	sub: string;
+	cand: StaminaCandidate;
+	element?: 'stamina-bar' | 'hero';
+	/** Trims the mounted cluster down to the part under discussion (harness chrome). */
+	focus?: 'gauge' | 'rec' | 'full';
+	/** CSS `zoom` on each cell, for boundary-level crops. */
+	zoom?: number;
+	states: StripState[];
+	options: StripOption[];
+}
+
+export const STRIPS: Record<string, StripDef> = {
+	/* 1 — the temp-stamina edge defect Scott flagged ("the left and right edges of
+	   temp stamina make no sense... some css thats not working as expected"). */
+	'temp-edge': {
+		title: 'Temp-stamina edges — the defect, and the fix',
+		sub: 'Candidate A channel · zoomed 2× on the fill→temp boundary',
+		cand: 'a',
+		focus: 'gauge',
+		zoom: 2,
+		states: [
+			{ fixture: 'temp', caption: '24/30 +6' },
+			{ fixture: 'temp-over', caption: '8/30 +40' },
+		],
+		options: [
+			{ id: 'e0', label: 'E0 — as reviewed', note: 'notch bitten out of the left edge; the separator shadow is clipped away' },
+			{ id: 'e1', label: 'E1 — forged seam', note: 'a real two-tone seam at the boundary, both edges square' },
+		],
+	},
+
+	/* 2 — the "separator that doesnt match any marker im familiar with": the BASE-MAX
+	   index mark, which lands mid-bar once temp widens the scale. */
+	'max-mark': {
+		title: 'The unexplained mid-bar separator — what to do with the base-max mark',
+		sub: 'Candidate A channel · the mark only exists when temp is present',
+		cand: 'c',
+		focus: 'gauge',
+		states: [
+			{ fixture: 'temp', caption: '24/30 +6 — mark lands at the temp plate’s far edge' },
+			{ fixture: 'temp-over', caption: '8/30 +40 — mark lands INSIDE the temp plate' },
+			{ fixture: 'winded-temp', caption: '11/30 +6 — winded, with temp' },
+		],
+		options: [
+			{ id: 'm0 h2', label: 'M0 — as reviewed', note: 'a bare metal hairline, unexplained' },
+			{ id: 'm1 h2', label: 'M1 — drop it', note: 'no mark; temp’s own material is the only boundary' },
+			{ id: 'm2 h2', label: 'M2 — material tells it', note: 'the temp region is a different material, so the boundary IS the mark' },
+			{ id: 'm3 h2', label: 'M3 — ◆ grammar', note: 'the same milled ◆ notch the zero bulkhead uses' },
+		],
+	},
+
+	/* 3 — C's "wanting": is the underline too short, weakening the gradient? */
+	'c-height': {
+		title: 'Candidate C — gauge height ladder',
+		sub: 'Same banner, same states; only the gauge’s depth changes',
+		cand: 'c',
+		states: [
+			{ fixture: 'healthy', caption: 'Healthy 24/30' },
+			{ fixture: 'winded', caption: 'Winded 11/30' },
+			{ fixture: 'temp', caption: 'Temp 24/30 +6' },
+		],
+		options: [
+			{ id: 'h1', label: 'H1 — hairline (as reviewed)', note: '0.30rem rule' },
+			{ id: 'h2', label: 'H2 — channel', note: '0.62rem — A’s milled channel at banner scale' },
+			{ id: 'h3', label: 'H3 — full channel', note: '1.05rem — A’s channel at full depth' },
+		],
+	},
+
+	/* 4 — the centrepiece: make temp read as EPHEMERAL / other. */
+	temp: {
+		title: 'Temp stamina — five materials',
+		sub: 'Appended at the end in all five; geometry (origin + scale) is identical throughout',
+		cand: 'a',
+		focus: 'gauge',
+		states: [
+			{ fixture: 'temp', caption: '24/30 +6' },
+			{ fixture: 'temp-over', caption: '8/30 +40 (temp > max)' },
+			{ fixture: 'temp-dying', caption: '-4/30 +5 (temp while dying)' },
+		],
+		options: [
+			{ id: 't1 e1', label: 'T1 — solid plate', note: 'as reviewed: opaque violet, same weight as the pour' },
+			{ id: 't2 e1', label: 'T2 — spectral glass', note: 'translucent; the channel’s recess reads straight through it' },
+			{ id: 't3 e1', label: 'T3 — hollow vessel', note: 'outlined walls, unfilled — capacity that is not substance' },
+			{ id: 't4 e1', label: 'T4 — crystalline', note: 'faceted plates, each one a shard that can shatter off' },
+			{ id: 't5 e1', label: 'T5 — shimmer', note: 'T2 plus a slow travelling gleam (static frame here; honours reduce-motion)' },
+		],
+	},
+
+	/* 5 — recovery markers: "they look more like some kind of HR design element than
+	   an interactive checkbox-style element." */
+	'rec-shape': {
+		title: 'Recovery markers — shape',
+		sub: 'Remaining vs. spent must survive a grayscale glance, and must read as CHECKBOXES',
+		cand: 'a',
+		focus: 'rec',
+		states: [
+			{ fixture: 'healthy', caption: '5 of 8 remaining' },
+			{ fixture: 'rec-none', caption: '0 of 8 — all spent' },
+			{ fixture: 'rec-full', caption: '8 of 8 — none spent' },
+		],
+		options: [
+			{ id: 'r1', label: 'R1 — diamond (as reviewed)', note: 'the ornament read Scott rejected' },
+			{ id: 'r2', label: 'R2 — square cell', note: 'the checkbox convention, forged' },
+			{ id: 'r3', label: 'R3 — round pip', note: 'tally/token read' },
+			{ id: 'r4', label: 'R4 — ingot', note: 'wide mini-plate: a spendable thing, not a dot' },
+		],
+	},
+
+	/* 6 — "Having 8 random elements that are unlabeled doesnt help users." */
+	'rec-label': {
+		title: 'Recovery markers — labelling',
+		sub: 'Shown on R2; the labelling choice is independent of the shape choice',
+		cand: 'a',
+		focus: 'rec',
+		states: [{ fixture: 'healthy', caption: '5 of 8 remaining' }],
+		options: [
+			{ id: 'l1 r2', label: 'L1 — eyebrow + count', note: 'RECOVERIES · 5/8' },
+			{ id: 'l2 r2', label: 'L2 — count only', note: '5/8' },
+			{ id: 'l3 r2', label: 'L3 — unlabeled', note: 'as reviewed' },
+		],
+	},
+
+	/* 7 — "Im not sure what the intention of the Catch Breath chip is." */
+	'catch-breath': {
+		title: 'Catch Breath — the control',
+		sub: 'The markers are shown with R2 + L1 throughout; only the control changes',
+		cand: 'a',
+		focus: 'rec',
+		states: [{ fixture: 'healthy', caption: '5 of 8 remaining' }],
+		options: [
+			{ id: 'cb1 r2 l1', label: 'CB1 — no chip; markers are the control', note: 'the leftmost remaining marker shown under hover' },
+			{ id: 'cb2 r2 l1', label: 'CB2 — icon-only button', note: 'D’s control at full-cluster scale' },
+			{ id: 'cb3 r2 l1', label: 'CB3 — labelled icon button', note: 'as reviewed' },
+		],
+	},
+
+	/* 8 — "the red border in Candidate A and D, or the entire red background in
+	   Candidate C are really nice looking." Standardise one vocabulary. */
+	dying: {
+		title: 'Dying — one vocabulary, three intensities',
+		sub: 'Keep-per-context: the rail may want border-only where the sheet wants both',
+		cand: 'a',
+		states: [
+			{ fixture: 'dying', caption: 'Dying -4/30' },
+			{ fixture: 'temp-dying', caption: 'Dying -4/30 +5' },
+		],
+		options: [
+			{ id: 'y1 r2 l1', label: 'Y1 — border only', note: 'A/D’s danger hairline' },
+			{ id: 'y2 r2 l1', label: 'Y2 — ground only', note: 'C’s blood-black plate' },
+			{ id: 'y3 r2 l1', label: 'Y3 — border + ground', note: 'both, at the same intensities' },
+		],
+	},
+
+	/* 9 — "there have been lots of HP bar designs over the years." Two directions that
+	   are not a re-skin of the four. */
+	fresh: {
+		title: 'Two fresh directions',
+		sub: 'Full state matrix, not a sketch — these are alternatives to the bar idea itself',
+		cand: 'a',
+		states: [
+			{ fixture: 'healthy', caption: 'Healthy 24/30' },
+			{ fixture: 'winded', caption: 'Winded 11/30' },
+			{ fixture: 'dying', caption: 'Dying -4/30' },
+			{ fixture: 'temp', caption: 'Temp 24/30 +6' },
+		],
+		options: [
+			{
+				id: 'f1 r2 l1 e1',
+				label: 'F1 — Recovery Ledger',
+				note: 'the gauge is graduated in RECOVERIES: every division is one Catch Breath’s worth of stamina',
+			},
+			{
+				id: 'f2 r2 l1 e1',
+				label: 'F2 — Forge Heat',
+				note: 'the bar is solid steel at all times; stamina is how much of it is still hot',
+			},
+		],
+	},
+
+	/* 10 — "where are conditions in this? Are conditions expected to be managed in
+	   another UI?" */
+	conditions: {
+		title: 'Conditions — in the cluster, or left where they are?',
+		sub: 'Conditions are a separate subsystem today (see the comment); this is the only question',
+		cand: 'a',
+		states: [
+			{ fixture: 'winded', caption: 'Winded 11/30, three conditions' },
+			{ fixture: 'healthy', caption: 'Healthy 24/30, three conditions' },
+		],
+		options: [
+			{ id: 'x1 r2 l1', label: 'X1 — cluster carries a condition row', note: 'net-new: a third register under the recoveries strip' },
+			{ id: 'x2 r2 l1', label: 'X2 — cluster untouched', note: 'as today: conditions stay in their own element / hero region' },
+		],
+	},
+};
+
 export interface HarnessParams {
 	element?: string;
 	fixture: string;
@@ -366,6 +600,8 @@ export interface HarnessParams {
 	cand?: StaminaCandidate | null;
 	/** SC-132 candidate stage: render the labeled state-matrix board. */
 	board?: 'stamina-bar' | 'hero' | null;
+	/** SC-132 round 3: render the named per-component option strip. */
+	strip?: string | null;
 }
 
 export function parseParams(search: string): HarnessParams {
@@ -383,6 +619,7 @@ export function parseParams(search: string): HarnessParams {
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
 		cand: parseStaminaCandidate(q.get('cand')),
 		board: board === 'stamina-bar' || board === 'hero' ? board : null,
+		strip: q.get('strip'),
 	};
 }
 
@@ -556,6 +793,119 @@ async function mountBoard(
 	await mountOne(pipeline, registry, ro, element, 'healthy', { ...params, readonly: true }, errors);
 }
 
+/**
+ * SC-132 round 3: everything a strip needs that the PLUGIN does not emit. Kept here,
+ * in the harness, rather than in `src/`, so round 3 leaves the plugin's DOM untouched
+ * and the freeze/jest surfaces cannot move.
+ */
+function decorateStripCell(cell: HTMLElement, optId: string): void {
+	// Options COMPOSE ("cb1 r2 l1"), matching the CSS's `~=` token semantics — so this
+	// has to test membership, not equality.
+	const opts = new Set(optId.split(/\s+/).filter(Boolean));
+	const rec = cell.querySelector<HTMLElement>('.dse-stamina-rec');
+	const pips = Array.from(cell.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip'));
+
+	// -- Marker labelling (L1/L2; L3 and the shape strip simply hide it) ------------
+	// The plugin has no label node today, which is exactly Scott's complaint ("8
+	// random elements that are unlabeled"). Injected as harness chrome so the option
+	// can be judged before anything is committed to the renderer.
+	if (rec && pips.length) {
+		const remaining = pips.filter((p) => p.classList.contains('dse-stamina-rec__pip--filled')).length;
+		const lab = createDiv({ cls: 'dse-stamina-rec__eyebrow' });
+		lab.createSpan({ cls: 'dse-stamina-rec__eyebrow-word', text: 'Recoveries' });
+		lab.createSpan({ cls: 'dse-stamina-rec__eyebrow-count', text: `${remaining}/${pips.length}` });
+		rec.prepend(lab);
+	}
+
+	// -- CB1: the markers ARE the control, so one of them has to be shown mid-hover
+	// or the option is invisible in a still. The leftmost REMAINING marker is the one
+	// a click would spend.
+	if (opts.has('cb1')) {
+		const firstRemaining = pips.find((p) => p.classList.contains('dse-stamina-rec__pip--filled'));
+		firstRemaining?.setAttribute('data-demo', 'hover');
+	}
+
+	// -- X1: the optional condition register ---------------------------------------
+	if (opts.has('x1') && rec) {
+		const row = createDiv({ cls: 'dse-stamina__conds' });
+		for (const [name, dur] of [
+			['Slowed', ''],
+			['Bleeding', 'save ends'],
+			['Weakened', 'EoT'],
+		] as [string, string][]) {
+			const chip = row.createSpan({ cls: 'dse-stamina__cond' });
+			chip.createSpan({ cls: 'dse-stamina__cond-name', text: name });
+			if (dur) chip.createSpan({ cls: 'dse-stamina__cond-dur', text: dur });
+		}
+		rec.insertAdjacentElement('afterend', row);
+	}
+
+	// -- F1: the ledger's division width -------------------------------------------
+	// Derived from the numbers the PANEL already computed (`--dse-zone`, `--dse-max-x`),
+	// not from a re-implementation of its geometry: `--dse-max-x - --dse-zone` is
+	// exactly `max` stamina wide, so one recovery is that span × recoveryValue/max.
+	// Re-expressed as a fraction of the LIVE region, because the gradient that paints
+	// the divisions is boxed to the live region and % there resolves against ITS width.
+	if (opts.has('f1')) {
+		const root = cell.querySelector<HTMLElement>('.dse-stamina__cand');
+		const maxTxt = cell.querySelector('.dse-stamina__cmax')?.textContent ?? '';
+		const max = Number(maxTxt);
+		const num = (name: string): number => Number.parseFloat(root?.style.getPropertyValue(name) ?? '');
+		const zone = num('--dse-zone');
+		const maxX = num('--dse-max-x');
+		if (root && Number.isFinite(max) && max > 0 && Number.isFinite(zone) && Number.isFinite(maxX)) {
+			// RR §8 / StaminaBar.recoveryValue: a recovery restores floor(max / 3).
+			const recoveryValue = Math.floor(max / 3);
+			const live = 100 - zone;
+			if (live > 0 && recoveryValue > 0) {
+				const step = ((maxX - zone) / live) * 100 * (recoveryValue / max);
+				root.style.setProperty('--dse-recstep', `${step}%`);
+			}
+		}
+	}
+}
+
+/**
+ * SC-132 round 3: one component question per page. Rows are OPTIONS, columns are
+ * STATES — so reading across a row shows one option surviving every state, and reading
+ * down a column shows the options differing with everything else held fixed.
+ */
+async function mountStrip(
+	pipeline: ElementPipeline,
+	registry: ElementRegistry,
+	mount: HTMLElement,
+	def: StripDef,
+	params: HarnessParams,
+	errors: string[],
+): Promise<void> {
+	const element = def.element ?? 'stamina-bar';
+	const head = mount.createDiv({ cls: 'dse-cand-head' });
+	head.createDiv({ cls: 'dse-cand-title', text: def.title });
+	head.createDiv({ cls: 'dse-cand-sub', text: `${def.sub} · Steel · ${params.bg} scheme` });
+
+	const grid = mount.createDiv({ cls: 'dse-cand-strip' });
+	if (params.strip) grid.setAttribute('data-strip', params.strip);
+	if (def.focus) grid.setAttribute('data-focus', def.focus);
+	grid.style.setProperty('--cols', String(def.states.length));
+
+	// Column headers, once at the top — the state is constant down a column.
+	grid.createDiv({ cls: 'dse-cand-optlab dse-cand-optlab--corner' });
+	for (const st of def.states) grid.createDiv({ cls: 'dse-cand-colcap', text: st.caption });
+
+	for (const opt of def.options) {
+		const lab = grid.createDiv({ cls: 'dse-cand-optlab' });
+		lab.createDiv({ cls: 'dse-cand-optlab-name', text: opt.label });
+		if (opt.note) lab.createDiv({ cls: 'dse-cand-optlab-note', text: opt.note });
+		for (const st of def.states) {
+			const cell = grid.createDiv({ cls: 'dse-cand-cell' });
+			cell.setAttribute('data-dse-stamina-var', opt.id);
+			if (def.zoom) cell.style.zoom = String(def.zoom);
+			await mountOne(pipeline, registry, cell, element, st.fixture, { ...params, readonly: st.readonly ?? false }, errors);
+			decorateStripCell(cell, opt.id);
+		}
+	}
+}
+
 export async function mountFromParams(
 	doc: Document,
 	params: HarnessParams,
@@ -578,6 +928,20 @@ export async function mountFromParams(
 	const errors: string[] = [];
 	if (!mount) return { errors: ['no #mount element'] };
 	mount.empty();
+	if (params.strip) {
+		const def = STRIPS[params.strip];
+		if (!def) return { errors: [`unknown strip: ${params.strip}`] };
+		// The strip's own candidate wins over any `?cand=` — a strip is defined against
+		// one base treatment, and mismatching the two would compare nothing.
+		setStaminaCandidate(def.cand);
+		doc.documentElement.setAttribute('data-dse-stamina-cand', def.cand);
+		mount.style.width = '';
+		await mountStrip(pipeline, registry, mount, def, params, errors);
+		for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
+			errors.push(`error card: ${(card.textContent ?? '').slice(0, 160)}`);
+		}
+		return { errors };
+	}
 	if (params.board) {
 		mount.style.width = '';
 		await mountBoard(pipeline, registry, mount, params, errors);
