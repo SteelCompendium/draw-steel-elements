@@ -207,13 +207,17 @@ different DOM per theme; do not invent a second mechanism.
   surface inside a Steel card): the site's "rich" dark tiles carry **no gradient of their
   own**; the richness is the parent card's diagonal gradient bleeding through
   **translucent-black** fills (`.sc-card__stat` `rgba(0,0,0,.25)` dark / `.04` light;
-  `.sc-kit__equip` `rgba(0,0,0,.22)` dark / `.04` light). The plugin's
-  `--dse-surface-sunken` token resolves under Steel dark to a **6%-white wash** — the
-  opposite direction — which occludes the card gradient and flattens the surface. Two
-  selectors (`.dse-tiles__cell`, `.dse-kit__equip`) had exactly this bug and now carry the
-  site's literal translucent-black values with light-mode twins. This is the reference
-  finding for SC-117's dark-mode audit: sweep other `--dse-surface-sunken` consumers
-  before assuming a sunken surface should be washed lighter.
+  `.sc-kit__equip` `rgba(0,0,0,.22)` dark / `.04` light). Two selectors
+  (`.dse-tiles__cell`, `.dse-kit__equip`) carry the site's literal translucent-black
+  values with light-mode twins. **SC-117 closed the general case:** the shared
+  `--dse-surface-sunken` token used to resolve under Steel dark to a **6%-white wash** (and
+  under Steel light to opaque `#eaeeef`) — the opposite direction, occluding the card
+  gradient on all 13 of its declaration sites — and now resolves to the site's own
+  `rgba(0,0,0,.18)` dark / `rgba(0,0,0,.02)` light. The four surfaces whose site value
+  differs from `.18` carry their own literal, SC-100-style: `--distance`/`--target` cells
+  `.2/.03`, `.dse-sb__item` `.22/.03`, `.dse-sb__kv` `.16/.024`. The rule for any NEW sunken
+  surface inside a Steel card: reach for the token, and only hardcode a literal when the
+  site measurably uses a different step of its ladder.
 
 ### Preferences (`src/prefs/`, D4)
 

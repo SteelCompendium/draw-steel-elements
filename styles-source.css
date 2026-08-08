@@ -3269,7 +3269,19 @@ Shared globals
 	/* -- Structure / surface -- */
 	--dse-surface: #1a1e21;
 	--dse-surface-raised: #22272b;
-	--dse-surface-sunken: rgba(220,226,230,0.06); /* 6% wash reads inset-panel, not darker */
+	/* SC-117 B1 — TRANSLUCENT BLACK, not a white wash. This token was
+	   `rgba(220,226,230,0.06)` ("6% wash reads inset-panel, not darker"), which is the
+	   OPPOSITE direction from the site and is what made Steel dark read flat: every card
+	   plate here is `--dse-card-bg`, a 160deg gradient (~3330), and the site's richness IS
+	   that gradient bleeding through translucent-BLACK child fills. A white wash ADDS a
+	   constant toward white, compressing the plate's ~33% internal ramp to nothing, so
+	   every panel lands on the same pale grey wherever it sits on the plate (SC-117 audit
+	   §1). The site's dark body-surface ladder is entirely black — .25/.22/.20/.18/.16 —
+	   and .18 is its most common step (`.sc-ability__section` and `.sc-ability__pr`,
+	   steel-ability-cards.css), so the shared token takes .18 and the four surfaces whose
+	   site value differs carry their own literal (SC-117 B2, the SC-100 precedent).
+	   Measured live on https://steelcompendium.io/v2/, both schemes. */
+	--dse-surface-sunken: rgba(0,0,0,0.18);
 	--dse-border: rgba(220,226,230,0.12);
 	--dse-border-strong: rgba(220,226,230,0.24);
 	--dse-radius: 0.4em; /* DESIGN.md card radius (Legacy 5px) */
@@ -4574,8 +4586,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 }
 
 /* -- SC-10 Task 3: finish the Task-2 ◆-marked title into the site's boxed
-   panel (steel-ability-cards.css .sc-ability__section: a raised header strip
-   over a sunken/bordered body). Applies to every .dse-section alike (Effect/
+   panel (steel-ability-cards.css .sc-ability__section: a sheen-only header strip
+   over a sunken/bordered body — SC-117 B3 corrected "a RAISED header strip" here;
+   the site's head strip paints no surface colour, see .dse-section__title below).
+   Applies to every .dse-section alike (Effect/
    Trigger/Special/Aftermath) EXCEPT --spend, which gets the dashed clause
    look below (higher-specificity override, same cascade layer). SCREEN-ONLY,
    print frozen (SC-4); Legacy's .dse-section has no border/background rule
@@ -4587,6 +4601,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	   (this was --dse-border, which is a different grey). */
 	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
+	/* SC-117 B1: the token now RESOLVES to the site's `rgba(0,0,0,.18)` dark /
+	   `rgba(0,0,0,.02)` light (steel-ability-cards.css:180/…). Until B1 it resolved to a
+	   6%-WHITE wash under Steel and to opaque #eaeeef under Steel light, so this line
+	   quietly painted the opposite of what the comment above describes. */
 	background: var(--dse-surface-sunken);
 	overflow: hidden;
 	/* Plan 21 Task 2 — section rhythm. The site gives each section a top-only
@@ -4617,7 +4635,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	   plugin's 16px base 0.625rem = 10px and 1.125rem = 18px. */
 	padding: 0.625rem 1.125rem;
 	border-bottom: 1px solid var(--dse-metal-faint);
-	background-color: var(--dse-surface-raised);
+	/* SC-117 B3 (audit D6) — NO background-color. This carried
+	   `background-color: var(--dse-surface-raised)` (opaque #22272b dark / #edf0f0 light)
+	   UNDER the sheen, which occluded both the section's own recessed fill and the card
+	   plate across the full width of every section header. The site's
+	   `.sc-ability__section-head` (steel-ability-cards.css:183-184) sets no
+	   background-color at all — only this sheen — and lets the section's `.18` black show
+	   through; measured live in BOTH schemes as `rgba(0,0,0,0)` + the identical
+	   `linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0))`. The sibling
+	   `.dse-pr__head` below already ships exactly that recipe, so this is adopting a
+	   correct in-file precedent, not inventing one. Must ship with B1: on its own a
+	   transparent head over a still-white-washed panel is worse than either end state. */
 	background-image: var(--dse-sheen-soft);
 	color: var(--dse-metal-bright);
 }
@@ -4679,6 +4707,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
        token .dse-section already maps this exact site value to. The site's
        light-scheme override (rgba(0,0,0,.02), …:157) rides on the token's own
        light value, so no separate light rule is needed.
+       *** SC-117 B1 — this paragraph asserted a fix that had not happened. ***
+       Until B1 the token resolved to `rgba(220,226,230,.06)` under Steel dark and to
+       OPAQUE `#eaeeef` under Steel light, i.e. neither "this exact site value" nor
+       anything that lets the light plate through. B1 flipped the token to exactly the
+       two literals quoted above, so the claim is true as of this commit and the
+       "no separate light rule is needed" conclusion now actually follows. (The audit
+       found the identical false claim on `.dse-section`, corrected there too.)
    `margin-top: .9rem` is NOT ported: the plugin already owns that rhythm
    (.dse-feature .dse-pr, ~170). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr {
@@ -5688,7 +5723,13 @@ body.theme-light
 	/* -- Structure / surface (light steel-white) -- */
 	--dse-surface: #f6f8f8;
 	--dse-surface-raised: #edf0f0;
-	--dse-surface-sunken: #eaeeef;
+	/* SC-117 B1 — the light half of the same flip. This was OPAQUE `#eaeeef`, which
+	   occludes the light plate gradient (`#ffffff → #eef1f1`) completely. The site uses the
+	   SAME mechanism in light, only thinner: a `.02–.04` translucent-BLACK band over the
+	   light plate, never a flat fill (`.sc-ability__section` / `.sc-ability__pr`
+	   rgba(0,0,0,.02), measured live, both schemes). Same .18/.02 pairing the dark block
+	   above documents. */
+	--dse-surface-sunken: rgba(0,0,0,0.02);
 	--dse-border: #c8cdd0;
 	--dse-border-strong: #8e959a;
 	--dse-hover: rgba(42,123,136,0.10);

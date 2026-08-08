@@ -90,7 +90,10 @@ const STEEL_DARK: Record<string, string> = {
 	// surfaces
 	surface: '#1a1e21',
 	'surface-raised': '#22272b',
-	'surface-sunken': 'rgba(220,226,230,0.06)',
+	// SC-117 B1: was 'rgba(220,226,230,0.06)' — a 6%-WHITE wash, the opposite direction
+	// from the site, which occluded the card plate's gradient. Now the site's own
+	// translucent-black `.sc-ability__section`/`.sc-ability__pr` value.
+	'surface-sunken': 'rgba(0,0,0,0.18)',
 	// borders / shape
 	border: 'rgba(220,226,230,0.12)',
 	'border-strong': 'rgba(220,226,230,0.24)',
@@ -318,7 +321,9 @@ const STEEL_LIGHT: Record<string, string> = {
 	// surfaces
 	surface: '#f6f8f8',
 	'surface-raised': '#edf0f0',
-	'surface-sunken': '#eaeeef',
+	// SC-117 B1: was OPAQUE '#eaeeef', which hid the light plate gradient entirely.
+	// The site runs the same translucent-black mechanism in light, only thinner.
+	'surface-sunken': 'rgba(0,0,0,0.02)',
 	// borders
 	border: '#c8cdd0',
 	'border-strong': '#8e959a',
