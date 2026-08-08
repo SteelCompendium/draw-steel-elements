@@ -33,6 +33,11 @@ import {
 	type NavSection,
 	type SettingsNavMode,
 } from '@views/settingsShell';
+import {
+	toSettingDefinitions,
+	type DeclarativeControl,
+	type DeclarativeItem,
+} from '@views/settingsDeclarative';
 
 // Local Font Access API (SC-112 Task 1 spike, Outcome A): queryLocalFonts() works
 // unconditionally in Obsidian's Electron — no permission prompt — but it still
@@ -102,10 +107,113 @@ export class DseSettingTab extends PluginSettingTab {
 	 *  installed-fonts fetch trigger. */
 	private activeSectionId: string | null = null;
 	private searchQuery = '';
+	/** SC-131 declarative SPIKE — OFF, so this ships nothing. `getSettingDefinitions()`
+	 *  returning an empty array is exactly what obsidian ≤1.12 does implicitly, and on
+	 *  1.13+ an empty array is the documented signal to fall through to `display()`. The
+	 *  evidence harness flips it at runtime (like `navMode`) and calls `update()`. */
+	declarativeSpike = false;
 
 	constructor(app: App, plugin: DrawSteelAdmonitionPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	// —— SC-131 declarative SPIKE (obsidian 1.13+; see settingsDeclarative.ts) ——
+	//
+	// The 1.13 entry point. Obsidian calls it on every `update()` AND once when the tab
+	// is registered — that registration call is what puts our rows in the native settings
+	// search index, before the user has ever opened our tab. Non-empty ⇒ obsidian renders
+	// from the definitions and SKIPS display(); empty ⇒ display() runs as it always has,
+	// which is both the ≤1.12 behaviour and this spike's default.
+	//
+	// Not declared as an override: the 1.8.7 typings the plugin builds against predate
+	// PluginSettingTab.getSettingDefinitions, so to the compiler this is a new method.
+	getSettingDefinitions(): DeclarativeItem[] {
+		if (!this.declarativeSpike) return [];
+		const prefs = this.plugin.frameworkV2?.services.prefs;
+		return toSettingDefinitions([
+			...(prefs ? this.buildPrefSections(prefs) : []),
+			...this.buildOperationalSections(),
+		]);
+	}
+
+	/** Declarative control bindings read through here rather than off
+	 *  `this.plugin.settings[key]`. DSE keeps its prefs in the PreferenceStore, and this
+	 *  is also where the two representation mismatches are absorbed: a 'on'|'off' string
+	 *  pref presents to a native toggle as a boolean. */
+	getControlValue(key: string): unknown {
+		const prefs = this.plugin.frameworkV2?.services.prefs;
+		if (!prefs) return undefined;
+		const descriptor = prefs.descriptors().find((candidate) => candidate.key === key);
+		if (!descriptor) return undefined;
+		const value = prefs.get(descriptor.key);
+		if (prefUi(descriptor)?.control === 'toggle' && typeof descriptor.default === 'string') {
+			return value === 'on';
+		}
+		return value;
+	}
+
+	/** The write half. Crucially this routes through `prefs.set()`, which notifies
+	 *  subscribers synchronously — so LIVE APPLY survives the move to native controls
+	 *  unchanged, and obsidian's automatic persistence rides on top of it. */
+	setControlValue(key: string, value: unknown): void | Promise<void> {
+		const prefs = this.plugin.frameworkV2?.services.prefs;
+		if (!prefs) return;
+		const descriptor = prefs.descriptors().find((candidate) => candidate.key === key);
+		if (!descriptor) return;
+		const ui = prefUi(descriptor);
+		let next = value;
+		if (ui?.control === 'toggle' && typeof descriptor.default === 'string') {
+			next = value ? 'on' : 'off';
+		} else if (ui?.control === 'slider') {
+			next = snap(value, this.scaleRange(descriptor, ui));
+		}
+		return prefs.set(descriptor.key, next as DsePrefs[keyof DsePrefs]);
+	}
+
+	/** The slider's numeric contract, shared by the imperative row and the native one. */
+	private scaleRange(descriptor: PrefDescriptor, ui: PrefUi): ScaleRange {
+		const fallback = typeof descriptor.default === 'number' ? descriptor.default : 1;
+		return {
+			min: ui.min ?? fallback,
+			max: ui.max ?? fallback,
+			step: ui.step ?? 1,
+			default: fallback,
+		};
+	}
+
+	/** The descriptor's NATIVE binding, or undefined when obsidian has no control type
+	 *  that can express the row (the six font pickers: a curated dropdown, a revealed
+	 *  free-text field and a "list installed fonts" button in one row). */
+	private nativeControl(descriptor: PrefDescriptor, ui: PrefUi): DeclarativeControl | undefined {
+		const key = String(descriptor.key);
+		switch (ui.control) {
+			case 'toggle':
+				return { type: 'toggle', key };
+			case 'select':
+				return {
+					type: 'dropdown',
+					key,
+					options: Object.fromEntries((ui.options ?? []).map((o) => [o.value, o.label])),
+				};
+			case 'text':
+				return { type: 'text', key };
+			case 'slider': {
+				const range = this.scaleRange(descriptor, ui);
+				// 1.13.1's displayFormat is the native home of the `.dse-slider-value`
+				// percent span the imperative row hand-builds — same readout, no CSS.
+				return {
+					type: 'slider',
+					key,
+					min: range.min,
+					max: range.max,
+					step: range.step,
+					displayFormat: (value: number) => `${Math.round(value * 100)}%`,
+				};
+			}
+			default:
+				return undefined; // 'font'
+		}
 	}
 
 	display(): void {
@@ -188,6 +296,10 @@ export class DseSettingTab extends PluginSettingTab {
 					// "Advanced" disclosure. The section reset below still covers them —
 					// it iterates `members`, not the rows the view happens to show.
 					advanced: ui.advanced,
+					// SC-131 declarative SPIKE: additive metadata the imperative shell
+					// ignores. `control` present ⇒ obsidian 1.13 renders and persists the
+					// row itself; absent ⇒ it falls back to the same `render` thunk below.
+					control: this.nativeControl(descriptor, ui),
 					render: (container) => this.renderRow(container, prefs, descriptor),
 				});
 			}
@@ -327,13 +439,7 @@ export class DseSettingTab extends PluginSettingTab {
 				// The range rides the descriptor's ui (Task 7 mirrored snap()'s
 				// min/max/step there) + the descriptor's own numeric default — no
 				// per-key knowledge here. Values pass through snap() before save().
-				const fallback = typeof descriptor.default === 'number' ? descriptor.default : 1;
-				const range: ScaleRange = {
-					min: ui.min ?? fallback,
-					max: ui.max ?? fallback,
-					step: ui.step ?? 1,
-					default: fallback,
-				};
+				const range = this.scaleRange(descriptor, ui);
 				const current = snap(prefs.get(descriptor.key), range);
 				const pct = (value: number): string => `${Math.round(value * 100)}%`;
 				// The site's set-scale-val percent readout (settings-panel.js:531-541),

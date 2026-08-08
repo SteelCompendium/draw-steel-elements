@@ -30,6 +30,7 @@
 //   - Advanced disclosures stay inside their own section;
 //   - live-apply is untouched — every row's own onChange still calls prefs.set().
 import { Setting } from 'obsidian';
+import type { DeclarativeControl } from '@views/settingsDeclarative';
 
 export type SettingsNavMode = 'off' | 'tabs' | 'sections' | 'search';
 
@@ -52,6 +53,15 @@ export interface NavRow {
 	 *  A search hit is shown directly — hiding a matched row would read as a broken
 	 *  search. */
 	advanced?: boolean;
+	/** SC-131 declarative SPIKE: extra search terms, used only by the 1.13 renderer
+	 *  (`settingsDeclarative.ts`) — the imperative shell matches label + help + section. */
+	aliases?: string[];
+	/** SC-131 declarative SPIKE: the row's NATIVE binding, when it has one. Purely
+	 *  additive — `render` stays the imperative shell's only input, so this field is
+	 *  invisible to every mode above. Its presence is the model saying "obsidian 1.13
+	 *  can render and persist this row itself"; its absence routes the row through the
+	 *  declarative `render` escape hatch instead. */
+	control?: DeclarativeControl;
 	render(container: HTMLElement): void;
 }
 
