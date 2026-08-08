@@ -307,11 +307,14 @@ export class StaminaEditModal extends DseModal {
 		// (SC-133 RC-4/I2: Spend Recovery below is now itself a MEMBER of this
 		// corridor, not just a non-contributor — recoverySpendResult heals from the
 		// CLAMPED position, so a press while the pending sum sits outside [floor, max]
-		// (from this stepper's own overshoot, illustrated above, or several stacked
-		// Damage clicks past the floor) snaps it back into range exactly like the
-		// stepper's own corrective "+". Stacked presses can no longer push the
-		// pending value further past either clamp, and the preview always matches
-		// what Apply persists.)
+		// (reachable only via THIS stepper's own typed/± overshoot, illustrated above —
+		// Damage below is capped at amountToDeath and can never drive the sum past the
+		// floor) snaps it back into range exactly like the stepper's own corrective
+		// "+". Stacked Spend Recovery presses can no longer push the pending value
+		// further past either clamp, and every SPEND RECOVERY press's own preview
+		// matches what Apply persists — this does not reach the stepper's own typed-
+		// overshoot corridor above, which can still disagree with Apply until the
+		// corrective "+"/Apply's clamp resolves it, same as before this fix.)
 		const staminaStepper = staminaStepperRow(
 			adjustSection,
 			{
@@ -409,9 +412,14 @@ export class StaminaEditModal extends DseModal {
 					// position (recoverySpendResult below), never onto the raw pending
 					// sum — see its doc for why a plain += would still lie once the raw
 					// sum sits outside [floor, max]. A zero-gain result (only possible at
-					// the max-side cap) neither heals nor spends a Recovery.
+					// the max-side cap under a sane recoveryValue > 0) neither heals nor
+					// spends a Recovery. fix-round-2 I2-nit: `!(gain > 0)`, NOT `gain <=
+					// 0` — the old (pre-consolidation) code's `!isNaN(adjustment) &&
+					// adjustment > 0` guard got dropped in the RC-4 rewrite, and `<= 0`
+					// lets a NaN gain (e.g. a malformed `max_stamina`) THROUGH — NaN <= 0
+					// is false. `!(gain > 0)` catches NaN the same way `isNaN` did.
 					const { gain, newStamina } = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina);
-					if (gain <= 0) return;
+					if (!(gain > 0)) return;
 					this.pendingStaminaChange = newStamina - currentStamina;
 					if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
 					refresh();
@@ -468,15 +476,19 @@ export class StaminaEditModal extends DseModal {
 			tempStepper.setValue(currentTempStamina + this.pendingTempStaminaChange);
 			updateBar();
 			this.updateActionButton(actionBtn);
+			// SC-133 I3 (fix-round-1) + fix-round-2 (untracked-recoveries residual): CB-8
+			// — never a silent no-op. Computed and applied REGARDLESS of whether
+			// Recoveries are tracked at all: a legacy bar (no `recoveries` fields) still
+			// has nothing to gain from a press once at max, and gating this on
+			// `recoveriesTracked` (as fix-round-1 did) left that case a silent no-op in
+			// onClick with the button rendered enabled — the exact CB-8 violation this
+			// whole mechanism exists to close, just for the untracked branch. `!(gain >
+			// 0)`, not `gain <= 0` (matches onClick's guard — see its comment for why:
+			// NaN-safety).
+			const noGain = !(this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain > 0);
 			if (recoveriesTracked) {
 				const remaining = currentRecoveries + this.pendingRecoveriesChange;
 				const noneLeft = remaining <= 0;
-				// SC-133 I3 (fix-round-1): CB-8 — never a silent no-op. A press that
-				// would heal 0 (only possible at the max-side cap under the rebased
-				// gain calc — see recoverySpendResult) must show as a REAL disabled
-				// button, exactly like running out of Recoveries does, not just be
-				// swallowed in onClick.
-				const noGain = this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain <= 0;
 				spendRecoveryBtn.setDisabled(noneLeft || noGain);
 				// House rule: never a silent disable — a visible reason tooltip
 				// accompanies the real `disabled` (CB-8), cleared once available again
@@ -488,6 +500,12 @@ export class StaminaEditModal extends DseModal {
 				// once the button had ever been disabled.
 				if (noneLeft) tooltip(spendRecoveryBtn.buttonEl, NO_RECOVERIES_TOOLTIP);
 				else if (noGain) tooltip(spendRecoveryBtn.buttonEl, NO_GAIN_TOOLTIP);
+				else tooltip(spendRecoveryBtn.buttonEl, SPEND_RECOVERY_LABEL);
+			} else {
+				// Same house rule, untracked branch: no Recoveries counter to run out of,
+				// but "no gain" is still a real, visible disabled reason.
+				spendRecoveryBtn.setDisabled(noGain);
+				if (noGain) tooltip(spendRecoveryBtn.buttonEl, NO_GAIN_TOOLTIP);
 				else tooltip(spendRecoveryBtn.buttonEl, SPEND_RECOVERY_LABEL);
 			}
 		};
@@ -504,10 +522,11 @@ export class StaminaEditModal extends DseModal {
 	 *  ACTUALLY deliver right now, computed from the CLAMPED (Apply-would-persist)
 	 *  position rather than the raw pending sum.
 	 *
-	 *  A raw sum can already sit past either clamp before this press — several
-	 *  stacked Damage clicks past the death floor, or a typed value miles past max
-	 *  (the stepper is deliberately unbounded; see the KNOWN DEVIATION comment
-	 *  above). Adding recoveryValue to that RAW sum and re-clamping (what the first
+	 *  A raw sum can already sit past either clamp before this press — NOT via
+	 *  Damage (capped at amountToDeath above, can never drive the sum past the
+	 *  floor) but via the STAMINA STEPPER's own typed or ± overshoot (deliberately
+	 *  unbounded; see the KNOWN DEVIATION comment above). Adding recoveryValue to
+	 *  that RAW sum and re-clamping (what the first
 	 *  RC-4 pass did, headroom-to-max only) can report a gain that doesn't match
 	 *  what Apply will actually persist — either silently zero when the two clamped
 	 *  values happen to coincide, or, worse, a PARTIAL number that still doesn't
@@ -524,8 +543,11 @@ export class StaminaEditModal extends DseModal {
 	 *  `+= gain`), so a pending sum that was sitting outside [floor, max] before
 	 *  this press is snapped into range by it — the only way the preview and
 	 *  Apply can agree on every press, not just ones that started in range. Under
-	 *  this model a Recovery healing from ANY floor position always helps (gain is
-	 *  only ever 0 at the max-side cap — recoveryValue can't be negative), so the
+	 *  this model a Recovery healing from ANY floor position always helps, as long
+	 *  as recoveryValue > 0 — gain is only ever 0 at the max-side cap (or, degenerate
+	 *  but real: recoveryValue itself is 0 whenever max_stamina ≤ 2, floor(max/3),
+	 *  which permanently reports no gain and shows the max-side tooltip regardless
+	 *  of position — doc note only, not a behavior this fix needs to change). So the
 	 *  net effect is that Spend Recovery, like the stepper's own "+", becomes
 	 *  another documented member of the corrective corridor above rather than a
 	 *  route to a silently-zero OR dishonest partial spend. */

@@ -250,13 +250,35 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 		expect(spend.getAttribute('aria-label')).toBe('Spend Recovery');
 	});
 
-	test('legacy block (no recoveries field): Spend Recovery never disables and recoveries stays undefined through Apply', () => {
+	// fix-round-2 item 1: this test previously pinned "never disables" for a legacy
+	// (untracked) block — that WAS the CB-8 violation the review found (a legacy bar
+	// could still hit zero true gain at max Stamina, but the disable gate lived
+	// entirely inside `if (recoveriesTracked)`, so the button stayed enabled while
+	// onClick silently swallowed every further press). Recoveries-tracking is
+	// orthogonal to "is there anything left to heal" — a legacy block now real-
+	// disables too, once a press would heal 0, with the same reason a tracked block
+	// gets. What's unchanged and still asserted: `recoveries` never gets written for
+	// an untracked block (no counter to decrement in the first place).
+	test('legacy block (no recoveries field): Spend Recovery still real-disables at zero true gain (no gain != no tracking), recoveries stays undefined through Apply', () => {
 		const { content, bar } = makeModal(21, 10, 0);
 		const spend = btn(content, 'Spend Recovery');
-		for (let i = 0; i < 5; i++) spend.click();
-		expect(spend.disabled).toBe(false);
+		for (let i = 0; i < 5; i++) spend.click(); // only the first 2 succeed (10 -> 17 -> 21); the rest are swallowed once real-disabled
+		expect(spend.disabled).toBe(true);
+		expect(spend.getAttribute('aria-label')).toBe('Already at maximum Stamina');
 		apply(content);
+		expect(bar.current_stamina).toBe(21);
 		expect(bar.recoveries).toBeUndefined();
+	});
+
+	// fix-round-2 item 1 (required): the exact case the review named — an untracked
+	// bar already AT full Stamina before the first press.
+	test('untracked bar already at max Stamina: Spend Recovery starts real-disabled with the max-gain reason', () => {
+		const { content } = makeModal(20, 20, 0); // no recoveries fields -> untracked
+		// aria-label is already the disabled reason by mount time (not 'Spend
+		// Recovery') — same reason spendRecoveryBtn's icon-based lookup exists.
+		const spend = spendRecoveryBtn(content);
+		expect(spend.disabled).toBe(true);
+		expect(spend.getAttribute('aria-label')).toBe('Already at maximum Stamina');
 	});
 
 	// FOLLOWUPS #27-fix-round finding 2 (HIGH): `recoveries_max` — not `recoveries` — is
@@ -578,6 +600,30 @@ describe('SC-133 RC-5: granting temp does not stack — take the higher of curre
 			expect(modal.pendingTempStaminaChange).toBe(-1);
 			apply(content);
 			expect(bar.temp_stamina).toBe(4);
+		});
+
+		// fix-round-2 item 4: the comment names all three down-movers (Damage, Kill,
+		// Full Heal) but only Damage was tested — Kill and Full Heal also zero temp.
+		test('Kill zeroes temp (running -> 0), then one "+" grants to 1, not back to 5', () => {
+			const { modal, content, bar } = makeModal(20, 20, 5);
+			btn(content, 'Kill').click(); // running 5 -> 0
+			const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+				.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
+			plus.click(); // running 0 -> 1, NOT a snap back to 5
+			expect(modal.pendingTempStaminaChange).toBe(-4);
+			apply(content);
+			expect(bar.temp_stamina).toBe(1);
+		});
+
+		test('Full Heal zeroes temp (running -> 0), then one "+" grants to 1, not back to 5', () => {
+			const { modal, content, bar } = makeModal(20, 20, 5);
+			btn(content, 'Full Heal').click(); // running 5 -> 0
+			const plus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+				.querySelector('button[aria-label="Increase Temporary Stamina"]') as HTMLButtonElement;
+			plus.click(); // running 0 -> 1, NOT a snap back to 5
+			expect(modal.pendingTempStaminaChange).toBe(-4);
+			apply(content);
+			expect(bar.temp_stamina).toBe(1);
 		});
 	});
 
