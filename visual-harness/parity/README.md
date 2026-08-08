@@ -304,6 +304,22 @@ Two severities:
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
+- **Known limitation — `background-color` is sampled but never compared.** `compare.cjs:323-324`
+  is the entire `bg` rule: `if (owns(pair,'bg') && !isFlat(s['background-image']) &&
+  isFlat(p['background-image'])) add('GAP', …)`. It reads `background-image` only — `bg` fires
+  strictly on **site-gradient + plugin-flat**, and never looks at `background-color` at all,
+  even though `background-color` **is** already captured into both inventories
+  (`site-capture.mjs`/`plugin-capture.mjs`) for every mapped pair, in both schemes — the data
+  exists, the comparison doesn't. SC-117 is the near-miss this leaves open: 13 declaration
+  sites washed the wrong **polarity** (translucent white where the site sits on translucent
+  black) across both schemes, and every pair above passed clean the whole time, because
+  neither side's `background-image` was `none`. `bg` stays a `material` rule (never
+  declarable — see "Which classes are declarable"), so closing this gap only ever tightens the
+  gate. **Future fix shape, as its own ticket, not a rider on any wave:** start narrow — a
+  polarity-only check (site fill translucent-black vs. plugin fill translucent-white/opaque)
+  would have caught SC-117 on day one and is close to noise-free; a full `background-color`
+  comparison is separately-scoped, larger work (it will surface a burst of new rows across the
+  mapped pairs that all need triage on landing).
 
 ## Splitting a collapsed node (`owns`)
 
