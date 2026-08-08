@@ -6933,6 +6933,26 @@ button.dse-pr__row:hover {
 .dse-crest--lg {
 	width: 3em;
 	height: 3.4em;
+	/* SC-130: measured nudge for THIS box (48 x 54.39px at the harness's 16px root) —
+	   see the --dse-crest-nudge comment on .dse-crest__glyph below. The base (md) size
+	   is currently unused by any composition (crest.ts's 'md' default is dead: every
+	   caller passes size:'lg'), so it is deliberately left at the 0px fallback rather
+	   than an extrapolated guess — a future md consumer needs its own measurement pass,
+	   since the target FRACTION carries over but the box-relative nudge does not.
+	   UNIT is em, not px (-5.2px measured / 16px root = -0.325em): SC-112's
+	   --dse-text-scale multiplies the element root's font-size (~4133), and this box
+	   is sized in em (3em x 3.4em) so it tracks that scale — a fixed-px nudge does
+	   NOT, so it drifts off the optical target at the slider's extremes (probed via
+	   the harness by stamping --dse-text-scale directly on the element root and
+	   re-measuring the same getBBox() ink-bbox-vs-target delta this fix uses
+	   elsewhere: a px nudge drifted to -2.09px / +2.09px, ~6.4% of box height, at
+	   the 0.6x/1.4x range ends — visible; an em nudge stays <=0.01px at both
+	   extremes since it scales with the SAME em basis as the box). --dse-card-scale
+	   (`zoom`, ~4153) needed no such fix: `zoom` rescales its whole subtree's
+	   rendering uniformly, px transforms included, so it stayed <=0.01px off at
+	   0.8x/1.2x even before this unit change — probed the same way, kept as
+	   evidence in the report rather than assumed. */
+	--dse-crest-nudge: -0.325em;
 }
 /* The shield's inner face/rim (the site's .sc-crest::before inset), keyed to
    --dse-metal-line (Legacy AND print: none — so this declaration is inert in
@@ -6946,10 +6966,38 @@ button.dse-pr__row:hover {
 	clip-path: var(--dse-crest-shape);
 	background: var(--dse-metal-line);
 }
+/* SC-130: optical-center the glyph in the shield (mirrors the site's SC-129 fix,
+   same --dse-crest-shape/--shield pentagon on both). Its visual mass sits at the
+   shoelace-formula centroid of that polygon — 40.4304% down, not 50% — so a plain
+   place-items:center (the only rule here before this fix) leaves every glyph sunk
+   toward the point. Nudge UP by --dse-crest-nudge to land the glyph's ink-bbox
+   center on that target.
+   MEASURED, not eyeballed (this is the plugin's own rendering, not a ported site
+   px value — the DOM/fonts differ): SVGGraphicsElement.getBBox() on each Lucide
+   glyph's rendered <svg> gives its exact vector ink bbox (no pixel-color scanning
+   needed, unlike the site's font-glyph case — a real geometry query beats a
+   polygon-erosion pixel scan for precision). Every glyph reachable through a real
+   fixture today (sword/user/zap/star/skull/crown/backpack, both color schemes) was
+   probed at the --lg box size (the only size any composition uses): ink center sits
+   4.73-5.70px below the target with NO nudge applied. Diagnosed per-glyph per the
+   ticket's "verify, don't assume" instruction: sword/user/zap/backpack/crown cluster
+   at 5.197-5.201px (a shared mechanism residual, ~0.004px spread — noise), while
+   skull (5.696px) and star (4.733px) sit ~0.5px off that cluster — real per-viewBox
+   asymmetry in those two icons' own paths, not a second mechanism. One shared value
+   (the cluster's own ~5.2px) leaves <=0.5px residual on every glyph, the same order
+   of magnitude the site's SC-129 fix accepted for its own per-glyph spread — not
+   worth a second, icon-specific override. Structural default lives here (inert
+   while `.dse-crest` is display:none — Legacy and the print camera; verified live,
+   not just by selector reading: `data-dse-print="on"` computes .dse-crest to
+   display:none, so *--steel-print.png can never see this transform) rather than
+   under the Steel-only guard above, so it's ready the moment Steel's show-override
+   (~4369) flips display to grid — same "inert until unhidden" placement as the rest
+   of this base rule block. */
 .dse-crest__glyph {
 	position: relative;
 	display: grid;
 	place-items: center;
+	transform: translateY(var(--dse-crest-nudge, 0px));
 }
 
 /* -- statTiles (Plan 24 / SC-100 Task 3): the kit stat-tile primitive -- */
