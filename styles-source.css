@@ -7637,12 +7637,19 @@ button.dse-pr__row:hover {
 /* -- Shared: the machined channel (candidates A, C, D use it at three scales) --- */
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
 	position: relative;
-	padding-top: 0.34rem;
+	/* The channel's interior depth and the gauge's own top padding are declared HERE,
+	   on the marks' shared ancestor, rather than on the channel — the index marks sit
+	   outside the channel (it clips its own fills) and still have to size and centre
+	   themselves against the very box they index. A marker that cannot measure its
+	   track is exactly how the first cut ended up perched on the track's top edge. */
+	--ch-h: 1.05rem;
+	--g-pad: 0.34rem;
+	padding-top: var(--g-pad);
 }
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
 	position: relative;
 	overflow: hidden;
-	height: var(--ch-h, 1.05rem);
+	height: var(--ch-h);
 	/* Translucent BLACK, so --dse-card-bg's diagonal bleeds through the slot —
 	   the plate is visibly BEHIND the channel rather than replaced by it. */
 	background: rgba(0, 0, 0, 0.32);
@@ -7726,31 +7733,45 @@ button.dse-pr__row:hover {
 	width: 1px;
 	background: rgba(255, 255, 255, 0.22);
 }
-/* Index marks: the brand ◆ seated on the channel's rail, marking the thresholds the
-   rules care about. The site's own connective motif doing real work instead of
-   decorating. */
+/* Index marks: the thresholds the RULES care about — the zero bulkhead, the winded
+   half-max line, and (once temp widens the scale) where base max actually sits.
+   REVIEW FIX, SC-132 round 2 (Scott, 2026-08-08: the marks "appear to be offset or out
+   of place"). The first cut floated a brand ◆ centred on the channel's TOP EDGE. That
+   is the site's rule-notch grammar — a ◆ straddling a 1px <hr> — transplanted onto a
+   ~22px bar, where it reads as a diamond that missed its mark, and onto C's 2px
+   underline, where it reads as a speck. A mark on a TRACK is a GRADUATION, not a notch:
+   it is sized to the track's interior and centred in it. So the base mark is a seam
+   spanning the channel's full depth, and each candidate integrates it in its own
+   material (A mills it into the rails, C threads it onto the rule).
+   `color` carries the mark's hue for the whole subtree, so the pseudo-element notches
+   below inherit it without restating the threshold ladder. */
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx {
 	position: absolute;
-	top: 0;
-	width: 0.3rem;
-	height: 0.3rem;
-	margin-left: -0.15rem;
-	transform: rotate(45deg);
-	background: var(--dse-metal);
+	/* + the channel's own 1px border: this is its INTERIOR, top to bottom. */
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	width: 1px;
+	margin-left: -0.5px;
+	color: var(--dse-metal);
+	background: currentColor;
+	/* Marks cross the pour, so they need separation from whatever is under them. A
+	   `filter` and not a `box-shadow`, because the notches below are pseudo-elements
+	   and only the filter reaches them. */
+	filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55));
 }
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
 	left: var(--dse-zone, 33%);
-	background: var(--dse-metal-bright);
+	color: var(--dse-metal-bright);
 }
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--winded {
 	left: var(--dse-winded-x, 66%);
-	background: var(--dse-stamina-winded);
+	color: var(--dse-stamina-winded);
 }
 /* Base-max index (SC-133): when temp widens the scale, this is where the hero's real
    ceiling sits — so a rescaled gauge never hides it. Inert at temp 0. */
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--max {
 	left: var(--dse-max-x, 100%);
-	background: var(--dse-metal);
+	color: var(--dse-metal);
 }
 [data-dse-stamina-cand] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='off'] .dse-stamina__gidx--max {
 	display: none;
@@ -7808,8 +7829,46 @@ button.dse-pr__row:hover {
 [data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
 	font-size: 1.12em;
 }
-[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
 	--ch-h: 1.15rem;
+}
+/* A's thresholds are MILLED, not applied. Each mark is a notch pair cut into the two
+   rails — the top half and the bottom half of the brand ◆, with the channel cut
+   straight through the middle of it — so the motif is still the site's, but it is a
+   feature OF the plate instead of an ornament floating over it. The two halves are
+   exactly half the notch's width tall, so they read as one diamond the slot passes
+   through, and at any fill level there is always a rail for them to sit on. */
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::before,
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	width: 0.34rem;
+	height: 0.17rem;
+	margin-left: -0.17rem;
+	background: currentColor;
+}
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::before {
+	top: 0;
+	clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::after {
+	bottom: 0;
+	clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+/* The zero bulkhead is the one place a real EDGE exists in the material — the pour's
+   origin and the dying reserve's wall — so it alone keeps a full-depth seam, forged
+   two-tone: a shadow face on the reserve side, a catch-light face on the pour side. */
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	width: 2px;
+	margin-left: -1px;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
+}
+/* The other two thresholds are graduations, not walls: notches only, so nothing draws
+   a line across a pour that is not actually divided there. The winded line still has
+   the channel's own faint `__gwinded` hairline tying its two notches together. */
+[data-dse-stamina-cand='a'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__gidx--winded, .dse-stamina__gidx--max) {
+	background: transparent;
 }
 /* Dying = the vessel itself is compromised: the frame goes danger-tinted and a
    sparse fracture runs across the channel. The state is legible even with the fill
@@ -8011,20 +8070,31 @@ button.dse-pr__row:hover {
 /* The gauge is confirmation, not the interface — a polished rule under the numerals
    with the thresholds as ◆ seed dots (the site's own <hr> motif). */
 [data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
-	padding-top: 0;
+	--ch-h: 0.3rem;
+	/* `0px`, NOT `0`: --g-pad is consumed by `calc(var(--g-pad) + 1px)` on the index
+	   marks, and a unitless zero makes that calc invalid at computed-value time — the
+	   mark silently falls back to `top: auto` and lands at its static position under
+	   the rule. (Measured, not assumed: the probe caught it as a 5.8px drop.) */
+	--g-pad: 0px;
 	margin-top: 0.55rem;
 }
 [data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
-	--ch-h: 0.3rem;
 	border-radius: 2px;
 	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
 }
-[data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx {
-	top: auto;
-	bottom: -0.18rem;
-	width: 0.24rem;
-	height: 0.24rem;
-	margin-left: -0.12rem;
+/* C's gauge is a RULE, so its marks are the site's rule grammar done properly. The
+   zero bulkhead is the ◆ SEED — threaded ON the line, centred on the rule's own
+   vertical midline rather than hung off its underside, and cut large enough to
+   overhang it, which is what makes a seed read as deliberate instead of as a speck
+   that drifted. The other thresholds get no diamond at all: on a 5px rule a second
+   floating ◆ was the stray dot Scott caught, so they are colour seams cut across the
+   rule instead — a graduation, at the scale the rule can actually carry. */
+[data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	top: calc(var(--g-pad) + 1px + var(--ch-h) / 2);
+	width: 0.3rem;
+	height: 0.3rem;
+	margin-left: -0.15rem;
+	transform: translateY(-50%) rotate(45deg);
 }
 [data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
 	clip-path: none;
@@ -8127,10 +8197,10 @@ button.dse-pr__row:hover {
 [data-dse-stamina-cand='d'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
 	flex: 1 1 4rem;
 	min-width: 3rem;
-	padding-top: 0;
+	--ch-h: 0.42rem;
+	--g-pad: 0px; /* see C: unitless 0 would void the marks' calc() */
 }
 [data-dse-stamina-cand='d'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
-	--ch-h: 0.42rem;
 	border-radius: 2px;
 	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
 }
