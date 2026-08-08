@@ -235,6 +235,16 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	hero: { default: heroDefault },
 	'hero-tokens': { default: tokensDefault },
 	'heroic-resource': { default: resourceDefault },
+	// SC-128 variant note — the site ships TWO ◆ rules and this fixture covers ONE of them
+	// by design, because only one of them is a standalone rule:
+	//   variant 1 ORNATE (fading lines + two seed dots + haloed 9px ◆, site `.md-typeset hr`)
+	//     → THIS fixture. `horizontal-rule--steel-{dark,light}.png` are its permanent shots.
+	//   variant 2 PLAIN (the same 9px ◆ seated on a solid 1px line, no dots, no fade, site
+	//     `.sb__head::after` + the band's border-bottom) → NOT a standalone element anywhere.
+	//     It is the statblock head band's bottom edge, shipped by SC-103, and its permanent
+	//     coverage is `statblock--*` (and the featureblock twin's `featureblock--*`).
+	// The element takes no config (definition.ts `parse: () => undefined`), so there is no
+	// second fixture to add here — a variant-2 entry would render an identical DOM.
 	'horizontal-rule': { default: horizontalRuleDefault },
 	initiative: { default: initiativeDefault },
 	kit: { default: kitDefault },

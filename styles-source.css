@@ -5550,6 +5550,110 @@ body.theme-light
 	border-left-color: var(--dse-role, var(--dse-role-leader));
 }
 
+/* ==================================================================== */
+/*   Standalone ornate horizontal rule (SC-128 variant 1)               */
+/* ==================================================================== */
+/* The site ships TWO distinct ◆ rules and the plugin now carries both:
+     1. ORNATE — center-out fading lines + two seed dots + a haloed 9px diamond
+        (`.md-typeset hr`, steel-redesign.css:356-379). The site's rule for a bare
+        markdown `---` in prose. THIS BLOCK.
+     2. PLAIN — the 9px diamond seated on a solid 1px line, no dots, no fade
+        (`.sb__head` + `.sb__head::after`, steel-statblock.css:90-103), the statblock
+        header's bottom edge. Already shipped VERBATIM by SC-103's head-band notch
+        (~:5431-5460 above: the band's `border-bottom` IS the solid line, the
+        `::after` IS the diamond) — measured identical to the site, both schemes, so
+        nothing is built for it here. Do not add a second implementation.
+   Surface map (the site is the referee — where it draws no rule, we draw none):
+     - ds-hr / ds-horizontal-rule (this element)  → variant 1, below.
+     - .dse-sb > .dse-hr, .dse-fb > .dse-hr       → suppressed; the site's statblock/
+       featureblock draw NO chars→features divider at the shipped `featstyle: card`
+       (verified live on the gnoll page: `[data-sb-featstyle="card"]`). The ornate
+       recipe the site keeps for `featstyle: flat` is a preference the plugin does
+       not implement.
+     - .dse-cond-list > .dse-hr (ConditionSelectModal) → plugin-only chrome with no
+       site counterpart; a functional, ornament-less wrap-breaker. Left alone
+       deliberately — the ornate rule is a CONTENT ornament, not a UI separator.
+   Scoped to [data-dse-element='horizontal-rule'] rather than bare `.dse-hr`: that
+   class is a shared kit primitive (kit/divider.ts) used by all four surfaces above,
+   each with its own frozen shots — and FOLLOWUPS #56's roleless statblock keeps a
+   `.dse-sb > .dse-hr` that must stay the plain section break, not become an ornament.
+   Material tier (the whole rule is colour/ornament), so it carries the print
+   exclusion compounded onto the element root, the same shape the fb band above uses.
+   The site's own geometry, ported verbatim (measured live, both schemes —
+   evidence/site-geometry.json):
+     line  1px, `linear-gradient(transparent → --fx-metal-line)` fading OUTWARD,
+           ending 30px short of centre;
+     dots  two radial dots, r 1.4px (transparent by 1.9px), --fx-metal, at ±22px;
+     ◆     9px, --fx-metal, rotate(45deg), halo `0 0 0 4px <page bg>` + a 1px
+           --fx-metal-faint ring at 5px.
+   --dse-metal / -line / -faint are the plugin's verbatim --fx-metal* twins
+   (~:3321-3328 dark, ~:6205-6208 light; identical hexes/alphas to the site). */
+[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print="on"]) .dse-hr {
+	/* The site's hr is a 1px box its ◆ halo overflows into the surrounding prose
+	   margins. A code-block element has no such margins to borrow, so the row
+	   reserves exactly the halo's own extent instead — 9px rotated (half-diagonal
+	   6.364px) + the 5px outer ring = 11.364px each side of centre, 23px total. The
+	   PAINTED geometry is unchanged; only the invisible box differs. */
+	height: 23px;
+}
+/* The two seed dots — a verbatim port of `.md-typeset hr::before`. `.dse-hr` is
+   already `position: relative` in the base rule, so this anchors to it. */
+[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print="on"]) .dse-hr::before {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 48px;
+	height: 4px;
+	transform: translate(-50%, -50%);
+	background:
+		radial-gradient(circle, var(--dse-metal) 1.4px, transparent 1.9px) no-repeat left center,
+		radial-gradient(circle, var(--dse-metal) 1.4px, transparent 1.9px) no-repeat right center;
+	background-size:
+		4px 4px,
+		4px 4px;
+}
+/* The fading lines. The site expresses both halves as background layers sized
+   `calc(50% - 30px)` on ONE node; the plugin's kit DOM already has two flex
+   children, so the same 30px centre gap is expressed as an inner margin:
+   the 9px diamond puts each line's inner edge at 4.5px, +25.5px = 30px. */
+[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print="on"]) .dse-hr__line {
+	height: 1px;
+}
+[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print="on"]) .dse-hr__line--left {
+	margin-right: 25.5px;
+	background: linear-gradient(to right, transparent, var(--dse-metal-line));
+}
+[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print="on"]) .dse-hr__line--right {
+	margin-left: 25.5px;
+	background: linear-gradient(to left, transparent, var(--dse-metal-line));
+}
+/* The haloed diamond. Three overrides of the Legacy base (~:6363) are load-bearing:
+   `border: none` clears the base's 2px bottom/right borders — the site's redesign
+   rule resets them for exactly the same reason (steel-redesign.css:375, "without this
+   reset they'd leak through and snag the new diamond's edges"); the transform drops
+   the base's translateZ/translateY nudge (the site's is a bare rotate); and the
+   box-shadow replaces the base's INSET punch-out with the site's two outer rings.
+   The halo colour chains `var(--dse-page-bg, var(--dse-surface))` on purpose:
+   --dse-page-bg is declared `:root { var(--background-primary) }` (~:3023) and
+   Obsidian declares --background-primary on `body.theme-*`, NOT on :root — so the
+   token is guaranteed-invalid document-wide today and the var() FALLBACK is what
+   actually resolves. --dse-surface is the right stand-in regardless: under Steel it
+   is #1a1e21 dark / #f6f8f8 light, byte-equal to the site's own --md-default-bg-color
+   in both schemes (measured). Written as a chain so that fixing --dse-page-bg later
+   (FOLLOWUPS: it also silently voids the Legacy diamond's fill and punch-out) makes
+   this rule follow the real page background with no edit here. */
+[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print="on"]) .dse-hr__diamond {
+	width: 9px;
+	height: 9px;
+	border: none;
+	background-color: var(--dse-metal);
+	transform: rotate(45deg);
+	box-shadow:
+		0 0 0 4px var(--dse-page-bg, var(--dse-surface)),
+		0 0 0 5px var(--dse-metal-faint);
+}
+
 /* -- Boxed 5-stat row (Size/Speed/Stamina/Stability/Free Strike): the site's
    .sb__stat framed cell — sunken box + hairline + small-caps label under the
    already-embossed big value (emboss shared rule above).

@@ -388,6 +388,10 @@ for what needs action.
   site puts it — straddling the bottom edge of the head band, role-hued —
   instead of appearing as a larger neutral divider further down the card,
   between the characteristics strip and the feature list (SC-103).
+- [STEEL] `ds-hr` / `ds-horizontal-rule` now draws the site's ornate divider:
+  a small haloed diamond flanked by two seed dots, with hairlines fading
+  outward to nothing. Previously it kept the old heavy look — a large solid
+  diamond on two thick lines running the full width (SC-128).
 
 ## 5.1.1
 

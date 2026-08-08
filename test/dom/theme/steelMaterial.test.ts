@@ -441,6 +441,111 @@ describe('Steel material contract', () => {
 		});
 	});
 
+	describe('standalone ornate horizontal rule (SC-128 variant 1)', () => {
+		// The site ships TWO ◆ rules. Variant 2 (the 9px ◆ on a solid line, no dots/fade) is
+		// the statblock head band's bottom edge and is ALREADY shipped verbatim by SC-103's
+		// notch above — the block here is variant 1 only: the ornate content rule the site
+		// gives a bare markdown `---` (`.md-typeset hr`, steel-redesign.css:356-379), ported
+		// onto the standalone ds-hr / ds-horizontal-rule element.
+		const SCOPE = "[data-dse-theme='steel'][data-dse-element='horizontal-rule']:not([data-dse-print=\"on\"])";
+		const ornate = rules.filter((r) =>
+			r.selector.replace(/\s+/g, ' ').trim().startsWith(SCOPE),
+		);
+		const bodyOf = (suffix: string): string => {
+			const found = ornate.filter(
+				(r) => r.selector.replace(/\s+/g, ' ').trim() === `${SCOPE} ${suffix}`,
+			);
+			expect(found).toHaveLength(1);
+			return found[0].body;
+		};
+
+		it('is HOST-scoped to the horizontal-rule element, never to the bare .dse-hr kit primitive', () => {
+			// `.dse-hr` is shared by FOUR surfaces (this element, .dse-sb, .dse-fb and the
+			// ConditionSelectModal's .dse-cond-list), three of which the site draws
+			// differently or not at all — and FOLLOWUPS #56's roleless statblock now keeps a
+			// `.dse-sb > .dse-hr` that must stay a plain section break, not become an
+			// ornament. A bare `.dse-hr` rule would reach all four and move frozen shots.
+			expect(ornate.length).toBeGreaterThan(0);
+			for (const r of ornate) {
+				expect(STEEL_SCOPE.test(r.selector)).toBe(true);
+				expect(r.selector).toContain("[data-dse-element='horizontal-rule']");
+				// Material tier: the whole rule is colour/ornament, so it stays out of print.
+				expect(r.selector).toContain(':not([data-dse-print="on"])');
+			}
+			// No OTHER Steel rule anywhere in the sheet paints the kit rule's parts, which is
+			// what keeps the other three surfaces (and their frozen shots) untouched.
+			const unscopedOrnament = rules.filter(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					/\.dse-hr(__line|__diamond|::before)/.test(r.selector) &&
+					!r.selector.includes("[data-dse-element='horizontal-rule']"),
+			);
+			expect(unscopedOrnament).toEqual([]);
+		});
+
+		it('the ◆ is the site 9px haloed diamond, and clears every Legacy base declaration it must', () => {
+			const body = bodyOf('.dse-hr__diamond');
+			expect(body).toMatch(/width:\s*9px\s*;/);
+			expect(body).toMatch(/height:\s*9px\s*;/);
+			// The site's own redesign rule resets these for the same reason: the Legacy base
+			// declares 2px bottom/right borders that would snag the new diamond's edges.
+			expect(body).toMatch(/border:\s*none\s*;/);
+			// A bare rotate — the base's translateZ/translateY nudge must not survive.
+			expect(body).toMatch(/transform:\s*rotate\(45deg\)\s*;/);
+			expect(body).not.toMatch(/translateZ|translateY/);
+			expect(body).toMatch(/background-color:\s*var\(--dse-metal\)\s*;/);
+			// Two OUTER rings replacing the base's inset punch-out: 4px of page background,
+			// then the 1px --dse-metal-faint edge that makes it read as "bordered".
+			expect(body).toMatch(/0 0 0 4px var\(--dse-page-bg, var\(--dse-surface\)\)/);
+			expect(body).toMatch(/0 0 0 5px var\(--dse-metal-faint\)/);
+			expect(body).not.toMatch(/inset/);
+		});
+
+		it('the two seed dots are a verbatim port of the site\'s hr::before (48×4 box, r1.4/1.9 at ±22px)', () => {
+			const body = bodyOf('.dse-hr::before');
+			expect(body).toMatch(/content:\s*''\s*;/);
+			expect(body).toMatch(/position:\s*absolute\s*;/);
+			expect(body).toMatch(/width:\s*48px\s*;/);
+			expect(body).toMatch(/height:\s*4px\s*;/);
+			expect(body).toMatch(/transform:\s*translate\(-50%, -50%\)\s*;/);
+			const dots = Array.from(
+				body.matchAll(/radial-gradient\(circle, var\(--dse-metal\) 1\.4px, transparent 1\.9px\)/g),
+			);
+			expect(dots).toHaveLength(2);
+			expect(body).toMatch(/no-repeat left center/);
+			expect(body).toMatch(/no-repeat right center/);
+		});
+
+		it('the lines are the site\'s 1px outward fade ending 30px short of centre', () => {
+			expect(bodyOf('.dse-hr__line')).toMatch(/height:\s*1px\s*;/);
+			// transparent OUTWARD, --dse-metal-line inward — the site's exact gradient.
+			expect(bodyOf('.dse-hr__line--left')).toMatch(
+				/background:\s*linear-gradient\(to right, transparent, var\(--dse-metal-line\)\)\s*;/,
+			);
+			expect(bodyOf('.dse-hr__line--right')).toMatch(
+				/background:\s*linear-gradient\(to left, transparent, var\(--dse-metal-line\)\)\s*;/,
+			);
+			// The site sizes both halves `calc(50% - 30px)` on one node; the kit DOM has two
+			// flex children, so the same 30px gap is 4.5px (half the ◆) + 25.5px of margin.
+			expect(bodyOf('.dse-hr__line--left')).toMatch(/margin-right:\s*25\.5px\s*;/);
+			expect(bodyOf('.dse-hr__line--right')).toMatch(/margin-left:\s*25\.5px\s*;/);
+		});
+
+		it('reserves the halo\'s own extent so a code block need not borrow prose margins', () => {
+			// 9px rotated (half-diagonal 6.364px) + the 5px outer ring = 11.364px each side.
+			expect(bodyOf('.dse-hr')).toMatch(/height:\s*23px\s*;/);
+		});
+
+		it('leaves the kit primitive\'s Legacy base geometry untouched (14px ◆, 2px lines)', () => {
+			const base = rules.find((r) => r.selector.trim() === '.dse-hr__diamond');
+			expect(base).toBeDefined();
+			expect(base!.body).toMatch(/width:\s*14px\s*;/);
+			expect(base!.body).toMatch(/inset 0 0 0 3px var\(--dse-page-bg\)/);
+			const line = rules.find((r) => r.selector.trim() === '.dse-hr__line');
+			expect(line!.body).toMatch(/height:\s*2px\s*;/);
+		});
+	});
+
 	describe('standalone spine removed (SC-102 part 2)', () => {
 		// D3: the site draws the accent spine ONLY inside a nested statblock/featureblock
 		// feature list (.sb__feat / .fb__feat) — the standalone ability page (.sc-ability)

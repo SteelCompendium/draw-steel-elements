@@ -42,11 +42,22 @@ describe('Plan 08 Task 2: kit/divider (D2 §2.10)', () => {
 		expect(rootEl.childElementCount).toBe(0);
 	});
 
-	test('CSS: the divider rules are authored against --dse-rule / --dse-rule-fade (no literals)', () => {
+	test('CSS: the divider BASE rules are authored against --dse-rule / --dse-rule-fade (no literals)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-		const left = sheet.match(/\.dse-hr__line--left\s*\{([^}]*)\}/);
-		const diamond = sheet.match(/\.dse-hr__diamond\s*\{([^}]*)\}/);
-		const vr = sheet.match(/\.dse-vr\s*\{([^}]*)\}/);
+		// SC-128 anchored these matchers to the BASE (theme-agnostic) rule. They used to be
+		// bare `.dse-hr__line--left {` matches, i.e. "the FIRST occurrence in the file" —
+		// correct only while the kit primitive had exactly one rule each. SC-128's Steel
+		// ornate rule (`[data-dse-theme='steel'][data-dse-element='horizontal-rule']… .dse-hr__line--left`)
+		// sits EARLIER in the sheet, so the unanchored form silently retargeted this test at
+		// the Steel override — which legitimately uses --dse-metal-line, not --dse-rule, and
+		// the test failed for the wrong reason. `^` + multiline pins the base rule (the only
+		// one whose selector starts a line at column 0) and keeps this assertion about the
+		// Legacy contract it was written for.
+		const base = (cls: string): RegExpMatchArray | null =>
+			sheet.match(new RegExp(`^\\.${cls}\\s*\\{([^}]*)\\}`, 'm'));
+		const left = base('dse-hr__line--left');
+		const diamond = base('dse-hr__diamond');
+		const vr = base('dse-vr');
 		expect(left).not.toBeNull();
 		expect(left![1]).toMatch(/var\(--dse-rule\)/);
 		expect(left![1]).toMatch(/var\(--dse-rule-fade\)/);
