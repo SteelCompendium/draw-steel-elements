@@ -7,6 +7,7 @@ import { Notice, parseYaml } from '../../mocks/obsidian';
 import { ElementPipeline } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { encounterElement } from '@/elements/encounter/definition';
+import { initiativeElement } from '@/elements/initiative/definition';
 import { budgetTable, bandTable, victoryPayout } from '@/elements/encounter/budget';
 import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
@@ -403,5 +404,99 @@ describe('D8 Task 4: view source hygiene — the ONLY .style access is setProper
 	test('shared kit style guard', () => {
 		const src = fs.readFileSync(path.join(__dirname, '../../../src/elements/encounter/view.ts'), 'utf8');
 		expect(styleGuardFindings(src)).toEqual([]);
+	});
+});
+
+// SC-134: the "appends a resolvable ds-initiative block" test above only string-matched
+// the emitted YAML — it never actually fed that block back through the initiative
+// pipeline, which is exactly how the builder (scc.v1: refs, view.ts:355/:382/:394) and
+// the tracker's resolver (bare-path-only, resolveRefs.ts) drifted 15 days apart without
+// a single test catching it. These tests close that gap: click the real hand-off
+// button, take the REAL emitted block, and run it through the REAL initiativeElement
+// pipeline (same ElementPipeline, same makeCompendiumDeps harness — the registered
+// SccRefProvider both elements share in production), asserting it actually renders
+// (zero error cards, real tracker DOM) rather than merely containing the right substring.
+describe('SC-134: builder -> tracker round trip actually resolves through the SCC provider chain', () => {
+	function errorCards(root: HTMLElement): string[] {
+		return Array.from(root.querySelectorAll('.dse-error-card')).map((e) => (e.textContent ?? '').trim());
+	}
+
+	test('solo row (standard shape, view.ts:355 soloGroup): emitted scc.v1: statblock resolves cleanly', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		loadMdDseFixture(vault, GOBLIN_REL);
+		vault.setFile('Note.md', `\`\`\`ds-encounter\n${encounterBody({ partyYaml: CONFIGURED_PARTY, monstersYaml: GOBLIN_ROW })}\n\`\`\`\n`);
+
+		const host = makeHost('ds-encounter');
+		await new ElementPipeline(deps).run(encounterElement, encounterBody({ partyYaml: CONFIGURED_PARTY, monstersYaml: GOBLIN_ROW }), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		root.querySelector<HTMLButtonElement>('[aria-label="Create initiative tracker block"]')!.dispatchEvent(
+			new MouseEvent('click', { bubbles: true }),
+		);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const noteContent = vault.getContent('Note.md') ?? '';
+		const block = /```ds-initiative\n([\s\S]+?)\n```/.exec(noteContent);
+		expect(block).not.toBeNull();
+		expect(block![1]).toContain('statblock: scc.v1:' + GOBLIN_CODE);
+
+		// THE round trip: feed the builder's OWN emitted block back through the
+		// initiative pipeline (before this fix, resolveInitiativeRefs treated the
+		// scc.v1: ref as a bare vault filename, could never find it, and threw —
+		// producing an error card and no tracker DOM at all).
+		const trackerHost = makeHost('ds-initiative');
+		await new ElementPipeline(deps).run(initiativeElement, block![1], trackerHost);
+		const trackerRoot = trackerHost.containerEl.firstElementChild as HTMLElement;
+
+		expect(errorCards(trackerRoot)).toEqual([]);
+		expect(trackerRoot.getAttribute('data-dse-error-stage')).toBeNull();
+		expect(trackerRoot.querySelector('.dse-init')).not.toBeNull();
+
+		const enemyEntries = trackerRoot.querySelectorAll('.dse-init__group--enemies .dse-init__entry');
+		expect(enemyEntries).toHaveLength(1);
+		expect(trackerRoot.querySelector('.dse-init__grouphead h4')!.textContent).toBe('Goblin Stinker');
+		expect(trackerRoot.querySelectorAll('.dse-init__grid .dse-init__cell')).toHaveLength(6); // GOBLIN_ROW's count: 6
+		expect(trackerRoot.querySelector('.dse-init__detail .dse-init__name')!.textContent).toBe('Goblin Stinker #1');
+	});
+
+	test('squad row (minion view.ts:382 + captain view.ts:394): both emitted scc.v1: statblocks resolve cleanly', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		loadMdDseFixture(vault, SKITTERLING_REL);
+		loadMdDseFixture(vault, GOBLIN_REL);
+		const rows =
+			`monsters:\n  - code: "scc.v1:${SKITTERLING_CODE}"\n    count: 8\n` +
+			`  - code: "scc.v1:${GOBLIN_CODE}"\n    count: 1\n    squad: captain`;
+		vault.setFile('Note.md', `\`\`\`ds-encounter\n${encounterBody({ partyYaml: CONFIGURED_PARTY, monstersYaml: rows })}\n\`\`\`\n`);
+
+		const host = makeHost('ds-encounter');
+		await new ElementPipeline(deps).run(encounterElement, encounterBody({ partyYaml: CONFIGURED_PARTY, monstersYaml: rows }), host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		root.querySelector<HTMLButtonElement>('[aria-label="Create initiative tracker block"]')!.dispatchEvent(
+			new MouseEvent('click', { bubbles: true }),
+		);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const noteContent = vault.getContent('Note.md') ?? '';
+		const block = /```ds-initiative\n([\s\S]+?)\n```/.exec(noteContent);
+		expect(block).not.toBeNull();
+		expect(block![1]).toContain('statblock: scc.v1:' + SKITTERLING_CODE);
+		expect(block![1]).toContain('statblock: scc.v1:' + GOBLIN_CODE);
+		expect(block![1]).toContain('is_squad: true');
+
+		const trackerHost = makeHost('ds-initiative');
+		await new ElementPipeline(deps).run(initiativeElement, block![1], trackerHost);
+		const trackerRoot = trackerHost.containerEl.firstElementChild as HTMLElement;
+
+		expect(errorCards(trackerRoot)).toEqual([]);
+		expect(trackerRoot.getAttribute('data-dse-error-stage')).toBeNull();
+
+		// Minion + captain merged into ONE squad enemy_group (per the builder's own
+		// adjacency-pairing contract) — both creature shapes resolved without error.
+		const enemyEntries = trackerRoot.querySelectorAll('.dse-init__group--enemies .dse-init__entry');
+		expect(enemyEntries).toHaveLength(1);
+		expect(trackerRoot.querySelectorAll('.dse-init__grid .dse-init__cell')).toHaveLength(9); // 8 minion + 1 captain
 	});
 });

@@ -29,7 +29,7 @@
 //      (For ref-bearing entries, the MERGED name/max_stamina/image keys are appended after
 //      parse's keys where legacy inserted them mid-object — a value-neutral key-order
 //      divergence on the first write-back of a ref-bearing block, accepted by Plan 06.)
-import type { ReferenceService } from '@/framework/seams/refs';
+import type { ReferenceService, ResolvedRef } from '@/framework/seams/refs';
 import type { EncounterData } from './model';
 
 /** The fields the legacy merge reads off a resolved statblock payload. */
@@ -37,6 +37,41 @@ interface StatblockFields {
 	name?: unknown;
 	stamina?: unknown;
 	image?: unknown;
+}
+
+// SC-134: matches the SAME shape the built-in "scc" provider slot and SccRefProvider
+// claim (src/framework/seams/refs.ts's SCC_PREFIX_RE, src/refs/SccRefProvider.ts's
+// SCC_PREFIX) — a local mirror, not an import, following this codebase's existing
+// convention of a per-file copy of this exact regex (also duplicated in
+// ReferenceResolver.ts and rewriteSccAnchors.ts) rather than a shared export.
+const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
+
+/**
+ * SC-134 fix: the encounter builder emits `statblock: scc.v1:<code>` (encounter/view.ts
+ * soloGroup + the squad minion/captain rows), but this function previously resolved
+ * EVERY `statblock` string as a bare vault path (`refs.resolveBarePath`), which never
+ * consults the registered `SccRefProvider` — so a builder-emitted ref was treated as a
+ * literal filename, could never be found, and threw, aborting the whole tracker (SC-134
+ * report, `docs/scc-log.md`-adjacent diagnosis in the SC-134 Linear thread).
+ *
+ * Route an `scc:`/`scc.vN:`-shaped ref through `refs.resolve()` — the SAME provider
+ * chain `resolveDeep`/every other element uses, so the registered `SccRefProvider`
+ * resolves it — and leave every other `statblock` string on `resolveBarePath`'s
+ * existing bare-vault-path behavior, byte-identical to before this fix. `sourcePath` is
+ * hardcoded `''` for the scc branch, matching `resolveBarePath`'s own hardcoded `''`:
+ * `SccRefProvider.resolve` never consults `req.sourcePath` (an SCC code is vault-global
+ * identity, not note-relative), so there is nothing to lose by not threading the real
+ * note path through here.
+ *
+ * Mirrors `resolveBarePath`'s null contract: a resolved ds-* block that parses to
+ * null/undefined returns null (skip the merge, no error) rather than `ResolvedRef`.
+ */
+async function resolveStatblockRef(refs: ReferenceService, raw: string): Promise<ResolvedRef | null> {
+	if (SCC_PREFIX_RE.test(raw.trim())) {
+		const resolved = await refs.resolve(raw, '');
+		return resolved.data == null ? null : resolved;
+	}
+	return refs.resolveBarePath(raw);
 }
 
 export async function resolveInitiativeRefs(
@@ -48,8 +83,10 @@ export async function resolveInitiativeRefs(
 		if (typeof hero.statblock === 'string') {
 			try {
 				// Throws the legacy messages on a dangling ref (file/block absent) and on
-				// malformed block YAML; null ONLY when the block parses to null.
-				const resolved = await refs.resolveBarePath(hero.statblock);
+				// malformed block YAML; null ONLY when the block parses to null. SC-134:
+				// dispatches to the SCC provider chain for `scc:`/`scc.vN:` refs, bare-path
+				// otherwise — see resolveStatblockRef.
+				const resolved = await resolveStatblockRef(refs, hero.statblock);
 				// Legacy truth-tested the parsed DATA (`if (resolved)`): a block that
 				// parses to null skips the merge without erroring.
 				const data = resolved?.data as StatblockFields | null | undefined;
@@ -76,7 +113,8 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
 		for (const [creatureIndex, creature] of group.creatures.entries()) {
 			if (typeof creature.statblock === 'string') {
 				try {
-					const resolved = await refs.resolveBarePath(creature.statblock);
+					// SC-134: see resolveStatblockRef above.
+					const resolved = await resolveStatblockRef(refs, creature.statblock);
 					const data = resolved?.data as StatblockFields | null | undefined;
 					if (data) {
 						if (!creature.name && data.name) creature.name = data.name as string;
