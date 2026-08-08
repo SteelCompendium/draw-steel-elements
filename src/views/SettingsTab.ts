@@ -25,6 +25,14 @@ import {
 } from '@/prefs/catalog';
 import { snap, type ScaleRange } from '@/prefs/scale';
 import { mountSettingsPreview } from '@views/SettingsPreview';
+import {
+	MULTI_SECTION_MODES,
+	SETTINGS_NAV_MODE,
+	renderSettingsShell,
+	type NavRow,
+	type NavSection,
+	type SettingsNavMode,
+} from '@views/settingsShell';
 
 // Local Font Access API (SC-112 Task 1 spike, Outcome A): queryLocalFonts() works
 // unconditionally in Obsidian's Electron — no permission prompt — but it still
@@ -40,6 +48,34 @@ declare global {
 /** Dropdown value reserved for the free-text "Custom…" entry of a 'font' row —
  *  never persisted (the text input's raw value is what saves). */
 const CUSTOM_FONT = '__custom__';
+
+/** The Preset row's description — hoisted so it is BOTH the rendered desc and the
+ *  row's search key (SC-131), never two copies that can drift. */
+const PRESET_HELP =
+	'A bundle of the statblock options below. Adjusting any single option re-derives "custom".';
+
+/** Section label → stable nav id. */
+function slugify(label: string): string {
+	return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/** A hand-written (non-descriptor) settings row. The label/help are BOTH the rendered
+ *  name/desc and the row's search keys — one source, so they cannot drift apart the way
+ *  a parallel search index would. Sentence-case lint can't inspect a variable passed to
+ *  setName/setDesc; the literals live at the call sites below, where it can. */
+function opRow(label: string, help: string, build: (setting: Setting) => void): NavRow {
+	return {
+		label,
+		help,
+		render: (container) => build(new Setting(container).setName(label).setDesc(help)),
+	};
+}
+
+/** Chrome (an explanatory paragraph, a status line): rendered in the unfiltered views,
+ *  never a search hit — it has no label to match on. */
+function opChrome(render: (container: HTMLElement) => void): NavRow {
+	return { render };
+}
 
 /** Structural slice of DropdownComponent the preset re-derivation needs. */
 interface ValueControl {
@@ -57,6 +93,15 @@ export class DseSettingTab extends PluginSettingTab {
 	 *  curated list silently stands). Kept for the tab's lifetime: the installed
 	 *  set doesn't change mid-session, and every font row shares one fetch. */
 	private installedFonts: readonly string[] | null = null;
+	/** SC-131: which candidate shell renders. Defaults to the shipped mode; writable so
+	 *  the renderer tests and the evidence capture can drive all four against identical
+	 *  content without a user-facing setting. */
+	navMode: SettingsNavMode = SETTINGS_NAV_MODE;
+	/** SC-131 session memory (tab instance lifetime — deliberately NOT persisted to
+	 *  data.json): survives the display() re-renders that a reset, a preset pick or the
+	 *  installed-fonts fetch trigger. */
+	private activeSectionId: string | null = null;
+	private searchQuery = '';
 
 	constructor(app: App, plugin: DrawSteelAdmonitionPlugin) {
 		super(app, plugin);
@@ -69,8 +114,31 @@ export class DseSettingTab extends PluginSettingTab {
 		this.presetDropdown = null;
 		this.recycleOwner(true);
 		const prefs = this.plugin.frameworkV2?.services.prefs;
-		if (prefs) this.renderPrefSections(containerEl, prefs);
-		this.renderOperationalSections(containerEl);
+		const sections = [
+			...(prefs ? this.buildPrefSections(prefs) : []),
+			...this.buildOperationalSections(),
+		];
+		renderSettingsShell(containerEl, {
+			mode: this.navMode,
+			sections,
+			activeId: this.activeSectionId,
+			query: this.searchQuery,
+			onActiveChange: (id) => {
+				this.activeSectionId = id;
+			},
+			onQueryChange: (query) => {
+				this.searchQuery = query;
+			},
+			// Every body (re)render drops the previous render's mounted children — the
+			// live preview and its pref subscriptions — and opens a fresh owner. The
+			// preset dropdown reference goes with it: a tab switch can un-render the
+			// Statblock section, and a stale handle must not be written to.
+			recycle: () => {
+				this.presetDropdown = null;
+				this.recycleOwner(true);
+			},
+			renderFooter: prefs ? (container) => this.renderResetAll(container, prefs) : undefined,
+		});
 	}
 
 	hide(): void {
@@ -86,8 +154,10 @@ export class DseSettingTab extends PluginSettingTab {
 		}
 	}
 
-	// —— D4 §4.1: one loop drives the whole pref UI ——
-	private renderPrefSections(containerEl: HTMLElement, prefs: PreferenceStore): void {
+	// —— D4 §4.1: one loop drives the whole pref UI. SC-131 turned the loop's OUTPUT
+	// from "rows appended to containerEl" into a NavSection model the shell renders in
+	// whichever mode is active — the descriptor list is still the only input. ——
+	private buildPrefSections(prefs: PreferenceStore): NavSection[] {
 		const groups = new Map<string, PrefDescriptor[]>();
 		for (const descriptor of prefs.descriptors()) {
 			const ui = prefUi(descriptor);
@@ -96,34 +166,59 @@ export class DseSettingTab extends PluginSettingTab {
 			if (!members) groups.set(ui.group, (members = []));
 			members.push(descriptor);
 		}
+		const sections: NavSection[] = [];
 		for (const groupName of GROUP_ORDER) {
 			const members = groups.get(groupName);
 			if (!members?.length) continue;
-			new Setting(containerEl)
-				.setName(groupName)
-				.setHeading()
-				.addExtraButton((button) =>
-					button
-						.setIcon('rotate-ccw')
-						.setTooltip('Reset this section to defaults')
-						.onClick(() => void this.resetDescriptors(prefs, members)),
-				);
-			if (groupName === 'Statblock display') this.renderPresetControl(containerEl, prefs);
-			// SC-112 Task 8: secondary rows (ui.advanced) collapse behind a <details>
-			// disclosure AFTER the primary rows. The group reset button above still
-			// resets ALL of `members` — advanced included.
-			const primary = members.filter((descriptor) => !prefUi(descriptor)?.advanced);
-			const advanced = members.filter((descriptor) => prefUi(descriptor)?.advanced);
-			for (const descriptor of primary) this.renderRow(containerEl, prefs, descriptor);
-			if (advanced.length) {
-				const details = containerEl.createEl('details', { cls: 'dse-settings-advanced' });
-				details.createEl('summary', { text: 'Advanced' });
-				for (const descriptor of advanced) this.renderRow(details, prefs, descriptor);
+			const rows: NavRow[] = [];
+			if (groupName === 'Statblock display') {
+				rows.push({
+					label: 'Preset',
+					help: PRESET_HELP,
+					render: (container) => this.renderPresetControl(container, prefs),
+				});
 			}
-			if (groupName === 'Statblock display' && this.displayOwner) {
-				mountSettingsPreview(containerEl, this.plugin, this.displayOwner);
+			for (const descriptor of members) {
+				const ui = prefUi(descriptor);
+				if (!ui) continue;
+				rows.push({
+					label: ui.label,
+					help: ui.help,
+					// SC-112 Task 8: secondary rows collapse behind the section's
+					// "Advanced" disclosure. The section reset below still covers them —
+					// it iterates `members`, not the rows the view happens to show.
+					advanced: ui.advanced,
+					render: (container) => this.renderRow(container, prefs, descriptor),
+				});
 			}
+			sections.push({
+				id: slugify(groupName),
+				label: groupName,
+				onReset: () => void this.resetDescriptors(prefs, members),
+				rows,
+				// The live statblock preview belongs wherever the settings on screen can
+				// visibly change it — i.e. any group holding a REFLECTED descriptor (an
+				// `attr` in the data-dse-* vocabulary or a `css` custom property). That is
+				// Appearance, Typography and Statblock display today, derived rather than
+				// listed, so a future reflected group inherits it for free. In the modes
+				// that put every section on screen at once it would mount three times, so
+				// there it stays where it has always been: under Statblock display.
+				renderPreview: this.sectionShowsPreview(groupName, members)
+					? (container) => {
+						if (this.displayOwner) mountSettingsPreview(container, this.plugin, this.displayOwner);
+					}
+					: undefined,
+			});
 		}
+		return sections;
+	}
+
+	private sectionShowsPreview(groupName: string, members: readonly PrefDescriptor[]): boolean {
+		if (MULTI_SECTION_MODES.includes(this.navMode)) return groupName === 'Statblock display';
+		return members.some((descriptor) => descriptor.attr !== undefined || descriptor.css !== undefined);
+	}
+
+	private renderResetAll(containerEl: HTMLElement, prefs: PreferenceStore): void {
 		new Setting(containerEl).addButton((button) =>
 			button
 				.setButtonText('Reset all preferences')
@@ -154,7 +249,7 @@ export class DseSettingTab extends PluginSettingTab {
 	private renderPresetControl(containerEl: HTMLElement, prefs: PreferenceStore): void {
 		new Setting(containerEl)
 			.setName('Preset')
-			.setDesc('A bundle of the statblock options below. Adjusting any single option re-derives "custom".')
+			.setDesc(PRESET_HELP)
 			.addDropdown((dropdown) => {
 				dropdown.addOption('steel', 'Steel card');
 				dropdown.addOption('sourcebook', 'Sourcebook');
@@ -339,122 +434,147 @@ export class DseSettingTab extends PluginSettingTab {
 
 	// —— Operational sections: F2 §3.4 rework (Task 11) — sentence case throughout,
 	// setHeading() sections instead of raw h3s, a manifest-driven sync status line,
-	// and Sync/Check-for-updates buttons wired to the Task 9/10 sync engine. ——
-	private renderOperationalSections(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Compendium').setHeading();
-		containerEl.createEl('p', {
-			// F2 Task 10: the sync engine (CompendiumSyncService.applySync) is
-			// non-destructive by construction — it never deletes or overwrites content
-			// it didn't install itself. This replaces the old "WIPED CLEAN"-style
-			// warning, which was actively false/scary as of that change.
-			text: 'The compendium syncs into a folder in your vault. Only files installed by the plugin are updated or removed — your own notes in that folder are never touched.',
-		});
-
-		new Setting(containerEl)
-			.setName('Destination folder')
-			.setDesc('Vault folder the compendium is synced into.')
-			.addText((text) =>
-				text
-					// Literal default vault folder name
-					// (DEFAULT_SETTINGS.compendiumDestinationDirectory), not prose;
-					// lowercasing would misrepresent the actual folder created.
-					// eslint-disable-next-line obsidianmd/ui/sentence-case
-					.setPlaceholder('DS Compendium')
-					.setValue(this.plugin.settings.compendiumDestinationDirectory)
-					.onChange(async (value) => {
-						this.plugin.settings.compendiumDestinationDirectory = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Release')
-			.setDesc('Specific data-unified release tag to sync. Leave empty for the latest release.')
-			.addText((text) =>
-				text
-					.setPlaceholder('Latest')
-					.setValue(this.plugin.settings.compendiumReleaseTag ?? '')
-					.onChange(async (value) => {
-						this.plugin.settings.compendiumReleaseTag = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Locale')
-			// "English" is a language proper noun; lowercasing it would be a grammar
-			// error, not a fix.
-			// eslint-disable-next-line obsidianmd/ui/sentence-case
-			.setDesc('Compendium language. Only English is published today.')
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption('en', 'English')
-					.setValue(this.plugin.settings.compendiumLocale)
-					.onChange(async (value) => {
-						this.plugin.settings.compendiumLocale = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		const statusEl = containerEl.createEl('p', {
-			cls: 'ds-compendium-status',
-			text: 'Loading sync status…',
-		});
-		void this.renderCompendiumStatus(statusEl);
-
-		new Setting(containerEl)
-			.setName('Sync compendium')
-			.setDesc('Download the selected release and update the files the plugin manages.')
-			.addButton((button) =>
-				button
-					.setButtonText('Sync')
-					.setCta()
-					.onClick(() => {
-						void this.plugin.syncCompendium();
-					}),
-			)
-			.addButton((button) =>
-				button.setButtonText('Check for updates').onClick(async () => {
-					try {
-						const result = await this.plugin.syncService.checkForUpdates();
-						new Notice(
-							result.upToDate
-								? `Compendium is up to date (${result.latestTag}).`
-								: `Update available: ${result.latestTag} (installed: ${result.installedTag ?? 'none'}).`,
-						);
-					} catch (error) {
-						const message = error instanceof Error ? error.message : String(error);
-						new Notice(`Update check failed — ${message}`);
-					}
+	// and Sync/Check-for-updates buttons wired to the Task 9/10 sync engine.
+	// SC-131 lifted each row into the same NavSection model the generated pref groups
+	// use, so the shell navigates and SEARCHES the whole tab rather than only its
+	// descriptor-driven half. Rows with no `label` are chrome (the safety sentence, the
+	// sync status line): rendered in the unfiltered views, never a search hit. ——
+	private buildOperationalSections(): NavSection[] {
+		const compendium: NavSection = {
+			id: 'compendium',
+			label: 'Compendium',
+			rows: [
+				opChrome((container) => {
+					container.createEl('p', {
+						// F2 Task 10: the sync engine (CompendiumSyncService.applySync) is
+						// non-destructive by construction — it never deletes or overwrites
+						// content it didn't install itself. This replaces the old
+						// "WIPED CLEAN"-style warning, which was actively false/scary as
+						// of that change.
+						text: 'The compendium syncs into a folder in your vault. Only files installed by the plugin are updated or removed — your own notes in that folder are never touched.',
+					});
 				}),
-			);
-
-		new Setting(containerEl).setName('Links').setHeading();
-
-		new Setting(containerEl)
-			.setName('Fall back to steelcompendium.io links')
-			.setDesc('When an SCC link is not found in your vault, link to its steelcompendium.io page instead. Navigation happens only on click.')
-			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.sccWebFallback).onChange(async (value) => {
-					this.plugin.settings.sccWebFallback = value;
-					await this.plugin.saveSettings();
+				opRow('Destination folder', 'Vault folder the compendium is synced into.', (setting) =>
+					setting.addText((text) =>
+						text
+							// Literal default vault folder name
+							// (DEFAULT_SETTINGS.compendiumDestinationDirectory), not prose;
+							// lowercasing would misrepresent the actual folder created.
+							// eslint-disable-next-line obsidianmd/ui/sentence-case
+							.setPlaceholder('DS Compendium')
+							.setValue(this.plugin.settings.compendiumDestinationDirectory)
+							.onChange(async (value) => {
+								this.plugin.settings.compendiumDestinationDirectory = value;
+								await this.plugin.saveSettings();
+							}),
+					),
+				),
+				opRow(
+					'Release',
+					'Specific data-unified release tag to sync. Leave empty for the latest release.',
+					(setting) =>
+						setting.addText((text) =>
+							text
+								.setPlaceholder('Latest')
+								.setValue(this.plugin.settings.compendiumReleaseTag ?? '')
+								.onChange(async (value) => {
+									this.plugin.settings.compendiumReleaseTag = value;
+									await this.plugin.saveSettings();
+								}),
+						),
+				),
+				// "English" is a language proper noun; lowercasing it would be a grammar
+				// error, not a fix.
+				opRow('Locale', 'Compendium language. Only English is published today.', (setting) =>
+					setting.addDropdown((dropdown) =>
+						dropdown
+							.addOption('en', 'English')
+							.setValue(this.plugin.settings.compendiumLocale)
+							.onChange(async (value) => {
+								this.plugin.settings.compendiumLocale = value;
+								await this.plugin.saveSettings();
+							}),
+					),
+				),
+				opChrome((container) => {
+					const statusEl = container.createEl('p', {
+						cls: 'ds-compendium-status',
+						text: 'Loading sync status…',
+					});
+					void this.renderCompendiumStatus(statusEl);
 				}),
-			);
+				opRow(
+					'Sync compendium',
+					'Download the selected release and update the files the plugin manages.',
+					(setting) =>
+						setting
+							.addButton((button) =>
+								button
+									.setButtonText('Sync')
+									.setCta()
+									.onClick(() => {
+										void this.plugin.syncCompendium();
+									}),
+							)
+							.addButton((button) =>
+								button.setButtonText('Check for updates').onClick(async () => {
+									try {
+										const result = await this.plugin.syncService.checkForUpdates();
+										new Notice(
+											result.upToDate
+												? `Compendium is up to date (${result.latestTag}).`
+												: `Update available: ${result.latestTag} (installed: ${result.installedTag ?? 'none'}).`,
+										);
+									} catch (error) {
+										const message = error instanceof Error ? error.message : String(error);
+										new Notice(`Update check failed — ${message}`);
+									}
+								}),
+							),
+				),
+			],
+		};
 
-		new Setting(containerEl).setName('Initiative tracker').setHeading();
+		const links: NavSection = {
+			id: 'links',
+			label: 'Links',
+			rows: [
+				opRow(
+					'Fall back to steelcompendium.io links',
+					'When an SCC link is not found in your vault, link to its steelcompendium.io page instead. Navigation happens only on click.',
+					(setting) =>
+						setting.addToggle((toggle) =>
+							toggle.setValue(this.plugin.settings.sccWebFallback).onChange(async (value) => {
+								this.plugin.settings.sccWebFallback = value;
+								await this.plugin.saveSettings();
+							}),
+						),
+				),
+			],
+		};
 
-		new Setting(containerEl)
-			.setName('Default creature image path')
-			.setDesc('Default image to use for creatures in the initiative tracker if not specified.')
-			.addText((text) =>
-				text
-					.setPlaceholder('path/to/image.png')
-					.setValue(this.plugin.settings.defaultImagePath)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultImagePath = value;
-						await this.plugin.saveSettings();
-					}),
-			);
+		const initiative: NavSection = {
+			id: 'initiative-tracker',
+			label: 'Initiative tracker',
+			rows: [
+				opRow(
+					'Default creature image path',
+					'Default image to use for creatures in the initiative tracker if not specified.',
+					(setting) =>
+						setting.addText((text) =>
+							text
+								.setPlaceholder('path/to/image.png')
+								.setValue(this.plugin.settings.defaultImagePath)
+								.onChange(async (value) => {
+									this.plugin.settings.defaultImagePath = value;
+									await this.plugin.saveSettings();
+								}),
+						),
+				),
+			],
+		};
+
+		return [compendium, links, initiative];
 	}
 
 	/** F2 Task 11: renders the manifest-driven "last synced" line. Async because

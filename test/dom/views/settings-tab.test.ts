@@ -16,6 +16,46 @@ function rowByName(name: string): Setting {
 	return row;
 }
 
+// SC-131: the tab is a navigation SHELL now — only the active section's rows are in the
+// DOM. Every pre-SC-131 row assertion below therefore opens its section first, the way a
+// user does (a real click on the real nav tab), rather than being retargeted at a
+// non-shipping render mode.
+function openSection(tab: DseSettingTab, label: string): void {
+	const tabs = Array.from(
+		(tab.containerEl as HTMLElement).querySelectorAll<HTMLElement>('.dse-settings-nav__tab'),
+	);
+	const button = tabs.find((candidate) => candidate.textContent === label);
+	if (!button) {
+		throw new Error(
+			`no nav tab labelled "${label}" (have: ${tabs.map((t) => t.textContent).join(', ')})`,
+		);
+	}
+	button.click();
+}
+
+function navLabels(tab: DseSettingTab): string[] {
+	return Array.from(
+		(tab.containerEl as HTMLElement).querySelectorAll<HTMLElement>('.dse-settings-nav__tab'),
+	).map((t) => t.textContent ?? '');
+}
+
+function searchFor(tab: DseSettingTab, query: string): void {
+	const input = (tab.containerEl as HTMLElement).querySelector<HTMLInputElement>(
+		'.dse-settings-search__input',
+	);
+	if (!input) throw new Error('no search field — is the shell in a mode that has one?');
+	input.value = query;
+	input.dispatchEvent(new Event('input'));
+}
+
+/** Row names currently in the DOM (the shell renders a subset, so Setting.created —
+ *  which is cumulative across re-renders — is the wrong question). */
+function visibleRowNames(tab: DseSettingTab): string[] {
+	return Array.from(
+		(tab.containerEl as HTMLElement).querySelectorAll<HTMLElement>('[data-setting-name]'),
+	).map((el) => el.getAttribute('data-setting-name') ?? '');
+}
+
 async function makeLoadedPlugin(): Promise<DrawSteelAdmonitionPlugin> {
 	const app = new App();
 	const plugin = new DrawSteelAdmonitionPlugin(app as never, { id: 'draw-steel-elements', version: 'test' } as never);
@@ -31,6 +71,12 @@ describe('D4 §4 — DseSettingTab', () => {
 	test('renders the visible groups in order and NO hidden PREF rows', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
+		// SC-131: the SHELL decides how many of these are on screen at once; the GROUP
+		// SET and its order are what this test has always been about, so it asserts them
+		// through the 'off' mode — the pre-SC-131 layout, kept verbatim as the decision
+		// pack's contrast baseline. The shipped mode's structure is covered by the SC-131
+		// describe block at the bottom of this file.
+		tab.navMode = 'off';
 		tab.display();
 		const headings = Setting.created.filter((s) => s.heading).map((s) => s.name);
 		// D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine, Task 4 the
@@ -105,6 +151,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		prefs.reflect(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Statblock display');
 		rowByName('Density').dropdowns[0].trigger('compact');
 		await flushAsync(1);
 		expect(prefs.get('sbDensity')).toBe('compact');
@@ -116,6 +163,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Statblock display');
 		const preset = rowByName('Preset').dropdowns[0];
 		expect(preset.value).toBe('steel');
 		preset.trigger('index');
@@ -129,6 +177,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Statblock display');
 		const preset = rowByName('Preset').dropdowns[0];
 		rowByName('Secondary stats').dropdowns[0].trigger('ledger');
 		await flushAsync(1);
@@ -143,6 +192,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Statblock display');
 		rowByName('Density').dropdowns[0].trigger('compact');
 		await flushAsync(1);
 		const heading = Setting.created.find((s) => s.heading && s.name === 'Statblock display')!;
@@ -325,6 +375,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 	test('Links section: the fallback toggle is operational (sccWebFallback), not a hidden pref', async () => {
 		const { tab, plugin } = makeFakePlugin();
 		tab.display();
+		openSection(tab, 'Links');
 		const toggle = rowByName('Fall back to steelcompendium.io links').toggles[0];
 		expect(toggle.value).toBe(DEFAULT_SETTINGS.sccWebFallback);
 		toggle.trigger(false);
@@ -335,6 +386,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 	test('Initiative tracker: default creature image path field (sentence case)', async () => {
 		const { tab, plugin } = makeFakePlugin();
 		tab.display();
+		openSection(tab, 'Initiative tracker');
 		rowByName('Default creature image path').texts[0].trigger('token.png');
 		await flushAsync(1);
 		expect(plugin.settings.defaultImagePath).toBe('token.png');
@@ -361,6 +413,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		prefs.reflect(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const dd = rowByName('Title font').dropdowns[0];
 		// Order: the uniform default sentinel, the curated entries, Custom… last.
 		expect(dd.options[0]).toEqual({ value: '', label: 'Default (Obsidian vault fonts)' });
@@ -386,6 +439,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		await prefs.set('fontBody', 'Comic Sans MS'); // not in the curated list
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const row = rowByName('Body font');
 		expect(row.dropdowns[0].value).toBe('__custom__');
 		const text = row.texts[0];
@@ -406,6 +460,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const row = rowByName('Title font');
 		row.dropdowns[0].trigger('__custom__');
 		await flushAsync(1);
@@ -422,6 +477,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const details = tab.containerEl.querySelector('details.dse-settings-advanced') as HTMLDetailsElement;
 		expect(details).not.toBeNull();
 		expect(details.open).toBe(false); // collapsed by default
@@ -456,6 +512,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		prefs.reflect(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const textRow = rowByName('Text size');
 		const slider = textRow.sliders[0];
 		expect(slider.limits).toEqual({ min: 0.6, max: 1.4, step: 0.05 });
@@ -480,6 +537,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const before = rowByName('Title font');
 		expect(before.dropdowns[0].options.map((o) => o.value)).not.toContain('Aptos'); // never called at render time
 		expect(before.extraButtons).toHaveLength(1);
@@ -505,6 +563,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		const before = rowByName('Title font');
 		Setting.created.length = 0;
 		before.extraButtons[0].click();
@@ -519,7 +578,203 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		tab.display();
+		openSection(tab, 'Typography');
 		expect(rowByName('Title font').extraButtons).toHaveLength(0);
 		expect(rowByName('Title font').dropdowns).toHaveLength(1); // picker still renders
+	});
+});
+
+// —— SC-131: the settings navigation shell. ONE mechanism (a NavSection model over the
+// pref groups + the operational sections), four render modes. These tests drive the
+// SHIPPED mode ('search' — candidate C) except where a mode is named, and they pin the
+// constraints the shell was not allowed to break: full-member group resets, Advanced
+// disclosures staying inside their own section, and the live preview keeping a home. ——
+describe('SC-131 — settings navigation shell', () => {
+	beforeEach(() => {
+		Setting.created.length = 0;
+	});
+
+	test('the nav lists every section in order; only the active one is rendered', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		expect(navLabels(tab)).toEqual([
+			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Compendium', 'Links', 'Initiative tracker',
+		]);
+		// First section is active by default and is the ONLY one on screen.
+		const active = (tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-nav__tab.is-active');
+		expect(active).toHaveLength(1);
+		expect(active[0].textContent).toBe('Appearance');
+		expect(visibleRowNames(tab)).toEqual([
+			'Appearance', 'Theme', 'Reduce motion', 'Print preview', 'Initiative portraits',
+		]);
+		expect(visibleRowNames(tab)).not.toContain('Title font');
+	});
+
+	test('clicking a tab renders that section and drops the previous one', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		openSection(tab, 'Rolling');
+		expect(visibleRowNames(tab)).toEqual(['Rolling', 'Enable rolling', 'Roller', 'Click ability to roll']);
+		expect(visibleRowNames(tab)).not.toContain('Theme');
+		openSection(tab, 'Initiative tracker');
+		expect(visibleRowNames(tab)).toEqual(['Initiative tracker', 'Default creature image path']);
+		expect(visibleRowNames(tab)).not.toContain('Enable rolling');
+	});
+
+	test('the active tab survives the display() re-render a group reset triggers', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		openSection(tab, 'Typography');
+		const heading = Setting.created.filter((s) => s.heading && s.name === 'Typography').pop()!;
+		heading.extraButtons[0].click();
+		await flushAsync(2); // resetDescriptors → display()
+		const active = (tab.containerEl as HTMLElement).querySelector('.dse-settings-nav__tab.is-active');
+		expect(active?.textContent).toBe('Typography');
+		expect(visibleRowNames(tab)).toContain('Title font');
+	});
+
+	test('search filters rows across ALL sections, by label and by help text', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const nav = (tab.containerEl as HTMLElement).querySelector('.dse-settings-nav')!;
+		expect(nav.classList.contains('dse-hidden')).toBe(false); // empty query = plain tabs
+
+		searchFor(tab, 'font');
+		expect(nav.classList.contains('dse-hidden')).toBe(true);
+		const names = visibleRowNames(tab);
+		// Every Typography slot, from a section that was NOT the active tab…
+		expect(names).toEqual(expect.arrayContaining([
+			'Typography', 'Title font', 'Body font', 'Controls font',
+			'Card body font', 'Label font', 'Monospace font',
+		]));
+		// …and nothing from the sections that do not match.
+		expect(names).not.toContain('Enable rolling');
+		expect(names).not.toContain('Default creature image path');
+
+		// Chrome (the Compendium safety paragraph) is not a row and never a hit.
+		searchFor(tab, 'never touched');
+		expect(visibleRowNames(tab)).toEqual([]);
+		// Help-text-only hits, in a generated section and a hand-written one alike.
+		searchFor(tab, 'vault folder'); // Destination folder's help text
+		expect(visibleRowNames(tab)).toEqual(['Compendium', 'Destination folder']);
+		searchFor(tab, 'system reduced-motion'); // Reduce motion's help text
+		expect(visibleRowNames(tab)).toEqual(['Appearance', 'Reduce motion']);
+	});
+
+	test('search: an ADVANCED row is surfaced inline, not left behind its disclosure', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		searchFor(tab, 'monospace');
+		expect(visibleRowNames(tab)).toEqual(['Typography', 'Monospace font']);
+		expect((tab.containerEl as HTMLElement).querySelector('details.dse-settings-advanced')).toBeNull();
+	});
+
+	test('search: no match shows the empty state; clearing the query restores the tabs', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		searchFor(tab, 'zzzznope');
+		expect(visibleRowNames(tab)).toEqual([]);
+		const empty = (tab.containerEl as HTMLElement).querySelector('.dse-settings-empty');
+		expect(empty?.textContent).toContain('zzzznope');
+		searchFor(tab, '');
+		expect((tab.containerEl as HTMLElement).querySelector('.dse-settings-empty')).toBeNull();
+		expect((tab.containerEl as HTMLElement).querySelector('.dse-settings-nav')!.classList.contains('dse-hidden')).toBe(false);
+		expect(visibleRowNames(tab)).toContain('Theme');
+	});
+
+	test('a group reset from a FILTERED view still resets the full member list', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		openSection(tab, 'Statblock display');
+		rowByName('Density').dropdowns[0].trigger('compact');
+		rowByName('Secondary stats').dropdowns[0].trigger('ledger');
+		await flushAsync(1);
+		expect(prefs.get('sbDensity')).toBe('compact');
+		expect(prefs.get('sbStats')).toBe('ledger');
+		// Filter down to ONE of the two changed rows, then reset from that partial view.
+		searchFor(tab, 'density');
+		expect(visibleRowNames(tab)).toEqual(['Statblock display', 'Density']);
+		const heading = Setting.created.filter((s) => s.heading && s.name === 'Statblock display').pop()!;
+		heading.extraButtons[0].click();
+		await flushAsync(2);
+		expect(prefs.get('sbDensity')).toBe('comfortable');
+		expect(prefs.get('sbStats')).toBe('grid'); // the row the view was HIDING
+		expect(plugin.settings.prefs).toEqual({}); // OD-D4-4: back to the empty disk shape
+	});
+
+	test("'sections' mode (candidate B): every section collapsed, bodies rendered lazily on expand", async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.navMode = 'sections';
+		tab.display();
+		const container = tab.containerEl as HTMLElement;
+		const details = Array.from(container.querySelectorAll<HTMLDetailsElement>('details.dse-settings-section'));
+		expect(details).toHaveLength(9);
+		expect(details.every((d) => !d.open)).toBe(true);
+		expect(visibleRowNames(tab)).toEqual([]); // nothing rendered yet
+		// The sticky mini-nav expands AND fills its target.
+		const jump = Array.from(container.querySelectorAll<HTMLElement>('.dse-settings-mininav__item'))
+			.find((item) => item.textContent === 'Element defaults')!;
+		jump.click();
+		const target = container.querySelector<HTMLDetailsElement>('details[data-section-id="element-defaults"]')!;
+		expect(target.open).toBe(true);
+		expect(visibleRowNames(tab)).toEqual(['Element defaults', 'Collapsible by default', 'Start collapsed']);
+	});
+
+	test("'off' mode (the pre-SC-131 contrast baseline) mounts exactly ONE preview, under Statblock display", async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.navMode = 'off';
+		tab.display();
+		const previews = (tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview');
+		expect(previews).toHaveLength(1);
+		// It still sits inside the Statblock display block: the next heading after it is
+		// the following group's.
+		const names = Setting.created.filter((s) => s.heading).map((s) => s.name);
+		expect(names).toContain('Statblock display');
+	});
+
+	test('the preview follows the REFLECTED groups: a home on Appearance/Typography/Statblock, none on the behavioral ones', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		const hasPreview = (): boolean =>
+			(tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview').length === 1;
+		expect(hasPreview()).toBe(true); // Appearance (attr-bearing)
+		openSection(tab, 'Typography');
+		expect(hasPreview()).toBe(true); // css-bearing
+		openSection(tab, 'Statblock display');
+		expect(hasPreview()).toBe(true);
+		for (const behavioral of ['Element defaults', 'Rolling', 'Authoring', 'Compendium']) {
+			openSection(tab, behavioral);
+			expect((tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview')).toHaveLength(0);
+		}
+		// A filtered view has no preview either — it is not a section view.
+		openSection(tab, 'Appearance');
+		searchFor(tab, 'theme');
+		expect((tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview')).toHaveLength(0);
+	});
+
+	test('"Reset all preferences" lives in the shell footer and is reachable from every tab', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		tab.display();
+		rowByName('Reduce motion').toggles[0].trigger(true);
+		await flushAsync(1);
+		openSection(tab, 'Compendium'); // an operational tab, far from the pref groups
+		const resetAll = Setting.created.filter((s) => s.buttons.some((b) => b.text === 'Reset all preferences')).pop()!;
+		resetAll.buttons[0].click();
+		await flushAsync(2);
+		expect(prefs.get('reduceMotion')).toBe(false);
 	});
 });

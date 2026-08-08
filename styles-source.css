@@ -7423,3 +7423,159 @@ button.dse-pr__row:hover {
 		min-width: 60px;
 	}
 }
+
+/* ================================================================== */
+/* SC-131 — SETTINGS NAVIGATION SHELL                                  */
+/* ================================================================== */
+/* Scoped entirely to `.dse-settings-shell`, which only ever exists inside the
+   plugin's own PluginSettingTab container. Nothing here can match inside a
+   rendered [data-dse-element], so the legacy/print freeze is untouched by
+   construction — and the settings tab is Obsidian-native chrome, so this
+   deliberately styles with Obsidian's own variables and carries NO
+   [data-dse-theme='steel'] gate (there is no Steel/Legacy story here).
+
+   NOTE for the sibling sc128-hr branch: this is a self-contained region
+   appended at EOF — a rebase should be able to take both sides whole. */
+
+.dse-settings-shell {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+/* —— the tab bar (candidates A + C) —— */
+.dse-settings-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	padding: 0.25rem 0 0.5rem;
+	border-bottom: 1px solid var(--background-modifier-border);
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background-color: var(--background-primary);
+}
+
+.dse-settings-nav__tab {
+	appearance: none;
+	background-color: transparent;
+	border: none;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	padding: 0.35em 0.75em;
+	white-space: nowrap;
+}
+
+.dse-settings-nav__tab:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.dse-settings-nav__tab.is-active {
+	background-color: var(--background-modifier-hover);
+	box-shadow: inset 0 -2px 0 0 var(--interactive-accent);
+	color: var(--text-normal);
+	font-weight: var(--font-semibold, 600);
+}
+
+/* The tab body owns the first heading, which Obsidian gives a large top margin —
+   redundant directly under the bar. */
+.dse-settings-body > .setting-item:first-child {
+	border-top: none;
+	padding-top: 0.5rem;
+}
+
+/* —— the filter field (candidate C) —— */
+.dse-settings-search {
+	padding: 0.5rem 0 0.25rem;
+}
+
+.dse-settings-search__input {
+	width: 100%;
+}
+
+.dse-settings-count,
+.dse-settings-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 0.25rem 0 0;
+}
+
+/* —— collapsible sections + sticky mini-nav (candidate B) —— */
+.dse-settings-mininav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	padding: 0.25rem 0 0.5rem;
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background-color: var(--background-primary);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dse-settings-mininav__item {
+	appearance: none;
+	background-color: var(--background-modifier-hover);
+	border: none;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	padding: 0.25em 0.6em;
+	white-space: nowrap;
+}
+
+.dse-settings-mininav__item:hover {
+	color: var(--text-normal);
+}
+
+.dse-settings-section {
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dse-settings-section__summary {
+	cursor: pointer;
+	font-weight: var(--font-semibold, 600);
+	list-style-position: outside;
+	padding: 0.6em 0;
+}
+
+.dse-settings-section[open] > .dse-settings-section__summary {
+	color: var(--text-normal);
+}
+
+/* A section body's own first heading duplicates the summary label — keep it (it
+   carries the section reset button) but tighten it. */
+.dse-settings-section__body > .setting-item:first-child {
+	border-top: none;
+	padding-top: 0;
+}
+
+/* —— the live preview's home ——
+   The preview is a FULL bandit-chief statblock: ~3900px on its own, which on a single
+   scroll page was simply more of the same problem, and inside a tab would have been the
+   tab. Capping it into a scrollable pane is what makes "the preview is visible while you
+   change the setting" actually true — one screen, one pane, its own scrollbar. The 'off'
+   mode is exempt so it keeps reproducing today's layout verbatim for the decision pack's
+   before/after (both it and this exemption go when the losing modes do). */
+.dse-settings-shell .dse-settings-preview {
+	max-height: 26rem;
+	overflow: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: 0.5rem;
+	resize: vertical;
+}
+
+.dse-settings-shell--off .dse-settings-preview {
+	max-height: none;
+	overflow: visible;
+	border: none;
+	padding: 0;
+	resize: none;
+}
