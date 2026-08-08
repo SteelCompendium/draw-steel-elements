@@ -4582,7 +4582,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	   ladder (`.dse-tiles__cell` .25, `.dse-kit__equip` .22). */
 	text-align: center;
 	background: rgba(0, 0, 0, 0.2);
-	border: 1px solid var(--dse-border);
+	/* SC-117 fix wave M2: the site frames this cell with --fx-metal-faint, the SAME
+	   hairline .dse-section/.dse-pr already carry (Plan 20 precedent) — this was
+	   --dse-border, a different (heavier, and opaque in light) token, which after B2's
+	   fill correction outlined the cell TWICE as heavy as the section panel beside it. */
+	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
 	/* SC-121 B-1: the site's own cell inset/height — `.sc-ability__cell
 	   { padding: .5rem .75rem; min-height: 3.4rem }` (steel-ability-cards.css:142-143)
@@ -5188,7 +5192,9 @@ body.theme-light
 	gap: 0.4rem;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__item {
-	border: 1px solid var(--dse-border);
+	/* SC-117 fix wave M2: site's own hairline (--fx-metal-faint), matching the
+	   .dse-section/--distance/--target correction above — was --dse-border. */
+	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
 	/* SC-117 B2 — the site's `.sb__stat` is the DEEPEST body step on a statblock,
 	   `rgba(0,0,0,.22)` (the same notch `.sc-kit__equip` takes), not the shared `.18`.
@@ -5216,7 +5222,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__it
 	display: flex;
 	flex-direction: column;
 	gap: 0.1rem;
-	border: 1px solid var(--dse-border);
+	/* SC-117 fix wave M2: site's own hairline (--fx-metal-faint) — was --dse-border. */
+	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
 	/* SC-117 B2 — the site's `.sb__field` sits one notch SHALLOWER than the shared token,
 	   `rgba(0,0,0,.16)` (the same step `.sb__feat`/`.fb__feat` use), so the kv grid reads
