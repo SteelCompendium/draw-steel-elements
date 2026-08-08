@@ -4514,6 +4514,28 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-feature__meta-cell--type {
 	background: rgba(0, 0, 0, 0.02);
 }
+/* SC-117 fix wave L2 — the review's one surviving instance of the ticket's own defect
+   (audit open item #4, upgraded from "unknown" to "defect awaiting a value"): the base
+   rule above (`.dse-card__badge`, ~245) fills from `--dse-chip-bg`, which resolves to an
+   OPAQUE `#eaeeef` in Steel light / `rgba(220,226,230,.06)` in dark — fully occluding the
+   `.dse-card` gradient plate underneath, the same occlusion mechanism B1-B4 closed
+   everywhere else this wave. The other five `--dse-chip-bg` consumers are safe (no
+   gradient ancestor or a later rule already wins), so only the badge needs its own
+   override; re-tinting the shared token would be unmeasured (same reasoning the B4
+   comment above gives for not touching it). No badge/tag/pill/rarity selector was
+   sampled in the site capture, so this is NOT a site-verified match — it borrows the B2
+   ladder's nearest analog: the shallowest rung (.16 dark / .024 light, the
+   .sb__field/.dse-sb__kv step), since a badge is a lightweight accent rather than a
+   content panel and the deepest/lightest rungs (.22/.03, matched by .dse-sb__item) would
+   read as overcorrecting a small pill. Border follows the M2 precedent
+   (--dse-metal-faint, not --dse-border) for the same reason. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__badge {
+	background: rgba(0, 0, 0, 0.16);
+	border-color: var(--dse-metal-faint);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__badge {
+	background: rgba(0, 0, 0, 0.024);
+}
 /* Type chip → the RIGHT end of the chip band (SC-121 Scott round: "the type is
    supposed to be right-aligned"). The B-1 recomposition above got the band's
    structure from the site's `.sc-ability__kw` — but that row is keywords-ONLY
