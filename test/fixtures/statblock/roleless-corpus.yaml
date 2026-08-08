@@ -1,0 +1,71 @@
+# FOLLOWUPS #56 / SC-128 — the CORPUS-SHAPED ROLELESS statblock.
+#
+# Why it exists: #56 (a statblock whose role maps to nothing lost its section break
+# entirely under Steel) was invisible to every gate because NO fixture anywhere rendered
+# an unmapped-role statblock — every existing one resolves a role, including the two that
+# look roleless (`role: ""` + `organization: Leader`, which statblockHeaderParts falls
+# back to, so roleOf() finds "leader"). A defect that no fixture can express is a defect
+# no camera and no freeze line can catch.
+#
+# CORPUS-SHAPED, not invented (the SC-102 villain-corpus lesson): a scan of all 512
+# statblocks in data-unified found exactly 5 that map no role — the 4 summoner Champions
+# (`role: ""` + `organization: Champion`, and "champion" is not in DSE_ROLES) and
+# Noncombatant (both fields empty). This fixture is the first of those, trimmed:
+#   data-unified/en/unified/yaml/monster/champion/summoner/demon/statblock/demon-lords-aspect.yaml
+# Its `organization: Champion` is the whole point — it proves the fallback chain
+# (`role || organization`) still finds nothing, which is what makes the card roleless.
+#
+# A SEPARATE fixture, deliberately not an edit to an existing statblock fixture: changing
+# those would move the FROZEN statblock--legacy-{dark,light}.png. Its own shots
+# (`statblock-roleless-corpus--*`) are new filenames, invisible to the freeze baseline by
+# construction (sha256sum -c only checks names it lists), widen-eligible later.
+#
+# Also the permanent home of the "no band" case: with no [data-dse-role] the head band,
+# its notch AND the crest all degrade to nothing, so this fixture is the only place the
+# statblock's whole fail-safe chain is visible at once.
+type: statblock
+name: Demon Lord's Aspect
+level: 0
+role: ""
+organization: Champion
+keywords:
+  - Demon
+  - Summon
+ev: ""
+stamina: SPECIAL
+immunities:
+  - Corruption 5
+speed: 5
+movement: Teleport
+size: "2"
+stability: 2
+free_strike: 9
+might: 2
+agility: 5
+reason: 5
+intuition: 2
+presence: 2
+features:
+  - type: feature
+    feature_type: ability
+    name: Grasping Appendages
+    icon: 🏹
+    ability_type: Signature Ability
+    keywords:
+      - Melee
+      - Strike
+      - Weapon
+    usage: Main action
+    distance: Melee 5
+    target: Two creatures or objects
+    effects:
+      - roll: 2d10 + 5
+        tier1: 9 corruption damage; pull 2
+        tier2: 12 corruption damage; pull 4
+        tier3: 14 corruption damage; pull 5
+  - type: feature
+    feature_type: trait
+    name: Warping Strike
+    icon: ⭐️
+    effects:
+      - effect: The Aspect's free strikes teleport the target 5 squares.

@@ -47,6 +47,10 @@ import humanBanditChief from '../../fixtures/statblock/human-bandit-chief.yaml';
 // verbatim with the visual harness (visual-harness/entry.ts FIXTURES.statblock
 // 'villain-corpus'), so the DOM catcher below and the shots render the same bytes.
 import statblockVillainCorpus from '../../fixtures/statblock/villain-corpus.yaml';
+// FOLLOWUPS #56 / SC-128: the corpus-shaped ROLELESS statblock. Shared verbatim with the
+// visual harness (visual-harness/entry.ts FIXTURES.statblock 'roleless-corpus') so the DOM
+// catcher below and the shots render the same bytes.
+import statblockRolelessCorpus from '../../fixtures/statblock/roleless-corpus.yaml';
 
 const SB_ALIASES = ['ds-sb', 'ds-statblock'] as const;
 
@@ -465,6 +469,38 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(main.querySelector('.dse-head__primary--left')!.textContent).toBe(
 			'Whip and Magic Longsword',
 		);
+	});
+
+	// FOLLOWUPS #56 — THE ROLELESS CATCHER. #56 existed for one reason: no fixture
+	// anywhere rendered a statblock whose role maps to nothing, so the Steel rule pair that
+	// erased its section break (an UNGATED `.dse-hr` suppression against a
+	// [data-dse-role]-GATED replacement notch) could not be seen by any camera, freeze line
+	// or assertion. This test makes the roleless card permanently expressible; the gate
+	// symmetry itself is asserted in test/dom/theme/steelMaterial.test.ts.
+	test('FOLLOWUPS #56: the CORPUS roleless shape — role "" + a non-role organization — sets NO data-dse-role, and still mounts its ◆ divider node', async () => {
+		// Pin the fixture's own shape first, so this test cannot stop being the catcher.
+		expect(statblockRolelessCorpus).toMatch(/^role: ""$/m);
+		expect(statblockRolelessCorpus).toMatch(/^organization: Champion$/m);
+
+		const { root } = await renderStatblock(statblockRolelessCorpus);
+		const card = root.querySelector('.dse-sb') as HTMLElement;
+
+		// The fail-safe tint pair: unmapped role sets NEITHER the attribute nor the alias.
+		// ("champion" is not in DSE_ROLES, and statblockHeaderParts' role||organization
+		// fallback therefore finds nothing either — that fallback is why `role: ""` alone
+		// is NOT enough to produce a roleless card, and why this fixture needs the
+		// organization to be a non-role word.)
+		expect(card.hasAttribute('data-dse-role')).toBe(false);
+		expect(card.style.getPropertyValue('--dse-role')).toBe('');
+
+		// The divider node is mounted regardless of theme (kit/divider.ts, view.ts:272);
+		// what changed in #56 is only whether Steel CSS hides it.
+		expect(root.querySelector('.dse-sb > .dse-hr .dse-hr__diamond')).not.toBeNull();
+
+		// Contrast: the role-mapped fixture DOES carry the pair, so the assertion above is
+		// about this fixture's shape and not about the selector being wrong everywhere.
+		const { root: mapped } = await renderStatblock(humanBanditChief);
+		expect(mapped.querySelector('.dse-sb')!.getAttribute('data-dse-role')).toBe('leader');
 	});
 
 	test('no features -> no divider and no feature list; head + meta + chars still render', async () => {

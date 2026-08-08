@@ -77,6 +77,15 @@ import ruleDefault from '../src/elements/display/rule/example.yaml';
 // construction (sha256sum -c only checks names it lists), widen-eligible later.
 import statblockVillainCorpus from '../test/fixtures/statblock/villain-corpus.yaml';
 
+// FOLLOWUPS #56 / SC-128: the CORPUS-SHAPED ROLELESS statblock — a card whose role maps to
+// nothing, which no fixture here had ever rendered. That gap is exactly WHY #56 went
+// unseen: SC-103 suppressed `.dse-sb > .dse-hr` ungated while its replacement notch was
+// [data-dse-role]-gated, so a roleless card lost band, notch AND divider at once, and no
+// camera could see it. steel-etl really emits this shape (5 of 512 statblocks in
+// data-unified: the 4 summoner Champions + Noncombatant), so the fixture is trimmed from a
+// real one rather than invented. Single-sourced with statblock.test.ts's roleless catcher.
+import statblockRolelessCorpus from '../test/fixtures/statblock/roleless-corpus.yaml';
+
 // SC-108 / FOLLOWUPS #37 (design recon 2026-08-02): a second, harness-local fixture for
 // featureblock's advancement-band gate (view.ts's `run.level > 0` branch), which had never
 // been rendered by any fixture. Verbatim from test/dom/elements/featureblock.test.ts's
@@ -257,7 +266,11 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	rule: { default: ruleDefault },
 	skills: { default: skillsDefault },
 	'stamina-bar': { default: staminaBarDefault },
-	statblock: { default: statblockDefault, 'villain-corpus': statblockVillainCorpus },
+	statblock: {
+		default: statblockDefault,
+		'villain-corpus': statblockVillainCorpus,
+		'roleless-corpus': statblockRolelessCorpus,
+	},
 	surges: { default: surgesDefault },
 	title: { default: titleDefault },
 	treasure: { default: treasureDefault },

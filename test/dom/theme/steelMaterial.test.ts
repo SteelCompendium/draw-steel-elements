@@ -281,10 +281,68 @@ describe('Steel material contract', () => {
 			);
 			expect(suppressions).toHaveLength(1);
 			const [rule] = suppressions;
+			// FOLLOWUPS #56 (candidate A): [data-dse-role]-GATED, matching the notch below.
 			expect(rule.selector.replace(/\s+/g, ' ').trim()).toBe(
-				"[data-dse-theme='steel'] .dse-sb > .dse-hr",
+				"[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-hr",
 			);
 			expect(STEEL_SCOPE.test(rule.selector)).toBe(true);
+		});
+
+		// FOLLOWUPS #56 — THE STRUCTURAL INVARIANT. SC-103 shipped a suppression and a
+		// replacement for the SAME visual job (the statblock's section break) with DIFFERENT
+		// conditions: the suppression fired always, the replacement only under
+		// [data-dse-role]. A roleless statblock therefore satisfied the "hide" arm and not
+		// the "paint" arm, and its section break vanished — band, notch and ◆ all absent, the
+		// chars→features gap collapsing 28px → 8px. Nothing could fail; there was no roleless
+		// fixture (there is now: test/fixtures/statblock/roleless-corpus.yaml). The general
+		// rule this locks is cheap and total: a suppression and its replacement must agree
+		// on WHEN they apply, per family. The two families legitimately choose DIFFERENT
+		// gates (the sb band is role-gated, the fb band is unconditional and hue-chains to
+		// the malice grey) — what may never differ is the two halves within one family.
+		/** Does this selector's `.dse-sb`/`.dse-fb` compound carry the [data-dse-role] gate? */
+		function roleGate(selector: string, family: 'sb' | 'fb'): boolean {
+			// `(?![\w-])` keeps `.dse-sb__item` / `.dse-fb__stats` from matching the family
+			// compound — without it a BEM sibling would silently read as "ungated".
+			const re = new RegExp(`\\.dse-${family}(?![\\w-])((?:\\[[^\\]]+\\])*)`);
+			const m = re.exec(selector);
+			if (!m) throw new Error(`selector never mentions .dse-${family}: ${selector}`);
+			return m[1].includes('[data-dse-role]');
+		}
+
+		const selectorOf = (needle: string): string => {
+			const found = rules.filter((r) => r.selector.replace(/\s+/g, ' ').trim() === needle);
+			expect(found).toHaveLength(1);
+			return found[0].selector.replace(/\s+/g, ' ').trim();
+		};
+
+		it('FOLLOWUPS #56: within each family the .dse-hr suppression and the replacement notch carry the SAME [data-dse-role] gate', () => {
+			const sbSuppression = selectorOf("[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-hr");
+			const sbNotch = selectorOf(
+				"[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after",
+			);
+			expect(roleGate(sbSuppression, 'sb')).toBe(roleGate(sbNotch, 'sb'));
+			// …and specifically GATED for the statblock, whose band is itself gated.
+			expect(roleGate(sbSuppression, 'sb')).toBe(true);
+
+			const fbSuppression = selectorOf("[data-dse-theme='steel'] .dse-fb > .dse-hr");
+			const fbNotch = selectorOf("[data-dse-theme='steel'] .dse-fb > .dse-head::after");
+			expect(roleGate(fbSuppression, 'fb')).toBe(roleGate(fbNotch, 'fb'));
+			// …and specifically UNGATED for the featureblock, whose band is unconditional.
+			expect(roleGate(fbSuppression, 'fb')).toBe(false);
+		});
+
+		it('the gate-symmetry detector HAS TEETH: it reports the exact pre-#56 asymmetry, and is not fooled by BEM siblings', () => {
+			// The shipped-and-broken pair SC-103 landed: hide always, paint only when roled.
+			expect(roleGate("[data-dse-theme='steel'] .dse-sb > .dse-hr", 'sb')).toBe(false);
+			expect(
+				roleGate("[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after", 'sb'),
+			).toBe(true);
+			// A `.dse-sb__*` descendant must not be mistaken for the family compound.
+			expect(roleGate("[data-dse-theme='steel'] .dse-sb[data-dse-role] .dse-sb__item", 'sb')).toBe(
+				true,
+			);
+			// And a selector that never names the family is a loud error, never a silent false.
+			expect(() => roleGate("[data-dse-theme='steel'] .dse-fb > .dse-hr", 'sb')).toThrow();
 		});
 
 		it('leaves the shared .dse-hr kit primitive\'s base rule alone — Legacy stays display:flex', () => {

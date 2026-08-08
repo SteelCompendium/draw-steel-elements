@@ -392,6 +392,11 @@ for what needs action.
   a small haloed diamond flanked by two seed dots, with hairlines fading
   outward to nothing. Previously it kept the old heavy look — a large solid
   diamond on two thick lines running the full width (SC-128).
+- [STEEL] A statblock whose role maps to nothing (a summoner Champion, a
+  Noncombatant) keeps its diamond divider between the characteristics strip
+  and the feature list. It had been losing the head band, the notch and the
+  divider all at once, leaving the two sections butted together with nothing
+  separating them (FOLLOWUPS #56).
 
 ## 5.1.1
 

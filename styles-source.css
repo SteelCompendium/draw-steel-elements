@@ -5427,8 +5427,23 @@ body.theme-light
    (~:4979-4983) and the framed feature cards carry the section break instead.
    Scoped EXACTLY to `.dse-sb > .dse-hr` — never bare `.dse-hr`, which is a shared kit
    primitive also used by the featureblock (featureblock/view.ts:133), the condition list
-   (~:1359) and ds-horizontal-rule, all with their own frozen shots. */
-[data-dse-theme='steel'] .dse-sb > .dse-hr {
+   (~:1359) and ds-horizontal-rule, all with their own frozen shots.
+   FOLLOWUPS #56 (candidate A, 2026-08-08): the suppression is GATED on [data-dse-role],
+   identically to the replacement notch below. It shipped ungated, and the two together
+   erased the section break outright on a roleless statblock: no band, no notch, and no ◆
+   either — the chars→features gap collapsed 28px (Legacy) → 8px (Steel) with nothing
+   painted in its place. This is not hypothetical: 5 of the 512 statblocks steel-etl emits
+   map no role (the 4 summoner Champions — `role: ""` + `organization: "Champion"`, and
+   Noncombatant with both empty; `test/fixtures/statblock/roleless-corpus.yaml` is shaped
+   from the first). Deliberately NOT the featureblock's ungated treatment: the fb band is
+   itself unconditional and hue-chains to the malice grey, so its notch always has a band
+   to sit on — the statblock's band is [data-dse-role]-gated by design (a fail-safe: an
+   unmapped role paints no band, so a grey diamond would hang off nothing). Gating the
+   suppression the same way keeps the pair consistent and hands the roleless card back the
+   plain kit divider it carried before SC-103. Left as the PLAIN kit divider on purpose —
+   the ornate SC-128 rule (~:5560) is element-scoped and does not reach here; this node's
+   job is a section break, not an ornament. */
+[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-hr {
 	display: none;
 }
 /* Structure tier (S-1(a), print follows structure): "which node draws what" — the notch's
