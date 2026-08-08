@@ -65,10 +65,19 @@ const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
  *
  * Mirrors `resolveBarePath`'s null contract: a resolved ds-* block that parses to
  * null/undefined returns null (skip the merge, no error) rather than `ResolvedRef`.
+ *
+ * Review round 1, M1: detect AND resolve against the SAME trimmed string. The
+ * registered `SccRefProvider` itself trims (`SccRefProvider.canResolve`/`resolve` both
+ * call `raw.trim()`), but the built-in RESERVED "scc" placeholder that stands in when no
+ * real provider is registered does NOT (`createReservedSccProvider`'s `canResolve` tests
+ * `raw` verbatim, `framework/seams/refs.ts:170`) — passing the untrimmed original there
+ * would report the generic "no provider could resolve this" message instead of the
+ * shape-aware SCC one for a padded ref in a provider-less context.
  */
 async function resolveStatblockRef(refs: ReferenceService, raw: string): Promise<ResolvedRef | null> {
-	if (SCC_PREFIX_RE.test(raw.trim())) {
-		const resolved = await refs.resolve(raw, '');
+	const trimmed = raw.trim();
+	if (SCC_PREFIX_RE.test(trimmed)) {
+		const resolved = await refs.resolve(trimmed, '');
 		return resolved.data == null ? null : resolved;
 	}
 	return refs.resolveBarePath(raw);

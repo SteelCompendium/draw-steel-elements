@@ -402,3 +402,64 @@ describe('T-2: idempotency — ref-free models are BYTE-unchanged', () => {
 		expect(model.heroes[0].current_stamina).toBe(120);
 	});
 });
+
+// SC-134 review round 1, M5: pin resolveStatblockRef's routing PREDICATE directly (not
+// just its end-to-end behavior), so a future widening of the SCC shape test (e.g. to the
+// looser `/^scc/`, dropping the colon requirement) fails loudly here instead of silently
+// misrouting a bare filename that happens to start with "scc". Spies on the REAL
+// ReferenceService's resolve()/resolveBarePath() (stubbed to a no-op success so nothing
+// throws) and asserts which one a given `statblock` string reaches — the dispatch itself,
+// not the resolution outcome (that's covered elsewhere: the DOM round-trip tests in
+// test/dom/elements/encounter.test.ts, and this file's bare-path/oracle tests above).
+describe('T-2 / SC-134 M5: resolveStatblockRef routing predicate — scc:/scc.vN: only', () => {
+	function spyRefs(): { refs: ReferenceService; resolveSpy: jest.SpyInstance; bareSpy: jest.SpyInstance } {
+		const { refs } = makeEnv();
+		const resolveSpy = jest.spyOn(refs, 'resolve').mockResolvedValue({ data: {} });
+		const bareSpy = jest.spyOn(refs, 'resolveBarePath').mockResolvedValue({ data: {} });
+		return { refs, resolveSpy, bareSpy };
+	}
+
+	const creatureSrcWith = (statblock: string): string =>
+		[
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    creatures:',
+			'      - name: Creature',
+			'        max_stamina: 10',
+			'        amount: 1',
+			`        statblock: "${statblock}"`,
+		].join('\n');
+
+	test.each([
+		['scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker', 'resolve'],
+		['scc:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker', 'resolve'],
+		['scc-notes.md', 'resolveBarePath'],
+		['scc.md', 'resolveBarePath'],
+		['sccdragon', 'resolveBarePath'],
+	])('creature statblock %s dispatches through %s()', async (statblock, which) => {
+		const { refs, resolveSpy, bareSpy } = spyRefs();
+		await resolveLikePipeline(creatureSrcWith(statblock), refs);
+		if (which === 'resolve') {
+			expect(resolveSpy).toHaveBeenCalledTimes(1);
+			expect(bareSpy).not.toHaveBeenCalled();
+		} else {
+			expect(bareSpy).toHaveBeenCalledTimes(1);
+			expect(resolveSpy).not.toHaveBeenCalled();
+		}
+	});
+
+	test('hero statblock scc.v1: also dispatches through resolve() (resolveRefs.ts:89 — same routing, hero loop)', async () => {
+		const { refs, resolveSpy, bareSpy } = spyRefs();
+		const src = [
+			'heroes:',
+			'  - name: Hero',
+			'    max_stamina: 10',
+			'    statblock: "scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker"',
+			'enemy_groups: []',
+		].join('\n');
+		await resolveLikePipeline(src, refs);
+		expect(resolveSpy).toHaveBeenCalledTimes(1);
+		expect(bareSpy).not.toHaveBeenCalled();
+	});
+});

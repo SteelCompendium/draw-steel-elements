@@ -499,4 +499,37 @@ describe('SC-134: builder -> tracker round trip actually resolves through the SC
 		expect(enemyEntries).toHaveLength(1);
 		expect(trackerRoot.querySelectorAll('.dse-init__grid .dse-init__cell')).toHaveLength(9); // 8 minion + 1 captain
 	});
+
+	// Review round 1, I1 (REQUIRED): the two round-trip tests above prove "doesn't throw",
+	// not "actually resolves through the SCC branch" — the builder inlines name/max_stamina
+	// at all three emission sites and the merge is `??`-guarded, so both tests above stay
+	// green even if resolveStatblockRef's scc branch is stubbed to silently `return null`
+	// (verified: see the can-fail proof in the SC-134 report/Linear comment). This negative
+	// control uses an UNSYNCED code (fixture deliberately not loaded) with no inlined
+	// name/max_stamina merge to fall back on, so only a REAL call into the registered
+	// SccRefProvider can produce this exact message (SccRefProvider.ts:31 — "is not
+	// available in this vault") — a bare-path revert reports "not found in root, DS
+	// Compendium…" instead, and a silent-skip regression (stub returns null/never calls
+	// the provider) reports nothing at all and this assertion fails.
+	test('the SCC branch is genuinely reached: an unsynced code errors with the provider message (negative control)', async () => {
+		const { deps } = makeCompendiumDeps(); // fixture deliberately NOT loaded — code is unsynced
+		const trackerHost = makeHost('ds-initiative');
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: X',
+			'    is_squad: false',
+			'    creatures:',
+			'      - name: X',
+			'        amount: 1',
+			'        max_stamina: 10',
+			'        isHero: false',
+			`        statblock: scc.v1:${GOBLIN_CODE}`,
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		await new ElementPipeline(deps).run(initiativeElement, src, trackerHost);
+		const root = trackerHost.containerEl.firstElementChild as HTMLElement;
+		expect(root.textContent).toContain('is not available in this vault');
+	});
 });
