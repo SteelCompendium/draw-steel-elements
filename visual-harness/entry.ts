@@ -24,6 +24,9 @@ import { createSessionStore } from '../src/framework/session';
 import { DEFAULT_SETTINGS } from '../src/model/Settings';
 import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
 import { App, Plugin } from '../test/mocks/obsidian-core';
+// SC-132 candidate stage only (see src/framework/kit/staminaCandidate.ts).
+import { parseStaminaCandidate, setStaminaCandidate } from '../src/framework/kit';
+import type { StaminaCandidate } from '../src/framework/kit';
 
 // Fixtures — D9 (Plan 15 Task 2): single-sourced from each element's own
 // authoring.example (src/elements/<id>/example.yaml), esbuild/jest `.yaml` text loader.
@@ -277,6 +280,78 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	'values-row': { default: valuesRowDefault },
 };
 
+/* ------------------------------------------------------------------ */
+/* SC-132 CANDIDATE STAGE ONLY — stamina-cluster design boards          */
+/* ------------------------------------------------------------------ */
+/*
+   These fixtures are deliberately NOT in FIXTURES: the manifest drives the whole
+   `npm run shots` sweep, so adding them there would put ~70 new PNGs into every
+   run and into the freeze surface. They are reachable only through `?cand=` /
+   `?board=1`, which only visual-harness/candidates.mjs ever passes.
+
+   The five states are the cluster's honest-state matrix (SC-132): healthy,
+   temp > 0, winded (at half max or below, RR §8), dying (at or below 0 — a hero
+   keeps a negative "dying zone" down to -max/2, which is why the bar's coordinate
+   space is [-max/2 … +max]), and read-only (canPersist false — driven by the
+   existing `?readonly=1` param, not a fixture).
+*/
+const staminaState = (current: number, temp: number): string =>
+	`max_stamina: 30\ncurrent_stamina: ${current}\ntemp_stamina: ${temp}\nrecoveries: 5\nrecoveries_max: 8\n`;
+
+/** Hero-sheet context: the same states inside the flagship composition. */
+const heroState = (current: number, temp: number, recoveries: number): string => `name: Torin Stonefist
+level: 3
+subclass: berserker
+characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
+skills:  [Endurance, Intimidate, Nature]
+max_stamina: 30
+recoveries_max: 8
+state:
+  stamina: { current: ${current}, temp: ${temp} }
+  recoveries: ${recoveries}
+  victories: 2
+`;
+
+export const CANDIDATE_FIXTURES: Record<string, Record<string, string>> = {
+	'stamina-bar': {
+		healthy: staminaState(24, 0),
+		temp: staminaState(24, 6),
+		winded: staminaState(11, 0),
+		dying: staminaState(-4, 0),
+		// SC-133 geometry cases — the three ranges the Legacy overlay gets wrong.
+		'temp-full': staminaState(30, 6),
+		'temp-over': staminaState(8, 40),
+		'temp-dying': staminaState(-4, 5),
+	},
+	hero: {
+		healthy: heroState(24, 0, 5),
+		temp: heroState(24, 6, 5),
+		winded: heroState(11, 0, 2),
+		dying: heroState(-4, 0, 0),
+	},
+};
+
+/** The board layout: one labeled row per state. */
+const BOARD_ROWS: { fixture: string; caption: string }[] = [
+	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
+	{ fixture: 'temp', caption: 'Temp Stamina — 24/30 +6' },
+	{ fixture: 'winded', caption: 'Winded — 11/30 (at or below half)' },
+	{ fixture: 'dying', caption: 'Dying — -4/30 (in the dying zone)' },
+];
+
+/**
+ * SC-133 geometry proof, standalone board only (the hero board is already tall, and
+ * these prove the GAUGE, which is identical on both surfaces). The three ranges where
+ * the Legacy temp overlay is wrong: temp with no headroom left, temp larger than max,
+ * and temp while dying — each one a case where the old `left: 0` overlay renders a nub
+ * in the Dying hatch, overflows the track, or goes co-extensive with the fill.
+ */
+const BOARD_ROWS_TEMP: { fixture: string; caption: string }[] = [
+	{ fixture: 'temp-full', caption: 'SC-133 · Temp at full Stamina — 30/30 +6 (no headroom under a fixed scale)' },
+	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40 (old bar overflows the track)' },
+	{ fixture: 'temp-dying', caption: 'SC-133 · Temp while dying — -4/30 +5 (old bar draws temp inside the hatch)' },
+];
+
 export interface HarnessParams {
 	element?: string;
 	fixture: string;
@@ -287,11 +362,16 @@ export interface HarnessParams {
 	gallery: boolean;
 	/** SC-121 Batch 4: constrain #mount to this many CSS px (narrow-width coverage). */
 	width?: number;
+	/** SC-132 candidate stage: the stamina-cluster design direction (a|b|c|d). */
+	cand?: StaminaCandidate | null;
+	/** SC-132 candidate stage: render the labeled state-matrix board. */
+	board?: 'stamina-bar' | 'hero' | null;
 }
 
 export function parseParams(search: string): HarnessParams {
 	const q = new URLSearchParams(search);
 	const width = Number(q.get('width'));
+	const board = q.get('board');
 	return {
 		element: q.get('element') ?? undefined,
 		fixture: q.get('fixture') ?? 'default',
@@ -301,6 +381,8 @@ export function parseParams(search: string): HarnessParams {
 		readonly: q.get('readonly') === '1',
 		gallery: q.get('gallery') === '1',
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
+		cand: parseStaminaCandidate(q.get('cand')),
+		board: board === 'stamina-bar' || board === 'hero' ? board : null,
 	};
 }
 
@@ -414,7 +496,10 @@ async function mountOne(
 ): Promise<void> {
 	const def = registry.get(id);
 	// Elements with a single fixture fall back to it in gallery sweeps.
-	const fixtures = FIXTURES[id] ?? {};
+	// SC-132: the candidate fixtures are merged in AFTER the real ones so they can
+	// never shadow a swept fixture name, and they are invisible to the manifest (and
+	// therefore to `npm run shots`) by construction — see CANDIDATE_FIXTURES.
+	const fixtures = { ...(FIXTURES[id] ?? {}), ...(CANDIDATE_FIXTURES[id] ?? {}) };
 	const source = fixtures[fixtureName] ?? fixtures['default'];
 	if (!def || source === undefined) {
 		errors.push(`unknown element/fixture: ${id}/${fixtureName}`);
@@ -436,12 +521,54 @@ async function mountOne(
 	}
 }
 
+/**
+ * SC-132 candidate stage: the labeled state-matrix board. One page holding every
+ * honest state of the stamina cluster under one candidate + one colour scheme, so a
+ * single screenshot is a reviewable artifact instead of a pile of loose PNGs.
+ * Captions are plain harness chrome (`.dse-cand-*`), outside any element root, so
+ * they carry none of the plugin's own styling.
+ */
+async function mountBoard(
+	pipeline: ElementPipeline,
+	registry: ElementRegistry,
+	mount: HTMLElement,
+	params: HarnessParams,
+	errors: string[],
+): Promise<void> {
+	const element = params.board === 'hero' ? 'hero' : 'stamina-bar';
+	const head = mount.createDiv({ cls: 'dse-cand-head' });
+	head.createDiv({
+		cls: 'dse-cand-title',
+		text: `Candidate ${String(params.cand ?? '-').toUpperCase()} — ${element === 'hero' ? 'hero sheet' : 'standalone ds-stamina element'}`,
+	});
+	head.createDiv({ cls: 'dse-cand-sub', text: `Steel · ${params.bg} scheme` });
+
+	const rows = element === 'hero' ? BOARD_ROWS : [...BOARD_ROWS, ...BOARD_ROWS_TEMP];
+	for (const row of rows) {
+		const sec = mount.createDiv({ cls: 'dse-cand-row' });
+		sec.createDiv({ cls: 'dse-cand-cap', text: row.caption });
+		await mountOne(pipeline, registry, sec, element, row.fixture, params, errors);
+	}
+	// Read-only is a HOST state, not a fixture: re-mount the healthy case with
+	// canPersist false so the inert affordance is part of the same board.
+	const ro = mount.createDiv({ cls: 'dse-cand-row' });
+	ro.createDiv({ cls: 'dse-cand-cap', text: 'Read-only — inert (canPersist false)' });
+	await mountOne(pipeline, registry, ro, element, 'healthy', { ...params, readonly: true }, errors);
+}
+
 export async function mountFromParams(
 	doc: Document,
 	params: HarnessParams,
 ): Promise<{ errors: string[] }> {
 	doc.body.classList.remove('theme-dark', 'theme-light');
 	doc.body.classList.add(params.bg === 'light' ? 'theme-light' : 'theme-dark');
+	// SC-132: both halves of the candidate switch come from the SAME param — the
+	// module flag the kit's DOM builder reads, and the root attribute every candidate
+	// CSS rule is prefixed with. Cleared explicitly so a re-navigation to a
+	// candidate-less URL cannot leave a stale attribute behind.
+	setStaminaCandidate(params.cand ?? null);
+	if (params.cand) doc.documentElement.setAttribute('data-dse-stamina-cand', params.cand);
+	else doc.documentElement.removeAttribute('data-dse-stamina-cand');
 	const registry = createElementRegistry();
 	registerFrameworkElementDefinitions(registry);
 	const { deps, theme } = makeHarnessDeps();
@@ -451,6 +578,14 @@ export async function mountFromParams(
 	const errors: string[] = [];
 	if (!mount) return { errors: ['no #mount element'] };
 	mount.empty();
+	if (params.board) {
+		mount.style.width = '';
+		await mountBoard(pipeline, registry, mount, params, errors);
+		for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
+			errors.push(`error card: ${(card.textContent ?? '').slice(0, 160)}`);
+		}
+		return { errors };
+	}
 	// Narrow captures pin #mount's own box; the shot is the #mount locator, so this is
 	// what makes the element lay out at sidebar width. Always reset it (the page is
 	// re-navigated per shot, but mountFromParams is also called directly by tests).

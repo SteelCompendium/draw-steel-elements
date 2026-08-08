@@ -59,6 +59,11 @@ export { HeroPanel } from './HeroPanel';
 export type { PanelHost } from './HeroPanel';
 export { renderStaminaBar, updateStaminaBar } from './StaminaBarPanel';
 export type { StaminaBarValues, StaminaBarRenderOptions } from './StaminaBarPanel';
+// SC-132 CANDIDATE STAGE ONLY — the stamina-cluster design-direction switch. Only the
+// visual harness ever calls setStaminaCandidate(); it is deleted with the losing
+// candidates once Scott picks a direction. See ./staminaCandidate.ts.
+export { setStaminaCandidate, getStaminaCandidate, parseStaminaCandidate } from './staminaCandidate';
+export type { StaminaCandidate } from './staminaCandidate';
 export { renderCharacteristicsGrid } from './CharacteristicsGrid';
 export type { CharacteristicsValues, CharacteristicsGridOptions } from './CharacteristicsGrid';
 export { buildConditionIcons } from './conditionIcons';
