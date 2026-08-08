@@ -228,6 +228,11 @@ export class StaminaEditModal extends DseModal {
 		});
 		applyInput.value = '0';
 		applyInput.setAttribute('aria-label', 'Amount to apply');
+		// SC-133 RC-3: the Apply box is a MAGNITUDE, not a signed delta — Damage/Healing
+		// already pick the direction via which button is pressed. `min="0"` mirrors the
+		// exact idiom the temp stepper below already uses for the same reason (a
+		// decrement guard that refuses to go negative, never a silent sign flip).
+		applyInput.setAttribute('min', '0');
 
 		iconButton(
 			applySection,
@@ -236,8 +241,13 @@ export class StaminaEditModal extends DseModal {
 				label: 'Damage',
 				text: 'Damage',
 				onClick: () => {
-					const adjustment = parseInt(applyInput.value);
-					if (!isNaN(adjustment)) {
+					const parsed = parseInt(applyInput.value);
+					if (!isNaN(parsed)) {
+						// SC-133 RC-3: clamp to a magnitude — a negative typed/leftover
+						// value must never invert Damage into a temp-stamina mint (it
+						// used to: Math.min(adjustment, tempAvailable) with a negative
+						// adjustment flips the subtraction below into an addition).
+						const adjustment = Math.max(0, parsed);
 						// Legacy verbatim: damage consumes temp STAMINA first, the
 						// remainder is capped at the distance to the death floor.
 						const tempStaminaAvailable = currentTempStamina + this.pendingTempStaminaChange;
@@ -261,8 +271,11 @@ export class StaminaEditModal extends DseModal {
 				label: 'Healing',
 				text: 'Healing',
 				onClick: () => {
-					const adjustment = parseInt(applyInput.value);
-					if (!isNaN(adjustment)) {
+					const parsed = parseInt(applyInput.value);
+					if (!isNaN(parsed)) {
+						// SC-133 RC-3: same magnitude clamp as Damage — a negative value
+						// must never invert Healing into applied damage.
+						const adjustment = Math.max(0, parsed);
 						this.pendingStaminaChange += Math.min(
 							adjustment,
 							this.amountToMaxStamina(currentStamina, maxStamina),
@@ -277,16 +290,20 @@ export class StaminaEditModal extends DseModal {
 		// Numeric adjust (kit stepper) + temp stamina.
 		const adjustSection = row.createDiv({ cls: 'dse-modal__section dse-sedit__adjust' });
 		// Deliberately UNBOUNDED (no stepper min/max): the legacy modal clamped the
-		// STEP but never the pending VALUE — e.g. stacked Spend Recovery presses
-		// over-shoot max and the display shows the raw sum, with clampStamina at Apply
-		// owning the final persisted value. KNOWN DEVIATION (degenerate overshoot
-		// corridor): once the pending value sits past max, legacy's next `+` was
-		// CORRECTIVE — its step was min(1, distance-to-max), NEGATIVE when over, so it
-		// snapped the value back to max — e.g. max 20, current 10: Spend Recovery ×2
-		// (→22) → `+` (→20) → `−`×3 → legacy persisted 17, while this unbounded stepper
-		// walks 22 → 23 → 20 and Apply's clamp persists 20. A deliberate, no-corruption
-		// deviation (both persist in-range values) — PENDING maintainer sign-off on
-		// strict byte-compat vs. this cleaner behavior.
+		// STEP but never the pending VALUE — e.g. typing a value past max shows the raw
+		// number, with clampStamina at Apply owning the final persisted value. KNOWN
+		// DEVIATION (degenerate overshoot corridor): once the pending value sits past
+		// max, legacy's next `+` was CORRECTIVE — its step was min(1, distance-to-max),
+		// NEGATIVE when over, so it snapped the value back to max — e.g. max 20,
+		// current 10: typing 22 → `+` (→20) → `−`×3 → legacy persisted 17, while this
+		// unbounded stepper walks 22 → 23 → 20 and Apply's clamp persists 20. A
+		// deliberate, no-corruption deviation (both persist in-range values) — PENDING
+		// maintainer sign-off on strict byte-compat vs. this cleaner behavior.
+		// (SC-133 RC-4: Spend Recovery below no longer contributes to this corridor —
+		// it now caps its own per-press amount at the remaining headroom to max, so
+		// stacked presses can no longer push the pending value past max in the first
+		// place. The corridor still exists via this stepper's own typed/± overshoot,
+		// illustrated above.)
 		const staminaStepper = staminaStepperRow(
 			adjustSection,
 			{
@@ -315,7 +332,28 @@ export class StaminaEditModal extends DseModal {
 				integer: true, // typed "2.5" commits 2 (legacy parseInt semantics)
 				label: 'Temporary Stamina',
 				onChange: (value) => {
-					this.pendingTempStaminaChange = value - currentTempStamina;
+					// SC-133 RC-5 — RAW (reference/draw-steel-reference.md:279):
+					// "Temporary Stamina: … doesn't stack (take higher) …". A grant
+					// entered through this control can never leave the character with
+					// LESS temp than they already had — take the higher of the value
+					// being set vs. the temp stamina the modal opened with. This is the
+					// correct, unambiguous read for a single atomic entry (typing "the
+					// ability grants N" — the natural GM gesture for applying a
+					// specific ability's stated temp amount) and, as a side effect,
+					// also blocks the minus button from walking a nonzero temp below
+					// its starting value (RAW has no "partial fade" mechanism — temp
+					// only reduces via Damage absorption or fully clearing via
+					// Kill/Full Heal/encounter end, none of which go through this
+					// control). NOT fully solved by this: a run of individual "+"
+					// presses starting AT the current value still climbs past it one
+					// step at a time (the first press's result already exceeds the
+					// baseline, so this comparison is a no-op for that path) — doing
+					// so would require decoupling "amount granted this session" from
+					// the displayed resulting total, a genuine affordance change
+					// deferred to the SC-132 stamina redesign (see the SC-133 fix
+					// report for the full reasoning).
+					const granted = Math.max(value, currentTempStamina);
+					this.pendingTempStaminaChange = granted - currentTempStamina;
 					refresh();
 				},
 			},
@@ -366,12 +404,23 @@ export class StaminaEditModal extends DseModal {
 					// value (StaminaBar.recoveryValue), not a re-derived literal; it is the
 					// same floor(max/3) math, sourced from the shared recoveryHealAmount
 					// helper (FOLLOWUPS #27-fix-round finding 3 — also used by both
-					// elements' Catch Breath). `capped: false` — this modal defers ALL
-					// clamping to Apply's clampStamina and deliberately does not bound the
-					// per-press amount (see the KNOWN DEVIATION comment on the stepper
-					// above); behavior here is unchanged from before the consolidation.
-					const adjustment = recoveryHealAmount(this.staminaBar.recoveryValue, currentStamina, maxStamina, false);
-					if (!isNaN(adjustment)) {
+					// elements' Catch Breath).
+					// SC-133 RC-4 (was `capped: false`): a Recovery heals UP TO
+					// recoveryValue, capped at the REMAINING headroom to max — this now
+					// passes `capped: true` (the default) with `current` advanced by
+					// every pending change so far this session (the same accounting
+					// amountToMaxStamina already uses for Healing), so pendingStaminaChange
+					// is always the ACTUAL amount Apply will persist — the preview can
+					// never promise more than it delivers. A press with zero headroom
+					// heals nothing, so it must not burn a Recovery for nothing either:
+					// bail out before mutating pendingStaminaChange/pendingRecoveriesChange.
+					// (Design nuance, flagged in the SC-133 fix report: RAW has no rule
+					// against spending a Recovery for zero gain, so a table that wants
+					// "spending a Recovery" as its own trigger independent of the heal
+					// would need a different control than this one — refusing the
+					// zero-gain press here is a deliberate UX call, not a RAW mandate.)
+					const adjustment = recoveryHealAmount(this.staminaBar.recoveryValue, currentStamina + this.pendingStaminaChange, maxStamina);
+					if (!isNaN(adjustment) && adjustment > 0) {
 						this.pendingStaminaChange += adjustment;
 						if (recoveriesTracked) this.pendingRecoveriesChange -= 1;
 						refresh();

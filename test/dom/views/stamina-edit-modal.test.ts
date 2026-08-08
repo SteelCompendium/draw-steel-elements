@@ -294,6 +294,172 @@ describe('FOLLOWUPS #27b: StaminaEditModal — Spend Recovery synced with recove
 	});
 });
 
+// SC-133 RC-3: a negative Apply amount is a magnitude input, not a signed one — it
+// must never invert Damage into a temp-stamina mint or Healing into damage. RAW
+// baseline: reference/draw-steel-reference.md:279 (temp absorbs damage first,
+// doesn't stack — unrelated to this RC, but the same modal). The bug: Damage read
+// the Apply box with parseInt and did no sign check, so `Math.min(adjustment,
+// tempAvailable)` with a negative adjustment flipped the temp subtraction into an
+// addition; Healing symmetrically applied a negative heal (net damage).
+describe('SC-133 RC-3: negative Apply input is clamped to a magnitude (0), never inverts the operation', () => {
+	test('Damage with a negative input is a no-op (does NOT mint temp stamina)', () => {
+		const { modal, content, bar } = makeModal(20, 20, 0);
+		clickDamage(content, -3);
+		expect(modal.pendingStaminaChange).toBe(0);
+		expect(modal.pendingTempStaminaChange).toBe(0);
+		apply(content);
+		expect(bar.current_stamina).toBe(20);
+		expect(bar.temp_stamina).toBe(0);
+	});
+
+	test('Damage with a negative input against existing temp does not drain or grant temp', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		clickDamage(content, -3);
+		expect(modal.pendingTempStaminaChange).toBe(0);
+		apply(content);
+		expect(bar.temp_stamina).toBe(5);
+	});
+
+	test('Healing with a negative input is a no-op (does NOT apply damage)', () => {
+		const { modal, content, bar } = makeModal(20, 10, 0);
+		clickHealing(content, -3);
+		expect(modal.pendingStaminaChange).toBe(0);
+		apply(content);
+		expect(bar.current_stamina).toBe(10);
+	});
+
+	test('the Apply input carries min="0" (the same clamp-to-0 idiom as the temp stepper)', () => {
+		const { content } = makeModal(20, 20, 0);
+		const input = content.querySelector('.dse-sedit__apply-input') as HTMLInputElement;
+		expect(input.getAttribute('min')).toBe('0');
+	});
+
+	test('a positive Apply input still works normally for both Damage and Healing', () => {
+		const { content, bar } = makeModal(20, 10, 0);
+		clickDamage(content, 4);
+		apply(content);
+		expect(bar.current_stamina).toBe(6);
+	});
+});
+
+// SC-133 RC-4: Spend Recovery must never burn a Recovery for zero additional
+// Stamina, and the preview (pendingStaminaChange, which drives both the action
+// button text and the preview bar) must always equal what Apply will actually
+// persist. Fix: the per-press heal amount is capped at the REMAINING headroom to
+// max (accounting for prior pending presses this session, same accounting
+// amountToMaxStamina already uses for Healing) via the shared recoveryHealAmount
+// helper's `capped: true` path; a press that would heal 0 is a no-op — no
+// pendingStaminaChange change, no Recovery decremented.
+describe('SC-133 RC-4: Spend Recovery never over-burns Recoveries, and the preview is never a lie', () => {
+	function makeRecoveryModal(max: number, current: number, recoveries: number, recoveriesMax: number) {
+		const app = new App();
+		const bar = new StaminaBar(false, false, max, current, 0, 1, 'default', recoveries, recoveriesMax);
+		const updateCallback = jest.fn();
+		const modal = new StaminaEditModal(app as any, bar, true, 'Frodo', updateCallback);
+		modal.open();
+		const content = (modal as any).contentEl as HTMLElement;
+		return { modal: modal as any, bar, content, updateCallback };
+	}
+
+	test('18/20, recoveryValue 6: x3 presses only consume 1 Recovery (2nd/3rd heal 0)', () => {
+		const { modal, content, bar } = makeRecoveryModal(20, 18, 8, 8);
+		const spend = spendRecoveryBtn(content);
+		spend.click(); // heals min(6, 2) = 2 -> 20/20
+		spend.click(); // headroom 0 -> no-op
+		spend.click(); // headroom 0 -> no-op
+		expect(modal.pendingStaminaChange).toBe(2); // the ACTUAL capped gain, not 18
+		apply(content);
+		expect(bar.current_stamina).toBe(20);
+		expect(bar.recoveries).toBe(7); // only 1 Recovery actually spent
+	});
+
+	test('the preview (action button text) always matches what Apply persists', () => {
+		const { content, bar } = makeRecoveryModal(20, 18, 8, 8);
+		const spend = spendRecoveryBtn(content);
+		spend.click();
+		spend.click();
+		spend.click();
+		expect(actionBtn(content).textContent).toContain('Gain 2 Stamina'); // not "Gain 18"
+		const before = bar.current_stamina;
+		apply(content);
+		expect(bar.current_stamina - before).toBe(2);
+	});
+
+	test('a press with full headroom still heals the full recoveryValue and spends exactly one Recovery', () => {
+		const { content, bar } = makeRecoveryModal(21, 10, 3, 5);
+		spendRecoveryBtn(content).click();
+		apply(content);
+		expect(bar.current_stamina).toBe(17); // 10 + floor(21/3)=7
+		expect(bar.recoveries).toBe(2);
+	});
+});
+
+// SC-133 RC-5: RAW (reference/draw-steel-reference.md:279) — "Temporary Stamina: …
+// doesn't stack (take higher) …". Granting temp through the modal must never
+// reduce it below what the character already carries. Implemented for the
+// explicit/typed entry gesture (the natural way to apply "this ability grants N
+// temp stamina" — type N) via Math.max(typed, currentTempStamina); this also
+// blocks the ± stepper's minus button from walking a nonzero temp below its
+// starting value (RAW has no "partial fade" mechanism — temp only reduces via
+// Damage absorption or fully clearing via Kill/Full Heal/encounter end). NOTE
+// (flagged in the fix report): this does NOT retrofit take-higher onto a run of
+// individual "+" clicks past the starting value (e.g. +1 x3 from a temp of 5 still
+// reaches 8) — each single step's resulting value already exceeds the baseline
+// the instant the first click lands, so a per-edit comparison against the fixed
+// baseline is structurally a no-op for that path; a true fix needs a "grant
+// amount" affordance distinct from the "resulting total" display, which is
+// SC-132 territory, not a handler-level bugfix.
+describe('SC-133 RC-5: granting temp does not stack — take the higher of current vs granted (RAW)', () => {
+	function tempInput(content: HTMLElement): HTMLInputElement {
+		return content.querySelectorAll<HTMLElement>('.dse-stepper')[1].querySelector('.dse-stepper__input') as HTMLInputElement;
+	}
+	function typeTemp(content: HTMLElement, v: string): void {
+		const input = tempInput(content);
+		input.value = v;
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+	}
+
+	test('typing a grant lower than current temp leaves temp unchanged (takes the higher)', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		typeTemp(content, '3');
+		expect(modal.pendingTempStaminaChange).toBe(0);
+		apply(content);
+		expect(bar.temp_stamina).toBe(5);
+	});
+
+	test('typing a grant higher than current temp raises temp to the granted amount', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		typeTemp(content, '9');
+		expect(modal.pendingTempStaminaChange).toBe(4);
+		apply(content);
+		expect(bar.temp_stamina).toBe(9);
+	});
+
+	test('typing a grant equal to current temp is a no-op', () => {
+		const { modal, content } = makeModal(20, 20, 5);
+		typeTemp(content, '5');
+		expect(modal.pendingTempStaminaChange).toBe(0);
+	});
+
+	test('the minus button cannot walk temp below the session-start value (no RAW partial-fade path)', () => {
+		const { modal, content, bar } = makeModal(20, 20, 5);
+		const minus = content.querySelectorAll<HTMLElement>('.dse-stepper')[1]
+			.querySelector('button[aria-label="Decrease Temporary Stamina"]') as HTMLButtonElement;
+		minus.click();
+		expect(modal.pendingTempStaminaChange).toBe(0);
+		apply(content);
+		expect(bar.temp_stamina).toBe(5);
+	});
+
+	test('granting from a temp of 0 is unaffected (no existing temp to take-higher against)', () => {
+		const { modal, content, bar } = makeModal(20, 20, 0);
+		typeTemp(content, '4');
+		expect(modal.pendingTempStaminaChange).toBe(4);
+		apply(content);
+		expect(bar.temp_stamina).toBe(4);
+	});
+});
+
 describe('D2 §3.5b: the managedModal template (kit scaffold, CB-8, SC-5)', () => {
 	test('modal is a kit DseModal: .dse-modal on the dialog, the "<name> Stamina" title wired via aria-labelledby, sections in .dse-modal__body', () => {
 		const { modal } = makeModal(20, 10, 0);

@@ -197,11 +197,16 @@ export class StaminaBar extends ComponentWrapper{
 // `capped` (default true) is the convention of the two IMMEDIATE-apply call sites
 // (stamina-bar/view.ts, hero/view.ts): the heal never overshoots `max` headroom, since
 // the mutation lands on the model the instant Catch Breath is clicked.
-// StaminaEditModal's Spend Recovery passes `capped: false` — that modal defers ALL
-// clamping to its own Apply-time clampStamina, and deliberately does NOT bound the
-// per-press amount (see the modal's "KNOWN DEVIATION" comment on why stacked presses
-// are allowed to overshoot before Apply reconciles them) — that design question is
-// unrelated to this consolidation and stays exactly as it was.
+//
+// SC-133 RC-4 (2026-08-08): StaminaEditModal's Spend Recovery USED TO pass
+// `capped: false`, deferring all clamping to its own Apply-time clampStamina and
+// deliberately not bounding the per-press amount (see the modal's "KNOWN DEVIATION"
+// comment). That let stacked presses burn Recoveries the Apply clamp then discarded —
+// e.g. 18/20 stamina, Spend Recovery ×3 burned 3 Recoveries for 2 total Stamina while
+// the preview promised "Gain 18". The modal now passes `capped: true` (the default),
+// with `current` advanced by the pending stamina change so far this session — same
+// per-press capping Healing already applies via amountToMaxStamina — and refuses the
+// press entirely (no Recovery decremented) when the capped amount is 0.
 export function recoveryHealAmount(recoveryValue: number, current: number, max: number, capped = true): number {
 	return capped ? Math.max(Math.min(recoveryValue, max - current), 0) : recoveryValue;
 }
