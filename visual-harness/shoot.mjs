@@ -48,7 +48,13 @@ async function snap(page, params, outName, opts = {}) {
 		// the production affordance after mount settles but before the shot, so a
 		// state that's only reachable by user action (e.g. a radiogroup selection) gets
 		// captured. `opts.click` is a CSS selector, always inside #mount.
-		if (opts.click) await page.locator(opts.click).click();
+		if (opts.click) {
+			await page.locator(opts.click).click();
+			// SC-117 fix wave M1: park the pointer off the clicked row before the shot, or
+			// the capture pins `:hover` (--dse-hover) over the row's resting fill instead of
+			// the checked-at-rest state the interaction shot exists to prove.
+			await page.mouse.move(0, 0);
+		}
 		const done = await page.evaluate(() => window.__dseHarnessDone);
 		const errors = [...done.errors, ...pageErrors];
 		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
