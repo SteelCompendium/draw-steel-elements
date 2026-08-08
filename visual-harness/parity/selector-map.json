@@ -25,11 +25,6 @@
     },
     {
       "pair": "statblock-wrap",
-      "rule": "line-height",
-      "why": "FOLLOWUPS #52 -- surfaced by the SC-110 fix round, which made rule coverage mandatory on EVERY pair (this pair narrowed \"owns\" to the two margin rules on a plugin selector no other pair names, and the old partition check only ran on SHARED selectors -- so these two rows were dropped with no error and no dead declaration). Site .sb-wrap line-height 27.2px (16px x the site's 1.7 body ratio); plugin [data-dse-element='statblock'] host 24px (Obsidian's inherited 1.5). Both schemes. The remedy is one selector: the Plan 21 Task 2 `line-height: 1.7` group at styles-source.css ~3512 lists the feature host, the featureblock host, .dse-sb and .dse-card but NOT the statblock host, which is why its transparent root alone kept the 1.5. Declared rather than fixed only because this fix round is contract-only and changes no plugin CSS (the freeze baseline must not move under it); #52 carries the one-line fix and this declaration dies with it (anti-rot)."
-    },
-    {
-      "pair": "statblock-wrap",
       "rule": "margin-top",
       "why": "FOLLOWUPS #39 -- the site's statblock block rhythm is 34px (.sb-wrap margin: 1.7rem auto at the 20px rem base); the plugin's host carries the Legacy base 0.5em = 8px. SC-110 fixed the half of #39 the gate owned (this pair did not exist, so the site's block margin was invisible to the contract); the residual 34-vs-8 is the real miss #39 recorded and it is a PIXEL decision. Plan 21 Task 2 set the precedent for closing it (it ported the site's 24px .sc-ability margin onto the feature host, Steel-scoped and screen-only, styles-source.css ~3497), but 26px of new air around every statblock and featureblock in an Obsidian note is Scott's call, not a gate ticket's."
     },

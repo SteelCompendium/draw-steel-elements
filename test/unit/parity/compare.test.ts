@@ -482,13 +482,16 @@ describe('the SHIPPED contract is itself valid', () => {
 	// Documented in README.md ("Declared deferrals") and the dse-verify skill. If this
 	// number moves, the run either fixed a divergence (delete the entry) or grew a new one
 	// (file a FOLLOWUPS item first) — it is never something to re-baseline quietly.
-	test('the declared set is exactly the documented 9 entries', () => {
+	// 2026-08-07 (SC-117 R1): 9 -> 8. `statblock-wrap:line-height` HEALED -- FOLLOWUPS #52's
+	// one-selector fix (the statblock host joined the Plan 21 line-height group) closed the
+	// divergence, `diff.mjs`'s anti-rot check reported the declaration as DEAD, and it was
+	// deleted. That is the mechanism working end to end, not a re-baseline.
+	test('the declared set is exactly the documented 8 entries', () => {
 		expect(map.declaredDeferrals.map((d: { pair: string; rule: string }) => `${d.pair}:${d.rule}`)).toEqual([
 			'pr-chars:ink',
 			'section-tag:font-size',
 			'section-tag:line-height',
 			'section-tag:letter-spacing',
-			'statblock-wrap:line-height',
 			'statblock-wrap:margin-top',
 			'statblock-wrap:margin-bottom',
 			'featureblock-wrap:margin-top',

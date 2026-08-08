@@ -8,7 +8,7 @@ plugin's "Steel" theme (`styles-source.css`, `[data-dse-theme='steel']`).
 
 | When you… | Run | Notes |
 |---|---|---|
-| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (9 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
+| Change any Steel CSS in `styles-source.css` | `npm run parity` | Must end **0 GAPs and 0 undeclared WARNs, exit 0** — that biconditional *is* the gate (SC-110). The only escape is an explicit entry in `selector-map.json`'s `declaredDeferrals` (8 today, and **never** for a material rule — see "Declared deferrals"). Close a GAP by fixing the CSS — never by deleting or weakening the pair that reports it, never by loosening a tolerance, and never by declaring something CSS can fix. |
 | Change any Steel CSS | `npx jest test/dom/theme/steelMaterial.test.ts` | The material contract (see below). Runs as part of `npx jest`, so the normal full-suite gate covers it. |
 | Know the **live site itself** changed | `npm run parity:site` | **Only then.** Regenerating the baseline for any other reason re-points the reference of record at whatever the plugin happens to look like. |
 | Open a PR that touched either | — | **Review the JSON diff** of `baseline/site-inventory.json` in the PR. A baseline diff must be explained by a real site change; if it isn't, a page failed to load/render and the capture is garbage. |
@@ -420,14 +420,23 @@ calls that belong to Scott, not to whoever is holding the gate.
 
 Deliberately conservative. Relaxing it is a one-line change to `NON_DECLARABLE_CLASSES`.
 
-**Currently declared: 9 entries / 18 rows** (both schemes each), in four findings:
+**Currently declared: 8 entries / 16 rows** (both schemes each), in three findings:
 
 | Finding | Rows | Site | Plugin | Status |
 |---|---|---|---|---|
 | `pr-chars:ink` (FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
 | `section-tag:font-size` / `:line-height` / `:letter-spacing` (FOLLOWUPS #51) | 6 | 18px / 30.6px / 1.8px (`.9rem`, `.1em`) | 16px / 27.2px / 1.12px (`.07em`) | **pixel decision** — one type-scale call; line-height is a pure consequence of font-size |
 | `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` Legacy base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
-| `statblock-wrap:line-height` (FOLLOWUPS #52) | 2 | `.sb-wrap` 27.2px (16px × 1.7) | host 24px (Obsidian's 1.5) | **one-line CSS fix, deferred** — the Plan 21 Task 2 `line-height: 1.7` group (`styles-source.css` ~3512) lists the feature host, the featureblock host, `.dse-sb` and `.dse-card` but **not** the statblock host. Surfaced by the SC-110 fix round; declared only because that round changes no plugin CSS |
+
+**HEALED and deleted — the anti-rot check working end to end (2026-08-07, SC-117 R1).**
+`statblock-wrap:line-height` (FOLLOWUPS #52) was the fourth finding here: site `.sb-wrap`
+27.2px vs the plugin's statblock host 24px, both schemes, declared only because the SC-110
+fix round that surfaced it changed no plugin CSS. SC-117's rider added the statblock host to
+the Plan 21 Task 2 `line-height: 1.7` group — one selector — and the next `npm run parity`
+**failed** with `DEAD DECLARATION(S)`, because the declaration now matched nothing. Deleting
+it is the required response (rule 6 above), and it is what took the set from 9/18 to 8/16.
+That is the intended lifecycle of every entry in this table: declared, fixed, reported dead,
+deleted.
 
 **Deliberately NOT declared**, for contrast, so the bar is legible:
 `statblock-band` / `featureblock-band` `margin-top` (site `0px` vs plugin `-8px`) stay

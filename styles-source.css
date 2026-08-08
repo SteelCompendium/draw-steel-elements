@@ -3520,9 +3520,19 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    plugin's 16px base, 1.7 reproduces 27.2px exactly. Set on the four plate roots
    and inherited down; the tight heads/badges/chips keep their own explicit
    line-height (title 1.15/1.04, badge 1, chip set to 1 below), so only the body
-   copy and the strip nodes (which the site also runs at 27.2) open up. */
+   copy and the strip nodes (which the site also runs at 27.2) open up.
+   FOLLOWUPS #52 (2026-08-07): the statblock HOST was the one member this group
+   missed. Its plate `.dse-sb` was already listed and already computed 27.2px, so
+   nothing looked wrong — but the host itself kept Obsidian's inherited 1.5 (24px)
+   against the site's `.sb-wrap` 27.2px, and the parity pair that would have caught it
+   was narrowing `owns` past the row until SC-110's fix round made rule coverage
+   mandatory. The host is transparent and very likely never paints text of its own;
+   "very likely" is exactly what the parity contract exists to abolish, so it joins the
+   group rather than staying declared. The feature and featureblock hosts are already
+   here — this makes all three families' hosts agree. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature']:not([data-dse-error-stage]),
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not([data-dse-error-stage]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'],
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	line-height: 1.7;
