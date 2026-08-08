@@ -15,6 +15,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [BUGFIX] The encounter builder's "Create initiative tracker block" produces a
+  tracker that renders again. The builder writes compendium references as SCC
+  codes (`scc.v1:...`), but the tracker's reference resolver only understood
+  vault file paths, so every builder-generated tracker died to an error card the
+  moment it rendered. The tracker now resolves SCC codes through the compendium
+  reference system; hand-written file-path references are untouched, and
+  encounters you generated before the fix start working with no edits (SC-134).
 - [BREAKING] Compendium source moved from the retired `data-md-dse` repo to
   `data-unified` releases (unified Browse layout, `md-dse` format). Run
   "Sync compendium" after updating — your old release-tag setting is reset
