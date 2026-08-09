@@ -20,7 +20,8 @@ for what needs action.
   rebuilds the settings tab on, and there is no way to use it and still run on
   older clients without maintaining two settings implementations forever. If you
   are on an older Obsidian, the plugin keeps working at your current version —
-  Obsidian simply will not offer you this update until you upgrade the app.
+  `versions.json` pins pre-1.13 clients to 6.0.1, the last build that runs
+  there, so Obsidian will not offer you 7.0.0 until you upgrade the app.
   Obsidian updates itself by default, so most installs already qualify (SC-131).
 - [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
   **searchable from Obsidian's own settings search** (SC-131). It was one

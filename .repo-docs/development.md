@@ -6,7 +6,7 @@
 |------|---------|--------|
 | Node.js | >= 22.15 | `package.json` engines field |
 | npm | (bundled with Node) | |
-| Obsidian | >= 0.15.0 | `manifest.json` minAppVersion |
+| Obsidian | >= 1.13.0 | `manifest.json` minAppVersion (SC-131: the declarative settings API the settings tab is built on landed in 1.13.0) |
 | devbox (optional) | any | For `gh` CLI and `jq` |
 
 ## Setup

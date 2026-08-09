@@ -9,6 +9,25 @@
 features. **Everyone** should re-sync their compendium. Only people who
 hand-write their own statblocks need to touch any YAML.
 
+## 0. Obsidian 1.13.0 or newer is required
+
+This is the release's only hard prerequisite. 7.0.0's settings tab is built on
+the declarative settings API Obsidian introduced in **1.13.0**, so the plugin no
+longer runs on older apps — `manifest.json`'s `minAppVersion` moves from 0.15.0
+to 1.13.0.
+
+**What to do:** nothing, in almost every case. Obsidian updates itself by
+default, so most installs already qualify — check **Settings → General → Current
+version** if you want to be sure. If you are on an older Obsidian, your existing
+Draw Steel Elements install keeps working exactly as it is: `versions.json` pins
+pre-1.13 clients to **6.0.1**, the last build that runs there, so Obsidian will
+not offer you 7.0.0 until you update the app. Nothing breaks; you simply stop
+receiving new plugin releases until then.
+
+Note this is a separate matter from the *installer* version. Obsidian's app
+package self-updates independently of the installer you originally downloaded,
+so an old installer does not by itself mean an old app.
+
 ## 1. Re-sync your compendium
 
 The compendium now downloads from a different, newer source. When you

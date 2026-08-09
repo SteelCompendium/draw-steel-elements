@@ -7462,10 +7462,6 @@ button.dse-pr__row:hover {
 	padding-top: 0.5rem;
 }
 
-.dse-settings-preview-row > .setting-item-info {
-	display: none;
-}
-
 .dse-settings-preview-row > .setting-item-control {
 	display: block;
 	flex: none;

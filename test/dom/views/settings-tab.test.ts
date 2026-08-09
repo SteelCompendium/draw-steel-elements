@@ -5,6 +5,7 @@
 // this tab supersedes).
 import DrawSteelAdmonitionPlugin from 'main';
 import { DseSettingTab } from '@views/SettingsTab';
+import { toSettingDefinitions } from '@views/settingsDeclarative';
 import { App, Plugin, Setting, Component, Notice, flushAsync } from '../../mocks/obsidian';
 import { SB_PRESETS } from '../../../src/prefs/catalog';
 import { DEFAULT_SETTINGS } from '@model/Settings';
@@ -58,72 +59,26 @@ function rowDefs(items: Def[] = []): Def[] {
 	return out;
 }
 
-/** Binds one native control the way obsidian does, through the tab's value accessors. */
-function bindControl(tab: DseSettingTab, setting: Setting, control: Def): void {
-	const read = (): any => (tab as any).getControlValue(control.key);
-	const write = (value: unknown): void => void (tab as any).setControlValue(control.key, value);
-	switch (control.type) {
-		case 'toggle':
-			setting.addToggle((t) => t.setValue(read() === true).onChange(write));
-			break;
-		case 'dropdown':
-			setting.addDropdown((d) => {
-				for (const [value, label] of Object.entries(control.options ?? {})) d.addOption(value, label as string);
-				d.setValue(String(read() ?? '')).onChange(write);
-			});
-			break;
-		case 'text':
-		case 'file':
-		case 'folder':
-			setting.addText((t) => {
-				if (control.placeholder) t.setPlaceholder(control.placeholder);
-				t.setValue(String(read() ?? '')).onChange(write);
-			});
-			break;
-		case 'slider':
-			setting.addSlider((sl) =>
-				sl
-					.setLimits(control.min, control.max, control.step)
-					.setValue(Number(read() ?? control.min))
-					.setDynamicTooltip()
-					.onChange(write),
-			);
-			break;
-		default:
-			throw new Error(`unhandled control type "${control.type}"`);
-	}
-}
-
-function renderDefs(tab: DseSettingTab, container: HTMLElement, items: Def[]): void {
-	for (const def of items) {
-		if (!def) continue;
-		if (def.type === 'group' || def.type === 'page') {
-			renderDefs(tab, container, def.items ?? []);
-			continue;
-		}
-		const setting = new Setting(container);
-		if (def.name) setting.setName(def.name);
-		if (typeof def.desc === 'string') setting.setDesc(def.desc);
-		if (def.control) bindControl(tab, setting, def.control);
-		else if (def.render) def.render(setting);
-		else if (def.action) setting.addButton((b) => b.setButtonText(def.name).onClick(() => def.action(setting.settingEl, 0)));
-	}
-}
-
 /**
- * Renders every page's rows into the tab's container — the whole tab at once.
+ * Drives the tab the way obsidian 1.13.4 actually does: `update()` refreshes the cached
+ * definitions, `renderTab()` renders FROM THAT CACHE. The rendering itself lives in the
+ * PluginSettingTab mock (test/mocks/obsidian-core.ts), so a test cannot accidentally
+ * re-derive the definitions on render and assert a contract obsidian does not honour.
  *
- * Real obsidian shows one page at a time; flattening here keeps the row-level suites
- * (which are about a row's behaviour, not its address) direct. The PAGE STRUCTURE itself
- * is asserted separately in the SC-131 block at the bottom.
+ * Real obsidian shows one page at a time; the mock flattens pages so the row-level suites
+ * (which are about a row's behaviour, not its address) stay direct. The PAGE STRUCTURE is
+ * asserted separately, off the definition tree, in the SC-131 block at the bottom.
  */
 function renderAll(tab: DseSettingTab): void {
-	const container = tab.containerEl as HTMLElement;
-	// `update()` is how the tab asks for a repaint (resets, preset apply, font fetch).
-	(tab as any).update = () => renderAll(tab);
-	container.empty?.();
-	container.innerHTML = '';
-	renderDefs(tab, container, definitions(tab));
+	tab.update();
+	(tab as any).renderTab();
+}
+
+/** Close and re-open the settings window: teardown, then a re-render from the cache with
+ *  NO intervening update() — the exact sequence that broke the live preview. */
+function reopen(tab: DseSettingTab): void {
+	(tab as any).closeTab();
+	(tab as any).renderTab();
 }
 
 async function makeLoadedPlugin(): Promise<DrawSteelAdmonitionPlugin> {
@@ -256,7 +211,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		await flushAsync(1);
 		// SC-131: the section reset moved from a heading extra-button to a named row on
 		// the section's own page — same handler, same full-member semantics.
-		const reset = rowDefs(pageNamed(tab, 'Statblock display').items).find((d) => d.name === 'Reset this section')!;
+		const reset = rowDefs(pageNamed(tab, 'Statblock display').items).find((d) => d.name === 'Reset statblock display')!;
 		reset.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('sbDensity')).toBe('comfortable');
@@ -554,7 +509,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		mono.trigger('Fira Code');
 		await flushAsync(1);
 		expect(prefs.get('fontMono')).toBe('Fira Code');
-		const reset = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Reset this section')!;
+		const reset = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Reset typography')!;
 		reset.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('fontMono')).toBe('');
@@ -672,7 +627,7 @@ describe('SC-131 — declarative settings definitions', () => {
 		expect(rolling.items[0].type).toBe('group');
 		expect(rolling.items[0].cls).toContain('dse-settings-page');
 		const names = rowDefs(rolling.items).map((d) => d.name);
-		expect(names).toEqual(['Enable rolling', 'Roller', 'Click ability to roll', 'Reset this section']);
+		expect(names).toEqual(['Enable rolling', 'Roller', 'Click ability to roll', 'Reset rolling']);
 		expect(names).not.toContain('Theme');
 	});
 
@@ -750,7 +705,7 @@ describe('SC-131 — declarative settings definitions', () => {
 		expect(prefs.get('fontTitle')).toBe('Georgia');
 		expect(prefs.get('fontMono')).toBe('Fira Code');
 		// The Typography page's reset row resets both.
-		const reset = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Reset this section')!;
+		const reset = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Reset typography')!;
 		reset.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('fontTitle')).toBe('');
@@ -825,5 +780,102 @@ describe('SC-131 — declarative settings definitions', () => {
 		await flushAsync(2);
 		expect(prefs.get('reduceMotion')).toBe(false);
 		expect(prefs.get('theme')).toBe('steel');
+	});
+});
+
+// —— SC-131: the render-callback cleanup contract. ——
+//
+// Obsidian keeps ANY truthy value a render callback returns and CALLS it on teardown
+// (`v && (e.cleanup = v)` … `t()` in the 1.13.4 bundle). `Setting`'s builders are
+// chainable, so a one-expression arrow silently returns the Setting — truthy, not
+// callable — and every teardown of that page throws. Both ends are defended: the row
+// authors use block bodies, and the mapper normalises whatever comes back.
+describe('SC-131 — render cleanup contract', () => {
+	beforeEach(() => {
+		Setting.created.length = 0;
+	});
+
+	test('no shipped render row returns a non-function (the mock throws if one does)', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		// renderTab() stores every render return as a cleanup and closeTab() invokes them;
+		// the mock throws on a truthy non-function rather than console.error-ing like
+		// obsidian, so a regression here is a test failure and not console noise.
+		renderAll(tab);
+		expect(() => (tab as any).closeTab()).not.toThrow();
+	});
+
+	test('the mapper swallows a stray chainable return rather than handing obsidian a bad cleanup', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const definition = toSettingDefinitions([
+			{
+				id: 'x',
+				label: 'X',
+				// The exact mistake: a chainable builder returned from a one-expression arrow.
+				rows: [{ label: 'Bad row', render: ((setting: Setting) => setting.setName('Bad row')) as never }],
+			},
+		])[0] as any;
+		const row = rowDefs(definition.items)[0];
+		const returned = row.render(new Setting(document.createElement('div')));
+		expect(returned).toBeUndefined();
+		expect(tab).toBeDefined();
+	});
+
+	test('a label-only row still becomes a definition instead of vanishing', () => {
+		const page = toSettingDefinitions([
+			{ id: 'x', label: 'X', rows: [{ label: 'Just a label', help: 'and a description' }] },
+		])[0] as any;
+		const rows = rowDefs(page.items);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].name).toBe('Just a label');
+		expect(rows[0].desc).toBe('and a description');
+		expect(rows[0].control).toBeUndefined();
+		expect(rows[0].render).toBeUndefined();
+	});
+});
+
+// —— SC-131: registration order. ——
+//
+// Obsidian builds a settings tab's SEARCH INDEX at registration by calling `update()`,
+// and `addSettingTab` runs early in onload() — before initializeElementFrameworkV2 builds
+// the PreferenceStore. So the registration-time definition build sees no prefs and emits
+// only the three hand-written operational pages; the six descriptor-driven ones are simply
+// absent, from the rendered tab AND from settings search, until something calls update()
+// again. main.ts does exactly that once the framework is up.
+//
+// This pins it: delete that post-init `settingTab.update()` and this test fails.
+describe('SC-131 — registration order', () => {
+	test('registration builds the operational pages only; the post-framework update() adds the rest', async () => {
+		const app = new App();
+		const plugin = new DrawSteelAdmonitionPlugin(
+			app as never,
+			{ id: 'draw-steel-elements', version: 'test' } as never,
+		);
+
+		// Record the page set at every getSettingDefinitions() call across onload().
+		const builds: string[][] = [];
+		const originalAdd = plugin.addSettingTab.bind(plugin);
+		jest.spyOn(plugin, 'addSettingTab').mockImplementation(((tab: any) => {
+			const original = tab.getSettingDefinitions.bind(tab);
+			jest.spyOn(tab, 'getSettingDefinitions').mockImplementation((() => {
+				const defs = original();
+				builds.push(defs.filter((d: any) => d?.type === 'page').map((d: any) => d.name));
+				return defs;
+			}) as never);
+			return originalAdd(tab);
+		}) as never);
+
+		await plugin.onload();
+
+		// At least two builds: the registration one, and main.ts's post-init update().
+		expect(builds.length).toBeGreaterThanOrEqual(2);
+		// Registration: no PreferenceStore yet, so only the hand-written sections.
+		expect(builds[0]).toEqual(['Compendium', 'Links', 'Initiative tracker']);
+		// After the framework is built, the full nine.
+		expect(builds[builds.length - 1]).toEqual([
+			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Compendium', 'Links', 'Initiative tracker',
+		]);
 	});
 });

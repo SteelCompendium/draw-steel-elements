@@ -64,13 +64,14 @@ export interface NavSection {
 	onReset?: () => void;
 	rows: readonly NavRow[];
 	/** Mounts the live statblock preview for this page. Present only on sections whose
-	 *  settings visibly change an element (see SettingsTab.sectionShowsPreview). */
-	renderPreview?: (container: HTMLElement) => void;
+	 *  settings visibly change an element (see SettingsTab.sectionShowsPreview).
+	 *  Returns the teardown for THIS mount — see `previewDefinition`. */
+	renderPreview?: (container: HTMLElement) => void | (() => void);
 }
 
-/** Class on the group wrapping a page's rows — the two-column preview layout hooks it. */
+/** Class on the group wrapping a page's rows — the preview layout hooks it. */
 export const PAGE_CLS = 'dse-settings-page';
-/** Class on the preview row, so CSS can pull it into the sticky second column. */
+/** Class on the preview row: CSS docks it to the bottom of the settings viewport. */
 export const PREVIEW_CLS = 'dse-settings-preview-row';
 /** Class on a chrome row (no name/control), so CSS can let its text span the full width. */
 export const CHROME_CLS = 'dse-settings-chrome-row';
@@ -99,8 +100,25 @@ function toDefinition(row: NavRow, section: NavSection): SettingDefinition | nul
 	// these are two separate returns rather than one object with both keys optional.
 	if (row.control) return { ...base, control: row.control };
 	const render = row.render;
-	if (!render) return null;
-	return { ...base, render: (setting) => render(setting) };
+	// A label-only row (no control, no render) is still a legitimate definition: obsidian
+	// renders name + desc as a static informational row. Dropping it would make it vanish
+	// silently, which is how a typo in a row spec becomes an invisible bug.
+	if (!render) return base;
+	return { ...base, render: (setting) => asCleanup(render(setting)) };
+}
+
+/**
+ * Normalises a render callback's return value into a cleanup function or `undefined`.
+ *
+ * Obsidian stores ANY truthy return as the row's cleanup and calls it on teardown
+ * (`v && (e.cleanup = v)` … `t()` in the 1.13.4 bundle). `Setting`'s builder methods are
+ * chainable, so a one-expression arrow like `(s) => s.addButton(...)` quietly returns the
+ * Setting — truthy, not callable — and every teardown of that page throws a TypeError into
+ * the console. Callers should use a block body; this makes it impossible to get wrong
+ * either way.
+ */
+function asCleanup(value: void | (() => void)): (() => void) | undefined {
+	return typeof value === 'function' ? value : undefined;
 }
 
 /** The live preview, as a nameless unsearchable row CSS lifts into the sticky column. */
@@ -110,10 +128,15 @@ function previewDefinition(section: NavSection): SettingDefinition | null {
 	return {
 		name: '',
 		searchable: false,
+		// The teardown rides obsidian's cleanup contract: whatever the mount returns is
+		// what obsidian calls when this row goes away, so the preview's Component (and its
+		// pref subscriptions) is released per MOUNT rather than per definitions build.
+		// Definitions are built once and replayed across every open/close of the settings
+		// window, so anything released at build time would never come back.
 		render: (setting) => {
 			setting.settingEl.addClass(PREVIEW_CLS);
 			setting.infoEl.remove();
-			renderPreview(setting.controlEl);
+			return asCleanup(renderPreview(setting.controlEl));
 		},
 	};
 }
@@ -127,7 +150,10 @@ function resetDefinition(section: NavSection): SettingDefinition | null {
 	const onReset = section.onReset;
 	if (!onReset) return null;
 	return {
-		name: 'Reset this section',
+		// Named after the section rather than "Reset this section": these rows are in the
+		// global settings search, where nine identical "Reset this section" hits would be
+		// indistinguishable.
+		name: `Reset ${section.label.toLowerCase()}`,
 		desc: `Restore every ${section.label.toLowerCase()} setting to its default.`,
 		aliases: [section.label, 'reset', 'defaults'],
 		action: () => onReset(),
@@ -167,8 +193,8 @@ function toPage(section: NavSection): SettingDefinitionPage | null {
 	if (preview) items.push(preview);
 	if (!items.length) return null;
 	// Everything on the page lives in one classed group, which is what gives the CSS a
-	// single grid container holding both the rows and the preview — the two-column,
-	// preview-always-visible layout. The group carries no heading: the page title is
+	// single container holding both the rows and the preview — the bottom-docked,
+	// always-visible preview layout. The group carries no heading: the page title is
 	// already the section name.
 	const group: SettingDefinitionGroup = {
 		type: 'group',

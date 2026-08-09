@@ -88,9 +88,6 @@ interface ValueControl {
 
 export class DseSettingTab extends PluginSettingTab {
 	plugin: DrawSteelAdmonitionPlugin;
-	/** Owns per-display() mounted children (the Task 6 statblock preview);
-	 *  recycled on every display(), unloaded on hide(). */
-	private displayOwner: Component | null = null;
 	private presetDropdown: ValueControl | null = null;
 	/** SC-112 Task 8: families fetched by "List installed fonts" (null = never
 	 *  fetched — the affordance is still offered; [] = fetch failed/denied — the
@@ -105,18 +102,23 @@ export class DseSettingTab extends PluginSettingTab {
 
 	// —— SC-131: the obsidian 1.13 entry point (see settingsDeclarative.ts) ——
 	//
-	// Obsidian calls this on every `update()` AND once when the tab is registered — that
-	// registration call is what puts our rows in the native settings search index, before
-	// the user has ever opened our tab. It must stay cheap: no I/O, no network. Building
-	// the model is a walk over the descriptor list plus a handful of closures, which
-	// qualifies; the one genuinely async thing (the compendium sync status line) is fetched
-	// inside its own row's render, not here.
+	// MUST BE SIDE-EFFECT FREE. The .d.ts says "called on every display()", but that is not
+	// what 1.13.4 does: `update()` is the ONLY caller — it caches the result into
+	// `settingItems`, and `renderTab()` then re-renders from that CACHE without asking us
+	// again (verified against the shipped bundle, not the typings). So this runs at tab
+	// REGISTRATION and on our own explicit `update()` calls, while the settings window may
+	// be opened and closed any number of times in between, replaying the same definitions.
+	//
+	// Anything torn down here would therefore stay torn down for every later re-render —
+	// which is exactly how an earlier revision of this file made the live preview vanish on
+	// the second open. Per-render resources belong to the render callback's own cleanup
+	// contract instead (see `renderPreview` below), never to this method.
+	//
+	// It must also stay cheap: no I/O, no network. Building the model is a walk over the
+	// descriptor list plus a handful of closures, which qualifies; the one genuinely async
+	// thing (the compendium sync status line) is fetched inside its own row's render.
 	getSettingDefinitions(): SettingDefinitionItem[] {
-		// Every call replaces the previously rendered rows, so the children mounted by the
-		// last one (the live preview and its pref subscriptions) must be dropped first.
-		this.recycleOwner(true);
 		const prefs = this.plugin.frameworkV2?.services.prefs;
-		this.presetDropdown = null;
 		return toSettingDefinitions(
 			[...(prefs ? this.buildPrefSections(prefs) : []), ...this.buildOperationalSections()],
 			prefs
@@ -212,24 +214,16 @@ export class DseSettingTab extends PluginSettingTab {
 					displayFormat: (value: number) => `${Math.round(value * 100)}%`,
 				};
 			}
-			default:
-				return undefined; // 'font'
-		}
-	}
-
-	/** Obsidian tears the tab down when the settings window closes. There is no
-	 *  `display()` any more (the declarative renderer replaced it), but the preview's
-	 *  Component owner still has to be unloaded so its pref subscriptions go with it. */
-	hide(): void {
-		this.recycleOwner(false);
-	}
-
-	private recycleOwner(recreate: boolean): void {
-		this.displayOwner?.unload();
-		this.displayOwner = null;
-		if (recreate) {
-			this.displayOwner = new Component();
-			this.displayOwner.load();
+			case 'font':
+				// The one control type obsidian cannot express: a curated dropdown, a
+				// revealed free-text field and a "list installed fonts" button in one row.
+				return undefined;
+			default: {
+				// Adding a PrefUi control kind without deciding its native binding is a
+				// compile error rather than a row that silently renders nothing.
+				const exhaustive: never = ui.control;
+				return exhaustive;
+			}
 		}
 	}
 
@@ -290,9 +284,18 @@ export class DseSettingTab extends PluginSettingTab {
 				// Appearance, Typography and Statblock display today, derived rather than
 				// listed, so a future reflected group inherits it for free. D-pages makes
 				// this cheap: each page is its own view, so a preview mounts at most once.
+				// Each MOUNT owns its Component and hands back the teardown. Obsidian stores a
+				// render callback's return value as that row's `cleanup` and invokes it when
+				// the row goes away (page navigation, settings close, re-render), so the
+				// preview's pref subscriptions die with the DOM that showed them — and,
+				// critically, a fresh owner is created on every mount rather than once per
+				// definitions build. Definitions are cached and replayed; mounts are not.
 				renderPreview: this.sectionShowsPreview(members)
 					? (container) => {
-						if (this.displayOwner) mountSettingsPreview(container, this.plugin, this.displayOwner);
+						const owner = new Component();
+						owner.load();
+						mountSettingsPreview(container, this.plugin, owner);
+						return () => owner.unload();
 					}
 					: undefined,
 			});
@@ -472,8 +475,9 @@ export class DseSettingTab extends PluginSettingTab {
 					// this used to be: obsidian supplies the folder suggester.
 					// Literal default vault folder name
 					// (DEFAULT_SETTINGS.compendiumDestinationDirectory), not prose;
-					// lowercasing would misrepresent the actual folder created.
-					// eslint-disable-next-line obsidianmd/ui/sentence-case
+					// lowercasing would misrepresent the actual folder created. (The
+					// sentence-case rule inspects setName/setDesc calls, which a declarative
+					// control has none of, so no disable directive is needed here.)
 					control: { type: 'folder', key: 'compendiumDestinationDirectory', placeholder: 'DS Compendium' },
 				},
 				{
@@ -495,10 +499,16 @@ export class DseSettingTab extends PluginSettingTab {
 					});
 					void this.renderCompendiumStatus(statusEl);
 				}),
+				// BLOCK BODY, deliberately: obsidian keeps a render callback's return value
+				// as the row's cleanup and CALLS it on teardown, and `Setting`'s builders
+				// are chainable — a one-expression arrow here would hand back the Setting,
+				// which is truthy but not callable, throwing a TypeError on every teardown
+				// of this page. (settingsDeclarative's asCleanup also guards this; both
+				// ends are fixed so neither alone is load-bearing.)
 				opRow(
 					'Sync compendium',
 					'Download the selected release and update the files the plugin manages.',
-					(setting) =>
+					(setting) => {
 						setting
 							.addButton((button) =>
 								button
@@ -509,20 +519,11 @@ export class DseSettingTab extends PluginSettingTab {
 									}),
 							)
 							.addButton((button) =>
-								button.setButtonText('Check for updates').onClick(async () => {
-									try {
-										const result = await this.plugin.syncService.checkForUpdates();
-										new Notice(
-											result.upToDate
-												? `Compendium is up to date (${result.latestTag}).`
-												: `Update available: ${result.latestTag} (installed: ${result.installedTag ?? 'none'}).`,
-										);
-									} catch (error) {
-										const message = error instanceof Error ? error.message : String(error);
-										new Notice(`Update check failed — ${message}`);
-									}
+								button.setButtonText('Check for updates').onClick(() => {
+									void this.checkForCompendiumUpdates();
 								}),
-							),
+							);
+					},
 				),
 			],
 		};
@@ -554,6 +555,23 @@ export class DseSettingTab extends PluginSettingTab {
 		};
 
 		return [compendium, links, initiative];
+	}
+
+	/** The "Check for updates" handler. Split out of the button so `onClick` receives a
+	 *  SYNC callback — an async one returns a promise obsidian never awaits, which is both
+	 *  an eslint no-misused-promises error and a silent unhandled rejection on failure. */
+	private async checkForCompendiumUpdates(): Promise<void> {
+		try {
+			const result = await this.plugin.syncService.checkForUpdates();
+			new Notice(
+				result.upToDate
+					? `Compendium is up to date (${result.latestTag}).`
+					: `Update available: ${result.latestTag} (installed: ${result.installedTag ?? 'none'}).`,
+			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			new Notice(`Update check failed — ${message}`);
+		}
 	}
 
 	/** F2 Task 11: renders the manifest-driven "last synced" line. Async because

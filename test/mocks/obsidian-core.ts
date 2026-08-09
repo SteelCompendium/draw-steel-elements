@@ -470,7 +470,18 @@ export class Plugin extends Component {
 		this.registeredPostProcessors.push(handler);
 		return handler;
 	}
-	addSettingTab(_tab: any): void {}
+	/** Registered settings tabs, in registration order (tests read this to assert the
+	 *  registration-time definition build). */
+	settingTabs: any[] = [];
+
+	/** SC-131: obsidian builds a tab's search index the moment it is registered, by
+	 *  calling `update()` — which is what makes registration ORDER matter. Anything the
+	 *  definitions depend on must already exist, or those rows are silently absent from
+	 *  both the tab and the settings search until something calls update() again. */
+	addSettingTab(tab: any): void {
+		this.settingTabs.push(tab);
+		tab?.update?.();
+	}
 	/** D8 Task 2: registerDseSidebar's ribbon icon — minimal jsdom-backed stub (real
 	 *  Obsidian adds the element to the left ribbon bar and wires the click callback;
 	 *  the mock just returns a detached element with the callback attached, matching the
@@ -844,33 +855,164 @@ export class Setting {
 	}
 }
 
+/**
+ * SC-131: a faithful stand-in for obsidian 1.13's declarative settings host.
+ *
+ * The shape here is taken from the SHIPPED 1.13.4 bundle, not the .d.ts, because the two
+ * disagree on the one thing that matters:
+ *
+ *   update()    { this.settingItems = this.getSettingDefinitions(); …refresh… }
+ *   renderTab() { this.settingItems.length > 0 ? renderFromCache(this) : this.display() }
+ *
+ * `getSettingDefinitions()` is called ONLY from `update()` — at tab registration and
+ * whenever the plugin asks. Re-rendering (opening the settings window again, navigating
+ * between pages) replays the CACHED `settingItems`. The .d.ts comment "Called on every
+ * display()" is simply false for 1.13.4.
+ *
+ * That distinction is load-bearing: a settings tab that tears resources down inside
+ * getSettingDefinitions() looks fine on first render and silently breaks on every one
+ * after. An earlier mock re-derived the definitions on each render and therefore asserted
+ * the OPPOSITE of the real contract, which is exactly how that bug shipped green. Tests
+ * must go through update() + renderTab().
+ */
 export class PluginSettingTab {
 	app: App;
 	plugin: any;
 	containerEl: any = typeof document !== 'undefined' ? document.createElement('div') : null;
+	/** The cache. Populated by update(), replayed by renderTab(). */
+	settingItems: any[] = [];
+	/** Cleanups returned by rendered `render` callbacks, invoked on teardown. */
+	private renderedCleanups: (() => void)[] = [];
+	/** Whether the tab is currently on screen — update() repaints only if it is. */
+	private rendered = false;
+
 	constructor(app: App, plugin: any) {
 		this.app = app;
 		this.plugin = plugin;
 	}
-	display(): void {}
-	hide(): void {}
-	// —— obsidian 1.13 declarative settings (SC-131) ——
+
 	/** Default is an empty tree; DseSettingTab overrides it. */
 	getSettingDefinitions(): any[] {
 		return [];
 	}
+
 	/** Base behaviour: control keys name fields on `plugin.settings`. DseSettingTab
 	 *  overrides this for PreferenceStore-backed keys and calls super for the rest. */
 	getControlValue(key: string): unknown {
 		return this.plugin?.settings?.[key];
 	}
+
 	setControlValue(key: string, value: unknown): void | Promise<void> {
 		if (this.plugin?.settings) this.plugin.settings[key] = value;
 		return this.plugin?.saveSettings?.();
 	}
-	/** Re-reads getSettingDefinitions() and repaints. Tests replace this with a real
-	 *  re-render (see the definition renderer in settings-tab.test.ts). */
-	update(): void {}
+
+	/** Re-reads the definitions into the cache and repaints the current page — the
+	 *  ONLY caller of getSettingDefinitions(), matching 1.13.4's
+	 *  `settingItems = getSettingDefinitions(); … refreshCurrentPage(this)`. When the
+	 *  settings window is closed there is nothing on screen to repaint, so the cache
+	 *  refresh happens alone. */
+	update(): void {
+		this.settingItems = this.getSettingDefinitions();
+		if (this.rendered) this.renderTab();
+	}
+
+	/** Renders the CACHED definitions. Deliberately does NOT call
+	 *  getSettingDefinitions() — that is the whole point of this mock. */
+	renderTab(): void {
+		this.closeTab();
+		const container = this.containerEl as HTMLElement;
+		if (container) container.innerHTML = '';
+		this.rendered = true;
+		this.renderDefs(container, this.settingItems);
+	}
+
+	/** Obsidian tears rendered rows down on page navigation and on settings close.
+	 *  Order matters and matches 1.13.4's `closeActiveTab`: run every rendered row's
+	 *  stored cleanup FIRST (`j2(n.renderedItems)`), then call the tab's `hide()`. */
+	closeTab(): void {
+		this.rendered = false;
+		const cleanups = this.renderedCleanups;
+		this.renderedCleanups = [];
+		for (const cleanup of cleanups) cleanup();
+		this.hide();
+	}
+
+	private renderDefs(container: HTMLElement, items: any[]): void {
+		for (const def of items ?? []) {
+			if (!def) continue;
+			if (def.type === 'group' || def.type === 'page') {
+				this.renderDefs(container, def.items ?? []);
+				continue;
+			}
+			const setting = new Setting(container);
+			if (def.name) setting.setName(def.name);
+			if (typeof def.desc === 'string') setting.setDesc(def.desc);
+			if (def.control) this.bindControl(setting, def.control);
+			else if (def.render) this.storeCleanup(def.render(setting));
+			else if (def.action) {
+				setting.addButton((b) => b.setButtonText(def.name).onClick(() => def.action(setting.settingEl, 0)));
+			}
+		}
+	}
+
+	/**
+	 * Mirrors obsidian's `v && (e.cleanup = v)` … `t()`: any TRUTHY return is kept and
+	 * later invoked. Obsidian swallows the resulting TypeError into console.error; this
+	 * throws instead, deliberately — a chainable builder accidentally returned from a
+	 * render callback (`(s) => s.addButton(...)` returns the Setting) is a real defect,
+	 * and a test harness should make it a failure rather than console noise.
+	 */
+	private storeCleanup(value: unknown): void {
+		if (!value) return;
+		if (typeof value !== 'function') {
+			throw new TypeError(
+				`render callback returned a non-function (${(value as object)?.constructor?.name ?? typeof value}); ` +
+					'obsidian stores it as the row cleanup and calls it on teardown. Use a block body.',
+			);
+		}
+		this.renderedCleanups.push(value as () => void);
+	}
+
+	private bindControl(setting: Setting, control: any): void {
+		const read = (): any => this.getControlValue(control.key);
+		const write = (value: unknown): void => void this.setControlValue(control.key, value);
+		switch (control.type) {
+			case 'toggle':
+				setting.addToggle((t) => t.setValue(read() === true).onChange(write));
+				break;
+			case 'dropdown':
+				setting.addDropdown((d) => {
+					for (const [value, label] of Object.entries(control.options ?? {})) {
+						d.addOption(value, label as string);
+					}
+					d.setValue(String(read() ?? '')).onChange(write);
+				});
+				break;
+			case 'text':
+			case 'file':
+			case 'folder':
+				setting.addText((t) => {
+					if (control.placeholder) t.setPlaceholder(control.placeholder);
+					t.setValue(String(read() ?? '')).onChange(write);
+				});
+				break;
+			case 'slider':
+				setting.addSlider((sl) =>
+					sl
+						.setLimits(control.min, control.max, control.step)
+						.setValue(Number(read() ?? control.min))
+						.setDynamicTooltip()
+						.onChange(write),
+				);
+				break;
+			default:
+				throw new Error(`unhandled control type "${control.type}"`);
+		}
+	}
+
+	display(): void {}
+	hide(): void {}
 }
 
 /** D8 Task 1: minimal sidebar leaf — constructs the registered view via the plugin's

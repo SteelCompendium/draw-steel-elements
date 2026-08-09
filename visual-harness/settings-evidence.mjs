@@ -278,6 +278,24 @@ const SET_DROPDOWN = (name, value) => `(() => {
 	return select.value;
 })()`;
 
+/** Leave our settings tab and come back to it, driven from the MAIN window.
+ *
+ *  This is the C1 path exactly: `openTab` runs the outgoing tab's row cleanups and its
+ *  `hide()`, and coming back calls `renderTab()`, which renders from the CACHED
+ *  settingItems — nothing here calls `update()`. If the preview's Component belonged to
+ *  the definitions build rather than to the mount, it is dead from here on.
+ *
+ *  (Driving `app.setting.close()` + `open()` instead would test the same thing, but it
+ *  destroys and recreates the popout's CDP target mid-run, which hangs the harness.) */
+const REOPEN = `(() => {
+	const settings = window.app.setting;
+	const other = settings.pluginTabs.find((t) => t.id !== 'draw-steel-elements')
+		?? settings.settingTabs[0];
+	settings.openTabById(other.id ?? other);
+	settings.openTabById('draw-steel-elements');
+	return true;
+})()`;
+
 /** Focus the settings window's OWN search field (never one our plugin renders). */
 const FOCUS_SEARCH = `(() => {
 	const el = [...document.querySelectorAll('input[type="search"]')][0];
@@ -387,7 +405,7 @@ async function main() {
 		// 1. The D-pages index: nine navigable entries where a 6850px scroll page was.
 		report.index = await evaluate(scdp, HITS);
 		console.log('  index:', JSON.stringify(report.index.content.slice(0, 12)));
-		await shoot(scdp, path.join(outDir, `impl-pages-index${suffix}.png`), 'D-pages index');
+		await shoot(scdp, path.join(outDir, `impl2-pages-index${suffix}.png`), 'D-pages index');
 
 		// 2. Section pages, each with its live preview on screen.
 		for (const page of ['Typography', 'Statblock display']) {
@@ -401,7 +419,7 @@ async function main() {
 			report[key] = await evaluate(scdp, PREVIEW_STATE);
 			console.log(`  ${page}:`, JSON.stringify(report[key]));
 			const slug = page.toLowerCase().replace(/ /g, '-');
-			await shoot(scdp, path.join(outDir, `impl-page-${slug}${suffix}.png`), `${page} page`);
+			await shoot(scdp, path.join(outDir, `impl2-page-${slug}${suffix}.png`), `${page} page`);
 			await evaluate(scdp, BACK);
 			await sleep(800);
 		}
@@ -413,7 +431,7 @@ async function main() {
 		await sleep(1000);
 		report.advanced = await evaluate(scdp, HITS);
 		console.log('  advanced:', JSON.stringify(report.advanced.content));
-		await shoot(scdp, path.join(outDir, `impl-page-advanced${suffix}.png`), 'nested Advanced page');
+		await shoot(scdp, path.join(outDir, `impl2-page-advanced${suffix}.png`), 'nested Advanced page');
 		await evaluate(scdp, BACK);
 		await sleep(600);
 		await evaluate(scdp, BACK);
@@ -433,11 +451,26 @@ async function main() {
 			previewOnScreen: after.onScreen,
 		};
 		console.log('  live apply with preview on screen:', JSON.stringify(report.liveApply));
-		await shoot(scdp, path.join(outDir, `impl-live-apply-compact${suffix}.png`), 'density changed, preview visible');
+		await shoot(scdp, path.join(outDir, `impl2-live-apply-compact${suffix}.png`), 'density changed, preview visible');
 		await evaluate(scdp, SET_DROPDOWN('Density', 'comfortable'));
 		await sleep(700);
 		await evaluate(scdp, BACK);
 		await sleep(600);
+
+		// 4b. CLOSE and REOPEN the settings window, then open the same page again — with
+		//     no update() in between, so obsidian replays its CACHED definitions. This is
+		//     the sequence that used to leave the preview permanently missing.
+		for (const pass of [1, 2]) {
+			await evaluate(cdp, REOPEN);
+			await sleep(1500);
+			await evaluate(scdp, OPEN_PAGE('Statblock display'));
+			await sleep(1600);
+			report[`reopen_${pass}`] = await evaluate(scdp, PREVIEW_STATE);
+			console.log(`  reopen #${pass}:`, JSON.stringify(report[`reopen_${pass}`]));
+			await shoot(scdp, path.join(outDir, `impl2-reopen-${pass}${suffix}.png`), `reopen #${pass}, preview alive`);
+			await evaluate(scdp, BACK);
+			await sleep(600);
+		}
 
 		// 5. The native settings search, against the shipped implementation.
 		for (const query of ['font', 'density']) {
@@ -454,7 +487,7 @@ async function main() {
 				const hits = await evaluate(scdp, HITS);
 				report[`search_${query}`] = hits;
 				console.log(`  native search "${query}" → sidebar:`, JSON.stringify(hits.sidebar.slice(0, 16)));
-				await shoot(scdp, path.join(outDir, `impl-search-${query}${suffix}.png`), `native search "${query}"`);
+				await shoot(scdp, path.join(outDir, `impl2-search-${query}${suffix}.png`), `native search "${query}"`);
 			} catch (error) {
 				report[`search_${query}`] = { error: String(error.message ?? error) };
 				console.log(`  native search "${query}" FAILED: ${error.message}`);
