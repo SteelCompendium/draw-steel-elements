@@ -6,9 +6,9 @@
 // Inert host: canPersist TRUE (statblock is static and never writes; `false` would
 // stamp data-dse-readonly and show a misleading "Read-only" badge on the preview),
 // replaceSource resolves false, blockKey is unique so session state never collides
-// with real blocks. Lifecycle: children attach to `owner` (the tab's per-display()
-// Component) — closing/re-rendering the tab unloads the preview and its pref
-// subscriptions (F1 §4.5).
+// with real blocks. Lifecycle: children attach to `owner` (the per-MOUNT Component the
+// preview render row creates) — the row's cleanup callback unloads it on every teardown
+// (page navigation, tab switch, settings close), releasing the pref subscriptions.
 import type { Component } from 'obsidian';
 import type DrawSteelAdmonitionPlugin from 'main';
 import type { BlockHost } from '@/framework/host/BlockHost';
