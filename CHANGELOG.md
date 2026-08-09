@@ -33,6 +33,11 @@ for what needs action.
   stacking, correctly tracking temp already spent absorbing damage in the same
   session. (How temp stamina is *drawn* — in the bar and the modal preview —
   is the SC-132 redesign's job and unchanged here.)
+- [BUGFIX] Crest glyphs sit on the shield's optical center (SC-130). The icons
+  in every crest — statblock heads, kit heads, ability cards, the villain skull —
+  sat at the shield's geometric center, visibly sunk toward the point; they now
+  carry a measured optical nudge (matching the same fix on steelcompendium.io)
+  that also holds at every text-size setting.
 - [BREAKING] Compendium source moved from the retired `data-md-dse` repo to
   `data-unified` releases (unified Browse layout, `md-dse` format). Run
   "Sync compendium" after updating — your old release-tag setting is reset
