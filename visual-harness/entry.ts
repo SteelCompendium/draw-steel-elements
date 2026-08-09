@@ -295,8 +295,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
    space is [-max/2 … +max]), and read-only (canPersist false — driven by the
    existing `?readonly=1` param, not a fixture).
 */
-const staminaState = (current: number, temp: number, recoveries = 5): string =>
-	`max_stamina: 30\ncurrent_stamina: ${current}\ntemp_stamina: ${temp}\nrecoveries: ${recoveries}\nrecoveries_max: 8\n`;
+const staminaState = (current: number, temp: number, recoveries = 5, recoveriesMax = 8): string =>
+	`max_stamina: 30\ncurrent_stamina: ${current}\ntemp_stamina: ${temp}\nrecoveries: ${recoveries}\nrecoveries_max: ${recoveriesMax}\n`;
 
 /** Hero-sheet context: the same states inside the flagship composition. */
 const heroState = (current: number, temp: number, recoveries: number): string => `name: Torin Stonefist
@@ -326,6 +326,11 @@ export const CANDIDATE_FIXTURES: Record<string, Record<string, string>> = {
 		'winded-temp': staminaState(11, 6),
 		'rec-none': staminaState(24, 0, 0),
 		'rec-full': staminaState(24, 0, 8),
+		// SC-132 round 4: the grouping question needs a LONG row. 12 is the top of the
+		// real range (a hero's recoveries come off the class ladder; 8 is the common
+		// value, 12 the high end), so it is the worst case for "count them at a glance".
+		'rec-12': staminaState(24, 0, 7, 12),
+		'rec-12-full': staminaState(24, 0, 12, 12),
 	},
 	hero: {
 		healthy: heroState(24, 0, 5),
@@ -584,6 +589,193 @@ export const STRIPS: Record<string, StripDef> = {
 			{ id: 'x2 r2 l1', label: 'X2 — cluster untouched', note: 'as today: conditions stay in their own element / hero region' },
 		],
 	},
+
+	/* ------------------------------------------------------------------ */
+	/* ROUND 4 — Scott's comment 34b0085d                                   */
+	/* ------------------------------------------------------------------ */
+
+	/* R4-1a — "temp stamina being like a SHIELD, conveying strength, armor,
+	   durability… even if its only temporary. The halo shield comes to mind as
+	   inspiration. Blue does feel right." T2 was rejected as reading WEAK, so every
+	   option here is vivid; S0 re-posts the reviewed purple plate as the control so
+	   the change is visible rather than asserted. */
+	'temp-shield': {
+		title: 'Temp stamina — the overshield direction',
+		sub: 'Vivid blue, strength-forward. Geometry (origin + scale) identical across all four; only the material changes',
+		cand: 'a',
+		focus: 'gauge',
+		states: [
+			{ fixture: 'temp', caption: '24/30 +6' },
+			{ fixture: 'temp-over', caption: '8/30 +40 (temp > max)' },
+			{ fixture: 'temp-dying', caption: '-4/30 +5 (temp while dying)' },
+		],
+		options: [
+			{ id: 't1 e1 m1', label: 'S0 — T1 as reviewed (control)', note: 'the purple solid plate you saw in round 3, for reference' },
+			{ id: 's1 e1 m1', label: 'S1 — Overshield plate', note: 'luminous solid blue, hard top catch-light, bright leading edge, a faint bloom past the seam' },
+			{ id: 's2 e1 m1', label: 'S2 — Energy glass', note: 'RADIANT glass, not faded: a bright core with a hot rim — you can see through it and it still glows' },
+			{ id: 's3 e1 m1', label: 'S3 — Armour plating', note: 'S1 plus segmented plates and bevelled seams — armour bolted on, spent plate by plate' },
+		],
+	},
+
+	/* R4-1b — "I am still curious to see if there are alternative placements for temp
+	   stamina other than the end of the bar… im curious what a second sub-bar would
+	   look like. There are lots of video games that have the multi-hp bar." Same three
+	   states in both placements so the quick-glance tradeoff is the visible variable. */
+	'temp-place': {
+		title: 'Temp stamina — placement: appended vs. a second sub-bar',
+		sub: 'S1 overshield held constant; only WHERE temp is drawn changes. Both lanes are the same px-per-point',
+		cand: 'a',
+		focus: 'gauge',
+		states: [
+			{ fixture: 'temp', caption: '24/30 +6' },
+			{ fixture: 'temp-over', caption: '8/30 +40 (temp > max)' },
+			{ fixture: 'temp-dying', caption: '-4/30 +5 (temp while dying)' },
+		],
+		options: [
+			{
+				id: 's1 e1 m1',
+				label: 'P1 — appended (baseline)',
+				note: 'temp starts where the pour ends; the gauge RESCALES to max+temp so it always fits',
+			},
+			{
+				id: 's1 e1 p2',
+				label: 'P2 — sub-bar BELOW',
+				note: 'main channel keeps a pure max scale (its right edge IS max); temp gets its own lane from the bulkhead',
+			},
+			{
+				id: 's1 e1 p3',
+				label: 'P3 — sub-bar ABOVE',
+				note: 'same lane, above the channel — the video-game overshield position',
+			},
+		],
+	},
+
+	/* R4-2 — "R2 or R3 are my favorites… I kinda want to see what something like a
+	   'plus' emoji/icon would look like. Or some other icon that represents a
+	   'recovery'. Also… the series of ▱▱▱▱▱▱ icons that can get colored in." */
+	'rec-shape2': {
+		title: 'Recovery markers, round 2 — your two favourites, refined, plus the two you asked for',
+		sub: 'Remaining = proud/filled, spent = engraved socket. All four at the same 12–16px working size',
+		cand: 'a',
+		focus: 'rec',
+		states: [
+			{ fixture: 'healthy', caption: '5 of 8 remaining' },
+			{ fixture: 'rec-none', caption: '0 of 8 — all spent' },
+			{ fixture: 'rec-full', caption: '8 of 8 — none spent' },
+		],
+		options: [
+			{ id: 'r2 rr', label: 'R2 — square cell (refined)', note: 'squarer, one size up, and the spent socket’s outline is now the strongest line in it' },
+			{ id: 'r3 rr', label: 'R3 — round pip (refined)', note: 'same refinement on the tally read' },
+			{ id: 'r5', label: 'R5 — plus marker', note: 'a ✚ is the one glyph that survives 12px in two strokes; available = struck, spent = the empty socket it was cut from' },
+			{ id: 'r6', label: 'R6 — outlined cell, filled in (▱)', note: 'your literal ask: the outline is always there, the fill is what you spend' },
+		],
+	},
+
+	/* R4-3 — "we can add a small amount of whitespace between a group of 3-5 recovery
+	   cells to allow quick counting, kinda like how commas separate groups of 3 digits". */
+	'rec-group': {
+		title: 'Recovery grouping — how big is a group?',
+		sub: 'R2 cells throughout. 8 is the common recovery count, 12 the high end — a group size has to serve both',
+		cand: 'a',
+		focus: 'rec',
+		states: [
+			{ fixture: 'healthy', caption: '8 recoveries (5 remaining) — the common count' },
+			{ fixture: 'rec-12', caption: '12 recoveries (7 remaining) — the long row' },
+		],
+		options: [
+			{ id: 'r2 rr g0', label: 'G0 — ungrouped', note: 'as reviewed: one even row you have to tally one at a time' },
+			{ id: 'r2 rr g3', label: 'G3 — groups of 3', note: 'the literal digit-comma analogy · 8 → 3·3·2, 12 → 3·3·3·3' },
+			{ id: 'r2 rr g4', label: 'G4 — groups of 4', note: 'the only size that divides BOTH common counts evenly · 8 → 4·4, 12 → 4·4·4' },
+			{ id: 'r2 rr g5', label: 'G5 — groups of 5', note: 'the tally-mark convention · 8 → 5·3, 12 → 5·5·2' },
+		],
+	},
+
+	/* R4-4 — "in the full hero sheet we need the 'Recoveries' label. On more condensed
+	   views I think we can drop it (still need a tooltip). The tooltip can show the
+	   fraction." Plus: NO always-visible numeric fraction anywhere. */
+	'rec-final': {
+		title: 'Recovery labelling — the final two forms',
+		sub: 'No always-visible fraction in either. The count lives in the tooltip, and only there',
+		cand: 'a',
+		focus: 'rec',
+		states: [
+			{ fixture: 'healthy', caption: '5 of 8 remaining' },
+			{ fixture: 'rec-none', caption: '0 of 8 — all spent' },
+		],
+		options: [
+			{
+				id: 'r2 rr g4 lf1',
+				label: 'LF1 — hero sheet',
+				note: 'RECOVERIES eyebrow, in the site’s stat-tile small-caps. No numerals',
+			},
+			{
+				id: 'r2 rr g4 lf2',
+				label: 'LF2 — condensed (rail / statblock / initiative)',
+				note: 'no label at all; the tooltip carries the fraction (shown open here — a still cannot otherwise show it)',
+			},
+		],
+	},
+
+	/* R4-5 — "Catch Breath - im pretty torn on this whole piece… recoveries need to be
+	   editable [both directions]… I dont want a missclick to be super punishing…
+	   Maybe we just have an undo button pop up in a notification."
+	   This strip is shaped differently from the others on purpose: the ROWS are the
+	   states of ONE proposed model, not competing options, because Scott asked for a
+	   coherent model rather than another menu. The last two rows are the alternative. */
+	interact: {
+		title: 'Catch Breath + recovery editing — one model, mocked state by state',
+		sub: 'Model M: markers are directly editable BOTH ways · Catch Breath is an icon-only button · every change offers an Undo',
+		cand: 'a',
+		focus: 'rec',
+		states: [{ fixture: 'healthy', caption: '5 of 8 remaining · Torin, 24/30' }],
+		options: [
+			{
+				id: 'r2 rr g4 lf1 im',
+				label: '1 · Rest',
+				note: 'nothing hovered. Identical to LF1 — the affordance costs no ink until a pointer arrives',
+			},
+			{
+				id: 'r2 rr g4 lf1 im ih-spend',
+				label: '2 · Over the LAST available marker → spend 1',
+				note: 'it sinks into its socket. Clicking the last available one always means exactly “spend one”',
+			},
+			{
+				id: 'r2 rr g4 lf1 im ih-spend3',
+				label: '3 · Over the 3rd-from-last → spend 3 in ONE click',
+				note: 'markers set the count, they do not just toggle. RAW needs this: “the target loses 1d3 Recoveries” (Monsters :1646, :23792, :24808)',
+			},
+			{
+				id: 'r2 rr g4 lf1 im ih-restore',
+				label: '4 · Over the FIRST spent marker → restore 1',
+				note: 'a ghost fill previews what the click gives back. Same gesture, other direction — this is “undo a Catch Breath”',
+			},
+			{
+				id: 'r2 rr g4 lf1 im ih-cb',
+				label: '5 · Over CATCH BREATH',
+				note: 'icon-only, per your width note. The tooltip is where the HEAL is stated — the one part a checkbox cannot imply',
+			},
+			{
+				id: 'r2 rr g4 lf1 im it',
+				label: '6 · After ANY change — the Undo notice',
+				note: 'an Obsidian Notice with an Undo action. This is the misclick answer: no confirm dialog, no cost to being wrong',
+			},
+			{
+				id: 'r2 rr g4 lf1 im if',
+				label: '7 · Keyboard',
+				note: 'the strip is one tabstop of role=radio markers; ←/→ move, Space commits. Ring is the plugin’s existing focus ring',
+			},
+			{
+				id: 'r2 rr g4 lf1 im id',
+				label: '8 · Read-only host',
+				note: 'markers inert (no pointer, no hover), the button really `disabled` — the existing canPersist=false convention, unchanged',
+			},
+			{
+				id: 'r2 rr g4 lf1 ia',
+				label: 'ALT · Stepper popover',
+				note: 'if direct edit still feels too easy to trip: one click opens −/+/Catch Breath, so no stray click can mutate anything',
+			},
+		],
+	},
 };
 
 export interface HarnessParams {
@@ -798,6 +990,19 @@ async function mountBoard(
  * in the harness, rather than in `src/`, so round 3 leaves the plugin's DOM untouched
  * and the freeze/jest surfaces cannot move.
  */
+/**
+ * SC-132 round 4: a posed tooltip. Obsidian's real tooltip is a body-level popper that
+ * only exists while a pointer rests on its anchor, so a screenshot can never contain
+ * one. This draws the same shape, anchored to the element it belongs to, purely so a
+ * still can show what the hover SAYS — which for the condensed labelling (LF2) is the
+ * entire proposal, and for the Catch Breath button is where the heal is explained.
+ */
+function mockTip(anchor: HTMLElement, text: string): void {
+	anchor.style.position = 'relative';
+	const tip = createDiv({ cls: 'dse-stamina-rec__mocktip', text });
+	anchor.appendChild(tip);
+}
+
 function decorateStripCell(cell: HTMLElement, optId: string): void {
 	// Options COMPOSE ("cb1 r2 l1"), matching the CSS's `~=` token semantics — so this
 	// has to test membership, not equality.
@@ -823,6 +1028,152 @@ function decorateStripCell(cell: HTMLElement, optId: string): void {
 	if (opts.has('cb1')) {
 		const firstRemaining = pips.find((p) => p.classList.contains('dse-stamina-rec__pip--filled'));
 		firstRemaining?.setAttribute('data-demo', 'hover');
+	}
+
+	/* ---------------- ROUND 4 ---------------- */
+
+	// -- G3/G4/G5: digit-style grouping whitespace (Scott's own analogy). The gap goes
+	// BEFORE the first marker of each group after the first, so a row of 8 at G4 reads
+	// 4 · 4 rather than 4 · 4 · (a trailing gap). Stamped as an attribute rather than an
+	// inline margin so the size stays a CSS decision.
+	const groupSize = ['g3', 'g4', 'g5'].find((g) => opts.has(g));
+	if (groupSize) {
+		const n = Number(groupSize.slice(1));
+		pips.forEach((p, i) => {
+			if (i > 0 && i % n === 0) p.setAttribute('data-grp', 'start');
+		});
+	}
+
+	// -- P2/P3: temp stamina as a SECOND SUB-BAR instead of a plate appended past the
+	// pour. This changes the gauge's scale, so the numbers are re-derived here rather
+	// than re-guessed:
+	//
+	//   The panel publishes the appended model's geometry as percentages of the CHANNEL:
+	//   `--dse-zone` (the bulkhead's x, i.e. the dying reserve's width) and `--dse-max-x`
+	//   (where base max sits under the temp-widened scale). So `maxX - zone` is exactly
+	//   `max` stamina wide, and `live = 100 - zone` is the whole positive region.
+	//
+	//   The sub-bar placement drops the temp-widening: the main channel goes back to a
+	//   PURE max scale, so its right-hand edge IS base max and the mid-bar index mark
+	//   that Scott could not place stops existing at all. Everything already laid out
+	//   under the widened scale is therefore multiplied by k = live / (maxX - zone).
+	//
+	//   SCALE HONESTY (the SC-133 invariant, restated for a second lane): the temp lane
+	//   spans the SAME live region as the pour and is measured in the same units, so one
+	//   stamina point is the same number of pixels in both lanes — the whole point of a
+	//   second bar is lost if it silently uses its own scale. A temp value larger than
+	//   max therefore cannot fit; it is clamped and flagged (`data-overflow`) rather than
+	//   quietly rescaled, because "you have more temp than your entire body" is real
+	//   information the appended model shows and this one has to admit it cannot.
+	if (opts.has('p2') || opts.has('p3')) {
+		const root = cell.querySelector<HTMLElement>('.dse-stamina__cand');
+		const num = (name: string): number =>
+			Number.parseFloat(root?.style.getPropertyValue(name) ?? '');
+		const zone = num('--dse-zone');
+		const maxX = num('--dse-max-x');
+		const pourW = num('--dse-pour-w');
+		const windedX = num('--dse-winded-x');
+		const max = Number(cell.querySelector('.dse-stamina__cmax')?.textContent ?? '');
+		const temp = Number((cell.querySelector('.dse-stamina__ctemp')?.textContent ?? '').replace('+', ''));
+		const live = 100 - zone;
+		const maxSpan = maxX - zone;
+		if (root && Number.isFinite(zone) && maxSpan > 0 && max > 0) {
+			const k = live / maxSpan;
+			root.style.setProperty('--dse-pour-w', `${pourW * k}%`);
+			root.style.setProperty('--dse-winded-x', `${zone + (windedX - zone) * k}%`);
+			root.style.setProperty('--dse-max-x', '100%');
+			root.style.setProperty('--dse-cap-x', `${zone + pourW * k}%`);
+			root.style.setProperty('--dse-cap-w', '0%');
+			// Expressed as a percentage of the CHANNEL, exactly like `--dse-pour-w`, and
+			// the lane's box is the channel's box — so "same px-per-point in both lanes"
+			// is not a claim, it is the same arithmetic on the same denominator, and a
+			// probe can assert it directly (subfill.width / temp === pour.width / current).
+			const wanted = Number.isFinite(temp) && temp > 0 ? (temp / max) * live : 0;
+			root.style.setProperty('--dse-sub-w', `${Math.min(wanted, live)}%`);
+			root.setAttribute('data-suboverflow', wanted > live ? 'on' : 'off');
+			const gauge = cell.querySelector<HTMLElement>('.dse-stamina__gauge');
+			const channel = cell.querySelector<HTMLElement>('.dse-stamina__gchannel');
+			if (gauge && channel) {
+				const lane = createDiv({ cls: 'dse-stamina__sublane' });
+				lane.createDiv({ cls: 'dse-stamina__subfill' });
+				if (opts.has('p3')) channel.insertAdjacentElement('beforebegin', lane);
+				else channel.insertAdjacentElement('afterend', lane);
+			}
+		}
+	}
+
+	// -- The interaction model (item 5). Every one of these is a state a POINTER or a
+	// TIMER would produce, which a still cannot reach — so the harness poses it. None of
+	// this is proposed DOM; it is a mock of behaviour, and the captions say so.
+	if (rec && pips.length) {
+		const spent = pips.filter((p) => !p.classList.contains('dse-stamina-rec__pip--filled'));
+		const avail = pips.filter((p) => p.classList.contains('dse-stamina-rec__pip--filled'));
+		// The model is "a marker SETS the count", not "a marker toggles itself" — which is
+		// what makes both edges behave the way a reader expects (clicking the last
+		// available spends exactly one; clicking the first spent restores exactly one)
+		// while still reaching any value in a single click. The RAW needs that reach:
+		// "the target loses 1d3 Recoveries" is a real and recurring monster rider.
+		//
+		// 2 — the last AVAILABLE marker under the pointer: a click here spends exactly 1.
+		if (opts.has('ih-spend')) {
+			const target = avail[avail.length - 1];
+			target?.setAttribute('data-demo', 'spend');
+			if (target) mockTip(target, 'Spend 1 — leaves 4');
+		}
+		// 3 — three back: the same gesture reaching a multi-recovery loss in one click.
+		if (opts.has('ih-spend3')) {
+			for (const p of avail.slice(-3)) p.setAttribute('data-demo', 'spend');
+			const target = avail[avail.length - 3];
+			if (target) mockTip(target, 'Spend 3 — leaves 2');
+		}
+		// 4 — the first SPENT marker: the "add one back" direction, same gesture.
+		if (opts.has('ih-restore')) {
+			const target = spent[0];
+			target?.setAttribute('data-demo', 'restore');
+			if (target) mockTip(target, 'Restore 1 — back to 6');
+		}
+		// 7 — keyboard: one tabstop for the group, arrows within it.
+		if (opts.has('if')) avail[avail.length - 1]?.setAttribute('data-demo', 'focus');
+	}
+	const btn = cell.querySelector<HTMLElement>('.dse-stamina-rec .dse-btn');
+	if (btn && opts.has('ih-cb')) {
+		btn.setAttribute('data-demo', 'hover');
+		mockTip(btn, 'Catch Breath — spend 1 recovery, regain 10 Stamina');
+	}
+	if (btn && opts.has('id')) btn.setAttribute('disabled', '');
+	// LF2's whole proposition is that the fraction lives in the tooltip, so the tooltip
+	// has to be in the picture.
+	if (rec && opts.has('lf2')) {
+		const left = pips.filter((p) => p.classList.contains('dse-stamina-rec__pip--filled')).length;
+		mockTip(rec, `Recoveries — ${left} of ${pips.length} · Catch Breath restores 10 Stamina`);
+	}
+
+	// 5 — the Undo notice. An Obsidian `Notice` floats over the workspace corner; here it
+	// is drawn inline beneath the strip it belongs to, so the strip and the notice can be
+	// read as one moment.
+	if (rec && opts.has('it')) {
+		// The notice is what you see AFTER the change, so the strip above it has to be
+		// the post-change strip — a still that showed 5 markers over a notice announcing
+		// 4 would be arguing against itself. The last available marker is emptied here.
+		const avail = pips.filter((p) => p.classList.contains('dse-stamina-rec__pip--filled'));
+		avail[avail.length - 1]?.classList.remove('dse-stamina-rec__pip--filled');
+		const n = createDiv({ cls: 'dse-stamina-rec__notice' });
+		n.createSpan({ cls: 'dse-stamina-rec__notice-body', text: 'Caught breath — +10 Stamina, 4 recoveries left' });
+		n.createSpan({ cls: 'dse-stamina-rec__notice-undo', text: 'Undo' });
+		rec.insertAdjacentElement('afterend', n);
+	}
+
+	// ALT — the stepper popover: one click opens it, and only the controls INSIDE it
+	// mutate anything.
+	if (rec && opts.has('ia')) {
+		const pop = createDiv({ cls: 'dse-stamina-rec__pop' });
+		pop.createSpan({ cls: 'dse-stamina-rec__pop-title', text: 'Recoveries' });
+		pop.createSpan({ cls: 'dse-stamina-rec__pop-btn', text: '−' });
+		pop.createSpan({ cls: 'dse-stamina-rec__pop-val', text: '5 / 8' });
+		pop.createSpan({ cls: 'dse-stamina-rec__pop-btn', text: '+' });
+		pop.createSpan({ cls: 'dse-stamina-rec__pop-sep' });
+		pop.createSpan({ cls: 'dse-stamina-rec__pop-cb', text: 'Catch Breath' });
+		rec.insertAdjacentElement('afterend', pop);
 	}
 
 	// -- X1: the optional condition register ---------------------------------------

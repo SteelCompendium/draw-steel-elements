@@ -42,6 +42,14 @@ body.theme-light #mount:has(.dse-cand-head) { color: #22272b; }
 /* candidate C draws its banner open-bottomed (the recoveries strip IS the foot); when
    the foot is trimmed for a gauge-focused strip the plate has to be closed again. */
 .dse-cand-strip[data-strip="max-mark"] .dse-stamina__cand { border-bottom: 1px solid var(--dse-metal-faint) !important; border-radius: var(--dse-radius) !important; padding-bottom: .5rem !important; }
+/* SC-132 round 4 — the interaction strip's rows are the STATES OF ONE MODEL rather than
+   competing options, so it runs one wide column with a much longer explanation rail; and
+   its cells hold posed tooltips/notices that must not be cropped by the row box. */
+.dse-cand-strip[data-strip="interact"] { grid-template-columns: 330px 1fr; row-gap: 26px; align-items: start; }
+.dse-cand-strip[data-strip="interact"] .dse-cand-cell { padding-bottom: 26px; }
+.dse-cand-strip[data-strip="rec-final"] .dse-cand-cell { padding-bottom: 26px; }
+/* The two temp strips are gauge-only and benefit from more width per state column. */
+.dse-cand-strip[data-strip="temp-place"] { row-gap: 20px; }
 </style>
 </head>
 <body class="theme-dark">

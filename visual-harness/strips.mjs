@@ -47,6 +47,13 @@ const ALL = [
 	'dying',
 	'fresh',
 	'conditions',
+	// Round 4 (Scott's comment 34b0085d).
+	'temp-shield',
+	'temp-place',
+	'rec-shape2',
+	'rec-group',
+	'rec-final',
+	'interact',
 ];
 const STRIPS = args.strip ? [args.strip] : ALL;
 const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
