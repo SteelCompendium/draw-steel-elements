@@ -54,9 +54,16 @@ const ALL = [
 	'rec-group',
 	'rec-final',
 	'interact',
+	// Round 5 (Scott's comment 59638cd9): the one outstanding component confirm.
+	'rec-g4r6',
 ];
 const STRIPS = args.strip ? [args.strip] : ALL;
 const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
+
+// Per-strip page width, where the default 1400 is not enough. A twelve-marker recovery
+// row is ~330 CSS px on its own, so `rec-g4r6`'s three option columns need real room —
+// and a strip that WRAPS its markers would misreport the grouping it exists to confirm.
+const PAGE_WIDTH = { 'rec-g4r6': 1620 };
 
 const failures = [];
 
@@ -78,6 +85,7 @@ try {
 			const onErr = (e) => pageErrors.push(String(e));
 			page.on('pageerror', onErr);
 			try {
+				await page.setViewportSize({ width: PAGE_WIDTH[strip] ?? 1400, height: 320 });
 				await page.goto(`${pageUrl}?${new URLSearchParams({ strip, theme: 'steel', bg })}`);
 				await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
 					timeout: 20000,

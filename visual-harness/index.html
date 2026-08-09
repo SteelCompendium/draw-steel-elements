@@ -50,6 +50,11 @@ body.theme-light #mount:has(.dse-cand-head) { color: #22272b; }
 .dse-cand-strip[data-strip="rec-final"] .dse-cand-cell { padding-bottom: 26px; }
 /* The two temp strips are gauge-only and benefit from more width per state column. */
 .dse-cand-strip[data-strip="temp-place"] { row-gap: 20px; }
+/* SC-132 round 5 — TRANSPOSED strips (options across, states down): the option's label
+   and note ride in the column header, and the row rail carries the state instead. */
+.dse-cand-strip[data-transposed="on"] .dse-cand-colcap--opt { font: 600 12px/1.35 ui-sans-serif, system-ui, sans-serif; opacity: 1; text-transform: none; letter-spacing: 0; }
+.dse-cand-strip[data-transposed="on"] .dse-cand-colcap--opt .dse-cand-optlab-note { margin-bottom: 5px; }
+.dse-cand-strip[data-transposed="on"] > .dse-cand-optlab { font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; opacity: .5; }
 </style>
 </head>
 <body class="theme-dark">

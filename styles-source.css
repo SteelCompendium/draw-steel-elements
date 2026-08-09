@@ -7492,6 +7492,7 @@ button.dse-pr__row:hover {
 	margin-right: 0;
 	width: 100%;
 }
+
 /* ==================================================================== */
 /*  SC-132 CANDIDATE STAGE ONLY — stamina-cluster design directions      */
 /* ==================================================================== */
@@ -9285,5 +9286,252 @@ button.dse-pr__row:hover {
 	background: rgba(0, 0, 0, 0.24);
 }
 /* END SC-132 round 4 */
+
+/* ==================================================================== */
+/*  SC-132 ROUND 5 — ASSEMBLY JOINERY (the layout gate)                  */
+/* ==================================================================== */
+/*  Scott's round-4 ruling (comment 59638cd9) LOCKED the component set: S0 (the
+    shipped purple/violet temp plate — he disclosed he is colourblind and had not
+    perceived it as purple, which dissolves the blue question and leaves
+    `--dse-stamina-temp` untouched), P1 appended, R6 outlined cells, G4 pending one
+    confirm, Model M, on top of round 3's H2 / M1 / E1 / LF1+LF2.
+
+    So round 5 does NOT add component options. Each assembled layout is the SAME
+    round-3/round-4 tokens composed into one `data-dse-stamina-var` list (see
+    ASSEMBLIES in visual-harness/entry.ts) — an assembly is therefore matched by the
+    very CSS the approved strips were shot under and cannot drift from them.
+
+    The three tokens below are the JOINERY an assembly needs and a per-component strip
+    never did. None of them changes an approved component's appearance:
+
+      forged  A's milled channel treatment, made candidate-agnostic, so the C hybrid
+              can take A's channel as its gauge (the round-1 recommendation, which up
+              to now has only ever been described in prose).
+      foot    the recoveries strip as the plate's lower register, so a bar-first
+              layout is a composed object rather than a bar with a loose row under it.
+      rail    the condensed form's density adjustments: R6 at stud scale, and dying as
+              a BORDER only (Scott's round-3 ruling: border for the rail, border and
+              ground for the sheet).
+
+    Gating is unchanged and still tripled: the `[data-dse-stamina-cand]` root attribute
+    (harness-only), a `data-dse-stamina-var` token only the harness stamps, and the
+    standing `[data-dse-theme='steel']:not([data-dse-print="on"])` guard. `src/` gains no
+    DOM in round 5 either.                                                             */
+
+/* -------------------------------------------------------------------- */
+/*  forged — A's machined channel, available to any layout               */
+/* -------------------------------------------------------------------- */
+/*  Why the C hybrid needs this at all: C's marks are the site's RULE grammar (a ◆ seed
+    threaded on a 5px hairline), which was right when C's gauge was a 0.30rem underline.
+    At the locked H2 the gauge is a real 10px machined slot, and a ◆ floating in the
+    middle of a slot is exactly the "mark that missed its track" defect round 2 fixed.
+    On a track, a mark is a GRADUATION: milled into the two rails, sized to the interior.
+    Every value below therefore RESTATES a property C set, so the reset is total rather
+    than a partial override leaving C's rotation or half-height behind.                 */
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx {
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	width: 1px;
+	margin-left: -0.5px;
+	transform: none;
+	border-radius: 0;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::before,
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	width: 0.34rem;
+	height: 0.17rem;
+	margin-left: -0.17rem;
+	background: currentColor;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::before {
+	top: 0;
+	clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::after {
+	bottom: 0;
+	clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+/* The zero bulkhead is the one place a real EDGE exists in the material, so it alone
+   keeps a full-depth two-tone seam: shadow face on the reserve side, catch-light face
+   on the pour side. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	width: 2px;
+	margin-left: -1px;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
+}
+/* Notches only for the other thresholds — nothing draws a line across a pour that is
+   not actually divided there. (M1 hides the base-max one outright; this covers the
+   winded mark and keeps the rule true if M1 is ever revisited.) */
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__gidx--winded, .dse-stamina__gidx--max) {
+	background: transparent;
+}
+/* Dying changes the vessel's MATERIAL, so the state still reads with the pour at zero —
+   which is precisely when a colour-only bar has nothing left to say. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__gchannel {
+	border-color: var(--dse-stamina-dying);
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__gchannel::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	opacity: 0.34;
+	/* A FRACTURE — three or four hairlines — not a hatch fill; a dense hatch here would
+	   just re-create the Legacy overlay this whole direction replaces. */
+	background: repeating-linear-gradient(
+		114deg,
+		transparent 0 52px,
+		var(--dse-stamina-dying) 52px 53px,
+		transparent 53px 105px
+	);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='forged'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__ccur {
+	color: var(--dse-stamina-dying);
+}
+
+/* -------------------------------------------------------------------- */
+/*  foot — the recoveries strip as the plate's lower register            */
+/* -------------------------------------------------------------------- */
+/*  Candidate C has always closed its banner with a foot; a bar-first layout had no
+    plate at all until the Y strip gave it one, which left the recovery row floating
+    below a closed block. Same construction as C's foot, minus C's 26rem banner cap —
+    a bar-first layout is full-bleed by definition, and a foot narrower than the plate
+    it closes would read as a second object. Must stay AFTER the Y plate rule: equal
+    specificity, so source order is what lets it re-open the plate's bottom edge.      */
+[data-dse-stamina-cand] [data-dse-stamina-var~='foot'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand {
+	border-bottom: none;
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='foot'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	margin-top: 0;
+	padding: 0.4rem 0.7rem;
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='foot'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	background: rgba(0, 0, 0, 0.035);
+}
+/* THE FOOT HAS TO FOLLOW THE PLATE INTO ITS STATES, or a dying hero's block renders as
+   a flooded red banner sitting on an untouched grey drawer — two objects, which is the
+   exact opposite of what a foot is for. (Caught by looking at the first assembled
+   boards; it is invisible in a component strip, because a strip never shows the plate
+   and its foot in a non-resting state together.)
+
+   `~` and not `+`: on the standalone element the strip is the bar's next sibling, but
+   on the hero sheet the stamina stepper sits between them. `:has()` is how the state
+   reaches out at all — `[data-state]` lives on `.dse-stamina__cand`, three levels inside
+   the PRECEDING sibling, so no ancestor/sibling combinator alone can see it. Candidate D
+   already relies on `:has()`, and the plugin's support floor (Chromium 106) clears it.
+
+   Candidate C gets the same treatment through its own foot rule rather than the token,
+   because C's foot is part of the banner itself and predates this layer. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='foot'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='dying']) ~ .dse-stamina-rec,
+[data-dse-stamina-cand='c'] [data-dse-stamina-var] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='dying']) ~ .dse-stamina-rec {
+	border-color: var(--dse-stamina-dying);
+	background:
+		linear-gradient(104deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.9)),
+		var(--dse-stamina-dying);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='foot'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='dying']) ~ .dse-stamina-rec,
+[data-dse-stamina-cand='c'] body.theme-light [data-dse-stamina-var] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='dying']) ~ .dse-stamina-rec {
+	background:
+		linear-gradient(104deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.95)),
+		var(--dse-stamina-dying);
+}
+/* Winded is a SPINE change, not a ground change — C's "banner conditions" — so C's foot
+   picks up the amber left edge and nothing else. Deliberately NOT extended to the `foot`
+   token: layout A has no spine to continue (it is not heraldic), and an amber left edge
+   under an unchanged plate would be a mark with no antecedent. */
+[data-dse-stamina-cand='c'] [data-dse-stamina-var] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='winded']) ~ .dse-stamina-rec {
+	border-left-color: var(--dse-stamina-winded);
+}
+
+/* -------------------------------------------------------------------- */
+/*  rail — the condensed form's density adjustments                      */
+/* -------------------------------------------------------------------- */
+/*  R6's cells are sized for a hero sheet (1em × 0.74em). Twelve of them plus grouping
+    gaps is ~190px, which is most of a 300px sidebar leaf on its own — so on the rail
+    the SAME cell is cut to stud scale and the grouping gap is scaled with it, keeping
+    the 3:1 punctuation ratio the G strip established rather than letting the gap grow
+    relative to a smaller marker. The outline stays 1px: it is the part that makes the
+    row's LENGTH report the maximum, which is the whole reason R6 won.                 */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	width: 0.72em;
+	height: 0.56em;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips {
+	gap: 0.2em;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip[data-grp='start'] {
+	margin-left: 0.34em;
+}
+/* Dying on a rail is a BORDER, not a ground flood (Scott's round-3 ruling: "Y1 for the
+   rail, Y3 for the sheet"). Candidate D's own dying rule floods the ground, which is
+   right for a standalone 28px bar sitting alone on a page and wrong for a rail inside a
+   sheet that already has its own dying treatment — so the ground is restored to the
+   rail's resting plate and only the hairline changes. Equal specificity to D's rule, so
+   this must stay below it. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] {
+	background: rgba(0, 0, 0, 0.22);
+	border-color: var(--dse-stamina-dying);
+	box-shadow: var(--dse-bevel), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] {
+	background: rgba(0, 0, 0, 0.045);
+}
+/* The dying numeral has to carry the state instead, now that the ground does not. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__ccur {
+	color: var(--dse-stamina-dying);
+}
+
+/*  THE PLATE IS THE ROW, NOT THE BAR. Round 1 put the rail's plate on
+    `.dse-stamina__cand`, which holds only the crest, the numerals and the gauge — the
+    recovery studs and Catch Breath are SIBLINGS of the bar, so the instrument's border
+    ran between the gauge and the markers and the cluster read as "a bar, plus some loose
+    studs beside it". Enclosing the whole row is what makes the rail one object, and it is
+    what makes the SIDEBAR case survive: at 300px the row wraps, and a wrapped rail with
+    the plate on the parent is still one instrument on two lines instead of a plate with
+    an orphan row under it.
+
+    Standalone surfaces only (`:not(:has(> .dse-hero__region-title))`). On the hero sheet
+    the rail's parent is the stamina REGION, which already carries its own card chrome and
+    its own heading — a second border around the heading would be a box inside a box. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-stamina[data-cand='d']):not(:has(> .dse-hero__region-title)) {
+	/* 1.75rem is the SC-121 control height the rail is built to; the block padding is
+	   deliberately tiny (it only exists so a WRAPPED second line does not touch the
+	   plate's edge) because every px here is a px the "one 28px row" claim loses — the
+	   probe asserts the finished plate stays under 34px. */
+	min-height: 1.75rem;
+	padding: 0.1rem 0.5rem;
+	row-gap: 0.3rem;
+	background: rgba(0, 0, 0, 0.22);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 3px;
+	box-shadow: var(--dse-bevel);
+}
+[data-dse-stamina-cand] body.theme-light [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-stamina[data-cand='d']):not(:has(> .dse-hero__region-title)) {
+	background: rgba(0, 0, 0, 0.045);
+}
+/* …and the inner plate stands down, or the row is a box inside a box. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) :not(:has(> .dse-hero__region-title)) > .dse-stamina[data-cand='d'] .dse-stamina__cand {
+	min-height: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+}
+/* Dying, on the enclosing plate: the hairline only (the rail ruling). The stand-down
+   rule above out-specifies both D's dying ground and the rail's own, so the inner plate
+   is already silent in every state and there is exactly one border left to change. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-stamina[data-cand='d'] .dse-stamina__cand[data-state='dying']):not(:has(> .dse-hero__region-title)) {
+	border-color: var(--dse-stamina-dying);
+}
+
+/* END SC-132 round 5 */
 
 /* END SC-132 candidate region */

@@ -331,12 +331,22 @@ export const CANDIDATE_FIXTURES: Record<string, Record<string, string>> = {
 		// value, 12 the high end), so it is the worst case for "count them at a glance".
 		'rec-12': staminaState(24, 0, 7, 12),
 		'rec-12-full': staminaState(24, 0, 12, 12),
+		// SC-132 round 5: the G4×R6 confirm needs the ALL-SPENT case at the long count
+		// too — 0-of-12 is where an ungrouped row is hardest to count and where R6's
+		// "the outline is always there" claim has to hold up.
+		'rec-12-none': staminaState(24, 0, 0, 12),
 	},
 	hero: {
 		healthy: heroState(24, 0, 5),
 		temp: heroState(24, 6, 5),
 		winded: heroState(11, 0, 2),
 		dying: heroState(-4, 0, 0),
+		// SC-132 round 5: the three SC-133 geometry cases IN CONTEXT. Rounds 1-4 only
+		// ever proved them on the standalone element; the layout pick is the last gate
+		// before implementation, so the hero sheet has to show them too.
+		'temp-full': heroState(30, 6, 5),
+		'temp-over': heroState(8, 40, 5),
+		'temp-dying': heroState(-4, 5, 0),
 	},
 };
 
@@ -403,6 +413,15 @@ interface StripDef {
 	focus?: 'gauge' | 'rec' | 'full';
 	/** CSS `zoom` on each cell, for boundary-level crops. */
 	zoom?: number;
+	/**
+	 * Swap the axes: OPTIONS become the columns and STATES the rows. The default
+	 * (options as rows) is right when there are few states and the question is "does
+	 * this option survive every state"; transposing is right when there are more states
+	 * than options and the cell content is WIDE — a 12-marker recovery row simply does
+	 * not fit in a sixth of the page, and a wrapped row would misreport the grouping
+	 * that is the thing under review.
+	 */
+	transpose?: boolean;
 	states: StripState[];
 	options: StripOption[];
 }
@@ -776,6 +795,148 @@ export const STRIPS: Record<string, StripDef> = {
 			},
 		],
 	},
+
+	/* R5-1 — the ONE outstanding component confirm. Scott: "Group size - soft approval
+	   of G4, but I want to see it with the R6 outlined cells to confirm first."
+	   Round 4 shot grouping on R2 studs, where the gap separates SOLID objects; R6's
+	   cells carry a permanent outline of their own, so the question is genuinely
+	   different — does a 0.5em gap still read as punctuation when every marker is
+	   already a bordered box? G0 is carried as the control so the answer is visible
+	   rather than asserted, and both label forms are shown because the eyebrow changes
+	   how much horizontal room the row has to punctuate. */
+	'rec-g4r6': {
+		title: 'Recovery grouping, confirmed on the R6 cells you picked',
+		sub: 'R6 outlined fill-in cells throughout · G4 = a gap every 4 · both real recovery counts, every fill state',
+		cand: 'a',
+		focus: 'rec',
+		// Six states against three options, and a 12-marker row is ~330px wide — so the
+		// options go across and the states go down. Untransposed, a 12-cell row wraps
+		// onto two lines and the grouping (the thing being confirmed) becomes unreadable.
+		transpose: true,
+		states: [
+			{ fixture: 'rec-full', caption: '8 of 8 — none spent' },
+			{ fixture: 'healthy', caption: '5 of 8 — partly spent' },
+			{ fixture: 'rec-none', caption: '0 of 8 — all spent' },
+			{ fixture: 'rec-12-full', caption: '12 of 12 — none spent' },
+			{ fixture: 'rec-12', caption: '7 of 12 — partly spent' },
+			{ fixture: 'rec-12-none', caption: '0 of 12 — all spent' },
+		],
+		options: [
+			{
+				id: 'r6 g0 lf1 im',
+				label: 'G0 — R6 ungrouped (control)',
+				note: 'the R6 row exactly as you approved it, with no punctuation — the thing G4 has to beat',
+			},
+			{
+				id: 'r6 g4 lf1 im',
+				label: 'G4 — hero-sheet form (RECOVERIES eyebrow)',
+				note: 'a gap every 4 cells · 8 → 4·4, 12 → 4·4·4. The form the full sheet uses',
+			},
+			{
+				id: 'r6 g4 lf2 notip im',
+				label: 'G4 — condensed form (no label)',
+				note: 'the same row with the eyebrow gone (rail / statblock / initiative). The count lives in the tooltip only',
+			},
+		],
+	},
+};
+
+/* ------------------------------------------------------------------ */
+/* SC-132 ROUND 5 — the ASSEMBLED layouts (the final design gate)       */
+/* ------------------------------------------------------------------ */
+/*
+   Scott deferred the layout pick through four rounds so the COMPONENTS could be
+   settled first. After his round-4 ruling (comment 59638cd9) they are, so this
+   round stops showing option menus and assembles the locked set into whole
+   layouts — the pick is now between finished objects, not between promises.
+
+   THE LOCKED SET, and where each piece comes from — every one of these is an
+   EXISTING round-3/round-4 variant token, composed rather than re-authored, so an
+   assembly is literally the components Scott approved and cannot silently drift
+   from the strips he approved them in:
+
+     e1    temp-edge forged seam            (round 3, locked)
+     m1    base-max index mark dropped      (round 3, locked)
+     h2    0.62rem channel                  (round 3, locked)
+     t?    — none: S0 keeps the SHIPPED purple/violet temp plate, so there is no
+             material token at all. `--dse-stamina-temp` is untouched.
+     P1    — none: appended is the default geometry, so there is no token either.
+     r6    outlined fill-in cells (▱)       (round 4, picked)
+     g4    a gap every 4 markers            (round 4, soft-approved → confirmed above)
+     lf1   RECOVERIES eyebrow, no fraction  (round 4, ruling — full forms)
+     lf2   no label, tooltip only           (round 4, ruling — condensed form)
+     im    Model M: icon-only Catch Breath, markers are a value control (round 4)
+
+   The three round-5 tokens (`forged`, `foot`, `rail`) are NOT new component
+   options — they are the joinery an assembly needs and a strip never did: A's
+   milled channel treatment made candidate-agnostic so the C hybrid can take it,
+   a plate foot so a bar-first layout is a composed object rather than a bar with
+   a loose row under it, and the rail's density adjustments. See the CSS.
+*/
+interface AssemblyDef {
+	title: string;
+	sub: string;
+	/** The base layout candidate this assembly is built on. */
+	cand: StaminaCandidate;
+	/** Composed `data-dse-stamina-var` tokens, stamped on every board row. */
+	vars: string;
+	/** Rows to draw per surface. */
+	rows: { 'stamina-bar': { fixture: string; caption: string }[]; hero: { fixture: string; caption: string }[] };
+}
+
+/** The standalone element's full honest-state matrix, incl. the three SC-133 cases. */
+const ASM_ROWS_BAR: { fixture: string; caption: string }[] = [
+	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
+	{ fixture: 'temp', caption: 'Temp Stamina — 24/30 +6' },
+	{ fixture: 'winded', caption: 'Winded — 11/30 (at or below half)' },
+	{ fixture: 'dying', caption: 'Dying — -4/30 (in the dying zone)' },
+	{ fixture: 'temp-full', caption: 'SC-133 · Temp at full Stamina — 30/30 +6' },
+	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40' },
+	{ fixture: 'temp-dying', caption: 'SC-133 · Temp while dying — -4/30 +5' },
+];
+
+/* The hero sheet is a whole flagship composition per row (~800 CSS px each), so the
+   CONTEXT board takes the three rows that decide something the standalone board cannot
+   — how the cluster sits inside the sheet's grid at rest, whether the widest temp case
+   still fits the sheet's narrow stamina column, and how the dying treatment reads next
+   to the sheet's other regions — rather than repeating a matrix already proven. */
+const ASM_ROWS_HERO: { fixture: string; caption: string }[] = [
+	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
+	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40' },
+	{ fixture: 'dying', caption: 'Dying — -4/30' },
+];
+
+const ASM_ROWS = { 'stamina-bar': ASM_ROWS_BAR, hero: ASM_ROWS_HERO };
+
+export const ASSEMBLIES: Record<string, AssemblyDef> = {
+	/* LA — the bar-first reading. The instrument IS the interface: a wide machined
+	   channel with the numerals in a head lane above it, no crest, no heraldry. */
+	la: {
+		title: 'Layout A — “Forged Gauge”, assembled',
+		sub: 'Bar-first · full-width machined channel · numerals in the head lane · no crest · plate + foot',
+		cand: 'a',
+		vars: 'e1 m1 h2 forged r6 g4 im lf1 y3 foot',
+		rows: ASM_ROWS,
+	},
+	/* LC — the number-first reading, and the hybrid that was recommended in round 1
+	   and never yet built: C's banner grammar carrying A's channel instead of C's
+	   hairline rule (which is what "left a bit wanting… maybe its too short" was). */
+	lc: {
+		title: 'Layout C — “Banner & Crest” × the forged channel, assembled',
+		sub: 'Number-first · 2em embossed numerals · crest carries the state · banner conditions · A’s H2 channel as the gauge',
+		cand: 'c',
+		vars: 'e1 m1 h2 forged r6 g4 im lf1',
+		rows: ASM_ROWS,
+	},
+	/* LD — the DENSITY VARIANT of the same components, not a fourth design: one 28px
+	   row that survives a sidebar leaf. */
+	ld: {
+		title: 'Layout D — “Sheet Rail”, the condensed form of the same components',
+		sub: 'One 28px row · crest · numerals · elastic gauge · R6 studs with G4 grouping · icon-only Catch Breath · no label',
+		cand: 'd',
+		vars: 'e1 m1 h2 r6 g4 im lf2 notip rail',
+		rows: ASM_ROWS,
+	},
 };
 
 export interface HarnessParams {
@@ -794,6 +955,8 @@ export interface HarnessParams {
 	board?: 'stamina-bar' | 'hero' | null;
 	/** SC-132 round 3: render the named per-component option strip. */
 	strip?: string | null;
+	/** SC-132 round 5: render the named ASSEMBLED layout's board (needs `board` too). */
+	asm?: string | null;
 }
 
 export function parseParams(search: string): HarnessParams {
@@ -812,6 +975,7 @@ export function parseParams(search: string): HarnessParams {
 		cand: parseStaminaCandidate(q.get('cand')),
 		board: board === 'stamina-bar' || board === 'hero' ? board : null,
 		strip: q.get('strip'),
+		asm: q.get('asm'),
 	};
 }
 
@@ -986,6 +1150,62 @@ async function mountBoard(
 }
 
 /**
+ * SC-132 round 5: an ASSEMBLED layout's state-matrix board. Same shape as
+ * `mountBoard`, with one difference that is the whole point of the round: every row
+ * is wrapped in the assembly's composed `data-dse-stamina-var` token list, so a board
+ * shows the LOCKED COMPONENTS in that layout rather than the layout's round-1
+ * defaults. The tokens are the same ones their own strips were shot under — an
+ * assembly cannot drift from the strip Scott approved it in, because it is the same
+ * CSS matching on the same attribute.
+ *
+ * The attribute goes on the ROW, not on the mount's own container: candidate D's rail
+ * uses `:has(> .dse-stamina[data-cand='d'])` to convert the bar's IMMEDIATE parent
+ * into the rail, so anything inserted between the two would silently un-rail it.
+ */
+async function mountAsmBoard(
+	pipeline: ElementPipeline,
+	registry: ElementRegistry,
+	mount: HTMLElement,
+	def: AssemblyDef,
+	params: HarnessParams,
+	errors: string[],
+): Promise<void> {
+	const element = params.board === 'hero' ? 'hero' : 'stamina-bar';
+	const head = mount.createDiv({ cls: 'dse-cand-head' });
+	head.createDiv({ cls: 'dse-cand-title', text: def.title });
+	head.createDiv({
+		cls: 'dse-cand-sub',
+		text: `${def.sub} · ${element === 'hero' ? 'hero sheet' : 'standalone ds-stamina element'} · Steel · ${params.bg} scheme${params.width ? ` · ${params.width}px (sidebar leaf)` : ''}`,
+	});
+
+	// Read-only is a HOST state and identical on both surfaces, so it rides the standalone
+	// board only — a second full hero sheet to prove one dimmed button is not worth 800px.
+	const rows =
+		element === 'hero'
+			? def.rows.hero
+			: [...def.rows['stamina-bar'], { fixture: 'READONLY', caption: 'Read-only — inert (canPersist false)' }];
+	for (const row of rows) {
+		const sec = mount.createDiv({ cls: 'dse-cand-row' });
+		sec.setAttribute('data-dse-stamina-var', def.vars);
+		sec.createDiv({ cls: 'dse-cand-cap', text: row.caption });
+		// Read-only is a HOST state, not a fixture — driven by `canPersist: false`, which
+		// is the plugin's REAL inert rendering. Deliberately NOT the round-4 `id` mock:
+		// on a board the honest thing is the state the host actually produces.
+		const ro = row.fixture === 'READONLY';
+		await mountOne(
+			pipeline,
+			registry,
+			sec,
+			element,
+			ro ? 'healthy' : row.fixture,
+			{ ...params, readonly: ro },
+			errors,
+		);
+		decorateStripCell(sec, def.vars);
+	}
+}
+
+/**
  * SC-132 round 3: everything a strip needs that the PLUGIN does not emit. Kept here,
  * in the harness, rather than in `src/`, so round 3 leaves the plugin's DOM untouched
  * and the freeze/jest surfaces cannot move.
@@ -1142,8 +1362,10 @@ function decorateStripCell(cell: HTMLElement, optId: string): void {
 	}
 	if (btn && opts.has('id')) btn.setAttribute('disabled', '');
 	// LF2's whole proposition is that the fraction lives in the tooltip, so the tooltip
-	// has to be in the picture.
-	if (rec && opts.has('lf2')) {
+	// has to be in the picture — EXCEPT where LF2 is only along for the ride (round 5
+	// composes it into the assembled rail and into the grouping confirm, where six posed
+	// tooltips would bury the thing actually under review). `notip` opts out.
+	if (rec && opts.has('lf2') && !opts.has('notip')) {
 		const left = pips.filter((p) => p.classList.contains('dse-stamina-rec__pip--filled')).length;
 		mockTip(rec, `Recoveries — ${left} of ${pips.length} · Catch Breath restores 10 Stamina`);
 	}
@@ -1237,8 +1459,35 @@ async function mountStrip(
 	const grid = mount.createDiv({ cls: 'dse-cand-strip' });
 	if (params.strip) grid.setAttribute('data-strip', params.strip);
 	if (def.focus) grid.setAttribute('data-focus', def.focus);
-	grid.style.setProperty('--cols', String(def.states.length));
 
+	const mountCell = async (opt: StripOption, st: StripState): Promise<void> => {
+		const cell = grid.createDiv({ cls: 'dse-cand-cell' });
+		cell.setAttribute('data-dse-stamina-var', opt.id);
+		if (def.zoom) cell.style.zoom = String(def.zoom);
+		await mountOne(pipeline, registry, cell, element, st.fixture, { ...params, readonly: st.readonly ?? false }, errors);
+		decorateStripCell(cell, opt.id);
+	};
+
+	if (def.transpose) {
+		// Columns are OPTIONS, rows are STATES. The option's label and note move into the
+		// column header, so the reading direction inverts: down a column is one option
+		// through every state, across a row is every option at one state.
+		grid.style.setProperty('--cols', String(def.options.length));
+		grid.setAttribute('data-transposed', 'on');
+		grid.createDiv({ cls: 'dse-cand-optlab dse-cand-optlab--corner' });
+		for (const opt of def.options) {
+			const head = grid.createDiv({ cls: 'dse-cand-colcap dse-cand-colcap--opt' });
+			head.createDiv({ cls: 'dse-cand-optlab-name', text: opt.label });
+			if (opt.note) head.createDiv({ cls: 'dse-cand-optlab-note', text: opt.note });
+		}
+		for (const st of def.states) {
+			grid.createDiv({ cls: 'dse-cand-optlab', text: st.caption });
+			for (const opt of def.options) await mountCell(opt, st);
+		}
+		return;
+	}
+
+	grid.style.setProperty('--cols', String(def.states.length));
 	// Column headers, once at the top — the state is constant down a column.
 	grid.createDiv({ cls: 'dse-cand-optlab dse-cand-optlab--corner' });
 	for (const st of def.states) grid.createDiv({ cls: 'dse-cand-colcap', text: st.caption });
@@ -1247,13 +1496,7 @@ async function mountStrip(
 		const lab = grid.createDiv({ cls: 'dse-cand-optlab' });
 		lab.createDiv({ cls: 'dse-cand-optlab-name', text: opt.label });
 		if (opt.note) lab.createDiv({ cls: 'dse-cand-optlab-note', text: opt.note });
-		for (const st of def.states) {
-			const cell = grid.createDiv({ cls: 'dse-cand-cell' });
-			cell.setAttribute('data-dse-stamina-var', opt.id);
-			if (def.zoom) cell.style.zoom = String(def.zoom);
-			await mountOne(pipeline, registry, cell, element, st.fixture, { ...params, readonly: st.readonly ?? false }, errors);
-			decorateStripCell(cell, opt.id);
-		}
+		for (const st of def.states) await mountCell(opt, st);
 	}
 }
 
@@ -1288,6 +1531,22 @@ export async function mountFromParams(
 		doc.documentElement.setAttribute('data-dse-stamina-cand', def.cand);
 		mount.style.width = '';
 		await mountStrip(pipeline, registry, mount, def, params, errors);
+		for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
+			errors.push(`error card: ${(card.textContent ?? '').slice(0, 160)}`);
+		}
+		return { errors };
+	}
+	if (params.asm) {
+		const def = ASSEMBLIES[params.asm];
+		if (!def) return { errors: [`unknown assembly: ${params.asm}`] };
+		// An assembly is defined against ONE base layout, so it wins over any `?cand=`.
+		setStaminaCandidate(def.cand);
+		doc.documentElement.setAttribute('data-dse-stamina-cand', def.cand);
+		// …but `?width=` is honoured here (unlike the round-1 boards, which force full
+		// width): the rail's whole claim is that it survives a sidebar leaf, and that is
+		// only testable at a pinned width.
+		mount.style.width = params.width ? `${params.width}px` : '';
+		await mountAsmBoard(pipeline, registry, mount, def, params, errors);
 		for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
 			errors.push(`error card: ${(card.textContent ?? '').slice(0, 160)}`);
 		}

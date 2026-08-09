@@ -1,0 +1,112 @@
+#!/usr/bin/env node
+// visual-harness/assemblies.mjs — SC-132 ROUND 5 camera: the ASSEMBLED layouts.
+//
+// Rounds 1-2 put four whole-cluster layouts up for a pick and Scott deferred it until
+// the components were settled; rounds 3-4 settled them. This camera shoots the locked
+// component set assembled into each surviving layout, as full state-matrix boards, so
+// the layout pick is made against finished objects rather than against promises.
+//
+// Same quarantine as candidates.mjs / strips.mjs, for the same reasons: a SEPARATE
+// camera writing to the SEPARATE `shots-candidates/` directory, driven by fixtures that
+// are off the manifest, so `npm run shots` and the freeze surface cannot see any of it.
+//
+// Output: visual-harness/shots-candidates/asm--<layout>--<surface>[--w<px>]--<scheme>.png
+//
+// Usage: node visual-harness/assemblies.mjs [--asm=la] [--scheme=dark]
+import { chromium } from 'playwright';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const dir = path.dirname(fileURLToPath(import.meta.url));
+const pageUrl = 'file://' + path.join(dir, 'index.html');
+const outDir = path.join(dir, 'shots-candidates');
+fs.mkdirSync(outDir, { recursive: true });
+
+const args = Object.fromEntries(
+	process.argv
+		.slice(2)
+		.filter((a) => a.startsWith('--'))
+		.map((a) => {
+			const [k, v] = a.replace(/^--/, '').split('=');
+			return [k, v ?? '1'];
+		}),
+);
+
+// Kept in sync with ASSEMBLIES in entry.ts; an unknown id fails the run loudly rather
+// than writing a blank board.
+const ALL = ['la', 'lc', 'ld'];
+const ASMS = args.asm ? [args.asm] : ALL;
+const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
+const SURFACES = ['stamina-bar', 'hero'];
+
+// 300px is Obsidian's default right-sidebar leaf width (the same number NARROW_SHOTS
+// uses). Only the rail claims to survive it, so only the rail is shot there — the other
+// two layouts would just be reporting that a full-width composition wraps, which is not
+// the question on the table.
+const NARROW = [{ asm: 'ld', surface: 'stamina-bar', width: 300 }];
+
+const failures = [];
+
+const browser = await chromium.launch();
+// 760px, not the round-1 boards' 1000px: the cluster's widest member is C's banner at
+// 26rem (416px), so 1000px was mostly empty plate, and a narrower board keeps a
+// full-matrix screenshot legible when Linear scales it down.
+const context = await browser.newContext({
+	viewport: { width: 760, height: 900 },
+	deviceScaleFactor: 2,
+});
+const page = await context.newPage();
+
+async function snap(params, outName) {
+	const pageErrors = [];
+	const onErr = (e) => pageErrors.push(String(e));
+	page.on('pageerror', onErr);
+	try {
+		await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
+			timeout: 20000,
+		});
+		const done = await page.evaluate(() => window.__dseHarnessDone);
+		const errors = [...done.errors, ...pageErrors];
+		const file = path.join(outDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
+		await page.screenshot({ path: file, fullPage: true });
+		if (errors.length) failures.push({ outName, errors });
+		console.log(`${errors.length ? 'FAIL' : '  ok'} ${path.basename(file)}`);
+	} catch (e) {
+		failures.push({ outName, errors: ['exception: ' + String(e)] });
+		console.log(`FAIL ${outName} (exception)`);
+	} finally {
+		page.off('pageerror', onErr);
+	}
+}
+
+try {
+	for (const asm of ASMS) {
+		for (const surface of SURFACES) {
+			for (const bg of SCHEMES) {
+				await snap({ asm, board: surface, theme: 'steel', bg }, `asm--${asm}--${surface}--${bg}`);
+			}
+		}
+	}
+	for (const n of NARROW) {
+		if (!ASMS.includes(n.asm)) continue;
+		for (const bg of SCHEMES) {
+			await snap(
+				{ asm: n.asm, board: n.surface, theme: 'steel', bg, width: String(n.width) },
+				`asm--${n.asm}--${n.surface}--w${n.width}--${bg}`,
+			);
+		}
+	}
+} catch (e) {
+	failures.push({ outName: 'sweep', errors: ['exception: ' + String(e)] });
+} finally {
+	await browser.close();
+}
+
+if (failures.length) {
+	console.error(`\n${failures.length} board(s) had errors:`);
+	for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
+	process.exit(1);
+}
+console.log(`\nassembly boards written to ${outDir}`);
