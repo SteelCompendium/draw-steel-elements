@@ -353,12 +353,23 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     /** D4: the debounced saveData adapter behind the PreferenceStore; flushed on unload. */
     private prefsStorage?: FlushablePrefsStorage;
 
+    /** SC-131: the declarative settings tab, kept so onload can `update()` it once the
+     *  PreferenceStore exists (registration happens before the framework is built). */
+    private settingTab!: DseSettingTab;
+
     async onload() {
         // Initialize schema registry with all common schemas
         this.initializeSchemas();
 
         await this.loadSettings();
-        this.addSettingTab(new DseSettingTab(this.app, this));
+        // SC-131: kept as a field because the settings tab is DECLARATIVE now. Obsidian
+        // calls getSettingDefinitions() once at registration to build the settings search
+        // index, and that happens here — before initializeElementFrameworkV2 below, so
+        // the PreferenceStore does not exist yet and the six descriptor-driven pages
+        // would be missing from both the index and the rendered tab. `update()` after the
+        // framework is up re-reads the definitions with prefs in hand.
+        this.settingTab = new DseSettingTab(this.app, this);
+        this.addSettingTab(this.settingTab);
 
         // Legacy registration path — now registers NOTHING (Plan 07 Task 5: all 11
         // elements are migrated onto Framework v2 and registered below). The call stays
@@ -392,6 +403,9 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             this.compendiumIndex,
         );
         this.frameworkV2 = frameworkV2;
+        // The PreferenceStore now exists — re-read the settings definitions so the
+        // descriptor-driven pages appear (see addSettingTab above).
+        this.settingTab.update();
 
         // F2 Task 10: the compendium sync engine. ManifestStore is pure vault-file
         // bookkeeping (Task 8); CompendiumSyncService's default `requestUrlFn` param

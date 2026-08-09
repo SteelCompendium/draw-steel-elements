@@ -16,44 +16,114 @@ function rowByName(name: string): Setting {
 	return row;
 }
 
-// SC-131: the tab is a navigation SHELL now — only the active section's rows are in the
-// DOM. Every pre-SC-131 row assertion below therefore opens its section first, the way a
-// user does (a real click on the real nav tab), rather than being retargeted at a
-// non-shipping render mode.
-function openSection(tab: DseSettingTab, label: string): void {
-	const tabs = Array.from(
-		(tab.containerEl as HTMLElement).querySelectorAll<HTMLElement>('.dse-settings-nav__tab'),
-	);
-	const button = tabs.find((candidate) => candidate.textContent === label);
-	if (!button) {
-		throw new Error(
-			`no nav tab labelled "${label}" (have: ${tabs.map((t) => t.textContent).join(', ')})`,
-		);
+// —— SC-131: the tab is DECLARATIVE now. It returns a definition tree from
+// getSettingDefinitions() and obsidian renders it; there is no display(). These helpers
+// are a faithful stand-in for that renderer — they walk the tree, create one Setting per
+// definition, and wire `control` bindings through the tab's own
+// getControlValue/setControlValue, which is exactly the path a native control takes. So
+// the row-level assertions below still exercise the real save + live-apply chain. ——
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Def = any;
+
+/** The top-level definitions: one page per section, plus the reset-all action. */
+function definitions(tab: DseSettingTab): Def[] {
+	return (tab as any).getSettingDefinitions() as Def[];
+}
+
+/** The top-level page definitions, in order. */
+function pages(tab: DseSettingTab): Def[] {
+	return definitions(tab).filter((d) => d?.type === 'page');
+}
+
+function pageNames(tab: DseSettingTab): string[] {
+	return pages(tab).map((p) => p.name);
+}
+
+function pageNamed(tab: DseSettingTab, name: string): Def {
+	const page = pages(tab).find((p) => p.name === name);
+	if (!page) throw new Error(`no page named "${name}" (have: ${pageNames(tab).join(', ')})`);
+	return page;
+}
+
+/** Every setting definition on a page, groups flattened and nested pages descended into
+ *  (so an Advanced row is reachable by name the way search reaches it). */
+function rowDefs(items: Def[] = []): Def[] {
+	const out: Def[] = [];
+	for (const item of items) {
+		if (!item) continue;
+		if (item.type === 'group' || item.type === 'page') out.push(...rowDefs(item.items ?? []));
+		else out.push(item);
 	}
-	button.click();
+	return out;
 }
 
-function navLabels(tab: DseSettingTab): string[] {
-	return Array.from(
-		(tab.containerEl as HTMLElement).querySelectorAll<HTMLElement>('.dse-settings-nav__tab'),
-	).map((t) => t.textContent ?? '');
+/** Binds one native control the way obsidian does, through the tab's value accessors. */
+function bindControl(tab: DseSettingTab, setting: Setting, control: Def): void {
+	const read = (): any => (tab as any).getControlValue(control.key);
+	const write = (value: unknown): void => void (tab as any).setControlValue(control.key, value);
+	switch (control.type) {
+		case 'toggle':
+			setting.addToggle((t) => t.setValue(read() === true).onChange(write));
+			break;
+		case 'dropdown':
+			setting.addDropdown((d) => {
+				for (const [value, label] of Object.entries(control.options ?? {})) d.addOption(value, label as string);
+				d.setValue(String(read() ?? '')).onChange(write);
+			});
+			break;
+		case 'text':
+		case 'file':
+		case 'folder':
+			setting.addText((t) => {
+				if (control.placeholder) t.setPlaceholder(control.placeholder);
+				t.setValue(String(read() ?? '')).onChange(write);
+			});
+			break;
+		case 'slider':
+			setting.addSlider((sl) =>
+				sl
+					.setLimits(control.min, control.max, control.step)
+					.setValue(Number(read() ?? control.min))
+					.setDynamicTooltip()
+					.onChange(write),
+			);
+			break;
+		default:
+			throw new Error(`unhandled control type "${control.type}"`);
+	}
 }
 
-function searchFor(tab: DseSettingTab, query: string): void {
-	const input = (tab.containerEl as HTMLElement).querySelector<HTMLInputElement>(
-		'.dse-settings-search__input',
-	);
-	if (!input) throw new Error('no search field — is the shell in a mode that has one?');
-	input.value = query;
-	input.dispatchEvent(new Event('input'));
+function renderDefs(tab: DseSettingTab, container: HTMLElement, items: Def[]): void {
+	for (const def of items) {
+		if (!def) continue;
+		if (def.type === 'group' || def.type === 'page') {
+			renderDefs(tab, container, def.items ?? []);
+			continue;
+		}
+		const setting = new Setting(container);
+		if (def.name) setting.setName(def.name);
+		if (typeof def.desc === 'string') setting.setDesc(def.desc);
+		if (def.control) bindControl(tab, setting, def.control);
+		else if (def.render) def.render(setting);
+		else if (def.action) setting.addButton((b) => b.setButtonText(def.name).onClick(() => def.action(setting.settingEl, 0)));
+	}
 }
 
-/** Row names currently in the DOM (the shell renders a subset, so Setting.created —
- *  which is cumulative across re-renders — is the wrong question). */
-function visibleRowNames(tab: DseSettingTab): string[] {
-	return Array.from(
-		(tab.containerEl as HTMLElement).querySelectorAll<HTMLElement>('[data-setting-name]'),
-	).map((el) => el.getAttribute('data-setting-name') ?? '');
+/**
+ * Renders every page's rows into the tab's container — the whole tab at once.
+ *
+ * Real obsidian shows one page at a time; flattening here keeps the row-level suites
+ * (which are about a row's behaviour, not its address) direct. The PAGE STRUCTURE itself
+ * is asserted separately in the SC-131 block at the bottom.
+ */
+function renderAll(tab: DseSettingTab): void {
+	const container = tab.containerEl as HTMLElement;
+	// `update()` is how the tab asks for a repaint (resets, preset apply, font fetch).
+	(tab as any).update = () => renderAll(tab);
+	container.empty?.();
+	container.innerHTML = '';
+	renderDefs(tab, container, definitions(tab));
 }
 
 async function makeLoadedPlugin(): Promise<DrawSteelAdmonitionPlugin> {
@@ -68,29 +138,22 @@ describe('D4 §4 — DseSettingTab', () => {
 		Setting.created.length = 0;
 	});
 
-	test('renders the visible groups in order and NO hidden PREF rows', async () => {
+	test('renders the visible sections in order and NO hidden PREF rows', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		// SC-131: the SHELL decides how many of these are on screen at once; the GROUP
-		// SET and its order are what this test has always been about, so it asserts them
-		// through the 'off' mode — the pre-SC-131 layout, kept verbatim as the decision
-		// pack's contrast baseline. The shipped mode's structure is covered by the SC-131
-		// describe block at the bottom of this file.
-		tab.navMode = 'off';
-		tab.display();
-		const headings = Setting.created.filter((s) => s.heading).map((s) => s.name);
-		// D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine, Task 4 the
-		// master switch + rollClickToRoll. F2 Task 11 shipped the SCC web-fallback
-		// control as an OPERATIONAL setting (below) instead of the dead prefs-catalog
-		// 'References' group scaffolding, which the F2 final-review fix wave deleted
-		// outright (webLinkFallback descriptor + the now-empty group) — so no
-		// 'References' heading ever appears here. D9 (Plan 15 Task 5) adds the
-		// Authoring group (authoringControls, default OFF — row is NOT hidden, so it
-		// renders a heading). F2 Task 11 appends the operational headings (Compendium,
-		// Links, Initiative tracker) after the generated pref sections. SC-112
-		// (Plan 23 Task 6) inserts Typography after Appearance; Task 8 renders its
-		// 'font'/'slider' controls (covered by the SC-112 describe block below).
-		expect(headings).toEqual([
+		renderAll(tab);
+		// SC-131: sections are navigable PAGES now, not setHeading() rows, so the section
+		// set and its order (which is what this test has always been about) is read off
+		// the definition tree. D5 (Plan 14) un-hid the Rolling rows: Task 2 rollerEngine,
+		// Task 4 the master switch + rollClickToRoll. F2 Task 11 shipped the SCC
+		// web-fallback control as an OPERATIONAL setting (below) instead of the dead
+		// prefs-catalog 'References' group scaffolding, which the F2 final-review fix wave
+		// deleted outright (webLinkFallback descriptor + the now-empty group) — so no
+		// 'References' page ever appears here. D9 (Plan 15 Task 5) adds the Authoring
+		// group. F2 Task 11 appends the operational sections (Compendium, Links,
+		// Initiative tracker) after the generated pref ones. SC-112 (Plan 23 Task 6)
+		// inserts Typography after Appearance.
+		expect(pageNames(tab)).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
@@ -118,7 +181,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const root = document.createElement('div');
 		plugin.frameworkV2!.services.theme.apply(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
+		renderAll(tab);
 		const dd = rowByName('Theme').dropdowns[0];
 		expect(dd.options).toEqual([
 			{ value: 'legacy', label: 'Match Obsidian (Legacy)' },
@@ -134,7 +197,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
+		renderAll(tab);
 		const toggle = rowByName('Print preview').toggles[0];
 		expect(toggle.value).toBe(false); // default 'off'
 		toggle.trigger(true);
@@ -150,8 +213,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const root = document.createElement('div');
 		prefs.reflect(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Statblock display');
+		renderAll(tab);
 		rowByName('Density').dropdowns[0].trigger('compact');
 		await flushAsync(1);
 		expect(prefs.get('sbDensity')).toBe('compact');
@@ -162,8 +224,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Statblock display');
+		renderAll(tab);
 		const preset = rowByName('Preset').dropdowns[0];
 		expect(preset.value).toBe('steel');
 		preset.trigger('index');
@@ -176,8 +237,7 @@ describe('D4 §4 — DseSettingTab', () => {
 	test('twiddling one preset member re-derives "custom" on the preset dropdown', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Statblock display');
+		renderAll(tab);
 		const preset = rowByName('Preset').dropdowns[0];
 		rowByName('Secondary stats').dropdowns[0].trigger('ledger');
 		await flushAsync(1);
@@ -187,16 +247,17 @@ describe('D4 §4 — DseSettingTab', () => {
 		expect(preset.value).toBe('custom');
 	});
 
-	test('per-group reset (heading extra-button) restores that group; sparse store empties', async () => {
+	test('per-section reset (the page\'s reset row) restores that section; sparse store empties', async () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Statblock display');
+		renderAll(tab);
 		rowByName('Density').dropdowns[0].trigger('compact');
 		await flushAsync(1);
-		const heading = Setting.created.find((s) => s.heading && s.name === 'Statblock display')!;
-		heading.extraButtons[0].click();
+		// SC-131: the section reset moved from a heading extra-button to a named row on
+		// the section's own page — same handler, same full-member semantics.
+		const reset = rowDefs(pageNamed(tab, 'Statblock display').items).find((d) => d.name === 'Reset this section')!;
+		reset.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('sbDensity')).toBe('comfortable');
 		expect(plugin.settings.prefs).toEqual({}); // OD-D4-4: default ⇒ deleted from disk shape
@@ -206,7 +267,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
+		renderAll(tab);
 		rowByName('Theme').dropdowns[0].trigger('legacy');
 		rowByName('Reduce motion').toggles[0].trigger(true);
 		await flushAsync(1);
@@ -270,7 +331,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('the safety sentence replaces any WIPED-CLEAN-style warning', () => {
 		const { tab } = makeFakePlugin();
-		tab.display();
+		renderAll(tab);
 		const text = tab.containerEl.textContent ?? '';
 		expect(text).not.toMatch(/wiped clean/i);
 		expect(text).toContain('Only files installed by the plugin are updated or removed');
@@ -279,7 +340,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('no-manifest status line reads "No compendium synced yet."', async () => {
 		const { tab } = makeFakePlugin();
-		tab.display();
+		renderAll(tab);
 		await flushAsync(2);
 		expect(tab.containerEl.textContent).toContain('No compendium synced yet.');
 	});
@@ -296,7 +357,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 			files: { a: 'x', b: 'y', c: 'z' },
 		};
 		const { tab } = makeFakePlugin({ manifestStore: { load: jest.fn(async () => manifest) } });
-		tab.display();
+		renderAll(tab);
 		await flushAsync(2);
 		const text = tab.containerEl.textContent ?? '';
 		expect(text).toContain('v4.20260716T000000');
@@ -306,7 +367,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Destination folder / Release / Locale fields write settings and save', async () => {
 		const { tab, plugin } = makeFakePlugin();
-		tab.display();
+		renderAll(tab);
 		rowByName('Destination folder').texts[0].trigger('My Compendium');
 		await flushAsync(1);
 		expect(plugin.settings.compendiumDestinationDirectory).toBe('My Compendium');
@@ -326,7 +387,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Sync button invokes plugin.syncCompendium', () => {
 		const { tab, plugin } = makeFakePlugin();
-		tab.display();
+		renderAll(tab);
 		rowByName('Sync compendium').buttons[0].click();
 		expect(plugin.syncCompendium).toHaveBeenCalledTimes(1);
 	});
@@ -339,7 +400,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 				)),
 			},
 		});
-		tab.display();
+		renderAll(tab);
 		rowByName('Sync compendium').buttons[1].click();
 		await flushAsync(2);
 		expect(plugin.syncService.checkForUpdates).toHaveBeenCalledTimes(1);
@@ -354,7 +415,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 				)),
 			},
 		});
-		tab.display();
+		renderAll(tab);
 		rowByName('Sync compendium').buttons[1].click();
 		await flushAsync(2);
 		expect(Notice.notices.some((n) => n.includes('v4.1') && n.includes('v4.0'))).toBe(true);
@@ -366,7 +427,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 				checkForUpdates: jest.fn(async () => { throw new Error('rate limited'); }),
 			},
 		});
-		tab.display();
+		renderAll(tab);
 		rowByName('Sync compendium').buttons[1].click();
 		await flushAsync(2);
 		expect(Notice.notices.some((n) => n.includes('rate limited'))).toBe(true);
@@ -374,8 +435,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Links section: the fallback toggle is operational (sccWebFallback), not a hidden pref', async () => {
 		const { tab, plugin } = makeFakePlugin();
-		tab.display();
-		openSection(tab, 'Links');
+		renderAll(tab);
 		const toggle = rowByName('Fall back to steelcompendium.io links').toggles[0];
 		expect(toggle.value).toBe(DEFAULT_SETTINGS.sccWebFallback);
 		toggle.trigger(false);
@@ -385,8 +445,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 
 	test('Initiative tracker: default creature image path field (sentence case)', async () => {
 		const { tab, plugin } = makeFakePlugin();
-		tab.display();
-		openSection(tab, 'Initiative tracker');
+		renderAll(tab);
 		rowByName('Default creature image path').texts[0].trigger('token.png');
 		await flushAsync(1);
 		expect(plugin.settings.defaultImagePath).toBe('token.png');
@@ -412,8 +471,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const root = document.createElement('div');
 		prefs.reflect(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
+		renderAll(tab);
 		const dd = rowByName('Title font').dropdowns[0];
 		// Order: the uniform default sentinel, the curated entries, Custom… last.
 		expect(dd.options[0]).toEqual({ value: '', label: 'Default (Obsidian vault fonts)' });
@@ -438,8 +496,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const prefs = plugin.frameworkV2!.services.prefs;
 		await prefs.set('fontBody', 'Comic Sans MS'); // not in the curated list
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
+		renderAll(tab);
 		const row = rowByName('Body font');
 		expect(row.dropdowns[0].value).toBe('__custom__');
 		const text = row.texts[0];
@@ -459,8 +516,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
+		renderAll(tab);
 		const row = rowByName('Title font');
 		row.dropdowns[0].trigger('__custom__');
 		await flushAsync(1);
@@ -472,38 +528,39 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		expect(row.texts[0].inputEl.classList.contains('dse-hidden')).toBe(true);
 	});
 
-	test('advanced font rows render inside a collapsed <details>; the group reset still covers them', async () => {
+	test('advanced font rows live on the section\'s nested Advanced page; the section reset still covers them', async () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
-		const details = tab.containerEl.querySelector('details.dse-settings-advanced') as HTMLDetailsElement;
-		expect(details).not.toBeNull();
-		expect(details.open).toBe(false); // collapsed by default
-		expect(details.querySelector('summary')?.textContent).toBe('Advanced');
-		// The three advanced slots live inside; the three primary slots do not.
-		for (const name of ['Card body font', 'Label font', 'Monospace font']) {
-			expect(details.querySelector(`[data-setting-name="${name}"]`)).not.toBeNull();
-		}
+		renderAll(tab);
+		// SC-131: obsidian has no declarative <details>, so the SC-112 disclosure became a
+		// nested native page inside Typography — still inside its own section, and now
+		// individually searchable rather than hidden behind a summary.
+		const group = pageNamed(tab, 'Typography').items[0];
+		const advanced = (group.items as Def[]).find((d) => d?.type === 'page');
+		expect(advanced.name).toBe('Advanced');
+		expect(rowDefs(advanced.items).map((d) => d.name)).toEqual([
+			'Card body font', 'Label font', 'Monospace font',
+		]);
+		const primary = (group.items as Def[]).filter((d) => d?.name && d.type !== 'page').map((d) => d.name);
 		for (const name of ['Title font', 'Body font', 'Controls font', 'Text size', 'Card size']) {
-			expect(details.querySelector(`[data-setting-name="${name}"]`)).toBeNull();
+			expect(primary).toContain(name);
 		}
 		// Mono slot gets ITS curated list, not the text one.
 		const mono = rowByName('Monospace font').dropdowns[0];
 		expect(mono.options.map((o) => o.value)).toContain('JetBrains Mono');
 		expect(mono.options.map((o) => o.value)).not.toContain('Georgia');
-		// Group reset (heading extra-button) resets advanced members too.
+		// Section reset resets advanced members too.
 		mono.trigger('Fira Code');
 		await flushAsync(1);
 		expect(prefs.get('fontMono')).toBe('Fira Code');
-		const heading = Setting.created.find((s) => s.heading && s.name === 'Typography')!;
-		heading.extraButtons[0].click();
+		const reset = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Reset this section')!;
+		reset.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('fontMono')).toBe('');
 	});
 
-	test('slider rows: site limits + dynamic tooltip; values snap before save; percent readout tracks', async () => {
+	test('slider rows: site limits + dynamic tooltip; values snap before save; percent readout is native', async () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const owner: any = new Component();
@@ -511,18 +568,19 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		const root = document.createElement('div');
 		prefs.reflect(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
-		const textRow = rowByName('Text size');
-		const slider = textRow.sliders[0];
+		renderAll(tab);
+		const slider = rowByName('Text size').sliders[0];
 		expect(slider.limits).toEqual({ min: 0.6, max: 1.4, step: 0.05 });
 		expect(slider.dynamicTooltip).toBe(true);
 		expect(slider.value).toBe(1);
-		expect(textRow.controlEl!.querySelector('.dse-slider-value')!.textContent).toBe('100%');
+		// SC-131: the readout is obsidian's own inline slider value (control.displayFormat,
+		// 1.13.1) rather than the hand-built `.dse-slider-value` span it replaced.
+		const control = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Text size')!.control;
+		expect(control.displayFormat(1)).toBe('100%');
+		expect(control.displayFormat(0.85)).toBe('85%');
 		slider.trigger(0.837); // off-step → snaps to 0.85
 		await flushAsync(1);
 		expect(prefs.get('textScale')).toBe(0.85);
-		expect(textRow.controlEl!.querySelector('.dse-slider-value')!.textContent).toBe('85%');
 		expect(root.style.getPropertyValue('--dse-text-scale')).toBe('0.85'); // live-apply
 		expect(rowByName('Card size').sliders[0].limits).toEqual({ min: 0.8, max: 1.2, step: 0.05 });
 	});
@@ -536,8 +594,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		]);
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
+		renderAll(tab);
 		const before = rowByName('Title font');
 		expect(before.dropdowns[0].options.map((o) => o.value)).not.toContain('Aptos'); // never called at render time
 		expect(before.extraButtons).toHaveLength(1);
@@ -562,8 +619,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		});
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
+		renderAll(tab);
 		const before = rowByName('Title font');
 		Setting.created.length = 0;
 		before.extraButtons[0].click();
@@ -577,204 +633,197 @@ describe('SC-112 Task 8 — Typography controls', () => {
 	test('no queryLocalFonts (feature-detect miss): font rows render without the affordance', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
+		renderAll(tab);
 		expect(rowByName('Title font').extraButtons).toHaveLength(0);
 		expect(rowByName('Title font').dropdowns).toHaveLength(1); // picker still renders
 	});
 });
 
-// —— SC-131: the settings navigation shell. ONE mechanism (a NavSection model over the
-// pref groups + the operational sections), four render modes. These tests drive the
-// SHIPPED mode ('search' — candidate C) except where a mode is named, and they pin the
-// constraints the shell was not allowed to break: full-member group resets, Advanced
-// disclosures staying inside their own section, and the live preview keeping a home. ——
-describe('SC-131 — settings navigation shell', () => {
+// —— SC-131: the settings tab as obsidian 1.13 DEFINITIONS ("D-pages").
+//
+// These assert the definition TREE — the thing obsidian renders and indexes — rather
+// than any DOM the plugin paints, because the plugin no longer paints any. They also pin
+// the constraints the redesign was not allowed to break: a section reset still covers its
+// FULL member list (including rows that moved to the nested Advanced page), Advanced rows
+// stay inside their own section, and live apply still runs through prefs.set(). ——
+describe('SC-131 — declarative settings definitions', () => {
 	beforeEach(() => {
 		Setting.created.length = 0;
 	});
 
-	test('the nav lists every section in order; only the active one is rendered', async () => {
+	test('every section is a navigable page, in order, and display() is gone', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		expect(navLabels(tab)).toEqual([
+		expect(pageNames(tab)).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
-		// First section is active by default and is the ONLY one on screen.
-		const active = (tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-nav__tab.is-active');
-		expect(active).toHaveLength(1);
-		expect(active[0].textContent).toBe('Appearance');
-		expect(visibleRowNames(tab)).toEqual([
-			'Appearance', 'Theme', 'Reduce motion', 'Print preview', 'Initiative portraits',
-		]);
-		expect(visibleRowNames(tab)).not.toContain('Title font');
+		// Path A: the imperative renderer is deleted outright, not left as a fallback.
+		// (PluginSettingTab still declares display(), so this asserts we add nothing.)
+		expect(Object.prototype.hasOwnProperty.call(DseSettingTab.prototype, 'display')).toBe(false);
 	});
 
-	test('clicking a tab renders that section and drops the previous one', async () => {
+	test('a page holds only its own rows, wrapped in one classed group', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Rolling');
-		expect(visibleRowNames(tab)).toEqual(['Rolling', 'Enable rolling', 'Roller', 'Click ability to roll']);
-		expect(visibleRowNames(tab)).not.toContain('Theme');
-		openSection(tab, 'Initiative tracker');
-		expect(visibleRowNames(tab)).toEqual(['Initiative tracker', 'Default creature image path']);
-		expect(visibleRowNames(tab)).not.toContain('Enable rolling');
+		const rolling = pageNamed(tab, 'Rolling');
+		// One group per page — the grid container the sticky preview layout hooks.
+		expect(rolling.items).toHaveLength(1);
+		expect(rolling.items[0].type).toBe('group');
+		expect(rolling.items[0].cls).toContain('dse-settings-page');
+		const names = rowDefs(rolling.items).map((d) => d.name);
+		expect(names).toEqual(['Enable rolling', 'Roller', 'Click ability to roll', 'Reset this section']);
+		expect(names).not.toContain('Theme');
 	});
 
-	test('the active tab survives the display() re-render a group reset triggers', async () => {
+	test('control-expressible rows bind natively; only the font pickers keep a render callback', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Typography');
-		const heading = Setting.created.filter((s) => s.heading && s.name === 'Typography').pop()!;
-		heading.extraButtons[0].click();
-		await flushAsync(2); // resetDescriptors → display()
-		const active = (tab.containerEl as HTMLElement).querySelector('.dse-settings-nav__tab.is-active');
-		expect(active?.textContent).toBe('Typography');
-		expect(visibleRowNames(tab)).toContain('Title font');
-	});
-
-	test('search filters rows across ALL sections, by label and by help text', async () => {
-		const plugin = await makeLoadedPlugin();
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		const nav = (tab.containerEl as HTMLElement).querySelector('.dse-settings-nav')!;
-		expect(nav.classList.contains('dse-hidden')).toBe(false); // empty query = plain tabs
-
-		searchFor(tab, 'font');
-		expect(nav.classList.contains('dse-hidden')).toBe(true);
-		const names = visibleRowNames(tab);
-		// Every Typography slot, from a section that was NOT the active tab…
-		expect(names).toEqual(expect.arrayContaining([
-			'Typography', 'Title font', 'Body font', 'Controls font',
-			'Card body font', 'Label font', 'Monospace font',
-		]));
-		// …and nothing from the sections that do not match.
-		expect(names).not.toContain('Enable rolling');
-		expect(names).not.toContain('Default creature image path');
-
-		// Chrome (the Compendium safety paragraph) is not a row and never a hit.
-		searchFor(tab, 'never touched');
-		expect(visibleRowNames(tab)).toEqual([]);
-		// Help-text-only hits, in a generated section and a hand-written one alike.
-		searchFor(tab, 'vault folder'); // Destination folder's help text
-		expect(visibleRowNames(tab)).toEqual(['Compendium', 'Destination folder']);
-		searchFor(tab, 'system reduced-motion'); // Reduce motion's help text
-		expect(visibleRowNames(tab)).toEqual(['Appearance', 'Reduce motion']);
-	});
-
-	test('search: an ADVANCED row is surfaced inline, not left behind its disclosure', async () => {
-		const plugin = await makeLoadedPlugin();
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		searchFor(tab, 'monospace');
-		expect(visibleRowNames(tab)).toEqual(['Typography', 'Monospace font']);
-		expect((tab.containerEl as HTMLElement).querySelector('details.dse-settings-advanced')).toBeNull();
-	});
-
-	test('search: no match shows the empty state; clearing the query restores the tabs', async () => {
-		const plugin = await makeLoadedPlugin();
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		searchFor(tab, 'zzzznope');
-		expect(visibleRowNames(tab)).toEqual([]);
-		const empty = (tab.containerEl as HTMLElement).querySelector('.dse-settings-empty');
-		expect(empty?.textContent).toContain('zzzznope');
-		searchFor(tab, '');
-		expect((tab.containerEl as HTMLElement).querySelector('.dse-settings-empty')).toBeNull();
-		expect((tab.containerEl as HTMLElement).querySelector('.dse-settings-nav')!.classList.contains('dse-hidden')).toBe(false);
-		expect(visibleRowNames(tab)).toContain('Theme');
-	});
-
-	test('a group reset from a FILTERED view still resets the full member list', async () => {
-		const plugin = await makeLoadedPlugin();
-		const prefs = plugin.frameworkV2!.services.prefs;
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		openSection(tab, 'Statblock display');
-		rowByName('Density').dropdowns[0].trigger('compact');
-		rowByName('Secondary stats').dropdowns[0].trigger('ledger');
-		await flushAsync(1);
-		expect(prefs.get('sbDensity')).toBe('compact');
-		expect(prefs.get('sbStats')).toBe('ledger');
-		// Filter down to ONE of the two changed rows, then reset from that partial view.
-		searchFor(tab, 'density');
-		expect(visibleRowNames(tab)).toEqual(['Statblock display', 'Density']);
-		const heading = Setting.created.filter((s) => s.heading && s.name === 'Statblock display').pop()!;
-		heading.extraButtons[0].click();
-		await flushAsync(2);
-		expect(prefs.get('sbDensity')).toBe('comfortable');
-		expect(prefs.get('sbStats')).toBe('grid'); // the row the view was HIDING
-		expect(plugin.settings.prefs).toEqual({}); // OD-D4-4: back to the empty disk shape
-	});
-
-	test("'sections' mode (candidate B): every section collapsed, bodies rendered lazily on expand", async () => {
-		const plugin = await makeLoadedPlugin();
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.navMode = 'sections';
-		tab.display();
-		const container = tab.containerEl as HTMLElement;
-		const details = Array.from(container.querySelectorAll<HTMLDetailsElement>('details.dse-settings-section'));
-		expect(details).toHaveLength(9);
-		expect(details.every((d) => !d.open)).toBe(true);
-		expect(visibleRowNames(tab)).toEqual([]); // nothing rendered yet
-		// The sticky mini-nav expands AND fills its target.
-		const jump = Array.from(container.querySelectorAll<HTMLElement>('.dse-settings-mininav__item'))
-			.find((item) => item.textContent === 'Element defaults')!;
-		jump.click();
-		const target = container.querySelector<HTMLDetailsElement>('details[data-section-id="element-defaults"]')!;
-		expect(target.open).toBe(true);
-		expect(visibleRowNames(tab)).toEqual(['Element defaults', 'Collapsible by default', 'Start collapsed']);
-	});
-
-	test("'off' mode (the pre-SC-131 contrast baseline) mounts exactly ONE preview, under Statblock display", async () => {
-		const plugin = await makeLoadedPlugin();
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.navMode = 'off';
-		tab.display();
-		const previews = (tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview');
-		expect(previews).toHaveLength(1);
-		// It still sits inside the Statblock display block: the next heading after it is
-		// the following group's.
-		const names = Setting.created.filter((s) => s.heading).map((s) => s.name);
-		expect(names).toContain('Statblock display');
-	});
-
-	test('the preview follows the REFLECTED groups: a home on Appearance/Typography/Statblock, none on the behavioral ones', async () => {
-		const plugin = await makeLoadedPlugin();
-		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		const hasPreview = (): boolean =>
-			(tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview').length === 1;
-		expect(hasPreview()).toBe(true); // Appearance (attr-bearing)
-		openSection(tab, 'Typography');
-		expect(hasPreview()).toBe(true); // css-bearing
-		openSection(tab, 'Statblock display');
-		expect(hasPreview()).toBe(true);
-		for (const behavioral of ['Element defaults', 'Rolling', 'Authoring', 'Compendium']) {
-			openSection(tab, behavioral);
-			expect((tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview')).toHaveLength(0);
+		const byName = new Map(
+			pages(tab).flatMap((page) => rowDefs(page.items).map((d) => [d.name, d] as const)),
+		);
+		// A representative binding of each native control type actually used.
+		expect(byName.get('Reduce motion')!.control).toEqual({ type: 'toggle', key: 'reduceMotion' });
+		expect(byName.get('Density')!.control).toMatchObject({ type: 'dropdown', key: 'sbDensity' });
+		expect(byName.get('Text size')!.control).toMatchObject({ type: 'slider', key: 'textScale', min: 0.6, max: 1.4, step: 0.05 });
+		// The suggester upgrades: these were bare text boxes before SC-131.
+		expect(byName.get('Destination folder')!.control).toMatchObject({ type: 'folder', key: 'compendiumDestinationDirectory' });
+		expect(byName.get('Default creature image path')!.control).toMatchObject({ type: 'file', key: 'defaultImagePath' });
+		// The six font pickers are the render fraction — no native control expresses a
+		// curated dropdown + revealed free-text + "list installed fonts" in one row.
+		for (const font of ['Title font', 'Body font', 'Controls font', 'Card body font', 'Label font', 'Monospace font']) {
+			expect(byName.get(font)!.control).toBeUndefined();
+			expect(typeof byName.get(font)!.render).toBe('function');
 		}
-		// A filtered view has no preview either — it is not a section view.
-		openSection(tab, 'Appearance');
-		searchFor(tab, 'theme');
-		expect((tab.containerEl as HTMLElement).querySelectorAll('.dse-settings-preview')).toHaveLength(0);
+		// The derived-value preset and the two-button sync row likewise.
+		expect(typeof byName.get('Preset')!.render).toBe('function');
+		expect(typeof byName.get('Sync compendium')!.render).toBe('function');
 	});
 
-	test('"Reset all preferences" lives in the shell footer and is reachable from every tab', async () => {
+	test('the slider percent readout is native displayFormat, not a hand-built span', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const textSize = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Text size')!;
+		expect(textSize.control.displayFormat(1)).toBe('100%');
+		expect(textSize.control.displayFormat(0.85)).toBe('85%');
+	});
+
+	test('every row carries its section as a search alias, and chrome is unsearchable', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const typography = rowDefs(pageNamed(tab, 'Typography').items);
+		for (const row of typography.filter((d) => d.name)) {
+			expect(row.aliases).toContain('Typography');
+		}
+		// The compendium safety sentence and sync status line have no name to match on.
+		const chrome = rowDefs(pageNamed(tab, 'Compendium').items).filter((d) => d.name === '');
+		expect(chrome.length).toBeGreaterThan(0);
+		for (const row of chrome) expect(row.searchable).toBe(false);
+	});
+
+	test('advanced rows move to a nested Advanced page inside their own section', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const group = pageNamed(tab, 'Typography').items[0];
+		const nested = (group.items as Def[]).filter((d) => d?.type === 'page');
+		expect(nested.map((p) => p.name)).toEqual(['Advanced']);
+		expect(rowDefs(nested[0].items).map((d) => d.name)).toEqual([
+			'Card body font', 'Label font', 'Monospace font',
+		]);
+		// The primary slots stay on the section page itself.
+		const primary = (group.items as Def[]).filter((d) => d?.name && d.type !== 'page').map((d) => d.name);
+		expect(primary).toContain('Title font');
+		expect(primary).not.toContain('Monospace font');
+		// Advanced rows are still individually indexed — searching finds them one level down.
+		expect(rowDefs(nested[0].items)[2].aliases).toContain('Typography');
+	});
+
+	test('a section reset covers its FULL member list, including the Advanced page', async () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		tab.display();
-		rowByName('Reduce motion').toggles[0].trigger(true);
+		renderAll(tab);
+		// Change one primary and one advanced member.
+		rowByName('Title font').dropdowns[0].trigger('Georgia');
+		rowByName('Monospace font').dropdowns[0].trigger('Fira Code');
 		await flushAsync(1);
-		openSection(tab, 'Compendium'); // an operational tab, far from the pref groups
-		const resetAll = Setting.created.filter((s) => s.buttons.some((b) => b.text === 'Reset all preferences')).pop()!;
-		resetAll.buttons[0].click();
+		expect(prefs.get('fontTitle')).toBe('Georgia');
+		expect(prefs.get('fontMono')).toBe('Fira Code');
+		// The Typography page's reset row resets both.
+		const reset = rowDefs(pageNamed(tab, 'Typography').items).find((d) => d.name === 'Reset this section')!;
+		reset.action(null, 0);
+		await flushAsync(2);
+		expect(prefs.get('fontTitle')).toBe('');
+		expect(prefs.get('fontMono')).toBe('');
+	});
+
+	test('the preview mounts on exactly the sections whose settings reflect onto an element', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		// The preview row is identified by what it RENDERS (the sticky-column class), not
+		// by being nameless — the compendium chrome rows are nameless too.
+		const hasPreview = (page: Def): boolean =>
+			rowDefs(page.items).some((d) => {
+				if (d.name !== '' || !d.render) return false;
+				const setting = new Setting(document.createElement('div'));
+				d.render(setting);
+				return setting.settingEl!.classList.contains('dse-settings-preview-row');
+			});
+		// Derived from the descriptors that actually reflect onto an element root, so a
+		// future reflected group inherits a preview without being listed anywhere.
+		expect(pages(tab).filter(hasPreview).map((p) => p.name)).toEqual([
+			'Appearance', 'Typography', 'Statblock display',
+		]);
+	});
+
+	test('a native control write still live-applies to a mounted root (prefs.set path)', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const owner: any = new Component();
+		owner.load();
+		const root = document.createElement('div');
+		prefs.reflect(root, owner);
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		// Exactly what obsidian does when the user drags the native slider / flips the
+		// native toggle — no plugin-rendered control in the path at all.
+		await (tab as any).setControlValue('sbDensity', 'compact');
+		expect(prefs.get('sbDensity')).toBe('compact');
+		expect(root.getAttribute('data-dse-density')).toBe('compact');
+		// The 'on'|'off' string mapping is absorbed by the accessors, both directions.
+		await (tab as any).setControlValue('printPreview', true);
+		expect(prefs.get('printPreview')).toBe('on');
+		expect((tab as any).getControlValue('printPreview')).toBe(true);
+		expect(root.getAttribute('data-dse-print')).toBe('on');
+	});
+
+	test('slider writes snap before they persist', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		await (tab as any).setControlValue('textScale', 0.837);
+		expect(prefs.get('textScale')).toBe(0.85);
+	});
+
+	test('an unknown control key falls through to plugin.settings (the operational rows)', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		await (tab as any).setControlValue('sccWebFallback', false);
+		expect(plugin.settings.sccWebFallback).toBe(false);
+		expect((tab as any).getControlValue('sccWebFallback')).toBe(false);
+	});
+
+	test('reset-all is a top-level action below the pages', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const defs = definitions(tab);
+		const last = defs[defs.length - 1];
+		expect(last.name).toBe('Reset all preferences');
+		await (tab as any).setControlValue('reduceMotion', true);
+		await (tab as any).setControlValue('theme', 'legacy');
+		last.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('reduceMotion')).toBe(false);
+		expect(prefs.get('theme')).toBe('steel');
 	});
 });

@@ -15,6 +15,31 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [BREAKING] **Obsidian 1.13.0 or newer is now required** (`minAppVersion`
+  moves from 0.15.0). Obsidian 1.13 introduced the settings API this release
+  rebuilds the settings tab on, and there is no way to use it and still run on
+  older clients without maintaining two settings implementations forever. If you
+  are on an older Obsidian, the plugin keeps working at your current version —
+  Obsidian simply will not offer you this update until you upgrade the app.
+  Obsidian updates itself by default, so most installs already qualify (SC-131).
+- [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
+  **searchable from Obsidian's own settings search** (SC-131). It was one
+  6850px scroll page — nine stacked sections and a full statblock preview — and
+  the queued display-parity settings would have pushed it past 8000. It is now
+  a short index of nine navigable pages (Appearance, Typography, Statblock
+  display, Element defaults, Rolling, Authoring, Compendium, Links, Initiative
+  tracker), each holding only its own settings. Because the settings are now
+  declared rather than hand-drawn, Obsidian indexes every one of them: typing
+  "font" or "density" into the search box at the top of the settings window
+  finds Draw Steel Elements rows alongside Obsidian's own, from any tab, and
+  jumps straight to them. Three things come along with it: the live statblock
+  preview now **stays docked at the bottom of the page while you scroll**, so
+  you can see a setting take effect without scrolling back and forth; the
+  compendium destination folder and the initiative tracker's default image path
+  gained real folder/file pickers instead of free-text boxes; and Typography's
+  secondary font slots moved from a collapsed "Advanced" disclosure onto an
+  Advanced sub-page, where search can still reach them individually. Every
+  setting, its default, and its live-apply behaviour is unchanged.
 - [BUGFIX] The encounter builder's "Create initiative tracker block" produces a
   tracker that renders again. The builder writes compendium references as SCC
   codes (`scc.v1:...`), but the tracker's reference resolver only understood

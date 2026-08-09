@@ -1,4 +1,4 @@
-// src/views/SettingsTab.ts — D4 §4 (Plan 13): the composed settings tab.
+// src/views/SettingsTab.ts — D4 §4 (Plan 13): the composed settings tab, as a MODEL.
 //
 // Two owners, one tab: the PREF SECTIONS are GENERATED from the descriptor list
 // (adding a pref = adding a descriptor in src/prefs/catalog.ts — no hand-wiring),
@@ -7,12 +7,20 @@
 // downloader section wholesale: sentence-case labels, a manifest-driven sync status
 // line, Sync/Check-for-updates buttons, and the new Links section for sccWebFallback).
 //
-// Live apply: every control's onChange calls prefs.set(); set() notifies
-// subscribers synchronously (Task 1), so prefs.reflect() re-stamps every mounted
-// element root and CSS reflows behind the open settings dialog — no Apply button,
-// no re-render. This replaces the D3 temporary commands (dse-cycle-theme,
-// dse-toggle-print-preview), deleted from main.ts in this same task.
+// SC-131: this class BUILDS A MODEL and does not paint. `buildPrefSections()` +
+// `buildOperationalSections()` produce a `NavSection[]`; `settingsDeclarative.ts` maps
+// that to the obsidian 1.13 definition tree returned by `getSettingDefinitions()`, and
+// obsidian renders it — as navigable pages, with every row in the native settings search.
+// There is no `display()` any more: the plugin requires 1.13.0 (manifest minAppVersion),
+// which is the version that made the declarative API available.
+//
+// Live apply: native controls read/write through `getControlValue`/`setControlValue`
+// below, which route into the PreferenceStore rather than `plugin.settings`. prefs.set()
+// notifies subscribers synchronously (Task 1), so prefs.reflect() re-stamps every mounted
+// element root and CSS reflows behind the open settings window — no Apply button, no
+// re-render. Custom (`render`) rows call prefs.set() directly, same as before.
 import { App, Component, Notice, PluginSettingTab, Setting, type TextComponent } from 'obsidian';
+import type { SettingControl, SettingDefinitionItem } from 'obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '@/framework/seams/prefs';
 import {
@@ -26,17 +34,9 @@ import {
 import { snap, type ScaleRange } from '@/prefs/scale';
 import { mountSettingsPreview } from '@views/SettingsPreview';
 import {
-	MULTI_SECTION_MODES,
-	SETTINGS_NAV_MODE,
-	renderSettingsShell,
+	toSettingDefinitions,
 	type NavRow,
 	type NavSection,
-	type SettingsNavMode,
-} from '@views/settingsShell';
-import {
-	toSettingDefinitions,
-	type DeclarativeControl,
-	type DeclarativeItem,
 } from '@views/settingsDeclarative';
 
 // Local Font Access API (SC-112 Task 1 spike, Outcome A): queryLocalFonts() works
@@ -69,17 +69,16 @@ function slugify(label: string): string {
  *  a parallel search index would. Sentence-case lint can't inspect a variable passed to
  *  setName/setDesc; the literals live at the call sites below, where it can. */
 function opRow(label: string, help: string, build: (setting: Setting) => void): NavRow {
-	return {
-		label,
-		help,
-		render: (container) => build(new Setting(container).setName(label).setDesc(help)),
-	};
+	// name/desc are set by obsidian from the definition's `name`/`desc`; `build` only adds
+	// the control. (Rows whose control IS expressible natively skip this helper entirely
+	// and carry a `control` instead — see the operational sections below.)
+	return { label, help, render: build };
 }
 
-/** Chrome (an explanatory paragraph, a status line): rendered in the unfiltered views,
+/** Chrome (an explanatory paragraph, a status line): rendered as its own full-width row,
  *  never a search hit — it has no label to match on. */
-function opChrome(render: (container: HTMLElement) => void): NavRow {
-	return { render };
+function opChrome(chrome: (container: HTMLElement) => void): NavRow {
+	return { chrome };
 }
 
 /** Structural slice of DropdownComponent the preset re-derivation needs. */
@@ -98,54 +97,47 @@ export class DseSettingTab extends PluginSettingTab {
 	 *  curated list silently stands). Kept for the tab's lifetime: the installed
 	 *  set doesn't change mid-session, and every font row shares one fetch. */
 	private installedFonts: readonly string[] | null = null;
-	/** SC-131: which candidate shell renders. Defaults to the shipped mode; writable so
-	 *  the renderer tests and the evidence capture can drive all four against identical
-	 *  content without a user-facing setting. */
-	navMode: SettingsNavMode = SETTINGS_NAV_MODE;
-	/** SC-131 session memory (tab instance lifetime — deliberately NOT persisted to
-	 *  data.json): survives the display() re-renders that a reset, a preset pick or the
-	 *  installed-fonts fetch trigger. */
-	private activeSectionId: string | null = null;
-	private searchQuery = '';
-	/** SC-131 declarative SPIKE — OFF, so this ships nothing. `getSettingDefinitions()`
-	 *  returning an empty array is exactly what obsidian ≤1.12 does implicitly, and on
-	 *  1.13+ an empty array is the documented signal to fall through to `display()`. The
-	 *  evidence harness flips it at runtime (like `navMode`) and calls `update()`. */
-	declarativeSpike = false;
 
 	constructor(app: App, plugin: DrawSteelAdmonitionPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
-	// —— SC-131 declarative SPIKE (obsidian 1.13+; see settingsDeclarative.ts) ——
+	// —— SC-131: the obsidian 1.13 entry point (see settingsDeclarative.ts) ——
 	//
-	// The 1.13 entry point. Obsidian calls it on every `update()` AND once when the tab
-	// is registered — that registration call is what puts our rows in the native settings
-	// search index, before the user has ever opened our tab. Non-empty ⇒ obsidian renders
-	// from the definitions and SKIPS display(); empty ⇒ display() runs as it always has,
-	// which is both the ≤1.12 behaviour and this spike's default.
-	//
-	// Not declared as an override: the 1.8.7 typings the plugin builds against predate
-	// PluginSettingTab.getSettingDefinitions, so to the compiler this is a new method.
-	getSettingDefinitions(): DeclarativeItem[] {
-		if (!this.declarativeSpike) return [];
+	// Obsidian calls this on every `update()` AND once when the tab is registered — that
+	// registration call is what puts our rows in the native settings search index, before
+	// the user has ever opened our tab. It must stay cheap: no I/O, no network. Building
+	// the model is a walk over the descriptor list plus a handful of closures, which
+	// qualifies; the one genuinely async thing (the compendium sync status line) is fetched
+	// inside its own row's render, not here.
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		// Every call replaces the previously rendered rows, so the children mounted by the
+		// last one (the live preview and its pref subscriptions) must be dropped first.
+		this.recycleOwner(true);
 		const prefs = this.plugin.frameworkV2?.services.prefs;
-		return toSettingDefinitions([
-			...(prefs ? this.buildPrefSections(prefs) : []),
-			...this.buildOperationalSections(),
-		]);
+		this.presetDropdown = null;
+		return toSettingDefinitions(
+			[...(prefs ? this.buildPrefSections(prefs) : []), ...this.buildOperationalSections()],
+			prefs
+				? () =>
+					void this.resetDescriptors(
+						prefs,
+						prefs.descriptors().filter((descriptor) => prefUi(descriptor) !== undefined),
+					)
+				: undefined,
+		);
 	}
 
-	/** Declarative control bindings read through here rather than off
-	 *  `this.plugin.settings[key]`. DSE keeps its prefs in the PreferenceStore, and this
-	 *  is also where the two representation mismatches are absorbed: a 'on'|'off' string
-	 *  pref presents to a native toggle as a boolean. */
+	/** Native control bindings read through here rather than off `this.plugin.settings`.
+	 *  DSE keeps its prefs in the PreferenceStore, and this is also where the
+	 *  representation mismatch is absorbed: an 'on'|'off' STRING pref presents to a native
+	 *  toggle as a boolean. Unknown keys fall through to the base implementation, which is
+	 *  what the operational rows (real `plugin.settings` fields) use. */
 	getControlValue(key: string): unknown {
+		const descriptor = this.prefDescriptor(key);
 		const prefs = this.plugin.frameworkV2?.services.prefs;
-		if (!prefs) return undefined;
-		const descriptor = prefs.descriptors().find((candidate) => candidate.key === key);
-		if (!descriptor) return undefined;
+		if (!descriptor || !prefs) return super.getControlValue(key);
 		const value = prefs.get(descriptor.key);
 		if (prefUi(descriptor)?.control === 'toggle' && typeof descriptor.default === 'string') {
 			return value === 'on';
@@ -157,10 +149,9 @@ export class DseSettingTab extends PluginSettingTab {
 	 *  subscribers synchronously — so LIVE APPLY survives the move to native controls
 	 *  unchanged, and obsidian's automatic persistence rides on top of it. */
 	setControlValue(key: string, value: unknown): void | Promise<void> {
+		const descriptor = this.prefDescriptor(key);
 		const prefs = this.plugin.frameworkV2?.services.prefs;
-		if (!prefs) return;
-		const descriptor = prefs.descriptors().find((candidate) => candidate.key === key);
-		if (!descriptor) return;
+		if (!descriptor || !prefs) return super.setControlValue(key, value);
 		const ui = prefUi(descriptor);
 		let next = value;
 		if (ui?.control === 'toggle' && typeof descriptor.default === 'string') {
@@ -168,7 +159,17 @@ export class DseSettingTab extends PluginSettingTab {
 		} else if (ui?.control === 'slider') {
 			next = snap(value, this.scaleRange(descriptor, ui));
 		}
-		return prefs.set(descriptor.key, next as DsePrefs[keyof DsePrefs]);
+		const saved = prefs.set(descriptor.key, next as DsePrefs[keyof DsePrefs]);
+		// A statblock option changing re-derives the preset label above it.
+		if (ui?.inPreset) this.presetDropdown?.setValue(deriveSbPreset(prefs));
+		return saved;
+	}
+
+	/** The PrefDescriptor a control key names, or undefined when the key belongs to
+	 *  `plugin.settings` instead (the operational rows). */
+	private prefDescriptor(key: string): PrefDescriptor | undefined {
+		const prefs = this.plugin.frameworkV2?.services.prefs;
+		return prefs?.descriptors().find((candidate) => candidate.key === key);
 	}
 
 	/** The slider's numeric contract, shared by the imperative row and the native one. */
@@ -185,7 +186,7 @@ export class DseSettingTab extends PluginSettingTab {
 	/** The descriptor's NATIVE binding, or undefined when obsidian has no control type
 	 *  that can express the row (the six font pickers: a curated dropdown, a revealed
 	 *  free-text field and a "list installed fonts" button in one row). */
-	private nativeControl(descriptor: PrefDescriptor, ui: PrefUi): DeclarativeControl | undefined {
+	private nativeControl(descriptor: PrefDescriptor, ui: PrefUi): SettingControl | undefined {
 		const key = String(descriptor.key);
 		switch (ui.control) {
 			case 'toggle':
@@ -216,39 +217,9 @@ export class DseSettingTab extends PluginSettingTab {
 		}
 	}
 
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-		this.presetDropdown = null;
-		this.recycleOwner(true);
-		const prefs = this.plugin.frameworkV2?.services.prefs;
-		const sections = [
-			...(prefs ? this.buildPrefSections(prefs) : []),
-			...this.buildOperationalSections(),
-		];
-		renderSettingsShell(containerEl, {
-			mode: this.navMode,
-			sections,
-			activeId: this.activeSectionId,
-			query: this.searchQuery,
-			onActiveChange: (id) => {
-				this.activeSectionId = id;
-			},
-			onQueryChange: (query) => {
-				this.searchQuery = query;
-			},
-			// Every body (re)render drops the previous render's mounted children — the
-			// live preview and its pref subscriptions — and opens a fresh owner. The
-			// preset dropdown reference goes with it: a tab switch can un-render the
-			// Statblock section, and a stale handle must not be written to.
-			recycle: () => {
-				this.presetDropdown = null;
-				this.recycleOwner(true);
-			},
-			renderFooter: prefs ? (container) => this.renderResetAll(container, prefs) : undefined,
-		});
-	}
-
+	/** Obsidian tears the tab down when the settings window closes. There is no
+	 *  `display()` any more (the declarative renderer replaced it), but the preview's
+	 *  Component owner still has to be unloaded so its pref subscriptions go with it. */
 	hide(): void {
 		this.recycleOwner(false);
 	}
@@ -263,8 +234,9 @@ export class DseSettingTab extends PluginSettingTab {
 	}
 
 	// —— D4 §4.1: one loop drives the whole pref UI. SC-131 turned the loop's OUTPUT
-	// from "rows appended to containerEl" into a NavSection model the shell renders in
-	// whichever mode is active — the descriptor list is still the only input. ——
+	// from "rows appended to containerEl" into a NavSection model, which
+	// settingsDeclarative.ts maps to obsidian's definition tree — the descriptor list is
+	// still the only input, and adding a pref is still adding a descriptor. ——
 	private buildPrefSections(prefs: PreferenceStore): NavSection[] {
 		const groups = new Map<string, PrefDescriptor[]>();
 		for (const descriptor of prefs.descriptors()) {
@@ -283,7 +255,8 @@ export class DseSettingTab extends PluginSettingTab {
 				rows.push({
 					label: 'Preset',
 					help: PRESET_HELP,
-					render: (container) => this.renderPresetControl(container, prefs),
+					aliases: ['statblock', 'bundle'],
+					render: (setting) => this.renderPresetControl(setting, prefs),
 				});
 			}
 			for (const descriptor of members) {
@@ -295,12 +268,15 @@ export class DseSettingTab extends PluginSettingTab {
 					// SC-112 Task 8: secondary rows collapse behind the section's
 					// "Advanced" disclosure. The section reset below still covers them —
 					// it iterates `members`, not the rows the view happens to show.
+					// SC-112 Task 8: secondary rows move to the section's nested "Advanced"
+					// page. The section reset still covers them — it iterates `members`,
+					// not the rows any one page happens to show.
 					advanced: ui.advanced,
-					// SC-131 declarative SPIKE: additive metadata the imperative shell
-					// ignores. `control` present ⇒ obsidian 1.13 renders and persists the
-					// row itself; absent ⇒ it falls back to the same `render` thunk below.
+					// `control` present ⇒ obsidian renders and persists the row itself
+					// (through getControlValue/setControlValue above); absent ⇒ the `render`
+					// thunk owns the row body. Only the six font pickers need the latter.
 					control: this.nativeControl(descriptor, ui),
-					render: (container) => this.renderRow(container, prefs, descriptor),
+					render: (setting) => this.renderRow(setting, prefs, descriptor),
 				});
 			}
 			sections.push({
@@ -312,10 +288,9 @@ export class DseSettingTab extends PluginSettingTab {
 				// visibly change it — i.e. any group holding a REFLECTED descriptor (an
 				// `attr` in the data-dse-* vocabulary or a `css` custom property). That is
 				// Appearance, Typography and Statblock display today, derived rather than
-				// listed, so a future reflected group inherits it for free. In the modes
-				// that put every section on screen at once it would mount three times, so
-				// there it stays where it has always been: under Statblock display.
-				renderPreview: this.sectionShowsPreview(groupName, members)
+				// listed, so a future reflected group inherits it for free. D-pages makes
+				// this cheap: each page is its own view, so a preview mounts at most once.
+				renderPreview: this.sectionShowsPreview(members)
 					? (container) => {
 						if (this.displayOwner) mountSettingsPreview(container, this.plugin, this.displayOwner);
 					}
@@ -325,22 +300,8 @@ export class DseSettingTab extends PluginSettingTab {
 		return sections;
 	}
 
-	private sectionShowsPreview(groupName: string, members: readonly PrefDescriptor[]): boolean {
-		if (MULTI_SECTION_MODES.includes(this.navMode)) return groupName === 'Statblock display';
+	private sectionShowsPreview(members: readonly PrefDescriptor[]): boolean {
 		return members.some((descriptor) => descriptor.attr !== undefined || descriptor.css !== undefined);
-	}
-
-	private renderResetAll(containerEl: HTMLElement, prefs: PreferenceStore): void {
-		new Setting(containerEl).addButton((button) =>
-			button
-				.setButtonText('Reset all preferences')
-				.onClick(() =>
-					void this.resetDescriptors(
-						prefs,
-						prefs.descriptors().filter((descriptor) => prefUi(descriptor) !== undefined),
-					),
-				),
-		);
 	}
 
 	private async resetDescriptors(
@@ -354,41 +315,47 @@ export class DseSettingTab extends PluginSettingTab {
 		} catch (error) {
 			console.error('Draw Steel Elements: failed to reset preferences', error);
 		}
-		this.display();
+		// `update()` is the declarative twin of the old `display()` call: it re-reads
+		// getSettingDefinitions() and repaints, which is what makes the reset visible in
+		// controls obsidian owns (a native control does not observe the store itself).
+		this.update();
 	}
 
 	// —— D4 §3.2: the preset bundle dropdown (derived label, never stored) ——
-	private renderPresetControl(containerEl: HTMLElement, prefs: PreferenceStore): void {
-		new Setting(containerEl)
-			.setName('Preset')
-			.setDesc(PRESET_HELP)
-			.addDropdown((dropdown) => {
-				dropdown.addOption('steel', 'Steel card');
-				dropdown.addOption('sourcebook', 'Sourcebook');
-				dropdown.addOption('index', 'Index card');
-				dropdown.addOption('custom', 'Custom');
-				dropdown.setValue(deriveSbPreset(prefs));
-				dropdown.onChange((value) => {
-					if (value === 'custom') return; // derived label, not a settable state
-					applySbPreset(prefs, value as SbPresetId)
-						.then(() => this.display())
-						.catch((error) =>
-							console.error('Draw Steel Elements: failed to apply statblock preset', error),
-						);
-				});
-				this.presetDropdown = dropdown;
+	//
+	// Not a native `dropdown` control: its value is DERIVED from the four statblock
+	// options rather than stored, and "custom" is a label the user cannot select into.
+	// A control binding would have to persist that pseudo-value; a render row need not.
+	private renderPresetControl(setting: Setting, prefs: PreferenceStore): void {
+		setting.addDropdown((dropdown) => {
+			dropdown.addOption('steel', 'Steel card');
+			dropdown.addOption('sourcebook', 'Sourcebook');
+			dropdown.addOption('index', 'Index card');
+			dropdown.addOption('custom', 'Custom');
+			dropdown.setValue(deriveSbPreset(prefs));
+			dropdown.onChange((value) => {
+				if (value === 'custom') return; // derived label, not a settable state
+				applySbPreset(prefs, value as SbPresetId)
+					.then(() => this.update())
+					.catch((error) =>
+						console.error('Draw Steel Elements: failed to apply statblock preset', error),
+					);
 			});
+			this.presetDropdown = dropdown;
+		});
 	}
 
-	private renderRow(
-		containerEl: HTMLElement,
-		prefs: PreferenceStore,
-		descriptor: PrefDescriptor,
-	): void {
+	/**
+	 * The row body for a descriptor obsidian cannot render itself.
+	 *
+	 * After SC-131 that is exactly one control kind — 'font'. Every other kind (toggle,
+	 * select, text, slider) is a native `control` binding produced by `nativeControl()`
+	 * above, so it never reaches here; obsidian renders it and persists it through
+	 * getControlValue/setControlValue.
+	 */
+	private renderRow(setting: Setting, prefs: PreferenceStore, descriptor: PrefDescriptor): void {
 		const ui = prefUi(descriptor);
-		if (!ui) return;
-		const setting = new Setting(containerEl).setName(ui.label);
-		if (ui.help) setting.setDesc(ui.help);
+		if (!ui || ui.control !== 'font') return;
 		const save = (value: DsePrefs[keyof DsePrefs]): void => {
 			prefs
 				.set(descriptor.key, value)
@@ -398,70 +365,8 @@ export class DseSettingTab extends PluginSettingTab {
 						error,
 					),
 				);
-			if (ui.inPreset) this.presetDropdown?.setValue(deriveSbPreset(prefs));
 		};
-		switch (ui.control) {
-			case 'toggle': {
-				// A toggle over a string-typed pref is the 'on'|'off' mapping (PrefUi
-				// doc): checked ⇔ 'on'. Boolean prefs map directly.
-				const onOff = typeof descriptor.default === 'string';
-				setting.addToggle((toggle) =>
-					toggle
-						.setValue(onOff ? prefs.get(descriptor.key) === 'on' : prefs.get(descriptor.key) === true)
-						.onChange((value) =>
-							save(onOff ? (value ? 'on' : 'off') : value),
-						),
-				);
-				break;
-			}
-			case 'select': {
-				setting.addDropdown((dropdown) => {
-					for (const option of ui.options ?? []) dropdown.addOption(option.value, option.label);
-					dropdown
-						.setValue(String(prefs.get(descriptor.key)))
-						.onChange((value) => save(value));
-				});
-				break;
-			}
-			case 'text': {
-				setting.addText((text) =>
-					text
-						.setValue(String(prefs.get(descriptor.key)))
-						.onChange((value) => save(value)),
-				);
-				break;
-			}
-			case 'font': {
-				this.renderFontControl(setting, prefs, descriptor, ui, save);
-				break;
-			}
-			case 'slider': {
-				// The range rides the descriptor's ui (Task 7 mirrored snap()'s
-				// min/max/step there) + the descriptor's own numeric default — no
-				// per-key knowledge here. Values pass through snap() before save().
-				const range = this.scaleRange(descriptor, ui);
-				const current = snap(prefs.get(descriptor.key), range);
-				const pct = (value: number): string => `${Math.round(value * 100)}%`;
-				// The site's set-scale-val percent readout (settings-panel.js:531-541),
-				// created before the slider so it sits to its left in the control cell.
-				const valueEl = setting.controlEl.createSpan({
-					cls: 'dse-slider-value',
-					text: pct(current),
-				});
-				setting.addSlider((slider) =>
-					slider
-						.setLimits(range.min, range.max, range.step)
-						.setValue(current)
-						.setDynamicTooltip()
-						.onChange((value) => {
-							const snapped = snap(value, range);
-							valueEl.setText(pct(snapped));
-							save(snapped);
-						}),
-				);
-				break;
-			}
-		}
+		this.renderFontControl(setting, prefs, descriptor, ui, save);
 	}
 
 	// —— SC-112 Task 8: the 'font' control — curated dropdown + Custom… free text
@@ -535,7 +440,7 @@ export class DseSettingTab extends PluginSettingTab {
 		} catch {
 			this.installedFonts = [];
 		}
-		this.display();
+		this.update();
 	}
 
 	// —— Operational sections: F2 §3.4 rework (Task 11) — sentence case throughout,
@@ -560,48 +465,29 @@ export class DseSettingTab extends PluginSettingTab {
 						text: 'The compendium syncs into a folder in your vault. Only files installed by the plugin are updated or removed — your own notes in that folder are never touched.',
 					});
 				}),
-				opRow('Destination folder', 'Vault folder the compendium is synced into.', (setting) =>
-					setting.addText((text) =>
-						text
-							// Literal default vault folder name
-							// (DEFAULT_SETTINGS.compendiumDestinationDirectory), not prose;
-							// lowercasing would misrepresent the actual folder created.
-							// eslint-disable-next-line obsidianmd/ui/sentence-case
-							.setPlaceholder('DS Compendium')
-							.setValue(this.plugin.settings.compendiumDestinationDirectory)
-							.onChange(async (value) => {
-								this.plugin.settings.compendiumDestinationDirectory = value;
-								await this.plugin.saveSettings();
-							}),
-					),
-				),
-				opRow(
-					'Release',
-					'Specific data-unified release tag to sync. Leave empty for the latest release.',
-					(setting) =>
-						setting.addText((text) =>
-							text
-								.setPlaceholder('Latest')
-								.setValue(this.plugin.settings.compendiumReleaseTag ?? '')
-								.onChange(async (value) => {
-									this.plugin.settings.compendiumReleaseTag = value;
-									await this.plugin.saveSettings();
-								}),
-						),
-				),
+				{
+					label: 'Destination folder',
+					help: 'Vault folder the compendium is synced into.',
+					// A native 'folder' control, which is an upgrade on the bare text box
+					// this used to be: obsidian supplies the folder suggester.
+					// Literal default vault folder name
+					// (DEFAULT_SETTINGS.compendiumDestinationDirectory), not prose;
+					// lowercasing would misrepresent the actual folder created.
+					// eslint-disable-next-line obsidianmd/ui/sentence-case
+					control: { type: 'folder', key: 'compendiumDestinationDirectory', placeholder: 'DS Compendium' },
+				},
+				{
+					label: 'Release',
+					help: 'Specific data-unified release tag to sync. Leave empty for the latest release.',
+					control: { type: 'text', key: 'compendiumReleaseTag', placeholder: 'Latest' },
+				},
 				// "English" is a language proper noun; lowercasing it would be a grammar
 				// error, not a fix.
-				opRow('Locale', 'Compendium language. Only English is published today.', (setting) =>
-					setting.addDropdown((dropdown) =>
-						dropdown
-							.addOption('en', 'English')
-							.setValue(this.plugin.settings.compendiumLocale)
-							.onChange(async (value) => {
-								this.plugin.settings.compendiumLocale = value;
-								await this.plugin.saveSettings();
-							}),
-					),
-				),
+				{
+					label: 'Locale',
+					help: 'Compendium language. Only English is published today.',
+					control: { type: 'dropdown', key: 'compendiumLocale', options: { en: 'English' } },
+				},
 				opChrome((container) => {
 					const statusEl = container.createEl('p', {
 						cls: 'ds-compendium-status',
@@ -645,17 +531,11 @@ export class DseSettingTab extends PluginSettingTab {
 			id: 'links',
 			label: 'Links',
 			rows: [
-				opRow(
-					'Fall back to steelcompendium.io links',
-					'When an SCC link is not found in your vault, link to its steelcompendium.io page instead. Navigation happens only on click.',
-					(setting) =>
-						setting.addToggle((toggle) =>
-							toggle.setValue(this.plugin.settings.sccWebFallback).onChange(async (value) => {
-								this.plugin.settings.sccWebFallback = value;
-								await this.plugin.saveSettings();
-							}),
-						),
-				),
+				{
+					label: 'Fall back to steelcompendium.io links',
+					help: 'When an SCC link is not found in your vault, link to its steelcompendium.io page instead. Navigation happens only on click.',
+					control: { type: 'toggle', key: 'sccWebFallback' },
+				},
 			],
 		};
 
@@ -663,20 +543,13 @@ export class DseSettingTab extends PluginSettingTab {
 			id: 'initiative-tracker',
 			label: 'Initiative tracker',
 			rows: [
-				opRow(
-					'Default creature image path',
-					'Default image to use for creatures in the initiative tracker if not specified.',
-					(setting) =>
-						setting.addText((text) =>
-							text
-								.setPlaceholder('path/to/image.png')
-								.setValue(this.plugin.settings.defaultImagePath)
-								.onChange(async (value) => {
-									this.plugin.settings.defaultImagePath = value;
-									await this.plugin.saveSettings();
-								}),
-						),
-				),
+				{
+					label: 'Default creature image path',
+					help: 'Default image to use for creatures in the initiative tracker if not specified.',
+					// Native 'file' control — obsidian supplies the file suggester, which
+					// the old free-text box did not.
+					control: { type: 'file', key: 'defaultImagePath', placeholder: 'path/to/image.png' },
+				},
 			],
 		};
 

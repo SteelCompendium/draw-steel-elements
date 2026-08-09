@@ -768,6 +768,9 @@ export class Setting {
 	/** Real Setting exposes the right-hand control container — SC-112 Task 8's slider
 	 *  renderer createSpans its percent readout into it. */
 	controlEl: HTMLElement | null;
+	/** Real Setting exposes the left-hand name/description container. SC-131's chrome
+	 *  rows (the compendium safety sentence, the sync status line) render into it. */
+	infoEl: HTMLElement | null;
 	name = '';
 	desc = '';
 	heading = false;
@@ -782,6 +785,9 @@ export class Setting {
 			typeof document !== 'undefined' && containerEl?.createDiv
 				? containerEl.createDiv({ cls: 'setting-item' })
 				: null;
+		this.infoEl = this.settingEl
+			? (this.settingEl as any).createDiv({ cls: 'setting-item-info' })
+			: null;
 		this.controlEl = this.settingEl
 			? (this.settingEl as any).createDiv({ cls: 'setting-item-control' })
 			: null;
@@ -848,6 +854,23 @@ export class PluginSettingTab {
 	}
 	display(): void {}
 	hide(): void {}
+	// —— obsidian 1.13 declarative settings (SC-131) ——
+	/** Default is an empty tree; DseSettingTab overrides it. */
+	getSettingDefinitions(): any[] {
+		return [];
+	}
+	/** Base behaviour: control keys name fields on `plugin.settings`. DseSettingTab
+	 *  overrides this for PreferenceStore-backed keys and calls super for the rest. */
+	getControlValue(key: string): unknown {
+		return this.plugin?.settings?.[key];
+	}
+	setControlValue(key: string, value: unknown): void | Promise<void> {
+		if (this.plugin?.settings) this.plugin.settings[key] = value;
+		return this.plugin?.saveSettings?.();
+	}
+	/** Re-reads getSettingDefinitions() and repaints. Tests replace this with a real
+	 *  re-render (see the definition renderer in settings-tab.test.ts). */
+	update(): void {}
 }
 
 /** D8 Task 1: minimal sidebar leaf — constructs the registered view via the plugin's
