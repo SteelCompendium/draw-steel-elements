@@ -140,6 +140,11 @@ export interface MigrationPlan {
 	blocked: BlockedRename[];
 	/** Under the root with no mapping at all — left in place. */
 	unmapped: string[];
+	/** Files that will be copied to `backupFolder` before anything moves. */
+	backupCount: number;
+	/** Where those copies will go. Shown in the preview; re-resolved at execute time
+	 *  so an existing folder is never written into. */
+	backupFolder: string;
 }
 
 export interface MigrationReport {
@@ -158,10 +163,16 @@ export interface MigrationReport {
 	remaining: number;
 	/** Vault path of the written report note, when one was written (review H3). */
 	reportNotePath: string | null;
+	/** Copies taken before anything moved. Empty when nothing needed one. */
+	backedUp: Array<{ fromPath: string; backupPath: string }>;
+	/** The folder those copies went into, or null when no backup was needed. */
+	backupFolder: string | null;
 }
 
+export type MigrationPhase = "backup" | "move";
+
 export interface ExecuteOptions {
-	onProgress?: (done: number, total: number) => void;
+	onProgress?: (done: number, total: number, phase?: MigrationPhase) => void;
 	/** Polled between files; returning true stops after the file in flight. */
 	shouldAbort?: () => boolean;
 	/** Write the per-path report note into the vault (review H3). Default true. */
@@ -172,6 +183,20 @@ export interface ExecuteOptions {
 export const planSize = (plan: MigrationPlan): number => plan.renames.length;
 
 const UNSAFE_PATH = /(^[\\/])|(^[a-zA-Z]:[\\/])|(^|\/)\.\.(\/|$)/;
+
+/**
+ * Where copies of the user's edited compendium files go before anything is moved.
+ *
+ * A SIBLING of the compendium root, never a child: anything inside the root is a path
+ * the sync engine walks, and it would report every backup file as unmanaged content
+ * squatting on the compendium. Outside, it is an ordinary folder of the user's own
+ * that nothing in this plugin ever reads, writes again, or deletes.
+ */
+export function backupFolderName(root: string): string {
+	const trimmed = normalizePath(root).replace(/\/+$/, "");
+	const base = trimmed === "" || trimmed === "/" ? "Compendium" : trimmed;
+	return `${base} backup (pre-7.0.0)`;
+}
 
 /**
  * Structural validation of a migration map. Returns a list of problems, empty when
@@ -380,7 +405,17 @@ export class CompendiumMigrationService {
 			});
 		}
 		onProgress?.(files.length, files.length);
-		return { root, detection, renames, blocked, unmapped };
+		// Scott's approval condition: anything we cannot prove is untouched gets copied
+		// out before it is moved. `modified === false` means byte-identical to the final
+		// legacy release, so the copy would protect nothing; `true` is an edit we can see,
+		// and `null` is a file from a retired release the shipped hashes cannot speak for —
+		// "unknown" is backed up, because the point of a backup is the case you cannot check.
+		const backupCount = renames.filter((rename) => rename.modified !== false).length;
+		return {
+			root, detection, renames, blocked, unmapped,
+			backupCount,
+			backupFolder: backupFolderName(root),
+		};
 	}
 
 	// -- execution -----------------------------------------------------------
@@ -425,6 +460,8 @@ export class CompendiumMigrationService {
 			aborted: false,
 			remaining: 0,
 			reportNotePath: null,
+			backedUp: [],
+			backupFolder: null,
 		};
 
 		// Self-heal anything a previous, interrupted run moved but never recorded.
@@ -472,8 +509,52 @@ export class CompendiumMigrationService {
 			await persist();
 		}
 
+		// -- PHASE 0: back up anything we cannot prove is untouched ---------------
+		//
+		// Before a single file moves. Write-ahead, like the rest of this engine: if the
+		// run dies part-way through the copying, nothing has been moved yet and the next
+		// run simply computes the backup again. Doing it the other way round — move,
+		// then copy — would leave a window where a file is already at its new path with
+		// no copy of the version the user actually edited.
+		//
+		// A file we could not copy is NOT moved. Backing it up is the only reason it is
+		// safe to hand it to a sync that will overwrite it, so a failed copy costs the
+		// rename, not the content.
+		const needsBackup = plan.renames.filter((rename) => rename.modified !== false);
+		const backupFailed = new Set<string>();
+		if (needsBackup.length > 0) {
+			const folder = await this.resolveBackupFolder(plan.root);
+			report.backupFolder = folder;
+			for (let index = 0; index < needsBackup.length; index++) {
+				if (options.shouldAbort?.() === true) {
+					report.aborted = true;
+					report.remaining = plan.renames.length;
+					break;
+				}
+				const rename = needsBackup[index];
+				const backupPath = normalizePath(`${folder}/${rename.oldRelative}`);
+				try {
+					const file = this.app.vault.getAbstractFileByPath(rename.fromPath);
+					if (!(file instanceof TFile)) continue; // gone since the plan — nothing to copy
+					const bytes = await this.app.vault.readBinary(file);
+					const target = await ensureParentFolders(this.app, backupPath, caseIndex);
+					await this.app.vault.createBinary(target, bytes);
+					report.backedUp.push({ fromPath: rename.fromPath, backupPath: target });
+				} catch (error: unknown) {
+					backupFailed.add(rename.fromPath);
+					report.failed.push({
+						fromPath: rename.fromPath,
+						toPath: rename.toPath,
+						error: `not moved — could not back it up first: `
+							+ (error instanceof Error ? error.message : String(error)),
+					});
+				}
+				options.onProgress?.(index + 1, needsBackup.length, "backup");
+			}
+		}
+
 		try {
-			for (let index = 0; index < plan.renames.length; index++) {
+			for (let index = 0; index < plan.renames.length && !report.aborted; index++) {
 				if (options.shouldAbort?.() === true) {
 					report.aborted = true;
 					report.remaining = plan.renames.length - index;
@@ -492,7 +573,11 @@ export class CompendiumMigrationService {
 				const rename = plan.renames[index];
 				// L1: progress must advance on EVERY entry, including the ones that skip —
 				// otherwise a run that skips a stretch looks hung.
-				const tick = () => options.onProgress?.(index + 1, plan.renames.length);
+				const tick = () => options.onProgress?.(index + 1, plan.renames.length, "move");
+				if (backupFailed.has(rename.fromPath)) {
+					tick(); // already reported as failed by phase 0 — never move an unbacked file
+					continue;
+				}
 				const file = this.app.vault.getAbstractFileByPath(rename.fromPath);
 				if (!(file instanceof TFile)) {
 					tick();
@@ -601,7 +686,7 @@ export class CompendiumMigrationService {
 	 */
 	public async writeReportNote(report: MigrationReport): Promise<string | null> {
 		const interesting = report.migratedModified.length + report.blocked.length
-			+ report.failed.length + report.unmapped.length;
+			+ report.failed.length + report.unmapped.length + report.backedUp.length;
 		if (report.migrated.length === 0 && interesting === 0) return null;
 
 		const lines: string[] = [];
@@ -619,6 +704,15 @@ export class CompendiumMigrationService {
 				"compendium first: syncing creates the new files, and the remaining moves then " +
 				"have nowhere to go.");
 		}
+		if (report.backupFolder !== null && report.backedUp.length > 0) {
+			lines.push("");
+			lines.push(
+				`**${report.backedUp.length} file(s) were copied to \`${report.backupFolder}\` before ` +
+				"anything moved** — every compendium file whose contents did not match the final " +
+				"legacy release, so nothing you had written into one can be lost. That folder is " +
+				"yours: nothing in this plugin reads it, writes to it again, or deletes it. Delete " +
+				"it yourself once you are satisfied.");
+		}
 		const section = (title: string, body: string, items: string[]) => {
 			if (items.length === 0) return;
 			lines.push("");
@@ -628,6 +722,11 @@ export class CompendiumMigrationService {
 			lines.push("");
 			for (const item of items) lines.push(`- \`${item}\``);
 		};
+		section(
+			"Backed up before the move",
+			"The copies are at the paths below. They are the recovery path if the sync replaces " +
+			"something you had written.",
+			report.backedUp.map((entry) => entry.backupPath));
 		section(
 			"Moved, but their content did not match the last legacy release",
 			"You edited these, or you were on an older compendium release. They were moved like " +
@@ -667,6 +766,20 @@ export class CompendiumMigrationService {
 		}
 	}
 
+	/**
+	 * A folder that does not exist yet. `(2)`, `(3)`, … if it does — a previous
+	 * migration's backup is somebody's safety net and is never written into, exactly
+	 * like the report note.
+	 */
+	private async resolveBackupFolder(root: string): Promise<string> {
+		const base = backupFolderName(root);
+		let candidate = normalizePath(base);
+		for (let n = 2; this.app.vault.getAbstractFileByPath(candidate) !== null; n++) {
+			candidate = normalizePath(`${base} (${n})`);
+		}
+		return candidate;
+	}
+
 	private filesUnder(prefix: string): TFile[] {
 		const vault = this.app.vault as unknown as { getFiles?: () => TFile[]; getMarkdownFiles: () => TFile[] };
 		const all = typeof vault.getFiles === "function" ? vault.getFiles() : vault.getMarkdownFiles();
@@ -683,6 +796,9 @@ export function describePlan(plan: MigrationPlan, sampleSize = 5): string {
 	];
 	if (modified > 0) {
 		lines.push(`${modified} of them differ from the last legacy release (edited, or from an older release) — they are moved too, and listed afterwards.`);
+	}
+	if (plan.backupCount > 0) {
+		lines.push(`${plan.backupCount} of them are copied to "${plan.backupFolder}" first, so nothing you edited can be lost.`);
 	}
 	if (plan.blocked.length > 0) {
 		lines.push(`${plan.blocked.length} cannot be moved because something already sits at the new path — left in place.`);

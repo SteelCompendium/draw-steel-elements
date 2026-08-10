@@ -44,7 +44,11 @@ for what needs action.
   skipped or left alone. One consequence worth knowing: a compendium file you had
   edited in place is moved like any other and then updated by the next sync, so
   copy your own words out of the flagged files first — the dialog and the report
-  note list them for exactly that reason.
+  note list them for exactly that reason — and, before anything moves, **every file
+  that does not match the release it came from is copied into a
+  `<your compendium> backup (pre-7.0.0)` folder beside your compendium**, so the
+  version you wrote is always recoverable. That folder is yours: nothing reads it,
+  rewrites it or deletes it, and a file that could not be copied is not moved at all.
 
 - [BREAKING] **Obsidian 1.13.0 or newer is now required** (`minAppVersion`
   moves from 0.15.0). Obsidian 1.13 introduced the settings API this release

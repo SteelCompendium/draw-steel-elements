@@ -11,7 +11,7 @@
 //   4. idempotency, abort, occupied destinations.
 import {
 	CHECKPOINT_INTERVAL, CompendiumMigrationService, LEGACY_DETECTION_THRESHOLD,
-	describePlan, migrationMap,
+	backupFolderName, describePlan, migrationMap,
 } from "@/data/CompendiumMigration";
 import type { MigrationMap } from "@/data/CompendiumMigration";
 import { CompendiumSyncService } from "@/data/CompendiumSyncService";
@@ -248,11 +248,13 @@ describe("execute — the move", () => {
 		const plan = await service.plan(ROOT);
 		expect(plan.renames).toHaveLength(3);
 
-		let done = 0;
+		let moved = 0;
 		const report = await service.execute(plan, {
 			writeReportNote: false,
-			onProgress: () => { done++; },
-			shouldAbort: () => done >= 1, // stop after the first file completes
+			// Count MOVES only: the backup phase reports progress too, and aborting on
+			// its very first tick would test a different thing (covered separately).
+			onProgress: (_done, _total, phase) => { if (phase === "move") moved++; },
+			shouldAbort: () => moved >= 1, // stop after the first file completes
 		});
 		expect(report.aborted).toBe(true);
 		expect(report.migrated).toHaveLength(1);
@@ -553,7 +555,7 @@ describe("H1 — an interrupted run must not strand its files", () => {
 		let moved = 0;
 		await ctx.service.execute(await ctx.service.plan(ROOT), {
 			writeReportNote: false,
-			onProgress: () => { moved++; },
+			onProgress: (_done, _total, phase) => { if (phase === "move") moved++; },
 			shouldAbort: () => moved >= 1,
 		});
 		// Wipe the manifest the way a failed write or a restored backup might.
@@ -595,7 +597,7 @@ describe("H2 — declining or stopping must re-arm the offer", () => {
 		let moved = 0;
 		const report = await service.execute(await service.plan(ROOT), {
 			writeReportNote: false,
-			onProgress: () => { moved++; },
+			onProgress: (_done, _total, phase) => { if (phase === "move") moved++; },
 			shouldAbort: () => moved >= 1,
 		});
 		expect(report.aborted).toBe(true);
@@ -706,5 +708,141 @@ describe("a transitional release: two old paths, one destination", () => {
 		await service.execute(plan, { writeReportNote: false });
 		expect(vault.text(`${ROOT}/career/disciple.md`)).toBe("older layout copy");
 		expect(vault.text(`${ROOT}/Rules/Careers/Disciple.md`)).toBe("disciple text");
+	});
+});
+
+
+// ---------------------------------------------------------------------------
+// Scott's approval condition — a backup of every file we cannot prove is untouched,
+// taken BEFORE anything moves.
+// ---------------------------------------------------------------------------
+
+const BACKUP = `${ROOT} backup (pre-7.0.0)`;
+
+describe("the pre-migration backup", () => {
+	test("copies an edited file out BEFORE its rename — the ordering is the whole point", async () => {
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, with MY notes");
+
+		// Record what existed at the moment of each rename. A backup taken afterwards
+		// would still end up on disk — only the ordering distinguishes the two, and
+		// only the ordering survives a crash between the two steps.
+		const backupAtRenameTime: boolean[] = [];
+		const real = ctx.fileManager.renameFile.bind(ctx.fileManager);
+		jest.spyOn(ctx.fileManager, "renameFile").mockImplementation(async (file, to) => {
+			backupAtRenameTime.push(
+				ctx.vault.text(`${BACKUP}/Rules/Careers/Sage.md`) === "sage text, with MY notes");
+			await real(file, to);
+		});
+
+		const plan = await ctx.service.plan(ROOT);
+		expect(plan.backupCount).toBe(1);
+		expect(plan.backupFolder).toBe(BACKUP);
+		const report = await ctx.service.execute(plan, { writeReportNote: false });
+
+		expect(backupAtRenameTime.every((present) => present)).toBe(true);
+		expect(report.backupFolder).toBe(BACKUP);
+		expect(report.backedUp).toEqual([{
+			fromPath: `${ROOT}/Rules/Careers/Sage.md`,
+			backupPath: `${BACKUP}/Rules/Careers/Sage.md`,
+		}]);
+		// The copy keeps the user's bytes even though the live file has moved on.
+		expect(ctx.vault.text(`${BACKUP}/Rules/Careers/Sage.md`)).toBe("sage text, with MY notes");
+		expect(ctx.vault.text(`${ROOT}/career/sage.md`)).toBe("sage text, with MY notes");
+	});
+
+	test("pristine files are not copied — the backup protects edits, not bulk", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault); // both mapped files are byte-identical to the release
+		const report = await service.execute(await service.plan(ROOT), { writeReportNote: false });
+		expect(report.backedUp).toEqual([]);
+		expect(report.backupFolder).toBeNull();
+		expect([...vault.folders].some((folder) => folder.startsWith(BACKUP))).toBe(false);
+	});
+
+	test("a file from a retired release (no shipped hash) IS copied — unknown is not the same as unchanged", async () => {
+		const { vault, service } = await setup();
+		vault.setText(`${ROOT}/Careers/Retired.md`, "whatever this was");
+		const plan = await service.plan(ROOT);
+		expect(plan.renames[0].modified).toBeNull();
+		expect(plan.backupCount).toBe(1);
+		const report = await service.execute(plan, { writeReportNote: false });
+		expect(report.backedUp.map((entry) => entry.backupPath)).toEqual([`${BACKUP}/Careers/Retired.md`]);
+	});
+
+	test("a file we could not back up is NOT moved, and says why", async () => {
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Disciple.md`, "disciple text, also edited");
+		jest.spyOn(ctx.vault, "createBinary").mockImplementationOnce(() => {
+			throw new Error("disk full");
+		});
+
+		const report = await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
+
+		expect(report.failed).toHaveLength(1);
+		expect(report.failed[0].error).toContain("could not back it up first");
+		expect(report.failed[0].error).toContain("disk full");
+		const unmoved = report.failed[0].fromPath;
+		// It is still exactly where it was — we never hand an unbacked file to the sync.
+		expect(ctx.vault.text(unmoved)).toBeDefined();
+		expect(ctx.fileManager.renamed.map((entry) => entry.from)).not.toContain(unmoved);
+		// …and the other one went through.
+		expect(report.migrated).toHaveLength(1);
+	});
+
+	test("an existing backup folder is never written into — it gets an (n)", async () => {
+		const ctx = await setup();
+		ctx.vault.setText(`${BACKUP}/keep-me.md`, "a previous migration's safety net");
+		seedLegacyVault(ctx.vault);
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
+
+		const report = await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
+		expect(report.backupFolder).toBe(`${BACKUP} (2)`);
+		expect(ctx.vault.text(`${BACKUP}/keep-me.md`)).toBe("a previous migration's safety net");
+	});
+
+	test("the backup folder is a SIBLING of the compendium, never inside it", async () => {
+		// Inside the root the sync would walk it and report every copy as an unmanaged
+		// stray; worse, a mapped path could collide with one.
+		expect(backupFolderName(ROOT).startsWith(`${ROOT}/`)).toBe(false);
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
+		await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
+		expect(ctx.service.detect(ROOT).filesInRoot).toBe(4); // the copies are not in there
+		const manifest = (await ctx.store.load())!;
+		expect(Object.keys(manifest.files).some((p) => p.includes("backup"))).toBe(false);
+	});
+
+	test("stopping during the backup moves nothing at all", async () => {
+		const { vault, fileManager, service } = await setup();
+		seedLegacyVault(vault);
+		vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
+		vault.setText(`${ROOT}/Rules/Careers/Disciple.md`, "disciple text, edited");
+		const report = await service.execute(await service.plan(ROOT), {
+			writeReportNote: false,
+			shouldAbort: () => true, // stop before the first copy
+		});
+		expect(report.aborted).toBe(true);
+		expect(report.backedUp).toEqual([]);
+		expect(report.migrated).toEqual([]);
+		expect(fileManager.renamed).toEqual([]);
+		expect(vault.text(`${ROOT}/Rules/Careers/Sage.md`)).toBe("sage text, edited");
+	});
+
+	test("describePlan and the report note both name the backup", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
+		const plan = await service.plan(ROOT);
+		expect(describePlan(plan)).toContain(`1 of them are copied to "${BACKUP}" first`);
+
+		const report = await service.execute(plan);
+		const note = vault.text(report.reportNotePath!)!;
+		expect(note).toContain(`copied to \`${BACKUP}\` before`);
+		expect(note).toContain(`${BACKUP}/Rules/Careers/Sage.md`);
 	});
 });

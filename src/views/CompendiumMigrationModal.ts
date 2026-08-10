@@ -20,7 +20,7 @@
 // Escape counts as "not now" (review M2), never as consent.
 import type { App } from 'obsidian';
 import { DseModal, collapsible } from '@/framework/kit';
-import type { MigrationPlan, MigrationReport } from '@/data/CompendiumMigration';
+import type { MigrationPhase, MigrationPlan, MigrationReport } from '@/data/CompendiumMigration';
 
 const SAMPLE_SIZE = 6;
 /** Per-path lists are complete in the report NOTE; the dialog shows a readable slice. */
@@ -29,7 +29,7 @@ const LIST_LIMIT = 40;
 export interface MigrationModalCallbacks {
 	/** Run the plan. Resolves with the report; the modal shows the summary. */
 	run: (
-		onProgress: (done: number, total: number) => void,
+		onProgress: (done: number, total: number, phase?: MigrationPhase) => void,
 		shouldAbort: () => boolean,
 	) => Promise<MigrationReport>;
 	/** "Not now", or Escape at the preview. Records the decline; does NOT sync. */
@@ -119,6 +119,22 @@ export class CompendiumMigrationModal extends DseModal {
 					`pages, anything of your own) — left exactly where they are.`,
 			});
 		}
+		if (this.plan.backupCount > 0) {
+			list.createEl('li', {
+				text:
+					`Before anything moves, ${this.plan.backupCount} file(s) — every one whose ` +
+					`contents do not match the final legacy release — are copied to ` +
+					`"${this.plan.backupFolder}", a new folder beside your compendium. Nothing you ` +
+					`wrote into a compendium file can be lost, and that folder is yours to delete ` +
+					`whenever you are satisfied.`,
+			});
+		} else {
+			list.createEl('li', {
+				text:
+					'No backup folder is needed: every file being moved is byte-identical to the ' +
+					'compendium release it came from, so there is nothing of yours inside them.',
+			});
+		}
 		list.createEl('li', { text: 'Nothing is deleted. Not now, not later.' });
 
 		if (renames.length > 0) {
@@ -180,7 +196,9 @@ export class CompendiumMigrationModal extends DseModal {
 		this.setDseTitle('Moving your compendium…');
 		this.body.empty();
 		const progress = this.body.createEl('p', {
-			text: `0 / ${this.plan.renames.length} moved`,
+			text: this.plan.backupCount > 0
+				? `0 / ${this.plan.backupCount} backed up`
+				: `0 / ${this.plan.renames.length} moved`,
 		});
 		this.body.createEl('p', {
 			text: 'You can stop at any point. Files already moved stay moved — each move is complete on its own.',
@@ -201,8 +219,11 @@ export class CompendiumMigrationModal extends DseModal {
 		let report: MigrationReport;
 		try {
 			report = await this.callbacks.run(
-				(done, total) => {
-					if (!this.closed) progress.setText(`${done} / ${total} moved`);
+				(done, total, phase) => {
+					if (this.closed) return;
+					progress.setText(phase === 'backup'
+						? `${done} / ${total} backed up`
+						: `${done} / ${total} moved`);
 				},
 				() => this.aborted,
 			);
@@ -271,6 +292,18 @@ export class CompendiumMigrationModal extends DseModal {
 					`creates the new files, and the remaining moves then have nowhere to go.`,
 			});
 		}
+		if (report.backedUp.length > 0) {
+			list.createEl('li', {
+				text:
+					`${report.backedUp.length} file(s) were copied to "${report.backupFolder}" before ` +
+					`anything moved. Delete that folder yourself once you are satisfied — nothing ` +
+					`here ever touches it again.`,
+			});
+		} else if (!report.aborted) {
+			list.createEl('li', {
+				text: 'No backup was needed — none of the moved files differed from the release they came from.',
+			});
+		}
 		list.createEl('li', {
 			text: 'The old, now-empty folders are left behind on purpose — deleting folders is not something this does. Remove them yourself whenever you like.',
 		});
@@ -281,6 +314,10 @@ export class CompendiumMigrationModal extends DseModal {
 		}
 
 		// Review H3 — the lists themselves, not just their counts.
+		this.pathSection(
+			`Backed up before the move — ${report.backedUp.length}`,
+			'Your recovery path if the sync replaces something you had written.',
+			report.backedUp.map((entry) => entry.backupPath));
 		this.pathSection(
 			`Moved, but different from the last legacy release — ${report.migratedModified.length}`,
 			'Edited by you, or from an older release. The next sync replaces them with the current official text.',

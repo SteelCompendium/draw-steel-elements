@@ -62,6 +62,8 @@ layout"*. Before anything happens it tells you:
 - how many of them differ from the final legacy release (you edited them, or
   you were on an older compendium release) — those are moved too, and listed
   afterwards so you can check them;
+- how many will be copied into the backup folder first, and what that folder is
+  called;
 - how many can't be moved because something already sits at the new path;
 - how many have no 7.0.0 counterpart at all;
 - a handful of real `old path → new path` examples;
@@ -120,6 +122,31 @@ roll-up pages whose contents the new tree files individually. Every single one
 is enumerated, with its reason, in
 [the migration map's review report](compendium-migration-map.md).
 
+### Your edited files are backed up first
+
+Before the migration moves a single file, it **copies every compendium file whose
+contents don't match the release they came from** into a new folder beside your
+compendium — `DS Compendium backup (pre-7.0.0)`, or whatever your compendium folder
+is called plus that suffix. The copies keep their original folder structure, so
+`Rules/Careers/Disciple.md` lands at
+`DS Compendium backup (pre-7.0.0)/Rules/Careers/Disciple.md`.
+
+- **What gets copied:** anything the plugin cannot prove is untouched — files you
+  edited in place, and files from a compendium release too old for the shipped
+  checksums to speak for. Files that are byte-identical to the release they came from
+  are *not* copied: there is nothing of yours inside them, so a copy would add bulk
+  without adding protection.
+- **Where it goes:** a sibling of your compendium folder, never inside it — anything
+  inside would be walked by the sync and reported as stray content.
+- **Nothing ever touches it again.** The plugin does not read it, write to it a second
+  time, or delete it, and it will not overwrite an existing backup (a second migration
+  makes `… (2)`). **Delete it yourself when you're satisfied.**
+- If nothing needed copying, no folder is made, and the dialog says so.
+- If a copy fails, that file is **not moved** — it stays exactly where it is and is
+  listed as failed. Backing it up is the only reason it would be safe to move.
+
+This is the recovery path for the warning below.
+
 **One thing the move changes about your edits.** If you edited a compendium file
 in place — added a note to a statblock, say — moving it hands it to the sync as a
 file the plugin manages, and **the next sync replaces its contents with the
@@ -128,8 +155,9 @@ unrecognised content. This is the same rule that has always applied to
 plugin-installed compendium files, now applied to yours because the migration
 adopts them; without that, the moved files could never receive updates at all.
 The migration flags every file whose content doesn't match the last legacy
-release, in the dialog and in the report note, precisely so you can copy your
-own words out first. **Homebrew you wrote yourself, and anything outside the
+release, in the dialog and in the report note — and, as of the section above,
+**keeps a copy of every one of them**, so if a sync does replace something you wrote,
+the version you wrote is still sitting in the backup folder. **Homebrew you wrote yourself, and anything outside the
 compendium folder, is never affected** — only files that came from the
 compendium in the first place.
 

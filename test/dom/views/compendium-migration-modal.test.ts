@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { CompendiumMigrationModal } from '@views/CompendiumMigrationModal';
-import type { MigrationPlan, MigrationReport } from '@/data/CompendiumMigration';
+import type { MigrationPhase, MigrationPlan, MigrationReport } from '@/data/CompendiumMigration';
 import { App } from '../../mocks/obsidian';
 import { styleGuardFindings } from '../kit/styleGuard';
 
@@ -33,6 +33,8 @@ function makePlan(overrides: Partial<MigrationPlan> = {}): MigrationPlan {
 		],
 		blocked: [{ fromPath: `${ROOT}/Rules/Careers/Agent.md`, toPath: `${ROOT}/career/agent.md` }],
 		unmapped: [`${ROOT}/Rules/_Index.md`],
+		backupCount: 1,
+		backupFolder: `${ROOT} backup (pre-7.0.0)`,
 		...overrides,
 	};
 }
@@ -49,6 +51,8 @@ function emptyReport(overrides: Partial<MigrationReport> = {}): MigrationReport 
 		aborted: false,
 		remaining: 0,
 		reportNotePath: null,
+		backedUp: [],
+		backupFolder: null,
 		...overrides,
 	};
 }
@@ -57,11 +61,14 @@ function makeModal(plan = makePlan(), report = emptyReport()) {
 	let resolveRun!: (report: MigrationReport) => void;
 	let rejectRun!: (error: unknown) => void;
 	const runCalls: Array<{
-		onProgress: (done: number, total: number) => void;
+		onProgress: (done: number, total: number, phase?: MigrationPhase) => void;
 		shouldAbort: () => boolean;
 	}> = [];
 	const callbacks = {
-		run: jest.fn((onProgress: (done: number, total: number) => void, shouldAbort: () => boolean) => {
+		run: jest.fn((
+			onProgress: (done: number, total: number, phase?: MigrationPhase) => void,
+			shouldAbort: () => boolean,
+		) => {
 			runCalls.push({ onProgress, shouldAbort });
 			return new Promise<MigrationReport>((resolve, reject) => {
 				resolveRun = resolve;
@@ -119,6 +126,9 @@ describe('CompendiumMigrationModal — preview', () => {
 		expect(text).toContain('1 cannot move because something already sits at the new path');
 		expect(text).toContain('1 file(s) have no 7.0.0 counterpart');
 		expect(text).toContain('Nothing is deleted');
+		// Scott's approval condition: the backup must be stated BEFORE the user confirms.
+		expect(text).toContain('1 file(s) — every one whose contents do not match');
+		expect(text).toContain('DS Compendium backup (pre-7.0.0)');
 		expect(callbacks.run).not.toHaveBeenCalled();
 	});
 
@@ -181,19 +191,27 @@ describe('CompendiumMigrationModal — preview', () => {
 });
 
 describe('CompendiumMigrationModal — running', () => {
+	test('a plan with nothing to back up says so instead of naming a folder', () => {
+		const { container } = makeModal(makePlan({ backupCount: 0 }));
+		expect(bodyText(container)).toContain('No backup folder is needed');
+	});
+
 	test('the move button starts the run and the dialog switches to progress', () => {
 		const { container, callbacks } = makeModal();
 		footerBtn(container, 'Move 2 file(s)').click();
 		expect(callbacks.run).toHaveBeenCalledTimes(1);
 		expect((container.querySelector('.dse-modal__title') as HTMLElement).textContent)
 			.toBe('Moving your compendium…');
-		expect(bodyText(container)).toContain('0 / 2 moved');
+		expect(bodyText(container)).toContain('0 / 1 backed up');
 	});
 
-	test('progress callbacks update the line in place', () => {
+	test('progress callbacks update the line in place, and name the phase', () => {
 		const { container, runCalls } = makeModal();
 		footerBtn(container, 'Move 2 file(s)').click();
-		runCalls[0].onProgress(1, 2);
+		expect(bodyText(container)).toContain('0 / 1 backed up'); // backup runs first
+		runCalls[0].onProgress(1, 1, 'backup');
+		expect(bodyText(container)).toContain('1 / 1 backed up');
+		runCalls[0].onProgress(1, 2, 'move');
 		expect(bodyText(container)).toContain('1 / 2 moved');
 	});
 
@@ -238,6 +256,32 @@ describe('CompendiumMigrationModal — summary', () => {
 		footerBtn(container, 'Sync the compendium now').click();
 		expect(callbacks.syncAfter).toHaveBeenCalledWith(report);
 		expect(document.body.contains(container)).toBe(false);
+	});
+
+	test('says where the backups went, and lists them', async () => {
+		const report = emptyReport({
+			migrated: [rename('Rules/Careers/Sage.md', 'career/sage.md', true)],
+			backedUp: [{
+				fromPath: `${ROOT}/Rules/Careers/Sage.md`,
+				backupPath: `${ROOT} backup (pre-7.0.0)/Rules/Careers/Sage.md`,
+			}],
+			backupFolder: `${ROOT} backup (pre-7.0.0)`,
+		});
+		const { container, finishRun } = makeModal(makePlan(), report);
+		footerBtn(container, 'Move 2 file(s)').click();
+		await settle(finishRun);
+		const text = bodyText(container);
+		expect(text).toContain('1 file(s) were copied to "DS Compendium backup (pre-7.0.0)"');
+		expect(text).toContain('Delete that folder yourself');
+		expect(text).toContain('DS Compendium backup (pre-7.0.0)/Rules/Careers/Sage.md');
+	});
+
+	test('a run that needed no backup says so rather than staying silent', async () => {
+		const report = emptyReport({ migrated: [rename('a.md', 'b.md')] });
+		const { container, finishRun } = makeModal(makePlan(), report);
+		footerBtn(container, 'Move 2 file(s)').click();
+		await settle(finishRun);
+		expect(bodyText(container)).toContain('No backup was needed');
 	});
 
 	test('H3 — the actual PATHS are in the dialog, not just the counts', async () => {
