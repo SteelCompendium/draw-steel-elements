@@ -799,9 +799,31 @@ describe("the pre-migration backup", () => {
 		seedLegacyVault(ctx.vault);
 		ctx.vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
 
-		const report = await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
-		expect(report.backupFolder).toBe(`${BACKUP} (2)`);
+		// The PREVIEW must already name the real destination: this is the one screen the
+		// whole feature is about, and a user with an earlier backup must not be shown a
+		// folder their copies will not go to.
+		const plan = await ctx.service.plan(ROOT);
+		expect(plan.backupFolder).toBe(`${BACKUP} (2)`);
+		expect(describePlan(plan)).toContain(`${BACKUP} (2)`);
+
+		const report = await ctx.service.execute(plan, { writeReportNote: false });
+		expect(report.backupFolder).toBe(plan.backupFolder); // preview and outcome agree
+		expect(ctx.vault.text(`${BACKUP} (2)/Rules/Careers/Sage.md`)).toBe("sage text, edited");
 		expect(ctx.vault.text(`${BACKUP}/keep-me.md`)).toBe("a previous migration's safety net");
+	});
+
+	test("a folder that appears BETWEEN preview and run is still not written into", async () => {
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited");
+		const plan = await ctx.service.plan(ROOT);
+		expect(plan.backupFolder).toBe(BACKUP);
+
+		// Something claims the previewed name while the dialog is open.
+		ctx.vault.setText(`${BACKUP}/squatter.md`, "not ours");
+		const report = await ctx.service.execute(plan, { writeReportNote: false });
+		expect(report.backupFolder).toBe(`${BACKUP} (2)`);
+		expect(ctx.vault.text(`${BACKUP}/squatter.md`)).toBe("not ours");
 	});
 
 	test("the backup folder is a SIBLING of the compendium, never inside it", async () => {
@@ -841,6 +863,7 @@ describe("the pre-migration backup", () => {
 		expect(describePlan(plan)).toContain(`1 of them are copied to "${BACKUP}" first`);
 
 		const report = await service.execute(plan);
+		expect(report.backupFolder).toBe(plan.backupFolder);
 		const note = vault.text(report.reportNotePath!)!;
 		expect(note).toContain(`copied to \`${BACKUP}\` before`);
 		expect(note).toContain(`${BACKUP}/Rules/Careers/Sage.md`);

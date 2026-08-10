@@ -31,8 +31,11 @@ import type { MigrationState } from "./migrationState";
  *
  * Safety rules, all enforced below and all tested:
  *   - Nothing is ever deleted. Not the old files, not the old (now empty) folders,
- *     not anything unmapped. The only vault mutations are `renameFile` and creating
- *     the destination folders (plus, optionally, writing a report note).
+ *     not anything unmapped. The complete list of vault mutations is: `renameFile`,
+ *     creating the folders those renames need, `createBinary` for the pre-migration
+ *     backup copies (into a folder OUTSIDE the compendium root, which nothing here
+ *     ever reads or writes again), and — optionally — creating the report note. No
+ *     existing file is ever written to, and nothing is ever removed.
  *   - A rename onto an existing path never happens; that pair is reported instead.
  *   - Files with no mapping are left exactly where they are and listed BY PATH.
  *   - Re-running is a no-op: an already-moved file is no longer at its old path.
@@ -414,7 +417,12 @@ export class CompendiumMigrationService {
 		return {
 			root, detection, renames, blocked, unmapped,
 			backupCount,
-			backupFolder: backupFolderName(root),
+			// The REAL folder, disambiguated here rather than only at execute time — the
+			// preview is the screen this whole feature is about, and a user who already
+			// has a backup from an earlier run must not be shown a name their copies will
+			// not go to. `execute()` still re-resolves as a fallback, in case a folder of
+			// that name appears between the preview and the confirmation.
+			backupFolder: await this.resolveBackupFolder(root),
 		};
 	}
 
@@ -523,7 +531,11 @@ export class CompendiumMigrationService {
 		const needsBackup = plan.renames.filter((rename) => rename.modified !== false);
 		const backupFailed = new Set<string>();
 		if (needsBackup.length > 0) {
-			const folder = await this.resolveBackupFolder(plan.root);
+			// Prefer the name the user was shown; only re-resolve if something claimed it
+			// between the preview and now.
+			const folder = this.app.vault.getAbstractFileByPath(plan.backupFolder) === null
+				? plan.backupFolder
+				: await this.resolveBackupFolder(plan.root);
 			report.backupFolder = folder;
 			for (let index = 0; index < needsBackup.length; index++) {
 				if (options.shouldAbort?.() === true) {
