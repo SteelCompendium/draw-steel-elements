@@ -194,9 +194,17 @@ describe('D4 §4 — DseSettingTab', () => {
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		renderAll(tab);
 		const preset = rowByName('Preset').dropdowns[0];
+		// SC-146 fix 4: sourcebook is now { featstyle: 'flat', stats: 'ledger' }
+		// (the site's own Sourcebook is a FLAT feature list) — a single member
+		// alone no longer matches any named bundle (matrix-checked: sourcebook
+		// and index each now diverge from steel in TWO members), so one toggle
+		// derives 'custom' immediately.
 		rowByName('Secondary stats').dropdowns[0].trigger('ledger');
 		await flushAsync(1);
-		expect(preset.value).toBe('sourcebook'); // ledger alone = the sourcebook bundle
+		expect(preset.value).toBe('custom');
+		rowByName('Feature style').dropdowns[0].trigger('flat');
+		await flushAsync(1);
+		expect(preset.value).toBe('sourcebook'); // flat + ledger = the sourcebook bundle
 		rowByName('Density').dropdowns[0].trigger('compact');
 		await flushAsync(1);
 		expect(preset.value).toBe('custom');

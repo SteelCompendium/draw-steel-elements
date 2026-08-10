@@ -239,7 +239,13 @@ describe('D3 Task 5: print RULES (real kit class names, verified by grep)', () =
 			// each appears in a break-inside rule (loosely — same declaration block)
 			expect(sheet).toContain(cls);
 		}
-		const breakRule = sheet.match(/[^}]*break-inside:\s*avoid[^}]*\}/)?.[0] ?? '';
+		// SC-146 fix 7 added an UNRELATED `break-inside: avoid` (CSS multi-column
+		// break, not print page-break) on the sb-columns='wide' arm, earlier in
+		// the sheet than this one — so the print rule must be found INSIDE
+		// @media print, not by "first break-inside in the file" (that grabbed
+		// the wide-columns rule instead once it existed).
+		const printBlock = sheet.match(/@media print\s*\{[\s\S]*?\}\s*\}/g)?.join('\n') ?? '';
+		const breakRule = printBlock.match(/[^}]*break-inside:\s*avoid[^}]*\}/)?.[0] ?? '';
 		expect(breakRule).toContain('[data-dse-element]');
 		expect(breakRule).toMatch(/\.dse-feature|\.dse-pr|\.dse-statgrid/);
 	});

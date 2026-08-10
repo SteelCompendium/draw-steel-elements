@@ -46,7 +46,7 @@ declare module '../framework/seams/prefs' {
 		sbFeatureStyle: 'card' | 'flat';
 		sbDensity: 'comfortable' | 'compact';
 		sbColumns: 'single' | 'wide';
-		sbStats: 'grid' | 'ledger';
+		sbStats: 'grid' | 'gridc' | 'ledger';
 		// —— Element defaults (behavioral — no attr; views read cx.prefs.get) ——
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
@@ -249,11 +249,22 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 			options: [{ value: 'single', label: 'Single column' }, { value: 'wide', label: 'Side-by-side (wide)' }],
 		},
 	}),
+	// SC-146 fix 1: re-pointed to the ACTUAL secondary stats block (Immunity /
+	// Weakness / Movement / With Captain, .dse-sb__grid > .dse-sb__kv) — this
+	// descriptor's CSS previously targeted .dse-sb__items/.dse-sb__item, the
+	// PRIMARY Size/Speed/Stamina/Stability/Free Strike row, the exact inverse of
+	// the site's data-sb-meta (audit sc146-audit-report.md §1). No primary-stats
+	// layout setting is added — the site has none, and this pref follows it
+	// (audit judgment call C1, Scott-approved: "yes, lose it").
 	d({
 		key: 'sbStats', default: 'grid', attr: 'sb-stats',
 		ui: {
 			group: 'Statblock display', inPreset: true, label: 'Secondary stats', control: 'select',
-			options: [{ value: 'grid', label: 'Grid' }, { value: 'ledger', label: 'Ledger' }],
+			options: [
+				{ value: 'grid', label: 'Grid' },
+				{ value: 'gridc', label: 'Grid (centered)' },
+				{ value: 'ledger', label: 'Ledger' },
+			],
 		},
 	}),
 
@@ -326,10 +337,23 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 
 // —— §3.2 statblock presets: NOT a stored pref — the label is DERIVED from the
 // members, re-deriving 'custom' when any single member diverges (site parity). ——
+// SC-146 fixes 4/5 (audit §4a "Preset bundle divergence"): both non-default
+// bundles diverged from the site's presets of the same name.
+//   - sourcebook: the site's book layout is a FLAT feature list
+//     (settings-panel.js:37, featstyle 'flat'); this bundle kept 'card'.
+//   - index: the site pins multi-column `wide: "off"` in EVERY preset — it is
+//     a standalone toggle, never a preset member (settings-panel.js:711) — but
+//     this bundle turned sbColumns 'wide' on.
+// `density: 'compact'` stays in the index bundle: the site has NO density
+// preset member at all (density has no site twin, full stop — it's the
+// plugin's own PLUGIN-ONLY divergence, matrix row P3/S21), so keeping it here
+// is a deliberate choice, not a leftover of the sbColumns bug above (audit
+// judgment call C3, Scott-approved: "keep it... but write it down as a
+// deliberate divergence, not an accident").
 export const SB_PRESETS = {
 	steel:      { sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'grid' },
-	sourcebook: { sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger' },
-	index:      { sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'wide', sbStats: 'grid' },
+	sourcebook: { sbFeatureStyle: 'flat', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger' },
+	index:      { sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'single', sbStats: 'grid' },
 } as const;
 export type SbPresetId = keyof typeof SB_PRESETS;
 

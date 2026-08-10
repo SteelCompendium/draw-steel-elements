@@ -1873,7 +1873,7 @@ code.dsa {
    Pref hooks (D4 Plan 13 Task 3 — reflected onto the ELEMENT ROOT by
    prefs.reflect(), not stamped by the element):
    [data-dse-density="comfortable|compact"], [data-dse-sb-featstyle="card|flat"],
-   [data-dse-sb-columns="single|wide"], [data-dse-sb-stats="grid|ledger"].
+   [data-dse-sb-columns="single|wide"], [data-dse-sb-stats="grid|gridc|ledger"].
    NO word/number changes anywhere — the "label: " colons are CSS-owned so the
    rendered text stays verbatim while the DOM stays layout-agnostic.
    Tokens only (D2 §5) — no color literals.
@@ -1985,22 +1985,50 @@ code.dsa {
 
 /* -- columns pref (D4 §3.1, the site data-sb-wide analogue): 'wide' lays the
    statblock's TOP-LEVEL feature list side-by-side on wide panes; nested feature
-   groups keep single column. auto-fill so narrow panes degrade to one column. -- */
+   groups keep single column.
+   SC-146 fix 7 (audit judgment C4, Scott-approved): CSS `columns`, not a CSS
+   `grid` — matches the site's own packing (steel-statblock.css:604-605,
+   `columns: 28rem` + `break-inside: avoid`). Grid's row-aligned tracks left a
+   short card's row as tall as its tallest neighbour, so a short top card left
+   a ragged empty gap under it; `columns` packs each card into the next
+   available column instead, no gaps. Narrow panes degrade to one column on
+   their own once no 28rem track fits — no media query needed.
+   `display: block` overrides the unconditional Steel `.dse-feature__nested`
+   flex rule below (~3576): `columns` has no effect on a flex/grid container. -- */
 [data-dse-element='statblock'][data-dse-sb-columns='wide'] .dse-sb > .dse-feature__nested {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
-	column-gap: 1rem;
-	align-items: start;
+	display: block;
+	columns: 28rem;
+	column-gap: 2rem;
+}
+/* `break-inside: avoid` stops a card straddling two columns; the margin
+   replaces the row-gap the site gets for free from its own flex `.sb__features`
+   base layout (columns has no vertical gap concept) — zeroed again in flat
+   mode below, where the mode's own hairline+diamond separator already reads as
+   the boundary (site: `[data-sb-wide="on"][data-sb-featstyle="flat"] .sb__feat
+   { margin-bottom: 0 }`, steel-statblock.css:608). */
+[data-dse-element='statblock'][data-dse-sb-columns='wide'] .dse-sb > .dse-feature__nested > .dse-feature {
+	break-inside: avoid;
+	margin-bottom: 0.65rem;
+}
+[data-dse-element='statblock'][data-dse-sb-columns='wide'][data-dse-sb-featstyle='flat'] .dse-sb > .dse-feature__nested > .dse-feature {
+	margin-bottom: 0;
 }
 
 /* -- secondary-stats pref (the site data-sb-meta analogue): 'grid' = the default
-   evenly-spread item row; 'ledger' stacks Size/Speed/Stamina/Stability/Free Strike
-   as hairline label-left / value-right rows -- */
-[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__items {
+   2-col Immunity/Weakness/Movement/With Captain cell row; 'gridc' = the same
+   cells, value over label, centred; 'ledger' stacks them as hairline
+   label-left / value-right rows.
+   SC-146 fix 1 (audit §1): re-pointed from .dse-sb__items/.dse-sb__item (the
+   PRIMARY Size/Speed/Stamina/Stability/Free Strike row — see view.ts's own
+   header comment) to .dse-sb__grid/.dse-sb__kv, the ACTUAL secondary stats
+   block, matching the site's [data-sb-meta] scope
+   (steel-statblock.css:163-195). The primary row is no longer reachable by any
+   pref — the site never offers that either (audit judgment call C1). -- */
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__grid {
 	display: block;
 	padding-bottom: 0.25rem;
 }
-[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__item {
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv {
 	display: flex;
 	justify-content: space-between;
 	align-items: baseline;
@@ -2008,13 +2036,24 @@ code.dsa {
 	border-bottom: 1px solid var(--dse-rule);
 	padding: 0.15rem 0;
 }
-[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__item-v {
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv-v {
 	font-size: var(--font-ui-medium);
 	order: 2;
 }
-[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__item-l {
+[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv-l {
 	order: 1;
 	font-size: inherit;
+}
+/* SC-146 fix 3 — the site's third mode (steel-statblock.css:169-172): same
+   framed cell as 'grid', but the value sits ABOVE the label and both centre.
+   The base .dse-sb__kv DOM order is label-then-value (view.ts renderMeta), so
+   flex column-REVERSE flips the visual stack without touching the DOM. */
+[data-dse-element='statblock'][data-dse-sb-stats='gridc'] .dse-sb__kv {
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: center;
+	text-align: center;
+	gap: 0.08rem;
 }
 
 /* ================================================================== */
@@ -3667,6 +3706,35 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
 [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *)::before {
 	border-top-left-radius: 0;
 	border-bottom-left-radius: 0;
+}
+
+/* SC-146 fix 6 (audit judgment C2, Scott-approved) — ◆ diamond separator
+   between consecutive flat-mode features, matching the site's
+   `[data-sb-featstyle="flat"] .sb__feat + .sb__feat::after`
+   (steel-statblock.css:344): without one, 'flat' reads as an unstructured
+   run. `::before` is already the action-type spine bar on `.dse-feature`
+   (~60; still drawn in flat mode above), so the separator takes `::after`
+   instead — free on this class — and reuses the plugin's own halo'd-diamond
+   recipe (`.dse-hr__diamond`, ~5772) rather than porting the site's
+   line+dots gradient, for visual consistency with the rest of the sheet.
+   Sits on the shared boundary between two chromeless rows: flat's own
+   0.25rem top/bottom padding + zero gap leaves exactly an 8px seam — this
+   diamond's own halo diameter — so no extra spacing is added. Steel +
+   screen-only: Legacy draws no ornaments (OD-2, the accent is Steel-only)
+   and print never draws it either. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *)::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 50%;
+	width: 8px;
+	height: 8px;
+	margin: -4px 0 0 -4px;
+	background-color: var(--dse-metal);
+	transform: rotate(45deg);
+	box-shadow:
+		0 0 0 4px var(--dse-page-bg, var(--dse-surface)),
+		0 0 0 5px var(--dse-metal-faint);
 }
 
 /* Card ground (SC-10): the site's steel-kit recipe — forged card gradient +
@@ -5865,6 +5933,36 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv-l::after {
 	content: '';
+}
+
+/* SC-146 fix 3, Steel arm — gridc bolds + colours the value over the muted
+   small-caps label (site: .sb__field-v { font-weight:700; color:
+   var(--sc-steel-lighter) }, steel-statblock.css:172). Layout itself
+   (column-reverse/center) is the base rule above; the box above is shared
+   with 'grid' unchanged. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-stats='gridc'] .dse-sb__kv-v {
+	font-weight: bold;
+	color: var(--dse-heading);
+}
+
+/* SC-146 fix 2 (audit §1b) — Steel-scoped ledger reset. The unconditional
+   Steel box rule above (.dse-sb__kv, ~5877) sunk-boxes every cell regardless
+   of the sb-stats pref, so the base ledger arm's border-bottom (~2007) landed
+   on top of a still-boxed cell — "boxed panels with a doubled bottom edge",
+   not the site's hairline row (steel-statblock.css:183-187). This arm resets
+   border/radius/background to nothing and turns the column into a row, so
+   'ledger' under Steel reads as a real hairline label-left/value-right line.
+   Attribute-qualified selector (+1 over the plain .dse-sb__kv box rule) wins
+   on specificity regardless of source order. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv {
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: baseline;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	padding: 0.4rem 0.1rem;
+	border-bottom: 1px solid var(--dse-metal-faint);
 }
 
 /* -- Boxed characteristics row: the site's .sb__chars gradient-bordered

@@ -53,7 +53,10 @@ test('styles-source.css keys the statblock pref hooks off the ROOT attributes (b
 	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-density='compact'\] \.dse-sb/);
 	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-sb-featstyle='flat'\]/);
 	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-sb-columns='wide'\] \.dse-sb > \.dse-feature__nested/);
-	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-sb-stats='ledger'\] \.dse-sb__item/);
+	// SC-146 fix 1: re-pointed from .dse-sb__item (the PRIMARY stat row) to
+	// .dse-sb__grid/.dse-sb__kv (the ACTUAL secondary stats block) — see
+	// styles-source.css's own comment at this selector for the full story.
+	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-sb-stats='ledger'\] \.dse-sb__grid/);
 	expect(sheet).toMatch(/\[data-dse-element\]\[data-dse-reduce-motion='true'\]/);
 	// the OLD card-scoped selectors must be gone (they'd shadow the reflected root):
 	expect(sheet).not.toMatch(/\.dse-sb\[data-dse-density/);

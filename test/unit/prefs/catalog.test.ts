@@ -184,14 +184,21 @@ test('every descriptor carries a PrefUi in a known group; no hidden rows remain 
 test('preset derivation: defaults = steel; one divergence = custom; applySbPreset round-trips', async () => {
 	const store = makeStore();
 	expect(deriveSbPreset(store)).toBe('steel');
+	// SC-146 fix 4: sourcebook is now { featstyle: 'flat', stats: 'ledger' }
+	// (was 'card' + 'ledger' — the site's own Sourcebook is a FLAT feature
+	// list, settings-panel.js:37), so deriving it needs both members flipped.
 	await store.set('sbStats', 'ledger');
+	expect(deriveSbPreset(store)).toBe('custom');
+	await store.set('sbFeatureStyle', 'flat');
 	expect(deriveSbPreset(store)).toBe('sourcebook');
 	await store.set('sbDensity', 'compact');
 	expect(deriveSbPreset(store)).toBe('custom');
 	await applySbPreset(store, 'index');
 	expect(deriveSbPreset(store)).toBe('index');
 	expect(store.get('sbFeatureStyle')).toBe('flat');
-	expect(store.get('sbColumns')).toBe('wide');
+	// SC-146 fix 5: the site pins multi-column `wide` OFF in every preset — it
+	// is a standalone toggle, never a preset member (settings-panel.js:711).
+	expect(store.get('sbColumns')).toBe('single');
 	await applySbPreset(store, 'steel');
 	expect(deriveSbPreset(store)).toBe('steel');
 	expect(SB_PRESETS.steel.sbDensity).toBe('comfortable');

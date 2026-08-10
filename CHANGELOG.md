@@ -107,6 +107,32 @@ for what needs action.
   (`align-items: start` on `.dse-hero__grid`, Steel-scoped) — the leftover
   height becomes gap between rows instead of dead air inside a panel. Legacy is
   unchanged (its shots are frozen).
+- [FIX] **Statblock display settings brought back in line with the v2 site**
+  (SC-146). An audit against the live site found the shipped settings had
+  drifted:
+  - **"Secondary stats" was restyling the wrong block.** Its `ledger` mode
+    turned the primary Size/Speed/Stamina/Stability/Free Strike row into a
+    ledger; the site's equivalent setting only ever touches the secondary
+    Immunity/Weakness/Movement/With Captain block. The CSS now targets the
+    right block, matching the site.
+  - **The `ledger` mode didn't look like a ledger under Steel** — the theme
+    boxed the cell unconditionally, so you got a boxed panel with a doubled
+    bottom edge instead of a hairline row. Fixed with a Steel-scoped reset.
+  - **Added the missing third mode, "Grid (centered)"** — a framed cell with
+    the value over the label, centred — so Secondary stats offers the same
+    three modes as the site.
+  - **The Sourcebook preset now matches the site's**: it sets Feature style to
+    Flat (was Cards).
+  - **The Index card preset no longer turns on multi-column layout** — the
+    site treats that as a separate toggle, off in every preset. Its Density:
+    Compact stays, as a deliberate plugin-only enhancement with no site
+    counterpart.
+  - **"Flat" feature style now draws a ◆ separator between features**,
+    matching the site — flat with no separator between entries read as an
+    unstructured run of text.
+  - **"Side-by-side (wide)" feature columns now pack like the site's**, using
+    CSS `columns` instead of a row-aligned grid, so a short card no longer
+    leaves a ragged empty gap under it.
 - [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
   **searchable from Obsidian's own settings search** (SC-131). It was one
   6850px scroll page — nine stacked sections and a full statblock preview — and
