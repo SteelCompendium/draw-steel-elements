@@ -59,6 +59,31 @@ export { HeroPanel } from './HeroPanel';
 export type { PanelHost } from './HeroPanel';
 export { renderStaminaBar, updateStaminaBar } from './StaminaBarPanel';
 export type { StaminaBarValues, StaminaBarRenderOptions } from './StaminaBarPanel';
+// -- SC-132: the stamina cluster's shared parts (the gauge, the recoveries strip and
+// the undo toast) — one implementation for the element, the hero sheet and both modals.
+export {
+	GAUGE_CLS,
+	renderStaminaGauge,
+	setStaminaGaugeDelta,
+	staminaGaugeGeometry,
+	staminaState,
+	updateStaminaGauge,
+} from './staminaGauge';
+export type {
+	StaminaGaugeGeometry,
+	StaminaGaugeOptions,
+	StaminaGaugeValues,
+	StaminaState,
+} from './staminaGauge';
+export { RECOVERY_GROUP_SIZE, markerTarget, renderRecoveriesStrip } from './RecoveriesStrip';
+export type {
+	RecoveriesStripHandle,
+	RecoveriesStripOptions,
+	RecoveriesStripState,
+	WoundState,
+} from './RecoveriesStrip';
+export { UNDO_NOTICE_MS, undoNotice } from './undoNotice';
+export type { UndoNoticeHandle } from './undoNotice';
 export { renderCharacteristicsGrid } from './CharacteristicsGrid';
 export type { CharacteristicsValues, CharacteristicsGridOptions } from './CharacteristicsGrid';
 export { buildConditionIcons } from './conditionIcons';
