@@ -33,6 +33,22 @@
 //     * the base ceiling stays legible because it gets its OWN index mark (`--dse-max-x`),
 //       so a rescaled gauge never hides where max actually is.
 //
+//   THE RESERVE IS A FIXED-WIDTH REGION, NOT PART OF THAT RESCALING — stated explicitly
+//   because it means the gauge carries TWO rulers whenever temp is present, and that is a
+//   deliberate choice rather than an oversight. The dying reserve always occupies
+//   `halfMax / (max + halfMax)` of the channel (a third, for any max), while the positive
+//   region to its right divides the remainder by `max + temp`. So at temp > 0 the two
+//   sides draw a different number of pixels per point of Stamina.
+//
+//   The alternative — one ruler, `max + halfMax + temp` across the whole channel — was
+//   rejected for a specific reason: it would MOVE THE ZERO BULKHEAD every time temp
+//   changed. The bulkhead is this model's origin; an origin that slides when you gain 4
+//   temporary Stamina is a worse lie than two rulers, because the reader's anchor for
+//   "how close am I to going down" would drift under them. Fixed reserve + fixed origin +
+//   an elastic positive region keeps the one landmark that matters nailed down, and the
+//   base-max mark reports the rescaling explicitly. `staminaGauge.test.ts` pins this
+//   choice so it cannot be "fixed" by accident.
+//
 // SC-5 (D2 §5): every number below leaves this module as a `--dse-*` custom property.
 // There is no inline colour and no inline width anywhere in the stamina family.
 
@@ -53,7 +69,11 @@ export interface StaminaGaugeOptions {
 	 * starts there.
 	 */
 	dyingZone?: boolean;
-	/** Extra graduations at these FRACTIONS of the positive region (minion death ticks). */
+	/** Extra graduations at these FRACTIONS OF THE WHOLE CHANNEL (minion death ticks).
+	 *  Not of the positive region: the CSS places them with a bare
+	 *  `left: var(--dse-tick-x)`, so a caller that also has a dying reserve would find
+	 *  them offset by it. Today's only caller (the minion pool) passes
+	 *  `dyingZone: false`, where the two are the same thing. */
 	ticks?: readonly number[];
 }
 
@@ -79,8 +99,16 @@ export interface StaminaGaugeGeometry {
  *  at 0 or below (and implies winded — dying takes display priority). */
 export function staminaState(s: StaminaGaugeValues): StaminaState {
 	const current = s.current ?? 0;
+	const max = s.max ?? 0;
+	// FOLLOWUPS #28's full-degrade case: every ref failed and no authored max_stamina, so
+	// `max` is 0. Without this line `current <= 0` is trivially true and the cluster puts
+	// on the whole dying dress — red frame, red ground, skull, the word — for a block that
+	// is UNCONFIGURED, not dead. A hero with no maximum is not dying; state is undefined
+	// there, and 'healthy' is the quiet answer (the numerals still read 0 / 0, which is
+	// the honest thing to show).
+	if (!(max > 0)) return 'healthy';
 	if (current <= 0) return 'dying';
-	if (current <= Math.floor((s.max ?? 0) / 2)) return 'winded';
+	if (current <= Math.floor(max / 2)) return 'winded';
 	return 'healthy';
 }
 
@@ -92,21 +120,32 @@ export function staminaGaugeGeometry(
 	s: StaminaGaugeValues,
 	opts: StaminaGaugeOptions = {},
 ): StaminaGaugeGeometry {
-	const current = s.current ?? 0;
-	const temp = Math.max(s.temp ?? 0, 0);
-	const max = s.max ?? 0;
+	// EVERY number is sanitised on the way in, not guarded on the way out. These values
+	// arrive from parsed YAML and from derived hero stats, so a non-finite one is a real
+	// possibility (a malformed `max_stamina:`, a reference that failed to resolve), and a
+	// single NaN anywhere propagates through the arithmetic into `NaN%` — which CSS drops
+	// SILENTLY, so the bar just stops moving and nothing reports a fault. Guarding only
+	// the divisions is not enough: a NaN NUMERATOR sails straight past a `denom > 0` check.
+	const num = (v: number | undefined): number => (Number.isFinite(v) ? (v as number) : 0);
+	const current = num(s.current);
+	const temp = Math.max(num(s.temp), 0);
+	const max = num(s.max);
 	const halfMax = Math.floor(max / 2);
 
 	// The dying reserve is half the hero's max, expressed against the whole coordinate
 	// space [-max/2 … +max]. With no dying zone the bulkhead sits at 0 and the positive
 	// region is the entire channel.
 	const total = max + halfMax;
-	const zone = opts.dyingZone === false || total <= 0 ? 0 : (halfMax / total) * 100;
+	// `!(x > 0)`, never `x <= 0`: NaN <= 0 is FALSE, so the `<=` form lets a NaN through
+	// and every percentage downstream becomes `NaN%` — a value CSS silently drops, which
+	// is the worst kind of bug because the bar just stops moving. This is the same trap
+	// StaminaEditModal documents by name in its Spend Recovery guard.
+	const zone = opts.dyingZone === false || !(total > 0) ? 0 : (halfMax / total) * 100;
 	const live = 100 - zone;
 
 	// The positive region's denominator: max, widened by temp so the cap always fits.
 	const denom = max + temp;
-	const pct = (n: number, span: number): number => (denom <= 0 ? 0 : (n / denom) * span);
+	const pct = (n: number, span: number): number => (!(denom > 0) ? 0 : (n / denom) * span);
 
 	const pourW = pct(Math.min(Math.max(current, 0), max), live);
 	return {

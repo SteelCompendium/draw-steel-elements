@@ -72,8 +72,9 @@ When `recoveries_max` is set, the bar gains:
   never a colour alone. Under Legacy it is the badge beside the markers, as before.
 
 If you would rather not edit by clicking a marker, turn on **Settings → Element defaults
-→ Advanced → "Edit Recoveries with a popover"**: a marker click then opens a small − / +
-popover instead of committing straight away.
+→ Advanced → "Edit Recoveries with a popover"**: a marker click — or an arrow key on the
+row — then opens a small − / + popover instead of committing straight away, so no single
+stray input can change the count.
 
 ```
 ~~~ds-stamina-bar

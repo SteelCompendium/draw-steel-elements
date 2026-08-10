@@ -97,7 +97,17 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		for (const el of [fill, temp, track]) {
 			expect(el.getAttribute('style') ?? '').not.toMatch(/NaN/);
 		}
-		expect(fill.getAttribute('data-state')).toBe('dying');
+		// SC-132 (review L6): 'healthy', NOT 'dying'. `max = 0` is the FULL-DEGRADE case
+		// this test exists for — every reference failed and no `max_stamina` was authored
+		// — and `current <= 0` is trivially true there, so the old answer dressed an
+		// UNCONFIGURED block in the whole dying treatment: red frame, red ground, a skull
+		// crest and the word DYING, for a hero the plugin simply could not resolve. That
+		// was invisible before SC-132 (the Legacy fill's `data-state` only tints a bar
+		// nobody can read at 0 width) and became loud the moment the Steel cluster started
+		// paying attention to it. A bar with no maximum is not dying; state is undefined
+		// there, and 'healthy' is the quiet answer. The NaN/geometry half of this test —
+		// the actual FOLLOWUPS #28 subject — is unchanged above.
+		expect(fill.getAttribute('data-state')).toBe('healthy');
 		expect(pill.textContent).toBe('(0/0)');
 	});
 

@@ -37,6 +37,10 @@ import type { Component } from 'obsidian';
 import { iconButton } from './iconButton';
 import type { IconButtonHandle } from './iconButton';
 
+/** The keys the marker row treats as value input. Named once so the direct-commit branch
+ *  and the popover branch cannot disagree about what counts as an edit. */
+const VALUE_KEYS = new Set(['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'Home', 'End']);
+
 /** Recovery markers per group. Scott, round 3: "we can add a small amount of whitespace
  *  between a group of 3-5 recovery cells to allow quick counting, kinda like how commas
  *  separate groups of 3 digits". G4 confirmed in round 5 — the only size that divides
@@ -169,10 +173,11 @@ export function renderRecoveriesStrip(
 	 *  ("can we allow for the ALT stepper popover as an optional setting. I think it looks
 	 *  really good and some players may want it"). */
 	const openPopover = (): void => {
-		if (popover) {
-			closePopover();
-			return;
-		}
+		// IDEMPOTENT, deliberately: the keyboard path calls this on every value key, and
+		// an editor that closed itself on the second ArrowLeft would be unusable. The
+		// MOUSE path toggles instead (a second click on the markers dismisses it), which
+		// is what a pointer user expects — see togglePopover below.
+		if (popover) return;
 		const pop = rootEl.createDiv({ cls: 'dse-stamina-rec__pop' });
 		popover = pop;
 		pop.createSpan({ cls: 'dse-stamina-rec__pop-title', text: 'Recoveries' });
@@ -196,10 +201,15 @@ export function renderRecoveriesStrip(
 		});
 	};
 
+	const togglePopover = (): void => {
+		if (popover) closePopover();
+		else openPopover();
+	};
+
 	if (opts.canPersist) {
 		opts.owner.registerDomEvent(pipsEl, 'click', (evt: MouseEvent) => {
 			if (opts.popoverEditor) {
-				openPopover();
+				togglePopover();
 				return;
 			}
 			const target = (evt.target as HTMLElement | null)?.closest('.dse-stamina-rec__pip');
@@ -210,6 +220,23 @@ export function renderRecoveriesStrip(
 		});
 		pipsEl.setAttribute('tabindex', '0');
 		opts.owner.registerDomEvent(pipsEl, 'keydown', (evt: KeyboardEvent) => {
+			if (evt.key === 'Escape') {
+				closePopover();
+				return;
+			}
+			// The ALT editor gates the KEYBOARD too. Its whole premise is that a stray
+			// input cannot change anything, and a stray arrow key is a stray input — a
+			// version that intercepted the mouse and let the keyboard commit straight
+			// through would be the setting only half-on. So a value key opens the popover
+			// instead of committing; the popover's − / + are real buttons in the tab
+			// order, so the keyboard can still do the edit, just deliberately.
+			if (opts.popoverEditor) {
+				if (VALUE_KEYS.has(evt.key)) {
+					evt.preventDefault();
+					openPopover();
+				}
+				return;
+			}
 			const step =
 				evt.key === 'ArrowRight' || evt.key === 'ArrowUp'
 					? 1
@@ -227,8 +254,6 @@ export function renderRecoveriesStrip(
 			} else if (evt.key === 'End') {
 				evt.preventDefault();
 				commit(opts.max);
-			} else if (evt.key === 'Escape') {
-				closePopover();
 			}
 		});
 		// The popover is a transient overlay, so it dismisses the way every other one

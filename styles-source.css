@@ -1155,6 +1155,10 @@ code.dsa {
 	flex-wrap: wrap;
 	gap: 0.6em;
 	margin-top: 0.5em;
+	/* SC-132: the anchor for the recovery-editor popover overlay. No offsets, so it moves
+	   nothing and changes no frozen byte — it only makes this box the containing block
+	   the overlay positions against, under every theme. */
+	position: relative;
 }
 
 .dse-stamina-rec__pips {
@@ -1221,12 +1225,33 @@ code.dsa {
    ornament, so unlike the two above it works under every theme — the Steel layer only
    re-skins it. It never exists in a screenshot: it is created on click and removed on
    dismiss. */
+/*  AN OVERLAY, NOT A ROW MEMBER. The first cut appended it in flow, which is wrong twice
+    over on a strip that is `flex-wrap: nowrap`: it takes width from the markers at every
+    size, and at a 300px sidebar leaf it rendered ~117px OUTSIDE the card — the exact
+    "very close to the edge of the card" complaint that the rail's padding pass fixed,
+    reintroduced by a control that was not there when that was measured. Anchored to the
+    strip's bottom-right instead, so it costs the row nothing and stays inside the plate's
+    right edge whatever the width.
+
+    The strip is already a containing block for it under Steel (`container-type:
+    inline-size` implies layout containment), but `position: relative` is declared here,
+    unscoped, so the popover is anchored under the LEGACY theme too — it is a control, not
+    ornament, and it works in both. `container-type` brings layout/style/size containment
+    and NOT paint containment, so nothing clips the overlay. */
 .dse-stamina-rec__pop {
-	position: relative;
+	position: absolute;
+	right: 0;
+	top: calc(100% + 0.3em);
+	z-index: 30;
 	display: inline-flex;
 	align-items: center;
+	/* Bounded by its anchor, and allowed to become two lines rather than hang off the
+	   card's left edge: at a 260px leaf the row's natural ~276px was 29px wider than the
+	   plate it sits in. `right: 0` anchors the overflow to the LEFT, so an unbounded
+	   popover escapes on exactly the side a right-anchored one cannot be seen to. */
+	max-width: 100%;
+	flex-wrap: wrap;
 	gap: 0.45rem;
-	margin-top: 0.4em;
 	padding: 0.3em 0.5em;
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
@@ -3047,10 +3072,9 @@ Shared globals
 	.dse-hero__ability-body {
 		margin-top: 0.5em;
 	}
-
-	.dse-hero__stamina-stepper {
-		margin-top: 0.5em;
-	}
+	/* (SC-132: `.dse-hero__stamina-stepper` deleted — the sheet's duplicate `- 31 +`
+	   counter row is gone and the bar itself is the write path, so the class no longer
+	   exists in any DOM.) */
 }
 
 /* ================================================================== */
@@ -7014,7 +7038,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
     block in a note there is no such title, and an unlabelled shield beside a bare number
     is not self-describing. So the rule keys off the title's PRESENCE, not a surface
     name, and there is exactly one place it can be wrong. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__clabel {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region:has(> .dse-hero__region-title) .dse-stamina__clabel {
 	display: none;
 }
 /*  …and the crest steps down a size, keyed off the same title. Not a style preference —
@@ -7025,15 +7049,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
     within 1.45px of touching. 2.2 × 2.5em hands ~10px back to the gap, and it costs
     nothing that matters: on the sheet the crest is the one member of the cluster carrying
     no information the other three channels do not. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region:has(> .dse-hero__region-title) .dse-stamina__crest {
 	width: 2.2em;
 	height: 2.5em;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest-glyph {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region:has(> .dse-hero__region-title) .dse-stamina__crest-glyph {
 	/* the same 9.56% of box height the full-size crest uses: 0.0956 × 2.5em */
 	--dse-crest-nudge: -0.24em;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest-glyph svg {
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region:has(> .dse-hero__region-title) .dse-stamina__crest-glyph svg {
 	width: 1.15em;
 	height: 1.15em;
 }
@@ -7068,6 +7092,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
     stamina region a two-row-capable column, and §8 above is what makes 240px work there.
 
     `container-type: inline-size` is Chromium 105, under the 106 floor. */
+/*  CONSTRAINT worth stating, because `container-type` is not free: `inline-size`
+    establishes layout, style and inline-size containment on the element ROOT. Two
+    consequences to respect if this element grows: nothing inside may size itself off the
+    root's BLOCK size (the root's height now comes from its content, which is what we
+    want here — the cluster is content-sized either way), and the root becomes a
+    containing block for `position: fixed` descendants. Neither bites today — the
+    element's only fixed/absolute descendant is the recovery popover, which is anchored
+    to the strip on purpose (§11) — but a future overlay that expects the viewport would
+    be surprised. It does NOT clip: paint containment is not part of `inline-size`. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='stamina-bar'] {
 	container-type: inline-size;
 	container-name: dse-stamina-host;
@@ -8058,6 +8091,16 @@ button.dse-pr__row:hover {
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
 .dse-pr__row[aria-checked]:focus-visible,
+/* SC-132: the recovery-marker row is a single `role="slider"` value control (one tab
+   stop for the whole row, not one per marker — see kit/RecoveriesStrip.ts), so the row
+   is what takes focus. `[tabindex]` because the row is only focusable when it is
+   editable; a read-only strip must not advertise a ring it cannot act on. */
+.dse-stamina-rec__pips[tabindex]:focus-visible,
+/* SC-132: the undo toast's action. It lives in an obsidian Notice, OUTSIDE any element
+   root — which is fine, `--dse-focus-ring` is declared on `:root`. Found by the
+   tabindex-vs-ring guard in kit-index.test.ts on its very first run, which is the
+   argument for having written it. */
+.dse-undo-notice__action:focus-visible,
 [data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):focus-visible {
 	outline: 2px solid var(--dse-focus-ring);
 	outline-offset: 2px;

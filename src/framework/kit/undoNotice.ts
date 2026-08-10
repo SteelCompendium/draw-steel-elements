@@ -25,6 +25,19 @@ export interface UndoNoticeHandle {
 }
 
 /**
+ * The one live undo, if any.
+ *
+ * ONE AT A TIME, on purpose. Each toast closes over a snapshot of the value BEFORE its
+ * own change, so a stack of them is a stack of stale snapshots: after three quick marker
+ * clicks, undoing the second one would write a count that was never adjacent to the
+ * current state, and undoing them out of order would silently jump the model backwards.
+ * "Undo" on a workspace notice means "undo THAT, the thing that just happened", so the
+ * previous toast is dismissed when a new change lands and the reader is never offered a
+ * button whose meaning has expired.
+ */
+let liveUndo: Notice | null = null;
+
+/**
  * Posts "<what> · Undo" into the workspace corner. `onUndo` runs at most once; the
  * notice dismisses itself the moment it does, so a double-click cannot undo twice.
  */
@@ -42,7 +55,9 @@ export function undoNotice(what: string, onUndo: () => void): UndoNoticeHandle {
 	undoEl.setAttribute('tabindex', '0');
 	frag.appendChild(textEl);
 	frag.appendChild(undoEl);
+	liveUndo?.hide();
 	const notice = new Notice(frag, UNDO_NOTICE_MS);
+	liveUndo = notice;
 	let spent = false;
 	const run = (evt: Event): void => {
 		evt.preventDefault();
@@ -51,6 +66,7 @@ export function undoNotice(what: string, onUndo: () => void): UndoNoticeHandle {
 		spent = true;
 		onUndo();
 		notice.hide();
+		if (liveUndo === notice) liveUndo = null;
 	};
 	// No `owner.registerDomEvent`: the listener's lifetime is the notice's, and the
 	// notice is torn out of the DOM by obsidian itself when it expires or is dismissed —

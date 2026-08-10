@@ -106,6 +106,24 @@ describe('SC-132: surfaces with no negative range', () => {
 	});
 });
 
+describe('SC-132 M4: the dying reserve is a FIXED-WIDTH region — two rulers, on purpose', () => {
+	// Pinned so the "inconsistency" cannot be tidied away by someone who has not read the
+	// reasoning: one shared denominator would make the ZERO BULKHEAD move whenever temp
+	// changed, and the bulkhead is this model's origin.
+	test('the bulkhead does not move when temp appears', () => {
+		const dry = staminaGaugeGeometry({ current: 20, temp: 0, max: 30 }, HERO);
+		const wet = staminaGaugeGeometry({ current: 20, temp: 12, max: 30 }, HERO);
+		expect(wet.zone).toBeCloseTo(dry.zone, 9);
+	});
+
+	test('…so the two sides really do carry different scales at temp > 0, and that is the trade', () => {
+		const g = staminaGaugeGeometry({ current: -1, temp: 60, max: 30 }, HERO);
+		const reservePxPerPoint = g.zone / 15; // the reserve is always max/2 points deep
+		const livePxPerPoint = (100 - g.zone) / (30 + 60);
+		expect(reservePxPerPoint).toBeGreaterThan(livePxPerPoint * 2);
+	});
+});
+
 describe('SC-132: degenerate inputs stay defined (FOLLOWUPS #28)', () => {
 	test('max 0 yields defined zeros rather than NaN% (CSS silently drops NaN)', () => {
 		const g = staminaGaugeGeometry({ current: 0, temp: 0, max: 0 }, HERO);
@@ -115,5 +133,32 @@ describe('SC-132: degenerate inputs stay defined (FOLLOWUPS #28)', () => {
 
 	test('a negative temp is treated as none rather than as a plate growing leftwards', () => {
 		expect(staminaGaugeGeometry({ current: 10, temp: -5, max: 30 }, HERO).capW).toBe(0);
+	});
+
+	// `x <= 0` is FALSE for NaN, so the obvious guard lets it straight through and every
+	// --dse-* percentage becomes `NaN%` — which CSS drops silently, so the bar simply
+	// stops moving and nothing anywhere reports an error.
+	test('a NaN anywhere in the values still yields FINITE geometry', () => {
+		for (const bad of [
+			{ current: NaN, temp: 0, max: 30 },
+			{ current: 10, temp: NaN, max: 30 },
+			{ current: 10, temp: 0, max: NaN },
+			{ current: NaN, temp: NaN, max: NaN },
+		]) {
+			const g = staminaGaugeGeometry(bad, HERO);
+			for (const [k, v] of Object.entries(g)) {
+				expect({ bad, k, finite: Number.isFinite(v) }).toEqual({ bad, k, finite: true });
+			}
+		}
+	});
+
+	test('an unconfigured bar (max 0) is NOT dying — it wears no state at all', () => {
+		// Without the guard `current <= 0` is trivially true at max 0 and the cluster puts
+		// on the full dying dress (red frame, red ground, skull, the word) for a block
+		// that simply failed to resolve its references.
+		expect(staminaState({ current: 0, temp: 0, max: 0 })).toBe('healthy');
+		expect(staminaState({ current: 0, temp: 0, max: NaN })).toBe('healthy');
+		// …but a real bar at 0 still is.
+		expect(staminaState({ current: 0, temp: 0, max: 1 })).toBe('dying');
 	});
 });

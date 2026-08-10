@@ -210,6 +210,10 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		'.dse-collapse__header:focus-visible',
 		'.dse-tabs__tab:focus-visible',
 		'.dse-pr__row[aria-checked]:focus-visible',
+		// SC-132: the recovery-marker row (one role="slider" stop for the whole row).
+		'.dse-stamina-rec__pips[tabindex]:focus-visible',
+		// SC-132: the undo toast's action, inside an obsidian Notice.
+		'.dse-undo-notice__action:focus-visible',
 	];
 
 	function focusRule(): { selector: string; body: string } | undefined {
@@ -229,6 +233,27 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		}
 		expect(rule!.body).toMatch(/outline:\s*2px solid var\(--dse-focus-ring\)/);
 		expect(rule!.body).toMatch(/outline-offset:\s*2px/);
+	});
+
+	// SC-132: the list above is hand-maintained, and the rule's own comment says new
+	// focusable kit controls MUST join it — which is exactly the kind of instruction that
+	// gets missed (this test was added because it WAS missed, for the recovery row). This
+	// guard closes the common half of the gap automatically: any kit module that makes
+	// something focusable has to name at least one class that the ring actually covers.
+	// It is a heuristic, not a proof — a module could name a covered class and still leave
+	// a SECOND control ringless — but it catches "new focusable widget, no ring at all",
+	// which is the failure that actually happens.
+	test('every kit module that sets tabindex names a class the focus ring covers', () => {
+		const selector = focusRule()!.selector;
+		const covered = [...selector.matchAll(/\.([a-z0-9_-]+)/gi)].map((m) => m[1]);
+		for (const file of fs.readdirSync(kitDir).filter((f) => f.endsWith('.ts'))) {
+			const src = fs.readFileSync(path.join(kitDir, file), 'utf8');
+			if (!/setAttribute\(\s*['"]tabindex['"]/.test(src)) continue;
+			expect({ file, covered: covered.some((cls) => src.includes(cls)) }).toEqual({
+				file,
+				covered: true,
+			});
+		}
 	});
 
 	test('the standalone Task-4 .dse-pr__row focus rule was consolidated (no duplicate ring)', () => {

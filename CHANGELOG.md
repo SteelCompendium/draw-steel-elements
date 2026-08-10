@@ -49,7 +49,8 @@ for what needs action.
   follows, so a misclick costs one click to put back rather than being punished up
   front with a confirmation dialog. If you would rather not edit by clicking,
   Settings → Element defaults → Advanced → "Edit Recoveries with a popover" turns
-  each marker click into a small − / + popover instead.
+  each marker click — and each arrow key — into a small − / + popover instead, so no
+  single stray input can change the count.
 - [FEATURE] **The hero sheet's Stamina can be edited from the sheet itself**
   (SC-132). The sheet used to carry a `− 31 +` counter row under the bar, which
   duplicated the bar's own readout and existed only because the bar itself was

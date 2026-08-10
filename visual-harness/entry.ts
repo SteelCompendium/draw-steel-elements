@@ -349,8 +349,8 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	{ id: 'perk-narrow', element: 'perk', fixture: 'default', width: 300 },
 	// SC-132: the stamina cluster's RAIL form. The rail is not a separate design — it is
 	// the standalone element's narrow form, selected by a container query on the element
-	// root at 340px — so 300px (Obsidian's default right-sidebar leaf) is the width that
-	// actually renders it. Without this entry the rail branch ships unshot.
+	// root at 400px — so 300px (Obsidian's default right-sidebar leaf) is well inside it.
+	// Without this entry the rail branch ships unshot.
 	{ id: 'stamina-rail', element: 'stamina-bar', fixture: 'recoveries', width: 300 },
 	// SC-132: the NARROWEST hero sheet this repo can produce. The sheet's grid gives
 	// characteristics its 370px max-content and stamina the remainder, so 660px is where

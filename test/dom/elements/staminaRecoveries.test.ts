@@ -439,6 +439,24 @@ describe('SC-132: the undo toast', () => {
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
 	});
 
+	// L1 (review): each toast closes over the value BEFORE its own change, so a stack of
+	// them is a stack of stale snapshots — undoing the second of three would write a count
+	// that was never adjacent to the current state.
+	test('only ONE undo is ever live: a new change dismisses the previous toast', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[3].click(); // 6 -> 3
+		const first = Notice.last!;
+		pips(root)[0].click(); // 3 -> 0
+		const second = Notice.last!;
+
+		expect(second).not.toBe(first);
+		expect(first.isHidden).toBe(true);
+		expect(second.isHidden).toBe(false);
+		// The live one undoes the LAST change, back to the state just before it.
+		second.noticeEl!.querySelector<HTMLElement>('.dse-undo-notice__action')!.click();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(3);
+	});
+
 	test('a no-op click posts nothing (there is nothing to undo)', async () => {
 		const { root } = await mountRecoveries();
 		// Model M has no no-op MARKER, so the no-op has to come from the keyboard's floor.
@@ -473,6 +491,31 @@ describe('SC-132: the ALT stepper popover is a SETTING, off by default', () => {
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(5);
 		pop.querySelector<HTMLButtonElement>('button[aria-label="Restore a Recovery"]')!.click();
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+	});
+
+	// M5 (review): the setting's premise is "a stray input cannot change anything", and a
+	// stray arrow key is a stray input. A version that intercepted the mouse and let the
+	// keyboard commit straight through would be the setting only half-on.
+	test('on: the KEYBOARD is gated too — a value key opens the popover instead of committing', async () => {
+		const { root } = await mountRecoveries({ popover: true });
+		const row = root.querySelector<HTMLElement>('.dse-stamina-rec__pips')!;
+		for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+			row.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+			expect({ key, value: row.getAttribute('aria-valuenow') }).toEqual({ key, value: '6' });
+		}
+		expect(root.querySelector('.dse-stamina-rec__pop')).not.toBeNull();
+		// …and the popover's own controls still do the edit, so the keyboard is gated, not
+		// disabled: those are real buttons in the tab order.
+		root.querySelector<HTMLButtonElement>('button[aria-label="Spend a Recovery"]')!.click();
+		expect(row.getAttribute('aria-valuenow')).toBe('5');
+	});
+
+	test('off: the keyboard commits directly (the shipped default is unchanged)', async () => {
+		const { root } = await mountRecoveries();
+		const row = root.querySelector<HTMLElement>('.dse-stamina-rec__pips')!;
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		expect(row.getAttribute('aria-valuenow')).toBe('5');
+		expect(root.querySelector('.dse-stamina-rec__pop')).toBeNull();
 	});
 
 	test('on: a click outside the strip dismisses the popover', async () => {
