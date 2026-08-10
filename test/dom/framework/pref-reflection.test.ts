@@ -131,15 +131,15 @@ test("M-3: every new border declaration falls back off the Steel-only tokens (Le
 	// case measured: `sbCharBox: on` under Legacy rendered a bare "M +2" — no box, and
 	// the spelled-out word display:none'd by the same arm.
 	const declarations = [
-		/\.dse-sb__char-box \{[^}]*border: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/s,
-		/\.dse-sb__band \{[^}]*border: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/s,
-		/\[data-dse-fb-stats='ledger'\] \.dse-fb__stats > \.dse-fb__stat \{[^}]*border-bottom: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/s,
+		/\.dse-sb__char-box \{[^}]*border: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/,
+		/\.dse-sb__band \{[^}]*border: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/,
+		/\[data-dse-fb-stats='ledger'\] \.dse-fb__stats > \.dse-fb__stat \{[^}]*border-bottom: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/,
 	];
 	for (const re of declarations) expect(sheet).toMatch(re);
 	// …and Steel screen still re-colours the boxed letter to the forged metal line, so
 	// the fallback costs the Steel look nothing.
 	expect(sheet).toMatch(
-		/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-sb__char-box \{[^}]*border-color: var\(--dse-metal-line\)/s,
+		/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-sb__char-box \{[^}]*border-color: var\(--dse-metal-line\)/,
 	);
 });
 
@@ -248,6 +248,43 @@ describe('SC-146 fix round 1 — regression guards', () => {
 		// The light-scheme twin overrides the halo colour to the site's own light
 		// plate-solid value (steel-statblock.css:74).
 		expect(sheet).toMatch(/body\.theme-light \[data-dse-theme='steel'\][^{]*\[data-dse-sb-featstyle='flat'\][^{]*::after\s*\{[^}]*#f4f6f6/);
+	});
+
+	// SC-123 fix round (review L-8, deferred here on purpose until SC-146 landed): the
+	// FEATUREBLOCK twin of the separator above. Both settings are called "Flat list" and
+	// the site draws separators in both of its flat modes, so the two must not diverge —
+	// which is exactly what would happen silently if only one of them ever grew a ◆.
+	test('flat-mode ◆ separator: the FEATUREBLOCK twin matches the statblock recipe declaration for declaration', () => {
+		const fbSpacer = sheet.match(
+			/\[data-dse-theme='steel'\][^{]*\[data-dse-fb-featstyle='flat'\][^{]*\.dse-feature__nested > \.dse-feature \+ \.dse-feature\s*\{([^}]*)\}/,
+		);
+		expect(fbSpacer).not.toBeNull();
+		expect(fbSpacer![1]).toMatch(/margin-top:\s*4px/);
+		expect(fbSpacer![1]).toMatch(/padding-top:\s*1\.25rem/);
+
+		const fbDiamond = sheet.match(
+			/\[data-dse-theme='steel'\][^{]*\[data-dse-fb-featstyle='flat'\][^{]*\.dse-feature \+ \.dse-feature::after\s*\{([^}]*)\}/,
+		);
+		expect(fbDiamond).not.toBeNull();
+		// Same 8px rotated core, same two halo rings, same plate-solid mid-tone — `.dse-fb`
+		// joins the same card-ground selector list as `.dse-sb`, so the ground under both
+		// diamonds is the identical gradient.
+		expect(fbDiamond![1]).toMatch(/width:\s*8px/);
+		expect(fbDiamond![1]).toMatch(/transform:\s*rotate\(45deg\)/);
+		expect(fbDiamond![1]).toMatch(/box-shadow:[\s\S]*#1e2327/);
+		expect(fbDiamond![1]).toMatch(/box-shadow:[\s\S]*--dse-metal-faint/);
+		expect(sheet).toMatch(
+			/body\.theme-light \[data-dse-theme='steel'\][^{]*\[data-dse-fb-featstyle='flat'\][^{]*::after\s*\{[^}]*#f4f6f6/,
+		);
+
+		// Screen + Steel only, like its twin: Legacy draws no ornaments and print never
+		// pays for the seam (both frozen classes, both unreachable here by construction).
+		for (const m of sheet.matchAll(
+			/^[^\n{}]*\[data-dse-fb-featstyle='flat'\][^\n{}]*\.dse-feature \+ \.dse-feature[^\n{}]*\{/gm,
+		)) {
+			expect(m[0]).toContain(":not([data-dse-print=\"on\"])");
+			expect(m[0]).toContain("[data-dse-theme='steel']");
+		}
 	});
 
 	test('wide columns packs at the site\'s real 560px (35rem), not the old 448px (28rem) (M6 guard)', () => {

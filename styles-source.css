@@ -3923,7 +3923,10 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
    specificity footing, same light-twin restatement; no `:not(.dse-fb *)` guard
    because here the options are SUPPOSED to be the ones inside `.dse-fb` — this is
    the pref that owns them. Default `card` is never named (default-value
-   convention), so nothing below is reachable until a user opts in. */
+   convention), so nothing below is reachable until a user opts in.
+   The FOURTH arm — the ◆ separator between consecutive options — lives with its
+   statblock twin further down (search "the FEATUREBLOCK twin of SC-146 fix 6"), so
+   the two recipes sit side by side and cannot drift. */
 [data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested {
 	gap: 0;
 }
@@ -4010,6 +4013,44 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-
 }
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *)::after {
 	/* Site steel-statblock.css:74. */
+	box-shadow:
+		0 0 0 4px #f4f6f6,
+		0 0 0 5px var(--dse-metal-faint);
+}
+
+/* SC-123 (deferred to the fix round, review L-8) — the FEATUREBLOCK twin of SC-146
+   fix 6's ◆ separator. Both `flat` settings are called "Flat list" and the site draws
+   separators in both of its flat modes (steel-statblock.css:315-345 for `.sb__feat`,
+   steel-featureblock.css:165-185 for the fb's options), so the two settings must not
+   diverge from each other — L-8 flagged exactly this as the coordination risk when the
+   two tickets landed apart. Verbatim reuse of the statblock recipe above, including
+   the fix-round M1 spacing pair (4px margin + 1.25rem padding on the SIBLING selector,
+   so only adjacent options pay for the seam) and the M2 plate-solid halo: `.dse-fb`
+   joins the SAME card-ground selector list as `.dse-sb` (~4028), so both diamonds sit
+   on the same gradient and take the same #1e2327 / #f4f6f6 mid-tone.
+   No `:not(.dse-fb *)` guard here, unlike the statblock arm — that guard exists to
+   keep the statblock's flat mode out of a nested featureblock's option list, which is
+   precisely the list THIS rule owns; a nested fb always carries its own
+   `[data-dse-element='featureblock']` root, so it is governed by its own preference. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature {
+	margin-top: 4px;
+	padding-top: 1.25rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature::after {
+	content: '';
+	position: absolute;
+	top: 4px;
+	left: 50%;
+	width: 8px;
+	height: 8px;
+	margin: -4px 0 0 -4px;
+	background-color: var(--dse-metal);
+	transform: rotate(45deg);
+	box-shadow:
+		0 0 0 4px #1e2327,
+		0 0 0 5px var(--dse-metal-faint);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature::after {
 	box-shadow:
 		0 0 0 4px #f4f6f6,
 		0 0 0 5px var(--dse-metal-faint);
