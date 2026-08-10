@@ -4,6 +4,9 @@ import {DseSettingTab} from "@views/SettingsTab";
 import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
 import {CompendiumSyncService, SyncOptions} from "@/data/CompendiumSyncService";
+import {CompendiumMigrationService} from "@/data/CompendiumMigration";
+import type {MigrationPlan} from "@/data/CompendiumMigration";
+import {CompendiumMigrationModal} from "@views/CompendiumMigrationModal";
 import {ManifestStore} from "@/data/manifest";
 import { registerElements } from '@/utils/RegisterElements';
 import { initializeSchemaRegistry, resetSchemaRegistry } from '@utils/JsonSchemaValidator';
@@ -341,6 +344,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
     manifestStore: ManifestStore;
     syncService: CompendiumSyncService;
 
+    /** SC-125: the pre-7.0.0 → 7.0.0 path migration (rename-only, never deletes).
+     *  A plugin field for the same reason the two above are — the manual command,
+     *  the first-sync prompt and any future settings affordance all reach it. */
+    migrationService: CompendiumMigrationService;
+
     /** D6 Task 2/10/11 (spec §6): the typed-model accessor over `sccResolver`'s read seam,
      *  backing the render pipeline's `cx.compendium` seam (Task 3/9's by-SCC hybrid
      *  render), the compendium search modal + insert commands below, and D8's encounter
@@ -412,6 +420,10 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // is the real `requestUrl` (Task 9's forward-compat ctor stub, wired live here).
         this.manifestStore = new ManifestStore(this.app, this.manifest.id);
         this.syncService = new CompendiumSyncService(this.app, this.manifestStore);
+        // SC-125: shares the manifest store because a completed migration ADOPTS the
+        // moved files into it — otherwise the next sync would treat 2,000 renamed
+        // files as user content squatting on compendium paths and skip every one.
+        this.migrationService = new CompendiumMigrationService(this.app, this.manifestStore);
 
         // F2 §4.4: the scc resolver's RefProvider, registered onto the framework's
         // ReferenceService (F1 §3.7 seam — see src/refs/SccRefProvider.ts). Later-
@@ -525,6 +537,15 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             name: 'Sync compendium (legacy alias)',
             callback: () => this.syncCompendium(),
         });
+        // SC-125: the manual door into the same migration the first 7.0.0 sync offers.
+        // Always available — a user who declined the prompt, stopped a run half-way, or
+        // restored an old compendium folder from a backup can run it whenever. Idempotent
+        // by construction: files already at their 7.0.0 paths are not in the plan.
+        this.addCommand({
+            id: 'migrate-compendium-layout',
+            name: 'Migrate compendium from the pre-7.0.0 layout',
+            callback: () => { void this.migrateCompendium(); },
+        });
     }
 
     /**
@@ -601,7 +622,21 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         const manifest = await this.manifestStore.load();
         if (manifest === null) {
             const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
+            // SC-125 trigger, stated exactly. ALL THREE must hold, and each one alone
+            // is enough to rule a fresh install out:
+            //   (a) no sync manifest exists — 7.0.0+ has never synced into this vault;
+            //   (b) the configured root is a folder that already has children;
+            //   (c) at least LEGACY_DETECTION_THRESHOLD files under it sit at exact
+            //       pre-7.0.0 compendium paths.
+            // A fresh install fails (b) (no folder at all, or an empty one) and would
+            // fail (c) anyway. A vault that already migrated fails (a) — the migration
+            // writes a manifest — and would fail (c) too, since the files have moved.
             if (root instanceof TFolder && root.children.length > 0) {
+                const detection = this.migrationService.detect(options.root);
+                if (detection.isLegacyLayout) {
+                    await this.offerMigration(options.root, () => { void this.syncService.sync(this.syncOptions()); });
+                    return;
+                }
                 // LegacyCompendiumModal's onChoice callback is declared `(trashOldRoot:
                 // boolean) => void` (fire-and-forget from the modal's own click handler,
                 // never awaited there either) -- an `async` callback passed directly
@@ -620,6 +655,62 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             }
         }
         await this.syncService.sync(options);
+    }
+
+    /**
+     * SC-125 — the manual command. Same engine and same dialog as the first-sync
+     * offer, but reachable at any time and with no sync chained onto the end unless
+     * the user asks for one from the summary.
+     */
+    async migrateCompendium(): Promise<void> {
+        await this.offerMigration(this.syncOptions().root, null);
+    }
+
+    /**
+     * Build the dry-run plan and put it in front of the user. `andThen`, when given,
+     * runs after the dialog closes — the first-sync path uses it to continue into the
+     * sync whichever way the user answers, because the sync itself is safe either way.
+     */
+    private async offerMigration(root: string, andThen: (() => void) | null): Promise<void> {
+        const notice = new Notice('Draw Steel Elements: checking the compendium layout…', 0);
+        let plan: MigrationPlan;
+        try {
+            plan = await this.migrationService.plan(root);
+        } finally {
+            notice.hide();
+        }
+        if (plan.renames.length === 0) {
+            new Notice(
+                plan.detection.filesInRoot === 0
+                    ? `Draw Steel Elements: nothing to migrate — "${root}" is empty.`
+                    : 'Draw Steel Elements: nothing to migrate — no pre-7.0.0 compendium files found.',
+                6000);
+            andThen?.();
+            return;
+        }
+        new CompendiumMigrationModal(this.app, plan, {
+            run: (onProgress, shouldAbort) =>
+                this.migrationService.execute(plan, { onProgress, shouldAbort }),
+            skip: () => { andThen?.(); },
+            done: (report) => {
+                if (report.migratedModified.length > 0 || report.failed.length > 0
+                    || report.blocked.length > 0) {
+                    console.warn(
+                        'Draw Steel Elements: compendium migration — files needing a look:',
+                        {
+                            movedButNotMatchingTheFinalLegacyRelease:
+                                report.migratedModified.map((rename) => rename.toPath),
+                            couldNotMoveTargetOccupied: report.blocked,
+                            failed: report.failed,
+                        });
+                }
+                new Notice(
+                    `Draw Steel Elements: ${report.migrated.length} compendium file(s) moved to the ` +
+                    `7.0.0 layout. Links in your notes were updated by Obsidian.`, 8000);
+                if (andThen) andThen();
+                else void this.syncCompendium();
+            },
+        }).open();
     }
 
     async loadSettings() {

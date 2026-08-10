@@ -5,6 +5,7 @@ import * as JSZip from "jszip";
 import {
 	CompendiumManifest, ManifestStore, MANIFEST_SCHEMA_VERSION, sha256Hex,
 } from "./manifest";
+import { ensureParentFolders } from "./vaultPaths";
 
 export const COMPENDIUM_SOURCE = "SteelCompendium/data-unified";
 export const COMPENDIUM_FORMAT = "md-dse";
@@ -297,21 +298,9 @@ export class CompendiumSyncService {
 		}
 	}
 
+	/** Shared with the SC-125 migration engine — see data/vaultPaths.ts. */
 	private async ensureParentFolders(vaultPath: string): Promise<void> {
-		const parts = vaultPath.split("/").slice(0, -1);
-		let current = "";
-		for (const part of parts) {
-			current = current ? `${current}/${part}` : part;
-			if (this.app.vault.getAbstractFileByPath(current) === null) {
-				try {
-					await this.app.vault.createFolder(current);
-				} catch (error: unknown) {
-					// Concurrent batch entries may race on the same folder.
-					const message = error instanceof Error ? error.message : String(error);
-					if (!message.includes("already exists")) throw error;
-				}
-			}
-		}
+		await ensureParentFolders(this.app, vaultPath);
 	}
 }
 

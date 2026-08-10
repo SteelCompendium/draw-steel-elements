@@ -89,6 +89,13 @@ export class FakeVault {
 	getMarkdownFiles(): TFile[] {
 		return [...this.files.keys()].filter((p) => p.endsWith(".md")).map(fakeTFile);
 	}
+	/** SC-125: the migration engine enumerates EVERY file under the compendium root,
+	 *  not just markdown — a legacy install also carries LICENSE, .github/… and any
+	 *  attachment a user dropped in there, all of which must be reported as unmapped
+	 *  rather than silently ignored. */
+	getFiles(): TFile[] {
+		return [...this.files.keys()].map(fakeTFile);
+	}
 	async read(file: TFile): Promise<string> {
 		const gate = this.readGates.get(file.path);
 		if (gate) await gate;
@@ -194,7 +201,26 @@ export class FakeVault {
 
 export class FakeFileManager {
 	trashed: string[] = [];
+	/** SC-125: every rename this fake performed, in order — `renameFile` is the ONLY
+	 *  vault mutation the migration engine is allowed to make, so the tests assert on
+	 *  this list directly. */
+	renamed: Array<{ from: string; to: string }> = [];
 	constructor(private vault: FakeVault) {}
+
+	/**
+	 * Obsidian's own move: relocates the file AND rewrites every link that pointed at
+	 * it. The link rewriting is Obsidian's, not ours, so the fake only models the
+	 * move — plus the two failure modes production code must handle: a missing source
+	 * and an occupied destination.
+	 */
+	async renameFile(file: TFile | TFolder, newPath: string): Promise<void> {
+		const bytes = this.vault.files.get(file.path);
+		if (bytes === undefined) throw new Error(`ENOENT: ${file.path}`);
+		if (this.vault.files.has(newPath)) throw new Error(`File already exists: ${newPath}`);
+		this.vault.files.delete(file.path);
+		this.vault.setText(newPath, new TextDecoder().decode(bytes));
+		this.renamed.push({ from: file.path, to: newPath });
+	}
 	async trashFile(file: TFile | TFolder): Promise<void> {
 		this.trashed.push(file.path);
 		if (file instanceof TFolder) {

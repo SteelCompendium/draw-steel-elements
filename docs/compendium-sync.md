@@ -56,12 +56,23 @@ sync date (or "No compendium synced yet.").
 
 ### First sync into an existing folder
 
-If the destination folder already contains files but has never been synced by this plugin
-(for example, a compendium copy from a pre-7.0.0 install of this plugin, or your own
-homebrew at that path), the first sync asks you to either move that folder to the trash
-first or keep everything in place. Nothing is touched automatically either way; files you
-keep are still never overwritten if they don't collide with a compendium path, and any that
-do are skipped and reported.
+If the destination folder already contains files but has never been synced by this plugin,
+the first sync stops and asks before touching anything. Which question it asks depends on
+what's in there:
+
+- **A pre-7.0.0 compendium** (at least twenty files sitting at exact pre-7.0.0 compendium
+  paths) — you're offered the **layout migration**: the old files are *moved* to their
+  7.0.0 paths so Obsidian rewrites the links in your notes for you. See
+  [Migrating from 5.x to 7.0.0 → Your links to compendium notes keep working](migrating-to-7.md#your-links-to-compendium-notes-keep-working)
+  for what the dialog shows and what it will and won't do. The command
+  **Migrate compendium from the pre-7.0.0 layout** runs the same thing at any time.
+- **Anything else** (your own homebrew at that path, a partial copy) — you're asked to
+  either move that folder to the trash first or keep everything in place.
+
+Nothing is touched automatically either way; files you keep are still never overwritten if
+they don't collide with a compendium path, and any that do are skipped and reported. A
+**fresh install never sees either prompt** — there is no folder yet, and nothing to ask
+about.
 
 ## Command Palette
 
@@ -69,3 +80,6 @@ Syncing can also be triggered from the command palette:
 
 1. Open the [Command Palette](https://help.obsidian.md/Plugins/Command+palette)
 2. Search and execute `Draw Steel Elements: Sync compendium`
+
+The pre-7.0.0 layout migration has its own entry:
+`Draw Steel Elements: Migrate compendium from the pre-7.0.0 layout`.

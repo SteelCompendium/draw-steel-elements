@@ -15,6 +15,26 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FEATURE] **Your links to compendium notes survive the 7.0.0 reorganisation**
+  (SC-125). The new compendium source renames every file —
+  `Rules/Careers/Disciple.md` becomes `career/disciple.md`, and so on for about
+  two thousand of them — which would have left every `[[wikilink]]` you ever
+  wrote into the compendium pointing at nothing. Instead, the first sync after
+  you update offers to **move** your existing compendium files to their new
+  paths, using Obsidian's own move operation, so **Obsidian rewrites the links
+  in your notes itself**. The plugin never opens, parses or edits a note you
+  wrote. You see the whole plan before anything happens — how many files move,
+  which ones differ from the last legacy release, which ones have no new
+  counterpart — and it is abortable mid-run, re-runnable from the command
+  **Migrate compendium from the pre-7.0.0 layout**, and incapable of deleting
+  anything: the only change it ever makes is a move, and it refuses to move onto
+  a path that is already occupied. Files it has no mapping for (folder index
+  pages, whole-book pages, your own notes) stay exactly where they are; every
+  one of them is enumerated with a reason in
+  [the migration map's review report](docs/compendium-migration-map.md). The
+  prompt cannot fire on a fresh install — it needs an existing folder with at
+  least twenty files at exact pre-7.0.0 compendium paths.
+
 - [BREAKING] **Obsidian 1.13.0 or newer is now required** (`minAppVersion`
   moves from 0.15.0). Obsidian 1.13 introduced the settings API this release
   rebuilds the settings tab on, and there is no way to use it and still run on

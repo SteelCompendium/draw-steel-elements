@@ -39,11 +39,78 @@ against the new one.
 **Sync compendium** (this also works as a command-palette command of the
 same name).
 
-If you already have a compendium folder from before 7.0.0, the first sync
-asks whether to move that old folder to the trash or keep it in place —
-either choice is safe. Files you keep are never overwritten or deleted, and
-anything moved to the trash is recoverable through Obsidian like any other
-deleted file.
+### Your links to compendium notes keep working
+
+The new source also reorganises the whole tree. `Rules/Careers/Disciple.md`
+is now `career/disciple.md`; `Bestiary/Monsters/Bredbeddle/Statblocks/Bredbeddle.md`
+is now `monster/bredbeddle/statblock/bredbeddle.md`; and so on for roughly
+two thousand files. If the plugin simply downloaded the new tree next to the
+old one, every `[[wikilink]]` you ever wrote into the compendium would point
+at a file that no longer exists.
+
+So it doesn't do that. **The first sync after you update offers to move your
+existing compendium files to their new paths** — and because it moves them
+with Obsidian's own move operation, *Obsidian* updates the links in your
+notes, the same way it does when you drag a note into a different folder.
+The plugin never opens, parses, or edits a note you wrote.
+
+**What the prompt looks like.** If you have a pre-7.0.0 compendium, the first
+**Sync compendium** shows a dialog titled *"Move your compendium to the 7.0.0
+layout"*. Before anything happens it tells you:
+
+- how many files will be moved, and into which folder;
+- how many of them differ from the final legacy release (you edited them, or
+  you were on an older compendium release) — those are moved too, and listed
+  afterwards so you can check them;
+- how many can't be moved because something already sits at the new path;
+- how many have no 7.0.0 counterpart at all;
+- a handful of real `old path → new path` examples;
+
+…and then gives you two buttons: **Not now**, which is the default and simply
+carries on to the ordinary sync, and **Move N file(s)**.
+
+While it runs you get a progress line and a **Stop** button. Stopping is safe
+at any point: each file's move is complete on its own, so the ones already
+moved stay moved and you can finish later.
+
+**Running it yourself.** The command **Migrate compendium from the pre-7.0.0
+layout** does exactly the same thing, any time. Use it if you chose *Not now*,
+if you stopped a run part-way, or if you restored an old compendium folder from
+a backup. Running it when there is nothing to do just says so.
+
+**What it will never do:**
+
+- delete anything — not the old files, not the old folders, not files it
+  doesn't recognise. The only change it makes is moving files;
+- overwrite anything — if something already occupies a new path, that one move
+  is skipped and reported;
+- touch a file it has no mapping for — index pages, book-level pages, and
+  anything of your own stay exactly where they are;
+- edit a note you wrote. Link rewriting is Obsidian's job, not the plugin's.
+
+**The leftovers.** After a migration the old folders (`Rules/`, `Bestiary/`,
+…) are still there, empty apart from anything that wasn't moved. Deleting
+folders isn't something this does, on purpose — delete them yourself whenever
+you're satisfied.
+
+Around 17% of the old files have no 7.0.0 counterpart, and links to *those*
+will break. They are overwhelmingly pages the new layout doesn't have rather
+than content that vanished: per-folder index pages, whole-book pages, and
+roll-up pages whose contents the new tree files individually. Every single one
+is enumerated, with its reason, in
+[the migration map's review report](compendium-migration-map.md).
+
+**A more durable way to link.** `scc.v1:` links are addressed by classification
+code, not by path, so they survive reorganisations like this one entirely.
+If you are writing new notes that reference the compendium, prefer them.
+
+### If you keep an old compendium folder instead
+
+If your compendium folder holds files but isn't a recognisable pre-7.0.0
+compendium, the first sync falls back to the older prompt: move that folder to
+the trash, or keep it in place. Either choice is safe. Files you keep are never
+overwritten or deleted, and anything moved to the trash is recoverable through
+Obsidian like any other deleted file.
 
 ## 2. Update your own statblock YAML (only if you hand-write `ds-sb` / `ds-statblock` blocks)
 

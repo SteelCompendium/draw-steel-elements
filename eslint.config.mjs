@@ -12,6 +12,10 @@ export default defineConfig([
       "main.js",
       "node_modules/**",
       "visual-harness/**",
+      // SC-125: maintainer-only, offline map generator (plain Node ESM, never
+      // bundled into the plugin) — same class as visual-harness, and the typed
+      // obsidianmd rules cannot run on a file outside tsconfig's project.
+      "tools/**",
       "demo-vault/**",
       "docs/**",
       "test/**",
