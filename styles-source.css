@@ -8008,8 +8008,14 @@ button.dse-pr__row:hover {
 	position: relative;
 	padding: 0.6rem 0.8rem 0.55rem;
 	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+	/* ROUND 6 — the 3px `border-left: … var(--dse-metal-line)` spine that used to sit
+	   here is GONE, and so is the `border-left-color: var(--st)` state rule that keyed
+	   off it. DESIGN.md rule 7 (added this round at Scott's instruction): a decorative
+	   coloured left border is banned — "it's become a cliche in the software community
+	   because claude agents always include it in their UI designs". The banner's state
+	   now travels on the border ALL THE WAY AROUND, the ground, the crest silhouette
+	   and the state word, none of which is a hue-only signal. */
 	border: 1px solid var(--dse-metal-faint);
-	border-left: 3px solid var(--dse-metal-line);
 	border-bottom: none;
 	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
 	box-shadow: var(--dse-bevel);
@@ -8100,11 +8106,12 @@ button.dse-pr__row:hover {
 [data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
 	clip-path: none;
 }
-/* Banner conditions: the spine and the ground take the state, so the whole block
-   changes character — a winded hero's banner is amber-edged, a dying hero's ground
-   goes to blood-black and the crest wears the skull. */
+/* Banner conditions: the BORDER (all four edges) and the ground take the state, so the
+   whole block changes character — a winded hero's banner is amber-edged, a dying hero's
+   ground goes to blood-black and the crest wears the skull. Round 6: this was a
+   `border-left-color` spine; it is now the whole frame (DESIGN.md rule 7). */
 [data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand:is([data-state='winded'], [data-state='dying']) {
-	border-left-color: var(--st);
+	border-color: var(--st);
 }
 [data-dse-stamina-cand='c'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] {
 	background:
@@ -8122,8 +8129,8 @@ button.dse-pr__row:hover {
 	margin-top: 0;
 	padding: 0.4rem 0.8rem;
 	background: rgba(0, 0, 0, 0.3);
+	/* Round 6: the foot's 3px spine went with the banner's (DESIGN.md rule 7). */
 	border: 1px solid var(--dse-metal-faint);
-	border-left: 3px solid var(--dse-metal-line);
 	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
 }
 
@@ -9443,12 +9450,14 @@ button.dse-pr__row:hover {
 		linear-gradient(104deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.95)),
 		var(--dse-stamina-dying);
 }
-/* Winded is a SPINE change, not a ground change — C's "banner conditions" — so C's foot
-   picks up the amber left edge and nothing else. Deliberately NOT extended to the `foot`
-   token: layout A has no spine to continue (it is not heraldic), and an amber left edge
-   under an unchanged plate would be a mark with no antecedent. */
+/* Winded is a BORDER change, not a ground change — C's "banner conditions" — so C's foot
+   picks up the amber frame and nothing else, matching the banner it closes. (Round 6:
+   this was `border-left-color`, the spine that DESIGN.md rule 7 now bans. Still
+   deliberately NOT extended to the `foot` token — layout A-plus carries winded on its
+   own plate border via the `y3` block, so the foot inherits the change from the object
+   it belongs to rather than from a rule of its own.) */
 [data-dse-stamina-cand='c'] [data-dse-stamina-var] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='winded']) ~ .dse-stamina-rec {
-	border-left-color: var(--dse-stamina-winded);
+	border-color: var(--dse-stamina-winded);
 }
 
 /* -------------------------------------------------------------------- */
@@ -9533,5 +9542,597 @@ button.dse-pr__row:hover {
 }
 
 /* END SC-132 round 5 */
+
+/* ==================================================================== */
+/*  SC-132 ROUND 6 — separators, the ban on spines, A-plus, the crest    */
+/* ==================================================================== */
+/*
+   Scott's round-5 review (Linear comment 39f3d812) opened five things. Four of them
+   are CSS and live here; the fifth (the hero sheet's duplicate counter editor) is a
+   src/ question answered in prose, not in a stylesheet.
+
+     N0-N4   THE SEPARATOR FAMILY. "I don't like the separators on the gauge bar with
+             the little triangles. They look out of place… A single vertical line is a
+             great option, but I also would like to see options for things like
+             non-horizontal lines. For example, a diagonal (to match the recovery cell
+             angles) or a rounded bar end, kinda like a pill." Each option answers ALL
+             FOUR marks in one vocabulary — bulkhead, winded threshold, base-max mark,
+             temp edge — because designing them one at a time is exactly how the set
+             stopped cohering.
+     nospine THE BAN. "The colored, wide left-border has to go. it's become a cliche in
+             the software community because claude agents always include it in their UI
+             designs." Recorded as DESIGN.md rule 7. Candidate C's two 3px spines and
+             both `border-left-color` state rules are deleted above; this token is the
+             belt-and-braces that stops a composed layout growing one back.
+     aplus   THE HYBRID his own reading points at: A's full-width, bar-first, dense
+             plate + C's big current-stamina numeral (and optionally C's crest), with
+             C's three balance faults fixed — no 26rem cap, no dead upper-right lane,
+             and the temp chip on the numeral's BASELINE rather than at its cap height.
+     crest   +  live / pose-* : THE LIVING CREST. "if it's going to be a visual
+             representation of the character's Stamina (maybe with a breathing effect
+             when 'winded') then thats okay to keep."
+     softsep THE SOFTENED DYING DIVIDER. "the horizontal line between the stamina and
+             the recoveries getting the same bold red that the border gets… feels a
+             little too strong."
+
+   Gating is unchanged and still tripled (root `[data-dse-stamina-cand]`, a harness-only
+   `data-dse-stamina-var` token, and the standing Steel/not-print guard). `src/` gains no
+   DOM in round 6 either — the crest, the numerals and every index mark already exist in
+   StaminaBarPanel's candidate layer.                                                  */
+
+/* -------------------------------------------------------------------- */
+/*  mshow — un-hide the base-max mark for the separator strip            */
+/* -------------------------------------------------------------------- */
+/*  M1 (locked) hides this mark whenever temp is present, which is the only time it
+    exists — so under the shipped ruling it is never drawn. It is still a MEMBER of the
+    separator family, and a family cannot be judged with a quarter of it invisible, so
+    the strip's last column forces it back. Nothing else uses this token.             */
+[data-dse-stamina-cand] [data-dse-stamina-var~='mshow'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--max {
+	display: block;
+}
+
+/* -------------------------------------------------------------------- */
+/*  N1-N4 — shared: the notches come off, the duplicate hairline too     */
+/* -------------------------------------------------------------------- */
+/*  `content: none` and not `display: none`: these pseudo-elements are declared by the
+    `forged` token (and by candidate A itself), and removing the generated content is the
+    one override that cannot be re-introduced by a later `content` of its own.
+
+    `.dse-stamina__gwinded` is the channel's own faint white hairline at half-max, which
+    exists in N0 only because N0's winded mark is a pair of notches with nothing joining
+    them. Every option below draws the winded threshold itself, so leaving the hairline in
+    would put TWO marks on the same x — the classic "why is there a second line there"
+    that started this whole strip.                                                     */
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='n1'], [data-dse-stamina-var~='n2'], [data-dse-stamina-var~='n3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::before,
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='n1'], [data-dse-stamina-var~='n2'], [data-dse-stamina-var~='n3']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx::after {
+	content: none;
+}
+[data-dse-stamina-cand] :is([data-dse-stamina-var~='n1'], [data-dse-stamina-var~='n2'], [data-dse-stamina-var~='n3'], [data-dse-stamina-var~='n4']) [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gwinded {
+	display: none;
+}
+
+/* -------------------------------------------------------------------- */
+/*  N1 — one vertical hairline, three weights                            */
+/* -------------------------------------------------------------------- */
+/*  The simplest coherent answer, and the one Scott named first. ONE shape (a vertical
+    line spanning the channel's interior) at three weights that encode what the mark IS:
+      2px, two-tone   a real EDGE in the material — the zero bulkhead, and the temp seam
+      1px, solid      a GRADUATION on the scale — winded, base max
+    The temp edge needs no new rule: E1 (locked) already draws precisely that 2px
+    two-tone seam at the join, so N1 is the option under which the locked temp treatment
+    and the rest of the family were designed in the same language by accident.        */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx {
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	width: 1px;
+	margin-left: -0.5px;
+	transform: none;
+	border-radius: 0;
+	background: currentColor;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n1'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	width: 2px;
+	margin-left: -1px;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
+}
+
+/* -------------------------------------------------------------------- */
+/*  N2 — diagonal, at the recovery cells' own angle                      */
+/* -------------------------------------------------------------------- */
+/*  Scott's suggestion, taken literally: −12deg is not a new number, it is the exact
+    `skewX(-12deg)` of the R6 cells he picked in round 4, so the gauge and the recovery
+    row end up cut on one angle. The strongest part is not the marks — it is that the
+    POUR itself ends on the diagonal, so the fill's leading edge belongs to the family
+    instead of being a square butt with a slanted tick beside it.
+
+    --skx is the horizontal run of that cut: height x tan(12deg) = height x 0.2126.
+    Declared on the gauge, where --ch-h lives, and inherited down to the fills.        */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	--skx: calc(var(--ch-h) * 0.2126);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx {
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	width: 1px;
+	margin-left: -0.5px;
+	border-radius: 0;
+	background: currentColor;
+	transform: skewX(-12deg);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	width: 2px;
+	margin-left: -1px;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
+}
+/* The pour's leading edge, cut on the same angle — but ONLY with no temp plate mating to
+   it. A diagonal cut under a square-edged temp plate opens a triangular hole of bare
+   channel at the bottom of the join, which is the exact defect E1 was written to kill. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='off'] .dse-stamina__gpour {
+	clip-path: polygon(0 0, 100% 0, calc(100% - var(--skx, 2px)) 100%, 0 100%);
+}
+/* …so with temp present the join is a SKEWED SEAM laid over the square butt instead:
+   3px rather than E1's 2px, because a skewed 2px bar no longer covers the joint it is
+   hiding once it leans. The temp plate's far end takes the same cut, so the borrowed
+   segment reads as another part machined on the same setup. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='on'] .dse-stamina__gchannel::before {
+	width: 3px;
+	margin-left: -1.5px;
+	transform: skewX(-12deg);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	clip-path: polygon(0 0, 100% 0, calc(100% - var(--skx, 2px)) 100%, 0 100%);
+}
+
+/* -------------------------------------------------------------------- */
+/*  N3 — pill segments: the separation IS the gap                        */
+/* -------------------------------------------------------------------- */
+/*  Scott's "rounded bar end, kinda like a pill", taken to its conclusion: if the ends are
+    capsules then NO line has to be drawn anywhere, because two capsules with air between
+    them are already separated. The channel becomes a capsule slot; the engraved reserve,
+    the pour and the temp plate become three capsules inside it; the bulkhead and the temp
+    seam both stop existing as ink and become 4px of bare channel.
+
+    The two remaining marks are not boundaries (nothing is divided at half max), so they
+    stay marks — but rounded ones, inset from the rails, so they read as the same
+    vocabulary rather than as a leftover from N1.
+
+    `max(0px, …)`: a capsule that has been inset by 4px must not invert when the segment
+    it is insetting is narrower than 4px (a 1-stamina pour, or temp at +1).            */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	border-radius: 999px;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	border-right: none;
+	border-radius: 999px;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gpour {
+	left: calc(var(--dse-zone, 33%) + 2px);
+	width: max(0px, calc(var(--dse-pour-w, 0%) - 4px));
+	border-radius: 999px;
+	box-shadow: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gwound {
+	width: max(0px, calc(var(--dse-wound-w, 0%) - 2px));
+	border-radius: 999px;
+	box-shadow: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	left: calc(var(--dse-cap-x, 0%) + 2px);
+	width: max(0px, calc(var(--dse-cap-w, 0%) - 4px));
+	border-radius: 999px;
+	clip-path: none;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+/* No ink at either boundary: the bulkhead is the gap before the pour, the temp edge is
+   the gap after it. (E1's seam is suppressed rather than deleted — the token is still
+   in the assembly's list, and an option that only half-applies is not an option.) */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	background: transparent;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-temp='on'] .dse-stamina__gchannel::before {
+	display: none;
+}
+/* The graduations: rounded ticks, inset 2px from each rail. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n3'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__gidx--winded, .dse-stamina__gidx--max) {
+	top: calc(var(--g-pad) + 3px);
+	height: calc(var(--ch-h) - 4px);
+	width: 2px;
+	margin-left: -1px;
+	transform: none;
+	border-radius: 999px;
+	background: currentColor;
+}
+
+/* -------------------------------------------------------------------- */
+/*  N4 — rim seeds: nothing crosses the pour                             */
+/* -------------------------------------------------------------------- */
+/*  The fourth option, and the only one that answers the complaint by REMOVING the mark
+    from the material instead of restyling it. Every graduation leaves the slot and
+    becomes the site's own brand seed — a small ◆ half-sunk into the channel's top rail,
+    pointing down at its threshold — so the pour is one uninterrupted band of colour at
+    every fill level. The two real EDGES keep their seams, because an edge is a fact
+    about the material and a graduation is an annotation of the scale: the zero bulkhead
+    stays a full-depth two-tone seam, and the temp edge stays E1's.
+
+    This also brings the family back into the site's ◆ vocabulary (the <hr> seed) that
+    round 2 walked away from — the round-2 defect was a diamond floating MID-SLOT with
+    nothing to seat on, and a diamond seated on a rail is the same motif done right.   */
+[data-dse-stamina-cand] [data-dse-stamina-var~='n4'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__gidx--winded, .dse-stamina__gidx--max) {
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	width: 1px;
+	margin-left: -0.5px;
+	transform: none;
+	background: transparent;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n4'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__gidx--winded, .dse-stamina__gidx--max)::before {
+	content: '';
+	position: absolute;
+	left: 50%;
+	/* Half-sunk: the seed's centre sits ON the channel's top border line, which is 1px
+	   above the interior this element is anchored to. --g-pad (0.34rem) is the room
+	   above it, and a 0.3rem diamond rotated 45deg needs 0.21rem of that. */
+	top: -0.16rem;
+	width: 0.3rem;
+	height: 0.3rem;
+	margin-left: -0.15rem;
+	background: currentColor;
+	border-radius: 1px;
+	transform: rotate(45deg);
+	clip-path: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n4'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__gidx--winded, .dse-stamina__gidx--max)::after {
+	content: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n4'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero::before,
+[data-dse-stamina-cand] [data-dse-stamina-var~='n4'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero::after {
+	content: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='n4'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	top: calc(var(--g-pad) + 1px);
+	height: var(--ch-h);
+	width: 2px;
+	margin-left: -1px;
+	transform: none;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
+}
+
+/* -------------------------------------------------------------------- */
+/*  nospine — DESIGN.md rule 7, enforced on the composed layouts         */
+/* -------------------------------------------------------------------- */
+/*  Candidate C's two spines are gone at source (see the CANDIDATE C block). This token
+    exists so that a layout composed out of other people's tokens cannot inherit one
+    later: it pins the WIDTH and STYLE of the left edge to the same hairline as the other
+    three and deliberately leaves `border-left-color` alone, so a state that legitimately
+    colours the WHOLE frame still colours this edge too. A rule that also reset the colour
+    would produce a plate with three red edges and one grey one.                       */
+[data-dse-stamina-cand] [data-dse-stamina-var~='nospine'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__cand, .dse-stamina-rec) {
+	border-left-width: 1px;
+	border-left-style: solid;
+}
+
+/* -------------------------------------------------------------------- */
+/*  aplus — A's full-width plate carrying C's big numeral                */
+/* -------------------------------------------------------------------- */
+/*  The head is a TWO-LANE GRID that ends where its content ends: crest (optional) in
+    column 1 spanning both rows, the small-caps eyebrow over the headline numeral in
+    column 2. That is C's winning arrangement with C's dead upper-right lane removed —
+    in C the numerals were the only thing in a `1fr` row and the plate was capped at
+    26rem, so a third of the banner was empty by construction. Here the plate is
+    full-bleed (A's thesis, and the reason Scott called A dense) and the gauge underneath
+    uses all of it, so there is no empty lane left to look at.                          */
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand {
+	max-width: none;
+	padding: 0.6rem 0.8rem 0.65rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__chead {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	column-gap: 0.7rem;
+	align-items: center;
+	margin-bottom: 0.1rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	grid-column: 1;
+	grid-row: 1 / 3;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cid {
+	grid-column: 2;
+	grid-row: 1;
+	align-self: end;
+}
+/* THE PRESENCE FIX. Scott on A: "it doesn't feel like it has a huge presence and Stamina
+   is one of the most important things to be tracking in the game"; on C: "I like how the
+   'current stamina' value pops with its larger font. I think that really helps catch the
+   eye with important information." So the current value is the headline and everything
+   else in the readout is subordinate to it — max at 0.46em, temp smaller still. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
+	grid-column: 2;
+	grid-row: 2;
+	margin-left: 0;
+	justify-content: flex-start;
+	font-size: 2.05em;
+	line-height: 1.02;
+	align-items: baseline;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__cslash, .dse-stamina__cmax) {
+	font-size: 0.46em;
+}
+/* THE TEMP CHIP FIX. Scott on C: "The placement and sizing of the temp stamina value
+   also just feels out of place being top-aligned." It was `align-self: flex-start` with a
+   margin, i.e. hung off the numeral's CAP height, which is why it read as a sticker. On a
+   BASELINE it is the same kind of thing as the "/ 30" beside it — part of one readout. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__ctemp {
+	align-self: baseline;
+	margin-top: 0;
+	margin-left: 0.45em;
+	font-size: 0.34em;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	margin-top: 0.45rem;
+}
+/* Winded on the whole frame, now that there is no spine to carry it. The state is
+   therefore said FOUR ways at once — the amber border, the crest's shield-alert
+   silhouette, the word "winded" in the eyebrow, and the amber pour — so no single
+   channel, least of all hue, is load-bearing. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='winded'] {
+	border-color: var(--dse-stamina-winded);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='winded']) ~ .dse-stamina-rec {
+	border-color: var(--dse-stamina-winded);
+}
+/* …and the same seam softening the dying case gets (below), for the same reason. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='aplus'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='winded']) ~ .dse-stamina-rec {
+	border-top-color: var(--dse-metal-faint);
+}
+
+/* -------------------------------------------------------------------- */
+/*  crest / live / pose-* — the living crest                             */
+/* -------------------------------------------------------------------- */
+/*  `crest` re-shows the shield on candidate A (A hides it outright), sized to span the
+    head's two rows. The SILHOUETTE is already state-driven in src/ — StaminaBarPanel's
+    STATE_ICON swaps the Lucide glyph shield → shield-alert → skull — so the crest is
+    informative before a single frame of animation is added; the motion is the second
+    channel, not the only one.
+
+    `live` adds breath. Two different animations rather than one at two speeds, because
+    winded and dying are not the same event: winded is EXERTION (a fast, deep,
+    recovering breath) and dying is FAILING (slow, shallow, and much dimmer at the
+    bottom of the cycle). Healthy does not move at all — a component that is always
+    animating is just noise, and stillness is what makes the motion mean something.
+
+    ACCESSIBILITY, both switches:
+      * `prefers-reduced-motion: reduce` pins the crest at its resting frame (below);
+      * the plugin's OWN reduce-motion preference already covers it with no new rule —
+        `[data-dse-element][data-dse-reduce-motion='true'] *` sets `animation: none
+        !important` (styles-source.css ~483), and the crest is inside an element root.
+    The 0%/100% keyframe is DELIBERATELY the un-transformed state (scale 1, opacity 1),
+    so "animation off" and "animation at rest" are the same picture rather than two.
+
+    `pose-ebb` / `pose-peak` are HARNESS-ONLY: the visual harness kills all animation for
+    deterministic shots, so the strip poses the two extremes by restating the keyframes'
+    own declarations. They are not part of any assembly.                              */
+[data-dse-stamina-cand] [data-dse-stamina-var~='crest'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	display: grid;
+	width: 2.5em;
+	height: 2.85em;
+	align-self: center;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='crest'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph {
+	color: var(--st);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='crest'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph svg {
+	width: 1.3em;
+	height: 1.3em;
+}
+/*  crestfill — the crest as a VESSEL rather than as a three-state badge.
+
+    This is the option that actually meets Scott's condition ("if it's going to be a
+    visual representation of the character's Stamina… then thats okay to keep"): the
+    shield fills bottom-up in proportion to current/max, so the ornament reports a
+    QUANTITY. The state hue rides the fill, the silhouette rides the glyph, and the
+    breath rides the whole shield — three independent channels, none of them hue alone.
+
+    The fraction arrives as `--crest-fill`, computed by the harness from the two numerals
+    (see decorateStripCell): the panel publishes channel geometry as percentages of a
+    temp-widened denominator, and CSS cannot divide percentage by percentage to get the
+    ratio back. In production this would be one more `setProperty('--dse-*', …)` in
+    updateCandidateLayer, i.e. the same SC-5-sanctioned mechanism the gauge already uses.
+
+    Two stacked layers over the metal, no color-mix (support floor): a translucent BLACK
+    wash above the waterline so the empty part of the shield reads as unlit material, and
+    the state hue below it. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='crestfill'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	background:
+		linear-gradient(
+			to top,
+			rgba(0, 0, 0, 0) 0 var(--crest-fill, 0%),
+			rgba(0, 0, 0, 0.55) var(--crest-fill, 0%)
+		),
+		linear-gradient(to top, var(--st) 0 var(--crest-fill, 0%), rgba(0, 0, 0, 0) var(--crest-fill, 0%)),
+		var(--dse-metal-grad);
+}
+/* The waterline itself — a bright meniscus, the same device the gauge's pour uses, so
+   the crest and the bar are visibly the same instrument at two scales. Suppressed at a
+   full or empty vessel, where a line would be drawn on the rim or on the floor. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='crestfill'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: var(--crest-fill, 0%);
+	height: 1px;
+	background: rgba(255, 255, 255, 0.55);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='crestfill'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__crest::after {
+	display: none;
+}
+/* The glyph has to stay legible against a hue that now moves up and down behind it. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='crestfill'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph {
+	color: var(--dse-heading);
+	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.75));
+}
+
+@keyframes dse-crest-breathe {
+	0%,
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(0.9);
+		opacity: 0.68;
+	}
+}
+@keyframes dse-crest-fail {
+	0%,
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(0.96);
+		opacity: 0.45;
+	}
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='live'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='winded'] .dse-stamina__crest {
+	animation: dse-crest-breathe 2.6s ease-in-out infinite;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='live'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__crest {
+	animation: dse-crest-fail 4.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-dse-stamina-cand] [data-dse-stamina-var~='live'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand:is([data-state='winded'], [data-state='dying']) .dse-stamina__crest {
+		animation: none;
+	}
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='pose-ebb'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='winded'] .dse-stamina__crest {
+	transform: scale(0.9);
+	opacity: 0.68;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='pose-ebb'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__crest {
+	transform: scale(0.96);
+	opacity: 0.45;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='pose-peak'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand:is([data-state='winded'], [data-state='dying']) .dse-stamina__crest {
+	transform: scale(1);
+	opacity: 1;
+}
+
+/* -------------------------------------------------------------------- */
+/*  softsep / nosoft — the dying divider                                 */
+/* -------------------------------------------------------------------- */
+/*  Scott: "One thing I don't love is the horizontal line between the stamina and the
+    recoveries getting the same bold red that the border gets. It just feels a little too
+    strong. Can we soften that horizontal line a bit?"
+
+    The line is not a rule the layout draws — it is the FOOT's `border-top`, and the
+    dying rule paints all four of the foot's edges at once. So the fix is one declaration:
+    the seam between the plate and its own foot goes back to the plate's OWN hairline
+    (grey `--dse-metal-faint`) while the block's OUTER border keeps the full-strength
+    red. That is the honest reading anyway — the outer border is the state boundary, the
+    inner seam is joinery, and joinery should never be as loud as the thing it joins.
+
+    Chosen over the alternatives (a thinner red, a desaturated red) because both of those
+    keep TWO reds on one object, and a second, weaker red is exactly the kind of hue
+    distinction that Scott's colourblindness makes unreliable. Grey-vs-red is not.
+
+    `nosoft` restores the reviewed appearance for the before/after row on the board.   */
+[data-dse-stamina-cand] [data-dse-stamina-var~='softsep'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='dying']) ~ .dse-stamina-rec {
+	border-top-color: var(--dse-metal-faint);
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='nosoft'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cand[data-state='dying']) ~ .dse-stamina-rec {
+	border-top-color: var(--dse-stamina-dying);
+}
+
+/* -------------------------------------------------------------------- */
+/*  rail, round-6 revision — one line, and no dead corner when it is not */
+/* -------------------------------------------------------------------- */
+/*  Scott: "The rail sidebar designs aren't looking great to me. The stamina bar looks
+    Squished to fit in while the second line has a bunch of unused space in the bottom
+    right. I am thinking that the content overflowed to a second line?"
+
+    He diagnosed it exactly. Round 5's rail declared `flex: 1 1 15rem` on the bar, i.e. a
+    240px FLEX BASIS — so in a 300px leaf (284px of content box) the bar demanded 240 and
+    the recovery strip's ~150px could not fit beside it, and the row wrapped. Wrapping is
+    not itself the bug; the bug is what wrapping produced: the bar then stretched to the
+    full line (looking stretched-thin rather than squished, which is the same complaint
+    from the other side) and the recovery strip sat on line two as a `flex: 0 0 auto`
+    island with ~90px of nothing to its right — the dead bottom-right corner.
+
+    Three changes, and the honest limit stated rather than hidden:
+      1. the crest comes OFF the rail (his lean: "I might suggest dropping the crest since
+         it feels a bit squished in there"). ~26px back, and the state still has the
+         numeral's colour, the border and the word;
+      2. the bar's basis drops 15rem → 8rem so the bar asks for what it needs instead of
+         claiming the leaf, and the gauge's own floor comes down with it;
+      3. the recovery strip becomes growable (`flex: 1 1 auto`) with Catch Breath pushed
+         to the far end. If the row DOES wrap, the second line now spans the full width
+         with the button on the right margin — a deliberate two-line form, not a short
+         row with a hole beside it. The bar keeps `flex-grow: 100` against the strip's 1
+         so that on a line they SHARE, essentially all the slack still goes to the gauge
+         (the strip's markers must not drift apart from their button); it is only when
+         the strip is alone on a wrapped line that its own grow has anything to take.
+    At 300px and 360px the rail is one line. At 260px with 8 recoveries it is two, and
+    that is reported as a limit rather than papered over.                              */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	display: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina[data-cand='d'] {
+	/* 7rem = 112px. Round 5's 15rem (240px) is the number that produced the wrap Scott
+	   saw: MEASURED, the recovery strip's natural width is 169.5px (135.9 of studs +
+	   5.6 gap + the 28px Catch Breath button) and a 300px leaf has 284px of content box,
+	   so anything over ~109px of basis wraps. 7rem clears that at 360px and above with
+	   room for a 109px gauge.
+
+	   IT DOES NOT CLEAR IT AT 300px, and that is reported rather than forced: 112 + 169.5
+	   + the 5.6 row gap is 287, three pixels over. Squeezing the basis to 6rem WOULD make
+	   one line at 300 — and would leave the gauge 52px, because the numerals (49px) and
+	   the studs are incompressible and the gauge is the only elastic member. A 52px gauge
+	   is a worse readout than a 225px one on a second line, so the honest two-line form
+	   (`rail2`) is offered as the answer below 360px instead of pretending. */
+	flex: 100 1 7rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	flex: 1 1 3rem;
+	min-width: 2.25rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	flex: 1 1 auto;
+	gap: 0.35rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn {
+	margin-left: auto;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-stamina[data-cand='d']):not(:has(> .dse-hero__region-title)) {
+	gap: 0.35rem;
+}
+
+/* -------------------------------------------------------------------- */
+/*  rail2 — the HONEST TWO-LINE form, offered alongside the one-line rail */
+/* -------------------------------------------------------------------- */
+/*  Scott asked for "genuinely one line at narrow widths (or an honest, documented
+    two-line form)". Measuring says these are a real trade, not a right answer and a
+    wrong one, so both are built and he picks:
+
+      one line (`rail`)   real from 360px up: one 33px row with a 109px gauge. Below
+                          that the strip cannot fit beside the bar without cutting the
+                          gauge to ~52px, so the rail wraps rather than lie about it.
+      two lines (`rail2`) the bar is FORCED onto its own line (`flex-basis: 100%`) at
+                          every width, so the gauge always gets the whole leaf (225px at
+                          300, 285px at 360) and the recovery strip gets the whole of
+                          line two with Catch Breath on the right margin. 63px tall, and
+                          nothing is squeezed at any leaf width.
+
+    So: `rail` for a sidebar the user has given ~360px or more, `rail2` for the default
+    300px leaf. Which of the two is the FORM is Scott's call, not a measurement's.
+
+    The dead bottom-right corner Scott saw is fixed in BOTH — that was never about
+    wrapping, it was the strip being `flex: 0 0 auto` on a line it did not fill.        */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rail2'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina[data-cand='d'] {
+	flex: 1 1 100%;
+}
+
+/* END SC-132 round 6 */
 
 /* END SC-132 candidate region */

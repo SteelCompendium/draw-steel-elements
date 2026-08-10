@@ -35,16 +35,34 @@ const args = Object.fromEntries(
 
 // Kept in sync with ASSEMBLIES in entry.ts; an unknown id fails the run loudly rather
 // than writing a blank board.
-const ALL = ['la', 'lc', 'ld'];
-const ASMS = args.asm ? [args.asm] : ALL;
+const ALL = ['la', 'lc', 'ld', 'ld2', 'lap', 'lapn'];
+const ASMS = args.asm ? args.asm.split(',') : ALL;
 const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
 const SURFACES = ['stamina-bar', 'hero'];
 
-// 300px is Obsidian's default right-sidebar leaf width (the same number NARROW_SHOTS
-// uses). Only the rail claims to survive it, so only the rail is shot there — the other
-// two layouts would just be reporting that a full-width composition wraps, which is not
-// the question on the table.
-const NARROW = [{ asm: 'ld', surface: 'stamina-bar', width: 300 }];
+// Sidebar leaves. 300px is Obsidian's DEFAULT right-sidebar width; 260 is about as narrow
+// as a leaf is dragged before it stops being usable, and 360 is the common "I gave the
+// sidebar some room" width. Round 5 shot 300 only, which is exactly why Scott could see
+// that the rail wrapped but not WHERE it starts and stops wrapping. Only the rail claims
+// to survive a leaf, so only the rail is shot here.
+const NARROW = [
+	{ asm: 'ld', surface: 'stamina-bar', width: 260 },
+	{ asm: 'ld', surface: 'stamina-bar', width: 300 },
+	{ asm: 'ld', surface: 'stamina-bar', width: 360 },
+	{ asm: 'ld2', surface: 'stamina-bar', width: 260 },
+	{ asm: 'ld2', surface: 'stamina-bar', width: 300 },
+	{ asm: 'ld2', surface: 'stamina-bar', width: 360 },
+];
+
+// ROUND 6, Scott: "In the Hero sheet, all 3 layouts appear to be very squished
+// horizontally. I assume they will look better in actual use." The board viewport is
+// 760px, which is a NARROW Obsidian note; a maximised editor pane on a laptop is
+// 900-1100. So the hero board is re-shot with #mount pinned to 860px inside a wider
+// viewport — verifying the assumption rather than repeating it.
+const WIDE = [
+	{ asm: 'lap', surface: 'hero', width: 860 },
+	{ asm: 'lapn', surface: 'hero', width: 860 },
+];
 
 const failures = [];
 
@@ -89,15 +107,19 @@ try {
 			}
 		}
 	}
-	for (const n of NARROW) {
+	for (const n of [...NARROW, ...WIDE]) {
 		if (!ASMS.includes(n.asm)) continue;
 		for (const bg of SCHEMES) {
+			// A 860px mount needs a viewport wide enough to hold it plus the board's own
+			// 26px gutters, or the capture just clips at 760 and reports nothing.
+			await page.setViewportSize({ width: Math.max(760, n.width + 120), height: 900 });
 			await snap(
 				{ asm: n.asm, board: n.surface, theme: 'steel', bg, width: String(n.width) },
 				`asm--${n.asm}--${n.surface}--w${n.width}--${bg}`,
 			);
 		}
 	}
+	await page.setViewportSize({ width: 760, height: 900 });
 } catch (e) {
 	failures.push({ outName: 'sweep', errors: ['exception: ' + String(e)] });
 } finally {

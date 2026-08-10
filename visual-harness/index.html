@@ -12,7 +12,11 @@
 /* SC-132 candidate boards — harness chrome only (captions/rules around the mounted
    elements). Deliberately OUTSIDE the plugin's class namespace and only ever present
    on `?board=1` pages, so it cannot influence any swept or frozen shot. */
-#mount:has(.dse-cand-head) { padding: 22px 26px 26px; }
+/* `max-width: none` (round 6): vars.css caps #mount at 760px, which silently CLAMPED the
+   `?width=` param — the "wide hero pane" board came out 760px wide and would have
+   reported the narrow case twice. Harmless for the other boards: without a `width` the
+   mount still fills the 760px viewport exactly as before. */
+#mount:has(.dse-cand-head) { padding: 22px 26px 26px; max-width: none; }
 .dse-cand-head { margin-bottom: 20px; }
 .dse-cand-title { font: 600 17px/1.3 ui-sans-serif, system-ui, sans-serif; letter-spacing: .01em; }
 .dse-cand-sub { font: 400 12px/1.4 ui-sans-serif, system-ui, sans-serif; opacity: .55; margin-top: 3px; text-transform: uppercase; letter-spacing: .09em; }
@@ -39,6 +43,15 @@ body.theme-light #mount:has(.dse-cand-head) { color: #22272b; }
 .dse-cand-strip[data-focus="gauge"] .dse-stamina__chead { display: none !important; }
 .dse-cand-strip[data-focus="rec"] .dse-stamina__gauge,
 .dse-cand-strip[data-focus="rec"] .dse-stamina__chead { display: none !important; }
+/* SC-132 round 6 — the crest question lives entirely in the HEAD lane. */
+.dse-cand-strip[data-focus="head"] .dse-stamina__gauge,
+.dse-cand-strip[data-focus="head"] .dse-stamina-rec { display: none !important; }
+/* …and a head-only cell has to close the plate again (the `foot` token opens its
+   bottom edge for a recoveries strip that this strip has just trimmed away). */
+.dse-cand-strip[data-focus="head"] .dse-stamina__cand { border-bottom: 1px solid var(--dse-metal-faint) !important; border-radius: var(--dse-radius) !important; }
+/* Round 6 — the separator strip runs five gauge columns; give the option rail room for
+   the four-line notes without stealing width from the gauges themselves. */
+.dse-cand-strip[data-strip="sep"] { grid-template-columns: 250px repeat(var(--cols, 2), 1fr); row-gap: 22px; align-items: center; }
 /* candidate C draws its banner open-bottomed (the recoveries strip IS the foot); when
    the foot is trimmed for a gauge-focused strip the plate has to be closed again. */
 .dse-cand-strip[data-strip="max-mark"] .dse-stamina__cand { border-bottom: 1px solid var(--dse-metal-faint) !important; border-radius: var(--dse-radius) !important; padding-bottom: .5rem !important; }

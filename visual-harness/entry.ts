@@ -397,6 +397,14 @@ interface StripState {
 	fixture: string;
 	caption: string;
 	readonly?: boolean;
+	/**
+	 * SC-132 round 6: extra `data-dse-stamina-var` tokens for THIS COLUMN, appended to
+	 * every option's own list. Needed by the separator strip, where one column has to
+	 * un-hide the base-max mark (M1 hides it everywhere else, and the mark is a member
+	 * of the separator family whether or not the locked ruling currently shows it) —
+	 * a per-state token is the only way to vary that without forking every option.
+	 */
+	vars?: string;
 }
 interface StripOption {
 	/** Stamped as `data-dse-stamina-var`; also the label's leading code (T1, R2, …). */
@@ -410,7 +418,7 @@ interface StripDef {
 	cand: StaminaCandidate;
 	element?: 'stamina-bar' | 'hero';
 	/** Trims the mounted cluster down to the part under discussion (harness chrome). */
-	focus?: 'gauge' | 'rec' | 'full';
+	focus?: 'gauge' | 'rec' | 'head' | 'full';
 	/** CSS `zoom` on each cell, for boundary-level crops. */
 	zoom?: number;
 	/**
@@ -839,6 +847,122 @@ export const STRIPS: Record<string, StripDef> = {
 			},
 		],
 	},
+
+	/* R6-1 — THE SEPARATOR FAMILY. Scott: "I don't like the separators on the gauge bar
+	   with the little triangles. They look out of place… I think its worth doing a round
+	   of looking at the separator options. A single vertical line is a great option, but
+	   I also would like to see options for things like non-horizontal lines. For example,
+	   a diagonal (to match the recovery cell angles) or a rounded bar end, kinda like a
+	   pill."
+
+	   The family is FOUR marks that have always been designed one at a time, which is
+	   why the set never cohered:
+	     1. the ZERO BULKHEAD — a real edge in the material (the pour's origin, the
+	        dying reserve's wall);
+	     2. the WINDED threshold — a graduation on the scale, at half max;
+	     3. the BASE-MAX mark — a graduation that only exists while temp has widened the
+	        scale (M1 hides it; the last column un-hides it so the family can be judged
+	        whole);
+	     4. the TEMP EDGE — the join where the pour ends and the borrowed plate begins.
+	   Each option below answers all four in ONE vocabulary. */
+	sep: {
+		title: 'The separator family — one vocabulary for all four marks',
+		sub: 'Bulkhead · winded threshold · base-max mark · temp edge · A’s forged channel at the locked H2 height',
+		cand: 'a',
+		focus: 'gauge',
+		// 1.8x, and four columns rather than six. A separator is 1-2px of a 10px slot:
+		// at 1x the strip reports that the marks EXIST, which is not the question. Zoom
+		// shrinks each cell's layout box and scales it back up, so the channel keeps a
+		// realistic proportion while the mark becomes visible (round 3's temp-edge strip
+		// established the trick at 2x).
+		zoom: 1.8,
+		states: [
+			{ fixture: 'healthy', caption: '24/30 — bulkhead + winded threshold' },
+			{ fixture: 'temp', caption: '24/30 +6 — the TEMP EDGE' },
+			{
+				fixture: 'temp',
+				caption: '24/30 +6 · BASE-MAX un-hidden (M1 hides it in the shipped layouts)',
+				vars: 'mshow',
+			},
+			{ fixture: 'dying', caption: '-4/30 — bulkhead with the reserve filled' },
+		],
+		options: [
+			{
+				id: 'e1 m1 h2 forged n0',
+				label: 'N0 — milled notch pairs (as reviewed)',
+				note: 'the control. Two half-diamonds cut into the rails — the “little triangles”',
+			},
+			{
+				id: 'e1 m1 h2 forged n1',
+				label: 'N1 — single vertical hairline',
+				note: 'one vocabulary, three weights: 2px two-tone seam for the bulkhead (a real edge), 1px hairline for a graduation, the same 2px seam at the temp edge',
+			},
+			{
+				id: 'e1 m1 h2 forged n2',
+				label: 'N2 — diagonal, at the recovery cells’ angle',
+				note: 'every mark skewed −12°, the exact skew of the R6 cells; the pour’s leading edge is cut on the same diagonal, so the fill ENDS in the family’s angle',
+			},
+			{
+				id: 'e1 m1 h2 forged n3',
+				label: 'N3 — pill segments, separation IS the gap',
+				note: 'capsule channel, capsule fills; no line is drawn anywhere — reserve, pour and temp are separated by bare channel. Graduations become rounded ticks',
+			},
+			{
+				id: 'e1 m1 h2 forged n4',
+				label: 'N4 — rim seeds (nothing crosses the pour)',
+				note: 'the brand ◆ seated on the channel’s top rail, pointing at the threshold; the slot itself is left clean. The bulkhead keeps its seam because it is the one real edge',
+			},
+		],
+	},
+
+	/* R6-2 — THE LIVING CREST. Scott: "For the Crest, is that offering any value? if not,
+	   then I think we should exclude it. if it's going to be a visual representation of
+	   the character's Stamina (maybe with a breathing effect when 'winded', etc) then
+	   thats okay to keep."
+
+	   The crest ALREADY changes silhouette with state (StaminaBarPanel.STATE_ICON:
+	   shield → shield-alert → skull). This strip asks whether adding BREATH to that makes
+	   it informative enough to keep. The harness kills animation for deterministic shots,
+	   so the two motion columns are the animation's two extreme frames declared
+	   statically — the pose rules restate the keyframes verbatim. */
+	'crest-live': {
+		title: 'The living crest — silhouette, and whether breath earns its keep',
+		sub: 'A-plus head · shield → shield-alert → skull · the motion columns are the keyframe extremes, declared statically',
+		cand: 'a',
+		focus: 'head',
+		states: [
+			{ fixture: 'healthy', caption: 'Healthy 24/30 — shield' },
+			{ fixture: 'winded', caption: 'Winded 11/30 — shield-alert' },
+			{ fixture: 'dying', caption: 'Dying -4/30 — skull' },
+		],
+		options: [
+			{
+				id: 'aplus y3 nospine',
+				label: 'K0 — no crest (control)',
+				note: 'the head with the crest excluded outright. State is carried by the word, the numeral colour and the plate’s border',
+			},
+			{
+				id: 'aplus crest y3 nospine',
+				label: 'K1 — crest, silhouette only',
+				note: 'shield / shield-alert / skull, no motion. What ships today inside candidates C and D',
+			},
+			{
+				id: 'aplus crest live pose-ebb y3 nospine',
+				label: 'K2 — breathing crest · EBB frame',
+				note: 'breath at its smallest. Winded: 0.90 scale / 0.68 opacity, 2.6s ease-in-out. Dying: 0.96 / 0.45, 4.4s. Healthy does not move at all',
+			},
+			{
+				id: 'aplus crest live pose-peak y3 nospine',
+				label: 'K2 — breathing crest · PEAK frame',
+				note: 'the same animation’s other extreme, and its RESTING frame: scale 1 / opacity 1. So “motion off” and “motion at rest” are the same picture — both reduce-motion switches land here',
+			},
+			{
+				id: 'aplus crest crestfill live pose-peak y3 nospine',
+				label: 'K3 — the crest as a VESSEL (fills with stamina) + breath',
+				note: 'the shield fills bottom-up in proportion to current/max — 80% · 37% · 0%. Now the crest reports a NUMBER, not just which of three states you are in; the silhouette and the breath ride on top of it',
+			},
+		],
+	},
 };
 
 /* ------------------------------------------------------------------ */
@@ -873,6 +997,13 @@ export const STRIPS: Record<string, StripDef> = {
    a plate foot so a bar-first layout is a composed object rather than a bar with
    a loose row under it, and the rail's density adjustments. See the CSS.
 */
+interface AsmRow {
+	fixture: string;
+	caption: string;
+	/** Round 6: extra tokens for THIS ROW only, appended to the assembly's list. */
+	vars?: string;
+}
+
 interface AssemblyDef {
 	title: string;
 	sub: string;
@@ -881,11 +1012,11 @@ interface AssemblyDef {
 	/** Composed `data-dse-stamina-var` tokens, stamped on every board row. */
 	vars: string;
 	/** Rows to draw per surface. */
-	rows: { 'stamina-bar': { fixture: string; caption: string }[]; hero: { fixture: string; caption: string }[] };
+	rows: { 'stamina-bar': AsmRow[]; hero: AsmRow[] };
 }
 
 /** The standalone element's full honest-state matrix, incl. the three SC-133 cases. */
-const ASM_ROWS_BAR: { fixture: string; caption: string }[] = [
+const ASM_ROWS_BAR: AsmRow[] = [
 	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
 	{ fixture: 'temp', caption: 'Temp Stamina — 24/30 +6' },
 	{ fixture: 'winded', caption: 'Winded — 11/30 (at or below half)' },
@@ -900,13 +1031,31 @@ const ASM_ROWS_BAR: { fixture: string; caption: string }[] = [
    — how the cluster sits inside the sheet's grid at rest, whether the widest temp case
    still fits the sheet's narrow stamina column, and how the dying treatment reads next
    to the sheet's other regions — rather than repeating a matrix already proven. */
-const ASM_ROWS_HERO: { fixture: string; caption: string }[] = [
+const ASM_ROWS_HERO: AsmRow[] = [
 	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
 	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40' },
 	{ fixture: 'dying', caption: 'Dying — -4/30' },
 ];
 
 const ASM_ROWS = { 'stamina-bar': ASM_ROWS_BAR, hero: ASM_ROWS_HERO };
+
+/* ROUND 6 — the A-plus boards carry the dying case TWICE, because the softened divider
+   is a before/after and a still of the "after" alone proves nothing. The first dying row
+   is deliberately shot WITHOUT `softsep`, i.e. exactly as Scott reviewed it in round 5
+   (the seam between plate and foot taking the same full-strength red as the border). */
+const ASM_ROWS_BAR_AP: AsmRow[] = [
+	...ASM_ROWS_BAR.slice(0, 3),
+	{ fixture: 'dying', caption: 'Dying — divider AS REVIEWED (the seam takes the same bold red)', vars: 'nosoft' },
+	{ fixture: 'dying', caption: 'Dying — divider SOFTENED (the plate’s own grey hairline)' },
+	...ASM_ROWS_BAR.slice(4),
+];
+const ASM_ROWS_HERO_AP: AsmRow[] = [
+	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
+	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40' },
+	{ fixture: 'winded', caption: 'Winded — 11/30 (no left-hand spine: the state is the border, the crest and the word)' },
+	{ fixture: 'dying', caption: 'Dying — -4/30, softened divider' },
+];
+const ASM_ROWS_AP = { 'stamina-bar': ASM_ROWS_BAR_AP, hero: ASM_ROWS_HERO_AP };
 
 export const ASSEMBLIES: Record<string, AssemblyDef> = {
 	/* LA — the bar-first reading. The instrument IS the interface: a wide machined
@@ -931,11 +1080,61 @@ export const ASSEMBLIES: Record<string, AssemblyDef> = {
 	/* LD — the DENSITY VARIANT of the same components, not a fourth design: one 28px
 	   row that survives a sidebar leaf. */
 	ld: {
-		title: 'Layout D — “Sheet Rail”, the condensed form of the same components',
-		sub: 'One 28px row · crest · numerals · elastic gauge · R6 studs with G4 grouping · icon-only Catch Breath · no label',
+		title: 'Layout D — “Sheet Rail”, the ONE-LINE form (round-6 revision)',
+		sub: 'One 33px row from 360px up · NO crest (dropped) · numerals · elastic gauge · R6 studs with G4 grouping · icon-only Catch Breath pinned to the right margin · no label',
 		cand: 'd',
-		vars: 'e1 m1 h2 r6 g4 im lf2 notip rail',
+		vars: 'e1 m1 h2 n1 r6 g4 im lf2 notip rail',
 		rows: ASM_ROWS,
+	},
+	/* LD2 — the same rail forced onto TWO lines. Not a fourth layout: the identical
+	   token list plus `rail2`, so the only difference is whether the bar shares its line
+	   with the recovery strip. Built because measuring the one-line form at 300px showed
+	   it costs the gauge ~155px, which is a real trade for Scott to make rather than one
+	   for this round to make silently. */
+	ld2: {
+		title: 'Layout D — “Sheet Rail”, the honest TWO-LINE form',
+		sub: 'The same rail with the bar on its own line: full-width gauge above, full-width recovery strip below with Catch Breath on the right margin · no crest',
+		cand: 'd',
+		vars: 'e1 m1 h2 n1 r6 g4 im lf2 notip rail rail2',
+		rows: ASM_ROWS,
+	},
+
+	/* ------------------------------------------------------------------ */
+	/* ROUND 6 — "A-PLUS", the hybrid Scott's own reading points at         */
+	/* ------------------------------------------------------------------ */
+	/*  His words, split into requirements:
+	      A  — "doesn't waste a ton of space, the Stamina bar takes the full width…
+	            really balanced" but "doesn't feel like it has a huge presence and
+	            Stamina is one of the most important things to be tracking".
+	      C  — "I like how the 'current stamina' value pops with its larger font… really
+	            helps catch the eye" and "The Crest in layout C is actually helping a lot
+	            with this presence metric" — but the upper right is "a ton of dead unused
+	            space", the temp value is "out of place being top-aligned", and it is not
+	            full width, so it is "not 'dense'".
+	    A-plus takes A's full-width bar-first plate and C's ONE winning move (the big
+	    numeral, and optionally the crest), and fixes the three things that made C
+	    unbalanced: no 26rem cap, no dead upper-right lane (the head is a two-lane grid
+	    that ends where the content ends), and the temp chip sits on the big numeral's
+	    BASELINE instead of floating at its cap height.
+
+	    Two variants, because the crest is a live question this round:
+	      lap   with the LIVING crest (silhouette + breath)
+	      lapn  without any crest at all
+	    Both carry `nospine` (DESIGN.md rule 7 — no decorative coloured left border) and
+	    `softsep` (the dying divider softened to the plate's own hairline). */
+	lap: {
+		title: 'Layout A-plus — full-width gauge + the big numeral, WITH the living crest',
+		sub: 'A’s full-width plate & foot · C’s 2em current-stamina numeral · living crest (shield → shield-alert → skull) · temp chip on the numeral’s baseline · no left-hand spine · softened dying divider',
+		cand: 'a',
+		vars: 'e1 m1 h2 forged n1 r6 g4 im lf1 y3 foot aplus crest live nospine softsep',
+		rows: ASM_ROWS_AP,
+	},
+	lapn: {
+		title: 'Layout A-plus — full-width gauge + the big numeral, NO crest',
+		sub: 'The same composition with the crest excluded: state rides the border, the ground, the word and the numeral’s colour',
+		cand: 'a',
+		vars: 'e1 m1 h2 forged n1 r6 g4 im lf1 y3 foot aplus nospine softsep',
+		rows: ASM_ROWS_AP,
 	},
 };
 
@@ -1186,7 +1385,9 @@ async function mountAsmBoard(
 			: [...def.rows['stamina-bar'], { fixture: 'READONLY', caption: 'Read-only — inert (canPersist false)' }];
 	for (const row of rows) {
 		const sec = mount.createDiv({ cls: 'dse-cand-row' });
-		sec.setAttribute('data-dse-stamina-var', def.vars);
+		// Round 6: a row may add tokens of its own (the softened-divider before/after).
+		const vars = row.vars ? `${def.vars} ${row.vars}` : def.vars;
+		sec.setAttribute('data-dse-stamina-var', vars);
 		sec.createDiv({ cls: 'dse-cand-cap', text: row.caption });
 		// Read-only is a HOST state, not a fixture — driven by `canPersist: false`, which
 		// is the plugin's REAL inert rendering. Deliberately NOT the round-4 `id` mock:
@@ -1201,7 +1402,7 @@ async function mountAsmBoard(
 			{ ...params, readonly: ro },
 			errors,
 		);
-		decorateStripCell(sec, def.vars);
+		decorateStripCell(sec, vars);
 	}
 }
 
@@ -1413,6 +1614,22 @@ function decorateStripCell(cell: HTMLElement, optId: string): void {
 		rec.insertAdjacentElement('afterend', row);
 	}
 
+	// -- K3 (round 6): the crest as a VESSEL. The fill fraction is current/max, which the
+	// panel does NOT publish as a custom property — it publishes CHANNEL geometry
+	// (`--dse-pour-w` etc., all percentages of a temp-widened denominator), and CSS calc
+	// cannot divide one percentage by another to recover the ratio. So it is derived here
+	// from the two numerals the head already renders, exactly like F1's `--dse-recstep`
+	// derives the recovery step from `--dse-max-x - --dse-zone`. Clamped at 0: a dying
+	// hero's vessel is empty, not negative.
+	if (opts.has('crestfill')) {
+		const root = cell.querySelector<HTMLElement>('.dse-stamina__cand');
+		const cur = Number(cell.querySelector('.dse-stamina__ccur')?.textContent ?? '');
+		const max = Number(cell.querySelector('.dse-stamina__cmax')?.textContent ?? '');
+		if (root && Number.isFinite(cur) && Number.isFinite(max) && max > 0) {
+			root.style.setProperty('--crest-fill', `${Math.min(Math.max(cur / max, 0), 1) * 100}%`);
+		}
+	}
+
 	// -- F1: the ledger's division width -------------------------------------------
 	// Derived from the numbers the PANEL already computed (`--dse-zone`, `--dse-max-x`),
 	// not from a re-implementation of its geometry: `--dse-max-x - --dse-zone` is
@@ -1462,10 +1679,12 @@ async function mountStrip(
 
 	const mountCell = async (opt: StripOption, st: StripState): Promise<void> => {
 		const cell = grid.createDiv({ cls: 'dse-cand-cell' });
-		cell.setAttribute('data-dse-stamina-var', opt.id);
+		// The COLUMN's tokens ride on top of the option's own (round 6) — see StripState.
+		const vars = st.vars ? `${opt.id} ${st.vars}` : opt.id;
+		cell.setAttribute('data-dse-stamina-var', vars);
 		if (def.zoom) cell.style.zoom = String(def.zoom);
 		await mountOne(pipeline, registry, cell, element, st.fixture, { ...params, readonly: st.readonly ?? false }, errors);
-		decorateStripCell(cell, opt.id);
+		decorateStripCell(cell, vars);
 	};
 
 	if (def.transpose) {

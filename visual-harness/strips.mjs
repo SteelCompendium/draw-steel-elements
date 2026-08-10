@@ -56,6 +56,9 @@ const ALL = [
 	'interact',
 	// Round 5 (Scott's comment 59638cd9): the one outstanding component confirm.
 	'rec-g4r6',
+	// Round 6 (Scott's comment 39f3d812): the separator family, and the living crest.
+	'sep',
+	'crest-live',
 ];
 const STRIPS = args.strip ? [args.strip] : ALL;
 const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
@@ -63,7 +66,8 @@ const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
 // Per-strip page width, where the default 1400 is not enough. A twelve-marker recovery
 // row is ~330 CSS px on its own, so `rec-g4r6`'s three option columns need real room —
 // and a strip that WRAPS its markers would misreport the grouping it exists to confirm.
-const PAGE_WIDTH = { 'rec-g4r6': 1620 };
+// Round 6: `sep` runs four ZOOMED gauge columns plus a wider option rail.
+const PAGE_WIDTH = { 'rec-g4r6': 1620, sep: 1500 };
 
 const failures = [];
 
