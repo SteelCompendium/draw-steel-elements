@@ -234,7 +234,7 @@ export function validateMigrationMap(map: MigrationMap): string[] {
 }
 
 export class CompendiumMigrationService {
-	private readonly map: MigrationMap;
+	private mapOverride: MigrationMap | undefined;
 
 	constructor(
 		private app: App,
@@ -242,7 +242,23 @@ export class CompendiumMigrationService {
 		private stateStore: MigrationStateStore,
 		map?: MigrationMap,
 	) {
-		this.map = map ?? migrationMap();
+		this.mapOverride = map;
+	}
+
+	/**
+	 * Resolved on FIRST USE, never in the constructor (review round 2, L3).
+	 *
+	 * `onload()` constructs this service unconditionally, so `map ?? migrationMap()`
+	 * in the constructor only moved the ~390 KiB parse from module-evaluation to
+	 * plugin-load — still every single launch, for a feature that runs at most once in
+	 * a vault's lifetime. Behind a getter, a vault that has already migrated (or never
+	 * needs to) never parses it at all: `reconcile()` returns before touching the map
+	 * when there is no migration state, and `detect()` is only reached inside the
+	 * trigger branch.
+	 */
+	private get map(): MigrationMap {
+		if (this.mapOverride === undefined) this.mapOverride = migrationMap();
+		return this.mapOverride;
 	}
 
 	// -- state ---------------------------------------------------------------
@@ -257,6 +273,18 @@ export class CompendiumMigrationService {
 		return state !== null && (state.declined || state.incomplete);
 	}
 
+	/**
+	 * Read-modify-write, and deliberately not guarded against a concurrent
+	 * `execute()` finishing at the same moment (review round 2, item 7).
+	 *
+	 * The two cannot legitimately overlap — the dialog only declines from a screen
+	 * where no run has started, and a dismissal *during* a run reports the run's own
+	 * outcome instead of declining. If they somehow raced, `execute`'s `finally`
+	 * re-reads the state before writing and its result deliberately WINS: a run that
+	 * actually finished is newer, better information than a decline that arrived while
+	 * it was finishing. The worst case is one lost `declined: true`, which costs a
+	 * re-offer that the completed run had made unnecessary anyway.
+	 */
 	public async markDeclined(root: string): Promise<void> {
 		const state = (await this.stateStore.load()) ?? emptyMigrationState(root);
 		state.declined = true;
@@ -363,12 +391,25 @@ export class CompendiumMigrationService {
 	 * before each move (the vault can change under a long run), and a failure on one
 	 * file never stops the others.
 	 *
-	 * Bookkeeping is CHECKPOINTED rather than deferred to the end (review H1): the
-	 * state file and the manifest are brought up to date every `CHECKPOINT_INTERVAL`
-	 * renames and again in a `finally`, and `reconcile()` runs first so a previously
-	 * interrupted run's files are adopted before this one adds to them. A crash mid-run
-	 * therefore costs a partial move, never a set of files stranded outside the
-	 * manifest forever.
+	 * Bookkeeping is WRITE-AHEAD, because the failure that matters is not an orderly
+	 * abort but the process dying (review H1, round 2). A `finally` does not run when
+	 * Obsidian is force-quit, so anything recorded only at the end — or only at a
+	 * checkpoint AFTER the work — has a window in which moved files exist that nothing
+	 * knows about. Two rules close it:
+	 *
+	 *   1. `incomplete: true` is persisted BEFORE the first rename and cleared in the
+	 *      `finally`. Death at any point therefore leaves it set on disk, so the next
+	 *      sync re-offers the migration instead of silently syncing — which would
+	 *      create the remaining destinations and shut the door for good.
+	 *   2. Each window of destinations is recorded BEFORE its renames happen, one
+	 *      window ahead at each checkpoint (the same number of writes as recording
+	 *      them afterwards). Over-recording is inert: `reconcile()` skips any recorded
+	 *      path whose file is not actually there, so a destination that never arrived
+	 *      costs nothing, while one that arrived just before the crash is adopted on
+	 *      the next run.
+	 *
+	 * `reconcile()` also runs first, so a previous interrupted run's files are adopted
+	 * before this one adds to them.
 	 */
 	public async execute(plan: MigrationPlan, options: ExecuteOptions = {}): Promise<MigrationReport> {
 		const report: MigrationReport = {
@@ -389,7 +430,39 @@ export class CompendiumMigrationService {
 		const state = (await this.stateStore.load()) ?? emptyMigrationState(plan.root);
 		state.root = plan.root;
 		const caseIndex: FolderCaseIndex = buildFolderCaseIndex(this.app);
+		const recorded = new Set(state.migrated);
 		let sinceCheckpoint = 0;
+
+		/** Write-ahead: claim a window of destinations BEFORE moving anything into them. */
+		const recordWindow = (from: number): void => {
+			for (const rename of plan.renames.slice(from, from + CHECKPOINT_INTERVAL)) {
+				if (recorded.has(rename.newRelative)) continue;
+				recorded.add(rename.newRelative);
+				state.migrated.push(rename.newRelative);
+			}
+		};
+		// Bookkeeping must never take the run down with it — the moves are the point,
+		// and a failed write leaves `incomplete` set, which is the safe direction.
+		const persist = async (): Promise<void> => {
+			try {
+				await this.stateStore.save(state);
+			} catch (error) {
+				console.warn("Draw Steel Elements: could not record migration progress.", error);
+			}
+		};
+		const adopt = async (): Promise<void> => {
+			try {
+				await this.reconcile(plan.root);
+			} catch (error) {
+				console.warn("Draw Steel Elements: could not update the compendium manifest.", error);
+			}
+		};
+
+		if (plan.renames.length > 0) {
+			state.incomplete = true; // survives a force-quit; cleared in the finally below
+			recordWindow(0);
+			await persist();
+		}
 
 		try {
 			for (let index = 0; index < plan.renames.length; index++) {
@@ -416,7 +489,6 @@ export class CompendiumMigrationService {
 					const target = await ensureParentFolders(this.app, rename.toPath, caseIndex);
 					await this.app.fileManager.renameFile(file, target);
 					report.migrated.push(rename);
-					state.migrated.push(rename.newRelative);
 					sinceCheckpoint++;
 					if (rename.modified === true) report.migratedModified.push(rename);
 				} catch (error: unknown) {
@@ -429,16 +501,30 @@ export class CompendiumMigrationService {
 				tick();
 				if (sinceCheckpoint >= CHECKPOINT_INTERVAL) {
 					sinceCheckpoint = 0;
-					await this.stateStore.save(state);
-					await this.reconcile(plan.root);
+					await adopt();
+					recordWindow(index + 1); // claim the next window before entering it
+					await persist();
 				}
 			}
 		} finally {
-			// Runs on an abort, on an unexpected throw, and on the happy path alike.
+			// Runs on an orderly abort, on an unexpected throw, and on the happy path.
+			// It does NOT run on process death — which is exactly why `incomplete` was
+			// set before the loop rather than here.
+			//
+			// Re-read first so a `markDeclined` that landed mid-run isn't silently lost
+			// from the record; this run's own outcome still wins for the two flags,
+			// because a run that finished is newer information than a decline that
+			// arrived while it was finishing (see markDeclined).
+			const onDisk = await this.stateStore.load();
+			for (const relative of onDisk?.migrated ?? []) {
+				if (recorded.has(relative)) continue;
+				recorded.add(relative);
+				state.migrated.push(relative);
+			}
 			state.incomplete = report.aborted && report.remaining > 0;
 			if (!state.incomplete) state.declined = false;
-			await this.stateStore.save(state);
-			await this.reconcile(plan.root);
+			await persist();
+			await adopt();
 		}
 
 		if (options.writeReportNote !== false) {

@@ -36,8 +36,10 @@ for what needs action.
   least twenty files at exact pre-7.0.0 compendium paths. Declining leaves the
   compendium alone and does **not** sync: syncing creates the new files and makes
   the move impossible afterwards, so that is its own explicitly labelled choice,
-  and you are asked again next time. An interrupted run is safe to resume — the
-  bookkeeping is checkpointed as it goes, so nothing is left stranded. Afterwards
+  and you are asked again next time. An interrupted run is safe to resume: each move
+  is recorded before it is made, so even force-quitting Obsidian mid-run leaves
+  nothing stranded and the next sync offers to finish rather than quietly carrying on
+  without you. Afterwards
   the migration writes a report note into your vault naming every file it flagged,
   skipped or left alone. One consequence worth knowing: a compendium file you had
   edited in place is moved like any other and then updated by the next sync, so

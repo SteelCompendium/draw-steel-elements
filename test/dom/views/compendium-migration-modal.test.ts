@@ -55,6 +55,7 @@ function emptyReport(overrides: Partial<MigrationReport> = {}): MigrationReport 
 
 function makeModal(plan = makePlan(), report = emptyReport()) {
 	let resolveRun!: (report: MigrationReport) => void;
+	let rejectRun!: (error: unknown) => void;
 	const runCalls: Array<{
 		onProgress: (done: number, total: number) => void;
 		shouldAbort: () => boolean;
@@ -62,8 +63,9 @@ function makeModal(plan = makePlan(), report = emptyReport()) {
 	const callbacks = {
 		run: jest.fn((onProgress: (done: number, total: number) => void, shouldAbort: () => boolean) => {
 			runCalls.push({ onProgress, shouldAbort });
-			return new Promise<MigrationReport>((resolve) => {
+			return new Promise<MigrationReport>((resolve, reject) => {
 				resolveRun = resolve;
+				rejectRun = reject;
 			});
 		}),
 		decline: jest.fn(),
@@ -71,11 +73,16 @@ function makeModal(plan = makePlan(), report = emptyReport()) {
 		finishRemaining: jest.fn(),
 		syncAfter: jest.fn(),
 		dismissed: jest.fn(),
+		failed: jest.fn(),
 	};
 	const modal = new CompendiumMigrationModal(new App() as any, plan, callbacks);
 	modal.open();
 	const container = (modal as any).containerEl as HTMLElement;
-	return { modal, container, callbacks, runCalls, finishRun: () => resolveRun(report) };
+	return {
+		modal, container, callbacks, runCalls,
+		finishRun: () => resolveRun(report),
+		failRun: (error: unknown) => rejectRun(error),
+	};
 }
 
 function footerBtn(container: HTMLElement, label: string): HTMLButtonElement {
@@ -304,6 +311,34 @@ describe('CompendiumMigrationModal — summary', () => {
 		footerBtn(container, 'Close').click();
 		expect(callbacks.dismissed).toHaveBeenCalledWith(report);
 		expect(callbacks.syncAfter).not.toHaveBeenCalled();
+	});
+});
+
+describe('CompendiumMigrationModal — the run throws', () => {
+	async function settle() {
+		for (let i = 0; i < 4; i++) await Promise.resolve();
+	}
+
+	test('an infrastructure error ends in an error state, not a dialog stuck on "Moving…"', async () => {
+		const { container, callbacks, failRun } = makeModal();
+		footerBtn(container, 'Move 2 file(s)').click();
+		expect((container.querySelector('.dse-modal__title') as HTMLElement).textContent)
+			.toBe('Moving your compendium…');
+
+		failRun(new Error('vault write refused'));
+		await settle();
+
+		expect((container.querySelector('.dse-modal__title') as HTMLElement).textContent)
+			.toBe('Migration could not finish');
+		const text = bodyText(container);
+		expect(text).toContain('vault write refused');
+		expect(text).toContain('stayed moved');
+		expect(text).toContain('Do not sync the compendium first');
+		expect(callbacks.failed).toHaveBeenCalledTimes(1);
+		// It must NOT look like a success, and must not offer the door-closing sync.
+		expect(container.querySelector('button[aria-label="Sync the compendium now"]')).toBeNull();
+		footerBtn(container, 'Close').click();
+		expect(document.body.contains(container)).toBe(false);
 	});
 });
 

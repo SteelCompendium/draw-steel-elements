@@ -10,7 +10,8 @@
 //   3. the trigger — never fires on a fresh install;
 //   4. idempotency, abort, occupied destinations.
 import {
-	CompendiumMigrationService, LEGACY_DETECTION_THRESHOLD, describePlan, migrationMap,
+	CHECKPOINT_INTERVAL, CompendiumMigrationService, LEGACY_DETECTION_THRESHOLD,
+	describePlan, migrationMap,
 } from "@/data/CompendiumMigration";
 import type { MigrationMap } from "@/data/CompendiumMigration";
 import { CompendiumSyncService } from "@/data/CompendiumSyncService";
@@ -47,6 +48,16 @@ async function testMap(): Promise<MigrationMap> {
 			"Careers/Retired.md": ["career/retired.md"],
 		},
 	};
+}
+
+/** N entries `Old/i.md` → `new/i.md`, enough to cross a checkpoint boundary. */
+async function bigMap(count: number): Promise<MigrationMap> {
+	const map = await testMap();
+	map.paths = {};
+	for (let i = 0; i < count; i++) {
+		map.paths[`Old/file-${String(i).padStart(4, "0")}.md`] = [`new/file-${String(i).padStart(4, "0")}.md`];
+	}
+	return map;
 }
 
 async function setup(map?: MigrationMap) {
@@ -356,25 +367,54 @@ describe("the handoff to the sync engine", () => {
 // Review fix round — the findings that had executable reproductions.
 // ---------------------------------------------------------------------------
 
+/**
+ * Simulate PROCESS DEATH, not an orderly abort.
+ *
+ * The distinction is the whole of review round 2's H1: `shouldAbort` unwinds through
+ * the `finally`, which is precisely the path a force-quit does NOT take. Here the run
+ * is killed by making the Nth rename throw a sentinel that escapes `execute()`
+ * entirely — every write that had already reached disk stays, and nothing that would
+ * only have happened at the end does.
+ */
+async function crashDuring(
+	ctx: Awaited<ReturnType<typeof setup>>,
+	service: CompendiumMigrationService,
+	afterRenames: number,
+): Promise<void> {
+	let done = 0;
+	const real = ctx.fileManager.renameFile.bind(ctx.fileManager);
+	const spy = jest.spyOn(ctx.fileManager, "renameFile").mockImplementation(async (file, to) => {
+		// Death is not an exception — an exception would be CAUGHT (the engine records a
+		// failed rename and carries on to its `finally`, which is the very thing a
+		// force-quit skips). The Nth call simply never returns, the run is abandoned
+		// mid-loop, and only what already reached disk survives.
+		if (done >= afterRenames) return new Promise<void>(() => { /* the process is gone */ });
+		done++;
+		await real(file, to);
+	});
+	const abandoned = service.execute(await service.plan(ROOT), { writeReportNote: false });
+	void abandoned.catch(() => { /* nobody is left to hear it */ });
+	// Let every microtask up to the hang settle (the checkpoint writes are awaits).
+	for (let i = 0; i < 50; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+	spy.mockRestore();
+}
+
 describe("H1 — an interrupted run must not strand its files", () => {
-	test("SCENARIO A: crash mid-run, then re-run — EVERY moved file ends up managed", async () => {
+	test("SCENARIO A: real process death mid-run, then re-run — EVERY moved file ends up managed", async () => {
 		const ctx = await setup();
 		seedLegacyVault(ctx.vault);
 		ctx.vault.setText(`${ROOT}/Careers/Retired.md`, "retired");
 
-		// Run 1 stops after one file, and then the process "dies" — no summary, no
-		// further calls on this service instance.
-		let moved = 0;
-		await ctx.service.execute(await ctx.service.plan(ROOT), {
-			writeReportNote: false,
-			onProgress: () => { moved++; },
-			shouldAbort: () => moved >= 1,
-		});
-		const afterCrash = (await ctx.store.load())!;
-		expect(Object.keys(afterCrash.files)).toHaveLength(1);
+		// Die after the first rename. Note this throws OUT of execute(), so its
+		// `finally` bookkeeping is the only thing that runs — and the assertions below
+		// must hold even if it hadn't.
+		await crashDuring(ctx, ctx.service, 1);
 
-		// Run 2 is a fresh service over the same vault (a plugin reload).
+		// The offer must come back: `incomplete` was written BEFORE the loop, so it is
+		// on disk no matter where the process died.
 		const service2 = await reopen(ctx);
+		expect(await service2.isPending()).toBe(true);
+
 		await service2.execute(await service2.plan(ROOT), { writeReportNote: false });
 
 		const manifest = (await ctx.store.load())!;
@@ -394,6 +434,55 @@ describe("H1 — an interrupted run must not strand its files", () => {
 		expect(report.updated.sort())
 			.toEqual(["career/disciple.md", "career/retired.md", "career/sage.md"]);
 		expect(report.skippedConflicts).toEqual([]);
+	});
+
+	test("C1: death BEFORE the first checkpoint still leaves the moved file recorded", async () => {
+		// The window that used to strand up to CHECKPOINT_INTERVAL-1 files. The
+		// destinations are claimed write-ahead, before their renames, so the record is
+		// already on disk when the process dies.
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		await crashDuring(ctx, ctx.service, 1);
+
+		const state = (await ctx.stateStore.load())!;
+		expect(state.migrated).toContain("career/disciple.md");
+		expect(state.incomplete).toBe(true);
+
+		// A bare reconcile — no further migration — is enough to rescue it.
+		const service2 = await reopen(ctx);
+		expect(await service2.reconcile(ROOT)).toBe(1);
+		expect(Object.keys((await ctx.store.load())!.files)).toEqual(["career/disciple.md"]);
+	});
+
+	test("C2: death AFTER a checkpoint still re-offers — it must never fall through to a silent sync", async () => {
+		// The regression this round exists to kill. A checkpoint had written a manifest,
+		// so `manifest === null` was false; `incomplete` was only set in the finally, so
+		// `isPending()` was false too — and the next sync ran unprompted, created the
+		// remaining destinations, and shut the door for good.
+		const map = await bigMap(CHECKPOINT_INTERVAL + 50);
+		const ctx = await setup(map);
+		for (const oldPath of Object.keys(map.paths)) ctx.vault.setText(`${ROOT}/${oldPath}`, oldPath);
+
+		await crashDuring(ctx, ctx.service, CHECKPOINT_INTERVAL + 10);
+
+		// A checkpoint really did land a manifest — the condition that used to silence
+		// the offer.
+		const manifest = await ctx.store.load();
+		expect(manifest).not.toBeNull();
+		expect(Object.keys(manifest!.files).length).toBeGreaterThanOrEqual(CHECKPOINT_INTERVAL);
+
+		// …and the offer still comes back.
+		const service2 = await reopen(ctx, map);
+		expect(await service2.isPending()).toBe(true);
+
+		const second = await service2.plan(ROOT);
+		expect(second.renames.length).toBe(50 - 10);
+		await service2.execute(second, { writeReportNote: false });
+
+		// Everything is managed, and nothing is left at a legacy path.
+		const finalManifest = (await ctx.store.load())!;
+		expect(Object.keys(finalManifest.files)).toHaveLength(CHECKPOINT_INTERVAL + 50);
+		expect(await service2.isPending()).toBe(false);
 	});
 
 	test("reconcile() alone repairs an unadopted move, without any further migration", async () => {

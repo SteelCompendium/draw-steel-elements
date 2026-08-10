@@ -42,6 +42,8 @@ export interface MigrationModalCallbacks {
 	syncAfter: (report: MigrationReport) => void;
 	/** The dialog went away without a terminal button — Escape, or a view unload. */
 	dismissed: (report: MigrationReport | null) => void;
+	/** The run itself threw. The dialog shows an error state; the caller logs/notices. */
+	failed: (error: unknown) => void;
 }
 
 export class CompendiumMigrationModal extends DseModal {
@@ -196,12 +198,22 @@ export class CompendiumMigrationModal extends DseModal {
 			},
 		]);
 
-		const report = await this.callbacks.run(
-			(done, total) => {
-				if (!this.closed) progress.setText(`${done} / ${total} moved`);
-			},
-			() => this.aborted,
-		);
+		let report: MigrationReport;
+		try {
+			report = await this.callbacks.run(
+				(done, total) => {
+					if (!this.closed) progress.setText(`${done} / ${total} moved`);
+				},
+				() => this.aborted,
+			);
+		} catch (error: unknown) {
+			// Review round 2, item 6. The engine swallows its own bookkeeping failures,
+			// but something further out (a vault write refused, a storage error) can
+			// still throw — and this promise had no catch, so the dialog sat on
+			// "Moving your compendium…" forever with no way to learn what happened.
+			this.renderFailure(error);
+			return;
+		}
 		this.lastReport = report;
 		// The dialog may have been dismissed while the run was in flight — rendering
 		// into a detached DOM would swallow the result silently (review M2).
@@ -210,6 +222,36 @@ export class CompendiumMigrationModal extends DseModal {
 			return;
 		}
 		this.renderSummary(report);
+	}
+
+	/** The run threw. Say so, say what is safe, and get out of the user's way. */
+	private renderFailure(error: unknown): void {
+		this.callbacks.failed(error);
+		if (this.closed) return;
+		this.setDseTitle('Migration could not finish');
+		this.body.empty();
+		this.body.createEl('p', {
+			text:
+				'Something went wrong part-way through. Files that had already been moved ' +
+				'stayed moved and were recorded, and nothing was deleted — running ' +
+				'"Migrate compendium from the pre-7.0.0 layout" again picks up where this ' +
+				'left off. Do not sync the compendium first: syncing creates the new files, ' +
+				'and the remaining moves would then have nowhere to go.',
+		});
+		this.body.createEl('p', {
+			cls: 'dse-migration__error',
+			text: error instanceof Error ? error.message : String(error),
+		});
+		this.footer([
+			{
+				label: 'Close',
+				text: 'Close',
+				onClick: () => {
+					this.answered = true;
+					this.close();
+				},
+			},
+		]);
 	}
 
 	// -- phase 3 -------------------------------------------------------------

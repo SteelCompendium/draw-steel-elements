@@ -749,6 +749,14 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                 if (report === null) { declined(); return; }
                 this.announceMigration(report);
             },
+            failed: (error) => {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error('Draw Steel Elements: the compendium migration failed:', error);
+                new Notice(
+                    `Draw Steel Elements: the compendium migration stopped on an error — ${message}. ` +
+                    'Files already moved stayed moved; run the migration command again to finish, ' +
+                    'and do not sync first.', 12000);
+            },
         }).open();
     }
 
