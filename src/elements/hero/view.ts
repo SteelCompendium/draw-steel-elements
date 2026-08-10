@@ -63,7 +63,7 @@ import type { ResolvedHeroDefinition } from './resolve';
 import { deriveHeroStats } from './deriveHeroStats';
 import type { DerivedStats } from './deriveHeroStats';
 import { HeroModel } from './model';
-import type { Condition, HeroStamina } from './model';
+import type { Condition } from './model';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
 // Matches TYPE_ADAPTERS' bare-feature scope (typeAdapters.ts) — abilities[] entries are
@@ -449,12 +449,6 @@ export class HeroSheetView extends ElementView<HeroModel> {
 			this.refreshStaminaRegion(model);
 			void this.persist();
 		});
-	}
-
-	private applyStaminaChange(patch: Partial<HeroStamina>): void {
-		Object.assign(this.model.state.stamina, patch);
-		this.refreshStaminaRegion(this.model);
-		void this.persist();
 	}
 
 	/** Targeted refresh (F1 §6): the bar/stepper/recoveries badge, PLUS the conditions

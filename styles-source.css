@@ -4504,6 +4504,36 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    crest.ts) — nothing hardcodes a face of its own, so these two rules move all
    of them. SCREEN-ONLY: print keeps --dse-metal-line (= `none` there), so
    *--steel-print.png is frozen (SC-4), and Legacy hides the crest outright. */
+/*  SC-132 final round — Scott, reviewing the light scheme: "the top-border of the crest
+    in light-theme doesnt appear to be the right color?" He is right, and the cause is not
+    a colour at all: it is `--dse-bevel`, the CARD lip, painted inside a shape that is not
+    a card.
+
+    MEASURED down the crest's centre column, before this rule (identical on the stamina
+    cluster and on the established ability-card crest, so it is the shared treatment, not
+    something SC-132 introduced):
+
+      dark   y0 rgb(228,231,233) · y1 rgb(224,228,230) · y2+ face rgb(35,40,45)
+             → a 2px bright metal rim over a near-black face. Correct.
+      light  y0 rgb(235,236,237) · y1 rgb(151,158,163) · y2+ face rgb(238,241,241)
+             → ONE grey row, with a near-white line above it that is indistinguishable
+               from the card behind (rgb(241,241,241)). The rim has effectively vanished.
+
+    The arithmetic: the rim is the 1.5px of `--dse-metal-grad` left visible around the
+    inset face, and `--dse-bevel` in light is `inset 0 1px 0 rgba(255,255,255,0.8)` — an
+    80%-white line that eats the top 1px of that 1.5px and repaints it the colour of the
+    page. In dark the same bevel is `rgba(255,255,255,0.07)`, i.e. nothing, which is why
+    only one scheme shows the defect.
+
+    A bevel is a lit LIP on a large flat plane; a crest is a small clipped pentagon whose
+    own metal gradient already carries the light. So the crest stops taking the card's
+    bevel, in both schemes — dark loses a 7%-white line over an already-227 rim, which is
+    below the threshold of visibility, and light gets its full rim back. Fixed on
+    `.dse-crest` rather than on the stamina crest alone: two crests with different edges
+    would be a worse outcome than the bug. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest {
+	box-shadow: none;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest::before {
 	background: radial-gradient(circle at 42% 30%, #2b3137, #14181b);
 }
@@ -6608,8 +6638,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
     ANIMATED VIA THE INDEPENDENT `scale` PROPERTY, NOT `transform`. `.dse-crest__glyph`
     already owns its `transform` (SC-130's optical-centring translateY), so a transform
     keyframe would silently throw that nudge away for the whole cycle and drop the glyph
-    ~5px mid-breath. `scale` (Chromium 104, under the 106 floor) composites ON TOP of
-    that transform, so the nudge survives untouched.
+    ~5px mid-breath. `scale` (Chromium 104, under the 106 floor) is an INDEPENDENT
+    transform property, so the used transform is translate/rotate/scale composed WITH
+    `transform` and the nudge is applied rather than replaced.
+
+    Not literally "untouched", and the difference is worth stating rather than glossing:
+    scale multiplies the composed translation too, so at the 0.84 trough the -0.3em
+    (~4.8px at a 16px root) nudge becomes ~4.0px — the glyph sits ~0.8px lower at the
+    bottom of a breath than at the top. That is the coherent behaviour for something
+    shrinking toward its own centre, it is a fifth of the ~5px error the transform
+    keyframe would have caused, and it is fully recovered at the identity frame. The
+    property choice is about the nudge never being DISCARDED, not about it being
+    perfectly rigid.
 
     ACCESSIBILITY, both switches: `prefers-reduced-motion: reduce` pins it (below), and
     the plugin's own preference needs no new rule — the D4 declaration
@@ -7159,14 +7199,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
 		display: none;
 	}
-	/* The label is redundant on a rail; the state word is not, and it goes to the far end
-	   of the line so the readout and the gauge stay adjacent. */
-	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__clabel {
-		display: none;
-	}
+	/*  THE IDENTITY LANE COMES OFF THE RAIL ENTIRELY — Scott's final call: "Lets drop the
+	    winded/dying text in the rail." His reasoning, and it holds up: in a layout this
+	    dense the state is already legible from the bar's own length, its colour, and the
+	    colour of the numeral, and the ~90px the word costs is ~a third of the gauge at a
+	    300px leaf. Whole lane hidden, not just the word — a `__cid` box emptied of its
+	    only visible child would still take the flex row's gap and leave a hole where the
+	    word was. */
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cid {
-		order: 3;
-		flex: 0 1 auto;
+		display: none;
 	}
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
 		flex: 0 0 auto;
@@ -7214,14 +7255,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip[data-grp='start'] {
 		margin-left: 0.34em;
 	}
-	/*  DYING ON THE RAIL — Scott's round-3 ruling, "Y1 for the rail, Y3 for the sheet":
-	    the whole rail takes the danger hairline and the ground stays put. A ground flood
-	    is right for a standalone plate sitting alone on a page and wrong for a 60px rail
-	    in a sidebar, where a full red wash under a 10px gauge is all you can see. The
-	    state is still said three ways here: the border, the skull silhouette is gone with
-	    the crest but the WORD is not, and the numeral turns red. */
+	/*  DYING ON THE RAIL — Scott's final call, overriding his own round-3 ruling ("Y1 for
+	    the rail, Y3 for the sheet"): the rail takes the red border AND the red gradient
+	    ground, the same treatment the full layout gets. He picked it off the both-ways
+	    board, and with the state WORD now gone from the rail (above) it is also the
+	    arithmetic answer: the rail's remaining channels were down to the border and the
+	    numeral's colour — two, both hue — and the ground restores a third that survives
+	    a grayscale glance. The plate is the whole row here, so the flood lands on the
+	    enclosing region rather than on the inner cluster (which stands down to nothing on
+	    the rail). */
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(.dse-stamina__cluster[data-state='dying']) {
 		border-color: var(--dse-stamina-dying);
+		background:
+			linear-gradient(104deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0.86)),
+			var(--dse-stamina-dying);
+	}
+	body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(.dse-stamina__cluster[data-state='dying']) {
+		background:
+			linear-gradient(104deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
+			var(--dse-stamina-dying);
 	}
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(.dse-stamina__cluster[data-state='winded']) {
 		border-color: var(--dse-stamina-winded);
