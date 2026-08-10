@@ -126,7 +126,8 @@ for what needs action.
   - **The Index card preset no longer turns on multi-column layout** — the
     site treats that as a separate toggle, off in every preset. Its Density:
     Compact stays, as a deliberate plugin-only enhancement with no site
-    counterpart.
+    counterpart. It also now sets Secondary stats to Grid (centered),
+    matching the site's own Index preset.
   - **"Flat" feature style now draws a ◆ separator between features**,
     matching the site — flat with no separator between entries read as an
     unstructured run of text.

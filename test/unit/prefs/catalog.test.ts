@@ -199,6 +199,10 @@ test('preset derivation: defaults = steel; one divergence = custom; applySbPrese
 	// SC-146 fix 5: the site pins multi-column `wide` OFF in every preset — it
 	// is a standalone toggle, never a preset member (settings-panel.js:711).
 	expect(store.get('sbColumns')).toBe('single');
+	// SC-146 FIX ROUND 1, I2: the site's Index bundle sets `meta: gridc`
+	// (audit §4a), which fix round 1 restored — the pre-fix-round commit
+	// left this at 'grid'.
+	expect(store.get('sbStats')).toBe('gridc');
 	await applySbPreset(store, 'steel');
 	expect(deriveSbPreset(store)).toBe('steel');
 	expect(SB_PRESETS.steel.sbDensity).toBe('comfortable');

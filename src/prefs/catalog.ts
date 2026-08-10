@@ -350,10 +350,16 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 // is a deliberate choice, not a leftover of the sbColumns bug above (audit
 // judgment call C3, Scott-approved: "keep it... but write it down as a
 // deliberate divergence, not an accident").
+// SC-146 FIX ROUND 1, I2 — the site's own Index bundle sets `meta: gridc`
+// (audit §4a table, settings-panel.js:39). Fixes 4/5 above touched this
+// exact object but left `sbStats: 'grid'`: the plugin had no `gridc` value
+// to give it at the time (fix 3 added the mode in the SAME commit), so the
+// mismatch slipped through unflagged. Now that C1 makes gridc render
+// correctly under Steel, there is no remaining reason to diverge.
 export const SB_PRESETS = {
 	steel:      { sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'grid' },
 	sourcebook: { sbFeatureStyle: 'flat', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger' },
-	index:      { sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'single', sbStats: 'grid' },
+	index:      { sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'single', sbStats: 'gridc' },
 } as const;
 export type SbPresetId = keyof typeof SB_PRESETS;
 

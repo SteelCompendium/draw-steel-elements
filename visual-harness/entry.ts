@@ -285,6 +285,23 @@ state:
   conditions: []
 `;
 
+// SC-146 FIX ROUND 1, I3 (review's "right tier") — the review's own root-cause finding:
+// the original commit shipped a fully green battery with a Critical defect (C1, gridc
+// inverted under Steel) because NOTHING in the shot/freeze/parity/jest battery ever
+// rendered a non-default statblock pref (`ls visual-harness/shots | grep -E
+// 'featstyle|columns|stats|ledger|gridc'` returned nothing). These four re-use the
+// default statblock's own DOM (so no new content to author or freeze-collide with) and
+// add a per-block `prefs:` override map — the same reserved key
+// (src/framework/prefOverrides.ts) an author can already put in a real vault note — so
+// every combo the sweep already shoots (legacy/steel × dark/light + steel-print) now
+// exists for each of the four surfaces this fix round touched. New filenames, so they
+// are invisible to the freeze baseline by construction (sha256sum -c only checks names
+// it lists) unless deliberately widened.
+const statblockStatsLedger = `prefs:\n  sbStats: ledger\n${statblockDefault}`;
+const statblockStatsGridc = `prefs:\n  sbStats: gridc\n${statblockDefault}`;
+const statblockFeatstyleFlat = `prefs:\n  sbFeatureStyle: flat\n${statblockDefault}`;
+const statblockColumnsWide = `prefs:\n  sbColumns: wide\n${statblockDefault}`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -332,6 +349,11 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		default: statblockDefault,
 		'villain-corpus': statblockVillainCorpus,
 		'roleless-corpus': statblockRolelessCorpus,
+		// SC-146 FIX ROUND 1, I3 — see the block comment above FIXTURES.
+		'stats-ledger': statblockStatsLedger,
+		'stats-gridc': statblockStatsGridc,
+		'featstyle-flat': statblockFeatstyleFlat,
+		'columns-wide': statblockColumnsWide,
 	},
 	surges: { default: surgesDefault },
 	title: { default: titleDefault },

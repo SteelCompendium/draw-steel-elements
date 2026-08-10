@@ -1992,12 +1992,18 @@ code.dsa {
    short card's row as tall as its tallest neighbour, so a short top card left
    a ragged empty gap under it; `columns` packs each card into the next
    available column instead, no gaps. Narrow panes degrade to one column on
-   their own once no 28rem track fits — no media query needed.
+   their own once no track fits — no media query needed.
    `display: block` overrides the unconditional Steel `.dse-feature__nested`
-   flex rule below (~3576): `columns` has no effect on a flex/grid container. -- */
+   flex rule below (~3576): `columns` has no effect on a flex/grid container.
+   SC-146 FIX ROUND 1, M6 — the original `columns: 28rem` matched the site's
+   declaration LITERALLY but not in px: Obsidian's rem base is 16px (448px),
+   while the site's Material theme runs a 125% base, 20px (560px) — same
+   source line, a different real breakpoint, ~112px earlier than the site's.
+   Changed to `35rem` (35 × 16px = 560px) so the plugin's column actually
+   opens at the site's own 560px. -- */
 [data-dse-element='statblock'][data-dse-sb-columns='wide'] .dse-sb > .dse-feature__nested {
 	display: block;
-	columns: 28rem;
+	columns: 35rem;
 	column-gap: 2rem;
 }
 /* `break-inside: avoid` stops a card straddling two columns; the margin
@@ -2024,9 +2030,17 @@ code.dsa {
    block, matching the site's [data-sb-meta] scope
    (steel-statblock.css:163-195). The primary row is no longer reachable by any
    pref — the site never offers that either (audit judgment call C1). -- */
+/* SC-146 FIX ROUND 1, I1 — was `display: block`, a carry-over from this
+   selector's PRE-fix-1 life targeting `.dse-sb__items` (the primary row,
+   where collapsing to a single column was the whole point). Re-pointed to
+   `.dse-sb__grid` but not re-thought, it also collapsed the SECONDARY
+   block's two-column pairing to one full-width column per row — the site
+   keeps the grid in ledger mode and only tightens the gap
+   (steel-statblock.css:196: `[data-sb-meta="ledger"] .sb__meta { gap: 0
+   1.6rem }`). Mirrored here: the base `.dse-sb__grid` 2-col grid (~:1924)
+   survives; only the gap changes (row-gap 0, column-gap 1.6rem). */
 [data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__grid {
-	display: block;
-	padding-bottom: 0.25rem;
+	gap: 0 1.6rem;
 }
 [data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv {
 	display: flex;
@@ -2039,6 +2053,12 @@ code.dsa {
 [data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv-v {
 	font-size: var(--font-ui-medium);
 	order: 2;
+	/* SC-146 FIX ROUND 1, M3 — site: `.sb__field-v { text-align: right }`
+	   (steel-statblock.css:190). `justify-content: space-between` above
+	   already places the value on the right; without this, a value that
+	   wraps to two lines is left-ragged inside its own flex item where the
+	   site's is right-ragged. */
+	text-align: right;
 }
 [data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv-l {
 	order: 1;
@@ -2047,7 +2067,12 @@ code.dsa {
 /* SC-146 fix 3 — the site's third mode (steel-statblock.css:169-172): same
    framed cell as 'grid', but the value sits ABOVE the label and both centre.
    The base .dse-sb__kv DOM order is label-then-value (view.ts renderMeta), so
-   flex column-REVERSE flips the visual stack without touching the DOM. */
+   flex column-REVERSE flips the visual stack without touching the DOM.
+   SC-146 FIX ROUND 1: under Steel this arm is SUPERSEDED by the
+   theme-scoped restatement at ~5943 (same-specificity tie the plain Steel
+   box rule otherwise wins — C1). Still load-bearing here for Legacy and
+   print, where the Steel box rule is excluded and this base arm is the only
+   one that fires. */
 [data-dse-element='statblock'][data-dse-sb-stats='gridc'] .dse-sb__kv {
 	display: flex;
 	flex-direction: column-reverse;
@@ -3717,23 +3742,64 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
    instead — free on this class — and reuses the plugin's own halo'd-diamond
    recipe (`.dse-hr__diamond`, ~5772) rather than porting the site's
    line+dots gradient, for visual consistency with the rest of the sheet.
-   Sits on the shared boundary between two chromeless rows: flat's own
-   0.25rem top/bottom padding + zero gap leaves exactly an 8px seam — this
-   diamond's own halo diameter — so no extra spacing is added. Steel +
-   screen-only: Legacy draws no ornaments (OD-2, the accent is Steel-only)
-   and print never draws it either. */
+   Steel + screen-only: Legacy draws no ornaments (OD-2, the accent is
+   Steel-only) and print never draws it either.
+   SC-146 FIX ROUND 1, M1 — the ORIGINAL comment here claimed flat's own
+   0.25rem top/bottom padding + zero gap left "exactly an 8px seam — this
+   diamond's own halo diameter". Both halves were wrong: 8px is the core
+   square's SIDE, not the halo's diameter — the halo is an 18×18px square
+   (the 4px + 5px box-shadow rings around an 8px core), and rotated 45deg its
+   DIAGONAL (±12.73px) sits on the seam, ~25.5px total — so the opaque halo
+   painted into the neighbouring feature's own content on both sides
+   (measured across five statblock fixtures: 21.2px clearance above the
+   seam, 2.0px below). Fixed by porting the site's own spacing pair
+   (steel-statblock.css:315 — `margin-top: calc(1.25rem + -16px)` / `padding-top:
+   1.25rem`, applied to the `.sb__feat + .sb__feat` SIBLING selector, not the
+   shared per-feature rule) onto the equivalent selector below: it opens a
+   real ~20px seam only between adjacent features, leaving the FIRST feature's
+   own top padding untouched. The diamond's own `top` offset moves from 0 to
+   4px to match the site's `::after` (steel-statblock.css:334) now that its
+   containing block (this feature's own border box) starts 4px later than
+   the previous feature's bottom edge. Print-excluded like the diamond it
+   makes room for — print draws no ornament, so it keeps the tighter 8px
+   rhythm instead of paying for whitespace nothing fills. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *) {
+	margin-top: 4px;
+	padding-top: 1.25rem;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *)::after {
 	content: '';
 	position: absolute;
-	top: 0;
+	top: 4px;
 	left: 50%;
 	width: 8px;
 	height: 8px;
 	margin: -4px 0 0 -4px;
 	background-color: var(--dse-metal);
 	transform: rotate(45deg);
+	/* SC-146 FIX ROUND 1, M2 — was `var(--dse-page-bg, var(--dse-surface))`,
+	   the PAGE ground token (right for `.dse-hr__diamond`'s <hr>, which sits
+	   directly on the page). This diamond sits on `.dse-sb`'s PLATE, a
+	   gradient (--dse-card-bg), not the flat page — so its halo needs the
+	   plate's own solid mid-tone, exactly like the site's `--sb-plate-solid`
+	   (steel-statblock.css:67,74; used by every plate-mounted diamond it
+	   draws, incl. its own flat-mode separator at :334). #1e2327 below is
+	   that value's plugin twin, copied byte-for-byte from the site — the two
+	   card gradients it stands in for are themselves byte-identical (~:3463
+	   dark vs. steel-redesign.css:20). A RAW literal, not a --dse-* token: the
+	   D3 token map (test/dom/framework/theme-steel.test.ts) enumerates the
+	   shared token union exhaustively, and this is a one-off halo colour with
+	   exactly one consumer — same precedent as .dse-sb__chars's own raw-rgba
+	   gradient a few hundred lines below, which documents the same call. The
+	   light twin is the body.theme-light override arm right after this one. */
 	box-shadow:
-		0 0 0 4px var(--dse-page-bg, var(--dse-surface)),
+		0 0 0 4px #1e2327,
+		0 0 0 5px var(--dse-metal-faint);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *)::after {
+	/* Site steel-statblock.css:74. */
+	box-shadow:
+		0 0 0 4px #f4f6f6,
 		0 0 0 5px var(--dse-metal-faint);
 }
 
@@ -5935,11 +6001,33 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv
 	content: '';
 }
 
+/* SC-146 FIX ROUND 1, C1 (Critical) — the base gridc arm (~:2051,
+   `[data-dse-element='statblock'][data-dse-sb-stats='gridc'] .dse-sb__kv`,
+   unscoped so Legacy/print get it) and the plain Steel box rule above
+   (.dse-sb__kv, ~:5906, `flex-direction: column`) are BOTH (0,3,0) — on a
+   tie the LATER rule in source order wins, and the Steel box rule sits
+   ~3,850 lines after the base gridc arm, so under Steel `column-reverse`
+   never applied: gridc silently degraded to "grid, but centred"
+   (label-over-value — the INVERSE of the site). Re-declared here,
+   attribute-qualified to (0,5,0) the same way the ledger Steel-reset arm
+   below does, so it wins on specificity regardless of source order, in both
+   colour schemes. Also folds in the site's own `justify-content: center` +
+   `min-height: 3.3rem` (steel-statblock.css:168-172, M4) — the unscoped base
+   arm never carried either, so a gridc cell used to size to its own content;
+   now a row of cells reads as an even rail regardless of value length. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-stats='gridc'] .dse-sb__kv {
+	flex-direction: column-reverse;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	gap: 0.1rem;
+	min-height: 3.3rem;
+}
 /* SC-146 fix 3, Steel arm — gridc bolds + colours the value over the muted
    small-caps label (site: .sb__field-v { font-weight:700; color:
-   var(--sc-steel-lighter) }, steel-statblock.css:172). Layout itself
-   (column-reverse/center) is the base rule above; the box above is shared
-   with 'grid' unchanged. */
+   var(--sc-steel-lighter) }, steel-statblock.css:172). The box
+   (border/bg/radius) is shared with 'grid' unchanged; the layout override
+   that makes this arm's DOM order actually read value-over-label is above. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-stats='gridc'] .dse-sb__kv-v {
 	font-weight: bold;
 	color: var(--dse-heading);
@@ -5963,6 +6051,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv
 	background: transparent;
 	padding: 0.4rem 0.1rem;
 	border-bottom: 1px solid var(--dse-metal-faint);
+}
+/* SC-146 FIX ROUND 1, I1 companion — the plain Steel `.dse-sb__grid { gap:
+   0.5rem }` rule (~:5903) is (0,3,0), the SAME specificity as the base
+   ledger `.dse-sb__grid` gap arm above (~:2027) — and it sits later in the
+   file, so under Steel it would silently re-widen the ledger gap back to
+   0.5rem/0.5rem, exactly the same tie C1 lost. Attribute-qualified to
+   (0,4,0) so it wins regardless of source order. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__grid {
+	gap: 0 1.6rem;
 }
 
 /* -- Boxed characteristics row: the site's .sb__chars gradient-bordered
