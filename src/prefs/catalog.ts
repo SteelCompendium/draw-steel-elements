@@ -327,8 +327,15 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 			help: 'Layout of the Distance/Target rail on ability cards. "Grid" — the default — keeps today\'s two boxed cells. Applies to every ability card (statblock, featureblock and standalone) under the Steel theme.',
 		},
 	}),
+	// —— The three CONDITIONAL-DOM keys (perBlock: false). statblock/view.ts reads them
+	// at BUILD time — charsAreSplit() picks the merged "Might +2" text node vs the
+	// three-part split, renderFeatures() picks inline vs one collapsible band — so they
+	// are the only presentation prefs on this element that re-render instead of
+	// reflowing. prefOverrides.ts runs after the mount and re-stamps the ATTRIBUTE only,
+	// which would dress the global shape in local attributes (measured: "+2Might"), so
+	// a per-block `prefs:` map warns and ignores them. Global-only, deliberately. ——
 	d({
-		key: 'sbCharLine', default: 'one', attr: 'sb-charline',
+		key: 'sbCharLine', default: 'one', attr: 'sb-charline', perBlock: false,
 		ui: {
 			group: 'Statblock display', inPreset: true, advanced: true,
 			label: 'Characteristics', control: 'select',
@@ -340,7 +347,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 	d({
-		key: 'sbCharBox', default: 'off', attr: 'sb-charbox',
+		key: 'sbCharBox', default: 'off', attr: 'sb-charbox', perBlock: false,
 		ui: {
 			group: 'Statblock display', inPreset: true, advanced: true,
 			label: 'Boxed first letter', control: 'select',
@@ -353,7 +360,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 	d({
-		key: 'sbVillain', default: 'inline', attr: 'sb-villain',
+		key: 'sbVillain', default: 'inline', attr: 'sb-villain', perBlock: false,
 		ui: {
 			group: 'Statblock display', inPreset: true, advanced: true,
 			label: 'Villain actions', control: 'select',

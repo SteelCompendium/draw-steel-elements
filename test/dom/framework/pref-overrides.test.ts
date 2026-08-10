@@ -181,6 +181,132 @@ describe('per-block `prefs:` override map (D4 §1.3/§1.4, OD-D4-2/3a)', () => {
 		}
 	});
 
+	// —— SC-123 fix round, review M-1: CONDITIONAL-DOM keys are global-only ——————————
+	//
+	// The three keys statblock/view.ts reads at BUILD time (sbCharLine/sbCharBox choose
+	// the merged "Might +2" text node vs the three-part split; sbVillain chooses inline
+	// vs one collapsible band) carry `perBlock: false`. Honoring a per-block override
+	// would re-stamp the ATTRIBUTE onto a root whose DOM was already built from the
+	// GLOBAL value — measured as the corrupt `"+2Might"` cell (value and word run
+	// together, no box, no layout) in the direction below, and as a silent no-op with
+	// the band still standing in the sbVillain mirror. Both directions of both keys are
+	// pinned here so a future "just let it through" cannot land quietly.
+	// Characteristics are TOP-LEVEL scalars on the statblock model (view.ts renderChars
+	// reads model.statblock.characteristics, which the SDK derives from these), and the
+	// villain feature is the CORPUS shape — `cost: Villain Action N` + the lone-dash
+	// usage, no ability_type — the same one test/fixtures/statblock/villain-corpus.yaml
+	// carries and the only shape steel-etl actually emits (SC-102).
+	const CHARS = `type: statblock
+name: Bare Creature
+stamina: "10"
+might: 2
+agility: 0
+reason: 0
+intuition: 0
+presence: 0
+`;
+	const VILLAIN_FEATURES = `${CHARS}features:
+  - type: feature
+    feature_type: ability
+    name: Ordinary Trait
+    effects:
+      - effect: Something passive.
+  - type: feature
+    feature_type: ability
+    name: Shoot!
+    cost: Villain Action 1
+    usage: '-'
+    effects:
+      - effect: The villain acts.
+`;
+
+	test.each([
+		['sbCharLine', 'sb-charline', 'two', 'one'],
+		['sbCharLine', 'sb-charline', 'one', 'two'],
+		['sbCharBox', 'sb-charbox', 'on', 'off'],
+		['sbCharBox', 'sb-charbox', 'off', 'on'],
+		['sbVillain', 'sb-villain', 'banded', 'inline'],
+		['sbVillain', 'sb-villain', 'inline', 'banded'],
+	])(
+		'M-1: a per-block prefs: override of the conditional-DOM key %s (global %s → block %s) warns, is ignored, and leaves the root on the GLOBAL value',
+		async (key, attr, globalValue, blockValue) => {
+			const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+			try {
+				const deps = makeDeps();
+				await deps.prefs.set(key as any, globalValue as any);
+				const pipeline = new ElementPipeline(deps);
+				const host = makeHost('ds-sb');
+
+				await pipeline.run(statblockElement, `prefs:\n  ${key}: ${blockValue}\n${VILLAIN_FEATURES}`, host);
+
+				const root = host.containerEl.firstElementChild as HTMLElement;
+				// The block still renders (warn-and-ignore, never an error card)…
+				expect(root.querySelector('.dse-error-card')).toBeNull();
+				// …the author is told why…
+				expect(warn).toHaveBeenCalledWith(expect.stringContaining(`"${key}" cannot be set per block`));
+				// …and the attribute still carries the GLOBAL value, so it agrees with the
+				// DOM the view actually built.
+				expect(root.getAttribute(`data-dse-${attr}`)).toBe(globalValue);
+			} finally {
+				warn.mockRestore();
+			}
+		},
+	);
+
+	test('M-1: the ignored override leaves DOM and attribute AGREEING — the "+2Might" shape is unreachable', async () => {
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const deps = makeDeps();
+			await deps.prefs.set('sbCharLine', 'two'); // global builds the SPLIT DOM
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost('ds-sb');
+
+			await pipeline.run(statblockElement, `prefs:\n  sbCharLine: one\n${CHARS}`, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			const cell = root.querySelector('.dse-sb__char') as HTMLElement;
+			// Split DOM (the global's shape), and the attribute agrees with it — the
+			// corrupt pairing was split DOM under data-dse-sb-charline="one", where no
+			// layout arm matches and the spans collapse to "+2Might".
+			expect(cell.querySelector('.dse-sb__char-v')).not.toBeNull();
+			expect(cell.querySelector('.dse-sb__char-l')).not.toBeNull();
+			expect(root.getAttribute('data-dse-sb-charline')).toBe('two');
+			expect(cell.textContent).toBe('M+2Might'); // box, value, label — laid out by the 'two' arm
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test('M-1: the sbVillain mirror — a block that asks for inline under a banded global keeps the band, and says so', async () => {
+		const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const deps = makeDeps();
+			await deps.prefs.set('sbVillain', 'banded');
+			const pipeline = new ElementPipeline(deps);
+			const host = makeHost('ds-sb');
+
+			await pipeline.run(statblockElement, `prefs:\n  sbVillain: inline\n${VILLAIN_FEATURES}`, host);
+
+			const root = host.containerEl.firstElementChild as HTMLElement;
+			// The band is still there (it always was — that was the silent part) …
+			expect(root.querySelector('.dse-sb__band--villain')).not.toBeNull();
+			// … but it is no longer silent, and the attribute no longer lies about it.
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining('"sbVillain" cannot be set per block'));
+			expect(root.getAttribute('data-dse-sb-villain')).toBe('banded');
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test('M-1 scope: the guard is exactly the three conditional-DOM keys — every other attr-bearing pref is still overridable', () => {
+		const rejected = DSE_PREF_DESCRIPTORS.filter((d) => d.perBlock === false).map((d) => d.key);
+		expect(rejected.sort()).toEqual(['sbCharBox', 'sbCharLine', 'sbVillain']);
+		// …and none of them lost its global reach: all three still reflect an attribute.
+		for (const key of rejected) {
+			expect(DSE_PREF_DESCRIPTORS.find((d) => d.key === key)!.attr).toBeTruthy();
+		}
+	});
+
 	test('the prefs: key never reaches schema validation or the model — a schema-validated block (skills, unevaluatedProperties: false) renders with no error card even though its schema does not declare the key', async () => {
 		const deps = makeDeps();
 		const pipeline = new ElementPipeline(deps);

@@ -271,11 +271,17 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 	 *
 	 * Consequence worth knowing: because the SHAPE (not just the styling) depends on
 	 * these two prefs, they re-render rather than reflow — the constructor subscribes
-	 * both keys to a remount, the same mechanism D5's rolling prefs use. A per-block
-	 * `prefs:` override still only re-stamps the attribute (prefOverrides.ts is
-	 * attribute-level by design), so a block that pins `sbCharLine` locally gets the
-	 * global shape with local attributes; the layout arms are written so that pairing
-	 * degrades to the default look rather than to a broken one. */
+	 * both keys to a remount, the same mechanism D5's rolling prefs use. And they are
+	 * GLOBAL-ONLY: both descriptors carry `perBlock: false`, so a per-block `prefs:`
+	 * map warns and ignores them (`prefOverrides.ts`). That is not squeamishness —
+	 * prefOverrides runs after this view has mounted and re-stamps the ATTRIBUTE only,
+	 * so honouring the override would pair the global DOM shape with a local attribute.
+	 * Measured before the guard (SC-123 review M-1): global `two` + block `one`
+	 * rendered the literal `"+2Might"` — value and word concatenated, no box, no
+	 * layout, because `one`/`off` is the default pair and by the sheet's own convention
+	 * no selector names it, so the split spans fall through to bare inline boxes. An
+	 * earlier revision of this comment claimed that pairing "degrades to the default
+	 * look"; it does not, and cannot. */
 	private renderChars(card: HTMLElement, model: StatblockConfig): void {
 		const chars = model.statblock.characteristics;
 		const row = card.createDiv({ cls: 'dse-sb__chars' });
@@ -315,7 +321,11 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 	 *  `<details>` with a crest head + chevron over a body list). At the default
 	 *  'inline' the emitted DOM is exactly what it always was — a single
 	 *  renderFeatureList over every feature in source order — which is what keeps
-	 *  `statblock-villain-corpus--legacy-*.png` byte-identical. Classification is
+	 *  `statblock-villain-corpus--legacy-*.png` byte-identical. Conditional DOM, so
+	 *  the descriptor carries `perBlock: false` like the two characteristics keys:
+	 *  a per-block override could only re-stamp the attribute after this ran, which
+	 *  for `banded` → `inline` was a silent no-op with the band still standing
+	 *  (SC-123 review M-1). Classification is
 	 *  `actionTypeOf`, the SAME predicate that draws the villain crest and accent
 	 *  (SC-102), so a card can never band a feature it wouldn't also mark. */
 	private renderFeatures(

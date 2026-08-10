@@ -96,6 +96,64 @@ test('SC-123: every new pref hook keys off a ROOT attribute too, one non-default
 	expect(sheet).not.toMatch(/data-dse-sb-villain=/);
 });
 
+// —— SC-123 fix round pins ————————————————————————————————————————————————————————
+//
+// Three CSS-level regressions the review found, each cheap to re-introduce and
+// invisible in a screenshot of the default state, so each gets a grep-pin here.
+
+test('M-2: the kwUsage/distTarget mode arms carry into PRINT (no :not([data-dse-print]) on any of them)', () => {
+	// The site keeps every `.sb__field` layout mode on paper and strips only backgrounds
+	// (steel-statblock.css:654). The first cut screen-scoped all seven of these arms, so
+	// two of the five statblock settings silently disagreed with their own printout while
+	// the other three (charline/charbox/villain, theme-agnostic) carried through.
+	const modeArms = sheet
+		.split('\n')
+		.filter((line) => /\[data-dse-(kwusage|disttarget)='/.test(line));
+	expect(modeArms.length).toBeGreaterThan(0);
+	// The ONLY arms allowed to stay screen-scoped are the material refinements: the
+	// translucent wash and the metal hairline colour, which print deliberately drops.
+	const screenScoped = modeArms.filter((line) => line.includes(':not([data-dse-print="on"])'));
+	for (const line of screenScoped) {
+		expect(line).toMatch(/\[data-dse-(kwusage|disttarget)='(grid|ledger)'\]/);
+	}
+	// …and every mode arm still names a NON-DEFAULT value, which is why none of them can
+	// be reached by a frozen camera (all of which shoot defaults) even in print.
+	for (const line of modeArms) {
+		expect(line).not.toMatch(/data-dse-kwusage='crest'/);
+		expect(line).not.toMatch(/data-dse-disttarget='grid'/);
+	}
+});
+
+test("M-3: every new border declaration falls back off the Steel-only tokens (Legacy paints them all)", () => {
+	// --dse-rule is `var(--icon-color)` declared on <html>, where Obsidian has not defined
+	// --icon-color — guaranteed-invalid, which makes `1px solid var(--dse-rule)` invalid
+	// at computed-value time and collapses the border to 0px/none outside Steel. Worst
+	// case measured: `sbCharBox: on` under Legacy rendered a bare "M +2" — no box, and
+	// the spelled-out word display:none'd by the same arm.
+	const declarations = [
+		/\.dse-sb__char-box \{[^}]*border: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/s,
+		/\.dse-sb__band \{[^}]*border: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/s,
+		/\[data-dse-fb-stats='ledger'\] \.dse-fb__stats > \.dse-fb__stat \{[^}]*border-bottom: 1px solid var\(--dse-rule, var\(--background-modifier-border\)\)/s,
+	];
+	for (const re of declarations) expect(sheet).toMatch(re);
+	// …and Steel screen still re-colours the boxed letter to the forged metal line, so
+	// the fallback costs the Steel look nothing.
+	expect(sheet).toMatch(
+		/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-sb__char-box \{[^}]*border-color: var\(--dse-metal-line\)/s,
+	);
+});
+
+test('L-3: the kwUsage colon reset is scoped to the CHIP band, never the distance/target rail', () => {
+	// Unqualified, `[data-dse-kwusage='grid'] .dse-feature__meta-key::after` also cleared
+	// the rail's key punctuation — the KEYWORD preference silently governing the DISTANCE
+	// rail. Inert today, but a cross-pref coupling one rule away from mattering.
+	const colonResets = sheet
+		.split('\n')
+		.filter((line) => /data-dse-kwusage.*\.dse-feature__meta-key::after/.test(line));
+	expect(colonResets.length).toBe(2); // grid + ledger
+	for (const line of colonResets) expect(line).toContain('.dse-feature__meta-chips ');
+});
+
 test('defaults are CSS no-ops: no selector exists for any catalog default value (legacy fidelity)', () => {
 	expect(sheet).not.toMatch(/data-dse-density='comfortable'/);
 	expect(sheet).not.toMatch(/data-dse-sb-featstyle='card'/);

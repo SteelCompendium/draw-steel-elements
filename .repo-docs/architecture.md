@@ -367,16 +367,22 @@ hand-wiring four call sites.
   into one kit `collapsible()` band). Their DEFAULT values emit exactly the DOM the element
   emitted before, which is what keeps the frozen legacy/print shots byte-identical — a
   plain always-on split was tried in SC-10 Task 4 and reverted because two inline spans
-  moved Chromium's sub-pixel text shaping. Consequences, all in
-  `src/elements/statblock/view.ts`: the view subscribes those three keys to a remount (the
-  D5 rolling-pref mechanism), and a per-block `prefs:` override still only re-stamps the
-  attribute, so a locally-pinned shape key gets the global DOM with local attributes.
-  Adding another conditional-DOM pref means repeating exactly that trio of moves.
+  moved Chromium's sub-pixel text shaping. Consequences: the view subscribes those three
+  keys to a remount (the D5 rolling-pref mechanism, `src/elements/statblock/view.ts`), and
+  all three descriptors carry **`perBlock: false`** — a per-block `prefs:` map warns and
+  ignores them (SC-123 fix round, review M-1). The rejection is structural, not stylistic:
+  `applyPrefOverrides` runs after the view mounted and re-stamps the ATTRIBUTE only, so an
+  honoured override would dress the global DOM shape in a local attribute — measured as a
+  characteristics cell reading `"+2Might"` (global `two`, block `one`) and, for
+  `sbVillain`, a silent no-op with the band still built. Adding another conditional-DOM
+  pref means repeating exactly that trio of moves: build the old DOM at the default value,
+  subscribe the key to a remount, mark it `perBlock: false`.
 - **Per-block `prefs:` overrides** (`framework/prefOverrides.ts`): a reserved `prefs:`
   map, presentation keys only. `extractPrefOverrides` pops it off the parsed YAML BEFORE
-  schema validation and `def.parse`; unknown or behavioral keys (no `attr` — those use the
-  block's own `collapsible:`/`collapse_default:`, see `resolveCollapsePrefs`) are dropped
-  with a `console.warn`, not an error card. `applyPrefOverrides` pins the override AFTER
+  schema validation and `def.parse`; three classes are dropped with a `console.warn`, not
+  an error card — unknown keys, attr-less keys (behavioral, or SC-112's css-bearing
+  typography; those use the block's own `collapsible:`/`collapse_default:`, see
+  `resolveCollapsePrefs`), and `perBlock: false` keys (the conditional-DOM trio above). `applyPrefOverrides` pins the override AFTER
   `reflect()` runs, so it wins on any later global change (listener-order precedence, no
   F1 signature change). For `shape: "persisted"` elements, `withPrefOverrides` wraps
   `def.serialize` to re-emit the `prefs:` map on every write-back — content-preserving but

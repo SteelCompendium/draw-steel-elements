@@ -7,6 +7,14 @@
 // own per-block spelling (collapsible:/collapse_default:) and are warned+ignored
 // here, as are unknown keys (console.warn, NOT an error card — the block renders).
 //
+// THREE rejection classes, all warn-and-ignore (SC-123 fix round, review M-1 added
+// the third): unknown keys; attr-less keys (behavioral, or SC-112's css-bearing
+// typography — global-only by design); and `perBlock: false` keys, the CONDITIONAL-DOM
+// preferences whose value a view reads at BUILD time. The last one is a hard structural
+// limit, not a policy choice: this module runs AFTER the view mounted and re-stamps an
+// ATTRIBUTE only, so an accepted override there would pair the global DOM shape with a
+// local attribute — measured as the corrupt `"+2Might"` characteristics cell.
+//
 // Override-wins mechanics (OD-D4-3a): applyPrefOverrides runs AFTER the pipeline's
 // cx.prefs.reflect(root, view), so its subscribe() callbacks register after
 // reflect's. On any global change to a pinned key, reflect stamps the global value
@@ -57,6 +65,20 @@ export function extractPrefOverrides(
 			);
 			continue;
 		}
+		if (descriptor.perBlock === false) {
+			// SC-123 fix round (review M-1). CONDITIONAL-DOM keys (sbCharLine / sbCharBox /
+			// sbVillain) are read by the view at BUILD time to choose which DOM to emit; this
+			// module runs AFTER the view mounted and only re-stamps an attribute, so honoring
+			// the override here would dress the GLOBAL shape in LOCAL attributes. Measured
+			// before this guard: global `two` + block `one` rendered "+2Might" — the value and
+			// the word run together, no box, no layout — and the `sbVillain` mirror was a
+			// silent no-op with the band still built. Rejecting is the honest answer, and it
+			// reports to the AUTHOR rather than deforming the page for the reader.
+			console.warn(
+				`Draw Steel Elements: "${key}" cannot be set per block — it changes the rendered structure, not just its styling, so it is a global preference only (Settings → Draw Steel Elements). Ignoring it for this block.`,
+			);
+			continue;
+		}
 		out[key] = value;
 	}
 	return Object.keys(out).length > 0 ? out : undefined;
@@ -77,7 +99,9 @@ export function applyPrefOverrides(
 	const byKey = new Map(prefs.descriptors().map((d) => [d.key as string, d]));
 	for (const [key, value] of Object.entries(overrides)) {
 		const descriptor = byKey.get(key);
-		if (!descriptor?.attr) continue; // extractPrefOverrides already filtered; belt
+		// extractPrefOverrides already filtered both of these; belt (SC-123 M-1 added the
+		// second one — a conditional-DOM key must never reach a root, from any caller).
+		if (!descriptor?.attr || descriptor.perBlock === false) continue;
 		const attrName = `data-dse-${descriptor.attr}`;
 		const pin = (): void => root.setAttribute(attrName, String(value));
 		pin();

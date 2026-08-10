@@ -42,6 +42,20 @@ export interface PrefDescriptor<K extends keyof DsePrefs = keyof DsePrefs> {
 		varName: string;
 		toCss(value: DsePrefs[K]): string | null;
 	};
+	/**
+	 * SC-123 fix round (review M-1): opt OUT of the per-block `prefs:` override map.
+	 * Defaults to overridable (undefined ⇔ true) — the only keys that set `false` are
+	 * the CONDITIONAL-DOM ones, whose value the view reads at BUILD time to decide what
+	 * DOM to emit (`statblock/view.ts` `charsAreSplit()` / `renderFeatures`).
+	 * `applyPrefOverrides` runs after the view has already mounted and only re-stamps an
+	 * attribute, so a per-block override of such a key would pair the GLOBAL shape with
+	 * LOCAL attributes — measured output for global `sbCharLine: two` + block `one` was
+	 * the literal string `"+2Might"` (value and word concatenated, no box, no layout),
+	 * and `sbVillain` was a silent no-op. Rejecting the key is honest and puts the
+	 * limitation in front of the AUTHOR (a console.warn) instead of the reader.
+	 * A key marked `perBlock: false` is still fully settable GLOBALLY.
+	 */
+	perBlock?: boolean;
 	/** Settings-tab metadata (label, control type, options) — shape finalized by D4. */
 	ui?: unknown;
 }

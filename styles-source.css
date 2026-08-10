@@ -2102,7 +2102,20 @@ code.dsa {
 	width: 1.45rem;
 	height: 1.45rem;
 	place-items: center;
-	border: 1px solid var(--dse-metal-line, var(--dse-rule));
+	/* TOKEN FALLBACK CHAIN, and why it is not simply `var(--dse-metal-line)` (review
+	   M-3). Outside Steel screen the ornament tokens are deliberately inert: Legacy and
+	   print both declare `--dse-metal-line: none`, and Legacy's `--dse-rule` is
+	   `var(--icon-color)` declared on <html>, where Obsidian has not defined
+	   --icon-color — so it is guaranteed-invalid document-wide. `1px solid none` is
+	   invalid at computed-value time, which silently collapses the whole shorthand to a
+	   0px `none` border. That mattered here more than anywhere: at `sbCharBox: on` the
+	   arm below ALSO drops the spelled-out word, so a Legacy user turning on "Boxed
+	   first letter → Letter only" got a bare "M +2" — no box, and the word it was
+	   allowed to replace gone with it. A guaranteed-invalid custom property DOES trigger
+	   the var() fallback (same mechanism the ornate-rule halo relies on, ~6300), so
+	   chaining to Obsidian's own --background-modifier-border makes every scheme paint
+	   something; Steel screen re-colours it to the metal line below. */
+	border: 1px solid var(--dse-rule, var(--background-modifier-border));
 	border-radius: 4px;
 	font-family: var(--font-monospace);
 	font-size: 0.82rem;
@@ -2170,6 +2183,11 @@ code.dsa {
 }
 [data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-v {
 	order: 3;
+	/* the site's own one-line numeral size (`[data-sb-charline="one"] .sb__char-v
+	   { font-size: 1.25rem }`, steel-statblock.css:231) — review L-4. Without it the
+	   value dropped to plain 16px body size on one line while the two-line arm bumped
+	   to 28px, so the Sourcebook preset's rail read flat next to the site's. */
+	font-size: 1.25rem;
 }
 /* the box itself, revealed by either boxed value */
 [data-dse-element='statblock'][data-dse-sb-charbox='on'] .dse-sb__char-box,
@@ -2194,7 +2212,10 @@ code.dsa {
    in the head, not by a spine. -- */
 .dse-sb__band {
 	margin-top: 0.65rem;
-	border: 1px solid var(--dse-rule);
+	/* fallback chain per review M-3 — see .dse-sb__char-box above: --dse-rule is
+	   guaranteed-invalid under Legacy, so an unqualified var() left the band unframed
+	   there. Steel screen re-colours to --dse-metal-line below. */
+	border: 1px solid var(--dse-rule, var(--background-modifier-border));
 	border-radius: var(--dse-radius);
 	overflow: hidden;
 }
@@ -2292,7 +2313,9 @@ code.dsa {
 	gap: 1em;
 	text-align: left;
 	justify-self: stretch;
-	border-bottom: 1px solid var(--dse-rule);
+	/* fallback chain per review M-3 — see .dse-sb__char-box: without it the mode named
+	   "Ledger" drew no hairline at all under Legacy. */
+	border-bottom: 1px solid var(--dse-rule, var(--background-modifier-border));
 	padding: 0.15rem 0;
 }
 /* Legacy "Stamina: 30" wording: bold key + the CSS-owned colon (never baked into
@@ -5366,7 +5389,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
    ══════════════════════════════════════════════════════════════════
    The site offers the SAME three-way cell vocabulary over both meta bands
    (steel-statblock.css:347-389: `data-sb-kwusage` = crest|text|grid|ledger,
-   `data-sb-disttarget` = text|grid|ledger, all four/three sharing one `.sb__field`
+   `data-sb-disttarget` = grid|text|ledger, all four/three sharing one `.sb__field`
    recipe). The plugin's two bands are the SC-121 B-1 recomposition above —
    `.dse-feature__meta-chips` (Keywords + Type) and `.dse-feature__meta-rail`
    (Distance + Target) — so the modes are pure reflows of what is already there; no
@@ -5375,11 +5398,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
    Three things worth knowing before editing:
      · DEFAULTS ARE THE RULES ABOVE, never named here. `kwUsage: crest` is the chip
        band SC-121 shipped and `distTarget: grid` is the boxed rail SC-117/SC-121
-       tuned — i.e. the plugin's defaults are the site's *Steel Card preset* values,
-       not the site's raw defaults (the site defaults `disttarget` to `text`).
-     · SCREEN + STEEL ONLY. The whole chip/rail vocabulary these modes restyle is
-       Steel's; Legacy paints the base 2-col grid with hidden labels, where "ledger"
-       and "grid" would have nothing to mean. Print rides the base, unchanged.
+       tuned — and BOTH are the site's own SB_DEFAULTS values (settings-panel.js:
+       31-33 ships `kwusage: "crest"`, `disttarget: "grid"`). An earlier revision of
+       this comment claimed the site defaults `disttarget` to `text`; it does not,
+       and neither does its Steel Card preset — corrected in the SC-123 fix round
+       (review M-4; the error came from the SC-146 audit's S8 row).
+     · STEEL ONLY, SCREEN **AND** PRINT. The chip/rail vocabulary these modes restyle
+       is Steel's — Legacy paints the base 2-col grid with hidden labels, where
+       "ledger" and "grid" would have nothing to mean — but a layout the reader chose
+       must survive export, exactly as the site's does (the site keeps every
+       `.sb__field` mode in print and strips only backgrounds, steel-statblock.css:
+       654). So the mode arms carry NO `:not([data-dse-print="on"])`; only the
+       MATERIAL refinements (the wash, the metal hairline colour) are screen-scoped,
+       and print falls back to the neutral `--dse-rule` hairline with no wash. Every
+       selector here still names a NON-DEFAULT value, so no frozen camera — all of
+       which shoot defaults — can reach a single one of them.
+       (Before the fix round these two prefs were the only two of the seven that
+       silently vanished on paper; review M-2.)
      · The `grid` and `ledger` arms REVEAL the two chip-band labels, which the crest
        mode visually-hides (a chip is self-evident, a framed cell is not). That
        un-hide has to out-specify the hide rule above, which is why every selector
@@ -5387,14 +5422,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
        element root) instead of nesting it deeper. */
 
 /* ── kwUsage: text — one baseline row, frameless, labels stay hidden ── */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-chips {
+[data-dse-theme='steel'][data-dse-kwusage='text'] .dse-feature__meta-chips {
+	/* `display` is restated (not inherited from the Steel screen base ~5052) so the
+	   mode also composes in print, where that base does not apply and the band is
+	   otherwise the Legacy `display: contents` pass-through. Same reason for the
+	   grid/ledger bands' own `display` below. */
+	display: flex;
 	flex-wrap: nowrap;
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 1rem;
+	/* Inert on screen (the Steel meta region is `display: block` there); in print the
+	   region is still the base 2-col grid, so the band claims the whole width instead
+	   of one track. */
+	grid-column: 1 / -1;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-cell--keywords,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-cell--type {
+[data-dse-theme='steel'][data-dse-kwusage='text'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel'][data-dse-kwusage='text'] .dse-feature__meta-cell--type {
 	padding: 0;
 	border: none;
 	border-radius: 0;
@@ -5402,7 +5446,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 }
 /* the keyword run reads as prose in this mode (the site drops the chip's small-caps
    there too); the action type keeps its small-caps classifier voice */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-cell--keywords {
+[data-dse-theme='steel'][data-dse-kwusage='text'] .dse-feature__meta-cell--keywords {
 	font-size: 1em;
 	font-variant: normal;
 	text-transform: none;
@@ -5416,13 +5460,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 
 /* grid — framed cells, value over label, centered (the rail's own resting look,
    lent to the chip band) */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-chips {
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-chips {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	/* One track per CELL, not a fixed pair (review L-5): the chip band's two cells are
+	   both optional (a feature with keywords but no usage, or the `--empty` dash
+	   placeholder Steel drops outright) and a fixed `1fr 1fr` left the survivor sitting
+	   in a half-width track beside a blank one. The band never holds more than the two
+	   cells renderFeature.ts can build, so column auto-flow is exactly "as many equal
+	   columns as there are cells". */
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	gap: 0.625rem;
+	grid-column: 1 / -1;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
 	display: flex;
 	flex-direction: column-reverse;
 	align-items: center;
@@ -5438,36 +5490,44 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	padding: 0.625rem 0.9375rem;
 	min-height: 4.25rem;
 	text-align: center;
-	background: rgba(0, 0, 0, 0.2);
-	border: 1px solid var(--dse-metal-faint);
+	/* The neutral hairline is the PRINT-safe floor; Steel screen re-colours it to the
+	   metal line just below. `--dse-metal-faint` is literally `none` in print (and in
+	   Legacy), so a `1px solid var(--dse-metal-faint)` here would be invalid at
+	   computed-value time on paper and the framed mode would print unframed. */
+	border: 1px solid var(--dse-rule);
 	border-radius: var(--dse-radius);
 	font-size: 1em;
-	font-variant: normal;
-	text-transform: none;
-	letter-spacing: normal;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
+	background: rgba(0, 0, 0, 0.2);
+	border-color: var(--dse-metal-faint);
 }
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
 	background: rgba(0, 0, 0, 0.03);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords .dse-feature__meta-value,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type .dse-feature__meta-value {
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords .dse-feature__meta-value,
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-cell--type .dse-feature__meta-value {
 	font-weight: 700;
 	color: var(--dse-heading);
 	text-shadow: var(--dse-emboss);
 }
 
 /* ledger — hairline rows, label left / value right (chip band AND rail) */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-chips,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-rail {
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-chips,
+[data-dse-theme='steel'][data-dse-disttarget='ledger'] .dse-feature__meta-rail {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	/* one track per cell — see the grid arm above (review L-5) */
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	gap: 0 1.4rem;
+	grid-column: 1 / -1;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--target {
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-cell--type,
+[data-dse-theme='steel'][data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance,
+[data-dse-theme='steel'][data-dse-disttarget='ledger'] .dse-feature__meta-cell--target {
 	display: flex;
 	flex-direction: row;
 	align-items: baseline;
@@ -5482,26 +5542,41 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	text-align: left;
 	background: none;
 	border: none;
-	border-bottom: 1px solid var(--dse-metal-faint);
+	/* print-safe hairline, re-coloured for Steel screen below — see the grid arm */
+	border-bottom: 1px solid var(--dse-rule);
 	border-radius: 0;
 	font-size: 1em;
-	font-variant: normal;
-	text-transform: none;
-	letter-spacing: normal;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords .dse-feature__meta-value,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type .dse-feature__meta-value,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance .dse-feature__meta-value,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--target .dse-feature__meta-value {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--target {
+	border-bottom-color: var(--dse-metal-faint);
+}
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords .dse-feature__meta-value,
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-cell--type .dse-feature__meta-value,
+[data-dse-theme='steel'][data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance .dse-feature__meta-value,
+[data-dse-theme='steel'][data-dse-disttarget='ledger'] .dse-feature__meta-cell--target .dse-feature__meta-value {
 	text-align: right;
 }
 
+/* The keyword/type cells keep the chip band's SMALL-CAPS VOICE in grid and ledger
+   (review L-6). The first cut reset `font-variant`/`text-transform`/`letter-spacing`
+   to normal here; the site does not — its grid/ledger arms strip only the chip's
+   border, background and padding (steel-statblock.css:372-376) and leave
+   `.sc-ability__chip`'s small-caps standing, so the run reads MAGIC, RANGED, STRIKE
+   rather than Magic, Ranged, Strike. Only the `text` mode drops the voice (its own
+   arm above), which is the one place the site drops it too. */
+
 /* the two chip-band labels, revealed for the framed/hairline modes (undoing the
    visually-hidden recipe above, colon included) */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords .dse-feature__meta-key,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type .dse-feature__meta-key,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords .dse-feature__meta-key,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type .dse-feature__meta-key {
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords .dse-feature__meta-key,
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-cell--type .dse-feature__meta-key,
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords .dse-feature__meta-key,
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-cell--type .dse-feature__meta-key {
+	/* `display` restated for the print case, like the bands above: the Legacy base
+	   hides every meta key and only the Steel SCREEN layer reveals it (~5063). */
+	display: inline;
 	position: static;
 	width: auto;
 	height: auto;
@@ -5516,21 +5591,28 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	font-weight: normal;
 	color: var(--dse-fg-faint);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-key::after,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-key::after {
+/* …and their colon goes with the hiding recipe. SCOPED TO THE CHIP BAND (review
+   L-3): unqualified, this cleared the distance/target rail's colons too — the
+   KEYWORD preference silently punctuating the DISTANCE rail. Inert in practice
+   today (the rail's own key carries no colon at any setting), but a cross-pref
+   coupling waiting to be tripped by the next rule that gives it one. */
+[data-dse-theme='steel'][data-dse-kwusage='grid'] .dse-feature__meta-chips .dse-feature__meta-key::after,
+[data-dse-theme='steel'][data-dse-kwusage='ledger'] .dse-feature__meta-chips .dse-feature__meta-key::after {
 	content: "";
 }
 
 /* ── distTarget: text — the site's "Distance: Melee 2 … One enemy" line, labels
    kept inline (which value is which stops being obvious once the box is gone) ── */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-rail {
+[data-dse-theme='steel'][data-dse-disttarget='text'] .dse-feature__meta-rail {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 1rem;
+	grid-column: 1 / -1;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-cell--distance,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-cell--target {
+[data-dse-theme='steel'][data-dse-disttarget='text'] .dse-feature__meta-cell--distance,
+[data-dse-theme='steel'][data-dse-disttarget='text'] .dse-feature__meta-cell--target {
+	display: flex;
 	flex-direction: row;
 	align-items: baseline;
 	justify-content: flex-start;
@@ -5542,8 +5624,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	border-radius: 0;
 	text-align: left;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-cell--target {
+[data-dse-theme='steel'][data-dse-disttarget='text'] .dse-feature__meta-cell--target {
 	text-align: right;
+}
+/* the rail's labels are the whole point of this mode ("which one is which"), so they
+   are restated visible for print, where the Legacy base still hides every meta key */
+[data-dse-theme='steel'][data-dse-disttarget='text'] .dse-feature__meta-cell--distance .dse-feature__meta-key,
+[data-dse-theme='steel'][data-dse-disttarget='text'] .dse-feature__meta-cell--target .dse-feature__meta-key {
+	display: inline;
 }
 
 /* -- SC-10 Task 3: finish the Task-2 ◆-marked title into the site's boxed
@@ -6467,8 +6555,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 /* SC-123 — Steel dressing for the OPT-IN characteristics split (the site's
    .sb__char-v/-l/-box: a big embossed tabular numeral over a small-caps word,
    with the boxed letter picking up the same forged highlight the strip itself
-   carries). Screen-only and Steel-only, like every other rule in this section;
-   the theme-agnostic layout arms above already give Legacy a sane split. */
+   carries). Screen-only and Steel-only, like every other rule in this section.
+   Legacy's split is carried by the theme-agnostic LAYOUT arms above — and, since the
+   SC-123 fix round, by their token FALLBACK chains: the first cut of this comment
+   claimed "the layout arms already give Legacy a sane split" while the boxed letter's
+   own frame resolved to a 0px border there, which is the defect review M-3 found. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-v {
 	color: var(--dse-heading);
 	text-shadow: var(--dse-emboss);
@@ -6480,6 +6571,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 	text-shadow: none;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-box {
+	/* the forged hairline; the base rule's neutral --dse-rule chain is what Legacy and
+	   print fall back to (review M-3) */
+	border-color: var(--dse-metal-line);
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.12));
 	text-shadow: none;
 }
@@ -6512,6 +6606,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 	font-family: var(--dse-font-title, inherit);
 	text-transform: uppercase;
 	letter-spacing: 0.02em;
+	/* the site's `.sb__band-title { font-size: 1.25rem }` (steel-statblock.css:418) —
+	   review L-4; the head was inheriting 16px and reading lighter than the site's. */
+	font-size: 1.25rem;
 	color: var(--dse-heading);
 	text-shadow: var(--dse-emboss);
 }

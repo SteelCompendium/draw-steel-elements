@@ -76,7 +76,9 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
   prefs (6 font slots + text/card size scales) are css-bearing and attr-less. The settings
   tab (`src/views/SettingsTab.ts`) renders FROM the descriptors — adding a pref = adding a
   descriptor. Per-block `prefs:` YAML overrides: `src/framework/prefOverrides.ts`
-  (attr-less keys rejected — css-bearing prefs are global-only).
+  (attr-less keys rejected — css-bearing prefs are global-only; so are `perBlock: false`
+  keys, the conditional-DOM trio `sbCharLine`/`sbCharBox`/`sbVillain`, whose value the
+  statblock view reads at BUILD time — an attribute-level override there renders corrupt).
   Defaults must always reproduce the current look (legacy-fidelity bar).
 - **Rolling (D5)**: `src/framework/roll/` — pure engine (`engine.ts resolveRoll`:
   2d10/tiers/edges/banes/crit, injected `DiceSource`), lenient `parse.ts`, and the

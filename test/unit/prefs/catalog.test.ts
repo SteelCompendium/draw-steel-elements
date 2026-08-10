@@ -29,10 +29,13 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('sbDensity')).toBe('comfortable');     // statblock/view.ts static value
 	expect(store.get('sbColumns')).toBe('single');
 	expect(store.get('sbStats')).toBe('grid');
-	// SC-123. Three of these deliberately DIVERGE from the site's own defaults
-	// (the site ships disttarget=text, charline=two, villain=banded) because the bar
-	// here is "reproduce TODAY'S plugin rendering", and today's is the boxed rail, the
-	// merged "Might +2" line and un-banded villain actions. See the SB_PRESETS comment.
+	// SC-123. TWO of these deliberately DIVERGE from the site's own defaults (the site
+	// ships charline=two and villain=banded) because the bar here is "reproduce TODAY'S
+	// plugin rendering", and today's is the merged "Might +2" line and un-banded villain
+	// actions. `distTarget: grid` is NOT a divergence — the site's SB_DEFAULTS ship
+	// disttarget=grid too (settings-panel.js:31-33); the SC-146 audit's S8 row said
+	// `text` and that error propagated here, corrected in the SC-123 fix round (review
+	// M-4). See the SB_PRESETS comment.
 	expect(store.get('kwUsage')).toBe('crest');        // the SC-121 chip band
 	expect(store.get('distTarget')).toBe('grid');      // the SC-117/121 boxed rail
 	expect(store.get('sbCharLine')).toBe('one');       // the merged text node (freeze bar)

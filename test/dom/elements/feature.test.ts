@@ -854,14 +854,30 @@ describe('Plan 09 Task 5: reusable-renderer + CSS hygiene (the grammar Task 6 co
 		// …and the base rule is genuinely UNSCOPED (no theme/print qualifier of its own).
 		expect(base![0]).not.toMatch(/data-dse-(?:theme|print)/);
 
-		// Every rule that gives a band a real layout is Steel-scoped AND print-excluded.
+		// Every rule that gives a band a real layout is Steel-scoped, and it reaches the
+		// frozen cameras only if it is ALSO either print-excluded or gated on a
+		// NON-DEFAULT kwUsage/distTarget value.
+		//
+		// The second escape hatch is SC-123's (fix round, review M-2): a layout the
+		// reader chose has to survive export, exactly as the site's does — it keeps every
+		// `.sb__field` mode in print and strips only backgrounds (steel-statblock.css:654)
+		// — so the mode arms deliberately dropped `:not([data-dse-print="on"])`. That is
+		// freeze-safe by a DIFFERENT mechanism, not by weakening this one: `crest` and
+		// `grid` are the defaults, no selector may name a default value
+		// (pref-reflection.test.ts enforces that), and every frozen camera shoots
+		// defaults — so a print arm keyed on `text`/`grid`/`ledger` is unreachable by
+		// construction. The invariant this test exists for — the BASE rule stays
+		// `display: contents`, above — is untouched.
 		const bandRules = sheet.match(
 			/^[^\n{}]*\.dse-feature__meta-(?:chips|rail)[^\n{}]*\{[\s\S]*?\n\}/gm,
 		)!;
 		const layoutRules = bandRules.filter((r) => !/display:\s*contents/.test(r));
 		expect(layoutRules.length).toBeGreaterThan(0);
 		for (const rule of layoutRules) {
-			expect(rule).toMatch(/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\)/);
+			expect(rule).toMatch(/\[data-dse-theme='steel'\]/);
+			if (!/:not\(\[data-dse-print="on"\]\)/.test(rule)) {
+				expect(rule).toMatch(/\[data-dse-(?:kwusage|disttarget)='(?:text|grid|ledger)'\]/);
+			}
 		}
 	});
 
