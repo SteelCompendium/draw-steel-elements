@@ -94,15 +94,19 @@ try {
 	// INTERACTION_SHOTS), same "legal --element value, not a registered element"
 	// treatment as narrowShots.
 	const interactionShots = manifest.interactionShots ?? [];
+	// SC-123: preference-variant shots (manifest.prefShots — entry.ts PREF_SHOTS), same
+	// treatment as the two lists above.
+	const prefShots = manifest.prefShots ?? [];
 	if (args.element) elements = elements.filter((e) => e.id === args.element);
-	// A narrow-shot/interaction-shot id (e.g. `perk-narrow`, `negotiation-pr-checked`)
-	// is a legal --element value even though it is not a registered element — it
-	// selects only that capture below.
+	// A narrow-shot/interaction-shot/pref-shot id (e.g. `perk-narrow`,
+	// `negotiation-pr-checked`, `statblock-charline-two`) is a legal --element value
+	// even though it is not a registered element — it selects only that capture below.
 	if (
 		args.element &&
 		elements.length === 0 &&
 		!narrowShots.some((n) => n.id === args.element) &&
-		!interactionShots.some((n) => n.id === args.element)
+		!interactionShots.some((n) => n.id === args.element) &&
+		!prefShots.some((n) => n.id === args.element)
 	) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -167,6 +171,29 @@ try {
 			if (args.readonly) params.readonly = '1';
 			const suffix = args.readonly ? '--readonly' : '';
 			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { click: n.click });
+		}
+	}
+	// SC-123: preference-variant shots, declared by the page (manifest.prefShots —
+	// entry.ts PREF_SHOTS). Same combo matrix and --element filtering as the lists
+	// above; the values are applied to the harness PreferenceStore before mount, so a
+	// pref that changes DOM shape is captured as it is really built.
+	for (const n of prefShots) {
+		if (args.element && args.element !== n.element && args.element !== n.id) continue;
+		const prefParam = Object.entries(n.prefs)
+			.map(([k, v]) => `${k}:${v}`)
+			.join(',');
+		for (const c of combos) {
+			const params = {
+				element: n.element,
+				fixture: n.fixture,
+				theme: c.theme,
+				bg: c.bg,
+				prefs: prefParam,
+			};
+			if (c.print) params.print = '1';
+			if (args.readonly) params.readonly = '1';
+			const suffix = args.readonly ? '--readonly' : '';
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
 		}
 	}
 	if (!args.element) {

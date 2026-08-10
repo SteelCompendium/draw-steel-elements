@@ -121,6 +121,45 @@ features:
       - effect: Allies within 2 squares gain an edge.
 `;
 
+// SC-123: a featureblock carrying the LOOSE-STAT HEADER (.dse-fb__stats). Neither
+// shipped fixture has one — the angulotl example declares no stamina/size/stats and
+// the advancement variant deliberately carries none — so the region the new
+// `fbStats` preference reflows had never been photographed at all, in any theme.
+// Shape copied verbatim from test/dom/elements/featureblock.test.ts's proven
+// WITH_STATS constant (the same shape SettingsPreview's featureblock uses), not
+// invented here. Harness-local, like featureblockAdvancement above: it is a
+// coverage variant, not the single-sourced authoring example (D9).
+const featureblockStats = `type: featureblock
+featureblock_type: Fixture
+name: Bloodstone of Yendral
+level: 2
+ev: "6"
+stamina: "30"
+size: "2"
+stats:
+  - name: Speed
+    value: "0"
+  - name: Stability
+    value: "3"
+  - name: Free Strike
+    value: "2"
+features:
+  - type: feature
+    feature_type: trait
+    name: Hungering Pulse
+    icon: ⭐️
+    effects:
+      - effect: Each enemy within 2 squares takes 2 corruption damage.
+  - type: feature
+    feature_type: trait
+    name: Blood Debt
+    icon: ❇️
+    cost: 3 Malice
+    effects:
+      - effect: The bloodstone drains one adjacent creature, which takes 5 corruption
+          damage and is weakened (save ends).
+`;
+
 // SC-121 Batch 4 / batch-1 review M-4: no fixture anywhere renders a CHECKED checkbox, so
 // Batch 1's themed `input[type=checkbox]:checked` rule (accent fill + accent border) was
 // asserted only in rule text. This variant of the negotiation fixture pre-checks state in
@@ -314,7 +353,11 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	culture: { default: cultureDefault },
 	encounter: { default: encounterDefault },
 	feature: { default: featureDefault, spend: featureSpend, villain: featureVillain },
-	featureblock: { default: featureblockDefault, advancement: featureblockAdvancement },
+	featureblock: {
+		default: featureblockDefault,
+		advancement: featureblockAdvancement,
+		stats: featureblockStats,
+	},
 	hero: { default: heroDefault, sparse: heroSparse },
 	'hero-tokens': { default: tokensDefault },
 	'heroic-resource': { default: resourceDefault },
@@ -371,6 +414,24 @@ export interface HarnessParams {
 	gallery: boolean;
 	/** SC-121 Batch 4: constrain #mount to this many CSS px (narrow-width coverage). */
 	width?: number;
+	/** SC-123: preference values to apply BEFORE the mount (pref-variant coverage).
+	 *  Wire format is the compact `key:value,key:value` of the `prefs` query param. */
+	prefs?: Record<string, string>;
+}
+
+/** SC-123: `kwUsage:text,sbCharBox:on` → `{ kwUsage: 'text', sbCharBox: 'on' }`.
+ *  Deliberately string-only: every pref a shot needs to vary is an `attr`-bearing
+ *  enum whose values are strings, and keeping the wire format flat keeps the shot
+ *  URL readable in a failure message. */
+function parsePrefParam(raw: string | null): Record<string, string> | undefined {
+	if (!raw) return undefined;
+	const out: Record<string, string> = {};
+	for (const part of raw.split(',')) {
+		const at = part.indexOf(':');
+		if (at <= 0) continue;
+		out[part.slice(0, at).trim()] = part.slice(at + 1).trim();
+	}
+	return Object.keys(out).length > 0 ? out : undefined;
 }
 
 export function parseParams(search: string): HarnessParams {
@@ -385,6 +446,7 @@ export function parseParams(search: string): HarnessParams {
 		readonly: q.get('readonly') === '1',
 		gallery: q.get('gallery') === '1',
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
+		prefs: parsePrefParam(q.get('prefs')),
 	};
 }
 
@@ -441,6 +503,63 @@ export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; 
 			click: "button.dse-pr__row[data-tier='mid']",
 		},
 	];
+
+/**
+ * SC-123: PREFERENCE-VARIANT captures. Every presentation preference before this
+ * ticket was a CSS reflow of DOM the default sweep already photographed, so the
+ * sweep never needed to vary one — but a preference nobody shoots is a preference
+ * nobody reviews, and three of SC-123's ports (the characteristics split, the
+ * boxed letter, the villain band) change the DOM itself. Each entry re-shoots an
+ * existing element/fixture with `prefs` applied to the harness PreferenceStore
+ * before mount, under its own `id` so it can never collide with — or overwrite —
+ * the default-value golden the freeze baseline pins. Declared on the page (not in
+ * shoot.mjs), same convention as NARROW_SHOTS / INTERACTION_SHOTS.
+ *
+ * One entry per NON-DEFAULT value of each new preference: the default value is
+ * already the whole rest of the sweep.
+ */
+export const PREF_SHOTS: {
+	id: string;
+	element: string;
+	fixture: string;
+	prefs: Record<string, string>;
+}[] = [
+	// Keyword display (`kwUsage`) — the chip band's other three presentations.
+	{ id: 'statblock-kwusage-text', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'text' } },
+	{ id: 'statblock-kwusage-grid', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'grid' } },
+	{ id: 'statblock-kwusage-ledger', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'ledger' } },
+	// Distance + target (`distTarget`) — the rail's other two.
+	{ id: 'statblock-disttarget-text', element: 'statblock', fixture: 'default', prefs: { distTarget: 'text' } },
+	{ id: 'statblock-disttarget-ledger', element: 'statblock', fixture: 'default', prefs: { distTarget: 'ledger' } },
+	// Characteristics (`sbCharLine`/`sbCharBox`) — the three split-DOM shapes. The
+	// fourth combination (two + onword) is the site's own quirk: identical to two +
+	// on, so shooting it would pin a duplicate picture rather than a behaviour.
+	{ id: 'statblock-charline-two', element: 'statblock', fixture: 'default', prefs: { sbCharLine: 'two' } },
+	{ id: 'statblock-charbox-on', element: 'statblock', fixture: 'default', prefs: { sbCharBox: 'on' } },
+	{ id: 'statblock-charbox-onword', element: 'statblock', fixture: 'default', prefs: { sbCharBox: 'onword' } },
+	// Villain actions (`sbVillain`) — on the CORPUS-shaped fixture, the only one whose
+	// villain actions carry the shape steel-etl really emits (see the import above).
+	{
+		id: 'statblock-villain-banded',
+		element: 'statblock',
+		fixture: 'villain-corpus',
+		prefs: { sbVillain: 'banded' },
+	},
+	// Featureblock display — the option list on the three-option angulotl example, the
+	// stat line on the (new) stats-bearing fixture above.
+	{
+		id: 'featureblock-featstyle-flat',
+		element: 'featureblock',
+		fixture: 'default',
+		prefs: { fbFeatureStyle: 'flat' },
+	},
+	{
+		id: 'featureblock-stats-ledger',
+		element: 'featureblock',
+		fixture: 'stats',
+		prefs: { fbStats: 'ledger' },
+	},
+];
 
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
@@ -541,10 +660,21 @@ export async function mountFromParams(
 	registerFrameworkElementDefinitions(registry);
 	const { deps, theme } = makeHarnessDeps();
 	theme.setActive(params.theme);
+	const errors: string[] = [];
+	// SC-123: pref-variant captures. Applied BEFORE the pipeline runs, so a preference
+	// that changes DOM SHAPE (the characteristics split, the villain band) is built the
+	// right way on first paint rather than through a remount — the store is per-mount
+	// here, so this can never leak into another shot.
+	for (const [key, value] of Object.entries(params.prefs ?? {})) {
+		try {
+			await deps.prefs.set(key as never, value as never);
+		} catch (e) {
+			errors.push(`unknown pref: ${key}=${value} (${String(e)})`);
+		}
+	}
 	const pipeline = new ElementPipeline(deps);
 	const mount = doc.getElementById('mount');
-	const errors: string[] = [];
-	if (!mount) return { errors: ['no #mount element'] };
+	if (!mount) return { errors: [...errors, 'no #mount element'] };
 	mount.empty();
 	// Narrow captures pin #mount's own box; the shot is the #mount locator, so this is
 	// what makes the element lay out at sidebar width. Always reset it (the page is
@@ -567,6 +697,12 @@ declare global {
 			elements: { id: string; fixtures: string[] }[];
 			narrowShots: { id: string; element: string; fixture: string; width: number }[];
 			interactionShots: { id: string; element: string; fixture: string; click: string }[];
+			prefShots: {
+				id: string;
+				element: string;
+				fixture: string;
+				prefs: Record<string, string>;
+			}[];
 		};
 		__dseHarnessDone?: { errors: string[] };
 	}
@@ -578,6 +714,7 @@ if (typeof window !== 'undefined') {
 		elements: Object.keys(FIXTURES).map((id) => ({ id, fixtures: Object.keys(FIXTURES[id]) })),
 		narrowShots: NARROW_SHOTS,
 		interactionShots: INTERACTION_SHOTS,
+		prefShots: PREF_SHOTS,
 	};
 	if (document.getElementById('mount')) {
 		void mountFromParams(document, parseParams(window.location.search)).then(async (r) => {

@@ -27,7 +27,7 @@ One-time setup: `npx playwright install chromium`.
 ## Pieces
 
 - `entry.ts` — mounts elements per URL params
-  (`?element=&fixture=&theme=&bg=&print=1&readonly=1&gallery=1&width=<px>`) through the real
+  (`?element=&fixture=&theme=&bg=&print=1&readonly=1&gallery=1&width=<px>&prefs=k:v,k:v`) through the real
   pipeline + seams; element list comes from `main.ts`'s
   `registerFrameworkElementDefinitions` (can't drift). `width=` pins `#mount` to a fixed
   CSS width — the NARROW-shot axis (`NARROW_SHOTS`, published on the manifest and swept by
@@ -36,6 +36,12 @@ One-time setup: `npx playwright install chromium`.
   break (SC-121 Batch 4). `INTERACTION_SHOTS` (same manifest/sweep convention, own `<id>`)
   re-shoots an element/fixture after one real click on a production affordance — for a
   state (e.g. a radiogroup selection) no static fixture can express (SC-117 Batch 6).
+  `PREF_SHOTS` (SC-123, third list, same convention) re-shoots an element/fixture with
+  `prefs=` applied to the harness PreferenceStore BEFORE the mount — one entry per
+  NON-DEFAULT value of a presentation preference. Every pref before SC-123 was a CSS
+  reflow of DOM the default sweep already photographed; three of SC-123's ports change
+  the DOM itself (the characteristics split, the boxed letter, the villain band), and a
+  preference nobody shoots is a preference nobody reviews.
 - `shim/obsidian.ts` — browser `obsidian` module: jest-free mock core + real Lucide icons +
   `marked` markdown + toast Notice. Aliased in by `esbuild.mjs` for this bundle only.
 - `vars.css` — vendored Obsidian default-theme variables (only what `styles-source.css` uses).
