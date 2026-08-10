@@ -8,15 +8,23 @@
 //   2. RUNNING  — a progress line and a Stop button. Stop finishes the file in
 //                 flight and leaves everything already moved where it is (each
 //                 rename is independently complete — there is no half state).
-//   3. SUMMARY  — what moved, what was skipped and why.
+//   3. SUMMARY  — what moved, what was skipped, and WHICH FILES (review H3: the
+//                 per-path lists live here, in collapsible sections, not only in a
+//                 console.warn the user will never see).
 //
-// The safe default takes initial focus: "Not now" is first in the footer, and the
-// migration itself is the explicit, second action. Nothing here deletes anything.
+// THE THING THIS DIALOG EXISTS TO PROTECT (review H2): a sync makes the migration
+// impossible, because it CREATES every destination and each pending move then finds
+// its target occupied. So no path out of this dialog may quietly fall through into a
+// sync. "Not now" declines and stops; syncing without migrating is its own explicitly
+// labelled button; and an aborted run's primary action is to FINISH, never to sync.
+// Escape counts as "not now" (review M2), never as consent.
 import type { App } from 'obsidian';
-import { DseModal } from '@/framework/kit';
+import { DseModal, collapsible } from '@/framework/kit';
 import type { MigrationPlan, MigrationReport } from '@/data/CompendiumMigration';
 
 const SAMPLE_SIZE = 6;
+/** Per-path lists are complete in the report NOTE; the dialog shows a readable slice. */
+const LIST_LIMIT = 40;
 
 export interface MigrationModalCallbacks {
 	/** Run the plan. Resolves with the report; the modal shows the summary. */
@@ -24,14 +32,25 @@ export interface MigrationModalCallbacks {
 		onProgress: (done: number, total: number) => void,
 		shouldAbort: () => boolean,
 	) => Promise<MigrationReport>;
-	/** Chosen when the user declines the migration but still wants the sync. */
-	skip: () => void;
-	/** Called once the summary is dismissed, so the caller can start the sync. */
-	done: (report: MigrationReport) => void;
+	/** "Not now", or Escape at the preview. Records the decline; does NOT sync. */
+	decline: () => void;
+	/** Explicit, labelled consent to sync without migrating. Links will break. */
+	syncAnyway: () => void;
+	/** After an aborted run: go round again with a fresh plan for the remainder. */
+	finishRemaining: (report: MigrationReport) => void;
+	/** After a complete run: the user asked for the sync. */
+	syncAfter: (report: MigrationReport) => void;
+	/** The dialog went away without a terminal button — Escape, or a view unload. */
+	dismissed: (report: MigrationReport | null) => void;
 }
 
 export class CompendiumMigrationModal extends DseModal {
 	private aborted = false;
+	private closed = false;
+	/** Set by every footer button that ends the interaction, so onClose can tell a
+	 *  deliberate answer from a dismissal. */
+	private answered = false;
+	private lastReport: MigrationReport | null = null;
 
 	constructor(
 		app: App,
@@ -45,13 +64,27 @@ export class CompendiumMigrationModal extends DseModal {
 		this.renderPreview();
 	}
 
+	/**
+	 * Review M2. Escape (and any other close that isn't a button) used to do nothing
+	 * at all: at the preview the caller was left waiting for a callback that never
+	 * came, and mid-run the migration carried on rendering into a detached DOM. Now a
+	 * dismissal is an answer — the conservative one.
+	 */
+	onClose(): void {
+		this.closed = true;
+		if (this.answered) return;
+		this.answered = true;
+		this.aborted = true; // stop a run in flight; `dismissed` gets its report later
+		this.callbacks.dismissed(this.lastReport);
+	}
+
 	// -- phase 1 -------------------------------------------------------------
 	private renderPreview(): void {
-		this.setDseTitle("Move your compendium to the 7.0.0 layout");
+		this.setDseTitle('Move your compendium to the 7.0.0 layout');
 		this.body.empty();
 
 		const { renames, blocked, unmapped } = this.plan;
-		this.body.createEl("p", {
+		this.body.createEl('p', {
 			text:
 				`Version 7.0.0 reorganises the compendium: "Rules/Careers/Disciple.md" is now ` +
 				`"career/disciple.md", and so on for every file. Moving your existing copies ` +
@@ -59,13 +92,13 @@ export class CompendiumMigrationModal extends DseModal {
 				`automatically — the plugin never edits a note you wrote.`,
 		});
 
-		const list = this.body.createEl("ul", { cls: "dse-migration__summary" });
-		list.createEl("li", {
+		const list = this.body.createEl('ul', { cls: 'dse-migration__summary' });
+		list.createEl('li', {
 			text: `${renames.length} file(s) will be moved inside "${this.plan.root}".`,
 		});
 		const modified = renames.filter((rename) => rename.modified === true).length;
 		if (modified > 0) {
-			list.createEl("li", {
+			list.createEl('li', {
 				text:
 					`${modified} of them do not match the final legacy release — either you edited ` +
 					`them, or you were on an older compendium release. They are moved too, and ` +
@@ -73,43 +106,65 @@ export class CompendiumMigrationModal extends DseModal {
 			});
 		}
 		if (blocked.length > 0) {
-			list.createEl("li", {
+			list.createEl('li', {
 				text: `${blocked.length} cannot move because something already sits at the new path — left in place.`,
 			});
 		}
 		if (unmapped.length > 0) {
-			list.createEl("li", {
+			list.createEl('li', {
 				text:
 					`${unmapped.length} file(s) have no 7.0.0 counterpart (index pages, book-level ` +
 					`pages, anything of your own) — left exactly where they are.`,
 			});
 		}
-		list.createEl("li", { text: "Nothing is deleted. Not now, not later." });
+		list.createEl('li', { text: 'Nothing is deleted. Not now, not later.' });
 
 		if (renames.length > 0) {
-			this.body.createEl("p", { text: "For example:" });
-			const sample = this.body.createEl("ul", { cls: "dse-migration__sample" });
+			this.body.createEl('p', { text: 'For example:' });
+			const sample = this.body.createEl('ul', { cls: 'dse-migration__sample' });
 			for (const rename of this.plan.renames.slice(0, SAMPLE_SIZE)) {
-				sample.createEl("li", { text: `${rename.oldRelative}  →  ${rename.newRelative}` });
+				sample.createEl('li', { text: `${rename.oldRelative}  →  ${rename.newRelative}` });
 			}
 			if (renames.length > SAMPLE_SIZE) {
-				sample.createEl("li", { text: `…and ${renames.length - SAMPLE_SIZE} more.` });
+				sample.createEl('li', { text: `…and ${renames.length - SAMPLE_SIZE} more.` });
 			}
 		}
 
+		this.body.createEl('p', {
+			cls: 'dse-migration__warning',
+			text:
+				'Syncing before you move these is a one-way door: the sync creates all the new ' +
+				'files, and the move then has nowhere to go. "Not now" leaves everything alone ' +
+				'and asks again next time you sync.',
+		});
+
 		this.footer([
 			{
-				label: "Not now",
-				text: "Not now",
+				label: 'Not now',
+				text: 'Not now',
 				onClick: () => {
+					this.answered = true;
 					this.close();
-					this.callbacks.skip();
+					this.callbacks.decline();
+				},
+			},
+			{
+				label: 'Sync without moving (links will break)',
+				text: 'Sync without moving',
+				variant: 'danger',
+				tooltip:
+					'Downloads the new compendium and leaves your old files where they are. ' +
+					'Links to compendium notes will stop working, and the move can no longer be done.',
+				onClick: () => {
+					this.answered = true;
+					this.close();
+					this.callbacks.syncAnyway();
 				},
 			},
 			{
 				label: `Move ${renames.length} file(s)`,
 				text: `Move ${renames.length} file(s)`,
-				variant: "accent",
+				variant: 'accent',
 				disabled: renames.length === 0,
 				onClick: () => {
 					void this.runMigration();
@@ -120,73 +175,136 @@ export class CompendiumMigrationModal extends DseModal {
 
 	// -- phase 2 -------------------------------------------------------------
 	private async runMigration(): Promise<void> {
-		this.setDseTitle("Moving your compendium…");
+		this.setDseTitle('Moving your compendium…');
 		this.body.empty();
-		const progress = this.body.createEl("p", {
+		const progress = this.body.createEl('p', {
 			text: `0 / ${this.plan.renames.length} moved`,
 		});
-		this.body.createEl("p", {
-			text: "You can stop at any point. Files already moved stay moved — each move is complete on its own.",
+		this.body.createEl('p', {
+			text: 'You can stop at any point. Files already moved stay moved — each move is complete on its own.',
 		});
 		const [stop] = this.footer([
 			{
-				label: "Stop",
-				text: "Stop",
-				variant: "danger",
+				label: 'Stop',
+				text: 'Stop',
+				variant: 'danger',
 				onClick: () => {
 					this.aborted = true;
 					stop.setDisabled(true);
-					stop.setLabel("Stopping…");
+					stop.setLabel('Stopping…');
 				},
 			},
 		]);
 
 		const report = await this.callbacks.run(
-			(done, total) => progress.setText(`${done} / ${total} moved`),
+			(done, total) => {
+				if (!this.closed) progress.setText(`${done} / ${total} moved`);
+			},
 			() => this.aborted,
 		);
+		this.lastReport = report;
+		// The dialog may have been dismissed while the run was in flight — rendering
+		// into a detached DOM would swallow the result silently (review M2).
+		if (this.closed) {
+			this.callbacks.dismissed(report);
+			return;
+		}
 		this.renderSummary(report);
 	}
 
 	// -- phase 3 -------------------------------------------------------------
 	private renderSummary(report: MigrationReport): void {
-		this.setDseTitle(report.aborted ? "Migration stopped" : "Compendium moved");
+		this.setDseTitle(report.aborted ? 'Migration stopped' : 'Compendium moved');
 		this.body.empty();
-		const list = this.body.createEl("ul", { cls: "dse-migration__summary" });
-		list.createEl("li", { text: `${report.migrated.length} file(s) moved; links updated by Obsidian.` });
+		const list = this.body.createEl('ul', { cls: 'dse-migration__summary' });
+		list.createEl('li', { text: `${report.migrated.length} file(s) moved; links updated by Obsidian.` });
 		if (report.aborted) {
-			list.createEl("li", {
-				text: `${report.remaining} file(s) not moved — run "Migrate compendium from the pre-7.0.0 layout" again to finish.`,
+			list.createEl('li', {
+				text:
+					`${report.remaining} file(s) not moved. Finish them before syncing — a sync ` +
+					`creates the new files, and the remaining moves then have nowhere to go.`,
 			});
 		}
-		if (report.migratedModified.length > 0) {
-			list.createEl("li", {
-				text: `${report.migratedModified.length} moved file(s) did not match the final legacy release — see the developer console for the list.`,
-			});
-		}
-		if (report.blocked.length > 0) {
-			list.createEl("li", { text: `${report.blocked.length} skipped: the new path was already occupied.` });
-		}
-		if (report.failed.length > 0) {
-			list.createEl("li", { text: `${report.failed.length} failed to move — see the developer console.` });
-		}
-		if (report.unmapped.length > 0) {
-			list.createEl("li", { text: `${report.unmapped.length} left in place: no 7.0.0 counterpart.` });
-		}
-		list.createEl("li", {
-			text: "The old, now-empty folders are left behind on purpose — deleting folders is not something this does. Remove them yourself whenever you like.",
+		list.createEl('li', {
+			text: 'The old, now-empty folders are left behind on purpose — deleting folders is not something this does. Remove them yourself whenever you like.',
 		});
+		if (report.reportNotePath !== null) {
+			list.createEl('li', {
+				text: `The full per-file list is saved in your vault as "${report.reportNotePath}".`,
+			});
+		}
 
-		this.footer([
-			{
-				label: "Sync the compendium now",
-				text: "Sync the compendium now",
-				variant: "accent",
-				onClick: () => {
-					this.close();
-					this.callbacks.done(report);
+		// Review H3 — the lists themselves, not just their counts.
+		this.pathSection(
+			`Moved, but different from the last legacy release — ${report.migratedModified.length}`,
+			'Edited by you, or from an older release. The next sync replaces them with the current official text.',
+			report.migratedModified.map((rename) => rename.toPath));
+		this.pathSection(
+			`Not moved — the new path was already occupied — ${report.blocked.length}`,
+			'Left exactly as they were. Nothing was overwritten.',
+			report.blocked.map((rename) => `${rename.fromPath}  →  ${rename.toPath}`));
+		this.pathSection(
+			`Failed to move — ${report.failed.length}`,
+			'Obsidian refused the move; these are still at their old paths.',
+			report.failed.map((entry) => `${entry.fromPath} — ${entry.error}`));
+		this.pathSection(
+			`Left in place — no 7.0.0 counterpart — ${report.unmapped.length}`,
+			'Index pages, book-level pages, and anything of your own in that folder.',
+			report.unmapped);
+
+		this.footer(report.aborted
+			? [
+				{
+					label: 'Close',
+					text: 'Close',
+					onClick: () => {
+						this.answered = true;
+						this.close();
+						this.callbacks.dismissed(report);
+					},
 				},
-			},
-		]);
+				{
+					label: `Finish moving the remaining ${report.remaining}`,
+					text: `Finish moving the remaining ${report.remaining}`,
+					variant: 'accent',
+					onClick: () => {
+						this.answered = true;
+						this.close();
+						this.callbacks.finishRemaining(report);
+					},
+				},
+			]
+			: [
+				{
+					label: 'Close',
+					text: 'Close',
+					onClick: () => {
+						this.answered = true;
+						this.close();
+						this.callbacks.dismissed(report);
+					},
+				},
+				{
+					label: 'Sync the compendium now',
+					text: 'Sync the compendium now',
+					variant: 'accent',
+					onClick: () => {
+						this.answered = true;
+						this.close();
+						this.callbacks.syncAfter(report);
+					},
+				},
+			]);
+	}
+
+	private pathSection(title: string, blurb: string, items: string[]): void {
+		if (items.length === 0) return;
+		const panel = collapsible(this.body, { title, open: false }, this.lifecycle);
+		panel.contentEl.createEl('p', { text: blurb });
+		const list = panel.contentEl.createEl('ul', { cls: 'dse-migration__paths' });
+		for (const item of items.slice(0, LIST_LIMIT)) list.createEl('li', { text: item });
+		if (items.length > LIST_LIMIT) {
+			list.createEl('li', { text: `…and ${items.length - LIST_LIMIT} more — see the report note.` });
+		}
 	}
 }

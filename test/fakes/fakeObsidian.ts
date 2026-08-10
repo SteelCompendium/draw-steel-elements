@@ -142,6 +142,12 @@ export class FakeVault {
 		if (this.folders.has(path)) throw new Error(`Folder already exists: ${path}`);
 		this.folders.add(path);
 	}
+	/** SC-125: the migration writes a plain-text report note (review H3). */
+	async create(path: string, data: string): Promise<TFile> {
+		if (this.files.has(path)) throw new Error(`File already exists: ${path}`);
+		this.setText(path, data);
+		return fakeTFile(path);
+	}
 	/** Test seeding helper. */
 	setText(path: string, text: string): void {
 		this.files.set(path, new TextEncoder().encode(text));
@@ -217,6 +223,14 @@ export class FakeFileManager {
 		const bytes = this.vault.files.get(file.path);
 		if (bytes === undefined) throw new Error(`ENOENT: ${file.path}`);
 		if (this.vault.files.has(newPath)) throw new Error(`File already exists: ${newPath}`);
+		// SC-125 review L7: real Obsidian will not move a file into a folder that does
+		// not exist. The fake used to create parents implicitly, which made the
+		// engine's ensureParentFolders call untestable — it could have been deleted and
+		// every test would still have passed.
+		const parent = newPath.split("/").slice(0, -1).join("/");
+		if (parent !== "" && !this.vault.folders.has(parent)) {
+			throw new Error(`Folder does not exist: ${parent}`);
+		}
 		this.vault.files.delete(file.path);
 		this.vault.setText(newPath, new TextDecoder().decode(bytes));
 		this.renamed.push({ from: file.path, to: newPath });

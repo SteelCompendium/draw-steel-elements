@@ -4,9 +4,9 @@
 
 Old corpus: `SteelCompendium/data-md-dse` — 243 release tags, final `v3.20260403152914`, 4017 distinct markdown paths across all of them (2443 in the final release).
 
-New corpus: `SteelCompendium/data-unified` `en/unified/md-dse` @ `v4.20260802171159-1-g52055343` — 3078 markdown files.
+New corpus: the PUBLISHED `SteelCompendium/data-unified` release **`v4.20260803143953`** — its `md-dse-unified-en.zip` asset, 3078 markdown files. Deliberately the published artifact and not a working tree: the sync downloads that zip, so a destination that exists only in a local checkout would be migrated and then trashed by the sync's phase 2. `tools/verify-migration-map.mjs` re-asserts this at release time.
 
-**Result: 3301 mapped, 3 ambiguous (unmapped), 713 unmatched (unmapped).**
+**Result: 3290 mapped, 3 ambiguous (unmapped), 724 unmatched (unmapped).**
 
 The number that decides what a real vault sees is the FINAL release: **2036 of its 2443 paths are mapped (83.3%)**. The rest are itemised under "Unmatched" below — every one has a stated reason, and every one is simply left where it is.
 
@@ -45,7 +45,9 @@ The 2024-era trees predate that key; for those, everything under `Bestiary/` is 
 
 Several **name forms** are tried per file, most literal first: `item_name`, `item_name` with a trailing bracketed qualifier removed (`Bredbeddle Malice (Malice Features)` → `Bredbeddle Malice`), `name`/`title`, and finally the file's own basename.
 
-**Type family** — the old `type` is a path (`monster/section`, `feature/ability/conduit/1st-level-feature`) and the new one is a flat noun (`statblock`, `ability`). The old family is its last segment when that segment is `statblock`, else its first segment; a frozen equivalence table says which new families that old family may land in.
+**Type family** — the old `type` is a path (`monster/section`, `feature/ability/conduit/1st-level-feature`) and the new one is a flat noun (`statblock`, `ability`). The old family is its last segment when that segment is `statblock`, else its first segment.
+
+A frozen equivalence table then **gates** the candidates: when the old family is one the table knows, a candidate whose new type the table does not sanction is discarded outright, and an entity left with no candidate falls through to *unmatched* rather than being matched to something of another type. When the old family is unknown (empty `type`, or a spelling the table has never seen) there is nothing to gate against, so those matches rest on name + book + the tie-breakers alone — 97 of the 3290 mapped entries, counted here so the ungated set is never invisible.
 
 ## Tie-breakers
 
@@ -68,8 +70,10 @@ A remaining exact tie is **not** guessed: the file is reported as ambiguous belo
 | Book | mapped | ambiguous | unmatched |
 | --- | ---: | ---: | ---: |
 | `(none)` | 0 | 0 | 3 |
-| `mcdm.heroes.v1` | 2011 | 3 | 609 |
+| `mcdm.heroes.v1` | 2000 | 3 | 620 |
 | `mcdm.monsters.v1` | 1290 | 0 | 101 |
+
+Of the 3290 mapped entries, **97** were matched with the family gate inactive (unknown old family) and **97** ended on a pairing the table does not list — necessarily a subset of the ungated ones, since a gated match cannot land on an unsanctioned pairing.
 
 ### Mapped, by old type family → new type
 
@@ -92,12 +96,12 @@ A remaining exact tie is **not** guessed: the file is reported as ambiguous belo
 | 22 | `chapter` | `chapter` |
 | 21 | `kit-ability` | `ability` |
 | 21 | `kit` | `kit` |
-| 19 | `movement` | `movement` |
 | 18 | `career` | `career` |
 | 17 | `common-ability` | `feature` |
 | 15 | `kits` | `kit` |
 | 13 | `culture-benefit` | `culture` |
 | 12 | `cultures` | `culture` |
+| 12 | `movement` | `movement` |
 | 12 | `negotiation` | `negotiation` |
 | 12 | `ancestry` | `ancestry` |
 | 12 | `motivation-or-pitfall` | `negotiation` |
@@ -112,11 +116,7 @@ A remaining exact tie is **not** guessed: the file is reported as ambiguous belo
 | 5 | `skill` | `skill-group` |
 | 5 | `skills` | `skill-group` |
 | 2 | `(none)` | `chapter` |
-| 1 | `complications` | `feature` |
-| 1 | `kits` | `ability` |
-| 1 | `class` | `feature` |
 | 1 | `feature` | `rule` |
-| 1 | `kit` | `ability` |
 | 1 | `movement` | `rule` |
 
 ## Ambiguous — 3 (left unmapped)
@@ -131,7 +131,7 @@ A remaining exact tie is **not** guessed: the file is reported as ambiguous belo
   - `feature/ability/common/knockback.md` (`ability`)
   - `feature/common/maneuvers/knockback.md` (`feature`)
 
-## Unmatched — 713 (left unmapped)
+## Unmatched — 724 (left unmapped)
 
 Grouped by reason. Every one of these is left in place by the migration engine.
 
@@ -887,9 +887,55 @@ Grouped by reason. Every one of these is left in place by the migration engine.
 
 - `Rules/Kits/Kits Table.md`
 
+### every same-named candidate belongs to an unsanctioned type family (class) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+
+- `Rules/Classes By Level/Fury/2nd Level Aspect Ability.md` _(historical release only)_
+
+### every same-named candidate belongs to an unsanctioned type family (kit) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+
+- `Rules/Kits/Lets Dance.md` _(historical release only)_
+
+### every same-named candidate belongs to an unsanctioned type family (complications) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+
+- `Complications/Elemental Absorption.md` _(historical release only)_
+
+### every same-named candidate belongs to an unsanctioned type family (kits) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+
+- `Kits/Caster Kits/Dancer.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Burrow.md` → `movement/burrow.md`) — 1 (0 in the final release)
+
+- `Movement/Burrow.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Crawl.md` → `movement/crawl.md`) — 1 (0 in the final release)
+
+- `Movement/Crawl.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Fly.md` → `movement/fly.md`) — 1 (0 in the final release)
+
+- `Movement/Fly.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Jump.md` → `movement/jump.md`) — 1 (0 in the final release)
+
+- `Movement/Jump.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Shifting.md` → `movement/shifting.md`) — 1 (0 in the final release)
+
+- `Movement/Shifting.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Teleport.md` → `movement/teleport.md`) — 1 (0 in the final release)
+
+- `Movement/Teleport.md` _(historical release only)_
+
+### unsafe on a case-insensitive filesystem — case-only rename (`Movement/Walk.md` → `movement/walk.md`) — 1 (0 in the final release)
+
+- `Movement/Walk.md` _(historical release only)_
+
 ## Final-release target collisions — 45
 
 Two paths from the FINAL release resolve to one unified file — the old tree filed one entity twice. The higher-scoring path (ties broken lexicographically) keeps the mapping; the other is DROPPED from the map and left in place, so the map is a function on the final release.
+
+**Injectivity is a FINAL-RELEASE-ONLY property, by design.** Across the union of all 243 releases the same entity legitimately lived at several paths, and those spellings never coexist in one vault — enforcing global injectivity would mean refusing to migrate users on older releases. A user on a *transitional* release (one whose tree mixes two layouts) can therefore see a non-zero **blocked** count: two of their files map to one destination, the first move wins deterministically (plan order is sorted by path), and the second is reported and left in place. Nothing is overwritten and nothing is lost; the second file simply keeps its old name.
 
 - `feature/censor/level-4/blessing-of-life.md` ← `Rules/Features/Censor/4th-Level Features/Blessing of Life.md` (mapped), `Rules/Features/Conduit/4th-Level Features/Blessing of Life.md` (dropped)
 - `feature/censor/level-4/impervious-touch.md` ← `Rules/Features/Censor/4th-Level Features/Impervious Touch.md` (mapped), `Rules/Features/Conduit/4th-Level Features/Impervious Touch.md` (dropped)
@@ -939,11 +985,11 @@ Two paths from the FINAL release resolve to one unified file — the old tree fi
 
 ## New content with no old counterpart
 
-1018 of the 3078 unified files were never in data-md-dse. They are created by the normal sync, not by the migration. By book:
+1020 of the 3078 unified files were never in data-md-dse. They are created by the normal sync, not by the migration. By book:
 
 | count | book |
 | ---: | --- |
-| 497 | `mcdm.heroes.v1` |
+| 499 | `mcdm.heroes.v1` |
 | 240 | `mcdm.beastheart.v1` |
 | 227 | `mcdm.summoner.v1` |
 | 54 | `mcdm.monsters.v1` |

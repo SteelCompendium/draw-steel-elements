@@ -66,17 +66,37 @@ layout"*. Before anything happens it tells you:
 - how many have no 7.0.0 counterpart at all;
 - a handful of real `old path → new path` examples;
 
-…and then gives you two buttons: **Not now**, which is the default and simply
-carries on to the ordinary sync, and **Move N file(s)**.
+…and then three buttons:
+
+- **Not now** (the default) — nothing happens at all. **The compendium is not
+  synced either**, and that is deliberate: see the warning below. You will be
+  asked again the next time you sync.
+- **Sync without moving** — downloads the new compendium and leaves your old
+  files where they are. Your links to compendium notes stop working, and the
+  move can no longer be done. Only pick this if you don't link to the
+  compendium.
+- **Move N file(s)** — does the move.
+
+> **Sync first and you can't move afterwards.** Not because the old files
+> disappear — they don't — but because the sync *creates* all the new files, so
+> every move then finds something already sitting at its destination and is
+> refused. That's why declining the offer doesn't quietly continue into a sync,
+> and why a half-finished move asks you to finish rather than offering to sync.
 
 While it runs you get a progress line and a **Stop** button. Stopping is safe
-at any point: each file's move is complete on its own, so the ones already
-moved stay moved and you can finish later.
+at any point: each file's move is complete on its own, so the ones already moved
+stay moved. Finish the rest with the command below **before** you sync.
 
 **Running it yourself.** The command **Migrate compendium from the pre-7.0.0
 layout** does exactly the same thing, any time. Use it if you chose *Not now*,
 if you stopped a run part-way, or if you restored an old compendium folder from
 a backup. Running it when there is nothing to do just says so.
+
+**Afterwards you get a report note.** The migration writes a note into your
+vault — *Draw Steel Elements migration report &lt;date&gt;* — listing, by path,
+every file it moved but flagged, every file it couldn't move, and every file it
+left alone. Counts are in the dialog; the actual filenames are in that note, and
+it stays there until you delete it.
 
 **What it will never do:**
 
@@ -99,6 +119,19 @@ than content that vanished: per-folder index pages, whole-book pages, and
 roll-up pages whose contents the new tree files individually. Every single one
 is enumerated, with its reason, in
 [the migration map's review report](compendium-migration-map.md).
+
+**One thing the move changes about your edits.** If you edited a compendium file
+in place — added a note to a statblock, say — moving it hands it to the sync as a
+file the plugin manages, and **the next sync replaces its contents with the
+current official text**. Before 7.0.0 that file would have been left alone as
+unrecognised content. This is the same rule that has always applied to
+plugin-installed compendium files, now applied to yours because the migration
+adopts them; without that, the moved files could never receive updates at all.
+The migration flags every file whose content doesn't match the last legacy
+release, in the dialog and in the report note, precisely so you can copy your
+own words out first. **Homebrew you wrote yourself, and anything outside the
+compendium folder, is never affected** — only files that came from the
+compendium in the first place.
 
 **A more durable way to link.** `scc.v1:` links are addressed by classification
 code, not by path, so they survive reorganisations like this one entirely.

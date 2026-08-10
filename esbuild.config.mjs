@@ -49,6 +49,32 @@ const yamlLoaderPlugin = {
   }
 };
 
+/**
+ * SC-125 (review L3) — the compendium migration map ships as raw TEXT, not as parsed
+ * data. esbuild's default `.json` loader would inline it as a JS object literal, which
+ * the JS engine then builds at plugin load: ~390 KiB of source, a measured ~6.7 ms and
+ * ~0.7 MB retained on EVERY startup, for a feature that runs at most once in a vault's
+ * lifetime. As a string it costs a string; `src/data/CompendiumMigration.ts` parses it
+ * lazily on first use (see `migrationMap()` there, which accepts both shapes because
+ * ts-jest still resolves the import as parsed JSON).
+ *
+ * Scoped to this one file on purpose — a blanket `.json: "text"` loader would silently
+ * change the meaning of any future JSON import.
+ */
+const migrationMapTextPlugin = {
+  name: "migration-map-text",
+  setup(build) {
+    build.onLoad({ filter: /src[\\/]data[\\/]migrationMap\.json$/ }, async (args) => ({
+      // Re-serialised compact: the committed file is pretty-printed so a human can
+      // review the diff line by line, but the bundle has no use for 45 KiB of indentation.
+      contents: `export default ${JSON.stringify(
+        JSON.stringify(JSON.parse(await fs.readFile(args.path, "utf8"))),
+      )};`,
+      loader: "js",
+    }));
+  },
+};
+
 const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["main.ts"],
@@ -87,6 +113,7 @@ const context = await esbuild.context({
   minify: prod,
   plugins: [
 	copyToStylesPlugin,
+	migrationMapTextPlugin,
 	yamlLoaderPlugin
   ],
   define: {

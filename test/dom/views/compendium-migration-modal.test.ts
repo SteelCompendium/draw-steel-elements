@@ -48,6 +48,7 @@ function emptyReport(overrides: Partial<MigrationReport> = {}): MigrationReport 
 		unmapped: [],
 		aborted: false,
 		remaining: 0,
+		reportNotePath: null,
 		...overrides,
 	};
 }
@@ -65,8 +66,11 @@ function makeModal(plan = makePlan(), report = emptyReport()) {
 				resolveRun = resolve;
 			});
 		}),
-		skip: jest.fn(),
-		done: jest.fn(),
+		decline: jest.fn(),
+		syncAnyway: jest.fn(),
+		finishRemaining: jest.fn(),
+		syncAfter: jest.fn(),
+		dismissed: jest.fn(),
 	};
 	const modal = new CompendiumMigrationModal(new App() as any, plan, callbacks);
 	modal.open();
@@ -130,12 +134,37 @@ describe('CompendiumMigrationModal — preview', () => {
 		expect(document.activeElement).toBe(footerBtn(container, 'Not now'));
 	});
 
-	test('"Not now" closes and calls skip(), never run()', () => {
+	test('"Not now" closes and declines — it never runs, and never syncs', () => {
 		const { container, callbacks } = makeModal();
 		footerBtn(container, 'Not now').click();
-		expect(callbacks.skip).toHaveBeenCalledTimes(1);
+		expect(callbacks.decline).toHaveBeenCalledTimes(1);
 		expect(callbacks.run).not.toHaveBeenCalled();
+		expect(callbacks.syncAnyway).not.toHaveBeenCalled();
+		expect(callbacks.syncAfter).not.toHaveBeenCalled();
 		expect(document.body.contains(container)).toBe(false);
+	});
+
+	test('H2 — syncing without migrating is its own labelled, danger-variant button', () => {
+		const { container, callbacks } = makeModal();
+		const button = footerBtn(container, 'Sync without moving (links will break)');
+		expect(button.classList.contains('dse-btn--danger')).toBe(true);
+		button.click();
+		expect(callbacks.syncAnyway).toHaveBeenCalledTimes(1);
+		expect(callbacks.decline).not.toHaveBeenCalled();
+	});
+
+	test('H2 — the preview says out loud that syncing first is a one-way door', () => {
+		const { container } = makeModal();
+		expect(bodyText(container)).toContain('one-way door');
+	});
+
+	test('M2 — Escape at the preview is a dismissal, not consent', () => {
+		const { modal, callbacks } = makeModal();
+		modal.close(); // what Obsidian's Escape handler does
+		expect(callbacks.dismissed).toHaveBeenCalledWith(null);
+		expect(callbacks.run).not.toHaveBeenCalled();
+		expect(callbacks.syncAnyway).not.toHaveBeenCalled();
+		expect(callbacks.syncAfter).not.toHaveBeenCalled();
 	});
 
 	test('the move button is disabled — the REAL property — when there is nothing to move', () => {
@@ -173,49 +202,108 @@ describe('CompendiumMigrationModal — running', () => {
 });
 
 describe('CompendiumMigrationModal — summary', () => {
-	test('reports what moved and hands control back with done()', async () => {
+	async function settle(finishRun: () => void) {
+		finishRun();
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+	}
+
+	test('reports what moved and hands control back with syncAfter()', async () => {
 		const report = emptyReport({
 			migrated: [rename('Rules/Careers/Disciple.md', 'career/disciple.md')],
 			migratedModified: [rename('Rules/Careers/Sage.md', 'career/sage.md', true)],
 			blocked: [{ fromPath: 'a', toPath: 'b' }],
 			unmapped: ['c'],
+			reportNotePath: 'Draw Steel Elements migration report 2026-08-10 1200.md',
 		});
 		const { container, callbacks, finishRun } = makeModal(makePlan(), report);
 		footerBtn(container, 'Move 2 file(s)').click();
-		finishRun();
-		await Promise.resolve();
-		await Promise.resolve();
+		await settle(finishRun);
 
 		expect((container.querySelector('.dse-modal__title') as HTMLElement).textContent)
 			.toBe('Compendium moved');
 		const text = bodyText(container);
 		expect(text).toContain('1 file(s) moved; links updated by Obsidian.');
-		expect(text).toContain('1 moved file(s) did not match the final legacy release');
-		expect(text).toContain('1 skipped: the new path was already occupied.');
-		expect(text).toContain('1 left in place: no 7.0.0 counterpart.');
 		expect(text).toContain('old, now-empty folders are left behind on purpose');
+		expect(text).toContain('Draw Steel Elements migration report 2026-08-10 1200.md');
 
 		footerBtn(container, 'Sync the compendium now').click();
-		expect(callbacks.done).toHaveBeenCalledWith(report);
+		expect(callbacks.syncAfter).toHaveBeenCalledWith(report);
 		expect(document.body.contains(container)).toBe(false);
 	});
 
-	test('an aborted run says so and tells the user how to finish', async () => {
+	test('H3 — the actual PATHS are in the dialog, not just the counts', async () => {
+		const report = emptyReport({
+			migrated: [rename('Rules/Careers/Disciple.md', 'career/disciple.md')],
+			migratedModified: [rename('Rules/Careers/Sage.md', 'career/sage.md', true)],
+			blocked: [{ fromPath: 'DS/Old/Thing.md', toPath: 'DS/new/thing.md' }],
+			failed: [{ fromPath: 'DS/Old/Broken.md', toPath: 'DS/new/broken.md', error: 'nope' }],
+			unmapped: ['DS/Rules/_Index.md'],
+		});
+		const { container, finishRun } = makeModal(makePlan(), report);
+		footerBtn(container, 'Move 2 file(s)').click();
+		await settle(finishRun);
+
+		const text = bodyText(container);
+		expect(text).toContain('DS Compendium/career/sage.md');
+		expect(text).toContain('DS/Old/Thing.md');
+		expect(text).toContain('DS/new/thing.md');
+		expect(text).toContain('DS/Old/Broken.md');
+		expect(text).toContain('nope');
+		expect(text).toContain('DS/Rules/_Index.md');
+	});
+
+	test('H3 — long lists are capped in the dialog and point at the report note', async () => {
+		const unmapped = Array.from({ length: 60 }, (_, i) => `DS/leftover-${i}.md`);
+		const report = emptyReport({ migrated: [rename('a.md', 'b.md')], unmapped });
+		const { container, finishRun } = makeModal(makePlan(), report);
+		footerBtn(container, 'Move 2 file(s)').click();
+		await settle(finishRun);
+		expect(bodyText(container)).toContain('…and 20 more — see the report note.');
+	});
+
+	test('H2 — an aborted run offers to FINISH, and does not offer a sync at all', async () => {
 		const report = emptyReport({
 			aborted: true,
 			remaining: 7,
 			migrated: [rename('Rules/Careers/Disciple.md', 'career/disciple.md')],
 		});
-		const { container, finishRun } = makeModal(makePlan(), report);
+		const { container, callbacks, finishRun } = makeModal(makePlan(), report);
 		footerBtn(container, 'Move 2 file(s)').click();
-		finishRun();
-		await Promise.resolve();
-		await Promise.resolve();
+		await settle(finishRun);
 
 		expect((container.querySelector('.dse-modal__title') as HTMLElement).textContent)
 			.toBe('Migration stopped');
-		expect(bodyText(container)).toContain('7 file(s) not moved');
-		expect(bodyText(container)).toContain('Migrate compendium from the pre-7.0.0 layout');
+		const text = bodyText(container);
+		expect(text).toContain('7 file(s) not moved');
+		expect(text).toContain('a sync creates the new files');
+		expect(container.querySelector('button[aria-label="Sync the compendium now"]')).toBeNull();
+
+		footerBtn(container, 'Finish moving the remaining 7').click();
+		expect(callbacks.finishRemaining).toHaveBeenCalledWith(report);
+		expect(callbacks.syncAfter).not.toHaveBeenCalled();
+	});
+
+	test('M2 — dismissing DURING the run still delivers the report to the caller', async () => {
+		const report = emptyReport({ migrated: [rename('a.md', 'b.md')], aborted: true, remaining: 3 });
+		const { modal, container, callbacks, runCalls, finishRun } = makeModal(makePlan(), report);
+		footerBtn(container, 'Move 2 file(s)').click();
+		modal.close(); // Escape mid-run
+		expect(runCalls[0].shouldAbort()).toBe(true); // the engine is told to stop
+		await settle(finishRun);
+		expect(callbacks.dismissed).toHaveBeenLastCalledWith(report);
+		expect(callbacks.syncAfter).not.toHaveBeenCalled();
+	});
+
+	test('"Close" on a completed run reports the dismissal and never syncs', async () => {
+		const report = emptyReport({ migrated: [rename('a.md', 'b.md')] });
+		const { container, callbacks, finishRun } = makeModal(makePlan(), report);
+		footerBtn(container, 'Move 2 file(s)').click();
+		await settle(finishRun);
+		footerBtn(container, 'Close').click();
+		expect(callbacks.dismissed).toHaveBeenCalledWith(report);
+		expect(callbacks.syncAfter).not.toHaveBeenCalled();
 	});
 });
 

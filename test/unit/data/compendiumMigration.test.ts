@@ -10,12 +10,15 @@
 //   3. the trigger — never fires on a fresh install;
 //   4. idempotency, abort, occupied destinations.
 import {
-	CompendiumMigrationService, LEGACY_DETECTION_THRESHOLD, MIGRATION_MAP, describePlan,
+	CompendiumMigrationService, LEGACY_DETECTION_THRESHOLD, describePlan, migrationMap,
 } from "@/data/CompendiumMigration";
 import type { MigrationMap } from "@/data/CompendiumMigration";
 import { CompendiumSyncService } from "@/data/CompendiumSyncService";
 import { ManifestStore, sha256Hex } from "@/data/manifest";
+import { MigrationStateStore } from "@/data/migrationState";
 import { makeFakeApp } from "../../fakes/fakeObsidian";
+
+const MIGRATION_MAP = migrationMap();
 
 const ROOT = "DS Compendium";
 
@@ -36,6 +39,7 @@ async function testMap(): Promise<MigrationMap> {
 		newFormat: "md-dse",
 		newLocale: "en",
 		newSnapshot: "test",
+		newRelease: "v4.20260803143953",
 		counts: {},
 		paths: {
 			"Rules/Careers/Disciple.md": ["career/disciple.md", await hashOf("disciple text")],
@@ -48,8 +52,18 @@ async function testMap(): Promise<MigrationMap> {
 async function setup(map?: MigrationMap) {
 	const { app, vault, fileManager } = makeFakeApp();
 	const store = new ManifestStore(app, "draw-steel-elements");
-	const service = new CompendiumMigrationService(app, store, map ?? (await testMap()));
-	return { app, vault, fileManager, store, service };
+	const stateStore = new MigrationStateStore(app, "draw-steel-elements");
+	const service = new CompendiumMigrationService(app, store, stateStore, map ?? (await testMap()));
+	return { app, vault, fileManager, store, stateStore, service };
+}
+
+/** A second service over the SAME vault + stores — models a plugin reload. */
+async function reopen(
+	ctx: Awaited<ReturnType<typeof setup>>,
+	map?: MigrationMap,
+): Promise<CompendiumMigrationService> {
+	return new CompendiumMigrationService(
+		ctx.app, ctx.store, ctx.stateStore, map ?? (await testMap()));
 }
 
 function seedLegacyVault(vault: ReturnType<typeof makeFakeApp>["vault"]): void {
@@ -86,7 +100,8 @@ describe("detect — the trigger", () => {
 
 	test("five coincidental legacy paths are not a compendium — no prompt", async () => {
 		const { app, vault } = await setup();
-		const service = new CompendiumMigrationService(app, new ManifestStore(app, "x"), MIGRATION_MAP);
+		const service = new CompendiumMigrationService(
+			app, new ManifestStore(app, "x"), new MigrationStateStore(app, "x"), MIGRATION_MAP);
 		for (const path of Object.keys(MIGRATION_MAP.paths).slice(0, 5)) {
 			vault.setText(`${ROOT}/${path}`, "x");
 		}
@@ -97,7 +112,8 @@ describe("detect — the trigger", () => {
 
 	test("twenty of them is a legacy install", async () => {
 		const { app, vault } = await setup();
-		const service = new CompendiumMigrationService(app, new ManifestStore(app, "x"), MIGRATION_MAP);
+		const service = new CompendiumMigrationService(
+			app, new ManifestStore(app, "x"), new MigrationStateStore(app, "x"), MIGRATION_MAP);
 		for (const path of Object.keys(MIGRATION_MAP.paths).slice(0, 20)) {
 			vault.setText(`${ROOT}/${path}`, "x");
 		}
@@ -178,7 +194,7 @@ describe("execute — the move", () => {
 	test("moves via fileManager.renameFile ONLY: no trash, no delete, content preserved", async () => {
 		const { vault, fileManager, service } = await setup();
 		seedLegacyVault(vault);
-		const report = await service.execute(await service.plan(ROOT));
+		const report = await service.execute(await service.plan(ROOT), { writeReportNote: false });
 
 		expect(fileManager.renamed).toEqual([
 			{ from: `${ROOT}/Rules/Careers/Disciple.md`, to: `${ROOT}/career/disciple.md` },
@@ -198,19 +214,19 @@ describe("execute — the move", () => {
 		const { vault, service } = await setup();
 		seedLegacyVault(vault);
 		expect(vault.folders.has(`${ROOT}/career`)).toBe(false);
-		await service.execute(await service.plan(ROOT));
+		await service.execute(await service.plan(ROOT), { writeReportNote: false });
 		expect(vault.folders.has(`${ROOT}/career`)).toBe(true);
 	});
 
 	test("is idempotent: a second run has nothing left to plan", async () => {
 		const { vault, fileManager, service } = await setup();
 		seedLegacyVault(vault);
-		await service.execute(await service.plan(ROOT));
+		await service.execute(await service.plan(ROOT), { writeReportNote: false });
 		const renamesAfterFirstRun = fileManager.renamed.length;
 
 		const second = await service.plan(ROOT);
 		expect(second.renames).toEqual([]);
-		await service.execute(second);
+		await service.execute(second, { writeReportNote: false });
 		expect(fileManager.renamed).toHaveLength(renamesAfterFirstRun);
 	});
 
@@ -223,6 +239,7 @@ describe("execute — the move", () => {
 
 		let done = 0;
 		const report = await service.execute(plan, {
+			writeReportNote: false,
 			onProgress: () => { done++; },
 			shouldAbort: () => done >= 1, // stop after the first file completes
 		});
@@ -240,7 +257,7 @@ describe("execute — the move", () => {
 		jest.spyOn(fileManager, "renameFile").mockImplementationOnce(() => {
 			throw new Error("Obsidian said no");
 		});
-		const report = await service.execute(await service.plan(ROOT));
+		const report = await service.execute(await service.plan(ROOT), { writeReportNote: false });
 		expect(report.failed).toEqual([{
 			fromPath: `${ROOT}/Rules/Careers/Disciple.md`,
 			toPath: `${ROOT}/career/disciple.md`,
@@ -253,7 +270,7 @@ describe("execute — the move", () => {
 		const { vault, service } = await setup();
 		seedLegacyVault(vault);
 		vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited by me");
-		const report = await service.execute(await service.plan(ROOT));
+		const report = await service.execute(await service.plan(ROOT), { writeReportNote: false });
 		expect(report.migrated).toHaveLength(2);
 		expect(report.migratedModified.map((r) => r.newRelative)).toEqual(["career/sage.md"]);
 		expect(vault.text(`${ROOT}/career/sage.md`)).toBe("sage text, edited by me");
@@ -264,7 +281,7 @@ describe("the handoff to the sync engine", () => {
 	test("adopts the moved files into the manifest, at their NEW relative paths", async () => {
 		const { vault, store, service } = await setup();
 		seedLegacyVault(vault);
-		await service.execute(await service.plan(ROOT));
+		await service.execute(await service.plan(ROOT), { writeReportNote: false });
 
 		const manifest = (await store.load())!;
 		expect(Object.keys(manifest.files).sort()).toEqual(["career/disciple.md", "career/sage.md"]);
@@ -277,7 +294,7 @@ describe("the handoff to the sync engine", () => {
 	test("THE POINT: the next sync UPDATES the moved files instead of skipping them as user content", async () => {
 		const { app, vault, store, service } = await setup();
 		seedLegacyVault(vault);
-		await service.execute(await service.plan(ROOT));
+		await service.execute(await service.plan(ROOT), { writeReportNote: false });
 
 		const sync = new CompendiumSyncService(app, store);
 		const incoming = new Map([
@@ -319,7 +336,7 @@ describe("the handoff to the sync engine", () => {
 			files: { "rule/combat/turn.md": "deadbeef" },
 		});
 		seedLegacyVault(vault);
-		await service.execute(await service.plan(ROOT));
+		await service.execute(await service.plan(ROOT), { writeReportNote: false });
 
 		const manifest = (await store.load())!;
 		expect(Object.keys(manifest.files).sort())
@@ -329,8 +346,214 @@ describe("the handoff to the sync engine", () => {
 
 	test("a run that moved nothing does not write a manifest at all", async () => {
 		const { store, service } = await setup();
-		const report = await service.execute(await service.plan(ROOT));
+		const report = await service.execute(await service.plan(ROOT), { writeReportNote: false });
 		expect(report.migrated).toEqual([]);
 		expect(await store.load()).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Review fix round — the findings that had executable reproductions.
+// ---------------------------------------------------------------------------
+
+describe("H1 — an interrupted run must not strand its files", () => {
+	test("SCENARIO A: crash mid-run, then re-run — EVERY moved file ends up managed", async () => {
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		ctx.vault.setText(`${ROOT}/Careers/Retired.md`, "retired");
+
+		// Run 1 stops after one file, and then the process "dies" — no summary, no
+		// further calls on this service instance.
+		let moved = 0;
+		await ctx.service.execute(await ctx.service.plan(ROOT), {
+			writeReportNote: false,
+			onProgress: () => { moved++; },
+			shouldAbort: () => moved >= 1,
+		});
+		const afterCrash = (await ctx.store.load())!;
+		expect(Object.keys(afterCrash.files)).toHaveLength(1);
+
+		// Run 2 is a fresh service over the same vault (a plugin reload).
+		const service2 = await reopen(ctx);
+		await service2.execute(await service2.plan(ROOT), { writeReportNote: false });
+
+		const manifest = (await ctx.store.load())!;
+		expect(Object.keys(manifest.files).sort())
+			.toEqual(["career/disciple.md", "career/retired.md", "career/sage.md"]);
+
+		// …and the proof that this is the property that matters: the next sync updates
+		// all three in place rather than skipping the run-1 file as a squatter.
+		const sync = new CompendiumSyncService(ctx.app, ctx.store);
+		const { report } = await sync.applySync(
+			new Map([
+				["career/disciple.md", bytes("NEW disciple")],
+				["career/retired.md", bytes("NEW retired")],
+				["career/sage.md", bytes("NEW sage")],
+			]),
+			await ctx.store.load(), { root: ROOT, locale: "en" }, "v4.new");
+		expect(report.updated.sort())
+			.toEqual(["career/disciple.md", "career/retired.md", "career/sage.md"]);
+		expect(report.skippedConflicts).toEqual([]);
+	});
+
+	test("reconcile() alone repairs an unadopted move, without any further migration", async () => {
+		const ctx = await setup();
+		seedLegacyVault(ctx.vault);
+		let moved = 0;
+		await ctx.service.execute(await ctx.service.plan(ROOT), {
+			writeReportNote: false,
+			onProgress: () => { moved++; },
+			shouldAbort: () => moved >= 1,
+		});
+		// Wipe the manifest the way a failed write or a restored backup might.
+		await ctx.store.save({
+			schemaVersion: 1, source: "SteelCompendium/data-unified", releaseTag: "v4.x",
+			locale: "en", format: "md-dse", root: ROOT, syncedAt: "2026-08-01T00:00:00.000Z",
+			files: {},
+		});
+		const service2 = await reopen(ctx);
+		expect(await service2.reconcile(ROOT)).toBe(1);
+		expect(Object.keys((await ctx.store.load())!.files)).toEqual(["career/disciple.md"]);
+	});
+
+	test("reconcile() claims ONLY what the migration moved — never a user note parked on a destination", async () => {
+		const ctx = await setup();
+		// No migration has ever run here; the user simply has a note at a path that
+		// happens to be a migration destination. A "sweep every destination" adoption
+		// would hand it to the next sync to overwrite.
+		ctx.vault.setText(`${ROOT}/career/disciple.md`, "MY notes, at that path by coincidence");
+		expect(await ctx.service.reconcile(ROOT)).toBe(0);
+		expect(await ctx.store.load()).toBeNull();
+	});
+});
+
+describe("H2 — declining or stopping must re-arm the offer", () => {
+	test("markDeclined makes the migration pending; markSettled clears it", async () => {
+		const { service } = await setup();
+		expect(await service.isPending()).toBe(false);
+		await service.markDeclined(ROOT);
+		expect(await service.isPending()).toBe(true);
+		await service.markSettled(ROOT);
+		expect(await service.isPending()).toBe(false);
+	});
+
+	test("an aborted run leaves the migration pending", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		vault.setText(`${ROOT}/Careers/Retired.md`, "retired");
+		let moved = 0;
+		const report = await service.execute(await service.plan(ROOT), {
+			writeReportNote: false,
+			onProgress: () => { moved++; },
+			shouldAbort: () => moved >= 1,
+		});
+		expect(report.aborted).toBe(true);
+		expect(await service.isPending()).toBe(true);
+	});
+
+	test("a completed run is not pending — and clears a decline recorded earlier", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		await service.markDeclined(ROOT);
+		await service.execute(await service.plan(ROOT), { writeReportNote: false });
+		expect(await service.isPending()).toBe(false);
+	});
+});
+
+describe("H3 — the per-path lists survive the dialog", () => {
+	test("writes a report note naming every skipped and flagged file", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		vault.setText(`${ROOT}/Rules/Careers/Sage.md`, "sage text, edited by me");
+		const report = await service.execute(await service.plan(ROOT));
+
+		expect(report.reportNotePath).not.toBeNull();
+		const note = vault.text(report.reportNotePath!)!;
+		expect(note).toContain("career/sage.md");                    // flagged as modified
+		expect(note).toContain(`${ROOT}/Rules/_Index.md`);           // unmapped
+		expect(note).toContain(`${ROOT}/My Homebrew.md`);            // unmapped
+		expect(note).toContain("Nothing was deleted");
+		// The note must warn that the sync will overwrite the file the user edited.
+		expect(note).toContain("overwrites them with the current official text");
+	});
+
+	test("the report note never overwrites an existing file", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		const first = await service.execute(await service.plan(ROOT));
+		vault.setText(`${ROOT}/Rules/Careers/Disciple.md`, "disciple text");
+		const second = await service.execute(await service.plan(ROOT));
+		expect(second.reportNotePath).not.toBe(first.reportNotePath);
+		expect(vault.text(first.reportNotePath!)).toBeDefined();
+	});
+
+	test("a no-op run writes no note at all", async () => {
+		const { vault, service } = await setup();
+		const report = await service.execute(await service.plan(ROOT));
+		expect(report.reportNotePath).toBeNull();
+		expect([...vault.files.keys()]).toEqual([]);
+	});
+});
+
+describe("M3 — case-insensitive filesystems", () => {
+	test("reuses an existing folder that differs only by case instead of making a second one", async () => {
+		const ctx = await setup();
+		ctx.vault.setText(`${ROOT}/Rules/Careers/Disciple.md`, "disciple text");
+		// A vault that already carries `Career/` (capital C) — on macOS/Windows this IS
+		// the folder `career/`, so creating the lowercase spelling must not happen.
+		ctx.vault.setText(`${ROOT}/Career/keep.md`, "something already here");
+
+		await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
+		expect(ctx.fileManager.renamed).toEqual([
+			{ from: `${ROOT}/Rules/Careers/Disciple.md`, to: `${ROOT}/Career/disciple.md` },
+		]);
+		expect(ctx.vault.folders.has(`${ROOT}/career`)).toBe(false);
+		expect(ctx.vault.text(`${ROOT}/Career/keep.md`)).toBe("something already here");
+	});
+});
+
+describe("L1/L2 — progress never stalls", () => {
+	test("plan() reports progress and finishes at total/total", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		const ticks: Array<[number, number]> = [];
+		const plan = await service.plan(ROOT, (done, total) => ticks.push([done, total]));
+		expect(ticks[ticks.length - 1]).toEqual([4, 4]);
+		expect(plan.renames).toHaveLength(2);
+	});
+
+	test("execute() ticks for entries it SKIPS, not only for the ones it moves", async () => {
+		const { vault, service } = await setup();
+		seedLegacyVault(vault);
+		const plan = await service.plan(ROOT);
+		// Make the first entry vanish between plan and execute — the skip branch.
+		vault.files.delete(`${ROOT}/Rules/Careers/Disciple.md`);
+		const ticks: number[] = [];
+		const report = await service.execute(plan, {
+			writeReportNote: false,
+			onProgress: (done) => ticks.push(done),
+		});
+		expect(report.migrated).toHaveLength(1);
+		expect(ticks).toEqual([1, 2]); // both entries advanced the bar
+	});
+});
+
+describe("a transitional release: two old paths, one destination", () => {
+	test("the first wins deterministically and the second is blocked, not overwritten", async () => {
+		const map = await testMap();
+		// Both spellings of the same entity, as a mid-2025 tree could carry.
+		map.paths["Careers/Disciple.md"] = ["career/disciple.md"];
+		const { vault, service } = await setup(map);
+		vault.setText(`${ROOT}/Careers/Disciple.md`, "older layout copy");
+		vault.setText(`${ROOT}/Rules/Careers/Disciple.md`, "disciple text");
+
+		const plan = await service.plan(ROOT);
+		expect(plan.renames.map((r) => r.oldRelative)).toEqual(["Careers/Disciple.md"]);
+		expect(plan.blocked).toEqual([
+			{ fromPath: `${ROOT}/Rules/Careers/Disciple.md`, toPath: `${ROOT}/career/disciple.md` },
+		]);
+		await service.execute(plan, { writeReportNote: false });
+		expect(vault.text(`${ROOT}/career/disciple.md`)).toBe("older layout copy");
+		expect(vault.text(`${ROOT}/Rules/Careers/Disciple.md`)).toBe("disciple text");
 	});
 });

@@ -5,7 +5,8 @@ import {LegacyCompendiumModal} from "@views/LegacyCompendiumModal";
 import {DSESettings, migrateSettings} from "@model/Settings";
 import {CompendiumSyncService, SyncOptions} from "@/data/CompendiumSyncService";
 import {CompendiumMigrationService} from "@/data/CompendiumMigration";
-import type {MigrationPlan} from "@/data/CompendiumMigration";
+import type {MigrationPlan, MigrationReport} from "@/data/CompendiumMigration";
+import {MigrationStateStore} from "@/data/migrationState";
 import {CompendiumMigrationModal} from "@views/CompendiumMigrationModal";
 import {ManifestStore} from "@/data/manifest";
 import { registerElements } from '@/utils/RegisterElements';
@@ -423,7 +424,8 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // SC-125: shares the manifest store because a completed migration ADOPTS the
         // moved files into it — otherwise the next sync would treat 2,000 renamed
         // files as user content squatting on compendium paths and skip every one.
-        this.migrationService = new CompendiumMigrationService(this.app, this.manifestStore);
+        this.migrationService = new CompendiumMigrationService(
+            this.app, this.manifestStore, new MigrationStateStore(this.app, this.manifest.id));
 
         // F2 §4.4: the scc resolver's RefProvider, registered onto the framework's
         // ReferenceService (F1 §3.7 seam — see src/refs/SccRefProvider.ts). Later-
@@ -619,22 +621,39 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      */
     async syncCompendium(): Promise<void> {
         const options = this.syncOptions();
+        // SC-125: adopt anything a previous (possibly interrupted) migration moved
+        // BEFORE any sync reads the manifest — otherwise those files look like user
+        // content squatting on compendium paths and get skipped forever.
+        await this.migrationService.reconcile(options.root);
         const manifest = await this.manifestStore.load();
-        if (manifest === null) {
+        // SC-125 (review H2): the offer is also owed when the user declined it or
+        // stopped a run part-way. After a partial run the manifest is no longer null,
+        // so the manifest-absence arm alone could never re-offer.
+        const migrationPending = await this.migrationService.isPending();
+        if (manifest === null || migrationPending) {
             const root = this.app.vault.getAbstractFileByPath(normalizePath(options.root));
-            // SC-125 trigger, stated exactly. ALL THREE must hold, and each one alone
-            // is enough to rule a fresh install out:
-            //   (a) no sync manifest exists — 7.0.0+ has never synced into this vault;
-            //   (b) the configured root is a folder that already has children;
+            // SC-125 trigger, stated exactly. The offer appears when:
+            //   (a) no sync manifest exists (7.0.0+ has never synced here) OR the user
+            //       has an outstanding declined/incomplete migration; AND
+            //   (b) the configured root is a folder that already has children; AND
             //   (c) at least LEGACY_DETECTION_THRESHOLD files under it sit at exact
-            //       pre-7.0.0 compendium paths.
+            //       pre-7.0.0 compendium paths — or, when (a) is an outstanding
+            //       migration, even ONE such file, since a partly-finished run can
+            //       leave fewer than the threshold behind.
             // A fresh install fails (b) (no folder at all, or an empty one) and would
-            // fail (c) anyway. A vault that already migrated fails (a) — the migration
-            // writes a manifest — and would fail (c) too, since the files have moved.
+            // fail (c) anyway. A vault that finished migrating and synced fails all three.
             if (root instanceof TFolder && root.children.length > 0) {
                 const detection = this.migrationService.detect(options.root);
-                if (detection.isLegacyLayout) {
-                    await this.offerMigration(options.root, () => { void this.syncService.sync(this.syncOptions()); });
+                if (detection.isLegacyLayout || (migrationPending && detection.legacyPaths > 0)) {
+                    await this.offerMigration(options.root);
+                    return;
+                }
+                if (migrationPending) {
+                    // Nothing left to migrate — stop re-offering and carry on.
+                    await this.migrationService.markSettled(options.root);
+                }
+                if (manifest !== null) {
+                    await this.syncService.sync(options);
                     return;
                 }
                 // LegacyCompendiumModal's onChoice callback is declared `(trashOldRoot:
@@ -659,58 +678,93 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
 
     /**
      * SC-125 — the manual command. Same engine and same dialog as the first-sync
-     * offer, but reachable at any time and with no sync chained onto the end unless
-     * the user asks for one from the summary.
+     * offer, reachable at any time.
      */
     async migrateCompendium(): Promise<void> {
-        await this.offerMigration(this.syncOptions().root, null);
+        await this.offerMigration(this.syncOptions().root);
     }
 
     /**
-     * Build the dry-run plan and put it in front of the user. `andThen`, when given,
-     * runs after the dialog closes — the first-sync path uses it to continue into the
-     * sync whichever way the user answers, because the sync itself is safe either way.
+     * Build the dry-run plan and put it in front of the user.
+     *
+     * Review H2: this NEVER chains into a sync on its own. A sync creates every
+     * destination and so makes the remaining moves impossible — that is a decision
+     * only the user gets to make, from a button that says so. Declining, dismissing,
+     * or stopping half-way all leave the compendium untouched and re-arm the offer.
      */
-    private async offerMigration(root: string, andThen: (() => void) | null): Promise<void> {
+    private async offerMigration(root: string): Promise<void> {
         const notice = new Notice('Draw Steel Elements: checking the compendium layout…', 0);
         let plan: MigrationPlan;
         try {
-            plan = await this.migrationService.plan(root);
+            plan = await this.migrationService.plan(
+                root, (done, total) => notice.setMessage(
+                    `Draw Steel Elements: checking the compendium layout… ${done}/${total}`));
+        } catch (error: unknown) {
+            // Review L5: a throwing plan used to escape into a discarded promise, so the
+            // user saw the "checking…" notice hang and then nothing at all.
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('Draw Steel Elements: could not plan the compendium migration:', error);
+            new Notice(`Draw Steel Elements: could not check the compendium layout — ${message}`, 8000);
+            return;
         } finally {
             notice.hide();
         }
+
         if (plan.renames.length === 0) {
+            await this.migrationService.markSettled(root);
             new Notice(
                 plan.detection.filesInRoot === 0
                     ? `Draw Steel Elements: nothing to migrate — "${root}" is empty.`
                     : 'Draw Steel Elements: nothing to migrate — no pre-7.0.0 compendium files found.',
                 6000);
-            andThen?.();
             return;
         }
+
+        const declined = () => {
+            void (async () => {
+                await this.migrationService.markDeclined(root);
+                new Notice(
+                    'Draw Steel Elements: compendium left as it is, and NOT synced — syncing now ' +
+                    'would create the new files and make the move impossible. You will be asked ' +
+                    'again next time you sync.', 10000);
+            })();
+        };
+
         new CompendiumMigrationModal(this.app, plan, {
             run: (onProgress, shouldAbort) =>
                 this.migrationService.execute(plan, { onProgress, shouldAbort }),
-            skip: () => { andThen?.(); },
-            done: (report) => {
-                if (report.migratedModified.length > 0 || report.failed.length > 0
-                    || report.blocked.length > 0) {
-                    console.warn(
-                        'Draw Steel Elements: compendium migration — files needing a look:',
-                        {
-                            movedButNotMatchingTheFinalLegacyRelease:
-                                report.migratedModified.map((rename) => rename.toPath),
-                            couldNotMoveTargetOccupied: report.blocked,
-                            failed: report.failed,
-                        });
-                }
-                new Notice(
-                    `Draw Steel Elements: ${report.migrated.length} compendium file(s) moved to the ` +
-                    `7.0.0 layout. Links in your notes were updated by Obsidian.`, 8000);
-                if (andThen) andThen();
-                else void this.syncCompendium();
+            decline: declined,
+            syncAnyway: () => {
+                void (async () => {
+                    await this.migrationService.markSettled(root);
+                    await this.syncService.sync(this.syncOptions());
+                })();
+            },
+            finishRemaining: () => { void this.offerMigration(root); },
+            syncAfter: (report) => {
+                this.announceMigration(report);
+                void this.syncService.sync(this.syncOptions());
+            },
+            dismissed: (report) => {
+                if (report === null) { declined(); return; }
+                this.announceMigration(report);
             },
         }).open();
+    }
+
+    /** One Notice after a migration run, pointing at the report note for the detail. */
+    private announceMigration(report: MigrationReport): void {
+        const tail = report.reportNotePath !== null
+            ? ` Full details: "${report.reportNotePath}".`
+            : '';
+        new Notice(
+            report.aborted
+                ? `Draw Steel Elements: stopped after moving ${report.migrated.length} file(s); ` +
+                  `${report.remaining} still to go. Run "Migrate compendium from the pre-7.0.0 ` +
+                  `layout" to finish before syncing.${tail}`
+                : `Draw Steel Elements: ${report.migrated.length} compendium file(s) moved to the ` +
+                  `7.0.0 layout. Links in your notes were updated by Obsidian.${tail}`,
+            10000);
     }
 
     async loadSettings() {

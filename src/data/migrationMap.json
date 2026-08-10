@@ -1,22 +1,23 @@
 {
  "schemaVersion": 1,
  "generator": "tools/gen-migration-map.mjs",
- "generatedAt": "2026-08-10T16:53:38Z",
+ "generatedAt": "2026-08-10T17:29:48Z",
  "oldSource": "SteelCompendium/data-md-dse",
  "oldFinalRelease": "v3.20260403152914",
  "oldReleasesCovered": 243,
  "newSource": "SteelCompendium/data-unified",
  "newFormat": "md-dse",
  "newLocale": "en",
- "newSnapshot": "v4.20260802171159-1-g52055343",
+ "newSnapshot": "published release asset md-dse-unified-en.zip",
+ "newRelease": "v4.20260803143953",
  "counts": {
   "oldPathsSeen": 4017,
   "oldPathsInFinalRelease": 2443,
   "newPaths": 3078,
-  "mapped": 3301,
+  "mapped": 3290,
   "mappedFromFinalRelease": 2036,
   "ambiguous": 3,
-  "unmatched": 713
+  "unmatched": 724
  },
  "paths": {
   "Abilities/Common Actions/Catch Breath.md": [
@@ -4668,9 +4669,6 @@
   "Complications/Cult Victim.md": [
    "complication/cult-victim.md"
   ],
-  "Complications/Elemental Absorption.md": [
-   "feature/null/level-6/elemental-absorption.md"
-  ],
   "Complications/Fire And Chaos.md": [
    "complication/fire-and-chaos.md"
   ],
@@ -4746,9 +4744,6 @@
   "Cultures/Upbringing/Noble.md": [
    "culture/noble.md"
   ],
-  "Kits/Caster Kits/Dancer.md": [
-   "feature/ability/shadow/level-3/dancer.md"
-  ],
   "Kits/Martial Kits/Cloak And Dagger.md": [
    "kit/cloak-and-dagger.md"
   ],
@@ -4794,38 +4789,17 @@
   "Kits/Martial Kits/Whirlwind.md": [
    "kit/whirlwind.md"
   ],
-  "Movement/Burrow.md": [
-   "movement/burrow.md"
-  ],
   "Movement/Climb Or Swim.md": [
    "movement/climb-or-swim.md"
   ],
-  "Movement/Crawl.md": [
-   "movement/crawl.md"
-  ],
   "Movement/Difficult Terrain.md": [
    "movement/difficult-terrain.md"
-  ],
-  "Movement/Fly.md": [
-   "movement/fly.md"
   ],
   "Movement/Forced Movement.md": [
    "movement/forced-movement.md"
   ],
   "Movement/High Ground.md": [
    "movement/high-ground.md"
-  ],
-  "Movement/Jump.md": [
-   "movement/jump.md"
-  ],
-  "Movement/Shifting.md": [
-   "movement/shifting.md"
-  ],
-  "Movement/Teleport.md": [
-   "movement/teleport.md"
-  ],
-  "Movement/Walk.md": [
-   "movement/walk.md"
   ],
   "Negotiation/Motivations and Pitfalls/Benevolence.md": [
    "negotiation/benevolence.md"
@@ -8465,9 +8439,6 @@
    "chapter/the-basics.md",
    "6b7b1ec7ad666581"
   ],
-  "Rules/Classes By Level/Fury/2nd Level Aspect Ability.md": [
-   "feature/fury/level-2/2nd-level-aspect-ability.md"
-  ],
   "Rules/Classes/Censor.md": [
    "class/censor.md",
    "6a0e6e78d7d9d5e8"
@@ -10955,9 +10926,6 @@
   "Rules/Kits/Guisarmier.md": [
    "kit/guisarmier.md",
    "029e3d09945197a0"
-  ],
-  "Rules/Kits/Lets Dance.md": [
-   "feature/ability/pugilist/lets-dance.md"
   ],
   "Rules/Kits/Martial Artist.md": [
    "kit/martial-artist.md",

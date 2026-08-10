@@ -1,10 +1,13 @@
 import { App, TFile, normalizePath } from "obsidian";
 import rawMigrationMap from "./migrationMap.json";
-import { ensureParentFolders } from "./vaultPaths";
+import { buildFolderCaseIndex, ensureParentFolders } from "./vaultPaths";
+import type { FolderCaseIndex } from "./vaultPaths";
 import {
 	CompendiumManifest, ManifestStore, MANIFEST_SCHEMA_VERSION, sha256Hex,
 } from "./manifest";
 import { COMPENDIUM_FORMAT, COMPENDIUM_SOURCE } from "./CompendiumSyncService";
+import { MigrationStateStore, emptyMigrationState } from "./migrationState";
+import type { MigrationState } from "./migrationState";
 
 /**
  * SC-125 — the pre-7.0.0 → 7.0.0 compendium migration.
@@ -20,13 +23,19 @@ import { COMPENDIUM_FORMAT, COMPENDIUM_SOURCE } from "./CompendiumSyncService";
  * The plugin therefore never opens, parses or edits a user-authored note. The
  * normal sync then updates the moved files' CONTENT in place.
  *
+ * THE ONE-SHOT PROPERTY, and why the flow guards it so hard: the migration is
+ * impossible after a sync, and not because the old files vanish — they don't. It is
+ * because the sync CREATES all ~3,000 destinations, so every planned rename then
+ * finds its target occupied and is refused. Declining the offer, or stopping a run,
+ * must therefore NOT fall through into a sync; see `MigrationStateStore`.
+ *
  * Safety rules, all enforced below and all tested:
  *   - Nothing is ever deleted. Not the old files, not the old (now empty) folders,
- *     not anything unmapped. The only vault mutation is `renameFile`.
+ *     not anything unmapped. The only vault mutations are `renameFile` and creating
+ *     the destination folders (plus, optionally, writing a report note).
  *   - A rename onto an existing path never happens; that pair is reported instead.
- *   - Files with no mapping are left exactly where they are and listed.
- *   - Re-running is a no-op: an already-moved file is no longer at its old path,
- *     so it is not in the plan at all.
+ *   - Files with no mapping are left exactly where they are and listed BY PATH.
+ *   - Re-running is a no-op: an already-moved file is no longer at its old path.
  */
 
 export const MIGRATION_MAP_SCHEMA_VERSION = 1 as const;
@@ -45,16 +54,36 @@ export interface MigrationMap {
 	newFormat: string;
 	newLocale: string;
 	newSnapshot: string;
+	/** The PUBLISHED data-unified release every destination was verified against. */
+	newRelease: string;
 	counts: Record<string, number>;
 	paths: Record<string, MigrationMapEntry>;
 }
 
 /**
- * `import ... from "./migrationMap.json"` gives TypeScript the file's full literal
- * type — 3.3k keys of it. Widening to `unknown` at the boundary keeps that literal
- * type from leaking into every inference site downstream.
+ * LAZY, and deliberately so (review L3).
+ *
+ * `migrationMap.json` is ~390 KiB. Imported as data it would be parsed at plugin load
+ * — a measured ~6.7 ms and ~0.7 MB retained on EVERY startup, forever, for a feature
+ * that runs at most once in a vault's life. `esbuild.config.mjs` swaps this import for
+ * the raw TEXT (see `migrationMapTextPlugin` there), and the parse happens on first
+ * use, which for almost every user is never.
+ *
+ * Jest resolves the same import through ts-jest's `resolveJsonModule`, so it arrives
+ * already parsed — hence the `typeof` check rather than an unconditional `JSON.parse`.
+ * Both shapes are correct; only the bundle pays the deferral.
  */
-export const MIGRATION_MAP = rawMigrationMap as unknown as MigrationMap;
+const migrationMapSource: unknown = rawMigrationMap;
+let parsedMigrationMap: MigrationMap | null = null;
+
+export function migrationMap(): MigrationMap {
+	if (parsedMigrationMap === null) {
+		parsedMigrationMap = (typeof migrationMapSource === "string"
+			? JSON.parse(migrationMapSource)
+			: migrationMapSource) as MigrationMap;
+	}
+	return parsedMigrationMap;
+}
 
 /**
  * How many files at exact legacy compendium paths it takes to call a folder "a
@@ -65,6 +94,10 @@ export const MIGRATION_MAP = rawMigrationMap as unknown as MigrationMap;
  * must not be able to prompt anybody.
  */
 export const LEGACY_DETECTION_THRESHOLD = 20;
+
+/** Renames between manifest/state checkpoints. A crash costs at most this many
+ *  files' bookkeeping, and the next run converges the rest anyway (H1). */
+export const CHECKPOINT_INTERVAL = 200;
 
 export interface LegacyDetection {
 	root: string;
@@ -123,12 +156,16 @@ export interface MigrationReport {
 	aborted: boolean;
 	/** Planned renames not attempted because the run was aborted. */
 	remaining: number;
+	/** Vault path of the written report note, when one was written (review H3). */
+	reportNotePath: string | null;
 }
 
 export interface ExecuteOptions {
 	onProgress?: (done: number, total: number) => void;
 	/** Polled between files; returning true stops after the file in flight. */
 	shouldAbort?: () => boolean;
+	/** Write the per-path report note into the vault (review H3). Default true. */
+	writeReportNote?: boolean;
 }
 
 /** Total renames a fully-executed plan performs — the headline dry-run number. */
@@ -144,6 +181,10 @@ const UNSAFE_PATH = /(^[\\/])|(^[a-zA-Z]:[\\/])|(^|\/)\.\.(\/|$)/;
  * The invariants are the ones the engine's safety story rests on:
  *   - no path can escape the compendium root (absolute, drive-prefixed, or `..`);
  *   - no entry renames a file onto itself;
+ *   - nothing is unsafe on a CASE-INSENSITIVE filesystem (review M3): no case-only
+ *     rename, and no two destinations whose folder chains differ only by case — on
+ *     macOS/Windows the first is a move onto itself and the second silently splits
+ *     one folder into two spellings that only one of them can win;
  *   - the hashed subset (the files a final-release vault actually holds) is
  *     INJECTIVE — two of them mapping to one destination would make the outcome
  *     depend on iteration order;
@@ -155,6 +196,7 @@ export function validateMigrationMap(map: MigrationMap): string[] {
 		problems.push(`schemaVersion is ${String(map.schemaVersion)}, expected ${MIGRATION_MAP_SCHEMA_VERSION}`);
 	}
 	const hashedTargets = new Map<string, string>();
+	const folderCase = new Map<string, string>();
 	for (const [oldPath, entry] of Object.entries(map.paths)) {
 		if (!Array.isArray(entry) || entry.length < 1 || entry.length > 2) {
 			problems.push(`${oldPath}: entry must be [newPath] or [newPath, hash]`);
@@ -165,8 +207,19 @@ export function validateMigrationMap(map: MigrationMap): string[] {
 		if (UNSAFE_PATH.test(oldPath)) problems.push(`${oldPath}: unsafe source path`);
 		if (UNSAFE_PATH.test(newPath)) problems.push(`${oldPath}: unsafe destination "${newPath}"`);
 		if (oldPath === newPath) problems.push(`${oldPath}: maps to itself`);
+		if (oldPath !== newPath && oldPath.toLowerCase() === newPath.toLowerCase()) {
+			problems.push(`${oldPath}: case-only rename to "${newPath}" (a no-op on macOS/Windows)`);
+		}
 		if (!oldPath.endsWith(".md")) problems.push(`${oldPath}: source is not markdown`);
 		if (!newPath.endsWith(".md")) problems.push(`${oldPath}: destination "${newPath}" is not markdown`);
+		const folder = newPath.split("/").slice(0, -1).join("/");
+		if (folder !== "") {
+			const owner = folderCase.get(folder.toLowerCase());
+			if (owner === undefined) folderCase.set(folder.toLowerCase(), folder);
+			else if (owner !== folder) {
+				problems.push(`${oldPath}: destination folder "${folder}" clashes by case with "${owner}"`);
+			}
+		}
 		if (hash !== undefined) {
 			if (!/^[0-9a-f]{8,64}$/.test(hash)) problems.push(`${oldPath}: bad hash "${hash}"`);
 			const clash = hashedTargets.get(newPath);
@@ -181,11 +234,47 @@ export function validateMigrationMap(map: MigrationMap): string[] {
 }
 
 export class CompendiumMigrationService {
+	private readonly map: MigrationMap;
+
 	constructor(
 		private app: App,
-		private store: ManifestStore,
-		private map: MigrationMap = MIGRATION_MAP,
-	) {}
+		private manifestStore: ManifestStore,
+		private stateStore: MigrationStateStore,
+		map?: MigrationMap,
+	) {
+		this.map = map ?? migrationMap();
+	}
+
+	// -- state ---------------------------------------------------------------
+
+	public async state(): Promise<MigrationState | null> {
+		return this.stateStore.load();
+	}
+
+	/** The offer is still owed: the user declined it, or a run stopped mid-way. */
+	public async isPending(): Promise<boolean> {
+		const state = await this.stateStore.load();
+		return state !== null && (state.declined || state.incomplete);
+	}
+
+	public async markDeclined(root: string): Promise<void> {
+		const state = (await this.stateStore.load()) ?? emptyMigrationState(root);
+		state.declined = true;
+		await this.stateStore.save(state);
+	}
+
+	/** Nothing left to migrate — stop re-offering. */
+	public async markSettled(root: string): Promise<void> {
+		const state = await this.stateStore.load();
+		if (state === null) return;
+		if (!state.declined && !state.incomplete) return;
+		state.declined = false;
+		state.incomplete = false;
+		state.root = root;
+		await this.stateStore.save(state);
+	}
+
+	// -- detection -----------------------------------------------------------
 
 	/** Cheap, synchronous, no file reads — safe to call on every sync. */
 	public detect(root: string): LegacyDetection {
@@ -209,11 +298,17 @@ export class CompendiumMigrationService {
 		};
 	}
 
+	// -- planning ------------------------------------------------------------
+
 	/**
 	 * The dry run. Reads every mapped file once to classify it as pristine or
-	 * modified; performs no writes and mutates nothing.
+	 * modified; performs no writes and mutates nothing. `onProgress` exists because
+	 * that is ~2,000 reads on a real legacy install (review L2).
 	 */
-	public async plan(root: string): Promise<MigrationPlan> {
+	public async plan(
+		root: string,
+		onProgress?: (done: number, total: number) => void,
+	): Promise<MigrationPlan> {
 		const normalizedRoot = normalizePath(root);
 		const prefix = `${normalizedRoot}/`;
 		const detection = this.detect(root);
@@ -221,9 +316,14 @@ export class CompendiumMigrationService {
 		const blocked: BlockedRename[] = [];
 		const unmapped: string[] = [];
 
-		// Deterministic order: the plan a user previews is the plan that runs.
+		// Deterministic order: the plan a user previews is the plan that runs, and the
+		// winner of any destination contest is stable rather than walk-order luck.
 		const files = this.filesUnder(prefix).sort((a, b) => (a.path < b.path ? -1 : 1));
+		const claimed = new Set<string>();
+		let done = 0;
 		for (const file of files) {
+			done++;
+			if (done % 100 === 0) onProgress?.(done, files.length);
 			const oldRelative = file.path.slice(prefix.length);
 			const entry = this.map.paths[oldRelative];
 			if (entry === undefined) {
@@ -233,10 +333,13 @@ export class CompendiumMigrationService {
 			const [newRelative, expectedHash] = entry;
 			const toPath = normalizePath(`${normalizedRoot}/${newRelative}`);
 			if (toPath === file.path) continue; // already where it belongs
-			if (this.app.vault.getAbstractFileByPath(toPath) !== null) {
+			// Occupied in the vault, or already claimed by an earlier file in this same
+			// plan (a transitional release can hold two spellings of one entity).
+			if (claimed.has(toPath) || this.app.vault.getAbstractFileByPath(toPath) !== null) {
 				blocked.push({ fromPath: file.path, toPath });
 				continue;
 			}
+			claimed.add(toPath);
 			renames.push({
 				fromPath: file.path,
 				toPath,
@@ -248,14 +351,24 @@ export class CompendiumMigrationService {
 						!== expectedHash,
 			});
 		}
+		onProgress?.(files.length, files.length);
 		return { root, detection, renames, blocked, unmapped };
 	}
+
+	// -- execution -----------------------------------------------------------
 
 	/**
 	 * Execute a plan. Every mapped file is moved with `FileManager.renameFile` so
 	 * Obsidian rewrites the user's links; the destination is re-checked immediately
 	 * before each move (the vault can change under a long run), and a failure on one
 	 * file never stops the others.
+	 *
+	 * Bookkeeping is CHECKPOINTED rather than deferred to the end (review H1): the
+	 * state file and the manifest are brought up to date every `CHECKPOINT_INTERVAL`
+	 * renames and again in a `finally`, and `reconcile()` runs first so a previously
+	 * interrupted run's files are adopted before this one adds to them. A crash mid-run
+	 * therefore costs a partial move, never a set of files stranded outside the
+	 * manifest forever.
 	 */
 	public async execute(plan: MigrationPlan, options: ExecuteOptions = {}): Promise<MigrationReport> {
 		const report: MigrationReport = {
@@ -268,61 +381,101 @@ export class CompendiumMigrationService {
 			unmapped: [...plan.unmapped],
 			aborted: false,
 			remaining: 0,
+			reportNotePath: null,
 		};
 
-		for (let index = 0; index < plan.renames.length; index++) {
-			if (options.shouldAbort?.() === true) {
-				report.aborted = true;
-				report.remaining = plan.renames.length - index;
-				break;
+		// Self-heal anything a previous, interrupted run moved but never recorded.
+		await this.reconcile(plan.root);
+		const state = (await this.stateStore.load()) ?? emptyMigrationState(plan.root);
+		state.root = plan.root;
+		const caseIndex: FolderCaseIndex = buildFolderCaseIndex(this.app);
+		let sinceCheckpoint = 0;
+
+		try {
+			for (let index = 0; index < plan.renames.length; index++) {
+				if (options.shouldAbort?.() === true) {
+					report.aborted = true;
+					report.remaining = plan.renames.length - index;
+					break;
+				}
+				const rename = plan.renames[index];
+				// L1: progress must advance on EVERY entry, including the ones that skip —
+				// otherwise a run that skips a stretch looks hung.
+				const tick = () => options.onProgress?.(index + 1, plan.renames.length);
+				const file = this.app.vault.getAbstractFileByPath(rename.fromPath);
+				if (!(file instanceof TFile)) {
+					tick();
+					continue; // vanished or already moved — nothing to do
+				}
+				if (this.app.vault.getAbstractFileByPath(rename.toPath) !== null) {
+					report.blocked.push({ fromPath: rename.fromPath, toPath: rename.toPath });
+					tick();
+					continue;
+				}
+				try {
+					const target = await ensureParentFolders(this.app, rename.toPath, caseIndex);
+					await this.app.fileManager.renameFile(file, target);
+					report.migrated.push(rename);
+					state.migrated.push(rename.newRelative);
+					sinceCheckpoint++;
+					if (rename.modified === true) report.migratedModified.push(rename);
+				} catch (error: unknown) {
+					report.failed.push({
+						fromPath: rename.fromPath,
+						toPath: rename.toPath,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+				tick();
+				if (sinceCheckpoint >= CHECKPOINT_INTERVAL) {
+					sinceCheckpoint = 0;
+					await this.stateStore.save(state);
+					await this.reconcile(plan.root);
+				}
 			}
-			const rename = plan.renames[index];
-			const file = this.app.vault.getAbstractFileByPath(rename.fromPath);
-			if (!(file instanceof TFile)) continue; // vanished or already moved — nothing to do
-			if (this.app.vault.getAbstractFileByPath(rename.toPath) !== null) {
-				report.blocked.push({ fromPath: rename.fromPath, toPath: rename.toPath });
-				continue;
-			}
-			try {
-				await ensureParentFolders(this.app, rename.toPath);
-				await this.app.fileManager.renameFile(file, rename.toPath);
-				report.migrated.push(rename);
-				if (rename.modified === true) report.migratedModified.push(rename);
-			} catch (error: unknown) {
-				report.failed.push({
-					fromPath: rename.fromPath,
-					toPath: rename.toPath,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-			options.onProgress?.(index + 1, plan.renames.length);
+		} finally {
+			// Runs on an abort, on an unexpected throw, and on the happy path alike.
+			state.incomplete = report.aborted && report.remaining > 0;
+			if (!state.incomplete) state.declined = false;
+			await this.stateStore.save(state);
+			await this.reconcile(plan.root);
 		}
 
-		await this.adoptIntoManifest(report, plan.root);
+		if (options.writeReportNote !== false) {
+			report.reportNotePath = await this.writeReportNote(report);
+		}
 		return report;
 	}
 
 	/**
-	 * Hand the moved files to the sync engine as MANAGED files.
+	 * Bring the sync manifest up to date with everything the migration has moved,
+	 * across ALL runs. Idempotent and cheap when there is nothing to do.
 	 *
-	 * Without this the very next sync would see 2,000 files it has no manifest entry
-	 * for, classify each as "user content squatting on a compendium path", and skip
-	 * them all — the migration would move the files and then leave them frozen at
-	 * legacy content forever. Recording the moved paths with their CURRENT hashes
-	 * makes the sync update them in place, which is the whole point.
+	 * Without this the sync would see the renamed files, find no manifest entry, and
+	 * classify every one as "user content squatting on a compendium path" — skipping
+	 * them all and freezing them at legacy content forever.
 	 *
-	 * Merges into any existing manifest rather than replacing it, so running the
-	 * manual command on a vault that already has a 7.0.0 manifest is safe.
+	 * It reads the state file rather than sweeping every file that happens to sit at a
+	 * known destination path, and that distinction matters: a user's own note parked on
+	 * a destination would be adopted by a sweep and then silently overwritten by the
+	 * next sync. Only files this plugin actually moved are ever claimed.
 	 */
-	private async adoptIntoManifest(report: MigrationReport, root: string): Promise<void> {
-		if (report.migrated.length === 0) return;
-		const existing = await this.store.load();
+	public async reconcile(root?: string): Promise<number> {
+		const state = await this.stateStore.load();
+		if (state === null || state.migrated.length === 0) return 0;
+		const existing = await this.manifestStore.load();
 		const files: Record<string, string> = { ...(existing?.files ?? {}) };
-		for (const rename of report.migrated) {
-			const file = this.app.vault.getAbstractFileByPath(rename.toPath);
+		const effectiveRoot = existing?.root ?? state.root ?? root ?? "";
+		let added = 0;
+		for (const relative of new Set(state.migrated)) {
+			if (files[relative] !== undefined) continue;
+			const file = this.app.vault.getAbstractFileByPath(
+				normalizePath(`${effectiveRoot}/${relative}`));
 			if (!(file instanceof TFile)) continue;
-			files[rename.newRelative] = await sha256Hex(await this.app.vault.readBinary(file));
+			files[relative] = await sha256Hex(await this.app.vault.readBinary(file));
+			added++;
 		}
+		if (added === 0 && existing !== null) return 0;
 		const manifest: CompendiumManifest = {
 			schemaVersion: MANIFEST_SCHEMA_VERSION,
 			source: existing?.source ?? COMPENDIUM_SOURCE,
@@ -332,11 +485,89 @@ export class CompendiumMigrationService {
 			releaseTag: existing?.releaseTag ?? `migrated:${this.map.oldFinalRelease}`,
 			locale: existing?.locale ?? this.map.newLocale,
 			format: existing?.format ?? COMPENDIUM_FORMAT,
-			root: existing?.root ?? root,
+			root: effectiveRoot,
 			syncedAt: new Date().toISOString(),
 			files,
 		};
-		await this.store.save(manifest);
+		await this.manifestStore.save(manifest);
+		return added;
+	}
+
+	/**
+	 * Review H3 — the per-path lists have to outlive the dialog. Counts in a Notice
+	 * are not "left in place and listed"; a user who wants to know WHICH file was
+	 * skipped has to be able to read it tomorrow, without the developer console.
+	 *
+	 * A new note at the vault root (never inside the compendium folder, where the sync
+	 * would then report it as an unmanaged stray), with a fresh name every time so it
+	 * can never overwrite anything.
+	 */
+	public async writeReportNote(report: MigrationReport): Promise<string | null> {
+		const interesting = report.migratedModified.length + report.blocked.length
+			+ report.failed.length + report.unmapped.length;
+		if (report.migrated.length === 0 && interesting === 0) return null;
+
+		const lines: string[] = [];
+		const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+		lines.push(`# Draw Steel Elements — compendium migration, ${stamp}`);
+		lines.push("");
+		lines.push(
+			`Moved **${report.migrated.length}** file(s) in \`${report.root}\` to the 7.0.0 layout. ` +
+			"Obsidian updated the links in your notes. Nothing was deleted.");
+		if (report.aborted) {
+			lines.push("");
+			lines.push(
+				`**Stopped early — ${report.remaining} file(s) were not moved.** Run the command ` +
+				'"Migrate compendium from the pre-7.0.0 layout" to finish. Do NOT sync the ' +
+				"compendium first: syncing creates the new files, and the remaining moves then " +
+				"have nowhere to go.");
+		}
+		const section = (title: string, body: string, items: string[]) => {
+			if (items.length === 0) return;
+			lines.push("");
+			lines.push(`## ${title} — ${items.length}`);
+			lines.push("");
+			lines.push(body);
+			lines.push("");
+			for (const item of items) lines.push(`- \`${item}\``);
+		};
+		section(
+			"Moved, but their content did not match the last legacy release",
+			"You edited these, or you were on an older compendium release. They were moved like " +
+			"any other file. **The next sync overwrites them with the current official text** — " +
+			"copy anything of your own out of them first if you want to keep it.",
+			report.migratedModified.map((r) => r.toPath));
+		section(
+			"Not moved — something already occupies the new path",
+			"Left exactly as they were, at their old paths. Nothing was overwritten.",
+			report.blocked.map((r) => `${r.fromPath}  →  ${r.toPath}`));
+		section(
+			"Failed to move",
+			"Obsidian refused the move. These are still at their old paths.",
+			report.failed.map((r) => `${r.fromPath}  →  ${r.toPath}  (${r.error})`));
+		section(
+			"Left in place — no 7.0.0 counterpart",
+			"Folder index pages, whole-book pages, and anything of your own that lives in the " +
+			"compendium folder. Links to these still work; links to the compendium pages that " +
+			"genuinely no longer exist will not.",
+			report.unmapped);
+		lines.push("");
+		lines.push(
+			"The old, now-empty folders were left behind on purpose — deleting folders is not " +
+			"something this does. Remove them yourself whenever you like.");
+
+		const base = `Draw Steel Elements migration report ${stamp.replace(":", "")}`;
+		let path = normalizePath(`${base}.md`);
+		for (let n = 2; this.app.vault.getAbstractFileByPath(path) !== null; n++) {
+			path = normalizePath(`${base} (${n}).md`);
+		}
+		try {
+			await this.app.vault.create(path, lines.join("\n"));
+			return path;
+		} catch (error) {
+			console.warn("Draw Steel Elements: could not write the migration report note.", error);
+			return null;
+		}
 	}
 
 	private filesUnder(prefix: string): TFile[] {

@@ -62,7 +62,10 @@ what's in there:
 
 - **A pre-7.0.0 compendium** (at least twenty files sitting at exact pre-7.0.0 compendium
   paths) — you're offered the **layout migration**: the old files are *moved* to their
-  7.0.0 paths so Obsidian rewrites the links in your notes for you. See
+  7.0.0 paths so Obsidian rewrites the links in your notes for you. Declining leaves the
+  compendium alone and **does not sync** — syncing creates the new files and makes the
+  move impossible, so that is a separate, explicitly labelled button. You are asked again
+  the next time you sync. See
   [Migrating from 5.x to 7.0.0 → Your links to compendium notes keep working](migrating-to-7.md#your-links-to-compendium-notes-keep-working)
   for what the dialog shows and what it will and won't do. The command
   **Migrate compendium from the pre-7.0.0 layout** runs the same thing at any time.

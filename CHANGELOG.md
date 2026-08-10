@@ -33,7 +33,16 @@ for what needs action.
   one of them is enumerated with a reason in
   [the migration map's review report](docs/compendium-migration-map.md). The
   prompt cannot fire on a fresh install — it needs an existing folder with at
-  least twenty files at exact pre-7.0.0 compendium paths.
+  least twenty files at exact pre-7.0.0 compendium paths. Declining leaves the
+  compendium alone and does **not** sync: syncing creates the new files and makes
+  the move impossible afterwards, so that is its own explicitly labelled choice,
+  and you are asked again next time. An interrupted run is safe to resume — the
+  bookkeeping is checkpointed as it goes, so nothing is left stranded. Afterwards
+  the migration writes a report note into your vault naming every file it flagged,
+  skipped or left alone. One consequence worth knowing: a compendium file you had
+  edited in place is moved like any other and then updated by the next sync, so
+  copy your own words out of the flagged files first — the dialog and the report
+  note list them for exactly that reason.
 
 - [BREAKING] **Obsidian 1.13.0 or newer is now required** (`minAppVersion`
   moves from 0.15.0). Obsidian 1.13 introduced the settings API this release

@@ -184,11 +184,46 @@ const FAMILY_EQUIVALENCE = new Map(
 		god: ["god"],
 		saint: ["saint"],
 		religion: ["god", "saint"],
+		// Plural/legacy spellings from the 2024-2025 trees. Missing keys used to mean
+		// "no opinion", which under the old scoring silently permitted cross-type
+		// matches (review M4: a complication landing on a Null class feature). With the
+		// table now acting as a GATE these must be complete for the families we know.
+		// A kit is only ever a kit. The lone `kits → ability` pairing the crosstab used to
+		// show was the review's Dancer substitution (the Dancer KIT was cut from the game;
+		// the only same-named survivor is a Shadow ability), not a real correspondence.
+		kits: ["kit"],
+		ancestries: ["ancestry"],
+		careers: ["career"],
+		complications: ["complication"],
+		titles: ["title"],
+		perks: ["perk"],
+		treasures: ["treasure"],
+		monsters: ["monster", "statblock", "featureblock"],
+		statblocks: ["statblock"],
+		features: ["feature", "ability", "trait", "featureblock", "rule"],
+		index: [],
 	}),
 );
 
 const familyMatches = (oldFam, newFam) =>
 	oldFam !== "" && (FAMILY_EQUIVALENCE.get(oldFam) ?? []).includes(newFam);
+
+/**
+ * M4 — the table is a GATE, not merely a weight.
+ *
+ * It used to contribute 1000 points and nothing more, so a candidate that agreed on
+ * book+name but belonged to a completely different type could still win on the other
+ * signals. 139 of 3,301 entries landed that way, four of them genuine cross-type
+ * substitutions (a complication onto the Null class's level-6 feature; a caster kit
+ * onto a Shadow ability). Now: when the old family is known, a candidate that the
+ * table does not sanction is not a candidate at all, and an entity with no surviving
+ * candidate falls through to `unmatched` rather than being substituted.
+ *
+ * An UNKNOWN old family (empty `type`, or a family the table has never seen) is still
+ * ungated — there is nothing to gate against — and those matches are counted
+ * separately in the report so the ungated set stays visible.
+ */
+const familyIsGated = (oldFam) => oldFam !== "" && FAMILY_EQUIVALENCE.has(oldFam);
 
 // ---------------------------------------------------------------------------
 // old index — the UNION of every release tree, newest tag wins per path
@@ -516,18 +551,33 @@ for (const row of oldRows) {
 	}
 	const forms = oldNameForms(row);
 	const hints = hintSegments(row);
+	const family = oldFamily(row);
+	const gated = familyIsGated(family);
 	const seen = new Set();
 	const scored = [];
+	let rejectedByFamily = 0;
 	forms.forEach((form, formIndex) => {
 		for (const cand of newByKey.get(`${row.source}|${form}`) ?? []) {
 			if (seen.has(cand.path)) continue;
 			seen.add(cand.path);
+			// M4: the family table GATES, it does not merely weigh. A same-named entity
+			// of an unsanctioned type is not a candidate.
+			if (gated && !familyMatches(family, newFamily(cand))) {
+				rejectedByFamily++;
+				continue;
+			}
 			const { s, reasons } = score(row, cand, formIndex, forms.length, hints);
 			scored.push({ cand, s, reasons, form });
 		}
 	});
 	if (scored.length === 0) {
-		unmatched.push({ ...row, reason: unmatchedReason(row) });
+		unmatched.push({
+			...row,
+			reason: rejectedByFamily > 0
+				? `every same-named candidate belongs to an unsanctioned type family (${family}) — ` +
+					"rejected rather than substituted (review M4)"
+				: unmatchedReason(row),
+		});
 		continue;
 	}
 	scored.sort((a, b) => b.s - a.s);
@@ -535,7 +585,16 @@ for (const row of oldRows) {
 		ambiguous.push({ ...row, candidates: scored.filter((x) => x.s === scored[0].s) });
 		continue;
 	}
-	matched.push({ old: row, new: scored[0].cand, score: scored[0].s, reasons: scored[0].reasons });
+	matched.push({
+		old: row,
+		new: scored[0].cand,
+		score: scored[0].s,
+		reasons: scored[0].reasons,
+		// True when nothing gated this match: the old family is empty or unknown to the
+		// table. Reported so the ungated set is never invisible.
+		ungated: !gated,
+		familyAgreed: familyMatches(family, newFamily(scored[0].cand)),
+	});
 }
 
 // INJECTIVITY, enforced exactly where it can bite: within the FINAL release tree,
@@ -569,6 +628,40 @@ for (const m of matched
 	});
 }
 
+// M3 — CASE-INSENSITIVE FILESYSTEM SAFETY (macOS/Windows vaults).
+//
+// Two shapes are unsafe there and both are dropped rather than shipped:
+//   (a) a CASE-ONLY rename (`Bestiary/x.md` → `bestiary/x.md`): on a case-insensitive
+//       filesystem source and destination are the SAME file, so the "destination is
+//       occupied" guard sees the file itself and the move is at best a no-op, at worst
+//       an error the user has to read.
+//   (b) two destinations whose directory chains differ only by case: whichever folder
+//       is created first wins, and the second set of files lands somewhere the sync
+//       will not recognise.
+// Every entry this drops is historical-only in the corpus we have, but the rule is
+// structural, not a spot-fix — `validateMigrationMap` enforces both in the plugin too.
+const caseDropped = [];
+const dirCaseOwner = new Map(); // lowercased dir chain → the first spelling seen
+for (const m of matched) {
+	if (dropped.has(m.old.path)) continue;
+	if (m.old.path !== m.new.path && m.old.path.toLowerCase() === m.new.path.toLowerCase()) {
+		dropped.add(m.old.path);
+		caseDropped.push({ ...m, why: `case-only rename (\`${m.old.path}\` → \`${m.new.path}\`)` });
+		continue;
+	}
+	const dir = m.new.path.split("/").slice(0, -1).join("/");
+	if (dir === "") continue;
+	const owner = dirCaseOwner.get(dir.toLowerCase());
+	if (owner === undefined) dirCaseOwner.set(dir.toLowerCase(), dir);
+	else if (owner !== dir) {
+		dropped.add(m.old.path);
+		caseDropped.push({ ...m, why: `destination folder \`${dir}\` clashes by case with \`${owner}\`` });
+	}
+}
+for (const c of caseDropped) {
+	unmatched.push({ ...c.old, reason: `unsafe on a case-insensitive filesystem — ${c.why}` });
+}
+
 // ---------------------------------------------------------------------------
 // emit
 // ---------------------------------------------------------------------------
@@ -589,6 +682,11 @@ const map = {
 	newFormat: "md-dse",
 	newLocale: "en",
 	newSnapshot: args.snapshot ?? "",
+	/** M1 — the PUBLISHED data-unified release the destinations were verified against.
+	 *  Every destination in `paths` exists in this release's md-dse-unified-en.zip; a
+	 *  destination missing upstream would be migrated and then trashed by the sync's
+	 *  phase 2. `tools/verify-migration-map.mjs` re-checks this at release time. */
+	newRelease: args["new-release"] ?? "",
 	counts: {
 		oldPathsSeen: oldRows.length,
 		oldPathsInFinalRelease: oldRows.filter((r) => r.inFinal).length,
@@ -611,6 +709,8 @@ console.log(
 if (args.report) writeReport();
 
 function writeReport() {
+	const ungatedCount = kept.filter((m) => m.ungated).length;
+	const noFamilyAgreement = kept.filter((m) => !m.familyAgreed).length;
 	const byBook = (rows, pick) => {
 		const counter = new Map();
 		for (const r of rows) {
@@ -631,8 +731,12 @@ function writeReport() {
 	);
 	lines.push("");
 	lines.push(
-		`New corpus: \`${NEW_SOURCE}\` \`en/unified/md-dse\`${args.snapshot ? ` @ \`${args.snapshot}\`` : ""} — ` +
-			`${map.counts.newPaths} markdown files.`,
+		`New corpus: the PUBLISHED \`${NEW_SOURCE}\` release ` +
+			`**\`${map.newRelease || "(unspecified)"}\`** — its \`md-dse-unified-en.zip\` asset, ` +
+			`${map.counts.newPaths} markdown files. Deliberately the published artifact and not a ` +
+			"working tree: the sync downloads that zip, so a destination that exists only in a " +
+			"local checkout would be migrated and then trashed by the sync's phase 2. " +
+			"`tools/verify-migration-map.mjs` re-asserts this at release time.",
 	);
 	lines.push("");
 	const finalCoverage = ((100 * map.counts.mappedFromFinalRelease) / map.counts.oldPathsInFinalRelease).toFixed(1);
@@ -711,8 +815,18 @@ function writeReport() {
 		"**Type family** — the old `type` is a path (`monster/section`, " +
 			"`feature/ability/conduit/1st-level-feature`) and the new one is a flat noun " +
 			"(`statblock`, `ability`). The old family is its last segment when that segment is " +
-			"`statblock`, else its first segment; a frozen equivalence table says which new " +
-			"families that old family may land in.",
+			"`statblock`, else its first segment.",
+	);
+	lines.push("");
+	lines.push(
+		"A frozen equivalence table then **gates** the candidates: when the old family is " +
+			"one the table knows, a candidate whose new type the table does not sanction is " +
+			"discarded outright, and an entity left with no candidate falls through to " +
+			"*unmatched* rather than being matched to something of another type. When the old " +
+			"family is unknown (empty `type`, or a spelling the table has never seen) there is " +
+			"nothing to gate against, so those matches rest on name + book + the tie-breakers " +
+			`alone — ${ungatedCount} of the ${kept.length} mapped entries, counted here so the ` +
+			"ungated set is never invisible.",
 	);
 	lines.push("");
 	lines.push("## Tie-breakers");
@@ -743,6 +857,13 @@ function writeReport() {
 				`| ${unmatched.filter((r) => (r.source || "(none)") === book).length} |`,
 		);
 	}
+	lines.push("");
+	lines.push(
+		`Of the ${kept.length} mapped entries, **${ungatedCount}** were matched with the family ` +
+			`gate inactive (unknown old family) and **${noFamilyAgreement}** ended on a pairing the ` +
+			"table does not list — necessarily a subset of the ungated ones, since a gated match " +
+			"cannot land on an unsanctioned pairing.",
+	);
 	lines.push("");
 	lines.push("### Mapped, by old type family → new type");
 	lines.push("");
@@ -787,6 +908,18 @@ function writeReport() {
 				"one entity twice. The higher-scoring path (ties broken lexicographically) keeps " +
 				"the mapping; the other is DROPPED from the map and left in place, so the map is a " +
 				"function on the final release.",
+		);
+		lines.push("");
+		lines.push(
+			"**Injectivity is a FINAL-RELEASE-ONLY property, by design.** Across the union of " +
+				"all 243 releases the same entity legitimately lived at several paths, and those " +
+				"spellings never coexist in one vault — enforcing global injectivity would mean " +
+				"refusing to migrate users on older releases. A user on a *transitional* release " +
+				"(one whose tree mixes two layouts) can therefore see a non-zero **blocked** count: " +
+				"two of their files map to one destination, the first move wins deterministically " +
+				"(plan order is sorted by path), and the second is reported and left in place. " +
+				"Nothing is overwritten and nothing is lost; the second file simply keeps its old " +
+				"name.",
 		);
 		lines.push("");
 		for (const c of collisions)
