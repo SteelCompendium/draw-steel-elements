@@ -50,6 +50,7 @@ declare module '../framework/seams/prefs' {
 		// —— Element defaults (behavioral — no attr; views read cx.prefs.get) ——
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
+		staminaRecoveryPopover: boolean;
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -269,6 +270,19 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Element defaults', label: 'Start collapsed', control: 'toggle',
 			help: 'Collapsible blocks start collapsed unless the block sets collapse_default: itself.',
+		},
+	}),
+	// SC-132: the ALT recovery editor. Default OFF — the shipped interaction is Model M
+	// (a marker click sets the count, with an Undo in the notice that follows). Scott
+	// asked for this as an option, not as the default: "can we allow for the ALT stepper
+	// popover as an optional setting. I think it looks really good and some players may
+	// want it."
+	d({
+		key: 'staminaRecoveryPopover', default: false,
+		ui: {
+			group: 'Element defaults', label: 'Edit Recoveries with a popover', control: 'toggle',
+			advanced: true,
+			help: 'Clicking the recovery markers opens a small − / + popover instead of setting the count directly. Off — the default — sets the count on click, and every change offers an Undo.',
 		},
 	}),
 
