@@ -146,23 +146,31 @@ for what needs action.
   word), and *Villain actions* (listed among the other features, as now, or
   collected into one collapsible **Villain Actions** band below them — the band
   is always open in print and export). A new **Featureblock display** page adds
-  *Feature style* (cards or a flat list, matching the statblock's own) and
-  *Stat line* (the loose Stamina/Size/EV header as today's two-per-row pairing
-  or as full-width rows with the value right-aligned) — and the settings
-  preview on that page shows a featureblock, not a statblock, so you can see
-  what you are changing. **Nothing changes unless you change it:** every new
-  setting ships on the value that reproduces exactly what the plugin renders
-  today. The three statblock presets now write all nine settings rather than
-  four, so Sourcebook and Index card carry the website's full look for their
-  name; Steel card stays the plugin's default state, so a fresh install still
-  reads "Steel card" rather than "Custom".
+  *Feature style* (cards or a flat list, matching the statblock's own right
+  down to the ◆ separator between entries) and *Stat line* (the loose
+  Stamina/Size/EV header as today's two-per-row pairing or as full-width rows
+  with the value right-aligned) — and the settings preview on that page shows a
+  featureblock, not a statblock, so you can see what you are changing.
+  **Nothing changes unless you change it:** every new setting ships on the
+  value that reproduces exactly what the plugin renders today. Whichever you
+  pick carries into print and export, and renders under both the Steel theme
+  and the ambient one. The three that change a card's structure rather than
+  just its styling — Characteristics, Boxed first letter and Villain actions —
+  are global settings only: a block that names one in its own `prefs:` map gets
+  a console warning and renders normally, instead of pairing one block's
+  structure with another's layout. The three statblock presets now write all
+  nine settings rather than four, so Sourcebook and Index card carry the
+  website's full look for their name; Steel card stays the plugin's default
+  state, so a fresh install still reads "Steel card" rather than "Custom".
 - [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
   **searchable from Obsidian's own settings search** (SC-131). It was one
   6850px scroll page — nine stacked sections and a full statblock preview — and
   the queued display-parity settings would have pushed it past 8000. It is now
-  a short index of nine navigable pages (Appearance, Typography, Statblock
-  display, Element defaults, Rolling, Authoring, Compendium, Links, Initiative
-  tracker), each holding only its own settings. Because the settings are now
+  a short index of ten navigable pages (Appearance, Typography, Statblock
+  display, Featureblock display, Element defaults, Rolling, Authoring,
+  Compendium, Links, Initiative tracker), each holding only its own settings —
+  nine at the rebuild, plus the Featureblock display page the display-parity
+  ports (SC-123) add. Because the settings are now
   declared rather than hand-drawn, Obsidian indexes every one of them: typing
   "font" or "density" into the search box at the top of the settings window
   finds Draw Steel Elements rows alongside Obsidian's own, from any tab, and
