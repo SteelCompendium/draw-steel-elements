@@ -134,6 +134,28 @@ for what needs action.
   - **"Side-by-side (wide)" feature columns now pack like the site's**, using
     CSS `columns` instead of a row-aligned grid, so a short card no longer
     leaves a ragged empty gap under it.
+- [FEATURE] **Seven more of the website's display settings work in the plugin**
+  (SC-123). The website lets you re-lay-out a statblock in ways the plugin
+  never offered; these are those controls, with the same options and the same
+  names. Under **Statblock display → Advanced**: *Keyword display* (the keyword
+  and action-type band as chips, as an inline text line, as framed cells or as
+  a hairline ledger), *Distance + target* (the same three treatments for the
+  distance/target rail), *Characteristics* (the familiar one-line "Might +2",
+  or the number stacked over the word), *Boxed first letter* (a small framed
+  M / A / R / I / P beside each characteristic, with or without the spelled-out
+  word), and *Villain actions* (listed among the other features, as now, or
+  collected into one collapsible **Villain Actions** band below them — the band
+  is always open in print and export). A new **Featureblock display** page adds
+  *Feature style* (cards or a flat list, matching the statblock's own) and
+  *Stat line* (the loose Stamina/Size/EV header as today's two-per-row pairing
+  or as full-width rows with the value right-aligned) — and the settings
+  preview on that page shows a featureblock, not a statblock, so you can see
+  what you are changing. **Nothing changes unless you change it:** every new
+  setting ships on the value that reproduces exactly what the plugin renders
+  today. The three statblock presets now write all nine settings rather than
+  four, so Sourcebook and Index card carry the website's full look for their
+  name; Steel card stays the plugin's default state, so a fresh install still
+  reads "Steel card" rather than "Custom".
 - [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
   **searchable from Obsidian's own settings search** (SC-131). It was one
   6850px scroll page — nine stacked sections and a full statblock preview — and

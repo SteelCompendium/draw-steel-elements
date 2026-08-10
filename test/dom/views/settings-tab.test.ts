@@ -109,7 +109,8 @@ describe('D4 §4 — DseSettingTab', () => {
 		// Initiative tracker) after the generated pref ones. SC-112 (Plan 23 Task 6)
 		// inserts Typography after Appearance.
 		expect(pageNames(tab)).toEqual([
-			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
+			'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 		const names = Setting.created.map((s) => s.name);
@@ -194,17 +195,18 @@ describe('D4 §4 — DseSettingTab', () => {
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		renderAll(tab);
 		const preset = rowByName('Preset').dropdowns[0];
-		// SC-146 fix 4: sourcebook is now { featstyle: 'flat', stats: 'ledger' }
-		// (the site's own Sourcebook is a FLAT feature list) — a single member
-		// alone no longer matches any named bundle (matrix-checked: sourcebook
-		// and index each now diverge from steel in TWO members), so one toggle
-		// derives 'custom' immediately.
+		expect(preset.value).toBe('steel'); // the default state IS a named preset
+		// Two tickets narrowed this in the same direction. SC-146 fix 4 corrected
+		// Sourcebook's Feature style to Flat (the site's own Sourcebook is a flat
+		// feature list), and SC-123 widened every bundle from four members to nine —
+		// so no single member, and no PAIR either, can land on another named bundle.
+		// One toggle derives 'custom' and stays there.
 		rowByName('Secondary stats').dropdowns[0].trigger('ledger');
 		await flushAsync(1);
 		expect(preset.value).toBe('custom');
 		rowByName('Feature style').dropdowns[0].trigger('flat');
 		await flushAsync(1);
-		expect(preset.value).toBe('sourcebook'); // flat + ledger = the sourcebook bundle
+		expect(preset.value).toBe('custom'); // flat + ledger is 2 of Sourcebook's 9 members
 		rowByName('Density').dropdowns[0].trigger('compact');
 		await flushAsync(1);
 		expect(preset.value).toBe('custom');
@@ -618,7 +620,8 @@ describe('SC-131 — declarative settings definitions', () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		expect(pageNames(tab)).toEqual([
-			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
+			'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 		// Path A: the imperative renderer is deleted outright, not left as a fallback.
@@ -735,8 +738,27 @@ describe('SC-131 — declarative settings definitions', () => {
 		// Derived from the descriptors that actually reflect onto an element root, so a
 		// future reflected group inherits a preview without being listed anywhere.
 		expect(pages(tab).filter(hasPreview).map((p) => p.name)).toEqual([
-			'Appearance', 'Typography', 'Statblock display',
+			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
 		]);
+	});
+
+	// SC-123: …and the SUBJECT follows the section. A statblock preview under the
+	// Featureblock page would show nothing either row can change (no `.dse-fb` in it).
+	test('the Featureblock display page previews a FEATUREBLOCK; every other page keeps the statblock', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const previewOf = async (page: string): Promise<HTMLElement | null> => {
+			const row = rowDefs(pageNamed(tab, page).items).find((d) => d.name === '' && d.render)!;
+			const host = document.createElement('div');
+			const setting = new Setting(host);
+			row.render(setting);
+			await flushAsync(3);
+			return setting.settingEl!.querySelector<HTMLElement>('[data-dse-element]');
+		};
+		expect((await previewOf('Featureblock display'))?.getAttribute('data-dse-element'))
+			.toBe('featureblock');
+		expect((await previewOf('Statblock display'))?.getAttribute('data-dse-element'))
+			.toBe('statblock');
 	});
 
 	test('a native control write still live-applies to a mounted root (prefs.set path)', async () => {
@@ -880,9 +902,10 @@ describe('SC-131 — registration order', () => {
 		expect(builds.length).toBeGreaterThanOrEqual(2);
 		// Registration: no PreferenceStore yet, so only the hand-written sections.
 		expect(builds[0]).toEqual(['Compendium', 'Links', 'Initiative tracker']);
-		// After the framework is built, the full nine.
+		// After the framework is built, the full ten (SC-123 added Featureblock display).
 		expect(builds[builds.length - 1]).toEqual([
-			'Appearance', 'Typography', 'Statblock display', 'Element defaults', 'Rolling', 'Authoring',
+			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
+			'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 	});

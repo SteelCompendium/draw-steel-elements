@@ -36,7 +36,7 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { StatblockConfig } from '@model/StatblockConfig';
-import { App, Plugin, MarkdownRenderer, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, MarkdownRenderer, makeFakeContext, flushAsync } from '../../mocks/obsidian';
 import { statblockElement } from '../../../src/elements/statblock/definition';
 import { StatblockElementView } from '../../../src/elements/statblock/view';
 import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
@@ -130,8 +130,18 @@ function makeDeps(): ElementPipelineDeps {
 	};
 }
 
-async function renderStatblock(source: string, hostOverrides: Partial<BlockHost> = {}) {
+async function renderStatblock(
+	source: string,
+	hostOverrides: Partial<BlockHost> = {},
+	/** SC-123: preference values applied BEFORE the mount — the three prefs that
+	 *  change this element's DOM SHAPE (sbCharLine/sbCharBox/sbVillain) can only be
+	 *  exercised that way, and it mirrors what the visual harness's PREF_SHOTS do. */
+	prefValues: Record<string, string> = {},
+) {
 	const deps = makeDeps();
+	for (const [key, value] of Object.entries(prefValues)) {
+		await deps.prefs.set(key as never, value as never);
+	}
 	const pipeline = new ElementPipeline(deps);
 	const host = makeHost(hostOverrides);
 	await pipeline.run(statblockElement, source, host);
@@ -360,12 +370,64 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(chars).toEqual(['Might -1', 'Agility +2', 'Reason +0', 'Intuition +1', 'Presence N/A']);
 	});
 
-	test('SC-10 Task 4: .dse-sb__char stays ONE merged text node (a label/value DOM split was tried and reverted — see the renderChars comment; splitting shifted Chromium sub-pixel text shaping enough to fail the byte-identical LEGACY-FREEZE gate)', async () => {
+	test('SC-10 Task 4: at the DEFAULT settings .dse-sb__char stays ONE merged text node (a label/value DOM split was tried and reverted — see the renderChars comment; splitting shifted Chromium sub-pixel text shaping enough to fail the byte-identical LEGACY-FREEZE gate)', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
 
 		const cell = root.querySelector('.dse-sb__chars > .dse-sb__char') as HTMLElement;
 		expect(cell.children).toHaveLength(0);
 		expect(cell.textContent).toBe('Might +2');
+	});
+
+	// —— SC-123: the characteristics split, opt-in only ——
+
+	test('sbCharLine="two" splits each cell into box/value/label (the site\'s .sb__char-* DOM), text verbatim', async () => {
+		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'two' });
+
+		const cells = Array.from(root.querySelectorAll('.dse-sb__chars > .dse-sb__char'));
+		expect(cells).toHaveLength(5);
+		// DOM order is box, value, label — the site orders them with grid-areas/`order`.
+		expect(Array.from(cells[0].children).map((el) => el.className)).toEqual([
+			'dse-sb__char-box', 'dse-sb__char-v', 'dse-sb__char-l',
+		]);
+		expect(cells.map((el) => el.querySelector('.dse-sb__char-box')!.textContent)).toEqual([
+			'M', 'A', 'R', 'I', 'P',
+		]);
+		expect(cells.map((el) => el.querySelector('.dse-sb__char-l')!.textContent)).toEqual([
+			'Might', 'Agility', 'Reason', 'Intuition', 'Presence',
+		]);
+		expect(cells.map((el) => el.querySelector('.dse-sb__char-v')!.textContent)).toEqual([
+			'+2', '+3', '+2', '+3', '+2',
+		]);
+		// NO CONTENT LOSS: the concatenation is still the merged string, word for word.
+		expect(cells.map((el) => el.textContent)).toEqual([
+			'M+2Might', 'A+3Agility', 'R+2Reason', 'I+3Intuition', 'P+2Presence',
+		]);
+	});
+
+	test('sbCharBox alone also splits (the box is the reason to split at all); formatCharacteristic parity survives', async () => {
+		const { root } = await renderStatblock(WITH_META, {}, { sbCharBox: 'on' });
+
+		const cells = Array.from(root.querySelectorAll('.dse-sb__chars > .dse-sb__char'));
+		expect(cells.map((el) => el.querySelector('.dse-sb__char-v')!.textContent)).toEqual([
+			'-1', '+2', '+0', '+1', 'N/A',
+		]);
+		expect(cells[4].querySelector('.dse-sb__char-box')!.textContent).toBe('P');
+	});
+
+	test('flipping a characteristics pref REMOUNTS the card (shape, not reflow) and flipping back restores the merged node', async () => {
+		const { root, deps } = await renderStatblock(humanBanditChief);
+		const cellOf = (): HTMLElement =>
+			root.querySelector('.dse-sb__chars > .dse-sb__char') as HTMLElement;
+		expect(cellOf().children).toHaveLength(0);
+
+		await deps.prefs.set('sbCharBox', 'onword');
+		await flushAsync(2);
+		expect(cellOf().children).toHaveLength(3);
+
+		await deps.prefs.set('sbCharBox', 'off');
+		await flushAsync(2);
+		expect(cellOf().children).toHaveLength(0);
+		expect(cellOf().textContent).toBe('Might +2');
 	});
 
 	test("features render through Task 5's renderFeatureList: ◆ divider, then .dse-feature__nested > .dse-feature cards (shared grammar)", async () => {
@@ -469,6 +531,65 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(main.querySelector('.dse-head__primary--left')!.textContent).toBe(
 			'Whip and Magic Longsword',
 		);
+	});
+
+	// —— SC-123 / FOLLOWUPS #54: villain BANDING, opt-in only ——
+
+	test('sbVillain default ("inline") builds NO band — one flat list in source order (the LEGACY-FREEZE shape)', async () => {
+		const { root } = await renderStatblock(statblockVillainCorpus);
+
+		expect(root.querySelector('.dse-sb__band')).toBeNull();
+		expect(root.querySelectorAll('.dse-sb > .dse-feature__nested')).toHaveLength(1);
+	});
+
+	test('sbVillain="banded" lifts the villain actions into one collapsible band below the rest', async () => {
+		const { root } = await renderStatblock(statblockVillainCorpus, {}, { sbVillain: 'banded' });
+
+		const band = root.querySelector<HTMLElement>('.dse-sb__band.dse-sb__band--villain')!;
+		expect(band).not.toBeNull();
+		// The kit collapsible supplies the affordance: a real button, expanded, wired to
+		// its region — the plugin never hand-rolls a <details>.
+		const header = band.querySelector<HTMLElement>('.dse-collapse__header')!;
+		expect(header.tagName).toBe('BUTTON');
+		expect(header.getAttribute('aria-expanded')).toBe('true');
+		expect(band.querySelector('.dse-collapse__title')!.textContent).toBe('Villain Actions');
+		// Crest before the title (chevron, crest, title), keyed to the same skull the
+		// villain cards themselves carry. The band's tint comes from the `--villain`
+		// modifier in the sheet, not an inline alias — nothing here is dynamic.
+		expect(band.querySelector('.dse-sb__band-crest')!.getAttribute('data-icon')).toBe('skull');
+		expect(Array.from(header.children).map((el) => el.className)).toEqual([
+			'dse-collapse__chevron', 'dse-sb__band-crest', 'dse-collapse__title',
+		]);
+		expect(band.getAttribute('style')).toBeNull();
+
+		// Exactly the villain actions inside, in source order…
+		const inBand = Array.from(
+			band.querySelectorAll<HTMLElement>('.dse-collapse__region .dse-feature'),
+		);
+		expect(inBand.map((el) => el.getAttribute('data-dse-act'))).toEqual(['villain', 'villain']);
+		expect(inBand.map((el) => el.querySelector('.dse-head__primary--left')!.textContent)).toEqual([
+			'Shoot!',
+			'Form Up!',
+		]);
+		// …and NOTHING else: the main run keeps every non-villain feature and loses none.
+		const mainRun = root.querySelector<HTMLElement>('.dse-sb > .dse-feature__nested')!;
+		expect(mainRun.querySelector('.dse-feature[data-dse-act="villain"]')).toBeNull();
+		expect(mainRun.querySelector('.dse-feature[data-dse-act="main"]')).not.toBeNull();
+	});
+
+	test('sbVillain="banded" on a statblock with NO villain action builds no band at all', async () => {
+		const { root } = await renderStatblock(humanBanditChief, {}, { sbVillain: 'banded' });
+
+		// human-bandit-chief's villain actions are the ability_type shape, so they DO
+		// classify — the no-band case is the roleless corpus fixture, which has none.
+		const { root: roleless } = await renderStatblock(
+			statblockRolelessCorpus,
+			{},
+			{ sbVillain: 'banded' },
+		);
+		expect(roleless.querySelector('.dse-feature[data-dse-act="villain"]')).toBeNull();
+		expect(roleless.querySelector('.dse-sb__band')).toBeNull();
+		expect(root.querySelector('.dse-sb__band')).not.toBeNull();
 	});
 
 	// FOLLOWUPS #56 — THE ROLELESS CATCHER. #56 existed for one reason: no fixture

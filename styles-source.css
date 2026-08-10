@@ -2081,6 +2081,148 @@ code.dsa {
 	gap: 0.08rem;
 }
 
+/* -- characteristics prefs (SC-123 — the site's data-sb-charline /
+   data-sb-charbox): how each Might/Agility/… cell reads.
+   ────────────────────────────────────────────────────────────────────
+   DOM CONTRACT, and why it is conditional. At the DEFAULT pair
+   (charline=one, charbox=off) statblock/view.ts still emits ONE merged text node
+   per cell ("Might +2") — the exact node the LEGACY-FREEZE gate is pinned to (a
+   label/value split was tried in SC-10 Task 4 and reverted: two inline <span>s
+   shifted Chromium's sub-pixel text shaping enough to move bytes in glyphs the
+   split never touched). Any OTHER combination builds the three-part split
+   (.dse-sb__char-box / -v / -l, the site's `.sb__char-*`), so the frozen shots keep
+   the merged node and only opted-in users ever see the split. That also means every
+   selector below is unreachable at defaults, which is what lets them be
+   theme-agnostic (Legacy gets the modes too) without touching a frozen pixel.
+   `one` is the DEFAULT value, so it is never named: the one-line arms are keyed off
+   the boxed-letter values, the only way to reach split DOM at charline=one. -- */
+.dse-sb__char-box {
+	display: none;
+	box-sizing: border-box;
+	width: 1.45rem;
+	height: 1.45rem;
+	place-items: center;
+	border: 1px solid var(--dse-metal-line, var(--dse-rule));
+	border-radius: 4px;
+	font-family: var(--font-monospace);
+	font-size: 0.82rem;
+	font-weight: bold;
+	line-height: 1;
+	color: var(--dse-heading);
+}
+.dse-sb__char-v {
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+}
+.dse-sb__char-l {
+	font-weight: normal;
+	color: var(--dse-fg-muted);
+}
+/* two-line: value over label (the site's default presentation) */
+[data-dse-element='statblock'][data-dse-sb-charline='two'] .dse-sb__char {
+	display: grid;
+	justify-items: center;
+	align-content: center;
+	gap: 0.1rem;
+}
+[data-dse-element='statblock'][data-dse-sb-charline='two'] .dse-sb__char-v {
+	font-size: calc(var(--font-ui-large) * 1.4);
+}
+/* …with a boxed letter: [box][value] over [label]. SITE QUIRK, reproduced
+   deliberately (SC-146 audit S5): at charline=two, `on` and `onword` are the same
+   picture — the word is in the label row either way, so only charline=one can drop
+   it. */
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char,
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char {
+	grid-template-columns: auto auto;
+	grid-template-areas: 'box val' 'lbl lbl';
+	justify-content: center;
+	column-gap: 0.4rem;
+	row-gap: 0.12rem;
+}
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-box,
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-box {
+	grid-area: box;
+	align-self: center;
+}
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-v,
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-v {
+	grid-area: val;
+}
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-l,
+[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-l {
+	grid-area: lbl;
+}
+/* one line + a boxed letter: [box][word][value] on one centered row. Center- (not
+   baseline-) aligned for the same reason the site gives: baseline lets the taller
+   box ride above the digits. */
+[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+}
+[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-box {
+	order: 1;
+}
+[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-l {
+	order: 2;
+}
+[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-v {
+	order: 3;
+}
+/* the box itself, revealed by either boxed value */
+[data-dse-element='statblock'][data-dse-sb-charbox='on'] .dse-sb__char-box,
+[data-dse-element='statblock'][data-dse-sb-charbox='onword'] .dse-sb__char-box {
+	display: grid;
+}
+/* letter-only, one line: the box replaces the spelled-out word */
+[data-dse-element='statblock'][data-dse-sb-charbox='on']:not([data-dse-sb-charline='two']) .dse-sb__char-l {
+	display: none;
+}
+
+/* -- villain-actions pref (SC-123 / FOLLOWUPS #54 — the site's data-sb-villain):
+   'inline' (default) leaves villain actions among the other features, which is the
+   only presentation the plugin has ever built; 'banded' makes statblock/view.ts
+   collect them into one kit `collapsible()` region below the rest. The band is
+   CONDITIONAL DOM for the same reason the characteristics split is (frozen
+   `statblock-villain-corpus--legacy-*.png`), so no selector here is reachable at
+   defaults. The kit primitive already supplies the header button, the chevron and
+   the print-forced-open behaviour — this only dresses it as a band.
+   DESIGN.md rule 7 (no decorative colored left-borders): the band is framed all the
+   way round with the shared hairline; the action type is carried by the crest glyph
+   in the head, not by a spine. -- */
+.dse-sb__band {
+	margin-top: 0.65rem;
+	border: 1px solid var(--dse-rule);
+	border-radius: var(--dse-radius);
+	overflow: hidden;
+}
+.dse-sb__band > .dse-collapse__header {
+	width: 100%;
+}
+.dse-sb__band > .dse-collapse__region {
+	padding: 0.25rem 0.65rem 0.7rem;
+}
+.dse-sb__band-crest {
+	display: inline-flex;
+	align-items: center;
+}
+.dse-sb__band--villain .dse-sb__band-crest {
+	color: var(--dse-act-villain);
+}
+
+/* -- featureblock feature-style pref (SC-123 — the site's data-fb-featstyle; the
+   twin of the statblock's own, and the reason the statblock's `flat` mode is
+   allowed to keep its hands off a nested `.dse-fb`) -- */
+[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature {
+	padding-top: 0.25rem;
+	padding-bottom: 0.25rem;
+}
+[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature:hover {
+	background-color: transparent;
+}
+
 /* ================================================================== */
 /*  Featureblock card grammar (D2 §3.7, Plan 09 Task 6a): .dse-fb     */
 /* ================================================================== */
@@ -2114,25 +2256,44 @@ code.dsa {
 }
 
 /* -- the loose-stat header: label/value cells. Layout is a pure CSS reflow keyed
-   by [data-dse-fb-stats] on the card root (grid today, matching the legacy
-   two-per-row look; ledger is the D4 pref hook — markup stays layout-agnostic) -- */
+   by [data-dse-fb-stats].
+   SC-123: the hook is now a REAL preference (`fbStats`), so it moved off the card
+   (view.ts used to stamp a hard-coded literal there, which is why the `ledger` arm
+   below was unreachable dead code since D4 — SC-146 audit §4b) and onto the ELEMENT
+   ROOT, where prefs.reflect() writes every attr-bearing descriptor. Consequences,
+   both deliberate:
+     · `grid` is no longer NAMED in a selector — it is the unqualified base rule.
+       That is the sheet's default-value convention (pref-reflection.test.ts asserts
+       no selector mentions any catalog default), and it keeps the default rendering
+       byte-identical: the card always carried `grid`, so the base layout is what it
+       always painted.
+     · a `.dse-fb` NESTED inside another element (an fb reached through a statblock
+       feature body) is governed by whichever element root encloses it — every root
+       carries the attr, so the pref reaches nested cards for free. -- */
 .dse-fb__stats {
 	margin-top: 0.5em;
 	margin-bottom: 0.5em;
-}
-.dse-fb[data-dse-fb-stats='grid'] > .dse-fb__stats {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	column-gap: 1.5em;
 	row-gap: 0.5em;
 }
-.dse-fb[data-dse-fb-stats='grid'] > .dse-fb__stats > .dse-fb__stat:nth-child(even) {
+.dse-fb__stats > .dse-fb__stat:nth-child(even) {
 	justify-self: end;
 	text-align: right;
 }
-.dse-fb[data-dse-fb-stats='ledger'] > .dse-fb__stats > .dse-fb__stat {
+[data-dse-element][data-dse-fb-stats='ledger'] .dse-fb__stats {
+	display: block;
+}
+[data-dse-element][data-dse-fb-stats='ledger'] .dse-fb__stats > .dse-fb__stat {
 	display: flex;
 	justify-content: space-between;
+	align-items: baseline;
+	gap: 1em;
+	text-align: left;
+	justify-self: stretch;
+	border-bottom: 1px solid var(--dse-rule);
+	padding: 0.15rem 0;
 }
 /* Legacy "Stamina: 30" wording: bold key + the CSS-owned colon (never baked into
    the DOM, so Steel's chip/ledger looks can drop it — same rule as
@@ -3697,9 +3858,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb
    descendant reach means these `[data-element='statblock'][…-featstyle='flat'] …` mode
    rules, unqualified, would ALSO flatten that nested fb's own option cards. The site keeps
    them separate keys (`data-fb-featstyle`, its own default `card`, settings-panel.js:44-45);
-   the plugin has no fb-side pref yet (catalog.ts:231, sb only), so the fix is to stop the
-   sb's flat mode at its OWN options and never let it reach inside a nested `.dse-fb`. Every
-   arm below excludes any option with a `.dse-fb` ancestor. */
+   so the fix is to stop the sb's flat mode at its OWN options and never let it reach inside a
+   nested `.dse-fb`. Every arm below excludes any option with a `.dse-fb` ancestor.
+   SC-123 shipped the missing fb-side key, so that exclusion is no longer a gap to apologise
+   for: a nested featureblock's options are flattened (or not) by `fbFeatureStyle`, its own
+   preference — the twin arms directly below this block. */
 [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested:not(.dse-fb *) {
 	gap: 0;
 }
@@ -3729,6 +3892,32 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
    no `body.theme-light` twin needed — the bar radius carries no light/dark divergence, so
    there is no out-specified light arm to restate. */
 [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *)::before {
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+}
+/* SC-123 — the FEATUREBLOCK twin of the three arms above (the site's
+   `data-fb-featstyle`, settings-panel.js:44-45). Same declarations, same
+   specificity footing, same light-twin restatement; no `:not(.dse-fb *)` guard
+   because here the options are SUPPOSED to be the ones inside `.dse-fb` — this is
+   the pref that owns them. Default `card` is never named (default-value
+   convention), so nothing below is reachable until a user opts in. */
+[data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested {
+	gap: 0;
+}
+[data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature,
+body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature {
+	background: none;
+	border-radius: 0;
+	padding-top: 0.25rem;
+	padding-right: 0;
+	padding-bottom: 0.25rem;
+	padding-left: 0;
+}
+[data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act],
+body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act] {
+	padding-left: calc(3px + 0.55em);
+}
+[data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]::before {
 	border-top-left-radius: 0;
 	border-bottom-left-radius: 0;
 }
@@ -5172,6 +5361,191 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	text-shadow: var(--dse-emboss);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   SC-123 — KEYWORD DISPLAY (`kwUsage`) + DISTANCE/TARGET (`distTarget`)
+   ══════════════════════════════════════════════════════════════════
+   The site offers the SAME three-way cell vocabulary over both meta bands
+   (steel-statblock.css:347-389: `data-sb-kwusage` = crest|text|grid|ledger,
+   `data-sb-disttarget` = text|grid|ledger, all four/three sharing one `.sb__field`
+   recipe). The plugin's two bands are the SC-121 B-1 recomposition above —
+   `.dse-feature__meta-chips` (Keywords + Type) and `.dse-feature__meta-rail`
+   (Distance + Target) — so the modes are pure reflows of what is already there; no
+   DOM changed for either pref.
+
+   Three things worth knowing before editing:
+     · DEFAULTS ARE THE RULES ABOVE, never named here. `kwUsage: crest` is the chip
+       band SC-121 shipped and `distTarget: grid` is the boxed rail SC-117/SC-121
+       tuned — i.e. the plugin's defaults are the site's *Steel Card preset* values,
+       not the site's raw defaults (the site defaults `disttarget` to `text`).
+     · SCREEN + STEEL ONLY. The whole chip/rail vocabulary these modes restyle is
+       Steel's; Legacy paints the base 2-col grid with hidden labels, where "ledger"
+       and "grid" would have nothing to mean. Print rides the base, unchanged.
+     · The `grid` and `ledger` arms REVEAL the two chip-band labels, which the crest
+       mode visually-hides (a chip is self-evident, a framed cell is not). That
+       un-hide has to out-specify the hide rule above, which is why every selector
+       here chains the mode attribute onto the theme attribute (both live on the
+       element root) instead of nesting it deeper. */
+
+/* ── kwUsage: text — one baseline row, frameless, labels stay hidden ── */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-chips {
+	flex-wrap: nowrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-cell--type {
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: none;
+}
+/* the keyword run reads as prose in this mode (the site drops the chip's small-caps
+   there too); the action type keeps its small-caps classifier voice */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='text'] .dse-feature__meta-cell--keywords {
+	font-size: 1em;
+	font-variant: normal;
+	text-transform: none;
+	letter-spacing: normal;
+	color: var(--dse-heading);
+}
+
+/* ── grid / ledger: the shared framed-cell and hairline-row vocabularies ──
+   Grouped by MODE rather than by band so the two bands cannot drift apart the way
+   the site's `.sb__field` never can. */
+
+/* grid — framed cells, value over label, centered (the rail's own resting look,
+   lent to the chip band) */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-chips {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.625rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: center;
+	justify-content: center;
+	gap: 0.2em;
+	/* Both resets undo the BASE 2-col-grid placement of the Type cell (`grid-column: 2;
+	   justify-self: end`, ~141) and the crest band's `margin-left: auto`: without them
+	   the framed cell shrink-wraps its text and floats at the right edge of its track
+	   instead of filling it, so the two bands' columns don't line up. */
+	justify-self: stretch;
+	margin-left: 0;
+	box-sizing: border-box;
+	padding: 0.625rem 0.9375rem;
+	min-height: 4.25rem;
+	text-align: center;
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	font-size: 1em;
+	font-variant: normal;
+	text-transform: none;
+	letter-spacing: normal;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
+	background: rgba(0, 0, 0, 0.03);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords .dse-feature__meta-value,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type .dse-feature__meta-value {
+	font-weight: 700;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+
+/* ledger — hairline rows, label left / value right (chip band AND rail) */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-chips,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-rail {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0 1.4rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--target {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.7rem;
+	/* see the grid arm above — same two resets, same reason (a hairline row must span
+	   its whole track, not shrink-wrap at the right edge of it) */
+	justify-self: stretch;
+	margin-left: 0;
+	min-height: 0;
+	padding: 0.4rem 0.1rem;
+	text-align: left;
+	background: none;
+	border: none;
+	border-bottom: 1px solid var(--dse-metal-faint);
+	border-radius: 0;
+	font-size: 1em;
+	font-variant: normal;
+	text-transform: none;
+	letter-spacing: normal;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords .dse-feature__meta-value,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type .dse-feature__meta-value,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--distance .dse-feature__meta-value,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='ledger'] .dse-feature__meta-cell--target .dse-feature__meta-value {
+	text-align: right;
+}
+
+/* the two chip-band labels, revealed for the framed/hairline modes (undoing the
+   visually-hidden recipe above, colon included) */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords .dse-feature__meta-key,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type .dse-feature__meta-key,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords .dse-feature__meta-key,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type .dse-feature__meta-key {
+	position: static;
+	width: auto;
+	height: auto;
+	margin: 0;
+	overflow: visible;
+	clip-path: none;
+	white-space: nowrap;
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.08em;
+	font-size: 0.78em;
+	font-weight: normal;
+	color: var(--dse-fg-faint);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-key::after,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-key::after {
+	content: "";
+}
+
+/* ── distTarget: text — the site's "Distance: Melee 2 … One enemy" line, labels
+   kept inline (which value is which stops being obvious once the box is gone) ── */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-rail {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-cell--distance,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-cell--target {
+	flex-direction: row;
+	align-items: baseline;
+	justify-content: flex-start;
+	gap: 0.4rem;
+	min-height: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	border-radius: 0;
+	text-align: left;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-disttarget='text'] .dse-feature__meta-cell--target {
+	text-align: right;
+}
+
 /* -- SC-10 Task 3: finish the Task-2 ◆-marked title into the site's boxed
    panel (steel-ability-cards.css .sc-ability__section: a sheen-only header strip
    over a sunken/bordered body — SC-117 B3 corrected "a RAISED header strip" here;
@@ -6079,14 +6453,67 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__chars {
 	background: linear-gradient(180deg, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0.05));
 }
-/* Each cell reads as ONE embossed line ("Might +2", shared emboss rule
-   above) — the site's two-line value-over-label .sb__char-v/-l split isn't
-   reproduced: it needs a label/value DOM split, which was tried and
-   reverted (renderChars comment, src/elements/statblock/view.ts) because it
-   shifted Chromium's sub-pixel text shaping enough to fail the
-   byte-identical LEGACY-FREEZE gate. */
+/* At the DEFAULT characteristics settings each cell reads as ONE embossed line
+   ("Might +2", shared emboss rule above): the site's value-over-label
+   .sb__char-v/-l split needs a label/value DOM split, which was tried in SC-10
+   Task 4 and reverted because it shifted Chromium's sub-pixel text shaping
+   enough to fail the byte-identical LEGACY-FREEZE gate. SC-123 brought the
+   split back as an OPT-IN (the `sbCharLine`/`sbCharBox` prefs — layout arms at
+   ~2040): the merged node still ships at defaults, so the frozen shots never
+   see the split, and the Steel dressing for it lives below. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char {
 	padding: 0.35rem 0.2rem;
+}
+/* SC-123 — Steel dressing for the OPT-IN characteristics split (the site's
+   .sb__char-v/-l/-box: a big embossed tabular numeral over a small-caps word,
+   with the boxed letter picking up the same forged highlight the strip itself
+   carries). Screen-only and Steel-only, like every other rule in this section;
+   the theme-agnostic layout arms above already give Legacy a sane split. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-v {
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-l {
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
+	font-size: 0.85em;
+	text-shadow: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-box {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.12));
+	text-shadow: none;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-box {
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0.05));
+}
+
+/* SC-123 — Steel dressing for the OPT-IN villain-action band (the site's
+   `.sb__band--villain`: a framed, faintly tinted region under a crest + title
+   head). The tint is the action-type alias the band's own head already carries,
+   mixed down to a wash — no new token, and no colored spine (DESIGN.md rule 7).
+   Unreachable at defaults (the band is only built at sbVillain='banded'), so the
+   frozen shots are untouched. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band {
+	border-color: var(--dse-metal-line);
+}
+/* Tint is per-BAND-KIND (the site tints its villain and malice bands differently), so
+   it hangs off the modifier, not the block. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band--villain {
+	/* Chromium-106-floor fallback pair (SC-121, cssSupportFloor.test.ts): the static
+	   translucent black is the same sunken step the nested option cards take, so a
+	   renderer without color-mix() still gets a legible band — just an untinted one. */
+	background: rgba(0, 0, 0, 0.16);
+	background: color-mix(in srgb, var(--dse-act-villain) 8%, transparent);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band > .dse-collapse__header {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band .dse-collapse__title {
+	font-family: var(--dse-font-title, inherit);
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
 }
 
 /* ================================================================== */

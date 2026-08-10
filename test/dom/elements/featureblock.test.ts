@@ -300,11 +300,15 @@ describe('Plan 09 Task 6a: featureblock re-cast onto the D2 kit card grammar (§
 		);
 	});
 
-	test('.dse-fb__stats: stamina/size then the named stats as label/value cells, verbatim, colon CSS-owned; [data-dse-fb-stats="grid"] on the card', async () => {
+	test('.dse-fb__stats: stamina/size then the named stats as label/value cells, verbatim, colon CSS-owned; the layout hook is the reflected pref, never a literal on the card', async () => {
 		const { root } = await renderFeatureblock(WITH_STATS);
 
 		const card = root.querySelector('.dse-fb') as HTMLElement;
-		expect(card.getAttribute('data-dse-fb-stats')).toBe('grid');
+		// SC-123: view.ts used to stamp a hard-coded `data-dse-fb-stats="grid"` here,
+		// which is precisely what made the sheet's `ledger` arm unreachable (SC-146
+		// audit §4b). The hook now arrives on the ELEMENT ROOT from prefs.reflect().
+		expect(card.hasAttribute('data-dse-fb-stats')).toBe(false);
+		expect(root.getAttribute('data-dse-fb-stats')).toBe('grid');
 
 		const stats = card.querySelector(':scope > .dse-fb__stats') as HTMLElement;
 		expect(stats).not.toBeNull();
@@ -550,7 +554,12 @@ describe('Plan 09 Task 6a: source + CSS hygiene', () => {
 		expect(sheet).toMatch(/\.dse-fb__flavor\s*\{/);
 		expect(sheet).toMatch(/\.dse-fb__stat-l::after\s*\{/); // the CSS-owned colon
 		expect(sheet).toMatch(/\.dse-fb__band--adv/);
-		expect(sheet).toMatch(/\[data-dse-fb-stats='grid'\]/);
+		// SC-123: the stat-layout hook is a real preference now, so `grid` (its default)
+		// is the UNQUALIFIED base rule and only `ledger` names the attribute — the
+		// sheet's default-value convention (pref-reflection.test.ts enforces it).
+		expect(sheet).toMatch(/^\.dse-fb__stats\s*\{[\s\S]*?display:\s*grid;/m);
+		expect(sheet).toMatch(/\[data-dse-fb-stats='ledger'\]/);
+		expect(sheet).not.toMatch(/\[data-dse-fb-stats='grid'\]/);
 		// The adv-head tints via the inherited --dse-role alias, monochrome fallback.
 		const advHead = sheet.match(/\.dse-fb__adv-head\s*\{[\s\S]*?\n\}/);
 		expect(advHead).not.toBeNull();

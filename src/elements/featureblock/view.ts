@@ -3,7 +3,9 @@
 // Re-cast from the legacy FeatureblockView sub-view tree (HeaderView +
 // FeatureblockStatsView + HR + FeaturesView) onto the site's Forged Band card:
 //
-//   .dse-fb[data-dse-role][data-dse-fb-stats]   ← the card root (role tint + stat layout)
+//   .dse-fb[data-dse-role]                      ← the card root (role tint; the stat
+//                                                 layout is the SC-123 `fbStats` pref,
+//                                                 reflected onto the ELEMENT root)
 //     .dse-head                                 ← kit cardHead (§3.7 slot fill below)
 //     .dse-fb__flavor                           ← italic flavor (markdown)
 //     .dse-fb__stats > .dse-fb__stat            ← the loose-stat header (label/value cells)
@@ -68,8 +70,13 @@ export class FeatureblockElementView extends ElementView<FeatureblockConfig> {
 		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
 
 		const card = root.createDiv({ cls: 'dse-fb' });
-		// Stat-layout hook (D4 owns the pref; static default = grid, like the site).
-		card.setAttribute('data-dse-fb-stats', 'grid');
+		// SC-123: the stat-layout hook is a real preference now (`fbStats`), reflected
+		// onto the ELEMENT ROOT by prefs.reflect() like every other attr-bearing
+		// descriptor — so nothing is stamped here. It used to be a hard-coded 'grid'
+		// literal, which is exactly why the sheet's `[data-dse-fb-stats='ledger']` arm
+		// was unreachable dead code from D4 until now (SC-146 audit §4b). Same change
+		// on the CSS side: `grid` became the unqualified base rule (default-value
+		// convention) and only `ledger` names an attribute.
 
 		const typeText = fb.featureblock_type?.trim() || undefined;
 		const role = applyRoleTint(card, typeText);

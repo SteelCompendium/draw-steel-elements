@@ -355,7 +355,23 @@ hand-wiring four call sites.
   subscribers synchronously, so open elements reflow live behind the dialog. Per-group and
   whole-tab reset actions write descriptor defaults (sparse storage then drops them). The
   Statblock display group also renders the preset dropdown and a live preview
-  (`SettingsPreview.ts`), both wholly derived, never persisted.
+  (`SettingsPreview.ts`), both wholly derived, never persisted. SC-123 added a
+  **Featureblock display** section (`fbFeatureStyle`/`fbStats`) and five secondary
+  Statblock-display rows (`kwUsage`/`distTarget`/`sbCharLine`/`sbCharBox`/`sbVillain`,
+  all `ui.advanced`); the preview's SUBJECT now follows the section — a featureblock
+  under the featureblock page, the canned statblock everywhere else.
+- **Conditional-DOM preferences (SC-123)** — the one class of pref that is NOT a pure CSS
+  reflow, and the reason it exists. Three keys change what the statblock view BUILDS:
+  `sbCharLine`/`sbCharBox` (the merged `"Might +2"` text node vs the site's
+  `.dse-sb__char-box`/`-v`/`-l` split) and `sbVillain` (villain actions inline vs lifted
+  into one kit `collapsible()` band). Their DEFAULT values emit exactly the DOM the element
+  emitted before, which is what keeps the frozen legacy/print shots byte-identical — a
+  plain always-on split was tried in SC-10 Task 4 and reverted because two inline spans
+  moved Chromium's sub-pixel text shaping. Consequences, all in
+  `src/elements/statblock/view.ts`: the view subscribes those three keys to a remount (the
+  D5 rolling-pref mechanism), and a per-block `prefs:` override still only re-stamps the
+  attribute, so a locally-pinned shape key gets the global DOM with local attributes.
+  Adding another conditional-DOM pref means repeating exactly that trio of moves.
 - **Per-block `prefs:` overrides** (`framework/prefOverrides.ts`): a reserved `prefs:`
   map, presentation keys only. `extractPrefOverrides` pops it off the parsed YAML BEFORE
   schema validation and `def.parse`; unknown or behavioral keys (no `attr` — those use the

@@ -47,6 +47,30 @@ declare module '../framework/seams/prefs' {
 		sbDensity: 'comfortable' | 'compact';
 		sbColumns: 'single' | 'wide';
 		sbStats: 'grid' | 'gridc' | 'ledger';
+		// —— SC-123 second wave: the site's remaining layout/structure settings.
+		// kwUsage/distTarget restyle the SHARED ability-card meta bands
+		// (renderFeature.ts's .dse-feature__meta-chips / -rail), so they reach every
+		// card — statblock, featureblock and standalone — where the site's
+		// data-sb-kwusage/-disttarget only reach its statblock feature block.
+		// sbCharLine/sbCharBox/sbVillain are statblock-only, like the site's.
+		//
+		// TWO DEFAULTS DIVERGE FROM THE SITE'S BY DESIGN (the legacy-fidelity bar
+		// wins): the site ships charline=two and villain=banded, and the plugin must
+		// reproduce TODAY'S rendering at default — the single merged "Might +2" line
+		// and un-banded villain actions. Everything else matches the site's own
+		// SB_DEFAULTS verbatim, INCLUDING disttarget=grid (settings-panel.js:31-33;
+		// an earlier revision of this comment, and the SC-146 audit row S8 it came
+		// from, misread that default as `text` — corrected in the SC-123 fix round,
+		// review M-4). See the SB_PRESETS comment for what the two cost the
+		// "Steel card" bundle.
+		kwUsage: 'crest' | 'text' | 'grid' | 'ledger';
+		distTarget: 'grid' | 'text' | 'ledger';
+		sbCharLine: 'one' | 'two';
+		sbCharBox: 'off' | 'on' | 'onword';
+		sbVillain: 'inline' | 'banded';
+		// —— Featureblock display (SC-123 — the site's data-fb-featstyle / data-fb-stats) ——
+		fbFeatureStyle: 'card' | 'flat';
+		fbStats: 'grid' | 'ledger';
 		// —— Element defaults (behavioral — no attr; views read cx.prefs.get) ——
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
@@ -64,6 +88,7 @@ export type PrefGroup =
 	| 'Appearance'
 	| 'Typography'
 	| 'Statblock display'
+	| 'Featureblock display'
 	| 'Element defaults'
 	| 'Rolling'
 	| 'Authoring';
@@ -73,6 +98,7 @@ export const GROUP_ORDER: readonly PrefGroup[] = [
 	'Appearance',
 	'Typography',
 	'Statblock display',
+	'Featureblock display',
 	'Element defaults',
 	'Rolling',
 	'Authoring',
@@ -268,6 +294,98 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
+	// —— SC-123: the site's remaining statblock layout settings. All five are
+	// SECONDARY rows (ui.advanced) — Scott's "3 primary + advanced" balance from
+	// SC-112: the primary page keeps the preset plus the four curated knobs, and the
+	// long tail lives one page deeper rather than flat. Each is still a preset member
+	// (SB_PRESET_MEMBERS), so the bundles write them regardless of which page shows
+	// them, and the section reset covers them (SettingsTab iterates members, not rows). ——
+	d({
+		key: 'kwUsage', default: 'crest', attr: 'kwusage',
+		ui: {
+			group: 'Statblock display', inPreset: true, advanced: true,
+			label: 'Keyword display', control: 'select',
+			options: [
+				{ value: 'crest', label: 'Chips' },
+				{ value: 'text', label: 'Inline text' },
+				{ value: 'grid', label: 'Grid' },
+				{ value: 'ledger', label: 'Ledger' },
+			],
+			help: 'Layout of the keyword + action-type band on ability cards. "Chips" — the default — keeps today\'s look: boxed keyword chips with the action type at the far right. Applies to every ability card (statblock, featureblock and standalone) under the Steel theme.',
+		},
+	}),
+	d({
+		key: 'distTarget', default: 'grid', attr: 'disttarget',
+		ui: {
+			group: 'Statblock display', inPreset: true, advanced: true,
+			label: 'Distance + target', control: 'select',
+			options: [
+				{ value: 'grid', label: 'Grid' },
+				{ value: 'text', label: 'Inline text' },
+				{ value: 'ledger', label: 'Ledger' },
+			],
+			help: 'Layout of the Distance/Target rail on ability cards. "Grid" — the default — keeps today\'s two boxed cells. Applies to every ability card (statblock, featureblock and standalone) under the Steel theme.',
+		},
+	}),
+	d({
+		key: 'sbCharLine', default: 'one', attr: 'sb-charline',
+		ui: {
+			group: 'Statblock display', inPreset: true, advanced: true,
+			label: 'Characteristics', control: 'select',
+			options: [
+				{ value: 'one', label: 'One line' },
+				{ value: 'two', label: 'Value over label' },
+			],
+			help: 'How each characteristic reads in the Might/Agility/Reason/Intuition/Presence rail. "One line" — the default — keeps today\'s single "Might +2" line; "Value over label" stacks the number above the word, like the website.',
+		},
+	}),
+	d({
+		key: 'sbCharBox', default: 'off', attr: 'sb-charbox',
+		ui: {
+			group: 'Statblock display', inPreset: true, advanced: true,
+			label: 'Boxed first letter', control: 'select',
+			options: [
+				{ value: 'off', label: 'Off' },
+				{ value: 'on', label: 'Letter only' },
+				{ value: 'onword', label: 'Letter and word' },
+			],
+			help: 'Adds a small framed M / A / R / I / P box to each characteristic. "Letter only" drops the spelled-out word on one-line characteristics; "Letter and word" keeps both. With Characteristics set to "Value over label" the two settings render alike — the website behaves the same way.',
+		},
+	}),
+	d({
+		key: 'sbVillain', default: 'inline', attr: 'sb-villain',
+		ui: {
+			group: 'Statblock display', inPreset: true, advanced: true,
+			label: 'Villain actions', control: 'select',
+			options: [
+				{ value: 'inline', label: 'Inline with other features' },
+				{ value: 'banded', label: 'Grouped in a collapsible band' },
+			],
+			help: 'Where a statblock\'s villain actions render. "Inline" — the default — lists them among the other features in source order. "Grouped" collects them into one collapsible "Villain Actions" band below the rest, like the website. Print and export always show the band open.',
+		},
+	}),
+
+	// —— Featureblock display (SC-123 — the site's Featureblocks group,
+	// settings-panel.js: data-fb-featstyle / data-fb-stats). Its own section rather
+	// than more rows under Statblock display: these govern a different element, and
+	// the site groups them separately too. ——
+	d({
+		key: 'fbFeatureStyle', default: 'card', attr: 'fb-featstyle',
+		ui: {
+			group: 'Featureblock display', label: 'Feature style', control: 'select',
+			options: [{ value: 'card', label: 'Cards' }, { value: 'flat', label: 'Flat list' }],
+			help: 'How a featureblock\'s options are presented. "Cards" — the default — frames each one; "Flat list" runs them as a dense frameless list, the same vocabulary the statblock\'s own Feature style offers.',
+		},
+	}),
+	d({
+		key: 'fbStats', default: 'grid', attr: 'fb-stats',
+		ui: {
+			group: 'Featureblock display', label: 'Stat line', control: 'select',
+			options: [{ value: 'grid', label: 'Grid' }, { value: 'ledger', label: 'Ledger' }],
+			help: 'Layout of a featureblock\'s loose stat header (Stamina / Size / EV …). "Grid" — the default — is today\'s two-per-row pairing; "Ledger" gives each stat its own full-width row with the value right-aligned.',
+		},
+	}),
+
 	// —— Element defaults (behavioral) ——
 	d({
 		key: 'collapsibleDefault', default: true,
@@ -336,9 +454,11 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 ];
 
 // —— §3.2 statblock presets: NOT a stored pref — the label is DERIVED from the
-// members, re-deriving 'custom' when any single member diverges (site parity). ——
-// SC-146 fixes 4/5 (audit §4a "Preset bundle divergence"): both non-default
-// bundles diverged from the site's presets of the same name.
+// members, re-deriving 'custom' when any single member diverges (site parity).
+//
+// SC-146 fixes 4/5 (audit §4a "Preset bundle divergence") corrected the four ORIGINAL
+// members of both non-default bundles, which had diverged from the site's presets of
+// the same name:
 //   - sourcebook: the site's book layout is a FLAT feature list
 //     (settings-panel.js:37, featstyle 'flat'); this bundle kept 'card'.
 //   - index: the site pins multi-column `wide: "off"` in EVERY preset — it is
@@ -356,14 +476,45 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 // to give it at the time (fix 3 added the mode in the SAME commit), so the
 // mismatch slipped through unflagged. Now that C1 makes gridc render
 // correctly under Steel, there is no remaining reason to diverge.
+//
+// SC-123 then widened every bundle with the five NEW members, so a preset writes the
+// same SET of decisions the site's does (settings-panel.js:35-39). SC-146's corrected
+// values for the four original members are carried through unchanged — the two tickets
+// touch disjoint members of the same three objects. Two deliberate divergences remain,
+// both forced by the plugin's legacy-fidelity bar rather than chosen:
+//
+//  1. **`steel` mirrors the plugin's DEFAULTS, not the site's Steel Card bundle.**
+//     The site's bundle sets `charline: two` and `villain: banded`; the plugin's
+//     defaults for those must reproduce today's rendering (one merged characteristic
+//     line, un-banded villain actions — anything else moves frozen shots). Writing the
+//     site's values here would make a fresh install derive 'custom' instead of 'Steel
+//     card', i.e. the dropdown would open on a state the user never chose. So `steel`
+//     stays "the plugin's home look" and the site-faithful values live in the other two
+//     bundles. Flipping the defaults themselves is a separate, sanctioned-rebaseline
+//     decision for Scott (SC-123 report).
+//  2. `sourcebook`/`index` DO carry the site's values for every new member
+//     (kwUsage/distTarget/sbCharLine/sbCharBox/sbVillain), because neither is the
+//     default state and neither has a fidelity bar to clear. ——
 export const SB_PRESETS = {
-	steel:      { sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'grid' },
-	sourcebook: { sbFeatureStyle: 'flat', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger' },
-	index:      { sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'single', sbStats: 'gridc' },
+	steel: {
+		sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'grid',
+		kwUsage: 'crest', distTarget: 'grid', sbCharLine: 'one', sbCharBox: 'off', sbVillain: 'inline',
+	},
+	sourcebook: {
+		sbFeatureStyle: 'flat', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger',
+		kwUsage: 'text', distTarget: 'text', sbCharLine: 'one', sbCharBox: 'on', sbVillain: 'inline',
+	},
+	index: {
+		sbFeatureStyle: 'flat', sbDensity: 'compact', sbColumns: 'single', sbStats: 'gridc',
+		kwUsage: 'grid', distTarget: 'grid', sbCharLine: 'two', sbCharBox: 'onword', sbVillain: 'banded',
+	},
 } as const;
 export type SbPresetId = keyof typeof SB_PRESETS;
 
-const SB_PRESET_MEMBERS = ['sbFeatureStyle', 'sbDensity', 'sbColumns', 'sbStats'] as const;
+const SB_PRESET_MEMBERS = [
+	'sbFeatureStyle', 'sbDensity', 'sbColumns', 'sbStats',
+	'kwUsage', 'distTarget', 'sbCharLine', 'sbCharBox', 'sbVillain',
+] as const;
 
 /** The preset whose bundle equals the current member values, else 'custom'. */
 export function deriveSbPreset(prefs: PreferenceStore): SbPresetId | 'custom' {

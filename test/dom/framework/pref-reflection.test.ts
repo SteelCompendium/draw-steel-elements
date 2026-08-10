@@ -29,6 +29,16 @@ test('reflect() stamps every catalog presentation default on a root (first-paint
 	expect(root.getAttribute('data-dse-sb-featstyle')).toBe('card');
 	expect(root.getAttribute('data-dse-sb-columns')).toBe('single');
 	expect(root.getAttribute('data-dse-sb-stats')).toBe('grid');
+	// SC-123's seven additions — same first-paint contract, same defaults-are-today's-look
+	// bar (the two conditional-DOM ones, sb-charline/sb-charbox, also gate the merged
+	// characteristics text node; see statblock/view.ts renderChars).
+	expect(root.getAttribute('data-dse-kwusage')).toBe('crest');
+	expect(root.getAttribute('data-dse-disttarget')).toBe('grid');
+	expect(root.getAttribute('data-dse-sb-charline')).toBe('one');
+	expect(root.getAttribute('data-dse-sb-charbox')).toBe('off');
+	expect(root.getAttribute('data-dse-sb-villain')).toBe('inline');
+	expect(root.getAttribute('data-dse-fb-featstyle')).toBe('card');
+	expect(root.getAttribute('data-dse-fb-stats')).toBe('grid');
 	expect(root.getAttribute('data-dse-reduce-motion')).toBe('false');
 	expect(root.getAttribute('data-dse-print')).toBe('off');
 	expect(root.getAttribute('data-dse-portraits')).toBe('on');
@@ -61,6 +71,29 @@ test('styles-source.css keys the statblock pref hooks off the ROOT attributes (b
 	// the OLD card-scoped selectors must be gone (they'd shadow the reflected root):
 	expect(sheet).not.toMatch(/\.dse-sb\[data-dse-density/);
 	expect(sheet).not.toMatch(/\.dse-sb\[data-dse-sb-featstyle/);
+	// SC-123: the fb stat hook moved off the CARD (a hard-coded literal, which is what
+	// made its `ledger` arm dead code) onto the reflected root, same as the sb four.
+	expect(sheet).not.toMatch(/\.dse-fb\[data-dse-fb-stats/);
+});
+
+test('SC-123: every new pref hook keys off a ROOT attribute too, one non-default arm each', () => {
+	// The two ability-card bands are Steel-screen-scoped (the chip/rail vocabulary they
+	// restyle only exists there); the statblock/featureblock ones are theme-agnostic.
+	expect(sheet).toMatch(/\[data-dse-kwusage='text'\] \.dse-feature__meta-chips/);
+	expect(sheet).toMatch(/\[data-dse-kwusage='grid'\] \.dse-feature__meta-chips/);
+	expect(sheet).toMatch(/\[data-dse-kwusage='ledger'\] \.dse-feature__meta-chips/);
+	expect(sheet).toMatch(/\[data-dse-disttarget='text'\] \.dse-feature__meta-rail/);
+	expect(sheet).toMatch(/\[data-dse-disttarget='ledger'\] \.dse-feature__meta-rail/);
+	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-sb-charline='two'\] \.dse-sb__char/);
+	expect(sheet).toMatch(/\[data-dse-sb-charbox='on'\] \.dse-sb__char-box/);
+	expect(sheet).toMatch(/\[data-dse-sb-charbox='onword'\] \.dse-sb__char-box/);
+	expect(sheet).toMatch(/\[data-dse-element='featureblock'\]\[data-dse-fb-featstyle='flat'\]/);
+	expect(sheet).toMatch(/\[data-dse-fb-stats='ledger'\] \.dse-fb__stats/);
+	// The villain band is CONDITIONAL DOM, not a CSS mode: the sheet styles the band
+	// class the view only ever builds at sbVillain='banded', so `banded` is correctly
+	// absent from every selector.
+	expect(sheet).toMatch(/^\.dse-sb__band \{/m);
+	expect(sheet).not.toMatch(/data-dse-sb-villain=/);
 });
 
 test('defaults are CSS no-ops: no selector exists for any catalog default value (legacy fidelity)', () => {
@@ -68,6 +101,16 @@ test('defaults are CSS no-ops: no selector exists for any catalog default value 
 	expect(sheet).not.toMatch(/data-dse-sb-featstyle='card'/);
 	expect(sheet).not.toMatch(/data-dse-sb-columns='single'/);
 	expect(sheet).not.toMatch(/data-dse-sb-stats='grid'/);
+	// SC-123's seven. `sb-charline='one'` is the interesting one: the one-line arms are
+	// reachable only at a non-default sb-charbox, so they are written as
+	// `:not([data-dse-sb-charline='two'])` rather than naming the default.
+	expect(sheet).not.toMatch(/data-dse-kwusage='crest'/);
+	expect(sheet).not.toMatch(/data-dse-disttarget='grid'/);
+	expect(sheet).not.toMatch(/data-dse-sb-charline='one'/);
+	expect(sheet).not.toMatch(/data-dse-sb-charbox='off'/);
+	expect(sheet).not.toMatch(/data-dse-sb-villain='inline'/);
+	expect(sheet).not.toMatch(/data-dse-fb-featstyle='card'/);
+	expect(sheet).not.toMatch(/data-dse-fb-stats='grid'/);
 });
 
 // SC-146 FIX ROUND 1, I3 — grep-pin guards for every new/changed arm this fix round

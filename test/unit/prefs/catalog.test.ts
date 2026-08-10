@@ -29,6 +29,17 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('sbDensity')).toBe('comfortable');     // statblock/view.ts static value
 	expect(store.get('sbColumns')).toBe('single');
 	expect(store.get('sbStats')).toBe('grid');
+	// SC-123. Three of these deliberately DIVERGE from the site's own defaults
+	// (the site ships disttarget=text, charline=two, villain=banded) because the bar
+	// here is "reproduce TODAY'S plugin rendering", and today's is the boxed rail, the
+	// merged "Might +2" line and un-banded villain actions. See the SB_PRESETS comment.
+	expect(store.get('kwUsage')).toBe('crest');        // the SC-121 chip band
+	expect(store.get('distTarget')).toBe('grid');      // the SC-117/121 boxed rail
+	expect(store.get('sbCharLine')).toBe('one');       // the merged text node (freeze bar)
+	expect(store.get('sbCharBox')).toBe('off');        // …with no boxed letter
+	expect(store.get('sbVillain')).toBe('inline');     // no band has ever been built
+	expect(store.get('fbFeatureStyle')).toBe('card');
+	expect(store.get('fbStats')).toBe('grid');         // was a hard-coded literal on the card
 	expect(store.get('collapsibleDefault')).toBe(true);     // old ComponentWrapper ?? true
 	expect(store.get('collapseDefault')).toBe(false);       // old ComponentWrapper ?? false
 	expect(store.get('staminaRecoveryPopover')).toBe(false); // SC-132: Model M direct-set is the shipped interaction
@@ -160,6 +171,16 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbDensity: 'density',         // BUILT name (spec draft said sb-density; built wins)
 		sbColumns: 'sb-columns',
 		sbStats: 'sb-stats',
+		// SC-123 — the site's own attribute names, minus its `sb-` prefix where the
+		// plugin's reach is wider than the site's (kwusage/disttarget restyle EVERY
+		// ability card here, not just a statblock's).
+		kwUsage: 'kwusage',
+		distTarget: 'disttarget',
+		sbCharLine: 'sb-charline',
+		sbCharBox: 'sb-charbox',
+		sbVillain: 'sb-villain',
+		fbFeatureStyle: 'fb-featstyle',
+		fbStats: 'fb-stats',
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
@@ -184,12 +205,14 @@ test('every descriptor carries a PrefUi in a known group; no hidden rows remain 
 test('preset derivation: defaults = steel; one divergence = custom; applySbPreset round-trips', async () => {
 	const store = makeStore();
 	expect(deriveSbPreset(store)).toBe('steel');
-	// SC-146 fix 4: sourcebook is now { featstyle: 'flat', stats: 'ledger' }
-	// (was 'card' + 'ledger' — the site's own Sourcebook is a FLAT feature
-	// list, settings-panel.js:37), so deriving it needs both members flipped.
+	// SC-146 fix 4 flipped Sourcebook's Feature style to Flat and SC-123 widened the
+	// bundle to nine members, so reaching Sourcebook now takes its whole member set
+	// (before either change, `sbStats: ledger` alone was the only difference).
 	await store.set('sbStats', 'ledger');
 	expect(deriveSbPreset(store)).toBe('custom');
 	await store.set('sbFeatureStyle', 'flat');
+	expect(deriveSbPreset(store)).toBe('custom'); // still only 2 of the 9
+	await applySbPreset(store, 'sourcebook');
 	expect(deriveSbPreset(store)).toBe('sourcebook');
 	await store.set('sbDensity', 'compact');
 	expect(deriveSbPreset(store)).toBe('custom');
@@ -206,4 +229,65 @@ test('preset derivation: defaults = steel; one divergence = custom; applySbPrese
 	await applySbPreset(store, 'steel');
 	expect(deriveSbPreset(store)).toBe('steel');
 	expect(SB_PRESETS.steel.sbDensity).toBe('comfortable');
+});
+
+// —— SC-123: the widened bundles ——
+
+test('every preset writes the SAME member set, and that set is exactly the inPreset rows', async () => {
+	const members = new Set(
+		DSE_PREF_DESCRIPTORS.filter((d) => prefUi(d)?.inPreset).map((d) => d.key as string),
+	);
+	for (const bundle of Object.values(SB_PRESETS)) {
+		expect(new Set(Object.keys(bundle))).toEqual(members);
+	}
+	// Nine members now: the D4 four plus SC-123's five statblock rows. The two
+	// featureblock rows are NOT members — the site's bundles have no fb member either.
+	expect(members.size).toBe(9);
+	expect(members.has('fbFeatureStyle')).toBe(false);
+	expect(members.has('fbStats')).toBe(false);
+});
+
+test('the `steel` bundle IS the default state — a fresh install derives "Steel card", never "Custom"', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const [key, value] of Object.entries(SB_PRESETS.steel)) {
+		expect(byKey.get(key)!.default).toBe(value);
+	}
+});
+
+test('the non-default bundles carry the SITE\'s values for every new member (settings-panel.js:35-39)', () => {
+	// Sourcebook — the book look: comma-joined keywords, an inline distance/target line,
+	// a boxed characteristic letter, no villain band.
+	expect(SB_PRESETS.sourcebook.kwUsage).toBe('text');
+	expect(SB_PRESETS.sourcebook.distTarget).toBe('text');
+	expect(SB_PRESETS.sourcebook.sbCharLine).toBe('one');
+	expect(SB_PRESETS.sourcebook.sbCharBox).toBe('on');
+	expect(SB_PRESETS.sourcebook.sbVillain).toBe('inline');
+	// Index card — everything in framed cells, value over label, villain actions banded.
+	expect(SB_PRESETS.index.kwUsage).toBe('grid');
+	expect(SB_PRESETS.index.distTarget).toBe('grid');
+	expect(SB_PRESETS.index.sbCharLine).toBe('two');
+	expect(SB_PRESETS.index.sbCharBox).toBe('onword');
+	expect(SB_PRESETS.index.sbVillain).toBe('banded');
+});
+
+test('SC-123 rows: statblock additions are SECONDARY (Scott\'s 3-primary-plus-advanced balance); the featureblock pair is its own section', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const key of ['kwUsage', 'distTarget', 'sbCharLine', 'sbCharBox', 'sbVillain']) {
+		const ui = prefUi(byKey.get(key)!)!;
+		expect(ui.group).toBe('Statblock display');
+		expect(ui.advanced).toBe(true);
+		expect(ui.control).toBe('select');
+	}
+	// The four pre-existing statblock rows stay on the primary page.
+	for (const key of ['sbFeatureStyle', 'sbDensity', 'sbColumns', 'sbStats']) {
+		expect(prefUi(byKey.get(key)!)!.advanced ?? false).toBe(false);
+	}
+	for (const key of ['fbFeatureStyle', 'fbStats']) {
+		const ui = prefUi(byKey.get(key)!)!;
+		expect(ui.group).toBe('Featureblock display');
+		expect(ui.advanced ?? false).toBe(false);
+	}
+	expect(GROUP_ORDER.indexOf('Featureblock display')).toBe(
+		GROUP_ORDER.indexOf('Statblock display') + 1,
+	);
 });

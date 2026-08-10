@@ -154,13 +154,54 @@ features:
           to each target can make a free strike against that target.
 `;
 
+/** SC-123: the Featureblock display section's own preview subject. A statblock
+ *  preview would show NOTHING that page can change (no `.dse-fb` anywhere in it), so
+ *  the section gets a featureblock instead — and one carrying the full loose-stat
+ *  header, since "Stat line" is half of what that page controls (the shipped
+ *  `src/elements/featureblock/example.yaml` has no stamina/size/stats at all, which
+ *  would have left that row previewing an empty region). Shape copied from
+ *  test/dom/elements/featureblock.test.ts's proven WITH_STATS constant. */
+export const PREVIEW_FEATUREBLOCK_YAML = `type: featureblock
+featureblock_type: Fixture
+name: Bloodstone of Yendral
+level: 2
+ev: "6"
+stamina: "30"
+size: "2"
+stats:
+  - name: Speed
+    value: "0"
+  - name: Stability
+    value: "3"
+  - name: Free Strike
+    value: "2"
+features:
+  - type: feature
+    feature_type: trait
+    name: Hungering Pulse
+    icon: ⭐️
+    effects:
+      - effect: Each enemy within 2 squares takes 2 corruption damage.
+  - type: feature
+    feature_type: trait
+    name: Blood Debt
+    icon: ❇️
+    cost: 3 Malice
+    effects:
+      - effect: The bloodstone drains one adjacent creature, which takes 5 corruption
+          damage and is weakened (save ends).
+`;
+
 export function mountSettingsPreview(
 	containerEl: HTMLElement,
 	plugin: DrawSteelAdmonitionPlugin,
 	owner: Component,
+	/** Which canned block to preview. Defaults to the statblock — the subject every
+	 *  reflected section had before SC-123 added a featureblock-only one. */
+	subject: 'statblock' | 'featureblock' = 'statblock',
 ): void {
 	const fw = plugin.frameworkV2;
-	const def = fw?.registry.get('statblock');
+	const def = fw?.registry.get(subject);
 	if (!fw || !def) return; // framework not constructed (never in practice): no preview
 	const wrap = containerEl.createDiv({ cls: 'dse-settings-preview' });
 	const host: BlockHost = {
@@ -174,9 +215,10 @@ export function mountSettingsPreview(
 		},
 		getBlockInfo: () => null,
 		replaceSource: async () => false,
-		blockKey: () => 'dse-settings-preview',
+		blockKey: () => `dse-settings-preview:${subject}`,
 	};
-	fw.pipeline.run(def, PREVIEW_STATBLOCK_YAML, host).catch((error) => {
+	const yaml = subject === 'featureblock' ? PREVIEW_FEATUREBLOCK_YAML : PREVIEW_STATBLOCK_YAML;
+	fw.pipeline.run(def, yaml, host).catch((error) => {
 		console.error('Draw Steel Elements: settings preview failed to render', error);
 	});
 }

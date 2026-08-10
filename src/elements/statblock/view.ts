@@ -44,16 +44,24 @@
 // Static + SDK-backed (OD-7: stays static): no persistence, no interactive
 // controls. All markdown renders through this.renderMarkdown (owner-parented,
 // ML-1) passed to renderFeatureList as the renderMd callback.
+import { setIcon } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
-import { cardHead, divider } from '@/framework/kit';
+import { cardHead, collapsible, divider } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
-import { renderFeatureList } from '@/elements/feature/renderFeature';
+import { actionTypeOf, crestIconFor, renderFeatureList } from '@/elements/feature/renderFeature';
 import { featureRollHooks } from '@/elements/feature/rollController';
 import { applyRoleTint, type DseRole } from '@/elements/roleTint';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
 import type { Statblock } from 'steel-compendium-sdk';
+
+/** SC-123: the villain band's head wording + its session slot. The title is the
+ *  site's own ("Villain Actions", steel-statblock.css `.sb__band-title`); the slot
+ *  keeps a reader's open/closed choice across the echo-rebuild, like every other
+ *  kit collapsible. */
+const VILLAIN_BAND_TITLE = 'Villain Actions';
+const VILLAIN_BAND_SLOT = 'sb.band.villain';
 
 /** The legacy StatsView.formatCharacteristic, VERBATIM (word/number parity). */
 function formatCharacteristic(value?: number): string {
@@ -157,6 +165,14 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		};
 		cx.prefs.subscribe('rollingEnabled', this, remount);
 		cx.prefs.subscribe('rollClickToRoll', this, remount);
+		// SC-123: the only three prefs anywhere on this element that change the DOM
+		// SHAPE rather than reflow it (the characteristics split and the villain band
+		// are both conditional DOM — see renderChars/renderFeatures), so they need the
+		// same remount treatment the rolling prefs get. Every other presentation pref
+		// is a pure CSS reflow off the reflected attribute and must NOT be listed here.
+		cx.prefs.subscribe('sbCharLine', this, remount);
+		cx.prefs.subscribe('sbCharBox', this, remount);
+		cx.prefs.subscribe('sbVillain', this, remount);
 	}
 
 	protected onMount(root: HTMLElement, model: StatblockConfig): void {
@@ -235,23 +251,47 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 
 	/** The .dse-sb__chars row: five verbatim "Name +N" pairs, legacy order.
 	 *
-	 * SC-10 Task 4 tried splitting each pair into -l/-v sub-spans (to match
-	 * .dse-sb__item/.dse-sb__kv's two-tier boxed-cell look) and reverted it: even
-	 * though the concatenated textContent stayed identical, wrapping the SAME text
-	 * in two inline <span>s shifted Chromium's sub-pixel text shaping/hinting by a
-	 * hair — pixel-diffed against the pre-task baseline as a 6×24px patch (62
-	 * pixels) inside the word "Agility" itself (nowhere near the label/value
-	 * split point), i.e. the mere presence of a sibling inline box changed
-	 * anti-aliasing on GLYPHS the split didn't touch. That fails the LEGACY-FREEZE
-	 * gate (`<id>--legacy-*.png` must be byte-identical), so the single merged
-	 * text node stays — .dse-sb__char is boxed as ONE cell in Steel below (no
-	 * per-glyph value/label split), unlike the item/kv rows, which already had a
-	 * label/value structure to key off before this task touched anything. */
+	 * TWO SHAPES, chosen by preference (SC-123). At the DEFAULT pair
+	 * (`sbCharLine: 'one'`, `sbCharBox: 'off'`) each cell stays ONE merged text node,
+	 * byte-for-byte what the element has always emitted; any other combination emits
+	 * the site's three-part split (`.dse-sb__char-box` / `-v` / `-l`, mirroring
+	 * `.sb__char-*`), which the CSS then lays out as a boxed letter and/or a
+	 * value-over-label stack.
+	 *
+	 * Why the merged node cannot simply be replaced: SC-10 Task 4 tried exactly that
+	 * and reverted it. Even with identical concatenated textContent, wrapping the SAME
+	 * text in two inline <span>s shifted Chromium's sub-pixel text shaping/hinting —
+	 * pixel-diffed as a 6×24px patch (62 pixels) inside the word "Agility" itself,
+	 * nowhere near the split point, i.e. the mere presence of a sibling inline box
+	 * changed anti-aliasing on glyphs the split never touched. That fails the
+	 * LEGACY-FREEZE gate (`<id>--legacy-*.png` must be byte-identical). Gating the
+	 * split on a non-default preference keeps the frozen cameras on the merged node
+	 * forever while still shipping the site's two presentations to anyone who asks
+	 * for them.
+	 *
+	 * Consequence worth knowing: because the SHAPE (not just the styling) depends on
+	 * these two prefs, they re-render rather than reflow — the constructor subscribes
+	 * both keys to a remount, the same mechanism D5's rolling prefs use. A per-block
+	 * `prefs:` override still only re-stamps the attribute (prefOverrides.ts is
+	 * attribute-level by design), so a block that pins `sbCharLine` locally gets the
+	 * global shape with local attributes; the layout arms are written so that pairing
+	 * degrades to the default look rather than to a broken one. */
 	private renderChars(card: HTMLElement, model: StatblockConfig): void {
 		const chars = model.statblock.characteristics;
 		const row = card.createDiv({ cls: 'dse-sb__chars' });
+		const split = this.charsAreSplit();
 		const pair = (label: string, value?: number): void => {
-			row.createDiv({ cls: 'dse-sb__char', text: `${label} ${formatCharacteristic(value)}` });
+			const cellEl = row.createDiv({ cls: 'dse-sb__char' });
+			if (!split) {
+				// LEGACY-FREEZE: one text node, exactly as before (see the doc comment).
+				cellEl.setText(`${label} ${formatCharacteristic(value)}`);
+				return;
+			}
+			// Site DOM order (steel-statblock.css orders them with grid-areas/`order`):
+			// box, value, label — the boxed letter is the label's initial, verbatim.
+			cellEl.createSpan({ cls: 'dse-sb__char-box', text: label.charAt(0).toUpperCase() });
+			cellEl.createSpan({ cls: 'dse-sb__char-v', text: formatCharacteristic(value) });
+			cellEl.createSpan({ cls: 'dse-sb__char-l', text: label });
 		};
 		pair('Might', chars.might);
 		pair('Agility', chars.agility);
@@ -260,8 +300,24 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		pair('Presence', chars.presence);
 	}
 
+	/** True when either characteristics preference has moved off its default — the
+	 *  single place that decides between the merged text node and the split DOM. */
+	private charsAreSplit(): boolean {
+		return this.cx.prefs.get('sbCharLine') !== 'one' || this.cx.prefs.get('sbCharBox') !== 'off';
+	}
+
 	/** The feature list on Task 5's shared grammar, behind the legacy ◆ rule
-	 *  (now the kit divider). Same guard as the legacy `features?.length > 0`. */
+	 *  (now the kit divider). Same guard as the legacy `features?.length > 0`.
+	 *
+	 *  SC-123 / FOLLOWUPS #54 — VILLAIN BANDING. At `sbVillain: 'banded'` the villain
+	 *  actions are lifted out of the main run and collected into ONE collapsible
+	 *  "Villain Actions" region below it (the site's `.sb__band--villain`, which is a
+	 *  `<details>` with a crest head + chevron over a body list). At the default
+	 *  'inline' the emitted DOM is exactly what it always was — a single
+	 *  renderFeatureList over every feature in source order — which is what keeps
+	 *  `statblock-villain-corpus--legacy-*.png` byte-identical. Classification is
+	 *  `actionTypeOf`, the SAME predicate that draws the villain crest and accent
+	 *  (SC-102), so a card can never band a feature it wouldn't also mark. */
 	private renderFeatures(
 		card: HTMLElement,
 		model: StatblockConfig,
@@ -270,8 +326,46 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const features = model.statblock.features;
 		if (!features || features.length === 0) return;
 		divider(card, { axis: 'h', ornament: true }, this);
-		renderFeatureList(card, FeatureConfig.allFrom(features), this, renderMd, {
-			roll: featureRollHooks(this.cx),
-		});
+		const configs = FeatureConfig.allFrom(features);
+		const opts = { roll: featureRollHooks(this.cx) };
+
+		if (this.cx.prefs.get('sbVillain') !== 'banded') {
+			renderFeatureList(card, configs, this, renderMd, opts);
+			return;
+		}
+		const villains = configs.filter((config) => actionTypeOf(config) === 'villain');
+		if (villains.length === 0) {
+			renderFeatureList(card, configs, this, renderMd, opts);
+			return;
+		}
+		const rest = configs.filter((config) => actionTypeOf(config) !== 'villain');
+		if (rest.length > 0) renderFeatureList(card, rest, this, renderMd, opts);
+
+		// The kit primitive already owns the header button, the chevron, the
+		// aria-expanded/aria-controls wiring and print-forced-open; the band is that
+		// primitive plus a crest and the `--villain` modifier the CSS tints from (no
+		// colored left-spine — DESIGN.md rule 7). The tint reads `--dse-act-villain`
+		// straight from the sheet rather than through an inline `--dse-act` alias: the
+		// band is villain BY CLASS, so there is nothing dynamic to carry.
+		const band = collapsible(
+			card,
+			{
+				title: VILLAIN_BAND_TITLE,
+				open: true,
+				persist: {
+					session: this.cx.session,
+					blockKey: this.cx.host.blockKey(),
+					slot: VILLAIN_BAND_SLOT,
+				},
+			},
+			this,
+		);
+		band.rootEl.addClass('dse-sb__band');
+		band.rootEl.addClass('dse-sb__band--villain');
+		const crestEl = band.headerEl.createSpan({ cls: 'dse-sb__band-crest' });
+		setIcon(crestEl, crestIconFor('villain')!);
+		const titleEl = band.headerEl.querySelector('.dse-collapse__title');
+		if (titleEl) band.headerEl.insertBefore(crestEl, titleEl);
+		renderFeatureList(band.contentEl, villains, this, renderMd, opts);
 	}
 }

@@ -290,11 +290,20 @@ export class DseSettingTab extends PluginSettingTab {
 				// preview's pref subscriptions die with the DOM that showed them — and,
 				// critically, a fresh owner is created on every mount rather than once per
 				// definitions build. Definitions are cached and replayed; mounts are not.
+				// SC-123: the preview SUBJECT follows the section — the Featureblock display
+				// page previews a featureblock, since a statblock shows nothing that page
+				// can change. Every other reflected section keeps the statblock it has
+				// previewed since D4.
 				renderPreview: this.sectionShowsPreview(members)
 					? (container) => {
 						const owner = new Component();
 						owner.load();
-						mountSettingsPreview(container, this.plugin, owner);
+						mountSettingsPreview(
+							container,
+							this.plugin,
+							owner,
+							groupName === 'Featureblock display' ? 'featureblock' : 'statblock',
+						);
 						return () => owner.unload();
 					}
 					: undefined,
