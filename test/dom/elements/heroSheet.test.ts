@@ -143,8 +143,16 @@ describe('D7 Task 9: a stamina change re-derives winded + refreshes conditions +
 		jest.useFakeTimers();
 		const { root, host } = await renderHero();
 
-		const minus = region(root, 'stamina')!.querySelector<HTMLButtonElement>('button[aria-label="Decrease Stamina"]')!;
-		for (let i = 0; i < 8; i++) minus.click(); // 31 -> 23 (<= 24 windedThreshold)
+		// SC-132: the sheet's `− 31 +` stepper row is gone (it duplicated the bar's own
+		// readout — Scott's round-5 review), and the bar itself is now the write path:
+		// it mounts canPersist, so a click opens the same StaminaEditModal the standalone
+		// `ds-stamina` element uses. Same user act, one affordance instead of two.
+		region(root, 'stamina')!.querySelector<HTMLElement>('.dse-stamina')!.click();
+		const modal = document.querySelector<HTMLElement>('.dse-modal')!;
+		expect(modal).not.toBeNull();
+		(modal.querySelector('.dse-sedit__apply-input') as HTMLInputElement).value = '8';
+		modal.querySelector<HTMLButtonElement>('button[aria-label="Damage"]')!.click();
+		modal.querySelector<HTMLButtonElement>('.dse-modal__footer .dse-btn--accent')!.click(); // 31 -> 23
 
 		expect(region(root, 'stamina')!.querySelector('.dse-stamina-rec__status')?.textContent).toBe('Winded');
 		const badge = region(root, 'conditions')!.querySelector('.dse-hero__wound-badge')!;
@@ -155,6 +163,45 @@ describe('D7 Task 9: a stamina change re-derives winded + refreshes conditions +
 		const written = host.replaceSource.mock.calls[0][0] as string;
 		expect(written).toContain('current: 23');
 		expect(defnPortion(written)).toBe(defnPortion(HERO_SOURCE));
+		jest.useRealTimers();
+	});
+});
+
+describe('SC-132: the sheet\'s stamina region is the cluster, and the cluster is editable', () => {
+	test('the duplicative `- 31 +` stepper row is gone and the bar itself is the write path', async () => {
+		const { root } = await renderHero();
+		const stamina = region(root, 'stamina')!;
+		// Scott, round 5: "All 3 layouts in the hero sheet show a counter editor… the
+		// counter value is duplicative with the value-max display and thats wasting
+		// screen real estate."
+		expect(stamina.querySelector('.dse-hero__stamina-stepper')).toBeNull();
+		expect(stamina.querySelector('button[aria-label="Decrease Stamina"]')).toBeNull();
+		// Its replacement, and the reason deleting it is safe: the bar mounts canPersist,
+		// so it opens the same StaminaEditModal the standalone element uses.
+		expect(stamina.querySelector('.dse-stamina--clickable')).not.toBeNull();
+	});
+
+	test('the region renders the Steel cluster (crest, state word, readout, gauge) around the same numbers', async () => {
+		const { root } = await renderHero();
+		const cluster = region(root, 'stamina')!.querySelector<HTMLElement>('.dse-stamina__cluster')!;
+		expect(cluster).not.toBeNull();
+		expect(cluster.getAttribute('data-state')).toBe('healthy');
+		expect(cluster.querySelector('.dse-stamina__ccur')!.textContent).toBe('31');
+		expect(cluster.querySelector('.dse-stamina__cmax')!.textContent).toBe('48');
+		expect(cluster.querySelector('.dse-stamina__gchannel')).not.toBeNull();
+		// The crest's silhouette is the state's SECOND channel, so it must actually swap.
+		expect(cluster.querySelector('.dse-stamina__crest-glyph')!.getAttribute('data-icon')).toBe('shield');
+	});
+
+	test('a recovery-marker click on the sheet sets the count and persists (Model M, same widget as the element)', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderHero();
+		const pips = region(root, 'stamina')!.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip');
+		pips[5].click(); // the fixture starts at recoveries: 6 of 10 -> spend exactly one
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toContain('recoveries: 5');
 		jest.useRealTimers();
 	});
 });
@@ -290,8 +337,14 @@ describe('D7 Task 9: read-only mount (canPersist=false) disables every write aff
 		const { root, host } = await renderHero(HERO_SOURCE, { canPersist: false });
 
 		const staminaRegion = region(root, 'stamina')!;
-		expect(staminaRegion.querySelector<HTMLButtonElement>('button[aria-label="Decrease Stamina"]')!.disabled).toBe(true);
-		expect(staminaRegion.querySelector<HTMLButtonElement>('button[aria-label="Increase Stamina"]')!.disabled).toBe(true);
+		// SC-132: the stepper row is gone. The bar is the write path now, so read-only
+		// means the bar carries no click affordance at all (F1 §4.4 renders it visible
+		// but inert rather than as a dead-end click) and the recovery markers are
+		// aria-disabled with no listener.
+		expect(staminaRegion.querySelector('.dse-stamina--clickable')).toBeNull();
+		expect(staminaRegion.querySelector('.dse-stamina-rec__pips')!.getAttribute('aria-disabled')).toBe('true');
+		expect(staminaRegion.querySelector('.dse-stamina-rec__pips')!.hasAttribute('tabindex')).toBe(false);
+		staminaRegion.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip').forEach((pip) => pip.click());
 		// Catch Breath's aria-label is dynamic (its own read-only reason tooltip stamps
 		// aria-label as a side effect too — FOLLOWUPS #27-fix-round finding 1's class of
 		// bug, native setTooltip), so it's found by its stable icon, not the label text.

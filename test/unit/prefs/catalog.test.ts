@@ -31,6 +31,7 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('sbStats')).toBe('grid');
 	expect(store.get('collapsibleDefault')).toBe(true);     // old ComponentWrapper ?? true
 	expect(store.get('collapseDefault')).toBe(false);       // old ComponentWrapper ?? false
+	expect(store.get('staminaRecoveryPopover')).toBe(false); // SC-132: Model M direct-set is the shipped interaction
 	expect(store.get('rollingEnabled')).toBe(false);        // D5 master switch — OFF is the fidelity bar
 	expect(store.get('rollClickToRoll')).toBe(true);        // OD-5: gated by rollingEnabled, shipped default kept
 	// SC-112: all six font slots default to the '' sentinel — toCss('') is null,
@@ -159,6 +160,9 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbDensity: 'density',         // BUILT name (spec draft said sb-density; built wins)
 		sbColumns: 'sb-columns',
 		sbStats: 'sb-stats',
+		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
+		// collapse defaults above it.
+		staminaRecoveryPopover: null,
 		collapsibleDefault: null,
 		collapseDefault: null,
 		rollingEnabled: null,

@@ -599,13 +599,39 @@ export abstract class SuggestModal<T> extends Modal {
 
 export class Notice {
 	static readonly notices: string[] = [];
-	constructor(message: string, _duration?: number) {
-		Notice.notices.push(message);
+	/** SC-132: the most recently constructed Notice, so a test can reach the ACTION node
+	 *  inside a rich (DocumentFragment) notice — the undo toast is the plugin's first
+	 *  notice that carries a control rather than only text. */
+	static last: Notice | null = null;
+	/** The real Notice's own element. Here: a detached div holding whatever was passed,
+	 *  which is enough for `noticeEl.querySelector(...)` + `.click()`.
+	 *
+	 *  NULL in the `unit` jest project, which runs in the NODE environment and has no
+	 *  `document` — several node-side services post notices (CompendiumSyncService), and
+	 *  a mock that needs a DOM to be constructed would break them. */
+	readonly noticeEl: HTMLElement | null =
+		typeof document === 'undefined' ? null : document.createElement('div');
+	private hidden = false;
+	constructor(message: string | DocumentFragment, _duration?: number) {
+		if (typeof message === 'string') {
+			Notice.notices.push(message);
+			if (this.noticeEl) this.noticeEl.textContent = message;
+		} else {
+			this.noticeEl?.appendChild(message);
+			Notice.notices.push(this.noticeEl?.textContent ?? '');
+		}
+		Notice.last = this;
 	}
 	setMessage(_message: string): this {
 		return this;
 	}
-	hide(): void {}
+	get isHidden(): boolean {
+		return this.hidden;
+	}
+	hide(): void {
+		this.hidden = true;
+		this.noticeEl?.remove();
+	}
 }
 
 export class MenuItem {

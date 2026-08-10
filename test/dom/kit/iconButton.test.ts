@@ -246,7 +246,13 @@ describe('Plan 08 Task 2: kit hygiene guard (D2 §5 — no inline color, tokens 
 
 	test('.dse-btn CSS derives its kit-layer ≥44px hit area from var(--dse-touch-min) (§4.6) — Steel overrides to 28px on a fine pointer, restoring 44px under pointer:coarse (see controlDensity.test.ts)', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-		const block = sheet.match(/\.dse-btn\s*\{([^}]*)\}/);
+		// ANCHORED at the start of a line (SC-132): the guard means the KIT's own
+		// `.dse-btn` rule, and it used to find it simply by being the first `.dse-btn {`
+		// in the file. Any element-scoped descendant rule authored earlier in the sheet
+		// (`… .dse-stamina-rec .dse-btn { … }`) contains that same substring and silently
+		// stole the match — a guard that reads a different rule than the one it names is
+		// worse than no guard.
+		const block = sheet.match(/^\.dse-btn\s*\{([^}]*)\}/m);
 		expect(block).not.toBeNull();
 		expect(block![1]).toMatch(/min-width:\s*var\(--dse-touch-min\)/);
 		expect(block![1]).toMatch(/min-height:\s*var\(--dse-touch-min\)/);

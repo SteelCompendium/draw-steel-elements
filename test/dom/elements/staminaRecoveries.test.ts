@@ -19,7 +19,7 @@ import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin } from '../../mocks/obsidian';
+import { App, Notice, Plugin } from '../../mocks/obsidian';
 import { staminaBarElement } from '../../../src/elements/stamina-bar/definition';
 import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
@@ -275,5 +275,213 @@ describe('D7 Task 4: ds-stamina Recoveries / Winded — additive, gated on recov
 		expect(status.getAttribute('data-state')).toBe('dying');
 		const catchBreathBtn = root.querySelector('button[aria-label="Catch Breath"]') as HTMLButtonElement;
 		expect(catchBreathBtn.disabled).toBe(true);
+	});
+});
+
+/* ==================================================================== */
+/*  SC-132 — Model M: the markers are a VALUE CONTROL                    */
+/* ==================================================================== */
+/*
+   Scott approved this model in comment 59638cd9 on the strength of two arguments, and
+   both are what these tests actually pin:
+
+     * SET, not toggle. RAW loses recoveries in MULTIPLES ("the target loses 1d3
+       Recoveries"), so a toggle would need three clicks for one monster rider.
+     * The two EDGES behave the way a reader predicts — the last available marker spends
+       exactly one, the first spent marker restores exactly one — so no click is a no-op
+       and neither end of the row is a trap.
+
+   Plus the answer to "I dont want a missclick to be super punishing": every mutation
+   posts an undo toast, and clicking Undo puts the model back.
+*/
+
+/** All markers in the strip, in DOM order. */
+function pips(root: HTMLElement): HTMLElement[] {
+	return Array.from(root.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip'));
+}
+
+async function mountRecoveries(overrides: {
+	yaml?: string;
+	popover?: boolean;
+	canPersist?: boolean;
+} = {}) {
+	const deps = makeDeps();
+	if (overrides.popover) await deps.prefs.set('staminaRecoveryPopover', true);
+	const pipeline = new ElementPipeline(deps);
+	const host = makeHost(overrides.canPersist === false ? { canPersist: false } : {});
+	await pipeline.run(staminaBarElement, overrides.yaml ?? RECOVERIES_YAML, host);
+	const root = host.containerEl.firstElementChild as HTMLElement;
+	return { root, host, deps };
+}
+
+describe('SC-132 Model M: a marker click SETS the count', () => {
+	test('clicking the LAST AVAILABLE marker spends exactly one (6 -> 5)', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[5].click(); // 0-based: the 6th marker, the last filled one
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(5);
+	});
+
+	test('clicking the FIRST SPENT marker restores exactly one (6 -> 7)', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[6].click(); // the 7th marker, the first empty one
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(7);
+	});
+
+	test('a distant marker sets the count in ONE click, in either direction', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[1].click(); // spend four at once (the 1d3-Recoveries case, and worse)
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(1);
+		pips(root)[9].click(); // …and back to full
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(10);
+	});
+
+	test('the two edge cells: marker 1 empties the pool and refills it', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[0].click(); // 6 -> 0 (index 0 < 6, so the target IS 0)
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(0);
+		pips(root)[0].click(); // 0 -> 1 (index 0 is now spent, so the target is 1)
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(1);
+	});
+
+	test('the change persists through the SAME debounced write path as every other edit', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await mountRecoveries();
+		pips(root)[5].click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toContain('recoveries: 5');
+	});
+
+	test('the row is ONE keyboard value control, not ten tab stops', async () => {
+		const { root } = await mountRecoveries();
+		const row = root.querySelector<HTMLElement>('.dse-stamina-rec__pips')!;
+		expect(row.getAttribute('role')).toBe('slider');
+		expect(row.getAttribute('tabindex')).toBe('0');
+		expect(row.getAttribute('aria-valuenow')).toBe('6');
+		expect(row.getAttribute('aria-valuemax')).toBe('10');
+		expect(pips(root).every((p) => !p.hasAttribute('tabindex'))).toBe(true);
+
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		expect(row.getAttribute('aria-valuenow')).toBe('5');
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		expect(row.getAttribute('aria-valuenow')).toBe('10');
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+		expect(row.getAttribute('aria-valuenow')).toBe('0');
+	});
+
+	test('the tooltip carries the fraction on every form, including where the eyebrow stands down', async () => {
+		const { root } = await mountRecoveries();
+		const row = root.querySelector<HTMLElement>('.dse-stamina-rec__pips')!;
+		expect(row.getAttribute('aria-valuetext')).toBe('Recoveries: 6 / 10');
+		pips(root)[5].click();
+		expect(row.getAttribute('aria-valuetext')).toBe('Recoveries: 5 / 10');
+	});
+
+	test('read-only (canPersist false): the markers are inert and clicking one writes nothing', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await mountRecoveries({ canPersist: false });
+		const row = root.querySelector<HTMLElement>('.dse-stamina-rec__pips')!;
+		expect(row.getAttribute('aria-disabled')).toBe('true');
+		expect(row.hasAttribute('tabindex')).toBe(false);
+
+		pips(root)[1].click();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+	});
+
+	test('markers are grouped in FOURS for countability (G4), and the first marker never starts a group', async () => {
+		const { root } = await mountRecoveries();
+		const starts = pips(root)
+			.map((p, i) => (p.getAttribute('data-grp') === 'start' ? i : -1))
+			.filter((i) => i >= 0);
+		expect(starts).toEqual([4, 8]);
+	});
+});
+
+describe('SC-132: the undo toast', () => {
+	beforeEach(() => {
+		Notice.notices.length = 0;
+		Notice.last = null;
+	});
+
+	test('a marker edit posts a toast naming the change, and Undo restores the count', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[1].click(); // 6 -> 1 (index 1 is still available, so it spends down TO it)
+
+		expect(Notice.notices[Notice.notices.length - 1]).toContain('Recoveries: 6 → 1');
+		const undo = Notice.last!.noticeEl!.querySelector<HTMLElement>('.dse-undo-notice__action')!;
+		expect(undo).not.toBeNull();
+
+		undo.click();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+	});
+
+	test('Undo is spent once: a second click cannot undo the undo', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[1].click();
+		const undo = Notice.last!.noticeEl!.querySelector<HTMLElement>('.dse-undo-notice__action')!;
+		undo.click();
+		undo.click();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+	});
+
+	test('Catch Breath posts a toast too, and Undo restores BOTH the recovery and the Stamina', async () => {
+		const { root } = await mountRecoveries();
+		const before = root.querySelector('.dse-stamina__ccur')!.textContent;
+		root.querySelector<HTMLButtonElement>('button:has([data-icon="wind"])')!.click();
+
+		expect(root.querySelector('.dse-stamina__ccur')!.textContent).not.toBe(before);
+		expect(Notice.notices[Notice.notices.length - 1]).toContain('Caught breath');
+
+		Notice.last!.noticeEl!.querySelector<HTMLElement>('.dse-undo-notice__action')!.click();
+		expect(root.querySelector('.dse-stamina__ccur')!.textContent).toBe(before);
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+	});
+
+	test('a no-op click posts nothing (there is nothing to undo)', async () => {
+		const { root } = await mountRecoveries();
+		// Model M has no no-op MARKER, so the no-op has to come from the keyboard's floor.
+		const row = root.querySelector<HTMLElement>('.dse-stamina-rec__pips')!;
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })); // 6 -> 0
+		Notice.notices.length = 0;
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); // already 0
+		expect(Notice.notices).toHaveLength(0);
+	});
+});
+
+describe('SC-132: the ALT stepper popover is a SETTING, off by default', () => {
+	test('default (off): a marker click commits directly and no popover is built', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[5].click();
+		expect(root.querySelector('.dse-stamina-rec__pop')).toBeNull();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(5);
+	});
+
+	test('on: a marker click opens the popover and changes NOTHING until a control in it is used', async () => {
+		const { root } = await mountRecoveries({ popover: true });
+		pips(root)[1].click();
+
+		const pop = root.querySelector<HTMLElement>('.dse-stamina-rec__pop')!;
+		expect(pop).not.toBeNull();
+		// The whole point of the ALT editor: a stray click is structurally incapable of
+		// changing anything.
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+		expect(pop.querySelector('.dse-stamina-rec__pop-val')!.textContent).toBe('6 / 10');
+
+		pop.querySelector<HTMLButtonElement>('button[aria-label="Spend a Recovery"]')!.click();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(5);
+		pop.querySelector<HTMLButtonElement>('button[aria-label="Restore a Recovery"]')!.click();
+		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
+	});
+
+	test('on: a click outside the strip dismisses the popover', async () => {
+		const { root } = await mountRecoveries({ popover: true });
+		document.body.appendChild(root);
+		pips(root)[1].click();
+		expect(root.querySelector('.dse-stamina-rec__pop')).not.toBeNull();
+
+		document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		expect(root.querySelector('.dse-stamina-rec__pop')).toBeNull();
 	});
 });

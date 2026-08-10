@@ -142,10 +142,17 @@ function panelElOf(view: DseSidebarView): HTMLElement {
 	return view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
 }
 
-function staminaMinusBtn(view: DseSidebarView): HTMLButtonElement {
-	return panelElOf(view).querySelector<HTMLButtonElement>(
-		'[data-dse-hero-region="stamina"] button[aria-label="Decrease Stamina"]',
-	)!;
+/** SC-132: the sheet's `− 31 +` stamina stepper row is gone (it duplicated the bar's own
+ *  readout). These tests never cared WHICH affordance wrote — they assert that an edit
+ *  made in a SIDEBAR leaf reaches the note through the debounced path with the authored
+ *  definition untouched — so they now drive the recovery markers, which are the sheet's
+ *  simplest deterministic write (Model M: clicking the last available marker spends
+ *  exactly one). The fixture starts at `recoveries: 6` of 10. */
+function spendRecoveryMarker(view: DseSidebarView): HTMLElement {
+	const pips = panelElOf(view).querySelectorAll<HTMLElement>(
+		'[data-dse-hero-region="stamina"] .dse-stamina-rec__pip',
+	);
+	return pips[5]; // 0-based index of the 6th (last filled) marker
 }
 
 /** Reaches into DseSidebarView's private `panels` — matches the level of internal access
@@ -169,14 +176,14 @@ describe('D7 Task 10: ds-hero in sidebar e2e (spec §5)', () => {
 		expect(root).not.toBeNull();
 		expect(root!.querySelector('.dse-hero')).not.toBeNull();
 		expect(panelEl.querySelector('.dse-hero__name')?.textContent).toBe('Torin Stonefist');
-		expect(staminaMinusBtn(view)).not.toBeNull();
+		expect(spendRecoveryMarker(view)).not.toBeUndefined();
 
 		// The mounted Component really is the production HeroSheetView, not a stand-in.
 		const host = firstPanel(view).host;
 		expect(host.lastMountedChild).toBeInstanceOf(HeroSheetView);
 	});
 
-	test('a stamina stepper change in the sidebar persists to the note; the authored definition is byte-identical', async () => {
+	test('a stamina-region edit in the sidebar persists to the note; the authored definition is byte-identical', async () => {
 		const { app, services } = setup();
 		const original = sessionNote();
 		app.vault.setFile('Session.md', original);
@@ -185,7 +192,7 @@ describe('D7 Task 10: ds-hero in sidebar e2e (spec §5)', () => {
 		const { view } = await openSidebarLeaf(app);
 
 		jest.useFakeTimers();
-		staminaMinusBtn(view).click(); // mutates the model + schedules the debounced persist()
+		spendRecoveryMarker(view).click(); // mutates the model + schedules the debounced persist()
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		jest.useRealTimers();
 
@@ -209,13 +216,13 @@ describe('D7 Task 10: ds-hero in sidebar e2e (spec §5)', () => {
 		expect(afterDefnLines.slice(0, originalDefnLines.length)).toEqual(originalDefnLines);
 		expect(afterDefnLines.slice(originalDefnLines.length)).toEqual([expect.stringMatching(/^_dse_anchor:\s*\S+$/)]);
 
-		// state.stamina.current decremented (31 -> 30); parsed rather than string-matched,
-		// since serialize() reformats the `state:` block on every write (expected).
+		// state.recoveries decremented (6 -> 5); parsed rather than string-matched, since
+		// serialize() reformats the `state:` block on every write (expected).
 		const parsedState = parseYaml(after.body.slice(after.body.search(/^state:/m)));
-		expect(parsedState.state.stamina.current).toBe(30);
+		expect(parsedState.state.recoveries).toBe(5);
 	});
 
-	test('note navigation does not unmount the sidebar leaf; a second stamina change still persists (path-addressed, not ctx-addressed)', async () => {
+	test('note navigation does not unmount the sidebar leaf; a second state change still persists (path-addressed, not ctx-addressed)', async () => {
 		const { app, services } = setup();
 		app.vault.setFile('Session.md', sessionNote());
 		app.vault.setFile('OtherNote.md', '# Somewhere else entirely');
@@ -234,13 +241,13 @@ describe('D7 Task 10: ds-hero in sidebar e2e (spec §5)', () => {
 		expect(panelElOf(view).querySelector('[data-dse-element="hero"]')).not.toBeNull();
 
 		jest.useFakeTimers();
-		staminaMinusBtn(view).click();
+		spendRecoveryMarker(view).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 		jest.useRealTimers();
 
 		const body = splitOnBlock(app.vault.getContent('Session.md')!).body;
 		const parsedState = parseYaml(body.slice(body.search(/^state:/m)));
-		expect(parsedState.state.stamina.current).toBe(30); // decremented once, in THIS test
+		expect(parsedState.state.recoveries).toBe(5); // decremented once, in THIS test
 	});
 
 	test('deleting the anchored block degrades the panel to the read-only "not found" notice; further writes no-op', async () => {

@@ -819,3 +819,78 @@ describe('D2 §3.5b: the managedModal template (kit scaffold, CB-8, SC-5)', () =
 		expect(sheet).toMatch(/--stamina-bar-color-dying:\s*var\(--dse-stamina-dying\)/);
 	});
 });
+
+/* ==================================================================== */
+/*  SC-132 / SC-133 RC-1+RC-2 — the preview carries the STEEL GAUGE      */
+/* ==================================================================== */
+/*
+   The fold SC-133 left open: the preview bar computed its own geometry and had no temp
+   segment at all, so a temp-only operation — the common one, since damage consumes temp
+   FIRST — looked like nothing had happened. The preview now mounts the same gauge the
+   element and the hero sheet draw (framework/kit/staminaGauge.ts), so the two cannot
+   disagree by construction.
+
+   The modal's MATH is untouched by this (SC-133's suite above still pins it); what these
+   tests pin is that the gauge is fed the pending state and reports it.
+*/
+
+/** Numeric value of a --dse-* percentage on the preview gauge. */
+function gaugeVar(content: HTMLElement, prop: string): number {
+	const gauge = content.querySelector<HTMLElement>('.dse-stamina__cluster--preview .dse-stamina__gauge');
+	if (!gauge) throw new Error('no preview gauge');
+	const raw = gauge.style.getPropertyValue(prop);
+	if (raw === '') throw new Error(`no ${prop} on the preview gauge`);
+	return parseFloat(raw);
+}
+
+describe('SC-133 RC-1/RC-2: the modal preview shows temp stamina and shares the bar\'s scale', () => {
+	test('the preview mounts the production gauge, not a modal-shaped approximation', () => {
+		const { content } = makeModal(30, 20, 0);
+		expect(content.querySelector('.dse-stamina__cluster--preview .dse-stamina__gchannel')).not.toBeNull();
+		expect(content.querySelector('.dse-stamina__cluster--preview .dse-stamina__gshield')).not.toBeNull();
+		// …and it is gauge-only: the modal's own steppers already say the numbers.
+		expect(content.querySelector('.dse-stamina__cluster--preview .dse-stamina__cnums')).toBeNull();
+	});
+
+	test('temp stamina is DRAWN — a bar with temp has a non-zero plate, one without has none', () => {
+		expect(gaugeVar(makeModal(30, 20, 4).content, '--dse-cap-w')).toBeGreaterThan(0);
+		expect(gaugeVar(makeModal(30, 20, 0).content, '--dse-cap-w')).toBe(0);
+	});
+
+	test('a TEMP-ONLY damage press moves the preview (the regression this closes)', () => {
+		const { content } = makeModal(30, 20, 5);
+		const before = gaugeVar(content, '--dse-cap-w');
+		clickDamage(content, 3); // consumed entirely by temp: current_stamina does not move
+		const after = gaugeVar(content, '--dse-cap-w');
+		expect(after).toBeLessThan(before);
+		expect(after).toBeGreaterThan(0);
+	});
+
+	test('the pending delta band names its direction, and collapses to zero when there is none', () => {
+		const { content } = makeModal(30, 20, 0);
+		const delta = content.querySelector<HTMLElement>('.dse-stamina__gdelta')!;
+		expect(delta.getAttribute('data-kind')).toBe('none');
+		expect(delta.style.getPropertyValue('--dse-delta-fill')).toBe('0%');
+
+		clickDamage(content, 5);
+		expect(delta.getAttribute('data-kind')).toBe('damage');
+		expect(parseFloat(delta.style.getPropertyValue('--dse-delta-fill'))).toBeGreaterThan(0);
+
+		clickHealing(content, 12); // net +7 against the committed value
+		expect(delta.getAttribute('data-kind')).toBe('heal');
+	});
+
+	test('the temp plate always starts exactly where the pour ends (one origin, one scale)', () => {
+		const { content } = makeModal(30, 11, 4);
+		const zone = gaugeVar(content, '--dse-zone');
+		const pour = gaugeVar(content, '--dse-pour-w');
+		expect(gaugeVar(content, '--dse-cap-x')).toBeCloseTo(zone + pour, 6);
+	});
+
+	test('a CREATURE modal (isHero false) has no dying reserve, so the pour starts at the channel edge', () => {
+		const { content } = makeModal(30, 20, 0, false);
+		expect(gaugeVar(content, '--dse-zone')).toBe(0);
+		const gauge = content.querySelector<HTMLElement>('.dse-stamina__gauge')!;
+		expect(gauge.getAttribute('data-zone')).toBe('off');
+	});
+});
