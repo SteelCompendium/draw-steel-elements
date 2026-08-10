@@ -5938,6 +5938,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	letter-spacing: 0.01em;
 }
 
+/* -- Region grid: sparse panels hug their own content (SC-107). Legacy's */
+/*    `.dse-hero__grid` (~2988) is unscoped `display: grid` with no       */
+/*    align-items, so the grid's own default (stretch) makes every        */
+/*    `.dse-hero__region` in a row match its tallest neighbour's height — */
+/*    CHARACTERISTICS/CONDITIONS/SKILLS visibly balloon with blank space  */
+/*    below a couple of lines of content when paired against a taller     */
+/*    region (e.g. Stamina, post-SC-132). Legacy shares that same         */
+/*    unscoped grid rule and its shots are frozen (LEGACY-FREEZE), so the */
+/*    fix can't touch it directly — `align-items: start` here, Steel-only,*/
+/*    lets each region size to its own content instead of stretching;     */
+/*    the leftover row height becomes gap between rows rather than blank  */
+/*    space inside a panel's border. Purely additive — no DOM/serialize   */
+/*    change, matches the "additive Steel-only polish" framing above. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__grid {
+	align-items: start;
+}
+
 /* -- Region panels: sunken plate + a raised, embossed header strip —   */
 /*    the same "boxed panel" grammar as .dse-section (~3462), ported to */
 /*    a region that has no separate title/body wrapper split (the title */

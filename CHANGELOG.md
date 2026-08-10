@@ -98,6 +98,15 @@ for what needs action.
   nothing had happened. The preview now uses the same gauge the bar does, and a
   pending change is ghosted onto it so you can see what Apply will do before you
   press it. The Minion Stamina Pool modal gets the same instrument.
+- [FIX] **The hero sheet's grid panels no longer stretch to their tallest
+  neighbour** (SC-107). Characteristics/Conditions/Skills (and any other sparse
+  region sharing a row with a fuller one, e.g. Stamina) used to inherit CSS
+  grid's default row-stretch behaviour, so a two-line panel's border box grew
+  to match a much taller neighbour and showed a slab of empty space below its
+  own content. Steel now sizes each region to its own content
+  (`align-items: start` on `.dse-hero__grid`, Steel-scoped) — the leftover
+  height becomes gap between rows instead of dead air inside a panel. Legacy is
+  unchanged (its shots are frozen).
 - [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
   **searchable from Obsidian's own settings search** (SC-131). It was one
   6850px scroll page — nine stacked sections and a full statblock preview — and

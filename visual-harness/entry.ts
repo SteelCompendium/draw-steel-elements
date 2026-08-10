@@ -252,6 +252,39 @@ effects:
   - effect: Each affected ally can shift 2 squares as a free action.
 `;
 
+// SC-107: the sheet's `.dse-hero__grid` had no dedicated fixture exercising a SPARSE
+// region next to a fuller one — `default` (heroDefault, src/elements/hero/example.yaml)
+// is a level-3 hero with a condition already on it, so its Conditions region is never the
+// short one. This harness-local variant (same convention as featureSpend/featureVillain
+// above, not an edit to the frozen D9 example) drops to a single skill and zero active
+// conditions — a level-1 hero fresh out of session zero — so the Conditions region renders
+// only its header + an empty-state line while Skills renders one chip: the shortest
+// possible content next to another short-but-not-identical region, in the same grid row.
+// Same ancestry/class/kit/ability refs as heroDefault (already proven to resolve/degrade
+// cleanly in the sweep) to keep this an isolated skills/conditions change, nothing else.
+const heroSparse = `name: Wren Larkspur
+level: 1
+ancestry: scc.v1:mcdm.heroes.v1/ancestry/dwarf
+class:   scc.v1:mcdm.heroes.v1/class/fury
+subclass: berserker
+kits:    [scc.v1:mcdm.heroes.v1/kit/mountain]
+characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
+skills:  [Endurance]
+abilities:
+  - scc.v1:mcdm.heroes.v1/.../brute-strike
+  - scc.v1:mcdm.heroes.v1/.../into-the-fray
+max_stamina: 48
+recoveries_max: 10
+resource: { type: Ferocity, min: 0 }
+state:
+  stamina: { current: 31, temp: 0 }
+  resource: 4
+  surges: 1
+  recoveries: 6
+  victories: 2
+  conditions: []
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -265,7 +298,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	encounter: { default: encounterDefault },
 	feature: { default: featureDefault, spend: featureSpend, villain: featureVillain },
 	featureblock: { default: featureblockDefault, advancement: featureblockAdvancement },
-	hero: { default: heroDefault },
+	hero: { default: heroDefault, sparse: heroSparse },
 	'hero-tokens': { default: tokensDefault },
 	'heroic-resource': { default: resourceDefault },
 	// SC-128 variant note — the site ships TWO ◆ rules and this fixture covers ONE of them
