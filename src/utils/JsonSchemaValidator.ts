@@ -32,8 +32,6 @@ function errorMessage(error: unknown): string {
 // ValidationService.addDependencySchema / FRAMEWORK_V2_DEPENDENCY_SCHEMAS in
 // src/framework/dependencySchemas.ts); any future validation against SDK-shipped
 // schemas can reuse this same Ajv2019 instance directly.
-// Singleton AJV instance with all schemas registered
-let globalAjv: AjvInstance | null = null;
 let registeredSchemas: Array<{ id: string, schema: object | string }> = [];
 
 /**
@@ -69,20 +67,9 @@ function createFreshAjvInstance(): AjvInstance {
 }
 
 /**
- * Get the global AJV instance (creates a basic one if not initialized)
- */
-function getAjvInstance(): AjvInstance {
-    if (!globalAjv) {
-        globalAjv = createFreshAjvInstance();
-    }
-    return globalAjv;
-}
-
-/**
  * Reset the schema registry (useful for testing or plugin reload)
  */
 export function resetSchemaRegistry(): void {
-    globalAjv = null;
     registeredSchemas = [];
 }
 

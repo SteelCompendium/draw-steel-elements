@@ -183,17 +183,17 @@ export function renderRecoveriesStrip(
 		pop.createSpan({ cls: 'dse-stamina-rec__pop-title', text: 'Recoveries' });
 		const dec = pop.createEl('button', { cls: 'dse-stamina-rec__pop-btn', text: '−' });
 		dec.type = 'button';
-		dec.setAttribute('aria-label', 'Spend a Recovery');
+		dec.setAttribute('aria-label', 'Spend a recovery');
 		const val = pop.createSpan({ cls: 'dse-stamina-rec__pop-val' });
 		const inc = pop.createEl('button', { cls: 'dse-stamina-rec__pop-btn', text: '+' });
 		inc.type = 'button';
-		inc.setAttribute('aria-label', 'Restore a Recovery');
+		inc.setAttribute('aria-label', 'Restore a recovery');
 		repaintPopover = () => val.setText(`${current} / ${opts.max}`);
 		repaintPopover();
 		dec.addEventListener('click', () => commit(current - 1));
 		inc.addEventListener('click', () => commit(current + 1));
 		pop.createDiv({ cls: 'dse-stamina-rec__pop-sep' });
-		const cb = pop.createEl('button', { cls: 'dse-stamina-rec__pop-cb', text: 'Catch Breath' });
+		const cb = pop.createEl('button', { cls: 'dse-stamina-rec__pop-cb', text: 'Catch breath' });
 		cb.type = 'button';
 		cb.addEventListener('click', () => {
 			closePopover();
@@ -214,7 +214,7 @@ export function renderRecoveriesStrip(
 			}
 			const target = (evt.target as HTMLElement | null)?.closest('.dse-stamina-rec__pip');
 			if (!target) return;
-			const index = Array.prototype.indexOf.call(pipsEl.children, target);
+			const index = Array.from(pipsEl.children).indexOf(target);
 			if (index < 0) return;
 			commit(markerTarget(index, current));
 		});
@@ -258,7 +258,7 @@ export function renderRecoveriesStrip(
 		});
 		// The popover is a transient overlay, so it dismisses the way every other one
 		// does: a click anywhere outside it closes it.
-		opts.owner.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+		opts.owner.registerDomEvent(activeDocument, 'click', (evt: MouseEvent) => {
 			if (!popover) return;
 			const node = evt.target as Node | null;
 			if (node && rootEl.contains(node)) return;

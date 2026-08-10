@@ -26,8 +26,14 @@ jobs:
       - name: Type check
         run: npm run tsc
 
-      # NOTE: no lint step yet — eslint is not installable in this repo (F3 BT-3).
-      # Add `npm run lint` here when BT-3 lands.
+      # Hard gate (SC-136 / FOLLOWUPS #61): SC-131 added the `lint` script but left it
+      # unwired because the flat config had drifted, reporting 6 pre-existing problems
+      # in 5 files. Those are now cleared (plus a small amount of further drift the
+      # SC-132 stamina redesign added in the interim), so `npm run lint` is clean and
+      # can gate for real. `eslint src main.ts` only — NOT `eslint .`, which crashes on
+      # package.json/manifest.json (obsidianmd's typed rules need a tsconfig project).
+      - name: Lint
+        run: npm run lint
 
       - name: Test
         run: npm test -- --ci

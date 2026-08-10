@@ -173,7 +173,7 @@ export const kitLayout: CardLayout<Kit> = {
 			// constructed inside). Suppressing a knowingly-empty band here (rather than
 			// pushing one that renders nothing) keeps `renderSteel()`'s generic
 			// `.dse-card__band` wrapper from ever leaving a stray empty div in the DOM.
-			const bodyForDedup = hybrid ? source!.body : m.signature_ability ? undefined : m.content;
+			const bodyForDedup = hybrid ? source.body : m.signature_ability ? undefined : m.content;
 			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
 			const flavor = m.flavor;
 			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
@@ -228,7 +228,7 @@ export const kitLayout: CardLayout<Kit> = {
 					head: 'Signature Ability',
 					render: (container, renderMarkdown, owner) => {
 						if (hybrid) {
-							const stripped = stripKitBodySections(source!.body);
+							const stripped = stripKitBodySections(source.body);
 							if (!stripped.trim()) return undefined;
 							return renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' }));
 						}

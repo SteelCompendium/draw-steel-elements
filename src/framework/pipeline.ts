@@ -261,6 +261,10 @@ export async function prepareModel<M>(
 		// the sidebar's `_dse_anchor` key excluded, never `rawData` itself.
 		const forValidation = dataForSchemaValidation(rawData);
 		const result = runStage('schema', () => validation.validate(def.id, schema, forValidation ?? null));
+		// The ValidationResult is deliberately thrown as-is (not wrapped in an Error) — it is
+		// self-describing to renderErrorCard via isValidationResult() below, matching the
+		// `error: Error | ValidationResult` contract documented at this function's top.
+		// eslint-disable-next-line @typescript-eslint/only-throw-error -- see comment above (SC-136/FOLLOWUPS #61)
 		if (!result.valid) throw result;
 	}
 

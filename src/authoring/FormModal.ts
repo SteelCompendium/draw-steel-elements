@@ -68,7 +68,11 @@ class FormModal extends DseModal {
 	}
 
 	onOpen(): void {
-		super.onOpen();
+		// Modal.onOpen()'s declared return type is `Promise<void> | void`; DseModal
+		// doesn't override it (base is a no-op today) but the call is fire-and-forget
+		// by design here, same as every other DseModal subclass that skips calling
+		// super.onOpen() at all.
+		void super.onOpen();
 		this.setDseTitle(`Edit ${this.def.name}`);
 		try {
 			const parsed: unknown = parseYaml(this.source);

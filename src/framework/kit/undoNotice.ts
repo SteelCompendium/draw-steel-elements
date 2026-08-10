@@ -45,10 +45,10 @@ export function undoNotice(what: string, onUndo: () => void): UndoNoticeHandle {
 	// Plain DOM, not obsidian's `createSpan`/`createEl` helpers: those are an
 	// augmentation of `Node` that a DocumentFragment only carries inside a real obsidian
 	// runtime, and a notice is one of the few places the plugin builds a fragment.
-	const frag = document.createDocumentFragment();
-	const textEl = document.createElement('span');
+	const frag = activeDocument.createDocumentFragment();
+	const textEl = activeDocument.createElement('span');
 	textEl.textContent = what;
-	const undoEl = document.createElement('a');
+	const undoEl = activeDocument.createElement('a');
 	undoEl.className = 'dse-undo-notice__action';
 	undoEl.textContent = 'Undo';
 	undoEl.setAttribute('role', 'button');

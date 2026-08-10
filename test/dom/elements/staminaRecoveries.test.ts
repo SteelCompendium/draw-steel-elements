@@ -487,9 +487,9 @@ describe('SC-132: the ALT stepper popover is a SETTING, off by default', () => {
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
 		expect(pop.querySelector('.dse-stamina-rec__pop-val')!.textContent).toBe('6 / 10');
 
-		pop.querySelector<HTMLButtonElement>('button[aria-label="Spend a Recovery"]')!.click();
+		pop.querySelector<HTMLButtonElement>('button[aria-label="Spend a recovery"]')!.click();
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(5);
-		pop.querySelector<HTMLButtonElement>('button[aria-label="Restore a Recovery"]')!.click();
+		pop.querySelector<HTMLButtonElement>('button[aria-label="Restore a recovery"]')!.click();
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(6);
 	});
 
@@ -506,7 +506,7 @@ describe('SC-132: the ALT stepper popover is a SETTING, off by default', () => {
 		expect(root.querySelector('.dse-stamina-rec__pop')).not.toBeNull();
 		// …and the popover's own controls still do the edit, so the keyboard is gated, not
 		// disabled: those are real buttons in the tab order.
-		root.querySelector<HTMLButtonElement>('button[aria-label="Spend a Recovery"]')!.click();
+		root.querySelector<HTMLButtonElement>('button[aria-label="Spend a recovery"]')!.click();
 		expect(row.getAttribute('aria-valuenow')).toBe('5');
 	});
 

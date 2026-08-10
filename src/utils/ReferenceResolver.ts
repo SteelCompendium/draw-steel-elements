@@ -62,6 +62,7 @@ export class ReferenceResolver {
     // narrower return type here that keeps it compiling. The input param below is
     // still `unknown`, narrowed by the `typeof`/`Array.isArray` checks; only the
     // return keeps the pre-existing `any`. See wave-2 report.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see NOTE above (SC-136/FOLLOWUPS #61)
     public async resolveReferences(data: unknown): Promise<any> {
         if (typeof data === 'string') {
             if (SCC_PREFIX.test(data.trim())) {

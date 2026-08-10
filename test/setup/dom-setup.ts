@@ -75,6 +75,13 @@ proto.hasClass = function (cls: string): boolean {
 	return this.classList.contains(cls);
 };
 
+// Obsidian's `activeDocument` global (obsidian.d.ts: `let activeDocument: Document`) —
+// the currently-focused window's document, used instead of the bare `document` global
+// for popout-window compatibility (obsidianmd/prefer-active-doc). jsdom has exactly one
+// window/document, so aliasing it directly is a faithful single-window stand-in; a real
+// popout-aware mock would need its own harness if that ever becomes test-relevant.
+(globalThis as any).activeDocument = document;
+
 // Obsidian also provides bare globals (used by e.g. src/elements/counter/view.ts).
 (globalThis as any).createEl = (
 	tag: string,
