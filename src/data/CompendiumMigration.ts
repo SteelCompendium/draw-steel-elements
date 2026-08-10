@@ -401,12 +401,14 @@ export class CompendiumMigrationService {
 	 *      `finally`. Death at any point therefore leaves it set on disk, so the next
 	 *      sync re-offers the migration instead of silently syncing — which would
 	 *      create the remaining destinations and shut the door for good.
-	 *   2. Each window of destinations is recorded BEFORE its renames happen, one
-	 *      window ahead at each checkpoint (the same number of writes as recording
-	 *      them afterwards). Over-recording is inert: `reconcile()` skips any recorded
-	 *      path whose file is not actually there, so a destination that never arrived
-	 *      costs nothing, while one that arrived just before the crash is adopted on
-	 *      the next run.
+	 *   2. Each window of destinations is recorded BEFORE its renames happen — windows
+	 *      tiled by PLAN INDEX (`[0, 200)`, `[200, 400)`, …), claimed at the top of the
+	 *      first iteration that needs them. Same number of writes as recording them
+	 *      afterwards. Over-recording is inert: `reconcile()` skips any recorded path
+	 *      whose file is not actually there, so a destination that never arrived costs
+	 *      nothing, while one that arrived just before the crash is adopted on the next
+	 *      run. Indexing by plan position rather than by successful-rename count is
+	 *      load-bearing — see the comment on `nextWindowStart`.
 	 *
 	 * `reconcile()` also runs first, so a previous interrupted run's files are adopted
 	 * before this one adds to them.
@@ -431,7 +433,13 @@ export class CompendiumMigrationService {
 		state.root = plan.root;
 		const caseIndex: FolderCaseIndex = buildFolderCaseIndex(this.app);
 		const recorded = new Set(state.migrated);
-		let sinceCheckpoint = 0;
+		// Windows are tiled by PLAN INDEX — [0, 200), [200, 400), … — never by a count of
+		// successful renames (review C3). A window can contain entries that produce no
+		// rename at all (a refused move, an occupied destination, a source that vanished
+		// between plan and execute), and counting successes slid the checkpoint past the
+		// window boundary, leaving the indices in between claimed by nobody. Those files
+		// moved and were never recorded — on a run that reported success.
+		let nextWindowStart = CHECKPOINT_INTERVAL;
 
 		/** Write-ahead: claim a window of destinations BEFORE moving anything into them. */
 		const recordWindow = (from: number): void => {
@@ -471,6 +479,16 @@ export class CompendiumMigrationService {
 					report.remaining = plan.renames.length - index;
 					break;
 				}
+				// Claim this entry's window BEFORE doing its work — that is the whole of the
+				// write-ahead invariant. At the top of the body rather than the bottom so no
+				// `continue` below can skip it, and a `while` so a stretch of entries that
+				// produce no renames can never leave the claim lagging behind the work.
+				while (index >= nextWindowStart) {
+					await adopt();
+					recordWindow(nextWindowStart);
+					nextWindowStart += CHECKPOINT_INTERVAL;
+					await persist();
+				}
 				const rename = plan.renames[index];
 				// L1: progress must advance on EVERY entry, including the ones that skip —
 				// otherwise a run that skips a stretch looks hung.
@@ -489,7 +507,6 @@ export class CompendiumMigrationService {
 					const target = await ensureParentFolders(this.app, rename.toPath, caseIndex);
 					await this.app.fileManager.renameFile(file, target);
 					report.migrated.push(rename);
-					sinceCheckpoint++;
 					if (rename.modified === true) report.migratedModified.push(rename);
 				} catch (error: unknown) {
 					report.failed.push({
@@ -499,12 +516,6 @@ export class CompendiumMigrationService {
 					});
 				}
 				tick();
-				if (sinceCheckpoint >= CHECKPOINT_INTERVAL) {
-					sinceCheckpoint = 0;
-					await adopt();
-					recordWindow(index + 1); // claim the next window before entering it
-					await persist();
-				}
 			}
 		} finally {
 			// Runs on an orderly abort, on an unexpected throw, and on the happy path.

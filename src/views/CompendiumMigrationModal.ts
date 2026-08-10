@@ -226,6 +226,10 @@ export class CompendiumMigrationModal extends DseModal {
 
 	/** The run threw. Say so, say what is safe, and get out of the user's way. */
 	private renderFailure(error: unknown): void {
+		// `failed` IS the answer — so Escape from this screen closes quietly instead of
+		// also firing the dismissal path and stacking a second, contradictory Notice on
+		// top of the error one.
+		this.answered = true;
 		this.callbacks.failed(error);
 		if (this.closed) return;
 		this.setDseTitle('Migration could not finish');

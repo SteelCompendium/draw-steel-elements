@@ -382,20 +382,39 @@ async function crashDuring(
 	afterRenames: number,
 ): Promise<void> {
 	let done = 0;
+	let hung = false;
 	const real = ctx.fileManager.renameFile.bind(ctx.fileManager);
 	const spy = jest.spyOn(ctx.fileManager, "renameFile").mockImplementation(async (file, to) => {
 		// Death is not an exception — an exception would be CAUGHT (the engine records a
 		// failed rename and carries on to its `finally`, which is the very thing a
 		// force-quit skips). The Nth call simply never returns, the run is abandoned
 		// mid-loop, and only what already reached disk survives.
-		if (done >= afterRenames) return new Promise<void>(() => { /* the process is gone */ });
+		if (done >= afterRenames) {
+			hung = true;
+			return new Promise<void>(() => { /* the process is gone */ });
+		}
 		done++;
 		await real(file, to);
 	});
 	const abandoned = service.execute(await service.plan(ROOT), { writeReportNote: false });
 	void abandoned.catch(() => { /* nobody is left to hear it */ });
-	// Let every microtask up to the hang settle (the checkpoint writes are awaits).
-	for (let i = 0; i < 50; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+
+	// Wait for the hang, then for the on-disk state to go QUIESCENT — never a fixed
+	// tick budget. A fixed budget is a race dressed up as a constant: a 250-file plan
+	// with a 200-file reconcile behind it needs more turns of the loop than a 3-file
+	// one, and the difference only shows up as an unreproducible failure once every
+	// few thousand runs.
+	let stable = 0;
+	let previous = "";
+	for (let tick = 0; tick < 5000 && stable < 5; tick++) {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		if (!hung) continue;
+		const snapshot = JSON.stringify(await ctx.stateStore.load());
+		if (snapshot === previous) stable++;
+		else { stable = 0; previous = snapshot; }
+	}
+	expect(hung).toBe(true);   // the run really did reach the point of death
+	expect(stable).toBe(5);    // …and everything it was going to write, it wrote
 	spy.mockRestore();
 }
 
@@ -405,9 +424,9 @@ describe("H1 — an interrupted run must not strand its files", () => {
 		seedLegacyVault(ctx.vault);
 		ctx.vault.setText(`${ROOT}/Careers/Retired.md`, "retired");
 
-		// Die after the first rename. Note this throws OUT of execute(), so its
-		// `finally` bookkeeping is the only thing that runs — and the assertions below
-		// must hold even if it hadn't.
+		// Die after the first rename. Nothing unwinds: `execute()` is simply abandoned
+		// mid-loop, so its `finally` never runs and the ONLY bookkeeping that survives is
+		// what was already written to disk ahead of the work.
 		await crashDuring(ctx, ctx.service, 1);
 
 		// The offer must come back: `incomplete` was written BEFORE the loop, so it is
@@ -452,6 +471,49 @@ describe("H1 — an interrupted run must not strand its files", () => {
 		const service2 = await reopen(ctx);
 		expect(await service2.reconcile(ROOT)).toBe(1);
 		expect(Object.keys((await ctx.store.load())!.files)).toEqual(["career/disciple.md"]);
+	});
+
+	test("C3: a refused rename inside a window must not leave the next window's files unrecorded", async () => {
+		// No crash needed — this run COMPLETES, and reports success. The old checkpoint
+		// counted successful renames while the window slices counted plan indices, so
+		// every entry that produced no rename slid the two apart: the entries in the gap
+		// moved and were claimed by no window at all, and the next sync then treated them
+		// as user content squatting on compendium paths.
+		const REFUSED = 20;
+		const TOTAL = CHECKPOINT_INTERVAL + 100;
+		const map = await bigMap(TOTAL);
+		const ctx = await setup(map);
+		for (const oldPath of Object.keys(map.paths)) ctx.vault.setText(`${ROOT}/${oldPath}`, oldPath);
+
+		let seen = 0;
+		const real = ctx.fileManager.renameFile.bind(ctx.fileManager);
+		jest.spyOn(ctx.fileManager, "renameFile").mockImplementation(async (file, to) => {
+			if (seen++ < REFUSED) throw new Error("Obsidian refused this one");
+			await real(file, to);
+		});
+
+		const report = await ctx.service.execute(await ctx.service.plan(ROOT), { writeReportNote: false });
+		expect(report.aborted).toBe(false);
+		expect(report.failed).toHaveLength(REFUSED);
+		expect(report.migrated).toHaveLength(TOTAL - REFUSED);
+
+		// EVERY file that actually moved is recorded — no gap between the windows.
+		const recorded = new Set((await ctx.stateStore.load())!.migrated);
+		const unrecorded = report.migrated
+			.map((rename) => rename.newRelative)
+			.filter((relative) => !recorded.has(relative));
+		expect(unrecorded).toEqual([]);
+
+		// …and the property that actually matters: the next sync strands none of them.
+		const manifest = (await ctx.store.load())!;
+		expect(Object.keys(manifest.files)).toHaveLength(TOTAL - REFUSED);
+		const sync = new CompendiumSyncService(ctx.app, ctx.store);
+		const incoming = new Map(report.migrated.map((rename) =>
+			[rename.newRelative, bytes(`fresh ${rename.newRelative}`)] as const));
+		const { report: syncReport } = await sync.applySync(
+			incoming, manifest, { root: ROOT, locale: "en" }, "v4.new");
+		expect(syncReport.skippedConflicts).toEqual([]);
+		expect(syncReport.updated).toHaveLength(TOTAL - REFUSED);
 	});
 
 	test("C2: death AFTER a checkpoint still re-offers — it must never fall through to a silent sync", async () => {

@@ -339,6 +339,20 @@ describe('CompendiumMigrationModal — the run throws', () => {
 		expect(container.querySelector('button[aria-label="Sync the compendium now"]')).toBeNull();
 		footerBtn(container, 'Close').click();
 		expect(document.body.contains(container)).toBe(false);
+		// The failure was already reported once — closing must not also fire the
+		// dismissal path and stack a second, contradictory Notice on top of it.
+		expect(callbacks.dismissed).not.toHaveBeenCalled();
+		expect(callbacks.decline).not.toHaveBeenCalled();
+	});
+
+	test('Escape from the error screen closes quietly — the error was already reported', async () => {
+		const { modal, container, callbacks, failRun } = makeModal();
+		footerBtn(container, 'Move 2 file(s)').click();
+		failRun(new Error('vault write refused'));
+		await settle();
+		modal.close();
+		expect(callbacks.failed).toHaveBeenCalledTimes(1);
+		expect(callbacks.dismissed).not.toHaveBeenCalled();
 	});
 });
 
