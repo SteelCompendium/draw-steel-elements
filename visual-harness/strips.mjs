@@ -59,6 +59,8 @@ const ALL = [
 	// Round 6 (Scott's comment 39f3d812): the separator family, and the living crest.
 	'sep',
 	'crest-live',
+	// Round 7 (Scott's comment 67763d6d): the crest FRAME held still, the ICON animated.
+	'crest-icon',
 ];
 const STRIPS = args.strip ? [args.strip] : ALL;
 const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];

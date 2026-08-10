@@ -963,6 +963,45 @@ export const STRIPS: Record<string, StripDef> = {
 			},
 		],
 	},
+
+	/* R7 — THE STABLE CREST WITH A LIVING ICON. Scott's round-6 ruling: K3 (the vessel)
+	   is out, because "that information is already provided by the stamina bar itself…
+	   If we are taking the screen real estate for a crest, its going to provide emotion".
+	   And the emotion has to be quiet: "I do think the crest itself is stable
+	   (un-animated) and the icon itself gets the animation; otherwise its too noisy."
+
+	   So this strip shows exactly one thing: the frame held still while the glyph
+	   breathes, at both extremes of both animations, against the healthy control that
+	   does not move at all. The harness kills animation, so the motion columns are the
+	   keyframes restated statically — see the `posei-*` tokens. */
+	'crest-icon': {
+		title: 'The stable crest, the living ICON — the round-6 correction',
+		sub: 'The shield frame never moves; only the glyph inside it breathes · winded 2.6s (exertion) · dying 4.4s (failing) · healthy still',
+		cand: 'a',
+		focus: 'head',
+		states: [
+			{ fixture: 'healthy', caption: 'Healthy 24/30 — shield, no motion' },
+			{ fixture: 'winded', caption: 'Winded 11/30 — shield-alert' },
+			{ fixture: 'dying', caption: 'Dying -4/30 — skull' },
+		],
+		options: [
+			{
+				id: 'aplus split crest livei y3 nospine posei-peak',
+				label: 'PEAK — the resting frame (and what both reduce-motion switches show)',
+				note: 'scale 1 / opacity 1 on the glyph. The 0%/100% keyframe is deliberately the identity frame, so “motion off” and “motion at rest” are the same picture',
+			},
+			{
+				id: 'aplus split crest livei y3 nospine posei-ebb',
+				label: 'EBB — the far end of the breath',
+				note: 'winded: the glyph at 0.84 scale / 0.60 opacity; dying: 0.93 / 0.34 — shallower and much dimmer, because dying is failing rather than exerting. The shield around it is byte-identical to the column on the left',
+			},
+			{
+				id: 'aplus split crest live pose-ebb y3 nospine',
+				label: 'ROUND 6, for contrast — the WHOLE SHIELD breathing',
+				note: 'the version Scott corrected: the frame itself scales and fades, so a piece of the plate’s chrome moves. Shown once so the difference is visible rather than described',
+			},
+		],
+	},
 };
 
 /* ------------------------------------------------------------------ */
@@ -1057,6 +1096,66 @@ const ASM_ROWS_HERO_AP: AsmRow[] = [
 ];
 const ASM_ROWS_AP = { 'stamina-bar': ASM_ROWS_BAR_AP, hero: ASM_ROWS_HERO_AP };
 
+/* ROUND 7 — Scott's own layout. The standalone board is the full honest matrix (plus the
+   read-only row mountAsmBoard appends), and the CREST variant adds two MOTION rows: the
+   harness kills animation, so the only way a still can report a breath is to shoot the
+   far end of it beside the resting frame that sits three rows above. */
+const ASM_ROWS_BAR_SPLIT: AsmRow[] = [...ASM_ROWS_BAR];
+const ASM_ROWS_BAR_SPLIT_CREST: AsmRow[] = [
+	...ASM_ROWS_BAR,
+	{
+		fixture: 'winded',
+		caption: 'MOTION · Winded, the icon at its breath EBB — glyph 0.84 scale / 0.60 opacity, 2.6s ease-in-out. The shield frame is identical to the winded row above',
+		vars: 'posei-ebb',
+	},
+	{
+		fixture: 'dying',
+		caption: 'MOTION · Dying, the icon at its EBB — glyph 0.93 / 0.34, 4.4s. Shallower and much dimmer: failing, not exerting',
+		vars: 'posei-ebb',
+	},
+];
+const ASM_ROWS_HERO_SPLIT: AsmRow[] = [
+	{ fixture: 'healthy', caption: 'Healthy — 24/30 (the sheet’s own region title carries the word “Stamina”, so the head drops it)' },
+	{ fixture: 'winded', caption: 'Winded — 11/30' },
+	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40' },
+	{ fixture: 'dying', caption: 'Dying — -4/30, softened divider' },
+];
+
+/* ROUND 7 — the rail. The matrix, then the three questions Scott's round-6 note opened:
+   the padding before/after, the worst-case recovery count, and the two options he asked
+   to see rather than to be told about (the one-line form, and the fraction collapse). */
+const ASM_ROWS_BAR_RAIL: AsmRow[] = [
+	...ASM_ROWS_BAR,
+	{
+		fixture: 'rec-12',
+		caption: 'WORST CASE — 12 recoveries (top of the real range), cells compressing rather than wrapping to a third line',
+	},
+	{
+		fixture: 'healthy',
+		caption: 'PADDING · AS REVIEWED — the plate inset 0.1rem/0.5rem, which is the Catch Breath edge Scott flagged',
+		vars: 'railtight',
+	},
+	{
+		fixture: 'healthy',
+		caption: 'PADDING · CORRECTED — 0.35rem/0.75rem, so the button clears the plate’s border by 13px',
+	},
+	{
+		fixture: 'healthy',
+		caption: 'COMPARISON — the ONE-LINE form with the same fixes (“unless there is significant horizontal space”). It only actually fits one line from 360px up, and costs the gauge 277 → 101px when it does; below 360 it wraps back by itself',
+		vars: 'oneline',
+	},
+	{
+		fixture: 'healthy',
+		caption: 'OPTION he does not love — the “5/8” fraction collapse instead of cells. Shown once for completeness, not recommended',
+		vars: 'rfrac',
+	},
+];
+const ASM_ROWS_HERO_RAIL: AsmRow[] = [
+	{ fixture: 'healthy', caption: 'Healthy — 24/30' },
+	{ fixture: 'temp-over', caption: 'SC-133 · Temp greater than max — 8/30 +40' },
+	{ fixture: 'dying', caption: 'Dying — -4/30' },
+];
+
 export const ASSEMBLIES: Record<string, AssemblyDef> = {
 	/* LA — the bar-first reading. The instrument IS the interface: a wide machined
 	   channel with the numerals in a head lane above it, no crest, no heraldry. */
@@ -1135,6 +1234,50 @@ export const ASSEMBLIES: Record<string, AssemblyDef> = {
 		cand: 'a',
 		vars: 'e1 m1 h2 forged n1 r6 g4 im lf1 y3 foot aplus nospine softsep',
 		rows: ASM_ROWS_AP,
+	},
+
+	/* ------------------------------------------------------------------ */
+	/* ROUND 7 — SCOTT'S OWN LAYOUT (comment 67763d6d), built to the letter */
+	/* ------------------------------------------------------------------ */
+	/*  "Left-aligned crest which effectively splits all the space to the right of it
+	    into two rows. The bottom row is the stamina bar. The top row has all the other
+	    data — the winded/dying text is left-aligned in the top row… The current stamina
+	    (in larger font), max stamina, and the temp stamina chip are in the top row and
+	    right-aligned."
+
+	    The token list is round 6's A-plus with `split` appended — deliberately, so the
+	    only thing that changed between the board he reviewed and this one is the GRID.
+	    Everything else (N1 separators, M1, S0's violet temp plate, R6 cells at G4, the
+	    icon-only Catch Breath, the RECOVERIES eyebrow, Y3's dying ground, the softened
+	    divider, no spine) is the locked set, unmoved.
+
+	      lsc   with the crest — frame stable, ICON animated (his round-6 correction)
+	      lscn  no crest at all, the two-row split kept exactly as-is                  */
+	lsc: {
+		title: 'Scott’s layout — left crest + two rows, WITH the crest (stable frame, living icon)',
+		sub: 'Crest spans both rows · top row: state word left, current/max/temp right-aligned · bottom row: the gauge, full remaining width · the shield never moves, the glyph breathes at winded and dying',
+		cand: 'a',
+		vars: 'e1 m1 h2 forged n1 r6 g4 im lf1 y3 foot aplus nospine softsep rcomp rnarrow split crest livei',
+		rows: { 'stamina-bar': ASM_ROWS_BAR_SPLIT_CREST, hero: ASM_ROWS_HERO_SPLIT },
+	},
+	lscn: {
+		title: 'Scott’s layout — the same two-row split, NO crest',
+		sub: 'The identical geometry with column 1 removed: the state word is simply leftmost · state rides the border, the ground, the word and the numeral’s colour',
+		cand: 'a',
+		vars: 'e1 m1 h2 forged n1 r6 g4 im lf1 y3 foot aplus nospine softsep rcomp rnarrow split splitn',
+		rows: { 'stamina-bar': ASM_ROWS_BAR_SPLIT, hero: ASM_ROWS_HERO_SPLIT },
+	},
+
+	/* LD3 — the rail, round-7 revision: the two-line form Scott called the direction,
+	    plus the two defects he named (recovery cells that cannot compress; Catch Breath
+	    against the card edge) and the two options he asked to SEE (one line where there
+	    is room; the fraction collapse he does not love). */
+	ld3: {
+		title: 'Layout D — “Sheet Rail”, the TWO-LINE form with the round-7 compression + padding fixes',
+		sub: 'Bar on its own full-width line above · recovery strip below, cells that shrink to a 0.42em floor instead of wrapping · Catch Breath on the right margin with the plate inset corrected to 0.75rem · no crest',
+		cand: 'd',
+		vars: 'e1 m1 h2 n1 r6 g4 im lf2 notip rail rail2 rcomp railpad',
+		rows: { 'stamina-bar': ASM_ROWS_BAR_RAIL, hero: ASM_ROWS_HERO_RAIL },
 	},
 };
 

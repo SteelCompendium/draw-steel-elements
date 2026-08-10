@@ -10135,4 +10135,478 @@ button.dse-pr__row:hover {
 
 /* END SC-132 round 6 */
 
+/* ==================================================================== */
+/*  SC-132 ROUND 7 — SCOTT'S OWN LAYOUT, the stable crest, the rail      */
+/* ==================================================================== */
+/*
+   Round 6 closed the component set (N1 separators, M1, S0, R6, G4, H2, the eyebrow
+   labels, Model M, the softened dying divider, no spines). Round 7 builds the LAYOUT
+   Scott proposed in his own words (Linear comment 67763d6d) rather than another menu:
+
+     "Left-aligned crest which effectively splits all the space to the right of it into
+      two rows. The bottom row is the stamina bar. The top row has all the other data —
+      the winded/dying text is left-aligned in the top row (so its next to the crest,
+      where the 'Stamina' text is in your examples). The current stamina (in larger
+      font), max stamina, and the temp stamina chip are in the top row and right-aligned.
+      I recognize this has the risk of making things feel a bit too dense, so make sure
+      there is proper padding and make things feel clean."
+
+   Tokens added here:
+     split / splitn  the layout itself (with a crest, and the no-crest twin).
+     livei           the crest FRAME is stable and the ICON breathes — his explicit
+                     correction of round 6's whole-shield animation ("I do think the
+                     crest itself is stable (un-animated) and the icon itself gets the
+                     animation; otherwise its too noisy").
+     posei-*         harness-only still frames of that icon animation.
+     rcomp           recovery cells that SHRINK instead of wrapping ("the recovery UI
+                     doesnt compress: the cells are the same width regardless of the
+                     card width").
+     railpad         "the 'catch breath' button is *very* close to the edge of the card
+                     and that needs to get corrected"; `railtight` restores the reviewed
+                     padding so the board can shoot a real before/after.
+     oneline         un-forces rail2's line break, for the one-line comparison row.
+     rfrac           the "5/8" fraction collapse he floated and does not love.
+
+   Gating unchanged and still tripled (root `[data-dse-stamina-cand]`, a harness-only
+   `data-dse-stamina-var` token, the standing Steel/not-print guard). `src/` is untouched
+   in round 7 as well — every node this block moves is already built by
+   StaminaBarPanel's candidate layer.                                                  */
+
+/* -------------------------------------------------------------------- */
+/*  split — the crest splits the space to its right into two rows        */
+/* -------------------------------------------------------------------- */
+/*  COMPOSED ON TOP OF `aplus`, not instead of it: A-plus already carries the four
+    non-layout decisions this needs (full-bleed plate, the 2em current-stamina numeral,
+    the temp chip on that numeral's BASELINE, winded on the whole frame). `split`
+    re-authors only the GRID, so it must stay after `aplus` in source order — the two
+    rules that collide (`.dse-stamina__chead`'s display and the plate's padding) have
+    equal specificity and source order is what decides them.
+
+    The head's three children are promoted into the PLATE's own grid with
+    `display: contents` on `.dse-stamina__chead`, because Scott's geometry needs the
+    GAUGE — which is the head's sibling, not its child — to share a column with the
+    numerals while the crest spans both rows. A nested head grid cannot express that;
+    only one grid containing all four boxes can.
+
+        ┌──────┬────────────────┬──────────────┐
+        │      │ winded         │      11 / 30 │   row 1  (baseline-aligned)
+        │crest ├────────────────┴──────────────┤
+        │      │ ▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░ │   row 2  (the gauge)
+        └──────┴───────────────────────────────┘
+
+    Column 2 is `minmax(0, 1fr)` and not `1fr`: a bare `1fr` has an `auto` minimum, so a
+    long state word would push the numerals off the plate's right edge instead of being
+    the thing that gives.                                                              */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	/* THE PADDING PASS (his "make sure there is proper padding and make things feel
+	   clean"). A-plus was 0.6/0.8/0.65rem around THREE stacked bands; this layout has
+	   two, so the same plate can afford a squarer, slightly larger inset without
+	   growing overall. 0.85rem inline is also the number the foot now matches (below),
+	   which is the alignment fault this pass found: A-plus's plate was inset 0.8rem and
+	   its foot 0.7rem, so the crest and the word RECOVERIES under it did not share a
+	   left margin. */
+	padding: 0.7rem 0.85rem 0.75rem;
+	/* The crest's column gap. Wide enough that the shield is a separate object from the
+	   readout, tight enough that the two still read as one instrument. */
+	column-gap: 0.75rem;
+	/* The one gap that decides "dense" vs "cramped": the air between the numerals'
+	   baseline row and the gauge. 0.45rem ≈ 7px — half the plate's own block padding,
+	   so the two rows group INSIDE the plate rather than floating in it. */
+	row-gap: 0.45rem;
+	max-width: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__chead {
+	display: contents;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	grid-area: 1 / 1 / 3 / 2;
+	align-self: center;
+	/* Bigger than A-plus's 2.5 x 2.85em, because the crest now has two rows of content
+	   to stand beside and because Scott's brief for it is EMOTION, not data ("If we are
+	   taking the screen real estate for a crest, its going to provide emotion"). At the
+	   harness's 16px root this is 44.8 x 50.4px against a 58px two-row block. */
+	width: 2.8em;
+	height: 3.15em;
+}
+/* SC-130's optical-centring nudge, re-derived for THIS box. `.dse-crest__glyph` already
+   applies `translateY(var(--dse-crest-nudge, 0px))`, but the token is only declared on
+   `.dse-crest--lg` (a 3.4em-tall box) and this crest is not that class — so without this
+   line the glyph sits visibly low in the pentagon, which is precisely the defect SC-130
+   fixed everywhere else. The nudge is a FRACTION of box height (9.56% — the shoelace
+   centroid of --dse-crest-shape is 40.43% down, not 50%), so it re-derives rather than
+   carries: 0.0956 x 3.15em = 0.30em. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph {
+	--dse-crest-nudge: -0.3em;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph svg {
+	width: 1.45em;
+	height: 1.45em;
+}
+/* Row 1, left: the state word. Baseline-aligned with the numerals opposite it rather
+   than centred, so the two ends of the row sit on ONE line of type instead of on two
+   optical centres — the same reason the temp chip moved onto the numeral's baseline in
+   round 6. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cid {
+	grid-area: 1 / 2 / 2 / 3;
+	align-self: baseline;
+	justify-self: start;
+	gap: 0.45rem;
+	min-width: 0;
+}
+/* The word carries a state next to a 2em numeral, so A-plus's 0.78em was a whisper.
+   Nowrap because it is the flexible column's content and must not become two lines —
+   and then, because a nowrap flex child's automatic minimum is its full text width, it
+   also needs `min-width: 0` + an ellipsis, or the word simply pushes the readout off the
+   plate at a narrow enough column. This is the LAST-RESORT degradation of the whole
+   layout: the two ends of row 1 pull against each other and something has to be allowed
+   to give, and the word is the member that is also said by the border, the ground and
+   the crest. Measured, it does not actually engage until well below the narrowest hero
+   column this repo can produce. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cstate {
+	font-size: 0.9em;
+	white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* THE HERO SHEET DROPS THE "STAMINA" LABEL, the standalone element keeps it. Scott:
+   "having 'Stamina' next to the crest seems like a waste considering its above the card
+   (at least on the Hero Sheet)" — his own parenthesis is the scope. On the hero sheet
+   the region's own `.dse-hero__region-title` says the word two lines up; on a bare
+   `ds-stamina` block in a note there is no such title, and an unlabelled shield beside a
+   bare number is not self-describing. So the rule keys off the title's PRESENCE rather
+   than off a surface name, and there is exactly one place it can be wrong. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__clabel {
+	display: none;
+}
+/* …and on the hero sheet the CREST steps down a size, keyed off the same region title.
+   Not a style preference — a measurement. The sheet's grid gives characteristics its
+   max-content (370px at a 660px sheet) and stamina the remainder, so the narrowest real
+   stamina column is 240px, and row 1 there is a tug-of-war: a nowrap state word on the
+   left, a 2em readout on the right, and the crest's column taken off the top of both.
+   At 2.8em the two ends came within 1.45px of touching. 2.2 x 2.5em hands ~10px back to
+   the gap, and it costs nothing that matters: on the hero sheet the crest is the one
+   member of the cluster carrying no information the other three channels do not. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest {
+	width: 2.2em;
+	height: 2.5em;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest-glyph {
+	/* the same 9.56% of box height the full-size crest uses: 0.0956 x 2.5em */
+	--dse-crest-nudge: -0.24em;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest-glyph svg {
+	width: 1.15em;
+	height: 1.15em;
+}
+/* Row 1, right: the readout, hard against the plate's right edge — the "wasted space in
+   the top-right" of A-plus was this box being left-packed under a `1fr` that had nothing
+   else in it. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
+	grid-area: 1 / 3 / 2 / 4;
+	align-self: baseline;
+	justify-self: end;
+	justify-content: flex-end;
+	margin-left: 0;
+}
+/* Row 2: the gauge takes the whole width to the right of the crest. `margin-top: 0`
+   because the grid's own `row-gap` is now the air above it — A-plus set a margin, and
+   leaving both would double the gap. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	grid-area: 2 / 2 / 3 / 4;
+	margin-top: 0;
+}
+/* THE FOOT'S LEFT MARGIN NOW MATCHES THE PLATE'S. Found by measuring rather than by
+   looking: A-plus's plate is inset 0.8rem and its foot 0.7rem, so the crest's left edge
+   and the word RECOVERIES beneath it were 1.6px out of line — small, but it is exactly
+   the kind of thing that makes a composed object read as two objects. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	padding: 0.45rem 0.85rem;
+}
+/* …and Catch Breath goes to the right margin, mirroring the numerals above it. The foot
+   otherwise left-packs into a short row with a wide hole on the right — the same fault
+   Scott named in the top-right of layout C and in the rail's bottom-right corner, one
+   band lower. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='split'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn {
+	margin-left: auto;
+}
+
+/* -------------------------------------------------------------------- */
+/*  splitn — the same layout with NO crest                               */
+/* -------------------------------------------------------------------- */
+/*  Not "split with the crest hidden": a hidden grid item still leaves its column's
+    `column-gap`, so the whole readout would sit 12px in from the plate's left edge with
+    nothing to its left. The no-crest twin therefore re-declares a TWO-column grid and
+    re-maps the three remaining areas — which is also the honest thing to compare
+    against, since Scott's alternative is "no crest", not "an invisible crest".        */
+[data-dse-stamina-cand] [data-dse-stamina-var~='splitn'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand {
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='splitn'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cid {
+	grid-area: 1 / 1 / 2 / 2;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='splitn'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
+	grid-area: 1 / 2 / 2 / 3;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='splitn'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	grid-area: 2 / 1 / 3 / 3;
+}
+
+/* -------------------------------------------------------------------- */
+/*  livei — the crest FRAME is stable; the ICON inside it animates       */
+/* -------------------------------------------------------------------- */
+/*  Scott's correction of round 6's `live`: "If we are going with the crest, I do think
+    the crest itself is stable (un-animated) and the icon itself gets the animation;
+    otherwise its too noisy." That is the right read — a shield that pulses is a piece of
+    the plate's chrome moving, which the eye reads as a layout glitch; a glyph breathing
+    inside a fixed frame is a character breathing inside their armour.
+
+    ANIMATED VIA `scale`, NOT `transform`. `.dse-crest__glyph` already owns its
+    `transform` (SC-130's optical-centring `translateY(--dse-crest-nudge)`), so a
+    transform keyframe would silently throw that nudge away for the whole cycle and drop
+    the glyph ~5px mid-breath. The independent `scale` property (Chromium 104, under the
+    106 floor) composites ON TOP of that transform, so the nudge survives untouched. It
+    is also why the keyframes below need no `var()` of their own.
+
+    Two animations, not one at two speeds, unchanged from round 6's reasoning: winded is
+    EXERTION and dying is FAILING. Amplitudes are larger than the whole-shield versions
+    because the glyph is a third of the shield's area and the same 10% would not read.
+    Healthy does not move at all.
+
+    ACCESSIBILITY, both switches: `prefers-reduced-motion: reduce` pins it (below), and
+    the plugin's own preference needs no new rule — the D4 declaration
+    `[data-dse-element][data-dse-reduce-motion='true'] * { animation: none !important }`
+    already reaches the glyph. Both land on the 0%/100% frame, which is deliberately the
+    IDENTITY frame, so "motion off" and "motion at rest" are the same picture.         */
+@keyframes dse-crest-icon-breathe {
+	0%,
+	100% {
+		scale: 1;
+		opacity: 1;
+	}
+	50% {
+		scale: 0.84;
+		opacity: 0.6;
+	}
+}
+@keyframes dse-crest-icon-fail {
+	0%,
+	100% {
+		scale: 1;
+		opacity: 1;
+	}
+	50% {
+		scale: 0.93;
+		opacity: 0.34;
+	}
+}
+/* The frame never moves — stated as a rule, not merely by omission, so that composing
+   `livei` with round 6's `live` cannot produce the noisy version by accident. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='livei'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	animation: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='livei'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='winded'] .dse-stamina__crest-glyph {
+	animation: dse-crest-icon-breathe 2.6s ease-in-out infinite;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='livei'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__crest-glyph {
+	animation: dse-crest-icon-fail 4.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-dse-stamina-cand] [data-dse-stamina-var~='livei'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand:is([data-state='winded'], [data-state='dying']) .dse-stamina__crest-glyph {
+		animation: none;
+	}
+}
+/* HARNESS-ONLY still frames. The visual harness kills every animation so shots are
+   deterministic, so the two extremes are restated declaratively — a caption claiming a
+   breath is not evidence of one. */
+[data-dse-stamina-cand] [data-dse-stamina-var~='posei-ebb'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='winded'] .dse-stamina__crest-glyph {
+	scale: 0.84;
+	opacity: 0.6;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='posei-ebb'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand[data-state='dying'] .dse-stamina__crest-glyph {
+	scale: 0.93;
+	opacity: 0.34;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='posei-peak'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cand:is([data-state='winded'], [data-state='dying']) .dse-stamina__crest-glyph {
+	scale: 1;
+	opacity: 1;
+}
+
+/* -------------------------------------------------------------------- */
+/*  rcomp — recovery cells that COMPRESS instead of wrapping             */
+/* -------------------------------------------------------------------- */
+/*  Scott: "Part of the problem is that the recovery UI doesnt compress: the cells are
+    the same width regardless of the card width."
+
+    Diagnosed, and he is right about the symptom but the cause is one line above the
+    cells: `.dse-stamina-rec__pips` is `flex-wrap: wrap`, and a wrapping flex container
+    NEVER shrinks its items — it starts a new line instead. So narrowing the card could
+    only ever add rows, never narrow a cell. Three declarations fix it:
+
+      1. the STRIP stops wrapping, so pressure reaches the items instead of pushing
+         Catch Breath onto a line of its own — AND its `min-width` comes off `auto`.
+         That second half is the part that was actually load-bearing and is easy to
+         miss: a flex ITEM's automatic minimum size is its max-content size, so a
+         nowrap strip inside the rail's plate simply refused to be narrower than its
+         own contents and OVERFLOWED the plate instead (measured: 241.7px of strip
+         inside a 234px content box at a 260px leaf, with 12 recoveries). Nothing
+         downstream can shrink until this box is allowed to;
+      2. the PIPS row stops wrapping and becomes the flexible member, so it is the box
+         that absorbs the pressure (the numerals and the button are incompressible);
+      3. each CELL gets a real floor. 0.42em ≈ 6.7px at the rail scale — below that a
+         1px-outlined parallelogram stops being countable and starts being a texture,
+         which would trade one unreadable state for another.
+
+    Honest limit, measured rather than promised: at the fixture's 8 recoveries the cells
+    do not need to shrink at all down to ~215px of leaf, and at 12 (the top of the real
+    range) not until ~250px. Compression is therefore INSURANCE — what it buys is that
+    the strip degrades gracefully instead of silently becoming a third line or spilling
+    over the plate's edge, which is what the round-6 form did.                         */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rcomp'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	flex-wrap: nowrap;
+	min-width: 0;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rcomp'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips {
+	flex: 1 1 auto;
+	flex-wrap: nowrap;
+	min-width: 0;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rcomp'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	flex: 0 1 auto;
+	min-width: 0.42em;
+}
+/*  …and the same `min-width: auto` trap one level further out, on the HERO SHEET.
+    `.dse-hero__region` is a grid item, so its automatic minimum is its max-content size
+    too — which is fine while the strip wraps (a wrapped box's max-content is small) and
+    becomes an OVERFLOW the moment the strip is told not to wrap. Measured before this
+    line: `grid-template-columns: 370px 363.688px` inside a 626px grid, i.e. the stamina
+    region hanging ~34px past the sheet's own right border.
+
+    NARROWED TO THE STAMINA REGION with `:has()`, and that narrowing is not cosmetic:
+    `.dse-hero__region` is shared by every region on the sheet, and the sheet's grid is
+    two `1fr` columns whose real widths come from their contents' automatic minimums
+    (measured at a 660px sheet: `370px 240px` — characteristics asks for 370 and stamina
+    takes the remainder). Zeroing the minimum on ALL regions made the columns 305/305 and
+    CLIPPED "Presence" off the characteristics row — a fix for one region paid for out of
+    another's content. Only the region that now contains unwrappable content may give up
+    its minimum.
+
+    This is a latent bug in the hero grid rather than something round 7 introduced — any
+    unwrappable content in a region would have done it — so the production round should
+    decide it on `.dse-hero__region` proper. Kept scoped here because candidate-stage CSS
+    must not change what the non-candidate build renders.                              */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rcomp'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region:has(.dse-stamina) {
+	min-width: 0;
+}
+
+/* -------------------------------------------------------------------- */
+/*  rnarrow — the eyebrow stands down when the strip runs out of room    */
+/* -------------------------------------------------------------------- */
+/*  The measurement that forces this, at the NARROWEST real hero column (a 240px stamina
+    region on a 660px sheet — the sheet's grid gives characteristics its 370px
+    max-content and stamina the remainder):
+
+        strip content box            178.8px
+        RECOVERIES eyebrow            70.9px   (68.5 + its 0.15rem margin)
+        two 0.5rem strip gaps         16.0px
+        Catch Breath                  28.0px
+        left for 8 markers            63.9px   — they want 169.6
+
+    Even at the 0.42em floor the markers need ~95px, so `rcomp`'s compression alone
+    cannot close it: the row ran ~2px long and the last markers slid UNDER the Catch
+    Breath button. There is no flexbox answer either — line-breaking happens BEFORE
+    flex-shrink, so a container that wraps never shrinks and one that shrinks never
+    wraps; the "cells wrap instead" branch was built and measured too, and it produced
+    FOUR marker rows at this width, which is worse than what it replaced.
+
+    So the honest fix is the one Scott already ruled in round 4 — "in the full hero sheet
+    we need the 'Recoveries' label. On more condensed views I think we can drop it (still
+    need a tooltip)" — applied by MEASUREMENT rather than by surface name. A 240px hero
+    column IS a condensed view; a 405px one is not. With the eyebrow gone the markers get
+    142.8px, compress to ~12.6px each (comfortably above the floor) and stay on one
+    countable line with the button clear of them.
+
+    MECHANISM: a container query, which is the only thing in CSS that can ask "is the box
+    I am in narrow" — a media query asks about the WINDOW, and the same 240px column
+    exists in a 1400px window. `container-type: inline-size` is Chromium 105 and the
+    plugin's floor is 106, so it is under the floor (the support-floor deny-list bans
+    `@container style(` — STYLE queries, Chromium 111 — not size queries). Containment is
+    put on `.dse-stamina-rec` itself, whose width comes from its parent regardless, so
+    nothing about the strip's own sizing changes.
+
+    In production the dropped label is replaced by the tooltip LF2 already specifies; the
+    board cannot pose one here (the harness's `notip`/`lf2` pairing owns that), so the
+    caption says so.                                                                    */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rnarrow'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	container-type: inline-size;
+	container-name: dse-stamina-rec;
+}
+@container dse-stamina-rec (max-width: 290px) {
+	[data-dse-stamina-cand] [data-dse-stamina-var~='rnarrow'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
+		display: none;
+	}
+}
+
+/* -------------------------------------------------------------------- */
+/*  railpad / railtight — the Catch Breath edge padding                  */
+/* -------------------------------------------------------------------- */
+/*  Scott: "the 'catch breath' button is *very* close to the edge of the card and that
+    needs to get corrected before we finalize the design."
+
+    The rail's plate was `padding: 0.1rem 0.5rem`, and the 0.5rem was deliberately tiny
+    because round 5 was defending a "one 33px row" claim — every pixel of inset was a
+    pixel that claim lost. Two lines is now the direction, so that budget is gone and the
+    padding can be what an interactive control actually needs: 0.75rem (12px) inline, so
+    a 28px button clears the plate's border by 13px including it, and 0.35rem block so a
+    wrapped second line is not touching the frame either.
+
+    `railtight` restores the reviewed value for the board's before/after row. It must
+    stay AFTER `railpad`: equal specificity, so source order decides.                  */
+[data-dse-stamina-cand] [data-dse-stamina-var~='railpad'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-stamina[data-cand='d']):not(:has(> .dse-hero__region-title)) {
+	padding: 0.35rem 0.75rem;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='railtight'] [data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-stamina[data-cand='d']):not(:has(> .dse-hero__region-title)) {
+	padding: 0.1rem 0.5rem;
+}
+
+/* -------------------------------------------------------------------- */
+/*  oneline — un-force rail2's line break (the comparison row)           */
+/* -------------------------------------------------------------------- */
+/*  `rail2` pins the bar to `flex-basis: 100%`. This puts it back on the shared line so
+    one board row can show the ONE-LINE form carrying the same compression and padding
+    fixes — Scott's "unless there is significant horizontal space" case, answered with a
+    picture instead of a sentence. Must stay after `rail2`.                            */
+[data-dse-stamina-cand] [data-dse-stamina-var~='oneline'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina[data-cand='d'] {
+	flex: 100 1 7rem;
+}
+
+/* -------------------------------------------------------------------- */
+/*  rfrac — the "5/8" fraction collapse (the option he does not love)    */
+/* -------------------------------------------------------------------- */
+/*  Scott: "Even if the recovery cells had a dynamic width, I think they would still need
+    to collapse into a fraction form ('5/8') at a certain card width. I dont love it, but
+    its an option."
+
+    Shown because it is nearly free — the fraction node already exists (the harness's
+    eyebrow `count` span, hidden by both LF forms), so the collapse is four display
+    switches and no new DOM. Shot as ONE row rather than a whole board, labelled as the
+    option he does not love, so the set is complete without arguing for it. Must stay
+    after the LF rules, which hide the eyebrow at equal specificity.                   */
+[data-dse-stamina-cand] [data-dse-stamina-var~='rfrac'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips {
+	display: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rfrac'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
+	display: inline-flex;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rfrac'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow-word {
+	display: none;
+}
+[data-dse-stamina-cand] [data-dse-stamina-var~='rfrac'] [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow-count {
+	display: inline;
+}
+
+/* END SC-132 round 7 */
+
 /* END SC-132 candidate region */

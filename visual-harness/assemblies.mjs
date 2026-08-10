@@ -35,7 +35,7 @@ const args = Object.fromEntries(
 
 // Kept in sync with ASSEMBLIES in entry.ts; an unknown id fails the run loudly rather
 // than writing a blank board.
-const ALL = ['la', 'lc', 'ld', 'ld2', 'lap', 'lapn'];
+const ALL = ['la', 'lc', 'ld', 'ld2', 'lap', 'lapn', 'lsc', 'lscn', 'ld3'];
 const ASMS = args.asm ? args.asm.split(',') : ALL;
 const SCHEMES = args.scheme ? [args.scheme] : ['dark', 'light'];
 const SURFACES = ['stamina-bar', 'hero'];
@@ -52,6 +52,10 @@ const NARROW = [
 	{ asm: 'ld2', surface: 'stamina-bar', width: 260 },
 	{ asm: 'ld2', surface: 'stamina-bar', width: 300 },
 	{ asm: 'ld2', surface: 'stamina-bar', width: 360 },
+	// Round 7: the same three leaves for the revised two-line rail.
+	{ asm: 'ld3', surface: 'stamina-bar', width: 260 },
+	{ asm: 'ld3', surface: 'stamina-bar', width: 300 },
+	{ asm: 'ld3', surface: 'stamina-bar', width: 360 },
 ];
 
 // ROUND 6, Scott: "In the Hero sheet, all 3 layouts appear to be very squished
@@ -62,6 +66,11 @@ const NARROW = [
 const WIDE = [
 	{ asm: 'lap', surface: 'hero', width: 860 },
 	{ asm: 'lapn', surface: 'hero', width: 860 },
+	// Round 7: Scott's layout has to be judged at BOTH hero widths — the default board
+	// (760px mount → a ~340px stamina region, the narrow case) is shot by the loop above,
+	// and this is the maximised-editor case where the two-row split has real room.
+	{ asm: 'lsc', surface: 'hero', width: 860 },
+	{ asm: 'lscn', surface: 'hero', width: 860 },
 ];
 
 const failures = [];
