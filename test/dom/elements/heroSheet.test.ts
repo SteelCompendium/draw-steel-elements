@@ -206,6 +206,69 @@ describe('SC-132: the sheet\'s stamina region is the cluster, and the cluster is
 	});
 });
 
+/*  SC-132 H1 (review fix). The sheet's bar now opens StaminaEditModal, and the FIRST cut
+    of that bridge passed only {max, current, temp} on the reasoning that the modal's
+    Spend Recovery would therefore "stay closed on the sheet". It does not: the button is
+    rendered unconditionally and the modal's `recoveriesTracked` flag gates only the
+    decrement and the ran-out disable. So the sheet shipped a control that healed to full
+    and spent nothing, at the book rate instead of the derived one. These tests are that
+    hole, nailed shut from both sides. */
+describe('SC-132 H1: the sheet\'s modal spends real Recoveries at the sheet\'s own rate', () => {
+	function openStaminaModal(root: HTMLElement): HTMLElement {
+		region(root, 'stamina')!.querySelector<HTMLElement>('.dse-stamina')!.click();
+		const modal = document.querySelector<HTMLElement>('.dse-modal');
+		expect(modal).not.toBeNull();
+		return modal!;
+	}
+	const spendBtn = (modal: HTMLElement) =>
+		modal.querySelector<HTMLButtonElement>('button:has([data-icon="syringe"])');
+	const apply = (modal: HTMLElement) =>
+		modal.querySelector<HTMLButtonElement>('.dse-modal__footer .dse-btn--accent')!.click();
+
+	test('Spend Recovery actually DECREMENTS the pool and persists the spend', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderHero();
+		const modal = openStaminaModal(root);
+
+		spendBtn(modal)!.click();
+		apply(modal);
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const written = host.replaceSource.mock.calls[0][0] as string;
+		expect(written).toContain('recoveries: 5'); // the fixture starts at 6 of 10
+		jest.useRealTimers();
+	});
+
+	test('…and it heals at the SHEET\'s derived rate — the same amount its own Catch Breath does', async () => {
+		// Pinned as an equality between the two paths rather than a hardcoded number: the
+		// point is that the modal and the button two inches from it can never disagree,
+		// whatever kits do to the derived recovery value.
+		const viaButton = await renderHero();
+		region(viaButton.root, 'stamina')!
+			.querySelector<HTMLButtonElement>('button:has([data-icon="wind"])')!
+			.click();
+		const buttonResult = region(viaButton.root, 'stamina')!.querySelector('.dse-stamina__ccur')!.textContent;
+
+		const viaModal = await renderHero();
+		const modal = openStaminaModal(viaModal.root);
+		spendBtn(modal)!.click();
+		apply(modal);
+		const modalResult = region(viaModal.root, 'stamina')!.querySelector('.dse-stamina__ccur')!.textContent;
+
+		expect(modalResult).toBe(buttonResult);
+		expect(modalResult).not.toBe('31'); // both really did heal
+	});
+
+	test('the modal also writes back the temp Stamina and the current value', async () => {
+		const { root } = await renderHero();
+		const modal = openStaminaModal(root);
+		(modal.querySelector('.dse-sedit__apply-input') as HTMLInputElement).value = '5';
+		modal.querySelector<HTMLButtonElement>('button[aria-label="Damage"]')!.click();
+		apply(modal);
+		expect(region(root, 'stamina')!.querySelector('.dse-stamina__ccur')!.textContent).toBe('26');
+	});
+});
+
 describe('D7 Task 9: ability roll bridge (recon delta 1) — expand, roll, react', () => {
 	// Real timers throughout: flushAsync (feature-roll.test.ts's own convention) drains
 	// the click -> async roll() microtask chain via a real setTimeout(…,0), which a

@@ -311,21 +311,31 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	 *  throwaway `StaminaBar` view-model that writes straight back into HeroState.
 	 *
 	 *  Why a bridge object and not the hero model: `StaminaEditModal` is typed against
-	 *  the `StaminaBar` MODEL (it reads/writes `current_stamina`/`temp_stamina`), and
-	 *  re-typing it against a union of two element models would push element shapes into
-	 *  a shared view. The bridge is three numbers in and three out, and it keeps the
-	 *  modal's SC-133 math — pinned by 27 tests — untouched.
+	 *  the `StaminaBar` MODEL, and re-typing it against a union of two element models
+	 *  would push element shapes into a shared view. The bridge is a handful of numbers
+	 *  in and the same numbers out, and it keeps the modal's SC-133 math — pinned by 27
+	 *  tests — untouched.
 	 *
-	 *  RECOVERIES ARE DELIBERATELY NOT BRIDGED (so the modal's Spend Recovery section
-	 *  stays closed on the sheet). The modal derives its recovery value from
-	 *  `StaminaBar.recoveryValue`, i.e. `floor(max/3)`, whereas the SHEET's value is
-	 *  `deriveHeroStats`' `recoveryValue`, which kits and class features can move. A
-	 *  bridge that carried recoveries would silently heal the wrong amount whenever the
-	 *  two disagreed. The sheet's own recovery markers and Catch Breath button — right
-	 *  under the bar, using the derived value — are the recoveries affordance here; the
-	 *  modal handles damage, healing and temp Stamina. */
+	 *  RECOVERIES ARE BRIDGED IN FULL, and the review that caught this is worth
+	 *  recording. A first cut bridged only {max, current, temp} and reasoned that the
+	 *  modal's Spend Recovery would therefore "stay closed on the sheet". It does not:
+	 *  the button is rendered unconditionally, and the modal's `recoveriesTracked` flag
+	 *  gates only the DECREMENT and the ran-out disable. So a hero could press Spend
+	 *  Recovery three times, heal to full, and still have every Recovery — at
+	 *  `floor(max/3)` rather than the sheet's derived rate. Pre-SC-132 the sheet could
+	 *  not reach this modal at all (its bar mounted `canPersist: false`), so that was a
+	 *  regression this branch would have introduced.
+	 *
+	 *  Two things therefore cross the bridge that a `StaminaBar` cannot derive:
+	 *    * `recoveryValue` — the sheet's comes from deriveHeroStats, where kits and
+	 *      class features move it; without the override the modal would heal the book
+	 *      rate while the Catch Breath button two inches away healed the real one;
+	 *    * `spendRecovery: false` when the sheet tracks NO pool at all (an unresolved
+	 *      class), because a control that spends from nothing is the same bug again. */
 	private openStaminaModal(): void {
 		const model = this.model;
+		const recoveriesMax = this.stats.recoveriesMax.value;
+		const tracked = recoveriesMax !== null;
 		const bridge = new StaminaBar(
 			false,
 			false,
@@ -333,14 +343,28 @@ export class HeroSheetView extends ElementView<HeroModel> {
 			model.state.stamina.current,
 			model.state.stamina.temp,
 			1,
+			'default',
+			tracked ? (model.state.recoveries ?? 0) : undefined,
+			tracked ? recoveriesMax : undefined,
 		);
 		openManagedModal(this, () =>
-			new StaminaEditModal(this.cx.app, bridge, true, model.defn.name, () => {
-				this.applyStaminaChange({
-					current: bridge.current_stamina,
-					temp: bridge.temp_stamina,
-				});
-			}),
+			new StaminaEditModal(
+				this.cx.app,
+				bridge,
+				true,
+				model.defn.name,
+				() => {
+					model.state.stamina.current = bridge.current_stamina;
+					model.state.stamina.temp = bridge.temp_stamina;
+					if (tracked) model.state.recoveries = bridge.recoveries ?? 0;
+					this.refreshStaminaRegion(model);
+					void this.persist();
+				},
+				{
+					recoveryValue: this.stats.recoveryValue.value ?? undefined,
+					spendRecovery: tracked,
+				},
+			),
 		);
 	}
 

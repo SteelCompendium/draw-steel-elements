@@ -185,11 +185,38 @@ const SPEND_RECOVERY_LABEL = 'Spend Recovery';
 // ---------------------------------------------------------------------------------
 // The single-stamina modal (hero / creature)
 
+/**
+ * SC-132 H1: the two things a CALLER can know that the `StaminaBar` model cannot.
+ *
+ * Both exist because the hero sheet now opens this modal (its bar mounts canPersist, and
+ * the duplicate stepper row it replaced is gone). The sheet's Recoveries are real but
+ * they are not a `StaminaBar`'s: their size and their heal rate come from
+ * `deriveHeroStats`, where kits and class features can move them.
+ */
+export interface StaminaEditModalOptions {
+	/**
+	 * Overrides RR §8's default recovery value (`StaminaBar.recoveryValue`, i.e.
+	 * `floor(max/3)`). The hero sheet passes its DERIVED value; without this the modal
+	 * would heal the book rate while the sheet's own Catch Breath button, two inches
+	 * away, healed the kit-adjusted one.
+	 */
+	recoveryValue?: number;
+	/**
+	 * Render the Spend Recovery quick action at all. Default true (every pre-SC-132
+	 * caller). False is for a caller that KNOWS there is no pool to spend from — see
+	 * hero/view.ts: without it the button renders enabled, heals `recoveryValue` and
+	 * spends nothing, because `recoveriesTracked` gates the decrement but not the
+	 * control.
+	 */
+	spendRecovery?: boolean;
+}
+
 export class StaminaEditModal extends DseModal {
 	private staminaBar: StaminaBar;
 	private isHero: boolean;
 	private name: string;
 	private updateCallback: () => void;
+	private opts: StaminaEditModalOptions;
 
 	// Pending STAMINA and Temp STAMINA changes — the legacy bookkeeping, verbatim
 	// (byte-compat-load-bearing: every Apply funnels through clampStamina below).
@@ -207,12 +234,14 @@ export class StaminaEditModal extends DseModal {
 		isHero: boolean,
 		name: string,
 		updateCallback: () => void,
+		opts: StaminaEditModalOptions = {},
 	) {
 		super(app);
 		this.staminaBar = staminaBar;
 		this.isHero = isHero;
 		this.name = name;
 		this.updateCallback = updateCallback;
+		this.opts = opts;
 	}
 
 	onOpen() {
@@ -451,7 +480,12 @@ export class StaminaEditModal extends DseModal {
 			},
 			this.lifecycle,
 		).buttonEl.classList.add('dse-sedit__btn');
-		const spendRecoveryBtn = iconButton(
+		// SC-132 H1: a caller that knows there is no pool can suppress the control
+		// outright. `recoveriesTracked` below gates the DECREMENT and the zero-disable,
+		// not the button — so on a bar with no pool the press heals and spends nothing,
+		// which on the hero sheet (whose pool is real but lives on HeroState) would have
+		// been free healing at the wrong rate.
+		const spendRecoveryBtn = this.opts.spendRecovery === false ? null : iconButton(
 			quickSection,
 			{
 				icon: 'syringe',
@@ -484,7 +518,7 @@ export class StaminaEditModal extends DseModal {
 			},
 			this.lifecycle,
 		);
-		spendRecoveryBtn.buttonEl.classList.add('dse-sedit__btn');
+		spendRecoveryBtn?.buttonEl.classList.add('dse-sedit__btn');
 
 		// -- Footer: Reset + the dynamic apply button (accent) ----------------------
 		const [, actionBtn] = this.footer([
@@ -543,7 +577,9 @@ export class StaminaEditModal extends DseModal {
 			// 0)`, not `gain <= 0` (matches onClick's guard — see its comment for why:
 			// NaN-safety).
 			const noGain = !(this.recoverySpendResult(currentStamina, negativeStaminaLimit, maxStamina).gain > 0);
-			if (recoveriesTracked) {
+			if (!spendRecoveryBtn) {
+				// The caller suppressed the control (SC-132 H1) — nothing to disable.
+			} else if (recoveriesTracked) {
 				const remaining = currentRecoveries + this.pendingRecoveriesChange;
 				const noneLeft = remaining <= 0;
 				spendRecoveryBtn.setDisabled(noneLeft || noGain);
@@ -614,7 +650,10 @@ export class StaminaEditModal extends DseModal {
 		maxStamina: number,
 	): { gain: number; newStamina: number } {
 		const before = this.clampStamina(currentStamina + this.pendingStaminaChange, negativeStaminaLimit, maxStamina);
-		const after = this.clampStamina(before + this.staminaBar.recoveryValue, negativeStaminaLimit, maxStamina);
+		// SC-132 H1: the caller's derived value wins when it supplied one (the hero
+		// sheet's, which kits can move); otherwise RR §8's floor(max/3) off the model.
+		const recoveryValue = this.opts.recoveryValue ?? this.staminaBar.recoveryValue;
+		const after = this.clampStamina(before + recoveryValue, negativeStaminaLimit, maxStamina);
 		return { gain: after - before, newStamina: after };
 	}
 
