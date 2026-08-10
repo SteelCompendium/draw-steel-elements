@@ -276,6 +276,15 @@ export class MinionStaminaPoolModal extends DseModal {
 		} else {
 			this.bar.set(currentStaminaPercentage, 0, 'none');
 		}
+		// SC-132: the same edit on the Steel gauge. A squad pool has no negative range —
+		// `dyingZone: false` collapses the zero bulkhead onto the channel's left edge, so
+		// the pour simply starts there — and no temp stamina, so the gauge degenerates to
+		// exactly what this modal has always shown, in the cluster's material. The death
+		// ticks come through as graduations (the gauge's own index-mark vocabulary).
+		this.bar.setGauge(
+			{ current: poolCurrentStamina, temp: 0, max: poolMaxStamina },
+			{ current: newStamina, temp: 0, max: poolMaxStamina },
+		);
 	}
 
 	private updateInfoText(): void {

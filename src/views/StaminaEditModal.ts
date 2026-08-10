@@ -20,8 +20,17 @@
 // updateCallback contract are unchanged, so the YAML any caller persists after an edit
 // is byte-identical to what the legacy modal produced for the same edit.
 import type { App, Component } from 'obsidian';
-import { DseModal, iconButton, stepper, tooltip } from '@/framework/kit';
-import type { IconButtonHandle, StepperHandle } from '@/framework/kit';
+import {
+	DseModal,
+	iconButton,
+	renderStaminaGauge,
+	setStaminaGaugeDelta,
+	staminaGaugeGeometry,
+	stepper,
+	tooltip,
+	updateStaminaGauge,
+} from '@/framework/kit';
+import type { IconButtonHandle, StaminaGaugeValues, StepperHandle } from '@/framework/kit';
 import { StaminaBar } from '@model/StaminaBar';
 
 // ---------------------------------------------------------------------------------
@@ -37,18 +46,35 @@ export interface StaminaPreviewBarOptions {
 export interface StaminaPreviewBarHandle {
 	readonly rootEl: HTMLElement;
 	/**
-	 * Reflects the pending edit onto the bar, in place: fill/delta widths as
+	 * Reflects the pending edit onto the LEGACY track, in place: fill/delta widths as
 	 * --dse-fill/--dse-delta-fill percentages (sanctioned geometry), the delta's
 	 * heal-vs-damage COLOR via [data-kind] class rules — never inline (SC-5).
 	 */
 	set(fillPct: number, deltaPct: number, kind: 'heal' | 'damage' | 'none'): void;
+	/**
+	 * SC-132/SC-133 RC-1+RC-2: reflects the same pending edit onto the STEEL GAUGE.
+	 *
+	 * `committed` and `pending` are the two states as whole {current, temp, max}
+	 * triples, not percentages, because the gauge's scale depends on temp — handing it
+	 * two pre-computed widths off two different denominators is exactly the bug SC-133
+	 * exists to fix. The gauge draws the PENDING state (what Apply will produce) and
+	 * ghosts the difference as a delta band.
+	 */
+	setGauge(committed: StaminaGaugeValues, pending: StaminaGaugeValues): void;
 }
 
 /**
- * The preview bar at the top of both stamina modals (D2 §3.5b): the same .dse-stamina
- * grammar as the element bar, in its --modal variant (fill + pending-delta flex pair).
- * The fill keeps the legacy modals' constant healthy green ([data-state="healthy"]) —
- * the modal bars never state-shifted, and Legacy is today's look.
+ * The preview bar at the top of both stamina modals (D2 §3.5b).
+ *
+ * TWO instruments in one node, exactly like the element bar: the LEGACY `.dse-stamina`
+ * track (fill + pending-delta flex pair, unchanged — Legacy is today's look) and, hidden
+ * by the base sheet and revealed only by the Steel screen layer, the same forged gauge
+ * the cluster draws.
+ *
+ * Why the modal gets the real gauge rather than a modal-shaped approximation: SC-133's
+ * whole finding was that a preview computing its own geometry disagrees with the bar it
+ * is previewing — temp stamina was invisible here, so a temp-only Damage press looked
+ * like nothing had happened. One builder, one geometry function, one answer.
  */
 export function staminaPreviewBar(
 	parent: HTMLElement,
@@ -68,12 +94,28 @@ export function staminaPreviewBar(
 		const tick = track.createDiv({ cls: 'dse-stamina__tick' });
 		tick.style.setProperty('--dse-tick-x', `${frac * 100}%`);
 	}
+
+	const gaugeOpts = { dyingZone: opts.dyingZone === true, ticks: opts.ticks };
+	const cluster = rootEl.createDiv({ cls: 'dse-stamina__cluster dse-stamina__cluster--preview' });
+	const gaugeEl = renderStaminaGauge(cluster, gaugeOpts);
+
 	return {
 		rootEl,
 		set(fillPct: number, deltaPct: number, kind: 'heal' | 'damage' | 'none'): void {
 			fillEl.style.setProperty('--dse-fill', `${fillPct}%`);
 			deltaEl.style.setProperty('--dse-delta-fill', `${kind === 'none' ? 0 : deltaPct}%`);
 			deltaEl.setAttribute('data-kind', kind);
+		},
+		setGauge(committed: StaminaGaugeValues, pending: StaminaGaugeValues): void {
+			cluster.setAttribute('data-temp', (pending.temp ?? 0) > 0 ? 'on' : 'off');
+			updateStaminaGauge(gaugeEl, pending, gaugeOpts);
+			// Both ends of the band are measured on the PENDING scale (same denominator),
+			// or a temp change would move the ruler out from under the comparison.
+			const scale = { ...committed, temp: pending.temp };
+			const from = staminaGaugeGeometry(scale, gaugeOpts).capX;
+			const to = staminaGaugeGeometry(pending, gaugeOpts).capX;
+			const kind = to > from ? 'heal' : to < from ? 'damage' : 'none';
+			setStaminaGaugeDelta(gaugeEl, Math.min(from, to), Math.abs(to - from), kind);
 		},
 	};
 }
@@ -218,6 +260,21 @@ export class StaminaEditModal extends DseModal {
 			} else {
 				bar.set((adjustedCurrentStamina / barLength) * 100, 0, 'none');
 			}
+			// SC-132/SC-133 RC-1+RC-2: the same pending edit on the Steel gauge, as whole
+			// values rather than percentages. This is additive — the legacy geometry above
+			// is untouched, and so is every number Apply persists.
+			bar.setGauge(
+				{
+					current: this.staminaBar.current_stamina,
+					temp: currentTempStamina,
+					max: maxStamina,
+				},
+				{
+					current: this.staminaBar.current_stamina + this.pendingStaminaChange,
+					temp: currentTempStamina + this.pendingTempStaminaChange,
+					max: maxStamina,
+				},
+			);
 		};
 
 		// -- Body sections: apply | numeric adjust + temp | quick actions -----------
