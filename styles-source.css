@@ -1196,6 +1196,75 @@ code.dsa {
 	color: var(--dse-stamina-dying);
 }
 
+/* -- SC-132: the Steel cluster's own nodes, hidden for Legacy and print -------- */
+/*  StaminaBarPanel builds the cluster (and the strip's RECOVERIES eyebrow)
+    UNCONDITIONALLY, and the base sheet hides them here — exactly the way `.dse-crest`
+    is hidden for Legacy (see kit/crest.ts's header). It has to be built unconditionally:
+    the theme is a live CSS attribute (seams/theme.ts stamps `data-dse-theme`; nothing
+    re-renders when the user flips it), so a DOM that branched on the theme would be
+    wrong the instant they did.
+
+    Two consequences, both deliberate:
+      * the LEGACY theme renders byte-for-byte what it rendered before SC-132 — a
+        display:none node contributes no box;
+      * so does the PRINT scheme. Every Steel rule carries the standing
+        `:not([data-dse-print="on"])` guard, which is exactly what that guard is FOR:
+        print drops the Steel skin. Paper therefore keeps the flat linear bar it has
+        always printed, which is also the ink-cheap answer — a machined channel with
+        three gradient layers is not something to send to a printer. */
+.dse-stamina__cluster,
+.dse-stamina-rec__eyebrow {
+	display: none;
+}
+
+/* The recovery-editor popover (SC-132 Model M's opt-in ALT editor) is a CONTROL, not
+   ornament, so unlike the two above it works under every theme — the Steel layer only
+   re-skins it. It never exists in a screenshot: it is created on click and removed on
+   dismiss. */
+.dse-stamina-rec__pop {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	margin-top: 0.4em;
+	padding: 0.3em 0.5em;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-chip-bg);
+}
+
+.dse-stamina-rec__pop-title {
+	font-size: 0.85em;
+	color: var(--dse-fg-muted);
+}
+
+.dse-stamina-rec__pop-btn {
+	min-width: 1.4em;
+	line-height: 1.2;
+	padding: 0 0.35em;
+}
+
+.dse-stamina-rec__pop-val {
+	font-variant-numeric: tabular-nums;
+	min-width: 3.2em;
+	text-align: center;
+}
+
+.dse-stamina-rec__pop-sep {
+	align-self: stretch;
+	width: 1px;
+	background: var(--dse-border);
+}
+
+/* The undo toast's action, inside an Obsidian Notice (workspace chrome, not an element
+   root — so this rule is deliberately unscoped and theme-agnostic). */
+.dse-undo-notice__action {
+	margin-left: 0.7em;
+	font-weight: 600;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
 /* ============================================================ */
 /*  The unified stamina modal chrome (.dse-sedit, D2 §3.5b/OD-6) */
 /* ============================================================ */
@@ -6267,6 +6336,936 @@ body.theme-light
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__status[hidden] {
 	display: none;
 }
+
+/* ================================================================== */
+/*   SC-132 — the Steel STAMINA CLUSTER (bar + gauge + recoveries)    */
+/* ================================================================== */
+/*
+   The stamina cluster was the last element family with NO Steel treatment at all:
+   under Steel it still rendered the Legacy DOM's flat limegreen/yellow/red fill, a
+   deepskyblue strip, two 45deg #000 hatch overlays and grey pills, composing none of
+   --dse-card-bg / --dse-sheen / --dse-bevel / --dse-metal-* / --dse-emboss. It is also
+   the one family with no steelcompendium.io counterpart, so `npm run parity` cannot see
+   the gap either — exactly the blind spot SC-10 Task 6 flagged for plugin-only surfaces.
+
+   SC-132 ran seven rounds of screenshotted design candidates against Scott (the record
+   is on the ticket; the round reports are in the workspace's .superpowers/sdd/). What
+   landed here is the round-7 winner, unchanged:
+
+     LAYOUT (Scott's own, comment 67763d6d)  a left-aligned crest spanning two rows; row
+       1 carries the state word on the left and current / max + the temp chip
+       right-aligned on a shared baseline; row 2 is the gauge across the full remaining
+       width. The "STAMINA" label is present on the standalone element and dropped when a
+       region title already says it (his parenthesis: "at least on the Hero Sheet").
+     GAUGE  an H2-height forged channel on the zero-bulkhead coordinate model (see
+       framework/kit/staminaGauge.ts for the model itself), N1 single-hairline
+       separators everywhere, a solid violet temp plate appended past the pour (P1).
+     CREST  a STABLE frame with a LIVING ICON — his correction of round 6: "the crest
+       itself is stable (un-animated) and the icon itself gets the animation; otherwise
+       its too noisy."
+     RECOVERIES  R6 outlined cells that fill in (his literal "▱▱▱▱▱▱"), grouped in fours
+       (G4), under a RECOVERIES eyebrow that stands down when the strip runs out of room,
+       with an icon-only Catch Breath control.
+     DYING  a red border AND a red gradient ground, with the divider between the two
+       registers SOFTENED to the plate's own grey hairline (his note: the bold red there
+       "feels a little too strong").
+
+   MATERIAL PROVENANCE — no new brand colour, and NO `color-mix()`. The support floor is
+   Chromium 106 and color-mix() is 111+, so an unsupported function would void the whole
+   declaration on a floor engine. Every shade is therefore built the way the SITE builds
+   them: a translucent black/white gradient LAYER composed over a `--dse-*` token via the
+   `background: <image>, <color>` shorthand, so the hue stays a token and the shading
+   stays an overlay. Fills read as gradient BANDS, never flat washes (DESIGN.md), and the
+   plate's own --dse-card-bg bleeds through every translucent-black surface (the SC-117
+   B1 / SC-100 lesson: a white wash flattens the plate's internal ramp).
+
+   NO COLOURED LEFT-BORDER anywhere (DESIGN.md rule 7). Every state paints the WHOLE
+   frame, which is also the honest reading — a state is a fact about the object, not
+   about one of its edges.
+
+   EVERY STATE IS SAID AT LEAST THREE WAYS (Scott is colourblind — docs/
+   working-preferences.md): the border colour, the crest's silhouette (shield →
+   shield-alert → skull), the word, and the numeral's colour. Hue is never load-bearing
+   on its own.
+
+   SCOPE: every rule below carries the standing
+   `[data-dse-theme='steel']:not([data-dse-print="on"])` guard, so the frozen
+   *--legacy-{dark,light}.png and *--steel-print.png shots cannot move — the cluster's
+   DOM is hidden outright in those schemes by the base rule near the .dse-stamina block.
+*/
+
+/* -- 1. Which instrument is visible ------------------------------------------- */
+/*  The Legacy track is REPLACED, not restyled: a ground-up composition leaving the old
+    channel visible under it would be a double readout. It stays in the DOM because
+    Legacy and print still render it. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(> .dse-stamina__cluster) > .dse-stamina__track {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster {
+	display: grid;
+	/* col 1 the crest · col 2 the state word · col 3 the readout.
+	   `minmax(0, 1fr)` and not a bare `1fr`: an `auto` minimum would let a long state
+	   word push the readout off the plate instead of being the thing that gives. */
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	/* Measured in round 7 against the alternatives, not picked: the plate has TWO bands
+	   here (round 6's had three), so it affords a squarer inset without growing. The
+	   0.85rem inline is also what the foot matches — a 0.1rem mismatch there put the
+	   crest and the word RECOVERIES beneath it 1.6px out of line. */
+	padding: 0.7rem 0.85rem 0.75rem;
+	/* Wide enough that the shield is a separate object from the readout, tight enough
+	   that the two still read as one instrument. */
+	column-gap: 0.75rem;
+	/* The one gap that decides "dense" vs "cramped": ~7px, half the plate's own block
+	   padding, so the two rows group INSIDE the plate rather than float in it. */
+	row-gap: 0.45rem;
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+	/* One `--dse-st` per state, so every fill/border/ink below keys off a single
+	   declaration instead of repeating the [data-state] ladder five times. */
+	--dse-st: var(--dse-stamina-healthy);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='winded'] {
+	--dse-st: var(--dse-stamina-winded);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='dying'] {
+	--dse-st: var(--dse-stamina-dying);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.02));
+}
+/* The plate opens its bottom edge ONLY when a recoveries strip follows to close it.
+   Without the guard, a block with no `recoveries_max` would render a plate with three
+   sides and nothing under it. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(~ .dse-stamina-rec) > .dse-stamina__cluster {
+	border-bottom: none;
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+}
+/* The strip's own Winded/Dying badge is redundant once the cluster carries the state:
+   the cluster should say a thing once. (It stays in the DOM for Legacy.) */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__status {
+	display: none;
+}
+
+/* -- 2. Row 1: the crest, the word, the readout -------------------------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	grid-area: 1 / 1 / 3 / 2;
+	align-self: center;
+	/* Bigger than the kit default because the crest now has two rows of content to stand
+	   beside, and because Scott's brief for it is EMOTION, not data: "If we are taking
+	   the screen real estate for a crest, its going to provide emotion." */
+	width: 2.8em;
+	height: 3.15em;
+}
+/* SC-130's optical-centring nudge, re-derived for THIS box. `.dse-crest__glyph` already
+   applies `translateY(var(--dse-crest-nudge, 0px))`, but the token is only declared on
+   `.dse-crest--lg` and this crest is not that class — so without this line the glyph
+   sits visibly low in the pentagon, which is precisely the defect SC-130 fixed
+   everywhere else. The nudge is a FRACTION of box height (9.56% — the shoelace centroid
+   of --dse-crest-shape is 40.43% down, not 50%), so it re-derives rather than carries:
+   0.0956 × 3.15em = 0.30em. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph {
+	--dse-crest-nudge: -0.3em;
+	color: var(--dse-st);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest-glyph svg {
+	width: 1.45em;
+	height: 1.45em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cid {
+	grid-area: 1 / 2 / 2 / 3;
+	display: flex;
+	/* Baseline-aligned with the numerals opposite, so the two ends of the row sit on ONE
+	   line of type instead of on two optical centres. */
+	align-items: baseline;
+	align-self: baseline;
+	justify-self: start;
+	gap: 0.45rem;
+	min-width: 0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__clabel {
+	/* No `font-family` here on purpose (SC-112 Task 5 gate): a Steel-scoped rule that
+	   declares a widened slot's font would silently re-narrow Legacy support. The
+	   small-caps/tracking treatment IS Steel-only and stays scoped; the face itself
+	   arrives from the theme-agnostic routing block. */
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.07em;
+	font-size: 0.82em;
+	color: var(--dse-metal);
+}
+/* The word carries a state next to a 2em numeral, so it cannot be a whisper. Nowrap
+   because it is the flexible column's content and must not become two lines — and then,
+   because a nowrap flex child's automatic minimum is its full text width, it also needs
+   `min-width: 0` + an ellipsis, or the word pushes the readout off the plate at a narrow
+   enough column. This is the LAST-RESORT degradation of the whole layout, and the word
+   is the right member to give: it is also said by the border, the ground and the crest.
+   Measured, it does not engage at any width this plugin can produce. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cstate {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	font-size: 0.9em;
+	white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--dse-st);
+}
+/* Healthy needs no shout — the state word only speaks when something is wrong, which is
+   also what makes it register when it appears. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='healthy'] .dse-stamina__cstate {
+	display: none;
+}
+/* Row 1, right: the readout, hard against the plate's right edge. THE PRESENCE FIX —
+   Scott on the bar-first layout: "it doesn't feel like it has a huge presence and
+   Stamina is one of the most important things to be tracking in the game"; and on the
+   number-first one: "I like how the 'current stamina' value pops with its larger font.
+   I think that really helps catch the eye with important information." So the current
+   value is the headline and everything else in the readout is subordinate to it. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
+	grid-area: 1 / 3 / 2 / 4;
+	display: flex;
+	align-items: baseline;
+	align-self: baseline;
+	justify-self: end;
+	justify-content: flex-end;
+	gap: 0.18em;
+	font-size: 2.05em;
+	line-height: 1.02;
+	font-variant-numeric: tabular-nums;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__ccur {
+	font-weight: 700;
+}
+/* SCOTT'S ROUND-7 TWEAK: the current value takes the state's colour at BOTH ends of the
+   ladder, not just at dying — "Lets make the 'Current Stamina' value turn that
+   yellow-ish color when 'winded' to match the 'dying' text color change." One
+   declaration off --dse-st covers both, so the two can never drift apart again. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster:is([data-state='winded'], [data-state='dying']) .dse-stamina__ccur {
+	color: var(--dse-st);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__cslash, .dse-stamina__cmax) {
+	color: var(--dse-metal);
+	font-size: 0.46em;
+}
+/* Temp reads as a bolted-on addendum, never as part of the base number — and it sits on
+   the numeral's BASELINE rather than hung off its cap height, which is what made it read
+   as a sticker in the round-5 boards. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__ctemp {
+	align-self: baseline;
+	margin-left: 0.45em;
+	padding: 0 0.34em;
+	font-size: 0.34em;
+	font-weight: 600;
+	color: var(--dse-stamina-temp);
+	background: rgba(0, 0, 0, 0.25);
+	border: 1px solid var(--dse-stamina-temp);
+	border-radius: 2px;
+	text-shadow: none;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__ctemp {
+	background: rgba(0, 0, 0, 0.04);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-temp='off'] .dse-stamina__ctemp {
+	display: none;
+}
+
+/* -- 3. The living icon -------------------------------------------------------- */
+/*  Two animations, not one at two speeds, because winded and dying are not the same
+    event: winded is EXERTION (a fast, deep, recovering breath) and dying is FAILING
+    (slower, and much dimmer at the bottom of the cycle). Healthy does not move at all —
+    a component that is always animating is noise, and the stillness is what makes the
+    motion mean something.
+
+    ANIMATED VIA THE INDEPENDENT `scale` PROPERTY, NOT `transform`. `.dse-crest__glyph`
+    already owns its `transform` (SC-130's optical-centring translateY), so a transform
+    keyframe would silently throw that nudge away for the whole cycle and drop the glyph
+    ~5px mid-breath. `scale` (Chromium 104, under the 106 floor) composites ON TOP of
+    that transform, so the nudge survives untouched.
+
+    ACCESSIBILITY, both switches: `prefers-reduced-motion: reduce` pins it (below), and
+    the plugin's own preference needs no new rule — the D4 declaration
+    `[data-dse-element][data-dse-reduce-motion='true'] * { animation: none !important }`
+    already reaches the glyph. Both land on the 0%/100% frame, which is DELIBERATELY the
+    identity frame, so "motion off" and "motion at rest" are the same picture rather than
+    two different ones. */
+@keyframes dse-crest-icon-breathe {
+	0%,
+	100% {
+		scale: 1;
+		opacity: 1;
+	}
+	50% {
+		scale: 0.84;
+		opacity: 0.6;
+	}
+}
+@keyframes dse-crest-icon-fail {
+	0%,
+	100% {
+		scale: 1;
+		opacity: 1;
+	}
+	50% {
+		scale: 0.93;
+		opacity: 0.34;
+	}
+}
+/* The FRAME never moves — stated as a rule and not merely by omission, so the shield
+   cannot pick up motion from anything composed over this later. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+	animation: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='winded'] .dse-stamina__crest-glyph {
+	animation: dse-crest-icon-breathe 2.6s ease-in-out infinite;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='dying'] .dse-stamina__crest-glyph {
+	animation: dse-crest-icon-fail 4.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster:is([data-state='winded'], [data-state='dying']) .dse-stamina__crest-glyph {
+		animation: none;
+	}
+}
+
+/* -- 4. Row 2: the forged gauge ------------------------------------------------ */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+	grid-area: 2 / 2 / 3 / 4;
+	position: relative;
+	/* The channel's interior depth and the gauge's own top padding are declared HERE, on
+	   the marks' shared ancestor, rather than on the channel — the index marks sit
+	   OUTSIDE the channel (which clips its own fills) and still have to size and centre
+	   themselves against the very box they index. A marker that cannot measure its track
+	   is how the first cut ended up perched on the track's top edge. */
+	--dse-ch-h: 0.62rem;
+	--dse-g-pad: 0.34rem;
+	padding-top: var(--dse-g-pad);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	position: relative;
+	overflow: hidden;
+	height: var(--dse-ch-h);
+	/* Translucent BLACK, so --dse-card-bg's diagonal bleeds through the slot — the plate
+	   is visibly BEHIND the channel rather than replaced by it. */
+	background: rgba(0, 0, 0, 0.32);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 3px;
+	/* Milled-slot read: a hard top shadow, a faint bottom catch-light. */
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gchannel {
+	background: rgba(0, 0, 0, 0.07);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+}
+/* The dying reserve is not "the bar in red" — it is a differently-machined section of
+   the same channel, engraved rather than polished, that exists whether or not the hero
+   has reached it. It carries the coordinate space the rules actually define (a hero
+   fights on down to -max/2). Engraved, NOT hatched: this region is normally empty of
+   meaning, so it must be present without competing with the pour — a dense hatch here
+   was just the Legacy overlay wearing new tokens. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: var(--dse-zone, 33%);
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 7px),
+		rgba(0, 0, 0, 0.22);
+	border-right: 1px solid var(--dse-metal-line);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdying {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.055) 0 1px, transparent 1px 7px),
+		rgba(0, 0, 0, 0.05);
+}
+/* No dying reserve on a creature/pool gauge: the bulkhead collapses onto the channel's
+   left edge and the pour simply starts there. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge[data-zone='off'] :is(.dse-stamina__gdying, .dse-stamina__gidx--zero, .dse-stamina__gidx--winded) {
+	display: none;
+}
+/* The fill: a horizontal molten ramp under a vertical sheen, with a bright meniscus at
+   the leading edge. A gradient BAND, per the design language — not a flat wash. Anchored
+   at the ZERO BULKHEAD, never at the track's left edge: green only ever means stamina
+   you actually have. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gpour {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--dse-zone, 33%);
+	width: var(--dse-pour-w, 0%);
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 46%, rgba(0, 0, 0, 0.3)),
+		linear-gradient(90deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0)),
+		var(--dse-st, var(--dse-stamina-healthy));
+	box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.42);
+}
+/* On paper-white the pour needs its DARK end doing the shading, or the band washes out
+   against the ground. */
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gpour {
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, 0.16)),
+		linear-gradient(90deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0)),
+		var(--dse-st, var(--dse-stamina-healthy));
+}
+/* The wound: how far PAST zero the hero has gone, growing LEFTWARD from the bulkhead
+   into the engraved reserve. Zero-width until it is real, so green (stamina you have)
+   and red (how deep into dying you are) never share a pixel. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gwound {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--dse-zone, 33%) - var(--dse-wound-w, 0%));
+	width: var(--dse-wound-w, 0%);
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.34)),
+		linear-gradient(90deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.42)),
+		var(--dse-stamina-dying);
+	box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.4);
+}
+/* Temp stamina is ablative plating bolted ON TOP of what you have: it starts exactly
+   where the pour ends, shares the pour's origin and scale, and is spent first. The
+   catch-light on its right edge closes the plate; the two-tone seam at its left edge is
+   drawn on the CHANNEL below, so it stays crisp whatever material sits under it. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gshield {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--dse-cap-x, 0%);
+	width: var(--dse-cap-w, 0%);
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 48%, rgba(0, 0, 0, 0.28)),
+		var(--dse-stamina-temp);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset -1px 0 0 rgba(255, 255, 255, 0.45);
+}
+/* One boundary, one mark: the pour's own meniscus stands down while a temp plate is
+   mated to it, and the seam below takes over. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge[data-temp='on'] .dse-stamina__gpour {
+	box-shadow: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge[data-temp='on'] .dse-stamina__gchannel::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	/* --dse-cap-x is set on the GAUGE and inherits down to the channel, so the seam
+	   tracks the pour's end without the panel emitting another node. */
+	left: var(--dse-cap-x, 0%);
+	width: 2px;
+	margin-left: -1px;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, rgba(255, 255, 255, 0.42) 1px);
+	z-index: 4;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge[data-temp='on'] .dse-stamina__gchannel::before {
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.5) 0 1px, rgba(255, 255, 255, 0.75) 1px);
+}
+
+/* -- 5. The index marks (separator family N1) ---------------------------------- */
+/*  Scott ruled the milled notch pairs out ("I don't like the separators on the gauge bar
+    with the little triangles. They look out of place") and picked N1 from the four
+    alternatives: ONE shape — a vertical line spanning the channel's interior — at two
+    weights that encode what the mark IS.
+      2px, two-tone   a real EDGE in the material: the zero bulkhead, and the temp seam
+      1px, solid      a GRADUATION on the scale: winded, base max
+    Marks cross the pour, so they need separation from whatever is under them: a
+    `filter`, not a `box-shadow`, so it would also reach a pseudo-element if one is ever
+    added back. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx {
+	position: absolute;
+	/* + the channel's own 1px border: this is its INTERIOR, top to bottom. */
+	top: calc(var(--dse-g-pad) + 1px);
+	height: var(--dse-ch-h);
+	width: 1px;
+	margin-left: -0.5px;
+	color: var(--dse-metal);
+	background: currentColor;
+	filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55));
+}
+/* The one place a real EDGE exists in the material, so it alone keeps a full-depth
+   two-tone seam: shadow face on the reserve side, catch-light face on the pour side. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	left: var(--dse-zone, 33%);
+	width: 2px;
+	margin-left: -1px;
+	color: var(--dse-metal-bright);
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--winded {
+	left: var(--dse-winded-x, 66%);
+	color: var(--dse-stamina-winded);
+}
+/* The base-max graduation: where the hero's real ceiling sits once temp has widened the
+   scale, so a rescaled gauge never hides it. Inert at temp 0, where it would just
+   restate the channel's own right edge. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--max {
+	left: var(--dse-max-x, 100%);
+	color: var(--dse-metal);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge:not([data-temp='on']) .dse-stamina__gidx--max {
+	display: none;
+}
+/* Minion-pool death ticks: the same graduation vocabulary, placed by the caller. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--tick {
+	left: var(--dse-tick-x, 0%);
+	color: var(--dse-metal-line);
+}
+
+/* -- 6. The recoveries strip as the plate's lower register --------------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	margin-top: 0;
+	/* Matches the plate's own 0.85rem inline inset, so the crest above and the word
+	   RECOVERIES below share a left margin (they were 1.6px out before round 7 measured
+	   it). */
+	padding: 0.45rem 0.85rem;
+	gap: 0.5rem;
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
+	/* The eyebrow's stand-down asks "is the box I am in narrow", and a container query is
+	   the only thing in CSS that can: a media query asks about the WINDOW, and the same
+	   240px column exists in a 1400px window. `container-type: inline-size` is Chromium
+	   105, under the 106 floor — the support-floor deny-list bans `@container style(`
+	   (STYLE queries, 111), not size queries. */
+	container-type: inline-size;
+	container-name: dse-stamina-rec;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+	background: rgba(0, 0, 0, 0.035);
+}
+/* Catch Breath goes to the right margin, mirroring the numerals above it. Without this
+   the foot left-packs into a short row with a wide hole on the right — the same fault
+   Scott named in the round-5 boards' top-right, one band lower. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn {
+	margin-left: auto;
+	min-height: 1.75rem;
+	/* Icon-only: "If there is a button, I think it needs to be only the icon." */
+	min-width: 1.75rem;
+	padding: 0;
+	justify-content: center;
+	border-radius: 3px;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec .dse-btn__text {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.34em;
+	margin-right: 0.15rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow-word {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	font-size: 0.8em;
+	color: var(--dse-fg-muted);
+}
+/* R6 — the OUTLINED CELL that fills in (Scott's literal "▱▱▱▱▱▱"). The outline is
+   permanent and identical in both states, so the row's LENGTH always says how many
+   recoveries the hero HAS and the fill only ever says how many are LEFT — the one thing
+   a socket/stud pair could not do at a glance. Skewed, because ▱ is a parallelogram and
+   because the slant is the site's own chamfer language. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips {
+	flex-wrap: nowrap;
+	gap: 0.3em;
+	align-items: center;
+	min-width: 0;
+	/* The row absorbs the pressure when the strip narrows: the eyebrow and the button are
+	   incompressible, so this is the only member that can give. */
+	flex: 1 1 auto;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	width: 1em;
+	height: 0.74em;
+	border-radius: 1px;
+	transform: skewX(-12deg);
+	background: none;
+	border: 1px solid var(--dse-metal-line);
+	box-shadow: none;
+	/* A real floor: below ~0.42em a 1px-outlined parallelogram stops being countable and
+	   becomes a texture, which would trade one unreadable state for another. */
+	flex: 0 1 auto;
+	min-width: 0.42em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip--filled {
+	background: var(--dse-metal-grad);
+	border-color: var(--dse-metal-bright);
+	box-shadow: var(--dse-chip-bevel);
+}
+/* LIGHT TWINS, and not optional ones: the base pip's own light rules set a background on
+   EVERY pip, so without these R6's "empty outline" state is a filled cell on light and
+   the filled state is indistinguishable from it. Source order decides between the two —
+   the filled twin must stay below the empty one. */
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+	background: none;
+	box-shadow: none;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip--filled {
+	background: var(--dse-metal-grad);
+	box-shadow: var(--dse-chip-bevel);
+}
+/* G4 grouping whitespace — Scott: "a small amount of whitespace between a group of 3-5
+   recovery cells to allow quick counting, kinda like how commas separate groups of 3
+   digits in larger numbers." 0.5em on top of the row's own 0.3em is a hair over the
+   ratio typography uses for a thin-space thousands separator. The group START is stamped
+   per marker by RecoveriesStrip.ts, not selected with :nth-child, so the group size stays
+   one constant in code rather than being hard-coded into this selector. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip[data-grp='start'] {
+	margin-left: 0.5em;
+}
+/* Model M: the markers are a value control, so they take a pointer and a focus ring. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips[tabindex] {
+	cursor: pointer;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips[aria-disabled='true'] {
+	opacity: 0.55;
+}
+/* THE EYEBROW STANDS DOWN when the strip runs out of room. Measured at the narrowest
+   real hero column (a 240px stamina region on a 660px sheet): the strip's content box is
+   178.8px, the RECOVERIES eyebrow takes 70.9 of it, the gaps 16 and Catch Breath 28,
+   leaving 63.9px for markers that want 169.6. Even at the 0.42em floor they need ~95px,
+   so compression alone cannot close it. This is Scott's own round-3 ruling ("in the full
+   hero sheet we need the 'Recoveries' label. On more condensed views I think we can drop
+   it (still need a tooltip)") applied by MEASUREMENT rather than by surface name — a
+   240px column IS a condensed view, a 405px one is not. The tooltip carries the fraction
+   in every form, so nothing is lost, only moved. */
+@container dse-stamina-rec (max-width: 290px) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
+		display: none;
+	}
+}
+
+/* -- 7. Winded and dying ------------------------------------------------------- */
+/*  Winded paints the WHOLE frame (no spine — DESIGN.md rule 7), so the state is said
+    four ways at once: the amber border, the crest's shield-alert silhouette, the word,
+    and the amber numeral + pour. No single channel, least of all hue, is load-bearing. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='winded'] {
+	border-color: var(--dse-stamina-winded);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cluster[data-state='winded']) ~ .dse-stamina-rec {
+	border-color: var(--dse-stamina-winded);
+}
+/*  Dying takes the border AND the ground (Scott: "I like Layout A the most with both the
+    border and the background"). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='dying'] {
+	border-color: var(--dse-stamina-dying);
+	background:
+		linear-gradient(104deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0.86)),
+		var(--dse-stamina-dying);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='dying'] {
+	background:
+		linear-gradient(104deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
+		var(--dse-stamina-dying);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cluster[data-state='dying']) ~ .dse-stamina-rec {
+	border-color: var(--dse-stamina-dying);
+	background:
+		linear-gradient(104deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.9)),
+		var(--dse-stamina-dying);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cluster[data-state='dying']) ~ .dse-stamina-rec {
+	background:
+		linear-gradient(104deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.95)),
+		var(--dse-stamina-dying);
+}
+/*  THE SOFTENED DIVIDER. Scott: "One thing I don't love is the horizontal line between
+    the stamina and the recoveries getting the same bold red that the border gets. It
+    just feels a little too strong."
+
+    The line is not a rule the layout draws — it is the FOOT's own `border-top`, and the
+    state rule above paints all four of the foot's edges at once. So the fix is one
+    declaration: the seam between the plate and its own foot goes back to the plate's own
+    grey steel hairline while the block's OUTER border keeps the full-strength state
+    colour. That is the honest reading anyway — the outer border is the state boundary,
+    the inner seam is joinery, and joinery should never be as loud as the thing it joins.
+
+    Chosen over a thinner or desaturated red because both of those keep TWO reds on one
+    object, and a second, weaker red is exactly the kind of hue distinction Scott's
+    colourblindness makes unreliable. Grey-vs-red is not. Must stay AFTER the two state
+    rules above: equal specificity, source order decides. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cluster:is([data-state='winded'], [data-state='dying'])) ~ .dse-stamina-rec {
+	border-top-color: var(--dse-metal-faint);
+}
+
+/* -- 8. The hero sheet's own adjustments --------------------------------------- */
+/*  THE SHEET DROPS THE "STAMINA" LABEL, the standalone element keeps it. Scott: "having
+    'Stamina' next to the crest seems like a waste considering its above the card (at
+    least on the Hero Sheet)" — his own parenthesis is the scope. On the sheet the
+    region's `.dse-hero__region-title` says the word two lines up; on a bare `ds-stamina`
+    block in a note there is no such title, and an unlabelled shield beside a bare number
+    is not self-describing. So the rule keys off the title's PRESENCE, not a surface
+    name, and there is exactly one place it can be wrong. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__clabel {
+	display: none;
+}
+/*  …and the crest steps down a size, keyed off the same title. Not a style preference —
+    a measurement. The sheet's grid gives characteristics its max-content (370px at a
+    660px sheet) and stamina the remainder, so the narrowest real stamina column is 240px,
+    and row 1 there is a tug-of-war: a nowrap state word on the left, a 2em readout on the
+    right, and the crest's column taken off the top of both. At 2.8em the two ends came
+    within 1.45px of touching. 2.2 × 2.5em hands ~10px back to the gap, and it costs
+    nothing that matters: on the sheet the crest is the one member of the cluster carrying
+    no information the other three channels do not. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest {
+	width: 2.2em;
+	height: 2.5em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest-glyph {
+	/* the same 9.56% of box height the full-size crest uses: 0.0956 × 2.5em */
+	--dse-crest-nudge: -0.24em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) :has(> .dse-hero__region-title) .dse-stamina__crest-glyph svg {
+	width: 1.15em;
+	height: 1.15em;
+}
+/*  A `min-width: auto` trap one level further out. `.dse-hero__region` is a grid item, so
+    its automatic minimum is its max-content size — fine while the recovery strip wrapped
+    (a wrapped box's max-content is small) and an OVERFLOW the moment the strip is told
+    not to wrap. Measured before this line: `grid-template-columns: 370px 363.688px`
+    inside a 626px grid, i.e. the stamina region hanging ~34px past the sheet's own right
+    border.
+
+    NARROWED TO THE STAMINA REGION with `:has()`, and the narrowing is not cosmetic:
+    `.dse-hero__region` is shared by every region on the sheet, whose real widths come
+    from their contents' automatic minimums. Zeroing the minimum on ALL regions made the
+    columns 305/305 and CLIPPED "Presence" off the characteristics row — a fix for one
+    region paid for out of another's content is not a fix. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region:has(.dse-stamina) {
+	min-width: 0;
+}
+
+/* -- 9. The RAIL: the standalone element's narrow form ------------------------- */
+/*  Scott, on the sidebar boards: "I think we need to go to two rows unless there is
+    significant horizontal space… Part of the problem is that the recovery UI doesnt
+    compress: the cells are the same width regardless of the card width… the 'catch
+    breath' button is *very* close to the edge of the card."
+
+    WHAT SELECTS THE RAIL, stated honestly, because "sidebar" is not a thing CSS can ask
+    about: the rail is the STANDALONE `ds-stamina` element's narrow form, chosen by a
+    container query on the element root. Width alone cannot be the whole rule — the hero
+    sheet's stamina column is 240px at its narrowest, NARROWER than the ~300px sidebar
+    leaf that wants the rail — so the query is scoped to the standalone element and the
+    hero sheet is never the rail. That is not a fudge: the sheet's own grid guarantees its
+    stamina region a two-row-capable column, and §8 above is what makes 240px work there.
+
+    `container-type: inline-size` is Chromium 105, under the 106 floor. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='stamina-bar'] {
+	container-type: inline-size;
+	container-name: dse-stamina-host;
+}
+@container dse-stamina-host (max-width: 340px) {
+	/*  The PLATE becomes the whole row, not just the bar. The recovery markers and Catch
+	    Breath are SIBLINGS of `.dse-stamina`, so a border on the bar alone would run
+	    between the gauge and the markers and the cluster would read as "a bar, plus some
+	    loose studs beside it". Enclosing both is what makes the rail one instrument on
+	    two lines. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(> .dse-stamina) {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem;
+		/* 0.75rem inline so a 28px button clears the plate's border by 13px including it,
+		   and 0.35rem block so the second line is not touching the frame either — the
+		   round-5 rail's 0.1rem/0.5rem was defending a "one 33px row" claim that two lines
+		   makes moot. */
+		padding: 0.35rem 0.75rem;
+		background: rgba(0, 0, 0, 0.22);
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: 3px;
+		box-shadow: var(--dse-bevel);
+	}
+	body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(> .dse-stamina) {
+		background: rgba(0, 0, 0, 0.045);
+	}
+	/* The bar takes a full line of its own, so the gauge always gets the whole leaf
+	   (measured: 177px at a 260px plate, 277px at 360) instead of the ~109px a shared
+	   line leaves it once the markers and the button have taken their incompressible
+	   share. Two honest lines beat one squeezed one — Scott's own reading of the
+	   one-line boards was that the bar, "arguably the most important thing", had become
+	   10% of the card. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region > .dse-stamina {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+	/*  The cluster collapses to one line: readout, gauge, state word. The crest comes off
+	    (Scott: "I might suggest dropping the crest since it feels a bit squished in
+	    there") — the state still has the numeral's colour, the border and the word. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 1.75rem;
+		padding: 0;
+		background: none;
+		border: none;
+		box-shadow: none;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(~ .dse-stamina-rec) > .dse-stamina__cluster {
+		border: none;
+		border-radius: 0;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__crest {
+		display: none;
+	}
+	/* The label is redundant on a rail; the state word is not, and it goes to the far end
+	   of the line so the readout and the gauge stay adjacent. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__clabel {
+		display: none;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cid {
+		order: 3;
+		flex: 0 1 auto;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
+		flex: 0 0 auto;
+		font-size: 1.15em;
+	}
+	/* The gauge is the elastic member: it takes whatever the line has left. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
+		flex: 1 1 4rem;
+		min-width: 3rem;
+		--dse-ch-h: 0.5rem;
+		/* Unitless 0 would void the marks' calc() — this must carry a unit. */
+		--dse-g-pad: 0px;
+		padding-top: 0;
+	}
+	/*  Line two: the strip, full width, with the markers compressing rather than wrapping.
+	    `flex-wrap: nowrap` + `min-width: 0` is the load-bearing pair and the easy one to
+	    miss: a WRAPPING flex container never shrinks its items (it starts a new line
+	    instead), and a flex ITEM's automatic minimum is its max-content size — so before
+	    both, a nowrap strip refused to be narrower than its own contents and OVERFLOWED
+	    the plate (measured: 241.7px of strip inside a 234px content box at a 260px leaf
+	    with 12 recoveries). Nothing downstream can compress until this box is allowed to. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec {
+		flex: 1 1 100%;
+		flex-wrap: nowrap;
+		min-width: 0;
+		margin-top: 0;
+		padding: 0;
+		gap: 0.35rem;
+		background: none;
+		border: none;
+		border-radius: 0;
+	}
+	/* R6's cells are sized for a hero sheet. Twelve of them plus grouping gaps is ~190px,
+	   most of a 300px leaf on its own, so on the rail the same cell is cut to stud scale
+	   and the grouping gap is scaled with it — keeping the ~3:1 punctuation ratio rather
+	   than letting the gap grow relative to a smaller marker. The 1px outline stays: it
+	   is the part that makes the row's LENGTH report the maximum. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip {
+		width: 0.72em;
+		height: 0.56em;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pips {
+		gap: 0.2em;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pip[data-grp='start'] {
+		margin-left: 0.34em;
+	}
+	/*  DYING ON THE RAIL — Scott's round-3 ruling, "Y1 for the rail, Y3 for the sheet":
+	    the whole rail takes the danger hairline and the ground stays put. A ground flood
+	    is right for a standalone plate sitting alone on a page and wrong for a 60px rail
+	    in a sidebar, where a full red wash under a 10px gauge is all you can see. The
+	    state is still said three ways here: the border, the skull silhouette is gone with
+	    the crest but the WORD is not, and the numeral turns red. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(.dse-stamina__cluster[data-state='dying']) {
+		border-color: var(--dse-stamina-dying);
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-collapse__region:has(.dse-stamina__cluster[data-state='winded']) {
+		border-color: var(--dse-stamina-winded);
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster[data-state='dying'] {
+		background: none;
+		border-color: transparent;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina:has(.dse-stamina__cluster:is([data-state='winded'], [data-state='dying'])) ~ .dse-stamina-rec {
+		border-color: transparent;
+		background: none;
+	}
+}
+
+/* -- 10. The modal previews ---------------------------------------------------- */
+/*  SC-133 RC-1/RC-2: the edit modal's preview used to compute its own geometry, so temp
+    stamina was invisible in it and a temp-only Damage press looked like nothing had
+    happened. It now mounts the SAME gauge (framework/kit/staminaGauge.ts), so the modal
+    and the bar cannot disagree by construction. The preview is gauge-only — no crest, no
+    numerals: the modal's own steppers already say the numbers, twice would be noise. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster--preview {
+	display: block;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster--preview .dse-stamina__gauge {
+	grid-area: auto;
+	--dse-ch-h: 0.85rem;
+}
+/*  The pending-edit band: a ghost of what Apply will do, drawn in the gauge's own
+    coordinate space so it lines up with the pour it is about to change. Heal and damage
+    are distinguished by POSITION as well as hue — a heal band always sits past the pour's
+    end, a damage band always eats back into it — which is the second channel the colour
+    alone would not give. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdelta {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--dse-delta-x, 0%);
+	width: var(--dse-delta-fill, 0%);
+	z-index: 3;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdelta[data-kind='heal'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0 2px, transparent 2px 6px),
+		var(--dse-stamina-healthy);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gdelta[data-kind='damage'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0 2px, transparent 2px 6px),
+		var(--dse-stamina-dying);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+/* -- 11. The recovery-editor popover, Steel skin ------------------------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pop {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.18)), var(--dse-card-bg);
+	border-color: var(--dse-metal-line);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), var(--dse-bevel);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pop-title {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pop-btn {
+	background: var(--dse-metal-grad);
+	border: 1px solid var(--dse-metal-line);
+	border-radius: 3px;
+	font-weight: 700;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pop-val {
+	font-weight: 600;
+	color: var(--dse-metal-bright);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pop-sep {
+	background: var(--dse-metal-faint);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__pop-cb {
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.06em;
+	padding: 0.15rem 0.45rem;
+	border-radius: 3px;
+	border: 1px solid var(--dse-metal-line);
+	background: rgba(0, 0, 0, 0.24);
+}
+
+/* END SC-132 Steel stamina cluster */
 
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
