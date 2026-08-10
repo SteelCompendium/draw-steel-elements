@@ -41,8 +41,11 @@ import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
 import type { ElementDefinition } from '@/framework/registry';
 import type { PanelHost } from '@/framework/kit';
-import { iconButton, renderCharacteristicsGrid, renderStaminaBar, updateStaminaBar, stepper, tabs, tooltip } from '@/framework/kit';
-import type { CharacteristicsValues, IconButtonHandle, StaminaBarValues, StepperHandle } from '@/framework/kit';
+import { openManagedModal } from '@/framework/kit';
+import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
+import { StaminaEditModal } from '@views/StaminaEditModal';
+import { iconButton, renderCharacteristicsGrid, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, stepper, tabs, tooltip } from '@/framework/kit';
+import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues, StepperHandle } from '@/framework/kit';
 import { openFormEditor } from '@/authoring/FormModal';
 import { FeatureConfig } from '@model/FeatureConfig';
 import { actionTypeOf } from '@/elements/feature/renderFeature';
@@ -61,7 +64,6 @@ import { deriveHeroStats } from './deriveHeroStats';
 import type { DerivedStats } from './deriveHeroStats';
 import { HeroModel } from './model';
 import type { Condition, HeroStamina } from './model';
-import { recoveryHealAmount } from '@model/StaminaBar';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
 // Matches TYPE_ADAPTERS' bare-feature scope (typeAdapters.ts) — abilities[] entries are
@@ -88,10 +90,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 
 	// -- stamina region --
 	private staminaBarEl: HTMLElement | null = null;
-	private staminaStepper: StepperHandle | null = null;
-	private recPipsEl: HTMLElement | null = null;
-	private recStatusEl: HTMLElement | null = null;
-	private catchBreathHandle: IconButtonHandle | null = null;
+	private recStrip: RecoveriesStripHandle | null = null;
 
 	// -- panels (real HeroPanel<S> instances, §2.1) --
 	private resourcePanel: ResourcePanel | null = null;
@@ -277,76 +276,118 @@ export class HeroSheetView extends ElementView<HeroModel> {
 
 	// ---------------------------------------------------------------- stamina
 
+	/**
+	 * SC-132: the sheet's stamina region is now the Steel cluster and nothing else.
+	 *
+	 * THE `− 24 +` STEPPER ROW IS GONE. Scott, reviewing the round-5 boards: "All 3
+	 * layouts in the hero sheet show a counter editor. Is that expected? If it is, the
+	 * counter value is duplicative with the value-max display and thats wasting screen
+	 * real estate." It was expected — and it was here for a reason: the sheet's bar was
+	 * mounted `canPersist: false`, so the stepper was the ONLY way to change Stamina on
+	 * the sheet. Deleting the row therefore has to come with its replacement, which is
+	 * the line below: the bar mounts with the host's real `canPersist`, so clicking it
+	 * opens the same StaminaEditModal the standalone element uses, and the recovery
+	 * markers underneath became a value control in the same pass (Model M).
+	 *
+	 * This is the one theme-agnostic change in SC-132 — a deleted node is deleted under
+	 * Legacy too — so it is also the only part of the redesign that moves a frozen shot.
+	 */
 	private renderStaminaRegion(container: HTMLElement, model: HeroModel): void {
 		const region = this.region(container, 'stamina', 'Stamina');
 
-		this.staminaBarEl = renderStaminaBar(region, this.staminaValues(model), { canPersist: false });
-
-		const stepperWrap = region.createDiv({ cls: 'dse-hero__stamina-stepper' });
-		this.staminaStepper = stepper(
-			stepperWrap,
-			{
-				value: model.state.stamina.current,
-				min: this.stats.deathThreshold.value ?? undefined,
-				max: this.stats.maxStamina.value ?? undefined,
-				editable: !this.readOnly,
-				integer: true,
-				label: 'Stamina',
-				onChange: (value) => this.applyStaminaChange({ current: value }),
-			},
-			this,
-		);
-		if (this.readOnly) {
-			this.staminaStepper.rootEl.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
-				btn.disabled = true;
-			});
-		}
+		this.staminaBarEl = renderStaminaBar(region, this.staminaValues(model), {
+			canPersist: !this.readOnly,
+			owner: this,
+			onClick: this.readOnly ? undefined : () => this.openStaminaModal(),
+			readOnlyTooltip: READ_ONLY_TOOLTIP,
+		});
 
 		const recMax = this.stats.recoveriesMax.value;
 		if (recMax !== null) this.renderRecoveries(region, model, recMax);
+	}
+
+	/** The sheet's write path for Stamina, now that the stepper row is gone: the same
+	 *  unified modal the standalone `ds-stamina` element opens (D2 §3.5b), fed a
+	 *  throwaway `StaminaBar` view-model that writes straight back into HeroState.
+	 *
+	 *  Why a bridge object and not the hero model: `StaminaEditModal` is typed against
+	 *  the `StaminaBar` MODEL (it reads/writes `current_stamina`/`temp_stamina`), and
+	 *  re-typing it against a union of two element models would push element shapes into
+	 *  a shared view. The bridge is three numbers in and three out, and it keeps the
+	 *  modal's SC-133 math — pinned by 27 tests — untouched.
+	 *
+	 *  RECOVERIES ARE DELIBERATELY NOT BRIDGED (so the modal's Spend Recovery section
+	 *  stays closed on the sheet). The modal derives its recovery value from
+	 *  `StaminaBar.recoveryValue`, i.e. `floor(max/3)`, whereas the SHEET's value is
+	 *  `deriveHeroStats`' `recoveryValue`, which kits and class features can move. A
+	 *  bridge that carried recoveries would silently heal the wrong amount whenever the
+	 *  two disagreed. The sheet's own recovery markers and Catch Breath button — right
+	 *  under the bar, using the derived value — are the recoveries affordance here; the
+	 *  modal handles damage, healing and temp Stamina. */
+	private openStaminaModal(): void {
+		const model = this.model;
+		const bridge = new StaminaBar(
+			false,
+			false,
+			this.stats.maxStamina.value ?? 0,
+			model.state.stamina.current,
+			model.state.stamina.temp,
+			1,
+		);
+		openManagedModal(this, () =>
+			new StaminaEditModal(this.cx.app, bridge, true, model.defn.name, () => {
+				this.applyStaminaChange({
+					current: bridge.current_stamina,
+					temp: bridge.temp_stamina,
+				});
+			}),
+		);
 	}
 
 	private staminaValues(model: HeroModel): StaminaBarValues {
 		return { current: model.state.stamina.current, temp: model.state.stamina.temp, max: this.stats.maxStamina.value ?? 0 };
 	}
 
-	/** D7 Task 4's pattern (stamina-bar/view.ts renderRecoveries), re-expressed against
-	 *  HeroState + deriveHeroStats instead of the standalone StaminaBar model — that
-	 *  view can't be reused directly (it owns its own ElementView<StaminaBar>). */
+	/** SC-132: the shared kit strip (framework/kit/RecoveriesStrip.ts), the same widget
+	 *  the standalone element mounts. This view keeps what it owns: HeroState, the
+	 *  derived stats, and the persist path. */
 	private renderRecoveries(container: HTMLElement, model: HeroModel, recMax: number): void {
-		const wrap = container.createDiv({ cls: 'dse-stamina-rec' });
-		this.recStatusEl = wrap.createDiv({ cls: 'dse-stamina-rec__status' });
-		this.recPipsEl = wrap.createDiv({ cls: 'dse-stamina-rec__pips' });
-		for (let i = 0; i < recMax; i++) this.recPipsEl.createDiv({ cls: 'dse-stamina-rec__pip' });
-
-		this.catchBreathHandle = iconButton(
-			wrap,
-			{ icon: 'wind', label: 'Catch Breath', text: 'Catch Breath', onClick: () => this.catchBreath() },
-			this,
-		);
-		if (this.readOnly) tooltip(this.catchBreathHandle.buttonEl, READ_ONLY_TOOLTIP);
-
+		this.recStrip = renderRecoveriesStrip(container, {
+			max: recMax,
+			canPersist: !this.readOnly,
+			owner: this,
+			onSetRemaining: (n) => this.setRecoveries(n),
+			onCatchBreath: () => this.catchBreath(),
+			popoverEditor: this.cx.prefs.get('staminaRecoveryPopover'),
+			readOnlyTooltip: READ_ONLY_TOOLTIP,
+		});
 		this.updateRecoveries(model);
 	}
 
 	private updateRecoveries(model: HeroModel): void {
-		if (!this.recPipsEl || !this.recStatusEl || !this.catchBreathHandle) return;
+		if (!this.recStrip) return;
 		const remaining = model.state.recoveries ?? 0;
-		this.recPipsEl.querySelectorAll<HTMLElement>('.dse-stamina-rec__pip').forEach((pip, i) => {
-			pip.toggleClass('dse-stamina-rec__pip--filled', i < remaining);
-		});
-
 		const { dying, winded } = this.woundState(model);
-		const state = dying ? 'dying' : winded ? 'winded' : null;
-		this.recStatusEl.hidden = state === null;
-		if (state) {
-			this.recStatusEl.setText(state === 'dying' ? 'Dying' : 'Winded');
-			this.recStatusEl.setAttribute('data-state', state);
-		} else {
-			this.recStatusEl.setText('');
-			this.recStatusEl.removeAttribute('data-state');
-		}
-		this.catchBreathHandle.setDisabled(this.readOnly || dying || remaining <= 0);
+		this.recStrip.update({
+			remaining,
+			wound: dying ? 'dying' : winded ? 'winded' : null,
+			catchBreathDisabled: this.readOnly || dying || remaining <= 0,
+		});
+	}
+
+	/** SC-132 Model M: the markers SET the count, and every mutation posts an undo
+	 *  toast (Scott: "I dont want a missclick to be super punishing"). */
+	private setRecoveries(next: number): void {
+		const model = this.model;
+		const before = model.state.recoveries ?? 0;
+		if (next === before) return;
+		const apply = (value: number): void => {
+			model.state.recoveries = value;
+			this.refreshStaminaRegion(model);
+			void this.persist();
+		};
+		apply(next);
+		undoNotice(`Recoveries: ${before} → ${next}`, () => apply(before));
 	}
 
 	/** RR §8: winded = at half Stamina max or below; dying = at 0 (implies winded too;
@@ -371,11 +412,19 @@ export class HeroSheetView extends ElementView<HeroModel> {
 
 		const max = this.stats.maxStamina.value ?? model.state.stamina.current;
 		const recoveryValue = this.stats.recoveryValue.value ?? 0;
+		const beforeStamina = model.state.stamina.current;
+		const healed = recoveryHealAmount(recoveryValue, model.state.stamina.current, max);
 		model.state.recoveries = remaining - 1;
-		model.state.stamina.current += recoveryHealAmount(recoveryValue, model.state.stamina.current, max);
+		model.state.stamina.current += healed;
 
 		this.refreshStaminaRegion(model);
 		void this.persist();
+		undoNotice(`Caught breath: +${healed} Stamina, −1 Recovery`, () => {
+			model.state.recoveries = remaining;
+			model.state.stamina.current = beforeStamina;
+			this.refreshStaminaRegion(model);
+			void this.persist();
+		});
 	}
 
 	private applyStaminaChange(patch: Partial<HeroStamina>): void {
@@ -391,7 +440,6 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	 *  as the hero's full status, not just the authored list). */
 	private refreshStaminaRegion(model: HeroModel): void {
 		if (this.staminaBarEl) updateStaminaBar(this.staminaBarEl, this.staminaValues(model));
-		this.staminaStepper?.setValue(model.state.stamina.current);
 		this.updateRecoveries(model);
 		this.refreshConditionsRegion(model);
 	}
