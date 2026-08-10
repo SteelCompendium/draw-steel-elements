@@ -6820,6 +6820,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	   it). */
 	padding: 0.45rem 0.85rem;
 	gap: 0.5rem;
+	/* The load-bearing pair, and the easy one to miss: a WRAPPING flex container never
+	   shrinks its items (it starts a new line instead), and a flex ITEM's automatic
+	   minimum is its max-content size. Without both, the narrow hero sheet pushed Catch
+	   Breath onto a line of its own instead of letting the markers compress — measured
+	   at a 660px sheet before this line. `min-width: 0` on `.dse-hero__region:has(…)`
+	   further out is the same trap one level up. */
+	flex-wrap: nowrap;
+	min-width: 0;
 	background: rgba(0, 0, 0, 0.3);
 	border: 1px solid var(--dse-metal-faint);
 	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
@@ -6930,8 +6938,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
    hero sheet we need the 'Recoveries' label. On more condensed views I think we can drop
    it (still need a tooltip)") applied by MEASUREMENT rather than by surface name — a
    240px column IS a condensed view, a 405px one is not. The tooltip carries the fraction
-   in every form, so nothing is lost, only moved. */
-@container dse-stamina-rec (max-width: 290px) {
+   in every form, so nothing is lost, only moved.
+
+   THE THRESHOLD IS THE STRIP'S OWN WIDTH, not the region's, and 250px is where the two
+   measurements land: at the narrowest real hero column (240px region) the strip is
+   ~213px and must drop the label; at the standard note width (a ~315px region) it is
+   ~288px, where the markers still fit under the label at ~11px each — comfortably above
+   their 6.7px floor — so the label stays, which is Scott's "in the full hero sheet we
+   need the 'Recoveries' label". A 290px threshold, tried first, took the label off the
+   standard sheet as well; that is the wrong half of his ruling. */
+@container dse-stamina-rec (max-width: 250px) {
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina-rec__eyebrow {
 		display: none;
 	}
@@ -7056,7 +7072,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	container-type: inline-size;
 	container-name: dse-stamina-host;
 }
-@container dse-stamina-host (max-width: 340px) {
+@container dse-stamina-host (max-width: 400px) {
 	/*  The PLATE becomes the whole row, not just the bar. The recovery markers and Catch
 	    Breath are SIBLINGS of `.dse-stamina`, so a border on the bar alone would run
 	    between the gauge and the markers and the cluster would read as "a bar, plus some

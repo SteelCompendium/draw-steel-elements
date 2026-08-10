@@ -56,11 +56,24 @@ default values, and whether they are required.
 
 When `recoveries_max` is set, the bar gains:
 
-- A row of pips showing Recoveries remaining out of the pool.
+- A row of Recovery markers showing how many remain out of the pool. **Clicking a marker
+  sets the count** — clicking the last available one spends exactly one, clicking the
+  first spent one restores exactly one, and any distance is a single click (Draw Steel
+  loses Recoveries in multiples, e.g. "the target loses 1d3 Recoveries"). The row is also
+  a keyboard control: arrow keys step it, Home/End empty and refill it. Every change
+  offers an **Undo** in the notice that follows.
 - A **Catch Breath** button that spends one Recovery to heal 1/3 of max Stamina (rounded
-  down), capped at `max_stamina`. Disabled while Dying or with no Recoveries left.
-- A **Winded**/**Dying** badge, per the core rules ("Stamina and Death"): Winded at half
-  Stamina max or below, Dying at 0 Stamina or below.
+  down), capped at `max_stamina`. Disabled while Dying or with no Recoveries left. Under
+  the Steel theme it is icon-only; hover it for the label.
+- A **Winded**/**Dying** state, per the core rules ("Stamina and Death"): Winded at half
+  Stamina max or below, Dying at 0 Stamina or below. Under the Steel theme the whole
+  cluster carries it — the frame's colour, the crest's silhouette (shield → alert shield
+  → skull), the state word, and the colour of the current-Stamina numeral — so it is
+  never a colour alone. Under Legacy it is the badge beside the markers, as before.
+
+If you would rather not edit by clicking a marker, turn on **Settings → Element defaults
+→ Advanced → "Edit Recoveries with a popover"**: a marker click then opens a small − / +
+popover instead of committing straight away.
 
 ```
 ~~~ds-stamina-bar
@@ -77,3 +90,20 @@ recoveries_max: 10
 - **Clicking** on the stamina bar opens an editor where you can adjust the `current_stamina`, `max_stamina`, and `temp_stamina` values directly.
 - The stamina bar **automatically updates** to reflect any changes in the stamina values.
 - The bar displays different colors or overlays to indicate various states (e.g., low stamina, temporary stamina).
+
+## The Steel theme's gauge
+
+Under the Steel theme the bar is a forged gauge rather than a linear fill, and it reads
+differently on purpose:
+
+- **Zero is a marked bulkhead, not the left edge.** Stamina pours rightward from it, and
+  the engraved reserve to its left is the negative range the rules give a hero (down to
+  −max/2). That reserve only fills once you are actually in it, so green always means
+  "Stamina you have" and red always means "how far past zero you are" — they never share
+  the same stretch of bar.
+- **Temporary Stamina is a plate bolted on past the pour**, sharing its origin and scale.
+  When temp is present the scale widens to `max + temp` and a separate mark shows where
+  your real maximum sits, so the plate is always visible and never overflows.
+- In a narrow pane (a sidebar leaf, roughly 400px or less) the whole cluster collapses to
+  a two-line **rail**: the readout and gauge on one line, the Recovery markers and Catch
+  Breath on the next.

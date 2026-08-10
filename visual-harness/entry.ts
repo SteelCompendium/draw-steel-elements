@@ -131,6 +131,30 @@ features:
 // class instance verbatim (model.ts) — that IS the persisted shape. A separate fixture, not
 // an edit to example.yaml: example.yaml is the single-sourced AUTHORING example (D9) and
 // its shots are freeze-pinned, so a checked-state variant belongs beside it, not inside it.
+// SC-132: the stamina family had exactly ONE fixture — a healthy bar, no recoveries —
+// so the subject of the whole redesign (the winded/dying state ladder, the recoveries
+// strip, the temp plate against a real max) had no shot coverage at all. Three variants
+// close that, and the numbers are the hero example's so the sheet and the standalone
+// element can be compared side by side: max 48, winded at <= 24, 10 recoveries.
+const staminaBarRecoveries = `max_stamina: 48
+current_stamina: 31
+temp_stamina: 4
+recoveries: 6
+recoveries_max: 10
+`;
+const staminaBarWinded = `max_stamina: 48
+current_stamina: 18
+temp_stamina: 0
+recoveries: 4
+recoveries_max: 10
+`;
+const staminaBarDying = `max_stamina: 48
+current_stamina: -6
+temp_stamina: 0
+recoveries: 1
+recoveries_max: 10
+`;
+
 const negotiationChecked = `name: "Convincing Frodo to remember the taste of strawberries"
 initial_interest: 3
 initial_patience: 3
@@ -265,7 +289,12 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	roll: { default: rollDefault },
 	rule: { default: ruleDefault },
 	skills: { default: skillsDefault },
-	'stamina-bar': { default: staminaBarDefault },
+	'stamina-bar': {
+		default: staminaBarDefault,
+		recoveries: staminaBarRecoveries,
+		winded: staminaBarWinded,
+		dying: staminaBarDying,
+	},
 	statblock: {
 		default: statblockDefault,
 		'villain-corpus': statblockVillainCorpus,
@@ -318,6 +347,17 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// for the radius). 300px = Obsidian's default right-sidebar leaf width, the narrowest
 	// place a reading-mode element realistically renders.
 	{ id: 'perk-narrow', element: 'perk', fixture: 'default', width: 300 },
+	// SC-132: the stamina cluster's RAIL form. The rail is not a separate design — it is
+	// the standalone element's narrow form, selected by a container query on the element
+	// root at 340px — so 300px (Obsidian's default right-sidebar leaf) is the width that
+	// actually renders it. Without this entry the rail branch ships unshot.
+	{ id: 'stamina-rail', element: 'stamina-bar', fixture: 'recoveries', width: 300 },
+	// SC-132: the NARROWEST hero sheet this repo can produce. The sheet's grid gives
+	// characteristics its 370px max-content and stamina the remainder, so 660px is where
+	// the stamina region bottoms out at ~240px — the width the cluster's crest step-down
+	// and the RECOVERIES eyebrow's stand-down were both measured against. The default
+	// sweep shoots the sheet at 760px, which is the comfortable case.
+	{ id: 'hero-narrow', element: 'hero', fixture: 'default', width: 660 },
 ];
 
 /**

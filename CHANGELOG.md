@@ -23,6 +23,45 @@ for what needs action.
   `versions.json` pins pre-1.13 clients to 6.0.1, the last build that runs
   there, so Obsidian will not offer you 7.0.0 until you upgrade the app.
   Obsidian updates itself by default, so most installs already qualify (SC-131).
+- [FEATURE] **The Stamina cluster is redesigned from scratch for the Steel theme**
+  (SC-132) — the bar, temporary Stamina, Recoveries, the Winded/Dying states and
+  Catch Breath, everywhere they render. It was the last element family with no
+  Steel treatment at all, so it still showed the old flat green/yellow/red fill
+  and a blue temp strip. It is now one instrument: a crest whose silhouette
+  carries the state (shield → alert shield → skull) and whose glyph breathes when
+  you are Winded and falters when you are Dying, the current Stamina in large
+  numerals with a temporary-Stamina chip beside it, and a forged gauge underneath.
+  The gauge reads honestly where the old bar did not: **zero is a marked bulkhead**,
+  Stamina pours rightward from it, and the negative range the rules give a hero
+  fills leftward only once you are in it — so green and red never occupy the same
+  stretch of bar. **Temporary Stamina is a real segment** bolted on past the pour,
+  sharing its origin and scale, with your true maximum keeping its own mark. Every
+  state is said at least three ways — frame colour, crest silhouette, the word, and
+  the colour of the numeral — so none of it depends on telling two colours apart.
+  In a sidebar-width pane the whole cluster collapses to a two-line rail. The
+  Legacy theme is unchanged.
+- [FEATURE] **Recoveries are editable by clicking a marker** (SC-132). Clicking
+  the last available marker spends exactly one, clicking the first spent one
+  restores exactly one, and any distance is a single click — Draw Steel takes
+  Recoveries away in multiples ("the target loses 1d3 Recoveries"), so a
+  one-at-a-time toggle was the wrong control. The row is a keyboard control too
+  (arrow keys, Home/End). **Every change offers an Undo** in the notice that
+  follows, so a misclick costs one click to put back rather than being punished up
+  front with a confirmation dialog. If you would rather not edit by clicking,
+  Settings → Element defaults → Advanced → "Edit Recoveries with a popover" turns
+  each marker click into a small − / + popover instead.
+- [FEATURE] **The hero sheet's Stamina can be edited from the sheet itself**
+  (SC-132). The sheet used to carry a `− 31 +` counter row under the bar, which
+  duplicated the bar's own readout and existed only because the bar itself was
+  read-only there. The row is gone; the bar now opens the same Stamina editor the
+  standalone `ds-stamina` block does, and the Recovery markers underneath it are
+  live.
+- [FIX] **The Stamina editor's preview bar shows temporary Stamina** (SC-133).
+  Damage consumes temporary Stamina first, so the most common edit in the modal
+  moved a number the preview could not draw at all — pressing Damage looked like
+  nothing had happened. The preview now uses the same gauge the bar does, and a
+  pending change is ghosted onto it so you can see what Apply will do before you
+  press it. The Minion Stamina Pool modal gets the same instrument.
 - [FEATURE] The settings tab is rebuilt as native Obsidian settings, and is
   **searchable from Obsidian's own settings search** (SC-131). It was one
   6850px scroll page — nine stacked sections and a full statblock preview — and
