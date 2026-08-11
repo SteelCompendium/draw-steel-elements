@@ -12,7 +12,7 @@ import type { ElementPipelineDeps } from '../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../src/framework/host/BlockHost';
 import { createElementRegistry } from '../src/framework/registry';
 import type { ElementRegistry } from '../src/framework/registry';
-import { createThemeService } from '../src/framework/seams/theme';
+import { createThemeService, DEFAULT_THEME_ID } from '../src/framework/seams/theme';
 import type { ThemeServiceInternal, DseThemeId } from '../src/framework/seams/theme';
 import { createPreferenceStore } from '../src/framework/seams/prefs';
 import { createRollService } from '../src/framework/roll/service';
@@ -435,17 +435,35 @@ function parsePrefParam(raw: string | null): Record<string, string> | undefined 
 	return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * The theme ids this harness can actually RENDER. Steel is the only one the plugin
+ * registers a value layer for; a snippet id (the DseThemeId union is still open, D3 §6)
+ * would need its own stylesheet, which the harness never loads — it would stamp
+ * data-dse-theme="<id>", match no rule, and quietly shoot the unscoped base.
+ *
+ * SC-144 review F1: the first cut of this coercion passed any non-empty value straight
+ * through while the comment claimed it clamped, so `?theme=legacy` still produced a
+ * legacy-stamped root long after the theme was removed. This file's whole job is to stop
+ * the camera silently shooting the wrong look, so the clamp is real now: an unrecognised
+ * (or retired) id resolves to the default rather than being honoured.
+ */
+const RENDERABLE_THEMES: readonly DseThemeId[] = ['steel'];
+
+function coerceTheme(raw: string | null): DseThemeId {
+	return raw !== null && RENDERABLE_THEMES.includes(raw as DseThemeId)
+		? (raw as DseThemeId)
+		: DEFAULT_THEME_ID;
+}
+
 export function parseParams(search: string): HarnessParams {
 	const q = new URLSearchParams(search);
 	const width = Number(q.get('width'));
 	return {
 		element: q.get('element') ?? undefined,
 		fixture: q.get('fixture') ?? 'default',
-		// SC-144: Steel is the only theme. The `theme` query param is still ACCEPTED (the
-		// camera keeps sending `theme=steel`, and the DseThemeId union is still open for a
-		// hand-set snippet id) but it can no longer select a different look, so anything
-		// that isn't a recognised id resolves to 'steel'.
-		theme: ((q.get('theme') || 'steel') as DseThemeId),
+		// SC-144: the `theme` param is still ACCEPTED (the camera keeps sending
+		// `theme=steel`) but it can no longer select a different look — see coerceTheme.
+		theme: coerceTheme(q.get('theme')),
 		bg: q.get('bg') === 'light' ? 'light' : 'dark',
 		print: q.get('print') === '1',
 		readonly: q.get('readonly') === '1',

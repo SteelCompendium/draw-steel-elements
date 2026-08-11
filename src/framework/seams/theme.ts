@@ -19,7 +19,9 @@
 // always-true [data-dse-theme='steel'] prefix was NOT stripped.
 //
 // HOW TO READ OLDER COMMENTS, of which there are many across styles-source.css and the
-// element views. "Legacy" was never a scoped rule set — it was the UNSCOPED :root base
+// element views — but only the ones in a THEME sense; "legacy" also names the pre-7.0
+// `.ds-*` markup and wording throughout this repo, which is unrelated to this ticket.
+// In the theme sense: "Legacy" was never a scoped rule set — it was the UNSCOPED :root base
 // that Steel overrides, and that base is still there (Steel inherits from it), so SC-144
 // deleted no CSS at all. Read "Legacy" as "the unscoped base". Read a scoping rationale
 // of the form "otherwise it moves the frozen legacy shots" as "…the frozen print shot":

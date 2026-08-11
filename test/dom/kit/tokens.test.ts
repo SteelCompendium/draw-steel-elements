@@ -40,7 +40,7 @@ function rootValue(name: string): string | undefined {
 	return undefined;
 }
 
-describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', () => {
+describe('Plan 08 Task 1: --dse-* token vocabulary + its unscoped base defaults (D2 §6)', () => {
 	test('every DseTokenName in the union has a --dse-<name> definition in the :root base', () => {
 		const defined = new Set(rootDseDefinitions(sheet));
 		const missing = DSE_TOKEN_NAMES.filter((n) => !defined.has(n));

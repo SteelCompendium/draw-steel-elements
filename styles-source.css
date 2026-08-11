@@ -3367,7 +3367,17 @@ Shared globals
    [data-dse-theme="steel"]; the closest scoped definition wins inside a Steel
    element root, and anything Steel does not override falls through to the base.
    There has never been a data-dse-theme="legacy" scope and there must never be
-   one: what the older comments in this file call "Legacy" IS this base.
+   one: where the older comments in this file say "Legacy" in a THEME sense, they
+   mean this base.
+
+   Mind the overload — "legacy" carries a SECOND, unrelated sense in this same
+   file: the pre-7.0 markup and wording the framework elements replaced (e.g. the
+   evicted `.ds-feature-*` block ~:30, `.ds-feature-inline-p` parity ~:195, the
+   modal footer's "legacy space-between" ~:1382, and the "Legacy 'Immunity: …' /
+   'Stamina: 30' wording" notes ~:1966/:2352). Those are about DOM and copy, not
+   about a theme, and SC-144 has nothing to do with them. Read by context: a
+   "Legacy" next to a token, a --dse-* value or a data-dse-theme scope is this
+   base; a "legacy" next to a .ds-* class name or a wording note is the old markup.
 
    SC-144 (2026-08-11) dropped the "legacy" theme. Two consequences that are easy
    to get wrong:

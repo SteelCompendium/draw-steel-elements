@@ -147,14 +147,62 @@ describe('mountFromParams error seam', () => {
 // steel-light, steel-print) and no longer sends anything but `theme=steel`, so the
 // harness's own default must be Steel: before SC-144 an omitted `theme=` param resolved
 // to 'legacy', which would now silently shoot the wrong look.
+//
+// Review F1: the interesting cases are the ones where a naive default would DISAGREE with
+// the clamp — a retired id and an outright bogus one. The first cut passed any non-empty
+// value straight through, so `?theme=legacy` still stamped a legacy root; these pin that
+// it cannot come back, at the parse level AND at the rendered root.
 describe('parseParams theme (SC-144)', () => {
-	test('an omitted theme param defaults to steel', () => {
+	test('an omitted or empty theme param defaults to steel', () => {
 		expect(parseParams('?element=feature&bg=dark').theme).toBe('steel');
 		expect(parseParams('').theme).toBe('steel');
-	});
-
-	test('an explicit theme=steel is honoured, and an empty value still resolves to steel', () => {
-		expect(parseParams('?theme=steel').theme).toBe('steel');
 		expect(parseParams('?theme=').theme).toBe('steel');
 	});
+
+	test('an explicit theme=steel is honoured', () => {
+		expect(parseParams('?theme=steel').theme).toBe('steel');
+	});
+
+	test('the RETIRED id is clamped, not honoured: ?theme=legacy resolves to steel', () => {
+		expect(parseParams('?theme=legacy').theme).toBe('steel');
+		expect(parseParams('?element=feature&theme=legacy&bg=light').theme).toBe('steel');
+	});
+
+	test('any unrecognised id is clamped to steel (nothing else has a stylesheet here)', () => {
+		expect(parseParams('?theme=garbage').theme).toBe('steel');
+		expect(parseParams('?theme=parchment').theme).toBe('steel');
+		expect(parseParams('?theme=STEEL').theme).toBe('steel'); // case-sensitive by design
+	});
+});
+
+describe('mountFromParams stamps Steel regardless of the requested theme (SC-144 F1)', () => {
+	let mount: HTMLDivElement;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+	});
+
+	afterEach(() => {
+		mount.remove();
+	});
+
+	test.each(['legacy', 'garbage'])(
+		'?theme=%s renders a root stamped data-dse-theme="steel"',
+		async (requested) => {
+			const { errors } = await mountFromParams(document, {
+				...parseParams(`?element=feature&theme=${requested}&bg=dark`),
+				fixture: 'default',
+				print: false,
+				readonly: false,
+				gallery: false,
+			});
+			expect(errors).toEqual([]);
+			// The element root is nested under the harness section wrapper (mountOne).
+			const root = mount.querySelector('[data-dse-element]') as HTMLElement;
+			expect(root).not.toBeNull();
+			expect(root.getAttribute('data-dse-theme')).toBe('steel');
+		},
+	);
 });

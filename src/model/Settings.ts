@@ -61,6 +61,13 @@ export const DEFAULT_SETTINGS: DSESettings = {
  * preference they never had would be noise. Deleting unconditionally (rather than
  * only when the value is 'legacy') also normalises any hand-set snippet id from the
  * same era; a fresh install has no `theme` key, so this is a no-op for it.
+ *
+ * Timing, stated precisely because it is easy to describe wrong (SC-144 review F7):
+ * `main.ts loadSettings()` calls this and does NOT save. So the key is dropped from
+ * the IN-MEMORY settings on every load, and only reaches disk on the next unrelated
+ * `saveSettings()`. That is idempotent and indistinguishable to the user — the pref
+ * resolves to `steel` from the first load onward either way — and it matches how the
+ * v1 → v2 branch has always behaved. Nothing here is a one-shot write.
  */
 export function migrateSettings(raw: unknown): DSESettings {
 	const base =
