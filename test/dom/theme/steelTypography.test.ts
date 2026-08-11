@@ -593,4 +593,38 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		expect(reachable.length).toBeGreaterThan(0);
 		for (const r of reachable) expect(STEEL_SCOPE.test(r.selector)).toBe(false);
 	});
+
+	// SC-143 — the kit band-head (Equipment / Kit Bonuses / Signature Ability) rendered
+	// "super small" (Scott, SC-143). Root cause: SC-100 (3f982aa) transcribed the site's
+	// `.sc-kit__band-head { font-size: .8rem }` (steel-kit.css:52) as a bare numeral into
+	// `font-size: 0.8em` without applying the site-rem(20px)->plugin-em(16px) ratio this
+	// suite's own §A/4777 precedent establishes for every OTHER font-size port in this
+	// file — the site's `.8rem` computes to 16px, which against the plugin's own 16px
+	// ambient card font (`.dse-card`, no font-size override) IS `1em`, not `0.8em`. The
+	// stray `0.8em` rendered the band heads at 12.8px, visibly smaller than every
+	// neighboring label (verified live: `.dse-tiles__value` 16px, the nested ability
+	// card's own `.dse-section__title` 1em/16px).
+	describe('kit band-head font-size (SC-143)', () => {
+		it('.dse-card__band-head is 1em (16px against the ambient card font), not the old 0.8em (12.8px)', () => {
+			const blocks = steelBlocksFor('.dse-card__band-head');
+			expect(blocks.length).toBeGreaterThan(0);
+			for (const b of blocks) {
+				const decl = b.match(/font-size:\s*([^;]+);/);
+				expect(decl).not.toBeNull();
+				expect(decl![1].trim()).toBe('1em');
+			}
+			// The regression this guards against: the old undersized numeral coming back.
+			expect(blocks.some((b) => /font-size:\s*0\.8em\s*;/.test(b))).toBe(false);
+		});
+
+		// Honest limit (same as the mono-slot note above): jsdom cannot resolve `em` against
+		// an ambient font-size out of a stubbed stylesheet, so this is a source-text
+		// assertion. The real 12.8px -> 16px move (both Steel light and dark) is
+		// independently verified by a live-browser getComputedStyle probe — see the SC-143
+		// fix report.
+		it('letter-spacing stays 0.07em — rescales with the font-size fix, no separate edit needed', () => {
+			const blocks = steelBlocksFor('.dse-card__band-head');
+			expect(blocks.some((b) => /letter-spacing:\s*0\.07em\s*;/.test(b))).toBe(true);
+		});
+	});
 });

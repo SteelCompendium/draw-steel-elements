@@ -5072,12 +5072,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band {
 	margin-top: 1em;
 }
+/* SC-143 fix: font-size was `0.8em`, a straight numeral-transcription of the site's
+   `.sc-kit__band-head { font-size: .8rem }` (steel-kit.css:52) that skipped the
+   ratio conversion §A/4777 establishes for every OTHER site-rem->plugin-em port in
+   this file (site rem base 20px, plugin rem/em base 16px) — `.8rem` on the site
+   computes to 16px, and 16px against the plugin's own 16px ambient card font IS
+   1em, not 0.8em. The stray `0.8em` therefore rendered the three band heads
+   (Equipment/Kit Bonuses/Signature Ability) at 12.8px, visibly smaller than every
+   neighboring label (the .dse-tiles__value stat, the nested ability card's own
+   `.dse-section__title` at 1em/16px) — Scott's "super small" (SC-143). Letter-
+   spacing/margins are already em-relative to this rule's own font-size, so they
+   rescale correctly with no separate edit. Shared rule (CardLayout's generic
+   SteelBand machinery, not a kit-only selector) — any future `bands()` consumer
+   inherits the fix for free. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band-head {
 	font-family: var(--dse-font-label);
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.07em;
-	font-size: 0.8em;
+	font-size: 1em;
 	color: var(--dse-metal);
 	margin-bottom: 0.45em;
 	padding-bottom: 0.25em;

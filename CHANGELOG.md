@@ -92,6 +92,13 @@ for what needs action.
   read-only there. The row is gone; the bar now opens the same Stamina editor the
   standalone `ds-stamina` block does, and the Recovery markers underneath it are
   live.
+- [FIX] **The kit card's band headers ("Equipment", "Kit Bonuses", "Signature
+  Ability") are no longer tiny** (SC-143). The Steel rule ported the site's
+  `.8rem` band-head size as a bare `0.8em`, skipping the 20px-site-root vs.
+  16px-plugin-root conversion every other font-size port in the theme applies —
+  so the heads rendered at 12.8px, visibly smaller than the tile values beside
+  them and the "Martial Kit" kicker above them. Now 1em (16px), matching the
+  nested ability card's own section heads.
 - [FIX] **The Stamina editor's preview bar shows temporary Stamina** (SC-133).
   Damage consumes temporary Stamina first, so the most common edit in the modal
   moved a number the preview could not draw at all — pressing Damage looked like
