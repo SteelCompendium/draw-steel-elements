@@ -21,7 +21,7 @@ import type { GenericNote } from '@/services/typeAdapters';
 import { DisplayCardView } from '@/elements/shared/CardLayout';
 import type { CardLayout } from '@/elements/shared/CardLayout';
 import { withReference } from '@/elements/shared/withReference';
-import type { RefOrInline } from '@/elements/shared/withReference';
+import type { ReferenceElement } from '@/elements/shared/withReference';
 
 export interface DisplayFamilyDescriptor<M> {
 	/** Stable machine id, kebab-case (registry id + canonical D9 sdk-model key). */
@@ -51,7 +51,7 @@ function isPlainObject(data: unknown): data is Record<string, unknown> {
 	return typeof data === 'object' && data !== null;
 }
 
-export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ElementDefinition<RefOrInline<M>> {
+export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ReferenceElement<M> {
 	const adapter = adapterForType(d.type);
 	if (!adapter?.fromData) {
 		throw new Error(`displayFamily("${d.id}"): no TYPE_ADAPTERS entry with fromData for type "${d.type}"`);
@@ -128,7 +128,7 @@ export interface GenericCardDescriptor {
 	example: string;
 }
 
-export function genericCard(cfg: GenericCardDescriptor): ElementDefinition<RefOrInline<GenericNote>> {
+export function genericCard(cfg: GenericCardDescriptor): ReferenceElement<GenericNote> {
 	const base: ElementDefinition<GenericNote> = {
 		id: cfg.id,
 		name: cfg.name,

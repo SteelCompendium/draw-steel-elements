@@ -1,7 +1,18 @@
-// src/elements/display/index.ts — D6 Task 6 (spec §2): registers ds-kit/ds-condition/
+// src/elements/display/index.ts — D6 Task 6 (spec §2): declares ds-kit/ds-condition/
 // ds-treasure, the first three displayFamily() instances. Task 7 adds the remaining seven
 // (ds-ancestry/ds-culture/ds-career/ds-class/ds-title/ds-perk/ds-complication) — same
 // factory, no new machinery.
+//
+// SC-149 (2026-08-10) — THESE TEN ARE INTERNAL MACHINERY, NOT PUBLIC ELEMENTS. Scott's
+// pre-release ruling: the ten typed display aliases are not a public-facing commitment;
+// one catch-all `ds-scc` (src/elements/scc/definition.ts) is. `main.ts` therefore no
+// longer registers them, so `ds-kit` & co. are not code-block languages any user can
+// write. They live on as the per-type CARD RENDERERS `ds-scc` mounts after it resolves a
+// code (via each wrapper's `.base`, see withReference's ReferenceElement) and as the
+// visual harness's fixtures (visual-harness/entry.ts registers them into its OWN
+// registry). Their aliases are kept verbatim: the harness gallery prints
+// `<id> (<alias>)` into a FROZEN shot, and the alias is the fence language the harness
+// host reports.
 import { displayFamily, genericCard } from './displayFamily';
 import type { ElementDefinition } from '@/framework/registry';
 import {
@@ -131,13 +142,19 @@ export const ruleElement = genericCard({
 });
 
 // D6 Task 8 review note: explicitly widened to `ElementDefinition<unknown>[]` — an implicit
-// array-literal type inferred a union of all eleven `ElementDefinition<RefOrInline<X>>`
-// element types, which `main.ts`'s `for (const el of displayElements) registry.register(el)`
+// array-literal type inferred a union of all ten `ElementDefinition<RefOrInline<X>>`
+// element types, which a `for (const el of …) registry.register(el)` loop
 // then failed to type-check (`register<M>`'s generic inference can't collapse an invariant
-// union like `ElementDefinition<Kit> | ElementDefinition<GenericNote> | …` back down to a
+// union like `ElementDefinition<Kit> | ElementDefinition<Ancestry> | …` back down to a
 // single `M`). This array's whole purpose is "a bag of heterogeneous definitions, registered
 // generically" — `unknown` here is the invariant-position workaround (widened type with no runtime cost).
-export const displayElements: ElementDefinition<unknown>[] = [
+//
+// SC-149: renamed from `displayElements` and no longer registered by `main.ts` — the ONLY
+// registrar is the visual harness (visual-harness/entry.ts's
+// `registerHarnessElementDefinitions`), which needs real registry entries to mount its ten
+// display fixtures. `ruleElement` is deliberately NOT in this list: it stays a public
+// element (it is not one of the ten Scott's ruling names) and `main.ts` registers it.
+export const INTERNAL_DISPLAY_ELEMENTS: ElementDefinition<unknown>[] = [
 	kitElement,
 	conditionElement,
 	treasureElement,
@@ -148,5 +165,4 @@ export const displayElements: ElementDefinition<unknown>[] = [
 	titleElement,
 	perkElement,
 	complicationElement,
-	ruleElement,
 ];

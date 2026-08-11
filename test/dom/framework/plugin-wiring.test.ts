@@ -36,8 +36,10 @@ import * as path from 'path';
 // RegisterElements.ts path registers nothing — there are no legacy aliases left to
 // sample (this file's original LEGACY_ALIASES coexistence constant is retired with them).
 // Plan 14 Task 5 appends Roll (ds-roll) — the 12th element, born on the framework.
-// D6 Task 6 (plan 16, spec §2) appends Kit/Condition/Treasure (ds-kit/ds-condition/
-// ds-treasure) — the 13th-15th elements, the first `displayFamily()` instances.
+// D6 Task 6 (plan 16, spec §2) appended Kit/Condition/Treasure (ds-kit/ds-condition/
+// ds-treasure) — the 13th-15th elements, the first `displayFamily()` instances — and Task
+// 7 the other seven. SC-149 UNREGISTERED all ten (never released; internal machinery for
+// `ds-scc` and the visual harness) and registered `ds-scc` in their place.
 const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'horizontal-rule',
 	'skills',
@@ -51,16 +53,11 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'values-row',
 	'characteristics',
 	'roll',
-	'kit',
-	'condition',
-	'treasure',
-	'ancestry',
-	'culture',
-	'career',
-	'class',
-	'title',
-	'perk',
-	'complication',
+	// SC-149: `scc` (ds-scc) REPLACED the ten typed display registrations
+	// (kit/condition/treasure/ancestry/culture/career/class/title/perk/complication) —
+	// they were never released and are internal machinery now. `rule` was not one of the
+	// ten and stays public.
+	'scc',
 	'rule',
 	'encounter',
 	'montage',

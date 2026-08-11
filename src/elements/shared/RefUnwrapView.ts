@@ -145,6 +145,20 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 				);
 				return;
 			}
+			// SC-149 — which base def renders this code? For every typed element that is
+			// always its own base; `ds-scc` supplies a `baseForType` that dispatches on the
+			// resolved entity's SCC `type` (the same TYPE_ADAPTERS ordering CompendiumIndex
+			// used to build the model just below, so the two can never disagree about which
+			// family a `type` belongs to). Checked BEFORE `entity.model()` so a type this
+			// plugin cannot render says so plainly instead of blaming a stale compendium.
+			const base = this.baseForType(entity.type);
+			if (base === undefined) {
+				this.errorCard(
+					root,
+					`"${entity.name}" (type: ${entity.type || 'unknown'}) has no renderer in this plugin.`,
+				);
+				return;
+			}
 			const parsed = await entity.model();
 			if (parsed === undefined) {
 				// Minor fix (review round 1, spec §1.5): name the file + frontmatter `type`,
@@ -158,7 +172,7 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 				return;
 			}
 			const source: RefSource = { file: entity.file, frontmatter: entity.frontmatter, body: await entity.body() };
-			await this.mountBase(root, parsed as M, source);
+			await this.mountBase(root, parsed as M, source, base);
 		} finally {
 			IN_FLIGHT_REFS.delete(guardKey);
 		}
@@ -245,8 +259,15 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		return raw.trim().replace(/^scc(\.v\d+)?:/, '').split('#')[0].trim();
 	}
 
-	private async mountBase(root: HTMLElement, model: M, source?: RefSource): Promise<void> {
-		const view = this.base.createView(this.cx);
+	/** SC-149 — the base def for a resolved SCC `type` (see WithReferenceOptions.baseForType).
+	 *  Without the option this is always the wrapped base, i.e. the pre-SC-149 behavior. */
+	private baseForType(type: string): ElementDefinition<M> | undefined {
+		if (!this.opts.baseForType) return this.base;
+		return this.opts.baseForType(type) as ElementDefinition<M> | undefined;
+	}
+
+	private async mountBase(root: HTMLElement, model: M, source?: RefSource, base?: ElementDefinition<M>): Promise<void> {
+		const view = (base ?? this.base).createView(this.cx);
 		if (source && isSourceAware(view)) view.setSource(source);
 		this.mountedChild = view;
 		this.addChild(view);

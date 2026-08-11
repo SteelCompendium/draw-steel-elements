@@ -35,7 +35,28 @@ export interface SourceAware {
 export interface WithReferenceOptions {
 	/** SCC type family this element renders — scopes bare-slug sugar (§1.3). */
 	sccType: string | RegExp;
+	/**
+	 * SC-149 (`ds-scc`) — pick the base def to mount from the RESOLVED entity's SCC
+	 * `type`, instead of always mounting the single base this wrapper wraps. Absent for
+	 * every typed element (statblock/feature/featureblock and the internal display
+	 * family): they render exactly one model shape, so their own base is always right.
+	 * `ds-scc` is the one caller — it accepts ANY code, so which view to mount is only
+	 * knowable after resolution. Returning `undefined` means "this plugin has no view
+	 * for that type" and produces an error card rather than a half-render.
+	 */
+	baseForType?: (type: string) => ElementDefinition<unknown> | undefined;
 }
+
+/**
+ * SC-149 — what `withReference()` returns: the wrapped def PLUS the base def it wraps.
+ * `ds-scc` needs the bases of the other reference-capable elements to mount them after
+ * it resolves a code (`baseForType` above), and reaching them any other way would mean
+ * either re-exporting eleven inner consts by hand or re-declaring them. The wrapper
+ * already holds the base — exposing it here keeps one source of truth.
+ */
+export type ReferenceElement<M> = ElementDefinition<RefOrInline<M>> & {
+	readonly base: ElementDefinition<M>;
+};
 
 const PREFIXED_RE = /^(scc(\.v\d+)?:|@)/;
 
@@ -67,12 +88,13 @@ export function detectWholeBlockRef(data: unknown, raw: string): string | null {
  * the ref -> payload round-trip and the §1.5 degrade ladder (recon (d): resolution needs
  * full cx, so it lives in the view, not resolveRefs). autoResolveRefs stays OFF.
  */
-export function withReference<M>(
-	base: ElementDefinition<M>,
-	opts: WithReferenceOptions,
-): ElementDefinition<RefOrInline<M>> {
+export function withReference<M>(base: ElementDefinition<M>, opts: WithReferenceOptions): ReferenceElement<M> {
 	return {
 		...base,
+		// SC-149: the wrapped base, exposed for `ds-scc`'s cross-type dispatch (see
+		// ReferenceElement's doc). Not part of ElementDefinition — the registry copies
+		// the object wholesale and ignores unknown keys.
+		base,
 		autoResolveRefs: false,
 		// Fix round 1 (spec §1.1): lets the pipeline's parse-stage guard recognize a bare
 		// `@path` body as this def's business (parseYaml would otherwise throw on the

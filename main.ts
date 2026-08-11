@@ -61,7 +61,8 @@ import { counterElement } from '@/elements/counter/definition';
 import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
-import { displayElements } from '@/elements/display';
+import { ruleElement } from '@/elements/display';
+import { sccElement } from '@/elements/scc/definition';
 import { encounterElement } from '@/elements/encounter/definition';
 import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { montageElement } from '@/elements/montage/definition';
@@ -271,6 +272,9 @@ export function initializeElementFrameworkV2(
  * registers nothing. D6 Task 6 (plan 16, spec §2) appends the first three
  * `displayFamily()` instances — Kit/Condition/Treasure — the 13th-15th elements and the
  * first reference-capable (`withReference`-wrapped) display-family elements.
+ * SC-149 (2026-08-10) then REPLACED those ten typed display registrations with a single
+ * catch-all `ds-scc` (see the comment at the registration site below) — they were never
+ * released, so the public surface is one element, not eleven.
  * Kept as a standalone function (same rationale as `initializeElementFrameworkV2`) so it
  * is testable without the full plugin lifecycle.
  */
@@ -287,7 +291,18 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(valuesRowElement);
 	registry.register(characteristicsElement);
 	registry.register(rollElement);
-	for (const el of displayElements) registry.register(el);
+	// SC-149 (2026-08-10, Scott's pre-release ruling): the PUBLIC compendium-reference
+	// surface is ONE catch-all element, `ds-scc` — body = an SCC code, renders whatever
+	// that code is. The ten typed display aliases D6 added (`ds-kit`, `ds-condition`,
+	// `ds-treasure`, `ds-ancestry`, `ds-culture`, `ds-career`, `ds-class`, `ds-title`,
+	// `ds-perk`, `ds-complication`) are deliberately NOT registered: they never shipped in
+	// a release, and Scott declined to make ten typed elements (and their inline YAML
+	// shapes) a maintained public commitment. They survive as internal machinery —
+	// `ds-scc` mounts their card views by resolved type, and the visual harness registers
+	// them into its own registry (see src/elements/display/index.ts).
+	registry.register(sccElement);
+	// `ds-rule` is NOT one of the ten and stays public (model-less generic card).
+	registry.register(ruleElement);
 	// D8 Task 4 (spec §2) — hard-gated on F2 OD-1 + D6 (both landed); the "Open in
 	// sidebar" hand-off (spec §2.4/OD-5, encounter/view.ts's setEncounterSidebarHandoff
 	// seam) is wired by Task 10 alongside the rest of the sidebar registration sweep.
