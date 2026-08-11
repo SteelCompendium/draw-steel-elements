@@ -301,10 +301,10 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 			modal.open();
 			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('steel');
 
-			theme.setActive('legacy');
+			theme.setActive('parchment');
 			await flushAsync();
 
-			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('legacy');
+			expect(modal.containerEl.getAttribute('data-dse-theme')).toBe('parchment');
 			modal.close();
 		});
 
@@ -315,7 +315,7 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 			modal.open();
 			modal.close(); // unloads this.lifecycle, which owns apply()'s onChange unsubscribe
 
-			theme.setActive('legacy');
+			theme.setActive('parchment');
 			await flushAsync();
 
 			// Stayed at the value from when it was open — never re-stamped after close.

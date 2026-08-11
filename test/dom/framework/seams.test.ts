@@ -112,22 +112,22 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 
 	test('active tracks the pref: a direct prefs.set("theme") changes active', async () => {
 		const { prefs, theme } = makeTheme();
-		await prefs.set('theme', 'legacy');
-		expect(theme.active).toBe('legacy');
+		await prefs.set('theme', 'parchment');
+		expect(theme.active).toBe('parchment');
 	});
 
 	test('a theme already in storage resolves once the async load lands', async () => {
-		const { theme } = makeTheme({ theme: 'legacy' });
+		const { theme } = makeTheme({ theme: 'parchment' });
 		await flushAsync();
-		expect(theme.active).toBe('legacy');
+		expect(theme.active).toBe('parchment');
 	});
 
 	test('setActive persists through prefs.set (storage write, prefs round-trip)', async () => {
 		const { storage, prefs, theme } = makeTheme();
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
-		expect(prefs.get('theme')).toBe('legacy');
-		expect(storage.savedCalls).toContainEqual({ theme: 'legacy' });
+		expect(prefs.get('theme')).toBe('parchment');
+		expect(storage.savedCalls).toContainEqual({ theme: 'parchment' });
 	});
 
 	test('cssVar(name) maps a token name to a --dse-* custom property reference', () => {
@@ -140,11 +140,11 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		const seen: string[] = [];
 		theme.onChange((t) => seen.push(t));
 
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
 		// A double-fire (setActive notifying listeners directly AND via the
-		// prefs.subscribe fan-out) would yield ['legacy', 'legacy'].
-		expect(seen).toEqual(['legacy']);
+		// prefs.subscribe fan-out) would yield ['parchment', 'parchment'].
+		expect(seen).toEqual(['parchment']);
 	});
 
 	test('onChange fires when the pref changes without setActive (external prefs.set)', async () => {
@@ -152,8 +152,8 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		const seen: string[] = [];
 		theme.onChange((t) => seen.push(t));
 
-		await prefs.set('theme', 'legacy');
-		expect(seen).toEqual(['legacy']);
+		await prefs.set('theme', 'parchment');
+		expect(seen).toEqual(['parchment']);
 	});
 
 	test('onChange unsubscribe silences the listener', async () => {
@@ -161,14 +161,14 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		const seen: string[] = [];
 		const unsubscribe = theme.onChange((t) => seen.push(t));
 
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
-		expect(seen).toEqual(['legacy']);
+		expect(seen).toEqual(['parchment']);
 
 		unsubscribe();
 		theme.setActive('steel');
 		await flushAsync();
-		expect(seen).toEqual(['legacy']); // no further notifications after unsubscribe
+		expect(seen).toEqual(['parchment']); // no further notifications after unsubscribe
 	});
 
 	test('apply(rootEl, owner) stamps data-dse-theme with the active theme immediately', () => {
@@ -185,9 +185,9 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		owner.load();
 		theme.apply(root, owner);
 
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
-		expect(root.getAttribute('data-dse-theme')).toBe('legacy');
+		expect(root.getAttribute('data-dse-theme')).toBe('parchment');
 	});
 
 	test('two apply()\'d roots (popout simulation, §2.5) both re-stamp on one change', async () => {
@@ -203,10 +203,10 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		theme.apply(mainRoot, mainOwner);
 		theme.apply(popoutRoot, popoutOwner);
 
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
-		expect(mainRoot.getAttribute('data-dse-theme')).toBe('legacy');
-		expect(popoutRoot.getAttribute('data-dse-theme')).toBe('legacy');
+		expect(mainRoot.getAttribute('data-dse-theme')).toBe('parchment');
+		expect(popoutRoot.getAttribute('data-dse-theme')).toBe('parchment');
 	});
 
 	test('apply() never touches document.body (popout safety, §2.5)', async () => {
@@ -215,7 +215,7 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		const owner = fakeOwner();
 		owner.load();
 		theme.apply(root, owner);
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
 
 		expect(document.body.hasAttribute('data-dse-theme')).toBe(false);
@@ -231,7 +231,7 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
 
 		owner.unload();
-		theme.setActive('legacy');
+		theme.setActive('parchment');
 		await flushAsync();
 		// Root was never re-stamped: apply()'s onChange subscription was torn down.
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
@@ -243,7 +243,7 @@ describe('D3 §2.2 (Plan 10 Task 2): PreferenceStore-backed ThemeService', () =>
 		theme.onChange((t) => seen.push(t));
 
 		pluginOwner.unload();
-		await prefs.set('theme', 'legacy');
+		await prefs.set('theme', 'parchment');
 		// No fan-out after the plugin unloads — the single long-lived subscription died
 		// with its owner (no leak past plugin lifetime).
 		expect(seen).toEqual([]);
@@ -260,14 +260,14 @@ describe('T-4 (Plan 02): PreferenceStore (F1 §3.6)', () => {
 		const storage = makeStorage();
 		const store = createPreferenceStore(storage);
 
-		await store.set('theme', 'legacy');
+		await store.set('theme', 'parchment');
 
-		expect(store.get('theme')).toBe('legacy');
-		expect(storage.savedCalls).toContainEqual({ theme: 'legacy' });
+		expect(store.get('theme')).toBe('parchment');
+		expect(storage.savedCalls).toContainEqual({ theme: 'parchment' });
 	});
 
 	test('constructor-time load picks up a value already in storage.get() (async)', async () => {
-		const storage = makeStorage({ theme: 'legacy' });
+		const storage = makeStorage({ theme: 'parchment' });
 		const store = createPreferenceStore(storage);
 
 		// The constructor kicks off an async load (get() must stay synchronous);
@@ -275,7 +275,7 @@ describe('T-4 (Plan 02): PreferenceStore (F1 §3.6)', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 
-		expect(store.get('theme')).toBe('legacy');
+		expect(store.get('theme')).toBe('parchment');
 	});
 
 	test('subscribe(key, owner, cb) fires on change and auto-unsubscribes when owner unloads', async () => {
@@ -285,12 +285,12 @@ describe('T-4 (Plan 02): PreferenceStore (F1 §3.6)', () => {
 		const seen: string[] = [];
 		store.subscribe('theme', owner, (v) => seen.push(v));
 
-		await store.set('theme', 'legacy');
-		expect(seen).toEqual(['legacy']);
+		await store.set('theme', 'parchment');
+		expect(seen).toEqual(['parchment']);
 
 		owner.unload();
 		await store.set('theme', 'steel');
-		expect(seen).toEqual(['legacy']); // no notification after owner unload
+		expect(seen).toEqual(['parchment']); // no notification after owner unload
 	});
 
 	describe('the built-in "theme" descriptor (D3 §7.1 — contract to D4)', () => {
@@ -302,17 +302,13 @@ describe('T-4 (Plan 02): PreferenceStore (F1 §3.6)', () => {
 			expect(Object.prototype.hasOwnProperty.call(descriptor, 'attr')).toBe(false);
 		});
 
-		test('carries the D4 settings-picker ui (OD-5 labels)', () => {
+		// SC-144 — the D4 settings-picker `ui` (the OD-5 "Match Obsidian (Legacy)" /
+		// "Steel" select) is GONE: with one theme there is nothing to pick. The
+		// descriptor survives so prefs.get('theme') still resolves; SettingsTab is
+		// descriptor-driven, so the absent `ui` is what removes the row.
+		test('carries NO ui — there is no theme picker (Steel is the only theme)', () => {
 			const descriptor = BUILTIN_DESCRIPTORS.find((d) => d.key === 'theme');
-			expect(descriptor?.ui).toEqual({
-				group: 'Appearance',
-				label: 'Theme',
-				control: 'select',
-				options: [
-					{ value: 'legacy', label: 'Match Obsidian (Legacy)' },
-					{ value: 'steel', label: 'Steel' },
-				],
-			});
+			expect(descriptor?.ui).toBeUndefined();
 		});
 	});
 

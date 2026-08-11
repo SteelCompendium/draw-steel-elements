@@ -103,21 +103,16 @@ export interface PrefsStorage {
 export const BUILTIN_DESCRIPTORS: readonly PrefDescriptor[] = [
 	// NO attr — see the module doc comment above (hard D3→D4 contract, D3 §7.1:
 	// ThemeService.apply() is the single writer of data-dse-theme; an attr here
-	// would double-stamp it via reflect()). The `ui` is the D4 settings-picker
-	// row (D3 OD-5 labels — "Match Obsidian (Legacy)" clarifies that Legacy
-	// defers to the active Obsidian theme).
+	// would double-stamp it via reflect()).
+	//
+	// NO `ui` either, as of SC-144: Steel is the only theme, so there is nothing to
+	// pick. The descriptor itself stays — `prefs.get('theme')` must keep resolving
+	// (ThemeService reads it every apply()), and the open `DseThemeId` union still
+	// admits a hand-set snippet id (D3 §6) for anyone editing data.json directly.
+	// SettingsTab is descriptor-driven, so dropping `ui` is what removes the row.
 	{
 		key: 'theme',
 		default: DEFAULT_THEME_ID,
-		ui: {
-			group: 'Appearance',
-			label: 'Theme',
-			control: 'select',
-			options: [
-				{ value: 'legacy', label: 'Match Obsidian (Legacy)' },
-				{ value: 'steel', label: 'Steel' },
-			],
-		},
 	},
 ];
 

@@ -12,8 +12,8 @@ import { createThemeService } from '../../../src/framework/seams/theme';
 import { Component } from '../../mocks/obsidian';
 import { flushAsync } from '../../mocks/obsidian';
 
-describe('D4 §5.3 / F2 Task 10 §6 — migrateSettings (v0/v1 → v2, additive except the dead-repo tag reset)', () => {
-	test('a v0 on-disk object carries compendiumDestinationDirectory/defaultImagePath over, gains prefs {} + settingsVersion 2, but its dead-repo release tag is wiped', () => {
+describe('D4 §5.3 / F2 Task 10 §6 / SC-144 — migrateSettings (v0/v1/v2 → v3, additive except the dead-repo tag reset and the retired theme key)', () => {
+	test('a v0 on-disk object carries compendiumDestinationDirectory/defaultImagePath over, gains prefs {} + the current settingsVersion, but its dead-repo release tag is wiped', () => {
 		const v0 = {
 			compendiumReleaseTag: 'v2.0.0', // a pre-7.0.0 data-md-dse tag — must never replay against data-unified
 			compendiumDestinationDirectory: 'My Compendium',
@@ -25,14 +25,14 @@ describe('D4 §5.3 / F2 Task 10 §6 — migrateSettings (v0/v1 → v2, additive 
 		expect(s.defaultImagePath).toBe('img/tok.png');
 		expect(s.compendiumLocale).toBe('en');
 		expect(s.prefs).toEqual({});
-		expect(s.settingsVersion).toBe(2);
+		expect(s.settingsVersion).toBe(3);
 	});
 
-	test('an already-v2 object with a user-pinned release tag passes it through unchanged', () => {
+	test('an already-v2 object with a user-pinned release tag passes it through unchanged (and is stamped v3)', () => {
 		const v2 = { ...DEFAULT_SETTINGS, settingsVersion: 2, compendiumReleaseTag: 'v4.pinned' };
 		const s = migrateSettings(v2);
 		expect(s.compendiumReleaseTag).toBe('v4.pinned');
-		expect(s.settingsVersion).toBe(2);
+		expect(s.settingsVersion).toBe(3);
 	});
 
 	test('null/undefined raw (fresh install) yields DEFAULT_SETTINGS shape', () => {
@@ -43,16 +43,50 @@ describe('D4 §5.3 / F2 Task 10 §6 — migrateSettings (v0/v1 → v2, additive 
 	test('never shares DEFAULT_SETTINGS.prefs by reference (mutation safety)', () => {
 		const a = migrateSettings(undefined);
 		const b = migrateSettings(undefined);
-		(a.prefs as Record<string, unknown>).theme = 'legacy';
+		(a.prefs as Record<string, unknown>).theme = 'parchment';
 		expect(b.prefs).toEqual({});
 		expect(DEFAULT_SETTINGS.prefs).toEqual({});
 	});
 
 	test('an already-v1 object with stored prefs passes through (cloned, not shared)', () => {
-		const v1 = { ...DEFAULT_SETTINGS, settingsVersion: 1, prefs: { theme: 'legacy' } };
+		const v1 = { ...DEFAULT_SETTINGS, settingsVersion: 1, prefs: { sbDensity: 'compact' } };
 		const s = migrateSettings(v1);
-		expect(s.prefs).toEqual({ theme: 'legacy' });
+		expect(s.prefs).toEqual({ sbDensity: 'compact' });
 		expect(s.prefs).not.toBe(v1.prefs);
+	});
+
+	// SC-144 — the "legacy" theme was dropped, so a stored `theme` is an orphan value.
+	// v2 → v3 deletes the key; sparse storage then resolves the pref to its descriptor
+	// default ('steel'). Silent by design: no Notice, no error, nothing else touched.
+	test('v2 → v3: a stored theme: "legacy" is dropped, leaving every other pref intact', () => {
+		const v2 = {
+			...DEFAULT_SETTINGS,
+			settingsVersion: 2,
+			prefs: { theme: 'legacy', sbDensity: 'compact' },
+		};
+		const s = migrateSettings(v2);
+		expect(s.prefs).not.toHaveProperty('theme');
+		expect(s.prefs).toEqual({ sbDensity: 'compact' });
+		expect(s.settingsVersion).toBe(3);
+	});
+
+	test('v2 → v3 leaves the caller\'s object alone (the delete lands on the clone)', () => {
+		const v2 = { ...DEFAULT_SETTINGS, settingsVersion: 2, prefs: { theme: 'legacy' } };
+		migrateSettings(v2);
+		expect(v2.prefs).toEqual({ theme: 'legacy' });
+	});
+
+	test('a fresh install is unaffected by the v3 migration (nothing to delete, no key invented)', () => {
+		const s = migrateSettings(undefined);
+		expect(s.prefs).not.toHaveProperty('theme');
+		expect(s.prefs).toEqual({});
+		expect(s.settingsVersion).toBe(3);
+	});
+
+	test('an already-v3 object keeps a hand-set theme id (the migration is one-time, not a policy)', () => {
+		const v3 = { ...DEFAULT_SETTINGS, settingsVersion: 3, prefs: { theme: 'parchment' } };
+		const s = migrateSettings(v3);
+		expect(s.prefs).toEqual({ theme: 'parchment' });
 	});
 });
 
@@ -68,8 +102,8 @@ describe('D4 §5.2 — createSaveDataPrefsStorage (debounced saveData adapter)',
 	test('set() updates settings.prefs IMMEDIATELY but debounces the disk write (~250ms trailing)', async () => {
 		const plugin = makePlugin();
 		const storage = createSaveDataPrefsStorage(plugin);
-		await storage.set({ theme: 'legacy' } as Partial<DsePrefs>);
-		expect(plugin.settings.prefs).toEqual({ theme: 'legacy' });
+		await storage.set({ theme: 'parchment' } as Partial<DsePrefs>);
+		expect(plugin.settings.prefs).toEqual({ theme: 'parchment' });
 		expect(plugin.saveSettings).not.toHaveBeenCalled();
 		jest.advanceTimersByTime(250);
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
@@ -78,11 +112,11 @@ describe('D4 §5.2 — createSaveDataPrefsStorage (debounced saveData adapter)',
 	test('a burst of set() calls collapses into ONE saveSettings (preset batch-write contract)', async () => {
 		const plugin = makePlugin();
 		const storage = createSaveDataPrefsStorage(plugin);
-		await storage.set({ theme: 'legacy' } as Partial<DsePrefs>);
+		await storage.set({ theme: 'parchment' } as Partial<DsePrefs>);
 		jest.advanceTimersByTime(100);
 		await storage.set({} as Partial<DsePrefs>);
 		jest.advanceTimersByTime(100);
-		await storage.set({ theme: 'legacy' } as Partial<DsePrefs>);
+		await storage.set({ theme: 'parchment' } as Partial<DsePrefs>);
 		jest.advanceTimersByTime(250);
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 	});
@@ -92,7 +126,7 @@ describe('D4 §5.2 — createSaveDataPrefsStorage (debounced saveData adapter)',
 		const storage = createSaveDataPrefsStorage(plugin);
 		storage.flush();
 		expect(plugin.saveSettings).not.toHaveBeenCalled();
-		void storage.set({ theme: 'legacy' } as Partial<DsePrefs>);
+		void storage.set({ theme: 'parchment' } as Partial<DsePrefs>);
 		storage.flush();
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 		jest.advanceTimersByTime(500); // the flushed timer must not fire a second write
@@ -101,9 +135,9 @@ describe('D4 §5.2 — createSaveDataPrefsStorage (debounced saveData adapter)',
 
 	test('get() returns the live prefs slice', async () => {
 		const plugin = makePlugin();
-		plugin.settings.prefs = { theme: 'legacy' } as Partial<DsePrefs>;
+		plugin.settings.prefs = { theme: 'parchment' } as Partial<DsePrefs>;
 		const storage = createSaveDataPrefsStorage(plugin);
-		await expect(storage.get()).resolves.toEqual({ theme: 'legacy' });
+		await expect(storage.get()).resolves.toEqual({ theme: 'parchment' });
 	});
 });
 
@@ -126,8 +160,8 @@ describe('D4 §5.2 / OD-D4-4 — the store persists SPARSELY and notifies before
 		const { storage, writes, release } = makeRecordingStorage();
 		release();
 		const store = createPreferenceStore(storage);
-		await store.set('theme', 'legacy');
-		expect(writes[writes.length - 1]).toEqual({ theme: 'legacy' });
+		await store.set('theme', 'parchment');
+		expect(writes[writes.length - 1]).toEqual({ theme: 'parchment' });
 		await store.set('theme', BUILTIN_DESCRIPTORS[0].default as DsePrefs['theme']);
 		expect(writes[writes.length - 1]).toEqual({}); // back to default ⇒ sparse snapshot drops it
 	});
@@ -146,9 +180,9 @@ describe('D4 §5.2 / OD-D4-4 — the store persists SPARSELY and notifies before
 		owner.load();
 		const seen: string[] = [];
 		store.subscribe('theme', owner, (v) => seen.push(v as string));
-		void store.set('theme', 'legacy');
+		void store.set('theme', 'parchment');
 		await flushAsync(1);
-		expect(seen).toEqual(['legacy']); // notified while storage.set is still pending
+		expect(seen).toEqual(['parchment']); // notified while storage.set is still pending
 	});
 });
 
@@ -167,7 +201,7 @@ describe('D4 — a rejection at any persistence boundary is caught, never left t
 			}),
 		};
 		const storage = createSaveDataPrefsStorage(plugin, 0);
-		await storage.set({ theme: 'legacy' } as Partial<DsePrefs>);
+		await storage.set({ theme: 'parchment' } as Partial<DsePrefs>);
 		storage.flush();
 		await flushAsync(3);
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
@@ -205,7 +239,7 @@ describe('D4 — a rejection at any persistence boundary is caught, never left t
 		const owner: any = new Component();
 		owner.load();
 		const theme = createThemeService(prefs, owner);
-		expect(() => theme.setActive('legacy')).not.toThrow();
+		expect(() => theme.setActive('parchment')).not.toThrow();
 		await flushAsync(3);
 		expect(errorSpy).toHaveBeenCalledWith(
 			'Draw Steel Elements: failed to persist theme preference',

@@ -126,9 +126,12 @@ describe('D4 §4 — DseSettingTab', () => {
 		expect(names).toContain('Default creature image path');
 	});
 
-	test('theme row: the builtin descriptor renders with OD-5 labels and live-applies to a mounted root', async () => {
+	// SC-144 — there is no Theme row any more: the builtin `theme` descriptor lost its
+	// `ui`, so the descriptor-driven tab renders nothing for it. Mounted roots are still
+	// stamped data-dse-theme="steel" by ThemeService.apply(); that contract lives in
+	// seams.test.ts, not here.
+	test('no theme row anywhere in the tab (the picker was removed with the legacy theme)', async () => {
 		const plugin = await makeLoadedPlugin();
-		const prefs = plugin.frameworkV2!.services.prefs;
 		// mock Component vs. real obsidian's Component (private fields) don't
 		// structurally unify at tsc; `any` here matches the established pattern
 		// (fakeOwner()/`owner: any` in seams.test.ts, pref-reflection.test.ts).
@@ -138,15 +141,11 @@ describe('D4 §4 — DseSettingTab', () => {
 		plugin.frameworkV2!.services.theme.apply(root, owner);
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		renderAll(tab);
-		const dd = rowByName('Theme').dropdowns[0];
-		expect(dd.options).toEqual([
-			{ value: 'legacy', label: 'Match Obsidian (Legacy)' },
-			{ value: 'steel', label: 'Steel' },
-		]);
-		dd.trigger('legacy');
-		await flushAsync(1);
-		expect(prefs.get('theme')).toBe('legacy');
-		expect(root.getAttribute('data-dse-theme')).toBe('legacy');
+		const allNames = pages(tab).flatMap((page) => rowDefs(page.items).map((d) => d.name));
+		expect(allNames).not.toContain('Theme');
+		// The Appearance group itself survives — it still holds its other rows.
+		expect(allNames).toContain('Reduce motion');
+		expect(root.getAttribute('data-dse-theme')).toBe('steel');
 	});
 
 	test('an on/off toggle row (print preview) maps checked ⇔ "on"', async () => {
@@ -228,18 +227,18 @@ describe('D4 §4 — DseSettingTab', () => {
 		expect(plugin.settings.prefs).toEqual({}); // OD-D4-4: default ⇒ deleted from disk shape
 	});
 
-	test('"Reset all preferences" returns every pref (incl. theme) to its default', async () => {
+	test('"Reset all preferences" returns every pref, across groups, to its default', async () => {
 		const plugin = await makeLoadedPlugin();
 		const prefs = plugin.frameworkV2!.services.prefs;
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		renderAll(tab);
-		rowByName('Theme').dropdowns[0].trigger('legacy');
+		rowByName('Print preview').toggles[0].trigger(true);
 		rowByName('Reduce motion').toggles[0].trigger(true);
 		await flushAsync(1);
 		const resetAll = Setting.created.find((s) => s.buttons.some((b) => b.text === 'Reset all preferences'))!;
 		resetAll.buttons[0].click();
 		await flushAsync(2);
-		expect(prefs.get('theme')).toBe('steel');
+		expect(prefs.get('printPreview')).toBe('off');
 		expect(prefs.get('reduceMotion')).toBe(false);
 	});
 
@@ -920,11 +919,11 @@ describe('SC-131 — declarative settings definitions', () => {
 		const last = defs[defs.length - 1];
 		expect(last.name).toBe('Reset all preferences');
 		await (tab as any).setControlValue('reduceMotion', true);
-		await (tab as any).setControlValue('theme', 'legacy');
+		await (tab as any).setControlValue('sbDensity', 'compact');
 		last.action(null, 0);
 		await flushAsync(2);
 		expect(prefs.get('reduceMotion')).toBe(false);
-		expect(prefs.get('theme')).toBe('steel');
+		expect(prefs.get('sbDensity')).toBe('comfortable');
 	});
 });
 

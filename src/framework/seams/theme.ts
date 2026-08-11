@@ -10,8 +10,13 @@
 // data-dse-element="<def.id>" (stamped by the pipeline — NOT this seam) and
 // data-dse-theme="<active>" (stamped here, by apply() — the SINGLE writer of that
 // attribute; the `theme` PrefDescriptor deliberately has no `attr`, see prefs.ts).
-// All element CSS is scoped under [data-dse-element]. "Legacy" = today's visual
-// styling expressed as a theme.
+// All element CSS is scoped under [data-dse-element].
+//
+// SC-144: Steel is the only shipped theme — the picker and the 'legacy' id are gone.
+// The seam itself is kept deliberately: it is what stamps data-dse-theme, which ~297
+// Steel rule blocks and every modal root select on, and it keeps the snippet-theme
+// door (D3 §6) open. See styles-source.css's theming contract comment for why the
+// always-true [data-dse-theme='steel'] prefix was NOT stripped.
 //
 // Popout safety (D3 §2.5): state is per-root, not per-document — apply() stamps the
 // element's OWN root in whatever window it lives; document.body is never touched.
@@ -19,7 +24,9 @@ import type { App, Component } from 'obsidian';
 import type { DseTokenName } from '../tokens';
 import type { PreferenceStore } from './prefs';
 
-export type DseThemeId = 'steel' | 'legacy' | (string & {}); // D3 §2.3 — open for snippet ids (§6)
+// SC-144 dropped the 'legacy' member: Steel is the only shipped theme. The union stays
+// OPEN (D3 §2.3/§6) so a snippet can still introduce its own id by hand.
+export type DseThemeId = 'steel' | (string & {});
 // Narrowed union (Plan 08 Task 1, D2 §6) — defined in framework/tokens.ts (seams must
 // not import kit); re-exported here so the F1 import surface stays intact.
 export type { DseTokenName };

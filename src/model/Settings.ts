@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: DSESettings = {
 	compendiumLocale: 'en',
 	defaultImagePath: 'Media/token_1.png',
 	sccWebFallback: true,
-	settingsVersion: 2,
+	settingsVersion: 3,
 	prefs: {},
 };
 
@@ -50,6 +50,17 @@ export const DEFAULT_SETTINGS: DSESettings = {
  * CompendiumDownloader's `repo.zip` asset) — meaningless, and potentially
  * resolution-breaking, against data-unified's own tag series. Never replayed:
  * wiped so the next sync resolves `latest` (or whatever the user re-pins).
+ *
+ * v2 → v3 (SC-144, the "legacy" theme removal): the `theme` pref's option set lost
+ * its `legacy` member, so a stored `theme: 'legacy'` is now an orphan value that no
+ * descriptor option can produce. Drop the key outright — sparse storage means the
+ * deletion lands the pref back on its descriptor default (`steel`), which is exactly
+ * the desired outcome. Deliberately SILENT: no Notice, no error. The theme picker
+ * never shipped (latest tag 6.0.1; the picker is unreleased-7.0.0 work), so only
+ * BRAT/beta vaults can hold the key at all, and warning a released user about a
+ * preference they never had would be noise. Deleting unconditionally (rather than
+ * only when the value is 'legacy') also normalises any hand-set snippet id from the
+ * same era; a fresh install has no `theme` key, so this is a no-op for it.
  */
 export function migrateSettings(raw: unknown): DSESettings {
 	const base =
@@ -64,6 +75,9 @@ export function migrateSettings(raw: unknown): DSESettings {
 			: {};
 	if (priorVersion < 2) {
 		s.compendiumReleaseTag = '';
+	}
+	if (priorVersion < 3) {
+		delete (s.prefs as Record<string, unknown>).theme;
 	}
 	s.settingsVersion = DEFAULT_SETTINGS.settingsVersion;
 	return s;
