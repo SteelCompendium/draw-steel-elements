@@ -181,6 +181,19 @@ describe('typeToAlias (spec §4.3)', () => {
 	test('a namespaced feature type maps to ds-feature', () => {
 		expect(typeToAlias('feature.fury.level-1')).toBe('ds-feature');
 	});
+	// SC-141: steel-etl writes the LEAF of the SCC type segment into frontmatter, so an
+	// ability file says `type: ability` (not `feature.ability.*`) and a trait file says
+	// `type: trait`. Both are ds-feature-block files; before SC-141 both fell through to
+	// the generic ds-rule fallback, which is what made 716 corpus files unrenderable.
+	test('a bare ability type maps to ds-feature', () => {
+		expect(typeToAlias('ability')).toBe('ds-feature');
+	});
+	test('a bare trait type maps to ds-feature', () => {
+		expect(typeToAlias('trait')).toBe('ds-feature');
+	});
+	test('featureblock still wins over the widened feature scope', () => {
+		expect(typeToAlias('featureblock')).toBe('ds-featureblock');
+	});
 	test('an unrecognized type falls back to the generic ds-rule card', () => {
 		expect(typeToAlias('nonsense.unknown-type')).toBe('ds-rule');
 	});

@@ -4,6 +4,8 @@ import * as path from "path";
 // concrete jest-free mock (established pattern -- see test/dom/authoring/insert.test.ts).
 import { Plugin } from "../../mocks/obsidian";
 import { createCompendiumIndex } from "@/services/CompendiumIndex";
+import { FEATURE_TYPE_RE } from "@/services/typeAdapters";
+import { FeatureConfig } from "@model/FeatureConfig";
 import { SccResolver } from "@/refs/SccResolver";
 import { DEFAULT_SETTINGS } from "@model/Settings";
 import { makeFakeApp, loadFixtureIntoVault, fakeTFile, FakeVault, FakeMetadataCache } from "../../fakes/fakeObsidian";
@@ -15,6 +17,8 @@ const KIT = "mcdm.heroes.v1/kit/panther";
 const KIT_PATH = "DS Compendium/kit/panther.md";
 const COND = "mcdm.heroes.v1/condition/bleeding";
 const COND_PATH = "DS Compendium/condition/bleeding.md";
+const ABILITY = "mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade";
+const ABILITY_PATH = "DS Compendium/feature/ability/shadow/level-1/coat-the-blade.md";
 
 function setup(empty = false) {
     const { app, vault, metadataCache } = makeFakeApp();
@@ -23,6 +27,8 @@ function setup(empty = false) {
             path.join(F, "monster/goblin/statblock/goblin-stinker.md"), GOBLIN_PATH);
         loadFixtureIntoVault(vault, metadataCache, path.join(F, "kit/panther.md"), KIT_PATH);
         loadFixtureIntoVault(vault, metadataCache, path.join(F, "condition/bleeding.md"), COND_PATH);
+        loadFixtureIntoVault(vault, metadataCache,
+            path.join(F, "feature/ability/shadow/level-1/coat-the-blade.md"), ABILITY_PATH);
     }
     const resolver = new SccResolver(app, DEFAULT_SETTINGS);
     return { app, vault, metadataCache, resolver, index: createCompendiumIndex(app, resolver) };
@@ -64,6 +70,22 @@ describe("CompendiumIndex (spec §6)", () => {
         const model = await entity!.model();
         expect((model as any).name).toBe("Panther");
         expect((model as any).stamina_bonus).toBeDefined();
+    });
+
+    // SC-141: an ability's frontmatter `type` is `ability` (the LEAF of the SCC segment
+    // `feature.ability.<class>.level-N`), not `feature` -- and the ds-feature adapter was
+    // scoped `/^feature($|\.)/`, so model() returned undefined for all 621 corpus ability
+    // files. The fixture is the real synced md-dse bytes.
+    test("getEntity().model() parses a `type: ability` file through the ds-feature adapter", async () => {
+        const entity = await setup().index.getEntity(ABILITY);
+        expect(entity!.type).toBe("ability");
+        const model = await entity!.model();
+        expect(model).toBeInstanceOf(FeatureConfig);
+        expect((model as FeatureConfig).feature.name).toBe("Coat the Blade");
+    });
+
+    test("resolveSlug's ds-feature scope reaches `type: ability` files too", () => {
+        expect(setup().index.resolveSlug("Coat the Blade", FEATURE_TYPE_RE)).toEqual([ABILITY]);
     });
 
     test("getStatblock returns a typed SDK Statblock (D8 entry point)", async () => {

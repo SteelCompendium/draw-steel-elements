@@ -57,6 +57,25 @@ export interface GenericNote {
  */
 export const STATBLOCK_TYPE_RE = /(^|\.)statblock$/;
 
+/**
+ * The `ds-feature` family's `type` scope — SC-141.
+ *
+ * The SCC *code* segment for every ability is `feature.ability.<class>.level-N`, but the
+ * frontmatter `type:` steel-etl writes into the synced md-dse file is the LEAF of that
+ * segment, not the whole thing: an ability file carries `type: ability`, a class/ancestry
+ * trait carries `type: trait`, and only the plain-feature files carry `type: feature`.
+ * (Real corpus, 2026-08-10: 621 `ability` + 95 `trait` + 876 `feature` files — and all
+ * three groups carry a ```ds-feature block, i.e. they are the SAME renderable family.)
+ *
+ * Scoping this to `/^feature($|\.)/` therefore made every one of the 716 `ability`/`trait`
+ * files invisible to `adapterForType` — `model()` returned `undefined`, and both the
+ * `ds-hero` abilities list and a by-SCC `ds-feature` reference reported the resolved file
+ * as "not an ability entry" / "not renderable". Exported (like STATBLOCK_TYPE_RE) so the
+ * `ds-feature` element's bare-slug scope and `ds-hero`'s abilities scope read the SAME
+ * regex instead of keeping their own copies, which is exactly how they drifted.
+ */
+export const FEATURE_TYPE_RE = /^(feature|ability|trait)($|\.)/;
+
 export interface TypeAdapter {
 	/** SCC-type test: does this adapter own a given frontmatter `type` value? */
 	matches(type: string): boolean;
@@ -144,7 +163,7 @@ function genericNoteAdapter(re: RegExp, alias: string): TypeAdapter {
 export const TYPE_ADAPTERS: TypeAdapter[] = [
 	dsBlockAdapter(STATBLOCK_TYPE_RE, (t) => StatblockConfig.readYaml(t), 'ds-statblock'),
 	dsBlockAdapter(/(^|\.)featureblock$/, (t) => FeatureblockConfig.readYaml(t), 'ds-featureblock'),
-	dsBlockAdapter(/^feature($|\.)/, (t) => FeatureConfig.readYaml(t), 'ds-feature'),
+	dsBlockAdapter(FEATURE_TYPE_RE, (t) => FeatureConfig.readYaml(t), 'ds-feature'),
 	frontmatterAdapter(/^kit$/, Kit.modelDTOAdapter, 'ds-kit'),
 	frontmatterAdapter(/^ancestry$/, Ancestry.modelDTOAdapter, 'ds-ancestry'),
 	frontmatterAdapter(/^culture$/, Culture.modelDTOAdapter, 'ds-culture'),
