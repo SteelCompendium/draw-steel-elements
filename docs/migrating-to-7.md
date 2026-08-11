@@ -35,9 +35,8 @@ update the plugin, your old "release tag" setting is automatically cleared,
 since it pointed at a release from the old source and wouldn't resolve
 against the new one.
 
-**What to do:** open **Settings → Draw Steel Elements**, then click
-**Sync compendium** (this also works as a command-palette command of the
-same name).
+**What to do:** open **Settings → Draw Steel Elements → Compendium**, then click
+**Sync** (the command palette's **Sync compendium** does the same thing).
 
 ### Your links to compendium notes keep working
 
@@ -59,7 +58,7 @@ The plugin never opens, parses, or edits a note you wrote.
 layout"*. Before anything happens it tells you:
 
 - how many files will be moved, and into which folder;
-- how many of them differ from the final legacy release (you edited them, or
+- how many of them differ from the last pre-7.0.0 release (you edited them, or
   you were on an older compendium release) — those are moved too, and listed
   afterwards so you can check them;
 - how many will be copied into the backup folder first, and what that folder is
@@ -154,7 +153,7 @@ current official text**. Before 7.0.0 that file would have been left alone as
 unrecognised content. This is the same rule that has always applied to
 plugin-installed compendium files, now applied to yours because the migration
 adopts them; without that, the moved files could never receive updates at all.
-The migration flags every file whose content doesn't match the last legacy
+The migration flags every file whose content doesn't match the last pre-7.0.0
 release, in the dialog and in the report note — and, as of the section above,
 **keeps a copy of every one of them**, so if a sync does replace something you wrote,
 the version you wrote is still sitting in the backup folder. **Homebrew you wrote yourself, and anything outside the
@@ -212,17 +211,18 @@ keywords:
 
 ## What's new in 7.0.0, at a glance
 
-- **Hero suite** — a full hero sheet (`ds-hero`) in one block: stamina with
-  recoveries, heroic resource, surges, conditions, and clickable abilities
-  with dice rolling. Also available as standalone trackers for heroic
+- **Hero suite** — a full [hero sheet](hero-suite.md) (`ds-hero`) in one block:
+  stamina with recoveries, heroic resource, surges, conditions, and clickable
+  abilities with dice rolling. Also available as standalone trackers for heroic
   resource, surges, conditions, and a shared party-wide hero token pool.
-- **Compendium reference cards** — new card types for kits, conditions,
-  treasures, ancestries, cultures, careers, classes, titles, perks,
-  complications, and general rules, plus a fuzzy search-and-insert command
-  to find and drop in any compendium entry without leaving the editor.
-- **GM subsystems** — an Encounter Builder that computes live EV/budget from
-  your synced compendium, plus trackers for montages, downtime projects, and
-  party-level victories/renown/wealth.
+- **One block renders any compendium entry** — sync the compendium and a
+  [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
+  whose body is an entry's code renders that entry, whatever it is: a kit, a
+  condition, a rule, a statblock. A search-and-insert command finds any entry
+  and writes the block for you without leaving the editor.
+- **[Director's trackers](gm-trackers.md)** — an Encounter Builder that computes
+  live EV/budget from your synced compendium, plus trackers for montages,
+  downtime projects, and party-level victories/renown/wealth.
 - **Malice panel and per-turn action checklist** in the initiative tracker —
   see [Initiative Tracker](initiative-tracker.md).
 - **Draw Steel sidebar** — pin any tracker to a persistent panel in
@@ -232,5 +232,13 @@ keywords:
 - **`scc.v1:` links now resolve everywhere** — in compendium notes, inside
   element text, and as references — checking your local compendium first,
   with an optional fallback to steelcompendium.io.
+- **A redesigned Stamina cluster** — a forged gauge that shows the negative
+  range honestly, temporary Stamina as a real segment, clickable Recovery
+  markers, Catch Breath, and the Winded/Dying states said more than one way.
+  See [Stamina Bar](stamina-bar.md).
+- **Rebuilt settings** — [ten pages](settings.md) instead of one long scroll,
+  searchable from Obsidian's own settings search, with a live preview of the
+  card you're changing and seven more of the website's statblock layout
+  options.
 
 See the [changelog](../CHANGELOG.md) for the full list of 7.0.0 changes.

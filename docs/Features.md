@@ -1,8 +1,15 @@
 # Feature Element
 
-The Feature Element can take many forms which results in a more fluid yaml when it comes to effects.
+The Feature Element renders one ability, trait, test or custom power roll as a card. Write
+it in a code block with the language identifier `ds-feature` (or the shorter `ds-ft` /
+`ds-feat`).
 
-Yaml is incredibly sensitive, be sure to format exactly.
+The element can take many forms, which results in a more fluid yaml when it comes to
+effects.
+
+Yaml is incredibly sensitive, be sure to format exactly — or let the plugin write the block
+for you by typing **`/ds`** in the editor (see
+[Writing and editing blocks](writing-blocks.md)).
 
 ## Field Definition
 
@@ -133,3 +140,26 @@ effects:
 ```
 
 ![simple power roll](Media/simple_feature_power_roll.png)
+
+## Use an ability from the compendium
+
+Instead of YAML, the whole block body can be a reference to an ability or trait in your
+[synced compendium](compendium-sync.md) — a compendium code (with or without the `scc.v1:`
+prefix), a `[[wikilink]]`, or an `@`-prefixed vault path:
+
+````markdown
+```ds-feature
+scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/brutal-slam
+```
+````
+
+The card re-resolves each time the note renders, so it follows the compendium. Use
+**Insert Draw Steel: compendium reference** in the command palette to search for an ability
+and write the block for you — see
+[Writing and editing blocks](writing-blocks.md#insert-content-from-the-compendium).
+
+## Rolling on ability cards
+
+Rendered ability cards can roll their own power rolls: turn on **Enable rolling** in
+[Settings → Rolling](settings.md#rolling), and clicking a tier row rolls it. The
+[Roll element](Roll.md) is the standalone version, and always rolls.

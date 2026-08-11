@@ -6,7 +6,9 @@ and then renders this information in an organized layout for easy reference duri
 
 ## Usage
 
-To use the Characteristics Element, insert a code block with the language identifier ds-characteristics in your Obsidian note, and then define your characteristics using YAML syntax inside the code block.
+To use the Characteristics Element, insert a code block with the language identifier
+`ds-characteristics` (or the shorter `ds-char`) in your Obsidian note, and then define your
+characteristics using YAML syntax inside the code block.
 
 ### Example characteristics:
 

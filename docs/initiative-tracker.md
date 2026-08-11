@@ -37,9 +37,14 @@ In the above example, there are two Heroes and one Enemy Group (Initiative Group
 
 ## How to Use
 
-To use the Initiative Tracker, you need to include a code block with the `ds-initiative` language identifier in your Obsidian note. Inside this code block, you define your encounter data in YAML format.
+To use the Initiative Tracker, you need to include a code block with the `ds-initiative` language identifier (or the shorter `ds-it` / `ds-init`) in your Obsidian note. Inside this code block, you define your encounter data in YAML format.
 
-In the plugin settings, you can configure a default image to use if none is provided.
+Two shortcuts save you the typing: type **`/ds`** in the editor and pick *Initiative tracker*
+for a filled-in example, or build the fight in an
+[encounter builder](gm-trackers.md#encounter-builder-ds-encounter) block and press
+**Create tracker block**, which writes a ready-to-run tracker for you.
+
+In the plugin settings, you can configure a [default image](settings.md#initiative-tracker) to use if none is provided.
 
 ### Code Block Structure
 
@@ -154,14 +159,19 @@ You can reference existing statblocks to populate creature or hero data (Name, M
 
 The reference supports multiple formats:
 
-1. **Full Path from vault root**: `Homebrew/monsters/MonsterName.md` (with or without `.md`)
-2. **Relative to Compendium root**: `Bestiary/Monsters/MonsterName` (with or without `.md`)
-3. **File Name**: `MonsterName` (with or without `.md`) looks for `MonsterName.md` anywhere in the vault 
-4. **Link**: `[[MonsterName]]` will use the first found link matching the name.  
+1. **Compendium code**: `scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker` —
+   resolved against your [synced compendium](compendium-sync.md), so it doesn't depend on
+   where the file sits in your vault. This is what the
+   [encounter builder](gm-trackers.md#encounter-builder-ds-encounter) writes.
+2. **Full Path from vault root**: `Homebrew/monsters/MonsterName.md` (with or without `.md`)
+3. **Path inside your compendium folder**: `DS Compendium/monster/goblin/statblock/goblin-stinker`
+   (with or without `.md`)
+4. **File Name**: `MonsterName` (with or without `.md`) looks for `MonsterName.md` anywhere in the vault 
+5. **Link**: `[[MonsterName]]` will use the first found link matching the name.  
  
-**Important:** if using File Name or Link and there are multiple files with the same name, the chosen one is not guaranteed. To ensure the correct file, specify the full path 
+**Important:** if using File Name or Link and there are multiple files with the same name, the chosen one is not guaranteed. To ensure the correct file, specify the full path or the compendium code.
 
-When a statblock is referenced, the plugin will look for the first Draw Steel Element code block (`ds-statblock` or similar) in that file and use its data.
+When a statblock is referenced by path, name or link, the plugin will look for the first Draw Steel Element code block (`ds-statblock` or similar) in that file and use its data.
 
 **Example using references:**
 
@@ -172,7 +182,7 @@ enemy_groups:
     creatures:
       - statblock: "Thorn Dragon"
         amount: 1
-      - statblock: "Bestiary/Monsters/Kobold"
+      - statblock: "scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker"
         amount: 5
 ```
 

@@ -9,8 +9,18 @@ and then renders this information in an organized layout for easy reference duri
 
 ## Usage
 
-To use the Statblock Processor, insert a code block with the language identifier `ds-statblock` in your Obsidian note, 
-and then define your statblock using YAML syntax inside the code block.
+To use the Statblock Element, insert a code block with the language identifier
+`ds-statblock` (or the shorter `ds-sb`) in your Obsidian note, and then define your
+statblock using YAML syntax inside the code block.
+
+Don't fancy typing all of that? Two shortcuts:
+
+- Type **`/ds`** in the editor and pick *Statblock* for a filled-in example to edit — see
+  [Writing and editing blocks](writing-blocks.md).
+- Use an official creature straight from the compendium, either as a
+  [live reference](#use-a-creature-from-the-compendium) or as an editable
+  [snapshot](writing-blocks.md#insert-draw-steel-compendium-block-snapshot) to homebrew
+  from.
 
 Example statblock
 
@@ -202,3 +212,29 @@ does not enforce this client-side — a missing field just renders as its displa
 ### Features
 
 See the [features](./Features.md) documentation for field definitions
+
+## Use a creature from the compendium
+
+Instead of YAML, the whole block body can be a reference to a creature in your
+[synced compendium](compendium-sync.md):
+
+````markdown
+```ds-statblock
+scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker
+```
+````
+
+A reference can be written as a compendium code (with or without the `scc.v1:` prefix), a
+`[[wikilink]]`, or a vault path prefixed with `@`. The card re-resolves every time the note
+renders, so it always shows the currently synced version.
+
+The generic [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
+does the same thing for any kind of entry, and is what the **Insert Draw Steel: compendium
+reference** command writes.
+
+## Changing how statblocks look
+
+Layout is a setting, not something you write into the block: feature cards vs. a flat list,
+comfortable vs. compact, one column vs. two, how the keyword band and the characteristics
+are drawn, and whether villain actions are grouped into their own band. There are three
+one-click presets. See [Settings → Statblock display](settings.md#statblock-display).

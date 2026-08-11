@@ -6,8 +6,9 @@ an interactive format for easy tracking during gameplay or writing.
 
 ## Usage
 
-To use the Counter Element, insert a code block with the language identifier `ds-counter` in your Obsidian note, and 
-then define your counter using YAML syntax inside the code block.
+To use the Counter Element, insert a code block with the language identifier `ds-counter`
+(or the shorter `ds-ct`) in your Obsidian note, and then define your counter using YAML
+syntax inside the code block.
 
 ### Example counter:
 

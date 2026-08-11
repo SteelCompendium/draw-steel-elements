@@ -36,3 +36,12 @@ Displays arbitrary key-value pairs.
 Displays skills
 
 ![Skills](Media/skills.png)
+
+**[Hero suite blocks](hero-suite.md)**
+
+Since 7.0.0 there are purpose-built trackers you can drop on a canvas too: a
+[heroic resource](hero-suite.md#heroic-resource-ds-resource) counter, a
+[surge](hero-suite.md#surges-ds-surges) counter, a
+[conditions](hero-suite.md#conditions-ds-conditions) strip, and the party's
+[hero token](hero-suite.md#hero-tokens-ds-tokens) pool — or the whole
+[hero sheet](hero-suite.md#hero-sheet-ds-hero) in a single card.

@@ -6,8 +6,9 @@ easy reference during gameplay or writing.
 
 ## Usage
 
-To use the Values Row Element, insert a code block with the language identifier `ds-values-row` in your Obsidian 
-note, and then define your key-value pairs using YAML syntax inside the code block.
+To use the Values Row Element, insert a code block with the language identifier
+`ds-values-row` (or the shorter `ds-vr`) in your Obsidian note, and then define your
+key-value pairs using YAML syntax inside the code block.
 
 ### Example key-value pairs:
 

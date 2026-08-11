@@ -67,3 +67,24 @@ features:
 | `size`              | `string`           | No       | Size category displayed in stats (e.g. "1M").                     |
 | `stats`             | `{name, value}[]`  | No       | List of additional stats to display.                              |
 | `features`          | `Feature[]`        | No       | List of features. See [Feature Element](Features.md) for details. |
+
+## Use a featureblock from the compendium
+
+Instead of YAML, the whole block body can be a reference to an entry in your
+[synced compendium](compendium-sync.md) — a compendium code (with or without the `scc.v1:`
+prefix), a `[[wikilink]]`, or an `@`-prefixed vault path:
+
+````markdown
+```ds-featureblock
+scc.v1:mcdm.monsters.v1/monster.angulotl/angulotl-malice
+```
+````
+
+The card re-resolves each time the note renders, so it follows the compendium. The
+**Insert Draw Steel: compendium reference** command will write one of these for you; see
+[Writing and editing blocks](writing-blocks.md#insert-content-from-the-compendium).
+
+## Changing how featureblocks look
+
+Feature style (cards or a flat list) and the stat line's layout are settings — see
+[Settings → Featureblock display](settings.md#featureblock-display).

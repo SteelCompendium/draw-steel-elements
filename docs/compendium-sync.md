@@ -20,7 +20,7 @@ in a specific version, set the Release field to a specific
 
 ## Quick Start
 
-1. Open the Draw Steel Elements settings and scroll to the **Compendium** section.
+1. Open **Settings → Draw Steel Elements → Compendium**.
 2. (Optional) Edit the [configuration](#configuration).
 3. Click the **Sync** button.
 
@@ -30,7 +30,7 @@ The compendium downloads into the Destination folder (`DS Compendium` by default
 
 ## Configuration
 
-In the Draw Steel Elements settings, under **Compendium**:
+On the **Settings → Draw Steel Elements → Compendium** page:
 
 - **Destination folder**
   - Vault folder the compendium is synced into.
@@ -104,6 +104,21 @@ your vault, the block offers a link to the entry on steelcompendium.io and a nud
 condition, a rule, a statblock — using whichever layout suits it, and those layouts change
 as the plugin develops. The code you write is stable; the card it produces is not
 specified.
+
+Statblocks, features and featureblocks accept the same reference in their own blocks — see
+[Use a creature from the compendium](statblock.md#use-a-creature-from-the-compendium).
+
+## Copying an entry to homebrew from
+
+**Insert Draw Steel: compendium block (snapshot)** does something different: it pastes the
+entry's full YAML into your note as an editable copy. That's the starting point for
+homebrew — take a goblin, raise its Stamina, give it a new ability, rename it, and it's
+yours.
+
+A snapshot is deliberately a **copy, not a link**: it does not follow the compendium
+afterwards, because your edits are the whole point. If you want content that keeps updating
+with the compendium, use **Insert Draw Steel: compendium reference** instead. Snapshots are
+offered for statblocks, features and featureblocks.
 
 ## Command Palette
 

@@ -42,8 +42,10 @@ along with descriptions for each interest level from `i0` to `i5`.
 
 ## How to Use
 
-To use the Negotiation Tracker, include a code block with the `ds-negotiation` language identifier in your Obsidian
-note. Inside this code block, you define your negotiation data in YAML format.
+To use the Negotiation Tracker, include a code block with the `ds-negotiation` language
+identifier (or the shorter `ds-nt`) in your Obsidian note. Inside this code block, you
+define your negotiation data in YAML format. Typing **`/ds`** in the editor and picking
+*Negotiation tracker* writes a filled-in example for you.
 
 ### Code Block Structure
 

@@ -1,55 +1,108 @@
 # Draw Steel Elements Plugin for Obsidian
 
-Some helper elements for the MCDM Draw Steel TTRPG
+Statblocks, ability cards, initiative and negotiation trackers, hero sheets and a synced
+copy of the Draw Steel Compendium — all inside your Obsidian vault.
 
-**IMPORTANT: This plugin does NOT (yet) work in "Live Preview" mode.**
+_The Draw Steel Elements Obsidian Plugin is an independent product published under the
+DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL ©
+2024 MCDM Productions, LLC._
 
-Please use this [form to report bugs](https://docs.google.com/forms/d/e/1FAIpQLSc6m-pZ0NLt2EArE-Tcxr-XbAPMyhu40ANHJKtyRvvwBd2LSw/viewform?usp=sharing&ouid=105036387964900154878) if you find them!
+**Reading mode only.** The plugin renders in Obsidian's Reading view; blocks show as plain
+code in Live Preview. Switch a note to Reading view (`Ctrl/Cmd + E`) to see your elements.
 
-**Upgrading from a 5.x install?** See the [5.x → 7.0.0 migration guide](./docs/migrating-to-7.md).
+Please use this [form to report bugs](https://docs.google.com/forms/d/e/1FAIpQLSc6m-pZ0NLt2EArE-Tcxr-XbAPMyhu40ANHJKtyRvvwBd2LSw/viewform?usp=sharing&ouid=105036387964900154878)
+if you find them!
 
 ![sample](./docs/Media/sample.png)
 
-## Elements
+## Install
 
-### Features Element
+**Requires Obsidian 1.13.0 or newer.** Obsidian updates itself by default, so most installs
+already qualify (**Settings → General → Current version** if you want to check). On an older
+Obsidian you keep the last compatible build, 6.0.1, until you update the app.
 
-The [Features Element](./docs/Features.md) is used to quickly format Tests, Abilities, Resistance Rolls, and other Power Rolls.
+1. **Settings → Community plugins → Browse**
+2. Search for **Draw Steel Elements**
+3. **Install**, then **Enable**
 
-![power roll.png](./docs/Media/ability-simple.png)
+**Upgrading from a 5.x or 6.0.1 install?** Read the
+[5.x → 7.0.0 migration guide](./docs/migrating-to-7.md) first — everyone should re-sync
+their compendium, and the first sync offers to move your old compendium files so your
+links keep working.
 
-### Initiative Tracker Element
+## Quick start
 
-The [Initiative Tracker Element](./docs/initiative-tracker.md) is used to manage and run encounters.
+Everything the plugin renders is a fenced code block whose language is a `ds-` name — for
+example:
 
-![Initiative Tracker.png](./docs/Media/initiative-tracker.png)
+````markdown
+```ds-hr
+```
+````
 
-### Negotiation Tracker Element
+You don't have to memorise any of them. In the editor, type **`/ds`** and pick an element
+from the list: the plugin writes a filled-in example block for you, ready to edit. Every
+element also has an **Insert Draw Steel: …** command in the command palette. See
+[Writing and editing blocks](./docs/writing-blocks.md).
 
-The [Negotiation Tracker Element](./docs/negotiation-tracker.md) is used to manage and run negotiations.
+Then either:
 
-![Initiative Tracker.png](./docs/Media/negotiation.png)
+- **Write your own content** — a creature in a [statblock](./docs/statblock.md), an ability
+  in a [feature](./docs/Features.md) block; or
+- **Use the official content** — [sync the compendium](./docs/compendium-sync.md) and
+  reference any entry by its code, no copying required.
 
-### Statblock Element
+## What's included
 
-The [Statblock Element](./docs/statblock.md) is used to display statblocks.
+### Content you write or reference
 
-![Statblock.png](./docs/Media/statblock.png)
+| Element | Block | What it does |
+|---|---|---|
+| [Statblock](./docs/statblock.md) | `ds-statblock`, `ds-sb` | A full creature statblock. |
+| [Feature / ability card](./docs/Features.md) | `ds-feature`, `ds-ft`, `ds-feat` | Abilities, traits, tests and other power rolls. |
+| [Featureblock](./docs/featureblock.md) | `ds-featureblock`, `ds-fb` | A group of features (Malice, Dynamic Terrain, …). |
+| [Compendium reference](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes) | `ds-scc` | Renders any entry from your synced compendium by its code. |
+| [Roll](./docs/Roll.md) | `ds-roll`, `ds-r`, `ds-power-roll` | A standalone power roll / test / flat dice roller. |
+| [Horizontal rule](./docs/horizontal-rule.md) | `ds-hr` | A Draw Steel styled section divider. |
 
-### Horizontal Rule Element
+### Running the game
 
-The [Horizontal Rule Element](./docs/horizontal-rule.md) is used as an alternative `<hr>` mimicking the Draw Steel design 
+| Element | Block | What it does |
+|---|---|---|
+| [Initiative tracker](./docs/initiative-tracker.md) | `ds-initiative`, `ds-it` | Run an encounter: turns, Stamina, conditions, Malice. |
+| [Negotiation tracker](./docs/negotiation-tracker.md) | `ds-negotiation`, `ds-nt` | Run a negotiation: interest, patience, motivations, pitfalls. |
+| [Encounter builder](./docs/gm-trackers.md#encounter-builder-ds-encounter) | `ds-encounter` | Build an encounter from compendium monsters with a live EV budget. |
+| [Montage Test tracker](./docs/gm-trackers.md#montage-test-tracker-ds-montage) | `ds-montage` | Track successes, failures and rounds in a montage test. |
+| [Project tracker](./docs/gm-trackers.md#project-tracker-ds-project) | `ds-project` | Track a downtime project's goal and accumulated points. |
+| [Party tracker](./docs/gm-trackers.md#party-tracker-ds-party) | `ds-party` | Victories, XP, renown, wealth and hero tokens for the whole party. |
 
-### Roll Element
+Any tracker can be pinned to a **persistent sidebar panel** so it stays visible while you
+navigate between notes — see [Pinning to the sidebar](./docs/writing-blocks.md#pinning-a-block-to-the-sidebar).
 
-The [Roll Element](./docs/Roll.md) is a standalone Draw Steel dice roller (power rolls, tests, opposed rolls, flat dice). Rolling can also be enabled on rendered ability cards via the plugin's **Rolling** settings.
+### Hero sheets
 
-![roll](./docs/Media/roll.png)
+| Element | Block | What it does |
+|---|---|---|
+| [Hero sheet](./docs/hero-suite.md#hero-sheet-ds-hero) | `ds-hero` | A whole hero in one block: Stamina, heroic resource, surges, conditions and clickable abilities. |
+| [Stamina bar](./docs/stamina-bar.md) | `ds-stamina-bar`, `ds-stam` | Stamina, temporary Stamina, Recoveries, Winded/Dying. |
+| [Conditions](./docs/hero-suite.md#conditions-ds-conditions) | `ds-conditions`, `ds-cond` | A conditions strip for one hero or creature. |
+| [Heroic resource](./docs/hero-suite.md#heroic-resource-ds-resource) | `ds-resource` | Ferocity, Focus, Piety, … tracked by class. |
+| [Surges](./docs/hero-suite.md#surges-ds-surges) | `ds-surges` | A surge counter. |
+| [Hero tokens](./docs/hero-suite.md#hero-tokens-ds-tokens) | `ds-tokens` | The party's shared hero token pool. |
 
-### Compendium Reference Element
+### Character sheet pieces (great in [Canvas](./docs/canvas-character-sheet.md))
 
-Sync the [Draw Steel Compendium](./docs/compendium-sync.md) into your vault and a `ds-scc`
-block renders any entry in it — the body is just the entry's SCC code:
+[Characteristics](./docs/characteristics-element.md) (`ds-characteristics`),
+[Skills](./docs/skills-element.md) (`ds-skills`),
+[Values row](./docs/values-row-element.md) (`ds-values-row`) and
+[Counter](./docs/counter.md) (`ds-counter`).
+
+## The compendium in your vault
+
+[Compendium Sync](./docs/compendium-sync.md) downloads the
+[Draw Steel Compendium](https://steelcompendium.io/compendium) into a folder in your vault
+and keeps it up to date, without touching your own notes. Once it's synced, a `ds-scc`
+block renders any entry in it — the body is just the entry's code:
 
 ````markdown
 ```ds-scc
@@ -58,27 +111,32 @@ mcdm.heroes.v1/kit/panther
 ````
 
 Use **Insert Draw Steel: compendium reference** in the command palette to search for an
-entry and drop the block in. See
-[Referencing a compendium entry](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes).
+entry and drop the block in. The card always shows the currently synced version — nothing
+is copied into your note.
 
-## Future work
+## Settings
 
-- Optionally add hidden header for a Power Roll Element for linking
-- Support Live Preview mode
-- Something with statblocks...
-- Something with encounter building...
-- Negotiation tracker
-- Party tracker (XP, Victories)
-- Text parser for generating power-roll admonitions from raw copied text
+**Settings → Draw Steel Elements** is a short index of pages: Appearance, Typography,
+Statblock display, Featureblock display, Element defaults, Rolling, Authoring, Compendium,
+Links and Initiative tracker. Statblocks ship with three one-click presets, and Obsidian's
+own settings search finds every individual setting by name. See the
+[settings guide](./docs/settings.md).
 
-### Known Issues
+## Docs
 
-- No support for Live Preview
-- This repo is in a very primitive state
+Full documentation: **[docs/index.md](./docs/index.md)** (also published at
+[steelcompendium.io](https://steelcompendium.io)).
+
+## Known limitations
+
+- **Reading mode only** — no Live Preview rendering.
+- The compendium's file layout is still developing; a future sync may rename or move a
+  compendium file you linked to. [Reference entries by code](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
+  if you want links that survive that.
 
 ## Development
 
-See the [changelog](CHANGELOG.md) for changes 
+See the [changelog](CHANGELOG.md) for changes.
 
 ### Build
 

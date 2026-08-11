@@ -7,8 +7,9 @@ gameplay or writing.
 
 ## Usage
 
-To use the Stamina Bar Element, insert a code block with the language identifier `ds-stamina-bar` in your 
-Obsidian note, and then define your stamina values using YAML syntax inside the code block.
+To use the Stamina Bar Element, insert a code block with the language identifier
+`ds-stamina-bar` (or the shorter `ds-stamina` / `ds-stam`) in your Obsidian note, and then
+define your stamina values using YAML syntax inside the code block.
 
 ### Example stamina bar:
 
@@ -31,7 +32,8 @@ Clicking on the bar allows you to adjust the stamina values directly.
 
 ## Field Definitions
 
-The Skills Element supports [Common Element Fields](common-element-fields).
+The Stamina Bar is always collapsible, and honours `collapse_default:` from the
+[Common Element Fields](common-element-fields.md).
 
 Below is a detailed description of each field used in the stamina bar element, including their types, 
 default values, and whether they are required.
@@ -52,7 +54,7 @@ default values, and whether they are required.
 - **`height`** allows you to customize the visual height of the stamina bar to suit your preferences.
 - **`recoveries`** / **`recoveries_max`** are both optional and additive: set `recoveries_max` (with `recoveries` for the starting count) to add a Recoveries pip row and a **Catch Breath** button under the bar. Omit both and the bar renders exactly as before — no pips, no button.
 
-## Recoveries & Winded
+## Recoveries and Winded
 
 When `recoveries_max` is set, the bar gains:
 
@@ -63,14 +65,13 @@ When `recoveries_max` is set, the bar gains:
   a keyboard control: arrow keys step it, Home/End empty and refill it. Every change
   offers an **Undo** in the notice that follows.
 - A **Catch Breath** button that spends one Recovery to heal 1/3 of max Stamina (rounded
-  down), capped at `max_stamina`. Disabled while Dying or with no Recoveries left. Under
-  the Steel theme it is icon-only; hover it for the label.
+  down), capped at `max_stamina`. Disabled while Dying or with no Recoveries left. It is
+  icon-only; hover it for the label.
 - A **Winded**/**Dying** state, per the core rules ("Stamina and Death"): Winded at half
-  Stamina max or below, Dying at 0 Stamina or below. Under the Steel theme the whole
-  cluster carries it — the frame's colour, the crest's silhouette (shield → alert shield
-  → skull), the state word, and the colour of the current-Stamina numeral — so it is
-  never a colour alone. In print and PDF export it falls back to the badge beside the
-  markers.
+  Stamina max or below, Dying at 0 Stamina or below. The whole cluster carries it — the
+  frame's colour, the crest's silhouette (shield → alert shield → skull), the state word,
+  and the colour of the current-Stamina numeral — so it is never a colour alone. In print
+  and PDF export it falls back to the badge beside the markers.
 
 If you would rather not edit by clicking a marker, turn on **Settings → Element defaults
 → Advanced → "Edit Recoveries with a popover"**: a marker click — or an arrow key on the
@@ -93,10 +94,10 @@ recoveries_max: 10
 - The stamina bar **automatically updates** to reflect any changes in the stamina values.
 - The bar displays different colors or overlays to indicate various states (e.g., low stamina, temporary stamina).
 
-## The Steel theme's gauge
+## How to read the gauge
 
-Under the Steel theme the bar is a forged gauge rather than a linear fill, and it reads
-differently on purpose:
+The bar is a forged gauge rather than a plain left-to-right fill, and it reads differently
+on purpose:
 
 - **Zero is a marked bulkhead, not the left edge.** Stamina pours rightward from it, and
   the engraved reserve to its left is the negative range the rules give a hero (down to

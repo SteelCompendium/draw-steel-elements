@@ -92,7 +92,7 @@ everything resets when Obsidian restarts or the plugin reloads.
 
 ## Related plugin settings
 
-Under **Settings → Draw Steel Elements → Rolling**:
+Under **[Settings → Draw Steel Elements → Rolling](settings.md#rolling)**:
 
 - **Enable rolling** (default off) — adds a dice roller to rendered ability cards
   (feature, featureblock, statblock). The Roll Element ignores this switch and always

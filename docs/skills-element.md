@@ -30,7 +30,8 @@ This code block will render the character's skills and custom skills in a format
 
 ## Field Definitions
 
-The Skills Element supports [Common Element Fields](common-element-fields).
+The Skills Element supports the [Common Element Fields](common-element-fields.md)
+(`collapsible` and `collapse_default`).
 
 Below is a detailed description of each field used in the skills element, including their types, default values, and whether they are required.
 
