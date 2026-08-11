@@ -32,6 +32,15 @@ const GOBLIN_CODE = 'mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker';
 const GOBLIN_REL = 'monster/goblin/statblock/goblin-stinker.md';
 const FEATURE_CODE = 'mcdm.heroes.v1/feature.fury.level-1/growing-ferocity';
 const FEATURE_REL = 'feature/fury/level-1/growing-ferocity.md';
+// SC-141 (landed): a REAL corpus ability file. Its frontmatter `type` is the LEAF of the
+// SCC segment — `ability`, not `feature.ability.*` — which is the shape 621 of the corpus's
+// files actually carry, and which no adapter claimed until SC-141 widened FEATURE_TYPE_RE.
+const ABILITY_CODE = 'mcdm.heroes.v1/feature.ability.fury.level-1/hit-and-run';
+const ABILITY_REL = 'feature/ability/fury/level-1/hit-and-run.md';
+// SC-141 fix round (M2): a real dynamic-terrain file — ds-featureblock content whose
+// frontmatter `type` is the ROOT of its segment (`dynamic-terrain`).
+const TERRAIN_CODE = 'mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar';
+const TERRAIN_REL = 'dynamic-terrain/mechanisms/pillar.md';
 
 /** Render a ds-scc block and hand back its root element. `theme` follows
  *  displayFamily.test.ts's convention: the kit card has a Steel-only composition (SC-100)
@@ -130,7 +139,12 @@ describe('SC-149 baseForSccType — one element, every family', () => {
 		['rule.combat', 'rule'],
 		['monster.goblin.statblock', 'statblock'],
 		['feature.fury.level-1', 'feature'],
+		// SC-141's widened scopes reach ds-scc's renderer lookup for free — it keys on the
+		// adapter alias, so a family that widens carries its view with it.
+		['ability', 'feature'],
+		['trait', 'feature'],
 		['monster.angulotl.featureblock', 'featureblock'],
+		['dynamic-terrain.mechanisms', 'featureblock'],
 	])('type %s renders through the %s element', (type, id) => {
 		expect(baseForSccType(type)!.id).toBe(id);
 	});
@@ -159,6 +173,8 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		[CONDITION_CODE, CONDITION_REL, 'condition'],
 		[RULE_CODE, RULE_REL, 'rule'],
 		[GOBLIN_CODE, GOBLIN_REL, 'statblock'],
+		[ABILITY_CODE, ABILITY_REL, 'feature'],
+		[TERRAIN_CODE, TERRAIN_REL, 'featureblock'],
 	])('%s re-stamps data-dse-element to the resolved family', async (code, rel, id) => {
 		const root = await render(code, [rel], 'legacy');
 		expect(root.getAttribute('data-dse-element')).toBe(id);
@@ -193,6 +209,29 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		const card = root.querySelector('.dse-feature') as HTMLElement;
 		expect(card).not.toBeNull();
 		expect(card.querySelector('.dse-head__primary--left')!.textContent).toBe('Growing Ferocity');
+	});
+
+	// SC-141 landed the scopes that make these two reachable AT ALL: before it, an
+	// `ability`-typed file (621 in the corpus) and a `dynamic-terrain`-typed one (35) were
+	// claimed by no adapter, so `model()` returned undefined and ds-scc would have shown
+	// "found but not renderable — re-sync" against a perfectly good compendium. They are
+	// pinned here through the PUBLIC element, on the real corpus files, because ds-scc is
+	// now the only way a user references either of them.
+	test('a real corpus ability file (type: ability) renders the REAL feature card', async () => {
+		const root = await render(ABILITY_CODE, [ABILITY_REL]);
+		expect(errorText(root)).toBe('');
+		expect(root.getAttribute('data-dse-element')).toBe('feature');
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card).not.toBeNull();
+		expect(card.querySelector('.dse-head__primary--left')!.textContent).toBe('Hit and Run');
+	});
+
+	test('a real dynamic-terrain file (type: dynamic-terrain) renders the REAL featureblock card', async () => {
+		const root = await render(TERRAIN_CODE, [TERRAIN_REL]);
+		expect(errorText(root)).toBe('');
+		expect(root.getAttribute('data-dse-element')).toBe('featureblock');
+		expect(root.querySelector('.dse-fb')).not.toBeNull();
+		expect(root.textContent).toContain('Pillar');
 	});
 
 	test('a statblock code renders the REAL statblock card, not a downgraded placeholder', async () => {

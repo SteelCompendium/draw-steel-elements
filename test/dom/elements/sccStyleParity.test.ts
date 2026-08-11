@@ -6,7 +6,10 @@
 // `data-dse-element` with the BLOCK's element id (`scc`) before any resolution can know
 // better, and 84 rules in styles-source.css require
 // `[data-dse-element='statblock'|'feature'|'featureblock']`. (No md-dse fixture is a
-// featureblock, so the two families with one are covered here; the mechanism is shared.) So the card came out with no
+// featureblock, so the two families with one are covered here; the mechanism is shared.)
+// Since SC-141 landed, the feature rows run twice: once on a hand-shaped `feature.*` code
+// and once on a REAL corpus ability file (`type: ability`), the shape 621 corpus files
+// carry and the one users will actually reference. So the card came out with no
 // gradient, no block rhythm, no hairline, plan 25's standalone action-spine removal
 // silently reverted, and EVERY SC-123/SC-146 statblock/featureblock preference a no-op
 // (a pref selector pairs its `data-dse-*` attribute WITH the element id). Identical DOM,
@@ -39,6 +42,13 @@ const GOBLIN_CODE = 'mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker';
 const GOBLIN_REL = 'monster/goblin/statblock/goblin-stinker.md';
 const FEATURE_CODE = 'mcdm.heroes.v1/feature.fury.level-1/growing-ferocity';
 const FEATURE_REL = 'feature/fury/level-1/growing-ferocity.md';
+// SC-141 (landed): a REAL corpus ability file, whose frontmatter type is the bare leaf
+// `ability`. 621 corpus files look like this and ds-scc is now the only public way to
+// reference one, so the styling claim has to hold for THIS shape, not just for the
+// hand-shaped `feature.*` one — the two reach the view down slightly different paths
+// (a widened family regex vs. the original literal).
+const ABILITY_CODE = 'mcdm.heroes.v1/feature.ability.fury.level-1/hit-and-run';
+const ABILITY_REL = 'feature/ability/fury/level-1/hit-and-run.md';
 
 /**
  * Every selector in the stylesheet, flattened out of at-rules. Brace-depth walk rather
@@ -124,6 +134,7 @@ describe('SC-149 H-1 — a ds-scc render is styled identically to the typed elem
 	test.each([
 		['statblock', statblockElement as ElementDefinition<unknown>, GOBLIN_CODE, GOBLIN_REL],
 		['feature', featureElement as ElementDefinition<unknown>, FEATURE_CODE, FEATURE_REL],
+		['feature', featureElement as ElementDefinition<unknown>, ABILITY_CODE, ABILITY_REL],
 	])('%s: every element-scoped selector that matches via the typed element also matches via ds-scc', async (id, typed, code, rel) => {
 		const selectors = elementScopedSelectors(id);
 		// Guard the guard: if the stylesheet stops carrying element-scoped rules for this
@@ -139,14 +150,13 @@ describe('SC-149 H-1 — a ds-scc render is styled identically to the typed elem
 	// The sharpest single rule: plan 25's standalone action-spine removal, a Scott-approved
 	// change that cost a sanctioned five-line freeze rebaseline. Through ds-scc it used to
 	// revert silently — a standalone feature rendered with the nested/embedded spine indent.
-	test('feature: plan 25\'s standalone action-spine rule reaches a ds-scc-rendered feature', async () => {
+	test.each([
+		['a hand-shaped feature.* code', FEATURE_CODE, FEATURE_REL],
+		['a real corpus ability file', ABILITY_CODE, ABILITY_REL],
+	])('feature: plan 25\'s standalone action-spine rule reaches ds-scc — %s', async (_label, code, rel) => {
 		const SPINE = "[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]";
 		expect(elementScopedSelectors('feature')).toContain(SPINE);
-		const { viaTyped, viaScc } = await renderBoth(
-			featureElement as ElementDefinition<unknown>,
-			FEATURE_CODE,
-			FEATURE_REL,
-		);
+		const { viaTyped, viaScc } = await renderBoth(featureElement as ElementDefinition<unknown>, code, rel);
 		expect(viaTyped.querySelector(SPINE)).not.toBeNull();
 		expect(viaScc.querySelector(SPINE)).not.toBeNull();
 	});
