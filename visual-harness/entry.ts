@@ -341,6 +341,16 @@ const statblockStatsLedger = `prefs:\n  sbStats: ledger\n${statblockDefault}`;
 const statblockStatsGridc = `prefs:\n  sbStats: gridc\n${statblockDefault}`;
 const statblockFeatstyleFlat = `prefs:\n  sbFeatureStyle: flat\n${statblockDefault}`;
 const statblockColumnsWide = `prefs:\n  sbColumns: wide\n${statblockDefault}`;
+// SC-146 ROUND 2, item 1 — the FOURTH secondary-stat cell. Scott's round-2 note asked what
+// sits beside Movement in the second row of the secondary block ("movement (and something
+// else?)"); the answer is `With Captain`, which the plugin renders whenever the field is
+// present (statblock/view.ts renderMeta) and which NO fixture anywhere carried, so the
+// 2x2-full case had never been photographed. Worth its own entry rather than a probe: the
+// site cannot supply this picture at all — its statblock generator drops `with_captain`
+// before render (verified across every captained minion page in v2/docs/Browse), so the
+// three-cell layout is the only one the site can ever show. Same prefs-prefix convention as
+// the four above; `sbStats: ledger` because that is the mode under review.
+const statblockWithCaptain = `prefs:\n  sbStats: ledger\nwith_captain: Strike +2\n${statblockDefault}`;
 
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
@@ -398,6 +408,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		'stats-gridc': statblockStatsGridc,
 		'featstyle-flat': statblockFeatstyleFlat,
 		'columns-wide': statblockColumnsWide,
+		'with-captain': statblockWithCaptain,
 	},
 	surges: { default: surgesDefault },
 	title: { default: titleDefault },

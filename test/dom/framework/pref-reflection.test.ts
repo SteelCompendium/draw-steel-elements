@@ -178,6 +178,58 @@ test('defaults are CSS no-ops: no selector exists for any catalog default value 
 // one assertion per surface, in the sheet-grep style this file already uses. The
 // "right tier" (real harness shot variants) lives in visual-harness/entry.ts's
 // FIXTURES.statblock (stats-ledger/stats-gridc/featstyle-flat/columns-wide).
+describe('SC-146 round 2 — regression guards', () => {
+	// Scott's round-2 report: three items, of which only two were code defects. The third
+	// (the secondary-stat ledger) turned out to be a stale vault build — the landed CSS
+	// already matches the site — so its guard here pins the SHAPE he described, which is
+	// exactly what the site renders and what a fresh build produces.
+	test("item 1: the ledger keeps the secondary block a TWO-column grid — Immunity/Weakness above, Movement (+ With Captain) below", () => {
+		// The site's own ledger is `grid-template-columns: 1fr 1fr` with `gap: 0 1.6rem`
+		// (steel-statblock.css:196) — measured live at 393px/393px, gap 0px 32px. Ours
+		// inherits the base `.dse-sb__grid` two-column template and overrides only the gap,
+		// in two places (base + a Steel arm that out-specifies the plain Steel gap rule).
+		// If either ever regains a `display: block` or a one-column template, the four
+		// cells stack and the "4-cell table" Scott is asking for is gone.
+		for (const re of [
+			/\[data-dse-element='statblock'\]\[data-dse-sb-stats='ledger'\] \.dse-sb__grid \{([^}]*)\}/,
+			/\[data-dse-theme='steel'\][^{]*\[data-dse-sb-stats='ledger'\][^{]*\.dse-sb__grid \{([^}]*)\}/,
+		]) {
+			const m = sheet.match(re);
+			expect(m).not.toBeNull();
+			expect(m![1]).toMatch(/gap:\s*0 1\.6rem/);
+			expect(m![1]).not.toMatch(/display:\s*block/);
+			expect(m![1]).not.toMatch(/grid-template-columns/);
+		}
+	});
+
+	test('item 3: the head-notch diamond gets room below it — the stat row carries the site\'s top inset, in BOTH media', () => {
+		// The notch is a 9px square centred ON the head's bottom edge with 4px + 5px halo
+		// rings; rotated 45deg that 19px square reaches 13.44px BELOW the edge. The head's
+		// 0.75rem bottom margin alone gives 12px, so the halo painted into the first stat
+		// cell. Two levers, both pinned: the site's own `.sb__defenses` top inset on the
+		// row, and the head's bottom margin restated on the PRINT-REACHING twin (the
+		// screen-only band rule owns the other three sides, and print had it collapsed to
+		// zero — an even worse 5.44px overlap).
+		// Comments stripped first: these two rules carry explanatory comments that
+		// themselves contain `}` (they quote the site's own declarations), which would
+		// otherwise terminate a `[^}]*` body match early.
+		const bare = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+		const items = bare.match(/^\.dse-sb__items \{([^}]*)\}/m);
+		expect(items).not.toBeNull();
+		expect(items![1]).toMatch(/padding-top:\s*0\.3rem/);
+		const twin = bare.match(
+			/\[data-dse-theme='steel'\] \.dse-sb\[data-dse-role\] > \.dse-head \{([^}]*)\}/,
+		);
+		expect(twin).not.toBeNull();
+		expect(twin![1]).toMatch(/position:\s*relative/);
+		expect(twin![1]).toMatch(/margin-bottom:\s*0\.75rem/);
+		// The twin must NOT be print-excluded — that is the whole point of restating it.
+		expect(bare).not.toMatch(
+			/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\) \.dse-sb\[data-dse-role\] > \.dse-head \{[^}]*position:\s*relative/,
+		);
+	});
+});
+
 describe('SC-146 fix round 1 — regression guards', () => {
 	test('no [data-dse-sb-stats] selector anywhere ever targets .dse-sb__items (the mistargeting fix-1 corrected)', () => {
 		// Blanket guard for the root defect the whole ticket opened on: sb-stats
@@ -232,8 +284,22 @@ describe('SC-146 fix round 1 — regression guards', () => {
 	test('flat-mode ◆ separator: the sibling selector opens real spacing AND the halo uses the plate colour, not the page token', () => {
 		const spacer = sheet.match(/\[data-dse-theme='steel'\][^{]*\[data-dse-sb-featstyle='flat'\][^{]*\.dse-feature__nested > \.dse-feature \+ \.dse-feature:not\(\.dse-fb \*\)\s*\{([^}]*)\}/);
 		expect(spacer).not.toBeNull();
-		expect(spacer![1]).toMatch(/margin-top:\s*4px/);
+		// SC-146 ROUND 2 item 2: 8px, not round 1's 4px. The divider's centre sits 4px
+		// inside this feature's border box, so the air above it is `margin-top +
+		// the previous feature's padding-bottom (4px) + 4px` and the air below is
+		// `padding-top - 4px`; 8px is the only value that balances them (16/16) and
+		// stops the diamond riding high in its own seam.
+		expect(spacer![1]).toMatch(/margin-top:\s*8px/);
 		expect(spacer![1]).toMatch(/padding-top:\s*1\.25rem/);
+		// …and the separator is a RULE, not a lone bead: two centre-out fading lines
+		// and two seed dots ride the feature's own background because `::before` is
+		// the action-type spine and `::after` is the diamond (see the CSS comment).
+		expect(spacer![1]).toMatch(/linear-gradient\(to right, transparent, var\(--dse-metal-line\)\)/);
+		expect(spacer![1]).toMatch(/linear-gradient\(to left, transparent, var\(--dse-metal-line\)\)/);
+		expect(spacer![1].match(/radial-gradient\(circle, var\(--dse-metal\) 1\.4px, transparent 1\.9px\)/g)).toHaveLength(2);
+		expect(spacer![1]).toMatch(/calc\(45% - 30px\) 1px/);
+		expect(spacer![1]).toMatch(/calc\(50% - 24px\) 2px/);
+		expect(spacer![1]).toMatch(/calc\(50% \+ 24px\) 2px/);
 		// The dark base arm (first ::after match in the file) uses the plate's own
 		// solid mid-tone as a raw literal, not --dse-page-bg — a one-off halo colour
 		// with a single consumer, same precedent as .dse-sb__chars's raw-rgba
@@ -259,8 +325,13 @@ describe('SC-146 fix round 1 — regression guards', () => {
 			/\[data-dse-theme='steel'\][^{]*\[data-dse-fb-featstyle='flat'\][^{]*\.dse-feature__nested > \.dse-feature \+ \.dse-feature\s*\{([^}]*)\}/,
 		);
 		expect(fbSpacer).not.toBeNull();
-		expect(fbSpacer![1]).toMatch(/margin-top:\s*4px/);
+		expect(fbSpacer![1]).toMatch(/margin-top:\s*8px/);
 		expect(fbSpacer![1]).toMatch(/padding-top:\s*1\.25rem/);
+		// the twin carries the same four rule layers, not just the diamond (round 2)
+		expect(fbSpacer![1]).toMatch(/linear-gradient\(to right, transparent, var\(--dse-metal-line\)\)/);
+		expect(fbSpacer![1]).toMatch(/linear-gradient\(to left, transparent, var\(--dse-metal-line\)\)/);
+		expect(fbSpacer![1].match(/radial-gradient\(circle, var\(--dse-metal\) 1\.4px, transparent 1\.9px\)/g)).toHaveLength(2);
+		expect(fbSpacer![1]).toMatch(/calc\(45% - 30px\) 1px/);
 
 		const fbDiamond = sheet.match(
 			/\[data-dse-theme='steel'\][^{]*\[data-dse-fb-featstyle='flat'\][^{]*\.dse-feature \+ \.dse-feature::after\s*\{([^}]*)\}/,

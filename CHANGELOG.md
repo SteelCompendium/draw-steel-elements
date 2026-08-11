@@ -226,7 +226,15 @@ for what needs action.
     matching the site's own Index preset.
   - **"Flat" feature style now draws a ◆ separator between features**,
     matching the site — flat with no separator between entries read as an
-    unstructured run of text.
+    unstructured run of text. The separator is the site's full stylized rule:
+    a diamond riding two centre-out fading lines with a seed dot to each side,
+    the same ornament a bare `---` already draws, and centred in its own gap.
+    Featureblocks in "Flat list" draw the identical separator.
+  - **The header's diamond no longer touches the stat row beneath it.** The
+    diamond sits on the header's bottom edge and its halo reached about 1px
+    into the Stamina cell's border on screen, and about 5px on paper. The stat
+    row now carries the site's own top inset and the header keeps its bottom
+    margin when printing, which is where the site gets the same clearance.
   - **"Side-by-side (wide)" feature columns now pack like the site's**, using
     CSS `columns` instead of a row-aligned grid, so a short card no longer
     leaves a ragged empty gap under it.

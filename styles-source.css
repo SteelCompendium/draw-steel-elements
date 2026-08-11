@@ -2044,6 +2044,16 @@ code.dsa {
 	display: flex;
 	justify-content: space-around;
 	align-items: center;
+	/* SC-146 ROUND 2, item 3 — the site's own `.sb__defenses { padding: .3rem var(--pad)
+	   .65rem }` top inset (steel-statblock.css:149), which the plugin's row never carried.
+	   It is what keeps the head's diamond notch off the Stamina cell: the notch is a 9px
+	   square centred ON the head's bottom edge with 4px + 5px halo rings, i.e. a 19px
+	   square whose rotated half-diagonal reaches 13.44px BELOW that edge, and the head's
+	   own 0.75rem bottom margin alone gave only 12px — the halo painted 1.44px into the
+	   first stat cell's border. Padding, not margin, on purpose: the head's bottom margin
+	   and `.dse-sb__meta`'s top margin are adjacent siblings and COLLAPSE (the gap is
+	   max(12, 8), not their sum), so only a padding can add guaranteed room. */
+	padding-top: 0.3rem;
 	padding-bottom: 0.5rem;
 }
 .dse-sb__item {
@@ -4150,9 +4160,56 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-
    the previous feature's bottom edge. Print-excluded like the diamond it
    makes room for — print draws no ornament, so it keeps the tighter 8px
    rhythm instead of paying for whitespace nothing fills. */
+/* SC-146 ROUND 2, item 2 — THE SEPARATOR IS A RULE, NOT A BEAD. Round 1 shipped the
+   haloed diamond alone; the site's separator is the same stylized <hr> the sheet already
+   draws for `ds-hr` — two centre-out fading lines and two seed dots WITH the diamond
+   riding on them (steel-statblock.css:315-345, whose `::before` carries all four layers
+   and whose `::after` carries the diamond). Without the lines the mode reads as a stray
+   bead in whitespace, which is what Scott saw.
+   WHY THE LAYERS LIVE ON THE ELEMENT'S OWN BACKGROUND and not on a `::before` like the
+   site's: `.dse-feature`'s `::before` is the ACTION-TYPE SPINE BAR (~:60, a 3px full-height
+   absolutely-positioned bar) and flat mode keeps it (SC-101/102 made the spine a
+   nested-card frame, not a card-mode ornament — unlike the site, whose spine is
+   `[data-sb-featstyle="card"]`-only and whose `::before` is therefore free). The diamond
+   already owns `::after`. Rather than refactor a structural SC-101/102 mechanism for an
+   ornament, the four gradient layers go on the feature's own `background-image` — flat
+   mode already blanks its background, and background layers place to the same precision a
+   pseudo does.
+   GEOMETRY, ported verbatim from the site and re-expressed against the feature's own box
+   (the site's strip is inset 5% each side, so its `calc(50% - 30px)` line is `calc(45% -
+   30px)` of the feature, and its dots at `calc(50% ± 24px)` are unchanged — both boxes
+   share a centre). Everything centres on y = 4px, the diamond's own centre: the 1px lines
+   sit at top 3.5px, the 4px dots at top 2px.
+   The 4-value `left 5% top 3.5px` form is load-bearing for the lines: in the 2-value form
+   a percentage is a fraction of (box − image), not an offset from the edge, so the inset
+   would drift with the card width. The dots keep the 2-value form on purpose — there the
+   (box − image) semantics is exactly what puts their CENTRES at 50% ± 24px, matching the
+   site layer for layer.
+   SPACING (round 2 correction to round 1's M1): the divider's centre sits 4px inside this
+   feature's border box, so the air above it is `margin-top + the previous feature's
+   padding-bottom + 4px` and the air below is `padding-top - 4px`. Round 1 set margin-top
+   4px, which gave 8px above and 16px below — the diamond rode high in its own seam. 8px
+   balances it exactly (8 + 4 + 4 = 16 = 20 - 4), which is what the site's own comment
+   asks for ("keep them EQUAL or the diamond drifts off-center"). */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *) {
-	margin-top: 4px;
+	margin-top: 8px;
 	padding-top: 1.25rem;
+	background-image:
+		linear-gradient(to right, transparent, var(--dse-metal-line)),
+		linear-gradient(to left, transparent, var(--dse-metal-line)),
+		radial-gradient(circle, var(--dse-metal) 1.4px, transparent 1.9px),
+		radial-gradient(circle, var(--dse-metal) 1.4px, transparent 1.9px);
+	background-repeat: no-repeat;
+	background-size:
+		calc(45% - 30px) 1px,
+		calc(45% - 30px) 1px,
+		4px 4px,
+		4px 4px;
+	background-position:
+		left 5% top 3.5px,
+		right 5% top 3.5px,
+		calc(50% - 24px) 2px,
+		calc(50% + 24px) 2px;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature:not(.dse-fb *)::after {
 	content: '';
@@ -4205,8 +4262,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    precisely the list THIS rule owns; a nested fb always carries its own
    `[data-dse-element='featureblock']` root, so it is governed by its own preference. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature {
-	margin-top: 4px;
+	margin-top: 8px;
 	padding-top: 1.25rem;
+	/* the statblock twin's four layers, verbatim — see its comment for the geometry and
+	   for why they ride the background instead of a `::before` (SC-146 round 2, item 2) */
+	background-image:
+		linear-gradient(to right, transparent, var(--dse-metal-line)),
+		linear-gradient(to left, transparent, var(--dse-metal-line)),
+		radial-gradient(circle, var(--dse-metal) 1.4px, transparent 1.9px),
+		radial-gradient(circle, var(--dse-metal) 1.4px, transparent 1.9px);
+	background-repeat: no-repeat;
+	background-size:
+		calc(45% - 30px) 1px,
+		calc(45% - 30px) 1px,
+		4px 4px,
+		4px 4px;
+	background-position:
+		left 5% top 3.5px,
+		right 5% top 3.5px,
+		calc(50% - 24px) 2px,
+		calc(50% + 24px) 2px;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature + .dse-feature::after {
 	content: '';
@@ -6387,6 +6462,15 @@ body.theme-light
    above (~:5000-5007). */
 [data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head {
 	position: relative;
+	/* SC-146 ROUND 2, item 3 — the notch's ROOM is part of its placement, so it belongs on
+	   this print-reaching twin, not on the screen-only band rule above (which sets the same
+	   0.75rem inside its `margin: 0 0 0.75rem` shorthand and still owns the other three
+	   sides). Without it print rendered the notch with the head margin collapsed to zero:
+	   8px of clearance against a 13.44px halo, a 5.44px overlap — worse than the 1.44px on
+	   screen. With this plus the row's own new top padding both media land on ~16.8px, the
+	   site's 17px (its `.sb__head` margin-bottom .55rem + `.sb__defenses` padding-top .3rem
+	   at a 20px root) to within a rounding step. */
+	margin-bottom: 0.75rem;
 }
 [data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after {
 	content: '';
