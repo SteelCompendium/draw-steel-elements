@@ -1,6 +1,13 @@
 # Build a Character Sheet in Canvas
 
-With [Obsidian Canvas](https://obsidian.md/canvas) you can create a flexible and robust character sheet.
+With [Obsidian Canvas](https://obsidian.md/canvas) you can lay out a flexible character
+sheet from the elements below.
+
+**Elements on a canvas are read-only.** A canvas text node gives the plugin no file to write
+back to, so anything interactive — spending a Recovery, stepping a resource — is disabled
+rather than silently discarded, and each card carries a small "Read-only" badge. Use a canvas
+for a sheet you **look at**; keep the blocks you actually click in ordinary notes, or pin
+them to the [sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).
 
 ![canvas character sheet](Media/canvas-character-sheet.png)
 

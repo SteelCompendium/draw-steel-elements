@@ -9,6 +9,8 @@ All of these blocks **write their state back into the note** as you play: spend 
 or a surge and the YAML in the block updates itself. You never have to edit those numbers
 by hand.
 
+Step-by-step version: [Track your hero](tracking-your-hero.md).
+
 ## Hero sheet (`ds-hero`)
 
 ```markdown

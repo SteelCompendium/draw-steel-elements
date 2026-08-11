@@ -32,6 +32,9 @@ links keep working.
 
 ## Quick start
 
+**New here? Start with [Getting started](./docs/getting-started.md)** — install to running a
+fight, no YAML or markdown knowledge assumed. The short version:
+
 Everything the plugin renders is a fenced code block whose language is a `ds-` name — for
 example:
 
@@ -126,6 +129,13 @@ own settings search finds every individual setting by name. See the
 
 Full documentation: **[docs/index.md](./docs/index.md)** (also published at
 [steelcompendium.io](https://steelcompendium.io)).
+
+Guides: [Getting started](./docs/getting-started.md) ·
+[Run an encounter](./docs/running-an-encounter.md) ·
+[Track your hero](./docs/tracking-your-hero.md) ·
+[Customize a monster](./docs/customizing-a-monster.md) ·
+[Style your statblocks](./docs/styling-statblocks.md) ·
+[Advanced usage](./docs/advanced-usage.md)
 
 ## Known limitations
 

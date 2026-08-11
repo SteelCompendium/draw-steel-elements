@@ -12,6 +12,20 @@ code in Live Preview. Switch a note to Reading view (`Ctrl/Cmd + E`) to see your
 
 ## Start here
 
+**New to the plugin? [Getting started](getting-started.md)** takes you from installing it to
+running a fight, assuming no YAML or markdown knowledge.
+
+### Guides
+
+- **[Getting started](getting-started.md)** — install, sync, your first element, your first fight
+- **[Run an encounter](running-an-encounter.md)** — build it, then run it
+- **[Track your hero](tracking-your-hero.md)** — the hero sheet and the standalone trackers
+- **[Customize a monster](customizing-a-monster.md)** — the homebrew loop
+- **[Style your statblocks](styling-statblocks.md)** — presets and the display settings
+- **[Advanced usage](advanced-usage.md)** — per-block overrides, the sidebar, canvas, print, rolling
+
+### Reference
+
 - **[Writing and editing blocks](writing-blocks.md)** — type `/ds`, pick an element, and
   the plugin writes the block for you. Also: the insert commands, the edit button, and
   pinning a tracker to the sidebar.
@@ -138,7 +152,8 @@ The party's shared hero token pool, in one canonical block.
 ### Character sheet pieces
 
 Various elements are provided to support building
-[character sheets in Canvas](canvas-character-sheet.md):
+[character sheets in Canvas](canvas-character-sheet.md). Canvas cards are **read-only** —
+good for a sheet you look at, not one you click:
 
 - **[Characteristics](characteristics-element.md)** — `ds-characteristics`, `ds-char`
 - **[Skills](skills-element.md)** — `ds-skills`

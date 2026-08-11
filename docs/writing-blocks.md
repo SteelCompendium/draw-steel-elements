@@ -4,6 +4,9 @@ Every Draw Steel element is a fenced code block whose language is a `ds-` name, 
 inside it. You don't have to remember the names or the fields — the plugin can write the
 block for you and complete the fields as you type.
 
+Never done this before? [Getting started](getting-started.md) walks the whole loop with
+screenshots; this page is the reference.
+
 ## Insert a block
 
 ### Type `/ds`

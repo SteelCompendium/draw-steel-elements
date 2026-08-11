@@ -16,6 +16,8 @@ files in the compendium, a future sync may rename or remove the file at that pat
 in a specific version, set the Release field to a specific
 [release tag](https://github.com/SteelCompendium/data-unified/releases).
 
+First time? [Getting started](getting-started.md) walks through the sync in context.
+
 ## Quick Start
 
 1. Open **Settings → Draw Steel Elements → Compendium**.

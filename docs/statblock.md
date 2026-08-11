@@ -213,6 +213,9 @@ does not enforce this client-side — a missing field just renders as its displa
 
 See the [features](./Features.md) documentation for field definitions
 
+Want the homebrew loop rather than the field list? See
+[Customize a monster](customizing-a-monster.md).
+
 ## Use a creature from the compendium
 
 Instead of YAML, the whole block body can be a reference to a creature in your

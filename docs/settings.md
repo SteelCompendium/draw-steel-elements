@@ -17,6 +17,9 @@ Nothing changes unless you change it.
 
 ![The Draw Steel Elements settings index](Media/settings-index.png)
 
+Choosing a statblock look, with pictures:
+[Style your statblocks](styling-statblocks.md).
+
 ## Appearance
 
 - **Reduce motion** — turn off transitions and animations inside Draw Steel elements. Your

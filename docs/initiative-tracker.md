@@ -6,6 +6,9 @@ The Initiative Tracker uses YAML-defined data to represent the state of an encou
 
 ![initiative-tracker](Media/initiative-tracker.gif)
 
+Running a fight start to finish, with pictures:
+[Run an encounter](running-an-encounter.md).
+
 ## Quick Start Example
 
 ```
