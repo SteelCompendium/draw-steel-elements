@@ -105,6 +105,20 @@ for what needs action.
   count and date only appeared if you closed the settings window and opened it
   again. The line now follows the sync live, whether you started it from the
   settings button, the command palette or the first-run prompt.
+- [FIX] **Abilities referenced by their compendium code now render** (SC-141).
+  Listing an ability in a `ds-hero` sheet by its code — say
+  `scc.v1:mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade` — produced
+  the error *"Coat the Blade" found but is not an ability entry*, even though the
+  file was right there in your synced compendium. The plugin was looking for
+  compendium files labelled `feature`, but every one of the roughly 700 ability
+  and trait files is labelled `ability` or `trait`, so none of them could be read:
+  no ability in the book could be referenced by code, in a hero sheet or in a
+  `ds-feature` block. They all work now, including by name (`Coat the Blade`).
+  Alongside it, two smaller repairs to how a bad entry is reported: a code that
+  genuinely cannot be found now says so plainly and names both possible causes
+  (an un-synced compendium **or** a wrong code) instead of only blaming the sync,
+  and a broken entry can only ever cost its own row — the rest of the ability
+  list, and the rest of the sheet, keep working around it.
 - [FIX] **The Stamina editor's preview bar shows temporary Stamina** (SC-133).
   Damage consumes temporary Stamina first, so the most common edit in the modal
   moved a number the preview could not draw at all — pressing Damage looked like

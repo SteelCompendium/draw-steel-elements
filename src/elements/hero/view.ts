@@ -48,6 +48,7 @@ import { iconButton, renderCharacteristicsGrid, renderRecoveriesStrip, renderSta
 import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
 import { openFormEditor } from '@/authoring/FormModal';
 import { FeatureConfig } from '@model/FeatureConfig';
+import { FEATURE_TYPE_RE } from '@/services/typeAdapters';
 import { actionTypeOf } from '@/elements/feature/renderFeature';
 import { FeatureElementView } from '@/elements/feature/view';
 import { ResourcePanel } from '@/elements/resource/panel';
@@ -66,10 +67,6 @@ import { HeroModel } from './model';
 import type { Condition } from './model';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
-// Matches TYPE_ADAPTERS' bare-feature scope (typeAdapters.ts) — abilities[] entries are
-// resolved by THIS task (spec §3.5: "left unresolved... Task 9's job"), mirroring
-// resolve.ts's ladder but for the `feature` family instead of class/ancestry/kit.
-const FEATURE_TYPE_RE = /^feature($|\.)/;
 
 interface AbilityEntry {
 	raw: string | Record<string, unknown>;
@@ -129,7 +126,19 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		// Abilities[] resolution is THIS task's job (spec §3.5) — eager for the compact
 		// row's name/cost/type + the tabs filter; the heavy full-card DOM stays lazy
 		// (renderAbilityRow's expand toggle).
-		this.abilities = await Promise.all((model.defn.abilities ?? []).map((raw) => this.resolveAbility(raw)));
+		// SC-141: `allSettled`, not `all` — `resolveAbility` catches every failure mode of
+		// its own, so a rejection here should be unreachable; belt-and-suspenders (mirroring
+		// resolve.ts's identical defense for class/ancestry/kits) because `Promise.all`
+		// would propagate ONE bad entry out of `onMount` and the pipeline would replace the
+		// ENTIRE hero sheet with an error card. One bad ability must only ever cost its own
+		// row.
+		const settled = await Promise.allSettled((model.defn.abilities ?? []).map((raw) => this.resolveAbility(raw)));
+		this.abilities = settled.map((outcome, i) => {
+			if (outcome.status === 'fulfilled') return outcome.value;
+			const raw = (model.defn.abilities ?? [])[i];
+			const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+			return { raw, issue: `Could not read this ability — ${reason}` };
+		});
 
 		// A dedicated child carries the `.dse-hero` class (the pipeline's own `root`
 		// already carries `data-dse-element="hero"` — this mirrors every other element's
@@ -653,29 +662,44 @@ export class HeroSheetView extends ElementView<HeroModel> {
 			}
 		}
 		const trimmed = raw.trim();
-		const compendium = this.cx.compendium;
-		if (!compendium || !compendium.available) {
-			return { raw, issue: 'Compendium not installed — run "Sync compendium" to resolve this ability.' };
-		}
-		let code: string;
-		if (/^scc(\.v\d+)?:/.test(trimmed)) {
-			code = trimmed.replace(/^scc(\.v\d+)?:/, '').split('#')[0].trim();
-		} else if (trimmed.includes('/')) {
-			code = trimmed;
-		} else {
-			const candidates = compendium.resolveSlug(trimmed, FEATURE_TYPE_RE);
-			if (candidates.length === 0) return { raw, issue: `No compendium entry matches "${trimmed}".` };
-			if (candidates.length > 1) {
-				return { raw, issue: `"${trimmed}" is ambiguous — paste a full code: ${candidates.join(', ')}` };
-			}
-			code = candidates[0];
-		}
+		// SC-141: ONE try around the whole ladder. `resolveSlug` used to sit outside it, so a
+		// throw from the index (the one call here that walks the whole vault index) escaped
+		// `resolveAbility` entirely and rejected the mount's `Promise.all`.
 		try {
+			const compendium = this.cx.compendium;
+			if (!compendium || !compendium.available) {
+				return { raw, issue: 'Compendium not installed — run "Sync compendium" to resolve this ability.' };
+			}
+			let code: string;
+			if (/^scc(\.v\d+)?:/.test(trimmed)) {
+				code = trimmed.replace(/^scc(\.v\d+)?:/, '').split('#')[0].trim();
+			} else if (trimmed.includes('/')) {
+				code = trimmed;
+			} else {
+				const candidates = compendium.resolveSlug(trimmed, FEATURE_TYPE_RE);
+				if (candidates.length === 0) return { raw, issue: `No compendium entry matches "${trimmed}".` };
+				if (candidates.length > 1) {
+					return { raw, issue: `"${trimmed}" is ambiguous — paste a full code: ${candidates.join(', ')}` };
+				}
+				code = candidates[0];
+			}
 			const entity = await compendium.getEntity(code);
-			if (!entity) return { raw, issue: `"${code}" not found in compendium — sync compendium?` };
+			// SC-141: name the code and both plausible causes. The old text ("sync
+			// compendium?") only offered one of them, which reads as an accusation against a
+			// compendium that is in fact fine whenever the real problem is a typo'd or
+			// placeholder code (e.g. an un-filled `mcdm.heroes.v1/.../into-the-fray`).
+			if (!entity) {
+				return {
+					raw,
+					issue: `Not found in the compendium: "${code}" — the compendium may not be synced (run "Sync compendium"), or the code may be wrong.`,
+				};
+			}
 			const parsed = await entity.model();
 			if (!(parsed instanceof FeatureConfig)) {
-				return { raw, issue: `"${entity.name}" found but is not an ability entry.` };
+				return {
+					raw,
+					issue: `"${entity.name}" (${code}) resolved to ${entity.file.path}, but that file has no ability content the plugin can render (type: ${entity.type || 'unknown'}) — re-sync the compendium.`,
+				};
 			}
 			return { raw, config: parsed };
 		} catch (error) {
