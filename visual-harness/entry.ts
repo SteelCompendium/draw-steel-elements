@@ -23,6 +23,7 @@ import { createValidationService } from '../src/framework/validation';
 import { createSessionStore } from '../src/framework/session';
 import { DEFAULT_SETTINGS } from '../src/model/Settings';
 import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
+import { INTERNAL_DISPLAY_ELEMENTS } from '../src/elements/display';
 import { App, Plugin } from '../test/mocks/obsidian-core';
 
 // Fixtures — D9 (Plan 15 Task 2): single-sourced from each element's own
@@ -620,6 +621,26 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
 	};
 }
 
+/**
+ * SC-149 — the harness's registry is the PUBLIC registry plus the ten internal
+ * display-family definitions. `main.ts` stopped registering `ds-kit` & co. (they are no
+ * longer public code-block languages; `ds-scc` is the one public reference element), but
+ * they are still the card renderers `ds-scc` mounts by resolved type, and the harness
+ * photographs each of them directly through its own fixture — so the harness registers
+ * them itself. Their ids and aliases are unchanged, which is what keeps every existing
+ * shot name (and the FROZEN gallery's `<id> (<alias>)` headings) byte-identical.
+ *
+ * There is deliberately NO `scc` fixture: `ds-scc` renders nothing without a synced
+ * compendium, and this harness has no `cx.compendium`, so every body it could be given
+ * would produce an error card — which `mountFromParams` (correctly) counts as a failed
+ * shot. `ds-scc`'s own coverage is the jsdom suite (test/dom/elements/sccElement.test.ts),
+ * which has a real CompendiumIndex over the md-dse fixtures.
+ */
+export function registerHarnessElementDefinitions(registry: ElementRegistry): void {
+	registerFrameworkElementDefinitions(registry);
+	for (const el of INTERNAL_DISPLAY_ELEMENTS) registry.register(el);
+}
+
 export function makeHarnessHost(
 	containerEl: HTMLElement,
 	opts: { readonly: boolean; language: string },
@@ -677,7 +698,7 @@ export async function mountFromParams(
 	doc.body.classList.remove('theme-dark', 'theme-light');
 	doc.body.classList.add(params.bg === 'light' ? 'theme-light' : 'theme-dark');
 	const registry = createElementRegistry();
-	registerFrameworkElementDefinitions(registry);
+	registerHarnessElementDefinitions(registry);
 	const { deps, theme } = makeHarnessDeps();
 	theme.setActive(params.theme);
 	const errors: string[] = [];

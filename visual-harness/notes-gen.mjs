@@ -176,9 +176,45 @@ fs.writeFileSync(
 );
 console.log(`wrote Harness/${VILLAIN_CORPUS_NOTE}.md (corpus-shaped villain statblock — cost + dash usage)`);
 
+// SC-149: the fence is `ds-scc` now — `ds-kit` is no longer a registered code-block
+// language, so this note would render as plain text (and the camera's recursion assertion
+// would fail) if it kept it. Same code, same resolved file, same nested-ds-feature proof;
+// the outer card is mounted by ds-scc's type dispatch instead of by a typed element.
 const BY_SCC_KIT_NOTE = 'by-scc-kit';
 fs.writeFileSync(
 	path.join(outDir, `${BY_SCC_KIT_NOTE}.md`),
-	`# ${BY_SCC_KIT_NOTE}\n\n\`\`\`ds-kit\nscc.v1:mcdm.heroes.v1/kit/panther\n\`\`\`\n`,
+	`# ${BY_SCC_KIT_NOTE}\n\n\`\`\`ds-scc\nscc.v1:mcdm.heroes.v1/kit/panther\n\`\`\`\n`,
 );
-console.log(`wrote Harness/${BY_SCC_KIT_NOTE}.md (by-SCC ds-kit reference -> nested ds-feature recursion proof)`);
+console.log(`wrote Harness/${BY_SCC_KIT_NOTE}.md (by-SCC ds-scc reference -> nested ds-feature recursion proof)`);
+
+// SC-149 — the ds-scc demo note. The ten typed display elements used to get one
+// inline-YAML Harness note each (generated from their example.yaml, above); they are no
+// longer public code-block languages, so those notes are gone and this replaces them: one
+// note exercising the ONE public reference element against every kind of code the seeded
+// compendium subtree actually contains (a kit -> displayFamily card, a condition -> a
+// second display family, a rule -> the model-less generic card), plus the strict-body
+// error card. Everything here resolves — the codes are read from the same
+// COMPENDIUM_SEED_FILES seeded above, so the note can never drift from the subtree.
+// (The inline-YAML exercise for the ten lives on in the BROWSER harness, which registers
+// their definitions directly — visual-harness/entry.ts.)
+const SCC_DEMO_NOTE = 'scc-demo';
+const seededCodes = COMPENDIUM_SEED_FILES.map((rel) => {
+	const content = fs.readFileSync(path.join(compendiumSeedSrc, rel), 'utf8');
+	const match = /^scc:\s*(\S+)\s*$/m.exec(content);
+	if (!match) {
+		console.error(`compendium seed ${rel} has no scc: frontmatter key`);
+		process.exit(1);
+	}
+	return match[1];
+});
+const sccBlock = (body) => '```ds-scc\n' + body + '\n```\n';
+fs.writeFileSync(
+	path.join(outDir, `${SCC_DEMO_NOTE}.md`),
+	`# ${SCC_DEMO_NOTE}\n\nOne public reference element, one accepted body: an SCC code.\n\n` +
+		seededCodes.map((code) => sccBlock(code)).join('\n') +
+		`\n## Anything else is an error card\n\n` +
+		sccBlock('name: Homebrew Kit\nstamina_bonus: 6') +
+		'\n' +
+		sccBlock('[[Panther]]'),
+);
+console.log(`wrote Harness/${SCC_DEMO_NOTE}.md (${seededCodes.length} resolvable codes + 2 strict-body error cards)`);

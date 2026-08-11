@@ -5,11 +5,26 @@
 // rawTextTransformer, and the browser boot is guarded on a #mount element jsdom lacks.
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import { createElementRegistry } from '../../../src/framework/registry';
-import { registerFrameworkElementDefinitions } from 'main';
-import { FIXTURES, makeHarnessDeps, makeHarnessHost, mountFromParams } from '../../../visual-harness/entry';
+import {
+	FIXTURES,
+	makeHarnessDeps,
+	makeHarnessHost,
+	mountFromParams,
+	registerHarnessElementDefinitions,
+} from '../../../visual-harness/entry';
 
+// SC-149: the HARNESS registry, not the public one — `registerHarnessElementDefinitions`
+// is what `mountFromParams` itself uses, and it adds the ten internal display-family
+// definitions the public registry no longer carries (see its doc comment in entry.ts).
 const registry = createElementRegistry();
-registerFrameworkElementDefinitions(registry);
+registerHarnessElementDefinitions(registry);
+
+// SC-149: registered elements that deliberately have NO browser fixture. `ds-scc` renders
+// nothing without a synced compendium and the harness has no `cx.compendium`, so every
+// body it could be given produces an error card — which `mountFromParams` correctly counts
+// as a failed shot. Its coverage lives in test/dom/elements/sccElement.test.ts, which has a
+// real CompendiumIndex over the md-dse fixtures.
+const NO_FIXTURE_IDS = ['scc'];
 
 describe('F4 visual-harness fixtures', () => {
 	test('every FIXTURES key is a registered element id', () => {
@@ -18,12 +33,23 @@ describe('F4 visual-harness fixtures', () => {
 		}
 	});
 
-	test('FIXTURES covers every registered element (all 32)', () => {
+	test('FIXTURES covers every registered element (bar the documented exclusions)', () => {
 		const registered = registry
 			.all()
 			.map((d) => d.id)
+			.filter((id) => !NO_FIXTURE_IDS.includes(id))
 			.sort();
 		expect(Object.keys(FIXTURES).sort()).toEqual(registered);
+	});
+
+	// SC-149: the ten typed display elements are gone from the PUBLIC registry but must
+	// stay photographable — every one of them owns frozen shot names (and a line in the
+	// frozen gallery), so losing their harness registration would silently drop coverage
+	// rather than fail loudly.
+	test('the ten internal display-family elements are still mountable in the harness registry', () => {
+		for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication']) {
+			expect(registry.get(id)).toBeDefined();
+		}
 	});
 
 	for (const [id, fixtures] of Object.entries(FIXTURES)) {

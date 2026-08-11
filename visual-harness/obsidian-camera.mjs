@@ -8,8 +8,8 @@
 // to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (elements.length × 2 × 2
 // shots — see aliases.json for the current element count) — plus the ground-truth SPECIAL
 // captures, each of which drives a surface the theme×bg sweep structurally cannot reach:
-//   step 3b  (D6 Task 11)      a by-SCC `ds-kit` card rendering its REAL nested `ds-feature`
-//                              card through Obsidian's own markdown pipeline
+//   step 3b  (D6 Task 11)      a by-SCC `ds-scc` card (a kit) rendering its REAL nested
+//                              `ds-feature` card through Obsidian's own markdown pipeline
 //   step 3c  (D8 Task 3)       the initiative tracker in a real SIDEBAR leaf, via the
 //                              plugin's "Send initiative tracker to sidebar" command
 //   step 3d  (D7 T10 / D-7)    four elements in a real SIDEBAR leaf via the GENERIC "Send
@@ -84,7 +84,10 @@ const aliases = JSON.parse(fs.readFileSync(path.join(dir, 'aliases.json'), 'utf8
 // --element=by-scc-kit, same as any other --element value, but runs its OWN single
 // capture instead of joining the theme×bg combo matrix (it exists to prove recursion
 // happened at all, not to sweep every visual combo).
-const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'kit' };
+// SC-149: the note's fence is `ds-scc` now (ds-kit is no longer a registered language),
+// so the outer card's root is `[data-dse-element="scc"]`. The nested-`ds-feature` proof
+// below is unchanged — that is the whole point of the capture.
+const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'scc' };
 
 // D8 Task 3 — the sidebar-leaf ground-truth capture (see "step 3c" below and the header
 // comment). Same convention as SPECIAL_NOTE above: not an element id, selected via
@@ -758,7 +761,7 @@ async function main() {
 		}
 
 		// -- step 3b: the D6 Task 11 by-SCC recursion ground-truth capture -----------------
-		// A `ds-kit` block whose body is nothing but `scc.v1:mcdm.heroes.v1/kit/panther`
+		// A `ds-scc` block whose body is nothing but `scc.v1:mcdm.heroes.v1/kit/panther`
 		// (Harness/by-scc-kit.md) resolves against the real compendium file seeded at
 		// "DS Compendium/kit/panther.md" (notes-gen.mjs). That file's markdown body embeds
 		// its OWN `ds-feature` code block (the kit's signature ability, "Devastating
