@@ -50,8 +50,11 @@ export interface NavRow {
 	 *  obsidian already created and named. May return a teardown callback. */
 	render?: (setting: Setting) => void | (() => void);
 	/** A label-less block (an explanatory paragraph, the sync status line). Rendered into
-	 *  its own full-width row and never a search hit — it has no name to match on. */
-	chrome?: (container: HTMLElement) => void;
+	 *  its own full-width row and never a search hit — it has no name to match on.
+	 *  May return a teardown for THIS mount, on the same contract as `render`/
+	 *  `renderPreview` (SC-140: the sync-status line subscribes to manifest changes while
+	 *  it is on screen, and must drop that subscription when the row goes away). */
+	chrome?: (container: HTMLElement) => void | (() => void);
 }
 
 /** One settings page: a group of rows plus, optionally, a reset and a live preview. */
@@ -86,7 +89,9 @@ function toDefinition(row: NavRow, section: NavSection): SettingDefinition | nul
 			render: (setting) => {
 				setting.settingEl.addClass(CHROME_CLS);
 				setting.infoEl.empty();
-				chrome(setting.infoEl);
+				// Same per-MOUNT cleanup contract as `render`/`renderPreview`: whatever the
+				// chrome hands back is what obsidian calls when this row is torn down.
+				return asCleanup(chrome(setting.infoEl));
 			},
 		};
 	}

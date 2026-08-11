@@ -62,3 +62,42 @@ describe("ManifestStore", () => {
         expect(await store.load()).toBeNull();
     });
 });
+
+// —— SC-140: the manifest is OBSERVABLE, so a view showing it can stay current ——
+describe("ManifestStore.onChange", () => {
+    test("save notifies subscribers with the manifest it wrote", async () => {
+        const { app } = makeFakeApp();
+        const store = new ManifestStore(app, "draw-steel-elements");
+        const seen: (CompendiumManifest | null)[] = [];
+        store.onChange((manifest) => seen.push(manifest));
+        await store.save(sampleManifest());
+        expect(seen).toEqual([sampleManifest()]);
+        // …and the notification comes AFTER the write landed — a subscriber that repaints
+        // must never show a manifest the disk does not have.
+        expect(await store.load()).toEqual(sampleManifest());
+    });
+
+    test("the returned unsubscribe stops further notifications", async () => {
+        const { app } = makeFakeApp();
+        const store = new ManifestStore(app, "draw-steel-elements");
+        const listener = jest.fn();
+        const unsubscribe = store.onChange(listener);
+        await store.save(sampleManifest());
+        unsubscribe();
+        await store.save({ ...sampleManifest(), releaseTag: "v4.later" });
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    test("a throwing listener neither fails the save nor robs its fellows", async () => {
+        const { app } = makeFakeApp();
+        const store = new ManifestStore(app, "draw-steel-elements");
+        const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+        const survivor = jest.fn();
+        store.onChange(() => { throw new Error("listener blew up"); });
+        store.onChange(survivor);
+        await expect(store.save(sampleManifest())).resolves.toBeUndefined();
+        expect(survivor).toHaveBeenCalledTimes(1);
+        expect(errorSpy).toHaveBeenCalled();
+        errorSpy.mockRestore();
+    });
+});

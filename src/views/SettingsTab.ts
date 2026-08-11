@@ -22,6 +22,7 @@
 import { App, Component, Notice, PluginSettingTab, Setting, type TextComponent } from 'obsidian';
 import type { SettingControl, SettingDefinitionItem } from 'obsidian';
 import DrawSteelAdmonitionPlugin from 'main';
+import type { CompendiumManifest } from '@/data/manifest';
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '@/framework/seams/prefs';
 import {
 	GROUP_ORDER,
@@ -76,8 +77,11 @@ function opRow(label: string, help: string, build: (setting: Setting) => void): 
 }
 
 /** Chrome (an explanatory paragraph, a status line): rendered as its own full-width row,
- *  never a search hit — it has no label to match on. */
-function opChrome(chrome: (container: HTMLElement) => void): NavRow {
+ *  never a search hit — it has no label to match on. May return a teardown for THIS mount
+ *  (SC-140), on the same cleanup contract as `render`. Spelled out in the signature rather
+ *  than left as `=> void`: a `void` return position silently accepts a returned value, and
+ *  "did obsidian keep this?" is exactly the question that must not be implicit here. */
+function opChrome(chrome: (container: HTMLElement) => void | (() => void)): NavRow {
 	return { chrome };
 }
 
@@ -117,6 +121,12 @@ export class DseSettingTab extends PluginSettingTab {
 	// It must also stay cheap: no I/O, no network. Building the model is a walk over the
 	// descriptor list plus a handful of closures, which qualifies; the one genuinely async
 	// thing (the compendium sync status line) is fetched inside its own row's render.
+	//
+	// The same caching is why a row showing MUTABLE state cannot just read it here and be
+	// done: nothing re-runs when the state moves. SC-140 was that bug — the sync-status
+	// line read the manifest at mount and then said "No compendium synced yet." through a
+	// whole sync. Such a row subscribes from its own render and unsubscribes in the
+	// cleanup it returns (see `mountCompendiumStatus`).
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		const prefs = this.plugin.frameworkV2?.services.prefs;
 		return toSettingDefinitions(
@@ -506,7 +516,9 @@ export class DseSettingTab extends PluginSettingTab {
 						cls: 'ds-compendium-status',
 						text: 'Loading sync status…',
 					});
-					void this.renderCompendiumStatus(statusEl);
+					// Block body + returned teardown: this row is LIVE (SC-140) — see
+					// mountCompendiumStatus.
+					return this.mountCompendiumStatus(statusEl);
 				}),
 				// BLOCK BODY, deliberately: obsidian keeps a render callback's return value
 				// as the row's cleanup and CALLS it on teardown, and `Setting`'s builders
@@ -583,15 +595,48 @@ export class DseSettingTab extends PluginSettingTab {
 		}
 	}
 
-	/** F2 Task 11: renders the manifest-driven "last synced" line. Async because
-	 *  ManifestStore.load() reads the vault adapter; the placeholder text set by
-	 *  the caller covers the gap until this resolves. */
-	private async renderCompendiumStatus(el: HTMLElement): Promise<void> {
-		const manifest = await this.plugin.manifestStore.load();
-		el.setText(
-			manifest
-				? `${manifest.releaseTag} · ${Object.keys(manifest.files).length} files · synced ${manifest.syncedAt.slice(0, 10)}`
-				: 'No compendium synced yet.',
-		);
+	/**
+	 * F2 Task 11 / SC-140: the manifest-driven "last synced" line, as a LIVE mount.
+	 *
+	 * Two reads, not one. The initial state comes from `ManifestStore.load()` (async — it
+	 * reads the vault adapter; the caller's placeholder text covers the gap), and every
+	 * later state arrives on `ManifestStore.onChange`, because the definitions this row
+	 * lives in are built ONCE and replayed (see getSettingDefinitions above) — nothing
+	 * re-runs to notice that a sync finished. SC-140 was exactly that: sync the compendium
+	 * with the settings window open and the line kept saying "No compendium synced yet."
+	 * until the window was closed and reopened.
+	 *
+	 * Returns the teardown for THIS mount, which obsidian calls when the row goes away
+	 * (page navigation, settings close, re-render) — the subscription must not outlive the
+	 * `<p>` it writes into.
+	 */
+	private mountCompendiumStatus(el: HTMLElement): () => void {
+		// Generation guard: a manifest arriving from a sync (or the mount being torn down)
+		// while the initial load() is still in flight must not be overwritten by that now
+		// stale read when it resolves.
+		let generation = 0;
+		const show = (manifest: CompendiumManifest | null): void => {
+			el.setText(compendiumStatusText(manifest));
+		};
+		const unsubscribe = this.plugin.manifestStore.onChange((manifest) => {
+			generation++;
+			show(manifest);
+		});
+		const mine = ++generation;
+		void this.plugin.manifestStore.load().then((manifest) => {
+			if (mine === generation) show(manifest);
+		});
+		return () => {
+			generation++;
+			unsubscribe();
+		};
 	}
+}
+
+/** The status line's text — a pure function of the manifest, so the first read and every
+ *  live update below it render the same sentence. */
+function compendiumStatusText(manifest: CompendiumManifest | null): string {
+	if (!manifest) return 'No compendium synced yet.';
+	const files = Object.keys(manifest.files).length;
+	return `${manifest.releaseTag} · ${files} files · synced ${manifest.syncedAt.slice(0, 10)}`;
 }

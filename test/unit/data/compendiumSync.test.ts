@@ -227,6 +227,19 @@ describe("CompendiumSyncService.applySync (F2 §3.4)", () => {
 		expect([...vault.adapter.store.keys()].sort()).toEqual(adapterKeysBefore); // no stray .tmp file either
 	});
 
+	// SC-140: the settings tab's sync-status line stays current by subscribing to the
+	// store, so a completed sync MUST reach that seam — this is the production wiring
+	// (applySync → store.save → listeners), not the view's fake of it.
+	test("a completed sync notifies ManifestStore subscribers with the new manifest", async () => {
+		const { store, service } = setup();
+		const seen: (CompendiumManifest | null)[] = [];
+		store.onChange((manifest) => seen.push(manifest));
+		await service.applySync(incomingOf({ "a.md": "a1" }), null, OPTIONS, "v4.new");
+		expect(seen).toHaveLength(1);
+		expect(seen[0]?.releaseTag).toBe("v4.new");
+		expect(Object.keys(seen[0]?.files ?? {})).toEqual(["a.md"]);
+	});
+
 	test("progress callback fires and covers the full set", async () => {
 		const { service } = setup();
 		const progress: Array<[number, number]> = [];

@@ -40,7 +40,13 @@ export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string>
 	return hex;
 }
 
+/** Notified after the manifest on disk changes, with the new state (null = gone). */
+export type ManifestListener = (manifest: CompendiumManifest | null) => void;
+
 export class ManifestStore {
+	/** SC-140: live subscribers to manifest writes — see `onChange`. */
+	private listeners = new Set<ManifestListener>();
+
 	constructor(private app: App, private pluginId: string) {}
 
 	private manifestPath(): string {
@@ -76,5 +82,41 @@ export class ManifestStore {
 			await this.app.vault.adapter.remove(path);
 		}
 		await this.app.vault.adapter.rename(tempPath, path);
+		// Only after the write actually landed: a listener that repaints UI must never
+		// show a manifest the disk doesn't have.
+		this.notify(manifest);
+	}
+
+	/**
+	 * SC-140 — subscribe to manifest changes; returns the unsubscribe.
+	 *
+	 * The manifest is the state the settings tab's sync-status line displays, and that
+	 * line is rendered ONCE per mount (obsidian caches the declarative definitions and
+	 * replays them, so nothing re-reads the store on its own). Without this seam a sync
+	 * that finished while the settings window was open left the line reading whatever it
+	 * said at mount time — "No compendium synced yet." on a first sync — until the window
+	 * was closed and reopened.
+	 *
+	 * Every writer goes through `save()` (CompendiumSyncService.applySync and the SC-125
+	 * migration's adoption), so subscribing here covers both without either of them
+	 * knowing a view exists.
+	 */
+	public onChange(listener: ManifestListener): () => void {
+		this.listeners.add(listener);
+		return () => {
+			this.listeners.delete(listener);
+		};
+	}
+
+	/** Fan out to subscribers. A throwing listener is contained: it must not fail the
+	 *  sync that triggered it, nor rob its fellow listeners of the notification. */
+	private notify(manifest: CompendiumManifest | null): void {
+		for (const listener of [...this.listeners]) {
+			try {
+				listener(manifest);
+			} catch (error) {
+				console.error("Draw Steel Elements: a compendium manifest listener threw", error);
+			}
+		}
 	}
 }

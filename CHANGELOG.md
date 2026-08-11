@@ -99,6 +99,12 @@ for what needs action.
   so the heads rendered at 12.8px, visibly smaller than the tile values beside
   them and the "Martial Kit" kicker above them. Now 1em (16px), matching the
   nested ability card's own section heads.
+- [FIX] **The compendium sync status updates as soon as a sync finishes**
+  (SC-140). Syncing from the settings window left the line above the Sync
+  button still reading "No compendium synced yet." — the release tag, file
+  count and date only appeared if you closed the settings window and opened it
+  again. The line now follows the sync live, whether you started it from the
+  settings button, the command palette or the first-run prompt.
 - [FIX] **The Stamina editor's preview bar shows temporary Stamina** (SC-133).
   Damage consumes temporary Stamina first, so the most common edit in the modal
   moved a number the preview could not draw at all — pressing Damage looked like

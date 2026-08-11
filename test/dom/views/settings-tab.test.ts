@@ -261,6 +261,46 @@ describe('D4 §4 — DseSettingTab', () => {
 	});
 });
 
+/**
+ * SC-140: a stand-in for ManifestStore carrying the seam the real one has — `load()` for
+ * the mount's first read and `onChange()` for everything after it — plus a `sync(manifest)`
+ * helper that plays the part of a sync completing: it moves the stored state AND notifies,
+ * exactly as the real `save()` does (write, then notify).
+ */
+function fakeManifestStore(initial: CompendiumManifest | null = null) {
+	const listeners = new Set<(manifest: CompendiumManifest | null) => void>();
+	let current = initial;
+	return {
+		load: jest.fn(async () => current),
+		onChange: jest.fn((listener: (manifest: CompendiumManifest | null) => void) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		}),
+		/** A sync (or a manifest going away) landing while the settings window is open. */
+		sync(manifest: CompendiumManifest | null): void {
+			current = manifest;
+			for (const listener of [...listeners]) listener(manifest);
+		},
+		listenerCount: (): number => listeners.size,
+	};
+}
+
+function sampleManifest(overrides: Partial<CompendiumManifest> = {}): CompendiumManifest {
+	return {
+		schemaVersion: 1,
+		source: 'SteelCompendium/data-unified',
+		releaseTag: 'v4.20260716T000000',
+		locale: 'en',
+		format: 'md-dse',
+		root: 'DS Compendium',
+		syncedAt: '2026-07-15T10:00:00.000Z',
+		files: { a: 'x', b: 'y', c: 'z' },
+		...overrides,
+	};
+}
+
 // —— F2 Task 11: the Compendium operational-section rework (F2 §3.4) ——
 // Driven against a lightweight fake plugin (not the real onload() path above):
 // the operational section only touches plugin.settings/saveSettings/syncCompendium/
@@ -282,7 +322,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 					{ installedTag: null, latestTag: 'v4.x', upToDate: false }
 				)),
 			},
-			manifestStore: { load: jest.fn(async () => null) },
+			manifestStore: fakeManifestStore(),
 			...overrides,
 		};
 		const tab = new DseSettingTab(app as never, plugin);
@@ -311,17 +351,7 @@ describe('F2 Task 11 — Compendium operational section', () => {
 	});
 
 	test('manifest-driven status line: tag, file count, sync date', async () => {
-		const manifest: CompendiumManifest = {
-			schemaVersion: 1,
-			source: 'SteelCompendium/data-unified',
-			releaseTag: 'v4.20260716T000000',
-			locale: 'en',
-			format: 'md-dse',
-			root: 'DS Compendium',
-			syncedAt: '2026-07-15T10:00:00.000Z',
-			files: { a: 'x', b: 'y', c: 'z' },
-		};
-		const { tab } = makeFakePlugin({ manifestStore: { load: jest.fn(async () => manifest) } });
+		const { tab } = makeFakePlugin({ manifestStore: fakeManifestStore(sampleManifest()) });
 		renderAll(tab);
 		await flushAsync(2);
 		const text = tab.containerEl.textContent ?? '';
@@ -414,6 +444,91 @@ describe('F2 Task 11 — Compendium operational section', () => {
 		rowByName('Default creature image path').texts[0].trigger('token.png');
 		await flushAsync(1);
 		expect(plugin.settings.defaultImagePath).toBe('token.png');
+	});
+
+	// —— SC-140: the status line is LIVE ——
+	//
+	// The bug: obsidian builds the declarative definitions ONCE and replays them, so the
+	// status row's manifest read happened at mount and never again. A sync finishing with
+	// the settings window open left the line reading "No compendium synced yet." until the
+	// window was closed and reopened. The row now subscribes to ManifestStore.onChange for
+	// its lifetime, and hands the unsubscribe back on obsidian's per-mount cleanup contract.
+	describe('SC-140 — live sync status', () => {
+		test('a sync completing with the settings window open updates the status line', async () => {
+			const store = fakeManifestStore(null);
+			const { tab } = makeFakePlugin({ manifestStore: store });
+			renderAll(tab);
+			await flushAsync(2);
+			expect(tab.containerEl.textContent).toContain('No compendium synced yet.');
+
+			// The sync finishes: applySync's final `store.save(manifest)`, in fake form.
+			store.sync(sampleManifest({ releaseTag: 'v4.20260810T120000' }));
+
+			const text = tab.containerEl.textContent ?? '';
+			expect(text).toContain('v4.20260810T120000');
+			expect(text).toContain('3 files');
+			expect(text).toContain('2026-07-15');
+			expect(text).not.toContain('No compendium synced yet.');
+		});
+
+		test('the manifest going away reverts the line to the never-synced state', async () => {
+			const store = fakeManifestStore(sampleManifest());
+			const { tab } = makeFakePlugin({ manifestStore: store });
+			renderAll(tab);
+			await flushAsync(2);
+			expect(tab.containerEl.textContent).toContain('v4.20260716T000000');
+
+			store.sync(null);
+
+			const text = tab.containerEl.textContent ?? '';
+			expect(text).toContain('No compendium synced yet.');
+			expect(text).not.toContain('v4.20260716T000000');
+		});
+
+		test('the subscription is per MOUNT: closing drops it, reopening re-reads the current state', async () => {
+			const store = fakeManifestStore(null);
+			const { tab } = makeFakePlugin({ manifestStore: store });
+			renderAll(tab);
+			await flushAsync(2);
+			expect(store.listenerCount()).toBe(1);
+
+			// Close the settings window: obsidian runs every rendered row's cleanup.
+			(tab as any).closeTab();
+			expect(store.listenerCount()).toBe(0);
+
+			// A sync now lands with nothing on screen — no listener, no throw.
+			store.sync(sampleManifest({ releaseTag: 'v4.while-closed' }));
+			expect(store.listenerCount()).toBe(0);
+
+			// Reopening replays the CACHED definitions (no update()) and must still show
+			// the state the sync left behind — the mount's own load() is what does that.
+			reopen(tab);
+			await flushAsync(2);
+			expect(tab.containerEl.textContent).toContain('v4.while-closed');
+			expect(store.listenerCount()).toBe(1);
+		});
+
+		test('a sync landing before the first read resolves is not clobbered by it', async () => {
+			const store = fakeManifestStore(null);
+			let resolveLoad: (manifest: CompendiumManifest | null) => void = () => {};
+			store.load.mockImplementation(
+				() => new Promise<CompendiumManifest | null>((resolve) => {
+					resolveLoad = resolve;
+				}),
+			);
+			const { tab } = makeFakePlugin({ manifestStore: store });
+			renderAll(tab);
+
+			// The sync wins the race against the mount's still-pending read.
+			store.sync(sampleManifest({ releaseTag: 'v4.fresh' }));
+			expect(tab.containerEl.textContent).toContain('v4.fresh');
+
+			// …and the stale read, resolving late with the pre-sync state, is discarded.
+			resolveLoad(null);
+			await flushAsync(2);
+			expect(tab.containerEl.textContent).toContain('v4.fresh');
+			expect(tab.containerEl.textContent).not.toContain('No compendium synced yet.');
+		});
 	});
 });
 
