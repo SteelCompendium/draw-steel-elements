@@ -202,7 +202,9 @@ different DOM per theme; do not invent a second mechanism.
   renders its slot as an em dash, never an omitted cell), then the signature ability
   through the existing `renderFeatureList` sub-render (deliberately richer than the site's
   tile). Remaining display families are sequenced as SC-120 — the seam + primitive make
-  each one layout-data + CSS + one sanctioned rebaseline.
+  each one layout-data + CSS + one sanctioned rebaseline. (SC-149 did not change any of
+  this: the display families' LAYOUTS are all still live — they are what `ds-scc` renders
+  once it resolves a code — only their ten typed code-block languages were retired.)
 - **Dark-mode material rule** (SC-100 visual-gate finding — read before styling any sunken
   surface inside a Steel card): the site's "rich" dark tiles carry **no gradient of their
   own**; the richness is the parent card's diagonal gradient bleeding through

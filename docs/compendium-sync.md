@@ -77,6 +77,34 @@ they don't collide with a compendium path, and any that do are skipped and repor
 **fresh install never sees either prompt** — there is no folder yet, and nothing to ask
 about.
 
+## Referencing a compendium entry in your notes
+
+Once the compendium is synced, a `ds-scc` block renders any entry in it. The body is the
+entry's SCC code — nothing else:
+
+````markdown
+```ds-scc
+mcdm.heroes.v1/kit/panther
+```
+````
+
+That's the whole format. The `scc.v1:` prefixed form works too
+(`scc.v1:mcdm.heroes.v1/kit/panther`); anything that isn't a code renders a short message
+telling you so.
+
+The easiest way to write one is the command palette: **Insert Draw Steel: compendium
+reference** searches the compendium and drops the block in for you. (Hold Shift when you
+pick an entry to insert an inline link instead, or Ctrl/Cmd to copy just the code.)
+
+The block re-resolves every time the note renders, so it always shows the currently synced
+version of the entry — nothing is copied into your note but the code. If the code isn't in
+your vault, the block offers a link to the entry on steelcompendium.io and a nudge to sync.
+
+**What it looks like is not a promise.** `ds-scc` renders whatever the entry is — a kit, a
+condition, a rule, a statblock — using whichever layout suits it, and those layouts change
+as the plugin develops. The code you write is stable; the card it produces is not
+specified.
+
 ## Command Palette
 
 Syncing can also be triggered from the command palette:

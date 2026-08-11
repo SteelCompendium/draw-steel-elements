@@ -15,6 +15,17 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FEATURE] **One block renders any compendium entry: `ds-scc`** (SC-149). Sync
+  the compendium, then write a fenced `ds-scc` block whose body is an entry's SCC
+  code (`mcdm.heroes.v1/kit/panther`) and the plugin renders that entry — a kit, a
+  condition, a rule, a statblock, whatever the code points at. The body is a code
+  and nothing else; anything else renders a short message saying so. Nothing is
+  copied into your note, so the block always shows the currently synced version,
+  and a code your vault doesn't have offers a link to steelcompendium.io instead.
+  **Insert Draw Steel: compendium reference** (command palette) searches the
+  compendium and writes the block for you. What the rendered card looks like is
+  deliberately not a specified format — it changes as the plugin develops; the
+  code you write is the stable part.
 - [FEATURE] **Your links to compendium notes survive the 7.0.0 reorganisation**
   (SC-125). The new compendium source renames every file —
   `Rules/Careers/Disciple.md` becomes `career/disciple.md`, and so on for about

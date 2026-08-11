@@ -43,16 +43,7 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-vr`, `ds-value-row`, `ds-values-row` | Values row |
 | `ds-hr`, `ds-horizontal-rule` | Horizontal rule |
 | `ds-roll` | Standalone dice roll (D5) |
-| `ds-kit` | Kit reference card (D6) |
-| `ds-condition` | Condition reference card (D6) |
-| `ds-treasure` | Treasure reference card (D6) |
-| `ds-ancestry` | Ancestry reference card (D6) |
-| `ds-culture` | Culture reference card (D6) |
-| `ds-career` | Career reference card (D6) |
-| `ds-class` | Class reference card (D6) |
-| `ds-title` | Title reference card (D6) |
-| `ds-perk` | Perk reference card (D6) |
-| `ds-complication` | Complication reference card (D6) |
+| `ds-scc` | Compendium reference — body is an SCC code, renders whatever that code is (D6 machinery, SC-149 surface) |
 | `ds-rule` | Rule/glossary reference card (D6; model-less — `genericCard()`, not `displayFamily()`) |
 | `ds-encounter` | Encounter Builder — live EV via the compendium, budget/difficulty, hand-off to a tracker (D8) |
 | `ds-montage` | Montage/Test tracker — negotiation-sibling, derived outcome bands (D8) |
@@ -64,11 +55,22 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-tokens`, `ds-hero-tokens` | Hero Tokens — canonical party-wide pool (D7) |
 | `ds-hero` | Hero sheet — the flagship: composes the four D7 panels above + Characteristics/Stamina/Skills/Abilities over one persisted block (D7) |
 
-Users interact by writing YAML inside these fenced code blocks in Obsidian notes. The 11
-D6 elements above, plus `ds-sb`/`ds-ft`/`ds-fb`, additionally accept a **whole-block
-reference** instead of inline YAML — see "Compendium reference (by-SCC)" below. All 32
-elements register through the SAME `registerFrameworkElementDefinitions` (`main.ts`) —
-there is no longer a legacy (non-framework) element in this plugin.
+Users interact by writing YAML inside these fenced code blocks in Obsidian notes.
+`ds-scc`, `ds-rule` and `ds-sb`/`ds-ft`/`ds-fb` additionally accept a **whole-block
+reference** instead of inline YAML — see "Compendium reference (by-SCC)" below; `ds-scc`
+accepts ONLY that. All 23 elements register through the SAME
+`registerFrameworkElementDefinitions` (`main.ts`) — there is no longer a legacy
+(non-framework) element in this plugin.
+
+**SC-149 (2026-08-10) — the ten typed display elements are internal, not public.** D6
+shipped `displayFamily()` instances for kit/condition/treasure/ancestry/culture/career/
+class/title/perk/complication. None of them was ever released, and Scott ruled against
+making ten typed elements (and their inline YAML shapes) a maintained public commitment:
+the public reference surface is the single catch-all `ds-scc`. Those ten definitions
+(`src/elements/display/`) live on as **internal machinery** — `ds-scc` mounts their card
+views by resolved SCC type, and the visual harness registers them into its own registry so
+each still gets its own fixture and shots. They are not registered by `main.ts`, so
+`ds-kit` & co. are not code-block languages any note can use.
 
 ## Data Contracts
 
@@ -98,12 +100,18 @@ else), then threads it into `initializeElementFrameworkV2` as the `compendium` p
 with `cx.sccAnchors`.
 
 `src/elements/shared/withReference.ts` wraps a base element definition (`statblock`,
-`feature`, `featureblock`, and the 11 `displayFamily()`/`genericCard()` elements above) so
-its block body may be **either** inline YAML **or** a whole-block reference:
+`feature`, `featureblock`, and the 11 internal `displayFamily()`/`genericCard()`
+definitions) so its block body may be **either** inline YAML **or** a whole-block
+reference:
 `scc.v1:<code>` (or bare `scc:<code>`), `@<vault-path>`, `[[wikilink]]`, or (for the
-`displayFamily()` elements only) a **bare slug** scoped to that element's own type family
-(`ds-kit` given `panther` resolves; given `bleeding`, a condition, it error-cards — no
-cross-family guessing). `RefUnwrapView` (`src/elements/shared/RefUnwrapView.ts`) owns
+internal `displayFamily()` definitions only) a **bare slug** scoped to that definition's
+own type family (`kit` given `panther` resolves; given `bleeding`, a condition, it
+error-cards — no cross-family guessing). **`ds-scc` accepts none of that flexibility**:
+its body is a full SCC code (optionally `scc.v1:`-prefixed) or an error card
+(`src/elements/scc/definition.ts`'s `parseSccBody`), and instead of one fixed base view it
+dispatches on the RESOLVED entity's `type` (`baseForSccType` → each element's
+`withReference` `.base`, so a statblock code renders the real statblock card).
+`RefUnwrapView` (`src/elements/shared/RefUnwrapView.ts`) owns
 resolution against `cx.compendium` and the §1.5 degrade ladder: unresolvable code → plain
 "not found" card; `cx.compendium` absent (harness/test caller that didn't construct one)
 → "compendium not installed" card; resolved but the wrong type family → "wrong type"
@@ -126,8 +134,16 @@ duplicates (a prefix of) the real source body is suppressed rather than shown tw
 
 Compendium search (`Ctrl/Cmd+P` → "Search compendium") and insert
 (`src/authoring/CompendiumSearchModal.ts` + `src/authoring/compendiumInsert.ts`) are a
-fuzzy `SuggestModal` over `CompendiumIndex.query()`, offering both a `scc.v1:` reference
-insert and a full-code inline insert.
+fuzzy `SuggestModal` over `CompendiumIndex.query()`, offering a reference block, an inline
+`scc.v1:` link (Shift), a copied code (Ctrl/Cmd) and — separately — a full-block snapshot.
+**SC-149 split those last two by family** (`referenceAliasForType`/`snapshotAliasForType`,
+`src/services/typeAdapters.ts`): a REFERENCE is a `ds-scc` block for every type except
+statblock/feature/featureblock, which keep their own typed fence; a SNAPSHOT exists ONLY
+for those three (the documented, stable YAML formats — they are the homebrew editing
+base). The snapshot command's modal filters every other family out of its results, and
+`insertFullBlock` refuses one with a Notice if reached another way. Dumping a
+display-family entry's internal YAML into a note pinned an unstable shape that then went
+stale silently — the vector Scott's ruling removes.
 
 Deferred (recorded, not shipped): hover-preview on an `scc.v1:` link (OD-D6-5) and
 autocomplete for by-SCC block bodies (OD-D6-4) — both future work, not blocking.

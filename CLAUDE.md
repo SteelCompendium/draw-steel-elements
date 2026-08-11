@@ -27,7 +27,7 @@ obsidian-shots` produces ground-truth PNGs from a real spawned Obsidian
 (`<element>--obsidian-<theme>-<bg>.png`) — slower; use it for sign-off, the browser harness
 for iteration. It also seeds a small real compendium subtree (`demo-vault/DS Compendium/`,
 git-ignored, regenerated every run) and captures one extra ground-truth shot
-(`by-scc-kit--obsidian-recursion.png`) proving a by-SCC `ds-kit` reference card renders its
+(`by-scc-kit--obsidian-recursion.png`) proving a by-SCC `ds-scc` reference card renders its
 real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 11;
 `visual-harness/obsidian-camera.mjs`'s "step 3b").
 
@@ -35,10 +35,10 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`). ALL 32 elements live on the framework (11 migrated + `ds-roll` (D5) +
-  11 D6 `displayFamily()`/`genericCard()` compendium-reference elements —
-  `ds-kit`/`ds-condition`/`ds-treasure`/`ds-ancestry`/`ds-culture`/`ds-career`/`ds-class`/
-  `ds-title`/`ds-perk`/`ds-complication`/`ds-rule` — + 4 D8 GM-subsystem elements —
+  `src/elements/`). ALL 23 registered elements live on the framework (11 migrated +
+  `ds-roll` (D5) + the 2 D6 compendium-reference elements that stayed public —
+  `ds-scc` (SC-149's catch-all: body = an SCC code, renders whatever that code is) and
+  `ds-rule` — + 4 D8 GM-subsystem elements —
   `ds-encounter`/`ds-montage`/`ds-project`/`ds-party` — + 5 D7 hero-suite elements —
   `ds-hero`/`ds-conditions`/`ds-resource`/`ds-surges`/`ds-tokens`); every legacy processor
   is retired (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation
@@ -53,11 +53,22 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
   threaded into the pipeline in `main.ts` right after `sccResolver`) is the typed-model
   accessor over the synced compendium (`getEntry`/`getEntity`/`getStatblock`/`query`).
   `src/elements/shared/withReference.ts`/`RefUnwrapView.ts`/`CardLayout.ts` give
-  `statblock`/`feature`/`featureblock` and the 11 display-family elements a shared
+  `statblock`/`feature`/`featureblock` and the 11 display-family DEFINITIONS a shared
   "whole-block reference OR inline YAML" contract (`scc.v1:`/bare-slug/`@path`/
   `[[wikilink]]`, by-SCC hybrid mode rendering the real resolved file's body). Compendium
   search + insert: `src/authoring/CompendiumSearchModal.ts` +
   `src/authoring/compendiumInsert.ts`.
+- **`ds-scc` + the internal display family (SC-149)**: the ten typed display elements
+  (`ds-kit`/`ds-condition`/`ds-treasure`/`ds-ancestry`/`ds-culture`/`ds-career`/`ds-class`/
+  `ds-title`/`ds-perk`/`ds-complication`) are **internal machinery, not public elements** —
+  Scott's pre-release ruling: one maintained catch-all beats ten typed commitments. They
+  are not registered by `main.ts`; `src/elements/scc/definition.ts` (`ds-scc`, strict
+  SCC-code body) mounts their card views by resolved SCC type via `baseForSccType` →
+  each element's `withReference` `.base`, and `visual-harness/entry.ts`'s
+  `registerHarnessElementDefinitions` registers them into the harness's own registry so
+  their fixtures/shots survive. Insert routing lives in `referenceAliasForType` /
+  `snapshotAliasForType` (`src/services/typeAdapters.ts`): reference = `ds-scc` for
+  everything but statblock/feature/featureblock; snapshot = those three only.
 - **Legacy processor pattern**: Each not-yet-migrated `ds-*` element has a processor in
   `src/drawSteelAdmonition/`, registered in `src/utils/RegisterElements.ts`
 - **Framework v2 element pattern**: each migrated `ds-*` element has a

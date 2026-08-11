@@ -61,6 +61,9 @@ Various Elements are provided to support building [Character Sheets in Canvas](c
 [Compendium Sync](compendium-sync.md) manages a local, up-to-date copy of the
 [Draw Steel Compendium](https://steelcompendium.io/compendium) in your Obsidian Vault.
 
+Once it's synced, a [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
+renders any entry in it — the body is just the entry's SCC code.
+
 Upgrading from before 7.0.0? The compendium tree was reorganised, and the plugin can move
 your existing copy to the new paths so Obsidian keeps your links working — see
 [Migrating from 5.x to 7.0.0](migrating-to-7.md) and

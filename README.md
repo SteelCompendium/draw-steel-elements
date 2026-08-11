@@ -46,6 +46,21 @@ The [Roll Element](./docs/Roll.md) is a standalone Draw Steel dice roller (power
 
 ![roll](./docs/Media/roll.png)
 
+### Compendium Reference Element
+
+Sync the [Draw Steel Compendium](./docs/compendium-sync.md) into your vault and a `ds-scc`
+block renders any entry in it — the body is just the entry's SCC code:
+
+````markdown
+```ds-scc
+mcdm.heroes.v1/kit/panther
+```
+````
+
+Use **Insert Draw Steel: compendium reference** in the command palette to search for an
+entry and drop the block in. See
+[Referencing a compendium entry](./docs/compendium-sync.md#referencing-a-compendium-entry-in-your-notes).
+
 ## Future work
 
 - Optionally add hidden header for a Power Roll Element for linking
