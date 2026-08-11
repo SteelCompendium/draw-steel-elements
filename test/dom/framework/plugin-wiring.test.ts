@@ -53,12 +53,11 @@ const ALL_FRAMEWORK_ELEMENT_IDS = [
 	'values-row',
 	'characteristics',
 	'roll',
-	// SC-149: `scc` (ds-scc) REPLACED the ten typed display registrations
-	// (kit/condition/treasure/ancestry/culture/career/class/title/perk/complication) —
-	// they were never released and are internal machinery now. `rule` was not one of the
-	// ten and stays public.
+	// SC-149: `scc` (ds-scc) REPLACED all eleven display registrations
+	// (kit/condition/treasure/ancestry/culture/career/class/title/perk/complication/rule) —
+	// they were never released and are internal machinery now. `rule` joined them in the
+	// fix round (it rendered any code through its generic card, with no type dispatch).
 	'scc',
-	'rule',
 	'encounter',
 	'montage',
 	'project',

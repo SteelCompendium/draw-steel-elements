@@ -14,7 +14,7 @@ import {
 } from '../../../visual-harness/entry';
 
 // SC-149: the HARNESS registry, not the public one — `registerHarnessElementDefinitions`
-// is what `mountFromParams` itself uses, and it adds the ten internal display-family
+// is what `mountFromParams` itself uses, and it adds the eleven internal display-family
 // definitions the public registry no longer carries (see its doc comment in entry.ts).
 const registry = createElementRegistry();
 registerHarnessElementDefinitions(registry);
@@ -42,12 +42,12 @@ describe('F4 visual-harness fixtures', () => {
 		expect(Object.keys(FIXTURES).sort()).toEqual(registered);
 	});
 
-	// SC-149: the ten typed display elements are gone from the PUBLIC registry but must
+	// SC-149: the eleven display elements are gone from the PUBLIC registry but must
 	// stay photographable — every one of them owns frozen shot names (and a line in the
 	// frozen gallery), so losing their harness registration would silently drop coverage
 	// rather than fail loudly.
-	test('the ten internal display-family elements are still mountable in the harness registry', () => {
-		for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication']) {
+	test('the eleven internal display-family elements are still mountable in the harness registry', () => {
+		for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication', 'rule']) {
 			expect(registry.get(id)).toBeDefined();
 		}
 	});

@@ -44,7 +44,6 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-hr`, `ds-horizontal-rule` | Horizontal rule |
 | `ds-roll` | Standalone dice roll (D5) |
 | `ds-scc` | Compendium reference — body is an SCC code, renders whatever that code is (D6 machinery, SC-149 surface) |
-| `ds-rule` | Rule/glossary reference card (D6; model-less — `genericCard()`, not `displayFamily()`) |
 | `ds-encounter` | Encounter Builder — live EV via the compendium, budget/difficulty, hand-off to a tracker (D8) |
 | `ds-montage` | Montage/Test tracker — negotiation-sibling, derived outcome bands (D8) |
 | `ds-project` | Project/Downtime tracker — points, breakthroughs, respite log (D8) |
@@ -56,21 +55,34 @@ This plugin exposes no programmatic API. Its interface is the set of code block 
 | `ds-hero` | Hero sheet — the flagship: composes the four D7 panels above + Characteristics/Stamina/Skills/Abilities over one persisted block (D7) |
 
 Users interact by writing YAML inside these fenced code blocks in Obsidian notes.
-`ds-scc`, `ds-rule` and `ds-sb`/`ds-ft`/`ds-fb` additionally accept a **whole-block
-reference** instead of inline YAML — see "Compendium reference (by-SCC)" below; `ds-scc`
-accepts ONLY that. All 23 elements register through the SAME
-`registerFrameworkElementDefinitions` (`main.ts`) — there is no longer a legacy
-(non-framework) element in this plugin.
+`ds-scc` and `ds-sb`/`ds-ft`/`ds-fb` additionally accept a **whole-block reference**
+instead of inline YAML — see "Compendium reference (by-SCC)" below; `ds-scc` accepts ONLY
+that. All 22 elements register through the SAME `registerFrameworkElementDefinitions`
+(`main.ts`) — there is no longer a legacy (non-framework) element in this plugin.
 
-**SC-149 (2026-08-10) — the ten typed display elements are internal, not public.** D6
+**SC-149 (2026-08-10) — the eleven typed display elements are internal, not public.** D6
 shipped `displayFamily()` instances for kit/condition/treasure/ancestry/culture/career/
-class/title/perk/complication. None of them was ever released, and Scott ruled against
-making ten typed elements (and their inline YAML shapes) a maintained public commitment:
-the public reference surface is the single catch-all `ds-scc`. Those ten definitions
-(`src/elements/display/`) live on as **internal machinery** — `ds-scc` mounts their card
-views by resolved SCC type, and the visual harness registers them into its own registry so
-each still gets its own fixture and shots. They are not registered by `main.ts`, so
-`ds-kit` & co. are not code-block languages any note can use.
+class/title/perk/complication plus the model-less `genericCard()` `ds-rule`. None of them
+was ever released, and Scott ruled against making typed display elements (and their inline
+YAML shapes) a maintained public commitment: the public reference surface is the single
+catch-all `ds-scc`. Those definitions (`src/elements/display/`) live on as **internal
+machinery** — `ds-scc` mounts their card views by resolved SCC type, and the visual harness
+registers them into its own registry so each still gets its own fixture and shots. They are
+not registered by `main.ts`, so `ds-kit` & co. are not code-block languages any note can
+use. (`ds-rule` was initially left public and unregistered in the fix round: with no type
+dispatch of its own it rendered ANY code through the generic card — a statblock code gave a
+silently EMPTY card — and it still accepted the `[[wikilink]]`/`@path` forms `ds-scc`
+refuses.)
+
+**`ds-scc` re-stamps `data-dse-element` to the family it resolved** (`RefUnwrapView.
+mountBase`). 84 rules in `styles-source.css` require `[data-dse-element='statblock'
+|'feature'|'featureblock']`, and every SC-123/SC-146 preference selector pairs a
+`data-dse-*` pref attribute WITH that element id — so without the re-stamp a statblock
+rendered through `ds-scc` matched none of them (no block rhythm, every pref a no-op) and a
+feature regained plan 25's removed action spine. The error/notice paths keep the block's
+own `scc` id. `test/dom/elements/sccStyleParity.test.ts` pins this by parsing the real
+stylesheet: the set of element-scoped selectors matching a `ds-scc` render must equal the
+set matching the same code through the typed element.
 
 ## Data Contracts
 

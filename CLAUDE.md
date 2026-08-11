@@ -35,10 +35,10 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —
   `ElementRegistry` + `ElementPipeline` + `ElementView`, declared elements in
-  `src/elements/`). ALL 23 registered elements live on the framework (11 migrated +
-  `ds-roll` (D5) + the 2 D6 compendium-reference elements that stayed public —
-  `ds-scc` (SC-149's catch-all: body = an SCC code, renders whatever that code is) and
-  `ds-rule` — + 4 D8 GM-subsystem elements —
+  `src/elements/`). ALL 22 registered elements live on the framework (11 migrated +
+  `ds-roll` (D5) + the ONE public D6 compendium-reference element, `ds-scc` (SC-149's
+  catch-all: body = an SCC code, renders whatever that code is) + 4 D8 GM-subsystem
+  elements —
   `ds-encounter`/`ds-montage`/`ds-project`/`ds-party` — + 5 D7 hero-suite elements —
   `ds-hero`/`ds-conditions`/`ds-resource`/`ds-surges`/`ds-tokens`); every legacy processor
   is retired (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation
@@ -58,15 +58,18 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
   `[[wikilink]]`, by-SCC hybrid mode rendering the real resolved file's body). Compendium
   search + insert: `src/authoring/CompendiumSearchModal.ts` +
   `src/authoring/compendiumInsert.ts`.
-- **`ds-scc` + the internal display family (SC-149)**: the ten typed display elements
+- **`ds-scc` + the internal display family (SC-149)**: the eleven display elements
   (`ds-kit`/`ds-condition`/`ds-treasure`/`ds-ancestry`/`ds-culture`/`ds-career`/`ds-class`/
-  `ds-title`/`ds-perk`/`ds-complication`) are **internal machinery, not public elements** —
+  `ds-title`/`ds-perk`/`ds-complication`/`ds-rule`) are **internal machinery, not public
+  elements** —
   Scott's pre-release ruling: one maintained catch-all beats ten typed commitments. They
   are not registered by `main.ts`; `src/elements/scc/definition.ts` (`ds-scc`, strict
   SCC-code body) mounts their card views by resolved SCC type via `baseForSccType` →
-  each element's `withReference` `.base`, and `visual-harness/entry.ts`'s
-  `registerHarnessElementDefinitions` registers them into the harness's own registry so
-  their fixtures/shots survive. Insert routing lives in `referenceAliasForType` /
+  each element's `withReference` `.base` (and re-stamps `data-dse-element` to the resolved
+  family, or 84 element-scoped CSS rules and every statblock/featureblock pref selector
+  would miss — pinned by `test/dom/elements/sccStyleParity.test.ts`), and
+  `visual-harness/entry.ts`'s `registerHarnessElementDefinitions` registers them into the
+  harness's own registry so their fixtures/shots survive. Insert routing lives in `referenceAliasForType` /
   `snapshotAliasForType` (`src/services/typeAdapters.ts`): reference = `ds-scc` for
   everything but statblock/feature/featureblock; snapshot = those three only.
 - **Legacy processor pattern**: Each not-yet-migrated `ds-*` element has a processor in

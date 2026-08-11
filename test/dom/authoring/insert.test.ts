@@ -30,15 +30,13 @@ test('registers exactly one insert-<id> command per element, sentence-cased', ()
 // The ten typed display elements are no longer registered, so they must NOT appear here:
 // an "Insert Draw Steel: Kit" command in the palette is exactly the public commitment
 // Scott's ruling removes.
-test('ds-scc and ds-rule each get an insert-<id> command; the ten typed display elements do not', () => {
+test('ds-scc gets an insert-<id> command; the eleven display elements do not', () => {
 	const plugin = new Plugin(new App());
 	registerInsertCommands(plugin as never, makeRegistry());
-	for (const id of ['scc', 'rule']) {
-		const cmd = plugin.commands.find((c) => c.id === `insert-${id}`);
-		expect(cmd).toBeDefined();
-		expect(typeof cmd.editorCallback).toBe('function');
-	}
-	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication']) {
+	const scc = plugin.commands.find((c) => c.id === 'insert-scc');
+	expect(scc).toBeDefined();
+	expect(typeof scc.editorCallback).toBe('function');
+	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication', 'rule']) {
 		expect(plugin.commands.find((c) => c.id === `insert-${id}`)).toBeUndefined();
 	}
 });

@@ -151,9 +151,19 @@ export const ruleElement = genericCard({
 //
 // SC-149: renamed from `displayElements` and no longer registered by `main.ts` — the ONLY
 // registrar is the visual harness (visual-harness/entry.ts's
-// `registerHarnessElementDefinitions`), which needs real registry entries to mount its ten
-// display fixtures. `ruleElement` is deliberately NOT in this list: it stays a public
-// element (it is not one of the ten Scott's ruling names) and `main.ts` registers it.
+// `registerHarnessElementDefinitions`), which needs real registry entries to mount its
+// eleven display fixtures.
+//
+// FIX ROUND: `ruleElement` joined this list. It was initially left public (the ruling names
+// ten aliases and `ds-rule` is not among them), but driven directly it is exactly the
+// failure `ds-scc` was built to prevent: with no `baseForType` it renders ANY code through
+// its own generic card, so a kit code yields a title and a badge with every stat silently
+// dropped and a statblock code yields a COMPLETELY EMPTY card — no error either time. It
+// also still accepts the `[[wikilink]]`/`@path` forms `ds-scc` refuses, and its advertised
+// inline mode only works by accident (a single-paragraph body folds to a YAML scalar, which
+// `detectWholeBlockRef` reads as a reference). `rule.*` codes already render correctly
+// through `ds-scc`, which reaches this very definition by type. One public catch-all was
+// the point.
 export const INTERNAL_DISPLAY_ELEMENTS: ElementDefinition<unknown>[] = [
 	kitElement,
 	conditionElement,
@@ -165,4 +175,5 @@ export const INTERNAL_DISPLAY_ELEMENTS: ElementDefinition<unknown>[] = [
 	titleElement,
 	perkElement,
 	complicationElement,
+	ruleElement,
 ];

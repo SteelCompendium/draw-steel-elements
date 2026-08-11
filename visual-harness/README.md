@@ -116,9 +116,9 @@ visual combo sweeps), each selectable as its own `--element=` value:
 
 | `--element=` | What it proves |
 |---|---|
-| `by-scc-kit` | a by-SCC `ds-kit` card recursing into a real nested `ds-feature` card |
+| `by-scc-kit` | a by-SCC `ds-scc` block (a kit code) recursing into a real nested `ds-feature` card |
 | `sidebar-initiative` | the dedicated "Send initiative tracker to sidebar" command |
-| `sidebar-hero` / `sidebar-statblock` / `sidebar-perk` / `sidebar-negotiation` | the GENERIC "Send block to sidebar" command — and narrow-width behaviour in a real 300px leaf |
+| `sidebar-hero` / `sidebar-statblock` / `sidebar-scc` / `sidebar-negotiation` | the GENERIC "Send block to sidebar" command — and narrow-width behaviour in a real 300px leaf |
 | `modal-stamina` / `modal-stamina-recovery` / `modal-conditions` / `modal-form` | the four interactive modals, opened by clicking their REAL affordances |
 | `settings` | the plugin settings tab, over a 2nd CDP connection to Obsidian 1.13's Settings POPOUT window |
 | `canvas` | the canvas read-only quarantine (`data-dse-readonly` asserted, not just eyeballed) |

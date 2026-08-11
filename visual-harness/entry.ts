@@ -622,7 +622,7 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
 }
 
 /**
- * SC-149 — the harness's registry is the PUBLIC registry plus the ten internal
+ * SC-149 — the harness's registry is the PUBLIC registry plus the eleven internal
  * display-family definitions. `main.ts` stopped registering `ds-kit` & co. (they are no
  * longer public code-block languages; `ds-scc` is the one public reference element), but
  * they are still the card renderers `ds-scc` mounts by resolved type, and the harness

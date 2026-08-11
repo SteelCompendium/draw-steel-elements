@@ -61,7 +61,6 @@ import { counterElement } from '@/elements/counter/definition';
 import { valuesRowElement } from '@/elements/values-row/definition';
 import { characteristicsElement } from '@/elements/characteristics/definition';
 import { rollElement } from '@/elements/roll/definition';
-import { ruleElement } from '@/elements/display';
 import { sccElement } from '@/elements/scc/definition';
 import { encounterElement } from '@/elements/encounter/definition';
 import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
@@ -293,16 +292,18 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(rollElement);
 	// SC-149 (2026-08-10, Scott's pre-release ruling): the PUBLIC compendium-reference
 	// surface is ONE catch-all element, `ds-scc` — body = an SCC code, renders whatever
-	// that code is. The ten typed display aliases D6 added (`ds-kit`, `ds-condition`,
+	// that code is. The eleven D6 display elements (`ds-kit`, `ds-condition`,
 	// `ds-treasure`, `ds-ancestry`, `ds-culture`, `ds-career`, `ds-class`, `ds-title`,
-	// `ds-perk`, `ds-complication`) are deliberately NOT registered: they never shipped in
-	// a release, and Scott declined to make ten typed elements (and their inline YAML
-	// shapes) a maintained public commitment. They survive as internal machinery —
-	// `ds-scc` mounts their card views by resolved type, and the visual harness registers
-	// them into its own registry (see src/elements/display/index.ts).
+	// `ds-perk`, `ds-complication`, `ds-rule`) are deliberately NOT registered: they never
+	// shipped in a release, and Scott declined to make typed display elements (and their
+	// inline YAML shapes) a maintained public commitment. They survive as internal
+	// machinery — `ds-scc` mounts their card views by resolved type, and the visual harness
+	// registers them into its own registry (see src/elements/display/index.ts).
+	// `ds-rule` joined them in the SC-149 fix round — it renders any code through its
+	// model-less generic card with no type dispatch at all (a statblock code yields an
+	// empty card, silently), so leaving it public would have kept the exact failure mode
+	// `ds-scc` exists to prevent. See src/elements/display/index.ts.
 	registry.register(sccElement);
-	// `ds-rule` is NOT one of the ten and stays public (model-less generic card).
-	registry.register(ruleElement);
 	// D8 Task 4 (spec §2) — hard-gated on F2 OD-1 + D6 (both landed); the "Open in
 	// sidebar" hand-off (spec §2.4/OD-5, encounter/view.ts's setEncounterSidebarHandoff
 	// seam) is wired by Task 10 alongside the rest of the sidebar registration sweep.

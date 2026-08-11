@@ -183,8 +183,11 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 // reference and a snapshot no longer answer the same question. Reference = ds-scc for
 // everything except the three public typed families; snapshot = those three families only.
 describe('referenceAliasForType (spec §4.3, SC-149)', () => {
-	test('a fully-qualified statblock type keeps its own typed fence', () => {
-		expect(referenceAliasForType('monster.goblin.statblock')).toBe('ds-statblock');
+	// N-2: the fence written into the note is the element's CANONICAL alias (`ds-sb`),
+	// not TYPE_ADAPTERS' internal long-form family identifier (`ds-statblock`). Both
+	// resolve; the canonical one is what the rest of the plugin writes.
+	test('a fully-qualified statblock type keeps its own typed fence, canonically named', () => {
+		expect(referenceAliasForType('monster.goblin.statblock')).toBe('ds-sb');
 	});
 	test('a namespaced feature type keeps its own typed fence', () => {
 		expect(referenceAliasForType('feature.fury.level-1')).toBe('ds-feature');
@@ -249,7 +252,7 @@ describe('SC-141 type scopes, on both insert lookups (SC-149 C2 port)', () => {
 
 describe('snapshotAliasForType (SC-149)', () => {
 	test.each([
-		['monster.goblin.statblock', 'ds-statblock'],
+		['monster.goblin.statblock', 'ds-sb'],
 		['feature.fury.level-1', 'ds-feature'],
 		['monster.angulotl.featureblock', 'ds-featureblock'],
 	])('%s is snapshottable as %s', (type, alias) => {
@@ -291,7 +294,7 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 			source: 'mcdm.monsters.v1',
 			file: {} as any,
 		});
-		expect(editor.writes[0].text).toBe(`\`\`\`ds-statblock\n${GOBLIN}\n\`\`\`\n`);
+		expect(editor.writes[0].text).toBe(`\`\`\`ds-sb\n${GOBLIN}\n\`\`\`\n`);
 	});
 
 	test('insertInlineLink writes a scc.v1 markdown link', () => {
@@ -308,7 +311,7 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 		expect(await insertFullBlock(editor as any, entity!)).toBe(true);
 		expect(editor.writes).toHaveLength(1);
 		const text = editor.writes[0].text;
-		expect(text.startsWith('```ds-statblock\n')).toBe(true);
+		expect(text.startsWith('```ds-sb\n')).toBe(true);
 		expect(text.trim().endsWith('```')).toBe(true);
 		expect(text).toContain('name: Goblin Stinker');
 	});
@@ -405,7 +408,7 @@ describe('dispatchBlockChoice (spec §4.3, full-block command)', () => {
 		const [entry] = index.query('stinker');
 		await dispatchBlockChoice(editor as any, index, entry);
 		expect(editor.writes).toHaveLength(1);
-		expect(editor.writes[0].text.startsWith('```ds-statblock\n')).toBe(true);
+		expect(editor.writes[0].text.startsWith('```ds-sb\n')).toBe(true);
 	});
 
 	test('a code that no longer resolves is a silent no-op', async () => {

@@ -290,20 +290,19 @@ for what needs action.
   "Sync compendium (legacy alias)" so hotkeys keep working; it will be removed
   in 8.0.0).
 - Updates `steel-compendium-sdk` to 3.x.
-- New: compendium reference cards — `ds-kit`, `ds-condition`, `ds-treasure`,
-  `ds-ancestry`, `ds-culture`, `ds-career`, `ds-class`, `ds-title`, `ds-perk`,
-  `ds-complication`, and `ds-rule` (a general glossary/rule card) render a
-  compendium entry as a styled card. Each also accepts `ds-sb`/`ds-ft`/`ds-fb`
-  (statblock/feature/featureblock) as a **reference**: write `scc.v1:<code>`,
-  `@<path>`, `[[wikilink]]`, or (for the 11 new cards) a bare slug like
-  `panther`, instead of inline YAML, and the card renders live from your
-  synced compendium — including any nested ability cards embedded in that
-  entry's own content.
+- New: **compendium reference cards** — every entry in the synced compendium
+  renders as a styled card from its SCC code alone, via the new `ds-scc` block
+  (see the `ds-scc` entry at the top of this release). Kits, conditions,
+  treasures, ancestries, cultures, careers, classes, titles, perks,
+  complications, rules, statblocks, features and featureblocks all render, each
+  in its own card style — including any nested ability cards embedded in that
+  entry's own content. `ds-sb`/`ds-ft`/`ds-fb` additionally accept a
+  **reference** in place of inline YAML: write `scc.v1:<code>`, `@<path>` or
+  `[[wikilink]]` and the block renders live from your synced compendium.
 - New: compendium search + insert — a fuzzy search command
-  ("Search compendium") to find and insert a reference or a full inline copy
-  of any compendium entry, without leaving the editor.
-- The `/ds` autocomplete and the per-element "Insert Draw Steel: …" commands
-  automatically cover every new card above.
+  ("Search compendium") to find and insert a reference to any compendium entry,
+  or (for statblocks, features and featureblocks) a full inline copy, without
+  leaving the editor.
 - New: **Draw Steel sidebar** — pin any tracker (initiative, encounter, montage,
   project, party) to a persistent right-sidebar panel that survives navigating
   between notes, via the new sword icon in the ribbon ("Open Draw Steel
@@ -436,7 +435,7 @@ for what needs action.
   the Steel typography work: Legacy and print/export shots don't reference
   the family and are untouched. Adds ~27KB to the built stylesheet (a 20KB
   woff2, base64-embedded).
-- The Steel theme's kit card (`ds-kit`) is rebuilt to the site's composition: a crest
+- The Steel theme's kit card is rebuilt to the site's composition: a crest
   and small-caps kind eyebrow ("Martial Kit" / "Magic Kit" / "Psionic Kit") over the
   name, a boxed Equipment panel, and Kit Bonuses as the site's fixed two-row stat-tile
   grid (Stamina per Echelon / Speed / Stability / Disengage, then Melee Dmg / Ranged

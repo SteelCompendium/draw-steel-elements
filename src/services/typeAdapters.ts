@@ -221,6 +221,16 @@ const DS_BLOCK_ALIASES = new Set(['ds-statblock', 'ds-feature', 'ds-featureblock
 const SCC_ALIAS = 'ds-scc';
 
 /**
+ * Fix round N-2 — the fence an INSERT writes for a ds-block family, as opposed to the
+ * `alias` above, which is this map's internal family identifier. The two diverge for
+ * statblock only: the element's canonical alias (`aliases[0]`) is `ds-sb`, and that is
+ * what a user should find in their note, but `TYPE_ADAPTERS`' identifier has always been
+ * the long `ds-statblock` (both resolve). Feature/featureblock keep their long forms,
+ * which are the clearest of their aliases (`ds-ft`/`ds-fb` are canonical but terse).
+ */
+const INSERT_FENCE: Record<string, string> = { 'ds-statblock': 'ds-sb' };
+
+/**
  * D6 Task 10 (spec §4.3), rewritten by SC-149 -- "which fence do I wrap a REFERENCE to
  * this SCC `type` in", over the SAME TYPE_ADAPTERS ordering/regexes `adapterForType`
  * uses (no forked type->element mapping). The three ds-block families keep their own
@@ -229,7 +239,8 @@ const SCC_ALIAS = 'ds-scc';
  */
 export function referenceAliasForType(type: string): string {
 	const alias = adapterForType(type)?.alias;
-	return alias !== undefined && DS_BLOCK_ALIASES.has(alias) ? alias : SCC_ALIAS;
+	if (alias === undefined || !DS_BLOCK_ALIASES.has(alias)) return SCC_ALIAS;
+	return INSERT_FENCE[alias] ?? alias;
 }
 
 /**
@@ -242,5 +253,6 @@ export function referenceAliasForType(type: string): string {
  */
 export function snapshotAliasForType(type: string): string | null {
 	const alias = adapterForType(type)?.alias;
-	return alias !== undefined && DS_BLOCK_ALIASES.has(alias) ? alias : null;
+	if (alias === undefined || !DS_BLOCK_ALIASES.has(alias)) return null;
+	return INSERT_FENCE[alias] ?? alias;
 }

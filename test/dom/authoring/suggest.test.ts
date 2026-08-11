@@ -108,20 +108,16 @@ test('getSuggestions filters by name and alias; empty query lists all', () => {
 // `ds-scc` appears with zero changes to this file, and the ten unregistered typed display
 // elements CANNOT appear (a `/dskit` completion would be the public commitment Scott's
 // ruling removes).
-test('the /ds suggest lists ds-scc and never the ten unregistered typed display elements', () => {
+test('the /ds suggest lists ds-scc and never the eleven unregistered display elements', () => {
 	const s = makeSuggest();
 	const all = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: '' });
 	const ids = all.map((d) => d.id);
-	for (const id of ['scc', 'rule']) {
-		expect(ids).toContain(id);
-	}
-	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication']) {
+	expect(ids).toContain('scc');
+	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication', 'rule']) {
 		expect(ids).not.toContain(id);
 	}
 	const scc = all.find((d) => d.id === 'scc')!;
 	expect(scc.aliases).toContain('ds-scc');
-	const rule = all.find((d) => d.id === 'rule')!;
-	expect(rule.aliases).toContain('ds-rule');
 	// getSuggestions filters by alias substring too — confirm the query path picks up the
 	// new alias, not just the empty-query "list everything" path above.
 	const sccQuery = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: 'scc' });
