@@ -194,6 +194,13 @@ describe('typeToAlias (spec §4.3)', () => {
 	test('featureblock still wins over the widened feature scope', () => {
 		expect(typeToAlias('featureblock')).toBe('ds-featureblock');
 	});
+	// SC-141 fix round (M2): the corpus's 35 dynamic-terrain files are ds-fb content whose
+	// frontmatter type is the ROOT of their SCC segment (`dynamic-terrain.mechanisms`), not
+	// the leaf. Unclaimed before, so Insert-reference wrapped all 35 in the wrong fence.
+	test('a dynamic-terrain type maps to ds-featureblock', () => {
+		expect(typeToAlias('dynamic-terrain')).toBe('ds-featureblock');
+		expect(typeToAlias('dynamic-terrain.mechanisms')).toBe('ds-featureblock');
+	});
 	test('an unrecognized type falls back to the generic ds-rule card', () => {
 		expect(typeToAlias('nonsense.unknown-type')).toBe('ds-rule');
 	});

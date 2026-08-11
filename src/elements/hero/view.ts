@@ -50,6 +50,7 @@ import { openFormEditor } from '@/authoring/FormModal';
 import { FeatureConfig } from '@model/FeatureConfig';
 import { FEATURE_TYPE_RE } from '@/services/typeAdapters';
 import { actionTypeOf } from '@/elements/feature/renderFeature';
+import type { ActionType } from '@/elements/feature/renderFeature';
 import { FeatureElementView } from '@/elements/feature/view';
 import { ResourcePanel } from '@/elements/resource/panel';
 import type { ResourceSlice } from '@/elements/resource/panel';
@@ -67,6 +68,19 @@ import { HeroModel } from './model';
 import type { Condition } from './model';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
+
+/** SC-141 fix round (M3): display text for the compact row's action-type chip, keyed to
+ *  `actionTypeOf`'s spine vocabulary (renderFeature.ts). `main` reads "Main action" so a
+ *  hand-authored `ability_type: Main action` renders byte-identically to before. */
+const ACTION_TYPE_LABELS: Record<ActionType, string> = {
+	main: 'Main action',
+	maneuver: 'Maneuver',
+	triggered: 'Triggered action',
+	move: 'Move action',
+	none: 'No action',
+	villain: 'Villain action',
+	trait: 'Trait',
+};
 
 interface AbilityEntry {
 	raw: string | Record<string, unknown>;
@@ -615,7 +629,8 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		const name = feature.name ?? '(unnamed ability)';
 		headEl.createSpan({ cls: 'dse-hero__ability-name', text: name });
 		if (feature.cost) headEl.createSpan({ cls: 'dse-hero__ability-cost', text: String(feature.cost) });
-		if (feature.ability_type) headEl.createSpan({ cls: 'dse-hero__ability-type', text: feature.ability_type });
+		const actionLabel = this.abilityActionLabel(entry.config);
+		if (actionLabel) headEl.createSpan({ cls: 'dse-hero__ability-type', text: actionLabel });
 
 		const bodyEl = rowEl.createDiv({ cls: 'dse-hero__ability-body' });
 		bodyEl.hidden = true;
@@ -641,6 +656,27 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		toggle.buttonEl.addClass('dse-hero__ability-toggle');
 
 		return { rowEl };
+	}
+
+	/** SC-141 fix round (M3): the compact row's action-type chip, off the SAME
+	 *  `actionTypeOf` spine the tabs filter and the full card already use — so the chip and
+	 *  the Signature/Heroic/Triggered tabs can never disagree.
+	 *
+	 *  It used to read `feature.ability_type` raw, which no compendium ability has: steel-etl
+	 *  writes the action type as `usage: '[Maneuver](scc.v1:…)'` and sets no `ability_type`
+	 *  at all, so every real corpus ability rendered a chip-less row (only hand-authored
+	 *  inline abilities, i.e. every fixture in this repo, carried one — the same
+	 *  fixture-shape-vs-corpus-shape blind spot as FOLLOWUPS #53 / plan 25). `actionTypeOf`
+	 *  already reads `usage` first and falls back to `ability_type`, so this is one call.
+	 *
+	 *  The raw `ability_type` survives only as a last resort, for an authored value
+	 *  `actionTypeOf` can't map to a spine token (it returns undefined rather than guess) —
+	 *  showing the author's own words beats showing nothing. */
+	private abilityActionLabel(config: FeatureConfig): string | undefined {
+		const act = actionTypeOf(config);
+		if (act) return ACTION_TYPE_LABELS[act];
+		const authored = config.feature.ability_type;
+		return authored ? String(authored) : undefined;
 	}
 
 	private abilityRawLabel(raw: string | Record<string, unknown>): string {

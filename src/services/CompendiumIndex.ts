@@ -163,13 +163,13 @@ class DseCompendiumIndex implements CompendiumIndex {
 
 	resolveSlug(slug: string, typeScope: string | RegExp): string[] {
 		const s = slug.trim().toLowerCase();
-		return this.resolver.entries()
+		const matches = this.resolver.entries()
 			.map((e) => this.getEntry(e.scc))
 			.filter((e): e is CompendiumEntry => e !== null && matchType(e.type, typeScope))
 			.filter((e) => e.file.basename.toLowerCase() === s
 				|| (String(this.app.metadataCache.getFileCache(e.file)?.frontmatter?.file_basename ?? "")).toLowerCase() === s
-				|| e.name.toLowerCase() === s)
-			.map((e) => e.scc);
+				|| e.name.toLowerCase() === s);
+		return preferFullOverStubTwin(matches).map((e) => e.scc);
 	}
 
 	registerWatchers(plugin: Plugin): void {
@@ -218,6 +218,45 @@ class DseCompendiumIndex implements CompendiumIndex {
 
 function matchType(type: string, scope: string | RegExp): boolean {
 	return typeof scope === "string" ? type === scope : scope.test(type);
+}
+
+const sourceOf = (code: string): string => code.slice(0, code.indexOf("/"));
+const itemOf = (code: string): string => code.slice(code.lastIndexOf("/") + 1);
+
+/**
+ * SC-141 fix round (M1) — the steel-etl STUB-TWIN tie-break.
+ *
+ * steel-etl emits many abilities TWICE: the full ability
+ * (`mcdm.summoner.v1/feature.ability.summoner.level-1/shield`, `type: ability`, ~2.8 KB)
+ * and a thin container/pointer stub at the class-progression code
+ * (`mcdm.summoner.v1/feature.summoner.level-1/shield`, `type: feature`, ~0.6 KB, no
+ * distance/effects/target). Same source, same item id, one real body between them.
+ *
+ * Before SC-141, `FEATURE_TYPE_RE` excluded `type: ability`, so a bare slug quietly
+ * resolved to the STUB — the wrong entry, silently. Widening the scope made both visible,
+ * which is more honest but turned 98 bare-slug keys from "renders the stub" into
+ * "ambiguous — paste a full code" and would have made the CHANGELOG's "including by name"
+ * claim false for most of them.
+ *
+ * This collapses exactly that pattern and nothing else: it fires only when the candidate
+ * set holds EXACTLY ONE full-content entry (`type: ability`/`trait`) and every other
+ * candidate is a `type: feature` sharing its source AND item id. Measured over the real
+ * corpus (3,078 files, 2026-08-10): 92 of the 98 newly-ambiguous keys collapse to the full
+ * ability, and NO key outside that newly-ambiguous set is touched. The 6 that remain are
+ * three genuine collisions (`blessing-of-secrets` — two different classes' abilities;
+ * `lead-by-example` and `hit-and-run` — different BOOKS) × their two slug spellings, and
+ * they must keep erroring: picking one would be a guess, not a tie-break.
+ */
+function preferFullOverStubTwin(matches: CompendiumEntry[]): CompendiumEntry[] {
+	if (matches.length < 2) return matches;
+	const full = matches.filter((e) => e.type === "ability" || e.type === "trait");
+	if (full.length !== 1) return matches;
+	const winner = full[0];
+	const isStubTwinOf = (e: CompendiumEntry): boolean =>
+		e.type === "feature"
+		&& sourceOf(e.scc) === sourceOf(winner.scc)
+		&& itemOf(e.scc) === itemOf(winner.scc);
+	return matches.every((e) => e === winner || isStubTwinOf(e)) ? [winner] : matches;
 }
 
 /** Subsequence fuzzy match — cheap and dependency-free (matches the SuggestModal intent). */

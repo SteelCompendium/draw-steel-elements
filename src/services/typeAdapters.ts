@@ -76,6 +76,27 @@ export const STATBLOCK_TYPE_RE = /(^|\.)statblock$/;
  */
 export const FEATURE_TYPE_RE = /^(feature|ability|trait)($|\.)/;
 
+/**
+ * The `ds-featureblock` family's `type` scope — SC-141 fix round (M2).
+ *
+ * Same shape of bug as FEATURE_TYPE_RE above, one family over: all 35 `dynamic-terrain`
+ * files in the real corpus (`dynamic-terrain.{mechanisms,fieldworks,siege-engines,
+ * power-fixtures,environmental-hazards,supernatural-objects}`) carry a real ```ds-fb block
+ * and were claimed by no adapter at all, so `getEntity().model()` returned `undefined` and
+ * a by-SCC reference reported them as "found but not renderable — re-sync" against a
+ * compendium that was perfectly fine. `typeToAlias` likewise wrapped all 35 in `ds-rule`.
+ *
+ * Note the frontmatter `type:` here is the ROOT of the SCC type segment
+ * (`dynamic-terrain.mechanisms` -> `type: dynamic-terrain`), where the feature family's is
+ * the LEAF (`feature.ability.shadow.level-1` -> `type: ability`). steel-etl is not
+ * self-consistent about which end it writes, which is exactly why these scopes must be
+ * derived from the corpus census rather than from the code shape.
+ *
+ * Exported (like STATBLOCK_TYPE_RE / FEATURE_TYPE_RE) so the `ds-featureblock` element's
+ * bare-slug scope reads it instead of keeping its own copy.
+ */
+export const FEATUREBLOCK_TYPE_RE = /(^|\.)featureblock$|^dynamic-terrain($|\.)/;
+
 export interface TypeAdapter {
 	/** SCC-type test: does this adapter own a given frontmatter `type` value? */
 	matches(type: string): boolean;
@@ -162,7 +183,7 @@ function genericNoteAdapter(re: RegExp, alias: string): TypeAdapter {
  */
 export const TYPE_ADAPTERS: TypeAdapter[] = [
 	dsBlockAdapter(STATBLOCK_TYPE_RE, (t) => StatblockConfig.readYaml(t), 'ds-statblock'),
-	dsBlockAdapter(/(^|\.)featureblock$/, (t) => FeatureblockConfig.readYaml(t), 'ds-featureblock'),
+	dsBlockAdapter(FEATUREBLOCK_TYPE_RE, (t) => FeatureblockConfig.readYaml(t), 'ds-featureblock'),
 	dsBlockAdapter(FEATURE_TYPE_RE, (t) => FeatureConfig.readYaml(t), 'ds-feature'),
 	frontmatterAdapter(/^kit$/, Kit.modelDTOAdapter, 'ds-kit'),
 	frontmatterAdapter(/^ancestry$/, Ancestry.modelDTOAdapter, 'ds-ancestry'),

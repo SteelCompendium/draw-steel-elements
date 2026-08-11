@@ -13,6 +13,7 @@
 // unset.
 import type { ElementDefinition } from '@/framework/registry';
 import { withReference } from '@/elements/shared/withReference';
+import { FEATUREBLOCK_TYPE_RE } from '@/services/typeAdapters';
 import { FeatureblockConfig } from '@model/FeatureblockConfig';
 import { FeatureblockElementView } from './view';
 import featureblockExample from './example.yaml';
@@ -36,6 +37,8 @@ const baseFeatureblockElement: ElementDefinition<FeatureblockConfig> = {
 	authoring: { example: featureblockExample, sdkModel: 'featureblock' },
 };
 
-// Bare-slug scope (§1.3): any `<family>.featureblock` type (e.g.
-// monster.angulotl.featureblock), matching TYPE_ADAPTERS' featureblock entry.
-export const featureblockElement = withReference(baseFeatureblockElement, { sccType: /featureblock$/ });
+// Bare-slug scope (§1.3): THE shared featureblock `type` scope from typeAdapters.ts, not a
+// local copy — any `<family>.featureblock` (e.g. monster.angulotl.featureblock) PLUS the
+// `dynamic-terrain` family, whose 35 corpus files are ds-fb content that no adapter claimed
+// before SC-141's fix round (M2). See FEATUREBLOCK_TYPE_RE's doc comment.
+export const featureblockElement = withReference(baseFeatureblockElement, { sccType: FEATUREBLOCK_TYPE_RE });

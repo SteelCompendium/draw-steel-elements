@@ -118,7 +118,25 @@ for what needs action.
   genuinely cannot be found now says so plainly and names both possible causes
   (an un-synced compendium **or** a wrong code) instead of only blaming the sync,
   and a broken entry can only ever cost its own row — the rest of the ability
-  list, and the rest of the sheet, keep working around it.
+  list, and the rest of the sheet, keep working around it. Looking an ability up
+  **by name** now prefers the real ability over the stub the compendium also
+  carries under the class-progression code — before, the name quietly found the
+  stub, which is a one-line pointer with none of the ability on it. Where a name
+  genuinely belongs to two different entries (*Hit and Run* is both a Fury
+  ability and a beastheart companion feature), you are still asked to paste the
+  full code, because picking one would be a guess.
+- [FIX] **Dynamic Terrain entries render too, and so do every book's feature
+  blocks** (SC-141). Two more sides of the same problem, found while fixing the
+  one above. Dynamic Terrain — pillars, pressure plates, siege engines, the 35
+  entries in *Monsters* — was labelled in a way no part of the plugin recognised,
+  so referencing one by code claimed the file was unreadable and told you to
+  re-sync a compendium that was perfectly healthy. Underneath that sat a second
+  fault that had nothing to do with labels: **no feature block from any book
+  could be read at all** — all 152 of them — because the plugin's own examples
+  spell out a field for each entry that the real books leave implicit, so the
+  reader crashed on the first entry of every real file and nothing ever caught
+  it. Both are fixed; real feature blocks and Dynamic Terrain now render from a
+  code like anything else.
 - [FIX] **The Stamina editor's preview bar shows temporary Stamina** (SC-133).
   Damage consumes temporary Stamina first, so the most common edit in the modal
   moved a number the preview could not draw at all — pressing Damage looked like

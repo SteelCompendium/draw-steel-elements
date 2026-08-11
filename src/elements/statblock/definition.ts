@@ -13,6 +13,7 @@
 // mousedown/pointerdown stop, so noClickShield stays unset.
 import type { ElementDefinition } from '@/framework/registry';
 import { withReference } from '@/elements/shared/withReference';
+import { STATBLOCK_TYPE_RE } from '@/services/typeAdapters';
 import { StatblockConfig } from '@model/StatblockConfig';
 import { StatblockElementView } from './view';
 import statblockExample from './example.yaml';
@@ -36,6 +37,10 @@ const baseStatblockElement: ElementDefinition<StatblockConfig> = {
 	authoring: { example: statblockExample, sdkModel: 'statblock' },
 };
 
-// Bare-slug scope (§1.3): any `<family>.statblock` type (e.g. monster.goblin.statblock),
-// matching CompendiumIndex's own STATBLOCK_TYPE_RE family — verified against TYPE_ADAPTERS.
-export const statblockElement = withReference(baseStatblockElement, { sccType: /statblock$/ });
+// Bare-slug scope (§1.3): THE shared statblock `type` scope from typeAdapters.ts — any
+// `<family>.statblock` (e.g. monster.goblin.statblock) or a bare `statblock`. SC-141 fix
+// round (L1): this used to be a hand-copied `/statblock$/`, which is LOOSER than the
+// exported constant it claimed to match (it also accepts `notastatblock`). No corpus type
+// exploited the gap, but a local copy claiming in a comment to match TYPE_ADAPTERS while
+// quietly differing from it is precisely the setup that produced SC-141.
+export const statblockElement = withReference(baseStatblockElement, { sccType: STATBLOCK_TYPE_RE });

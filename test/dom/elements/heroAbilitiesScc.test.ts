@@ -19,8 +19,10 @@ import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
+import { FEATURE_TYPE_RE, FEATUREBLOCK_TYPE_RE } from '@/services/typeAdapters';
 import { heroElement } from '../../../src/elements/hero/definition';
 import { featureElement } from '../../../src/elements/feature/definition';
+import { featureblockElement } from '../../../src/elements/featureblock/definition';
 import { makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 
 const COAT_THE_BLADE = 'scc.v1:mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade';
@@ -235,5 +237,144 @@ describe('SC-141: the same widened scope fixes by-SCC `ds-feature` references', 
 		const { root } = await renderHero(['Coat the Blade']);
 		expect(rowName(abilityRows(root)[0])).toBe('Coat the Blade');
 		expect(rowIssue(abilityRows(root)[0])).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------- fix round
+
+describe('SC-141 fix round (M1): a bare name prefers the full ability over its steel-etl stub twin', () => {
+	/** steel-etl emits `Shield!` twice: the real ability (`feature.ability.summoner.level-1`,
+	 *  `type: ability`, 2793 B) and a pointer stub (`feature.summoner.level-1`,
+	 *  `type: feature`, 605 B, body "You have the following triggered action."). Both real
+	 *  corpus bytes. Pre-SC-141 the bare slug silently resolved to the STUB (the ability was
+	 *  invisible); widening the scope made it ambiguous; the tie-break makes it right. */
+	function makeTwinDeps(): ElementPipelineDeps {
+		const { deps, vault } = makeCompendiumDeps();
+		loadMdDseFixture(vault, 'class/fury.md');
+		loadMdDseFixture(vault, 'kit/mountain.md');
+		loadMdDseFixture(vault, 'ancestry/dwarf.md');
+		loadMdDseFixture(vault, 'feature/ability/summoner/level-1/shield.md');
+		loadMdDseFixture(vault, 'feature/summoner/level-1/shield.md');
+		return deps;
+	}
+
+	test('the twin pair resolves to the ability, not the 605-byte stub', async () => {
+		const { root } = await renderHero(['Shield!'], makeTwinDeps());
+		const row = abilityRows(root)[0];
+		expect(rowIssue(row)).toBeNull();
+		expect(rowName(row)).toBe('Shield!');
+
+		// Prove it is the ABILITY: the stub's whole body is one pointer sentence and it has
+		// no trigger; the real one is a triggered action with a trigger line.
+		row.querySelector<HTMLButtonElement>('.dse-hero__ability-toggle')!.click();
+		await new Promise((r) => setTimeout(r, 0));
+		const body = row.querySelector<HTMLElement>('.dse-hero__ability-body')!;
+		expect(body.textContent).not.toContain('You have the following triggered action');
+		expect(body.textContent).toContain('Trigger');
+	});
+
+	test('the index itself returns the single ability code, not both', () => {
+		const deps = makeTwinDeps();
+		expect(deps.compendium!.resolveSlug('Shield!', FEATURE_TYPE_RE))
+			.toEqual(['mcdm.summoner.v1/feature.ability.summoner.level-1/shield']);
+	});
+
+	test('a GENUINE collision across books still errors — the tie-break never guesses', () => {
+		// Two unrelated `Hit and Run` entries: a Fury level-1 ability (mcdm.heroes.v1) and a
+		// beastheart companion feature (mcdm.beastheart.v1). Different sources, so this is
+		// not a twin — picking one would be a guess.
+		const { deps, vault } = makeCompendiumDeps();
+		loadMdDseFixture(vault, 'feature/ability/fury/level-1/hit-and-run.md');
+		loadMdDseFixture(vault, 'feature/companion/beastheart/lightbender/level-3/hit-and-run.md');
+		expect(deps.compendium!.resolveSlug('Hit and Run', FEATURE_TYPE_RE).sort()).toEqual([
+			'mcdm.beastheart.v1/feature.companion.beastheart.lightbender.level-3/hit-and-run',
+			'mcdm.heroes.v1/feature.ability.fury.level-1/hit-and-run',
+		]);
+	});
+
+	test('the hero sheet surfaces that genuine ambiguity as one row, listing both codes', async () => {
+		const { deps, vault } = makeCompendiumDeps();
+		loadMdDseFixture(vault, 'class/fury.md');
+		loadMdDseFixture(vault, 'kit/mountain.md');
+		loadMdDseFixture(vault, 'ancestry/dwarf.md');
+		loadMdDseFixture(vault, 'feature/ability/fury/level-1/hit-and-run.md');
+		loadMdDseFixture(vault, 'feature/companion/beastheart/lightbender/level-3/hit-and-run.md');
+		const { root } = await renderHero(['Hit and Run'], deps);
+		const issue = rowIssue(abilityRows(root)[0]);
+		expect(issue).toContain('is ambiguous');
+		expect(issue).toContain('mcdm.heroes.v1/feature.ability.fury.level-1/hit-and-run');
+	});
+});
+
+describe('SC-141 fix round (M3): the compact row shows an action type for real corpus abilities', () => {
+	test('a corpus ability (usage, no ability_type) gets its chip', async () => {
+		const { root } = await renderHero([COAT_THE_BLADE]);
+		const chip = abilityRows(root)[0].querySelector('.dse-hero__ability-type');
+		// The corpus writes `usage: '[Maneuver](scc.v1:…)'` and NO ability_type; the chip now
+		// reads the same `actionTypeOf` spine the tabs filter uses.
+		expect(chip?.textContent).toBe('Maneuver');
+	});
+
+	test('a hand-authored `ability_type` still renders exactly as authored', async () => {
+		const inline = `name: Torin Stonefist
+level: 3
+characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
+abilities:
+  - name: Brute Strike
+    ability_type: Main action
+    usage: Main action
+    effects:
+      - { name: Effect, effect: Deal damage equal to might. }
+`;
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		await pipeline.run(heroElement, inline, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(abilityRows(root)[0].querySelector('.dse-hero__ability-type')?.textContent)
+			.toBe('Main action');
+	});
+});
+
+describe('SC-141 fix round (M2): `type: dynamic-terrain` is the same bug, one family over', () => {
+	/** All 35 corpus dynamic-terrain files carry a real ```ds-fb block and were claimed by no
+	 *  adapter, so a by-SCC reference blamed the sync for a compendium that was fine. */
+	const PILLAR = 'scc.v1:mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar';
+
+	function makeDtDeps(): { deps: ElementPipelineDeps; index: CompendiumIndex } {
+		const { deps, vault, index } = makeCompendiumDeps();
+		loadMdDseFixture(vault, 'dynamic-terrain/mechanisms/pillar.md');
+		return { deps, index };
+	}
+
+	test('getEntity().model() parses it through the ds-featureblock adapter', async () => {
+		const { index } = makeDtDeps();
+		const entity = await index.getEntity('mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar');
+		expect(entity!.type).toBe('dynamic-terrain');
+		expect(await entity!.model()).toBeDefined();
+	});
+
+	test('a by-SCC `ds-featureblock` block renders it (was "found but not renderable")', async () => {
+		const { deps } = makeDtDeps();
+		const containerEl = document.createElement('div');
+		const host: BlockHost = {
+			mode: 'reading' as RenderMode,
+			sourcePath: 'Note.md',
+			containerEl,
+			canPersist: true,
+			addChild: (child) => child,
+			getBlockInfo: () => ({ language: 'ds-featureblock', lineStart: 0, lineEnd: 1 }),
+			replaceSource: async () => true,
+			blockKey: () => 'Note.md::ds-featureblock::0',
+		};
+		await new ElementPipeline(deps).run(featureblockElement, PILLAR, host);
+
+		expect(containerEl.textContent).not.toContain('not renderable');
+		expect(containerEl.textContent).toContain('Toppling Pillar');
+	});
+
+	test('bare-slug resolution reaches it under the shared featureblock scope', () => {
+		const { index } = makeDtDeps();
+		expect(index.resolveSlug('Pillar', FEATUREBLOCK_TYPE_RE))
+			.toEqual(['mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar']);
 	});
 });
