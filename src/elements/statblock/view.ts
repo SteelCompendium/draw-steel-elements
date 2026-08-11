@@ -276,11 +276,16 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 	 * text in two inline <span>s shifted Chromium's sub-pixel text shaping/hinting —
 	 * pixel-diffed as a 6×24px patch (62 pixels) inside the word "Agility" itself,
 	 * nowhere near the split point, i.e. the mere presence of a sibling inline box
-	 * changed anti-aliasing on glyphs the split never touched. That fails the
-	 * LEGACY-FREEZE gate (`<id>--legacy-*.png` must be byte-identical). Gating the
-	 * split on a non-default preference keeps the frozen cameras on the merged node
-	 * forever while still shipping the site's two presentations to anyone who asks
-	 * for them.
+	 * changed anti-aliasing on glyphs the split never touched. That failed the freeze
+	 * gate, which at the time covered the screen shots too. Gating the split on a
+	 * non-default preference kept the frozen cameras on the merged node while still
+	 * shipping the site's two presentations to anyone who asks for them.
+	 *
+	 * SC-144 note: that freeze pressure is GONE — the legacy shots were retired and
+	 * only `*--steel-print.png` is frozen now. So "should the site-faithful split be
+	 * the default?" is a live design question again, deliberately NOT answered here
+	 * (changing it is visible to every user; it needs its own ticket). Both shapes
+	 * stay reachable and tested either way.
 	 *
 	 * Consequence worth knowing: because the SHAPE (not just the styling) depends on
 	 * these two prefs, they re-render rather than reflow — the constructor subscribes
@@ -333,8 +338,10 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 	 *  "Villain Actions" region below it (the site's `.sb__band--villain`, which is a
 	 *  `<details>` with a crest head + chevron over a body list). At the default
 	 *  'inline' the emitted DOM is exactly what it always was — a single
-	 *  renderFeatureList over every feature in source order — which is what keeps
-	 *  `statblock-villain-corpus--legacy-*.png` byte-identical. Conditional DOM, so
+	 *  renderFeatureList over every feature in source order. That default was chosen
+	 *  to hold the then-frozen legacy shots byte-identical; SC-144 retired them, so
+	 *  the default is now an open design question (same note as the characteristics
+	 *  pair above). Conditional DOM, so
 	 *  the descriptor carries `perBlock: false` like the two characteristics keys:
 	 *  a per-block override could only re-stamp the attribute after this ran, which
 	 *  for `banded` → `inline` was a silent no-op with the band still standing

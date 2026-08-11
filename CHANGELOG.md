@@ -84,8 +84,7 @@ for what needs action.
   sharing its origin and scale, with your true maximum keeping its own mark. Every
   state is said at least three ways — frame colour, crest silhouette, the word, and
   the colour of the numeral — so none of it depends on telling two colours apart.
-  In a sidebar-width pane the whole cluster collapses to a two-line rail. The
-  Legacy theme is unchanged.
+  In a sidebar-width pane the whole cluster collapses to a two-line rail.
 - [FEATURE] **Recoveries are editable by clicking a marker** (SC-132). Clicking
   the last available marker spends exactly one, clicking the first spent one
   restores exactly one, and any distance is a single click — Draw Steel takes
@@ -161,8 +160,7 @@ for what needs action.
   to match a much taller neighbour and showed a slab of empty space below its
   own content. Steel now sizes each region to its own content
   (`align-items: start` on `.dse-hero__grid`, Steel-scoped) — the leftover
-  height becomes gap between rows instead of dead air inside a panel. Legacy is
-  unchanged (its shots are frozen).
+  height becomes gap between rows instead of dead air inside a panel.
 - [FIX] **Statblock display settings brought back in line with the v2 site**
   (SC-146). An audit against the live site found the shipped settings had
   drifted:
@@ -347,10 +345,16 @@ for what needs action.
 - [BUGFIX] A freshly-synced compendium file is now immediately resolvable by
   reference blocks (no more transient "found but not renderable — re-sync"
   card right after a sync).
-- New: the **Steel theme** brings the steelcompendium.io High-Fantasy Steel look
+- New: the **Steel look** brings the steelcompendium.io High-Fantasy Steel design
   into Obsidian — forged cards, embossed serif titles, crest badges, role-tinted
-  statblock plates; the original look remains available as the **Legacy** style.
-  Switch themes in Settings → Appearance.
+  statblock plates. **This replaces the way Draw Steel elements looked in 6.0.1 and
+  earlier, and there is no way back to it.** A beta build briefly offered a Theme
+  picker in Settings → Appearance with a "Match Obsidian (Legacy)" option; that
+  option was broken, and rather than fix a second look nobody on a released version
+  ever had, it was removed before 7.0.0 shipped (SC-144). If you had chosen it in a
+  beta vault you are moved to Steel automatically on first load — no prompt, nothing
+  else in your settings is touched. Print and PDF export are unaffected either way.
+  Nothing else about your notes changes: this is presentation only.
 - The Steel theme now matches the site's **material treatment**: the metal sheen,
   bevel and hairline on card plates, section heads and the ability cost chip;
   tier-coloured washes on power-roll rows; role/malice gradient header bands on
@@ -399,27 +403,25 @@ for what needs action.
   `steelTypography.test.ts` gained a contract test
   that locks the shape of the selector itself — every element root, not a named
   list — so a future edit can't quietly narrow the routing back down without
-  failing the suite. Same honest limits as above: screen-only (print/export and
-  the Legacy style are untouched), serif-not-slab, and only the 600/700 weights
-  ship.
+  failing the suite. Same honest limits as above: screen-only (print and PDF export
+  are untouched), serif-not-slab, and only the 600/700 weights ship.
 - The Steel theme now reaches DSE's modals too — stamina edit / Spend Recovery,
   condition pickers, the form editor, and other modal dialogs now follow the
-  active theme: under Steel they render the forged treatment (title emboss,
-  sunken sections, forged footer buttons) instead of unstyled app defaults;
-  Legacy modals are unchanged. (Verified by DOM contract tests asserting the
+  active look: they render the forged treatment (title emboss, sunken sections,
+  forged footer buttons) instead of unstyled app defaults. (Verified by DOM
+  contract tests asserting the
   theme attribute stamps, re-stamps live, and tears down on close — not a
   rendered screenshot, since no frozen harness shot opens a modal.)
 - [INTERNAL] Featureblock advancement bands and the sidebar panel now have
-  dedicated visual-harness fixtures: the featureblock fixture's legacy/print
-  renders joined the frozen golden-PNG set (98 → 101), while its Steel-scheme
-  shots and both new sidebar shots are regenerated (unfrozen) goldens
-  verified by eye.
+  dedicated visual-harness fixtures: the featureblock fixture's frozen renders
+  joined the golden-PNG set (98 → 101), while its remaining shots and both new
+  sidebar shots are regenerated (unfrozen) goldens verified by eye.
 - [INTERNAL] The font system's single `--dse-font-display` token is retired,
   replaced by six semantic slots (title/body/card-body/label/controls/mono),
   each independently themeable. Every consumer was re-pointed to its
   classified slot, intended as a zero-rendering-change migration — which held
-  for Legacy and print (both pixel-identical; freeze and parity gates stayed
-  green throughout, though they cover legacy+print shots only), but not quite
+  for every frozen render (pixel-identical; freeze and parity gates stayed
+  green throughout, though the freeze covers print shots only), but not quite
   for one Steel region: the rename left the stepper/counter sans exclusion
   inoperative (its token chain resolved to nothing at the root), so those
   digits silently began rendering serif under Steel. That accidental state
@@ -432,8 +434,8 @@ for what needs action.
   to the bundled 600 (SemiBold) face for lack of a 400 — closing the "reads
   slightly heavier than the site's" gap called out above. Titles are
   unaffected (they set 600/700 explicitly). Screen-only, same as the rest of
-  the Steel typography work: Legacy and print/export shots don't reference
-  the family and are untouched. Adds ~27KB to the built stylesheet (a 20KB
+  the Steel typography work: print and PDF export don't reference the family
+  and are untouched. Adds ~27KB to the built stylesheet (a 20KB
   woff2, base64-embedded).
 - The Steel theme's kit card is rebuilt to the site's composition: a crest
   and small-caps kind eyebrow ("Martial Kit" / "Magic Kit" / "Psionic Kit") over the
@@ -443,9 +445,7 @@ for what needs action.
   dropping the slot, so every kit reads uniformly at a glance. The tiles and the
   Equipment panel sink into the card's dark gradient the way the site's do. The
   signature ability keeps the plugin's full inline ability card (keywords, action chip,
-  power-roll tiers, effects — richer than the site's tile). The Legacy style's kit card
-  is unchanged byte-for-byte, and switching themes in Settings re-renders open kit
-  cards live.
+  power-roll tiers, effects — richer than the site's tile).
 - New: **Typography settings** — a Typography section in the plugin settings lets
   you choose the fonts and sizes Draw Steel elements render with:
   - **Six font pickers** — Title, Body, and Controls, plus Card body, Label, and
@@ -461,10 +461,9 @@ for what needs action.
     steps: the same ranges, steps, and snap behavior as steelcompendium.io's own
     site settings. Text size scales the type inside elements; Card size zooms
     whole statblock/ability cards. Print and export always render at 100%.
-  - Font and size choices apply under **both the Steel and Legacy themes** —
-    Legacy users get the pickers too, and at the defaults Legacy is
-    byte-for-byte unchanged (verified against the frozen legacy screenshot
-    set; that check covers legacy and print renders, not Steel-screen ones).
+  - Font and size choices apply everywhere, including print and PDF export. At
+    the defaults nothing moves — verified byte-for-byte against the frozen
+    screenshot set.
   - One deliberate rendering decision under Steel, made while wiring the
     Controls slot: interactive controls (steppers, buttons, tabs) **default to
     the Body font** — serif under Steel. Stepper/counter digits were already
@@ -517,8 +516,8 @@ for what needs action.
   of two. That one character is now drawn in a monospace face, which always has
   it — your configured Obsidian monospace font, with a fixed-font fallback
   stack for the rare case that setting is empty; the digits stay in the card's
-  serif. Fixed on the Steel screen theme only —
-  the Legacy theme and PDF/print export still show `²11` for now (SC-121).
+  serif. Fixed on screen only — PDF/print export still shows `²11` for now
+  (SC-121).
 - [BUGFIX] The hero sheet's Stamina card no longer shows a small empty pill
   beside the recovery dots on a healthy character. The winded/dying badge was
   meant to hide itself and never did (SC-121).
@@ -549,9 +548,8 @@ for what needs action.
   mini-statblocks (a perk's "Familiar Statblock", for example) had no styling at
   all: no borders, no cell padding, no column grouping, so the rows ran together
   into one block of text. They now get a bordered, rounded frame with a header
-  band and a hairline under each row, matching the website's tables. Steel
-  screen theme only for now — the Legacy theme and PDF/print export still show
-  the unstyled table (SC-121).
+  band and a hairline under each row, matching the website's tables. Screen
+  only for now — PDF/print export still shows the unstyled table (SC-121).
 - [STEEL] Those same prose tables now scroll sideways instead of running off the
   edge. A wide book table (the perk's five-column familiar statblock) put its
   last columns outside the card with no way to reach them once the card was
@@ -560,7 +558,7 @@ for what needs action.
   width nothing changes (SC-121).
 - [STEEL] The statblock's Size / Speed / Stamina / Stability / Free Strike row
   has gaps between its tiles again. Steel gives each of those five stats its own
-  bordered box, but the row underneath was still Legacy's unboxed layout, which
+  bordered box, but the row underneath was still the older unboxed layout, which
   spaced the stats optically rather than with a real gap — so the boxes rendered
   edge to edge as one undivided strip. The row now uses the same gap the website
   puts between the same five tiles (SC-121).

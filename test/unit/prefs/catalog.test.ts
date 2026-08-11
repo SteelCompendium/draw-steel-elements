@@ -102,7 +102,7 @@ test('font slots: Typography rows with the font control, the uniform default opt
 		expect(ui.options![0]).toEqual({ value: '', label: 'Default (Obsidian vault fonts)' });
 		expect(ui.advanced ?? false).toBe(advanced);
 		// SHIP verdict (Task 5): the help names the cross-theme reach explicitly.
-		expect(ui.help).toContain('applies under both the Steel and Legacy themes');
+		expect(ui.help).toContain('applies everywhere, including print and export');
 	}
 	// Mono gets the mono curated list; the five text slots share the text list.
 	expect(prefUi(byKey.get('fontMono')!)!.options!.some((o) => o.value === 'JetBrains Mono')).toBe(true);

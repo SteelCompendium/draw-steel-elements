@@ -1,6 +1,6 @@
 // D3 Plan 10 Task 3 — the Steel theme value block ([data-dse-theme="steel"]).
 //
-// D3 authors the --dse-* VALUE layer on top of D2's Legacy base. Task 3 adds the
+// D3 authors the --dse-* VALUE layer on top of D2's unscoped base. Task 3 adds the
 // [data-dse-element][data-dse-theme="steel"] override block that swaps the look to
 // High-Fantasy Steel. Values are transcribed VERBATIM from the authoritative token
 // map (docs/superpowers/dse-overhaul/D3-token-map.md, "Steel value (dark)" column) —
@@ -8,17 +8,17 @@
 //
 // jsdom's getComputedStyle does not cascade custom properties from a <style> sheet
 // (nor resolve var()), so — exactly like test/dom/kit/tokens.test.ts — we assert the
-// DECLARED values by parsing styles-source.css: the Legacy value from the unscoped
+// DECLARED values by parsing styles-source.css: the base value from the unscoped
 // :root base, the Steel value from the scoped override block. A mounted root then
 // demonstrates the attribute-selector semantics the cascade relies on (the Steel
-// block matches iff data-dse-theme="steel"; without it, only the Legacy base does).
+// block matches iff data-dse-theme="steel"; without it, only the unscoped base does).
 import * as fs from 'fs';
 import * as path from 'path';
 import { DSE_TOKEN_NAMES } from '../../../src/framework/tokens';
 
 const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-/** Declared value of --dse-<name> in the unscoped :root Legacy base (or undefined). */
+/** Declared value of --dse-<name> in the unscoped :root unscoped base (or undefined). */
 function baseValue(name: string): string | undefined {
 	// FOOTGUN: `[^}]*` stops at the FIRST brace, so a CSS COMMENT containing `{` or `}`
 	// inside any token block silently truncates that block's body (values → undefined).
@@ -60,10 +60,10 @@ function steelDefinitions(): string[] {
 }
 
 /**
- * Tokens the map marks "= Legacy (theme-invariant)" — deliberately ABSENT from the
+ * Tokens the map marks "= base (theme-invariant)" — deliberately ABSENT from the
  * Steel block so the base value flows through. NB radius (0.4em) and crest-shape
  * (polygon) are NOT here: the map gives them concrete Steel values (they differ
- * from Legacy), so Steel overrides them.
+ * from the base), so Steel overrides them.
  */
 // SC-10: badge-fg joined the invariants — the tier-badge frame is a hollow
 // clip-path whose interior is the card surface, so its ink is ink-on-surface
@@ -114,9 +114,9 @@ const STEEL_DARK: Record<string, string> = {
 	// excluded from this dict even though they ARE overridden in the Steel
 	// block (font-controls since SC-112's root-cause fix): their chained
 	// declaration text (`var(--dse-font-body)` / `var(--dse-font-title)` /
-	// `var(--dse-font-body)`) is IDENTICAL in both Legacy and Steel by design
+	// `var(--dse-font-body)`) is IDENTICAL in both the base and Steel by design
 	// (only what the chain resolves to differs per theme), so they'd fail the
-	// "every overridden token DIFFERS from Legacy" invariant below, which
+	// "every overridden token DIFFERS from the base" invariant below, which
 	// assumes a literal per-theme value. Covered instead by the dedicated
 	// slot-chain contract in test/dom/theme/steelTypography.test.ts.
 	'font-title': '"Source Serif 4", var(--font-text)',
@@ -186,10 +186,10 @@ const STEEL_DARK: Record<string, string> = {
 };
 
 describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => {
-	test('the scoped Steel override block exists after the Legacy base', () => {
+	test('the scoped Steel override block exists after the unscoped base', () => {
 		// Widened by SC-104 / FOLLOWUPS #31: :is([data-dse-element], .dse-modal).
 		expect(sheet).toMatch(/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/);
-		// It comes AFTER the :root Legacy base (override layering).
+		// It comes AFTER the :root unscoped base (override layering).
 		const base = sheet.search(/:root\s*\{[^}]*--dse-surface\s*:/);
 		const steel = sheet.search(/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\s*\{/);
 		expect(base).toBeGreaterThan(-1);
@@ -207,8 +207,8 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		expect(steelValue('font-body')).toBe('"Source Serif 4", var(--font-text)');
 	});
 
-	test('WITHOUT the theme attr, tokens resolve to the UNCHANGED Legacy base', () => {
-		// The base is byte-unchanged by Task 3 — spot-check the anchor Legacy values.
+	test('WITHOUT the theme attr, tokens resolve to the UNCHANGED unscoped base', () => {
+		// The base is byte-unchanged by Task 3 — spot-check the anchor base values.
 		expect(baseValue('surface')).toBe('var(--code-background)');
 		expect(baseValue('fg')).toBe('var(--text-normal)');
 		expect(baseValue('accent')).toBe('var(--interactive-accent)');
@@ -216,19 +216,19 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		expect(baseValue('font-body')).toBe('var(--font-text)');
 		expect(baseValue('radius')).toBe('5px');
 		expect(baseValue('crest-shape')).toBe('none');
-		// role/act accents stay Legacy-monochrome in the base.
+		// role/act accents stay monochrome in the base.
 		expect(baseValue('role-controller')).toBe('var(--dse-fg-muted)');
 		expect(baseValue('act-main')).toBe('none');
 	});
 
-	test('every overridden token actually DIFFERS from its Legacy base value', () => {
+	test('every overridden token actually DIFFERS from its unscoped base value', () => {
 		for (const name of Object.keys(STEEL_DARK)) {
 			expect(baseValue(name)).toBeDefined();
 			expect(steelValue(name)).not.toBe(baseValue(name));
 		}
 	});
 
-	test('theme-invariant tokens are NOT overridden in the Steel block (inherit Legacy)', () => {
+	test('theme-invariant tokens are NOT overridden in the Steel block (inherit the base)', () => {
 		for (const name of THEME_INVARIANT) {
 			expect(steelValue(name)).toBeUndefined();
 		}
@@ -272,7 +272,7 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 	test('attribute selector semantics: the Steel block matches iff data-dse-theme="steel"', () => {
 		const el = document.createElement('div');
 		el.setAttribute('data-dse-element', 'statblock');
-		// No theme attr → only the Legacy base ([data-dse-element] / :root) applies.
+		// No theme attr → only the unscoped base ([data-dse-element] / :root) applies.
 		expect(el.matches('[data-dse-element][data-dse-theme="steel"]')).toBe(false);
 		el.dataset.dseTheme = 'steel';
 		// Now the Steel override block applies (closest scoped def wins).

@@ -152,49 +152,51 @@ registered in `main.ts`'s `registerFrameworkElementDefinitions`), `view.ts` (the
 `serialize` wrapper around the pre-existing `@model/*` class, kept renderer-agnostic so
 the same model classes still back the legacy validator/schemas).
 
-### Theme-conditional Steel compositions (`CardLayout.steel`, plan 24 / SC-100)
+### Steel card compositions (`CardLayout.steel`, plan 24 / SC-100; de-branched by SC-144)
 
 The display-card family (the eleven D6 reference cards — kit, condition, treasure,
 ancestry, culture, career, class, title, perk, complication, rule — all rendered by the
 shared `DisplayCardView` driven by a declarative `CardLayout<M>`,
-`src/elements/shared/CardLayout.ts`) historically built **one theme-agnostic DOM**, themed
-purely in CSS. SC-100 added the sanctioned pattern for theme-aware DOM — a theme-scoped
-composition slot, branched at mount. This is THE reference for any future view that needs
-different DOM per theme; do not invent a second mechanism.
+`src/elements/shared/CardLayout.ts`) builds its DOM from a declarative layout. Most
+families build one shape; a family may opt into a richer, composed shape instead.
+
+**History worth knowing, because the shape of the code still reflects it.** SC-100 added
+this as a THEME-aware seam: the composition rendered only under the Steel theme, the other
+theme got the base DOM, and a mounted view subscribed to `cx.theme.onChange` so flipping
+the picker swapped branches live. SC-144 dropped the legacy theme, which collapsed all of
+that — with one theme, the branch is a static property of the layout. It is now a plain
+"does this layout have a composition" check, and the subscription, its re-entrancy guard
+and the tear-down/re-render path are gone.
 
 - **The slot.** `CardLayout<M>` has an optional `steel?: SteelCardComposition<M>`
   (eyebrow + crest for the shared `cardHead`, an optional `crestSize`, and ordered
   `SteelBand`s — each band an optional small-caps head plus its own `render()` into a
   positioned container). Absent (every layout except kit today) ⇒ zero behavior change:
-  the view never takes the Steel branch, in any theme.
-- **Branch condition.** `DisplayCardView.onMount` branches **once, at mount**:
-  `cx.theme.active === 'steel' && !!layout.steel` ⇒ `renderSteel()`; anything else ⇒
-  `renderLegacy()`. The legacy branch is the pre-seam `onMount` body **moved verbatim**
-  (same statements, same order) — it is the old code relocated, not a copy, so the legacy
-  DOM cannot drift.
-- **Legacy is the canonical fallback.** `DseThemeId` is an open union
-  (`'steel' | 'legacy' | (string & {})`); any future snippet theme id renders the legacy
-  DOM. Only the literal `'steel'` theme takes the composition.
-- **Re-render on live theme change.** Only when `layout.steel` exists, the view registers
-  a `cx.theme.onChange` subscription (owner-registered via `this.register`, so teardown is
-  automatic and popout-safe). On a branch change it unloads its **own** owned children and
-  removes the **tracked** `.dse-card` node — never `rootEl.empty()`, which would also
-  destroy pipeline-owned siblings appended after mount (e.g. the authoring pencil) — then
-  re-renders the new branch. A per-instance `themeChangeRegistered` boolean guards the
-  registration: `ElementView.update()`'s default path re-invokes `onMount` (and
-  `SidebarPanel.handleExternalChange` calls `update()` directly as its live-preview
-  refresh), so an unguarded registration would stack one leaked closure per update.
-- **The four invariants** (contract-tested in
-  `test/dom/elements/displayCardThemeBranch.test.ts`):
-  1. A layout without `steel` renders byte-identical DOM under every theme.
-  2. A layout with `steel` renders the legacy DOM verbatim under every non-steel theme.
-  3. A live theme switch swaps the DOM in both directions without touching pipeline-owned
-     siblings, and unloads the outgoing branch's owned children (no listener leaks).
-  4. Print never branches the render — `data-dse-print` stays a pure CSS attribute over
-     whichever DOM the active theme built. Corollary: a Steel composition for a family
-     necessarily changes that family's frozen `*--steel-print.png`, which needs its own
-     sanctioned single-line rebaseline sign-off (see the workspace `dse-verify` skill's
-     freeze section; SC-100's `kit--steel-print.png` was the first).
+  the view never takes the composition branch.
+- **Branch condition.** `DisplayCardView.computeBranch()` is `layout.steel ? 'steel' :
+  'base'`, evaluated once at mount. The base branch is the pre-seam `onMount` body **moved
+  verbatim** (same statements, same order) — it is the old code relocated, not a copy, so
+  the base DOM cannot drift.
+- **The branch cannot change at runtime.** Nothing re-renders a mounted card on a theme
+  event, and the view registers no theme subscription at all. If you ever need one back,
+  note what it cost the first time: a re-enterable `onMount` stacks one leaked closure per
+  `update()` call unless it is guarded.
+- **`cardEl` still matters.** `renderBranch()` tracks the `.dse-card` node it created,
+  because SC-145's authoring pencil anchors to it (`authoringAnchor()`) rather than to the
+  element root — the pencil would otherwise render outside the card's border.
+- **The two invariants** (contract-tested in
+  `test/dom/elements/displayCardBranch.test.ts`):
+  1. Branch selection follows the layout, not the theme: a layout with `steel` renders the
+     composition, one without renders the base DOM, and neither changes with the active
+     theme id (including a hand-set snippet id).
+  2. No theme subscription is ever registered, for either kind of layout, across mount and
+     repeated `update()` calls.
+- **Print never branches the render** — `data-dse-print` stays a pure CSS attribute over
+  whatever DOM was built. Corollary, and the one that costs money: a composition for a
+  family necessarily changes that family's frozen `*--steel-print.png`, which needs its own
+  sanctioned single-line rebaseline sign-off (see the workspace `dse-verify` skill's freeze
+  section; SC-100's `kit--steel-print.png` was the first). Since SC-144, `steel-print` is
+  the ONLY frozen class, so this is the whole freeze exposure of a composition.
 - **First consumer: kit** (`kitLayout.steel`, `src/elements/display/layouts.ts`): crest +
   kind-eyebrow head via `cardHead`, a boxed Equipment band, "Kit Bonuses" as two rows of
   four **fixed-slot** stat tiles via the generic `statTiles()` primitive
@@ -257,7 +259,7 @@ newest member. `actionTypeOf` resolves it in this order: `isTrait()` → `trait`
 "villain action" (`isVillainCost`, links stripped, case-insensitive) → `villain`; otherwise the
 `ability_type` string ladder (villain matched **before** the generic "action" catch-all, since
 "Villain Action 1" contains "action"). `crestIconFor` maps it to Lucide's `skull`. Token:
-`--dse-act-villain` — `none` in Legacy, `#e0584b` in Steel dark (the site's literal, scheme-
+`--dse-act-villain` — `none` in the unscoped base, `#e0584b` in Steel dark (the site's literal, scheme-
 invariant — it is **not** re-listed in the Steel-light block on purpose, matching the site
 having no light variant), `#b03a2e` in both print blocks (a deliberate ink-economy darkening
 with no site value behind it). Full token-block-by-block reasoning and the guard-test
@@ -283,10 +285,13 @@ hits in the whole history), so `cost` + the `ability_type` fallback (for hand-au
 e.g. this element's own `example.yaml`) cover the entire structured universe — no compatibility
 branch was needed. `renderFeature.ts`'s `isVillainCost` doc comment carries this same note.
 
-**The statblock/featureblock diamond notch (SC-103).** The legacy ◆ divider
+**The statblock/featureblock diamond notch (SC-103).** The ◆ divider
 (`kit/divider.ts`) mounts as a real, theme-agnostic DOM node — `statblock/view.ts` inserts it
-unconditionally after the characteristics strip, and three test files assert it in every
-theme. It therefore **cannot move or disappear in TS** without breaking Legacy. Steel instead
+unconditionally after the characteristics strip, and three test files assert it. Until SC-144
+it **could not move or disappear in TS** without breaking the legacy theme; that constraint is
+now lifted (with legacy gone, the node's only job is to be hidden under Steel), but **nothing
+here has acted on it** — moving or deleting the node is a DOM change with its own freeze
+exposure and belongs to its own ticket. Steel currently
 hides it (`[data-dse-theme='steel'] .dse-sb > .dse-hr { display: none }` / the `.dse-fb`
 twin) and paints the site's real notch — `.sb__head::after` / `.fb__head::after`, a 9px
 role-hued diamond straddling the head band's bottom edge — as a Steel-scoped `::after` on
@@ -367,7 +372,9 @@ hand-wiring four call sites.
   `sbCharLine`/`sbCharBox` (the merged `"Might +2"` text node vs the site's
   `.dse-sb__char-box`/`-v`/`-l` split) and `sbVillain` (villain actions inline vs lifted
   into one kit `collapsible()` band). Their DEFAULT values emit exactly the DOM the element
-  emitted before, which is what keeps the frozen legacy/print shots byte-identical — a
+  emitted before, which is what kept the then-frozen legacy shots byte-identical (SC-144
+  retired those; the reason for the defaults is now history, and revisiting them is a live
+  design question filed as its own ticket) — a
   plain always-on split was tried in SC-10 Task 4 and reverted because two inline spans
   moved Chromium's sub-pixel text shaping. Consequences: the view subscribes those three
   keys to a remount (the D5 rolling-pref mechanism, `src/elements/statblock/view.ts`), and

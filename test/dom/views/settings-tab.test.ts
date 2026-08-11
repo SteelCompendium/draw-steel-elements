@@ -558,7 +558,7 @@ describe('SC-112 Task 8 — Typography controls', () => {
 		expect(dd.options[dd.options.length - 1]).toEqual({ value: '__custom__', label: 'Custom…' });
 		expect(dd.value).toBe(''); // default selected
 		// Help text comes from the descriptor (Task 6 SHIP clause), not renderer copy.
-		expect(rowByName('Title font').desc).toContain('Steel and Legacy');
+		expect(rowByName('Title font').desc).toContain('applies everywhere, including print and export');
 		dd.trigger('Georgia');
 		await flushAsync(1);
 		expect(prefs.get('fontTitle')).toBe('Georgia');

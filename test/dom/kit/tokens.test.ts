@@ -1,12 +1,11 @@
-// Plan 08 Task 1 (D2 §6) — the --dse-* token vocabulary + Legacy defaults.
+// Plan 08 Task 1 (D2 §6) — the --dse-* token vocabulary + its base defaults.
 //
-// Layering contract (D2↔D3 reconciliation): Legacy = TODAY'S look, authored as the
-// unscoped :root BASE block in styles-source.css — NOT scoped under a
-// data-dse-theme="legacy" selector. D3 owns the token values long-term and adds the
-// [data-dse-theme="steel"] override layer on top (closest scoped definition wins
-// within a steel element root); until then the default (theme "steel") renders the
-// Legacy base = today's look. No kit widget or element consumes the tokens yet
-// (Plan 08 Tasks 2-4 do).
+// Layering contract (D2↔D3 reconciliation): the base values are authored UNSCOPED, in
+// the :root block of styles-source.css. D3's [data-dse-theme="steel"] block is an
+// OVERRIDE layer on top (closest scoped definition wins within a steel element root);
+// anything Steel does not override falls through to the base. SC-144 removed the second
+// theme, so Steel is the only override layer that exists — but the base is still a
+// separate layer, not Steel's own block, and the scope test below pins that.
 import * as fs from 'fs';
 import * as path from 'path';
 import { DSE_TOKEN_NAMES } from '../../../src/framework/tokens';
@@ -61,8 +60,15 @@ describe('Plan 08 Task 1: --dse-* token vocabulary + Legacy defaults (D2 §6)', 
 		expect(stray).toEqual([]);
 	});
 
-	test('Legacy is the BASE — no [data-dse-theme="legacy"] scope exists', () => {
-		expect(sheet).not.toMatch(/\[data-dse-theme="legacy"\]/);
+	// SC-144 widened this from the original "no legacy scope" assertion. The base is the
+	// unscoped layer, and `steel` is the ONLY theme scope that may appear — a second one
+	// would mean someone re-introduced per-theme value forking (whether they called it
+	// 'legacy' or anything else), which is exactly the shape this ticket removed.
+	test('the base is unscoped — `steel` is the only [data-dse-theme] value in the sheet', () => {
+		const scopes = new Set(
+			Array.from(sheet.matchAll(/\[data-dse-theme\s*=\s*['"]([^'"]+)['"]\]/g)).map((m) => m[1]),
+		);
+		expect([...scopes].sort()).toEqual(['steel']);
 	});
 
 	test('the union covers the full D2 §6 sheet (76 tokens: ~58 core + 12 roles + 7 actions)', () => {

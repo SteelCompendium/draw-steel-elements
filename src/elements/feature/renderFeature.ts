@@ -27,7 +27,7 @@
 //
 // SC-10 Task 2: cardHead's crest + left-eyebrow slots are THEME-AGNOSTIC DOM — the
 // crest <span> (kit/crest.ts) and the "Ability"/"Trait" kind-noun eyebrow mount in
-// EVERY theme; styles-source.css's Legacy base neutralizes both (`.dse-crest` is
+// EVERY theme; styles-source.css's unscoped base neutralizes both (`.dse-crest` is
 // already unconditionally `display:none`; a feature-scoped `.dse-head__eyebrow`
 // hide rule keeps the newly-filled eyebrow invisible there too), so Legacy's look
 // is unchanged and only the Steel skin layer reveals them.
@@ -271,7 +271,7 @@ export function renderFeature(
 	// SDK text renders exactly as the legacy markdown path did.
 	//
 	// SC-10 Task 2 (theme-agnostic DOM — both the crest <span> and the filled
-	// left-eyebrow mount in EVERY theme; Legacy neutralizes both via CSS, see
+	// left-eyebrow mount in EVERY theme; the unscoped base neutralizes both via CSS, see
 	// styles-source.css): leftEyebrow = the "Ability"/"Trait" kind-noun (site's
 	// "◆ ABILITY" eyebrow); crest = a Lucide glyph keyed to the SAME act spine
 	// below. Neither slot invents wording the SDK data doesn't already imply.
@@ -388,7 +388,7 @@ export function renderFeature(
 		// ability_cards.go: `strings.HasPrefix(strings.ToLower(label), "spend")`) gets
 		// its own modifier so Steel can render the site's dashed enhancement box
 		// (styles-source.css `.dse-section--spend`), keyed off the RAW cost field (not
-		// the composed, possibly-parenthesized title) — theme-agnostic DOM; Legacy has
+		// the composed, possibly-parenthesized title) — theme-agnostic DOM; the base has
 		// no unscoped rule keying off it, so the class is inert there (today's "Title:
 		// body" line, unchanged).
 		const isSpend = !!effect.cost && /^spend\b/i.test(String(effect.cost).trim());

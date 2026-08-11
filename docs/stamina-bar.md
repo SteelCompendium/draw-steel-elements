@@ -69,7 +69,8 @@ When `recoveries_max` is set, the bar gains:
   Stamina max or below, Dying at 0 Stamina or below. Under the Steel theme the whole
   cluster carries it — the frame's colour, the crest's silhouette (shield → alert shield
   → skull), the state word, and the colour of the current-Stamina numeral — so it is
-  never a colour alone. Under Legacy it is the badge beside the markers, as before.
+  never a colour alone. In print and PDF export it falls back to the badge beside the
+  markers.
 
 If you would rather not edit by clicking a marker, turn on **Settings → Element defaults
 → Advanced → "Edit Recoveries with a popover"**: a marker click — or an arrow key on the

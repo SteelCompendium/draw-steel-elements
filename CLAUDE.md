@@ -93,7 +93,8 @@ real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 
   (attr-less keys rejected — css-bearing prefs are global-only; so are `perBlock: false`
   keys, the conditional-DOM trio `sbCharLine`/`sbCharBox`/`sbVillain`, whose value the
   statblock view reads at BUILD time — an attribute-level override there renders corrupt).
-  Defaults must always reproduce the current look (legacy-fidelity bar).
+  Every default is chosen so a vault that never opens Settings renders what it rendered
+  before the pref existed.
 - **Rolling (D5)**: `src/framework/roll/` — pure engine (`engine.ts resolveRoll`:
   2d10/tiers/edges/banes/crit, injected `DiceSource`), lenient `parse.ts`, and the
   `RollService` seam (`service.ts`, reached as `cx.roll`; optional Dice Roller plugin

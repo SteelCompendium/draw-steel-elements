@@ -54,10 +54,12 @@ declare module '../framework/seams/prefs' {
 		// data-sb-kwusage/-disttarget only reach its statblock feature block.
 		// sbCharLine/sbCharBox/sbVillain are statblock-only, like the site's.
 		//
-		// TWO DEFAULTS DIVERGE FROM THE SITE'S BY DESIGN (the legacy-fidelity bar
-		// wins): the site ships charline=two and villain=banded, and the plugin must
-		// reproduce TODAY'S rendering at default — the single merged "Might +2" line
-		// and un-banded villain actions. Everything else matches the site's own
+		// TWO DEFAULTS DIVERGE FROM THE SITE'S BY DESIGN: the site ships charline=two
+		// and villain=banded, and the plugin defaults to the single merged "Might +2"
+		// line and un-banded villain actions instead. That was chosen to hold the then-
+		// frozen legacy shots byte-identical; SC-144 retired those shots, so the reason
+		// is now history and "should the site-faithful shape be the default?" is a live
+		// design question — its own ticket, deliberately not answered by SC-144. Everything else matches the site's own
 		// SB_DEFAULTS verbatim, INCLUDING disttarget=grid (settings-panel.js:31-33;
 		// an earlier revision of this comment, and the SC-146 audit row S8 it came
 		// from, misread that default as `text` — corrected in the SC-123 fix round,
@@ -180,7 +182,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		css: { varName: '--dse-font-title', toCss: (v) => (v === '' ? null : fontCss('title', v)) },
 		ui: {
 			group: 'Typography', label: 'Title font', control: 'font', options: TEXT_FONT_OPTIONS,
-			help: 'Font for titles and headings in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault text font (the Steel theme layers its bundled serif on top). A chosen font applies under both the Steel and Legacy themes.',
+			help: 'Font for titles and headings in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault text font (the Steel theme layers its bundled serif on top). A chosen font applies everywhere, including print and export.',
 		},
 	}),
 	d({
@@ -188,7 +190,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		css: { varName: '--dse-font-body', toCss: (v) => (v === '' ? null : fontCss('body', v)) },
 		ui: {
 			group: 'Typography', label: 'Body font', control: 'font', options: TEXT_FONT_OPTIONS,
-			help: 'Font for body text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault text font (the Steel theme layers its bundled serif on top). A chosen font applies under both the Steel and Legacy themes.',
+			help: 'Font for body text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault text font (the Steel theme layers its bundled serif on top). A chosen font applies everywhere, including print and export.',
 		},
 	}),
 	d({
@@ -196,7 +198,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		css: { varName: '--dse-font-controls', toCss: (v) => (v === '' ? null : fontCss('controls', v)) },
 		ui: {
 			group: 'Typography', label: 'Controls font', control: 'font', options: TEXT_FONT_OPTIONS,
-			help: 'Font for interactive controls (buttons, steppers, inputs) in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Body font. A chosen font applies under both the Steel and Legacy themes.',
+			help: 'Font for interactive controls (buttons, steppers, inputs) in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Body font. A chosen font applies everywhere, including print and export.',
 		},
 	}),
 	d({
@@ -204,7 +206,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		css: { varName: '--dse-font-card-body', toCss: (v) => (v === '' ? null : fontCss('cardBody', v)) },
 		ui: {
 			group: 'Typography', label: 'Card body font', control: 'font', options: TEXT_FONT_OPTIONS, advanced: true,
-			help: 'Font for text inside ability and feature cards. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Body font. A chosen font applies under both the Steel and Legacy themes.',
+			help: 'Font for text inside ability and feature cards. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Body font. A chosen font applies everywhere, including print and export.',
 		},
 	}),
 	d({
@@ -212,7 +214,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		css: { varName: '--dse-font-label', toCss: (v) => (v === '' ? null : fontCss('label', v)) },
 		ui: {
 			group: 'Typography', label: 'Label font', control: 'font', options: TEXT_FONT_OPTIONS, advanced: true,
-			help: 'Font for small labels, captions, and chips in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Title font. A chosen font applies under both the Steel and Legacy themes.',
+			help: 'Font for small labels, captions, and chips in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: same as the Title font. A chosen font applies everywhere, including print and export.',
 		},
 	}),
 	d({
@@ -220,7 +222,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		css: { varName: '--dse-font-mono', toCss: (v) => (v === '' ? null : fontCss('mono', v)) },
 		ui: {
 			group: 'Typography', label: 'Monospace font', control: 'font', options: MONO_FONT_OPTIONS, advanced: true,
-			help: 'Font for monospaced text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault monospace font. A chosen font applies under both the Steel and Legacy themes.',
+			help: 'Font for monospaced text in Draw Steel elements. "Default (Obsidian vault fonts)" keeps today\'s look: your vault monospace font. A chosen font applies everywhere, including print and export.',
 		},
 	}),
 
@@ -237,7 +239,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Typography', label: 'Text size', control: 'slider',
 			min: TEXT_SCALE.min, max: TEXT_SCALE.max, step: TEXT_SCALE.step,
-			help: 'Scale the text inside Draw Steel elements (60%–140%). Applies under both the Steel and Legacy themes; print and export always use 100%.',
+			help: 'Scale the text inside Draw Steel elements (60%–140%). Applies to every Draw Steel element; print and export always use 100%.',
 		},
 	}),
 	d({
@@ -249,7 +251,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		ui: {
 			group: 'Typography', label: 'Card size', control: 'slider',
 			min: CARD_SCALE.min, max: CARD_SCALE.max, step: CARD_SCALE.step,
-			help: 'Scale whole statblock and ability cards (80%–120%). Applies under both the Steel and Legacy themes; print and export always use 100%.',
+			help: 'Scale whole statblock and ability cards (80%–120%). Applies to every Draw Steel element; print and export always use 100%.',
 		},
 	}),
 
@@ -488,12 +490,13 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 // same SET of decisions the site's does (settings-panel.js:35-39). SC-146's corrected
 // values for the four original members are carried through unchanged — the two tickets
 // touch disjoint members of the same three objects. Two deliberate divergences remain,
-// both forced by the plugin's legacy-fidelity bar rather than chosen:
+// both inherited from the byte-freeze era rather than chosen (see the note above the
+// SB_DEFAULTS block: SC-144 retired the legacy shots, so these are now open questions):
 //
 //  1. **`steel` mirrors the plugin's DEFAULTS, not the site's Steel Card bundle.**
 //     The site's bundle sets `charline: two` and `villain: banded`; the plugin's
-//     defaults for those must reproduce today's rendering (one merged characteristic
-//     line, un-banded villain actions — anything else moves frozen shots). Writing the
+//     defaults for those reproduce the pre-SC-123 rendering (one merged characteristic
+//     line, un-banded villain actions). Writing the
 //     site's values here would make a fresh install derive 'custom' instead of 'Steel
 //     card', i.e. the dropdown would open on a state the user never chose. So `steel`
 //     stays "the plugin's home look" and the site-faithful values live in the other two

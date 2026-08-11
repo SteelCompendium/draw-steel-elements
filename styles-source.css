@@ -3357,21 +3357,44 @@ Shared globals
 }
 
 /* ================================================================== */
-/*   --dse-* token vocabulary — Legacy base (D2 §6, Plan 08 Task 1)   */
+/*   --dse-* token vocabulary — the unscoped BASE (D2 §6, Plan 08 T1) */
 /* ================================================================== */
 /*
-   Legacy = TODAY'S look, authored as the unscoped :root BASE so every element
-   root inherits these by default. Steel is an OVERRIDE layer that D3 authors
-   under [data-dse-theme="steel"] — the closest scoped definition wins within a
-   steel element root; until D3 ships that layer, the default theme ("steel")
-   renders this Legacy base, i.e. today's look. Do NOT add a
-   data-dse-theme="legacy" scope: Legacy IS the base.
+   THE THEMING CONTRACT. Read this before adding a rule anywhere in this file.
 
-   D3 owns the token VALUES (both themes, both color schemes) going forward;
-   the NAMES are the contract — they mirror the DseTokenName union in
-   src/framework/tokens.ts one-for-one (test/dom/kit/tokens.test.ts pins the
-   mapping). This block is the ONE place color literals live (D2 §5): widgets
-   consume tokens only.
+   There is ONE value layer authored unscoped, at :root — the BASE. Every element
+   root inherits it. Steel is an OVERRIDE layer authored under
+   [data-dse-theme="steel"]; the closest scoped definition wins inside a Steel
+   element root, and anything Steel does not override falls through to the base.
+   There has never been a data-dse-theme="legacy" scope and there must never be
+   one: what the older comments in this file call "Legacy" IS this base.
+
+   SC-144 (2026-08-11) dropped the "legacy" theme. Two consequences that are easy
+   to get wrong:
+
+   1. NO CSS WAS DELETED, and none should be. The base is not the legacy theme's
+      stylesheet — it is the layer Steel inherits from. Deleting it would break
+      Steel, not tidy it. SC-144's whole CSS diff is this comment.
+
+   2. THE [data-dse-theme='steel'] PREFIX STAYS, even though it is now always
+      true. ~297 rule blocks carry it. Stripping it would drop each of those
+      rules' specificity by one attribute selector, silently reordering the
+      cascade against this base — putting every frozen byte and every Steel shot
+      back in play for a readability gain. It also keeps the snippet-theme door
+      (D3 §6, the open DseThemeId union) open. Declined by default; if it is ever
+      revisited it is its own ticket with its own full battery.
+
+   What DID change for a rule author: the freeze gate is now `*--steel-print.png`
+   only (66 lines). So the load-bearing half of the scoping habit is the PRINT
+   exclusion — a screen-intended Steel rule still needs
+   :not([data-dse-print="on"]) or it moves frozen bytes. Comments elsewhere in
+   this file that justify a scope by "the frozen legacy shots" are historical
+   rationale: read them as "the frozen print shot".
+
+   D3 owns the token VALUES (both color schemes) going forward; the NAMES are the
+   contract — they mirror the DseTokenName union in src/framework/tokens.ts
+   one-for-one (test/dom/kit/tokens.test.ts pins the mapping). This block is the
+   ONE place color literals live (D2 §5): widgets consume tokens only.
 */
 :root {
 	/* -- Structure / surface -- */

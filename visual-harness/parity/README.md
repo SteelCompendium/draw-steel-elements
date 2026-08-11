@@ -442,7 +442,7 @@ Deliberately conservative. Relaxing it is a one-line change to `NON_DECLARABLE_C
 |---|---|---|---|---|
 | `pr-chars:ink` (FOLLOWUPS #40) | 2 | `.chars` `rgb(205,209,212)` / `rgb(95,104,109)` | `rgba(220,226,230,.95)` / `rgb(26,29,32)` | **deliberate** — the plugin's one-node caption is heading-emphasised where the site splits `.pre`/`.chars` |
 | `section-tag:font-size` / `:line-height` / `:letter-spacing` (FOLLOWUPS #51) | 6 | 18px / 30.6px / 1.8px (`.9rem`, `.1em`) | 16px / 27.2px / 1.12px (`.07em`) | **pixel decision** — one type-scale call; line-height is a pure consequence of font-size |
-| `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` Legacy base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
+| `statblock-wrap` + `featureblock-wrap` `:margin-top`/`:margin-bottom` (FOLLOWUPS #39) | 8 | 34px (`1.7rem` on `.sb-wrap`/`.fb-wrap`) | 8px (`0.5em` unscoped base on the host) | **pixel decision** — Plan 21 Task 2 set the precedent (24px onto the feature host) but 26px of new air per block is Scott's call |
 
 **HEALED and deleted — the anti-rot check working end to end (2026-08-07, SC-117 R1).**
 `statblock-wrap:line-height` (FOLLOWUPS #52) was the fourth finding here: site `.sb-wrap`

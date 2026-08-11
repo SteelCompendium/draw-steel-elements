@@ -1,11 +1,11 @@
 // D3 Plan 10 Task 1 (scaffold; Task 6 finalizes) — token reconciliation-map coverage.
 //
 // The D3 token map (docs/superpowers/dse-overhaul/D3-token-map.md, WORKSPACE repo)
-// is the single authoritative source for the Steel/Legacy/Print value of every
+// is the single authoritative source for the base/Steel/Print value of every
 // --dse-* token — Tasks 3-5 author CSS value blocks FROM it. This test pins the
 // map to the DSE_TOKEN_NAMES union: exactly one map row per union name, no
 // missing, no extra. Task 6 extends this file into the full build guard (every
-// token present in the Legacy base AND covered by the Steel + Print blocks).
+// token present in the unscoped base AND covered by the Steel + Print blocks).
 //
 // The map lives in the WORKSPACE superproject (not this submodule), so the file
 // is resolved against the known workspace layouts (main checkout: submodule at
@@ -86,14 +86,14 @@ const workspaceMapAvailable = !!locateMap();
 });
 
 // ====================================================================
-//   D3 Task 6 — the BUILD GUARD + Legacy fidelity assertion (spec §7.3)
+//   D3 Task 6 — the BUILD GUARD + base fidelity assertion (spec §7.3)
 // ====================================================================
 //
 // The "added a token, forgot a theme block" net TypeScript can't see: for EVERY
-// name in DSE_TOKEN_NAMES, assert --dse-<name> is present in the Legacy base AND
+// name in DSE_TOKEN_NAMES, assert --dse-<name> is present in the unscoped base AND
 // (overridden in Steel OR map-marked Steel-invariant) AND (overridden in a Print
-// block OR map-marked print-invariant). Plus: the Legacy base still resolves to
-// the map's Legacy column verbatim (Legacy is byte-frozen by D3). Same
+// block OR map-marked print-invariant). Plus: the unscoped base still resolves to
+// the map's base column verbatim (the base is byte-frozen by D3). Same
 // parse-the-declaration strategy the theme tests use (jsdom cannot cascade var()).
 
 const styleSheet = fs.readFileSync(path.join(repoRoot, 'styles-source.css'), 'utf8');
@@ -116,9 +116,9 @@ function blockBody(re: RegExp, label: string): string {
 	return m[1];
 }
 
-// The four value blocks D3 owns (the Legacy base is the unscoped :root).
-const legacyBase = (() => {
-	// The last :root block holds the --dse-* Legacy vocabulary (an earlier :root
+// The four value blocks D3 owns (the unscoped base is the unscoped :root).
+const unscopedBase = (() => {
+	// The last :root block holds the --dse-* base vocabulary (an earlier :root
 	// only aliases the legacy --stamina-bar-* names); concatenate all to be safe.
 	let all = '';
 	for (const b of styleSheet.matchAll(/:root\s*\{([^}]*)\}/g)) all += b[1] + '\n';
@@ -164,7 +164,7 @@ const STEEL_INVARIANT = new Set([
 // SC-105: the whole font vocabulary (title/body/card-body/label/controls) was
 // print-invariant — none of these 5 tokens were overridden in a print block,
 // same as font-display was before Task 2 retired it (removed from this set,
-// along with the union, LEGACY_MAP, and its 3 direct test pins elsewhere).
+// along with the union, BASE_MAP, and its 3 direct test pins elsewhere).
 // SC-112 Task 3: font-controls now LEAVES this set — the neutral print block
 // pins it explicitly (`--dse-font-controls: var(--font-text);`) to hold the
 // Steel-print freeze, so it's overridden, not invariant, in print.
@@ -175,7 +175,7 @@ const PRINT_INVARIANT = new Set([
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')), // "= Steel (exact)"
 ]);
 
-const inBase = new Set(defsIn(legacyBase));
+const inBase = new Set(defsIn(unscopedBase));
 const inSteel = new Set(defsIn(steelDark));
 const inPrint = new Set([...defsIn(printNeutral), ...defsIn(printSteel)]);
 
@@ -190,8 +190,8 @@ function printGaps(names: readonly string[]): string[] {
 	return names.filter((n) => !inPrint.has(n) && !PRINT_INVARIANT.has(n));
 }
 
-/** The full, frozen Legacy column (= today's shipped :root base, verbatim from the map). */
-const LEGACY_MAP: Record<string, string> = {
+/** The full, frozen base column (= today's shipped :root base, verbatim from the map). */
+const BASE_MAP: Record<string, string> = {
 	surface: 'var(--code-background)',
 	'surface-raised': 'var(--color-base-25)',
 	'surface-sunken': 'rgba(0,0,0,.2)',
@@ -212,8 +212,8 @@ const LEGACY_MAP: Record<string, string> = {
 	// Title/Body are independent literals (never chain to each other);
 	// Card-body/Label are var() chains to Body/Title (Scott's "same as
 	// Body"/"same as Title" ruling). SC-112 Task 3: Controls JOINS the chain
-	// group — "same as Body" — resolving to the identical Legacy value
-	// (var(--font-text)) one hop further out; Legacy is byte-identical either way.
+	// group — "same as Body" — resolving to the identical base value
+	// (var(--font-text)) one hop further out; the base is byte-identical either way.
 	'font-title': 'var(--font-text)',
 	'font-body': 'var(--font-text)',
 	'font-card-body': 'var(--dse-font-body)',
@@ -228,7 +228,7 @@ const LEGACY_MAP: Record<string, string> = {
 	'metal-line': 'none',
 	'metal-faint': 'none',
 	// Plan 20 Task 3 — the material layer. `inherit` makes `color: var(--dse-metal)`
-	// a no-op in Legacy; the overlays/bevel are absent.
+	// a no-op in the base; the overlays/bevel are absent.
 	metal: 'inherit',
 	'metal-bright': 'inherit',
 	sheen: 'none',
@@ -280,7 +280,7 @@ const LEGACY_MAP: Record<string, string> = {
 };
 
 describe('D3 Task 6: build guard — every token covered by base + Steel + Print (§7.3)', () => {
-	test('EVERY union token appears in the Legacy base :root block', () => {
+	test('EVERY union token appears in the unscoped base :root block', () => {
 		expect(baseGaps(DSE_TOKEN_NAMES)).toEqual([]);
 	});
 
@@ -336,14 +336,14 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 	});
 });
 
-describe('D3 Task 6: Legacy fidelity — the base is FROZEN at the map Legacy column', () => {
-	test('every token under a bare [data-dse-element] resolves to its map Legacy value', () => {
+describe('D3 Task 6: base fidelity — the base is FROZEN at the map base column', () => {
+	test('every token under a bare [data-dse-element] resolves to its map base value', () => {
 		for (const name of DSE_TOKEN_NAMES) {
-			expect(valueIn(legacyBase, name)).toBe(LEGACY_MAP[name]);
+			expect(valueIn(unscopedBase, name)).toBe(BASE_MAP[name]);
 		}
 	});
 
-	test('the Legacy map covers exactly the union (no drift in the fidelity fixture)', () => {
-		expect(new Set(Object.keys(LEGACY_MAP))).toEqual(new Set<string>(DSE_TOKEN_NAMES));
+	test('the base map covers exactly the union (no drift in the fidelity fixture)', () => {
+		expect(new Set(Object.keys(BASE_MAP))).toEqual(new Set<string>(DSE_TOKEN_NAMES));
 	});
 });

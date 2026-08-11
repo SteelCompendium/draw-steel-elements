@@ -26,7 +26,7 @@
     {
       "pair": "statblock-wrap",
       "rule": "margin-top",
-      "why": "FOLLOWUPS #39 -- the site's statblock block rhythm is 34px (.sb-wrap margin: 1.7rem auto at the 20px rem base); the plugin's host carries the Legacy base 0.5em = 8px. SC-110 fixed the half of #39 the gate owned (this pair did not exist, so the site's block margin was invisible to the contract); the residual 34-vs-8 is the real miss #39 recorded and it is a PIXEL decision. Plan 21 Task 2 set the precedent for closing it (it ported the site's 24px .sc-ability margin onto the feature host, Steel-scoped and screen-only, styles-source.css ~3497), but 26px of new air around every statblock and featureblock in an Obsidian note is Scott's call, not a gate ticket's."
+      "why": "FOLLOWUPS #39 -- the site's statblock block rhythm is 34px (.sb-wrap margin: 1.7rem auto at the 20px rem base); the plugin's host carries the unscoped base's 0.5em = 8px. SC-110 fixed the half of #39 the gate owned (this pair did not exist, so the site's block margin was invisible to the contract); the residual 34-vs-8 is the real miss #39 recorded and it is a PIXEL decision. Plan 21 Task 2 set the precedent for closing it (it ported the site's 24px .sc-ability margin onto the feature host, Steel-scoped and screen-only, styles-source.css ~3497), but 26px of new air around every statblock and featureblock in an Obsidian note is Scott's call, not a gate ticket's."
     },
     {
       "pair": "statblock-wrap",

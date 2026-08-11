@@ -11,7 +11,7 @@
 //     v2/docs/javascripts/settings-panel.js:47-73 is a model, not a template).
 //
 // Fallback tails are the §5 fallback story of sc105-font-tokens-design.md, matching
-// the theme-block chains in styles-source.css (:3002-3006 Legacy, :3192-3196 Steel):
+// the value-block chains in styles-source.css (the unscoped base, then the Steel block):
 // Title/Body bottom out at the vault's --font-text, Mono at --font-monospace, and
 // the three chained slots (Controls/Card-body → Body, Label → Title) fall back to
 // their PARENT SLOT token — so overriding Body alone still carries Controls and

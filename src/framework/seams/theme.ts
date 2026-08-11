@@ -18,6 +18,14 @@
 // door (D3 §6) open. See styles-source.css's theming contract comment for why the
 // always-true [data-dse-theme='steel'] prefix was NOT stripped.
 //
+// HOW TO READ OLDER COMMENTS, of which there are many across styles-source.css and the
+// element views. "Legacy" was never a scoped rule set — it was the UNSCOPED :root base
+// that Steel overrides, and that base is still there (Steel inherits from it), so SC-144
+// deleted no CSS at all. Read "Legacy" as "the unscoped base". Read a scoping rationale
+// of the form "otherwise it moves the frozen legacy shots" as "…the frozen print shot":
+// `*--steel-print.png` is the only frozen class now, so `:not([data-dse-print="on"])` is
+// the load-bearing half of the Steel scoping habit.
+//
 // Popout safety (D3 §2.5): state is per-root, not per-document — apply() stamps the
 // element's OWN root in whatever window it lives; document.body is never touched.
 import type { App, Component } from 'obsidian';

@@ -15,8 +15,10 @@
 // Scoping (map's Print-layer caveat): the NEUTRAL block (surfaces→white,
 // fg→near-black, ornament off, borders→grey, + the always-rendered semantics
 // tier-*/stamina-*/encounter) applies to BOTH themes. role-*/act-* spines are
-// Steel-only meaning (Legacy draws grey/no spine), so their print values are
-// SCOPED to [data-dse-theme="steel"] — a Legacy print stays monochrome.
+// Steel-only meaning (the unscoped base draws grey/no spine), so their print values are
+// SCOPED to [data-dse-theme="steel"]. SC-144 left that split in place deliberately: print
+// is an ORTHOGONAL axis, not a theme, and the neutral arm is what a print root gets with
+// no theme attribute at all — see the neutral-twin test below.
 import * as fs from 'fs';
 import * as path from 'path';
 import { DSE_TOKEN_NAMES } from '../../../src/framework/tokens';
@@ -143,17 +145,17 @@ const PRINT_STEEL: Record<string, string> = {
 	'act-villain': '#b03a2e',
 };
 
-/** Tokens intentionally NOT overridden in print (= Legacy / = active theme / = Steel exact). */
+/** Tokens intentionally NOT overridden in print (= base / = active theme / = Steel exact). */
 const PRINT_INVARIANT = [
-	'touch-min', // = Legacy (print rules hide the controls it sizes)
+	'touch-min', // = base (print rules hide the controls it sizes)
 	// SC-105 Task 2: font-display retired — the remaining print-invariant font
 	// slots (bar font-mono, listed separately below) stay = active theme, no
 	// font override in print. SC-112 Task 3: font-controls LEAVES this set — it
 	// now gets an explicit print pin (PRINT_NEUTRAL above) to hold the freeze.
 	'font-title', 'font-body', 'font-card-body', 'font-label',
-	'font-mono', // = Legacy
-	'rule-fade', // = Legacy (theme-invariant)
-	'badge-fg', // = Legacy ink-on-surface (hollow frame; print --dse-fg is #000) — SC-10
+	'font-mono', // = base
+	'rule-fade', // = base (theme-invariant)
+	'badge-fg', // = base ink-on-surface (hollow frame; print --dse-fg is #000) — SC-10
 	// SC-112 Task 7: the scale tokens need no print VALUE override — their
 	// consumer rules are print-excluded (:not([data-dse-print="on"])), so print
 	// always renders 1:1 whatever the sliders say.
@@ -263,15 +265,15 @@ describe('D3 Task 5: print RULES (real kit class names, verified by grep)', () =
 });
 
 describe('D3 Task 5: print composes over whichever theme is active (orthogonal axes)', () => {
-	test('the neutral twin matches a print root REGARDLESS of theme (both Legacy and Steel)', () => {
-		const legacy = document.createElement('div');
-		legacy.setAttribute('data-dse-element', 'statblock');
-		legacy.dataset.dsePrint = 'on';
-		// Legacy print root (no theme attr) matches the neutral twin.
-		expect(legacy.matches('[data-dse-element][data-dse-print="on"]')).toBe(true);
+	test('the neutral twin matches a print root with NO theme attribute, as well as a Steel one', () => {
+		const unthemed = document.createElement('div');
+		unthemed.setAttribute('data-dse-element', 'statblock');
+		unthemed.dataset.dsePrint = 'on';
+		// A print root with no theme attribute at all matches the neutral twin.
+		expect(unthemed.matches('[data-dse-element][data-dse-print="on"]')).toBe(true);
 		// …but NOT the Steel-scoped one (its roles/acts stay monochrome).
 		expect(
-			legacy.matches('[data-dse-element][data-dse-theme="steel"][data-dse-print="on"]'),
+			unthemed.matches('[data-dse-element][data-dse-theme="steel"][data-dse-print="on"]'),
 		).toBe(false);
 
 		const steel = document.createElement('div');
