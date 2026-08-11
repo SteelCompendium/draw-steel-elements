@@ -21,6 +21,12 @@ export const horizontalRuleElement: ElementDefinition<void> = {
 	parse: () => undefined,
 	autoResolveRefs: false,
 	noClickShield: true,
+	// SC-145: zero-config element (see the file header) — there is no YAML a user could
+	// ever edit, so the generic authoringControls "Edit Horizontal rule" pencil would
+	// open a form with nothing in it. Same opt-out convention as ds-hero's
+	// noAuthoringButton (registry.ts), for the opposite reason (that one has its own
+	// affordance instead; this one needs none at all).
+	noAuthoringButton: true,
 	createView: (cx) => new HorizontalRuleView(cx),
 	authoring: { example: horizontalRuleExample },
 };

@@ -157,6 +157,12 @@ export function statblockHeaderParts(statblock: Statblock): {
 }
 
 export class StatblockElementView extends ElementView<StatblockConfig> {
+	/** SC-145: the `.dse-sb` card node onMount most recently created — tracked so
+	 *  authoringAnchor() below can anchor the generic authoring pencil to it instead of
+	 *  root (root itself carries no card-frame border/background; see that method's
+	 *  ElementView doc for why the mismatch put the pencil outside the visible card). */
+	private cardEl?: HTMLElement;
+
 	constructor(cx: RenderContext) {
 		super(cx);
 		// D5 roll-pref re-mount — see FeatureElementView's constructor comment.
@@ -180,6 +186,7 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
 
 		const card = root.createDiv({ cls: 'dse-sb' });
+		this.cardEl = card;
 		// D4 (Plan 13 Task 3): density/featstyle/columns/stats arrive on the ELEMENT
 		// ROOT as data-dse-* via the pipeline's prefs.reflect() — nothing to stamp
 		// here. CSS keys off [data-dse-element='statblock'][data-dse-…] descendants.
@@ -213,6 +220,12 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		this.renderMeta(card, model);
 		this.renderChars(card, model);
 		this.renderFeatures(card, model, renderMd);
+	}
+
+	/** SC-145: `.dse-sb` (not root) carries the card's visible border/background —
+	 *  see the `cardEl` field doc above and ElementView.authoringAnchor()'s doc. */
+	authoringAnchor(): HTMLElement {
+		return this.cardEl ?? this.rootEl;
 	}
 
 	/** The .dse-sb__meta info grid: the legacy StatsView surface — the

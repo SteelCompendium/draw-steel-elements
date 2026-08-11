@@ -402,9 +402,14 @@ export class ElementPipeline {
 			// `!def.noAuthoringButton` — `ds-hero` opts out because it mounts its OWN
 			// "Edit definition" header affordance (same openFormEditor/schema, placed next
 			// to `[respite]` per spec §3.2, not a redundant trailing pencil).
+			// SC-145: mounted into `view.authoringAnchor()`, NOT unconditionally `root` —
+			// see that method's doc (framework/view.ts) for why a bare `root` target left
+			// the button visually outside the card for every view whose visible card frame
+			// is a nested child div (the D6 display-family `.dse-card` / statblock's
+			// `.dse-sb`) rather than root itself.
 			if (cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs)) {
 				iconButton(
-					root,
+					view.authoringAnchor(),
 					{
 						icon: 'pencil',
 						label: `Edit ${def.name}`,

@@ -241,6 +241,19 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 		this.source = source;
 	}
 
+	/**
+	 * SC-145: the visible card frame here is `.dse-card` (a child of root, not root
+	 * itself — see renderLegacy/renderSteel below, both `root.createDiv({ cls:
+	 * 'dse-card' })`), so the generic authoring pencil must anchor to THAT node, not
+	 * root, or it renders as a stray sibling below/outside the card's border. Falls
+	 * back to `rootEl` only in the defensive case the pipeline ever asked before the
+	 * first render completed (cardEl unset) — never true in production (mount() always
+	 * runs onMount, which always sets cardEl, before the pipeline reads this).
+	 */
+	authoringAnchor(): HTMLElement {
+		return this.cardEl ?? this.rootEl;
+	}
+
 	protected async onMount(root: HTMLElement, model: M): Promise<void> {
 		await this.renderBranch(root, model);
 

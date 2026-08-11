@@ -65,6 +65,23 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		await this.resolveAndMount(root, model.raw);
 	}
 
+	/**
+	 * SC-145: `mountBase` mounts the wrapped base view against the SAME `root` node this
+	 * view got (never a nested sub-div — see `mountBase` below), so whatever card frame
+	 * the base view's OWN `authoringAnchor()` names (e.g. DisplayCardView's `.dse-card`,
+	 * StatblockElementView's `.dse-sb`) is exactly as valid here. Delegating is what makes
+	 * those per-view overrides reach the generic pipeline pencil at all: the pipeline
+	 * calls `authoringAnchor()` on THIS view (the one `def.createView()` returned for
+	 * every withReference-wrapped element — statblock/feature/featureblock + all 11 D6
+	 * display-family elements), never on the inner one directly. Falls back to `rootEl`
+	 * when nothing mounted yet (an error/web/unresolved-ref card, none of which override
+	 * authoringAnchor — also moot, since `def.noAuthoringButton`/error-path short-circuits
+	 * usually apply, but a safe default regardless).
+	 */
+	authoringAnchor(): HTMLElement {
+		return this.mountedChild?.authoringAnchor() ?? this.rootEl;
+	}
+
 	protected async onUpdate(model: RefOrInline<M>): Promise<void> {
 		if (this.mountedChild) {
 			this.removeChild(this.mountedChild);

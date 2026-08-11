@@ -1,0 +1,195 @@
+// SC-145 — "Correct edit button placement". The pipeline's generic authoringControls
+// pencil (D9 Plan 15 Task 5, pipeline.ts) used to be appended unconditionally to `root`
+// after view.mount(). For views whose visible card frame (border/background) is painted
+// directly on root — counter/initiative/encounter/negotiation/montage/project/party/
+// feature/featureblock, per the shared "card plate" CSS rule (styles-source.css ~:4068,
+// which targets `[data-dse-element='<id>']` compounds) — that put the pencil inside the
+// box by construction. For views whose visible card frame is instead a NESTED child div
+// — the D6 display-family `.dse-card` (kit/complication/… — DisplayCardView) and
+// statblock's `.dse-sb` — root itself carries no border, so the pencil rendered as a
+// stray sibling BELOW/OUTSIDE the visible box (Scott's screenshots on the ticket).
+//
+// The fix: ElementView.authoringAnchor() (framework/view.ts) — default `rootEl`,
+// overridden by DisplayCardView/StatblockElementView to return their tracked card node —
+// and pipeline.ts now mounts the pencil into `view.authoringAnchor()` instead of a bare
+// `root`. A second, easy-to-miss piece: EVERY affected element (all 11 display-family +
+// statblock) is wrapped in `withReference()` (shared/withReference.ts), so the view the
+// pipeline actually calls `authoringAnchor()` on is `RefUnwrapView`, not
+// DisplayCardView/StatblockElementView directly — RefUnwrapView.authoringAnchor() must
+// DELEGATE to whichever base view it mounted (`this.mountedChild`), or the override on
+// the wrapped view is unreachable dead code. These tests assert the DOM-structural
+// contract that anchor now guarantees end-to-end (through the real withReference wrap,
+// not a bypass): the
+// button is a DESCENDANT of whichever node the theme's CSS actually borders, for one
+// "wide card" element from the previously-broken family (a DisplayCardView-driven card,
+// the kit/complication shape) and one "narrow card" element from the previously-correct
+// family (counter — must NOT regress), plus statblock (the other previously-broken
+// family, a different nested anchor class). It also locks in the two per-element
+// opt-outs: horizontal-rule's noAuthoringButton (no meaningful YAML to edit) and the
+// authoringControls-off default (no authoring buttons render at all, matching the
+// pre-D9 pipeline exactly).
+import { ElementPipeline } from '@/framework/pipeline';
+import type { ElementDefinition } from '@/framework/registry';
+import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
+import { DisplayCardView } from '@/elements/shared/CardLayout';
+import type { CardLayout } from '@/elements/shared/CardLayout';
+import { withReference } from '@/elements/shared/withReference';
+import { counterElement } from '@/elements/counter/definition';
+import { statblockElement } from '@/elements/statblock/definition';
+import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
+import { makeCompendiumDeps } from '../elements/_refHarness';
+import type { ElementPipelineDeps } from '@/framework/pipeline';
+
+function makeHost(language: string, overrides: Partial<BlockHost> = {}) {
+	const containerEl = document.createElement('div');
+	const host = {
+		mode: 'reading' as RenderMode,
+		sourcePath: 'Note.md',
+		containerEl,
+		canPersist: true,
+		addChild: (child: unknown) => child,
+		getBlockInfo: () => ({ language, lineStart: 0, lineEnd: 1 }),
+		replaceSource: async () => true,
+		blockKey: () => `Note.md::${language}::0`,
+		...overrides,
+	};
+	return host as BlockHost & { containerEl: HTMLElement };
+}
+
+async function withAuthoringControlsOn(deps: ElementPipelineDeps): Promise<ElementPipelineDeps> {
+	await deps.prefs.set('authoringControls', true);
+	return deps;
+}
+
+/** A minimal stand-in for the D6 display-family shape (kit/complication/…): any real
+ *  member registers through `displayFamily()`, which always drives `DisplayCardView` —
+ *  the exact class under test here — wrapped in `withReference()`, exactly like every
+ *  real display-family def (`displayFamily()` itself always wraps its `base`; see
+ *  displayFamily.ts). Wrapping it here too matters, not just for fidelity: the pipeline
+ *  never sees a bare `DisplayCardView` in production — `def.createView()` returns the
+ *  `RefUnwrapView` `withReference` builds, so it is RefUnwrapView's `authoringAnchor()`
+ *  delegation (RefUnwrapView.ts) that actually has to carry DisplayCardView's `.dse-card`
+ *  override out to the pipeline. A hand-built LAYOUT keeps the test independent of a real
+ *  Kit/Complication SDK model shape or the compendium harness (same convention as
+ *  test/dom/elements/displayCard.test.ts's own testDef/testLayout). */
+interface WideCardModel {
+	name: string;
+	body: string;
+}
+
+function wideCardLayout(): CardLayout<WideCardModel> {
+	return {
+		title: (m) => m.name,
+		body: (m) => m.body,
+	};
+}
+
+function wideCardDef(): ReturnType<typeof withReference<WideCardModel>> {
+	const base: ElementDefinition<WideCardModel> = {
+		id: 'test-wide-card',
+		name: 'Test Wide Card',
+		aliases: ['ds-test-wide-card'],
+		shape: 'static',
+		parse: (data) => data as WideCardModel,
+		createView: (cx) => new DisplayCardView(cx, wideCardLayout()),
+	};
+	return withReference(base, { sccType: 'test-wide-card' });
+}
+
+const EDIT_BTN = '.dse-btn[aria-label^="Edit "]';
+
+describe('SC-145: authoring pencil anchors to the card frame, not blindly to root', () => {
+	test('wide card (DisplayCardView, the kit/complication shape): pencil mounts INSIDE .dse-card, not as a root-level sibling after it', async () => {
+		const { deps } = makeCompendiumDeps();
+		await withAuthoringControlsOn(deps);
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost('ds-test-wide-card');
+
+		await pipeline.run(wideCardDef(), JSON.stringify({ name: 'Chosen One', body: 'Some prose.' }), host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const card = root.querySelector('.dse-card');
+		expect(card).not.toBeNull();
+
+		const btn = root.querySelector<HTMLElement>(EDIT_BTN);
+		expect(btn).not.toBeNull();
+		// The bug: appended as root's own child, a SIBLING of .dse-card, not inside it.
+		expect(card!.contains(btn)).toBe(true);
+		expect(btn!.parentElement).toBe(card);
+		// root itself carries no border/background in this theme — .dse-card does — so a
+		// direct child of root (the old behavior) would render visually outside the box.
+		expect(btn!.parentElement).not.toBe(root);
+	});
+
+	test('narrow card (counter — root itself is the visible box, unchanged since D2): pencil still mounts as a direct child of root', async () => {
+		const { deps } = makeCompendiumDeps();
+		await withAuthoringControlsOn(deps);
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost('ds-counter');
+
+		await pipeline.run(counterElement, 'name: Health\ncurrent_value: 7\nmax_value: 20\nmin_value: 0\n', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const btn = root.querySelector<HTMLElement>(EDIT_BTN);
+		expect(btn).not.toBeNull();
+		// counter's own content lives in a NESTED `.dse-counter` wrapper, but the card
+		// plate CSS borders ROOT directly for this element — so the pencil belongs on
+		// root, exactly as it did before this fix (non-regression).
+		expect(btn!.parentElement).toBe(root);
+		expect(root.querySelector('.dse-counter')!.contains(btn)).toBe(false);
+	});
+
+	test('statblock (the other previously-broken family — nested .dse-sb): pencil mounts INSIDE .dse-sb', async () => {
+		const { deps } = makeCompendiumDeps();
+		await withAuthoringControlsOn(deps);
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost('ds-statblock');
+
+		await pipeline.run(statblockElement, 'type: statblock\nname: Bare Creature\nstamina: "10"\n', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const card = root.querySelector('.dse-sb');
+		expect(card).not.toBeNull();
+
+		const btn = root.querySelector<HTMLElement>(EDIT_BTN);
+		expect(btn).not.toBeNull();
+		expect(card!.contains(btn)).toBe(true);
+		expect(btn!.parentElement).toBe(card);
+		expect(btn!.parentElement).not.toBe(root);
+	});
+});
+
+describe('SC-145: horizontal-rule opts out of the generic pencil entirely (no meaningful YAML to edit)', () => {
+	test('noAuthoringButton is set', () => {
+		expect(horizontalRuleElement.noAuthoringButton).toBe(true);
+	});
+
+	test('authoringControls on: no Edit button renders for ds-hr', async () => {
+		const { deps } = makeCompendiumDeps();
+		await withAuthoringControlsOn(deps);
+		const pipeline = new ElementPipeline(deps);
+		const host = makeHost('ds-hr');
+
+		await pipeline.run(horizontalRuleElement, '', host);
+
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelector(EDIT_BTN)).toBeNull();
+	});
+});
+
+describe('SC-145: authoringControls off (the default): no authoring buttons render anywhere', () => {
+	test('wide card (DisplayCardView) and counter both render with zero Edit buttons', async () => {
+		const { deps } = makeCompendiumDeps(); // authoringControls left at its default (false)
+		const pipeline = new ElementPipeline(deps);
+
+		const wideHost = makeHost('ds-test-wide-card');
+		await pipeline.run(wideCardDef(), JSON.stringify({ name: 'Chosen One', body: 'Some prose.' }), wideHost);
+		const wideRoot = wideHost.containerEl.firstElementChild as HTMLElement;
+		expect(wideRoot.querySelector(EDIT_BTN)).toBeNull();
+
+		const counterHost = makeHost('ds-counter');
+		await pipeline.run(counterElement, 'name: Health\ncurrent_value: 7\nmax_value: 20\nmin_value: 0\n', counterHost);
+		const counterRoot = counterHost.containerEl.firstElementChild as HTMLElement;
+		expect(counterRoot.querySelector(EDIT_BTN)).toBeNull();
+	});
+});

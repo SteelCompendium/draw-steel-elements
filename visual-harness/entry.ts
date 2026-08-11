@@ -559,6 +559,26 @@ export const PREF_SHOTS: {
 		fixture: 'stats',
 		prefs: { fbStats: 'ledger' },
 	},
+	// SC-145: `authoringControls` ("Show edit button on rendered blocks") had NO harness
+	// coverage before this ticket — the default sweep always renders with it off, so the
+	// generic reading-mode pencil (D9 Plan 15 Task 5, pipeline.ts) was never photographed
+	// at all, in either its pre-fix (outside the card) or post-fix (inside the card)
+	// shape. One entry per element family the fix touches: `complication` is Scott's own
+	// bad-placement screenshot on the ticket (a DisplayCardView card — the pencil used to
+	// land as a stray `root` sibling below `.dse-card`); `counter` is the
+	// already-correct family (root itself is the card) — a non-regression witness;
+	// `statblock` is the OTHER previously-broken family this audit found (nested
+	// `.dse-sb`, not called out in the ticket's screenshots but the same bug);
+	// `horizontal-rule` proves the `noAuthoringButton` opt-out renders NO pencil at all.
+	{ id: 'complication-edit-btn', element: 'complication', fixture: 'default', prefs: { authoringControls: 'true' } },
+	{ id: 'counter-edit-btn', element: 'counter', fixture: 'default', prefs: { authoringControls: 'true' } },
+	{ id: 'statblock-edit-btn', element: 'statblock', fixture: 'default', prefs: { authoringControls: 'true' } },
+	{
+		id: 'horizontal-rule-edit-btn',
+		element: 'horizontal-rule',
+		fixture: 'default',
+		prefs: { authoringControls: 'true' },
+	},
 ];
 
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
@@ -665,11 +685,22 @@ export async function mountFromParams(
 	// that changes DOM SHAPE (the characteristics split, the villain band) is built the
 	// right way on first paint rather than through a remount — the store is per-mount
 	// here, so this can never leak into another shot.
-	for (const [key, value] of Object.entries(params.prefs ?? {})) {
+	//
+	// SC-145: `parsePrefParam` (above) always yields STRING values (it parses a
+	// `key:value,…` query param) — every PREF_SHOTS entry before this ticket varied a
+	// string-enum pref (kwUsage/distTarget/sbCharLine/…), so the raw string passed
+	// straight through undetected. `authoringControls` is the first BOOLEAN pref a shot
+	// varies, and the pipeline's own gate (`isAuthoringControlsOn`, framework/pipeline.ts)
+	// is a strict `=== true` — the un-coerced string `'true'` would silently fail that
+	// check and produce an authoringControls-OFF shot with no error, no button, and no
+	// hint anything was wrong. Coerce the two literal boolean spellings; every existing
+	// string-enum pref value ('text'/'grid'/'two'/…) is untouched by this.
+	for (const [key, rawValue] of Object.entries(params.prefs ?? {})) {
+		const value: unknown = rawValue === 'true' ? true : rawValue === 'false' ? false : rawValue;
 		try {
 			await deps.prefs.set(key as never, value as never);
 		} catch (e) {
-			errors.push(`unknown pref: ${key}=${value} (${String(e)})`);
+			errors.push(`unknown pref: ${key}=${rawValue} (${String(e)})`);
 		}
 	}
 	const pipeline = new ElementPipeline(deps);

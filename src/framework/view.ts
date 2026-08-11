@@ -65,6 +65,31 @@ export abstract class ElementView<M> extends Component {
 	protected onUpdate?(model: M): void | Promise<void>;
 
 	/**
+	 * SC-145: the DOM node the pipeline's generic reading-mode "Edit <element>" pencil
+	 * (D9's authoringControls pref, ElementPipeline.run) should be mounted INTO. Must be
+	 * whichever node actually carries the element's visible card frame (border/
+	 * background/padding) — the pipeline appends the button as this node's last child
+	 * right after mount(), so the button renders visually INSIDE the card rather than as
+	 * a stray sibling below/outside it.
+	 *
+	 * Defaults to `rootEl`, which is correct for every view that mounts its content
+	 * straight onto root: the shared "card plate" CSS rule (styles-source.css, ~:4068)
+	 * targets `[data-dse-element]` directly for counter/initiative/encounter/
+	 * negotiation/montage/project/party/feature/featureblock, so root itself IS the
+	 * visible box for those, regardless of whatever nested wrapper div (`.dse-counter`,
+	 * `.dse-init`, …) the view happens to render its own content into.
+	 *
+	 * A view whose visible card frame is instead a NESTED child div — the D6
+	 * display-family `.dse-card` (DisplayCardView, below) and statblock's `.dse-sb`
+	 * (StatblockElementView) — overrides this to return that node. Called by the
+	 * pipeline AFTER `mount()` resolves, so an overriding view's card node is guaranteed
+	 * to already exist by call time.
+	 */
+	authoringAnchor(): HTMLElement {
+		return this.rootEl;
+	}
+
+	/**
 	 * Inject the model → YAML serializer persist() uses on write-back. Wired by the
 	 * pipeline from `def.serialize` (Task 9) — see the file header design note. Required
 	 * before the first persist() call (persist() throws a clear error otherwise, rather

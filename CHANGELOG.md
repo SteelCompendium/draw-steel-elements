@@ -600,6 +600,15 @@ for what needs action.
   and the feature list. It had been losing the head band, the notch and the
   divider all at once, leaving the two sections butted together with nothing
   separating them (FOLLOWUPS #56).
+- [BUGFIX] The "Show edit button on rendered blocks" pencil now renders
+  inside the card it edits, for every element — kits, complications, and the
+  rest of the compendium-reference cards, plus statblocks, used to render it
+  as a stray line floating below/outside the card's border (only
+  counter/initiative/trackers/features got it right, because their card
+  border happens to sit on the element's outer container instead of a nested
+  div). Fixed once, at the framework level, for every element. Also:
+  `ds-hr`/`ds-horizontal-rule` no longer shows the pencil at all — a rule has
+  no configuration, so there was never anything to edit (SC-145).
 
 ## 5.1.1
 
