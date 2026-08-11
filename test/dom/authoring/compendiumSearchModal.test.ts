@@ -145,16 +145,74 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 		expect(document.body.contains((modal as any).containerEl)).toBe(false);
 	});
 
-	test('renderSuggestion shows name, type chip, source, and the bare code in a <code> element', () => {
+	// SC-159 — the row must be STRUCTURED, not one text run. The predecessor of this
+	// test asserted `el.textContent` contained each field, which is true of a correct row
+	// AND of the bug it shipped with: four unstyled inline spans rendering as
+	// "Panther" + "kit" + "mcdm.heroes.v1" with nothing between them (the real capture
+	// read "Goblin Stinkerstatblockmcdm.monsters.v1"). A textContent assertion cannot
+	// tell those apart, so this one goes element by element.
+	test('renderSuggestion puts name, type and source in DISTINCT elements, plus the bare code', () => {
 		const { app, index } = setup();
 		const modal = new CompendiumSearchModal(app as any, index, jest.fn());
 		const [entry] = modal.getSuggestions('panth');
 		const el = document.createElement('div');
 		modal.renderSuggestion(entry, el);
-		expect(el.textContent).toContain('Panther');
-		expect(el.textContent).toContain('kit');
-		expect(el.textContent).toContain('mcdm.heroes.v1');
-		expect(el.querySelector('code')?.textContent).toBe(KIT);
+
+		const name = el.querySelector('.dse-compendium-suggest__name');
+		const type = el.querySelector('.dse-compendium-suggest__type');
+		const source = el.querySelector('.dse-compendium-suggest__source');
+		const code = el.querySelector('code.dse-compendium-suggest__code');
+
+		// Each field owns a node, and that node holds EXACTLY its own field — no
+		// neighbour's text bleeding in.
+		expect(name?.textContent).toBe('Panther');
+		expect(type?.textContent).toBe('kit');
+		expect(source?.textContent).toBe('mcdm.heroes.v1');
+		expect(code?.textContent).toBe(KIT);
+
+		// Four separate nodes, not one (or two) doing double duty.
+		expect(new Set([name, type, source, code]).size).toBe(4);
+
+		// The specific regression: name and type are not siblings in one inline run —
+		// the chips live in their own meta container, which is what the stylesheet
+		// pushes to the right of the name.
+		const meta = el.querySelector('.dse-compendium-suggest__meta');
+		expect(meta).not.toBeNull();
+		expect(meta!.contains(type!)).toBe(true);
+		expect(meta!.contains(source!)).toBe(true);
+		expect(meta!.contains(name!)).toBe(false);
+
+		// The code is a LINE, not a trailing inline node: it is a sibling of the head
+		// row, not inside it.
+		const head = el.querySelector('.dse-compendium-suggest__head');
+		expect(head?.contains(name!)).toBe(true);
+		expect(head?.contains(code!)).toBe(false);
+		expect(code!.parentElement).toBe(el);
+	});
+
+	// The row is only readable because a stylesheet backs those class names — that is the
+	// entire fix. A rename on either side silently reinstates the run-together bug, so the
+	// contract is pinned across both files.
+	test('every class the row emits is actually styled in styles-source.css', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const { app, index } = setup();
+		const modal = new CompendiumSearchModal(app as any, index, jest.fn());
+		const [entry] = modal.getSuggestions('panth');
+		const el = document.createElement('div');
+		modal.renderSuggestion(entry, el);
+
+		const emitted = new Set<string>();
+		for (const node of el.querySelectorAll('*')) {
+			for (const cls of Array.from(node.classList)) {
+				if (cls.startsWith('dse-compendium-suggest')) emitted.add(cls);
+			}
+		}
+		expect(emitted.size).toBeGreaterThan(0);
+		// `__head` and `__meta` are pure layout containers and are styled; every emitted
+		// class must appear as a selector somewhere in the sheet.
+		for (const cls of emitted) {
+			expect(sheet).toContain(`.${cls}`);
+		}
 	});
 
 	// SC-149: the snapshot command passes `filter` so only snapshottable families are

@@ -106,10 +106,29 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 			});
 			return;
 		}
-		const row = el.createDiv({ cls: 'dse-compendium-suggest__row' });
-		row.createSpan({ cls: 'dse-compendium-suggest__name', text: entry.name });
-		row.createSpan({ cls: 'dse-compendium-suggest__type', text: entry.type });
-		row.createSpan({ cls: 'dse-compendium-suggest__source', text: entry.source });
+		// SC-159 — the four fields are a two-LINE layout, not four inline spans. Before
+		// this fix the row emitted exactly these nodes with no stylesheet behind them, so
+		// the browser laid them out as one inline run and a result read
+		// "Goblin Stinkerstatblockmcdm.monsters.v1". The DOM was never the problem; the
+		// missing CSS was. Both live together now — `.dse-compendium-suggest` in
+		// styles-source.css is the only thing that makes this readable, so if you rename a
+		// class here, rename it there.
+		//
+		// Line 1: the name (prominent) + type/source as muted chips, right-aligned.
+		// Line 2: the full SCC code, mono and dimmer — the precise identifier.
+		// The chips DO restate what the code's first two segments already say (source is
+		// literally `scc.slice(0, scc.indexOf('/'))`, see CompendiumIndex.sourceOf), and
+		// that repetition is the point: the code is long and easy to skim past, so the
+		// two facts you actually disambiguate on — is this a statblock or a feature, is it
+		// from monsters or heroes — get to be short, scannable, and in a fixed position.
+		const head = el.createDiv({ cls: 'dse-compendium-suggest__head' });
+		head.createSpan({ cls: 'dse-compendium-suggest__name', text: entry.name });
+		const meta = head.createDiv({ cls: 'dse-compendium-suggest__meta' });
+		// Guarded: a hand-authored note can carry a blank type or source, and an empty
+		// chip renders as a stray 2px pill rather than as nothing.
+		if (entry.type) meta.createSpan({ cls: 'dse-compendium-suggest__type', text: entry.type });
+		if (entry.source)
+			meta.createSpan({ cls: 'dse-compendium-suggest__source', text: entry.source });
 		el.createEl('code', { cls: 'dse-compendium-suggest__code', text: entry.scc });
 	}
 

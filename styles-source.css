@@ -1528,6 +1528,114 @@ code.dsa {
 	visibility: visible;
 }
 
+/* -- SC-159: the compendium search modal's suggestion rows -------------------- *
+   CompendiumSearchModal (src/authoring/CompendiumSearchModal.ts) shipped its row
+   markup with NO stylesheet behind it, so four block-less spans laid out as a single
+   inline run: a result read "Goblin Stinkerstatblockmcdm.monsters.v1". It is the first
+   modal a beginner opens (the Getting Started tutorial points at it) and the bug was
+   visible in a published docs screenshot, which is how it was found.
+
+   Deliberately UNSCOPED, and it uses OBSIDIAN'S OWN variables rather than --dse-*
+   tokens. Both of those are load-bearing, and the second one is the non-obvious part:
+
+     **--dse-* tokens do not resolve here.** This modal extends Obsidian's SuggestModal
+     directly, not the kit's DseModal, so it is neither inside a [data-dse-element] root
+     nor a .dse-modal, and nothing stamps data-dse-theme on it (managedModal.ts's WeakMap
+     lookup never runs). The :root token block does not save you: it is authored as
+     `--dse-fg-muted: var(--text-muted)` etc., and Obsidian declares --text-muted on
+     BODY, so at :root (= <html>) those references are undefined and every token computes
+     to the guaranteed-invalid value. Inheriting an invalid value is still invalid, so
+     `border: 1px solid var(--dse-border)` silently becomes NO border and
+     `color: var(--dse-fg-muted)` silently falls back to the inherited ink. Verified, not
+     assumed: an earlier draft of this block used tokens and rendered with zero border,
+     zero chip background, un-muted text, and — worst — a `font-family: var(--dse-font-mono)`
+     that was invalid-at-computed-value and therefore replaced the <code> element's UA
+     monospace default with the inherited sans face, making the row WORSE than before.
+     Element cards never hit this because the Steel block re-declares every token under
+     `:is([data-dse-element], .dse-modal)[data-dse-theme='steel']`, inside body's cascade.
+
+   Using the app's variables is also just correct for this surface: it is a native
+   suggester and should look like Obsidian's own search in whichever color scheme the
+   vault is using, not like a forged Steel card dropped into the command palette. Both
+   schemes were checked.
+
+   Screen-only chrome by construction: nothing inside a [data-dse-element] root, so no
+   print rule and no frozen shot can reach these classes.                          */
+
+.dse-compendium-suggest__head {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75em;
+}
+
+/* The name carries the row. Everything else is support. */
+.dse-compendium-suggest__name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	color: var(--text-normal);
+	overflow-wrap: anywhere;
+}
+
+/* Type + source, pushed right. `flex-wrap` so a long pair drops under the name on a
+   narrow modal instead of squeezing the name to nothing. */
+.dse-compendium-suggest__meta {
+	flex: 0 1 auto;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.35em;
+}
+
+/* Muted chips on the shared chip grammar (cf. .dse-stamina-rec__status). Border all
+   around, never a colored left-edge spine — DESIGN.md rule 7. */
+.dse-compendium-suggest__type,
+.dse-compendium-suggest__source {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.05em 0.5em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s, 4px);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: 0.8em;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+/* No `font-family` here on purpose — twice over. Beyond the token problem above, an
+   earlier draft pinned var(--dse-font-label) and tripped steelTypography.test.ts:
+   SC-112's font-slot gate requires EVERY consumer of a widened slot to carry
+   :not([data-dse-print="on"]), and the suite finds "the Label rule" by taking the FIRST
+   rule in the sheet whose body sets that slot — which this one became, hijacking the
+   guard away from .dse-section__title. Inheriting is also simply correct: the font slots
+   are card typography, they are never stamped on this modal, and a chip in a native
+   suggester should wear the app's UI font like the rest of the palette. */
+
+/* Line 2: the precise identifier. Dimmest thing in the row — present for the user who
+   needs it, never competing with the name for the user who doesn't. */
+/* The <code> element already defaults to the UA monospace face; naming Obsidian's own
+   --font-monospace keeps it consistent with the rest of the app AND, unlike the --dse-*
+   slot, actually resolves here. */
+.dse-compendium-suggest__code {
+	display: block;
+	margin-top: 0.2em;
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	overflow-wrap: anywhere;
+}
+
+/* The empty-index CTA row (spec §4.2) — one title, one explanatory line. */
+.dse-compendium-suggest__title {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+.dse-compendium-suggest__hint {
+	margin-top: 0.2em;
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
 /* CustomizeConditionModal body: tools column beside the live preview. */
 .dse-cust {
 	display: flex;

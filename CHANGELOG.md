@@ -15,6 +15,13 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [BUGFIX] **The compendium search modal is readable again** (SC-159). Every result
+  ran its name, type and source together into one unbroken string — a goblin listed
+  itself as "Goblin Stinkerstatblockmcdm.monsters.v1". The row now has a real layout:
+  the entry's name on its own line in bold, its type and source as two small muted
+  chips at the right, and the full compendium code underneath in a monospace face.
+  This is the first modal the Getting started tutorial sends you to, so it was also
+  the first thing a new user saw; the tutorial screenshot is regenerated.
 - **The documentation has tutorials** (SC-142). Six new guides sit on top of the
   reference pages: **Getting started** (install → sync → your first element → your
   first fight, assuming no YAML or markdown knowledge), **Run an encounter**,
