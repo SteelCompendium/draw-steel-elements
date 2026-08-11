@@ -29,6 +29,8 @@ monsters:
 ~~~
 ```
 
+![The encounter builder](Media/encounter.png)
+
 | Field | What it is |
 |---|---|
 | `party.hero_count`, `party.hero_level` | How many heroes, and what level — this sets the budget. |
@@ -77,6 +79,8 @@ participants:
 ~~~
 ```
 
+![A montage test tracker](Media/montage.png)
+
 Tracks the round, the running successes and failures against their limits, and which
 skills each participant has already used (the tracker warns you when someone reuses one).
 Record a test's outcome from the participant's row; the tally and round track update
@@ -103,6 +107,8 @@ rolls:
   - { respite: 2, roll: 20, points: 34, breakthrough: true }
 ~~~
 ```
+
+![A downtime project tracker](Media/project.png)
 
 Tracks one downtime project: the goal, its prerequisites, the points accrued so far, and
 every respite roll that got you there.
@@ -134,6 +140,8 @@ party:
   hero_tokens: 2
 ~~~
 ```
+
+![The party tracker](Media/party.png)
 
 One row per hero with level, class, ancestry, victories, XP, renown and wealth, plus the
 party's shared hero token pool. `hero_ref` is an ordinary link to that hero's note.

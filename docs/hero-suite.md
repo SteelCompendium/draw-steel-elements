@@ -26,6 +26,8 @@ abilities:
 ~~~
 ```
 
+![A hero sheet](Media/hero.png)
+
 The sheet renders characteristics, a Stamina bar with Recoveries, the heroic resource,
 surges, conditions, and the hero's abilities as compact rows that expand into full ability
 cards (rollable, if you have turned rolling on in [Settings](settings.md#rolling)).
@@ -84,6 +86,8 @@ conditions:
 ~~~
 ```
 
+![A conditions strip](Media/conditions.png)
+
 Each entry is either a bare condition name or an object with a `key` plus an optional
 `effect` (its duration — "save ends", "EoT", "EoE") and `color`. Click **+** to add
 conditions, click a condition to remove it.
@@ -96,6 +100,8 @@ class: fury
 current: 4
 ~~~
 ```
+
+![A heroic resource tracker](Media/heroic-resource.png)
 
 Name the `class` and the block labels itself with that class's resource (Ferocity, Focus,
 Piety, Clarity, …), applies its floor, and shows a short reminder of how the resource is
@@ -117,6 +123,8 @@ highest_characteristic: 3
 ~~~
 ```
 
+![A surge counter](Media/surges.png)
+
 A surge counter. `highest_characteristic` is optional; when present the panel shows what
 each surge is worth ("each = +3 damage").
 
@@ -128,6 +136,8 @@ label: Session 12 party pool
 tokens: 3
 ~~~
 ```
+
+![The party's hero token pool](Media/hero-tokens.png)
 
 The party's shared Hero Token pool. Keep **one** of these — in your session note or the
 sidebar — and everyone reads the same number. `label` is optional; `tokens` is the count.

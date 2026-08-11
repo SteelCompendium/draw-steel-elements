@@ -83,6 +83,8 @@ interactive there, and stays in sync with the note. The initiative tracker has i
 shortcut for this, **Send initiative tracker to sidebar**, which finds the tracker in the
 current note without needing your cursor inside it.
 
+![An initiative tracker pinned to the Draw Steel sidebar](Media/sidebar.png)
+
 Open the panel any time with the crossed-swords ribbon icon, or the **Open Draw Steel
 sidebar** command.
 

@@ -145,8 +145,24 @@ See the [changelog](CHANGELOG.md) for changes.
 
 <!-- ~/Documents/demo/DS Elements demo has symlink to this repo -->
 
+### Screenshots
+
+Every image in this README and in `docs/` is generated:
+
+```bash
+npm run docs-shots          # regenerate all of them (~4 min)
+npm run docs-shots -- --only=statblock.png
+npm run docs-shots -- --browser-only     # skip the Obsidian half
+```
+
+The run starts its own virtual display, so it is fully headless — your own Obsidian can
+stay open, and nothing appears on screen. What each image is and where it comes from lives
+in `visual-harness/docs-manifest.mjs`; add an entry there to add an image. The two animated
+GIFs are the only images a human still has to record by hand, and the run says so.
+
 ### Release
 
+- **Refresh the screenshots**: `npm run docs-shots`, then commit whatever changed
 - Make sure the `manifest.json` has the right release version
   - This should be semver without the `v` prefix
 - Update `CHANGELOG.md`

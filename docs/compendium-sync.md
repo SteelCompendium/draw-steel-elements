@@ -16,15 +16,13 @@ files in the compendium, a future sync may rename or remove the file at that pat
 in a specific version, set the Release field to a specific
 [release tag](https://github.com/SteelCompendium/data-unified/releases).
 
-![compendium](Media/compendium.png)
-
 ## Quick Start
 
 1. Open **Settings → Draw Steel Elements → Compendium**.
 2. (Optional) Edit the [configuration](#configuration).
 3. Click the **Sync** button.
 
-![Compendium Download](Media/compendium-download.png)
+![The Compendium settings page](Media/compendium.png)
 
 The compendium downloads into the Destination folder (`DS Compendium` by default).
 
@@ -91,6 +89,8 @@ mcdm.heroes.v1/kit/panther
 That's the whole format. The `scc.v1:` prefixed form works too
 (`scc.v1:mcdm.heroes.v1/kit/panther`); anything that isn't a code renders a short message
 telling you so.
+
+![A compendium entry rendered by a ds-scc block](Media/scc-reference.png)
 
 The easiest way to write one is the command palette: **Insert Draw Steel: compendium
 reference** searches the compendium and drops the block in for you. (Hold Shift when you

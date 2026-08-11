@@ -15,6 +15,8 @@ defaults.
 Every setting ships on the value that reproduces what the plugin renders out of the box.
 Nothing changes unless you change it.
 
+![The Draw Steel Elements settings index](Media/settings-index.png)
+
 ## Appearance
 
 - **Reduce motion** — turn off transitions and animations inside Draw Steel elements. Your
@@ -43,6 +45,8 @@ How statblocks are laid out. Start with the **Preset**:
 - **Steel card** — the plugin's own look, and the default.
 - **Sourcebook** — the book-style flat layout.
 - **Index card** — compact, for reference at the table.
+
+![The Statblock display settings page](Media/settings-statblock.png)
 
 A preset writes all nine settings below it. Change any one of them afterwards and the
 preset box reads **Custom** — nothing is lost, it's just no longer one of the three named
