@@ -44,19 +44,38 @@ import type { CardLayout } from '@/elements/shared/CardLayout';
 import type { Kit } from 'steel-compendium-sdk';
 import kitExample from '@/elements/display/kit/example.yaml';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
-import type { ThemeServiceInternal } from '@/framework/seams/theme';
 
-// Plan 24 / SC-100 Task 3: kitLayout now declares a `.steel` composition, and
-// DEFAULT_THEME_ID is 'steel' — every test in this file asserts the LEGACY hybrid DOM
-// (Task 9's original contract, unchanged), so each pins `deps.theme` to 'legacy'
-// explicitly (Task 2's invariant 2: a layout WITH `steel` still renders the legacy DOM
-// verbatim under every non-steel theme). The Steel-branch hybrid render gets its own
-// coverage in kitSteel.test.ts.
+// SC-144: `kitLayout` declares a `.steel` composition, so the real ds-kit card always
+// renders it (that render's coverage is kitSteel.test.ts). Until SC-144 the ROW claims
+// below — (a) and (c), both about `renderBase()`'s row slots — ran on the real kitElement
+// pinned to `setActive('legacy')`; the legacy theme is gone, so they run on a steel-less
+// clone of kitLayout instead (`baseKitElement` below). That keeps the assertions verbatim
+// and keeps them pointed at live code: `renderBase()` is the render path for the ten other
+// display families. Claims (b), (d) and (e) are branch-agnostic (body / error card /
+// flavor-suppression) and still run through the REAL kitElement.
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
 const KIT_REL = 'kit/panther.md';
 const SELF_REF_CODE = 'mcdm.heroes.v1/kit/self-ref';
 const SELF_REF_REL = 'kit/self-ref.md';
+
+/** Steel-less clone of kitLayout — see the note above. */
+const baseKitLayout: CardLayout<Kit> = { ...kitLayout, steel: undefined };
+const baseKitElement = displayFamily<Kit>({
+	id: 'kit-hybrid-base-branch',
+	aliases: ['ds-kit-hybrid-base-branch'],
+	name: 'Kit Hybrid (base branch)',
+	type: 'kit',
+	layout: baseKitLayout,
+	example: kitExample,
+});
+
+/** The card title node, whichever branch rendered it: the base branch's
+ *  `.dse-card__title`, or the Steel composition's cardHead primary slot. */
+function cardTitleText(card: HTMLElement): string | null | undefined {
+	return (card.querySelector('.dse-card__title') ?? card.querySelector('.dse-head__primary--left'))
+		?.textContent;
+}
 
 function rowByLabel(card: HTMLElement, label: string): HTMLElement | null {
 	return (
@@ -69,16 +88,15 @@ function rowByLabel(card: HTMLElement, label: string): HTMLElement | null {
 describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (spec §2.3, §9)', () => {
 	test('(a) frontmatter-driven rows render in by-SCC mode', async () => {
 		const { vault, deps } = makeCompendiumDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
-		const host = makeHost('ds-kit');
+		const host = makeHost('ds-kit-hybrid-base-branch');
 
-		await new ElementPipeline(deps).run(kitElement, `scc.v1:${KIT_CODE}`, host);
+		await new ElementPipeline(deps).run(baseKitElement, `scc.v1:${KIT_CODE}`, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		const card = root.querySelector('.dse-card') as HTMLElement;
-		expect(card.querySelector('.dse-card__title')?.textContent).toBe('Panther');
+		expect(cardTitleText(card)).toBe('Panther');
 
 		const stamina = rowByLabel(card, 'Stamina');
 		expect(stamina?.querySelector('.dse-card__row-value')?.textContent).toContain('+6 per');
@@ -92,7 +110,6 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 
 	test('(b) the resolved source body — including its nested ```ds-feature fence — reaches renderMarkdown; real nested-card recursion is real-Obsidian-only (jest mock can\'t execute code-block processors)', async () => {
 		const { vault, deps } = makeCompendiumDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 		const host = makeHost('ds-kit');
 
@@ -126,9 +143,9 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		// guard's DUPLICATE_ROW_MIN_LENGTH floor, so any suppression proven here is the
 		// omitWhenSource flag itself, not a text-duplicate coincidence.
 		const testLayout: CardLayout<Kit> = {
-			...kitLayout,
+			...baseKitLayout,
 			rows: [
-				...(kitLayout.rows ?? []),
+				...(baseKitLayout.rows ?? []),
 				{ label: 'OmitTest', value: (m) => m.melee_damage_bonus, omitWhenSource: true },
 			],
 		};
@@ -142,7 +159,6 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		});
 
 		const { vault, deps } = makeCompendiumDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 
 		const inlineHost = makeHost('ds-kit-hybrid-omit-test');
@@ -163,7 +179,6 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 
 	test('(d) depth guard: a code already resolving in the SAME block is refused, not infinitely recursed', async () => {
 		const { vault, deps } = makeCompendiumDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, SELF_REF_REL);
 		const host = makeHost('ds-kit');
 		const pipeline = new ElementPipeline(deps);
@@ -195,7 +210,7 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		// it resolves normally, proving a refused inner recursion doesn't corrupt the
 		// outer resolution.
 		expect(roots[0].querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(roots[0].querySelector('.dse-card__title')?.textContent).toBe('Self Ref');
+		expect(cardTitleText(roots[0])).toBe('Self Ref');
 
 		// Root #1: the INNER (recursive, same blockKey + same code) call's root div —
 		// refused by the depth guard instead of recursing further.
@@ -212,7 +227,6 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		// text. This test asserts `.dse-card__flavor` is absent, proving the guard fires
 		// on this real-content path.
 		const { vault, deps } = makeCompendiumDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 		const host = makeHost('ds-kit');
 
@@ -221,7 +235,7 @@ describe('D6 Task 9: hybrid by-SCC render — frontmatter chrome + source body (
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		const card = root.querySelector('.dse-card') as HTMLElement;
-		expect(card.querySelector('.dse-card__title')?.textContent).toBe('Panther');
+		expect(cardTitleText(card)).toBe('Panther');
 
 		// Assert the flavor is absent (suppressed by the duplicate-text guard), not
 		// just a missing element — confirm the body is present to prove the guard

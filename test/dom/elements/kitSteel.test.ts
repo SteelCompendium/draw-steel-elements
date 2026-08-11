@@ -6,11 +6,12 @@
 // grid, and the kept (richer) signature-ability sub-render — inline mode through
 // renderFeatureList, hybrid mode through the stripped source body.
 //
-// DEFAULT_THEME_ID is 'steel' (framework/seams/theme.ts), so these tests render
-// under the ambient default — no `setActive` needed — UNLIKE displayFamily.test.ts /
-// displayCardHybrid.test.ts, which now pin `setActive('legacy')` explicitly to keep
-// proving the OLD DOM still renders (Task 2's invariant 2). This file is the Steel
-// branch's own coverage.
+// SC-144 — with the legacy theme dropped, the branch is a static property of the layout
+// (`layout.steel` present => the composition), so this is no longer "the Steel-theme
+// coverage" but simply the coverage of the ds-kit card, full stop: it is the only card
+// with a composition, and it renders it unconditionally. displayFamily.test.ts /
+// displayCardHybrid.test.ts, which used to pin `setActive('legacy')` to reach kit's base
+// DOM, now exercise the base branch through steel-less clones of kitLayout.
 import { ElementPipeline } from '@/framework/pipeline';
 import type { ElementPipelineDeps } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
@@ -234,18 +235,22 @@ describe('Plan 24 / SC-100 Task 3: kit Steel composition — hybrid by-SCC mode 
 	});
 });
 
-describe('Plan 24 / SC-100 Task 3: non-kit families stay byte-identical across themes (no `.steel` composition of their own)', () => {
-	test('ds-condition: inline DOM is byte-identical under legacy vs. steel (mirrors Task 2 contract (a) — regression proof that kit\'s new composition never leaks into a sibling family)', async () => {
-		async function renderUnder(themeId: 'legacy' | 'steel'): Promise<string> {
-			const host = inlineHost('ds-condition');
-			const deps = makeInlineDeps();
-			(deps.theme as unknown as { setActive: (t: string) => void }).setActive(themeId);
-			await new ElementPipeline(deps).run(conditionElement, conditionExample, host);
-			// innerHTML, not outerHTML (Task 2 contract (a)'s own convention): the ROOT
-			// itself legitimately carries a different `data-dse-theme` stamp per theme —
-			// that attribute isn't part of the "same DOM shape" claim being tested here.
-			return (host.containerEl.firstElementChild as HTMLElement).innerHTML;
-		}
-		expect(await renderUnder('steel')).toBe(await renderUnder('legacy'));
+describe('Plan 24 / SC-100 Task 3: kit\'s composition never leaks into a sibling family', () => {
+	// Pre-SC-144 this compared ds-condition's inline DOM under 'legacy' vs 'steel'. With one
+	// theme left that comparison is vacuous, but the claim underneath it is not: a family
+	// with no `.steel` composition of its own must still get the base card frame, never any
+	// part of kit's. Asserted directly against the DOM instead of against a theme flip.
+	test('ds-condition: renders the base card frame — none of the kit composition\'s grammar', async () => {
+		const host = inlineHost('ds-condition');
+		await new ElementPipeline(makeInlineDeps()).run(conditionElement, conditionExample, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const card = root.querySelector('.dse-card') as HTMLElement;
+
+		expect(card.querySelector('.dse-card__title')!.textContent).toBe('Bleeding');
+		// The composition's own grammar: cardHead, crest, bands, stat tiles. None of it here.
+		expect(card.querySelector('.dse-head')).toBeNull();
+		expect(card.querySelector('.dse-crest')).toBeNull();
+		expect(card.querySelector('.dse-card__band')).toBeNull();
+		expect(card.querySelector('.dse-tiles__cell')).toBeNull();
 	});
 });

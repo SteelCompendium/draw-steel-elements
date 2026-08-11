@@ -13,7 +13,6 @@ import { ElementPipeline } from '@/framework/pipeline';
 import type { ElementPipelineDeps } from '@/framework/pipeline';
 import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { createThemeService } from '@/framework/seams/theme';
-import type { ThemeServiceInternal } from '@/framework/seams/theme';
 import { createPreferenceStore } from '@/framework/seams/prefs';
 import { createRollService } from '@/framework/roll/service';
 import type { PrefsStorage } from '@/framework/seams/prefs';
@@ -45,15 +44,50 @@ import titleExample from '@/elements/display/title/example.yaml';
 import perkExample from '@/elements/display/perk/example.yaml';
 import complicationExample from '@/elements/display/complication/example.yaml';
 import type { ElementDefinition } from '@/framework/registry';
+import { displayFamily } from '@/elements/display/displayFamily';
+import { kitLayout } from '@/elements/display/layouts';
+import type { CardLayout } from '@/elements/shared/CardLayout';
+import type { Kit } from 'steel-compendium-sdk';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 import { MarkdownRenderer } from '../../mocks/obsidian';
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
 const KIT_REL = 'kit/panther.md';
+
 const CONDITION_CODE = 'mcdm.heroes.v1/condition/bleeding';
 const CONDITION_REL = 'condition/bleeding.md';
 const TREASURE_CODE = 'mcdm.heroes.v1/treasure.leveled.weapon/executioners-blade';
 const TREASURE_REL = 'treasure/leveled/weapon/executioners-blade.md';
+
+/**
+ * SC-144 — a steel-LESS clone of the real kitLayout, used by the base-branch row/feature
+ * assertions below.
+ *
+ * Those tests predate `kitLayout.steel` and check `DisplayCardView.renderBase()`'s slots
+ * (rows with markdown values, the `features` slot's real feature card) against the richest
+ * fixture in the repo. Until SC-144 they ran on the real `kitElement` pinned to
+ * `setActive('legacy')`; with the legacy theme gone the real kit card ALWAYS renders its
+ * Steel composition (that render's own coverage is kitSteel.test.ts), so pinning is no
+ * longer possible. Dropping `steel` from a clone keeps the assertions verbatim and keeps
+ * them pointed at live code: `renderBase()` is still the render path for the other ten
+ * display families, and its `features` slot has no other fixture anywhere.
+ */
+const baseKitLayout: CardLayout<Kit> = { ...kitLayout, steel: undefined };
+const baseKitElement = displayFamily<Kit>({
+	id: 'kit-base-branch',
+	aliases: ['ds-kit-base-branch'],
+	name: 'Kit (base branch)',
+	type: 'kit',
+	layout: baseKitLayout,
+	example: kitExample,
+});
+
+/** The card title node, whichever branch rendered it: the base branch's
+ *  `.dse-card__title`, or the Steel composition's cardHead primary slot. */
+function cardTitleText(root: HTMLElement): string | null | undefined {
+	return (root.querySelector('.dse-card__title') ?? root.querySelector('.dse-head__primary--left'))
+		?.textContent;
+}
 
 /** Real service instances, same convention as horizontal-rule.test.ts's makeDeps() — no
  *  compendium/sccAnchors: the inline-mode tests never resolve a reference. */
@@ -94,16 +128,13 @@ function inlineHost(language: string): BlockHost & { containerEl: HTMLElement } 
 }
 
 describe('D6 Task 6: displayFamily inline rendering', () => {
-	// Plan 24 / SC-100 Task 3: kitLayout now declares a `.steel` composition, and
-	// DEFAULT_THEME_ID is 'steel' — so every ds-kit assertion below is now pinned to
-	// `setActive('legacy')` to keep proving the OLD row-list DOM still renders
-	// byte-identically (Task 2's invariant 2). Assertions themselves are UNCHANGED; the
-	// new Steel-branch composition gets its own coverage in kitSteel.test.ts.
-	test('ds-kit: inline example.yaml renders title/subtitle/badges/rows/body', async () => {
-		const host = inlineHost('ds-kit');
+	// SC-144: the two base-branch assertions below run on `baseKitElement` (the steel-less
+	// kitLayout clone defined at the top of this file) — see its doc comment. The real
+	// ds-kit card's inline render is covered by kitSteel.test.ts.
+	test('base branch: inline example.yaml renders title/subtitle/badges/rows/body', async () => {
+		const host = inlineHost('ds-kit-base-branch');
 		const deps = makeInlineDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
-		await new ElementPipeline(deps).run(kitElement, kitExample, host);
+		await new ElementPipeline(deps).run(baseKitElement, kitExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -131,12 +162,11 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 		expect(root.textContent).not.toContain('```ds-feature');
 	});
 
-	test('ds-kit: Stamina (and other *_bonus rows) render their inline SCC link through renderMarkdown', async () => {
+	test('base branch: Stamina (and other *_bonus rows) render their inline SCC link through renderMarkdown', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
-		const host = inlineHost('ds-kit');
+		const host = inlineHost('ds-kit-base-branch');
 		const deps = makeInlineDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
-		await new ElementPipeline(deps).run(kitElement, kitExample, host);
+		await new ElementPipeline(deps).run(baseKitElement, kitExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		const staminaRow = Array.from(root.querySelectorAll('.dse-card__row')).find(
@@ -500,22 +530,19 @@ describe('D6 Task 7 review fix: previously-duplicated flavor/row text appears ex
 describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 	test('ds-kit: full scc.v1: code and bare slug both resolve, no error card', async () => {
 		const { vault, deps } = makeCompendiumDeps();
-		// Plan 24 / SC-100 Task 3: pin to the legacy branch (see the Task 6 describe
-		// block above for why).
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, KIT_REL);
 
 		const codeHost = makeHost('ds-kit');
 		await new ElementPipeline(deps).run(kitElement, `scc.v1:${KIT_CODE}`, codeHost);
 		const codeRoot = codeHost.containerEl.firstElementChild as HTMLElement;
 		expect(codeRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(codeRoot.querySelector('.dse-card__title')!.textContent).toBe('Panther');
+		expect(cardTitleText(codeRoot)).toBe('Panther');
 
 		const slugHost = makeHost('ds-kit');
 		await new ElementPipeline(deps).run(kitElement, 'panther', slugHost);
 		const slugRoot = slugHost.containerEl.firstElementChild as HTMLElement;
 		expect(slugRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe('Panther');
+		expect(cardTitleText(slugRoot)).toBe('Panther');
 	});
 
 	test('ds-condition: full scc.v1: code and bare slug both resolve, no error card', async () => {
@@ -682,35 +709,34 @@ const ALL_TEN: {
 ];
 
 describe('D6 Task 7: all ten displayFamily elements mount inline and by-SCC with no error card', () => {
-	// Plan 24 / SC-100 Task 3: this table asserts the shared LEGACY `.dse-card__title`
-	// shape uniformly across all ten families — pin every entry to 'legacy' explicitly
-	// (a no-op for the nine families with no `.steel` composition; load-bearing for
-	// ds-kit, the sole family that has one as of this task).
+	// The title assertion goes through cardTitleText() (top of file): nine families render
+	// the base branch's `.dse-card__title`, ds-kit renders its Steel composition's cardHead
+	// primary slot. Pre-SC-144 this table pinned every entry to `setActive('legacy')` to
+	// force the uniform base shape; with one theme left, the branch is the layout's, so the
+	// table reads whichever title node the family's own branch produced.
 	test.each(ALL_TEN)('$id: inline example.yaml mounts with the expected title, no error card', async ({ id, element, example, inlineTitle }) => {
 		const host = inlineHost(id);
 		const deps = makeInlineDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		await new ElementPipeline(deps).run(element, example, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(root.querySelector('.dse-card__title')!.textContent).toBe(inlineTitle);
+		expect(cardTitleText(root)).toBe(inlineTitle);
 	});
 
 	test.each(ALL_TEN)('$id: full scc.v1: code and bare slug both resolve, no error card', async ({ id, element, refTitle, code, rel, slug }) => {
 		const { vault, deps } = makeCompendiumDeps();
-		(deps.theme as ThemeServiceInternal).setActive('legacy');
 		loadMdDseFixture(vault, rel);
 
 		const codeHost = makeHost(id);
 		await new ElementPipeline(deps).run(element, `scc.v1:${code}`, codeHost);
 		const codeRoot = codeHost.containerEl.firstElementChild as HTMLElement;
 		expect(codeRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(codeRoot.querySelector('.dse-card__title')!.textContent).toBe(refTitle);
+		expect(cardTitleText(codeRoot)).toBe(refTitle);
 
 		const slugHost = makeHost(id);
 		await new ElementPipeline(deps).run(element, slug, slugHost);
 		const slugRoot = slugHost.containerEl.firstElementChild as HTMLElement;
 		expect(slugRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe(refTitle);
+		expect(cardTitleText(slugRoot)).toBe(refTitle);
 	});
 });

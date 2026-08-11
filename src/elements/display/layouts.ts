@@ -164,7 +164,7 @@ export const kitLayout: CardLayout<Kit> = {
 			const hybrid = source !== undefined;
 			const bands: SteelBand[] = [];
 
-			// Flavor — the SAME duplicate-text guard renderLegacy applies (D6 Task 7
+			// Flavor — the SAME duplicate-text guard renderBase applies (D6 Task 7
 			// review fix), using the SAME "whichever markdown will actually render as the
 			// trailing body" selection: the resolved source body in hybrid mode, else the
 			// inline fallback `m.content` (this file's OWN `body` field's ternary, two
@@ -218,7 +218,7 @@ export const kitLayout: CardLayout<Kit> = {
 
 			// Signature Ability — kept plugin-is-richer sub-render (Design §5): inline
 			// mode renders the REAL feature card via the shared renderFeatureList grammar
-			// (same mechanism the legacy `features` slot uses); hybrid mode has no
+			// (same mechanism the base `features` slot uses); hybrid mode has no
 			// `signature_ability` frontmatter field, so it renders the resolved source
 			// body instead (Equipment/Kit Bonuses sections stripped, fence kept — see
 			// stripKitBodySections above) so the nested ```ds-feature fence can recurse
@@ -266,7 +266,7 @@ export const treasureLayout: CardLayout<Treasure> = {
 			// `project_roll_characteristic` carries inline SCC links straight out of the
 			// compendium data (every real treasure with a project has them — e.g.
 			// "[Reason](scc.v1:mcdm.heroes.v1/rule.character/reason) or [Intuition](…)"),
-			// and without this flag renderLegacy() calls setText() on the joined value, so
+			// and without this flag renderBase() calls setText() on the joined value, so
 			// the whole link — brackets, parens, URI — printed verbatim in the card. The
 			// file header's old claim that "Treasure's non-linking rows (Prerequisite/
 			// Project) are the control: real data confirms 0 links there" was wrong for

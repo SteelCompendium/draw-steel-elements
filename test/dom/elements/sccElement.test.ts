@@ -19,7 +19,6 @@
 import { ElementPipeline } from '@/framework/pipeline';
 import { parseSccBody, sccElement, baseForSccType, SCC_ELEMENT_NAME } from '@/elements/scc/definition';
 import sccExample from '@/elements/scc/example.yaml';
-import type { ThemeServiceInternal } from '@/framework/seams/theme';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
@@ -42,14 +41,10 @@ const ABILITY_REL = 'feature/ability/fury/level-1/hit-and-run.md';
 const TERRAIN_CODE = 'mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar';
 const TERRAIN_REL = 'dynamic-terrain/mechanisms/pillar.md';
 
-/** Render a ds-scc block and hand back its root element. `theme` follows
- *  displayFamily.test.ts's convention: the kit card has a Steel-only composition (SC-100)
- *  with its own DOM, so kit assertions pin the legacy row-list card the other families
- *  still render in either theme. */
-async function render(body: string, seed: string[] = [], theme?: 'legacy'): Promise<HTMLElement> {
+/** Render a ds-scc block and hand back its root element. */
+async function render(body: string, seed: string[] = []): Promise<HTMLElement> {
 	const { vault, deps } = makeCompendiumDeps();
 	for (const rel of seed) loadMdDseFixture(vault, rel);
-	if (theme) (deps.theme as ThemeServiceInternal).setActive(theme);
 	const host = makeHost('ds-scc');
 	await new ElementPipeline(deps).run(sccElement, body, host);
 	return host.containerEl.firstElementChild as HTMLElement;
@@ -157,9 +152,11 @@ describe('SC-149 baseForSccType — one element, every family', () => {
 
 describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 	test('a kit code renders the kit card', async () => {
-		const root = await render(KIT_CODE, [KIT_REL], 'legacy');
+		const root = await render(KIT_CODE, [KIT_REL]);
 		expect(errorText(root)).toBe('');
-		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Panther');
+		// SC-144: with the legacy theme gone the kit card always renders its Steel
+		// composition, whose title lives in the cardHead primary slot.
+		expect(root.querySelector('.dse-head__primary--left')!.textContent).toBe('Panther');
 	});
 
 	// SC-149 fix round, H-1: the pipeline stamps the BLOCK's element id before anything is
@@ -176,7 +173,7 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		[ABILITY_CODE, ABILITY_REL, 'feature'],
 		[TERRAIN_CODE, TERRAIN_REL, 'featureblock'],
 	])('%s re-stamps data-dse-element to the resolved family', async (code, rel, id) => {
-		const root = await render(code, [rel], 'legacy');
+		const root = await render(code, [rel]);
 		expect(root.getAttribute('data-dse-element')).toBe(id);
 	});
 
@@ -297,7 +294,7 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 	});
 
 	test('a tab-indented code still resolves (leading whitespace is not a body shape)', async () => {
-		const root = await render(`\t${KIT_CODE}`, [KIT_REL], 'legacy');
+		const root = await render(`\t${KIT_CODE}`, [KIT_REL]);
 		expect(errorText(root)).toBe('');
 		expect(root.getAttribute('data-dse-element')).toBe('kit');
 	});

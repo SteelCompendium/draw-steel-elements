@@ -35,29 +35,26 @@
 // separate, always-on-in-hybrid suppression (no duplicate-text check needed — the row is
 // just never a candidate in hybrid mode at all).
 //
-// Plan 24 / SC-100 Task 2 — the theme-conditional composition seam (THE pattern every
-// future theme-aware view uses, per the plan's Architecture section): `CardLayout<M>`
-// gains an optional `steel` slot (`SteelCardComposition<M>`, below). Absent (every layout
-// today) => zero behavior change: onMount always takes the `renderLegacy()` branch, which
-// is the PRE-EXISTING onMount body moved verbatim (same statements, same order — the
-// legacy DOM cannot drift, because it isn't a copy, it's the same code relocated). Present
-// AND the active theme is 'steel' => `renderSteel()` (a generic composition renderer;
-// Task 3 fills `kitLayout.steel` and the concrete equipment/stat-tile/signature bands — no
-// new view code needed here, only band data). Any OTHER theme id — 'legacy' or a future
-// open-union snippet id (`DseThemeId` is `'steel' | 'legacy' | (string & {})`) — takes
-// `renderLegacy()` too: legacy is the canonical fallback for every non-steel theme, not
-// just literal 'legacy'.
+// Plan 24 / SC-100 Task 2 — the optional composition seam: `CardLayout<M>` carries an
+// optional `steel` slot (`SteelCardComposition<M>`, below). Absent (10 of the 11 display
+// families) => `renderBase()`, which is the PRE-EXISTING onMount body moved verbatim
+// (same statements, same order — the base DOM cannot drift, because it isn't a copy, it's
+// the same code relocated). Present (`kitLayout.steel` only, so far) => `renderSteel()`,
+// a generic composition renderer driven by band data, no new view code per family.
 //
-// A theme switch today is reflow-only (ThemeService.apply() just re-stamps the root's
-// data-dse-theme attribute; see seams/theme.ts) — nothing re-renders a mounted view. This
-// view adds that: when (and only when) `layout.steel` exists, it registers its OWN
-// `cx.theme.onChange` subscription (owner-registered via `this.register`, so teardown is
-// automatic and popout-safe) that recomputes the branch and, if it changed, tears down
-// its own card subtree — unload the branch's owned children (renderMarkdown/nested feature
-// views registered via `this.addChild`), remove the TRACKED `.dse-card` node — and
-// re-renders. It deliberately never calls `rootEl.empty()`: the pipeline appends
-// pipeline-owned siblings to root AFTER mount() returns (e.g. the authoring pencil,
-// pipeline.ts), and emptying root would destroy those too.
+// SC-144 — this used to be a THEME-conditional seam: `computeBranch()` also required
+// `cx.theme.active === 'steel'`, so a layout with a composition still rendered the base
+// DOM under the legacy theme (or any other non-steel id), and the view kept a
+// `cx.theme.onChange` subscription to swap branches live when the user flipped the
+// picker. With the legacy theme dropped, Steel is the only theme, the branch is a pure
+// property of the LAYOUT, and it can no longer change over a view's lifetime — so the
+// subscription, its re-entrancy guard and the tear-down/re-render path are all gone. What
+// remains is worth keeping: `renderBranch()` still tracks the created `.dse-card` node in
+// `cardEl`, because SC-145's authoring pencil anchors to it (see authoringAnchor()).
+//
+// One consequence to know about: a hand-set snippet theme id in data.json (the DseThemeId
+// union is still open, D3 §6) now gets the STEEL composition where it previously fell
+// back to the base DOM. Only the kit card is affected — it is the sole opted-in layout.
 import type { Component } from 'obsidian';
 import type { Feature } from 'steel-compendium-sdk';
 import { ElementView } from '@/framework/view';
@@ -96,12 +93,12 @@ export interface SteelBand {
 	head?: string;
 	/**
 	 * Builds this band's content into `container`. `renderMarkdown` is the SAME
-	 * view-lifecycle-bound helper (`this.renderMarkdown`) the legacy branch uses — pass
+	 * view-lifecycle-bound helper (`this.renderMarkdown`) the base branch uses — pass
 	 * markdown through it (not raw text) so scc-anchor rewriting and owned-child
 	 * bookkeeping stay uniform between the two branches. `owner` (Task 3, SC-100) is the
 	 * mounted `DisplayCardView` itself — a band that needs to recurse through the shared
 	 * `renderFeature`/`renderFeatureList` grammar (e.g. kit's Signature Ability band, the
-	 * same real-feature-card mechanism the legacy branch's `features` slot uses) needs a
+	 * same real-feature-card mechanism the base branch's `features` slot uses) needs a
 	 * `Component` owner for THAT grammar's own child registration; existing band literals
 	 * that don't need it can simply omit the third parameter (TS function-type
 	 * compatibility — Task 2's own contract test band does exactly this).
@@ -158,10 +155,10 @@ export interface CardLayout<M> {
 	/** By-SCC hybrid: render the resolved file body instead of `body`. Default true (Task 9). */
 	useSourceBody?: boolean;
 	/**
-	 * Optional Steel-theme composition (Plan 24 / SC-100). Absent (every layout as of
-	 * Task 2) => `DisplayCardView` never takes the `renderSteel()` branch, so behavior is
-	 * IDENTICAL to before this field existed, in every theme. See the file header for the
-	 * full branch/re-render contract.
+	 * Optional Steel composition (Plan 24 / SC-100). Absent (10 of the 11 display
+	 * families) => `DisplayCardView` never takes the `renderSteel()` branch, so behavior
+	 * is IDENTICAL to before this field existed. Presence of this slot is now the WHOLE
+	 * branch rule (SC-144 — see the file header).
 	 */
 	steel?: SteelCardComposition<M>;
 }
@@ -206,29 +203,12 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 	private source?: RefSource;
 
 	/**
-	 * The `.dse-card` node this view most recently created — tracked so a theme-change
-	 * re-render can remove EXACTLY this node (never `rootEl.empty()`; see file header).
-	 * Set at the end of every `renderBranch()` call; only ever undefined before the
-	 * first render has completed.
+	 * The `.dse-card` node this view most recently created — tracked because SC-145's
+	 * authoring pencil anchors to it (authoringAnchor(), below), not to root. Set at the
+	 * end of every `renderBranch()` call; only ever undefined before the first render
+	 * has completed.
 	 */
 	private cardEl?: HTMLElement;
-	/** Which branch is currently mounted — compared against on every theme-change
-	 *  notification so a same-branch fire (e.g. legacy -> some other non-steel snippet
-	 *  id) is correctly a no-op rather than a needless rebuild. */
-	private renderedBranch?: 'legacy' | 'steel';
-	/**
-	 * Review fix (Task 2 I1): `onMount` is RE-ENTERABLE — `ElementView.update()`'s default
-	 * path (no `onUpdate` override here) is `unloadOwnedChildren(); rootEl.empty();
-	 * onMount(rootEl, model)`, and `SidebarPanel.handleExternalChange` calls
-	 * `previous.update(model)` directly on an already-mounted view as its live-preview
-	 * refresh fast path. Without this guard, every re-entry into `onMount` would register
-	 * ANOTHER `theme.onChange` closure — distinct closures never dedupe by content, so the
-	 * listener count would grow unboundedly (1 -> 2 -> 3 -> ... across repeated updates),
-	 * each one a permanent leak until the view itself unloads. Set true the first time the
-	 * subscription is registered; checked (not re-derived) on every subsequent `onMount`
-	 * re-entry, so exactly one subscription exists per view instance for its whole life.
-	 */
-	private themeChangeRegistered = false;
 
 	constructor(
 		cx: RenderContext,
@@ -243,7 +223,7 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 
 	/**
 	 * SC-145: the visible card frame here is `.dse-card` (a child of root, not root
-	 * itself — see renderLegacy/renderSteel below, both `root.createDiv({ cls:
+	 * itself — see renderBase/renderSteel below, both `root.createDiv({ cls:
 	 * 'dse-card' })`), so the generic authoring pencil must anchor to THAT node, not
 	 * root, or it renders as a stray sibling below/outside the card's border. Falls
 	 * back to `rootEl` only in the defensive case the pipeline ever asked before the
@@ -256,72 +236,30 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 
 	protected async onMount(root: HTMLElement, model: M): Promise<void> {
 		await this.renderBranch(root, model);
-
-		// Re-render on theme change (Task 2 Step 2): ONLY subscribe when this layout
-		// actually HAS a Steel composition — a steel-less layout always takes the
-		// renderLegacy() branch regardless of theme (byte-identical DOM in every theme,
-		// invariant 1), so a subscription here could never do anything useful. Guarded by
-		// `themeChangeRegistered` (review fix I1, above) so a re-entrant onMount (via
-		// update()'s default rebuild path) never registers a second subscription — `root`
-		// is safe to capture once here because ElementView.mount() assigns `this.rootEl`
-		// exactly once and update() always re-invokes onMount against that SAME reference.
-		if (this.layout.steel && !this.themeChangeRegistered) {
-			this.themeChangeRegistered = true;
-			this.register(
-				this.cx.theme.onChange(() => {
-					void this.onThemeChange(root);
-				}),
-			);
-		}
 	}
 
-	/**
-	 * Theme-change handler: recompute the branch for the now-active theme; re-render
-	 * iff it differs from what's currently mounted. Registered via `this.register()` in
-	 * onMount (above), so:
-	 *  - it can never fire before the first render has run (it doesn't exist yet), and
-	 *  - it is auto-unsubscribed on view unload (owner registration — the Obsidian
-	 *    Component contract `this.register` relies on), so it can never fire after
-	 *    unload either.
-	 * The guard below asserts that ordering rather than silently tolerating a violation
-	 * of it, so a future refactor that breaks it fails loudly instead of throwing a
-	 * confusing NPE deep in DOM removal code.
-	 */
-	private async onThemeChange(root: HTMLElement): Promise<void> {
-		if (!this.cardEl || !this.renderedBranch) {
-			throw new Error('DisplayCardView.onThemeChange: fired before the first render completed');
-		}
-		if (this.computeBranch() === this.renderedBranch) return;
-
-		// Tear down exactly this view's owned children (renderMarkdown embeds, nested
-		// feature-card views registered via `this.addChild`) before discarding the DOM
-		// they live in — leaving them registered would leak their listeners/timers.
-		this.unloadOwnedChildren();
-		this.cardEl.remove();
-		await this.renderBranch(root, this.model);
-	}
-
-	/** Compute the branch, render it, and update the tracked cardEl/renderedBranch. */
+	/** Render the branch this layout selects and track the `.dse-card` it created. */
 	private async renderBranch(root: HTMLElement, model: M): Promise<void> {
-		const branch = this.computeBranch();
-		this.cardEl = branch === 'steel' ? await this.renderSteel(root, model) : await this.renderLegacy(root, model);
-		this.renderedBranch = branch;
+		this.cardEl = this.computeBranch() === 'steel'
+			? await this.renderSteel(root, model)
+			: await this.renderBase(root, model);
 	}
 
-	/** The single branch-selection rule (plan Architecture section, invariant-defining):
-	 *  Steel ONLY when the active theme is literally 'steel' AND this layout opted in.
-	 *  Every other theme id — 'legacy', or a future open-union snippet id — is legacy. */
-	private computeBranch(): 'legacy' | 'steel' {
-		return this.cx.theme.active === 'steel' && !!this.layout.steel ? 'steel' : 'legacy';
+	/** The single branch-selection rule (SC-144): a layout that opted into a Steel
+	 *  composition gets it, every other layout gets the base DOM. This is a static
+	 *  property of the layout — it cannot change over a mounted view's lifetime, which
+	 *  is why this view registers no theme subscription and needs no re-render path. */
+	private computeBranch(): 'base' | 'steel' {
+		return this.layout.steel ? 'steel' : 'base';
 	}
 
 	/**
-	 * The canonical (and, until a layout opts into `steel`, ONLY) render path — moved
-	 * verbatim from the pre-Task-2 `onMount` body (same statements, same order), so the
-	 * legacy DOM cannot drift: it isn't a copy of the old logic, it IS the old logic,
-	 * relocated. Returns the created `.dse-card` node so the caller can track it.
+	 * The canonical (and, for every layout without a `steel` composition, ONLY) render
+	 * path — moved verbatim from the pre-Task-2 `onMount` body (same statements, same
+	 * order), so this DOM cannot drift: it isn't a copy of the old logic, it IS the old
+	 * logic, relocated. Returns the created `.dse-card` node so the caller can track it.
 	 */
-	private async renderLegacy(root: HTMLElement, model: M): Promise<HTMLElement> {
+	private async renderBase(root: HTMLElement, model: M): Promise<HTMLElement> {
 		const card = root.createDiv({ cls: 'dse-card' });
 		const head = card.createDiv({ cls: 'dse-card__head' });
 		head.createDiv({ cls: 'dse-card__title', text: this.layout.title(model) });
