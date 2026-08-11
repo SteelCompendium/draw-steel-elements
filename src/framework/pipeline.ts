@@ -241,6 +241,11 @@ export async function prepareModel<M>(
 		const trimmed = source.trim();
 		if (def.acceptsWholeBlockRef && trimmed.startsWith('@') && !trimmed.includes('\n')) {
 			rawData = trimmed;
+		} else if (def.parseHandlesRawBody) {
+			// SC-149 fix round (M-3): this def's parse reads `raw` and owns its own error
+			// messages, so an unparseable body is its business, not a pipeline failure.
+			// `data` is undefined — exactly what such a parse already ignores.
+			rawData = undefined;
 		} else {
 			throw error;
 		}

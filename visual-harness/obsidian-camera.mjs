@@ -85,9 +85,11 @@ const aliases = JSON.parse(fs.readFileSync(path.join(dir, 'aliases.json'), 'utf8
 // capture instead of joining the theme×bg combo matrix (it exists to prove recursion
 // happened at all, not to sweep every visual combo).
 // SC-149: the note's fence is `ds-scc` now (ds-kit is no longer a registered language),
-// so the outer card's root is `[data-dse-element="scc"]`. The nested-`ds-feature` proof
-// below is unchanged — that is the whole point of the capture.
-const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'scc' };
+// but the selector stays `kit` — `ds-scc` re-stamps `data-dse-element` to the family it
+// resolved so the family's own CSS applies (RefUnwrapView.mountBase, fix round H-1), and a
+// kit code resolves to the kit view. The nested-`ds-feature` proof below is unchanged —
+// that is the whole point of the capture.
+const SPECIAL_NOTE = { id: 'by-scc-kit', elementSel: 'kit' };
 
 // D8 Task 3 — the sidebar-leaf ground-truth capture (see "step 3c" below and the header
 // comment). Same convention as SPECIAL_NOTE above: not an element id, selected via
@@ -108,11 +110,28 @@ const SIDEBAR_SPECIAL_ID = 'sidebar-initiative';
 // into concatenated text). The four here are chosen for what narrow width can break:
 //   hero        — the D-7 defect itself, re-verified post-SC-122 (the catalog's open question)
 //   statblock   — the densest multi-column grammar in the plugin
-//   perk        — the only markdown pipe-table (batch-3 review L-5's exact scenario)
+//   scc         — a markdown pipe-table (batch-3 review L-5's exact scenario)
 //   negotiation — a control-heavy tracker (checkboxes, ladder, steppers) at 300px
 // `hero` keeps its original output name (`hero--obsidian-sidebar-steel-dark.png`) so the
 // existing baseline shot is not orphaned.
-const GENERIC_SIDEBAR_IDS = ['hero', 'statblock', 'perk', 'negotiation'];
+//
+// SC-149 fix round (M-1): the pipe-table slot was `perk`, whose Harness note stopped being
+// generated when the ten typed display aliases left the public registry — step 3d would
+// have hard-failed on a note that no longer exists (and searched for a fence named after
+// `aliases['perk']`, now undefined). `scc` inherits the slot and the coverage: its note is
+// a by-SCC reference to `kit/panther`, whose real compendium body contains the signature
+// ability's markdown pipe table, so the sidebar still gets a table at 300px — through the
+// hybrid render path, which is if anything the more interesting case.
+//
+// `element` is the id the MOUNTED root carries, which is not always the note's element:
+// `ds-scc` re-stamps `data-dse-element` to the family it resolved (RefUnwrapView.mountBase,
+// H-1), so the scc note's panel is a `kit` root. Defaults to `id`.
+const GENERIC_SIDEBAR_IDS = [
+	{ id: 'hero' },
+	{ id: 'statblock' },
+	{ id: 'scc', element: 'kit' },
+	{ id: 'negotiation' },
+];
 
 // SC-121 Batch 4 (catalog D-5) — the modal captures. NOTHING in either camera had ever
 // rendered a modal (the F4 spec's v1 limits explicitly excluded "modals/hover/focus
@@ -202,7 +221,7 @@ let onlyModal = false;
 let onlySettings = false;
 let onlyCanvas = false;
 if (args.element) {
-	const sidebarMatch = GENERIC_SIDEBAR_IDS.find((id) => args.element === `sidebar-${id}`);
+	const sidebarMatch = GENERIC_SIDEBAR_IDS.find((e) => args.element === `sidebar-${e.id}`);
 	const modalMatch = MODAL_SHOTS.find((m) => m.id === args.element);
 	const extraMatch = EXTRA_NOTES.find((n) => n.id === args.element);
 	extraNotes = [];
@@ -299,7 +318,7 @@ const requireNote = (name) => {
 		throw new Error(`missing ${note} — run \`npm run obsidian-shots\` (it generates the notes first)`);
 	}
 };
-if (runGenericSidebar) for (const id of genericSidebarIds) requireNote(`${id}.md`);
+if (runGenericSidebar) for (const e of genericSidebarIds) requireNote(`${e.id}.md`);
 if (runModals) for (const m of modalShots) requireNote(`${m.note}.md`);
 if (runCanvas) requireNote(`${CANVAS_SPECIAL_ID}.canvas`);
 if (!fs.existsSync(path.join(repo, 'main.js'))) {
@@ -1006,9 +1025,11 @@ async function main() {
 		// is unchanged. One shot each (steel/dark), same ground-truth-existence scope as
 		// steps 3b/3c; gated the same way (`--element=sidebar-<id>`).
 		if (runGenericSidebar) {
-			for (const id of genericSidebarIds) {
+			for (const entry of genericSidebarIds) {
+				const { id } = entry;
+				const element = entry.element ?? id;
 				const outName = `${id}--obsidian-sidebar-steel-dark`;
-				const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="${id}"]')`;
+				const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="${element}"]')`;
 				const alias = aliases[id];
 				try {
 					// Start from a panel-free sidebar (see closeDseSidebarLeaves' comment
@@ -1046,7 +1067,7 @@ async function main() {
 						);
 					}
 
-					await waitFor(cdp, `!!${elSel}`, { what: `sidebar panel mounted [data-dse-element="${id}"]` });
+					await waitFor(cdp, `!!${elSel}`, { what: `sidebar panel mounted [data-dse-element="${element}"]` });
 					await sleep(500); // settle: late layout, same as step 3c
 
 					await setPluginTheme(elSel, 'steel');

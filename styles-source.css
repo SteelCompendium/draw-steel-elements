@@ -427,6 +427,37 @@ code.dsa {
 	border-left-color: var(--color-blue);
 }
 
+/* SC-149 — the compendium-reference NOTICE card (`renderRefNotice`,
+   src/elements/shared/RefUnwrapView.ts; `.dse-ref-web-card` carries the same classes).
+   Deliberately NOT the .dse-error-card grammar above: `ds-scc` is the one public element
+   whose failure card is a routine, expected user experience — a code that isn't synced
+   yet, or a body pasted from the wrong place — so it must read as an explanation, not as
+   a crash. No element name, no pipeline stage word, no monospace dump: informational
+   blue accent (matching the "reference" stage accent above), prose message, muted
+   follow-up line. Theme-agnostic (Obsidian vars only) and matched by no existing fixture,
+   so no frozen shot can move. */
+
+.dse-ref-notice {
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-left: 3px solid var(--color-blue);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-3);
+	margin: var(--size-4-2) 0;
+}
+
+.dse-ref-notice__msg {
+	color: var(--text-normal);
+	overflow-wrap: anywhere;
+}
+
+.dse-ref-notice__hint {
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+	margin-top: var(--size-4-1);
+	overflow-wrap: anywhere;
+}
+
 /* Framework read-only affordance (src/framework/pipeline.ts) — the pipeline stamps
    data-dse-readonly on the element root when the host can't persist edits
    (host.canPersist === false, e.g. Obsidian canvas). Elements already gate their

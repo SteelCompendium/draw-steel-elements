@@ -21,6 +21,20 @@ import { extractFirstDsBlockText } from '@/services/typeAdapters';
 import type { RefOrInline, RefSource, WithReferenceOptions } from './withReference';
 
 /**
+ * SC-149 fix round (L-1) — the friendly frame for a reference that could not be shown.
+ * Deliberately NOT the `.dse-error-card` grammar: no element name, no pipeline stage word
+ * ("failed to render (render)" is jargon, and "render" is the wrong word for "your body
+ * isn't a code"). Just what happened, and what to do about it. Exported so the styling
+ * contract has one owner; `.dse-ref-web-card` (the "not installed locally" state) carries
+ * the same classes so the two read as one family.
+ */
+export function renderRefNotice(root: HTMLElement, opts: { message: string; hint?: string }): void {
+	const card = root.createDiv({ cls: 'dse-ref-notice' });
+	card.createDiv({ cls: 'dse-ref-notice__msg', text: opts.message });
+	if (opts.hint) card.createDiv({ cls: 'dse-ref-notice__hint', text: opts.hint });
+}
+
+/**
  * D6 Task 9 (spec §9 risk) — depth guard against a by-SCC ref chain that resolves back
  * into itself. Module-level (not per-instance) because the cycle we're guarding against
  * spans MULTIPLE RefUnwrapView instances: block A resolves code C, mounts a base view
@@ -58,6 +72,12 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	}
 
 	protected async onMount(root: HTMLElement, model: RefOrInline<M>): Promise<void> {
+		if (model.kind === 'invalid') {
+			// SC-149 (L-1): a refused body — the def already produced the user-facing
+			// message; this view only has to present it.
+			this.errorCard(root, model.message, model.hint);
+			return;
+		}
 		if (model.kind === 'inline') {
 			await this.mountBase(root, model.model);
 			return;
@@ -88,6 +108,11 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 			this.mountedChild = undefined;
 		}
 		this.rootEl.empty();
+		// SC-149 (H-1): a previous successful mount may have re-stamped the root with the
+		// RESOLVED family's element id (see mountBase). Put the block's own id back before
+		// re-resolving, or an edit that turns a statblock code into a bad body would leave
+		// the root claiming to be a statblock.
+		this.rootEl.setAttribute('data-dse-element', this.base.id);
 		await this.onMount(this.rootEl, model);
 	}
 
@@ -267,24 +292,48 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	}
 
 	private async mountBase(root: HTMLElement, model: M, source?: RefSource, base?: ElementDefinition<M>): Promise<void> {
-		const view = (base ?? this.base).createView(this.cx);
+		const resolved = base ?? this.base;
+		// SC-149 fix round, H-1 (HIGH) — the pipeline stamped `data-dse-element` with the
+		// BLOCK's element id (pipeline.ts, before any resolution could know better). When
+		// `baseForType` picked a different view, that left `ds-scc`'s statblock/feature/
+		// featureblock output matching NONE of the 84 element-scoped CSS rules in
+		// styles-source.css: no card gradient, no block rhythm, no hairline, plan 25's
+		// standalone action-spine removal silently reverted, and every SC-123/SC-146
+		// statblock/featureblock preference a no-op (the pref attributes are stamped, but
+		// their selectors also require the element id). Re-stamp to the view that actually
+		// rendered — "ds-scc renders the REAL statblock card" is then true at the CSS layer
+		// too, which is the honest semantics. SUCCESS PATH ONLY: every error/notice card
+		// above keeps the block's own id, so nothing styles an error as a statblock.
+		if (resolved.id !== this.base.id) root.setAttribute('data-dse-element', resolved.id);
+		const view = resolved.createView(this.cx);
 		if (source && isSourceAware(view)) view.setSource(source);
 		this.mountedChild = view;
 		this.addChild(view);
 		await view.mount(root, model);
 	}
 
-	private errorCard(root: HTMLElement, message: string): void {
+	/** SC-149 (L-1): `friendlyErrors` elements get a plain-language notice card; everything
+	 *  else keeps the framework's `<name>: failed to render (<stage>)` frame verbatim. The
+	 *  MESSAGE is identical either way — only the frame differs — so every pinned message
+	 *  still reads the same in both. */
+	private errorCard(root: HTMLElement, message: string, hint?: string): void {
+		if (this.opts.friendlyErrors) {
+			renderRefNotice(root, { message, hint });
+			return;
+		}
 		renderErrorCard(root, { id: this.base.id, name: this.base.name }, new Error(message));
 	}
 
 	private webCard(root: HTMLElement, code: string, url: string): void {
-		const card = root.createDiv({ cls: 'dse-ref-web-card', attr: { 'data-scc': code } });
-		card.createDiv({ cls: 'dse-ref-web-card__msg', text: 'Not installed locally.' });
+		const card = root.createDiv({ cls: 'dse-ref-notice dse-ref-web-card', attr: { 'data-scc': code } });
+		card.createDiv({ cls: 'dse-ref-notice__msg dse-ref-web-card__msg', text: 'Not installed locally.' });
 		const a = card.createEl('a', { cls: 'dse-ref-web-card__link', text: 'View on steelcompendium.io', href: url });
 		a.setAttribute('target', '_blank');
 		a.setAttribute('rel', 'noopener');
-		card.createDiv({ cls: 'dse-ref-web-card__cta', text: 'Run "Sync compendium" to embed it here.' });
+		card.createDiv({
+			cls: 'dse-ref-notice__hint dse-ref-web-card__cta',
+			text: 'Run "Sync compendium" to embed it here.',
+		});
 	}
 }
 

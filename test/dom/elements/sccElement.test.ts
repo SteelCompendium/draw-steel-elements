@@ -44,8 +44,13 @@ async function render(body: string, seed: string[] = [], theme?: 'legacy'): Prom
 	return host.containerEl.firstElementChild as HTMLElement;
 }
 
+/** SC-149 fix round (L-1): ds-scc presents refusals/unresolved references in the friendly
+ *  `.dse-ref-notice` frame, never the framework's `<name>: failed to render (<stage>)`
+ *  error card — so a test that still looked for `.dse-error-card` would silently pass on
+ *  an empty string. Both are checked. */
 function errorText(root: HTMLElement): string {
-	const card = root.querySelector('.dse-error-card');
+	expect(root.querySelector('.dse-error-card')).toBeNull();
+	const card = root.querySelector('.dse-ref-notice');
 	return card === null ? '' : (card.textContent ?? '');
 }
 
@@ -69,6 +74,25 @@ describe('SC-149 parseSccBody — an SCC code and nothing else', () => {
 	test('inline YAML (a mapping) is refused with the one-accepted-form message', () => {
 		expect(() => parseSccBody('name: Panther\nstamina_bonus: 6')).toThrow(/more than one line/);
 		expect(() => parseSccBody('name: Panther\nstamina_bonus: 6')).toThrow(/must be a single SCC code/);
+	});
+
+	test('an inline SCC link names the code it already contains (fix round M-3)', () => {
+		expect(() => parseSccBody(`[Panther](scc.v1:${KIT_CODE})`)).toThrow(/inline link/);
+		expect(() => parseSccBody(`[Panther](scc.v1:${KIT_CODE})`)).toThrow(new RegExp(KIT_CODE.replace(/\./g, '\\.')));
+	});
+
+	test('a backticked or fenced code says to remove the backticks', () => {
+		expect(() => parseSccBody(`\`${KIT_CODE}\``)).toThrow(/Remove the backticks/);
+	});
+
+	test('leading/trailing whitespace is tolerated; internal whitespace is not', () => {
+		expect(parseSccBody(`\t ${KIT_CODE} \t`)).toBe(KIT_CODE);
+		expect(() => parseSccBody('mcdm.heroes.v1/kit/ panther')).toThrow(/is not a full SCC code/);
+	});
+
+	// N-1: nothing forbids a one-character code segment (none exist in today's registry).
+	test('a one-character trailing segment is a valid code', () => {
+		expect(parseSccBody('mcdm.heroes.v1/kit/a')).toBe('mcdm.heroes.v1/kit/a');
 	});
 
 	test('a single-line YAML mapping is refused too (it is not a code)', () => {
@@ -119,8 +143,28 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 	test('a kit code renders the kit card', async () => {
 		const root = await render(KIT_CODE, [KIT_REL], 'legacy');
 		expect(errorText(root)).toBe('');
-		expect(root.getAttribute('data-dse-element')).toBe('scc');
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Panther');
+	});
+
+	// SC-149 fix round, H-1: the pipeline stamps the BLOCK's element id before anything is
+	// resolved, so ds-scc's output used to claim `data-dse-element="scc"` — which matches
+	// none of the 84 element-scoped CSS rules and none of the preference selectors (those
+	// pair a pref attribute WITH the element id). The root now names the family that
+	// actually rendered. sccStyleParity.test.ts proves the CSS consequence; this pins the
+	// mechanism, including that a FAILURE keeps the block's own id.
+	test.each([
+		[KIT_CODE, KIT_REL, 'kit'],
+		[CONDITION_CODE, CONDITION_REL, 'condition'],
+		[RULE_CODE, RULE_REL, 'rule'],
+		[GOBLIN_CODE, GOBLIN_REL, 'statblock'],
+	])('%s re-stamps data-dse-element to the resolved family', async (code, rel, id) => {
+		const root = await render(code, [rel], 'legacy');
+		expect(root.getAttribute('data-dse-element')).toBe(id);
+	});
+
+	test('a refused body keeps data-dse-element="scc" — an error is never styled as a statblock', async () => {
+		const root = await render('name: Homebrew Kit\nstamina_bonus: 6', [KIT_REL]);
+		expect(root.getAttribute('data-dse-element')).toBe('scc');
 	});
 
 	test('a condition code renders the condition card (same block, different family)', async () => {
@@ -165,10 +209,42 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		expect(errorText(root)).toContain('Sync compendium');
 	});
 
-	test('an inline-YAML body error-cards under the element name, and mounts no card', async () => {
+	test('an inline-YAML body shows the notice card, mounts nothing, and names no stage', async () => {
 		const root = await render('name: Homebrew Kit\nstamina_bonus: 6', [KIT_REL]);
-		expect(errorText(root)).toContain(SCC_ELEMENT_NAME);
 		expect(errorText(root)).toContain('must be a single SCC code');
+		expect(errorText(root)).toContain('Insert Draw Steel: compendium reference');
 		expect(root.querySelector('.dse-card')).toBeNull();
+		// L-1: no `<name>: failed to render (render)` jargon anywhere in the card.
+		expect(errorText(root)).not.toContain('failed to render');
+		expect(errorText(root)).not.toContain(SCC_ELEMENT_NAME);
+	});
+
+	// SC-149 fix round, M-3: bodies that are not valid YAML never reached the element at
+	// all — the pipeline's parse stage error-carded them with the YAML parser's own words
+	// ("Unexpected scalar at node end at line 1, column 10"). `parseHandlesRawBody` hands
+	// them over. The inline-link case is the one that matters: it is exactly what the
+	// insert modal's Shift action writes, one keystroke away.
+	test.each([
+		[
+			'the insert modal\'s own inline-link output',
+			`[Panther](scc.v1:${KIT_CODE})`,
+			['inline link', KIT_CODE],
+		],
+		['a backticked code (how it appears in the docs)', `\`${KIT_CODE}\``, ['Remove the backticks']],
+		// A pasted fence starts with a backtick, so it lands on the fence/backtick message —
+		// which says the right thing for it ("no code fence around the code").
+		['a pasted code fence', '```ds-scc\n' + KIT_CODE + '\n```', ['no code fence']],
+		['a broken YAML flow sequence', 'name: [Panther', ['is not a full SCC code']],
+	])('%s reaches the strict-body contract, not the YAML parser', async (_label, body, expected) => {
+		const root = await render(body, [KIT_REL]);
+		const text = errorText(root);
+		for (const fragment of expected as string[]) expect(text).toContain(fragment);
+		expect(text).not.toMatch(/line \d+, column \d+/);
+	});
+
+	test('a tab-indented code still resolves (leading whitespace is not a body shape)', async () => {
+		const root = await render(`\t${KIT_CODE}`, [KIT_REL], 'legacy');
+		expect(errorText(root)).toBe('');
+		expect(root.getAttribute('data-dse-element')).toBe('kit');
 	});
 });

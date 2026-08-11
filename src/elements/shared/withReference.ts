@@ -23,9 +23,16 @@ export interface RefSource {
 	body: string;
 }
 
-/** parse()'s output for a wrapped def: either the base model (inline body) or an
- *  unresolved reference string (whole-block ref — resolved later, in the view). */
-export type RefOrInline<M> = { kind: 'inline'; model: M } | { kind: 'ref'; raw: string };
+/** parse()'s output for a wrapped def: the base model (inline body), an unresolved
+ *  reference string (whole-block ref — resolved later, in the view), or — SC-149 fix round
+ *  L-1, `ds-scc` only — a REFUSED body carrying the message to show. The third variant
+ *  exists so a strict-body refusal is presented by the view (a friendly notice card, see
+ *  `friendlyErrors`) instead of thrown into the pipeline's developer-flavoured
+ *  "failed to render (render)" frame. Nothing else produces it. */
+export type RefOrInline<M> =
+	| { kind: 'inline'; model: M }
+	| { kind: 'ref'; raw: string }
+	| { kind: 'invalid'; message: string; hint?: string };
 
 /** A base view that wants the resolved source file threaded in (display family, §2.3). */
 export interface SourceAware {
@@ -45,6 +52,16 @@ export interface WithReferenceOptions {
 	 * for that type" and produces an error card rather than a half-render.
 	 */
 	baseForType?: (type: string) => ElementDefinition<unknown> | undefined;
+	/**
+	 * SC-149 fix round (L-1) — present every reference failure as a friendly NOTICE card
+	 * (what happened + what to do) instead of the framework's `<name>: failed to render
+	 * (<stage>)` error card. Opt-in, and `ds-scc` is the only element that opts in: it is
+	 * the one public element whose failure card is a routine, expected user experience
+	 * (a code that isn't synced yet, a body that isn't a code), where "failed to render
+	 * (render)" is both jargon and the wrong word. Typed elements keep the developer frame
+	 * — their references are hand-authored by someone already editing YAML.
+	 */
+	friendlyErrors?: boolean;
 }
 
 /**

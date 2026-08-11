@@ -112,6 +112,19 @@ export interface ElementDefinition<M = unknown> {
 	 * reason to write one) still error-card exactly as before.
 	 */
 	acceptsWholeBlockRef?: boolean;
+	/**
+	 * SC-149 fix round (M-3) — this def's `parse` consumes the RAW block text and owns its
+	 * own error messages, so a `parseYaml` failure in the pipeline's parse stage
+	 * (pipeline.ts step 2) is NOT an error: `parse(undefined, source)` is called instead.
+	 *
+	 * Without this, any body that isn't valid YAML never reaches `parse` at all and the
+	 * user gets the YAML parser's own words — e.g. pasting the plugin's OWN inline-link
+	 * output (`[Panther](scc.v1:…)`, one keystroke away in the insert modal) into a
+	 * `ds-scc` block produced "Unexpected scalar at node end at line 1, column 10" instead
+	 * of the element's "that's an inline link, use just the code" message. `ds-scc` is the
+	 * only def that sets this; it ignores `data` entirely by construction.
+	 */
+	parseHandlesRawBody?: boolean;
 }
 
 /**
