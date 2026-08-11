@@ -91,6 +91,11 @@ current note without needing your cursor inside it.
 Open the panel any time with the crossed-swords ribbon icon, or the **Open Draw Steel
 sidebar** command.
 
+Pinning a tracker adds a hidden `_dse_anchor:` line to it — that's the plugin's bookmark
+for finding the block again after you edit the note around it. Leave it alone. A `ds-scc`
+block, whose content is exactly one compendium code, is never written to: pinning one
+leaves the note unchanged and the sidebar finds it by its code.
+
 ## Per-block appearance overrides (advanced)
 
 Most appearance settings are global (see [Settings](settings.md)), but a single block can

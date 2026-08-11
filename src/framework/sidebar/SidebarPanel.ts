@@ -68,6 +68,7 @@ export class SidebarPanel extends Component {
 			backingFile,
 			this.state.alias,
 			this.state.anchorId,
+			this.state.body ?? null,
 			this.panelEl,
 			this,
 			(body) => void this.handleExternalChange(body),

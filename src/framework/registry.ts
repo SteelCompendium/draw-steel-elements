@@ -125,6 +125,28 @@ export interface ElementDefinition<M = unknown> {
 	 * only def that sets this; it ignores `data` entirely by construction.
 	 */
 	parseHandlesRawBody?: boolean;
+	/**
+	 * SC-158 — this element's body has an EXACT, non-YAML grammar, so the framework must
+	 * never write its own metadata into it.
+	 *
+	 * The sidebar gives a block durable identity by stamping a `_dse_anchor: <id>` line
+	 * into its body (`framework/sidebar/anchor.ts`). That is invisible to a YAML-bodied
+	 * element — the key rides along as an unknown property, which is why three persisted
+	 * models grew explicit `_dse_anchor` passthrough fields and why `prepareModel` hides
+	 * the key from schema validation. `ds-scc`'s body is one SCC code and nothing else, so
+	 * the same stamp turned a working block into the element's own refusal card,
+	 * permanently (the stamp is written to the note). Setting this flag means:
+	 *
+	 *  - `sendToSidebar` does NOT stamp — the note is left byte-identical;
+	 *  - the sidebar addresses the block by its BODY instead of by an id
+	 *    (`SidebarBlockHost`), so pinning still works;
+	 *  - nothing else in the framework may start writing into the body later without
+	 *    checking this flag first.
+	 *
+	 * Distinct from `parseHandlesRawBody` above, which is about who owns a YAML PARSE
+	 * FAILURE. An element can want either without the other; `ds-scc` happens to want both.
+	 */
+	strictBody?: boolean;
 }
 
 /**

@@ -38,7 +38,19 @@ function makeHost(
 	const plugin = { app } as unknown as Plugin;
 	const owner = new Component();
 	const containerEl = document.createElement('div');
-	const host = new SidebarBlockHost(plugin, file, ALIAS, ANCHOR_ID, containerEl, owner, onExternalChange, onAnchorLost);
+	// SC-158 added the strict-body identity slot (`boundBody`) after `anchorId`; an
+	// anchored host passes null — it addresses by id, exactly as before.
+	const host = new SidebarBlockHost(
+		plugin,
+		file,
+		ALIAS,
+		ANCHOR_ID,
+		null,
+		containerEl,
+		owner,
+		onExternalChange,
+		onAnchorLost,
+	);
 	return { host, owner, containerEl };
 }
 

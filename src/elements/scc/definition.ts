@@ -224,6 +224,10 @@ export const sccElement: ElementDefinition<RefOrInline<never>> = {
 		// plain-language notice card instead of "SCC reference: failed to render (render)".
 		friendlyErrors: true,
 	}),
+	// SC-158: the body is one SCC code, exactly — the framework must not write its own
+	// metadata into it. Without this, "Send block to sidebar" stamped a `_dse_anchor:` line
+	// in and the block became a permanent refusal card. See ElementDefinition.strictBody.
+	strictBody: true,
 	// M-3: this def reads the RAW body and owns every message about it, so the pipeline must
 	// hand over bodies that aren't valid YAML too (a pasted inline link, a backticked code)
 	// instead of error-carding them with the YAML parser's words.

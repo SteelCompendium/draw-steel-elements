@@ -46,7 +46,7 @@
 // `prepareModel` (`dataForSchemaValidation`) — see that function's own doc.
 import type { Component, Plugin, TFile } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
-import { findAnchoredBlock } from '../sidebar/anchor';
+import { findAnchoredBlock, findFenceByBody, listFences } from '../sidebar/anchor';
 
 /** Matches a fence-open line, capturing the fence run and the language token — same shape
  *  as ReadingModeBlockHost's OPEN_FENCE (not exported there, so re-declared narrowly here
@@ -111,7 +111,11 @@ export class SidebarBlockHost implements BlockHost {
 		private readonly plugin: Plugin,
 		private readonly backingFile: TFile,
 		private readonly alias: string,
-		private readonly anchorId: string,
+		private readonly anchorId: string | null,
+		/** SC-158 — the bound body, for a `strictBody` element whose block carries no
+		 *  anchor. Mutable: getBlockInfo re-binds it when a single-block note's body was
+		 *  edited, and replaceSource keeps it current after a self-write. */
+		private boundBody: string | null,
 		readonly containerEl: HTMLElement,
 		private readonly owner: Component,
 		private readonly onExternalChange: (body: string) => void,
@@ -139,7 +143,42 @@ export class SidebarBlockHost implements BlockHost {
 
 	getBlockInfo(): BlockInfo | null {
 		if (this.cachedContent === null) return null;
-		return findAnchoredBlock(this.cachedContent, this.alias, this.anchorId);
+		return this.locate(this.cachedContent);
+	}
+
+	/**
+	 * SC-158 — THE one "where is my block in this content" answer, so the four callers
+	 * (getBlockInfo, currentBody, applyFreshContent, replaceSource) can never disagree
+	 * about identity. Anchored elements are unchanged: scan for the stamped id.
+	 */
+	private locate(content: string): BlockInfo | null {
+		if (this.anchorId !== null) return findAnchoredBlock(content, this.alias, this.anchorId);
+		return this.findUnanchoredBlock(content);
+	}
+
+	/**
+	 * SC-158 — block identity for a `strictBody` element, which is never stamped with an
+	 * `_dse_anchor` (that stamp is what corrupted `ds-scc` blocks) and therefore has no id
+	 * to scan for. The body IS the identity:
+	 *
+	 *  1. the fence of this alias whose body matches the one we bound to — exact, and
+	 *     immune to line drift anywhere else in the note, which is the property the anchor
+	 *     mechanism exists to provide;
+	 *  2. failing that, IF the note has exactly one block of this alias, re-bind to it.
+	 *     That is the common note, and it means editing the code in a pinned block updates
+	 *     the panel instead of silently unbinding it. With two or more candidates there is
+	 *     no safe guess, so the panel degrades through the existing "block vanished" path
+	 *     rather than binding to the wrong one.
+	 */
+	private findUnanchoredBlock(content: string): BlockInfo | null {
+		if (this.boundBody !== null) {
+			const exact = findFenceByBody(content, this.alias, this.boundBody);
+			if (exact) return exact;
+		}
+		const fences = listFences(content, this.alias);
+		if (fences.length !== 1) return null;
+		this.boundBody = extractBody(content, fences[0]);
+		return fences[0];
 	}
 
 	/** Not part of BlockHost — the sidebar's analogue of reading-mode's getSectionInfo
@@ -181,7 +220,7 @@ export class SidebarBlockHost implements BlockHost {
 	 *  SidebarPanel get the initial render body without a second vault read. */
 	currentBody(): string | null {
 		if (this.cachedContent === null) return null;
-		const info = findAnchoredBlock(this.cachedContent, this.alias, this.anchorId);
+		const info = this.locate(this.cachedContent);
 		return info ? extractBody(this.cachedContent, info) : null;
 	}
 
@@ -199,7 +238,9 @@ export class SidebarBlockHost implements BlockHost {
 		let wrote = false;
 		let finalContent: string | null = null;
 		await this.plugin.app.vault.process(this.backingFile, (content) => {
-			const info = findAnchoredBlock(content, this.alias, this.anchorId);
+			// SC-158: locate against the LIVE content the same way getBlockInfo does — by
+			// anchor, or by body for a strict-body element (which has none).
+			const info = this.locate(content);
 			if (!info) return content; // block moved/vanished under us: abort, don't corrupt
 
 			const lines = content.split('\n');
@@ -209,6 +250,11 @@ export class SidebarBlockHost implements BlockHost {
 
 			const newBlockLines = [`${openFence.fence}${openFence.language}`, ...newSource.split('\n'), closeFence];
 			lines.splice(info.lineStart, info.lineEnd - info.lineStart + 1, ...newBlockLines);
+			// SC-158: a strict-body element is addressed BY its body, so our own write has
+			// to move the binding with it or the very next lookup misses. (No shipped
+			// strict-body element persists — ds-scc is shape:"static" — so this is
+			// defense in depth for a future one, and it costs one assignment.)
+			if (this.anchorId === null) this.boundBody = newSource;
 			wrote = true;
 			finalContent = lines.join('\n');
 			return finalContent;
@@ -261,7 +307,7 @@ export class SidebarBlockHost implements BlockHost {
 		this.cachedContent = content;
 		if (!notify) return;
 
-		const info = findAnchoredBlock(content, this.alias, this.anchorId);
+		const info = this.locate(content);
 		if (!info) {
 			// D8 Task 3 fix: an EXTERNAL edit (user deletes the block, or edits it out
 			// from under the panel) that leaves the anchor unfindable used to update

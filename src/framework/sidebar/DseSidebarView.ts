@@ -22,8 +22,14 @@ export interface SidebarPanelState {
 	/** e.g. "ds-initiative" — selects the ElementDefinition via registry.get, and is
 	 *  also the exact fence language findAnchoredBlock scans for (anchor.ts). */
 	alias: string;
-	/** Durable block anchor (spec §1.5 / anchor.ts). */
-	anchorId: string;
+	/** Durable block anchor (spec §1.5 / anchor.ts), or `null` for a `strictBody` element
+	 *  (SC-158): those blocks are never stamped, so they carry no id and are addressed by
+	 *  `body` below instead. */
+	anchorId: string | null;
+	/** SC-158 — the block's body text at bind time. Only set (and only read) when
+	 *  `anchorId` is null: it IS the block's identity for a strict-body element. Persisted
+	 *  with the rest of the panel state, so a pinned `ds-scc` block survives a restart. */
+	body?: string;
 	collapsed?: boolean;
 }
 

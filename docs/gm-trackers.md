@@ -6,8 +6,9 @@ running a montage test, following a downtime project, and keeping the party's to
 Like the other trackers, each of these **writes its state back into the note** as you use
 it, and each can be pinned to the
 [sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar) so it stays available while you
-move between notes. Blocks also carry a `_dse_anchor:` key once pinned — that's the
-plugin's bookmark; leave it alone.
+move between notes. These blocks also carry a `_dse_anchor:` key once pinned — that's the
+plugin's bookmark; leave it alone. (A `ds-scc` reference block never gets one — see
+[Pinning a block to the sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).)
 
 ## Encounter builder (`ds-encounter`)
 

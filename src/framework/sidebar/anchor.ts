@@ -46,7 +46,12 @@ function detectEol(body: string): '\r\n' | '\n' {
 /** Finds an existing `_dse_anchor:` line in `body`, or appends a fresh one. Pure string
  *  op — `body` is a fenced block's BODY text (no fences), never the whole note). The
  *  joiner in front of the fresh anchor line matches `body`'s own dominant EOL (FOLLOWUPS
- *  #28 LOW), so a CRLF-authored block doesn't turn mixed-EOL on first stamp. */
+ *  #28 LOW), so a CRLF-authored block doesn't turn mixed-EOL on first stamp.
+ *
+ *  SC-158: this appends a LINE, which is only safe for a body whose grammar tolerates an
+ *  unknown key — i.e. a YAML mapping. Callers must not call it for an element declaring
+ *  `ElementDefinition.strictBody` (see `sendToSidebar`, the only caller); those blocks are
+ *  found with `findFenceByBody` below instead. */
 export function ensureAnchor(body: string): { body: string; id: string } {
 	const existing = readAnchor(body);
 	if (existing) return { body, id: existing };
@@ -92,6 +97,31 @@ export function findAnchoredBlock(content: string, alias: string, id: string): B
  */
 export function findFirstFence(content: string, alias: string): BlockInfo | null {
 	return listFences(content, alias)[0] ?? null;
+}
+
+/**
+ * SC-158 — the CONTENT-ADDRESSED counterpart of `findAnchoredBlock`, for elements whose
+ * body the framework must not write into (`ElementDefinition.strictBody`). Those blocks
+ * carry no `_dse_anchor:` line, so their identity is the body text itself: the first
+ * ```` ```<alias> ```` block whose body matches `body` exactly.
+ *
+ * This is a weaker identity than a stamped id and deliberately so — it is what buys a
+ * byte-identical note. It survives arbitrary line drift elsewhere in the note (the whole
+ * point of the anchor mechanism) and only loses the binding if the block's OWN body is
+ * edited, at which point "this is no longer the thing you pinned" is a defensible reading.
+ * `SidebarBlockHost` softens even that: in a note with a single block of the alias it
+ * re-binds to it rather than degrading.
+ *
+ * Trailing whitespace is normalized on both sides, mirroring `ensureAnchor`'s own
+ * `body.replace(/\s+$/, '')`, so a trailing blank line inside the fence can't desync a
+ * binding the user never touched.
+ */
+export function findFenceByBody(content: string, alias: string, body: string): BlockInfo | null {
+	const wanted = body.replace(/\s+$/, '');
+	for (const block of iterateFences(content, alias)) {
+		if (block.body.replace(/\s+$/, '') === wanted) return block.info;
+	}
+	return null;
 }
 
 /**

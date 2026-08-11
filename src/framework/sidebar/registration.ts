@@ -101,7 +101,16 @@ export async function sendToSidebar(
 	const file = services.app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) return;
 
+	// SC-158 — does this element's body tolerate a stamped line at all? A YAML-bodied
+	// element carries `_dse_anchor` as an unknown key and never notices; `ds-scc`'s body is
+	// one SCC code, and the stamp turned every pinned block into the element's own refusal
+	// card, permanently. For a `strictBody` element the note is left BYTE-IDENTICAL and the
+	// block is addressed by its body instead (SidebarBlockHost.findUnanchoredBlock).
+	const strictBody = services.registry.get(alias)?.strictBody === true;
+
 	let anchorId: string | null = null;
+	let boundBody: string | null = null;
+	let bound = false;
 	let noticeLine: number | null = null;
 	await services.app.vault.process(file, (content) => {
 		const fences = listFences(content, alias);
@@ -113,6 +122,12 @@ export async function sendToSidebar(
 
 		const lines = content.split('\n');
 		const body = lines.slice(info.lineStart + 1, info.lineEnd).join('\n');
+		bound = true;
+		if (strictBody) {
+			boundBody = body;
+			return content; // never written — that is the whole point
+		}
+
 		const { body: anchoredBody, id } = ensureAnchor(body);
 		anchorId = id;
 		if (anchoredBody === body) return content; // already anchored — no write needed
@@ -120,7 +135,7 @@ export async function sendToSidebar(
 		lines.splice(info.lineStart + 1, info.lineEnd - info.lineStart - 1, ...anchoredBody.split('\n'));
 		return lines.join('\n');
 	});
-	if (anchorId === null) return; // no matching block found
+	if (!bound) return; // no matching block found
 
 	if (noticeLine !== null) {
 		// `noticeLine` is only ever assigned inside the `vault.process(file, (content)
@@ -139,5 +154,7 @@ export async function sendToSidebar(
 	}
 
 	const view = await openSidebarView(services);
-	view?.addPanel({ filePath, alias, anchorId });
+	// Exactly one of the two identities is ever set: an id (stamped in the body) or the
+	// body itself (strict-body elements, never stamped).
+	view?.addPanel({ filePath, alias, anchorId, body: boundBody ?? undefined });
 }
