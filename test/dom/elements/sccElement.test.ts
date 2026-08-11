@@ -30,6 +30,8 @@ const RULE_CODE = 'mcdm.heroes.v1/rule.combat/turn';
 const RULE_REL = 'rule/combat/turn.md';
 const GOBLIN_CODE = 'mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker';
 const GOBLIN_REL = 'monster/goblin/statblock/goblin-stinker.md';
+const FEATURE_CODE = 'mcdm.heroes.v1/feature.fury.level-1/growing-ferocity';
+const FEATURE_REL = 'feature/fury/level-1/growing-ferocity.md';
 
 /** Render a ds-scc block and hand back its root element. `theme` follows
  *  displayFamily.test.ts's convention: the kit card has a Steel-only composition (SC-100)
@@ -178,6 +180,19 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		const root = await render(RULE_CODE, [RULE_REL]);
 		expect(errorText(root)).toBe('');
 		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Taking a Turn');
+	});
+
+	// C1: the feature family through ds-scc renders the REAL feature view. Pinned as its
+	// own end-to-end case because this family is the one whose scope moves: SC-141 widens
+	// FEATURE_TYPE_RE to claim the corpus's `ability`/`trait` types, and every one of those
+	// 716 codes reaches a view through exactly this path.
+	test('a feature code renders the REAL feature card', async () => {
+		const root = await render(FEATURE_CODE, [FEATURE_REL]);
+		expect(errorText(root)).toBe('');
+		expect(root.getAttribute('data-dse-element')).toBe('feature');
+		const card = root.querySelector('.dse-feature') as HTMLElement;
+		expect(card).not.toBeNull();
+		expect(card.querySelector('.dse-head__primary--left')!.textContent).toBe('Growing Ferocity');
 	});
 
 	test('a statblock code renders the REAL statblock card, not a downgraded placeholder', async () => {

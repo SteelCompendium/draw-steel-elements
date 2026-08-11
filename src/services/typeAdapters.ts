@@ -73,6 +73,12 @@ export const STATBLOCK_TYPE_RE = /(^|\.)statblock$/;
  * as "not an ability entry" / "not renderable". Exported (like STATBLOCK_TYPE_RE) so the
  * `ds-feature` element's bare-slug scope and `ds-hero`'s abilities scope read the SAME
  * regex instead of keeping their own copies, which is exactly how they drifted.
+ *
+ * SC-149 added a third consumer: the insert commands' `TYPED_FAMILIES` below routes on this
+ * very constant, so widening the family widens what "Insert compendium reference" wraps in
+ * a typed `ds-feature` fence (and what may be snapshotted) in the same edit. The 716
+ * ability/trait files are ds-feature CONTENT, so they belong on the typed public path, not
+ * behind the `ds-scc` catch-all.
  */
 export const FEATURE_TYPE_RE = /^(feature|ability|trait)($|\.)/;
 
@@ -93,7 +99,9 @@ export const FEATURE_TYPE_RE = /^(feature|ability|trait)($|\.)/;
  * derived from the corpus census rather than from the code shape.
  *
  * Exported (like STATBLOCK_TYPE_RE / FEATURE_TYPE_RE) so the `ds-featureblock` element's
- * bare-slug scope reads it instead of keeping its own copy.
+ * bare-slug scope reads it instead of keeping its own copy — and, since SC-149, so the
+ * insert commands' `TYPED_FAMILIES` below routes the same 35 files to the typed `ds-fb`
+ * fence rather than the `ds-scc` catch-all.
  */
 export const FEATUREBLOCK_TYPE_RE = /(^|\.)featureblock$|^dynamic-terrain($|\.)/;
 
@@ -208,27 +216,40 @@ export function adapterForType(type: string): TypeAdapter | undefined {
 }
 
 /**
- * The three PUBLIC typed element fences whose inline YAML is a documented, stable
- * authoring surface (statblock/feature/featureblock). SC-149 makes this the dividing
- * line for both insert commands: these three keep their typed reference block AND their
+ * The three PUBLIC typed families, whose inline YAML is a documented, stable authoring
+ * surface, mapped to the fence an insert writes for them. SC-149 makes this the dividing
+ * line for BOTH insert commands: these three keep their typed reference block AND their
  * snapshot; everything else references through `ds-scc` and has no snapshot at all.
+ *
+ * Keyed on the SAME exported family regexes `TYPE_ADAPTERS` dispatches on, deliberately
+ * NOT on a literal list of `type` strings or adapter aliases: when a family's scope
+ * widens (SC-141 widens `FEATURE_TYPE_RE` to claim the `ability` and `trait` types the
+ * corpus really uses), the routing widens with it automatically and the two branches
+ * cannot drift. The whole feature family — feature/ability/trait — therefore rides the
+ * typed `ds-feature` path for both commands: Scott's snapshot ruling keeps snapshots for
+ * the stable typed formats, and ability/trait YAML IS the documented `ds-feature` format.
+ *
+ * Ordered like TYPE_ADAPTERS (featureblock before feature) so the same type can never
+ * resolve to one family for rendering and another for insertion.
+ *
+ * The statblock fence is the element's CANONICAL alias `ds-sb`, not TYPE_ADAPTERS'
+ * long-form identifier `ds-statblock` (both resolve; fix round N-2).
  */
-const DS_BLOCK_ALIASES = new Set(['ds-statblock', 'ds-feature', 'ds-featureblock']);
+const TYPED_FAMILIES: { re: RegExp; fence: string }[] = [
+	{ re: STATBLOCK_TYPE_RE, fence: 'ds-sb' },
+	{ re: FEATUREBLOCK_TYPE_RE, fence: 'ds-featureblock' },
+	{ re: FEATURE_TYPE_RE, fence: 'ds-feature' },
+];
+
+/** The typed fence for a `type` in one of the three public families, else undefined. */
+function typedFenceFor(type: string): string | undefined {
+	return TYPED_FAMILIES.find((family) => family.re.test(type))?.fence;
+}
 
 /** SC-149's catch-all reference fence (src/elements/scc/definition.ts's alias, duplicated
  *  as a literal here rather than imported: `src/services/` must not depend on
  *  `src/elements/`, and this string is pinned by test). */
 const SCC_ALIAS = 'ds-scc';
-
-/**
- * Fix round N-2 — the fence an INSERT writes for a ds-block family, as opposed to the
- * `alias` above, which is this map's internal family identifier. The two diverge for
- * statblock only: the element's canonical alias (`aliases[0]`) is `ds-sb`, and that is
- * what a user should find in their note, but `TYPE_ADAPTERS`' identifier has always been
- * the long `ds-statblock` (both resolve). Feature/featureblock keep their long forms,
- * which are the clearest of their aliases (`ds-ft`/`ds-fb` are canonical but terse).
- */
-const INSERT_FENCE: Record<string, string> = { 'ds-statblock': 'ds-sb' };
 
 /**
  * D6 Task 10 (spec §4.3), rewritten by SC-149 -- "which fence do I wrap a REFERENCE to
@@ -238,9 +259,7 @@ const INSERT_FENCE: Record<string, string> = { 'ds-statblock': 'ds-sb' };
  * through `ds-scc`, which resolves by code and picks the renderer itself.
  */
 export function referenceAliasForType(type: string): string {
-	const alias = adapterForType(type)?.alias;
-	if (alias === undefined || !DS_BLOCK_ALIASES.has(alias)) return SCC_ALIAS;
-	return INSERT_FENCE[alias] ?? alias;
+	return typedFenceFor(type) ?? SCC_ALIAS;
 }
 
 /**
@@ -252,7 +271,5 @@ export function referenceAliasForType(type: string): string {
  * the three documented formats stay: they are the homebrew editing base.
  */
 export function snapshotAliasForType(type: string): string | null {
-	const alias = adapterForType(type)?.alias;
-	if (alias === undefined || !DS_BLOCK_ALIASES.has(alias)) return null;
-	return INSERT_FENCE[alias] ?? alias;
+	return typedFenceFor(type) ?? null;
 }

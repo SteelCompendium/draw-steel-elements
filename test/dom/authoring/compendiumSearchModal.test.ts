@@ -27,7 +27,7 @@ import {
 	dispatchBlockChoice,
 	registerCompendiumInsertCommands,
 } from '@/authoring/compendiumInsert';
-import { referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
+import { adapterForType, referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 
 const KIT = 'mcdm.heroes.v1/kit/panther';
@@ -248,6 +248,48 @@ describe('SC-141 type scopes, on both insert lookups (SC-149 C2 port)', () => {
 			expect(snapshotAliasForType(type)).toBe('ds-featureblock');
 		},
 	);
+});
+
+// SC-149 fix round (C3): both commands route on the EXPORTED family regexes
+// TYPE_ADAPTERS itself dispatches on, so a family that widens (SC-141 widens
+// FEATURE_TYPE_RE to claim the corpus's `ability`/`trait` types) carries its routing with
+// it. This pins the invariant rather than the current type list: for EVERY type, "the
+// insert commands treat this as a typed family" must equal "TYPE_ADAPTERS renders it with
+// a ds-block adapter". A future leaf added to one branch and not the other fails here.
+describe('insert routing agrees with TYPE_ADAPTERS about family membership (SC-149 C3)', () => {
+	const DS_BLOCK_ALIASES = new Set(['ds-statblock', 'ds-feature', 'ds-featureblock']);
+	test.each([
+		'monster.goblin.statblock',
+		'statblock',
+		'monster.angulotl.featureblock',
+		'featureblock',
+		'feature',
+		'feature.fury.level-1',
+		'feature.ability.tactician.level-1',
+		// SC-141's real widened scopes, now landed — the leaf types steel-etl actually
+		// writes, and the dynamic-terrain root. These are the cases the invariant exists
+		// for: they moved family without either branch being edited.
+		'ability',
+		'trait',
+		'dynamic-terrain',
+		'dynamic-terrain.mechanisms',
+		'kit',
+		'condition',
+		'rule.combat',
+		'nonsense.unknown-type',
+		'',
+	])('%s: typed-family routing matches the adapter family', (type) => {
+		const isTypedByAdapter = DS_BLOCK_ALIASES.has(adapterForType(type)?.alias ?? '');
+		expect(snapshotAliasForType(type) !== null).toBe(isTypedByAdapter);
+		expect(referenceAliasForType(type) !== 'ds-scc').toBe(isTypedByAdapter);
+	});
+
+	test('the whole feature family rides the typed ds-feature path, both commands', () => {
+		for (const type of ['feature', 'feature.fury.level-1', 'ability', 'trait']) {
+			expect(referenceAliasForType(type)).toBe('ds-feature');
+			expect(snapshotAliasForType(type)).toBe('ds-feature');
+		}
+	});
 });
 
 describe('snapshotAliasForType (SC-149)', () => {

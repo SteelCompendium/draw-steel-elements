@@ -175,10 +175,18 @@ const BASE_BY_ALIAS: Record<string, ElementDefinition<unknown>> = {
 	'ds-rule': ruleElement.base,
 };
 
-/** The renderer for a resolved entity's SCC `type`, or undefined when this plugin has
- *  none (RefUnwrapView then error-cards instead of half-rendering). A `type` no adapter
- *  claims has no model either (`CompendiumIndex.getEntity().model()` returns undefined),
- *  so it never reaches a view regardless. */
+/**
+ * The renderer for a resolved entity's SCC `type`, or undefined when this plugin has none
+ * — RefUnwrapView then shows "no renderer in this plugin" instead of half-rendering.
+ *
+ * This is a REAL user-visible outcome, not a theoretical branch, and it is only ever as
+ * correct as `TYPE_ADAPTERS`' family scopes: a type the adapters don't claim gets that
+ * card even if the plugin could obviously render it. SC-141 is exactly that — the feature
+ * adapter matched only `feature*` while the corpus emits 716 `ability`/`trait` codes, so
+ * every one of them would land here. Widening a family regex in `typeAdapters.ts` is what
+ * fixes such a case; nothing in this file needs to change, and nothing here should be read
+ * as a guarantee that the situation cannot arise.
+ */
 export function baseForSccType(type: string): ElementDefinition<unknown> | undefined {
 	const alias = adapterForType(type)?.alias;
 	return alias === undefined ? undefined : BASE_BY_ALIAS[alias];
