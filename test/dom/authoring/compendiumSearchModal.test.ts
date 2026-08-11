@@ -27,7 +27,7 @@ import {
 	dispatchBlockChoice,
 	registerCompendiumInsertCommands,
 } from '@/authoring/compendiumInsert';
-import { typeToAlias } from '@/services/typeAdapters';
+import { referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
 
 const KIT = 'mcdm.heroes.v1/kit/panther';
@@ -157,6 +157,17 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 		expect(el.querySelector('code')?.textContent).toBe(KIT);
 	});
 
+	// SC-149: the snapshot command passes `filter` so only snapshottable families are
+	// offered. Applied AFTER the query filters, so `type:kit` cannot type past it.
+	test('opts.filter removes non-matching entries, including from a type: query', () => {
+		const { app, index } = setup();
+		const modal = new CompendiumSearchModal(app as any, index, jest.fn(), {
+			filter: (entry) => snapshotAliasForType(entry.type) !== null,
+		});
+		expect(modal.getSuggestions('').map((r) => r.scc)).toEqual([GOBLIN]);
+		expect(modal.getSuggestions('type:kit ')).toEqual([]);
+	});
+
 	test('renderSuggestion of the sync CTA shows the sync prompt, not a code chip', () => {
 		const { app, index } = setup(true);
 		const modal = new CompendiumSearchModal(app as any, index, jest.fn());
@@ -168,42 +179,88 @@ describe('CompendiumSearchModal (spec §4.2)', () => {
 	});
 });
 
-describe('typeToAlias (spec §4.3)', () => {
-	test('a fully-qualified statblock type maps to ds-statblock', () => {
-		expect(typeToAlias('monster.goblin.statblock')).toBe('ds-statblock');
+// SC-149 retarget of the former `typeToAlias` suite: one lookup became two, because a
+// reference and a snapshot no longer answer the same question. Reference = ds-scc for
+// everything except the three public typed families; snapshot = those three families only.
+describe('referenceAliasForType (spec §4.3, SC-149)', () => {
+	test('a fully-qualified statblock type keeps its own typed fence', () => {
+		expect(referenceAliasForType('monster.goblin.statblock')).toBe('ds-statblock');
 	});
-	test('a bare kit type maps to ds-kit', () => {
-		expect(typeToAlias('kit')).toBe('ds-kit');
+	test('a namespaced feature type keeps its own typed fence', () => {
+		expect(referenceAliasForType('feature.fury.level-1')).toBe('ds-feature');
 	});
-	test('a bare condition type maps to ds-condition', () => {
-		expect(typeToAlias('condition')).toBe('ds-condition');
+	test('a featureblock type keeps its own typed fence', () => {
+		expect(referenceAliasForType('monster.angulotl.featureblock')).toBe('ds-featureblock');
 	});
-	test('a namespaced feature type maps to ds-feature', () => {
-		expect(typeToAlias('feature.fury.level-1')).toBe('ds-feature');
+	test('a bare kit type references through ds-scc (ds-kit is no longer public)', () => {
+		expect(referenceAliasForType('kit')).toBe('ds-scc');
 	});
-	// SC-141: steel-etl writes the LEAF of the SCC type segment into frontmatter, so an
-	// ability file says `type: ability` (not `feature.ability.*`) and a trait file says
-	// `type: trait`. Both are ds-feature-block files; before SC-141 both fell through to
-	// the generic ds-rule fallback, which is what made 716 corpus files unrenderable.
-	test('a bare ability type maps to ds-feature', () => {
-		expect(typeToAlias('ability')).toBe('ds-feature');
+	test('a bare condition type references through ds-scc', () => {
+		expect(referenceAliasForType('condition')).toBe('ds-scc');
 	});
-	test('a bare trait type maps to ds-feature', () => {
-		expect(typeToAlias('trait')).toBe('ds-feature');
+	test('the model-less rule family references through ds-scc', () => {
+		expect(referenceAliasForType('rule.combat')).toBe('ds-scc');
 	});
+	test('an unrecognized type references through ds-scc', () => {
+		// SC-141's own last assertion was `typeToAlias('nonsense.unknown-type') === 'ds-rule'`
+		// — the generic-card fallback. `ds-rule` is no longer a registered element, and
+		// `ds-scc` IS the generic destination now (it renders an unknown type through that
+		// same generic card, by resolved type). Same intent, current answer.
+		expect(referenceAliasForType('nonsense.unknown-type')).toBe('ds-scc');
+	});
+});
+
+// SC-141's `typeToAlias` assertions, ported (SC-149 C2). SC-149 split that one lookup into
+// referenceAliasForType/snapshotAliasForType, so these must be re-stated on BOTH — the
+// whole point of SC-141 is that these types are ds-feature/ds-featureblock CONTENT, which
+// under SC-149's scheme means they keep the typed public fence for a reference AND stay
+// snapshottable (their YAML is the documented ds-feature/ds-fb format). Dropping them at
+// the rebase would have silently un-fixed 716 ability/trait files plus 35 dynamic-terrain
+// ones for the insert commands.
+describe('SC-141 type scopes, on both insert lookups (SC-149 C2 port)', () => {
+	// steel-etl writes the LEAF of the SCC type segment into frontmatter, so an ability
+	// file says `type: ability` (not `feature.ability.*`) and a trait file says `type:
+	// trait`. Both are ds-feature-block files; before SC-141 both fell through to the
+	// generic fallback, which is what made 716 corpus files unrenderable.
+	test.each(['ability', 'trait', 'ability.tactician', 'feature.fury.level-1'])(
+		'%s is ds-feature for a reference AND for a snapshot',
+		(type) => {
+			expect(referenceAliasForType(type)).toBe('ds-feature');
+			expect(snapshotAliasForType(type)).toBe('ds-feature');
+		},
+	);
+
 	test('featureblock still wins over the widened feature scope', () => {
-		expect(typeToAlias('featureblock')).toBe('ds-featureblock');
+		expect(referenceAliasForType('featureblock')).toBe('ds-featureblock');
+		expect(snapshotAliasForType('featureblock')).toBe('ds-featureblock');
 	});
+
 	// SC-141 fix round (M2): the corpus's 35 dynamic-terrain files are ds-fb content whose
 	// frontmatter type is the ROOT of their SCC segment (`dynamic-terrain.mechanisms`), not
 	// the leaf. Unclaimed before, so Insert-reference wrapped all 35 in the wrong fence.
-	test('a dynamic-terrain type maps to ds-featureblock', () => {
-		expect(typeToAlias('dynamic-terrain')).toBe('ds-featureblock');
-		expect(typeToAlias('dynamic-terrain.mechanisms')).toBe('ds-featureblock');
+	test.each(['dynamic-terrain', 'dynamic-terrain.mechanisms'])(
+		'%s is ds-featureblock for a reference AND for a snapshot',
+		(type) => {
+			expect(referenceAliasForType(type)).toBe('ds-featureblock');
+			expect(snapshotAliasForType(type)).toBe('ds-featureblock');
+		},
+	);
+});
+
+describe('snapshotAliasForType (SC-149)', () => {
+	test.each([
+		['monster.goblin.statblock', 'ds-statblock'],
+		['feature.fury.level-1', 'ds-feature'],
+		['monster.angulotl.featureblock', 'ds-featureblock'],
+	])('%s is snapshottable as %s', (type, alias) => {
+		expect(snapshotAliasForType(type)).toBe(alias);
 	});
-	test('an unrecognized type falls back to the generic ds-rule card', () => {
-		expect(typeToAlias('nonsense.unknown-type')).toBe('ds-rule');
-	});
+	test.each(['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication', 'rule.combat', 'nonsense.unknown-type'])(
+		'%s has no snapshot form',
+		(type) => {
+			expect(snapshotAliasForType(type)).toBeNull();
+		},
+	);
 });
 
 describe('compendiumInsert action functions (spec §4.3)', () => {
@@ -215,12 +272,26 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 		file: {} as any,
 	};
 
-	test('insertReferenceBlock writes a fenced ds-<alias> block whose body is the bare code', () => {
+	test('insertReferenceBlock writes a fenced ds-scc block whose body is the bare code', () => {
 		const editor = new Editor('');
 		insertReferenceBlock(editor as any, kitEntry);
 		expect(editor.writes).toHaveLength(1);
-		expect(editor.writes[0].text).toBe(`\`\`\`ds-kit\n${KIT}\n\`\`\`\n`);
+		expect(editor.writes[0].text).toBe(`\`\`\`ds-scc\n${KIT}\n\`\`\`\n`);
 		expect(editor.writes[0].from).toEqual(editor.writes[0].to); // pure insert
+	});
+
+	// SC-149: the three public typed families keep their own reference fence — only the
+	// display families were folded into ds-scc.
+	test('insertReferenceBlock keeps the typed fence for a statblock entry', () => {
+		const editor = new Editor('');
+		insertReferenceBlock(editor as any, {
+			scc: GOBLIN,
+			type: 'monster.goblin.statblock',
+			name: 'Goblin Stinker',
+			source: 'mcdm.monsters.v1',
+			file: {} as any,
+		});
+		expect(editor.writes[0].text).toBe(`\`\`\`ds-statblock\n${GOBLIN}\n\`\`\`\n`);
 	});
 
 	test('insertInlineLink writes a scc.v1 markdown link', () => {
@@ -232,26 +303,40 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 
 	test('insertFullBlock serializes the resolved entity model DTO as YAML inside a ds-<alias> block', async () => {
 		const { index } = setup();
-		const entity = await index.getEntity(KIT);
+		const entity = await index.getEntity(GOBLIN);
 		const editor = new Editor('');
-		await insertFullBlock(editor as any, entity!);
+		expect(await insertFullBlock(editor as any, entity!)).toBe(true);
 		expect(editor.writes).toHaveLength(1);
 		const text = editor.writes[0].text;
-		expect(text.startsWith('```ds-kit\n')).toBe(true);
+		expect(text.startsWith('```ds-statblock\n')).toBe(true);
 		expect(text.trim().endsWith('```')).toBe(true);
-		expect(text).toContain('name: Panther');
-		expect(text).toContain('stamina_bonus:');
+		expect(text).toContain('name: Goblin Stinker');
 	});
 
-	test('insertFullBlock falls back to the raw source body for the model-less rule family', async () => {
+	// SC-149 (Scott, firm): a snapshot of a display-family entry dumps an internal,
+	// unstable YAML shape into the user's note, where it then silently goes stale. The
+	// snapshot command no longer offers those entries at all (see the modal filter below);
+	// this pins the function-level refusal for every other caller.
+	test('insertFullBlock refuses a display-family entry and writes nothing', async () => {
+		const { Notice: NoticeMock } = await import('../../mocks/obsidian');
+		NoticeMock.notices.length = 0;
+		const { index } = setup();
+		const entity = await index.getEntity(KIT);
+		const editor = new Editor('');
+		expect(await insertFullBlock(editor as any, entity!)).toBe(false);
+		expect(editor.writes).toHaveLength(0);
+		expect(NoticeMock.notices.join('\n')).toContain('Panther');
+	});
+
+	test('insertFullBlock refuses the model-less rule family too', async () => {
 		const app = new App();
 		loadMdDseFixture(app.vault, 'rule/combat/turn.md');
 		const resolver = new SccResolver(app as any, DEFAULT_SETTINGS);
 		const index = createCompendiumIndex(app as any, resolver);
 		const entity = await index.getEntity('mcdm.heroes.v1/rule.combat/turn');
 		const editor = new Editor('');
-		await insertFullBlock(editor as any, entity!);
-		expect(editor.writes[0].text.startsWith('```ds-rule\n')).toBe(true);
+		expect(await insertFullBlock(editor as any, entity!)).toBe(false);
+		expect(editor.writes).toHaveLength(0);
 	});
 
 	test('copyCode writes scc:<code> to the clipboard when available', async () => {
@@ -293,7 +378,7 @@ describe('dispatchReferenceChoice modifier-key dispatch (spec §4.3)', () => {
 	test('no modifiers -> reference block (the default, OD-D6-6)', () => {
 		const editor = new Editor('');
 		dispatchReferenceChoice(editor as any, kitEntry, {});
-		expect(editor.writes[0].text).toBe(`\`\`\`ds-kit\n${KIT}\n\`\`\`\n`);
+		expect(editor.writes[0].text).toBe(`\`\`\`ds-scc\n${KIT}\n\`\`\`\n`);
 	});
 
 	test('shift -> inline link', () => {
@@ -317,10 +402,10 @@ describe('dispatchBlockChoice (spec §4.3, full-block command)', () => {
 	test('resolves the entry to a CompendiumEntity and inserts the full-block snapshot', async () => {
 		const { index } = setup();
 		const editor = new Editor('');
-		const [entry] = index.query('panth');
+		const [entry] = index.query('stinker');
 		await dispatchBlockChoice(editor as any, index, entry);
 		expect(editor.writes).toHaveLength(1);
-		expect(editor.writes[0].text.startsWith('```ds-kit\n')).toBe(true);
+		expect(editor.writes[0].text.startsWith('```ds-statblock\n')).toBe(true);
 	});
 
 	test('a code that no longer resolves is a silent no-op', async () => {

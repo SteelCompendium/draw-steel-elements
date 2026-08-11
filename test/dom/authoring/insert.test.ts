@@ -19,22 +19,37 @@ test('registers exactly one insert-<id> command per element, sentence-cased', ()
 	const plugin = new Plugin(new App());
 	const registry = makeRegistry();
 	registerInsertCommands(plugin as never, registry);
-	expect(plugin.commands).toHaveLength(registry.all().length); // 23 (D6 Task 11: 12 + 11 display-family)
+	expect(plugin.commands).toHaveLength(registry.all().length); // one per registered element
 	const roll = plugin.commands.find((c) => c.id === 'insert-roll');
 	expect(roll.name).toBe('Insert Draw Steel: Roll');
 	expect(typeof roll.editorCallback).toBe('function');
 });
 
-// D6 Task 11 (wiring sweep): same pure-loop guarantee as the /ds suggest test — pins that
-// the D6 display-family elements got an insert-<id> command with zero per-element code.
-test('the D6 display-family elements (ds-kit .. ds-rule) each get an insert-<id> command', () => {
+// D6 Task 11 (wiring sweep), retargeted by SC-149: same pure-loop guarantee — the public
+// compendium-reference elements get an insert-<id> command with zero per-element code.
+// The ten typed display elements are no longer registered, so they must NOT appear here:
+// an "Insert Draw Steel: Kit" command in the palette is exactly the public commitment
+// Scott's ruling removes.
+test('ds-scc and ds-rule each get an insert-<id> command; the ten typed display elements do not', () => {
 	const plugin = new Plugin(new App());
 	registerInsertCommands(plugin as never, makeRegistry());
-	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication', 'rule']) {
+	for (const id of ['scc', 'rule']) {
 		const cmd = plugin.commands.find((c) => c.id === `insert-${id}`);
 		expect(cmd).toBeDefined();
 		expect(typeof cmd.editorCallback).toBe('function');
 	}
+	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication']) {
+		expect(plugin.commands.find((c) => c.id === `insert-${id}`)).toBeUndefined();
+	}
+});
+
+// SC-149 (deliverable 7): the ONE authoring surface the ten used to have — a starter
+// block — must now offer only ds-scc, and its starter body must be an SCC code
+// placeholder, not YAML.
+test('the ds-scc insert scaffold is a ds-scc fence whose body is a bare SCC code', () => {
+	const editor = new Editor('');
+	insertScaffold(editor as never, makeRegistry().get('scc')!);
+	expect(editor.writes[0].text).toBe('```ds-scc\nmcdm.heroes.v1/kit/panther\n```');
 });
 
 test('the command callback inserts the element scaffold at the cursor only', () => {

@@ -9,22 +9,25 @@ import { Notice, stringifyYaml } from 'obsidian';
 import type { Editor, Plugin } from 'obsidian';
 import type { CompendiumEntity, CompendiumEntry, CompendiumIndex } from '@/services/CompendiumIndex';
 import type { CompendiumSyncService } from '@/data/CompendiumSyncService';
-import { typeToAlias } from '@/services/typeAdapters';
+import { referenceAliasForType, snapshotAliasForType } from '@/services/typeAdapters';
 import { wrapFence } from './scaffold';
 import { CompendiumSearchModal } from './CompendiumSearchModal';
 
-/** Reference block (OD-D6-6 default): a fenced `ds-<alias>` block whose body is just the
- *  bare SCC code — live-updates with the compendium, smallest possible note.
+/** Reference block (OD-D6-6 default): a fenced block whose body is just the bare SCC code
+ *  — live-updates with the compendium, smallest possible note. Since SC-149 the fence is
+ *  `ds-scc` for everything except the three public typed families
+ *  (statblock/feature/featureblock), which keep `ds-statblock`/`ds-feature`/
+ *  `ds-featureblock` — see `referenceAliasForType`.
  *
  *  **Adjudication (D6 Task 10):** The spec's own example (§4.3) shows the inserted body as
  *  a bare item slug (smallest note). We instead insert the full `entry.scc` triple
  *  (`source/type/item`), a deliberate deviation justified by the workspace's "codes are
  *  forever" principle: machine-inserted references prefer the unambiguous permanent code
- *  over slug brevity, since a slug can become ambiguous as the corpus grows. `detectWholeBlockRef`
- *  rule 2 (§1.3) handles this correctly: it detects `/` in the body and resolves the full code.
- *  This deviation is ratified and documented here. */
+ *  over slug brevity, since a slug can become ambiguous as the corpus grows. Both fences
+ *  handle that: `detectWholeBlockRef` rule 2 (§1.3) detects the `/` for the typed elements,
+ *  and a full code is the ONLY form `ds-scc` accepts at all. */
 export function insertReferenceBlock(editor: Editor, entry: CompendiumEntry): void {
-	const alias = typeToAlias(entry.type);
+	const alias = referenceAliasForType(entry.type);
 	editor.replaceSelection(wrapFence(alias, entry.scc) + '\n');
 }
 
@@ -43,6 +46,8 @@ export function insertInlineLink(editor: Editor, entry: CompendiumEntry): void {
  * level down. `undefined` covers the model-less family (`rule.*`'s `GenericNote` — no
  * SDK DTO exists at all, matching genericCard's own "the raw body IS the card content"
  * design, spec §3 / OD-D6-7) — the caller falls back to the resolved file's raw body.
+ * (Since SC-149 only the three ds-block families can be snapshotted at all, so that
+ * fallback is now a defensive path rather than the `rule.*` route it was written for.)
  */
 function extractDTO(model: unknown): unknown {
 	if (model == null || typeof model !== 'object') return undefined;
@@ -58,16 +63,32 @@ function extractDTO(model: unknown): unknown {
 	return undefined;
 }
 
-/** Full block (snapshot): the resolved entity's typed model, serialized to YAML, inline
- *  in a fenced `ds-<alias>` block — an editable copy that no longer live-updates, by
- *  design (the bridge to D9's authoring flow, spec §4.3). Falls back to the entity's raw
- *  source body for the model-less `rule.*` family (see extractDTO above). */
-export async function insertFullBlock(editor: Editor, entity: CompendiumEntity): Promise<void> {
-	const alias = typeToAlias(entity.type);
+/**
+ * Full block (snapshot): the resolved entity's typed model, serialized to YAML, inline
+ * in a fenced `ds-<alias>` block — an editable copy that no longer live-updates, by
+ * design (the bridge to D9's authoring flow, spec §4.3).
+ *
+ * SC-149: ONLY the three public typed families (statblock/feature/featureblock) can be
+ * snapshotted. For anything else `snapshotAliasForType` returns null and this is a
+ * no-op-with-a-Notice: dumping a display-family entry's internal YAML into a user's note
+ * pins an unstable shape that then silently goes stale — exactly what Scott's ruling
+ * removes. The command's own modal already filters those entries out (see
+ * `registerCompendiumInsertCommands`); this guard covers every other caller.
+ * Returns true when something was inserted.
+ */
+export async function insertFullBlock(editor: Editor, entity: CompendiumEntity): Promise<boolean> {
+	const alias = snapshotAliasForType(entity.type);
+	if (alias === null) {
+		new Notice(
+			`No snapshot for "${entity.name}" (${entity.type || 'unknown type'}) — use "Insert Draw Steel: compendium reference" instead.`,
+		);
+		return false;
+	}
 	const model = await entity.model();
 	const dto = extractDTO(model);
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
 	editor.replaceSelection(wrapFence(alias, body) + '\n');
+	return true;
 }
 
 /** Copy code: the bare `scc:<code>` form, for pasting elsewhere by hand. Best-effort —
@@ -114,7 +135,8 @@ export function dispatchReferenceChoice(
 /** The `insert-compendium-block` command's `onChoose` body: resolves the chosen entry to
  *  a full `CompendiumEntity` (needed for `.model()`/`.body()`) and inserts the snapshot.
  *  A miss (resolution raced a vault change between search and choice) is a silent no-op —
- *  nothing sane to insert for a code that no longer resolves. */
+ *  nothing sane to insert for a code that no longer resolves. A non-snapshottable type
+ *  (SC-149) is refused by `insertFullBlock` itself, with a Notice. */
 export async function dispatchBlockChoice(
 	editor: Editor,
 	index: CompendiumIndex,
@@ -168,7 +190,13 @@ export function registerCompendiumInsertCommands(
 				plugin.app,
 				index,
 				(entry) => void dispatchBlockChoice(editor, index, entry),
-				{ onSyncRequested, placeholder: 'Search the compendium… (inserts a full snapshot)' },
+				{
+					onSyncRequested,
+					placeholder: 'Search statblocks, features and featureblocks… (inserts a full snapshot)',
+					// SC-149: only the three snapshottable families are offered at all —
+					// a user should never pick a kit here and get a Notice instead of a block.
+					filter: (entry) => snapshotAliasForType(entry.type) !== null,
+				},
 			).open();
 		},
 	});

@@ -43,6 +43,11 @@ export interface CompendiumSearchModalOptions {
 	 *  selects the synthetic "Sync compendium" row. Wired by compendiumInsert.ts to the
 	 *  plugin's existing `syncCompendium()` (reuses the F2 settings action, per spec). */
 	onSyncRequested?: () => void | Promise<void>;
+	/** SC-149 — restrict which entries this modal offers at all (applied AFTER the
+	 *  `type:`/`source:` query filters, so a user cannot type their way past it). The
+	 *  snapshot command uses it to list only the three snapshottable families; omit it
+	 *  and every indexed entry is offered, as before. */
+	filter?: (entry: CompendiumEntry) => boolean;
 }
 
 /** `type:<value>` / `source:<value>` prefix tokens are stripped from the query text and
@@ -87,7 +92,8 @@ export class CompendiumSearchModal extends SuggestModal<CompendiumEntry> {
 		// is the practical gate for that.
 		if (!this.index.available) return [syncCtaEntry()];
 		const { text, filters } = parseCompendiumQuery(query);
-		return this.index.query(text, filters);
+		const results = this.index.query(text, filters);
+		return this.opts.filter ? results.filter(this.opts.filter) : results;
 	}
 
 	renderSuggestion(entry: CompendiumEntry, el: HTMLElement): void {

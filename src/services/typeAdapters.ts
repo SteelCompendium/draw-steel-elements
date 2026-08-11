@@ -104,10 +104,13 @@ export interface TypeAdapter {
 	 * D6 Task 10 (spec §4.3) -- the canonical `ds-<alias>` code-block language for this
 	 * type family (e.g. "ds-kit", "ds-statblock"), matching the display element's own
 	 * `aliases[0]`-equivalent canonical form (see src/elements/display/index.ts and the
-	 * statblock/feature/featureblock definitions). `typeToAlias` below is the sole
-	 * reader -- single source of truth for "what fence do I wrap a reference/full-block
-	 * insert in for this SCC type," alongside `fromFile`/`fromData` already owning "how
-	 * do I parse it."
+	 * statblock/feature/featureblock definitions). `referenceAliasForType`/
+	 * `snapshotAliasForType` below are the readers -- single source of truth for "what
+	 * fence do I wrap a reference/full-block insert in for this SCC type," alongside
+	 * `fromFile`/`fromData` already owning "how do I parse it." Since SC-149 the ten
+	 * display-family aliases here are INTERNAL names (no registered code-block language
+	 * answers to them); they still identify the family for `ds-scc`'s renderer lookup
+	 * (`src/elements/scc/definition.ts`).
 	 */
 	alias: string;
 	/** Turn a resolved compendium file into the element's model, or null when unavailable. */
@@ -205,14 +208,39 @@ export function adapterForType(type: string): TypeAdapter | undefined {
 }
 
 /**
- * D6 Task 10 (spec §4.3) -- the compendium search/insert commands' "which fence do I
- * wrap this SCC `type` in" lookup, over the SAME TYPE_ADAPTERS ordering/regexes
- * `adapterForType` uses (no forked type->element mapping). Falls back to the model-less
- * `ds-rule` alias for any `type` no adapter claims (empty/unrecognized frontmatter) --
- * `genericCard`'s by-SCC path (`genericNoteAdapter`) already renders an arbitrary
- * name+body generically, so it is the safest generic destination for a reference/full
- * block whose real type this map doesn't know.
+ * The three PUBLIC typed element fences whose inline YAML is a documented, stable
+ * authoring surface (statblock/feature/featureblock). SC-149 makes this the dividing
+ * line for both insert commands: these three keep their typed reference block AND their
+ * snapshot; everything else references through `ds-scc` and has no snapshot at all.
  */
-export function typeToAlias(type: string): string {
-	return adapterForType(type)?.alias ?? 'ds-rule';
+const DS_BLOCK_ALIASES = new Set(['ds-statblock', 'ds-feature', 'ds-featureblock']);
+
+/** SC-149's catch-all reference fence (src/elements/scc/definition.ts's alias, duplicated
+ *  as a literal here rather than imported: `src/services/` must not depend on
+ *  `src/elements/`, and this string is pinned by test). */
+const SCC_ALIAS = 'ds-scc';
+
+/**
+ * D6 Task 10 (spec §4.3), rewritten by SC-149 -- "which fence do I wrap a REFERENCE to
+ * this SCC `type` in", over the SAME TYPE_ADAPTERS ordering/regexes `adapterForType`
+ * uses (no forked type->element mapping). The three ds-block families keep their own
+ * public typed fence; every other type -- including one no adapter claims -- references
+ * through `ds-scc`, which resolves by code and picks the renderer itself.
+ */
+export function referenceAliasForType(type: string): string {
+	const alias = adapterForType(type)?.alias;
+	return alias !== undefined && DS_BLOCK_ALIASES.has(alias) ? alias : SCC_ALIAS;
+}
+
+/**
+ * SC-149 -- "may this SCC `type` be inserted as an inline SNAPSHOT (a full block of
+ * serialized YAML that stops tracking the compendium)?" and, if so, in which fence.
+ * `null` for everything outside the ds-block trio: Scott's ruling is firm that a
+ * snapshot of a display-family entry -- a dump of an internal, unstable YAML shape that
+ * silently goes stale -- is the exact vector this pass exists to remove. Snapshots of
+ * the three documented formats stay: they are the homebrew editing base.
+ */
+export function snapshotAliasForType(type: string): string | null {
+	const alias = adapterForType(type)?.alias;
+	return alias !== undefined && DS_BLOCK_ALIASES.has(alias) ? alias : null;
 }

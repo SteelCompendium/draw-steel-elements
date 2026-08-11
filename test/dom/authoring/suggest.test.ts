@@ -102,26 +102,32 @@ test('getSuggestions filters by name and alias; empty query lists all', () => {
 	expect(stam.some((d) => d.id === 'stamina-bar')).toBe(true);
 });
 
-// D6 Task 11 (wiring sweep): the suggester is a pure loop over the registry — no
-// per-element code — so registerFrameworkElementDefinitions appending the 11 D6
-// display-family elements (ds-kit .. ds-rule) auto-lists them here with zero changes to
-// this file. Pins that promise directly, rather than relying on the length-only assertion
-// above to notice a regression.
-test('the /ds suggest auto-lists the D6 display-family elements (ds-kit .. ds-rule) with no per-element code', () => {
+// D6 Task 11 (wiring sweep), retargeted by SC-149: the suggester is a pure loop over the
+// registry — no per-element code — so what `registerFrameworkElementDefinitions` registers
+// is exactly what `/ds` offers. That cuts both ways, which is the point of this test now:
+// `ds-scc` appears with zero changes to this file, and the ten unregistered typed display
+// elements CANNOT appear (a `/dskit` completion would be the public commitment Scott's
+// ruling removes).
+test('the /ds suggest lists ds-scc and never the ten unregistered typed display elements', () => {
 	const s = makeSuggest();
 	const all = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: '' });
 	const ids = all.map((d) => d.id);
-	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication', 'rule']) {
+	for (const id of ['scc', 'rule']) {
 		expect(ids).toContain(id);
 	}
-	const kit = all.find((d) => d.id === 'kit')!;
-	expect(kit.aliases).toContain('ds-kit');
+	for (const id of ['kit', 'condition', 'treasure', 'ancestry', 'culture', 'career', 'class', 'title', 'perk', 'complication']) {
+		expect(ids).not.toContain(id);
+	}
+	const scc = all.find((d) => d.id === 'scc')!;
+	expect(scc.aliases).toContain('ds-scc');
 	const rule = all.find((d) => d.id === 'rule')!;
 	expect(rule.aliases).toContain('ds-rule');
-	// getSuggestions filters by alias substring too — confirm the query path picks up a
+	// getSuggestions filters by alias substring too — confirm the query path picks up the
 	// new alias, not just the empty-query "list everything" path above.
+	const sccQuery = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: 'scc' });
+	expect(sccQuery.some((d) => d.id === 'scc')).toBe(true);
 	const kitQuery = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: 'kit' });
-	expect(kitQuery.some((d) => d.id === 'kit')).toBe(true);
+	expect(kitQuery.some((d) => d.id === 'kit')).toBe(false);
 });
 
 test('selectSuggestion replaces the token range with the scaffold', () => {
