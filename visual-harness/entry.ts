@@ -73,7 +73,7 @@ import ruleDefault from '../src/elements/display/rule/example.yaml';
 // makes the sweep forever render what the pipeline emits. Single-sourced with
 // statblock.test.ts's DOM catcher (both import this same file). Deliberately a SEPARATE
 // fixture rather than an edit to the existing statblock fixtures: adding an ability to
-// those would change the FROZEN statblock--legacy-{dark,light}.png. Its own shots
+// those would change the FROZEN statblock shots. Its own shots
 // (`statblock-villain-corpus--*`) are new filenames — invisible to the freeze baseline by
 // construction (sha256sum -c only checks names it lists), widen-eligible later.
 import statblockVillainCorpus from '../test/fixtures/statblock/villain-corpus.yaml';
@@ -270,7 +270,7 @@ effects:
 // authoring example) is a permanent FALSE villain (D5): it carries `ability_type:
 // Villain Action 1` alongside `usage: Main action`, and a real usage line always wins,
 // so it renders — correctly — as a main-action card and cannot be "fixed" without either
-// editing the D9 example (which would move its frozen `feature--legacy-*` shots) or
+// editing the D9 example (which would move its frozen `feature--steel-print` shot) or
 // breaking the precedence rule the false-villain case exists to pin (task-3 review H-1).
 // This harness-local literal (SC-108's pattern, `featureblockAdvancement` above) is the
 // same shape MINUS `usage`, so `actionTypeOf` falls through to the real `ability_type`
@@ -333,7 +333,7 @@ state:
 // default statblock's own DOM (so no new content to author or freeze-collide with) and
 // add a per-block `prefs:` override map — the same reserved key
 // (src/framework/prefOverrides.ts) an author can already put in a real vault note — so
-// every combo the sweep already shoots (legacy/steel × dark/light + steel-print) now
+// every combo the sweep already shoots (steel × dark/light + steel-print) now
 // exists for each of the four surfaces this fix round touched. New filenames, so they
 // are invisible to the freeze baseline by construction (sha256sum -c only checks names
 // it lists) unless deliberately widened.
@@ -441,7 +441,11 @@ export function parseParams(search: string): HarnessParams {
 	return {
 		element: q.get('element') ?? undefined,
 		fixture: q.get('fixture') ?? 'default',
-		theme: (q.get('theme') === 'steel' ? 'steel' : 'legacy') as DseThemeId,
+		// SC-144: Steel is the only theme. The `theme` query param is still ACCEPTED (the
+		// camera keeps sending `theme=steel`, and the DseThemeId union is still open for a
+		// hand-set snippet id) but it can no longer select a different look, so anything
+		// that isn't a recognised id resolves to 'steel'.
+		theme: ((q.get('theme') || 'steel') as DseThemeId),
 		bg: q.get('bg') === 'light' ? 'light' : 'dark',
 		print: q.get('print') === '1',
 		readonly: q.get('readonly') === '1',

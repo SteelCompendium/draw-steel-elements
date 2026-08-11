@@ -1,9 +1,14 @@
 #!/usr/bin/env node
-// visual-harness/shoot.mjs — the F4 camera (Plan 11). Sweeps element × theme × bg
-// (+ steel print) through the built harness page and writes deterministic PNGs to
+// visual-harness/shoot.mjs — the F4 camera (Plan 11). Sweeps element × bg (+ print)
+// through the built harness page and writes deterministic PNGs to
 // visual-harness/shots/. Any mount error (error card, page error, unknown fixture)
 // saves the shot with an --ERROR suffix and exits nonzero naming the failure.
-// Flags: --element=<id> --theme=<legacy|steel> --bg=<dark|light> --fixture=<name> --readonly
+// Flags: --element=<id> --bg=<dark|light> --fixture=<name> --readonly
+//
+// SC-144: the theme axis is gone. Steel is the only theme, so the sweep is 3 combos
+// (steel-dark, steel-light, steel-print) instead of 5, and there is no --theme flag to
+// filter on. Shot names keep the `steel-` prefix — the frozen `*--steel-print.png`
+// baseline is keyed on it.
 import { chromium } from 'playwright';
 import path from 'path';
 import fs from 'fs';
@@ -25,8 +30,6 @@ const args = Object.fromEntries(
 );
 
 const COMBOS = [
-	{ theme: 'legacy', bg: 'dark' },
-	{ theme: 'legacy', bg: 'light' },
 	{ theme: 'steel', bg: 'dark' },
 	{ theme: 'steel', bg: 'light' },
 	{ theme: 'steel', bg: 'dark', print: true },
@@ -112,13 +115,9 @@ try {
 		process.exit(2);
 	}
 	let combos = COMBOS;
-	if (args.theme) combos = combos.filter((c) => c.theme === args.theme && !c.print);
 	if (args.bg) combos = combos.filter((c) => c.bg === args.bg && !c.print);
 	if (combos.length === 0) {
-		const badParts = [];
-		if (args.theme) badParts.push(`--theme=${args.theme}`);
-		if (args.bg) badParts.push(`--bg=${args.bg}`);
-		console.error(`no combos match ${badParts.join(' ')}`);
+		console.error(`no combos match --bg=${args.bg}`);
 		process.exit(2);
 	}
 

@@ -10,6 +10,7 @@ import {
 	makeHarnessDeps,
 	makeHarnessHost,
 	mountFromParams,
+	parseParams,
 	registerHarnessElementDefinitions,
 } from '../../../visual-harness/entry';
 
@@ -91,7 +92,7 @@ describe('mountFromParams error seam', () => {
 		const { errors } = await mountFromParams(document, {
 			element: 'nope',
 			fixture: 'default',
-			theme: 'legacy',
+			theme: 'steel',
 			bg: 'dark',
 			print: false,
 			readonly: false,
@@ -105,7 +106,7 @@ describe('mountFromParams error seam', () => {
 		const { errors } = await mountFromParams(document, {
 			element: 'feature',
 			fixture: 'default',
-			theme: 'legacy',
+			theme: 'steel',
 			bg: 'dark',
 			print: false,
 			readonly: false,
@@ -119,7 +120,7 @@ describe('mountFromParams error seam', () => {
 		await mountFromParams(document, {
 			element: 'feature',
 			fixture: 'default',
-			theme: 'legacy',
+			theme: 'steel',
 			bg: 'dark',
 			print: false,
 			readonly: false,
@@ -131,7 +132,7 @@ describe('mountFromParams error seam', () => {
 		await mountFromParams(document, {
 			element: 'feature',
 			fixture: 'default',
-			theme: 'legacy',
+			theme: 'steel',
 			bg: 'light',
 			print: false,
 			readonly: false,
@@ -139,5 +140,21 @@ describe('mountFromParams error seam', () => {
 		});
 		expect(document.body.classList.contains('theme-light')).toBe(true);
 		expect(document.body.classList.contains('theme-dark')).toBe(false);
+	});
+});
+
+// SC-144 — the theme axis was retired. `shoot.mjs` sweeps 3 combos (steel-dark,
+// steel-light, steel-print) and no longer sends anything but `theme=steel`, so the
+// harness's own default must be Steel: before SC-144 an omitted `theme=` param resolved
+// to 'legacy', which would now silently shoot the wrong look.
+describe('parseParams theme (SC-144)', () => {
+	test('an omitted theme param defaults to steel', () => {
+		expect(parseParams('?element=feature&bg=dark').theme).toBe('steel');
+		expect(parseParams('').theme).toBe('steel');
+	});
+
+	test('an explicit theme=steel is honoured, and an empty value still resolves to steel', () => {
+		expect(parseParams('?theme=steel').theme).toBe('steel');
+		expect(parseParams('?theme=').theme).toBe('steel');
 	});
 });

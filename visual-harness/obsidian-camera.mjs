@@ -3,9 +3,10 @@
 // Launches a SECOND, fully isolated Obsidian instance (scratch --user-data-dir + CDP port),
 // attaches over raw CDP, opens each demo-vault/Harness/<element>.md in reading mode, and
 // clip-screenshots the rendered [data-dse-element] once per combo of
-//   plugin theme (legacy|steel — frameworkV2.services.theme.setActive, the DSE skin)
+//   plugin theme (steel — frameworkV2.services.theme.setActive, the DSE skin; SC-144
+//                  retired the second value, so this axis is single-valued now)
 // × chrome bg  (dark|light  — app.changeTheme, Obsidian's own moonstone/obsidian theme)
-// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (elements.length × 2 × 2
+// to visual-harness/shots/<element>--obsidian-<theme>-<bg>.png (elements.length × 1 × 2
 // shots — see aliases.json for the current element count) — plus the ground-truth SPECIAL
 // captures, each of which drives a surface the theme×bg sweep structurally cannot reach:
 //   step 3b  (D6 Task 11)      a by-SCC `ds-scc` card (a kit) rendering its REAL nested
@@ -34,7 +35,7 @@
 // Entry point: `npm run obsidian-shots` (regenerates Harness notes + builds the plugin
 // first). Running this file directly assumes both are already up to date.
 //
-// Usage: node visual-harness/obsidian-camera.mjs [--element=<id>] [--theme=<legacy|steel>] [--bg=<dark|light>]
+// Usage: node visual-harness/obsidian-camera.mjs [--element=<id>] [--theme=<steel>] [--bg=<dark|light>]
 //        Bad flag values exit 2 naming them. Per-combo failures write an --ERROR-suffixed
 //        window shot, the sweep CONTINUES, and the run exits 1 listing every failure.
 // Env:   DSE_CAMERA_TMP     scratch root (default /tmp/claude-1000/dse-obsidian-camera)
@@ -75,7 +76,7 @@ const args = Object.fromEntries(
 		}),
 );
 
-const THEMES = ['legacy', 'steel']; // DSE plugin theme (data-dse-theme on element roots)
+const THEMES = ['steel']; // DSE plugin theme (data-dse-theme on element roots) — SC-144: one value
 const BGS = ['dark', 'light']; // Obsidian chrome theme (body.theme-dark / theme-light)
 const aliases = JSON.parse(fs.readFileSync(path.join(dir, 'aliases.json'), 'utf8'));
 
