@@ -413,6 +413,12 @@ export interface HarnessParams {
 	print: boolean;
 	readonly: boolean;
 	gallery: boolean;
+	/** SC-142 phase 2a: a gallery of just these element ids, in this order (`gallery=a,b,c`
+	 *  rather than `gallery=1`). Used by the docs camera for the README's montage image —
+	 *  the full 40-element gallery is 24 000 px tall, which is review evidence, not a
+	 *  picture anyone puts at the top of a README. `gallery=1` is unchanged (every id), so
+	 *  the F4 sweep's frozen `gallery--steel-*` shots cannot move. */
+	galleryIds?: string[];
 	/** SC-121 Batch 4: constrain #mount to this many CSS px (narrow-width coverage). */
 	width?: number;
 	/** SC-123: preference values to apply BEFORE the mount (pref-variant coverage).
@@ -467,7 +473,16 @@ export function parseParams(search: string): HarnessParams {
 		bg: q.get('bg') === 'light' ? 'light' : 'dark',
 		print: q.get('print') === '1',
 		readonly: q.get('readonly') === '1',
-		gallery: q.get('gallery') === '1',
+		gallery: (q.get('gallery') ?? '') !== '',
+		// `gallery=1` keeps its exact meaning (all ids, unfiltered); anything else is a
+		// comma-separated subset. Unknown ids are dropped by the FIXTURES lookup below.
+		galleryIds:
+			(q.get('gallery') ?? '1') === '1'
+				? undefined
+				: (q.get('gallery') ?? '')
+						.split(',')
+						.map((s) => s.trim())
+						.filter(Boolean),
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
 		prefs: parsePrefParam(q.get('prefs')),
 	};
@@ -754,7 +769,9 @@ export async function mountFromParams(
 	// what makes the element lay out at sidebar width. Always reset it (the page is
 	// re-navigated per shot, but mountFromParams is also called directly by tests).
 	mount.style.width = params.width ? `${params.width}px` : '';
-	const ids = params.gallery ? Object.keys(FIXTURES) : [params.element ?? 'feature'];
+	const ids = params.gallery
+		? (params.galleryIds ?? Object.keys(FIXTURES)).filter((id) => FIXTURES[id])
+		: [params.element ?? 'feature'];
 	for (const id of ids) {
 		await mountOne(pipeline, registry, mount, id, params.fixture, params, errors);
 	}

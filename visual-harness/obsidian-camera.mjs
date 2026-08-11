@@ -45,11 +45,20 @@
 //
 // SAFETY: never touches ~/.config/obsidian; refuses to start if the CDP port is already
 // serving (i.e. some other instance owns it); kills ONLY the child it spawned.
+//
+// SC-142 phase 2a — DOCS MODE (`--docs`, written by `npm run docs-shots`): the same CDP
+// plumbing, driven from visual-harness/docs-manifest.mjs, writing PUBLISHING images into
+// docs/Media instead of shots/. It reuses this file rather than forking it because every
+// hard part (spawn, attach, enable the plugin, open a note, drive a modal, clip, quit) is
+// already here and already debugged; a second camera would drift. Docs mode runs ONLY the
+// docs captures — the sweep, the specials and the shots/ directory are untouched, so the
+// `shots` / freeze / parity gates cannot move when a docs image does. See "step 3h".
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DOCS_SHOTS } from './docs-manifest.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -256,12 +265,27 @@ if (args.element) {
 		elements = [args.element];
 	}
 }
-const runSpecial = !args.element || onlySpecial;
-const runSidebarSpecial = !args.element || onlySidebarSpecial;
-const runGenericSidebar = !args.element || onlyGenericSidebar;
-const runModals = !args.element || onlyModal;
-const runSettings = !args.element || onlySettings;
-const runCanvas = !args.element || onlyCanvas;
+// SC-142 phase 2a: docs mode replaces the whole sweep (see the header). Every existing
+// run-flag is forced off and the note list emptied, so the loops below no-op naturally —
+// no re-indentation of any capture that already works.
+const DOCS_MODE = !!args.docs;
+const docsShots = DOCS_SHOTS.filter(
+	(s) => s.source === 'obsidian' && (!args.only || s.out === args.only),
+);
+if (DOCS_MODE) {
+	elements = [];
+	extraNotes = [];
+	if (args.only && docsShots.length === 0) {
+		console.error(`--only=${args.only} matches no obsidian entry in docs-manifest.mjs`);
+		process.exit(2);
+	}
+}
+const runSpecial = !DOCS_MODE && (!args.element || onlySpecial);
+const runSidebarSpecial = !DOCS_MODE && (!args.element || onlySidebarSpecial);
+const runGenericSidebar = !DOCS_MODE && (!args.element || onlyGenericSidebar);
+const runModals = !DOCS_MODE && (!args.element || onlyModal);
+const runSettings = !DOCS_MODE && (!args.element || onlySettings);
+const runCanvas = !DOCS_MODE && (!args.element || onlyCanvas);
 let themes = THEMES;
 if (args.theme) {
 	if (!THEMES.includes(args.theme)) {
@@ -282,7 +306,20 @@ const combos = themes.flatMap((theme) => bgs.map((bg) => ({ theme, bg })));
 
 // Every note the theme×bg sweep opens: one per registered element (note name = element id)
 // plus the EXTRA_NOTES entries (note name != element id).
-const noteTargets = [...elements.map((id) => ({ id, element: id })), ...extraNotes];
+//
+// SC-142 phase 2a fix: `ds-scc` is the one registered element whose MOUNTED root does not
+// carry its own id — `RefUnwrapView.mountBase` re-stamps `data-dse-element` to the family
+// the code resolved to (fix round H-1, so the family's CSS applies), so the scc note's root
+// is `kit`, and the sweep's `[data-dse-element="scc"]` could never match. It has been
+// failing both scc combos since SC-149 introduced the element; nothing caught it because
+// `npm run obsidian-shots` needs a display and was not run at the SC-149 or SC-144
+// landings. Same id→element mapping GENERIC_SIDEBAR_IDS already carries for its own scc
+// entry, applied to the main sweep.
+const SWEEP_ELEMENT_OVERRIDES = { scc: 'kit' };
+const noteTargets = [
+	...elements.map((id) => ({ id, element: SWEEP_ELEMENT_OVERRIDES[id] ?? id })),
+	...extraNotes,
+];
 
 // The Harness notes are generated (notes-gen.mjs) and the vault loads the plugin via a
 // symlink to this repo's build output — both must exist before launching Obsidian.
@@ -324,6 +361,32 @@ if (runModals) for (const m of modalShots) requireNote(`${m.note}.md`);
 if (runCanvas) requireNote(`${CANVAS_SPECIAL_ID}.canvas`);
 if (!fs.existsSync(path.join(repo, 'main.js'))) {
 	throw new Error(`missing ${path.join(repo, 'main.js')} — run \`npm run obsidian-shots\` (it builds the plugin first)`);
+}
+
+// SC-142 phase 2a: a docs entry may carry its OWN note/canvas body (manifest `body`/
+// `canvas`), for content no element fixture has — a bare power roll, an initiative tracker
+// with a minion squad, a character-sheet canvas. They are written into the same
+// git-ignored, regenerated Harness folder notes-gen.mjs owns, under a `docs-` prefix so
+// they can never collide with a generated element note.
+const docsNoteName = (entry) => `docs-${entry.out.replace(/\.[a-z]+$/i, '')}`;
+if (DOCS_MODE) {
+	const harness = path.join(vaultPath, 'Harness');
+	fs.mkdirSync(harness, { recursive: true });
+	for (const entry of docsShots) {
+		if (entry.body) {
+			fs.writeFileSync(path.join(harness, `${docsNoteName(entry)}.md`), entry.body);
+		} else if (entry.canvas) {
+			fs.writeFileSync(
+				path.join(harness, `${docsNoteName(entry)}.canvas`),
+				JSON.stringify(entry.canvas, null, 2),
+			);
+		} else if (entry.note) {
+			const note = path.join(harness, `${entry.note}.md`);
+			if (!fs.existsSync(note)) {
+				throw new Error(`missing ${note} — run \`npm run docs-shots\` (it generates the notes first)`);
+			}
+		}
+	}
 }
 
 // -- safety: the scratch user-data-dir must never be the real config dir ----------------
@@ -1353,6 +1416,331 @@ async function main() {
 			}
 		}
 
+		// -- step 3h: SC-142 phase 2a — the DOCS captures ----------------------------------
+		// Publishing images for README.md / docs/**, declared in docs-manifest.mjs. Same
+		// affordances the ground-truth specials above drive (open a note, click the real
+		// control, wait for the real DOM), with three differences that follow from these
+		// being PUBLISHED pictures rather than review evidence:
+		//   1. they write to docs/Media (--out), never to shots/, so no gate moves;
+		//   2. they are captured at scale 2 (retina) — a docs image is looked at, not diffed;
+		//   3. the clip carries a little padding, so a card doesn't sit flush against the
+		//      image edge on the docs site.
+		if (DOCS_MODE) {
+			const docsOut = path.resolve(repo, args.out ?? path.join('docs', 'Media'));
+			fs.mkdirSync(docsOut, { recursive: true });
+
+			const PAD = 12;
+			/** Clip + write at 2x. `rectExpr` yields {x,y,width,height,vh,vw} like captureClip's. */
+			const docsCapture = async (target, outFile, rectExpr, note = '') => {
+				let emulated = false;
+				try {
+					let rect = await evaluate(target, rectExpr);
+					if (rect.y + rect.height > rect.vh) {
+						await target.call('Emulation.setDeviceMetricsOverride', {
+							width: rect.vw,
+							height: Math.ceil(rect.y + rect.height + 120),
+							deviceScaleFactor: 0,
+							mobile: false,
+						});
+						emulated = true;
+						await sleep(500);
+						await clearNotices();
+						rect = await evaluate(target, rectExpr);
+					}
+					const clip = {
+						x: Math.max(0, rect.x - PAD),
+						y: Math.max(0, rect.y - PAD),
+						width: Math.min(rect.width + PAD * 2, rect.vw),
+						height: rect.height + PAD * 2,
+					};
+					const shoot = async (scale) => {
+						const res = await target.call('Page.captureScreenshot', {
+							format: 'png',
+							clip: { ...clip, scale },
+						});
+						fs.writeFileSync(outFile, Buffer.from(res.data, 'base64'));
+						return fs.statSync(outFile).size;
+					};
+					// Same byte budget as the browser half (docs-shots.mjs): retina for small
+					// surfaces, 1x for anything that would otherwise ship a megabyte-plus PNG
+					// to every reader of the docs site.
+					let bytes = await shoot(2);
+					if (bytes > 900_000) bytes = await shoot(1);
+					console.log(
+						`  ok ${path.basename(outFile)} (${bytes} bytes, ${Math.round(clip.width)}x${Math.round(clip.height)}${emulated ? ', emulated viewport' : ''})${note ? ' — ' + note : ''}`,
+					);
+				} finally {
+					if (emulated) {
+						try {
+							await target.call('Emulation.clearDeviceMetricsOverride');
+							await sleep(300);
+						} catch {
+							/* socket may already be down */
+						}
+					}
+				}
+			};
+
+			const closeModals = async () => {
+				await evaluate(
+					cdp,
+					`document.querySelectorAll('.modal-container .modal-close-button').forEach((b) => b.click())`,
+				);
+				await evaluate(cdp, `document.querySelectorAll('.modal-container').forEach((c) => c.remove())`);
+			};
+			const rectOf = (sel) =>
+				`(() => { const r = ${sel}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth }; })()`;
+
+			// Docs images are shot on Obsidian's DARK chrome: the published docs site is
+			// mkdocs-material `slate`, and GitHub's default is dark too.
+			await setChromeBg('dark');
+
+			for (const entry of docsShots) {
+				const outFile = path.join(docsOut, entry.out);
+				const noteName = entry.body || entry.canvas ? docsNoteName(entry) : entry.note;
+				try {
+					await closeModals();
+					await closeDseSidebarLeaves();
+
+					if (entry.kind === 'settings') {
+						// Same popout dance as step 3f, plus an optional page: the 7.0.0
+						// settings tab is an INDEX of pages, so a docs image of "the
+						// Compendium settings" has to navigate into that page first.
+						let scdp;
+						try {
+							await evaluate(
+								cdp,
+								`(() => { window.app.setting.open(); window.app.setting.openTabById('draw-steel-elements'); })()`,
+							);
+							let t = null;
+							const ts0 = Date.now();
+							while (!t) {
+								if (Date.now() - ts0 > 15000) throw new Error('no Settings popout target within 15s');
+								t = ((await jsonList()) ?? []).find(
+									(x) => x.type === 'page' && /^Settings /.test(x.title ?? ''),
+								);
+								if (!t) await sleep(250);
+							}
+							scdp = await Cdp.connect(t.webSocketDebuggerUrl);
+							await waitFor(scdp, `!!document.querySelector('.vertical-tab-content')`, {
+								what: 'DSE settings tab content in the popout',
+							});
+							if (entry.page) {
+								// The page rows are ordinary clickable settings items; match on
+								// the visible label rather than a positional selector.
+								const opened = await evaluate(
+									scdp,
+									`(() => {
+										const rows = [...document.querySelectorAll('.vertical-tab-content .setting-item')];
+										const row = rows.find((r) => (r.querySelector('.setting-item-name')?.textContent ?? '').trim() === ${JSON.stringify(entry.page)});
+										if (!row) return false;
+										(row.querySelector('.setting-item-control button, .setting-item-control .clickable-icon') ?? row).click();
+										return true;
+									})()`,
+								);
+								if (!opened) throw new Error(`settings page "${entry.page}" not found`);
+								await sleep(600);
+							}
+							await scdp.call('Emulation.setDeviceMetricsOverride', {
+								width: 1100,
+								height: 1600,
+								deviceScaleFactor: 0,
+								mobile: false,
+							});
+							await sleep(600);
+							await evaluate(
+								scdp,
+								`(() => {
+									document.querySelectorAll('.notice').forEach((n) => n.remove());
+									const c = document.querySelector('.vertical-tab-content');
+									if (c) c.scrollTop = 0;
+								})()`,
+							);
+							await sleep(300);
+							await docsCapture(
+								scdp,
+								outFile,
+								`(() => {
+									const c = document.querySelector('.vertical-tab-content');
+									const r = c.getBoundingClientRect();
+									// Trim the tab's own trailing whitespace: the settings pane is
+									// a full-height column, but a docs image wants the CONTENT.
+									const items = [...c.querySelectorAll('.setting-item')];
+									const last = items.length ? items[items.length - 1].getBoundingClientRect() : r;
+									const height = Math.min(last.bottom - r.y + 16, window.innerHeight - r.y);
+									return { x: r.x, y: r.y, width: r.width, height, vh: window.innerHeight, vw: window.innerWidth };
+								})()`,
+								entry.page ? `settings → ${entry.page}` : 'settings index',
+							);
+						} finally {
+							try {
+								await scdp?.call('Emulation.clearDeviceMetricsOverride');
+							} catch {
+								/* popout may already be gone */
+							}
+							scdp?.close();
+							await evaluate(cdp, 'window.app.setting.close()').catch(() => {});
+							await sleep(400);
+						}
+						continue;
+					}
+
+					if (entry.kind === 'canvas') {
+						const elSel = `document.querySelector('.canvas-node [data-dse-element]')`;
+						await evaluate(
+							cdp,
+							`(async () => {
+								await window.app.workspace.openLinkText('Harness/${noteName}.canvas', '', false);
+								const leaf = window.app.workspace.getMostRecentLeaf();
+								await leaf.setViewState({ type: 'canvas', state: { file: 'Harness/${noteName}.canvas' }, active: true });
+							})()`,
+						);
+						await waitFor(
+							cdp,
+							`window.app.workspace.getMostRecentLeaf()?.view?.file?.path === 'Harness/${noteName}.canvas'`,
+							{ what: `Harness/${noteName}.canvas open` },
+						);
+						await evaluate(cdp, `window.app.workspace.getMostRecentLeaf().view.canvas?.zoomToFit?.()`).catch(
+							() => {},
+						);
+						await waitFor(cdp, `!!${elSel}`, { what: 'a DSE element rendered inside a canvas node' });
+						await sleep(900); // canvas transform + element mount + fonts
+						await setPluginTheme(elSel, 'steel');
+						await clearNotices();
+						await docsCapture(
+							cdp,
+							outFile,
+							`(() => {
+								const nodes = [...document.querySelectorAll('.canvas-node')].filter((n) => n.querySelector('[data-dse-element]'));
+								const rs = nodes.map((n) => n.getBoundingClientRect());
+								const x = Math.min(...rs.map((r) => r.x));
+								const y = Math.min(...rs.map((r) => r.y));
+								const right = Math.max(...rs.map((r) => r.right));
+								const bottom = Math.max(...rs.map((r) => r.bottom));
+								return { x, y, width: right - x, height: bottom - y, vh: window.innerHeight, vw: window.innerWidth };
+							})()`,
+							'canvas',
+						);
+						continue;
+					}
+
+					if (entry.kind === 'sidebar') {
+						const element = entry.element ?? 'initiative';
+						const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="${element}"]')`;
+						await openNote(noteName, 'source');
+						const alias = aliases[element] ?? aliases[noteName];
+						const exec = await evaluate(
+							cdp,
+							`(() => {
+								try {
+									const editor = window.app.workspace.getMostRecentLeaf().view.editor;
+									const fence = String.fromCharCode(96, 96, 96) + '${alias}';
+									const lines = editor.getValue().split('\\n');
+									const fenceLine = lines.findIndex((l) => l.trim() === fence);
+									if (fenceLine === -1) return { ok: false, error: 'no ${alias} fence found' };
+									editor.setCursor({ line: fenceLine + 1, ch: 0 });
+									return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar') };
+								} catch (e) { return { ok: false, error: String(e) }; }
+							})()`,
+						);
+						if (!exec.ok) throw new Error(`send-block-to-sidebar did not run: ${exec.error ?? '(false)'}`);
+						await waitFor(cdp, `!!${elSel}`, { what: `sidebar panel [data-dse-element="${element}"]` });
+						await sleep(600);
+						await setPluginTheme(elSel, 'steel');
+						await clearNotices();
+						// The whole leaf, chrome included — the point of the picture is "this
+						// lives in Obsidian's sidebar", not "this element renders".
+						await docsCapture(
+							cdp,
+							outFile,
+							`(() => {
+								const r = ${elSel}.closest('.workspace-leaf').getBoundingClientRect();
+								return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+							})()`,
+							'sidebar leaf',
+						);
+						continue;
+					}
+
+					// kinds 'note' and 'modal' both start from a rendered note.
+					const element = entry.element ?? 'feature';
+					const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${element}"]')`;
+					await openNote(noteName, 'preview');
+					await waitFor(
+						cdp,
+						`(() => { const el = ${elSel}; if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`,
+						{ what: `rendered [data-dse-element="${element}"] in Harness/${noteName}.md` },
+					);
+					await sleep(600); // settle: compendium resolves, fonts, images
+					await setPluginTheme(elSel, 'steel');
+					await clearNotices();
+
+					if (entry.kind === 'modal') {
+						if (entry.pref) {
+							await evaluate(
+								cdp,
+								`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs.set('${entry.pref[0]}', ${JSON.stringify(entry.pref[1])})`,
+							);
+							await sleep(400);
+						}
+						// `pre` clicks reach a control that only exists after another one is
+						// used (the minion pool lives in a detail row you have to open first).
+						//
+						// The long settle is load-bearing, not padding: a pre-click on a
+						// persisted tracker (selecting a creature writes `selectedInstanceKey`)
+						// schedules a DEBOUNCED write-behind, and the write re-renders the
+						// element — unloading the view's children, which closes any modal
+						// opened in the meantime. Clicking the trigger too early therefore
+						// opens a modal that vanishes between the `ready` wait and the shot
+						// (observed: an error frame showing the tracker with no modal at all).
+						for (const sel of entry.pre ?? []) {
+							await waitFor(cdp, `!!document.querySelector('${sel}')`, { what: `pre-click ${sel}` });
+							await evaluate(cdp, `document.querySelector('${sel}').click()`);
+							await sleep(2000);
+						}
+						await waitFor(cdp, `!!document.querySelector('${entry.trigger}')`, {
+							what: `modal trigger ${entry.trigger}`,
+						});
+						await evaluate(cdp, `document.querySelector('${entry.trigger}').click()`);
+						await waitFor(cdp, `!!document.querySelector('${entry.ready}')`, {
+							what: `open modal (${entry.ready})`,
+						});
+						if (entry.then) {
+							await sleep(300);
+							const clicked = await evaluate(
+								cdp,
+								`(() => { const b = document.querySelector('${entry.then}'); if (!b) return false; if (b.disabled) return 'disabled'; b.click(); return true; })()`,
+							);
+							if (clicked !== true) throw new Error(`follow-up click ${entry.then} not available (${clicked})`);
+						}
+						await sleep(500);
+						await clearNotices();
+						await docsCapture(
+							cdp,
+							outFile,
+							rectOf(`document.querySelector('${entry.clip ?? '.dse-modal'}')`),
+							'modal',
+						);
+						await closeModals();
+						if (entry.pref) {
+							await evaluate(
+								cdp,
+								`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs.set('${entry.pref[0]}', ${JSON.stringify(!entry.pref[1])})`,
+							).catch(() => {});
+						}
+						continue;
+					}
+
+					await docsCapture(cdp, outFile, rectOf(elSel), 'note');
+				} catch (e) {
+					failures.push({ outName: entry.out, errors: [String(e)] });
+					await errorShot(`docs-${entry.out.replace(/\.png$/, '')}`);
+					console.log(`FAIL ${entry.out}: ${String(e)}`);
+					await closeModals().catch(() => {});
+				}
+			}
+		}
+
 		// -- step 4: restore persisted defaults, then quit cleanly --------------------------
 		// The plugin theme pref (data.json, git-ignored) and the vault's appearance.json
 		// (tracked) both persist whatever the sweep last set — put them back to the
@@ -1384,6 +1772,10 @@ async function main() {
 		console.error(`\n${failures.length} shot(s) had errors:`);
 		for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
 		process.exit(1);
+	}
+	if (DOCS_MODE) {
+		console.log(`\nall ${docsShots.length} docs image(s) written to ${path.resolve(repo, args.out ?? 'docs/Media')}`);
+		return;
 	}
 	const total =
 		noteTargets.length * combos.length +

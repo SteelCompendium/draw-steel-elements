@@ -126,6 +126,44 @@
           "store_path": "/nix/store/qvbwz06cqra3cmlra40v0adw75j6j7wm-jq-1.8.1-bin"
         }
       }
+    },
+    "xvfb@latest": {
+      "last_modified": "2026-08-01T16:34:20Z",
+      "resolved": "github:NixOS/nixpkgs/a5cbcfe954791221bfffe2307f7d1a1bf61a871e#xvfb",
+      "source": "devbox-search",
+      "version": "21.1.24",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/dya60r90xvavy5nb2sprbhdncx5a18y9-xvfb-21.1.24",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/dya60r90xvavy5nb2sprbhdncx5a18y9-xvfb-21.1.24"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/3vl98drr7xqxf0ylpa7791ggsyznz64x-xvfb-21.1.24",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/3vl98drr7xqxf0ylpa7791ggsyznz64x-xvfb-21.1.24"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/90pgwg2ighm77ic1h5wjhyfbbvri9rqd-xvfb-21.1.24",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/90pgwg2ighm77ic1h5wjhyfbbvri9rqd-xvfb-21.1.24"
+        }
+      }
     }
   }
 }

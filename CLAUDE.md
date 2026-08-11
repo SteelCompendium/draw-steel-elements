@@ -31,6 +31,14 @@ git-ignored, regenerated every run) and captures one extra ground-truth shot
 real nested `ds-feature` card through Obsidian's own markdown pipeline (D6 Task 11;
 `visual-harness/obsidian-camera.mjs`'s "step 3b").
 
+**Docs screenshots are generated too (SC-142): `npm run docs-shots`** regenerates every
+image in `README.md` + `docs/**` from `visual-harness/docs-manifest.mjs` (one entry per file
+in `docs/Media`) — element cards via the browser harness, settings/modals/canvas/sidebar via
+`obsidian-camera.mjs --docs`. It starts its **own Xvfb** display (repo devbox `xvfb`
+package), so it is fully headless and does NOT need Scott's `:1` or a closed Obsidian —
+unlike `npm run obsidian-shots`. It writes only to `docs/Media`, never `shots/`, so no gate
+moves. Run it before a release; details in `visual-harness/README.md`.
+
 ## Key Architecture
 
 - **One rendering strategy: Element Framework v2** (`src/framework/` —

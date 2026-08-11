@@ -151,3 +151,60 @@ Verified by comparing F4 and F5 shots of the same element side by side:
 - **Steel fallback palette**: both cameras show Steel's fallback-hex values (no `--sc-*`
   variable is defined in either the harness's `vars.css` or `demo-vault/`) — not a fidelity
   delta, just confirmation the two cameras agree here.
+
+## `npm run docs-shots` — the published screenshots (SC-142)
+
+The images in `README.md` and `docs/**` are not hand-taken screenshots any more. One command
+regenerates all of them from the real plugin:
+
+    npm run docs-shots                        # everything (~4 min)
+    npm run docs-shots -- --only=hero.png     # one image
+    npm run docs-shots -- --browser-only      # skip the Obsidian half (no display used)
+
+**Run it before every release** (it is a step in the README's Release checklist). Docs images
+went stale silently for two years because nothing could regenerate them; now the fix is a
+command, and a review of the diff.
+
+### How it is wired
+
+- `docs-manifest.mjs` — **the single source of truth**: one entry per file in `docs/Media`.
+  Add an entry, reference `docs/Media/<out>` from the doc, re-run. Nothing else knows about
+  docs images. Entries also declare what is deliberately NOT regenerable (`DOCS_MANUAL` —
+  the two animated GIFs, the favicon), which the run prints at the end along with any Media
+  file the manifest doesn't declare.
+- `docs-shots.mjs` — the runner. Element cards go through this harness's own page (fast, no
+  display); everything else goes to `obsidian-camera.mjs --docs`.
+- `obsidian-camera.mjs --docs` — the same camera, same CDP plumbing, writing to `docs/Media`
+  instead of `shots/`. Kinds: `note`, `settings` (with an optional page to navigate into),
+  `modal` (real affordance clicks, with `pre:` clicks for controls that only exist after
+  another one is used), `sidebar` (via the real command), `canvas`.
+
+Two properties are deliberate:
+
+- **It writes nowhere near `shots/`.** The `shots` / freeze / parity gates cannot move when
+  a docs image does, and vice versa.
+- **A docs image can show content no fixture has.** A manifest entry may carry its own note
+  `body` or `canvas` JSON, written into the git-ignored `demo-vault/Harness/` under a
+  `docs-` prefix. Adding a *fixture* for a docs image would move the `shots` count and the
+  frozen baseline, which is a gate change for a picture — this avoids that entirely.
+
+### The display: Xvfb, not yours
+
+Real Obsidian needs an X display. The runner starts its **own Xvfb** (a framebuffer X server
+that renders into memory, from this repo's devbox `xvfb` package), points the camera at it,
+and kills it afterwards. Consequences worth knowing:
+
+- Nothing appears on screen and no window steals focus.
+- **Your own Obsidian can stay open.** The camera spawns its own instance against its own
+  scratch `--user-data-dir` on its own display; `:1` is never touched. (This is the one real
+  operational difference from `npm run obsidian-shots`, which still uses `:1` by default.)
+- It picks a free display number (`:99` upward), so parallel runs don't collide.
+- If Xvfb is missing, the runner tries `devbox install` and, failing that, prints the exact
+  fallback: quit Obsidian, then `DSE_DOCS_DISPLAY=:1 DSE_DOCS_NO_XVFB=1 npm run docs-shots`.
+
+### Framing rules
+
+Docs images are a publishing surface, so the framing differs from review evidence: Obsidian's
+dark chrome (the docs site is mkdocs-material `slate`), a 12px pad around the subject, and 2x
+(retina) capture — dropping to 1x automatically for anything that would otherwise ship a
+PNG over ~900 kB (a full statblock is 3 600 CSS px tall; at 2x it is a 2.5 MB download).
