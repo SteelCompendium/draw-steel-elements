@@ -139,6 +139,79 @@ const CHARACTER_SHEET_CANVAS = {
 	edges: [],
 };
 
+// SC-142 phase 2b (tutorials) — the note a beginner builds in docs/getting-started.md,
+// shown twice: as text while you write it, and rendered in Reading view. One reference
+// block, because that is the first thing the tutorial has them write. The code is a real
+// entry from the seeded subtree below — a tutorial screenshot showing "Not installed
+// locally" would teach the wrong thing.
+const TUTORIAL_NOTE = `# Session 4 — the bridge
+
+The goblins are waiting on the far bank.
+
+${fence('ds-statblock', 'scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker')}`;
+
+// The homebrew story (docs/customizing-a-monster.md): what "Insert compendium block
+// (snapshot)" drops into your note — the same goblin, already being made yours. Kept
+// deliberately short (the real snapshot is longer) so the screenshot reads at docs size.
+const TUTORIAL_SNAPSHOT = fence(
+	'ds-statblock',
+	`
+name: Ashfall Stinker
+type: statblock
+level: 2
+organization: Horde
+role: Controller
+keywords:
+  - Goblin
+  - Humanoid
+ev: "6"
+stamina: "12"
+speed: 5
+movement: Climb
+size: 1S
+stability: 0
+free_strike: 2
+might: -2
+agility: 1
+reason: 0
+intuition: 0
+presence: 2
+features:
+  - type: feature
+    feature_type: ability
+    name: Ashfall Bomb
+    ability_type: Signature Ability
+    keywords:
+      - Area
+      - Magic
+      - Ranged
+    usage: Main action
+    distance: Ranged 8
+    target: Each enemy in a 2 burst
+    effects:
+      - roll: Power Roll + 2
+        tier1: 3 fire damage
+        tier2: 5 fire damage
+        tier3: 7 fire damage; burning (save ends)
+`,
+);
+
+/** SC-142 phase 2b: compendium entries the docs captures need present in the demo vault,
+ *  copied from `test/fixtures/md-dse/` (itself a verbatim slice of data-unified) into the
+ *  git-ignored `demo-vault/DS Compendium/` before the camera runs. `notes-gen.mjs` seeds
+ *  three files for the ground-truth captures; the tutorials need a monster the search
+ *  modal can find and a reference block can resolve, and a screenshot of "Not installed
+ *  locally" would teach a beginner the wrong thing. */
+export const DOCS_COMPENDIUM_SEED = [
+	'monster/goblin/statblock/goblin-stinker.md',
+	'monster/goblin/statblock/skitterling.md',
+	'kit/panther.md',
+	'kit/mountain.md',
+	'ancestry/dwarf.md',
+	'class/fury.md',
+	'condition/bleeding.md',
+];
+
 export const DOCS_SHOTS = [
 	// ————————————————————————————————— element cards (browser harness) —————————————————
 	// The default fixture is a full leader statblock — ~3 600 CSS px tall, so 1x from the
@@ -265,6 +338,63 @@ export const DOCS_SHOTS = [
 	{ out: 'sidebar.png', source: 'obsidian', kind: 'sidebar', note: 'initiative', element: 'initiative' },
 	// docs/canvas-character-sheet.md
 	{ out: 'canvas-character-sheet.png', source: 'obsidian', kind: 'canvas', canvas: CHARACTER_SHEET_CANVAS },
+	// ————————————————————————————— tutorials (SC-142 phase 2b) —————————————————————————
+	// The two halves of "what am I even looking at": the same note as TEXT and RENDERED.
+	// Leaf-framed on purpose — a beginner needs to see the note inside Obsidian, not a
+	// card floating on its own.
+	{
+		out: 'tutorial-source-mode.png',
+		source: 'obsidian',
+		kind: 'note',
+		body: TUTORIAL_NOTE,
+		element: 'statblock',
+		mode: 'source',
+	},
+	{
+		out: 'tutorial-reading-mode.png',
+		source: 'obsidian',
+		kind: 'note',
+		body: TUTORIAL_NOTE,
+		element: 'statblock',
+		frame: 'leaf',
+	},
+	// The command palette, filtered — how every Draw Steel command is reached.
+	{
+		out: 'tutorial-command-palette.png',
+		source: 'obsidian',
+		kind: 'palette',
+		// A note has to be open in the editor or the palette hides every editor command —
+		// which is all of the Insert ones.
+		note: 'statblock',
+		query: 'Insert Draw Steel',
+	},
+	// The compendium search modal mid-query: the "drop a monster into a note" step.
+	{
+		out: 'tutorial-compendium-search.png',
+		source: 'obsidian',
+		kind: 'search',
+		note: 'statblock',
+		query: 'goblin',
+	},
+	// The homebrew starting point: a snapshot in the editor, being edited.
+	{
+		out: 'tutorial-snapshot-yaml.png',
+		source: 'obsidian',
+		kind: 'note',
+		body: TUTORIAL_SNAPSHOT,
+		element: 'statblock',
+		mode: 'source',
+	},
+	// Print preview (advanced-usage.md): the same card in its print/export layout.
+	{
+		out: 'tutorial-print-preview.png',
+		source: 'obsidian',
+		kind: 'note',
+		body: TUTORIAL_NOTE,
+		element: 'statblock',
+		pref: ['printPreview', 'on'],
+		prefRestore: 'off',
+	},
 ];
 
 /** Images that are NOT regenerable by this pipeline, with the reason — reported by the

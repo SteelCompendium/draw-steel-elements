@@ -58,7 +58,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DOCS_SHOTS } from './docs-manifest.mjs';
+import { DOCS_SHOTS, DOCS_COMPENDIUM_SEED } from './docs-manifest.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.dirname(dir);
@@ -372,6 +372,21 @@ const docsNoteName = (entry) => `docs-${entry.out.replace(/\.[a-z]+$/i, '')}`;
 if (DOCS_MODE) {
 	const harness = path.join(vaultPath, 'Harness');
 	fs.mkdirSync(harness, { recursive: true });
+	// SC-142 phase 2b: top up the seeded compendium subtree (notes-gen.mjs seeds the three
+	// files the ground-truth captures need) with the entries the DOCS captures reference —
+	// a tutorial screenshot of an unresolved "Not installed locally" card would teach a
+	// beginner exactly the wrong thing, and the search-modal shot needs something to find.
+	// Additive: never removes what notes-gen seeded.
+	const seedSrc = path.join(repo, 'test', 'fixtures', 'md-dse');
+	const seedDest = path.join(vaultPath, 'DS Compendium');
+	for (const rel of DOCS_COMPENDIUM_SEED) {
+		const src = path.join(seedSrc, rel);
+		if (!fs.existsSync(src)) throw new Error(`docs compendium seed missing: ${src}`);
+		const dest = path.join(seedDest, rel);
+		fs.mkdirSync(path.dirname(dest), { recursive: true });
+		fs.copyFileSync(src, dest);
+	}
+	console.log(`docs: seeded ${DOCS_COMPENDIUM_SEED.length} compendium entr(ies) into DS Compendium/`);
 	for (const entry of docsShots) {
 		if (entry.body) {
 			fs.writeFileSync(path.join(harness, `${docsNoteName(entry)}.md`), entry.body);
@@ -1491,6 +1506,24 @@ async function main() {
 			const rectOf = (sel) =>
 				`(() => { const r = ${sel}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth }; })()`;
 
+			// SC-142 phase 2b — WAIT FOR THE METADATA CACHE before any docs capture.
+			// The seeded compendium files are copied in a moment before Obsidian launches,
+			// and `layoutReady` fires BEFORE Obsidian has finished reading their
+			// frontmatter. A reference block rendered in that window resolves the file but
+			// gets no `type`, so the card degrades to *"found but not renderable … (type:
+			// unknown) … re-sync"* — a real user's stale-compendium message, published as a
+			// tutorial screenshot teaching a beginner that the product is broken. It is a
+			// race, so it fails intermittently and silently: the element root the capture
+			// waits for DOES appear, it is just an error card.
+			if (DOCS_COMPENDIUM_SEED.length) {
+				const probe = `DS Compendium/${DOCS_COMPENDIUM_SEED[0]}`;
+				await waitFor(
+					cdp,
+					`!!window.app.metadataCache.getCache(${JSON.stringify(probe)})?.frontmatter?.type`,
+					{ what: `frontmatter indexed for ${probe}`, timeout: 60000 },
+				);
+			}
+
 			// Docs images are shot on Obsidian's DARK chrome: the published docs site is
 			// mkdocs-material `slate`, and GitHub's default is dark too.
 			await setChromeBg('dark');
@@ -1662,17 +1695,84 @@ async function main() {
 						continue;
 					}
 
+					// SC-142 phase 2b (tutorials) — two kinds that photograph OBSIDIAN'S OWN UI
+					// rather than a rendered element, because a beginner's first minutes are
+					// spent in exactly those two surfaces and no screenshot of a card can
+					// teach them. Both open the real thing (a command, not a fabricated
+					// dialog) and type into it the way a user does: set the input's value,
+					// then dispatch a real `input` event so Obsidian's own suggester runs.
+					if (entry.kind === 'palette' || entry.kind === 'search') {
+						// Both want a live EDITOR behind them: `search` is an editorCallback
+						// command and simply will not run without one, and the palette hides
+						// every editor command (all the Insert ones — the whole point of the
+						// tutorial shot) when the active leaf is not a note being edited.
+						if (noteName) await openNote(noteName, 'source');
+						const commandId =
+							entry.kind === 'palette'
+								? 'command-palette:open'
+								: 'draw-steel-elements:insert-compendium-reference';
+						const ran = await evaluate(
+							cdp,
+							`(() => { try { return window.app.commands.executeCommandById('${commandId}') !== false; } catch (e) { return String(e); } })()`,
+						);
+						if (ran !== true) throw new Error(`${commandId} did not run (${ran})`);
+						await waitFor(cdp, `!!document.querySelector('.prompt input, .modal input')`, {
+							what: `${entry.kind} prompt input`,
+						});
+						if (entry.query) {
+							await evaluate(
+								cdp,
+								`(() => {
+									const input = document.querySelector('.prompt input, .modal input');
+									input.value = ${JSON.stringify(entry.query)};
+									input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+								})()`,
+							);
+							// The compendium index resolves asynchronously; give the suggester
+							// time to repaint before the shot rather than photographing an
+							// empty result list.
+							await waitFor(cdp, `!!document.querySelector('.suggestion-item, .suggestion-empty')`, {
+								what: 'suggestions for the typed query',
+							});
+							await sleep(700);
+						}
+						await clearNotices();
+						await docsCapture(
+							cdp,
+							outFile,
+							rectOf(`document.querySelector('.prompt, .modal')`),
+							entry.kind === 'palette' ? 'command palette' : 'compendium search',
+						);
+						await closeModals();
+						continue;
+					}
+
 					// kinds 'note' and 'modal' both start from a rendered note.
 					const element = entry.element ?? 'feature';
 					const elSel = `document.querySelector('.workspace-leaf.mod-active [data-dse-element="${element}"]')`;
-					await openNote(noteName, 'preview');
-					await waitFor(
-						cdp,
-						`(() => { const el = ${elSel}; if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`,
-						{ what: `rendered [data-dse-element="${element}"] in Harness/${noteName}.md` },
-					);
+					// SC-142 phase 2b: `mode: 'source'` photographs the note as TEXT — what a
+					// block looks like while you are writing it, which every tutorial needs
+					// beside the rendered result. There is no element root in source mode, so
+					// such an entry must also frame the leaf (below).
+					const noteMode = entry.mode ?? 'preview';
+					// SC-142 phase 2b: an optional pref for note captures (print preview).
+					if (entry.pref && entry.kind === 'note') {
+						await evaluate(
+							cdp,
+							`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs.set('${entry.pref[0]}', ${JSON.stringify(entry.pref[1])})`,
+						);
+						await sleep(400);
+					}
+					await openNote(noteName, noteMode);
+					if (noteMode === 'preview') {
+						await waitFor(
+							cdp,
+							`(() => { const el = ${elSel}; if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`,
+							{ what: `rendered [data-dse-element="${element}"] in Harness/${noteName}.md` },
+						);
+					}
 					await sleep(600); // settle: compendium resolves, fonts, images
-					await setPluginTheme(elSel, 'steel');
+					if (noteMode === 'preview') await setPluginTheme(elSel, 'steel');
 					await clearNotices();
 
 					if (entry.kind === 'modal') {
@@ -1731,7 +1831,35 @@ async function main() {
 						continue;
 					}
 
-					await docsCapture(cdp, outFile, rectOf(elSel), 'note');
+					// SC-142 phase 2b: `frame: 'leaf'` clips the whole editor pane instead of
+					// the element root — the tutorial framing. A beginner reading "switch to
+					// Reading view" needs to see the note IN Obsidian (tab, breadcrumb, the
+					// pane it lives in); a card floating on its own is the reference framing,
+					// and it is the picture that made the instruction confusing in the first
+					// place. Source-mode captures have no element root at all, so they are
+					// always leaf-framed.
+					const frameLeaf = entry.frame === 'leaf' || noteMode === 'source';
+					await docsCapture(
+						cdp,
+						outFile,
+						frameLeaf
+							? `(() => {
+									const r = document.querySelector('.workspace-leaf.mod-active').getBoundingClientRect();
+									return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
+								})()`
+							: rectOf(elSel),
+						frameLeaf ? `note (${noteMode}, leaf)` : 'note',
+					);
+					if (entry.pref && entry.kind === 'note') {
+						// Restore explicitly: not every pref is a boolean (printPreview is an
+						// 'on'/'off' string, so `!value` would write `false` and leave the
+						// vault's data.json holding a value the catalog never defines).
+						const restore = entry.prefRestore ?? !entry.pref[1];
+						await evaluate(
+							cdp,
+							`window.app.plugins.plugins['draw-steel-elements'].frameworkV2.services.prefs.set('${entry.pref[0]}', ${JSON.stringify(restore)})`,
+						).catch(() => {});
+					}
 				} catch (e) {
 					failures.push({ outName: entry.out, errors: [String(e)] });
 					await errorShot(`docs-${entry.out.replace(/\.png$/, '')}`);
