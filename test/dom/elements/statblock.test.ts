@@ -353,7 +353,7 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 	});
 
 	test('.dse-sb__chars: the five characteristics render as verbatim "Name +N" pairs, legacy order', async () => {
-		const { root } = await renderStatblock(humanBanditChief);
+		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'one' });
 
 		const chars = Array.from(root.querySelectorAll('.dse-sb__chars > .dse-sb__char')).map(
 			(el) => el.textContent,
@@ -361,8 +361,11 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(chars).toEqual(['Might +2', 'Agility +3', 'Reason +2', 'Intuition +3', 'Presence +2']);
 	});
 
+	// Pinned to sbCharLine:'one' deliberately: these two assert formatCharacteristic's
+	// output as ONE string, which only the merged shape produces. The default (split)
+	// form's value parity is asserted separately, per-part, below.
 	test('.dse-sb__chars formatting parity: negative "-N", zero "+0", missing "N/A" — the legacy formatCharacteristic verbatim', async () => {
-		const { root } = await renderStatblock(WITH_META);
+		const { root } = await renderStatblock(WITH_META, {}, { sbCharLine: 'one' });
 
 		const chars = Array.from(root.querySelectorAll('.dse-sb__chars > .dse-sb__char')).map(
 			(el) => el.textContent,
@@ -370,15 +373,33 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(chars).toEqual(['Might -1', 'Agility +2', 'Reason +0', 'Intuition +1', 'Presence N/A']);
 	});
 
-	test('SC-10 Task 4: at the DEFAULT settings .dse-sb__char stays ONE merged text node (a label/value DOM split was tried and reverted — see the renderChars comment; splitting shifted Chromium sub-pixel text shaping enough to fail the byte-identical LEGACY-FREEZE gate)', async () => {
+	// SC-10 Task 4 tried this split and had to revert it: two inline spans shifted
+	// Chromium's sub-pixel text shaping enough to fail the then-byte-identical freeze
+	// gate on the SCREEN shots. SC-123 brought it back as an opt-in so the frozen
+	// cameras kept shooting the merged node. Scott's 2026-08-12 ruling then made it the
+	// DEFAULT ("nobody has this code yet … lets do the correct thing"), and the frozen
+	// statblock print shots were rebaselined to match. Both shapes stay reachable and
+	// tested; only which one is the default moved.
+	test('at the DEFAULT settings .dse-sb__char is SPLIT into box/value/label — the site\'s shape', async () => {
 		const { root } = await renderStatblock(humanBanditChief);
+
+		const cell = root.querySelector('.dse-sb__chars > .dse-sb__char') as HTMLElement;
+		expect(Array.from(cell.children).map((el) => el.className)).toEqual([
+			'dse-sb__char-box', 'dse-sb__char-v', 'dse-sb__char-l',
+		]);
+		// No content loss against the merged form: same words, same order.
+		expect(cell.textContent).toBe('M+2Might');
+	});
+
+	test('sbCharLine="one" (opt-in) collapses the cell back to ONE merged text node', async () => {
+		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'one' });
 
 		const cell = root.querySelector('.dse-sb__chars > .dse-sb__char') as HTMLElement;
 		expect(cell.children).toHaveLength(0);
 		expect(cell.textContent).toBe('Might +2');
 	});
 
-	// —— SC-123: the characteristics split, opt-in only ——
+	// —— SC-123: the characteristics split (the default since the 2026-08-12 ruling) ——
 
 	test('sbCharLine="two" splits each cell into box/value/label (the site\'s .sb__char-* DOM), text verbatim', async () => {
 		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'two' });
@@ -414,20 +435,22 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(cells[4].querySelector('.dse-sb__char-box')!.textContent).toBe('P');
 	});
 
-	test('flipping a characteristics pref REMOUNTS the card (shape, not reflow) and flipping back restores the merged node', async () => {
+	test('flipping a characteristics pref REMOUNTS the card (shape, not reflow) and flipping back restores the default split', async () => {
 		const { root, deps } = await renderStatblock(humanBanditChief);
 		const cellOf = (): HTMLElement =>
 			root.querySelector('.dse-sb__chars > .dse-sb__char') as HTMLElement;
-		expect(cellOf().children).toHaveLength(0);
-
-		await deps.prefs.set('sbCharBox', 'onword');
-		await flushAsync(2);
+		// The default is now the split shape, so the round trip runs the other way.
 		expect(cellOf().children).toHaveLength(3);
 
-		await deps.prefs.set('sbCharBox', 'off');
+		await deps.prefs.set('sbCharLine', 'one');
 		await flushAsync(2);
 		expect(cellOf().children).toHaveLength(0);
 		expect(cellOf().textContent).toBe('Might +2');
+
+		await deps.prefs.set('sbCharLine', 'two');
+		await flushAsync(2);
+		expect(cellOf().children).toHaveLength(3);
+		expect(cellOf().textContent).toBe('M+2Might');
 	});
 
 	test("features render through Task 5's renderFeatureList: ◆ divider, then .dse-feature__nested > .dse-feature cards (shared grammar)", async () => {
@@ -440,17 +463,25 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		const list = root.querySelector('.dse-sb > .dse-feature__nested') as HTMLElement;
 		expect(list).not.toBeNull();
 		const cards = list.querySelectorAll(':scope > .dse-feature');
-		expect(cards).toHaveLength(8);
 
-		const names = Array.from(cards).map(
-			(c) => c.querySelector('.dse-head__primary--left')!.textContent,
-		);
-		expect(names).toEqual([
+		// The default bands villain actions since the 2026-08-12 ruling, so the main run
+		// holds the five non-villain features and the band holds the three villain ones.
+		// Assert the SPLIT explicitly (it is the default's defining shape) and then that
+		// nothing was lost across the pair — all eight cards, in source order.
+		expect(cards).toHaveLength(5);
+		const band = root.querySelector<HTMLElement>('.dse-sb__band--villain')!;
+		expect(band.querySelectorAll('.dse-feature')).toHaveLength(3);
+
+		const nameOf = (c: Element): string | null =>
+			c.querySelector('.dse-head__primary--left')!.textContent;
+		expect(Array.from(cards).map(nameOf)).toEqual([
 			'Whip and Magic Longsword',
 			'Kneel, Peasant!',
 			'Bloodstones',
 			'End Effect',
 			'Supernatural Insight',
+		]);
+		expect(Array.from(band.querySelectorAll('.dse-feature')).map(nameOf)).toEqual([
 			'Shoot!',
 			'Form Up!',
 			'Lead From the Front',
@@ -533,10 +564,20 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		);
 	});
 
-	// —— SC-123 / FOLLOWUPS #54: villain BANDING, opt-in only ——
+	// —— SC-123 / FOLLOWUPS #54: villain BANDING, the default since the 2026-08-12 ruling ——
 
-	test('sbVillain default ("inline") builds NO band — one flat list in source order (the LEGACY-FREEZE shape)', async () => {
+	test('sbVillain default ("banded") lifts the villain actions into a band — the site\'s shape', async () => {
 		const { root } = await renderStatblock(statblockVillainCorpus);
+
+		expect(root.querySelector('.dse-sb__band.dse-sb__band--villain')).not.toBeNull();
+		// The main run keeps every non-villain feature and loses none to the band.
+		const mainRun = root.querySelector<HTMLElement>('.dse-sb > .dse-feature__nested')!;
+		expect(mainRun.querySelector('.dse-feature[data-dse-act="villain"]')).toBeNull();
+		expect(mainRun.querySelector('.dse-feature[data-dse-act="main"]')).not.toBeNull();
+	});
+
+	test('sbVillain="inline" (opt-in) builds NO band — one flat list in source order', async () => {
+		const { root } = await renderStatblock(statblockVillainCorpus, {}, { sbVillain: 'inline' });
 
 		expect(root.querySelector('.dse-sb__band')).toBeNull();
 		expect(root.querySelectorAll('.dse-sb > .dse-feature__nested')).toHaveLength(1);
@@ -633,8 +674,12 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(root.querySelector('.dse-sb__chars')).not.toBeNull();
 	});
 
+	// Both content-loss tests run at sbCharLine:'one'. They compare against the legacy
+	// view tree's output as VERBATIM strings ("Might +2"), which only the merged cell
+	// produces — the default split spells the same words as "M+2Might". The default
+	// shape's own no-loss claim is asserted per-part in the characteristics tests above.
 	test('NO content loss: every field the legacy HeaderView/StatsView/FeaturesView tree rendered appears verbatim (bandit chief)', async () => {
-		const { root } = await renderStatblock(humanBanditChief);
+		const { root } = await renderStatblock(humanBanditChief, {}, { sbCharLine: 'one' });
 		const text = root.textContent!;
 
 		for (const expected of [
@@ -697,7 +742,7 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 	});
 
 	test('NO content loss: the featureless fixture keeps every fallback string verbatim', async () => {
-		const { root } = await renderStatblock(NO_FEATURES);
+		const { root } = await renderStatblock(NO_FEATURES, {}, { sbCharLine: 'one' });
 		const text = root.textContent!;
 
 		for (const expected of [
@@ -735,8 +780,27 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		}
 	});
 
-	test('static: rendering never writes back (no replaceSource) and mounts NO interactive controls', async () => {
+	// Split in two by the 2026-08-12 default flip. The statblock is still a read-only
+	// render — it never writes back and mounts no EDITING affordance — but the banded
+	// villain default now ships one disclosure button (the kit collapsible's header).
+	// A disclosure is not an edit, so the claim is narrowed rather than dropped, and the
+	// absolute no-controls form is kept against the un-banded shape.
+	test('static: rendering never writes back, and the only control is the villain band\'s disclosure', async () => {
 		const { root, host } = await renderStatblock(humanBanditChief);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+
+		const controls = Array.from(
+			root.querySelectorAll('button, input, select, textarea, [tabindex]'),
+		);
+		expect(controls).toHaveLength(1);
+		expect(controls[0].className).toBe('dse-collapse__header');
+		// A disclosure, not an input: it toggles visibility and nothing else.
+		expect(controls[0].getAttribute('aria-expanded')).toBe('true');
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+	});
+
+	test('static: with villain banding off, the card mounts NO interactive control at all', async () => {
+		const { root, host } = await renderStatblock(humanBanditChief, {}, { sbVillain: 'inline' });
 		expect(host.replaceSource).not.toHaveBeenCalled();
 		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);

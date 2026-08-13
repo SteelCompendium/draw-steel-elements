@@ -54,17 +54,18 @@ declare module '../framework/seams/prefs' {
 		// data-sb-kwusage/-disttarget only reach its statblock feature block.
 		// sbCharLine/sbCharBox/sbVillain are statblock-only, like the site's.
 		//
-		// TWO DEFAULTS DIVERGE FROM THE SITE'S BY DESIGN: the site ships charline=two
-		// and villain=banded, and the plugin defaults to the single merged "Might +2"
-		// line and un-banded villain actions instead. That was chosen to hold the then-
-		// frozen legacy shots byte-identical; SC-144 retired those shots, so the reason
-		// is now history and "should the site-faithful shape be the default?" is a live
-		// design question — its own ticket, deliberately not answered by SC-144. Everything else matches the site's own
-		// SB_DEFAULTS verbatim, INCLUDING disttarget=grid (settings-panel.js:31-33;
-		// an earlier revision of this comment, and the SC-146 audit row S8 it came
-		// from, misread that default as `text` — corrected in the SC-123 fix round,
-		// review M-4). See the SB_PRESETS comment for what the two cost the
-		// "Steel card" bundle.
+		// EVERY DEFAULT HERE NOW MATCHES THE SITE'S OWN SB_DEFAULTS verbatim, including
+		// disttarget=grid (settings-panel.js:31-33; an earlier revision of this comment,
+		// and the SC-146 audit row S8 it came from, misread that default as `text` —
+		// corrected in the SC-123 fix round, review M-4).
+		//
+		// charline and villain were the last two holdouts. They defaulted to the single
+		// merged "Might +2" line and un-banded villain actions, chosen only to hold the
+		// then-frozen legacy shots byte-identical. SC-144 retired those shots, which left
+		// the divergence with no reason behind it, and Scott ruled on 2026-08-12: "nobody
+		// has this code yet. We dont have to worry about breaking anyone. Lets do the
+		// correct thing." So they ship the site's values — charline=two, villain=banded —
+		// and the frozen statblock print shots were rebaselined against that ruling.
 		kwUsage: 'crest' | 'text' | 'grid' | 'ledger';
 		distTarget: 'grid' | 'text' | 'ledger';
 		sbCharLine: 'one' | 'two';
@@ -337,7 +338,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 	// which would dress the global shape in local attributes (measured: "+2Might"), so
 	// a per-block `prefs:` map warns and ignores them. Global-only, deliberately. ——
 	d({
-		key: 'sbCharLine', default: 'one', attr: 'sb-charline', perBlock: false,
+		key: 'sbCharLine', default: 'two', attr: 'sb-charline', perBlock: false,
 		ui: {
 			group: 'Statblock display', inPreset: true, advanced: true,
 			label: 'Characteristics', control: 'select',
@@ -345,7 +346,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 				{ value: 'one', label: 'One line' },
 				{ value: 'two', label: 'Value over label' },
 			],
-			help: 'How each characteristic reads in the Might/Agility/Reason/Intuition/Presence rail. "One line" — the default — keeps today\'s single "Might +2" line; "Value over label" stacks the number above the word, like the website.',
+			help: 'How each characteristic reads in the Might/Agility/Reason/Intuition/Presence rail. "Value over label" — the default, matching the website — stacks the number above the word; "One line" puts them on a single "Might +2" line instead.',
 		},
 	}),
 	d({
@@ -362,7 +363,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 	d({
-		key: 'sbVillain', default: 'inline', attr: 'sb-villain', perBlock: false,
+		key: 'sbVillain', default: 'banded', attr: 'sb-villain', perBlock: false,
 		ui: {
 			group: 'Statblock display', inPreset: true, advanced: true,
 			label: 'Villain actions', control: 'select',
@@ -370,7 +371,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 				{ value: 'inline', label: 'Inline with other features' },
 				{ value: 'banded', label: 'Grouped in a collapsible band' },
 			],
-			help: 'Where a statblock\'s villain actions render. "Inline" — the default — lists them among the other features in source order. "Grouped" collects them into one collapsible "Villain Actions" band below the rest, like the website. Print and export always show the band open.',
+			help: 'Where a statblock\'s villain actions render. "Grouped" — the default, matching the website — collects them into one collapsible "Villain Actions" band below the rest. "Inline" lists them among the other features in source order instead. Print and export always show the band open.',
 		},
 	}),
 
@@ -489,26 +490,25 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 // SC-123 then widened every bundle with the five NEW members, so a preset writes the
 // same SET of decisions the site's does (settings-panel.js:35-39). SC-146's corrected
 // values for the four original members are carried through unchanged — the two tickets
-// touch disjoint members of the same three objects. Two deliberate divergences remain,
-// both inherited from the byte-freeze era rather than chosen (see the note above the
-// SB_DEFAULTS block: SC-144 retired the legacy shots, so these are now open questions):
+// touch disjoint members of the same three objects.
 //
-//  1. **`steel` mirrors the plugin's DEFAULTS, not the site's Steel Card bundle.**
-//     The site's bundle sets `charline: two` and `villain: banded`; the plugin's
-//     defaults for those reproduce the pre-SC-123 rendering (one merged characteristic
-//     line, un-banded villain actions). Writing the
-//     site's values here would make a fresh install derive 'custom' instead of 'Steel
-//     card', i.e. the dropdown would open on a state the user never chose. So `steel`
-//     stays "the plugin's home look" and the site-faithful values live in the other two
-//     bundles. Flipping the defaults themselves is a separate, sanctioned-rebaseline
-//     decision for Scott (SC-123 report).
-//  2. `sourcebook`/`index` DO carry the site's values for every new member
-//     (kwUsage/distTarget/sbCharLine/sbCharBox/sbVillain), because neither is the
-//     default state and neither has a fidelity bar to clear. ——
+// **`steel` now equals the site's Steel Card bundle, and equals the plugin's defaults.**
+// It used to be neither: it mirrored the plugin's own defaults, which held `charline:
+// one` / `villain: inline` for byte-freeze reasons rather than design ones. Scott's
+// 2026-08-12 ruling flipped those defaults to the site's values, which collapses the
+// two into one — the bundle and the defaults now agree because they are both simply
+// "what the site does".
+//
+// The invariant that constrains this object is worth stating plainly, because it is the
+// thing a future edit can break silently: **`steel` MUST equal the descriptor defaults,
+// member for member.** The preset label is derived, never stored (deriveSbPreset), so a
+// fresh install that does not match any bundle opens its dropdown reading "Custom" — a
+// state the user never chose. Changing a default without changing this bundle (or the
+// reverse) produces exactly that. A test pins the equality in both directions. ——
 export const SB_PRESETS = {
 	steel: {
 		sbFeatureStyle: 'card', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'grid',
-		kwUsage: 'crest', distTarget: 'grid', sbCharLine: 'one', sbCharBox: 'off', sbVillain: 'inline',
+		kwUsage: 'crest', distTarget: 'grid', sbCharLine: 'two', sbCharBox: 'off', sbVillain: 'banded',
 	},
 	sourcebook: {
 		sbFeatureStyle: 'flat', sbDensity: 'comfortable', sbColumns: 'single', sbStats: 'ledger',

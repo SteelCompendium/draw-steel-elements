@@ -34,9 +34,9 @@ test('reflect() stamps every catalog presentation default on a root (first-paint
 	// characteristics text node; see statblock/view.ts renderChars).
 	expect(root.getAttribute('data-dse-kwusage')).toBe('crest');
 	expect(root.getAttribute('data-dse-disttarget')).toBe('grid');
-	expect(root.getAttribute('data-dse-sb-charline')).toBe('one');
+	expect(root.getAttribute('data-dse-sb-charline')).toBe('two');
 	expect(root.getAttribute('data-dse-sb-charbox')).toBe('off');
-	expect(root.getAttribute('data-dse-sb-villain')).toBe('inline');
+	expect(root.getAttribute('data-dse-sb-villain')).toBe('banded');
 	expect(root.getAttribute('data-dse-fb-featstyle')).toBe('card');
 	expect(root.getAttribute('data-dse-fb-stats')).toBe('grid');
 	expect(root.getAttribute('data-dse-reduce-motion')).toBe('false');

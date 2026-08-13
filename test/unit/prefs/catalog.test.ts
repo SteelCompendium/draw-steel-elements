@@ -19,7 +19,7 @@ test('every catalog key is unique and none shadows a builtin', () => {
 	expect(new Set(keys).size).toBe(keys.length);
 });
 
-test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
+test('defaults match the v2 site\'s own SB_DEFAULTS (site-parity bar)', () => {
 	const store = makeStore();
 	expect(store.get('theme')).toBe('steel');
 	expect(store.get('reduceMotion')).toBe(false);
@@ -29,18 +29,15 @@ test('defaults reproduce today\'s look (the legacy-fidelity bar)', () => {
 	expect(store.get('sbDensity')).toBe('comfortable');     // statblock/view.ts static value
 	expect(store.get('sbColumns')).toBe('single');
 	expect(store.get('sbStats')).toBe('grid');
-	// SC-123. TWO of these deliberately DIVERGE from the site's own defaults (the site
-	// ships charline=two and villain=banded) because the bar here is "reproduce TODAY'S
-	// plugin rendering", and today's is the merged "Might +2" line and un-banded villain
-	// actions. `distTarget: grid` is NOT a divergence — the site's SB_DEFAULTS ship
-	// disttarget=grid too (settings-panel.js:31-33); the SC-146 audit's S8 row said
-	// `text` and that error propagated here, corrected in the SC-123 fix round (review
-	// M-4). See the SB_PRESETS comment.
+	// SC-123 + Scott's 2026-08-12 ruling. The bar used to be "reproduce TODAY'S plugin
+	// rendering", which held charline/villain away from the site for byte-freeze reasons.
+	// It is now plain site parity: every value below is the site's own SB_DEFAULTS
+	// (settings-panel.js:31-33, 35-39), no exceptions left.
 	expect(store.get('kwUsage')).toBe('crest');        // the SC-121 chip band
 	expect(store.get('distTarget')).toBe('grid');      // the SC-117/121 boxed rail
-	expect(store.get('sbCharLine')).toBe('one');       // the merged text node (freeze bar)
-	expect(store.get('sbCharBox')).toBe('off');        // …with no boxed letter
-	expect(store.get('sbVillain')).toBe('inline');     // no band has ever been built
+	expect(store.get('sbCharLine')).toBe('two');       // value over label, like the site
+	expect(store.get('sbCharBox')).toBe('off');        // …with no boxed letter (site too)
+	expect(store.get('sbVillain')).toBe('banded');     // the collapsible Villain Actions band
 	expect(store.get('fbFeatureStyle')).toBe('card');
 	expect(store.get('fbStats')).toBe('grid');         // was a hard-coded literal on the card
 	expect(store.get('collapsibleDefault')).toBe(true);     // old ComponentWrapper ?? true
@@ -235,6 +232,28 @@ test('preset derivation: defaults = steel; one divergence = custom; applySbPrese
 });
 
 // —— SC-123: the widened bundles ——
+
+// Scott's 2026-08-12 ruling flipped sbCharLine/sbVillain to the site's values, which made
+// the `steel` bundle and the descriptor defaults identical. That equality is now an
+// INVARIANT, not a coincidence, and it is the kind that breaks silently: the preset label
+// is derived rather than stored, so if a future edit moves a default without moving the
+// bundle (or the reverse), a fresh install opens its dropdown reading "Custom" — a state
+// nobody chose — and nothing else fails. Pinned in both directions.
+test('the steel bundle IS the descriptor defaults, member for member (a fresh install derives "Steel card")', () => {
+	const defaults = new Map(
+		DSE_PREF_DESCRIPTORS.filter((d) => prefUi(d)?.inPreset).map((d) => [d.key as string, d.default]),
+	);
+	// Same key set, so neither side can carry a member the other lacks.
+	expect(new Set(Object.keys(SB_PRESETS.steel))).toEqual(new Set(defaults.keys()));
+	// …and the same value for every one of them.
+	for (const [key, value] of defaults) {
+		expect(SB_PRESETS.steel[key as keyof typeof SB_PRESETS.steel]).toBe(value);
+	}
+	// The consequence, asserted directly rather than inferred: an untouched store derives
+	// the named preset, never 'custom'.
+	expect(deriveSbPreset(makeStore())).toBe('steel');
+});
+
 
 test('every preset writes the SAME member set, and that set is exactly the inPreset rows', async () => {
 	const members = new Set(

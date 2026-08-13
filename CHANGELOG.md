@@ -15,6 +15,17 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- **Statblocks now look like the website out of the box** (SC-123). Two display
+  settings shipped on the plugin's own historical look rather than the site's, and
+  they were the last two that differed. **Characteristics** now default to the
+  website's stacked presentation — the number on top, the name beneath it — instead
+  of a single "Might +2" line; and **Villain actions** now default to the website's
+  collapsible "Villain Actions" band below the rest of the features, instead of being
+  listed inline among them. Everything else already matched. Both settings still offer
+  the old presentation — Characteristics → "One line", Villain actions → "Inline with
+  other features" — and the "Steel card" preset now writes exactly these defaults, so a
+  fresh install shows "Steel card" rather than "Custom". This changes how existing
+  statblocks render, which is why it lands before 7.0.0 ships rather than after.
 - [BUGFIX] **The compendium search modal is readable again** (SC-159). Every result
   ran its name, type and source together into one unbroken string — a goblin listed
   itself as "Goblin Stinkerstatblockmcdm.monsters.v1". The row now has a real layout:
