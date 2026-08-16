@@ -56,6 +56,28 @@ minions marked as squads, Stamina filled in from their real statblocks.
 Click **Open in sidebar** instead and it does the same thing, then pins the new tracker to
 Obsidian's right sidebar so it stays on screen while you flip between notes.
 
+### The tracker is a snapshot, and that is on purpose
+
+**What works.** Press either button as many times as you like. The first press builds the
+tracker; after that they just reopen the one you already have, so you can pull the sidebar
+back up mid-fight without worrying about it. You will never end up with a pile of duplicate
+trackers, and nothing you have done in the fight is touched.
+
+**What deliberately doesn't.** The tracker is a copy of the encounter taken at the moment it
+was built. If you go back and change the encounter afterwards — add a monster, change the
+party size — **those changes do not appear in a tracker that already exists.**
+
+That is deliberate rather than a gap. Once a fight is running, the tracker is the fight:
+current Stamina, conditions, whose turn has come round. Rebuilding it from the encounter
+would be the only way to pick up your edits, and it would throw all of that away — usually
+in the middle of the session, from a button you pressed just to bring the sidebar back.
+Keeping your place is worth more than staying in sync.
+
+**When you do want a fresh one:** delete the tracker block from the note, then press
+**Open in sidebar** again. With no tracker to find, the builder makes a new one from the
+encounter as it stands now. Do this between fights, not during one — the new tracker starts
+clean, with everyone at full Stamina and no conditions.
+
 ## 3. Run it
 
 ![The initiative tracker](Media/initiative-tracker.png)
