@@ -5,6 +5,7 @@ copyright: The Draw Steel Compendium is an independent product published under t
 
 theme:
     name: 'material'
+    custom_dir: overrides
     font:
         text: 'Source Serif 4'
     palette:
@@ -42,6 +43,14 @@ plugins:
 
 extra:
     homepage: https://steelcompendium.io
+    # SC-164: mike-versioned docs — main pushes deploy the released version under the
+    # `latest` alias, develop pushes deploy `dev`. This turns on Material's built-in
+    # version selector (reads gh-pages' mike-managed versions.json) and the "outdated
+    # version" banner machinery (see overrides/main.html's `outdated` block override —
+    # Material's own mechanism, not a custom one) that tells a `dev` reader they're not
+    # looking at the released docs.
+    version:
+        provider: mike
 
 extra_css:
     - stylesheets/extra.css

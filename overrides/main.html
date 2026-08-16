@@ -1,0 +1,23 @@
+<!--
+  SC-164: Material for MkDocs' own "outdated version" banner mechanism (versioning.md),
+  not a custom widget — Material ships `main.html`'s `outdated` block empty by default;
+  overriding it here just supplies the text. The bundled `versions.js` (loaded whenever
+  `extra.version.provider: mike` is set, see mkdocs.yml) reads gh-pages' mike-managed
+  `versions.json`, compares the CURRENT deployed version against the `latest` alias, and
+  toggles this block's visibility itself — nothing here decides "is this dev" by hand.
+  With exactly two versions (`latest`/released, `dev`/development), "not latest" and "is
+  dev" are the same condition in practice.
+
+  `'../' ~ base_url` is Material's own documented idiom (from its versioning.md example
+  verbatim, only the copy changed): `base_url` is mkdocs' normal relative-to-site-root
+  path from the CURRENT page; prefixing `../` walks back out of the version subdirectory
+  (e.g. `/dev/some/page/`) mike serves every version under, landing on the site root,
+  where mike's redirect index.html then forwards to the `latest` alias.
+-->
+{% extends "base.html" %}
+
+{% block outdated %}
+  You're viewing the <strong>development version</strong> of these docs — it documents
+  unreleased features that may still change. For the current release, see
+  <a href="{{ '../' ~ base_url }}"><strong>the latest docs</strong></a>.
+{% endblock %}

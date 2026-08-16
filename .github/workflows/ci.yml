@@ -1,9 +1,15 @@
 name: ci
+
+# SC-164: mike-versioned docs. `main` (released content only, SC-163) deploys the
+# released docs as the `latest` alias; `develop` (mainline) deploys the `dev` docs. Both
+# land on the SAME gh-pages branch, in mike's own layout (per-version subdirectories +
+# a root redirect + versions.json) — never `mkdocs gh-deploy --force`, which overwrites
+# the WHOLE branch and would wipe whichever version this push didn't touch.
 on:
   push:
     branches:
-      - master
       - main
+      - develop
 permissions:
   contents: write
 jobs:
@@ -25,4 +31,42 @@ jobs:
       - run: pip install mkdocs-roamlinks-plugin
       - run: pip install mkdocs-rss-plugin
       # - run: pip install mkdocs-mermaid2-plugin
-      - run: mkdocs gh-deploy --force
+      - run: pip install mike
+      # mike commits directly to gh-pages (deploy/set-default are `git commit` + `git
+      # push`, not a GitHub API call) — give the runner an identity or the commit step
+      # fails. Standard mike CI recipe; the old `mkdocs gh-deploy` (ghp-import) path
+      # never needed this because it always ran as a full-branch rebuild, not a commit
+      # mike expects to be attributable.
+      - name: Configure git identity for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # main push: the RELEASED docs. <version> is read from manifest.json AT THIS SHA
+      # (never hardcoded) — main only ever moves via the release fast-forward (SC-163),
+      # so this is always the version that was just released. `--update-aliases` moves
+      # the `latest` alias onto this version even if a version with this exact number
+      # was already deployed (re-running a release deploy is idempotent, not additive).
+      #
+      # `--alias-type=redirect`, NOT mike's default `symlink`: mike's own README flags
+      # symlink aliases as a known footgun on hosts that don't serve them (documented
+      # for GitHub Enterprise Server; classic gh-pages-branch GitHub Pages hosting has
+      # its own history of NOT resolving symlinked blobs, per longstanding GitHub Pages
+      # reports). `redirect` writes a real HTML redirect page per URL under `latest/`
+      # instead of a filesystem symlink — one extra invisible hop, zero host-serving
+      # risk. Verified structurally in the local scratch-remote proof before this ever
+      # touches the real gh-pages branch (see SC-164 report).
+      - name: Deploy released docs (main → latest)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          echo "Deploying released docs as version $VERSION (alias: latest)"
+          mike deploy --push --update-aliases --alias-type=redirect "$VERSION" latest
+
+      # develop push: the MAINLINE docs, always unreleased-by-definition — deployed
+      # under the literal version name `dev` (no numeric version, no alias; the
+      # overrides/main.html "outdated" banner is what warns readers, not the version
+      # string itself).
+      - name: Deploy development docs (develop → dev)
+        if: github.ref == 'refs/heads/develop'
+        run: mike deploy --push dev

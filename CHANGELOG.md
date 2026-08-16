@@ -710,6 +710,18 @@ for what needs action.
   div). Fixed once, at the framework level, for every element. Also:
   `ds-hr`/`ds-horizontal-rule` no longer shows the pencil at all — a rule has
   no configuration, so there was never anything to edit (SC-145).
+- [INTERNAL] Docs are now versioned on gh-pages via
+  [mike](https://github.com/jimporter/mike) (SC-164, follow-on to SC-163's
+  branch split). `main` pushes deploy the released docs as the `latest`
+  alias (root redirects there); `develop` pushes deploy the mainline docs
+  under `dev/`, banded with a "development version — unreleased features"
+  banner (Material's own `outdated`-block mechanism, `overrides/main.html`)
+  so pre-release docs can't be mistaken for current. Both versions live on
+  one gh-pages branch with a header version selector
+  (`extra.version.provider: mike`). `ci.yml`'s old
+  `mkdocs gh-deploy --force` — a full-branch overwrite that would have wiped
+  whichever version a given push didn't touch — is retired in favor of
+  `mike deploy`. No plugin runtime code changed.
 
 ## 5.1.1
 
