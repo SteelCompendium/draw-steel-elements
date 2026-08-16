@@ -560,6 +560,14 @@ code.dsa {
    --dse-malice, per-condition color → the VALIDATED --dse-condition-color property. */
 
 [data-dse-element="initiative"] .dse-init {
+    /* SC-154 — negotiation/montage/party (this element's own "loose tracker" peer
+       group: no card background/border, but breathing room from the note edge) all
+       carry `padding: var(--dse-pad)` on their own root wrapper. `.dse-init` never
+       did, so its top-of-block button and every row inside it sat flush against
+       whatever margin the note itself supplied — literally the "buttons right up
+       against containers" report. One line, matches the established sibling
+       pattern exactly (no new token, no new convention). */
+    padding: var(--dse-pad);
 
     /* -- compact kit buttons: legacy visual size, kit semantics -- */
     .dse-init__turn,
@@ -676,19 +684,43 @@ code.dsa {
     }
 
     /* -- enemies header: heading + Malice panel -- */
+    /* SC-154 — `flex-wrap: wrap` (previously only added under the .dse-sidebar
+       override below, so it never helped a note pane that is merely narrow —
+       split-pane, a smaller window — rather than the literal right-sidebar leaf).
+       Measured regression check: raising the Malice panel's max-width to 320px
+       above (needed so its own round-control buttons stop wrapping text) made this
+       WORSE at a plain 300px-wide mount with no .dse-sidebar ancestor — "ENEMY
+       GROUPS" wrapped to two lines and the Malice panel's first row rendered on
+       top of it, overlapping. Wrapping the heading below the panel when they don't
+       both fit is the same fallback `.dse-init__round` gets two rules up; the
+       .dse-sidebar override's own `flex-direction: column` still wins whenever a
+       real sidebar leaf is the ancestor (higher-specificity, later in the
+       cascade), so this is additive, not a behavior change for that case. */
     .dse-init__enemies-head {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         align-items: flex-start;
+        gap: 6px;
     }
 
     /* D8 §3: the Malice panel wraps the pool stepper + round/log/quick-add stacked. */
+    /* SC-154 — was max-width: 220px, narrower than "Reset turns (this round)" +
+       "Advance round" could ever fit even alone (each ~200-230px including its
+       icon), let alone side by side with the round-1 label — measured pre-fix at
+       full note width: the reset button wrapped its OWN text across 3 lines inside
+       a 98px-wide box, while the row it sat in had 900px of untouched width to its
+       left (the exact "dense in one spot, dead space next to it" report). 320px is
+       the measured width "Reset turns (this round)" needs to stay on one line at
+       this row's 0.85em font — the other three panel children (log/quick-add) are
+       already narrower than that, so this doesn't widen the panel's overall footprint
+       beyond what one control already needs. */
     .dse-init__malice-panel {
         display: flex;
         flex-direction: column;
         align-items: flex-end;
         gap: 4px;
-        max-width: 220px;
+        max-width: 320px;
     }
 
     /* -- Malice: the kit stepper (CB-7 — its render() updates ONLY the value node) -- */
@@ -732,8 +764,17 @@ code.dsa {
     /* D8 §7.2/§3.1: round counter + the two round-state controls, "Reset turns (this
        round)" (turn-only correction) and "Advance round" (full round-boundary
        transition) — task-9-review.md HIGH finding: distinct, non-interchangeable controls. */
+    /* SC-154 — `flex-wrap: wrap` (previously only added under the .dse-sidebar
+       narrow override below) so a width that can't hold "Round N" + both buttons
+       on one line wraps them as WHOLE UNITS onto their own line, never mid-phrase.
+       `white-space: nowrap` on the buttons themselves (next rule) is what makes
+       that the only way they can respond to a width squeeze — before this pair,
+       flex-shrink + this row's own min-width:0 buttons let the text wrap 2-3 lines
+       INSIDE an artificially narrow box instead of the button ever moving to a new
+       line. */
     .dse-init__round {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 6px;
         font-size: 0.85em;
@@ -745,6 +786,7 @@ code.dsa {
         min-width: 0;
         min-height: 0;
         padding: 2px 6px;
+        white-space: nowrap;
     }
 
     /* D8 §3.1: the spend/gain log — a small, muted, right-aligned readout. */
@@ -781,17 +823,37 @@ code.dsa {
         gap: 4px;
     }
 
+    /* SC-154 — was `width: 4.5em` with no declared padding of its own, so the box
+       relied entirely on the browser's bare default <input> padding. Measured: the
+       "Amount" placeholder (6 characters at this row's 0.85em font) clipped inside
+       that box in real Obsidian (whose own default input chrome adds more inset
+       than this harness's unstyled input does) — the report's "text is offset from
+       the container it's supposed to be in". Widened, and padding/box-sizing made
+       explicit (matching .dse-stepper__input's own convention) so the box's
+       printed size no longer depends on inherited host chrome. */
     .dse-init__malice-quickadd-amount {
-        width: 4.5em;
+        width: 5.5em;
+        padding: 0.25em 0.4em;
+        box-sizing: border-box;
     }
 
+    /* SC-154 — same explicit padding/box-sizing as -amount above, for the same
+       reason: two inputs in the same row should look like a matched pair, not one
+       tight/one loose depending on which one happens to already be wide enough to
+       hide the missing declaration. */
     .dse-init__malice-quickadd-label {
         width: 8em;
+        padding: 0.25em 0.4em;
+        box-sizing: border-box;
     }
 
-    /* -- hero / enemy-group entries -- */
+    /* SC-154 — the turn-indicator box and the row content next to it had zero gap
+       (the row's own left padding was 0 — see .dse-init__row below — so the two
+       sat literally edge to edge). A small gap reads as "two related controls",
+       not "one button glued to a card". */
     .dse-init__entry {
         display: flex;
+        gap: 8px;
     }
 
     .dse-init__groupbody {
@@ -828,6 +890,34 @@ code.dsa {
             width: 60px;
             height: 60px;
             object-fit: cover;
+        }
+    }
+
+    /* SC-162 — the themed stand-in for a missing/broken portrait
+       (InitiativeView.renderPortraitFallback, src/elements/initiative/view.ts): a
+       neutral capsule (the SAME "surface + hairline
+       border" language .dse-init__cell already uses below, not the crest shield —
+       the crest system hides itself entirely under print/non-Steel by design,
+       which would make a MISSING-image state literally invisible there; this one
+       stays visible everywhere) holding one Lucide glyph, sized to fill whichever
+       slot it mounts into (60px row portrait here; 50px grid cell, overridden
+       below). Shield vs. skull is the whole signal — no color is load-bearing
+       (Scott is colorblind). */
+    .dse-init__portrait-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 60px;
+        height: 60px;
+        flex: 0 0 auto;
+        border-radius: var(--dse-radius);
+        background-color: var(--color-base-30);
+        border: 1px solid var(--dse-border);
+        color: var(--dse-fg-muted);
+
+        svg {
+            width: 55%;
+            height: 55%;
         }
     }
 
@@ -974,6 +1064,13 @@ code.dsa {
             height: 100%;
             object-fit: cover;
             pointer-events: none;
+        }
+
+        /* SC-162 — this slot is already sized (50x50 above); the fallback just
+           fills it, same convention as the img rule right above. */
+        .dse-init__portrait-fallback {
+            width: 100%;
+            height: 100%;
         }
     }
 
@@ -2734,6 +2831,11 @@ Shared globals
    an unresolved SCC code reads as quiet, not alarming — the row is excluded from math,
    not an error. */
 [data-dse-element="encounter"] .dse-enc {
+	/* SC-154 — same gap as .dse-init below: negotiation/montage/party (the "loose
+	   tracker" peer group — no card frame, but breathing room from the note edge)
+	   all carry `padding: var(--dse-pad)` on their own root; .dse-enc never did, so
+	   its head/table/summary/buttons sat flush against the note's own margin. */
+	padding: var(--dse-pad);
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
@@ -2751,6 +2853,20 @@ Shared globals
 	.dse-enc__empty {
 		color: var(--dse-fg-muted);
 		font-style: italic;
+	}
+
+	/* SC-154 — the 5-column roster (Name/Role/Organization/Count/EV) has no narrow-
+	   width story: at a ~300px sidebar leaf the table's natural content width pushes
+	   Count and EV off the visible edge with no scrollbar, silently losing two of
+	   five columns (measured: table content forces ~520px+ even with short cell
+	   text). `overflow-x: auto` on the wrapping section is a no-op at any width wide
+	   enough to fit the table (no visible scrollbar, nothing else changes) and turns
+	   the narrow case from silent data loss into an explicit, scrollable table —
+	   the same escape hatch `.dse-enc__table`'s own `overflow: hidden` sibling
+	   convention (perk's markdown table, SC-121 C-6) uses for the opposite edge
+	   case. */
+	.dse-enc__roster {
+		overflow-x: auto;
 	}
 
 	.dse-enc__table {

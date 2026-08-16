@@ -492,6 +492,58 @@ export class InitiativeView extends ElementView<EncounterData> {
 		return el;
 	}
 
+	// -------------------------------------------------------------------- portrait
+
+	/** SC-162 — a themed fallback in place of the browser's broken-image icon,
+	 *  for the two ways a portrait can fail to show a real picture: no `image:`
+	 *  field at all (resolveImageSourceOrDefault rejects, SC-4's existing catch
+	 *  path), and a resolved src that the <img> itself can't load (a moved/renamed
+	 *  vault file, a dead URL — nothing previously listened for that). One glyph per
+	 *  side, not one per color (Scott is colorblind): 'shield' silhouette for
+	 *  heroes, 'skull' for enemies — distinguishable at a glance without reading
+	 *  color, matching the plugin's existing crest glyph vocabulary (skull already
+	 *  means "villain/danger" on ability crests; shield already means "defender" on
+	 *  statblock role crests — reused here for the analogous hero/enemy read, in a
+	 *  context — a tracker row's portrait slot — neither existing usage appears
+	 *  in). Decorative (aria-hidden): the actor's name is already visible text right
+	 *  next to every portrait this mounts into. */
+	private renderPortraitFallback(container: HTMLElement, kind: 'hero' | 'enemy'): void {
+		container.empty();
+		const fallback = container.createSpan({ cls: 'dse-init__portrait-fallback' });
+		fallback.setAttribute('aria-hidden', 'true');
+		setIcon(fallback, kind === 'hero' ? 'shield' : 'skull');
+	}
+
+	/** The one portrait-resolution + render path, shared by the hero row, the enemy
+	 *  detail row, and the instance grid cell (all three used to hand-roll this
+	 *  same then/catch). `container` is emptied by renderPortraitFallback on both
+	 *  failure paths, so a re-render (a grid-cell rebuild after an edit) can call
+	 *  this again safely. */
+	private renderPortrait(
+		container: HTMLElement,
+		kind: 'hero' | 'enemy',
+		imgSrcRaw: string | null,
+		name: string,
+	): void {
+		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
+			.then((imgSrc) => {
+				const img = container.createEl('img', { attr: { src: imgSrc, alt: name } });
+				// SC-162: a resolved src is not a guarantee the browser can actually load it
+				// (moved/renamed vault file, dead URL) — this is the "broken image" the
+				// ticket names; nothing listened for it before.
+				img.addEventListener('error', () => this.renderPortraitFallback(container, kind), {
+					once: true,
+				});
+			})
+			// SC-4 (unchanged trigger): BOTH the actor's own image and the vault's default
+			// token image are missing — warn once, then (SC-162) show the themed fallback
+			// instead of leaving the slot empty.
+			.catch(() => {
+				console.warn(`Draw Steel Elements: no portrait image found for "${name}" (and no default token image)`);
+				this.renderPortraitFallback(container, kind);
+			});
+	}
+
 	// -------------------------------------------------------------------- hero row
 
 	private buildCharacterRow(entry: HTMLElement, character: Hero, owner: Component): void {
@@ -513,17 +565,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 		// Character Image
 		const imageEl = rowEl.createDiv({ cls: 'dse-init__portrait' });
-		const imgSrcRaw = character.image ?? null;
-		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
-			.then((imgSrc) => {
-				imageEl.createEl('img', { attr: { src: imgSrc, alt: character.name } });
-			})
-			// SC-4: when BOTH the character image and the default token image are missing
-			// from the vault, the resolve chain rejects — previously an UNHANDLED rejection
-			// (console error every render). Warn once, leave the portrait slot empty.
-			.catch(() => {
-				console.warn(`Draw Steel Elements: no portrait image found for "${character.name}" (and no default token image)`);
-			});
+		this.renderPortrait(imageEl, 'hero', character.image ?? null, character.name);
 
 		// Middle: Character Info
 		const infoEl = rowEl.createDiv({ cls: 'dse-init__info' });
@@ -700,15 +742,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				if (selected) cellEl.setAttribute('data-selected', '');
 
 				const imgEl = cellEl.createSpan({ cls: 'dse-init__cell-portrait' });
-				const imgSrcRaw = creature.image ?? null;
-				Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
-					.then((imgSrc) => {
-						imgEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
-					})
-					// SC-4: see the hero-row portrait catch above.
-					.catch(() => {
-						console.warn(`Draw Steel Elements: no portrait image found for "${creature.name}" (and no default token image)`);
-					});
+				this.renderPortrait(imgEl, 'enemy', creature.image ?? null, creature.name);
 
 				const staminaEl = cellEl.createSpan({ cls: 'dse-init__stamina dse-init__cell-stamina' });
 				this.updateStaminaDisplay(staminaEl, instance, creature, group);
@@ -731,15 +765,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 		// Left: Creature Image
 		const imageEl = container.createDiv({ cls: 'dse-init__portrait' });
-		const imgSrcRaw = creature.image ?? null;
-		Images.resolveImageSourceOrDefault(this.cx.app, imgSrcRaw, this.cx.settings.defaultImagePath)
-			.then((imgSrc) => {
-				imageEl.createEl('img', { attr: { src: imgSrc, alt: creature.name } });
-			})
-			// SC-4: see the hero-row portrait catch above.
-			.catch(() => {
-				console.warn(`Draw Steel Elements: no portrait image found for "${creature.name}" (and no default token image)`);
-			});
+		this.renderPortrait(imageEl, 'enemy', creature.image ?? null, creature.name);
 
 		// Middle: Creature Info
 		const name = `${creature.name} #${instance.id}`;

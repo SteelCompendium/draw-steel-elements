@@ -392,6 +392,33 @@ const kitCollapsed = `collapsed: true\n${kitDefault}`;
 const featureCollapsed = `collapsed: true\n${featureDefault}`;
 const encounterCollapsed = `collapsed: true\n${encounterDefault}`;
 
+// SC-154 / SC-162 — the default fixture (Frodo/Sam vs. Orcs/Troll) seeds an `image:` on
+// every actor, so the plugin's real look for an IMAGELESS combatant — the surface SC-162
+// exists to fix, and the surface most encounter/initiative notes actually start from
+// before anyone bothers pointing `image:` at a token file — had never been photographed.
+// No `image:` field anywhere here: every hero and creature falls through to
+// InitiativeView.renderPortrait's fallback (shield glyph for heroes, skull for enemies).
+// Samwise's name is also deliberately long — the row-rhythm defect class SC-154 audited
+// (name column width vs. the portrait/stat columns either side of it) needs a name that
+// actually threatens to wrap, which neither existing initiative fixture's names do.
+const initiativeNoImages = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+  - name: "Samwise Gamgee of the Fellowship of the Ring"
+    max_stamina: 90
+enemy_groups:
+  - name: "Mordor Forces"
+    creatures:
+      - name: "Orc"
+        max_stamina: 40
+        amount: 4
+      - name: "Troll"
+        max_stamina: 150
+        amount: 1
+malice:
+  value: 5
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -423,7 +450,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	// The element takes no config (definition.ts `parse: () => undefined`), so there is no
 	// second fixture to add here — a variant-2 entry would render an identical DOM.
 	'horizontal-rule': { default: horizontalRuleDefault },
-	initiative: { default: initiativeDefault },
+	initiative: { default: initiativeDefault, 'no-images': initiativeNoImages },
 	kit: { default: kitDefault, collapsed: kitCollapsed },
 	montage: { default: montageDefault },
 	negotiation: { default: negotiationDefault, checked: negotiationChecked },
@@ -635,6 +662,24 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// and the RECOVERIES eyebrow's stand-down were both measured against. The default
 	// sweep shoots the sheet at 760px, which is the comfortable case.
 	{ id: 'hero-narrow', element: 'hero', fixture: 'default', width: 660 },
+	// SC-154 — encounter's 5-column roster table (Name/Role/Organization/Count/EV) had
+	// NO narrow-width coverage at all before this fix: at 300px its natural content
+	// width silently pushed Count/EV off the visible edge with no scroll affordance
+	// (fixed: `.dse-enc__roster` now scrolls). This is the regression shot for that —
+	// and for the root `padding: var(--dse-pad)` add, visible as the card content no
+	// longer sitting flush against the mount edge at any width.
+	{ id: 'encounter-narrow', element: 'encounter', fixture: 'default', width: 300 },
+	// SC-154 — same padding regression coverage for the initiative tracker, plus (at
+	// this width) the malice round-control buttons, which used to wrap their own TEXT
+	// across 2-4 lines regardless of width (the `.dse-init__round`/`-reset`/`-advance`
+	// fix below) — narrow is exactly where a leftover regression would be easiest to
+	// miss since the sidebar-scoped override also touches this row.
+	{ id: 'initiative-narrow', element: 'initiative', fixture: 'default', width: 300 },
+	// SC-162 — the imageless-combatant fixture (shield/skull fallback glyphs) at the
+	// width where the plugin's own narrow row-wrap (info stacks above stamina) is most
+	// likely to crowd a 60px-square fallback the same way it used to crowd a real
+	// portrait image.
+	{ id: 'initiative-no-images-narrow', element: 'initiative', fixture: 'no-images', width: 300 },
 ];
 
 /**

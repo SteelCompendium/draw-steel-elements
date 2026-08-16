@@ -108,6 +108,27 @@ for what needs action.
   compendium using wikilinks or plain vault paths — both are documented under
   [Compendium links](docs/compendium-sync.md#compendium-links) and planned for a later
   release.
+- [FIX] **The encounter and initiative tracker blocks are properly spaced** (SC-154).
+  Both had shipped without the same breathing room every other tracker (negotiation,
+  montage, the party sheet) already gets: buttons, headings and rows sat flush against
+  the note's own margin with no padding at all. On top of that, the initiative
+  tracker's "Reset turns (this round)" / "Advance round" buttons wrapped their own
+  text across two to four cramped lines regardless of how wide the note was, because
+  the Malice panel that holds them was capped narrower than either button's label
+  ever fit — while the same row had hundreds of pixels of empty space to its left.
+  Both are fixed: the tracker roots now carry the same padding their sibling trackers
+  do, the round-control buttons keep their label on one line and wrap as whole
+  buttons (never mid-word) if the width genuinely doesn't allow it, the turn
+  indicator no longer sits glued to the row beside it, the Malice quick-add
+  "Amount"/label boxes are wide enough for their own placeholder text, and the
+  encounter roster table scrolls horizontally instead of silently losing its Count
+  and EV columns at sidebar width.
+- [FIX] **Initiative tracker rows show a proper placeholder instead of a broken-image
+  icon** (SC-162). A hero or creature with no `image:` set, or one whose image can't
+  actually be loaded, used to leave the browser's own broken-image glyph in the
+  portrait slot. It now shows a themed shield (heroes) or skull (enemies) glyph
+  instead — two different shapes, not two colors, so it reads clearly regardless of
+  color vision.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the
