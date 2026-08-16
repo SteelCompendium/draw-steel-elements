@@ -1300,4 +1300,144 @@ describe('Steel material contract', () => {
 			expect(css).not.toContain('.dse-section__head');
 		});
 	});
+
+	// ================================================================
+	//   SC-152 — the character-sheet panels are members of the plate
+	// ================================================================
+	// Scott, SC-152: "The pre-existing elements that were designed to be included in a
+	// character sheet are lacking the 'high fantasy steel' stylizing. Some seem to be
+	// stylized (ex: ds-counter) while others are not (ex: ds-char). At the very least
+	// they should get the stylized card container."
+	//
+	// These panels are plugin-only surfaces with no site counterpart, so the parity gate
+	// structurally cannot see them and the freeze gate only watches print — which is
+	// exactly how they stayed flat while the tracker family got the material. This block
+	// is the mechanism that notices if they fall back out.
+	describe('character-sheet panels (SC-152)', () => {
+		/** The ONE shared card-ground rule — identified by what it paints, not by its
+		 *  selector text, so reformatting the selector list cannot make this vacuous. */
+		const plateDark = (): Rule => {
+			const r = rules.find((x) => /background:\s*var\(--dse-card-bg\)/.test(x.body));
+			expect(r).toBeDefined();
+			return r as Rule;
+		};
+		const plateLight = (): Rule => {
+			const r = rules.find(
+				(x) =>
+					x.selector.includes('body.theme-light') &&
+					/box-shadow:\s*var\(--dse-bevel\),\s*0 4px 12px/.test(x.body),
+			);
+			expect(r).toBeDefined();
+			return r as Rule;
+		};
+		/** The tracker/sheet root-padding rule (rule 1 of the plugin-only surfaces block). */
+		const rootPadding = (): Rule => {
+			const r = rules.find(
+				(x) =>
+					x.selector.includes("[data-dse-element='counter']") &&
+					/^\s*padding:\s*var\(--dse-pad\);\s*$/.test(x.body),
+			);
+			expect(r).toBeDefined();
+			return r as Rule;
+		};
+
+		/** The eight panels SC-152 brought into the family. */
+		const SHEET_PANELS = [
+			'characteristics',
+			'values-row',
+			'skills',
+			'heroic-resource',
+			'surges',
+			'hero-tokens',
+			'conditions',
+			'hero',
+		];
+
+		it.each(SHEET_PANELS)(
+			'ds-%s is a member of the shared card-ground plate, in BOTH schemes',
+			(id) => {
+				expect(plateDark().selector).toContain(`[data-dse-element='${id}']`);
+				expect(plateLight().selector).toContain(`[data-dse-element='${id}']`);
+			},
+		);
+
+		/** Split a selector list on TOP-LEVEL commas only. A naive `.split(',')` shreds the
+		 *  `:is(a, b, c)` group these rules are built from, leaving fragments like
+		 *  `[data-dse-element='skills']` that carry none of their own compound's prefix —
+		 *  which would make the print-exclusion check below assert against nothing real. */
+		const topLevelArms = (selector: string): string[] => {
+			const out: string[] = [];
+			let depth = 0;
+			let cur = '';
+			for (const ch of selector) {
+				if (ch === '(') depth++;
+				else if (ch === ')') depth--;
+				if (ch === ',' && depth === 0) {
+					out.push(cur);
+					cur = '';
+				} else cur += ch;
+			}
+			if (cur.trim()) out.push(cur);
+			return out;
+		};
+
+		it('the arm carrying them is print-excluded — paper keeps the plain rendering', () => {
+			// The whole freeze story of this ticket: every SC-152 selector sits behind
+			// :not([data-dse-print="on"]), so not one *--steel-print.png moves. If someone
+			// drops the exclusion, 10+ frozen shots start failing and this fails first,
+			// with a reason attached.
+			let checked = 0;
+			for (const rule of [plateDark(), plateLight(), rootPadding()]) {
+				for (const arm of topLevelArms(rule.selector)) {
+					if (!SHEET_PANELS.some((id) => arm.includes(`[data-dse-element='${id}']`))) continue;
+					expect(arm).toContain(':not([data-dse-print="on"])');
+					checked++;
+				}
+			}
+			// Guard the guard: if the splitter or the rule finders ever stop producing an
+			// arm that mentions a sheet panel, the loop above passes by doing nothing.
+			expect(checked).toBe(3);
+		});
+
+		it('stamina-bar and roll are deliberately NOT plated', () => {
+			// stamina-bar renders its SC-132 interior inside its own collapsible region
+			// frame — a root plate would DOUBLE-frame it. roll is already plated: it
+			// renders an inner `.dse-card`, which the plate rule already matches. Both
+			// exclusions are judgement calls, so they get a test rather than a comment
+			// alone: re-adding either should be a decision, not a drive-by.
+			for (const id of ['stamina-bar', 'roll']) {
+				expect(plateDark().selector).not.toContain(`[data-dse-element='${id}']`);
+				expect(plateLight().selector).not.toContain(`[data-dse-element='${id}']`);
+			}
+		});
+
+		it('only the panels whose inner wrapper does NOT already pad get root padding', () => {
+			// The double-padding trap: .dse-res / .dse-surge / .dse-tokens carry
+			// `padding: var(--dse-pad)` themselves, so adding it to their roots too would
+			// double the inset on exactly those three and nothing else would look wrong.
+			for (const id of ['characteristics', 'values-row', 'skills', 'conditions', 'hero']) {
+				expect(rootPadding().selector).toContain(`[data-dse-element='${id}']`);
+			}
+			for (const id of ['heroic-resource', 'surges', 'hero-tokens']) {
+				expect(rootPadding().selector).not.toContain(`[data-dse-element='${id}']`);
+			}
+		});
+
+		it('the stat row reuses the shipped boxed-cell grammar, not a bespoke one', () => {
+			// ds-characteristics / ds-values-row / the hero sheet's Characteristics region
+			// all render the same `.dse-statgrid`, which is the statblock primary row's
+			// value-over-label shape — so the cell joins the existing sunken-cell list and
+			// the label takes `.dse-sb__item-l`'s small-caps + tracking.
+			const sunken = rules.find((r) =>
+				/background:\s*var\(--dse-surface-sunken\)/.test(r.body) &&
+				r.selector.includes('.dse-init__cell'),
+			);
+			expect(sunken).toBeDefined();
+			expect(sunken!.selector).toContain('.dse-statgrid__cell');
+
+			const label = steelBlocksFor('.dse-statgrid__label').join('\n');
+			expect(label).toMatch(/font-variant:\s*small-caps/);
+			expect(label).toMatch(/letter-spacing:\s*0\.04em/);
+		});
+	});
 });

@@ -141,6 +141,20 @@ for what needs action.
   portrait slot. It now shows a themed shield (heroes) or skull (enemies) glyph
   instead — two different shapes, not two colors, so it reads clearly regardless of
   color vision.
+- **The character-sheet elements are forged cards now, like everything else**
+  (SC-152). The trackers and the reference cards have had the Steel plate — the
+  forged gradient ground, hairline edge, rounded corner and soft bevel — since the
+  look shipped, but the pieces you actually build a character sheet from did not:
+  Characteristics, Values row, Skills, Heroic resource, Surges, Hero tokens,
+  Conditions and the Hero sheet itself all rendered as bare text on the page, so a
+  sheet made of them read as an undifferentiated run of lines with the odd styled
+  block (a Counter) floating in it. All eight now carry the same plate, so a sheet
+  reads as a set of matching panels. The characteristics row gets one step more,
+  because its shape already existed elsewhere: its cells become the same boxed,
+  small-caps-labelled stat plates the statblock's Size / Speed / Stamina row draws.
+  Nothing moves in print or PDF export — the plate is a screen treatment, and paper
+  keeps the plain, ink-cheap rendering it already had. The Stamina bar and the roll
+  card were already styled and are untouched.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the

@@ -4712,7 +4712,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    and the reference-card family did, and were folded in — review fix). Note the
    per-selector qualifiers: the monitored element panels apply in print too (their
    *--steel-print.png shots predate this rule), while the surfaces added later
-   carry :not([data-dse-print="on"]) so LEGACY-FREEZE stays byte-identical. */
+   carry :not([data-dse-print="on"]) so LEGACY-FREEZE stays byte-identical.
+
+   SC-152 — the CHARACTER-SHEET panels join here too (Scott: "the pre-existing
+   elements that were designed to be included in a character sheet are lacking the
+   'high fantasy steel' stylizing … at the very least they should get the stylized
+   card container"). They are the second half of the plugin-only surface family the
+   trackers already belong to: same "in-note panel with no site counterpart" shape,
+   same reason the parity harness cannot see them, so they were the surfaces most
+   able to stay flat unnoticed. Joining the list rather than restating the recipe is
+   the rule this block exists to enforce.
+   Deliberately NOT in this list:
+     - `stamina-bar` — its SC-132 interior is already fully Steel AND it renders
+       inside its own collapsible region frame; a root plate would DOUBLE-frame it.
+     - `roll` — already plated: it renders an inner `.dse-card`, which the last
+       selector below already matches.
+     - `hero`'s embedded regions — structurally unreachable from here, and that is
+       the point: the sheet stamps [data-dse-element="hero"] on its ROOT only and
+       its regions carry no element attr of their own (they take
+       `.dse-hero__region`'s frame instead), so every id below can only ever match a
+       STANDALONE block. Same protection `counter` has always relied on. */
 [data-dse-theme='steel'][data-dse-element='feature']:not([data-dse-error-stage]),
 [data-dse-theme='steel'][data-dse-element='featureblock']:not([data-dse-error-stage]),
 [data-dse-theme='steel'] .dse-sb,
@@ -4723,7 +4742,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 		[data-dse-element='montage'],
 		[data-dse-element='project'],
 		[data-dse-element='party'],
-		[data-dse-element='counter']
+		[data-dse-element='counter'],
+		[data-dse-element='characteristics'],
+		[data-dse-element='values-row'],
+		[data-dse-element='skills'],
+		[data-dse-element='heroic-resource'],
+		[data-dse-element='surges'],
+		[data-dse-element='hero-tokens'],
+		[data-dse-element='conditions'],
+		[data-dse-element='hero']
 	):not([data-dse-error-stage]),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	background: var(--dse-card-bg);
@@ -4741,7 +4768,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):is(
 		[data-dse-element='montage'],
 		[data-dse-element='project'],
 		[data-dse-element='party'],
-		[data-dse-element='counter']
+		[data-dse-element='counter'],
+		[data-dse-element='characteristics'],
+		[data-dse-element='values-row'],
+		[data-dse-element='skills'],
+		[data-dse-element='heroic-resource'],
+		[data-dse-element='surges'],
+		[data-dse-element='hero-tokens'],
+		[data-dse-element='conditions'],
+		[data-dse-element='hero']
 	):not([data-dse-error-stage]),
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -7866,7 +7901,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
       copies restated background/border/radius/box-shadow and the
       rgba(0,0,0,.34)/.08 literals verbatim, and could drift). All that lives here
       is what genuinely differs: these roots carry no padding of their own (their
-      inner regions do), so the frame gets its own like .dse-hero's. */
+      inner regions do), so the frame gets its own like .dse-hero's.
+
+      SC-152 adds the character-sheet panels that are in the SAME position — root
+      unpadded, so the new plate would otherwise crop its own content. It is a
+      per-element fact, not a family one, so only the five that need it are listed:
+      `heroic-resource`, `surges` and `hero-tokens` deliberately stay OUT because
+      their inner wrappers (.dse-res / .dse-surge / .dse-tokens) already carry
+      `padding: var(--dse-pad)` themselves — adding it here too would double the
+      inset on exactly those three. Measured, not assumed (see the SC-152 report's
+      inventory table). */
 [data-dse-theme='steel']:not([data-dse-print="on"]):is(
 		[data-dse-element='initiative'],
 		[data-dse-element='encounter'],
@@ -7874,7 +7918,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='montage'],
 		[data-dse-element='project'],
 		[data-dse-element='party'],
-		[data-dse-element='counter']
+		[data-dse-element='counter'],
+		[data-dse-element='characteristics'],
+		[data-dse-element='values-row'],
+		[data-dse-element='skills'],
+		[data-dse-element='conditions'],
+		[data-dse-element='hero']
 	):not([data-dse-error-stage]) {
 	padding: var(--dse-pad);
 }
@@ -7915,11 +7964,32 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
       stamps it (managedModal.ts) AND the Steel token gates reach .dse-modal
       (styles-source.css ~3123/~4508/~5287/~5296), the selector is live again. */
 [data-dse-theme='steel']:not([data-dse-print="on"])
-	:is(.dse-init__cell, .dse-init__groupbody, .dse-enc__summary, .dse-modal__section) {
+	:is(.dse-init__cell, .dse-init__groupbody, .dse-enc__summary, .dse-modal__section, .dse-statgrid__cell) {
 	background: var(--dse-surface-sunken);
 	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
 	box-shadow: var(--dse-bevel);
+}
+
+/* -- 3b. SC-152: the stat ROW (ds-characteristics / ds-values-row, and the hero
+      sheet's own Characteristics region — all three render the same
+      `.dse-statgrid` from framework/kit/CharacteristicsGrid.ts) is the same
+      value-over-label grammar the statblock's primary row already draws as boxed
+      cells (`.dse-sb__item`, ~6717 + its small-caps `-l` twin). It was the one
+      character-sheet panel whose structure already MATCHED a shipped Steel
+      composition, so it joins the sunken-cell list above rather than getting a
+      plate-and-nothing-else. Only the two things that list can't carry live here:
+      the cell needs interior padding (it had none — it was bare centred text with
+      a 5px margin), and the label takes the same small-caps + tracking as
+      `.dse-sb__item-l` so the row reads as a rank of engraved plates.
+      The `margin: 0 5px` from the base rule becomes the gutter between boxes.
+      No DOM change: this is the existing markup, re-skinned. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-statgrid__cell {
+	padding: 0.45rem 0.3rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-statgrid__label {
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
 }
 
 /* -- 4. Tracker headings: the plugin-only families' section headings are
