@@ -1,0 +1,1472 @@
+<!--
+  SC-164: Material for MkDocs' own "outdated version" banner mechanism (versioning.md),
+  not a custom widget — Material ships `main.html`'s `outdated` block empty by default;
+  overriding it here just supplies the text. The bundled `versions.js` (loaded whenever
+  `extra.version.provider: mike` is set, see mkdocs.yml) reads gh-pages' mike-managed
+  `versions.json`, compares the CURRENT deployed version against the `latest` alias, and
+  toggles this block's visibility itself — nothing here decides "is this dev" by hand.
+  With exactly two versions (`latest`/released, `dev`/development), "not latest" and "is
+  dev" are the same condition in practice.
+
+  `'../' ~ base_url` is Material's own documented idiom (from its versioning.md example
+  verbatim, only the copy changed): `base_url` is mkdocs' normal relative-to-site-root
+  path from the CURRENT page; prefixing `../` walks back out of the version subdirectory
+  (e.g. `/dev/some/page/`) mike serves every version under, landing on the site root,
+  where mike's redirect index.html then forwards to the `latest` alias.
+-->
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://steelCompendium.io/dev/writing-blocks/">
+      
+      
+        <link rel="prev" href="../values-row-element/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../Media/favicon.ico">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Writing and Editing Blocks - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Serif+4:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Serif 4";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#writing-and-editing-blocks" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  You're viewing the <strong>development version</strong> of these docs — it documents
+  unreleased features that may still change. For the current release, see
+  <a href="../.."><strong>the latest docs</strong></a>.
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-header__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Steel Compendium: Draw Steel Elements Obsidian Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Writing and Editing Blocks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-nav__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    Steel Compendium: Draw Steel Elements Obsidian Plugin
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Draw Steel Elements Plugin for Obsidian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Roll/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roll Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced-usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../canvas-character-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build a Character Sheet in Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../characteristics-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Characteristics Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-element-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Element Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-migration-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-7.0.0 compendium path map — review report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compendium Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../counter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Counter Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../customizing-a-monster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Customize a Monster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../featureblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Featureblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gm-trackers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Director's Trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hero-suite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hero Sheets and Trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../horizontal-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Horizontal Rule Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../initiative-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initiative Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrating-to-7/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 5.x to 7.0.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../negotiation-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Negotiation Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../running-an-encounter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run an Encounter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skills-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skills Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stamina-bar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stamina Bar Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../statblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../styling-statblocks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style Your Statblocks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracking-your-hero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Track Your Hero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../values-row-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Values Row Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing and Editing Blocks
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing and Editing Blocks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#insert-a-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert a block
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Insert a block">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-ds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type /ds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#or-use-the-command-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Or use the command palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#autocomplete-inside-a-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autocomplete inside a block
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edit-a-rendered-block-with-a-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit a rendered block with a form
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#insert-content-from-the-compendium" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert content from the compendium
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Insert content from the compendium">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#insert-draw-steel-compendium-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert Draw Steel: compendium reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#insert-draw-steel-compendium-block-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert Draw Steel: compendium block (snapshot)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pinning-a-block-to-the-sidebar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pinning a block to the sidebar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-block-appearance-overrides-advanced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-block appearance overrides (advanced)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#insert-a-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert a block
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Insert a block">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-ds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type /ds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#or-use-the-command-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Or use the command palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#autocomplete-inside-a-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autocomplete inside a block
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edit-a-rendered-block-with-a-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit a rendered block with a form
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#insert-content-from-the-compendium" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert content from the compendium
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Insert content from the compendium">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#insert-draw-steel-compendium-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert Draw Steel: compendium reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#insert-draw-steel-compendium-block-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert Draw Steel: compendium block (snapshot)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pinning-a-block-to-the-sidebar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pinning a block to the sidebar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-block-appearance-overrides-advanced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-block appearance overrides (advanced)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="writing-and-editing-blocks">Writing and Editing Blocks<a class="headerlink" href="#writing-and-editing-blocks" title="Permanent link">&para;</a></h1>
+<p>Every Draw Steel element is a fenced code block whose language is a <code>ds-</code> name, with YAML
+inside it. You don't have to remember the names or the fields — the plugin can write the
+block for you and complete the fields as you type.</p>
+<p>Never done this before? <a href="../getting-started/">Getting started</a> walks the whole loop with
+screenshots; this page is the reference.</p>
+<h2 id="insert-a-block">Insert a block<a class="headerlink" href="#insert-a-block" title="Permanent link">&para;</a></h2>
+<h3 id="type-ds">Type <code>/ds</code><a class="headerlink" href="#type-ds" title="Permanent link">&para;</a></h3>
+<p>In the editor, type <strong><code>/ds</code></strong> on an empty line. A list of every element appears; keep
+typing to filter it (<code>/dsstat</code>, <code>/dshero</code>, …). Pick one and the trigger is replaced with a
+complete, filled-in example block you can edit.</p>
+<h3 id="or-use-the-command-palette">Or use the command palette<a class="headerlink" href="#or-use-the-command-palette" title="Permanent link">&para;</a></h3>
+<p>Every element also has its own command: open the
+<a href="https://help.obsidian.md/Plugins/Command+palette">command palette</a> and search for
+<strong>Insert Draw Steel:</strong> — for example <em>Insert Draw Steel: Statblock</em>, <em>Insert Draw Steel:
+Initiative tracker</em>, <em>Insert Draw Steel: Hero sheet</em>. The block is inserted at your cursor.</p>
+<p>Both routes insert; neither ever overwrites text you already wrote.</p>
+<h2 id="autocomplete-inside-a-block">Autocomplete inside a block<a class="headerlink" href="#autocomplete-inside-a-block" title="Permanent link">&para;</a></h2>
+<p>With your cursor inside a <code>ds-</code> block, start typing a field name and Obsidian suggests the
+fields that element accepts. After a field that only allows certain values (for example
+<code>mode:</code> in a <a href="../Roll/">roll block</a>), the suggestions become that field's allowed values.</p>
+<p>Field-name suggestions are offered for top-level fields; deeper, indented fields are not
+suggested yet.</p>
+<h2 id="edit-a-rendered-block-with-a-form">Edit a rendered block with a form<a class="headerlink" href="#edit-a-rendered-block-with-a-form" title="Permanent link">&para;</a></h2>
+<p>Turn on <strong>Settings → Draw Steel Elements → Authoring → "Show edit button on rendered
+blocks"</strong> and every rendered block gains a small pencil. Clicking it opens a form with one
+control per field, a live preview of the card as you change it, and a Save button that
+stays disabled while the block is invalid. Saving writes the block back into your note
+through the same path the trackers use, so nothing else in the note is touched.</p>
+<p>The setting is off by default; the insert commands and <code>/ds</code> work either way. The
+<a href="../hero-suite/#hero-sheet-ds-hero">hero sheet</a> has its own <strong>Edit definition</strong> button in
+its header instead, whatever this setting says.</p>
+<h2 id="insert-content-from-the-compendium">Insert content from the compendium<a class="headerlink" href="#insert-content-from-the-compendium" title="Permanent link">&para;</a></h2>
+<p>Once you have <a href="../compendium-sync/">synced the compendium</a> there are two commands, and the
+difference between them matters.</p>
+<h3 id="insert-draw-steel-compendium-reference">Insert Draw Steel: compendium reference<a class="headerlink" href="#insert-draw-steel-compendium-reference" title="Permanent link">&para;</a></h3>
+<p>Searches the compendium and inserts a small block that <em>points at</em> the entry:</p>
+<div class="highlight"><pre><span></span><code><span class="sb">```ds-scc</span>
+<span class="s">mcdm.heroes.v1/kit/panther</span>
+<span class="sb">```</span>
+</code></pre></div>
+<p>Nothing is copied into your note but the code, so the card always shows the currently
+synced version of that entry. This is what you want for official content you just need to
+look at. While the search list is open, hold <strong>Shift</strong> when you pick an entry to insert an
+inline link instead, or <strong>Ctrl/Cmd</strong> to copy just the code.</p>
+<h3 id="insert-draw-steel-compendium-block-snapshot">Insert Draw Steel: compendium block (snapshot)<a class="headerlink" href="#insert-draw-steel-compendium-block-snapshot" title="Permanent link">&para;</a></h3>
+<p>Searches statblocks, features and featureblocks, and pastes the entry's <strong>full YAML</strong> into
+your note as an editable copy.</p>
+<p><strong>Why you'd want that:</strong> it's the starting point for homebrew. Drop in a goblin, change its
+Stamina, give it a new ability, rename it — and it's yours. A snapshot deliberately does
+<em>not</em> keep up with the compendium afterwards; your edits are the whole point, and a sync
+that overwrote them would defeat it. If you want content that keeps updating, use <strong>Insert
+compendium reference</strong> instead.</p>
+<p>Snapshots are offered for statblocks, features and featureblocks only.</p>
+<h2 id="pinning-a-block-to-the-sidebar">Pinning a block to the sidebar<a class="headerlink" href="#pinning-a-block-to-the-sidebar" title="Permanent link">&para;</a></h2>
+<p>Running a session across several notes? Put your cursor inside a block and run <strong>Send block
+to sidebar</strong> — the block moves into a persistent panel in Obsidian's right sidebar, stays
+interactive there, and stays in sync with the note. The initiative tracker has its own
+shortcut for this, <strong>Send initiative tracker to sidebar</strong>, which finds the tracker in the
+current note without needing your cursor inside it.</p>
+<p><img alt="An initiative tracker pinned to the Draw Steel sidebar" src="../Media/sidebar.png" /></p>
+<p>Open the panel any time with the crossed-swords ribbon icon, or the <strong>Open Draw Steel
+sidebar</strong> command.</p>
+<p>Pinning a tracker adds a hidden <code>_dse_anchor:</code> line to it — that's the plugin's bookmark
+for finding the block again after you edit the note around it. Leave it alone. A <code>ds-scc</code>
+block, whose content is exactly one compendium code, is never written to: pinning one
+leaves the note unchanged and the sidebar finds it by its code.</p>
+<h2 id="per-block-appearance-overrides-advanced">Per-block appearance overrides (advanced)<a class="headerlink" href="#per-block-appearance-overrides-advanced" title="Permanent link">&para;</a></h2>
+<p>Most appearance settings are global (see <a href="../settings/">Settings</a>), but a single block can
+pin its own look with a reserved <code>prefs:</code> key:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">prefs</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">sbDensity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compact</span>
+<span class="w">  </span><span class="nt">sbFeatureStyle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flat</span>
+</code></pre></div>
+<p>The key is stripped before the block is parsed, so it never collides with the element's own
+fields, and it survives interaction with a tracker. Settings that change a card's structure
+rather than its styling — Characteristics, Boxed first letter, Villain actions — and the
+typography settings are global only: naming one here logs a warning to Obsidian's developer
+console and the block renders normally.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The Draw Steel Compendium is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../javascripts/tablesort.js"></script>
+      
+    
+  </body>
+</html>

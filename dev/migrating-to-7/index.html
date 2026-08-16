@@ -1,0 +1,1544 @@
+<!--
+  SC-164: Material for MkDocs' own "outdated version" banner mechanism (versioning.md),
+  not a custom widget — Material ships `main.html`'s `outdated` block empty by default;
+  overriding it here just supplies the text. The bundled `versions.js` (loaded whenever
+  `extra.version.provider: mike` is set, see mkdocs.yml) reads gh-pages' mike-managed
+  `versions.json`, compares the CURRENT deployed version against the `latest` alias, and
+  toggles this block's visibility itself — nothing here decides "is this dev" by hand.
+  With exactly two versions (`latest`/released, `dev`/development), "not latest" and "is
+  dev" are the same condition in practice.
+
+  `'../' ~ base_url` is Material's own documented idiom (from its versioning.md example
+  verbatim, only the copy changed): `base_url` is mkdocs' normal relative-to-site-root
+  path from the CURRENT page; prefixing `../` walks back out of the version subdirectory
+  (e.g. `/dev/some/page/`) mike serves every version under, landing on the site root,
+  where mike's redirect index.html then forwards to the `latest` alias.
+-->
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://steelCompendium.io/dev/migrating-to-7/">
+      
+      
+        <link rel="prev" href="../initiative-tracker/">
+      
+      
+        <link rel="next" href="../negotiation-tracker/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../Media/favicon.ico">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Migrating from 5.x to 7.0.0 - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Serif+4:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Serif 4";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#migrating-from-5x-to-700" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  You're viewing the <strong>development version</strong> of these docs — it documents
+  unreleased features that may still change. For the current release, see
+  <a href="../.."><strong>the latest docs</strong></a>.
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-header__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Steel Compendium: Draw Steel Elements Obsidian Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Migrating from 5.x to 7.0.0
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-nav__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    Steel Compendium: Draw Steel Elements Obsidian Plugin
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Draw Steel Elements Plugin for Obsidian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Roll/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roll Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced-usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../canvas-character-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build a Character Sheet in Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../characteristics-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Characteristics Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-element-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Element Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-migration-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-7.0.0 compendium path map — review report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compendium Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../counter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Counter Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../customizing-a-monster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Customize a Monster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../featureblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Featureblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gm-trackers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Director's Trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hero-suite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hero Sheets and Trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../horizontal-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Horizontal Rule Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../initiative-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initiative Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 5.x to 7.0.0
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 5.x to 7.0.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0-obsidian-1130-or-newer-is-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0. Obsidian 1.13.0 or newer is required
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-re-sync-your-compendium" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Re-sync your compendium
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Re-sync your compendium">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#your-links-to-compendium-notes-keep-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your links to compendium notes keep working
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#your-edited-files-are-backed-up-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your edited files are backed up first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-you-keep-an-old-compendium-folder-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If you keep an old compendium folder instead
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-update-your-own-statblock-yaml-only-if-you-hand-write-ds-sb-ds-statblock-blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Update your own statblock YAML (only if you hand-write ds-sb / ds-statblock blocks)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-700-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in 7.0.0, at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../negotiation-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Negotiation Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../running-an-encounter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run an Encounter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skills-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skills Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stamina-bar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stamina Bar Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../statblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../styling-statblocks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style Your Statblocks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracking-your-hero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Track Your Hero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../values-row-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Values Row Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../writing-blocks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing and Editing Blocks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0-obsidian-1130-or-newer-is-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0. Obsidian 1.13.0 or newer is required
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-re-sync-your-compendium" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Re-sync your compendium
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Re-sync your compendium">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#your-links-to-compendium-notes-keep-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your links to compendium notes keep working
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#your-edited-files-are-backed-up-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your edited files are backed up first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-you-keep-an-old-compendium-folder-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If you keep an old compendium folder instead
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-update-your-own-statblock-yaml-only-if-you-hand-write-ds-sb-ds-statblock-blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Update your own statblock YAML (only if you hand-write ds-sb / ds-statblock blocks)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-new-in-700-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's new in 7.0.0, at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="migrating-from-5x-to-700">Migrating from 5.x to 7.0.0<a class="headerlink" href="#migrating-from-5x-to-700" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>This guide was written for the release originally numbered <strong>6.0.0</strong>; that
+number was retired after a release-candidate mishap (see the changelog's 6.0.1
+entry) and the release ships as <strong>7.0.0</strong>. 6.0.1 is identical to 5.1.1, so
+everything here applies to 6.0.1 installs too.</p>
+</blockquote>
+<p>7.0.0 changes two things that need action, plus adds a large set of new
+features. <strong>Everyone</strong> should re-sync their compendium. Only people who
+hand-write their own statblocks need to touch any YAML.</p>
+<h2 id="0-obsidian-1130-or-newer-is-required">0. Obsidian 1.13.0 or newer is required<a class="headerlink" href="#0-obsidian-1130-or-newer-is-required" title="Permanent link">&para;</a></h2>
+<p>This is the release's only hard prerequisite. 7.0.0's settings tab is built on
+the declarative settings API Obsidian introduced in <strong>1.13.0</strong>, so the plugin no
+longer runs on older apps — <code>manifest.json</code>'s <code>minAppVersion</code> moves from 0.15.0
+to 1.13.0.</p>
+<p><strong>What to do:</strong> nothing, in almost every case. Obsidian updates itself by
+default, so most installs already qualify — check <strong>Settings → General → Current
+version</strong> if you want to be sure. If you are on an older Obsidian, your existing
+Draw Steel Elements install keeps working exactly as it is: <code>versions.json</code> pins
+pre-1.13 clients to <strong>6.0.1</strong>, the last build that runs there, so Obsidian will
+not offer you 7.0.0 until you update the app. Nothing breaks; you simply stop
+receiving new plugin releases until then.</p>
+<p>Note this is a separate matter from the <em>installer</em> version. Obsidian's app
+package self-updates independently of the installer you originally downloaded,
+so an old installer does not by itself mean an old app.</p>
+<h2 id="1-re-sync-your-compendium">1. Re-sync your compendium<a class="headerlink" href="#1-re-sync-your-compendium" title="Permanent link">&para;</a></h2>
+<p>The compendium now downloads from a different, newer source. When you
+update the plugin, your old "release tag" setting is automatically cleared,
+since it pointed at a release from the old source and wouldn't resolve
+against the new one.</p>
+<p><strong>What to do:</strong> open <strong>Settings → Draw Steel Elements → Compendium</strong>, then click
+<strong>Sync</strong> (the command palette's <strong>Sync compendium</strong> does the same thing).</p>
+<h3 id="your-links-to-compendium-notes-keep-working">Your links to compendium notes keep working<a class="headerlink" href="#your-links-to-compendium-notes-keep-working" title="Permanent link">&para;</a></h3>
+<p>The new source also reorganises the whole tree. <code>Rules/Careers/Disciple.md</code>
+is now <code>career/disciple.md</code>; <code>Bestiary/Monsters/Bredbeddle/Statblocks/Bredbeddle.md</code>
+is now <code>monster/bredbeddle/statblock/bredbeddle.md</code>; and so on for roughly
+two thousand files. If the plugin simply downloaded the new tree next to the
+old one, every <code>[[wikilink]]</code> you ever wrote into the compendium would point
+at a file that no longer exists.</p>
+<p>So it doesn't do that. <strong>The first sync after you update offers to move your
+existing compendium files to their new paths</strong> — and because it moves them
+with Obsidian's own move operation, <em>Obsidian</em> updates the links in your
+notes, the same way it does when you drag a note into a different folder.
+The plugin never opens, parses, or edits a note you wrote.</p>
+<p><strong>What the prompt looks like.</strong> If you have a pre-7.0.0 compendium, the first
+<strong>Sync compendium</strong> shows a dialog titled <em>"Move your compendium to the 7.0.0
+layout"</em>. Before anything happens it tells you:</p>
+<ul>
+<li>how many files will be moved, and into which folder;</li>
+<li>how many of them differ from the last pre-7.0.0 release (you edited them, or
+  you were on an older compendium release) — those are moved too, and listed
+  afterwards so you can check them;</li>
+<li>how many will be copied into the backup folder first, and what that folder is
+  called;</li>
+<li>how many can't be moved because something already sits at the new path;</li>
+<li>how many have no 7.0.0 counterpart at all;</li>
+<li>a handful of real <code>old path → new path</code> examples;</li>
+</ul>
+<p>…and then three buttons:</p>
+<ul>
+<li><strong>Not now</strong> (the default) — nothing happens at all. <strong>The compendium is not
+  synced either</strong>, and that is deliberate: see the warning below. You will be
+  asked again the next time you sync.</li>
+<li><strong>Sync without moving</strong> — downloads the new compendium and leaves your old
+  files where they are. Your links to compendium notes stop working, and the
+  move can no longer be done. Only pick this if you don't link to the
+  compendium.</li>
+<li><strong>Move N file(s)</strong> — does the move.</li>
+</ul>
+<blockquote>
+<p><strong>Sync first and you can't move afterwards.</strong> Not because the old files
+disappear — they don't — but because the sync <em>creates</em> all the new files, so
+every move then finds something already sitting at its destination and is
+refused. That's why declining the offer doesn't quietly continue into a sync,
+and why a half-finished move asks you to finish rather than offering to sync.</p>
+</blockquote>
+<p>While it runs you get a progress line and a <strong>Stop</strong> button. Stopping is safe
+at any point: each file's move is complete on its own, so the ones already moved
+stay moved. Finish the rest with the command below <strong>before</strong> you sync.</p>
+<p><strong>Running it yourself.</strong> The command <strong>Migrate compendium from the pre-7.0.0
+layout</strong> does exactly the same thing, any time. Use it if you chose <em>Not now</em>,
+if you stopped a run part-way, or if you restored an old compendium folder from
+a backup. Running it when there is nothing to do just says so.</p>
+<p><strong>Afterwards you get a report note.</strong> The migration writes a note into your
+vault — <em>Draw Steel Elements migration report &lt;date&gt;</em> — listing, by path,
+every file it moved but flagged, every file it couldn't move, and every file it
+left alone. Counts are in the dialog; the actual filenames are in that note, and
+it stays there until you delete it.</p>
+<p><strong>What it will never do:</strong></p>
+<ul>
+<li>delete anything — not the old files, not the old folders, not files it
+  doesn't recognise. The only change it makes is moving files;</li>
+<li>overwrite anything — if something already occupies a new path, that one move
+  is skipped and reported;</li>
+<li>touch a file it has no mapping for — index pages, book-level pages, and
+  anything of your own stay exactly where they are;</li>
+<li>edit a note you wrote. Link rewriting is Obsidian's job, not the plugin's.</li>
+</ul>
+<p><strong>The leftovers.</strong> After a migration the old folders (<code>Rules/</code>, <code>Bestiary/</code>,
+…) are still there, empty apart from anything that wasn't moved. Deleting
+folders isn't something this does, on purpose — delete them yourself whenever
+you're satisfied.</p>
+<p>Around 17% of the old files have no 7.0.0 counterpart, and links to <em>those</em>
+will break. They are overwhelmingly pages the new layout doesn't have rather
+than content that vanished: per-folder index pages, whole-book pages, and
+roll-up pages whose contents the new tree files individually. Every single one
+is enumerated, with its reason, in
+<a href="../compendium-migration-map/">the migration map's review report</a>.</p>
+<h3 id="your-edited-files-are-backed-up-first">Your edited files are backed up first<a class="headerlink" href="#your-edited-files-are-backed-up-first" title="Permanent link">&para;</a></h3>
+<p>Before the migration moves a single file, it <strong>copies every compendium file whose
+contents don't match the release they came from</strong> into a new folder beside your
+compendium — <code>DS Compendium backup (pre-7.0.0)</code>, or whatever your compendium folder
+is called plus that suffix. The copies keep their original folder structure, so
+<code>Rules/Careers/Disciple.md</code> lands at
+<code>DS Compendium backup (pre-7.0.0)/Rules/Careers/Disciple.md</code>.</p>
+<ul>
+<li><strong>What gets copied:</strong> anything the plugin cannot prove is untouched — files you
+  edited in place, and files from a compendium release too old for the shipped
+  checksums to speak for. Files that are byte-identical to the release they came from
+  are <em>not</em> copied: there is nothing of yours inside them, so a copy would add bulk
+  without adding protection.</li>
+<li><strong>Where it goes:</strong> a sibling of your compendium folder, never inside it — anything
+  inside would be walked by the sync and reported as stray content.</li>
+<li><strong>Nothing ever touches it again.</strong> The plugin does not read it, write to it a second
+  time, or delete it, and it will not overwrite an existing backup (a second migration
+  makes <code>… (2)</code>). <strong>Delete it yourself when you're satisfied.</strong></li>
+<li>If nothing needed copying, no folder is made, and the dialog says so.</li>
+<li>If a copy fails, that file is <strong>not moved</strong> — it stays exactly where it is and is
+  listed as failed. Backing it up is the only reason it would be safe to move.</li>
+</ul>
+<p>This is the recovery path for the warning below.</p>
+<p><strong>One thing the move changes about your edits.</strong> If you edited a compendium file
+in place — added a note to a statblock, say — moving it hands it to the sync as a
+file the plugin manages, and <strong>the next sync replaces its contents with the
+current official text</strong>. Before 7.0.0 that file would have been left alone as
+unrecognised content. This is the same rule that has always applied to
+plugin-installed compendium files, now applied to yours because the migration
+adopts them; without that, the moved files could never receive updates at all.
+The migration flags every file whose content doesn't match the last pre-7.0.0
+release, in the dialog and in the report note — and, as of the section above,
+<strong>keeps a copy of every one of them</strong>, so if a sync does replace something you wrote,
+the version you wrote is still sitting in the backup folder. <strong>Homebrew you wrote yourself, and anything outside the
+compendium folder, is never affected</strong> — only files that came from the
+compendium in the first place.</p>
+<p><strong>A more durable way to link.</strong> <code>scc.v1:</code> links are addressed by classification
+code, not by path, so they survive reorganisations like this one entirely.
+If you are writing new notes that reference the compendium, prefer them.</p>
+<h3 id="if-you-keep-an-old-compendium-folder-instead">If you keep an old compendium folder instead<a class="headerlink" href="#if-you-keep-an-old-compendium-folder-instead" title="Permanent link">&para;</a></h3>
+<p>If your compendium folder holds files but isn't a recognisable pre-7.0.0
+compendium, the first sync falls back to the older prompt: move that folder to
+the trash, or keep it in place. Either choice is safe. Files you keep are never
+overwritten or deleted, and anything moved to the trash is recoverable through
+Obsidian like any other deleted file.</p>
+<h2 id="2-update-your-own-statblock-yaml-only-if-you-hand-write-ds-sb-ds-statblock-blocks">2. Update your own statblock YAML (only if you hand-write <code>ds-sb</code> / <code>ds-statblock</code> blocks)<a class="headerlink" href="#2-update-your-own-statblock-yaml-only-if-you-hand-write-ds-sb-ds-statblock-blocks" title="Permanent link">&para;</a></h2>
+<p>If you write your own creatures in <code>ds-sb</code> or <code>ds-statblock</code> code blocks,
+two keys were renamed:</p>
+<table>
+<thead>
+<tr>
+<th>Old key</th>
+<th>New key(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>roles:</code></td>
+<td><code>role:</code> + <code>organization:</code></td>
+</tr>
+<tr>
+<td><code>ancestry:</code></td>
+<td><code>keywords:</code></td>
+</tr>
+</tbody>
+</table>
+<p>Old blocks keep working through the whole 7.x series — the plugin still
+reads <code>roles:</code>/<code>ancestry:</code> and sorts them into <code>organization:</code>/<code>role:</code> /
+<code>keywords:</code> for you, with a warning logged to Obsidian's developer console —
+but support is removed in 8.0.0, so it's worth updating them now. If a block
+has both an old and a new key for the same value, the new key always wins.</p>
+<p>Before:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">roles</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Horde</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Controller</span>
+<span class="nt">ancestry</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Goblin</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Humanoid</span>
+</code></pre></div>
+<p>After:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">organization</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Horde</span>
+<span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Controller</span>
+<span class="nt">keywords</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Goblin</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Humanoid</span>
+</code></pre></div>
+<h2 id="whats-new-in-700-at-a-glance">What's new in 7.0.0, at a glance<a class="headerlink" href="#whats-new-in-700-at-a-glance" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Hero suite</strong> — a full <a href="../hero-suite/">hero sheet</a> (<code>ds-hero</code>) in one block:
+  stamina with recoveries, heroic resource, surges, conditions, and clickable
+  abilities with dice rolling. Also available as standalone trackers for heroic
+  resource, surges, conditions, and a shared party-wide hero token pool.</li>
+<li><strong>One block renders any compendium entry</strong> — sync the compendium and a
+  <a href="../compendium-sync/#referencing-a-compendium-entry-in-your-notes"><code>ds-scc</code> block</a>
+  whose body is an entry's code renders that entry, whatever it is: a kit, a
+  condition, a rule, a statblock. A search-and-insert command finds any entry
+  and writes the block for you without leaving the editor.</li>
+<li><strong><a href="../gm-trackers/">Director's trackers</a></strong> — an Encounter Builder that computes
+  live EV/budget from your synced compendium, plus trackers for montages,
+  downtime projects, and party-level victories/renown/wealth.</li>
+<li><strong>Malice panel and per-turn action checklist</strong> in the initiative tracker —
+  see <a href="../initiative-tracker/">Initiative Tracker</a>.</li>
+<li><strong>Draw Steel sidebar</strong> — pin any tracker to a persistent panel in
+  Obsidian's right sidebar so it survives navigating between notes; see
+  <a href="../initiative-tracker/#pinning-to-the-sidebar">Pinning to the Sidebar</a> for
+  the "send to sidebar" commands.</li>
+<li><strong><code>scc.v1:</code> links now resolve everywhere</strong> — in compendium notes, inside
+  element text, and as references — checking your local compendium first,
+  with an optional fallback to steelcompendium.io.</li>
+<li><strong>A redesigned Stamina cluster</strong> — a forged gauge that shows the negative
+  range honestly, temporary Stamina as a real segment, clickable Recovery
+  markers, Catch Breath, and the Winded/Dying states said more than one way.
+  See <a href="../stamina-bar/">Stamina Bar</a>.</li>
+<li><strong>Rebuilt settings</strong> — <a href="../settings/">ten pages</a> instead of one long scroll,
+  searchable from Obsidian's own settings search, with a live preview of the
+  card you're changing and seven more of the website's statblock layout
+  options.</li>
+</ul>
+<p>See the <a href="../CHANGELOG.md">changelog</a> for the full list of 7.0.0 changes.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The Draw Steel Compendium is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../javascripts/tablesort.js"></script>
+      
+    
+  </body>
+</html>

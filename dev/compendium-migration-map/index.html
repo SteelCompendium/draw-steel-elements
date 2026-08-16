@@ -1,0 +1,3103 @@
+<!--
+  SC-164: Material for MkDocs' own "outdated version" banner mechanism (versioning.md),
+  not a custom widget — Material ships `main.html`'s `outdated` block empty by default;
+  overriding it here just supplies the text. The bundled `versions.js` (loaded whenever
+  `extra.version.provider: mike` is set, see mkdocs.yml) reads gh-pages' mike-managed
+  `versions.json`, compares the CURRENT deployed version against the `latest` alias, and
+  toggles this block's visibility itself — nothing here decides "is this dev" by hand.
+  With exactly two versions (`latest`/released, `dev`/development), "not latest" and "is
+  dev" are the same condition in practice.
+
+  `'../' ~ base_url` is Material's own documented idiom (from its versioning.md example
+  verbatim, only the copy changed): `base_url` is mkdocs' normal relative-to-site-root
+  path from the CURRENT page; prefixing `../` walks back out of the version subdirectory
+  (e.g. `/dev/some/page/`) mike serves every version under, landing on the site root,
+  where mike's redirect index.html then forwards to the `latest` alias.
+-->
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://steelCompendium.io/dev/compendium-migration-map/">
+      
+      
+        <link rel="prev" href="../common-element-fields/">
+      
+      
+        <link rel="next" href="../compendium-sync/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../Media/favicon.ico">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Pre-7.0.0 compendium path map — review report - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Serif+4:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Serif 4";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pre-700-compendium-path-map-review-report" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  You're viewing the <strong>development version</strong> of these docs — it documents
+  unreleased features that may still change. For the current release, see
+  <a href="../.."><strong>the latest docs</strong></a>.
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-header__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Steel Compendium: Draw Steel Elements Obsidian Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Pre-7.0.0 compendium path map — review report
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://steelcompendium.io" title="Steel Compendium: Draw Steel Elements Obsidian Plugin" class="md-nav__button md-logo" aria-label="Steel Compendium: Draw Steel Elements Obsidian Plugin" data-md-component="logo">
+      
+  <img src="../Media/favicon.ico" alt="logo">
+
+    </a>
+    Steel Compendium: Draw Steel Elements Obsidian Plugin
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Draw Steel Elements Plugin for Obsidian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Roll/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roll Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced-usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../canvas-character-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build a Character Sheet in Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../characteristics-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Characteristics Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-element-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Element Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-7.0.0 compendium path map — review report
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-7.0.0 compendium path map — review report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-map-lives-and-how-to-rebuild-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the map lives, and how to rebuild it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-an-entity-is-matched" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How an entity is matched
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tie-breakers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tie-breakers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mapped-by-old-type-family-new-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapped, by old type family → new type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ambiguous-3-left-unmapped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ambiguous — 3 (left unmapped)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unmatched-724-left-unmapped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unmatched — 724 (left unmapped)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Unmatched — 724 (left unmapped)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#index-page-the-unified-layout-has-no-folder-index-files-247-117-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        index page — the unified layout has no folder index files — 247 (117 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-class-level-roll-up-page-the-unified-layout-files-each-feature-individually-100-100-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        per-class level roll-up page — the unified layout files each feature individually — 100 (100 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retired-layout-only-this-path-existed-in-an-older-data-md-dse-release-and-the-entity-has-no-nametypebook-match-in-the-current-unified-tree-88-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        retired layout only — this path existed in an older data-md-dse release and the entity has no name+type+book match in the current unified tree — 88 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-subclass-ability-container-page-the-unified-layout-files-each-ability-individually-63-63-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream: subclass ability container page — the unified layout files each ability individually — 63 (63 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-3-1-the-retainer-roles-level-4710-pages-became-one-monsterretainerrole-advancementrolemd-so-no-single-old-path-owns-the-rename-52-26-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream (3 → 1): the retainer role's Level 4/7/10 pages became one monster/retainer/role-advancement/&lt;role&gt;.md, so no single old path owns the rename — 52 (26 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duplicate-in-the-final-legacy-release-another-old-path-maps-to-the-same-unified-file-and-carries-the-rename-the-old-tree-filed-one-entity-under-two-paths-45-45-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        duplicate in the final legacy release — another old path maps to the same unified file and carries the rename (the old tree filed one entity under two paths) — 45 (45 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-frontmatter-repo-scaffolding-readmelicenseetc-38-5-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        no-frontmatter (repo scaffolding: README/LICENSE/etc.) — 38 (5 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-2-1-the-heroic-resources-in-combat-and-out-of-combat-pages-became-one-feature-page-named-for-the-resource-itself-33-18-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream (2 → 1): the heroic resource's in-combat and out-of-combat pages became one feature page named for the resource itself — 33 (18 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-11-1-the-per-domain-pages-became-one-domain-piety-and-effects-feature-24-12-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream (11 → 1): the per-domain pages became one Domain Piety and Effects feature — 24 (12 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rules-sub-section-folded-into-its-parent-rule-page-upstream-16-15-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rules sub-section folded into its parent rule page upstream — 16 (15 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whole-book-aggregate-page-the-unified-browse-layout-has-no-book-level-pages-4-3-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        whole-book aggregate page — the unified (Browse) layout has no book-level pages — 4 (3 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chapter-aggregate-page-with-no-unified-counterpart-2-2-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chapter aggregate page with no unified counterpart — 2 (2 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-entity-of-this-nametypebook-in-the-unified-tree-content-removed-or-renamed-beyond-matching-1-1-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        no entity of this name+type+book in the unified tree (content removed or renamed beyond matching) — 1 (1 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-class-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (class) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kit-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (kit) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-complications-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (complications) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kits-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (kits) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementburrowmd-movementburrowmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Burrow.md → movement/burrow.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementcrawlmd-movementcrawlmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Crawl.md → movement/crawl.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementflymd-movementflymd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Fly.md → movement/fly.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementjumpmd-movementjumpmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Jump.md → movement/jump.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementshiftingmd-movementshiftingmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Shifting.md → movement/shifting.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementteleportmd-movementteleportmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Teleport.md → movement/teleport.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementwalkmd-movementwalkmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Walk.md → movement/walk.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-release-target-collisions-45" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final-release target collisions — 45
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-content-with-no-old-counterpart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New content with no old counterpart
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compendium-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compendium Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../counter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Counter Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../customizing-a-monster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Customize a Monster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../featureblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Featureblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gm-trackers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Director's Trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hero-suite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hero Sheets and Trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../horizontal-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Horizontal Rule Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../initiative-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initiative Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrating-to-7/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 5.x to 7.0.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../negotiation-tracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Negotiation Tracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../running-an-encounter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run an Encounter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skills-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skills Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stamina-bar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stamina Bar Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../statblock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statblock Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../styling-statblocks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Style Your Statblocks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracking-your-hero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Track Your Hero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../values-row-element/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Values Row Element
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../writing-blocks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing and Editing Blocks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-map-lives-and-how-to-rebuild-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the map lives, and how to rebuild it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-an-entity-is-matched" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How an entity is matched
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tie-breakers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tie-breakers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mapped-by-old-type-family-new-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapped, by old type family → new type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ambiguous-3-left-unmapped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ambiguous — 3 (left unmapped)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unmatched-724-left-unmapped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unmatched — 724 (left unmapped)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Unmatched — 724 (left unmapped)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#index-page-the-unified-layout-has-no-folder-index-files-247-117-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        index page — the unified layout has no folder index files — 247 (117 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-class-level-roll-up-page-the-unified-layout-files-each-feature-individually-100-100-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        per-class level roll-up page — the unified layout files each feature individually — 100 (100 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retired-layout-only-this-path-existed-in-an-older-data-md-dse-release-and-the-entity-has-no-nametypebook-match-in-the-current-unified-tree-88-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        retired layout only — this path existed in an older data-md-dse release and the entity has no name+type+book match in the current unified tree — 88 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-subclass-ability-container-page-the-unified-layout-files-each-ability-individually-63-63-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream: subclass ability container page — the unified layout files each ability individually — 63 (63 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-3-1-the-retainer-roles-level-4710-pages-became-one-monsterretainerrole-advancementrolemd-so-no-single-old-path-owns-the-rename-52-26-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream (3 → 1): the retainer role's Level 4/7/10 pages became one monster/retainer/role-advancement/&lt;role&gt;.md, so no single old path owns the rename — 52 (26 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duplicate-in-the-final-legacy-release-another-old-path-maps-to-the-same-unified-file-and-carries-the-rename-the-old-tree-filed-one-entity-under-two-paths-45-45-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        duplicate in the final legacy release — another old path maps to the same unified file and carries the rename (the old tree filed one entity under two paths) — 45 (45 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-frontmatter-repo-scaffolding-readmelicenseetc-38-5-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        no-frontmatter (repo scaffolding: README/LICENSE/etc.) — 38 (5 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-2-1-the-heroic-resources-in-combat-and-out-of-combat-pages-became-one-feature-page-named-for-the-resource-itself-33-18-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream (2 → 1): the heroic resource's in-combat and out-of-combat pages became one feature page named for the resource itself — 33 (18 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#merged-upstream-11-1-the-per-domain-pages-became-one-domain-piety-and-effects-feature-24-12-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        merged upstream (11 → 1): the per-domain pages became one Domain Piety and Effects feature — 24 (12 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rules-sub-section-folded-into-its-parent-rule-page-upstream-16-15-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rules sub-section folded into its parent rule page upstream — 16 (15 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whole-book-aggregate-page-the-unified-browse-layout-has-no-book-level-pages-4-3-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        whole-book aggregate page — the unified (Browse) layout has no book-level pages — 4 (3 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chapter-aggregate-page-with-no-unified-counterpart-2-2-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chapter aggregate page with no unified counterpart — 2 (2 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-entity-of-this-nametypebook-in-the-unified-tree-content-removed-or-renamed-beyond-matching-1-1-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        no entity of this name+type+book in the unified tree (content removed or renamed beyond matching) — 1 (1 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-class-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (class) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kit-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (kit) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-complications-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (complications) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kits-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        every same-named candidate belongs to an unsanctioned type family (kits) — rejected rather than substituted (review M4) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementburrowmd-movementburrowmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Burrow.md → movement/burrow.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementcrawlmd-movementcrawlmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Crawl.md → movement/crawl.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementflymd-movementflymd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Fly.md → movement/fly.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementjumpmd-movementjumpmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Jump.md → movement/jump.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementshiftingmd-movementshiftingmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Shifting.md → movement/shifting.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementteleportmd-movementteleportmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Teleport.md → movement/teleport.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementwalkmd-movementwalkmd-1-0-in-the-final-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsafe on a case-insensitive filesystem — case-only rename (Movement/Walk.md → movement/walk.md) — 1 (0 in the final release)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-release-target-collisions-45" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final-release target collisions — 45
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-content-with-no-old-counterpart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New content with no old counterpart
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="pre-700-compendium-path-map-review-report">Pre-7.0.0 compendium path map — review report<a class="headerlink" href="#pre-700-compendium-path-map-review-report" title="Permanent link">&para;</a></h1>
+<!-- GENERATED by tools/gen-migration-map.mjs — do not hand-edit. -->
+
+<p>Old corpus: <code>SteelCompendium/data-md-dse</code> — 243 release tags, final <code>v3.20260403152914</code>, 4017 distinct markdown paths across all of them (2443 in the final release).</p>
+<p>New corpus: the PUBLISHED <code>SteelCompendium/data-unified</code> release <strong><code>v4.20260803143953</code></strong> — its <code>md-dse-unified-en.zip</code> asset, 3078 markdown files. Deliberately the published artifact and not a working tree: the sync downloads that zip, so a destination that exists only in a local checkout would be migrated and then trashed by the sync's phase 2. <code>tools/verify-migration-map.mjs</code> re-asserts this at release time.</p>
+<p><strong>Result: 3290 mapped, 3 ambiguous (unmapped), 724 unmatched (unmapped).</strong></p>
+<p>The number that decides what a real vault sees is the FINAL release: <strong>2036 of its 2443 paths are mapped (83.3%)</strong>. The rest are itemised under "Unmatched" below — every one has a stated reason, and every one is simply left where it is.</p>
+<h2 id="where-the-map-lives-and-how-to-rebuild-it">Where the map lives, and how to rebuild it<a class="headerlink" href="#where-the-map-lives-and-how-to-rebuild-it" title="Permanent link">&para;</a></h2>
+<p>The map itself is <code>src/data/migrationMap.json</code>, <strong>bundled into <code>main.js</code></strong>. It is deliberately not fetched at runtime: the migration only has one chance to run (the first sync destroys the old paths), so making it depend on the network — offline, rate-limited, an asset that failed to publish — would trade a certain outcome for a probable one. The cost is about 390 KiB of JSON, ~80 KiB over the wire once compressed, and it can be dropped from a later release once 7.0.0 adoption is done.</p>
+<p>Rebuild both this report and the map with:</p>
+<div class="highlight"><pre><span></span><code>node<span class="w"> </span>tools/gen-migration-map.mjs<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--old<span class="w"> </span>/path/to/data-md-dse<span class="w">            </span><span class="c1"># a git clone, all tags fetched \</span>
+<span class="w">  </span>--new<span class="w"> </span>/path/to/data-unified/en/unified/md-dse<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>src/data/migrationMap.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--report<span class="w"> </span>docs/compendium-migration-map.md<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--snapshot<span class="w"> </span>&lt;data-unified<span class="w"> </span>git<span class="w"> </span>describe&gt;
+</code></pre></div>
+<p><code>test/unit/data/migrationMap.test.ts</code> validates whatever the generator emits — path safety, no self-mappings, and injectivity over the final release — so a regeneration that breaks an invariant fails the build, not a vault.</p>
+<h2 id="how-an-entity-is-matched">How an entity is matched<a class="headerlink" href="#how-an-entity-is-matched" title="Permanent link">&para;</a></h2>
+<p>The SCC code is deliberately NOT the key: the ETL refactor that produced data-unified changed codes, and they are not frozen. The key is the triple <strong>(book, name, type family)</strong>.</p>
+<p><strong>Book</strong> — the <code>source</code> frontmatter key (<code>mcdm.heroes.v1</code> / <code>mcdm.monsters.v1</code>). 
+The 2024-era trees predate that key; for those, everything under <code>Bestiary/</code> is the monsters book and everything else is the heroes book (data-md-dse only ever carried those two).</p>
+<p><strong>Name</strong> — normalized with these rules, in this order:</p>
+<ol>
+<li>drop frontmatter backslash escapes (<code>motivation\_or\_pitfall</code>)</li>
+<li>Unicode NFKD, then drop combining marks (diacritics fold)</li>
+<li>lowercase</li>
+<li><code>&amp;</code> → <code>and</code></li>
+<li>apostrophes (<code>'</code> <code>’</code> <code>ʼ</code>) are <strong>deleted</strong>, not replaced (<code>Ajax's</code> → <code>ajaxs</code>)</li>
+<li>every remaining non-alphanumeric run → <code>-</code>, then trim leading/trailing <code>-</code></li>
+</ol>
+<p>Several <strong>name forms</strong> are tried per file, most literal first: <code>item_name</code>, <code>item_name</code> with a trailing bracketed qualifier removed (<code>Bredbeddle Malice (Malice Features)</code> → <code>Bredbeddle Malice</code>), <code>name</code>/<code>title</code>, and finally the file's own basename.</p>
+<p><strong>Type family</strong> — the old <code>type</code> is a path (<code>monster/section</code>, <code>feature/ability/conduit/1st-level-feature</code>) and the new one is a flat noun (<code>statblock</code>, <code>ability</code>). The old family is its last segment when that segment is <code>statblock</code>, else its first segment.</p>
+<p>A frozen equivalence table then <strong>gates</strong> the candidates: when the old family is one the table knows, a candidate whose new type the table does not sanction is discarded outright, and an entity left with no candidate falls through to <em>unmatched</em> rather than being matched to something of another type. When the old family is unknown (empty <code>type</code>, or a spelling the table has never seen) there is nothing to gate against, so those matches rest on name + book + the tie-breakers alone — 97 of the 3290 mapped entries, counted here so the ungated set is never invisible.</p>
+<h2 id="tie-breakers">Tie-breakers<a class="headerlink" href="#tie-breakers" title="Permanent link">&para;</a></h2>
+<p>Only candidates that already agree on (book, one name form) are scored, so these decide <em>between</em> candidates — none of them can create a match:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Weight</th>
+<th>Tie-breaker</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1000</td>
+<td>the old type family maps to the candidate's type (FAMILY_EQUIVALENCE)</td>
+</tr>
+<tr>
+<td style="text-align: right;">400</td>
+<td>old path is under a <code>Statblocks/</code> folder and the candidate is under <code>statblock/</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">80 each, max 5</td>
+<td>each old folder/type segment that reappears as a segment of the candidate path — level (<code>10th-Level Features</code> → <code>level-10</code>) and plural (<code>Rivals</code> → <code>rival</code>) forms translated</td>
+</tr>
+<tr>
+<td style="text-align: right;">300</td>
+<td>old path is under a <code>Features/</code> folder and the candidate is a featureblock/feature/ability</td>
+</tr>
+<tr>
+<td style="text-align: right;">200</td>
+<td>the two file basenames normalize to the same slug</td>
+</tr>
+<tr>
+<td style="text-align: right;">60</td>
+<td>an earlier (more literal) name form matched — literal item_name beats a bracket-stripped one</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td>shallower candidate path wins an otherwise exact tie</td>
+</tr>
+</tbody>
+</table>
+<p>A remaining exact tie is <strong>not</strong> guessed: the file is reported as ambiguous below and left out of the map (the engine then leaves it in place, never renames it).</p>
+<h2 id="coverage">Coverage<a class="headerlink" href="#coverage" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Book</th>
+<th style="text-align: right;">mapped</th>
+<th style="text-align: right;">ambiguous</th>
+<th style="text-align: right;">unmatched</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>(none)</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td><code>mcdm.heroes.v1</code></td>
+<td style="text-align: right;">2000</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">620</td>
+</tr>
+<tr>
+<td><code>mcdm.monsters.v1</code></td>
+<td style="text-align: right;">1290</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">101</td>
+</tr>
+</tbody>
+</table>
+<p>Of the 3290 mapped entries, <strong>97</strong> were matched with the family gate inactive (unknown old family) and <strong>97</strong> ended on a pairing the table does not list — necessarily a subset of the ungated ones, since a gated match cannot land on an unsanctioned pairing.</p>
+<h3 id="mapped-by-old-type-family-new-type">Mapped, by old type family → new type<a class="headerlink" href="#mapped-by-old-type-family-new-type" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">count</th>
+<th>old family</th>
+<th>new type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">932</td>
+<td><code>feature</code></td>
+<td><code>feature</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">485</td>
+<td><code>feature</code></td>
+<td><code>ability</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">431</td>
+<td><code>monster</code></td>
+<td><code>statblock</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">416</td>
+<td><code>statblock</code></td>
+<td><code>statblock</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">129</td>
+<td><code>monster-feature</code></td>
+<td><code>featureblock</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">104</td>
+<td><code>monster-section</code></td>
+<td><code>monster</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">100</td>
+<td><code>complication</code></td>
+<td><code>complication</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">98</td>
+<td><code>treasure</code></td>
+<td><code>treasure</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">95</td>
+<td><code>(none)</code></td>
+<td><code>statblock</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">71</td>
+<td><code>dynamic-terrain</code></td>
+<td><code>dynamic-terrain</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">59</td>
+<td><code>title</code></td>
+<td><code>title</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">47</td>
+<td><code>perk</code></td>
+<td><code>perk</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">34</td>
+<td><code>keywords</code></td>
+<td><code>rule</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">23</td>
+<td><code>abilities</code></td>
+<td><code>ability</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td><code>chapter</code></td>
+<td><code>chapter</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">21</td>
+<td><code>kit-ability</code></td>
+<td><code>ability</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">21</td>
+<td><code>kit</code></td>
+<td><code>kit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">18</td>
+<td><code>career</code></td>
+<td><code>career</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">17</td>
+<td><code>common-ability</code></td>
+<td><code>feature</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">15</td>
+<td><code>kits</code></td>
+<td><code>kit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">13</td>
+<td><code>culture-benefit</code></td>
+<td><code>culture</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td><code>cultures</code></td>
+<td><code>culture</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td><code>movement</code></td>
+<td><code>movement</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td><code>negotiation</code></td>
+<td><code>negotiation</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td><code>ancestry</code></td>
+<td><code>ancestry</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td><code>motivation-or-pitfall</code></td>
+<td><code>negotiation</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td><code>abilities</code></td>
+<td><code>feature</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td><code>ancestries</code></td>
+<td><code>ancestry</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td><code>conditions</code></td>
+<td><code>condition</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td><code>class</code></td>
+<td><code>class</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td><code>condition</code></td>
+<td><code>condition</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td><code>careers</code></td>
+<td><code>career</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td><code>classes</code></td>
+<td><code>class</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td><code>complications</code></td>
+<td><code>complication</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td><code>skill</code></td>
+<td><code>skill-group</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td><code>skills</code></td>
+<td><code>skill-group</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td><code>(none)</code></td>
+<td><code>chapter</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td><code>feature</code></td>
+<td><code>rule</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td><code>movement</code></td>
+<td><code>rule</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="ambiguous-3-left-unmapped">Ambiguous — 3 (left unmapped)<a class="headerlink" href="#ambiguous-3-left-unmapped" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Abilities/Common Maneuvers/Escape Grab.md</code> (<code>abilities</code>) — tied candidates:</li>
+<li><code>feature/ability/common/escape-grab.md</code> (<code>ability</code>)</li>
+<li><code>feature/common/maneuvers/escape-grab.md</code> (<code>feature</code>)</li>
+<li><code>Abilities/Common Maneuvers/Grab.md</code> (<code>abilities</code>) — tied candidates:</li>
+<li><code>feature/ability/common/grab.md</code> (<code>ability</code>)</li>
+<li><code>feature/common/maneuvers/grab.md</code> (<code>feature</code>)</li>
+<li><code>Abilities/Common Maneuvers/Knockback.md</code> (<code>abilities</code>) — tied candidates:</li>
+<li><code>feature/ability/common/knockback.md</code> (<code>ability</code>)</li>
+<li><code>feature/common/maneuvers/knockback.md</code> (<code>feature</code>)</li>
+</ul>
+<h2 id="unmatched-724-left-unmapped">Unmatched — 724 (left unmapped)<a class="headerlink" href="#unmatched-724-left-unmapped" title="Permanent link">&para;</a></h2>
+<p>Grouped by reason. Every one of these is left in place by the migration engine.</p>
+<h3 id="index-page-the-unified-layout-has-no-folder-index-files-247-117-in-the-final-release">index page — the unified layout has no folder index files — 247 (117 in the final release)<a class="headerlink" href="#index-page-the-unified-layout-has-no-folder-index-files-247-117-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Bestiary/Basics/_Index.md</code></li>
+<li><code>Bestiary/Chapters/_Index.md</code></li>
+<li><code>Bestiary/Dynamic Terrain/_Index.md</code></li>
+<li><code>Bestiary/Monsters/_Index.md</code></li>
+<li><code>Bestiary/Retainers/_Index.md</code></li>
+<li><code>Bestiary/monsters/Basics/_Index.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Chapters/_Index.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Dynamic Terrain/_Index.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/_Index.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/_Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Common/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Common/Main Actions/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Common/Maneuvers/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Common/Move Actions/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Arcane Archer/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Battlemind/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Cloak and Dagger/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Dual Wielder/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Guisarmier/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Martial Artist/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Mountain/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Panther/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Pugilist/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Raider/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Ranger/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Rapid Fire/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Retiarius/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Shining Armor/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Sniper/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Spellsword/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Stick and Robe/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Swashbuckler/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Sword and Board/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Warrior Priest/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Kits/Whirlwind/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/10th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/1st-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/2nd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/3rd-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/4th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/5th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/6th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/7th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/8th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/9th-Level Features/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/Index.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Ancestries/_Index.md</code></li>
+<li><code>Rules/Careers/_Index.md</code></li>
+<li><code>Rules/Chapters/_Index.md</code></li>
+<li><code>Rules/Classes/_Index.md</code></li>
+<li><code>Rules/Complications/_Index.md</code></li>
+<li><code>Rules/Conditions/_Index.md</code></li>
+<li><code>Rules/Cultures/_Index.md</code></li>
+<li><code>Rules/Features/Censor/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Censor/Index.md</code></li>
+<li><code>Rules/Features/Conduit/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Conduit/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Elementalist/Index.md</code></li>
+<li><code>Rules/Features/Fury/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Fury/Index.md</code></li>
+<li><code>Rules/Features/Null/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Null/Index.md</code></li>
+<li><code>Rules/Features/Shadow/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Shadow/Index.md</code></li>
+<li><code>Rules/Features/Tactician/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Tactician/Index.md</code></li>
+<li><code>Rules/Features/Talent/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Talent/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/10th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/1st-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/2nd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/3rd-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/4th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/5th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/6th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/7th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/8th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/9th-Level Features/Index.md</code></li>
+<li><code>Rules/Features/Troubadour/Index.md</code></li>
+<li><code>Rules/Kits/_Index.md</code></li>
+<li><code>Rules/Movement/_Index.md</code></li>
+<li><code>Rules/Perks/_Index.md</code></li>
+<li><code>Rules/Skills/_Index.md</code></li>
+<li><code>Rules/Titles/_Index.md</code></li>
+<li><code>Rules/Treasures/_Index.md</code></li>
+</ul>
+<h3 id="per-class-level-roll-up-page-the-unified-layout-files-each-feature-individually-100-100-in-the-final-release">per-class level roll-up page — the unified layout files each feature individually — 100 (100 in the final release)<a class="headerlink" href="#per-class-level-roll-up-page-the-unified-layout-files-each-feature-individually-100-100-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Classes By Level/Censor/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Censor/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Conduit/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Elementalist/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Fury/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Fury/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Fury/Stormwight Kits.md</code></li>
+<li><code>Rules/Classes By Level/Null/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Null/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Shadow/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Tactician/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Talent/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Talent/Basics.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/10th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/1st Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/2nd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/3rd Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/4th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/5th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/6th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/7th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/8th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/9th Level Features.md</code></li>
+<li><code>Rules/Classes By Level/Troubadour/Basics.md</code></li>
+</ul>
+<h3 id="retired-layout-only-this-path-existed-in-an-older-data-md-dse-release-and-the-entity-has-no-nametypebook-match-in-the-current-unified-tree-88-0-in-the-final-release">retired layout only — this path existed in an older data-md-dse release and the entity has no name+type+book match in the current unified tree — 88 (0 in the final release)<a class="headerlink" href="#retired-layout-only-this-path-existed-in-an-older-data-md-dse-release-and-the-entity-has-no-nametypebook-match-in-the-current-unified-tree-88-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Abilities/Common Maneuvers/Drink Potion.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/3-Piety Abilities/Angel Of Wrath.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/3-Piety Abilities/Punishing Smite.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/3-Piety Abilities/Righteous Rebuke.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/3-Piety Abilities/Thunder Of The Divine.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/5-Piety Abilities/Armor Of The Faithful.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/5-Piety Abilities/Divine Weakness.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/5-Piety Abilities/Terrifying Smite.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/5-Piety Abilities/Wave Of Virtue.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/Signature Abilities/Holy Lance.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/Triggered Actions/Divine Disruption.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/Triggered Actions/Holy Infusion.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/3-Essence Abilities/Burn!.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/3-Essence Abilities/Punch The Earth.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/3-Essence Abilities/Stare Into The Abyss.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/5-Essence Abilities/Incorporealness.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/5-Essence Abilities/Nourishing Rain.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/5-Essence Abilities/Open The Earth.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Signature Abilities/Debris.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Signature Abilities/Fire Lance.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Signature Abilities/Growing Pains.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Signature Abilities/Void Ray.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Triggered Actions/Earthen Force.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Triggered Actions/Mend The Soul.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/Triggered Actions/Void Embrace.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/3-Rage Abilities/Death Before Beauty.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/3-Rage Abilities/Stab Me So I Can Pull Myself Closer To You.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/3-Rage Abilities/Whirlwind Strike.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/5-Rage Abilities/Brute Precision.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/5-Rage Abilities/Dying Blow.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/5-Rage Abilities/Primordial Shockwave.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/Signature Abilities/Humiliating Strike.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/Signature Abilities/Impaling Strike.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/Triggered Actions/Regeneration.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/Triggered Actions/Relentless Toss.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/Triggered Actions/Uncanny Dodge.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/3-Insight Abilities/Blade Dance.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/3-Insight Abilities/Quick Pursuit.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/3-Insight Abilities/Wounding Strike.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/5-Insight Abilities/Impairing Shot.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/5-Insight Abilities/Quickness.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/Signature Abilities/Distracting Pain.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/Signature Abilities/Shot And Step.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/Signature Abilities/Sucker Slice.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/Triggered Actions/Misdirection.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Tactician/3-Focus Abilities/Dazing Blow.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Tactician/3-Focus Abilities/Phalanx Forward!.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Tactician/5-Focus Abilities/Their Weakness Is Our Strength.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Tactician/Triggered Actions/Flank Them Now!.md</code> <em>(historical release only)</em></li>
+<li><code>Ancestries/Elf, High.md</code> <em>(historical release only)</em></li>
+<li><code>Ancestries/Elf, Wode.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Monsters/Gnolls/Statblocks/Gnoll Chainflai.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Monsters/Orcs/Features/Orc Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Monsters/Undead/Features/At the start of any undeads turn you can spend Malice to activate one of the following features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Monsters/Wyverns/Features/Wyvern Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Monsters/Xorannox the Tyract/Statblocks/Toxic Eye Level 6 Hexer.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Gnolls/Statblocks/Gnoll Chainflai.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Goblins/Features/Goblin Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Hobgoblins/Features/Hobgoblin Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Kingfissure Worm/Statblocks/Kingfissure Wor.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Lizardfolks/Features/Lizardfolk Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Medusas/Features/Medusa Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Orcs/Features/Orc Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Undead/Features/At the start of any undeads turn you can spend Malice to activate one of the following features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Wyverns/Features/Wyvern Malice Malice Features.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Monsters/Xorannox the Tyract/Statblocks/Toxic Eye Level 6 Hexer.md</code> <em>(historical release only)</em></li>
+<li><code>Complications/Devil Deal.md</code> <em>(historical release only)</em></li>
+<li><code>Complications/Punishment Curse.md</code> <em>(historical release only)</em></li>
+<li><code>Complications/Vivid Dreams.md</code> <em>(historical release only)</em></li>
+<li><code>Complications/War Of The Guilds.md</code> <em>(historical release only)</em></li>
+<li><code>Cultures/Organizations/Anarchic.md</code> <em>(historical release only)</em></li>
+<li><code>Cultures/Upbringing/Illegal.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Bloodpact.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Caster Kit Table.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Frigid.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Meditator.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Missile.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Nature Calling.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Rook.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Spellslinger.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Caster Kits/Ward Weaver.md</code> <em>(historical release only)</em></li>
+<li><code>Kits/Martial Kits/Martial Kits Table.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/1st-Level Features/Ry of Agonizing Self Reflection.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/8th-Level Features/Source of Earth Statblock.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/1st-Level Features/1st Level Aspect Features Tables.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/2nd-Level Features/In a Puff of Smoke.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/9th-Level Features/Squad.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Features/Elementalist/8th-Level Features/Source of Earth Statblock.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="merged-upstream-subclass-ability-container-page-the-unified-layout-files-each-ability-individually-63-63-in-the-final-release">merged upstream: subclass ability container page — the unified layout files each ability individually — 63 (63 in the final release)<a class="headerlink" href="#merged-upstream-subclass-ability-container-page-the-unified-layout-files-each-ability-individually-63-63-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Features/Censor/2nd-Level Features/2nd Level Exorcist Ability.md</code></li>
+<li><code>Rules/Features/Censor/2nd-Level Features/2nd Level Oracle Ability.md</code></li>
+<li><code>Rules/Features/Censor/2nd-Level Features/2nd Level Paragon Ability.md</code></li>
+<li><code>Rules/Features/Censor/6th-Level Features/6th Level Exorcist Abilities.md</code></li>
+<li><code>Rules/Features/Censor/6th-Level Features/6th Level Oracle Abilities.md</code></li>
+<li><code>Rules/Features/Censor/6th-Level Features/6th Level Paragon Abilities.md</code></li>
+<li><code>Rules/Features/Censor/9th-Level Features/9th Level Exorcist Abilities.md</code></li>
+<li><code>Rules/Features/Censor/9th-Level Features/9th Level Oracle Abilities.md</code></li>
+<li><code>Rules/Features/Censor/9th-Level Features/9th Level Paragon Abilities.md</code></li>
+<li><code>Rules/Features/Fury/2nd-Level Features/2nd Level Berserker Ability.md</code></li>
+<li><code>Rules/Features/Fury/2nd-Level Features/2nd Level Reaver Ability.md</code></li>
+<li><code>Rules/Features/Fury/2nd-Level Features/2nd Level Stormwight Ability.md</code></li>
+<li><code>Rules/Features/Fury/6th-Level Features/6th Level Berserker Abilities.md</code></li>
+<li><code>Rules/Features/Fury/6th-Level Features/6th Level Reaver Abilities.md</code></li>
+<li><code>Rules/Features/Fury/6th-Level Features/6th Level Stormwight Abilities.md</code></li>
+<li><code>Rules/Features/Fury/9th-Level Features/9th Level Berserker Abilities.md</code></li>
+<li><code>Rules/Features/Fury/9th-Level Features/9th Level Reaver Abilities.md</code></li>
+<li><code>Rules/Features/Fury/9th-Level Features/9th Level Stormwight Abilities.md</code></li>
+<li><code>Rules/Features/Null/2nd-Level Features/2nd Level Chronokinetic Ability.md</code></li>
+<li><code>Rules/Features/Null/2nd-Level Features/2nd Level Cryokinetic Ability.md</code></li>
+<li><code>Rules/Features/Null/2nd-Level Features/2nd Level Metakinetic Ability.md</code></li>
+<li><code>Rules/Features/Null/6th-Level Features/6th Level Chronokinetic Abilities.md</code></li>
+<li><code>Rules/Features/Null/6th-Level Features/6th Level Cryokinetic Abilities.md</code></li>
+<li><code>Rules/Features/Null/6th-Level Features/6th Level Metakinetic Abilities.md</code></li>
+<li><code>Rules/Features/Null/9th-Level Features/9th Level Chronokinetic Abilities.md</code></li>
+<li><code>Rules/Features/Null/9th-Level Features/9th Level Cryokinetic Abilities.md</code></li>
+<li><code>Rules/Features/Null/9th-Level Features/9th Level Metakinetic Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/2nd-Level Features/2nd Level Black Ash Ability.md</code></li>
+<li><code>Rules/Features/Shadow/2nd-Level Features/2nd Level Caustic Alchemy Ability.md</code></li>
+<li><code>Rules/Features/Shadow/2nd-Level Features/2nd Level Harlequin Mask Ability.md</code></li>
+<li><code>Rules/Features/Shadow/6th-Level Features/6th Level Black Ash Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/6th-Level Features/6th Level Caustic Alchemy Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/6th-Level Features/6th Level Harlequin Mask Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/9th-Level Features/9th Level Black Ash Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/9th-Level Features/9th Level Caustic Alchemy Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/9th-Level Features/9th Level Harlequin Mask Abilities.md</code></li>
+<li><code>Rules/Features/Tactician/2nd-Level Features/2nd Level Insurgent Ability.md</code></li>
+<li><code>Rules/Features/Tactician/2nd-Level Features/2nd Level Mastermind Ability.md</code></li>
+<li><code>Rules/Features/Tactician/2nd-Level Features/2nd Level Vanguard Ability.md</code></li>
+<li><code>Rules/Features/Tactician/6th-Level Features/6th Level Insurgent Abilities.md</code></li>
+<li><code>Rules/Features/Tactician/6th-Level Features/6th Level Mastermind Abilities.md</code></li>
+<li><code>Rules/Features/Tactician/6th-Level Features/6th Level Vanguard Abilities.md</code></li>
+<li><code>Rules/Features/Tactician/9th-Level Features/9th Level Insurgent Abilities.md</code></li>
+<li><code>Rules/Features/Tactician/9th-Level Features/9th Level Mastermind Abilities.md</code></li>
+<li><code>Rules/Features/Tactician/9th-Level Features/9th Level Vanguard Abilities.md</code></li>
+<li><code>Rules/Features/Talent/2nd-Level Features/2nd Level Chronopathy Ability.md</code></li>
+<li><code>Rules/Features/Talent/2nd-Level Features/2nd Level Telekinesis Ability.md</code></li>
+<li><code>Rules/Features/Talent/2nd-Level Features/2nd Level Telepathy Ability.md</code></li>
+<li><code>Rules/Features/Talent/6th-Level Features/6th Level Chronopathy Abilities.md</code></li>
+<li><code>Rules/Features/Talent/6th-Level Features/6th Level Telekinesis Abilities.md</code></li>
+<li><code>Rules/Features/Talent/6th-Level Features/6th Level Telepathy Abilities.md</code></li>
+<li><code>Rules/Features/Talent/9th-Level Features/9th Level Chronopathy Abilities.md</code></li>
+<li><code>Rules/Features/Talent/9th-Level Features/9th Level Telekinesis Abilities.md</code></li>
+<li><code>Rules/Features/Talent/9th-Level Features/9th Level Telepathy Abilities.md</code></li>
+<li><code>Rules/Features/Troubadour/2nd-Level Features/2nd Level Auteur Ability.md</code></li>
+<li><code>Rules/Features/Troubadour/2nd-Level Features/2nd Level Duelist Ability.md</code></li>
+<li><code>Rules/Features/Troubadour/2nd-Level Features/2nd Level Virtuoso Ability.md</code></li>
+<li><code>Rules/Features/Troubadour/6th-Level Features/6th Level Auteur Abilities.md</code></li>
+<li><code>Rules/Features/Troubadour/6th-Level Features/6th Level Duelist Abilities.md</code></li>
+<li><code>Rules/Features/Troubadour/6th-Level Features/6th Level Virtuoso Abilities.md</code></li>
+<li><code>Rules/Features/Troubadour/9th-Level Features/9th Level Auteur Abilities.md</code></li>
+<li><code>Rules/Features/Troubadour/9th-Level Features/9th Level Duelist Abilities.md</code></li>
+<li><code>Rules/Features/Troubadour/9th-Level Features/9th Level Virtuoso Abilities.md</code></li>
+</ul>
+<h3 id="merged-upstream-3-1-the-retainer-roles-level-4710-pages-became-one-monsterretainerrole-advancementrolemd-so-no-single-old-path-owns-the-rename-52-26-in-the-final-release">merged upstream (3 → 1): the retainer role's Level 4/7/10 pages became one <code>monster/retainer/role-advancement/&lt;role&gt;.md</code>, so no single old path owns the rename — 52 (26 in the final release)<a class="headerlink" href="#merged-upstream-3-1-the-retainer-roles-level-4710-pages-became-one-monsterretainerrole-advancementrolemd-so-no-single-old-path-owns-the-rename-52-26-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Ambusher abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Ambusher abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Ambusher abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Artillery abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Artillery abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Artillery abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Brute abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Brute abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Brute abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Controller abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Controller abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Controller abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Defender abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Defender abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Defender abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Harrier abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Harrier abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Harrier abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Hexer abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Hexer abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Mount abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Mount abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Mount abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Support abilities/Level 10 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Support abilities/Level 4 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/Retainers/Role Advancement Abilities/Support abilities/Level 7 Role Advancement Ability.md</code></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Ambusher abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Ambusher abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Ambusher abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Artillery abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Artillery abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Artillery abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Brute abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Brute abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Brute abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Controller abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Controller abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Controller abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Defender abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Defender abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Defender abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Harrier abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Harrier abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Harrier abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Hexer abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Hexer abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Mount abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Mount abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Mount abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Support abilities/Level 10 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Support abilities/Level 4 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/monsters/Retainers/Role Advancement Abilities/Support abilities/Level 7 Role Advancement Ability.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="duplicate-in-the-final-legacy-release-another-old-path-maps-to-the-same-unified-file-and-carries-the-rename-the-old-tree-filed-one-entity-under-two-paths-45-45-in-the-final-release">duplicate in the final legacy release — another old path maps to the same unified file and carries the rename (the old tree filed one entity under two paths) — 45 (45 in the final release)<a class="headerlink" href="#duplicate-in-the-final-legacy-release-another-old-path-maps-to-the-same-unified-file-and-carries-the-rename-the-old-tree-filed-one-entity-under-two-paths-45-45-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Abilities/Conduit/4th-Level Features/Beacon of Grace.md</code></li>
+<li><code>Rules/Abilities/Conduit/4th-Level Features/Blessing of Secrets.md</code></li>
+<li><code>Rules/Abilities/Conduit/4th-Level Features/Penance.md</code></li>
+<li><code>Rules/Abilities/Conduit/4th-Level Features/Sanctuary.md</code></li>
+<li><code>Rules/Abilities/Conduit/4th-Level Features/Vessel of Retribution.md</code></li>
+<li><code>Rules/Abilities/Conduit/7th-Level Features/Arise.md</code></li>
+<li><code>Rules/Abilities/Conduit/7th-Level Features/Blessing of Steel.md</code></li>
+<li><code>Rules/Abilities/Conduit/7th-Level Features/Blessing of the Blade.md</code></li>
+<li><code>Rules/Abilities/Conduit/7th-Level Features/Drag the Unworthy.md</code></li>
+<li><code>Rules/Abilities/Elementalist/4th-Level Features/Heart of the Wode.md</code></li>
+<li><code>Rules/Abilities/Elementalist/4th-Level Features/Muse of Fire.md</code></li>
+<li><code>Rules/Abilities/Elementalist/4th-Level Features/Return to Oblivion.md</code></li>
+<li><code>Rules/Abilities/Elementalist/4th-Level Features/Summon Source of Earth.md</code></li>
+<li><code>Rules/Abilities/Elementalist/4th-Level Features/World Torn Asunder.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Heart of the Wode.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Luminous Champion Aloft.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Magma Titan.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Meteor.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Muse of Fire.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Return to Oblivion.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/Summon Source of Earth.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/The Wode Remembers and Returns.md</code></li>
+<li><code>Rules/Abilities/Elementalist/5th-Level Features/World Torn Asunder.md</code></li>
+<li><code>Rules/Abilities/Elementalist/8th-Level Features/Earth Rejects You.md</code></li>
+<li><code>Rules/Abilities/Elementalist/8th-Level Features/Prism.md</code></li>
+<li><code>Rules/Abilities/Elementalist/8th-Level Features/The Green Defends Its Servants.md</code></li>
+<li><code>Rules/Abilities/Elementalist/8th-Level Features/Unquenchable Fire.md</code></li>
+<li><code>Rules/Abilities/Troubadour/5th-Level Features/Take Two.md</code></li>
+<li><code>Rules/Abilities/Troubadour/5th-Level Features/We Cant Be Upstaged.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Blessing of Life.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Impervious Touch.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Improved Hands of the Maker.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Improved Sanctified Weapon.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Invocation of the Heart.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Light of Revelation.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Oracular Warning.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Saints Epiphany.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Seance.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Windwalk.md</code></li>
+<li><code>Rules/Features/Conduit/4th-Level Features/Wode Road.md</code></li>
+<li><code>Rules/Features/Elementalist/1st-Level Features/Signature Abilities.md</code></li>
+<li><code>Rules/Features/Fury/1st-Level Features/Signature Ability.md</code></li>
+<li><code>Rules/Features/Null/1st-Level Features/Signature Abilities.md</code></li>
+<li><code>Rules/Features/Shadow/1st-Level Features/Signature Ability.md</code></li>
+<li><code>Rules/Features/Talent/1st-Level Features/Signature Abilities.md</code></li>
+</ul>
+<h3 id="no-frontmatter-repo-scaffolding-readmelicenseetc-38-5-in-the-final-release">no-frontmatter (repo scaffolding: README/LICENSE/etc.) — 38 (5 in the final release)<a class="headerlink" href="#no-frontmatter-repo-scaffolding-readmelicenseetc-38-5-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Abilities/Common Actions/index.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Common Maneuvers/index.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Conduit/index.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Elementalist/index.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Fury/index.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Shadow/index.md</code> <em>(historical release only)</em></li>
+<li><code>Abilities/Tactician/index.md</code> <em>(historical release only)</em></li>
+<li><code>Adventures/Bay of Blackbottom/Bay of Blackbottom.md</code> <em>(historical release only)</em></li>
+<li><code>Adventures/README.md</code></li>
+<li><code>Adventures/adventures.md</code></li>
+<li><code>Bestiary/Demon Bendrak.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Chorogaunt.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Ensnarer.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Frenzied.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Muceron.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Pitling.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Remasch.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Ruinant.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Torlas.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Demon Villain Power.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Draw Steel Bestiary (original).md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Draw Steel Bestiary.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Goblin Villain Power.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Human Villain Power.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/README.md</code></li>
+<li><code>Bestiary/Radenwight Ratagast.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Radenwight Villain Power.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Siege Hawk.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/War Dog Cognivite.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/War Dog Portalite.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/War Dog Villain Power.md</code> <em>(historical release only)</em></li>
+<li><code>Bestiary/Warg.md</code> <em>(historical release only)</em></li>
+<li><code>Draw Steel Rules (original).md</code> <em>(historical release only)</em></li>
+<li><code>Draw Steel Rules.md</code> <em>(historical release only)</em></li>
+<li><code>README.md</code></li>
+<li><code>Rules/Draw Steel Rules (raw).md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Draw Steel Rules.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/README.md</code></li>
+</ul>
+<h3 id="merged-upstream-2-1-the-heroic-resources-in-combat-and-out-of-combat-pages-became-one-feature-page-named-for-the-resource-itself-33-18-in-the-final-release">merged upstream (2 → 1): the heroic resource's in-combat and out-of-combat pages became one feature page named for the resource itself — 33 (18 in the final release)<a class="headerlink" href="#merged-upstream-2-1-the-heroic-resources-in-combat-and-out-of-combat-pages-became-one-feature-page-named-for-the-resource-itself-33-18-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Abilities/Censor/1st-Level Features/Wrath Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Censor/1st-Level Features/Wrath in Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Piety Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/1st-Level Features/Essence Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Elementalist/1st-Level Features/Essence in Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/1st-Level Features/Ferocity Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Fury/1st-Level Features/Ferocity in Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Null/1st-Level Features/Discipline Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/1st-Level Features/Insight Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Shadow/1st-Level Features/Insight in Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/1st-Level Features/Focus Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Tactician/1st-Level Features/Focus in Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Talent/1st-Level Features/Clarity Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/1st-Level Features/Drama Outside of Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Troubadour/1st-Level Features/Drama in Combat.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Features/Censor/1st-Level Features/Wrath Outside of Combat.md</code></li>
+<li><code>Rules/Features/Censor/1st-Level Features/Wrath in Combat.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Piety Outside of Combat.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Piety in Combat.md</code></li>
+<li><code>Rules/Features/Elementalist/1st-Level Features/Essence Outside of Combat.md</code></li>
+<li><code>Rules/Features/Elementalist/1st-Level Features/Essence in Combat.md</code></li>
+<li><code>Rules/Features/Fury/1st-Level Features/Ferocity Outside of Combat.md</code></li>
+<li><code>Rules/Features/Fury/1st-Level Features/Ferocity in Combat.md</code></li>
+<li><code>Rules/Features/Null/1st-Level Features/Discipline Outside of Combat.md</code></li>
+<li><code>Rules/Features/Null/1st-Level Features/Discipline in Combat.md</code></li>
+<li><code>Rules/Features/Shadow/1st-Level Features/Insight Outside of Combat.md</code></li>
+<li><code>Rules/Features/Shadow/1st-Level Features/Insight in Combat.md</code></li>
+<li><code>Rules/Features/Tactician/1st-Level Features/Focus Outside of Combat.md</code></li>
+<li><code>Rules/Features/Tactician/1st-Level Features/Focus in Combat.md</code></li>
+<li><code>Rules/Features/Talent/1st-Level Features/Clarity Outside of Combat.md</code></li>
+<li><code>Rules/Features/Talent/1st-Level Features/Clarity in Combat.md</code></li>
+<li><code>Rules/Features/Troubadour/1st-Level Features/Drama Outside of Combat.md</code></li>
+<li><code>Rules/Features/Troubadour/1st-Level Features/Drama in Combat.md</code></li>
+</ul>
+<h3 id="merged-upstream-11-1-the-per-domain-pages-became-one-domain-piety-and-effects-feature-24-12-in-the-final-release">merged upstream (11 → 1): the per-domain pages became one <code>Domain Piety and Effects</code> feature — 24 (12 in the final release)<a class="headerlink" href="#merged-upstream-11-1-the-per-domain-pages-became-one-domain-piety-and-effects-feature-24-12-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Creation Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Death Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Fate Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Knowledge Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Life Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Love Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Nature Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Protection Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Storm Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Sun Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/Trickery Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Abilities/Conduit/1st-Level Features/War Domain Piety and Effect.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Creation Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Death Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Fate Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Knowledge Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Life Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Love Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Nature Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Protection Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Storm Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Sun Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/Trickery Domain Piety and Effect.md</code></li>
+<li><code>Rules/Features/Conduit/1st-Level Features/War Domain Piety and Effect.md</code></li>
+</ul>
+<h3 id="rules-sub-section-folded-into-its-parent-rule-page-upstream-16-15-in-the-final-release">rules sub-section folded into its parent rule page upstream — 16 (15 in the final release)<a class="headerlink" href="#rules-sub-section-folded-into-its-parent-rule-page-upstream-16-15-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Climbing Other Creatures.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Movement/Big Versus Little.md</code></li>
+<li><code>Rules/Movement/Burrowing Forced Movement.md</code></li>
+<li><code>Rules/Movement/Climbing Other Creatures.md</code></li>
+<li><code>Rules/Movement/Death Effects and Forced Movement.md</code></li>
+<li><code>Rules/Movement/Dig Maneuver.md</code></li>
+<li><code>Rules/Movement/Falling Far.md</code></li>
+<li><code>Rules/Movement/Falling Onto Another Creature.md</code></li>
+<li><code>Rules/Movement/Forced Into a Fall.md</code></li>
+<li><code>Rules/Movement/Hurling Through Objects.md</code></li>
+<li><code>Rules/Movement/Non Burrowing Creatures.md</code></li>
+<li><code>Rules/Movement/Slamming Into Objects.md</code></li>
+<li><code>Rules/Movement/Slamming into Creatures.md</code></li>
+<li><code>Rules/Movement/Targeting Burrowing Creatures.md</code></li>
+<li><code>Rules/Movement/Vertical.md</code></li>
+<li><code>Rules/Movement/When a Creature Moves.md</code></li>
+</ul>
+<h3 id="whole-book-aggregate-page-the-unified-browse-layout-has-no-book-level-pages-4-3-in-the-final-release">whole-book aggregate page — the unified (Browse) layout has no book-level pages — 4 (3 in the final release)<a class="headerlink" href="#whole-book-aggregate-page-the-unified-browse-layout-has-no-book-level-pages-4-3-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Bestiary/Draw Steel Monsters - Unlinked.md</code></li>
+<li><code>Bestiary/monsters/Draw Steel Monsters - Unlinked.md</code> <em>(historical release only)</em></li>
+<li><code>Rules/Draw Steel Heroes - Unlinked.md</code></li>
+<li><code>Rules/Draw Steel Heroes.md</code></li>
+</ul>
+<h3 id="chapter-aggregate-page-with-no-unified-counterpart-2-2-in-the-final-release">chapter aggregate page with no unified counterpart — 2 (2 in the final release)<a class="headerlink" href="#chapter-aggregate-page-with-no-unified-counterpart-2-2-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Chapters/Perks.md</code></li>
+<li><code>Rules/Chapters/Rewards.md</code></li>
+</ul>
+<h3 id="no-entity-of-this-nametypebook-in-the-unified-tree-content-removed-or-renamed-beyond-matching-1-1-in-the-final-release">no entity of this name+type+book in the unified tree (content removed or renamed beyond matching) — 1 (1 in the final release)<a class="headerlink" href="#no-entity-of-this-nametypebook-in-the-unified-tree-content-removed-or-renamed-beyond-matching-1-1-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Kits/Kits Table.md</code></li>
+</ul>
+<h3 id="every-same-named-candidate-belongs-to-an-unsanctioned-type-family-class-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release">every same-named candidate belongs to an unsanctioned type family (class) — rejected rather than substituted (review M4) — 1 (0 in the final release)<a class="headerlink" href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-class-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Classes By Level/Fury/2nd Level Aspect Ability.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kit-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release">every same-named candidate belongs to an unsanctioned type family (kit) — rejected rather than substituted (review M4) — 1 (0 in the final release)<a class="headerlink" href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kit-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rules/Kits/Lets Dance.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="every-same-named-candidate-belongs-to-an-unsanctioned-type-family-complications-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release">every same-named candidate belongs to an unsanctioned type family (complications) — rejected rather than substituted (review M4) — 1 (0 in the final release)<a class="headerlink" href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-complications-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Complications/Elemental Absorption.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kits-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release">every same-named candidate belongs to an unsanctioned type family (kits) — rejected rather than substituted (review M4) — 1 (0 in the final release)<a class="headerlink" href="#every-same-named-candidate-belongs-to-an-unsanctioned-type-family-kits-rejected-rather-than-substituted-review-m4-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Kits/Caster Kits/Dancer.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementburrowmd-movementburrowmd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Burrow.md</code> → <code>movement/burrow.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementburrowmd-movementburrowmd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Burrow.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementcrawlmd-movementcrawlmd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Crawl.md</code> → <code>movement/crawl.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementcrawlmd-movementcrawlmd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Crawl.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementflymd-movementflymd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Fly.md</code> → <code>movement/fly.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementflymd-movementflymd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Fly.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementjumpmd-movementjumpmd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Jump.md</code> → <code>movement/jump.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementjumpmd-movementjumpmd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Jump.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementshiftingmd-movementshiftingmd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Shifting.md</code> → <code>movement/shifting.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementshiftingmd-movementshiftingmd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Shifting.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementteleportmd-movementteleportmd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Teleport.md</code> → <code>movement/teleport.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementteleportmd-movementteleportmd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Teleport.md</code> <em>(historical release only)</em></li>
+</ul>
+<h3 id="unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementwalkmd-movementwalkmd-1-0-in-the-final-release">unsafe on a case-insensitive filesystem — case-only rename (<code>Movement/Walk.md</code> → <code>movement/walk.md</code>) — 1 (0 in the final release)<a class="headerlink" href="#unsafe-on-a-case-insensitive-filesystem-case-only-rename-movementwalkmd-movementwalkmd-1-0-in-the-final-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Movement/Walk.md</code> <em>(historical release only)</em></li>
+</ul>
+<h2 id="final-release-target-collisions-45">Final-release target collisions — 45<a class="headerlink" href="#final-release-target-collisions-45" title="Permanent link">&para;</a></h2>
+<p>Two paths from the FINAL release resolve to one unified file — the old tree filed one entity twice. The higher-scoring path (ties broken lexicographically) keeps the mapping; the other is DROPPED from the map and left in place, so the map is a function on the final release.</p>
+<p><strong>Injectivity is a FINAL-RELEASE-ONLY property, by design.</strong> Across the union of all 243 releases the same entity legitimately lived at several paths, and those spellings never coexist in one vault — enforcing global injectivity would mean refusing to migrate users on older releases. A user on a <em>transitional</em> release (one whose tree mixes two layouts) can therefore see a non-zero <strong>blocked</strong> count: two of their files map to one destination, the first move wins deterministically (plan order is sorted by path), and the second is reported and left in place. Nothing is overwritten and nothing is lost; the second file simply keeps its old name.</p>
+<ul>
+<li><code>feature/censor/level-4/blessing-of-life.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Blessing of Life.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Blessing of Life.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/impervious-touch.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Impervious Touch.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Impervious Touch.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/improved-hands-of-the-maker.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Improved Hands of the Maker.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Improved Hands of the Maker.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/improved-sanctified-weapon.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Improved Sanctified Weapon.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Improved Sanctified Weapon.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/invocation-of-the-heart.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Invocation of the Heart.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Invocation of the Heart.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/light-of-revelation.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Light of Revelation.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Light of Revelation.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/oracular-warning.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Oracular Warning.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Oracular Warning.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/saints-epiphany.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Saints Epiphany.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Saints Epiphany.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/seance.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Seance.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Seance.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/windwalk.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Windwalk.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Windwalk.md</code> (dropped)</li>
+<li><code>feature/censor/level-4/wode-road.md</code> ← <code>Rules/Features/Censor/4th-Level Features/Wode Road.md</code> (mapped), <code>Rules/Features/Conduit/4th-Level Features/Wode Road.md</code> (dropped)</li>
+<li><code>feature/troubadour/level-1/signature-ability.md</code> ← <code>Rules/Features/Censor/1st-Level Features/Signature Ability.md</code> (mapped), <code>Rules/Features/Fury/1st-Level Features/Signature Ability.md</code> (dropped)</li>
+<li><code>feature/troubadour/level-1/signature-ability.md</code> ← <code>Rules/Features/Censor/1st-Level Features/Signature Ability.md</code> (mapped), <code>Rules/Features/Shadow/1st-Level Features/Signature Ability.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-4/blessing-of-secrets.md</code> ← <code>Rules/Features/Conduit/4th-Level Features/Blessing of Secrets.md</code> (mapped), <code>Rules/Abilities/Conduit/4th-Level Features/Blessing of Secrets.md</code> (dropped)</li>
+<li><code>feature/ability/troubadour/level-5/take-two.md</code> ← <code>Rules/Features/Troubadour/5th-Level Features/Take Two.md</code> (mapped), <code>Rules/Abilities/Troubadour/5th-Level Features/Take Two.md</code> (dropped)</li>
+<li><code>feature/ability/troubadour/level-5/we-cant-be-upstaged.md</code> ← <code>Rules/Features/Troubadour/5th-Level Features/We Cant Be Upstaged.md</code> (mapped), <code>Rules/Abilities/Troubadour/5th-Level Features/We Cant Be Upstaged.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-5/beacon-of-grace.md</code> ← <code>Rules/Abilities/Conduit/5th-Level Features/Beacon of Grace.md</code> (mapped), <code>Rules/Abilities/Conduit/4th-Level Features/Beacon of Grace.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-5/penance.md</code> ← <code>Rules/Abilities/Conduit/5th-Level Features/Penance.md</code> (mapped), <code>Rules/Abilities/Conduit/4th-Level Features/Penance.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-5/sanctuary.md</code> ← <code>Rules/Abilities/Conduit/5th-Level Features/Sanctuary.md</code> (mapped), <code>Rules/Abilities/Conduit/4th-Level Features/Sanctuary.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-5/vessel-of-retribution.md</code> ← <code>Rules/Abilities/Conduit/5th-Level Features/Vessel of Retribution.md</code> (mapped), <code>Rules/Abilities/Conduit/4th-Level Features/Vessel of Retribution.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-8/arise.md</code> ← <code>Rules/Abilities/Conduit/8th-Level Features/Arise.md</code> (mapped), <code>Rules/Abilities/Conduit/7th-Level Features/Arise.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-8/blessing-of-steel.md</code> ← <code>Rules/Abilities/Conduit/8th-Level Features/Blessing of Steel.md</code> (mapped), <code>Rules/Abilities/Conduit/7th-Level Features/Blessing of Steel.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-8/blessing-of-the-blade.md</code> ← <code>Rules/Abilities/Conduit/8th-Level Features/Blessing of the Blade.md</code> (mapped), <code>Rules/Abilities/Conduit/7th-Level Features/Blessing of the Blade.md</code> (dropped)</li>
+<li><code>feature/ability/conduit/level-8/drag-the-unworthy.md</code> ← <code>Rules/Abilities/Conduit/8th-Level Features/Drag the Unworthy.md</code> (mapped), <code>Rules/Abilities/Conduit/7th-Level Features/Drag the Unworthy.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/heart-of-the-wode.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Heart of the Wode.md</code> (mapped), <code>Rules/Abilities/Elementalist/4th-Level Features/Heart of the Wode.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/muse-of-fire.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Muse of Fire.md</code> (mapped), <code>Rules/Abilities/Elementalist/4th-Level Features/Muse of Fire.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/return-to-oblivion.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Return to Oblivion.md</code> (mapped), <code>Rules/Abilities/Elementalist/4th-Level Features/Return to Oblivion.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/summon-source-of-earth.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Summon Source of Earth.md</code> (mapped), <code>Rules/Abilities/Elementalist/4th-Level Features/Summon Source of Earth.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/world-torn-asunder.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/World Torn Asunder.md</code> (mapped), <code>Rules/Abilities/Elementalist/4th-Level Features/World Torn Asunder.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/heart-of-the-wode.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Heart of the Wode.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Heart of the Wode.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-6/luminous-champion-aloft.md</code> ← <code>Rules/Abilities/Elementalist/6th-Level Features/Luminous Champion Aloft.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Luminous Champion Aloft.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-6/magma-titan.md</code> ← <code>Rules/Abilities/Elementalist/6th-Level Features/Magma Titan.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Magma Titan.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-6/meteor.md</code> ← <code>Rules/Abilities/Elementalist/6th-Level Features/Meteor.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Meteor.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/muse-of-fire.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Muse of Fire.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Muse of Fire.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/return-to-oblivion.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Return to Oblivion.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Return to Oblivion.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/summon-source-of-earth.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/Summon Source of Earth.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/Summon Source of Earth.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-6/the-wode-remembers-and-returns.md</code> ← <code>Rules/Abilities/Elementalist/6th-Level Features/The Wode Remembers and Returns.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/The Wode Remembers and Returns.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-8/world-torn-asunder.md</code> ← <code>Rules/Abilities/Elementalist/8th-Level Features/World Torn Asunder.md</code> (mapped), <code>Rules/Abilities/Elementalist/5th-Level Features/World Torn Asunder.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-9/earth-rejects-you.md</code> ← <code>Rules/Abilities/Elementalist/9th-Level Features/Earth Rejects You.md</code> (mapped), <code>Rules/Abilities/Elementalist/8th-Level Features/Earth Rejects You.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-9/prism.md</code> ← <code>Rules/Abilities/Elementalist/9th-Level Features/Prism.md</code> (mapped), <code>Rules/Abilities/Elementalist/8th-Level Features/Prism.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-9/the-green-defends-its-servants.md</code> ← <code>Rules/Abilities/Elementalist/9th-Level Features/The Green Defends Its Servants.md</code> (mapped), <code>Rules/Abilities/Elementalist/8th-Level Features/The Green Defends Its Servants.md</code> (dropped)</li>
+<li><code>feature/ability/elementalist/level-9/unquenchable-fire.md</code> ← <code>Rules/Abilities/Elementalist/9th-Level Features/Unquenchable Fire.md</code> (mapped), <code>Rules/Abilities/Elementalist/8th-Level Features/Unquenchable Fire.md</code> (dropped)</li>
+<li><code>rule/combat/signature-ability.md</code> ← <code>Rules/Features/Conduit/1st-Level Features/Signature Abilities.md</code> (mapped), <code>Rules/Features/Elementalist/1st-Level Features/Signature Abilities.md</code> (dropped)</li>
+<li><code>rule/combat/signature-ability.md</code> ← <code>Rules/Features/Conduit/1st-Level Features/Signature Abilities.md</code> (mapped), <code>Rules/Features/Null/1st-Level Features/Signature Abilities.md</code> (dropped)</li>
+<li><code>rule/combat/signature-ability.md</code> ← <code>Rules/Features/Conduit/1st-Level Features/Signature Abilities.md</code> (mapped), <code>Rules/Features/Talent/1st-Level Features/Signature Abilities.md</code> (dropped)</li>
+</ul>
+<h2 id="new-content-with-no-old-counterpart">New content with no old counterpart<a class="headerlink" href="#new-content-with-no-old-counterpart" title="Permanent link">&para;</a></h2>
+<p>1020 of the 3078 unified files were never in data-md-dse. They are created by the normal sync, not by the migration. By book:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">count</th>
+<th>book</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">499</td>
+<td><code>mcdm.heroes.v1</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">240</td>
+<td><code>mcdm.beastheart.v1</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">227</td>
+<td><code>mcdm.summoner.v1</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">54</td>
+<td><code>mcdm.monsters.v1</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The Draw Steel Compendium is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../javascripts/tablesort.js"></script>
+      
+    
+  </body>
+</html>
