@@ -1815,6 +1815,12 @@ async function main() {
 						}
 						await sleep(500);
 						await clearNotices();
+						// Blur whatever the modal focused before shooting. A focused text
+						// input paints a BLINKING CARET, so the same modal captured twice
+						// differs by a 2x30px bar and the docs image churns on every run for
+						// no reason (observed on initiative-tracker-stamina-modal.png).
+						await evaluate(cdp, `document.activeElement?.blur?.()`);
+						await sleep(250);
 						await docsCapture(
 							cdp,
 							outFile,
