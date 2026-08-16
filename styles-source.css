@@ -831,8 +831,18 @@ code.dsa {
        the container it's supposed to be in". Widened, and padding/box-sizing made
        explicit (matching .dse-stepper__input's own convention) so the box's
        printed size no longer depends on inherited host chrome. */
+    /* Review fix round 1 — `box-sizing: border-box` folds the padding declared just
+       above INTO these widths, so the first pass at this fix actually SHRANK the
+       usable text area (amount: 60px of content before, 58.3px after) and the
+       "Amount" placeholder started clipping — the very symptom the change was
+       written to stop. Measuring the placeholder with canvas/measureText says it
+       still fits; the rendered pixels say otherwise (the placeholder draws in a
+       wider face than a measuring node picks up), so these widths were set by
+       screenshotting the row and reading the glyphs, and must be re-checked that
+       way if the padding or font-size here ever changes. 6em leaves ~67px of
+       content, comfortably more than the 60px that fit pre-fix. */
     .dse-init__malice-quickadd-amount {
-        width: 5.5em;
+        width: 6em;
         padding: 0.25em 0.4em;
         box-sizing: border-box;
     }
@@ -841,8 +851,14 @@ code.dsa {
        reason: two inputs in the same row should look like a matched pair, not one
        tight/one loose depending on which one happens to already be wide enough to
        hide the missing declaration. */
+    /* Review fix round 1 — this one was worse than -amount: it gained the padding
+       and box-sizing above but no width bump at all, taking its content area from
+       107px to 92.3px against a ~97px placeholder ("E.g. Feytouched" rendered as
+       "E.g. Feytouche"). 9.5em restores ~114px of content — more than the 107px
+       that fit pre-fix — and the whole row (amount + label + Add) still sits well
+       inside .dse-init__malice-panel's 320px cap, so nothing new wraps. */
     .dse-init__malice-quickadd-label {
-        width: 8em;
+        width: 9.5em;
         padding: 0.25em 0.4em;
         box-sizing: border-box;
     }
