@@ -42,3 +42,7 @@ demo-vault/Harness
 demo-vault/.obsidian/workspace.json
 demo-vault/.obsidian/plugins/*
 !demo-vault/.obsidian/plugins/draw-steel-elements
+
+# SC-164: `mkdocs`/`mike deploy`'s own build output dir (mkdocs.yml has no explicit
+# site_dir, so this is the default) — regenerated on every deploy, never committed.
+site/
