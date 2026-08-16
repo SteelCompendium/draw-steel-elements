@@ -17,6 +17,7 @@ import { normalizeSccTarget } from '@/refs/SccResolver';
 import type { EncounterComputed, EncounterModel, EncounterRow } from './model';
 import { computeEncounter, rowEv } from './budget';
 import { serialize as serializeInitiative } from '../initiative/model';
+import { GENERATED_FROM_KEY, findGeneratedBlock } from '@/framework/sidebar/anchor';
 import type { EncounterData, EnemyGroup } from '../initiative/model';
 
 /** One resolved (or degraded) roster row — the shape buildRoster/buildEncounterData
@@ -104,6 +105,14 @@ function groupRows(resolved: RowResolution[]): GroupedRow[] {
  *  the button still creates the tracker block and tells the user how to finish the
  *  hand-off by hand. */
 type SidebarHandoff = (filePath: string, alias: string, cursorLine?: number) => Promise<void>;
+
+/** SC-153 — where this encounter's tracker block ended up: the note, and the 0-based line
+ *  of its opening fence, which is what lets the sidebar hand-off bind THAT block rather
+ *  than the note's first `ds-initiative`. */
+interface TrackerBlockRef {
+	filePath: string;
+	lineStart: number;
+}
 let sidebarHandoff: SidebarHandoff | null = null;
 
 /** Wired by Task 10 (main.ts) to `(filePath, alias, line) => sendToSidebar(dseSidebarServices, filePath, alias, line)`. */
@@ -410,24 +419,91 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 *  Task 4 review round 1, Finding 5 (LOW): `vault.process` wrapped in try/catch — an
 	 *  I/O failure now surfaces a Notice instead of an unhandled promise rejection,
 	 *  matching every other "never silent" branch in this method. */
-	private async writeTrackerBlock(resolved: RowResolution[]): Promise<string | null> {
+	private async writeTrackerBlock(resolved: RowResolution[]): Promise<TrackerBlockRef | null> {
 		const filePath = this.cx.host.sourcePath;
 		const file = this.cx.app.vault.getAbstractFileByPath(filePath);
 		if (!(file instanceof TFile)) {
 			new Notice('Draw Steel Elements: cannot locate this note to create a tracker block.');
 			return null;
 		}
+
+		// SC-153 — identity first: this encounter needs a durable id before it can claim a
+		// tracker block as "mine". `_dse_anchor` is the codebase's one durable-block-id
+		// mechanism and EncounterModel already declares the field (round-trips for free —
+		// parse mutates-and-returns the raw object), so there is nothing to invent. It is
+		// written through the element's normal persist path, which this view already uses
+		// for `_computed` (syncComputed above), so this is not a new class of write.
+		const generatorId = this.ensureEncounterAnchor();
+
 		const data = this.buildEncounterData(resolved);
-		const body = serializeInitiative(data);
-		const fenced = `\n\n\`\`\`ds-initiative\n${body}\n\`\`\`\n`;
+		const body = `${GENERATED_FROM_KEY}: ${generatorId}\n${serializeInitiative(data)}`;
+
+		let reused = false;
+		let lineStart = 0;
 		try {
-			await this.cx.app.vault.process(file, (content) => content.replace(/\s*$/, '') + fenced);
+			await this.cx.app.vault.process(file, (content) => {
+				const existing = findGeneratedBlock(content, 'ds-initiative', generatorId);
+				if (existing) {
+					// REFRESH in place. The block keeps its position, its fence and — crucially —
+					// any `_dse_anchor` the sidebar stamped on it, because we splice only the
+					// BODY lines and re-stamp the marker ourselves. That is what lets the sidebar
+					// panel bound to this block survive the refresh instead of going stale.
+					reused = true;
+					lineStart = existing.lineStart;
+					const lines = content.split('\n');
+					const anchorLine = lines
+						.slice(existing.lineStart + 1, existing.lineEnd)
+						.find((l) => /^_dse_anchor:/.test(l));
+					const nextBody = anchorLine ? `${anchorLine}\n${body}` : body;
+					lines.splice(
+						existing.lineStart + 1,
+						existing.lineEnd - existing.lineStart - 1,
+						...nextBody.split('\n'),
+					);
+					return lines.join('\n');
+				}
+				const trimmed = content.replace(/\s*$/, '');
+				// +2 for the blank line and the opening fence the template below adds.
+				lineStart = trimmed.split('\n').length + 1;
+				return `${trimmed}\n\n\`\`\`ds-initiative\n${body}\n\`\`\`\n`;
+			});
 		} catch (e) {
 			new Notice(`Draw Steel Elements: failed to write the initiative tracker block — ${errorMessage(e)}`);
 			return null;
 		}
-		new Notice('Draw Steel Elements: initiative tracker block created at the end of this note.');
-		return filePath;
+		new Notice(
+			reused
+				? 'Draw Steel Elements: this encounter\'s initiative tracker block was refreshed.'
+				: 'Draw Steel Elements: initiative tracker block created at the end of this note.',
+		);
+		return { filePath, lineStart };
+	}
+
+	/**
+	 * SC-153 — returns this encounter block's durable id, minting one on first use.
+	 *
+	 * SYNCHRONOUS, and the write is deliberately NOT awaited. `ElementView.persist()` is
+	 * debounced: awaiting it parks until the flush timer fires, so an awaited version made
+	 * the whole button hang — in a host whose timers never advance (jsdom, and any future
+	 * caller that tears down before the debounce) it hung forever and the sidebar never
+	 * opened at all. The id exists the instant it is assigned to the model, which is all
+	 * the caller needs; letting the write settle on its own schedule also coalesces it with
+	 * whatever `syncComputed` already had pending. The later flush re-reads the note and
+	 * splices only the encounter's own fence, so it cannot clobber the tracker block this
+	 * press is about to append.
+	 *
+	 * Persisting is skipped when the host is read-only (`!canPersist`): the id is still
+	 * returned, so the tracker still gets addressed correctly for THIS session — it just
+	 * won't survive a reload. That matches how `syncComputed` already treats a read-only
+	 * host, and is strictly better than refusing to act.
+	 */
+	private ensureEncounterAnchor(): string {
+		const existing = this.model._dse_anchor;
+		if (existing) return existing;
+		const id = Math.random().toString(16).slice(2, 8).padEnd(6, '0');
+		this.model._dse_anchor = id;
+		if (this.cx.host.canPersist) void this.persist();
+		return id;
 	}
 
 	private async handleCreateTrackerBlock(resolved: RowResolution[]): Promise<void> {
@@ -440,8 +516,9 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 *  written by this point (writeTrackerBlock above), so this failure is scoped to
 	 *  "couldn't open it in the sidebar," not "lost the tracker." */
 	private async handleOpenInSidebar(resolved: RowResolution[]): Promise<void> {
-		const filePath = await this.writeTrackerBlock(resolved);
-		if (filePath === null) return;
+		const ref = await this.writeTrackerBlock(resolved);
+		if (ref === null) return;
+		const { filePath, lineStart } = ref;
 		if (!sidebarHandoff) {
 			new Notice(
 				'Draw Steel Elements: tracker block created — open the Draw Steel sidebar and use ' +
@@ -450,7 +527,13 @@ export class EncounterView extends ElementView<EncounterModel> {
 			return;
 		}
 		try {
-			await sidebarHandoff(filePath, 'ds-initiative');
+			// SC-153 — hand the LINE over, not just the alias. Without it sendToSidebar binds
+			// `fences[0]`, the first ds-initiative block in the note, which for a note with
+			// more than one tracker is reliably the wrong one: the encounter would refresh
+			// its own block at the bottom while the sidebar kept showing someone else's at
+			// the top. The `cursorLine` parameter already exists for exactly this
+			// disambiguation; there simply was no caller passing it.
+			await sidebarHandoff(filePath, 'ds-initiative', lineStart);
 		} catch (e) {
 			new Notice(`Draw Steel Elements: tracker block created, but opening it in the sidebar failed — ${errorMessage(e)}`);
 		}

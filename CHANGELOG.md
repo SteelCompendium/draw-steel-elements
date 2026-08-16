@@ -15,6 +15,16 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [BUGFIX] **"Open in sidebar" stops piling up initiative trackers** (SC-153). Every
+  press of an encounter block's "Open in sidebar" button appended another
+  `ds-initiative` block to the note AND stacked another copy of it in the sidebar —
+  three presses left three trackers and three panels, while the sidebar kept showing
+  the first one, so the panel you were looking at went stale as soon as a second
+  tracker existed. The button is now idempotent: the first press creates the tracker,
+  and every press after that refreshes that same block in place and reveals the panel
+  it is already pinned to. An encounter recognises its own tracker by a durable id, so
+  a note with two encounters still gets one tracker each. Pinning any block that is
+  already pinned is now a no-op everywhere in the sidebar, not just for this button.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the

@@ -178,4 +178,68 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 
 		jest.useRealTimers();
 	});
+
+	// —— SC-153: addPanel is idempotent on block identity ——
+	//
+	// Nothing checked whether a block was already pinned, so every entry point that funnels
+	// through sendToSidebar (the generic command, the initiative command, the encounter
+	// builder's button) stacked a second panel for the same block on a second press. The
+	// encounter builder surfaced it because its button is the one users press repeatedly,
+	// but the duplicate belongs to the sidebar to prevent.
+	test('pinning the SAME anchored block twice keeps one panel and returns the existing one', async () => {
+		const { app } = setup();
+		app.vault.setFile('Note.md', counterBlock(ANCHOR_A));
+		const { view } = await openView(app);
+
+		const first = view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		await flushAsync();
+		const second = view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		await flushAsync();
+
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
+		// The caller gets the live panel back, not a discarded duplicate.
+		expect(second).toBe(first);
+		// `collapsed` is view state, not identity — a differing value is still the same block.
+		const third = view.addPanel({
+			filePath: 'Note.md',
+			alias: 'ds-counter',
+			anchorId: ANCHOR_A,
+			collapsed: true,
+		});
+		await flushAsync();
+		expect(third).toBe(first);
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
+	});
+
+	test('two genuinely different blocks still get their own panels', async () => {
+		const { app } = setup();
+		app.vault.setFile('NoteA.md', counterBlock(ANCHOR_A));
+		app.vault.setFile('NoteB.md', counterBlock(ANCHOR_B));
+		const { view } = await openView(app);
+
+		// Different anchor in the same note, different note with the same anchor, and the
+		// same note+anchor under a different alias are all DIFFERENT blocks.
+		view.addPanel({ filePath: 'NoteA.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		view.addPanel({ filePath: 'NoteA.md', alias: 'ds-counter', anchorId: ANCHOR_B });
+		view.addPanel({ filePath: 'NoteB.md', alias: 'ds-counter', anchorId: ANCHOR_A });
+		await flushAsync();
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(3);
+	});
+
+	// SC-158's strict-body blocks carry no anchor at all — their identity IS the body, so
+	// the dedupe has to compare that instead or it would collapse two different pinned
+	// `ds-scc` codes into one panel.
+	test('strict-body panels dedupe on BODY, and two different bodies stay two panels', async () => {
+		const { app } = setup();
+		app.vault.setFile('Note.md', counterBlock(ANCHOR_A));
+		const { view } = await openView(app);
+
+		const a1 = view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: null, body: 'one' });
+		const a2 = view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: null, body: 'one' });
+		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: null, body: 'two' });
+		await flushAsync();
+
+		expect(a2).toBe(a1);
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(2);
+	});
 });

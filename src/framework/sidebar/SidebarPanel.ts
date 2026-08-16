@@ -48,6 +48,18 @@ export class SidebarPanel extends Component {
 	 *  anchored block's current body. Renders the read-only "not addressable" degrade
 	 *  card (F1 §4.4 / spec §1.5) instead when the def is unknown, the backing note is
 	 *  missing, or the anchored block can't currently be found. */
+	/**
+	 * SC-153 — bring an ALREADY-mounted panel to the user's attention, for the case where
+	 * they pinned a block that is pinned already (`DseSidebarView.addPanel`). Without this
+	 * the second press looks like nothing happened when the panel is scrolled out of view.
+	 * Deliberately does not re-render: the panel is already live and, for the encounter
+	 * builder's refresh path, its host's own change listener has already picked up the new
+	 * body. `scrollIntoView` is guarded because jsdom does not implement it.
+	 */
+	reveal(): void {
+		this.panelEl?.scrollIntoView?.({ block: 'nearest' });
+	}
+
 	async mount(container: HTMLElement): Promise<void> {
 		this.panelEl = container.createDiv({ cls: 'dse-sidebar__panel' });
 

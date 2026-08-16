@@ -120,7 +120,30 @@ export class DseSidebarView extends ItemView {
 	/** Constructs + mounts a new panel (fire-and-forget on the async mount — callers that
 	 *  need to observe the mounted DOM synchronously in a test should await a macrotask
 	 *  flush, matching the rest of the DSE write-behind/mount conventions). */
+	/**
+	 * SC-153 — IDEMPOTENT by block identity. Pinning a block that is already pinned
+	 * focuses the panel it already has instead of stacking a second copy of it.
+	 *
+	 * Every entry point funnels through here (`sendToSidebar`, so: the generic "Send block
+	 * to sidebar" command, the initiative command, and the encounter builder's "Open in
+	 * sidebar"), and none of them checked — so pressing any of them twice on one block
+	 * mounted the same block twice, each panel independently re-rendering the same note
+	 * text. The encounter builder made it obvious because its button is the one users press
+	 * repeatedly, but the duplicate is the sidebar's to prevent, not the caller's.
+	 *
+	 * Identity mirrors the two addressing modes exactly (`SidebarPanelState`): an anchored
+	 * block is its `anchorId`, a `strictBody` block is its `body`. Two panels differing
+	 * only in `collapsed` are the same panel.
+	 */
 	addPanel(state: SidebarPanelState): SidebarPanel {
+		const existing = this.panels.find((p) => samePanelTarget(p.state, state));
+		if (existing) {
+			// Already pinned. Re-mounting would duplicate it; doing nothing would make the
+			// button feel broken when the panel is scrolled out of view — so reveal it, and
+			// let the caller's own reveal of the leaf do the rest.
+			existing.reveal();
+			return existing;
+		}
 		return this.mountPanel(state);
 	}
 
@@ -146,4 +169,18 @@ export class DseSidebarView extends ItemView {
 		if (!this.panelsEl) this.panelsEl = this.contentEl.createDiv({ cls: 'dse-sidebar' });
 		return this.panelsEl;
 	}
+}
+
+/**
+ * SC-153 — do these two panel states address the SAME block? Deliberately mirrors the
+ * addressing split in `SidebarPanelState`/`SidebarBlockHost` rather than comparing whole
+ * objects: `collapsed` is view state, not identity, and `body` is only meaningful for a
+ * strict-body (never-anchored) block. A null-vs-null anchor with differing bodies is two
+ * different blocks; a shared anchorId is one block regardless of body drift, which is the
+ * whole point of stamping an anchor.
+ */
+function samePanelTarget(a: SidebarPanelState, b: SidebarPanelState): boolean {
+	if (a.filePath !== b.filePath || a.alias !== b.alias) return false;
+	if (a.anchorId !== null || b.anchorId !== null) return a.anchorId === b.anchorId;
+	return (a.body ?? '') === (b.body ?? '');
 }
