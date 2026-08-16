@@ -186,6 +186,16 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		expect(afterSecond).toContain(`_dse_anchor: ${anchor}`);
 		expect(Notice.notices.some((n) => /tracker block created/i.test(n))).toBe(true);
 		expect(Notice.notices.some((n) => /was refreshed/i.test(n))).toBe(true);
+
+		// The panel was mounted BEFORE the refresh spliced its backing block. If the splice
+		// had dropped or moved the anchor, SidebarBlockHost would fail to re-locate the
+		// block and the panel would degrade to its read-only "not addressable" card — the
+		// failure mode this whole in-place-splice approach exists to avoid.
+		const leaf = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0];
+		const view = leaf.view as unknown as DseSidebarView;
+		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
+		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
+		expect(panelEl.querySelector('[data-dse-element="initiative"]')).not.toBeNull();
 		plugin.onunload();
 	});
 
