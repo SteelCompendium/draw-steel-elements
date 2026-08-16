@@ -369,6 +369,20 @@ if (!fs.existsSync(path.join(repo, 'main.js'))) {
 // git-ignored, regenerated Harness folder notes-gen.mjs owns, under a `docs-` prefix so
 // they can never collide with a generated element note.
 const docsNoteName = (entry) => `docs-${entry.out.replace(/\.[a-z]+$/i, '')}`;
+// SC-142 phase 2b hardening (added after I tripped it myself, 2026-08-15): docs mode
+// refuses to run on the DEFAULT display. `DSE_CAMERA_DISPLAY` falls back to `:1`, which on
+// a workstation is the developer's own desktop — so invoking this file directly, instead of
+// through `npm run docs-shots`, silently opens a real Obsidian window on their screen and
+// can collide with the one they already have open. The runner (docs-shots.mjs) always
+// starts its own Xvfb and passes the display explicitly, so this only ever fires on a
+// hand-rolled invocation. `DSE_DOCS_NO_XVFB=1` is the documented, deliberate escape hatch
+// (the "quit Obsidian and use your own display" fallback) and still works.
+if (DOCS_MODE && DISPLAY === ':1' && process.env.DSE_DOCS_NO_XVFB !== '1') {
+	throw new Error(
+		'docs mode refuses to run on :1 (the developer\'s own display). Run `npm run docs-shots`, ' +
+			'which starts its own Xvfb — or set DSE_DOCS_NO_XVFB=1 to opt in deliberately.',
+	);
+}
 if (DOCS_MODE) {
 	const harness = path.join(vaultPath, 'Harness');
 	fs.mkdirSync(harness, { recursive: true });
