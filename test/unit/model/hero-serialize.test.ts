@@ -35,9 +35,13 @@ describe('D7 Task 7: hero model parse (spec §3.1 shape)', () => {
 		expect(model.defn.level).toBe(3);
 		expect(model.defn.characteristics).toEqual({ might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 });
 		expect(model.defn.kits).toEqual(['scc.v1:mcdm.heroes.v1/kit/mountain']);
+		// SC-156 replaced the example's two ellipsis-placeholder codes with real corpus
+		// entries. That the codes RESOLVE is pinned separately, against a real
+		// CompendiumIndex (test/dom/elements/heroExampleCodes.test.ts); this assertion
+		// only cares that parse carries whatever the example ships through untouched.
 		expect(model.defn.abilities).toEqual([
-			'scc.v1:mcdm.heroes.v1/.../brute-strike',
-			'scc.v1:mcdm.heroes.v1/.../into-the-fray',
+			'scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/brutal-slam',
+			'scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/thunder-roar',
 		]);
 		expect(model.defn.resource).toEqual({ type: 'Ferocity', min: 0 });
 		expect(model.state).toEqual({

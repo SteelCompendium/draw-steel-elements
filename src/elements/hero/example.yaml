@@ -8,8 +8,8 @@ kits:    [scc.v1:mcdm.heroes.v1/kit/mountain]       # 0–2 (Tactician: 2)
 characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
 skills:  [Endurance, Intimidate, Nature]
 abilities:                                          # SCC codes or inline ability YAML
-  - scc.v1:mcdm.heroes.v1/.../brute-strike           # signature
-  - scc.v1:mcdm.heroes.v1/.../into-the-fray          # heroic (costs ferocity)
+  - scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/brutal-slam   # signature
+  - scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/thunder-roar  # heroic (5 Ferocity)
 # optional overrides when NOT compendium-resolving:
 max_stamina: 48            # else derived from class+kit+level
 recoveries_max: 10         # else class-derived

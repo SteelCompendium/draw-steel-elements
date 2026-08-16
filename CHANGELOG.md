@@ -243,6 +243,23 @@ for what needs action.
   count and date only appeared if you closed the settings window and opened it
   again. The line now follows the sync live, whether you started it from the
   settings button, the command palette or the first-run prompt.
+- [FIX] **The hero sheet you insert starts with two real abilities** (SC-156). The
+  starter block behind `/ds` -> Hero sheet and "Insert Draw Steel: Hero sheet"
+  listed two ability codes that were never valid — `.../brute-strike` and
+  `.../into-the-fray`, with a literal `...` where the type belongs — so every hero
+  sheet anyone inserted began with two permanently broken ability rows. (It is also
+  where the SC-141 report's broken input came from.) They are now two real Fury
+  level-1 abilities, a signature and a heroic one: **Brutal Slam** and **Thunder
+  Roar**. A test now resolves every code the example ships against the real corpus,
+  so a placeholder cannot get back in.
+- [INTERNAL] Both reported failures of the compendium insert commands are pinned by
+  regression tests over the real corpus bytes (SC-147, SC-148). Neither needed a
+  code change: "Insert compendium reference" writing a `ds-rule` fence that then
+  refused to render, and "Insert compendium block (snapshot)" dumping a whole
+  `ds-feature` block nested inside a `ds-rule` one, were both consequences of no
+  adapter claiming the `ability` type, which SC-141 fixed — and SC-149 independently
+  removed the `ds-rule` fallback the fence came from. The tests drive both commands
+  end to end for the exact entry from the reports.
 - [FIX] **Abilities referenced by their compendium code now render** (SC-141).
   Listing an ability in a `ds-hero` sheet by its code — say
   `scc.v1:mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade` — produced

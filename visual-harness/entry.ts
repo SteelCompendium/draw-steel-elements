@@ -300,8 +300,11 @@ effects:
 // conditions — a level-1 hero fresh out of session zero — so the Conditions region renders
 // only its header + an empty-state line while Skills renders one chip: the shortest
 // possible content next to another short-but-not-identical region, in the same grid row.
-// Same ancestry/class/kit/ability refs as heroDefault (already proven to resolve/degrade
-// cleanly in the sweep) to keep this an isolated skills/conditions change, nothing else.
+// Same ancestry/class/kit/ability refs as heroDefault to keep this an isolated
+// skills/conditions change, nothing else. SC-156 replaced that pair of ability refs — in
+// BOTH fixtures at once, so they stay identical — with the real corpus codes
+// (fury.level-1 brutal-slam + thunder-roar), which the harness compendium now carries, so
+// these rows render real ability cards instead of degrading.
 const heroSparse = `name: Wren Larkspur
 level: 1
 ancestry: scc.v1:mcdm.heroes.v1/ancestry/dwarf
@@ -311,8 +314,8 @@ kits:    [scc.v1:mcdm.heroes.v1/kit/mountain]
 characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
 skills:  [Endurance]
 abilities:
-  - scc.v1:mcdm.heroes.v1/.../brute-strike
-  - scc.v1:mcdm.heroes.v1/.../into-the-fray
+  - scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/brutal-slam
+  - scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/thunder-roar
 max_stamina: 48
 recoveries_max: 10
 resource: { type: Ferocity, min: 0 }
