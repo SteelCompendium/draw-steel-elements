@@ -144,7 +144,34 @@ export class DseSidebarView extends ItemView {
 			existing.reveal();
 			return existing;
 		}
-		return this.mountPanel(state);
+		const panel = this.mountPanel(state);
+		// SC-153 FIX ROUND 1 — a panel whose block no longer exists is not a second target,
+		// it is debris. Identity dedupe above only catches a RE-pin of a block that is still
+		// there; delete the block and pin its replacement and the ids legitimately differ, so
+		// the user was left with two panels for one block (the dead one either showing a
+		// "re-link this panel" card or, worse, stale DOM that still looked live). Sweeping
+		// same-note/same-alias panels that no longer resolve turns that back into one panel.
+		// Async because the check re-reads the note (see SidebarPanel.stillAddressable) —
+		// same fire-and-forget convention as mountPanel's own async mount above.
+		void this.evictOrphanedSiblings(panel);
+		return panel;
+	}
+
+	/**
+	 * SC-153 FIX ROUND 1 — drop panels bound to the same note+alias as `keep` whose backing
+	 * block has vanished. Deliberately narrow: only same note AND same alias (a dead panel
+	 * for some unrelated block is none of this pin's business), never `keep` itself, and
+	 * only on a re-read that actually fails to locate the block — a panel that has simply
+	 * not mounted yet reports addressable and is left alone.
+	 */
+	private async evictOrphanedSiblings(keep: SidebarPanel): Promise<void> {
+		for (const panel of [...this.panels]) {
+			if (panel === keep) continue;
+			if (panel.state.filePath !== keep.state.filePath) continue;
+			if (panel.state.alias !== keep.state.alias) continue;
+			if (await panel.stillAddressable()) continue;
+			this.removePanel(panel);
+		}
 	}
 
 	/** Tears the panel + its host/view down (Component cascade — see onClose). */

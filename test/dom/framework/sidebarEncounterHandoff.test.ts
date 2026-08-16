@@ -161,7 +161,7 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		plugin.onunload();
 	});
 
-	test('the first press creates, every later press REFRESHES the same block — keeping its sidebar anchor', async () => {
+	test('the first press creates; a later press BINDS to the same block and writes nothing', async () => {
 		const app = new App();
 		const plugin = makePlugin(app);
 		await plugin.onload();
@@ -180,22 +180,105 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		const afterSecond = app.vault.getContent('Session.md')!;
 
 		expect(fenceCount(afterSecond)).toBe(1);
-		// The refresh spliced the BODY and preserved the anchor line — without that, the
-		// live panel's binding would break on every press and the panel would degrade to
-		// its "backing block not found" card.
 		expect(afterSecond).toContain(`_dse_anchor: ${anchor}`);
+		// SC-153 FIX ROUND 1: the note is BYTE-IDENTICAL across the second press. The
+		// original fix spliced a freshly generated body in ("refresh in place"), which kept
+		// the binding but discarded the tracker's live state; the next test pins the
+		// consequence directly. Here the strongest available statement is the simplest one —
+		// re-pressing does not write.
+		expect(afterSecond).toBe(afterFirst);
 		expect(Notice.notices.some((n) => /tracker block created/i.test(n))).toBe(true);
-		expect(Notice.notices.some((n) => /was refreshed/i.test(n))).toBe(true);
+		expect(Notice.notices.some((n) => /already has an initiative tracker/i.test(n))).toBe(true);
+		expect(Notice.notices.some((n) => /was refreshed/i.test(n))).toBe(false);
 
-		// The panel was mounted BEFORE the refresh spliced its backing block. If the splice
-		// had dropped or moved the anchor, SidebarBlockHost would fail to re-locate the
-		// block and the panel would degrade to its read-only "not addressable" card — the
-		// failure mode this whole in-place-splice approach exists to avoid.
+		// Still one live panel, still bound (not degraded to the "not addressable" card).
 		const leaf = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0];
 		const view = leaf.view as unknown as DseSidebarView;
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
 		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
 		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
 		expect(panelEl.querySelector('[data-dse-element="initiative"]')).not.toBeNull();
+		plugin.onunload();
+	});
+
+	test('SC-153 fix round 1: re-pressing does NOT destroy live tracker state', async () => {
+		// The regression this fix exists for. `ds-initiative` is the live combat document —
+		// round counter, current HP, combatants added mid-fight. The original SC-153 fix
+		// regenerated its body from the encounter definition on every press, so the ordinary
+		// "open the sidebar again after playing for a while" gesture silently reset the
+		// fight. Before SC-153 the state survived (a duplicate block was appended instead),
+		// so the rewrite was a regression in kind, not just a rough edge.
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\n');
+
+		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		// Play the fight: edit the generated block by hand, the way the tracker's own
+		// controls (and a GM with a keyboard) do.
+		const created = app.vault.getContent('Session.md')!;
+		const lines = created.split('\n');
+		const open = lines.findIndex((l) => l.trim() === '```ds-initiative');
+		let close = open + 1;
+		while (close < lines.length && lines[close].trim() !== '```') close++;
+		lines.splice(close, 0, 'round: 3', 'heroes:', '  - name: Improvised Ally', '    current_hp: 7');
+		app.vault.setFile('Session.md', lines.join('\n'));
+
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		const after = app.vault.getContent('Session.md')!;
+		expect(after).toContain('round: 3');
+		expect(after).toContain('Improvised Ally');
+		expect(after).toContain('current_hp: 7');
+		// …and it is still ONE tracker and ONE panel: state survival did not cost idempotency.
+		expect(fenceCount(after)).toBe(1);
+		const leaf = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0];
+		const view = leaf.view as unknown as DseSidebarView;
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
+		plugin.onunload();
+	});
+
+	test('SC-153 fix round 1: deleting the tracker and pressing again leaves exactly ONE live panel', async () => {
+		// The orphan case. The first panel is bound to the deleted block's anchor, so the
+		// regenerated block's fresh anchor is legitimately a different target — identity
+		// dedupe alone cannot catch it, and the user was left with two panels for one block
+		// (one of them dead, or worse, stale DOM that still looked live).
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\n');
+
+		const button = await mountEncounter(plugin, 'Session.md', 'party: {}\nmonsters: []');
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		const leaf = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0];
+		const view = leaf.view as unknown as DseSidebarView;
+		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
+
+		// The user deletes the whole generated fence.
+		const withBlock = app.vault.getContent('Session.md')!;
+		const lines = withBlock.split('\n');
+		const open = lines.findIndex((l) => l.trim() === '```ds-initiative');
+		let close = open + 1;
+		while (close < lines.length && lines[close].trim() !== '```') close++;
+		lines.splice(open, close - open + 1);
+		app.vault.setFile('Session.md', lines.join('\n'));
+		expect(fenceCount(app.vault.getContent('Session.md')!)).toBe(0);
+
+		button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+		await flushAsync(); // the orphan sweep re-reads the note before evicting
+
+		expect(fenceCount(app.vault.getContent('Session.md')!)).toBe(1);
+		const panels = view.contentEl.querySelectorAll('.dse-sidebar__panel');
+		expect(panels).toHaveLength(1);
+		expect((panels[0] as HTMLElement).getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
+		expect(panels[0].querySelector('[data-dse-element="initiative"]')).not.toBeNull();
 		plugin.onunload();
 	});
 

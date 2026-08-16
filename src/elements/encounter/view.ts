@@ -444,23 +444,38 @@ export class EncounterView extends ElementView<EncounterModel> {
 			await this.cx.app.vault.process(file, (content) => {
 				const existing = findGeneratedBlock(content, 'ds-initiative', generatorId);
 				if (existing) {
-					// REFRESH in place. The block keeps its position, its fence and — crucially —
-					// any `_dse_anchor` the sidebar stamped on it, because we splice only the
-					// BODY lines and re-stamp the marker ourselves. That is what lets the sidebar
-					// panel bound to this block survive the refresh instead of going stale.
+					// SC-153 FIX ROUND 1 — BIND, DO NOT REWRITE. The note is returned
+					// BYTE-IDENTICAL and only `lineStart` is taken, so the sidebar hand-off can
+					// address this exact block.
+					//
+					// This used to splice a freshly generated body over the existing one
+					// ("refresh in place"), preserving the `_dse_anchor` line so the panel's
+					// binding survived. The binding did survive — but the TRACKER'S STATE did
+					// not. `ds-initiative` is not a static rendering of the encounter, it is the
+					// live combat document: round counter, current HP, conditions, turn order,
+					// combatants added mid-fight. Regenerating it from the encounter definition
+					// discards every one of those, and the trigger was the button's ordinary
+					// use — open the sidebar, play for twenty minutes, press again to bring the
+					// panel back, and the fight resets to round 1 at full HP. The review round
+					// reproduced exactly that (a hand-added `round: 3` and a `current_hp: 7`
+					// combatant, both gone after one press).
+					//
+					// Worse, it was a REGRESSION in kind: before SC-153 a second press appended
+					// a duplicate tracker and left the original — annoying and visible, but the
+					// state survived. Nothing about the duplication bug requires the rewrite:
+					// idempotency comes from not appending when a block already exists, plus
+					// DseSidebarView.addPanel's dedupe. So the rewrite is removed outright.
+					//
+					// Consequence, deliberately accepted: an encounter edited AFTER its tracker
+					// was generated does not push those edits into the tracker. Re-syncing is a
+					// destructive act on a live document and needs its own explicit affordance
+					// (a "Regenerate tracker" action, with the user choosing it) — not a silent
+					// side effect of a button labelled "Open in sidebar". Deleting the tracker
+					// block and pressing again is the manual regenerate today, and it works (the
+					// create branch below runs when no marked block is found).
 					reused = true;
 					lineStart = existing.lineStart;
-					const lines = content.split('\n');
-					const anchorLine = lines
-						.slice(existing.lineStart + 1, existing.lineEnd)
-						.find((l) => /^_dse_anchor:/.test(l));
-					const nextBody = anchorLine ? `${anchorLine}\n${body}` : body;
-					lines.splice(
-						existing.lineStart + 1,
-						existing.lineEnd - existing.lineStart - 1,
-						...nextBody.split('\n'),
-					);
-					return lines.join('\n');
+					return content;
 				}
 				const trimmed = content.replace(/\s*$/, '');
 				// +2 for the blank line and the opening fence the template below adds.
@@ -473,7 +488,10 @@ export class EncounterView extends ElementView<EncounterModel> {
 		}
 		new Notice(
 			reused
-				? 'Draw Steel Elements: this encounter\'s initiative tracker block was refreshed.'
+				? // Says what actually happened: nothing was written. Anything warmer ("refreshed")
+					// would imply the tracker had been brought up to date with the encounter, which
+					// is precisely the destructive behaviour removed above.
+					'Draw Steel Elements: this encounter already has an initiative tracker block — opening it.'
 				: 'Draw Steel Elements: initiative tracker block created at the end of this note.',
 		);
 		return { filePath, lineStart };

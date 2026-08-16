@@ -60,6 +60,31 @@ export class SidebarPanel extends Component {
 		this.panelEl?.scrollIntoView?.({ block: 'nearest' });
 	}
 
+	/**
+	 * SC-153 FIX ROUND 1 — does this panel's backing block still exist in the note?
+	 * `DseSidebarView.evictOrphanedSiblings` uses it to clear debris left when the user
+	 * deletes a pinned block and then pins its replacement.
+	 *
+	 * Re-reads the note through the host rather than trusting the cached content: the whole
+	 * point is to run right after someone else changed the file, and the host's vault
+	 * "modify" listener is not guaranteed to have landed yet (it may not have fired at all
+	 * in a synthetic host). `refresh()` is safe to call again — its listener registration is
+	 * guarded — and re-priming the cache is exactly what a panel about to be judged stale
+	 * should do anyway.
+	 *
+	 * Returns TRUE (keep the panel) whenever the answer is not a definite "gone": an
+	 * unmounted panel has no host yet, and a read failure is not evidence of deletion.
+	 */
+	async stillAddressable(): Promise<boolean> {
+		if (!this.host) return true;
+		try {
+			await this.host.refresh();
+		} catch {
+			return true;
+		}
+		return this.host.getBlockInfo() !== null;
+	}
+
 	async mount(container: HTMLElement): Promise<void> {
 		this.panelEl = container.createDiv({ cls: 'dse-sidebar__panel' });
 
