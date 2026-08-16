@@ -30,6 +30,18 @@ for what needs action.
   again. An encounter recognises its own tracker by a durable id, so a note with two
   encounters still gets one tracker each. Pinning any block that is already pinned is
   now a no-op everywhere in the sidebar, not just for this button.
+- [BUGFIX] **Compendium links (`scc.v1:`) no longer prompt-then-do-nothing outside
+  Reading view** (SC-135). Clicking one previously worked only where the plugin already
+  rewrites it into a real note link — Reading view, and inside rendered element cards.
+  Everywhere else (Live Preview, Source mode, popout windows) Obsidian saw an
+  unrecognized link scheme, asked to confirm opening it as an external app, and then
+  silently did nothing on approval. A new click handler now resolves the link the same
+  way Reading view does and opens the note (or the web page, or a plain-language notice
+  if the code isn't recognized) instead — honoring Ctrl/Cmd-click and middle-click for
+  new tab/split/window, and reaching popout windows too. Backlinks, the graph view, and
+  "unlinked mentions" still don't know about these links (documented under
+  [Compendium links](docs/compendium-sync.md#compendium-links)); a future release may
+  add an option to sync them in a link format Obsidian's own tools can index.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the

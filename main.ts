@@ -76,6 +76,7 @@ import { SccResolver } from '@/refs/SccResolver';
 import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
+import { registerSccLinkClickHandling, createSccClickActions } from '@/refs/sccLinkClickHandler';
 
 // `DependencySchema` + `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` now live in
 // `@/framework/dependencySchemas` (D9 Task 4): `DsSchemaSuggest` needs the same data to
@@ -455,6 +456,13 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // so non-compendium notes pay ~nothing. F1's pipeline may take ownership
         // of this registration later (F2 §4.4) — keep sccPostProcessor the seam.
         this.registerMarkdownPostProcessor(sccPostProcessor(this.sccResolver));
+
+        // SC-135 phase 1 (option C): delegated click resolution for scc.v1: links on the
+        // surfaces the rewrite above never reaches — Live Preview, Source mode, and any
+        // third-party render. Reuses this.sccResolver verbatim; see
+        // src/refs/sccLinkClickHandler.ts for the full rationale and the popout-safety
+        // handling (each popout window gets its own document).
+        registerSccLinkClickHandling(this, this.app.workspace, this.sccResolver, createSccClickActions(this.app));
 
         // D1 Task 1 (F1 §2.3 "incremental migration switch"): populate the framework
         // registry with migrated element definitions, then wire Obsidian's

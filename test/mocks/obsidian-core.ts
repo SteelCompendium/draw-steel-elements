@@ -269,6 +269,42 @@ export class FakeWorkspace {
 	_leaves: WorkspaceLeaf[] = [];
 	_activeLeaf: WorkspaceLeaf | null = null;
 
+	// SC-135 phase 1: src/refs/sccLinkClickHandler.ts's registerSccLinkClickHandling reaches
+	// `workspace.containerEl` (main-window attach point) through the REAL onload() path.
+	// NULL in the `unit` jest project (node env, no `document`) — same defensive pattern as
+	// Notice.noticeEl above; no unit-project test drives onload() far enough to dereference
+	// this, since that requires the jsdom-only WorkspaceLeaf/ItemView machinery anyway.
+	containerEl: HTMLElement = (typeof document === 'undefined' ? null : document.createElement('div')) as HTMLElement;
+
+	// SC-135 phase 1: reached only lazily, inside a click's openVault() — never at onload —
+	// but stubbed here so any test that DOES simulate a click through the full mock has a
+	// working (if inert) target. Real semantics are exercised by
+	// test/dom/sccLinkClickHandler.test.ts's own lightweight fakes, not this mock.
+	getActiveFile(): TFile | null {
+		return null;
+	}
+	readonly openLinkTextCalls: Array<{ linktext: string; sourcePath: string; newLeaf?: unknown }> = [];
+	async openLinkText(linktext: string, sourcePath: string, newLeaf?: unknown): Promise<void> {
+		this.openLinkTextCalls.push({ linktext, sourcePath, newLeaf });
+	}
+
+	// SC-135 phase 1: registerSccLinkClickHandling's "already-open popout" sweep at
+	// registration time. Every _leaves entry the mock tracks lives in the one jsdom
+	// `document` (WorkspaceLeaf/ItemView both require it) — the mock does not model real
+	// popout windows, so this is a plain sweep, not a popout enumeration.
+	iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => unknown): void {
+		for (const leaf of this._leaves) callback(leaf);
+	}
+
+	// See FakeVault.on above (T-6/F2 Task 7) — same rationale: no event actually fires from
+	// this mock; registerEvent(vault.on(...)) style calls just need a non-throwing stub so
+	// production onload() code can register through the REAL path. SC-135 phase 1's
+	// `workspace.on('window-open', ...)` is exercised for real against
+	// test/dom/sccLinkClickHandler.test.ts's own lightweight fake workspace, not this one.
+	on(_name: string, _callback: (...args: any[]) => any): any {
+		return { unsubscribe: () => {} };
+	}
+
 	getActiveViewOfType(_type: any): any {
 		return null;
 	}
@@ -631,6 +667,25 @@ export class Notice {
 	hide(): void {
 		this.hidden = true;
 		this.noticeEl?.remove();
+	}
+}
+
+// SC-135 phase 1: the click-resolution seam (src/refs/sccLinkClickHandler.ts) calls the
+// REAL obsidian `Keymap.isModEvent` (imported from 'obsidian', resolving to this mock under
+// jest via moduleNameMapper) — a faithful-enough reimplementation of the documented
+// semantics (real obsidian.d.ts): Cmd/Ctrl+Alt+Shift -> 'window', Cmd/Ctrl+Alt -> 'split',
+// Cmd/Ctrl (or a middle-click MouseEvent, button 1) -> 'tab', otherwise false.
+export type PaneType = 'tab' | 'split' | 'window';
+
+export class Keymap {
+	static isModEvent(evt?: MouseEvent | KeyboardEvent | null): PaneType | boolean {
+		if (!evt) return false;
+		const mod = evt.ctrlKey || evt.metaKey;
+		if (mod && evt.altKey && evt.shiftKey) return 'window';
+		if (mod && evt.altKey) return 'split';
+		if (mod) return 'tab';
+		if ('button' in evt && (evt as MouseEvent).button === 1) return 'tab';
+		return false;
 	}
 }
 
@@ -1074,6 +1129,14 @@ export class WorkspaceLeaf {
 
 	getViewState(): { type: string; active?: boolean } {
 		return this.state;
+	}
+
+	// SC-135 phase 1: registerSccLinkClickHandling's already-open-popout sweep calls
+	// `leaf.getContainer().doc`. The mock never models a real popout WorkspaceWindow (every
+	// leaf lives in the one jsdom `document`), so this always returns that leaf's own
+	// document — correct for "main window", which is all this mock can represent.
+	getContainer(): { doc?: Document } {
+		return { doc: this.containerEl.ownerDocument ?? undefined };
 	}
 
 	detach(): void {

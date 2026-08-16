@@ -110,6 +110,42 @@ specified.
 Statblocks, features and featureblocks accept the same reference in their own blocks — see
 [Use a creature from the compendium](statblock.md#use-a-creature-from-the-compendium).
 
+## Compendium links
+
+Inline links to a compendium entry — the ones this plugin writes when you hold Shift on an
+insert (above), and the ones already inside compendium notes themselves — look like this:
+
+```markdown
+[Vasloria](scc.v1:mcdm.heroes.v1/rule.world/vasloria)
+```
+
+**Clicking one works everywhere** — Reading view, Live Preview, Source mode, and in a
+popout window — and does the same thing every time: opens the synced note if you have it,
+opens the entry's page on steelcompendium.io if you don't, or tells you plainly that the
+code isn't recognized. Ctrl/Cmd-click, Ctrl/Cmd+Alt-click and middle-click open it in a new
+tab, split, or window the same way a normal link would.
+
+**What doesn't work yet:**
+
+- **Backlinks, the graph view, and "unlinked mentions"** don't know about these links. As
+  far as Obsidian's own link index is concerned, they're not links to anything in your
+  vault — so a compendium note won't show up in another note's backlinks just because it's
+  referenced this way, and you won't see it in the graph. Clicking still works regardless;
+  this only affects Obsidian's own link-tracking features.
+- **There's no option yet to have the compendium sync in wikilink or plain vault-path
+  form** instead of this `scc.v1:` form. That form is what makes a link survive the
+  compendium's layout changing under it — some sync in the future may keep breaking links
+  from happening if the compendium's structure changes again — so it isn't going away, but
+  an alternative is planned.
+
+Both are on the list; this note exists so "why doesn't this show up in backlinks?" has an
+answer today instead of feeling like a bug.
+
+**One more thing worth remembering:** clicking always works, but only **Reading view**
+actually draws the cards (`ds-scc` and every other element). A link will take you to the
+right note in any view; what you see when you get there depends on which view that note is
+in.
+
 ## Copying an entry to homebrew from
 
 **Insert Draw Steel: compendium block (snapshot)** does something different: it pastes the
