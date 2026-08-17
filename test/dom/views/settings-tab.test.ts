@@ -1038,15 +1038,17 @@ describe('SC-131 — registration order', () => {
 // —— SC-160: the `dependsOn` affordance (a dependent sub-toggle row). ——
 //
 // The catalog gained a notion it never had: a row that is a SUB-TOGGLE of the row above
-// it. Two halves, and each fails in its own quiet way if it regresses — the label indent
-// (a sub-toggle that reads like a peer setting is just a confusing extra checkbox), and
-// the disabled state (a control that still looks live while it can do nothing).
+// it. Two halves, and each fails in its own quiet way if it regresses — the LABEL (a
+// sub-toggle that reads like a peer setting is just a confusing extra checkbox; the row
+// is not visually indented, so the `↳` glyph and the parent's name in the label carry the
+// whole relationship), and the disabled state (a control that still looks live while it
+// can do nothing).
 describe('SC-160 — dependent rows (dependsOn)', () => {
 	beforeEach(() => {
 		Setting.created.length = 0;
 	});
 
-	test('the sub-toggle is indented under its parent, adjacent to it, on the SAME page', async () => {
+	test('the sub-toggle is NOT visually indented (glyph only; see settingsDeclarative decline note) but is adjacent to its parent, on the SAME page', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		const rows = rowDefs(pageNamed(tab, 'Statblock display').items);
@@ -1054,11 +1056,11 @@ describe('SC-160 — dependent rows (dependsOn)', () => {
 		const parentAt = names.indexOf('Sticky mini-header');
 		expect(parentAt).toBeGreaterThan(-1);
 		// The site's own spelling of a sub-toggle, plus the PARENT'S NAME — SC-160 fix
-		// round 1. The row is really indented now (the marker below), but a settings-search
-		// hit arrives with neither the indent nor the row above it, and the bare "Include
-		// secondary stats" was indistinguishable there from the pre-existing "Secondary
-		// stats" two rows up. Naming it after its parent is what makes the two tellable
-		// apart wherever a row travels alone.
+		// round 1. There is no real indent (the next test pins why), and a settings-search
+		// hit arrives with neither the glyph's context nor the row above it, so the bare
+		// "Include secondary stats" was indistinguishable there from the pre-existing
+		// "Secondary stats" two rows up. Naming it after its parent is what makes the two
+		// tellable apart wherever a row travels alone.
 		expect(names[parentAt + 1]).toBe('↳ Sticky mini-header: include secondary stats');
 		// …and it must stay distinguishable from the row it used to collide with.
 		expect(names).toContain('Secondary stats');

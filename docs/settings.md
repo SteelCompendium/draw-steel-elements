@@ -81,9 +81,9 @@ Two things the mini-header deliberately does not do:
 - **A statblock inside a callout gets no pinned bar.** A callout's body is its own scroll
   box that never actually scrolls, so there is no "scrolled past the header" moment for the
   bar to appear at. The card itself is unaffected.
-- **At the very end of a long statblock the bar briefly covers a strip of the text below
-  it.** The bar is anchored to its own card, so in the last centimetre of that card's travel
-  it slides down over whatever follows before disappearing with it. Keep scrolling and it
+- **At the very end of a statblock the bar briefly covers a strip of the text below it.**
+  The bar is anchored to its own card, so in the last stretch of that card's travel it
+  slides down over whatever follows before disappearing with it. Keep scrolling and it
   clears.
 
 Under **Advanced**:

@@ -63,11 +63,12 @@ const PRESET_HELP =
 /** SC-160: the marker a dependent row's label carries, verbatim from the site's own
  *  sub-toggle (`&#8627;` + a space — settings-panel.js's "↳ include secondary stats").
  *
- *  It is in the NAME because obsidian 1.13 offers nowhere else to put it: there is no
- *  per-row class hook and no safe element-bearing field, so the row cannot be visually
- *  indented at all. The full derivation (including the `desc`-as-DocumentFragment trap
- *  that looks like a way out and silently deletes the row's description on every render
- *  after the first) is documented in settingsDeclarative.ts.
+ *  It is in the NAME because every way to indent the row costs more than the indent is
+ *  worth: the per-row class hook exists but is mutually exclusive with `control`, a
+ *  one-row group would split the page's single `PAGE_CLS` container, and
+ *  `desc`-as-DocumentFragment is a trap that silently deletes the row's description on
+ *  every render after the first. So the row is NOT visually indented — only the glyph
+ *  marks it. The full derivation of all three is documented in settingsDeclarative.ts.
  *
  *  It also survives into the native settings search results, where a hit arrives with
  *  neither the row above it nor any indent — which is why the dependent row's label names

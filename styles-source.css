@@ -7002,7 +7002,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
    ⚠ WHY THE PRINT HALF IS `@media screen` AROUND THE REVEAL AND NOT A `display: none` IN
    `@media print` (SC-160 fix round 1, 2026-08-17 — the first shape was measured WRONG in
    a real Obsidian). `@media` contributes NOTHING to specificity. This reveal rule is
-   (0,5,1); an entry in the sheet's shared `@media print { … display: none }` list is
+   (0,5,0); an entry in the sheet's shared `@media print { … display: none }` list is
    `.dse-sb__sticky`, (0,1,0). The reveal therefore WINS under print media and the
    re-assertion was inert — measured on Chromium 106 under emulated print media:
    `getComputedStyle(anchor).display === 'block'`, with both rules reported as matching.
@@ -9786,7 +9786,7 @@ button.dse-pr__row:hover {
 	   higher specificity. That is a PRECONDITION of this list, not a property of
 	   `@media print` — `@media` adds no specificity of its own. SC-160's sticky
 	   mini-header was briefly listed here and was measured inert on Chromium 106 for
-	   exactly that reason: its reveal rule is (0,5,1) and `.dse-sb__sticky` is (0,1,0),
+	   exactly that reason: its reveal rule is (0,5,0) and `.dse-sb__sticky` is (0,1,0),
 	   so the reveal won under print media. It is kept out of print by an `@media screen`
 	   wrapper around that reveal rule instead (see the STICKY MINI-HEADER block above).
 	   Before adding a selector here, check that no rule anywhere re-enables it more

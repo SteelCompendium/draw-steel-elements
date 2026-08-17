@@ -94,14 +94,24 @@ export const CHROME_CLS = 'dse-settings-chrome-row';
  * The obvious ask for a sub-toggle is a real `margin-left` on the row. It is not available,
  * and the reason is worth writing down so the next person does not re-derive it:
  *
- *  1. Obsidian 1.13's `SettingDefinitionBase` is `name` / `desc` / `aliases` / `searchable`
- *     / `visible`. There is NO per-row class or id hook, and the rendered element carries
- *     no distinguishing attribute (measured in a real 1.13 Settings popout: the dependent
+ *  1. Obsidian 1.13's `SettingDefinitionBase` (`name` / `desc` / `aliases` / `searchable` /
+ *     `visible`) carries no class or id field, and the rendered element has no
+ *     distinguishing attribute (measured in a real 1.13 Settings popout: the dependent
  *     row's element is exactly `class="setting-item mod-toggle"`, and both it and its
- *     parent sit at the same `getBoundingClientRect().left`).
- *  2. A GROUP does take `cls` — but `toPage()` below already wraps a page's rows in one
- *     group, and a group may not nest inside a group (only settings and pages may), so a
- *     one-row group around the dependent row is not expressible either.
+ *     parent sit at the same `getBoundingClientRect().left`). A per-row class hook DOES
+ *     exist — `render` receives the live `Setting`, and `toDefinition`/`previewDefinition`
+ *     below use exactly that (`setting.settingEl.addClass(CHROME_CLS / PREVIEW_CLS)`) — but
+ *     `render` and `control` are MUTUALLY EXCLUSIVE (`SettingDefinitionControl` declares
+ *     `render?: never`). Reaching the hook therefore means hand-building the toggle and
+ *     giving up the native `control` binding (`getControlValue`/`setControlValue`) AND the
+ *     native `disabled` predicate that `refreshDomState()` drives — which is the one half
+ *     of the dependent-row feature that is measured working. Worse trade than no indent.
+ *  2. A GROUP does take `cls`, and a group may not nest inside a group (only settings and
+ *     pages may) — but a PAGE's `items` accept `SettingDefinitionItem`, which includes
+ *     groups, so SIBLING one-row groups at page level ARE expressible. The blocker is the
+ *     layout, not the schema: `toPage()` below deliberately puts everything in ONE
+ *     `PAGE_CLS` group because that single container is what the bottom-docked preview CSS
+ *     lays out against (see its comment). Splitting it to indent one row would cost that.
  *  3. `desc` accepts a DocumentFragment, which looks like the escape hatch: plant an empty
  *     marker span and indent the row with `:has()`. It is a TRAP. Obsidian calls
  *     `getSettingDefinitions()` only from `update()` and re-renders from the cached
