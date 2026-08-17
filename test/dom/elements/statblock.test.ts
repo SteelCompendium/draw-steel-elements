@@ -785,13 +785,23 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 	// villain default now ships one disclosure button (the kit collapsible's header).
 	// A disclosure is not an edit, so the claim is narrowed rather than dropped, and the
 	// absolute no-controls form is kept against the un-banded shape.
+	//
+	// SC-169 widened both claims by exactly two buttons: the statblock opted into the
+	// framework element chrome, which always mounts a collapse toggle (in the hover panel)
+	// and its twin expand affordance (on the collapsed one-line bar). Both are
+	// FRAMEWORK-owned disclosures carrying `data-dse-chrome-item`, so the tests below
+	// filter them out by that attribute rather than by count — the point being defended is
+	// that the statblock's OWN rendering still mounts no control beyond the villain band.
+	const nonChromeControls = (root: HTMLElement): Element[] =>
+		Array.from(root.querySelectorAll('button, input, select, textarea, [tabindex]')).filter(
+			(el) => !el.hasAttribute('data-dse-chrome-item'),
+		);
+
 	test('static: rendering never writes back, and the only control is the villain band\'s disclosure', async () => {
 		const { root, host } = await renderStatblock(humanBanditChief);
 		expect(host.replaceSource).not.toHaveBeenCalled();
 
-		const controls = Array.from(
-			root.querySelectorAll('button, input, select, textarea, [tabindex]'),
-		);
+		const controls = nonChromeControls(root);
 		expect(controls).toHaveLength(1);
 		expect(controls[0].className).toBe('dse-collapse__header');
 		// A disclosure, not an input: it toggles visibility and nothing else.
@@ -799,11 +809,19 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
-	test('static: with villain banding off, the card mounts NO interactive control at all', async () => {
+	test('static: with villain banding off, the card mounts NO interactive control of its own', async () => {
 		const { root, host } = await renderStatblock(humanBanditChief, {}, { sbVillain: 'inline' });
 		expect(host.replaceSource).not.toHaveBeenCalled();
-		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
+		expect(nonChromeControls(root)).toHaveLength(0);
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+	});
+
+	test('SC-169: the only controls the FRAMEWORK adds are the chrome collapse/expand pair', async () => {
+		const { root } = await renderStatblock(humanBanditChief, {}, { sbVillain: 'inline' });
+		const chrome = Array.from(root.querySelectorAll('[data-dse-chrome-item]')).map((el) =>
+			el.getAttribute('data-dse-chrome-item'),
+		);
+		expect(chrome.sort()).toEqual(['collapse', 'expand']);
 	});
 
 	test('ties the created view to host.addChild (block lifecycle); a real StatblockElementView still renders underneath (D6 Task 4: wrapped in RefUnwrapView)', async () => {

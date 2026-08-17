@@ -7,6 +7,7 @@
 import type { RenderContext } from './context';
 import type { ElementView } from './view';
 import type { ReferenceService } from './seams/refs';
+import type { ElementChrome } from './chrome/types';
 
 /** Strongest behavioral requirement an element makes — drives pipeline wiring (F1 §1.3). */
 export type ElementShape = 'static' | 'interactive' | 'persisted';
@@ -125,6 +126,18 @@ export interface ElementDefinition<M = unknown> {
 	 * only def that sets this; it ignores `data` entirely by construction.
 	 */
 	parseHandlesRawBody?: boolean;
+	/**
+	 * SC-169 — OPT-IN to the standard element chrome: the top-right hover menu panel and
+	 * whole-element collapse (`framework/chrome/`). The slot's PRESENCE is the opt-in
+	 * (Scott's ruling 3: card-like containers opt in; trivial elements — `ds-hr` and
+	 * friends — get no panel), and its contents are the two things the framework cannot
+	 * derive: the one-line collapsed `summary(ctx)` and any element-specific menu items.
+	 * Absent ⇒ no panel, no collapse, no `collapsed:` key, zero DOM change.
+	 *
+	 * Declared as a FIELD holding an object (not a set of methods on the definition) so a
+	 * wrapper like `withReference()` can override it wholesale for its own model shape.
+	 */
+	chrome?: ElementChrome<M>;
 	/**
 	 * SC-158 — this element's body has an EXACT, non-YAML grammar, so the framework must
 	 * never write its own metadata into it.

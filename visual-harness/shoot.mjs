@@ -92,6 +92,12 @@ async function snap(page, combo, params, captureId, opts = {}) {
 			// the checked-at-rest state the interaction shot exists to prove.
 			await page.mouse.move(0, 0);
 		}
+		// SC-169: hover shots are the EXACT OPPOSITE of the line above — the pointer must
+		// STAY on the target, because `:hover` is the state under review (the element menu
+		// panel is hidden until the cursor is over the container or the panel).
+		if (opts.hover) {
+			await page.locator(opts.hover).first().hover();
+		}
 		const done = await page.evaluate(() => window.__dseHarnessDone);
 		const errors = [...done.errors, ...pageErrors];
 		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
@@ -142,6 +148,11 @@ try {
 	// SC-160: scroll-state shots (manifest.scrollShots — entry.ts SCROLL_SHOTS), same
 	// treatment as the three lists above.
 	const scrollShots = manifest.scrollShots ?? [];
+	// SC-169: element-chrome shots (manifest.chromeShots — entry.ts CHROME_SHOTS). Same
+	// "legal --element value, not a registered element" treatment as the lists above;
+	// unlike them an entry mounts a STACK of elements, so it has no single `element`
+	// field to filter on — the id is the only handle.
+	const chromeShots = manifest.chromeShots ?? [];
 	if (args.element) elements = elements.filter((e) => e.id === args.element);
 	// A narrow-shot/interaction-shot/pref-shot id (e.g. `perk-narrow`,
 	// `negotiation-pr-checked`, `statblock-charline-two`) is a legal --element value
@@ -152,7 +163,8 @@ try {
 		!narrowShots.some((n) => n.id === args.element) &&
 		!interactionShots.some((n) => n.id === args.element) &&
 		!prefShots.some((n) => n.id === args.element) &&
-		!scrollShots.some((n) => n.id === args.element)
+		!scrollShots.some((n) => n.id === args.element) &&
+		!chromeShots.some((n) => n.id === args.element)
 	) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -236,6 +248,30 @@ try {
 					.join(',');
 			}
 			await snap(page, c, params, n.id);
+		}
+	}
+	// SC-169: element-chrome shots — a STACK of elements, an optional hover, an optional
+	// mobile branch and optional #mount padding (the panel is painted above the element's
+	// top edge, and the shot is the #mount locator). The print combo is captured
+	// deliberately: it is the standing proof that the panel and the collapsed one-line
+	// form are absent from the print scheme.
+	for (const n of chromeShots) {
+		if (args.element && args.element !== n.id) continue;
+		for (const c of combos) {
+			// SC-170 review fix (M-1/M-4): hand the COMBO to snap(); it owns theme/bg, the
+			// `print=1` param, the print MEDIUM, `--readonly` and the output name. This loop
+			// only contributes the chrome-specific query params.
+			const params = {
+				stack: n.stack.map((e) => `${e.element}:${e.fixture}`).join(','),
+			};
+			if (n.pad) params.pad = String(n.pad);
+			if (n.mobile) params.mobile = '1';
+			if (n.prefs) {
+				params.prefs = Object.entries(n.prefs)
+					.map(([k, v]) => `${k}:${v}`)
+					.join(',');
+			}
+			await snap(page, c, params, n.id, { hover: n.hover });
 		}
 	}
 	if (!args.element) {

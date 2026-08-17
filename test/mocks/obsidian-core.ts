@@ -1250,6 +1250,21 @@ export function setTooltip(el: HTMLElement, tooltip: string, _options?: any): vo
 	el.setAttribute('aria-label', tooltip);
 }
 
+// ---------------------------------------------------------------- Platform (SC-169)
+/**
+ * Obsidian's `Platform` capability object. The element chrome reads `Platform.isMobile`
+ * to decide between the desktop hover-reveal panel and the mobile always-visible one
+ * (src/framework/chrome/platform.ts). Fixed to DESKTOP here — tests and the visual
+ * harness force the mobile branch through `setChromeMobileOverride()`, the deliberate
+ * seam, rather than by mutating this object.
+ */
+export const Platform = {
+	isMobile: false,
+	isDesktop: true,
+	isMobileApp: false,
+	isDesktopApp: true,
+};
+
 // ---------------------------------------------------------------- ctx fake
 export interface MarkdownSectionInformation {
 	text: string;

@@ -22,6 +22,9 @@ import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
+import { extractCollapsedDefault, withCollapsedDefault } from './chrome/collapsedKey';
+import { mountChrome } from './chrome/mountChrome';
+import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
 import { ANCHOR_KEY } from './sidebar/anchor';
@@ -206,6 +209,8 @@ export interface PrepareModelDeps {
 export interface PreparedModel<M> {
 	readonly model: M;
 	readonly prefOverrides: Partial<DsePrefs> | undefined;
+	/** SC-169: the reserved `collapsed:` key's value, or undefined when absent. */
+	readonly collapsedDefault: boolean | undefined;
 }
 
 /**
@@ -257,6 +262,14 @@ export async function prepareModel<M>(
 	// enters the semantic model).
 	const prefOverrides = extractPrefOverrides(rawData, prefs);
 
+	// SC-169: the reserved top-level `collapsed:` key — the AUTHORED default for the
+	// whole-element collapse. Popped here for exactly the reasons `prefs:` is: schemas
+	// (all `additionalProperties: false`) never see it, and it never enters any semantic
+	// model. Only meaningful for a def that declares the `chrome` slot; popping it
+	// unconditionally keeps the reserved-key vocabulary uniform across every element and
+	// keeps prepareModel's two callers identical.
+	const collapsedDefault = extractCollapsedDefault(rawData);
+
 	// Step 3: validate (F1 §2.4.2). Invalid -> throw the ValidationResult itself
 	// (self-describing to renderErrorCard — no ElementStageError tag needed, same as
 	// run()'s original early-return-then-renderErrorCard, just routed through the
@@ -291,7 +304,7 @@ export async function prepareModel<M>(
 		model = runStage('render', () => def.parse(rawData, source));
 	}
 
-	return { model, prefOverrides };
+	return { model, prefOverrides, collapsedDefault };
 }
 
 /** Services bundle ElementPipeline needs beyond app/plugin/settings (F1 §2.2's onload
@@ -375,7 +388,7 @@ export class ElementPipeline {
 			// catch below, which renders it via renderErrorCard exactly as the old inline
 			// early-return did (isValidationResult recognizes a raw ValidationResult however
 			// it arrives).
-			const { model, prefOverrides } = await prepareModel(def, source, {
+			const { model, prefOverrides, collapsedDefault } = await prepareModel(def, source, {
 				prefs,
 				refs: cx.refs,
 				validation,
@@ -417,7 +430,13 @@ export class ElementPipeline {
 			// watcher is registered before mount.
 			watchPrintMedia(root, view);
 			if (def.serialize) {
-				const serialize = def.serialize;
+				let serialize = def.serialize;
+				// SC-169: a block carrying the reserved `collapsed:` key must not lose it
+				// either — same round-trip hazard, same wrapper shape. Applied BEFORE the
+				// prefs wrapper, so the emitted body reads `prefs:` … `collapsed:` … body.
+				if (collapsedDefault !== undefined) {
+					serialize = withCollapsedDefault(serialize, collapsedDefault);
+				}
 				// D4: a block carrying prefs: must not lose it when replaceSource
 				// rewrites the body from serialize(model).
 				view.setSerializer(prefOverrides ? withPrefOverrides(serialize, prefOverrides) : serialize);
@@ -437,7 +456,45 @@ export class ElementPipeline {
 			// the button visually outside the card for every view whose visible card frame
 			// is a nested child div (the D6 display-family `.dse-card` / statblock's
 			// `.dse-sb`) rather than root itself.
-			if (cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs)) {
+			// SC-169: the edit affordance's GATE is unchanged; only its LOCATION moves when
+			// the element opted into chrome.
+			const showEdit = cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs);
+
+			// SC-169: the standard menu panel + whole-element collapse. Opt-in via the
+			// `chrome` slot; a def without it renders exactly the DOM it rendered before.
+			// When chrome IS present it OWNS the edit affordance — the pencil becomes a panel
+			// item instead of a card-corner button, so there is never a second one. That
+			// relocation is invisible to the print freeze: `[data-dse-print="on"] .dse-btn
+			// { display: none }` (styles-source.css, print rule 4) already hides the
+			// card-corner pencil on paper — which is why `statblock--steel-print.png` and
+			// `statblock-edit-btn--steel-print.png` carry the SAME hash in the freeze baseline.
+			if (def.chrome) {
+				mountChrome(
+					{
+						root,
+						anchor: view.authoringAnchor(),
+						chrome: def.chrome,
+						ctx: { model, def: { id: def.id, name: def.name } },
+						persist: { session, blockKey: host.blockKey(), slot: 'chrome' },
+						collapsedDefault,
+						pipelineItems: showEdit
+							? [
+									{
+										id: 'edit',
+										icon: 'pencil',
+										label: `Edit ${def.name}`,
+										onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
+									} satisfies ChromeMenuItem,
+								]
+							: [],
+					},
+					view,
+				);
+			} else if (showEdit) {
+				// D9 (Plan 15 Task 5) / SC-145: mounted into `view.authoringAnchor()`, NOT
+				// unconditionally `root` — see that method's doc (framework/view.ts) for why a
+				// bare `root` target left the button visually outside the card for every view
+				// whose visible card frame is a nested child div.
 				iconButton(
 					view.authoringAnchor(),
 					{

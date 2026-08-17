@@ -8,6 +8,17 @@ import heroExample from './example.yaml';
 import { parse, serialize } from './model';
 import type { HeroModel } from './model';
 import { HeroSheetView } from './view';
+import type { ElementChrome } from '@/framework/chrome/types';
+
+/**
+ * SC-169 prototype element #2 — the plain NAME case, verbatim from Scott's description:
+ * a collapsed `ds-hero` reads "Hero: Frodo Baggins". The label is "Hero", not the
+ * definition's own `name` ("Hero sheet"): the collapsed line is read as a sentence about
+ * the character, not as the name of a plugin element.
+ */
+const heroChrome: ElementChrome<HeroModel> = {
+	summary: ({ model }) => ({ label: 'Hero', name: model.defn.name }),
+};
 
 export const heroElement: ElementDefinition<HeroModel> = {
 	id: 'hero',
@@ -23,6 +34,7 @@ export const heroElement: ElementDefinition<HeroModel> = {
 	// call `openFormEditor(this, cx, heroElement, source, cx.validation)` without a
 	// definition.ts <-> view.ts import cycle.
 	createView: (cx) => new HeroSheetView(cx, heroElement),
+	chrome: heroChrome,
 	// D7 Task 9: the pipeline's generic authoringControls pencil is suppressed — the
 	// sheet mounts its OWN "Edit definition" header affordance instead (spec §3.2
 	// placement, next to `[respite]`).

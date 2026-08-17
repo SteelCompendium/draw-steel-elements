@@ -21,6 +21,7 @@ import { DSE_PREF_DESCRIPTORS } from '../src/prefs/catalog';
 import { createReferenceService } from '../src/framework/seams/refs';
 import { createValidationService } from '../src/framework/validation';
 import { createSessionStore } from '../src/framework/session';
+import { setChromeMobileOverride } from '../src/framework/chrome/platform';
 import { DEFAULT_SETTINGS } from '../src/model/Settings';
 import { registerFrameworkElementDefinitions, FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from '../main';
 import { INTERNAL_DISPLAY_ELEMENTS } from '../src/elements/display';
@@ -355,6 +356,16 @@ const statblockColumnsWide = `prefs:\n  sbColumns: wide\n${statblockDefault}`;
 // the four above; `sbStats: ledger` because that is the mode under review.
 const statblockWithCaptain = `prefs:\n  sbStats: ledger\nwith_captain: Strike +2\n${statblockDefault}`;
 
+// SC-169: the AUTHORED-collapsed form of each of the three prototype elements — the
+// reserved top-level `collapsed:` key (src/framework/chrome/collapsedKey.ts), which the
+// pipeline pops before schema validation and before def.parse. Prefixing the existing
+// single-sourced example is deliberate: the collapsed one-line form must be derived from
+// the SAME content the expanded golden shows, so a reviewer can read the two shots as a
+// before/after of one block rather than of two different creatures.
+const statblockCollapsed = `collapsed: true\n${statblockDefault}`;
+const heroCollapsed = `collapsed: true\n${heroDefault}`;
+const staminaBarCollapsed = `collapsed: true\n${staminaBarDefault}`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -372,7 +383,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		advancement: featureblockAdvancement,
 		stats: featureblockStats,
 	},
-	hero: { default: heroDefault, sparse: heroSparse },
+	hero: { default: heroDefault, sparse: heroSparse, collapsed: heroCollapsed },
 	'hero-tokens': { default: tokensDefault },
 	'heroic-resource': { default: resourceDefault },
 	// SC-128 variant note — the site ships TWO ◆ rules and this fixture covers ONE of them
@@ -401,6 +412,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		recoveries: staminaBarRecoveries,
 		winded: staminaBarWinded,
 		dying: staminaBarDying,
+		collapsed: staminaBarCollapsed,
 	},
 	statblock: {
 		default: statblockDefault,
@@ -412,6 +424,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		'featstyle-flat': statblockFeatstyleFlat,
 		'columns-wide': statblockColumnsWide,
 		'with-captain': statblockWithCaptain,
+		collapsed: statblockCollapsed,
 	},
 	surges: { default: surgesDefault },
 	title: { default: titleDefault },
@@ -454,6 +467,17 @@ export interface HarnessParams {
 	/** SC-123: preference values to apply BEFORE the mount (pref-variant coverage).
 	 *  Wire format is the compact `key:value,key:value` of the `prefs` query param. */
 	prefs?: Record<string, string>;
+	/** SC-169: mount several elements in a column, NO gallery headings — the only way to
+	 *  photograph the menu panel of one element overlapping the element above it. Wire
+	 *  format `element:fixture,element:fixture`. */
+	stack?: { element: string; fixture: string }[];
+	/** SC-169: padding (CSS px) around #mount. The chrome panel is positioned ABOVE the
+	 *  element's top edge, so without breathing room the `#mount` locator screenshot
+	 *  clips it right off the frame. */
+	pad?: number;
+	/** SC-169: force the `Platform.isMobile` branch of the chrome (always-visible panel +
+	 *  reserved top space) without a mobile Obsidian. */
+	mobile?: boolean;
 }
 
 /** SC-123: `kwUsage:text,sbCharBox:on` → `{ kwUsage: 'text', sbCharBox: 'on' }`.
@@ -469,6 +493,23 @@ function parsePrefParam(raw: string | null): Record<string, string> | undefined 
 		out[part.slice(0, at).trim()] = part.slice(at + 1).trim();
 	}
 	return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** SC-169: `statblock:default,hero:collapsed` → [{element,fixture},…]. A bare `element`
+ *  with no colon means the `default` fixture. */
+function parseStackParam(raw: string | null): { element: string; fixture: string }[] | undefined {
+	if (!raw) return undefined;
+	const out = raw
+		.split(',')
+		.map((part) => part.trim())
+		.filter(Boolean)
+		.map((part) => {
+			const at = part.indexOf(':');
+			return at < 0
+				? { element: part, fixture: 'default' }
+				: { element: part.slice(0, at).trim(), fixture: part.slice(at + 1).trim() };
+		});
+	return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -496,6 +537,7 @@ export function parseParams(search: string): HarnessParams {
 	const width = Number(q.get('width'));
 	const scroll = Number(q.get('scroll'));
 	const scrollTo = Number(q.get('scrollTo'));
+	const pad = Number(q.get('pad'));
 	return {
 		scroll: Number.isFinite(scroll) && scroll > 0 ? scroll : undefined,
 		// 0 is a MEANINGFUL value here (the unscrolled twin), so this cannot use the
@@ -521,6 +563,9 @@ export function parseParams(search: string): HarnessParams {
 						.filter(Boolean),
 		width: Number.isFinite(width) && width > 0 ? width : undefined,
 		prefs: parsePrefParam(q.get('prefs')),
+		stack: parseStackParam(q.get('stack')),
+		pad: Number.isFinite(pad) && pad > 0 ? pad : undefined,
+		mobile: q.get('mobile') === '1',
 	};
 }
 
@@ -717,6 +762,84 @@ export const SCROLL_SHOTS: {
 	},
 ];
 
+/**
+ * SC-169: ELEMENT-CHROME captures. The standard menu panel is hover-revealed, positioned
+ * OUTSIDE the container (above its top edge), and its mobile form is chosen by
+ * `Platform.isMobile` — none of which any existing capture list can express:
+ *   - NARROW_SHOTS varies width, PREF_SHOTS varies preferences, INTERACTION_SHOTS fires
+ *     one CLICK. A hover is not a click (clicking the collapse toggle would photograph
+ *     the collapsed form, not the panel).
+ *   - the panel of ONE element overlapping the element ABOVE it can only be photographed
+ *     with two elements mounted in a column, which no list could ask for.
+ *   - `#mount`'s screenshot is clipped to its own box, so a panel that deliberately
+ *     overflows the top edge needs `pad`.
+ * Each entry gets its own `id`, so every file it writes is a NEW name — invisible to the
+ * freeze baseline by construction (`sha256sum -c` only checks the names it lists).
+ */
+export const CHROME_SHOTS: {
+	id: string;
+	stack: { element: string; fixture: string }[];
+	/** CSS selector inside #mount that shoot.mjs hovers before the shot. */
+	hover?: string;
+	/** Force the mobile branch. */
+	mobile?: boolean;
+	/** Padding (CSS px) around #mount so the above-the-edge panel stays in frame. */
+	pad?: number;
+	prefs?: Record<string, string>;
+}[] = [
+	// (1) The panel itself, on the element with the most chrome: `authoringControls` ON,
+	// so the panel carries TWO items and the right-to-left growth is visible.
+	{
+		id: 'chrome-hover-statblock',
+		stack: [{ element: 'statblock', fixture: 'default' }],
+		hover: '[data-dse-element="statblock"]',
+		pad: 56,
+		prefs: { authoringControls: 'true' },
+	},
+	// (2) The default one-item panel, on a second family (and `ds-hero` sets
+	// noAuthoringButton, so this is also the "chrome does not duplicate an element's own
+	// edit affordance" witness).
+	{
+		id: 'chrome-hover-hero',
+		stack: [{ element: 'hero', fixture: 'default' }],
+		hover: '[data-dse-element="hero"]',
+		pad: 56,
+	},
+	// (3) OWNERSHIP — the shot the design decision hangs on. Two elements vertically
+	// adjacent; the LOWER one is hovered, so its panel is painted on top of the upper
+	// element. If the attachment styling does not read, it reads here.
+	{
+		id: 'chrome-stacked-hover',
+		stack: [
+			{ element: 'stamina-bar', fixture: 'default' },
+			{ element: 'stamina-bar', fixture: 'winded' },
+		],
+		hover: '[data-dse-harness-index="1"] [data-dse-element]',
+		pad: 24,
+	},
+	// (4) All three prototype elements in their authored-collapsed form, so the three
+	// summary shapes (name / name / key-data) can be compared in one image.
+	{
+		id: 'chrome-collapsed-trio',
+		stack: [
+			{ element: 'hero', fixture: 'collapsed' },
+			{ element: 'statblock', fixture: 'collapsed' },
+			{ element: 'stamina-bar', fixture: 'collapsed' },
+		],
+		pad: 24,
+	},
+	// (5) MOBILE — panel always visible, extra top space above each element, no hover.
+	{
+		id: 'chrome-mobile',
+		stack: [
+			{ element: 'stamina-bar', fixture: 'default' },
+			{ element: 'stamina-bar', fixture: 'winded' },
+		],
+		mobile: true,
+		pad: 24,
+	},
+];
+
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
 	const app = new App();
@@ -811,6 +934,9 @@ async function mountOne(
 		return;
 	}
 	const section = mount.createDiv({ cls: 'dse-harness-section' });
+	// SC-169: a stable per-section address so a stacked capture can name WHICH element to
+	// hover ("the lower one"). No CSS keys on it, so it renders nothing.
+	section.setAttribute('data-dse-harness-index', String(mount.children.length - 1));
 	if (params.gallery) section.createEl('h2', { text: `${id} (${def.aliases[0]})` });
 	const container = section.createDiv();
 	const host = makeHarnessHost(container, { readonly: params.readonly, language: def.aliases[0] });
@@ -832,6 +958,10 @@ export async function mountFromParams(
 ): Promise<{ errors: string[] }> {
 	doc.body.classList.remove('theme-dark', 'theme-light');
 	doc.body.classList.add(params.bg === 'light' ? 'theme-light' : 'theme-dark');
+	// SC-169: chosen BEFORE any element mounts — the chrome reads it once, at mount time.
+	// Always written (not only when true) so a direct test caller cannot inherit a
+	// previous call's mobile mode.
+	setChromeMobileOverride(params.mobile === true ? true : undefined);
 	const registry = createElementRegistry();
 	registerHarnessElementDefinitions(registry);
 	const { deps, theme } = makeHarnessDeps();
@@ -872,11 +1002,18 @@ export async function mountFromParams(
 	// leftover scroller would silently change what the next mount lays out in.
 	mount.style.height = params.scroll ? `${params.scroll}px` : '';
 	mount.style.overflowY = params.scroll ? 'auto' : '';
-	const ids = params.gallery
-		? (params.galleryIds ?? Object.keys(FIXTURES)).filter((id) => FIXTURES[id])
-		: [params.element ?? 'feature'];
-	for (const id of ids) {
-		await mountOne(pipeline, registry, mount, id, params.fixture, params, errors);
+	// SC-169: the chrome panel overflows the element's TOP edge, and the shot is the
+	// #mount locator — without padding the camera clips the very thing under review.
+	mount.style.padding = params.pad ? `${params.pad}px` : '';
+	const targets: { element: string; fixture: string }[] = params.stack
+		? params.stack
+		: params.gallery
+			? (params.galleryIds ?? Object.keys(FIXTURES))
+					.filter((id) => FIXTURES[id])
+					.map((id) => ({ element: id, fixture: params.fixture }))
+			: [{ element: params.element ?? 'feature', fixture: params.fixture }];
+	for (const target of targets) {
+		await mountOne(pipeline, registry, mount, target.element, target.fixture, params, errors);
 	}
 	// Error cards the pipeline rendered (parse/schema/render failures) count as failures.
 	for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
@@ -934,6 +1071,7 @@ declare global {
 				width?: number;
 				prefs?: Record<string, string>;
 			}[];
+			chromeShots: typeof CHROME_SHOTS;
 		};
 		__dseHarnessDone?: { errors: string[] };
 	}
@@ -947,6 +1085,7 @@ if (typeof window !== 'undefined') {
 		interactionShots: INTERACTION_SHOTS,
 		prefShots: PREF_SHOTS,
 		scrollShots: SCROLL_SHOTS,
+		chromeShots: CHROME_SHOTS,
 	};
 	if (document.getElementById('mount')) {
 		void mountFromParams(document, parseParams(window.location.search)).then(async (r) => {

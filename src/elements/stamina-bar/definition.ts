@@ -6,6 +6,22 @@ import staminaBarSchemaYaml from '@model/schemas/StaminaBarSchema.yaml';
 import { parse, serialize } from './model';
 import { StaminaBarView } from './view';
 import staminaExample from './example.yaml';
+import type { ElementChrome } from '@/framework/chrome/types';
+
+/**
+ * SC-169 prototype element #3 — the KEY-DATA case from Scott's description
+ * ("Stamina: Frodo Baggins (22/48)"). A standalone `ds-stamina` block carries no name of
+ * its own (the model is max/current/temp/recoveries), so the collapsed line reads
+ * "Stamina (31/48)": label + the two numbers that are the whole point of the element.
+ * Temp stamina is deliberately NOT folded in — it is a third number and the one-line form
+ * has room for the pair a reader actually scans for.
+ */
+const staminaBarChrome: ElementChrome<StaminaBar> = {
+	summary: ({ model }) => ({
+		label: 'Stamina',
+		detail: `${model.current_stamina ?? 0}/${model.max_stamina ?? 0}`,
+	}),
+};
 
 export const staminaBarElement: ElementDefinition<StaminaBar> = {
 	id: 'stamina-bar',
@@ -17,5 +33,6 @@ export const staminaBarElement: ElementDefinition<StaminaBar> = {
 	parse,
 	serialize,
 	createView: (cx) => new StaminaBarView(cx),
+	chrome: staminaBarChrome,
 	authoring: { example: staminaExample },
 };

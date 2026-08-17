@@ -15,6 +15,15 @@ theme:
     logo: Media/favicon.ico
     favicon: Media/favicon.ico
 
+# SC-169: `docs/` is BOTH the published mkdocs source and — per the workspace CLAUDE.md
+# routing table — the home of per-effort plans/specs (`docs/superpowers/`). Those are
+# internal engineering documents, not user documentation, and with no explicit `nav:` this
+# site builds its navigation from the directory tree, so an unexcluded spec would show up
+# as a top-level section on steelcompendium.io. Excluded from the build instead of being
+# routed somewhere else, so the workspace convention still resolves.
+exclude_docs: |
+    superpowers/
+
 markdown_extensions:
     - footnotes
     -  pymdownx.arithmatex:

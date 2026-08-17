@@ -60,6 +60,8 @@ function staminaValues(model: StaminaBar): StaminaBarValues {
 
 export class StaminaBarView extends ElementView<StaminaBar> {
 	private barEl: HTMLElement | null = null;
+	/** The kit collapsible's region — the framed card (see authoringAnchor below). */
+	private cardEl: HTMLElement | null = null;
 	// D7 Task 4: only populated when model.recoveries_max is defined (renderRecoveries's
 	// early-return guard) — null on every legacy block, which is also how
 	// updateRecoveries no-ops for them.
@@ -79,7 +81,19 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// here, preserving the same quirk.
 		const { collapseDefault } = resolveCollapsePrefs(model, this.cx.prefs);
 		const wrapper = collapsible(root, { title: WRAPPER_TITLE, open: !collapseDefault }, this);
+		this.cardEl = wrapper.contentEl;
 		this.renderBar(wrapper.contentEl, model);
+	}
+
+	/** SC-145's contract (ElementView.authoringAnchor) — "the node that carries the
+	 *  element's visible card frame". For this element that is the kit collapsible's
+	 *  REGION, not root: root also holds the wrapper's own "Stamina Bar" disclosure
+	 *  header, which sits above the framed bar. Read by SC-169's chrome as the node the
+	 *  menu panel is seated on, so the panel hugs the bar's top edge instead of floating
+	 *  in the header's leading. (The D9 pencil follows it too — but that pencil is now
+	 *  the chrome's own panel item for any chrome-bearing element, so nothing moves.) */
+	authoringAnchor(): HTMLElement {
+		return this.cardEl ?? this.rootEl;
 	}
 
 	private renderBar(container: HTMLElement, model: StaminaBar): void {

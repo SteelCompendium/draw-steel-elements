@@ -13,6 +13,7 @@
 // mousedown/pointerdown stop, so noClickShield stays unset.
 import type { ElementDefinition } from '@/framework/registry';
 import { withReference } from '@/elements/shared/withReference';
+import type { ElementChrome } from '@/framework/chrome/types';
 import { STATBLOCK_TYPE_RE } from '@/services/typeAdapters';
 import { StatblockConfig } from '@model/StatblockConfig';
 import { StatblockElementView } from './view';
@@ -22,6 +23,16 @@ import statblockExample from './example.yaml';
 // whole-block reference (scc:/scc.v1:/bare-slug/@path/[[wikilink]]) to a compendium
 // statblock file, resolved by withReference/RefUnwrapView. This base def is
 // UNTOUCHED from the pre-D6 shape; only the exported `statblockElement` changes.
+/**
+ * SC-169 prototype element #1 — the plain NAME case on a static, SDK-backed element.
+ * Declared on the BASE def (in terms of the real `StatblockConfig`); `withReference`
+ * lifts it through the ref wrapper, so a whole-block-reference body degrades to
+ * "Statblock: <the reference>" rather than needing its own slot.
+ */
+const statblockChrome: ElementChrome<StatblockConfig> = {
+	summary: ({ model }) => ({ label: 'Statblock', name: model.statblock.name ?? undefined }),
+};
+
 const baseStatblockElement: ElementDefinition<StatblockConfig> = {
 	id: 'statblock',
 	name: 'Statblock',
@@ -34,6 +45,7 @@ const baseStatblockElement: ElementDefinition<StatblockConfig> = {
 	parse: (_data, raw) => StatblockConfig.readYaml(raw),
 	autoResolveRefs: false,
 	createView: (cx) => new StatblockElementView(cx),
+	chrome: statblockChrome,
 	authoring: { example: statblockExample, sdkModel: 'statblock' },
 };
 

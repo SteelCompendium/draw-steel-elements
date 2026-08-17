@@ -9888,7 +9888,13 @@ button.dse-pr__row:hover {
 	.dse-tabs__list,
 	.dse-cond--add,
 	.dse-cond-item__toggle,
-	.dse-cond-item__cog {
+	.dse-cond-item__cog,
+	/* SC-169: the element menu panel and its collapsed one-line form are SCREEN chrome —
+	   completely absent from print, in desktop and mobile modes alike. Redundant with the
+	   base `display:none` in the "Element chrome" section at the foot of this file; listed
+	   here so the exclusion is greppable from the print scheme itself. */
+	.dse-chrome,
+	.dse-chrome-summary {
 		display: none;
 	}
 	/* Rule 5 — page-break hygiene: never split a statblock / ability / power-roll
@@ -9937,7 +9943,10 @@ button.dse-pr__row:hover {
 [data-dse-print="on"] .dse-tabs__list,
 [data-dse-print="on"] .dse-cond--add,
 [data-dse-print="on"] .dse-cond-item__toggle,
-[data-dse-print="on"] .dse-cond-item__cog {
+[data-dse-print="on"] .dse-cond-item__cog,
+/* SC-169 — see the @media print twin above. */
+[data-dse-print="on"] .dse-chrome,
+[data-dse-print="on"] .dse-chrome-summary {
 	display: none;
 }
 [data-dse-element][data-dse-print="on"],
@@ -10133,4 +10142,195 @@ button.dse-pr__row:hover {
 .dse-settings-chrome-row > .setting-item-info {
 	margin-right: 0;
 	width: 100%;
+}
+
+/* ================================================================== */
+/*   Element chrome — standard menu panel + whole-element collapse    */
+/*   (SC-169)                                                          */
+/* ================================================================== */
+/*
+   Emitted by src/framework/chrome/mountChrome.ts for any element whose
+   ElementDefinition declares the `chrome` slot. Two pieces of DOM, both appended to
+   the element ROOT ([data-dse-element], which also carries [data-dse-chrome]):
+
+     .dse-chrome          the top-right icon panel — OUT OF FLOW, seated ON the root's
+                          top edge and growing UPWARD, so it overlaps whatever element
+                          sits above rather than costing every element a top margin
+                          (Scott's SC-169 description).
+     .dse-chrome-summary  the one-line collapsed form, IN FLOW, revealed only while
+                          [data-dse-collapsed='on'] is set.
+
+   THE PRINT CONTRACT (SC-169's hard requirement — "completely absent from the print
+   scheme, in both desktop and mobile modes"). Three layers, deliberately redundant:
+     1. the BASE layer below sets `display: none` on both nodes. Everything that makes
+        them visible is scoped `[data-dse-theme='steel']:not([data-dse-print="on"])`, so
+        print never has a rule that could reveal them.
+     2. the collapse rules carry the same exclusion, so a COLLAPSED element prints in
+        FULL — the same answer print rule 3 already gives the kit collapsible (nothing on
+        paper hides behind a fold).
+     3. both class names are also listed in the two print hide-lists above, so `grep
+        dse-chrome styles-source.css` shows the exclusion without having to reason about
+        the cascade.
+   The panel is additionally out of flow, so even if a rule leaked it could not reflow the
+   card. Net effect: an element's PRINT rendering is byte-identical before and after it
+   opts into chrome — which the freeze gate proves rather than being told.
+*/
+
+/* -- BASE (unscoped, structural): chrome does not exist unless a theme opts it in -- */
+.dse-chrome,
+.dse-chrome-summary {
+	display: none;
+}
+
+/* -- STEEL, SCREEN ONLY --------------------------------------------------------- */
+
+/* The panel's positioning context is whichever node carries the element's VISIBLE CARD
+   FRAME — `view.authoringAnchor()`, SC-145's existing answer to that same question, which
+   is `root` for most elements and a nested child (`.dse-sb`, `.dse-card`) for the rest.
+   Seated on the ROOT's top edge instead, the panel would float in dead space above every
+   element whose frame starts lower than its root. Only chrome-bearing nodes get this, so
+   no other element's stacking/painting is touched. */
+/* BOTH forms are load-bearing: the anchor is a DESCENDANT of the themed root for a view
+   whose card frame is nested (`.dse-sb`), and IS the themed root itself for every view
+   that mounts straight onto root. With only the descendant arm, the second class of
+   element gets no containing block at all and the panel positions against the initial
+   containing block — measured: the hero sheet's panel landed at viewport y = -24 instead
+   of on its own top edge. */
+[data-dse-theme='steel']:not([data-dse-print="on"]).dse-chrome-anchor,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-anchor {
+	position: relative;
+}
+
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome {
+	display: flex;
+	align-items: stretch;
+	position: absolute;
+	/* Right-anchored: the collapse toggle is the panel's last child, so it stays the
+	   rightmost control and every added item extends the panel LEFTWARD. */
+	right: 0.6em;
+	/* Fully above the container's top edge… */
+	bottom: 100%;
+	/* …then pulled down by exactly the shared 1px hairline so the panel's bottom edge
+	   and the card's top edge are the SAME line — the "attached tab" read that tells you
+	   which element the panel belongs to when it overlaps the one above. */
+	margin-bottom: -1px;
+	z-index: 3;
+	padding: 0 1px;
+	background: var(--dse-surface-raised);
+	border: 1px solid var(--dse-border);
+	border-bottom: 0;
+	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	/* Literal, like the SC-10 card lift-shadow: an UPWARD cast, so the panel reads as
+	   floating over the element above it and resting on the element below. */
+	box-shadow: 0 -2px 6px rgb(0 0 0 / 30%);
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* Hover-reveal: the cursor over the container OR over the panel (which is a descendant
+   of the container, so :hover covers it even though it is painted outside the box).
+   :focus-within is the keyboard twin — without it the panel is unreachable by Tab. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]:hover .dse-chrome,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome]:focus-within .dse-chrome {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Panel buttons: OS-window-controls density. Flat, borderless, muted until hovered —
+   the panel frame is the affordance, not each glyph. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome .dse-btn {
+	min-width: 1.7em;
+	min-height: 1.5em;
+	padding: 0.1em 0.35em;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome .dse-btn:hover:not([disabled]) {
+	background: var(--dse-hover);
+	color: var(--dse-fg);
+}
+@media (pointer: coarse) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome .dse-btn {
+		min-width: var(--dse-touch-min);
+		min-height: 2em;
+	}
+}
+
+/* -- MOBILE (Platform.isMobile → chrome/platform.ts stamps the attribute) --------- */
+/* Scott's ruling 4: no hover on a touch device, so the panel is always visible — and
+   because it is always visible it must NOT sit on top of the element above, so this is
+   the one mode that reserves top space. Desktop reserves none. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome][data-dse-chrome-mobile='on'] {
+	margin-top: 2.1em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-mobile='on'] .dse-chrome {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* -- COLLAPSED ------------------------------------------------------------------- */
+/* Everything the element rendered is hidden; the one-line summary and the panel stay.
+   `!important` for the same reason print rule 3 uses it: the children being hidden carry
+   their own display declarations from selectors of equal-or-greater specificity that
+   appear later in this sheet, and this rule must win against all of them without having
+   to enumerate them. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-collapsed='on']
+	> *:not(.dse-chrome):not(.dse-chrome-summary) {
+	display: none !important;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-collapsed='on'] > .dse-chrome-summary {
+	display: flex;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary {
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5em;
+	padding: 0.25em 0.35em 0.25em 0.8em;
+	background: var(--dse-card-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary__text {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+/* The two font-SLOT consumers are deliberately theme-agnostic (and print-excluded): the
+   SC-112 slot contract routes every `--dse-font-*` consumer without a [data-dse-theme]
+   qualifier, and test/dom/theme/steelTypography.test.ts gates exactly that. Everything
+   else about the collapsed bar stays Steel-scoped. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-chrome-summary__label {
+	font-family: var(--dse-font-label);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-chrome-summary__name {
+	font-family: var(--dse-font-title);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary__label {
+	font-size: 0.82em;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary__name {
+	color: var(--dse-heading);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary__detail {
+	color: var(--dse-fg-muted);
+	font-variant-numeric: tabular-nums;
+}
+/* The collapsed bar's own expand button is IN FLOW and always visible (the hover panel
+   is not reachable on a touch device, and a collapsed element must never be a dead end). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary .dse-btn {
+	flex: none;
+	background: transparent;
+	border: 0;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary .dse-btn:hover:not([disabled]) {
+	background: var(--dse-hover);
+	color: var(--dse-fg);
 }

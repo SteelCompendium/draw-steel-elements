@@ -139,7 +139,16 @@ describe('SC-145: authoring pencil anchors to the card frame, not blindly to roo
 		expect(root.querySelector('.dse-counter')!.contains(btn)).toBe(false);
 	});
 
-	test('statblock (the other previously-broken family — nested .dse-sb): pencil mounts INSIDE .dse-sb', async () => {
+	// SC-169 SUPERSEDES the statblock case of this fix. The statblock opted into the
+	// framework element chrome, and chrome OWNS the edit affordance: the pencil is a panel
+	// item (`.dse-chrome`, positioned on the card's top edge) instead of a card-corner
+	// button, so there is never a second pencil. `authoringAnchor()` is untouched and
+	// still governs every element WITHOUT a chrome slot (the two cases above). The
+	// relocation is invisible to the print freeze — `[data-dse-print="on"] .dse-btn
+	// { display: none }` already hid the card-corner pencil on paper, which is why
+	// `statblock--steel-print.png` and `statblock-edit-btn--steel-print.png` carry the
+	// same hash in the baseline.
+	test('SC-169: a chrome-bearing element (statblock) puts the pencil in the chrome panel, and only there', async () => {
 		const { deps } = makeCompendiumDeps();
 		await withAuthoringControlsOn(deps);
 		const pipeline = new ElementPipeline(deps);
@@ -151,11 +160,20 @@ describe('SC-145: authoring pencil anchors to the card frame, not blindly to roo
 		const card = root.querySelector('.dse-sb');
 		expect(card).not.toBeNull();
 
-		const btn = root.querySelector<HTMLElement>(EDIT_BTN);
-		expect(btn).not.toBeNull();
+		const buttons = root.querySelectorAll<HTMLElement>(EDIT_BTN);
+		expect(buttons).toHaveLength(1);
+		const btn = buttons[0];
+		const panel = root.querySelector('.dse-chrome');
+		expect(panel).not.toBeNull();
+		expect(btn.parentElement).toBe(panel);
+		expect(btn.getAttribute('data-dse-chrome-item')).toBe('edit');
+		// The PANEL still hangs off `authoringAnchor()` — that is how it gets seated on the
+		// card's top edge — so the pencil is still a descendant of `.dse-sb`. What changed is
+		// that it is no longer a DIRECT child of the card (the pre-SC-169 placement): it is a
+		// panel item, out of flow, above the card's top edge.
 		expect(card!.contains(btn)).toBe(true);
-		expect(btn!.parentElement).toBe(card);
-		expect(btn!.parentElement).not.toBe(root);
+		expect(btn.parentElement).not.toBe(card);
+		expect(panel!.parentElement).toBe(card);
 	});
 });
 

@@ -13,6 +13,7 @@
 // resolveRefs hook — parse() only tags ref-vs-inline; the view does the async work. This
 // keeps the base statblock/feature/display views reference-agnostic (§1.4).
 import type { ElementDefinition } from '@/framework/registry';
+import type { ElementChrome } from '@/framework/chrome/types';
 import type { TFile } from 'obsidian';
 import { RefUnwrapView } from './RefUnwrapView';
 
@@ -125,11 +126,44 @@ export function withReference<M>(base: ElementDefinition<M>, opts: WithReference
 		// serialize), so both are simply unset here.
 		resolveRefs: undefined,
 		serialize: undefined,
+		// SC-169: the base's chrome slot is typed against `M`, but the wrapped def's model
+		// is `RefOrInline<M>` — spreading it through would be a type error AND would hand
+		// the element's own summary() a wrapper object it does not understand. Lifted
+		// instead, so a reference-capable element declares chrome ONCE, on its base, in
+		// terms of its real model (see liftChrome).
+		chrome: base.chrome ? liftChrome(base.chrome, base) : undefined,
 		parse(data, raw): RefOrInline<M> {
 			const ref = detectWholeBlockRef(data, raw);
 			if (ref !== null) return { kind: 'ref', raw: ref };
 			return { kind: 'inline', model: base.parse(data, raw) };
 		},
 		createView: (cx) => new RefUnwrapView<M>(cx, base, opts),
+	};
+}
+
+/**
+ * SC-169 — lift a base def's `chrome` slot through the reference wrapper.
+ *
+ * INLINE bodies delegate to the element's own summary() with its real model. A
+ * WHOLE-BLOCK REFERENCE has no model at this layer at all: the resolved entity lives
+ * inside RefUnwrapView, which owns the async round-trip, so the collapsed line falls back
+ * to the definition's type name plus the reference text the author wrote
+ * ("Statblock: scc.v1:…"). That is honest rather than wrong, and it is a rollout item
+ * (the view would need to be able to refresh its own chrome summary post-resolution),
+ * deliberately out of the SC-169 spec phase.
+ */
+function liftChrome<M>(
+	chrome: ElementChrome<M>,
+	base: Pick<ElementDefinition<M>, 'id' | 'name'>,
+): ElementChrome<RefOrInline<M>> {
+	return {
+		summary: ({ model, def }) => {
+			if (model.kind === 'inline') return chrome.summary({ model: model.model, def });
+			return { label: base.name, name: model.kind === 'ref' ? model.raw : undefined };
+		},
+		items: chrome.items
+			? ({ model, def }) =>
+					model.kind === 'inline' ? (chrome.items?.({ model: model.model, def }) ?? []) : []
+			: undefined,
 	};
 }
