@@ -1333,6 +1333,14 @@ tracker.</p>
 <td><code>grid</code>, <code>ledger</code></td>
 </tr>
 <tr>
+<td><code>sbSticky</code></td>
+<td><code>on</code>, <code>off</code></td>
+</tr>
+<tr>
+<td><code>sbStickyMeta</code></td>
+<td><code>on</code>, <code>off</code></td>
+</tr>
+<tr>
 <td><code>reduceMotion</code></td>
 <td><code>true</code>, <code>false</code></td>
 </tr>
@@ -1370,7 +1378,10 @@ between notes, and edits made in either place stay in sync.</p>
   Steel sidebar</strong>.</li>
 </ul>
 <p>Narrow panes are a real layout: elements reflow at sidebar width (the stamina cluster
-collapses to a two-line rail, for instance) rather than being squeezed.</p>
+collapses to a two-line rail, for instance) rather than being squeezed. A statblock's
+<a href="../settings/#statblock-display">sticky mini-header</a> reflows the same way: at sidebar width
+it drops the stat pills and the secondary-stats line and keeps just the creature's name and
+role, which is the question a pinned header is there to answer.</p>
 <h2 id="canvas">Canvas<a class="headerlink" href="#canvas" title="Permanent link">&para;</a></h2>
 <p>Elements render inside <a href="../canvas-character-sheet/">Obsidian Canvas</a> text nodes, which makes
 a canvas a good way to lay out a character sheet or a session dashboard.</p>
@@ -1380,6 +1391,8 @@ file to write back to, so anything interactive — spending a Recovery, marking 
 stepping a resource — is deliberately disabled rather than silently discarded, and each card
 carries a small "Read-only" badge. Use canvas for a <strong>layout you look at</strong>; keep the blocks
 you actually click in ordinary notes (or pin them to the sidebar).</p>
+<p>A canvas node is a fixed-size card you drag, not a scroll surface, so the statblock
+<a href="../settings/#statblock-display">sticky mini-header</a> is inert there whatever the setting says.</p>
 <h2 id="print-and-pdf-export">Print and PDF export<a class="headerlink" href="#print-and-pdf-export" title="Permanent link">&para;</a></h2>
 <p>Everything renders in a print layout when you print or export to PDF, and the layout you
 picked in Settings carries over.</p>
