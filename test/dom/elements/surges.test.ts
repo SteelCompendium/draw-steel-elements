@@ -193,11 +193,21 @@ describe('D7 Task 5: canPersist=false — read-only renders WITHOUT write afford
 });
 
 describe('D7 Task 5: source hygiene + CSS contract', () => {
-	test('CSS contract: .dse-surge scoped under [data-dse-element="surges"], tokens only', () => {
-		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-		const block = sheet.match(/\[data-dse-element="surges"\]\s+\.dse-surge\s*\{[\s\S]*?\n\}\n\n/);
+	test('CSS contract: .dse-surge is COMPOUND with [data-dse-element="surges"], not a descendant of it — tokens only', () => {
+		// SC-152 fix round, same repair and same reasoning as resource.test.ts's twin:
+		// `mountPanel` does `root.addClass('dse-surge')` on the stamped root (panel.ts:38),
+		// so the descendant form never matched and the block's `padding: var(--dse-pad)`
+		// and bold "Surges" label never applied. Comments stripped first — the sheet's own
+		// prose quotes the broken form.
+		const sheet = fs
+			.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8')
+			.replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(sheet).not.toMatch(/\[data-dse-element="surges"\]\s+\.dse-surge\s*\{/);
+		const block = sheet.match(/\[data-dse-element="surges"\]\.dse-surge\s*\{[\s\S]*?\n\}\n/);
 		expect(block).not.toBeNull();
 		expect(block![0]).toMatch(/var\(--dse-/);
+		expect(block![0]).toMatch(/padding:\s*var\(--dse-pad\)/);
+		expect(block![0]).toMatch(/\.dse-surge__label\s*\{[^}]*font-weight:\s*bold/);
 	});
 
 	test('source hygiene: panel.ts/view.ts pass the shared kit style guard (no inline color, no color literals)', () => {

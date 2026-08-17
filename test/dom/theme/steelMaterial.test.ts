@@ -1315,9 +1315,19 @@ describe('Steel material contract', () => {
 	// is the mechanism that notices if they fall back out.
 	describe('character-sheet panels (SC-152)', () => {
 		/** The ONE shared card-ground rule — identified by what it paints, not by its
-		 *  selector text, so reformatting the selector list cannot make this vacuous. */
+		 *  selector text, so reformatting the selector list cannot make this vacuous.
+		 *  ANCHORED on `counter` (SC-152 review L-1): three rules in the sheet paint
+		 *  `background: var(--dse-card-bg)` — this one, `.dse-hero` (~6980) and the
+		 *  stamina recovery popover (~8452) — and taking the FIRST match was right only
+		 *  by source order, so a reorder would have silently retargeted the whole block
+		 *  at a different rule. `counter` is the shared ground's oldest member and is
+		 *  what `rootPadding()` already anchors on. */
 		const plateDark = (): Rule => {
-			const r = rules.find((x) => /background:\s*var\(--dse-card-bg\)/.test(x.body));
+			const r = rules.find(
+				(x) =>
+					/background:\s*var\(--dse-card-bg\)/.test(x.body) &&
+					x.selector.includes("[data-dse-element='counter']"),
+			);
 			expect(r).toBeDefined();
 			return r as Rule;
 		};
@@ -1325,6 +1335,7 @@ describe('Steel material contract', () => {
 			const r = rules.find(
 				(x) =>
 					x.selector.includes('body.theme-light') &&
+					x.selector.includes("[data-dse-element='counter']") &&
 					/box-shadow:\s*var\(--dse-bevel\),\s*0 4px 12px/.test(x.body),
 			);
 			expect(r).toBeDefined();
@@ -1341,7 +1352,8 @@ describe('Steel material contract', () => {
 			return r as Rule;
 		};
 
-		/** The eight panels SC-152 brought into the family. */
+		/** The seven panels SC-152 brought into the family.
+		 *  `hero` is NOT one of them — see the dedicated test below. */
 		const SHEET_PANELS = [
 			'characteristics',
 			'values-row',
@@ -1350,7 +1362,6 @@ describe('Steel material contract', () => {
 			'surges',
 			'hero-tokens',
 			'conditions',
-			'hero',
 		];
 
 		it.each(SHEET_PANELS)(
@@ -1381,41 +1392,124 @@ describe('Steel material contract', () => {
 			return out;
 		};
 
-		it('the arm carrying them is print-excluded — paper keeps the plain rendering', () => {
-			// The whole freeze story of this ticket: every SC-152 selector sits behind
-			// :not([data-dse-print="on"]), so not one *--steel-print.png moves. If someone
-			// drops the exclusion, 10+ frozen shots start failing and this fails first,
-			// with a reason attached.
+		/** The `.dse-statgrid__*` rules SC-152 added / joined, found by what they paint. */
+		const statgridCellPad = (): Rule => {
+			const r = rules.find(
+				(x) =>
+					x.selector.includes('.dse-statgrid__cell') &&
+					/^\s*padding:\s*0\.45rem 0\.3rem;\s*$/.test(x.body),
+			);
+			expect(r).toBeDefined();
+			return r as Rule;
+		};
+		const statgridLabel = (): Rule => {
+			const r = rules.find(
+				(x) =>
+					x.selector.includes('.dse-statgrid__label') &&
+					/font-variant:\s*small-caps/.test(x.body),
+			);
+			expect(r).toBeDefined();
+			return r as Rule;
+		};
+		/** The shared sunken-cell rule `.dse-statgrid__cell` joined. */
+		const sunkenCells = (): Rule => {
+			const r = rules.find(
+				(x) =>
+					/background:\s*var\(--dse-surface-sunken\)/.test(x.body) &&
+					x.selector.includes('.dse-init__cell'),
+			);
+			expect(r).toBeDefined();
+			return r as Rule;
+		};
+
+		it('EVERY rule SC-152 touches is print-excluded — paper keeps the plain rendering', () => {
+			// The screen-only story of this ticket: every SC-152 selector sits behind
+			// :not([data-dse-print="on"]), so not one *--steel-print.png moves *because of
+			// the plate*. If someone drops the exclusion, 10+ frozen shots start failing
+			// and this fails first, with a reason attached.
+			//
+			// SC-152 review L-2: the first version of this sweep walked only the three
+			// element-id rules and counted 3, leaving the two `.dse-statgrid__*` rules and
+			// the sunken-cell membership unguarded (they carried the exclusion; it just was
+			// not asserted). All six touched rules are in the sweep now, each with the
+			// marker that identifies SC-152's own contribution to it.
+			//
+			// SCOPE NOTE (SC-152 review H-3): `:not([data-dse-print="on"])` excludes the
+			// on-screen export-PREVIEW twin — which is the surface the frozen
+			// `*--steel-print.png` shots photograph. Real `@media print` is a separate
+			// surface that this exclusion does NOT cover, because Steel's token block
+			// outspecifies the print block; that is a pre-existing, systemic bug tracked as
+			// SC-170, not something this sweep can or does assert.
+			const sweep: { rule: Rule; markers: string[] }[] = [
+				{ rule: plateDark(), markers: SHEET_PANELS.map((id) => `[data-dse-element='${id}']`) },
+				{ rule: plateLight(), markers: SHEET_PANELS.map((id) => `[data-dse-element='${id}']`) },
+				{ rule: rootPadding(), markers: SHEET_PANELS.map((id) => `[data-dse-element='${id}']`) },
+				{ rule: sunkenCells(), markers: ['.dse-statgrid__cell'] },
+				{ rule: statgridCellPad(), markers: ['.dse-statgrid__cell'] },
+				{ rule: statgridLabel(), markers: ['.dse-statgrid__label'] },
+			];
 			let checked = 0;
-			for (const rule of [plateDark(), plateLight(), rootPadding()]) {
+			for (const { rule, markers } of sweep) {
 				for (const arm of topLevelArms(rule.selector)) {
-					if (!SHEET_PANELS.some((id) => arm.includes(`[data-dse-element='${id}']`))) continue;
+					if (!markers.some((m) => arm.includes(m))) continue;
 					expect(arm).toContain(':not([data-dse-print="on"])');
 					checked++;
 				}
 			}
-			// Guard the guard: if the splitter or the rule finders ever stop producing an
-			// arm that mentions a sheet panel, the loop above passes by doing nothing.
-			expect(checked).toBe(3);
+			// Guard the guard: if the splitter or the rule finders ever stop producing a
+			// marked arm, the loop above passes by doing nothing. One arm per rule today.
+			expect(checked).toBe(6);
 		});
 
-		it('stamina-bar and roll are deliberately NOT plated', () => {
+		it('stamina-bar, roll and hero are deliberately NOT plated at the root', () => {
 			// stamina-bar renders its SC-132 interior inside its own collapsible region
 			// frame — a root plate would DOUBLE-frame it. roll is already plated: it
-			// renders an inner `.dse-card`, which the plate rule already matches. Both
-			// exclusions are judgement calls, so they get a test rather than a comment
-			// alone: re-adding either should be a decision, not a drive-by.
-			for (const id of ['stamina-bar', 'roll']) {
+			// renders an inner `.dse-card`, which the plate rule already matches. hero is
+			// the same case as roll one node down: its `.dse-hero` wrapper carries the full
+			// plate (see the next test), and SC-152's first round put the ROOT in the list
+			// too, which shipped two concentric frames on the flagship sheet (the review's
+			// H-1). All three exclusions are judgement calls, so they get a test rather
+			// than a comment alone: re-adding any of them should be a decision, not a
+			// drive-by.
+			for (const id of ['stamina-bar', 'roll', 'hero']) {
 				expect(plateDark().selector).not.toContain(`[data-dse-element='${id}']`);
 				expect(plateLight().selector).not.toContain(`[data-dse-element='${id}']`);
+				expect(rootPadding().selector).not.toContain(`[data-dse-element='${id}']`);
 			}
 		});
 
-		it('only the panels whose inner wrapper does NOT already pad get root padding', () => {
+		it('the hero sheet keeps its plate on the inner .dse-hero, one node down', () => {
+			// The other half of the previous test: `hero` is out of the shared list because
+			// it is ALREADY plated, not because the sheet is meant to be bare. This is a
+			// class-keyed rule, which is why the SC-152 inventory's element-stamp probe
+			// could not see it and concluded the sheet had no outer edge.
+			const heroPlate = rules.find(
+				(r) =>
+					/background:\s*var\(--dse-card-bg\)/.test(r.body) &&
+					r.selector.includes('.dse-hero') &&
+					STEEL_SCOPE.test(r.selector),
+			);
+			expect(heroPlate).toBeDefined();
+			expect(heroPlate!.body).toMatch(/border:\s*1px solid var\(--dse-border\)/);
+			expect(heroPlate!.body).toMatch(/border-radius:\s*var\(--dse-radius\)/);
+			expect(heroPlate!.body).toMatch(/box-shadow:\s*var\(--dse-bevel\)/);
+			// …and it pads itself, which is why `hero` is out of the root-padding list too.
+			expect(heroPlate!.body).toMatch(/padding:\s*var\(--dse-pad\)/);
+		});
+
+		it('only the panels whose own block does NOT already pad get root padding', () => {
 			// The double-padding trap: .dse-res / .dse-surge / .dse-tokens carry
-			// `padding: var(--dse-pad)` themselves, so adding it to their roots too would
-			// double the inset on exactly those three and nothing else would look wrong.
-			for (const id of ['characteristics', 'values-row', 'skills', 'conditions', 'hero']) {
+			// `padding: var(--dse-pad)` in their own element blocks (~3249/~3273/~3295), so
+			// adding it to their roots too would double the inset on exactly those three
+			// and nothing else would look wrong.
+			// SC-152 fix round: for .dse-res / .dse-surge that was true of the STYLESHEET
+			// but not of the DOM — their blocks were joined to the element stamp by a dead
+			// descendant combinator, so the padding never applied and the panels cropped
+			// their content against the new plate at a 1px ink inset. The repair is in
+			// those blocks (compound selector), pinned by
+			// test/dom/elements/{resource,surges}.test.ts; the split here is unchanged and
+			// is now true in the DOM as well: all three sit at a 17px ink inset.
+			for (const id of ['characteristics', 'values-row', 'skills', 'conditions']) {
 				expect(rootPadding().selector).toContain(`[data-dse-element='${id}']`);
 			}
 			for (const id of ['heroic-resource', 'surges', 'hero-tokens']) {

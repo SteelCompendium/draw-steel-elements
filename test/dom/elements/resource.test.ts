@@ -193,11 +193,27 @@ describe('D7 Task 3: canPersist=false — read-only renders WITHOUT write afford
 });
 
 describe('D7 Task 3: source hygiene + CSS contract', () => {
-	test('CSS contract: .dse-res scoped under [data-dse-element="heroic-resource"], tokens only', () => {
-		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-		const block = sheet.match(/\[data-dse-element="heroic-resource"\]\s+\.dse-res\s*\{[\s\S]*?\n\}\n\n/);
+	test('CSS contract: .dse-res is COMPOUND with [data-dse-element="heroic-resource"], not a descendant of it — tokens only', () => {
+		// SC-152 fix round. `mountPanel` does `root.addClass('dse-res')` on the very
+		// element the pipeline already stamped `data-dse-element="heroic-resource"` onto
+		// (panel.ts:42 receives the exact `root` ElementView.onMount got), so a
+		// DESCENDANT combinator between the two can never match: both halves are the same
+		// node. The block shipped that way since D7, which is why the standalone panel had
+		// no `padding: var(--dse-pad)` (it rendered flush against its own border box — a
+		// 1px ink inset once SC-152 plated it, against hero-tokens' 17px) and why its
+		// "Ferocity" label rendered un-bold. Same bug class as FOLLOWUPS #28's
+		// `.dse-cond-panel`; see test/dom/elements/conditions.test.ts.
+		// Comments are stripped first — this file's own prose quotes the broken form.
+		const sheet = fs
+			.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8')
+			.replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(sheet).not.toMatch(/\[data-dse-element="heroic-resource"\]\s+\.dse-res\s*\{/);
+		const block = sheet.match(/\[data-dse-element="heroic-resource"\]\.dse-res\s*\{[\s\S]*?\n\}\n/);
 		expect(block).not.toBeNull();
 		expect(block![0]).toMatch(/var\(--dse-/);
+		// The two declarations the dead selector was withholding.
+		expect(block![0]).toMatch(/padding:\s*var\(--dse-pad\)/);
+		expect(block![0]).toMatch(/\.dse-res__label\s*\{[^}]*font-weight:\s*bold/);
 	});
 
 	test('source hygiene: panel.ts/view.ts pass the shared kit style guard (no inline color, no color literals)', () => {

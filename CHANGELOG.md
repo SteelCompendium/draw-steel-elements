@@ -145,16 +145,26 @@ for what needs action.
   (SC-152). The trackers and the reference cards have had the Steel plate — the
   forged gradient ground, hairline edge, rounded corner and soft bevel — since the
   look shipped, but the pieces you actually build a character sheet from did not:
-  Characteristics, Values row, Skills, Heroic resource, Surges, Hero tokens,
-  Conditions and the Hero sheet itself all rendered as bare text on the page, so a
-  sheet made of them read as an undifferentiated run of lines with the odd styled
-  block (a Counter) floating in it. All eight now carry the same plate, so a sheet
-  reads as a set of matching panels. The characteristics row gets one step more,
-  because its shape already existed elsewhere: its cells become the same boxed,
-  small-caps-labelled stat plates the statblock's Size / Speed / Stamina row draws.
-  Nothing moves in print or PDF export — the plate is a screen treatment, and paper
-  keeps the plain, ink-cheap rendering it already had. The Stamina bar and the roll
-  card were already styled and are untouched.
+  Characteristics, Values row, Skills, Heroic resource, Surges, Hero tokens and
+  Conditions all rendered as bare text on the page, so a sheet made of them read as
+  an undifferentiated run of lines with the odd styled block (a Counter) floating in
+  it. All seven now carry the same plate, so a sheet reads as a set of matching
+  panels. The characteristics row gets one step more, because its shape already
+  existed elsewhere: its cells become the same boxed, small-caps-labelled stat
+  plates the statblock's Size / Speed / Stamina row draws. The plate is written as a
+  screen treatment; a real Ctrl-P / Export-to-PDF currently carries it through
+  anyway, along with the other Steel surfaces, and getting print back to a plain,
+  ink-cheap rendering is tracked separately as SC-170.
+- **Heroic resource and Surges get the padding and the bold label they were always
+  meant to have** (SC-152). Their styling was keyed to a descendant of the element,
+  but the class lands on the element itself, so the whole block — the inset that
+  keeps the content off the edge, and the bold "Ferocity" / "Surges" label — had
+  never applied to either panel. Both now match Hero tokens, which had the same
+  styling and always did apply it. (Two print/PDF exports of those two panels change
+  as a result: they gain the same small inset and bold label their sibling already
+  had on paper.)
+- The Hero sheet, the Stamina bar and the roll card were already styled and keep the
+  framing they had.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the

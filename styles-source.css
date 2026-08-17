@@ -3594,8 +3594,28 @@ Shared globals
 /* ==================== */
 /* A class-aware, signed stepper (kit .dse-stepper — its own chrome, no color/geometry
    redeclared here) with a label (the resolved resource name, e.g. "Ferocity") above and
-   a gain-rule hint line below. Tokens only — no color literals. */
-[data-dse-element="heroic-resource"] .dse-res {
+   a gain-rule hint line below. Tokens only — no color literals.
+
+   COMPOUND, not descendant (SC-152 fix round). ResourcePanel.mountPanel does
+   `root.addClass('dse-res')` on the element root it is handed (resource/panel.ts:42),
+   so the two halves of `[data-dse-element="heroic-resource"] .dse-res` were the SAME
+   node and this whole block — padding AND the bold label — had never matched anything
+   since D7 shipped. The standalone panel therefore rendered flush against its own
+   border box (1px ink inset once SC-152 gave it a plate) with an un-bold "Ferocity"
+   label, where hero-tokens' otherwise-identical block (~3295) has always been live
+   because TokenPoolContainer really does create an inner `.dse-tokens` wrapper.
+   Fixing the SELECTOR rather than the DOM keeps the hero sheet's embedded region
+   (which gets `.dse-res` on a `.dse-hero__region` div, under a `hero` root) exactly
+   as it renders today — the compound can still only match the STANDALONE element.
+   NOTE the deliberate divergence from FOLLOWUPS #28, which repaired the identical
+   dead-descendant bug on `.dse-cond-panel` (~3188) by UNSCOPING it so the hero
+   sheet's embedded Conditions region picked the rules up too. Doing that here would
+   also restyle the hero sheet's Resource/Surges regions — which already carry their
+   own `.dse-hero__region` heading, so the panel's own bold label would read as a
+   second one — and would move three more frozen `hero*--steel-print.png` shots. That
+   is a hero-sheet design question, not this repair; the compound keeps the blast
+   radius at the two standalone elements SC-152 actually plated. */
+[data-dse-element="heroic-resource"].dse-res {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25em;
@@ -3618,8 +3638,13 @@ Shared globals
 /* The simplest HeroPanel yet: a label above a stepper (kit .dse-stepper — its own
    chrome, no color/geometry redeclared here), with an optional "each = +N damage" hint
    line below (shown only when highest_characteristic is authored). Tokens only — no
-   color literals. */
-[data-dse-element="surges"] .dse-surge {
+   color literals.
+
+   COMPOUND, not descendant — same repair, same reason as heroic-resource above:
+   SurgePanel.mountPanel does `root.addClass('dse-surge')` (surges/panel.ts:38), so
+   the descendant form never matched and the "Surges" label was un-bold and unpadded.
+   (SC-152 fix round.) */
+[data-dse-element="surges"].dse-surge {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25em;
@@ -4727,6 +4752,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
        inside its own collapsible region frame; a root plate would DOUBLE-frame it.
      - `roll` — already plated: it renders an inner `.dse-card`, which the last
        selector below already matches.
+     - `hero` — ALSO already plated, one node down: the sheet's own `.dse-hero`
+       wrapper (hero/view.ts, `root.createDiv({ cls: 'dse-hero' })`) carries the
+       full plate at ~6980, class-keyed rather than element-keyed. SC-152's first
+       round added the ROOT here as well and produced two concentric frames
+       (root 760×1101.9 with `.dse-hero` inset 17px inside it, where base had the
+       two rects coinciding exactly at 24,24 760×1067.9). If a root-level plate is
+       ever wanted it must REPLACE `.dse-hero`'s, not stack on it.
      - `hero`'s embedded regions — structurally unreachable from here, and that is
        the point: the sheet stamps [data-dse-element="hero"] on its ROOT only and
        its regions carry no element attr of their own (they take
@@ -4749,8 +4781,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 		[data-dse-element='heroic-resource'],
 		[data-dse-element='surges'],
 		[data-dse-element='hero-tokens'],
-		[data-dse-element='conditions'],
-		[data-dse-element='hero']
+		[data-dse-element='conditions']
 	):not([data-dse-error-stage]),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	background: var(--dse-card-bg);
@@ -4775,8 +4806,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):is(
 		[data-dse-element='heroic-resource'],
 		[data-dse-element='surges'],
 		[data-dse-element='hero-tokens'],
-		[data-dse-element='conditions'],
-		[data-dse-element='hero']
+		[data-dse-element='conditions']
 	):not([data-dse-error-stage]),
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
 	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -7905,12 +7935,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 
       SC-152 adds the character-sheet panels that are in the SAME position — root
       unpadded, so the new plate would otherwise crop its own content. It is a
-      per-element fact, not a family one, so only the five that need it are listed:
-      `heroic-resource`, `surges` and `hero-tokens` deliberately stay OUT because
-      their inner wrappers (.dse-res / .dse-surge / .dse-tokens) already carry
-      `padding: var(--dse-pad)` themselves — adding it here too would double the
-      inset on exactly those three. Measured, not assumed (see the SC-152 report's
-      inventory table). */
+      per-element fact, not a family one, so only the four that need it are listed.
+      `heroic-resource`, `surges` and `hero-tokens` stay OUT because their own
+      element blocks (~3249 / ~3273 / ~3297) already carry
+      `padding: var(--dse-pad)` in every theme — adding it here too would double
+      the inset on exactly those three. (SC-152 fix round: for `heroic-resource`
+      and `surges` that was true of the STYLESHEET but not of the DOM until the
+      dead descendant selectors at ~3249/~3273 were repaired — see the note there.
+      Measured after the repair: all three sit at a 17px ink inset, in family.)
+      `hero` also stays out: its plate lives on the inner `.dse-hero`, which pads
+      itself (~6984). */
 [data-dse-theme='steel']:not([data-dse-print="on"]):is(
 		[data-dse-element='initiative'],
 		[data-dse-element='encounter'],
@@ -7922,8 +7956,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='characteristics'],
 		[data-dse-element='values-row'],
 		[data-dse-element='skills'],
-		[data-dse-element='conditions'],
-		[data-dse-element='hero']
+		[data-dse-element='conditions']
 	):not([data-dse-error-stage]) {
 	padding: var(--dse-pad);
 }
