@@ -42,16 +42,50 @@ const STEEL_SCOPE = /\[data-dse-theme=['"]steel['"]\]/;
 interface Rule {
 	selector: string;
 	body: string;
+	/**
+	 * SC-171: true when this rule lives inside an `@supports (… color-mix …)` block — the
+	 * ENHANCEMENT layer. Every enhanced twin repeats its base rule's selector verbatim, so
+	 * without this flag a plain `rules.filter(...)` count doubles for every gated surface
+	 * and the structural assertions below would read a gate as a duplicate rule.
+	 */
+	gated: boolean;
 }
+
+/**
+ * Character ranges of the sheet's `@supports (… color-mix …)` blocks, in the
+ * comment-stripped copy. Brace-matched, so a nested at-rule inside one is still inside.
+ */
+const colorMixGateRanges: [number, number][] = (() => {
+	const out: [number, number][] = [];
+	const re = /@supports\s*\([^{]*color-mix\([^{]*\{/g;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(css))) {
+		let depth = 1;
+		let i = re.lastIndex;
+		for (; i < css.length && depth > 0; i++) {
+			if (css[i] === '{') depth += 1;
+			else if (css[i] === '}') depth -= 1;
+		}
+		out.push([m.index, i]);
+	}
+	return out;
+})();
+
+const insideColorMixGate = (at: number): boolean =>
+	colorMixGateRanges.some(([start, end]) => at > start && at < end);
 
 /** Flat list of every `selector { body }` in the file (no nested-brace constructs are used). */
 const rules: Rule[] = (() => {
 	const out: Rule[] = [];
 	const re = /([^{}]+)\{([^{}]*)\}/g;
 	let m: RegExpExecArray | null;
-	while ((m = re.exec(css))) out.push({ selector: m[1].trim(), body: m[2] });
+	while ((m = re.exec(css)))
+		out.push({ selector: m[1].trim(), body: m[2], gated: insideColorMixGate(m.index) });
 	return out;
 })();
+
+/** The BASE layer — everything a Chromium 106 engine actually applies. */
+const baseRules: Rule[] = rules.filter((r) => !r.gated);
 
 /** Every rule body whose selector list mentions `selector` AND is scoped to Steel. */
 const steelBlocksFor = (selector: string): string[] =>
@@ -309,8 +343,11 @@ describe('Steel material contract', () => {
 			return m[1].includes('[data-dse-role]');
 		}
 
+		// SC-171: BASE layer only. An `@supports` twin repeats the selector verbatim, and the
+		// gate is exactly what makes the base declaration authoritative on the floor engine —
+		// counting it as a second rule would misread the fix as a duplicate.
 		const selectorOf = (needle: string): string => {
-			const found = rules.filter((r) => r.selector.replace(/\s+/g, ' ').trim() === needle);
+			const found = baseRules.filter((r) => r.selector.replace(/\s+/g, ' ').trim() === needle);
 			expect(found).toHaveLength(1);
 			return found[0].selector.replace(/\s+/g, ' ').trim();
 		};
@@ -373,8 +410,9 @@ describe('Steel material contract', () => {
 		it('paints a 9px role-hued ::after notch, structure tier, under Steel only', () => {
 			// Scoped to .dse-sb specifically: the SC-101 fix round (M-1) gave the featureblock
 			// its own twin (`.dse-fb > .dse-head::after`, below), so a bare '.dse-head::after'
-			// filter now matches two rules — one per family.
-			const afters = rules.filter(
+			// filter now matches two rules — one per family. BASE layer only (SC-171): the
+			// color-mix halo now lives in an @supports twin under the same selector.
+			const afters = baseRules.filter(
 				(r) => r.selector.includes('.dse-sb') && r.selector.includes('.dse-head::after'),
 			);
 			expect(afters).toHaveLength(1);
@@ -396,17 +434,30 @@ describe('Steel material contract', () => {
 			expect(body).not.toMatch(/var\(--dse-rule\)/);
 		});
 
-		it('the notch halo carries a flat fallback before its color-mix() enhancement (support floor, SC-121 M-1)', () => {
-			const rule = rules.find(
-				(r) =>
-					r.selector.trim() ===
-					"[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after",
+		// SC-121 M-1 authored this as a same-rule fallback PAIR. SC-171 measured that shape
+		// failing on the real floor engine (`box-shadow: none` — no halo at all), because a
+		// `var()`-bearing color-mix() parses and then fails at computed-value time, after the
+		// cascade has already dropped the static twin. The contract is now two-part: the base
+		// rule holds the flat halo ALONE, and the color-mix halo lives only behind the gate.
+		it('the notch halo is flat in the base rule and color-mix-enhanced only behind the @supports gate (SC-121 M-1, SC-171)', () => {
+			const sel = "[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after";
+			const base = baseRules.find((r) => r.selector.trim() === sel);
+			expect(base).toBeDefined();
+			const baseShadows = Array.from(base!.body.matchAll(/box-shadow:[^;]+;/g)).map((m) => m[0]);
+			expect(baseShadows).toHaveLength(1);
+			expect(baseShadows[0]).not.toMatch(/color-mix/);
+			expect(baseShadows[0]).toMatch(/0 0 0 5px var\(--dse-role\)/);
+
+			const gated = rules.filter((r) => r.gated && r.selector.trim() === sel);
+			expect(gated).toHaveLength(1);
+			const gatedShadows = Array.from(gated[0].body.matchAll(/box-shadow:[^;]+;/g)).map(
+				(m) => m[0],
 			);
-			expect(rule).toBeDefined();
-			const boxShadows = Array.from(rule!.body.matchAll(/box-shadow:[^;]+;/g)).map((m) => m[0]);
-			expect(boxShadows).toHaveLength(2);
-			expect(boxShadows[0]).not.toMatch(/color-mix/);
-			expect(boxShadows[1]).toMatch(
+			// Static twin repeated first inside the block — cssSupportFloor.test.ts's adjacency
+			// scan reads source text and does not model @supports.
+			expect(gatedShadows).toHaveLength(2);
+			expect(gatedShadows[0]).not.toMatch(/color-mix/);
+			expect(gatedShadows[1]).toMatch(
 				/color-mix\(in srgb, var\(--dse-role\) 40%, var\(--dse-surface\)\)/,
 			);
 		});
@@ -452,10 +503,15 @@ describe('Steel material contract', () => {
 		});
 
 		it('paints a 9px notch on .dse-fb, hue-chained to the same fallback as the band, structure tier', () => {
-			// Exactly two `.dse-head::after` rules total: the statblock's (role-gated) and this
-			// one (ungated) — a future per-family fork or a third copy fails here.
-			const afters = rules.filter((r) => r.selector.includes('.dse-head::after'));
+			// Exactly two BASE `.dse-head::after` rules total: the statblock's (role-gated) and
+			// this one (ungated) — a future per-family fork or a third copy fails here. The
+			// @supports enhancement twins (SC-171) are counted separately below.
+			const afters = baseRules.filter((r) => r.selector.includes('.dse-head::after'));
 			expect(afters).toHaveLength(2);
+			// …and each has exactly one gated twin, no more.
+			expect(rules.filter((r) => r.gated && r.selector.includes('.dse-head::after'))).toHaveLength(
+				2,
+			);
 
 			const fb = afters.find((r) => r.selector.includes('.dse-fb'));
 			expect(fb).toBeDefined();
@@ -476,10 +532,25 @@ describe('Steel material contract', () => {
 			expect(body).toMatch(/background:\s*var\(--dse-role,\s*var\(--dse-role-leader\)\)\s*;/);
 			expect(body).not.toMatch(/var\(--dse-rule\)/);
 
-			const boxShadows = Array.from(body.matchAll(/box-shadow:[^;]+;/g)).map((m) => m[0]);
-			expect(boxShadows).toHaveLength(2);
-			expect(boxShadows[0]).not.toMatch(/color-mix/);
-			expect(boxShadows[1]).toMatch(
+			// SC-171: the base rule carries the flat halo ALONE; the color-mix halo lives only
+			// behind the @supports gate (ungated it computed to `box-shadow: none` on the
+			// Chromium 106 floor — measured in-app).
+			const baseShadows = Array.from(body.matchAll(/box-shadow:[^;]+;/g)).map((m) => m[0]);
+			expect(baseShadows).toHaveLength(1);
+			expect(baseShadows[0]).not.toMatch(/color-mix/);
+
+			const gated = rules.filter(
+				(r) =>
+					r.gated &&
+					r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-head::after",
+			);
+			expect(gated).toHaveLength(1);
+			const gatedShadows = Array.from(gated[0].body.matchAll(/box-shadow:[^;]+;/g)).map(
+				(m) => m[0],
+			);
+			expect(gatedShadows).toHaveLength(2);
+			expect(gatedShadows[0]).not.toMatch(/color-mix/);
+			expect(gatedShadows[1]).toMatch(
 				/color-mix\(in srgb, var\(--dse-role,\s*var\(--dse-role-leader\)\) 40%, var\(--dse-surface\)\)/,
 			);
 		});
@@ -492,7 +563,11 @@ describe('Steel material contract', () => {
 						r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-head" ||
 						r.selector.trim() === "[data-dse-theme='steel'] .dse-fb > .dse-head::after"),
 			);
-			expect(fbNotchRules).toHaveLength(3);
+			// 4 since SC-171: the three base rules plus the notch's @supports twin. The point of
+			// the assertion is the loop below — every one of them, gated or not, is structure
+			// tier and therefore carries no print exclusion.
+			expect(fbNotchRules).toHaveLength(4);
+			expect(fbNotchRules.filter((r) => r.gated)).toHaveLength(1);
 			for (const r of fbNotchRules) {
 				expect(r.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
 			}

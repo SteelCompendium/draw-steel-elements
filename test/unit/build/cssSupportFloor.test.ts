@@ -53,6 +53,24 @@ import path from 'path';
 //     What it still does NOT understand: the cascade, `@supports` (a feature correctly
 //     wrapped in `@supports` would still be flagged — tag it `floor-ok(...)` and say so), or
 //     which rules actually apply to any element.
+//
+// ── SC-171: THE THIRD SCAN — adjacency is NOT enough for a `var()`-bearing color-mix ──
+// The two scans above were both satisfied by the whole sheet and the sheet was still broken
+// in the app. `findFloorViolations` enforces "static declaration first, enhanced declaration
+// immediately after", an idiom that rests on the enhanced declaration being invalid at PARSE
+// time. That is true only for LITERAL values. A declaration whose value contains `var()`
+// parses fine — substitution happens later — and fails at COMPUTED-VALUE time, AFTER the
+// cascade has already discarded the static twin beneath it, so the property lands on `unset`
+// rather than on the fallback. Measured in real Obsidian (Chromium 106.0.5249.199 / Electron
+// 21.4.1, SC-160 then SC-171): the statblock head band computed `background-image: none`,
+// `background-color: rgba(0, 0, 0, 0)` and `border-bottom: 0px none`, and every tier row lost
+// its wash. Every color-mix() declaration in this sheet contains a `var()`.
+//
+// `findUngatedColorMixViolations` is therefore the gate that can actually see the failure:
+// a `color-mix()` declaration carrying a `var()` MUST sit inside an `@supports` block whose
+// condition itself tests color-mix, so that a floor engine never enters the block and the
+// static declaration outside it is the only one it sees. Unlike the two scans above, this one
+// DOES model `@supports` — it walks brace depth and keeps the at-rule prelude stack.
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const SOURCE = path.join(repoRoot, 'styles-source.css');
@@ -397,6 +415,95 @@ export function findTokenViolations(rawCss: string): TokenViolation[] {
 	return violations;
 }
 
+// ── SC-171: the @supports-gate scan ─────────────────────────────────────────────────────
+export interface UngatedColorMixViolation {
+	/** 1-based source line of the offending declaration. */
+	line: number;
+	prop: string;
+	decl: string;
+	reason: string;
+}
+
+/** The literal gate the sheet uses everywhere; the scan accepts any @supports testing color-mix. */
+export const COLOR_MIX_GATE = '@supports (background: color-mix(in srgb, red 14%, blue))';
+
+/** An enclosing prelude counts as a gate only if it is an @supports that probes color-mix. */
+function preludeGatesColorMix(prelude: string): boolean {
+	const p = prelude.trim();
+	return /^@supports\b/i.test(p) && p.includes('color-mix(');
+}
+
+/**
+ * Flag every `color-mix()` declaration whose value also contains `var()` and which is NOT
+ * inside an `@supports` block testing color-mix. See the SC-171 note in this file's header
+ * for why the adjacency scan above cannot see this class.
+ *
+ * Brace-depth walk over a comment-masked copy, carrying the stack of enclosing preludes
+ * (selectors AND at-rules), so `@supports` nesting is modelled rather than ignored.
+ */
+export function findUngatedColorMixViolations(rawCss: string): UngatedColorMixViolation[] {
+	const masked = maskComments(rawCss);
+	const violations: UngatedColorMixViolation[] = [];
+	const stack: string[] = [];
+	let buf = '';
+	let line = 1;
+	let segLine = 0;
+
+	const flush = () => {
+		const text = buf.trim().replace(/\s+/g, ' ');
+		const at = segLine || line;
+		buf = '';
+		segLine = 0;
+		if (!text) return;
+		const colon = text.indexOf(':');
+		if (colon === -1) return;
+		const prop = text.slice(0, colon).trim();
+		const value = text.slice(colon + 1).trim();
+		if (!value.includes('color-mix(')) return;
+		// Same exemption as the adjacency scan (limit 4): a custom property's value is not
+		// parsed as a property value until it is substituted.
+		if (prop.startsWith('--')) return;
+		// A color-mix() with NO var() really is invalid at parse time, so the plain
+		// static-first adjacency pair (enforced by findFloorViolations) is sufficient there.
+		if (!value.includes('var(')) return;
+		if (stack.some(preludeGatesColorMix)) return;
+		violations.push({
+			line: at,
+			prop,
+			decl: `${prop}: ${value}`,
+			reason:
+				`it contains \`var()\`, so a Chromium 106 engine parses it and then fails at ` +
+				`computed-value time — AFTER the cascade discarded the static \`${prop}\` above it, ` +
+				`leaving the property \`unset\`. Move it inside \`${COLOR_MIX_GATE}\` (repeating the ` +
+				`static twin inside the block) so the static declaration is the only one outside the gate.`,
+		});
+	};
+
+	for (const ch of masked) {
+		if (ch === '{') {
+			stack.push(buf.trim().replace(/\s+/g, ' '));
+			buf = '';
+			segLine = 0;
+			continue;
+		}
+		if (ch === '}') {
+			flush(); // a final declaration may omit its trailing `;`
+			stack.pop();
+			continue;
+		}
+		if (ch === ';') {
+			flush();
+			continue;
+		}
+		if (ch === '\n') line += 1;
+		if (!buf && /\s/.test(ch)) continue; // skip leading whitespace of a segment
+		if (!segLine) segLine = line;
+		buf += ch;
+	}
+
+	return violations;
+}
+
 describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106 floor)', () => {
 	const rawCss = readFileSync(SOURCE, 'utf8');
 
@@ -407,11 +514,12 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 	it('finds the color-mix() declarations it is meant to be checking (no vacuous pass)', () => {
 		const css = stripComments(rawCss);
 		const count = css.split('color-mix(').length - 1;
-		// 7 real declarations today: the tier-row wash (1) plus the statblock and
-		// featureblock role bands (3 each: two gradient stops + the bottom edge). An 8th
-		// textual occurrence lives in a comment quoting the site's source and is stripped
-		// above. If this number moves, the new declarations must be fallback-guarded too —
-		// which the assertion below enforces regardless of the count.
+		// Textual occurrences, not declarations: as of SC-171 the sheet has 10 color-mix()
+		// DECLARATIONS (background ×5, border-bottom ×2, box-shadow ×2, background-image ×1),
+		// each carrying one or two color-mix() calls, plus one call inside each `@supports`
+		// prelude that gates them. Occurrences in prose comments are stripped above. If this
+		// number moves, the new declarations must be guarded too — which the two assertions
+		// below enforce regardless of the count.
 		expect(count).toBeGreaterThanOrEqual(7);
 	});
 
@@ -420,6 +528,75 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		expect(
 			violations.map((v) => `${v.decl}  <-- ${v.reason}`).join('\n'),
 		).toBe('');
+	});
+
+	// ── SC-171 ───────────────────────────────────────────────────────────────────────
+	it('every var()-bearing color-mix() declaration sits inside an @supports color-mix gate', () => {
+		const violations = findUngatedColorMixViolations(rawCss);
+		expect(
+			violations
+				.map((v) => `styles-source.css:${v.line}  ${v.decl}\n    <-- ${v.reason}`)
+				.join('\n'),
+		).toBe('');
+	});
+
+	it('CAN-FAIL PROOF: neutering the sheet’s own gates makes the scan report every declaration', () => {
+		// The assertion above is only meaningful if the scan would fire on THIS file. Rewrite
+		// every real gate prelude to one that does not test color-mix and re-run: each of the
+		// sheet's 10 declarations must now be reported by name. This is the live proof, run on
+		// the shipped stylesheet on every jest run — not a synthetic sample.
+		const gates = rawCss.split(COLOR_MIX_GATE).length - 1;
+		expect(gates).toBeGreaterThanOrEqual(7); // the gates the sweep authored
+		const ungated = rawCss.split(COLOR_MIX_GATE).join('@supports (background: red)');
+		const violations = findUngatedColorMixViolations(ungated);
+		expect(violations.length).toBe(10);
+		// …and they are the surfaces SC-171 measured, by property.
+		const byProp = violations.reduce<Record<string, number>>((acc, v) => {
+			acc[v.prop] = (acc[v.prop] ?? 0) + 1;
+			return acc;
+		}, {});
+		expect(byProp).toEqual({
+			background: 5,
+			'background-image': 1,
+			'border-bottom': 2,
+			'box-shadow': 2,
+		});
+	});
+
+	it('detector sanity: the @supports-gate scan flags exactly the ungated var() cases', () => {
+		const gate = COLOR_MIX_GATE;
+		const bare = `.a { background: #123456; background: color-mix(in srgb, var(--x) 40%, blue); }`;
+		const gated = `.a { background: #123456; }\n${gate} {\n\t.a { background: #123456; background: color-mix(in srgb, var(--x) 40%, blue); }\n}`;
+		// A LITERAL color-mix() really is invalid at parse time, so the adjacency pair alone
+		// is enough there — this scan must not demand a gate for it.
+		const literalPair = `.b { color: #123456; color: color-mix(in srgb, red 40%, blue); }`;
+		// A gate that does not actually probe color-mix must NOT count as a gate.
+		const wrongGate = `@supports (display: grid) { .c { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); } }`;
+		// Nesting: an inner @media inside the real gate is still gated.
+		const nested = `${gate} { @media screen { .d { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); } } }`;
+		// Custom properties are exempt (limit 4).
+		const customProp = `.e { --w: color-mix(in srgb, var(--x) 4%, blue); }`;
+		// Prose in a comment must never be read as a declaration.
+		const inComment = `/* background: color-mix(in srgb, var(--x) 4%, blue); */ .f { color: red; }`;
+		// The last declaration in a rule may omit its trailing semicolon.
+		const noTrailingSemi = `.g { background: #123; background: color-mix(in srgb, var(--x) 4%, blue) }`;
+
+		expect(findUngatedColorMixViolations(bare)).toHaveLength(1);
+		expect(findUngatedColorMixViolations(bare)[0].prop).toBe('background');
+		expect(findUngatedColorMixViolations(gated)).toHaveLength(0);
+		expect(findUngatedColorMixViolations(literalPair)).toHaveLength(0);
+		expect(findUngatedColorMixViolations(wrongGate)).toHaveLength(1);
+		expect(findUngatedColorMixViolations(nested)).toHaveLength(0);
+		expect(findUngatedColorMixViolations(customProp)).toHaveLength(0);
+		expect(findUngatedColorMixViolations(inComment)).toHaveLength(0);
+		expect(findUngatedColorMixViolations(noTrailingSemi)).toHaveLength(1);
+	});
+
+	it('detector sanity: the gate scan reports a usable source line', () => {
+		const css = `.a {\n\tcolor: red;\n}\n\n.b {\n\tbackground: #123;\n\tbackground: color-mix(in srgb, var(--x) 4%, blue);\n}\n`;
+		const v = findUngatedColorMixViolations(css);
+		expect(v).toHaveLength(1);
+		expect(v[0].line).toBe(7);
 	});
 
 	// ── SC-121 Batch 4: the curated deny-list scan ───────────────────────────────────

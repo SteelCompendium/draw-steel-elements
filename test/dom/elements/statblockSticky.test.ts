@@ -603,10 +603,14 @@ describe('SC-160 sticky mini-header — CSS contract', () => {
 		// …and NOT the thing that broke: no color-mix anywhere in the ungated rule.
 		expect(innerRule).not.toContain('color-mix');
 
-		// Every sticky color-mix() that does exist sits inside an @supports block.
-		const gate = SHEET.match(
-			/@supports \(background: color-mix\([^)]*\)\) \{\n([\s\S]*?)^\}/m,
-		)?.[1];
+		// Every sticky color-mix() that does exist sits inside an @supports block. SC-171 gave
+		// the other eight declarations in the sheet the same treatment, so there are several
+		// such blocks now — select the sticky one by content rather than taking the first.
+		const gates = [
+			...SHEET.matchAll(/@supports \(background: color-mix\([^)]*\)\) \{\n([\s\S]*?)^\}/gm),
+		].map((m) => m[1]);
+		expect(gates.length).toBeGreaterThanOrEqual(2);
+		const gate = gates.find((g) => g.includes('.dse-sb__sticky-inner'));
 		expect(gate).toBeDefined();
 		expect(gate).toContain('.dse-sb__sticky-inner');
 		expect(gate).toContain('color-mix(in srgb, var(--dse-role, var(--dse-metal)) 14%, var(--dse-surface))');

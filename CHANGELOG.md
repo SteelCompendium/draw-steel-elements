@@ -27,6 +27,15 @@ for what needs action.
   it reflows to just the name and role because that is all a 300px-wide bar can usefully
   say. It is deliberately absent where scrolling isn't a thing: print, PDF export, print
   preview, and canvas cards — and inside a callout, whose body never scrolls.
+- [BUGFIX] **Statblock and feature cards get their missing backgrounds and colour washes
+  back** (SC-171). In the app — as opposed to the screenshots — several Steel surfaces were
+  painting nothing at all: a statblock's header band lost its background *and* the coloured
+  line under it, the same for a feature block's header, the little diamond between a
+  statblock's stats and its features lost the ring that separates it from the card, the
+  faint tier stripes behind power-roll outcome rows were absent, and an opt-in villain
+  action band had no panel behind it. They now render the way they always did in the
+  documentation images. Nothing about the design changed and no colour was altered; the
+  styling was simply written in a form the app's older rendering engine silently threw away.
 - [BUGFIX] **"Open in sidebar" stops piling up initiative trackers** (SC-153). Every
   press of an encounter block's "Open in sidebar" button appended another
   `ds-initiative` block to the note AND stacked another copy of it in the sidebar —

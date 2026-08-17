@@ -46,6 +46,12 @@
 - **Constants:** UPPER_SNAKE_CASE (`DEFAULT_SETTINGS`)
 - **Code block tags:** lowercase with hyphens, `ds-` prefix (`ds-feature`, `ds-stamina-bar`)
 - **CSS classes:** lowercase with hyphens, `ds-` prefix (`ds-container`, `ds-multiline`, `ds-vue-wrapper`)
+- **CSS browser support floor is Chromium 106** (the oldest Electron a supported Obsidian
+  desktop still ships). Any above-floor feature needs a floor-safe fallback, and a
+  `var()`-bearing `color-mix()` needs an `@supports` **gate** around the enhanced
+  declaration — a static twin authored merely *above* it does not survive, because the
+  declaration parses and then fails at computed-value time (SC-171). `styles-source.css`'s
+  "SUPPORT FLOOR" note is the authority; `test/unit/build/cssSupportFloor.test.ts` gates it.
 
 ## Commit Messages
 

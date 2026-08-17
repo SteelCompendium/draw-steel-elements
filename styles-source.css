@@ -6120,46 +6120,61 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
    `background-image` (not `background`) so the selectable-row state colours
    (button hover / aria-checked) keep painting their own background-color under
    the wash. */
-/* ===== SUPPORT FLOOR: color-mix() needs a static fallback (SC-121 batch 3) =====
+/* ===== SUPPORT FLOOR: color-mix() needs a static fallback + an @supports gate =====
+   (SC-121 batch 3, corrected by SC-160 / fixed sheet-wide by SC-171 2026-08-17)
+
    The plugin's browser support floor is **Chromium 106** (the oldest Electron a
    supported Obsidian desktop install still ships — the same floor SC-122's build
    target and its cssNesting.test.ts guard are pinned to). `color-mix()` did not
-   ship until Chromium 111. An unsupported function makes the WHOLE declaration
-   invalid at parse time, so on a floor engine every color-mix() line here was
-   silently dropped and the property fell back to whatever it inherited — exactly
-   SC-122's failure shape (a declaration that looks fine in the harness's modern
-   Chromium and simply is not there in the app).
+   ship until Chromium 111, so on a floor engine every color-mix() declaration in
+   this sheet has to degrade to something a human designed — exactly SC-122's
+   failure shape (a declaration that looks fine in the harness's modern Chromium
+   and simply is not there in the app).
 
-   Fix everywhere: **progressive enhancement**. Declare a static, precomputed
-   value FIRST, then the color-mix() line immediately after, same property, same
-   rule. A floor engine parses the static one and drops the enhanced one; a modern
-   engine parses both and the later one wins. Nothing changes on a modern engine —
-   which is why the frozen shots (all rendered in the harness's modern Chromium,
-   where color-mix resolves and the static line is inert) do not move.
+   ── THE RULE, stated correctly ────────────────────────────────────────────────
+   **A static fallback survives only if the enhanced declaration is GATED. A
+   `var()`-bearing `color-mix()` is NOT rejected at parse time.**
 
-   `test/unit/build/cssSupportFloor.test.ts` is the guard: a new color-mix()
-   declaration without an immediately-preceding static declaration of the same
-   property fails there. Read that file's header for what the guard can and
-   cannot see.
+   The original doctrine here said an unsupported function makes the whole
+   declaration invalid at PARSE time, so a static declaration authored immediately
+   above it survives the cascade — "progressive enhancement", static line first,
+   enhanced line second, same property, same rule. **That holds only for LITERAL
+   values.** A declaration whose value contains `var()` parses fine regardless of
+   what else is in it (substitution happens later), and fails at COMPUTED-VALUE
+   time — which happens AFTER the cascade has already discarded the static
+   declaration beneath it. The property is then set to its `unset` value, not to
+   the fallback: for `background` that is fully transparent, for `border-bottom`
+   it is no border at all.
 
-   ⚠ CORRECTION (SC-160, 2026-08-17 — measured in a real Obsidian, Chromium
-   106.0.5249.199 / Electron 21.4.1). The "invalid at PARSE time" claim above holds
-   only when the enhanced declaration contains no `var()`. A declaration that
-   contains one parses fine and fails at COMPUTED-VALUE time instead — which happens
-   AFTER the cascade has already discarded the static declaration beneath it, so the
-   property is set to its `unset` value rather than to the fallback. Every
-   color-mix() declaration in this sheet contains a `var()`, so on the floor engine
-   the pairs below are inert: the property gets `unset`, not the static twin. Probed
-   in-app: the same pair with LITERAL colours keeps its static value; with `var()` it
-   computes to `rgba(0, 0, 0, 0)` / `background-image: none`.
+   Measured, not reasoned — real Obsidian, Chromium 106.0.5249.199 / Electron
+   21.4.1 (SC-160, re-measured sheet-wide by SC-171):
+     · the same pair written with LITERAL colours keeps its static value;
+     · with `var()` it computes to `rgba(0, 0, 0, 0)` / `background-image: none`;
+     · `CSS.supports('color', 'color-mix(in srgb, red 14%, blue)')` → `false`.
+   EVERY color-mix() declaration in this sheet contains a `var()` (the mixed hue is
+   always a token, and `--dse-role` is written inline per card at runtime), so the
+   bare adjacency pair is inert everywhere it is used alone.
 
-   The form that actually holds is an `@supports (background: color-mix(in srgb, red
-   14%, blue))` wrapper — a floor engine never enters the block, so the static
-   declaration outside it stands. The sticky mini-header (SC-160, far below) is
-   written that way and is the worked example; the pairs in this section are the
-   pre-existing instances, tracked as FOLLOWUPS #73. Keep the static-first adjacency
-   inside any @supports block you add: the guard reads source text and does not model
-   @supports. */
+   ── THE FORM THAT ACTUALLY HOLDS ──────────────────────────────────────────────
+   Author the static declaration in the base rule, then repeat the pair inside an
+   `@supports (background: color-mix(in srgb, red 14%, blue))` block placed
+   immediately after it. A floor engine never enters the block, so the static
+   declaration outside it is the ONLY declaration of that property and stands; a
+   modern engine enters it and the enhanced line wins. Nothing changes on a modern
+   engine — which is why the frozen shots (all rendered in the harness's modern
+   Chromium) do not move.
+
+   Two mechanical requirements when you add one:
+     1. the gate block must sit AFTER the rule it enhances (equal specificity —
+        source order decides), and
+     2. keep the static-first adjacency INSIDE the block: the guard reads source
+        text and does not model @supports.
+
+   `test/unit/build/cssSupportFloor.test.ts` is the guard, and since SC-171 it
+   enforces BOTH halves: the same-property adjacency scan, plus a scan that fails
+   on any `color-mix()` declaration containing `var()` that is not inside an
+   `@supports` block testing color-mix. Read that file's header for what it can
+   and cannot see. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row {
 	--t: var(--dse-tier-low);
 	/* Plan 21 Task 2 — the site authors this row `.55rem .9rem` too
@@ -6177,18 +6192,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	border-left: 3px solid var(--t);
 	border-top: 1px solid var(--dse-metal-faint);
 	/* SUPPORT-FLOOR FALLBACK — see the SUPPORT FLOOR note just above.
-	   `--tw` is the STATIC precomputed twin of the color-mix() line that follows:
-	   `color-mix(in srgb, C 8%, transparent)` in sRGB is premultiplied, so it is
-	   exactly C at alpha .08. Declared per tier beside `--t`. Chromium < 111 drops
-	   the color-mix() declaration at parse time and keeps this one; 111+ parses
-	   both and the later one wins, so nothing changes on a modern engine. */
+	   `--tw` is the STATIC precomputed twin of the color-mix() line in the @supports
+	   block below: `color-mix(in srgb, C 8%, transparent)` in sRGB is premultiplied,
+	   so it is exactly C at alpha .08. Declared per tier beside `--t`. This static
+	   line is the ONLY `background-image` declaration outside the gate, so a floor
+	   engine keeps it; 111+ enters the gate and the enhanced line wins. */
 	--tw: rgba(231, 76, 60, 0.08); /* --dse-tier-low  dark  #e74c3c */
 	background-image: linear-gradient(90deg, var(--tw), transparent 60%);
-	background-image: linear-gradient(
-		90deg,
-		color-mix(in srgb, var(--t) 8%, transparent),
-		transparent 60%
-	);
+}
+/* SC-171: the color-mix() tier wash is the ENHANCEMENT — gated, never bare. Before
+   this gate the floor engine computed `background-image: none` on every tier row
+   (measured in-app), because the adjacent-pair idiom cannot survive a `var()`. */
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row {
+		background-image: linear-gradient(90deg, var(--tw), transparent 60%);
+		background-image: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--t) 8%, transparent),
+			transparent 60%
+		);
+	}
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row:first-child {
 	border-top: none;
@@ -6451,15 +6474,25 @@ body.theme-light
 	   with a visible bottom edge) and keeps the role SIGNAL on the edge — a
 	   full-strength 1px role hairline instead of the 38% mix. Pre-111 engines
 	   lose only the 40%→9% hue gradient inside the band; before this fallback
-	   they lost the entire background AND the border, so the band vanished. */
+	   they lost the entire background AND the border, so the band vanished.
+	   SC-171: these two are the ONLY declarations of their properties outside the
+	   @supports gate below — that is what makes them survive on the floor engine.
+	   Until the gate existed they did not: the head computed to
+	   `background-image: none` / `rgba(0, 0, 0, 0)` / `border-bottom: 0px none`. */
 	background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
-	background: linear-gradient(
-		180deg,
-		color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface)),
-		color-mix(in srgb, var(--dse-role) 9%, var(--dse-surface))
-	);
 	border-bottom: 1px solid var(--dse-role);
-	border-bottom: 1px solid color-mix(in srgb, var(--dse-role) 38%, transparent);
+}
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb[data-dse-role] > .dse-head {
+		background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
+		background: linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface)),
+			color-mix(in srgb, var(--dse-role) 9%, var(--dse-surface))
+		);
+		border-bottom: 1px solid var(--dse-role);
+		border-bottom: 1px solid color-mix(in srgb, var(--dse-role) 38%, transparent);
+	}
 }
 
 /* -- Statblock diamond notch (SC-103): the legacy ◆ divider (kit/divider.ts) mounts as a
@@ -6521,11 +6554,18 @@ body.theme-light
 	background: var(--dse-role);
 	/* SUPPORT-FLOOR FALLBACK (SC-121 M-1) — same discipline as the band rule above: a flat
 	   halo (both rings solid --dse-role) for pre-111 engines, then the color-mix()-enhanced
-	   halo for the rest. Pre-111 engines lose only the outer ring's 40% hue mix. */
+	   halo for the rest. Pre-111 engines lose only the outer ring's 40% hue mix.
+	   SC-171: gated. Ungated the floor engine computed `box-shadow: none` — no halo at all,
+	   so the notch lost its separation from the card below. */
 	box-shadow: 0 0 0 4px var(--dse-surface), 0 0 0 5px var(--dse-role);
-	box-shadow:
-		0 0 0 4px var(--dse-surface),
-		0 0 0 5px color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface));
+}
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel'] .dse-sb[data-dse-role] > .dse-head::after {
+		box-shadow: 0 0 0 4px var(--dse-surface), 0 0 0 5px var(--dse-role);
+		box-shadow:
+			0 0 0 4px var(--dse-surface),
+			0 0 0 5px color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface));
+	}
 }
 
 /* -- Featureblock header band (SC-10 Task 5): the SAME recipe as the statblock
@@ -6550,15 +6590,22 @@ body.theme-light
 	margin: 0 0 0.75rem;
 	padding: 1.25rem 1.5rem 1.3125rem;
 	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
-	/* SUPPORT-FLOOR FALLBACKS — same reasoning as the statblock band above. */
+	/* SUPPORT-FLOOR FALLBACKS — same reasoning, and since SC-171 the same @supports
+	   gate, as the statblock band above. */
 	background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
-	background: linear-gradient(
-		180deg,
-		color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface)),
-		color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 9%, var(--dse-surface))
-	);
 	border-bottom: 1px solid var(--dse-role, var(--dse-role-leader));
-	border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
+}
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head {
+		background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
+		background: linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface)),
+			color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 9%, var(--dse-surface))
+		);
+		border-bottom: 1px solid var(--dse-role, var(--dse-role-leader));
+		border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
+	}
 }
 
 /* -- Featureblock head-band notch twin (SC-101 fix round, M-1): Task 2 gave the statblock
@@ -6598,11 +6645,17 @@ body.theme-light
 	height: 9px;
 	transform: translate(-50%, 50%) rotate(45deg);
 	background: var(--dse-role, var(--dse-role-leader));
-	/* SUPPORT-FLOOR FALLBACK (SC-121 M-1) — same discipline as the statblock notch above. */
+	/* SUPPORT-FLOOR FALLBACK (SC-121 M-1) — same discipline, and since SC-171 the same
+	   @supports gate, as the statblock notch above. */
 	box-shadow: 0 0 0 4px var(--dse-surface), 0 0 0 5px var(--dse-role, var(--dse-role-leader));
-	box-shadow:
-		0 0 0 4px var(--dse-surface),
-		0 0 0 5px color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface));
+}
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel'] .dse-fb > .dse-head::after {
+		box-shadow: 0 0 0 4px var(--dse-surface), 0 0 0 5px var(--dse-role, var(--dse-role-leader));
+		box-shadow:
+			0 0 0 4px var(--dse-surface),
+			0 0 0 5px color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface));
+	}
 }
 
 /* -- Level>0 advancement rail: same fallback correction as the band above.
@@ -6941,11 +6994,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 /* Tint is per-BAND-KIND (the site tints its villain and malice bands differently), so
    it hangs off the modifier, not the block. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band--villain {
-	/* Chromium-106-floor fallback pair (SC-121, cssSupportFloor.test.ts): the static
-	   translucent black is the same sunken step the nested option cards take, so a
-	   renderer without color-mix() still gets a legible band — just an untinted one. */
+	/* Chromium-106-floor fallback (SC-121, cssSupportFloor.test.ts; gated by SC-171): the
+	   static translucent black is the same sunken step the nested option cards take, so a
+	   renderer without color-mix() still gets a legible band — just an untinted one.
+	   Ungated the floor engine computed `rgba(0, 0, 0, 0)` instead, i.e. no band at all. */
 	background: rgba(0, 0, 0, 0.16);
-	background: color-mix(in srgb, var(--dse-act-villain) 8%, transparent);
+}
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band--villain {
+		background: rgba(0, 0, 0, 0.16);
+		background: color-mix(in srgb, var(--dse-act-villain) 8%, transparent);
+	}
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__band > .dse-collapse__header {
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
@@ -7093,28 +7152,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 	pointer-events: none;
 }
 /* -- the role-tinted plate: an ENHANCEMENT, gated behind @supports. ------------------
-   WHY A GATE AND NOT THE USUAL SAME-RULE FALLBACK PAIR. The house rule for `color-mix()`
-   (Chromium 111, above the 106 floor) is "static declaration first, enhanced declaration
-   immediately after, same property, same rule" — see the SUPPORT FLOOR note earlier in
-   this sheet. That idiom only works when the enhanced declaration is invalid at PARSE
-   time, which is true only if it contains no `var()`. Every color-mix() line in this
-   sheet does contain one, and a declaration containing `var()` parses fine and fails
-   later, at COMPUTED-VALUE time — which happens AFTER the cascade has already discarded
-   the static declaration beneath it. The property is then set to its `unset` value, not
-   to the fallback: for `background` that is fully transparent.
-
-   Measured, not reasoned: in real Obsidian (Chromium 106.0.5249.199 / Electron 21.4.1)
-   `background: var(--dse-surface); background: linear-gradient(…color-mix(…var(…)…)…)`
-   computes to `rgba(0, 0, 0, 0)` with `background-image: none` — the bar rendered
-   see-through and the pinned stats were illegible over the scrolling card body. The same
-   pair written with LITERAL colours does keep the static value, which is why the idiom
-   looks sound and why this failed silently everywhere but a real floor engine.
-
-   `@supports` is the fix that actually holds: a floor engine never enters the block, so
-   the flat `background: var(--dse-surface)` above stands untouched; a modern engine
-   enters it and paints the tint. The pair is repeated INSIDE the block to satisfy
-   cssSupportFloor.test.ts's same-rule adjacency scan, which reads source text and does
-   not model @supports. -- */
+   The gate is the sheet's standard treatment for a `var()`-bearing `color-mix()` — the
+   full reasoning (and the in-app measurements behind it) lives in the SUPPORT FLOOR note
+   earlier in this sheet; SC-160 discovered it here and SC-171 applied it to the other
+   eight declarations. In short: a `var()`-bearing declaration parses fine on the floor
+   engine and fails at COMPUTED-VALUE time, after the cascade has already discarded the
+   static twin beneath it, so the property lands on `unset` — for `background`, fully
+   transparent. Measured here (Chromium 106.0.5249.199 / Electron 21.4.1): the bar
+   rendered see-through and the pinned stats were illegible over the scrolling card body.
+   A floor engine never enters the block below, so the flat `background: var(--dse-surface)`
+   above stands untouched; a modern engine enters it and paints the tint. The pair is
+   repeated INSIDE the block to satisfy cssSupportFloor.test.ts's same-rule adjacency scan,
+   which reads source text and does not model @supports. -- */
 @supports (background: color-mix(in srgb, red 14%, blue)) {
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner {
 		background: var(--dse-surface);
