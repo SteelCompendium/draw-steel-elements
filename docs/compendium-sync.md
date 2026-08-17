@@ -119,41 +119,52 @@ insert (above), and the ones already inside compendium notes themselves — look
 [Vasloria](scc.v1:mcdm.heroes.v1/rule.world/vasloria)
 ```
 
-**Clicking one works everywhere** — Reading view, Live Preview, Source mode, and in a
-popout window — and it opens the synced note if you have it, opens the entry's page on
-steelcompendium.io if you don't, or tells you plainly that the code isn't recognized.
-Ctrl/Cmd-click, Ctrl/Cmd+Alt-click and middle-click open it in a new tab, split, or window
-the same way a normal link would.
+### Clicking one
 
-**One gesture difference while you're editing.** In Live Preview, a link you're not
-actively editing (the cursor is elsewhere) is a plain, clickable line of text — click it
-like any link. But once your cursor is on that line — because you clicked into it to edit
-nearby text, or you're typing there — Obsidian shows you the raw `[text](scc.v1:...)`
-syntax instead, the same as it does for any other link type, and a plain click there just
-moves your cursor, so you can edit the text without accidentally leaving the note. Hold
-Ctrl/Cmd while clicking to follow the link anyway. Source mode always shows raw syntax, so
-it always needs Ctrl/Cmd-click. This matches how Obsidian's own internal links behave.
+**Clicking a compendium link works in every view** — Reading view, Live Preview, Source
+mode, and in a popout window. Where it takes you:
 
-**What doesn't work yet:**
+- **You have the entry synced** → it opens that note in your vault.
+- **You don't** → it opens the entry's page on steelcompendium.io in your browser. That's
+  the **Fall back to steelcompendium.io links** setting (Settings → Draw Steel Elements →
+  **Links**), which is on by default. With it turned off, nothing opens and you get a short
+  message saying the entry wasn't found instead.
+- **The code isn't one we recognize** (a typo, or an entry that no longer exists) → a short
+  message says so, and nothing else happens.
 
-- **Backlinks, the graph view, and "unlinked mentions"** don't know about these links. As
-  far as Obsidian's own link index is concerned, they're not links to anything in your
-  vault — so a compendium note won't show up in another note's backlinks just because it's
-  referenced this way, and you won't see it in the graph. Clicking still works regardless;
-  this only affects Obsidian's own link-tracking features.
-- **There's no option yet to have the compendium sync in wikilink or plain vault-path
-  form** instead of this `scc.v1:` form. That form is what makes a link survive the
-  compendium's layout changing under it — some sync in the future may keep breaking links
-  from happening if the compendium's structure changes again — so it isn't going away, but
-  an alternative is planned.
+**Ways to open it:** a normal click opens it in the current tab. **Ctrl/Cmd-click** opens
+it in a new tab, **Ctrl/Cmd+Alt-click** in a split beside the current one, and
+**Ctrl/Cmd+Alt+Shift-click** in a new window. **Middle-click** opens a new tab, same as
+Ctrl/Cmd-click. These are Obsidian's own shortcuts — compendium links just follow them.
 
-Both are on the list; this note exists so "why doesn't this show up in backlinks?" has an
-answer today instead of feeling like a bug.
+**One difference while you're editing.** In Live Preview, a link you aren't editing looks
+like ordinary underlined text and a plain click follows it. Put your cursor on that line —
+by clicking into it, or typing nearby — and Obsidian reveals the raw
+`[text](scc.v1:...)` behind it, exactly as it does for any other link. While that raw text
+is showing, a plain click just moves your cursor, so you can edit the words without
+accidentally leaving the note; hold **Ctrl/Cmd** to follow the link anyway. Source mode
+always shows raw text, so there a link always needs Ctrl/Cmd-click. Obsidian's own links
+behave the same way — this isn't special to the compendium.
 
-**One more thing worth remembering:** clicking always works, but only **Reading view**
-actually draws the cards (`ds-scc` and every other element). A link will take you to the
-right note in any view; what you see when you get there depends on which view that note is
-in.
+**Only Reading view draws the cards.** A link takes you to the right note in any view, but
+statblocks, features and the rest only render as cards in Reading view (`Ctrl/Cmd + E`).
+What you see when you arrive depends on which view that note is in.
+
+### What compendium links can't do yet
+
+Two things are deliberately not built yet. Neither is a bug, and neither stops links from
+working — this section exists so you don't have to wonder.
+
+- **They don't show up in backlinks, the graph view, or "unlinked mentions."** Obsidian's
+  link index doesn't recognize the `scc.v1:` form as a link to a file in your vault, so
+  linking to a compendium entry this way won't add it to another note's backlinks and won't
+  draw an edge in the graph. Clicking works regardless; only Obsidian's own link-tracking
+  features are affected.
+- **You can't yet choose a different link style for the synced compendium** — there's no
+  option to have it use wikilinks (`[[...]]`) or plain vault paths instead of `scc.v1:`.
+  The `scc.v1:` form is deliberate: it points at an entry rather than at a file path, so
+  your links keep working even when the compendium's folder layout changes in a later
+  release. It isn't going away, but an alternative style is planned.
 
 ## Copying an entry to homebrew from
 

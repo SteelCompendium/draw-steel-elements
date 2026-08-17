@@ -86,11 +86,15 @@ export interface DomEventOwner {
 /**
  * Attaches capture-phase `click` + `auxclick` (middle-click; browsers route the middle
  * button through auxclick, not click) listeners to `doc`, lifecycle-bound to `owner` —
- * `registerDomEvent` detaches automatically when `owner` unloads, so calling this once per
- * window (main + each popout, see registerSccLinkClickHandling below) and letting the
- * plugin's own unload tear every one of them down is sufficient; no separate per-window
- * detach is needed (a torn-down popout `document` silently accepts a stale
- * removeEventListener call).
+ * `registerDomEvent` detaches them when `owner` tears down. Called once per window (main +
+ * each popout, see registerSccLinkClickHandling below). `owner` can be the plugin itself
+ * (everything detaches at plugin unload) or a per-window owner that can be released
+ * earlier — which is what registerSccLinkClickHandling passes, so a closed popout stops
+ * being retained the moment it closes rather than at unload (finding L-6).
+ *
+ * Both listeners share ONE callback, and a middle click reaches only `auxclick` (never
+ * `click`), so a physical click always runs the body exactly once — the double-fire that
+ * bit the CM6 extension (finding H-1) is structurally impossible here.
  */
 export function attachSccLinkClickHandling(
 	owner: DomEventOwner,
@@ -105,10 +109,21 @@ export function attachSccLinkClickHandling(
 	owner.registerDomEvent(doc, 'auxclick', onEvent, { capture: true });
 }
 
-/** The one thing this module needs from Plugin beyond DomEventOwner: registerEvent, to
- *  hand the 'window-open' EventRef to the plugin's own auto-cleanup on unload. */
-export interface SccClickPlugin extends DomEventOwner {
+/** What registerSccLinkClickHandling needs from Plugin. Note it does NOT need
+ *  `registerDomEvent`: listeners go on per-window owners (see below), not on the plugin.
+ *  - `registerEvent`, to hand the 'window-open'/'window-close' EventRefs to the plugin's own
+ *    auto-cleanup on unload;
+ *  - `register`, to hand it one teardown callback covering every window still attached at
+ *    unload (Component.register — identical on the real Plugin and the test mock).
+ *
+ *  Deliberately NOT `addChild`/`removeChild`, which would be the more idiomatic way to own
+ *  per-window listeners: `Component.addChild` is generic and constrained to `Component`, so
+ *  putting it on this seam forces every caller to be a real `Component` and breaks the
+ *  lightweight structural fakes this interface exists for (tsc rejects it against both the
+ *  real Plugin and the test mock). */
+export interface SccClickPlugin {
 	registerEvent(ref: unknown): void;
+	register(callback: () => unknown): void;
 }
 
 /** A leaf's container, narrowed to just the `.doc` field WorkspaceWindow carries — the
@@ -128,7 +143,29 @@ export interface SccClickLeaf {
 export interface SccClickWorkspace {
 	readonly containerEl: HTMLElement;
 	on(name: 'window-open', callback: (win: WorkspaceWindow, window: Window) => unknown): unknown;
+	on(name: 'window-close', callback: (win: WorkspaceWindow, window: Window) => unknown): unknown;
 	iterateAllLeaves(callback: (leaf: SccClickLeaf) => unknown): void;
+}
+
+/** A `DomEventOwner` whose registrations can be released on demand, rather than only when
+ *  the plugin unloads. Lets `attachSccLinkClickHandling` stay the single place that knows
+ *  WHICH events to bind (so its existing coverage still applies) while giving each window
+ *  an independent teardown. */
+interface DetachableDomEventOwner extends DomEventOwner {
+	detachAll(): void;
+}
+
+function createDetachableOwner(): DetachableDomEventOwner {
+	const removals: Array<() => void> = [];
+	return {
+		registerDomEvent(el, type, callback, options) {
+			el.addEventListener(type, callback, options);
+			removals.push(() => el.removeEventListener(type, callback, options));
+		},
+		detachAll() {
+			for (const remove of removals.splice(0)) remove();
+		},
+	};
 }
 
 /**
@@ -138,6 +175,15 @@ export interface SccClickWorkspace {
  * it), and every popout opened from here on (`workspace.on('window-open')` — each popout
  * window has its own `document`, this repo's eslint-plugin-obsidianmd config lints for
  * exactly this popout-safety class of bug).
+ *
+ * **Each window's listeners get their own owner, released on `window-close`** (SC-135 fix
+ * round 1, review finding L-6). Registering them straight on the plugin leaked a closed
+ * popout's whole `Document` for the rest of the session: `registerDomEvent` keeps a
+ * `() => el.removeEventListener(...)` closure alive until its owner tears down, so with the
+ * plugin as owner every popout ever opened stayed reachable — plus the entry the dedupe set
+ * held. A per-window `DetachableDomEventOwner` drops both at the moment the window actually
+ * goes away; whatever is still attached at plugin unload is released by the single
+ * `plugin.register` teardown below.
  */
 export function registerSccLinkClickHandling(
 	plugin: SccClickPlugin,
@@ -145,11 +191,22 @@ export function registerSccLinkClickHandling(
 	resolver: SccAnchorResolver,
 	actions: SccClickActions,
 ): void {
-	const attached = new Set<Document>();
+	// Doubles as the dedupe set (a window already in the map is already attached) and as
+	// the owner registry the window-close teardown looks up.
+	const attached = new Map<Document, DetachableDomEventOwner>();
 	const attach = (doc: Document | null | undefined): void => {
 		if (!doc || attached.has(doc)) return;
-		attached.add(doc);
-		attachSccLinkClickHandling(plugin, doc, resolver, actions);
+		const owner = createDetachableOwner();
+		attached.set(doc, owner);
+		attachSccLinkClickHandling(owner, doc, resolver, actions);
+	};
+	const detach = (doc: Document | null | undefined): void => {
+		if (!doc) return;
+		const owner = attached.get(doc);
+		if (!owner) return;
+		attached.delete(doc);
+		// Drops this module's last references to `doc` — the listener closures AND the map key.
+		owner.detachAll();
 	};
 
 	// Main window.
@@ -160,8 +217,16 @@ export function registerSccLinkClickHandling(
 		attach(leaf.getContainer().doc);
 	});
 
-	// Every popout opened from here on.
+	// Every popout opened from here on, and its teardown when the user closes it.
 	plugin.registerEvent(workspace.on('window-open', (win) => attach(win.doc)));
+	plugin.registerEvent(workspace.on('window-close', (win) => detach(win.doc)));
+
+	// Plugin unload: release every window still attached (the main window always, plus any
+	// popout open at the time). Mirrors what registerDomEvent used to do for us.
+	plugin.register(() => {
+		for (const owner of attached.values()) owner.detachAll();
+		attached.clear();
+	});
 }
 
 /**

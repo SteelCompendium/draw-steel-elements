@@ -84,6 +84,34 @@ describe('findSccLinkAtPos', () => {
 		const line = '[x]( scc.v1:a/b )';
 		expect(findSccLinkAtPos(line, 0, 2)?.href).toBe('scc.v1:a/b');
 	});
+
+	// SC-135 fix round 1 (review finding M-2): the link pattern used to be a module-level
+	// `/g` RegExp, whose `lastIndex` is mutated by every `exec`. It was reset on entry so it
+	// was never actually wrong — but it made the module's behaviour depend on hidden global
+	// state, and one early `return` added in the wrong place would have made a later call
+	// silently start scanning from the middle of the line. The pattern is now built per call;
+	// these pin the property so it can't regress into a shared object again.
+	test('no state carries between calls: repeating a call after scanning further returns the same answer', () => {
+		const line = '[first](scc.v1:a/b) then [second](scc.v1:c/d)';
+		const firstPos = 2;
+		const secondPos = line.indexOf('[second]') + 2;
+
+		const before = findSccLinkAtPos(line, 0, firstPos)?.href;
+		expect(findSccLinkAtPos(line, 0, secondPos)?.href).toBe('scc.v1:c/d');
+		const after = findSccLinkAtPos(line, 0, firstPos)?.href;
+
+		expect(before).toBe('scc.v1:a/b');
+		expect(after).toBe(before);
+	});
+
+	test('no state carries between calls: the FIRST link on a line is still found after a miss', () => {
+		const line = '[only](scc.v1:a/b) trailing prose';
+		// The first call scans the ENTIRE line and finds nothing covering pos (the click is
+		// past every link), which is what leaves a `/g` regex's lastIndex parked at the end.
+		// The second call must still find the link at the start of the same line.
+		expect(findSccLinkAtPos(line, 0, line.length)).toBeNull();
+		expect(findSccLinkAtPos(line, 0, 2)?.href).toBe('scc.v1:a/b');
+	});
 });
 
 describe('shouldFollowOnClick (Obsidian Live Preview reveal convention)', () => {

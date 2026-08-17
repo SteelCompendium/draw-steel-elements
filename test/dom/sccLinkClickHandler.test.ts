@@ -335,11 +335,7 @@ describe('registerSccLinkClickHandling (SC-135 phase 1 §2 — wiring)', () => {
 		plugin.load();
 		const resolver = resolverFixture();
 		const actions = stubActions();
-		const workspace = {
-			containerEl: document.body,
-			on: jest.fn(() => ({})),
-			iterateAllLeaves: jest.fn((_cb: any) => {}),
-		};
+		const workspace = fakeWorkspace();
 
 		registerSccLinkClickHandling(plugin, workspace, resolver, actions);
 		const anchor = anchorContainer(document, VAULT_HREF);
@@ -356,15 +352,11 @@ describe('registerSccLinkClickHandling (SC-135 phase 1 §2 — wiring)', () => {
 		const resolver = resolverFixture();
 		const actions = stubActions();
 		const popoutDoc = document.implementation.createHTMLDocument('popout');
-		const workspace = {
-			containerEl: document.body,
-			on: jest.fn(() => ({})),
-			iterateAllLeaves: jest.fn((cb: any) => {
-				cb(fakeLeaf(popoutDoc));
-				cb(fakeLeaf(popoutDoc)); // a second leaf in the SAME popout — must dedupe.
-				cb(fakeLeaf(undefined)); // the main-window split has no `.doc` — must no-op.
-			}),
-		};
+		const workspace = fakeWorkspace([
+			fakeLeaf(popoutDoc),
+			fakeLeaf(popoutDoc), // a second leaf in the SAME popout — must dedupe.
+			fakeLeaf(undefined), // the main-window split has no `.doc` — must no-op.
+		]);
 
 		registerSccLinkClickHandling(plugin, workspace, resolver, actions);
 		const anchor = anchorContainer(popoutDoc, VAULT_HREF);
@@ -374,37 +366,153 @@ describe('registerSccLinkClickHandling (SC-135 phase 1 §2 — wiring)', () => {
 		plugin.unload();
 	});
 
+	/** A workspace fake that records each `on(name, cb)` registration by name, so a test can
+	 *  fire 'window-open'/'window-close' the way Obsidian would. */
+	function fakeWorkspace(leaves: Array<{ getContainer: () => { doc?: Document } }> = []) {
+		const callbacks: Record<string, (win: { doc: Document }) => unknown> = {};
+		return {
+			callbacks,
+			containerEl: document.body,
+			on: jest.fn((name: string, cb: any) => {
+				callbacks[name] = cb;
+				return { fake: `eventref:${name}` };
+			}),
+			iterateAllLeaves: jest.fn((cb: any) => {
+				for (const leaf of leaves) cb(leaf);
+			}),
+		};
+	}
+
 	test('registers a window-open listener and attaches to a FUTURE popout when it fires', () => {
 		const plugin = new Plugin();
 		plugin.load();
 		const resolver = resolverFixture();
 		const actions = stubActions();
-		let windowOpenCallback: ((win: { doc: Document }) => unknown) | undefined;
-		const workspace = {
-			containerEl: document.body,
-			on: jest.fn((_name: string, cb: any) => {
-				windowOpenCallback = cb;
-				return { fake: 'eventref' };
-			}),
-			iterateAllLeaves: jest.fn((_cb: any) => {}),
-		};
+		const workspace = fakeWorkspace();
 		const registerEventSpy = jest.spyOn(plugin, 'registerEvent');
 
 		registerSccLinkClickHandling(plugin, workspace, resolver, actions);
 		expect(workspace.on).toHaveBeenCalledWith('window-open', expect.any(Function));
-		expect(registerEventSpy).toHaveBeenCalledWith({ fake: 'eventref' });
+		expect(registerEventSpy).toHaveBeenCalledWith({ fake: 'eventref:window-open' });
 
 		// A click in the popout BEFORE window-open fires is not caught yet.
 		const popoutDoc = document.implementation.createHTMLDocument('popout');
 		const preAnchor = anchorContainer(popoutDoc, VAULT_HREF);
 		preAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-        expect(actions.vaultCalls).toHaveLength(0);
+		expect(actions.vaultCalls).toHaveLength(0);
 
 		// Simulate Obsidian firing 'window-open' for the new popout.
-		windowOpenCallback!({ doc: popoutDoc });
+		workspace.callbacks['window-open']({ doc: popoutDoc });
 
 		preAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 		expect(actions.vaultCalls).toHaveLength(1);
 		plugin.unload();
+	});
+
+	// SC-135 fix round 1 — review finding L-6. Per-window listener ownership: a closed popout
+	// must stop being referenced when it closes, not merely when the plugin unloads.
+	describe('per-window teardown (SC-135 fix round 1, finding L-6)', () => {
+		test('registers a window-close listener alongside window-open', () => {
+			const plugin = new Plugin();
+			plugin.load();
+			const workspace = fakeWorkspace();
+			const registerEventSpy = jest.spyOn(plugin, 'registerEvent');
+
+			registerSccLinkClickHandling(plugin, workspace, resolverFixture(), stubActions());
+
+			expect(workspace.on).toHaveBeenCalledWith('window-close', expect.any(Function));
+			expect(registerEventSpy).toHaveBeenCalledWith({ fake: 'eventref:window-close' });
+			plugin.unload();
+		});
+
+		test('window-close detaches THAT popout\'s listeners and leaves the main window working', () => {
+			const plugin = new Plugin();
+			plugin.load();
+			const resolver = resolverFixture();
+			const actions = stubActions();
+			const workspace = fakeWorkspace();
+			registerSccLinkClickHandling(plugin, workspace, resolver, actions);
+
+			const popoutDoc = document.implementation.createHTMLDocument('popout');
+			workspace.callbacks['window-open']({ doc: popoutDoc });
+			const popoutAnchor = anchorContainer(popoutDoc, VAULT_HREF);
+			popoutAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+			expect(actions.vaultCalls).toHaveLength(1);
+
+			workspace.callbacks['window-close']({ doc: popoutDoc });
+
+			// The popout's listeners are gone — a click there is no longer intercepted.
+			popoutAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+			expect(actions.vaultCalls).toHaveLength(1);
+
+			// ...and the main window is untouched by that teardown.
+			const mainAnchor = anchorContainer(document, VAULT_HREF);
+			mainAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+			expect(actions.vaultCalls).toHaveLength(2);
+
+			mainAnchor.remove();
+			plugin.unload();
+		});
+
+		test('a window closed and re-opened attaches again (the dedupe entry was released, not stuck)', () => {
+			const plugin = new Plugin();
+			plugin.load();
+			const resolver = resolverFixture();
+			const actions = stubActions();
+			const workspace = fakeWorkspace();
+			registerSccLinkClickHandling(plugin, workspace, resolver, actions);
+
+			const popoutDoc = document.implementation.createHTMLDocument('popout');
+			workspace.callbacks['window-open']({ doc: popoutDoc });
+			workspace.callbacks['window-close']({ doc: popoutDoc });
+			workspace.callbacks['window-open']({ doc: popoutDoc });
+
+			const anchor = anchorContainer(popoutDoc, VAULT_HREF);
+			anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+			// Exactly one — re-attached, and not double-attached.
+			expect(actions.vaultCalls).toHaveLength(1);
+			plugin.unload();
+		});
+
+		test('window-close for a window that was never attached is a no-op', () => {
+			const plugin = new Plugin();
+			plugin.load();
+			const actions = stubActions();
+			const workspace = fakeWorkspace();
+			registerSccLinkClickHandling(plugin, workspace, resolverFixture(), actions);
+
+			const strayDoc = document.implementation.createHTMLDocument('never-attached');
+			expect(() => workspace.callbacks['window-close']({ doc: strayDoc })).not.toThrow();
+
+			// The main window still works.
+			const mainAnchor = anchorContainer(document, VAULT_HREF);
+			mainAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+			expect(actions.vaultCalls).toHaveLength(1);
+			mainAnchor.remove();
+			plugin.unload();
+		});
+
+		test('plugin unload still detaches EVERY window that is left attached', () => {
+			const plugin = new Plugin();
+			plugin.load();
+			const resolver = resolverFixture();
+			const actions = stubActions();
+			const workspace = fakeWorkspace();
+			registerSccLinkClickHandling(plugin, workspace, resolver, actions);
+
+			const popoutDoc = document.implementation.createHTMLDocument('popout');
+			workspace.callbacks['window-open']({ doc: popoutDoc });
+
+			plugin.unload();
+
+			const mainAnchor = anchorContainer(document, VAULT_HREF);
+			mainAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+			const popoutAnchor = anchorContainer(popoutDoc, VAULT_HREF);
+			popoutAnchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+			expect(actions.vaultCalls).toHaveLength(0);
+			mainAnchor.remove();
+		});
 	});
 });

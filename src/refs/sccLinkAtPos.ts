@@ -29,7 +29,27 @@ export interface SccLinkMatch {
 // 37,771 occurrences measured are this exact form, zero bare/other), and this is also
 // exactly what a hand-typed link looks like. No nested-bracket or escaped-paren handling —
 // same scope as the existing DOM rewrite, not a general markdown-link parser.
-const MD_LINK_RE = /\[([^\]\n]*)\]\(([^)\n]+)\)/g;
+//
+// KNOWN, DEFERRED (SC-135 review findings L-1/L-2, measured against all 37,771 scc links in
+// the shipped compendium: ZERO occurrences of any of it, so this only ever affects
+// hand-written notes). Two classes, both diverging from what Reading view does, because
+// this is a regex over raw text with no markdown syntax tree behind it:
+//   - Silent no-ops where Reading view works: nested brackets in the link text
+//     (`[a [b] c](scc.v1:…)`), an image inside the text (`[![x](y.png)](scc.v1:…)`).
+//   - False positives where Reading view correctly does nothing: a link inside an inline
+//     code span or a fenced code block, and an escaped `\[t\](scc.v1:…)`.
+// The fix, if it is ever wanted, is `syntaxTree(view.state).resolveInner(pos, 1)` in the
+// CM6 caller — bail on `inline-code`/`HyperMD-codeblock`. `@codemirror/language` is already
+// a devDependency and an esbuild external, so it costs no new bundle surface.
+//
+// A SOURCE string, not a shared `RegExp` object, on purpose (SC-135 fix round 1, review
+// finding M-2): a module-level `/g` regex carries mutable `lastIndex` state across every
+// call in the process. `findSccLinkAtPos` reset it on entry, so it was never actually
+// wrong — but a shared mutable global is a standing trap for the next caller who adds an
+// early return or a nested scan, and it made the module's own "no shared mutable state"
+// test untrue. Building the regex per call removes the state entirely; this runs once per
+// mousedown, so the allocation is free at this frequency.
+const MD_LINK_SOURCE = '\\[([^\\]\\n]*)\\]\\(([^)\\n]+)\\)';
 
 /**
  * Scans `lineText` (one line's raw text, no line terminator) for an `scc(.vN)?:` markdown
@@ -43,9 +63,9 @@ const MD_LINK_RE = /\[([^\]\n]*)\]\(([^)\n]+)\)/g;
  * contain a given `pos`).
  */
 export function findSccLinkAtPos(lineText: string, lineStart: number, pos: number): SccLinkMatch | null {
-	MD_LINK_RE.lastIndex = 0;
+	const re = new RegExp(MD_LINK_SOURCE, 'g');
 	let match: RegExpExecArray | null;
-	while ((match = MD_LINK_RE.exec(lineText)) !== null) {
+	while ((match = re.exec(lineText)) !== null) {
 		const from = lineStart + match.index;
 		const to = from + match[0].length;
 		if (pos < from) return null; // matches are in left-to-right order; nothing further can cover pos

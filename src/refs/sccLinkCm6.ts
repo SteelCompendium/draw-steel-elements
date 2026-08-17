@@ -19,12 +19,12 @@ import type { SccClickActions } from './sccLinkClickHandler';
 import { findSccLinkAtPos, shouldFollowOnClick } from './sccLinkAtPos';
 
 /**
- * The shared mousedown/auxclick body: locate an scc link under the pointer via CM6's own
- * document model (not the DOM), decide whether THIS click should follow it per Obsidian's
- * reveal-state convention, and if so resolve + preventDefault before Obsidian's own
- * external-link path ever sees it. Returns true when handled (CM6's domEventHandlers
- * contract: a truthy return suppresses CM6's own default handling of the event too, e.g.
- * cursor placement from the same mousedown).
+ * The mousedown body: locate an scc link under the pointer via CM6's own document model
+ * (not the DOM), decide whether THIS click should follow it per Obsidian's reveal-state
+ * convention, and if so resolve + preventDefault before Obsidian's own external-link path
+ * ever sees it. Returns true when handled (CM6's domEventHandlers contract: a truthy return
+ * suppresses CM6's own default handling of the event too, e.g. cursor placement from the
+ * same mousedown).
  */
 function handlePointerEvent(
 	event: MouseEvent,
@@ -43,8 +43,12 @@ function handlePointerEvent(
 	if (!link) return false;
 
 	const livePreview = view.state.field(editorLivePreviewField, false) ?? false;
-	const selection = view.state.selection.main;
-	const lineRevealed = selection.from <= line.to && selection.to >= line.from;
+	// EVERY selection range, not just `.main` (SC-135 fix round 1, review finding L-3):
+	// Obsidian reveals a line's raw markdown when ANY cursor sits on it, so reading only
+	// the main range made a line held open by a SECONDARY multi-cursor look folded — and a
+	// plain click there followed the link instead of placing the cursor, contradicting the
+	// documented gesture rule.
+	const lineRevealed = view.state.selection.ranges.some((range) => range.from <= line.to && range.to >= line.from);
 	const modEvent = Keymap.isModEvent(event);
 	const isModOrAux = modEvent !== false || event.button === 1;
 
@@ -69,10 +73,16 @@ function handlePointerEvent(
 }
 
 /**
- * Builds the CM6 `Extension` to pass to `plugin.registerEditorExtension`. Handles both
- * `mousedown` (left-click and the common case) and `auxclick` (middle-click on platforms
- * where it doesn't reach `mousedown` with `button === 1` first — defensive redundancy,
- * `handlePointerEvent` is idempotent per its own button check either way).
+ * Builds the CM6 `Extension` to pass to `plugin.registerEditorExtension`.
+ *
+ * **`mousedown` ONLY — do not add an `auxclick` handler back.** (SC-135 fix round 1, review
+ * finding H-1.) A middle click already arrives here as `mousedown` with `button === 1`, and
+ * a browser then fires `auxclick` for the SAME physical click on release; `preventDefault()`
+ * on the mousedown does not suppress it. This extension used to handle both, so every
+ * middle-click ran the full side-effecting body twice and opened the target in TWO tabs.
+ * `handlePointerEvent` is not idempotent — it calls `actions.openVault(...)` each time — so
+ * the one-handler rule is what keeps middle-click single. Pinned by
+ * test/dom/sccLinkCm6.test.ts's "middle-click ... exactly once" case.
  *
  * Wrapped in `Prec.highest` — CM6's own docs (`EditorView.domEventHandlers`): "such
  * functions are ordered by extension precedence, and the first handler to return true
@@ -89,9 +99,6 @@ export function createSccLinkCm6Extension(resolver: SccAnchorResolver, actions: 
 	return Prec.highest(
 		EditorView.domEventHandlers({
 			mousedown(event, view) {
-				return handlePointerEvent(event, view, resolver, actions);
-			},
-			auxclick(event, view) {
 				return handlePointerEvent(event, view, resolver, actions);
 			},
 		}),

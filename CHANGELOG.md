@@ -35,13 +35,19 @@ for what needs action.
   rewrites it into a real note link — Reading view, and inside rendered element cards.
   Everywhere else (Live Preview, Source mode, popout windows) Obsidian saw an
   unrecognized link scheme, asked to confirm opening it as an external app, and then
-  silently did nothing on approval. A new click handler now resolves the link the same
-  way Reading view does and opens the note (or the web page, or a plain-language notice
-  if the code isn't recognized) instead — honoring Ctrl/Cmd-click and middle-click for
-  new tab/split/window, and reaching popout windows too. Backlinks, the graph view, and
-  "unlinked mentions" still don't know about these links (documented under
-  [Compendium links](docs/compendium-sync.md#compendium-links)); a future release may
-  add an option to sync them in a link format Obsidian's own tools can index.
+  silently did nothing on approval. Clicking now opens the synced note, or the entry's
+  page on steelcompendium.io if you haven't synced it (the **Fall back to
+  steelcompendium.io links** setting, on by default), or says plainly that the code isn't
+  recognized. Ctrl/Cmd-click opens a new tab, Ctrl/Cmd+Alt-click a split,
+  Ctrl/Cmd+Alt+Shift-click a new window, and middle-click a new tab — and it all works in
+  popout windows too. One deliberate nuance, matching Obsidian's own links: in Live
+  Preview a plain click follows the link, but while your cursor is on that line (so the
+  raw `[text](scc.v1:...)` is showing) a plain click just moves the cursor and Ctrl/Cmd
+  follows it; Source mode always needs Ctrl/Cmd. Backlinks, the graph view and "unlinked
+  mentions" still don't know about these links, and there's still no option to sync the
+  compendium using wikilinks or plain vault paths — both are documented under
+  [Compendium links](docs/compendium-sync.md#compendium-links) and planned for a later
+  release.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the
