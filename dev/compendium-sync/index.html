@@ -574,6 +574,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#compendium-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compendium links
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compendium links">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clicking-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clicking one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-compendium-links-cant-do-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What compendium links can't do yet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#copying-an-entry-to-homebrew-from" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1204,6 +1243,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#compendium-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compendium links
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compendium links">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clicking-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clicking one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-compendium-links-cant-do-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What compendium links can't do yet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#copying-an-entry-to-homebrew-from" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1333,6 +1411,65 @@ as the plugin develops. The code you write is stable; the card it produces is no
 specified.</p>
 <p>Statblocks, features and featureblocks accept the same reference in their own blocks — see
 <a href="../statblock/#use-a-creature-from-the-compendium">Use a creature from the compendium</a>.</p>
+<h2 id="compendium-links">Compendium links<a class="headerlink" href="#compendium-links" title="Permanent link">&para;</a></h2>
+<p>Inline links to a compendium entry — the ones this plugin writes when you hold Shift on an
+insert (above), and the ones already inside compendium notes themselves — look like this:</p>
+<div class="highlight"><pre><span></span><code>[<span class="nt">Vasloria</span>](<span class="na">scc.v1:mcdm.heroes.v1/rule.world/vasloria</span>)
+</code></pre></div>
+<h3 id="clicking-one">Clicking one<a class="headerlink" href="#clicking-one" title="Permanent link">&para;</a></h3>
+<p><strong>Clicking a compendium link works in every view</strong> — Reading view, Live Preview, Source
+mode, and in a popout window. Where it takes you:</p>
+<ul>
+<li><strong>You have the entry synced</strong> → it opens that note in your vault.</li>
+<li><strong>You don't</strong> → it opens the entry's page on steelcompendium.io in your browser. That's
+  the <strong>Fall back to steelcompendium.io links</strong> setting (Settings → Draw Steel Elements →
+  <strong>Links</strong>), which is on by default. With it turned off, nothing opens and you get a short
+  message saying the entry wasn't found instead.</li>
+<li><strong>The code isn't one we recognize</strong> (a typo, or an entry that no longer exists) → a short
+  message says so, and nothing else happens.</li>
+</ul>
+<p><strong>Ways to open it:</strong> a normal click opens it in the current tab. <strong>Ctrl/Cmd-click</strong> opens
+it in a new tab, <strong>Ctrl/Cmd+Alt-click</strong> in a split beside the current one, and
+<strong>Ctrl/Cmd+Alt+Shift-click</strong> in a new window. <strong>Middle-click</strong> opens a new tab, same as
+Ctrl/Cmd-click. These are Obsidian's own shortcuts — compendium links just follow them.</p>
+<p><strong>One difference while you're editing.</strong> In Live Preview, a link you aren't editing looks
+like ordinary underlined text and a plain click follows it. Put your cursor on that line —
+by clicking into it, or typing nearby — and Obsidian reveals the raw
+<code>[text](scc.v1:...)</code> behind it, exactly as it does for any other link. While that raw text
+is showing, a plain click just moves your cursor, so you can edit the words without
+accidentally leaving the note; hold <strong>Ctrl/Cmd</strong> to follow the link anyway. Source mode
+always shows raw text, so there a link always needs Ctrl/Cmd-click. Obsidian's own links
+behave the same way — this isn't special to the compendium.</p>
+<p><strong>Only Reading view draws the cards.</strong> A link takes you to the right note in any view, but
+statblocks, features and the rest only render as cards in Reading view (<code>Ctrl/Cmd + E</code>).
+What you see when you arrive depends on which view that note is in.</p>
+<h3 id="what-compendium-links-cant-do-yet">What compendium links can't do yet<a class="headerlink" href="#what-compendium-links-cant-do-yet" title="Permanent link">&para;</a></h3>
+<p>A few things are deliberately not built yet. None of them is a bug, and none stops links from
+working — this section exists so you don't have to wonder.</p>
+<ul>
+<li><strong>They don't show up in backlinks, the graph view, or "unlinked mentions."</strong> Obsidian's
+  link index doesn't recognize the <code>scc.v1:</code> form as a link to a file in your vault, so
+  linking to a compendium entry this way won't add it to another note's backlinks and won't
+  draw an edge in the graph. Clicking works regardless; only Obsidian's own link-tracking
+  features are affected.</li>
+<li><strong>You can't yet choose a different link style for the synced compendium</strong> — there's no
+  option to have it use wikilinks (<code>[[...]]</code>) or plain vault paths instead of <code>scc.v1:</code>.
+  The <code>scc.v1:</code> form is deliberate: it points at an entry rather than at a file path, so
+  your links keep working even when the compendium's folder layout changes in a later
+  release. It isn't going away, but an alternative style is planned.</li>
+<li><strong>While editing, a compendium link written inside code is still clickable.</strong> If you put
+  one in a <code>`code span`</code> or a fenced code block — showing someone the syntax, say —
+  Reading view correctly treats it as plain text and does nothing when you click it. Live
+  Preview and Source mode don't yet make that distinction, so clicking it there can still
+  take you to the entry. Nothing in your note is changed; you just end up somewhere you
+  didn't ask to go.</li>
+<li><strong>Link text containing square brackets isn't recognized while editing.</strong> A link written
+  as <code>[the [big] one](scc.v1:...)</code> opens normally in Reading view, but in Live Preview and
+  Source mode clicking it won't take you anywhere — it just puts your cursor there, as if
+  it were ordinary text. Link text without brackets inside it works everywhere, and that is
+  what the compendium itself always writes, so this only comes up in links you type
+  yourself.</li>
+</ul>
 <h2 id="copying-an-entry-to-homebrew-from">Copying an entry to homebrew from<a class="headerlink" href="#copying-an-entry-to-homebrew-from" title="Permanent link">&para;</a></h2>
 <p><strong>Insert Draw Steel: compendium block (snapshot)</strong> does something different: it pastes the
 entry's full YAML into your note as an editable copy. That's the starting point for
