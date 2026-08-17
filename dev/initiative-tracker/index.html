@@ -1895,23 +1895,23 @@
 <h2 id="quick-start-example">Quick Start Example<a class="headerlink" href="#quick-start-example" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>~~~ds-initiative
 heroes:
-  - name: &quot;Frodo Baggins&quot;
+  - name: "Frodo Baggins"
     max_stamina: 80
-    image: &quot;images/frodo.png&quot;
-  - name: &quot;Samwise Gamgee&quot;
+    image: "images/frodo.png"
+  - name: "Samwise Gamgee"
     max_stamina: 90
-    image: &quot;images/sam.png&quot;
+    image: "images/sam.png"
 enemy_groups:
-  - name: &quot;Mordor Forces&quot;
+  - name: "Mordor Forces"
     creatures:
-      - name: &quot;Orc&quot;
+      - name: "Orc"
         max_stamina: 40
         amount: 4
-        image: &quot;images/orc.png&quot;
-      - name: &quot;Troll&quot;
+        image: "images/orc.png"
+      - name: "Troll"
         max_stamina: 150
         amount: 1
-        image: &quot;images/troll.png&quot;
+        image: "images/troll.png"
 malice:
   value: 5
 ~~~
@@ -1927,12 +1927,12 @@ for a filled-in example, or build the fight in an
 <h3 id="code-block-structure">Code Block Structure<a class="headerlink" href="#code-block-structure" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>~~~ds-initiative # Your encounter data here
 heroes:
-  - name: &quot;Aragorn&quot;
+  - name: "Aragorn"
     max_stamina: 120
 enemy_groups:
-  - name: &quot;Orc Horde&quot;
+  - name: "Orc Horde"
     creatures:
-      - name: &quot;Orc Warrior&quot;
+      - name: "Orc Warrior"
         max_stamina: 50
         amount: 3
 malice:
@@ -1960,13 +1960,13 @@ malice:
 </ul>
 <h4 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">heroes</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Gandalf&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Gandalf"</span>
 <span class="w">    </span><span class="nt">max_stamina</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
 <span class="w">    </span><span class="nt">current_stamina</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">85</span>
 <span class="w">    </span><span class="nt">temp_stamina</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;images/gandalf.png&quot;</span>
+<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">"images/gandalf.png"</span>
 <span class="w">    </span><span class="nt">conditions</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;blinded&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"blinded"</span>
 </code></pre></div>
 <h3 id="enemy-groups">Enemy Groups<a class="headerlink" href="#enemy-groups" title="Permanent link">&para;</a></h3>
 <p>An enemy group represents a collection of creatures that act together in the initiative order.</p>
@@ -2000,19 +2000,19 @@ malice:
 </ul>
 <h4 id="example_1">Example<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">enemy_groups</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Goblin</span><span class="nv"> </span><span class="s">Gang&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Goblin</span><span class="nv"> </span><span class="s">Gang"</span>
 <span class="w">    </span><span class="nt">creatures</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Goblin&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Goblin"</span>
 <span class="w">        </span><span class="nt">max_stamina</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 <span class="w">        </span><span class="nt">amount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;images/goblin.png&quot;</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Undead</span><span class="nv"> </span><span class="s">Horde&quot;</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">"images/goblin.png"</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Undead</span><span class="nv"> </span><span class="s">Horde"</span>
 <span class="w">    </span><span class="nt">is_squad</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">    </span><span class="nt">creatures</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Skeleton&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Skeleton"</span>
 <span class="w">        </span><span class="nt">max_stamina</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <span class="w">        </span><span class="nt">amount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;images/skeleton.png&quot;</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="s">"images/skeleton.png"</span>
 <span class="w">        </span><span class="nt">squad_role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">minion</span>
 </code></pre></div>
 <p>In this example, "Goblin Gang" is a regular enemy group, while "Undead Horde" is a minion group consisting of 10 Skeletons.</p>
@@ -2035,11 +2035,11 @@ malice:
 <p><strong>Example using references:</strong></p>
 <div class="highlight"><pre><span></span><code><span class="nn">...</span>
 <span class="nt">enemy_groups</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Dragon</span><span class="nv"> </span><span class="s">Encounter&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Dragon</span><span class="nv"> </span><span class="s">Encounter"</span>
 <span class="w">    </span><span class="nt">creatures</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">statblock</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Thorn</span><span class="nv"> </span><span class="s">Dragon&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">statblock</span><span class="p">:</span><span class="w"> </span><span class="s">"Thorn</span><span class="nv"> </span><span class="s">Dragon"</span>
 <span class="w">        </span><span class="nt">amount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">statblock</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">statblock</span><span class="p">:</span><span class="w"> </span><span class="s">"scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker"</span>
 <span class="w">        </span><span class="nt">amount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
 </code></pre></div>
 <p>In this case, the <code>Thorn Dragon</code>'s name, max stamina (or stamina), and image will be automatically loaded. You can still override these values by explicitly providing them in the YAML.</p>

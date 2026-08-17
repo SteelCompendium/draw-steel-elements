@@ -1700,23 +1700,23 @@ where the state is persisted.</p>
 <p><img alt="negotiation" src="../Media/negotiation.gif" /></p>
 <h2 id="quick-start-example">Quick Start Example<a class="headerlink" href="#quick-start-example" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>~~~ds-negotiation
-name: &quot;Convincing Frodo to remember the taste of strawberries&quot;
+name: "Convincing Frodo to remember the taste of strawberries"
 initial_interest: 3
 initial_patience: 3
 motivations:
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: &quot;Higher Authority&quot;
-    reason: &quot;It&#39;s Frodo&#39;s duty to destroy the ring&quot;
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: &quot;Peace&quot;
-    reason: &quot;The Shire is life&quot;
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: "Higher Authority"
+    reason: "It's Frodo's duty to destroy the ring"
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: "Peace"
+    reason: "The Shire is life"
 pitfalls:
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: &quot;Power&quot;
-    reason: &quot;The ring is too powerful to ignore&quot;
-i5: &quot;Remembers the taste of strawberries and cream!&quot;
-i4: &quot;Remembers the taste of strawberries&quot;
-i3: &quot;Remembers the taste of unripe strawberries&quot;
-i2: &quot;Remembers the smell of strawberries&quot;
-i1: &quot;Doesn&#39;t remember the taste of strawberries&quot;
-i0: &quot;Thinks you&#39;re after the ring; becomes hostile&quot;
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: "Power"
+    reason: "The ring is too powerful to ignore"
+i5: "Remembers the taste of strawberries and cream!"
+i4: "Remembers the taste of strawberries"
+i3: "Remembers the taste of unripe strawberries"
+i2: "Remembers the smell of strawberries"
+i1: "Doesn't remember the taste of strawberries"
+i0: "Thinks you're after the ring; becomes hostile"
 ~~~
 </code></pre></div>
 <p><img alt="negotiation.png" src="../Media/negotiation.png" /></p>
@@ -1730,21 +1730,21 @@ define your negotiation data in YAML format. Typing <strong><code>/ds</code></st
 <em>Negotiation tracker</em> writes a filled-in example for you.</p>
 <h3 id="code-block-structure">Code Block Structure<a class="headerlink" href="#code-block-structure" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>~~~ds-negotiation
-name: &quot;Negotiation Title&quot;
+name: "Negotiation Title"
 initial_interest: &lt;number&gt;
 initial_patience: &lt;number&gt;
 motivations:
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: &quot;Motivation Name&quot;
-    reason: &quot;Explanation of the motivation&quot;
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: "Motivation Name"
+    reason: "Explanation of the motivation"
 pitfalls:
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: &quot;Pitfall Name&quot;
-    reason: &quot;Explanation of the pitfall&quot;
-i5: &quot;Interest Level 5 Description&quot;
-i4: &quot;Interest Level 4 Description&quot;
-i3: &quot;Interest Level 3 Description&quot;
-i2: &quot;Interest Level 2 Description&quot;
-i1: &quot;Interest Level 1 Description&quot;
-i0: &quot;Interest Level 0 Description&quot;
+<span class="w">  </span><span class="k">-</span><span class="w"> </span>name: "Pitfall Name"
+    reason: "Explanation of the pitfall"
+i5: "Interest Level 5 Description"
+i4: "Interest Level 4 Description"
+i3: "Interest Level 3 Description"
+i2: "Interest Level 2 Description"
+i1: "Interest Level 1 Description"
+i0: "Interest Level 0 Description"
 ~~~
 </code></pre></div>
 <h2 id="negotiation-data-format">Negotiation Data Format<a class="headerlink" href="#negotiation-data-format" title="Permanent link">&para;</a></h2>
@@ -1780,24 +1780,24 @@ i0: &quot;Interest Level 0 Description&quot;
 <li><code>i5</code> to <code>i0</code> (string, optional): Descriptions of the NPC's response at each interest level.</li>
 </ul>
 <h4 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code>name: &quot;Negotiation with the Dragon&quot;
+<div class="highlight"><pre><span></span><code>name: "Negotiation with the Dragon"
 initial_interest: 2
 initial_patience: 4
 motivations:
 
-<span class="k">-</span><span class="w"> </span>name: &quot;Greed&quot;
-  reason: &quot;The dragon loves treasure&quot;
-<span class="k">-</span><span class="w"> </span>name: &quot;Pride&quot;
-  reason: &quot;The dragon wants to be recognized as the strongest&quot;
+<span class="k">-</span><span class="w"> </span>name: "Greed"
+  reason: "The dragon loves treasure"
+<span class="k">-</span><span class="w"> </span>name: "Pride"
+  reason: "The dragon wants to be recognized as the strongest"
   pitfalls:
-<span class="k">-</span><span class="w"> </span>name: &quot;Insult&quot;
-  reason: &quot;Mentioning the dragon&#39;s age angers it&quot;
-  i5: &quot;The dragon agrees to help and offers a gift&quot;
-  i4: &quot;The dragon is willing to negotiate further&quot;
-  i3: &quot;The dragon is intrigued but hesitant&quot;
-  i2: &quot;The dragon listens but remains indifferent&quot;
-  i1: &quot;The dragon grows impatient&quot;
-  i0: &quot;The dragon becomes hostile&quot;
+<span class="k">-</span><span class="w"> </span>name: "Insult"
+  reason: "Mentioning the dragon's age angers it"
+  i5: "The dragon agrees to help and offers a gift"
+  i4: "The dragon is willing to negotiate further"
+  i3: "The dragon is intrigued but hesitant"
+  i2: "The dragon listens but remains indifferent"
+  i1: "The dragon grows impatient"
+  i0: "The dragon becomes hostile"
 </code></pre></div>
 <h2 id="interacting-with-the-tracker">Interacting with the Tracker<a class="headerlink" href="#interacting-with-the-tracker" title="Permanent link">&para;</a></h2>
 <p>Once your negotiation is defined, the Negotiation Tracker provides an interactive UI in your note.</p>
