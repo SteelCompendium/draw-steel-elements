@@ -16,7 +16,18 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 // global `TextEncoder`, which isn't polyfilled there (it's only ever been exercised from
 // the `unit` project's node environment before now). `_refHarness.ts`'s `FakeVault.setFile`
 // is a plain-string store, already proven under test/dom/**.
-import { loadMdDseFixture } from '../elements/_refHarness';
+import {
+	loadMdDseFixture,
+	extractDsBlockText,
+	makeCompendiumDeps,
+	makeHost as makeRenderHost,
+} from '../elements/_refHarness';
+import { parseYaml, stringifyYaml } from 'obsidian';
+import { ElementPipeline } from '@/framework/pipeline';
+import type { ElementDefinition } from '@/framework/registry';
+import { statblockElement } from '@/elements/statblock/definition';
+import { featureElement } from '@/elements/feature/definition';
+import { featureblockElement } from '@/elements/featureblock/definition';
 import { CompendiumSearchModal, isSyncCtaEntry, parseCompendiumQuery } from '@/authoring/CompendiumSearchModal';
 import {
 	insertReferenceBlock,
@@ -467,6 +478,153 @@ describe('compendiumInsert action functions (spec §4.3)', () => {
 		await copyCode(kitEntry);
 		expect(NoticeMock.notices).toContain(`Copied scc:${KIT}`);
 	});
+});
+
+// SC-165 — the snapshot BODY's editability contract, one level below SC-147/SC-148's
+// fence-and-shape regressions (`compendiumInsertScenarios.test.ts`, which pins that the
+// snapshot is one fence of parseable single-level YAML and not the raw file). This suite
+// asks the next question: is every line in that YAML a line the user can actually edit?
+//
+// It was not. The SDK DTOs carry a `metadata` slot that steel-etl fills with provenance
+// (`scc`/`source`) and, for a feature, a MIRROR of the whole entry — name, effects, flavor,
+// target, action type. Nothing on the render path reads it, so a user who edited a value
+// under `metadata:` saw the card not change: a silent-edit trap in the one feature whose
+// purpose is "take it and edit it".
+//
+// Driven over the real corpus bytes for all three snapshottable families, and deliberately
+// asserting the contract in both directions:
+//   1. `metadata` is gone (and the fixture really had one, so the assertion can't go
+//      vacuous when a fixture is refreshed);
+//   2. putting it BACK renders byte-identical DOM — the proof that what was removed is
+//      render-inert rather than merely unwanted;
+//   3. removing any OTHER surviving top-level key DOES change the DOM — the proof that
+//      nothing render-live was removed, and that no new inert field can slip in later.
+describe('SC-165 — the snapshot body is trimmed to the fields the renderer reads', () => {
+	/** [family, element definition, SCC code, fixture path, delete-is-a-no-op keys]. */
+	const SNAPSHOT_CASES: [string, ElementDefinition<any>, string, string, string[]][] = [
+		[
+			'statblock',
+			statblockElement,
+			GOBLIN,
+			'monster/goblin/statblock/goblin-stinker.md',
+			// `type` is the one surviving constant: every DTO stamps it from the model's own
+			// `modelType()` and the DTO constructor overwrites whatever a user types, so it
+			// cannot change a render. It stays because it is part of the documented block
+			// format — every element's `example.yaml` opens with it and the docs describe it.
+			['type'],
+		],
+		[
+			'feature',
+			featureElement,
+			'mcdm.heroes.v1/feature.ability.shadow.level-1/coat-the-blade',
+			'feature/ability/shadow/level-1/coat-the-blade.md',
+			// `feature_type` is the feature family's second documented constant. The card's
+			// ability-vs-trait branch does NOT read it — `renderFeature.actionTypeOf` asks
+			// `config.feature.isTrait()`, which the SDK recomputes from shape (no keywords,
+			// usage, distance or target) — so editing or deleting it changes nothing here.
+			// It stays anyway: it opens the documented `ds-feature` format, `FeatureblockConfig`
+			// normalizes nested entries on it, and it is the SDK's declared ability/trait/
+			// subtrait discriminator. Keeping a documented key the current renderer happens to
+			// ignore is the safe direction; dropping it would silently narrow the format.
+			['type', 'feature_type'],
+		],
+		[
+			'featureblock',
+			featureblockElement,
+			'mcdm.monsters.v1/dynamic-terrain.mechanisms/pillar',
+			'dynamic-terrain/mechanisms/pillar.md',
+			['type'],
+		],
+	];
+
+	/** Runs the real insert command over a real fixture and hands back both the pipeline
+	 *  deps (to render with) and the snapshot's fence + body. */
+	async function snapshot(code: string, rel: string) {
+		const { vault, index, deps } = makeCompendiumDeps();
+		const content = loadMdDseFixture(vault, rel);
+		const entity = await index.getEntity(code);
+		expect(entity).not.toBeNull();
+		const editor = new Editor('');
+		expect(await insertFullBlock(editor as any, entity!)).toBe(true);
+		const written = editor.writes[0].text;
+		const body = written.replace(/^```[\w-]+\n/, '').replace(/\n```\s*$/, '');
+		return { deps, written, body, parsed: parseYaml(body) as Record<string, unknown>, content };
+	}
+
+	/** Renders a block body through the real pipeline and returns the card's innerHTML.
+	 *  `dse-pr-<N>-head` ids come off a module-level counter that advances per render, so
+	 *  they're normalized away exactly as statblockRef.test.ts does. */
+	async function renderBody(deps: any, element: ElementDefinition<any>, body: string): Promise<string> {
+		const host = makeRenderHost();
+		await new ElementPipeline(deps).run(element, body, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		return root.innerHTML.replace(/dse-pr-\d+-head/g, 'dse-pr-N-head');
+	}
+
+	test.each(SNAPSHOT_CASES)(
+		'%s: the snapshot carries no metadata: block, though the synced entry does',
+		async (_family, _element, code, rel) => {
+			const { body, parsed, content } = await snapshot(code, rel);
+			expect(parsed.metadata).toBeUndefined();
+			expect(body).not.toMatch(/^metadata:/m);
+			// Can't-go-vacuous guard: the SOURCE really does ship one, so this suite is
+			// asserting a trim, not the absence of a field that was never there.
+			const source = parseYaml(extractDsBlockText(content)) as Record<string, unknown>;
+			expect(source.metadata).toBeDefined();
+		},
+	);
+
+	test.each(SNAPSHOT_CASES)(
+		'%s: putting metadata back renders identical DOM — what was trimmed is render-inert',
+		async (_family, element, code, rel) => {
+			const { deps, body, parsed, content } = await snapshot(code, rel);
+			const source = parseYaml(extractDsBlockText(content)) as Record<string, unknown>;
+			const withMetadata = stringifyYaml({ ...parsed, metadata: source.metadata }).trimEnd();
+			expect(withMetadata).toMatch(/^metadata:/m);
+			expect(await renderBody(deps, element, body)).toBe(
+				await renderBody(deps, element, withMetadata),
+			);
+		},
+	);
+
+	test.each(SNAPSHOT_CASES)(
+		'%s: every other surviving top-level key changes the render when removed',
+		async (_family, element, code, rel, constants) => {
+			const { deps, body, parsed } = await snapshot(code, rel);
+			const base = await renderBody(deps, element, body);
+			const inert: string[] = [];
+			for (const key of Object.keys(parsed)) {
+				const without = { ...parsed };
+				delete without[key];
+				const rendered = await renderBody(deps, element, stringifyYaml(without).trimEnd());
+				if (rendered === base) inert.push(key);
+			}
+			// Anything new showing up here is a field the snapshot pastes that the user
+			// cannot edit — i.e. the SC-165 bug returning under a different key name.
+			expect(inert).toEqual(constants);
+		},
+	);
+
+	// The two survivors the liveness sweep excuses are DOCUMENTED format keys, not leftovers:
+	// both appear in the elements' own authoring examples, which is the line between "a key
+	// the user may edit even if today's renderer ignores it" and "transport the user must
+	// never be handed".
+	test.each([
+		['statblock', statblockElement, ['type']],
+		['feature', featureElement, ['type', 'feature_type']],
+		['featureblock', featureblockElement, ['type']],
+	] as [string, ElementDefinition<any>, string[]][])(
+		'%s: each excused key is part of the documented block format (its example.yaml)',
+		(family, element, constants) => {
+			const example = fs.readFileSync(
+				path.join(__dirname, `../../../src/elements/${family}/example.yaml`),
+				'utf8',
+			);
+			for (const key of constants) expect(example).toMatch(new RegExp(`^${key}:`, 'm'));
+			// …and the element really is the one this family snapshots into.
+			expect(element.id).toBe(family);
+		},
+	);
 });
 
 describe('dispatchReferenceChoice modifier-key dispatch (spec §4.3)', () => {

@@ -64,9 +64,53 @@ function extractDTO(model: unknown): unknown {
 }
 
 /**
+ * SC-165 — the DTO keys a SNAPSHOT must not paste into a user's note.
+ *
+ * `metadata` is the SDK DTOs' transport/provenance slot (steel-etl fills it: `scc`,
+ * `source`, and for a feature a mirror of the whole entry). NOTHING on the render path
+ * reads it — the three views build their DOM from the model, and `Feature`/`Statblock`/
+ * `Featureblock` only ever carry `metadata` back out again through `toDTO()`. In a
+ * snapshot that makes it actively harmful rather than merely bulky: a synced feature file
+ * repeats name/effects/flavor/target/action type under `metadata:`, so the pasted block
+ * arrived at roughly double length carrying a second, DEAD copy of every value — edit
+ * `metadata.name` and the card does not change, because the view reads the TOP-LEVEL
+ * `name`. A silent-edit trap in the one feature whose whole purpose is "take it and edit
+ * it" (spec §4.3, "the homebrew starting point").
+ *
+ * Deliberately a DENY list of one key, not an allow-list of live keys: the three
+ * `partialFromModel`s (StatblockDTO/FeatureDTO/FeatureblockDTO) emit their model's own
+ * render fields plus exactly this one, so an allow-list would silently DROP any field a
+ * future SDK adds, while this list silently KEEPS it — the safe direction when the SDK
+ * moves under us. Everything surviving here is a field the renderer reads (`type` is the
+ * one constant: the SDK stamps it from `modelType()` and the DTO constructor overwrites
+ * whatever a user types, but it is part of the documented block format and every
+ * `example.yaml` opens with it, so it stays).
+ *
+ * SNAPSHOT OUTPUT ONLY. The synced compendium files keep their full DTO shape; the sync
+ * format is not in question, only what gets pasted into a note as an editing base.
+ */
+const RENDER_INERT_SNAPSHOT_KEYS = ['metadata'] as const;
+
+/**
+ * Drops `RENDER_INERT_SNAPSHOT_KEYS` from a serialized-to-YAML-bound DTO. TOP LEVEL ONLY,
+ * on purpose: the corpus never nests `metadata:` inside a `features:` entry (checked
+ * across all of data-unified's md-dse output — zero indented `metadata:` lines), so a deep
+ * walk would buy nothing while gaining the ability to reach into nested YAML that a user's
+ * own homebrew might legitimately own. Non-objects pass through untouched so the
+ * `dto === undefined` raw-body fallback below still fires.
+ */
+function trimSnapshotDTO(dto: unknown): unknown {
+	if (dto == null || typeof dto !== 'object' || Array.isArray(dto)) return dto;
+	const trimmed = { ...(dto as Record<string, unknown>) };
+	for (const key of RENDER_INERT_SNAPSHOT_KEYS) delete trimmed[key];
+	return trimmed;
+}
+
+/**
  * Full block (snapshot): the resolved entity's typed model, serialized to YAML, inline
  * in a fenced `ds-<alias>` block — an editable copy that no longer live-updates, by
- * design (the bridge to D9's authoring flow, spec §4.3).
+ * design (the bridge to D9's authoring flow, spec §4.3). Trimmed to the fields the
+ * renderer actually reads — see `RENDER_INERT_SNAPSHOT_KEYS`.
  *
  * SC-149: ONLY the three public typed families (statblock/feature/featureblock) can be
  * snapshotted. For anything else `snapshotAliasForType` returns null and this is a
@@ -85,7 +129,7 @@ export async function insertFullBlock(editor: Editor, entity: CompendiumEntity):
 		return false;
 	}
 	const model = await entity.model();
-	const dto = extractDTO(model);
+	const dto = trimSnapshotDTO(extractDTO(model));
 	const body = dto === undefined ? (await entity.body()).trim() : stringifyYaml(dto).trimEnd();
 	editor.replaceSelection(wrapFence(alias, body) + '\n');
 	return true;
