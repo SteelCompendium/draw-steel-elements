@@ -689,6 +689,14 @@ export class Keymap {
 	}
 }
 
+// SC-135 phase 1b: src/refs/sccLinkCm6.ts imports this (real obsidian.d.ts:
+// `export const editorLivePreviewField: StateField<boolean>`) purely as a CM6 state-field
+// KEY to pass to `view.state.field(...)` — never constructed or read by this mock's own
+// code (no test drives a real EditorView through it). An inert placeholder is enough so
+// the import resolves; the field's actual read behavior is real-Obsidian-verified only
+// (see the SC-135 phase 1 report), matching this module's treatment of `Keymap` above.
+export const editorLivePreviewField = {} as unknown;
+
 export class MenuItem {
 	title = '';
 	icon = '';

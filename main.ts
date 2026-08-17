@@ -77,6 +77,7 @@ import { SccRefProvider } from '@/refs/SccRefProvider';
 import { sccPostProcessor } from '@/refs/rewriteSccAnchors';
 import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import { registerSccLinkClickHandling, createSccClickActions } from '@/refs/sccLinkClickHandler';
+import { createSccLinkCm6Extension } from '@/refs/sccLinkCm6';
 
 // `DependencySchema` + `FRAMEWORK_V2_DEPENDENCY_SCHEMAS` now live in
 // `@/framework/dependencySchemas` (D9 Task 4): `DsSchemaSuggest` needs the same data to
@@ -457,12 +458,20 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // of this registration later (F2 §4.4) — keep sccPostProcessor the seam.
         this.registerMarkdownPostProcessor(sccPostProcessor(this.sccResolver));
 
-        // SC-135 phase 1 (option C): delegated click resolution for scc.v1: links on the
-        // surfaces the rewrite above never reaches — Live Preview, Source mode, and any
-        // third-party render. Reuses this.sccResolver verbatim; see
-        // src/refs/sccLinkClickHandler.ts for the full rationale and the popout-safety
-        // handling (each popout window gets its own document).
-        registerSccLinkClickHandling(this, this.app.workspace, this.sccResolver, createSccClickActions(this.app));
+        // SC-135 phase 1 (option C) + phase 1b: delegated click resolution for scc.v1:
+        // links on the surfaces the rewrite above never reaches. ONE shared actions object
+        // (open the note / open the web fallback / notify unresolved) is routed to via two
+        // mechanisms: the DOM listener below (real <a> anchors — Reading-view popovers,
+        // third-party renders, any rendered ds-* element card) and the CM6 extension
+        // registered further down (Live Preview + Source mode, where CM6 renders no <a>
+        // for a link at all — confirmed against real Obsidian; see
+        // src/refs/sccLinkClickHandler.ts and src/refs/sccLinkCm6.ts for the respective
+        // rationale). Popout windows: the DOM listener attaches per-window
+        // (workspace.on('window-open')); the CM6 extension needs no such handling —
+        // registerEditorExtension below applies it to every editor instance app-wide.
+        const sccClickActions = createSccClickActions(this.app);
+        registerSccLinkClickHandling(this, this.app.workspace, this.sccResolver, sccClickActions);
+        this.registerEditorExtension(createSccLinkCm6Extension(this.sccResolver, sccClickActions));
 
         // D1 Task 1 (F1 §2.3 "incremental migration switch"): populate the framework
         // registry with migrated element definitions, then wire Obsidian's

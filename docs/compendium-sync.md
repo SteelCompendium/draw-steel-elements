@@ -120,10 +120,19 @@ insert (above), and the ones already inside compendium notes themselves — look
 ```
 
 **Clicking one works everywhere** — Reading view, Live Preview, Source mode, and in a
-popout window — and does the same thing every time: opens the synced note if you have it,
-opens the entry's page on steelcompendium.io if you don't, or tells you plainly that the
-code isn't recognized. Ctrl/Cmd-click, Ctrl/Cmd+Alt-click and middle-click open it in a new
-tab, split, or window the same way a normal link would.
+popout window — and it opens the synced note if you have it, opens the entry's page on
+steelcompendium.io if you don't, or tells you plainly that the code isn't recognized.
+Ctrl/Cmd-click, Ctrl/Cmd+Alt-click and middle-click open it in a new tab, split, or window
+the same way a normal link would.
+
+**One gesture difference while you're editing.** In Live Preview, a link you're not
+actively editing (the cursor is elsewhere) is a plain, clickable line of text — click it
+like any link. But once your cursor is on that line — because you clicked into it to edit
+nearby text, or you're typing there — Obsidian shows you the raw `[text](scc.v1:...)`
+syntax instead, the same as it does for any other link type, and a plain click there just
+moves your cursor, so you can edit the text without accidentally leaving the note. Hold
+Ctrl/Cmd while clicking to follow the link anyway. Source mode always shows raw syntax, so
+it always needs Ctrl/Cmd-click. This matches how Obsidian's own internal links behave.
 
 **What doesn't work yet:**
 

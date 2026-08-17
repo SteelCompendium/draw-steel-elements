@@ -32,6 +32,8 @@
   },
   "devDependencies": {
     "@codemirror/language": "^6.11.3",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.23.0",
     "@types/css": "^0.0.38",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
