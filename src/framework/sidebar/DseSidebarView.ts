@@ -169,6 +169,29 @@ export class DseSidebarView extends ItemView {
 			if (panel === keep) continue;
 			if (panel.state.filePath !== keep.state.filePath) continue;
 			if (panel.state.alias !== keep.state.alias) continue;
+			// SC-153 FIX ROUND 2 — ANCHORED panels only. "Not addressable" has to mean
+			// "definitely gone" before it can justify closing a panel behind the user's back,
+			// and only a stamped `_dse_anchor` gives that: `findAnchoredBlock` scans for a
+			// durable id, so a miss means the block was deleted (or moved to another note),
+			// never merely edited.
+			//
+			// A body-addressed panel (`anchorId === null` — SC-158 `strictBody`, i.e. `ds-scc`)
+			// has no such id: its identity IS its body text, so the user retyping one character
+			// inside the block reads as "gone" even though the block is right there. Sweeping
+			// on that is wrong twice over — it closes a panel for an edit rather than a
+			// deletion, AND the thing it closes is the "Backing block not found — re-link this
+			// panel from the note" card, which is the user's only notice that the binding
+			// broke. Re-review probe P-N: two `ds-scc` blocks in one note, edit the pinned
+			// one's body, pin the other, and the first panel silently vanished.
+			//
+			// Deliberately NOT "skip panels showing the degrade card": in production the
+			// ORPHAN this sweep exists to clear is normally already degraded (deleting the
+			// block fires vault "modify" -> notifyAnchorLost -> the same card), so that guard
+			// would un-fix the duplicate-panel bug in the real app while every jsdom test kept
+			// passing — the mock vault never fires "modify", so the harness would never see it.
+			// The authoritative-identity split is the property that actually distinguishes the
+			// two cases.
+			if (panel.state.anchorId === null) continue;
 			if (await panel.stillAddressable()) continue;
 			this.removePanel(panel);
 		}

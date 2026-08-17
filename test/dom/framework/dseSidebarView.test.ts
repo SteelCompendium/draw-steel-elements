@@ -242,4 +242,45 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 		expect(a2).toBe(a1);
 		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(2);
 	});
+
+	// SC-153 FIX ROUND 2 — the orphan sweep (`evictOrphanedSiblings`, added in fix round 1)
+	// must never reach a BODY-ADDRESSED panel. Those are SC-158 `strictBody` blocks (`ds-scc`
+	// in production, modelled here the same way the dedupe test above models them): they carry
+	// no `_dse_anchor`, so "I can't locate my block" means "the body text changed", which is an
+	// EDIT, not a deletion — and the panel it would close is the "re-link this panel" card that
+	// is the user's only notice the binding broke. Re-review probe P-N caught it: two blocks in
+	// one note, edit the pinned one's body, pin the other, and the first panel vanished.
+	test('the orphan sweep never closes a BODY-ADDRESSED panel — its degrade card survives', async () => {
+		const { app } = setup();
+		// TWO fences of this alias, so SidebarBlockHost.findUnanchoredBlock's "a note with a
+		// single block of this alias re-binds to it" softening cannot fire and a body that
+		// isn't present really does resolve to nothing.
+		app.vault.setFile(
+			'Note.md',
+			['```ds-counter', 'current_value: 1', '```', '', '```ds-counter', 'current_value: 2', '```'].join('\n'),
+		);
+		const { view } = await openView(app);
+
+		// A panel whose bound body is no longer in the note — exactly what a user editing a
+		// pinned strict-body block leaves behind. It degrades to the read-only card.
+		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: null, body: 'current_value: 9' });
+		await flushAsync();
+		const stale = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
+		expect(stale.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+
+		// Now pin a DIFFERENT, perfectly healthy block in the SAME note under the SAME alias —
+		// the one thing that triggers the sweep against the panel above.
+		view.addPanel({ filePath: 'Note.md', alias: 'ds-counter', anchorId: null, body: 'current_value: 2' });
+		await flushAsync();
+		await flushAsync(); // the sweep is fire-and-forget and re-reads the note
+
+		const panels = [...view.contentEl.querySelectorAll('.dse-sidebar__panel')];
+		expect(panels).toHaveLength(2);
+		// The degraded panel is still MOUNTED (`isConnected` is useless here — the whole leaf
+		// subtree is detached from `document` in jsdom), and still saying what it says: the
+		// sweep did not silently close the user's only notice that the binding broke.
+		expect(panels).toContain(stale);
+		expect(stale.getAttribute('data-dse-sidebar-unavailable')).toBe('true');
+		expect(stale.querySelector('.dse-error-card-message')?.textContent).toContain('re-link this panel');
+	});
 });

@@ -17,6 +17,7 @@ import type { BlockHost, RenderMode } from '@/framework/host/BlockHost';
 import { encounterElement } from '@/elements/encounter/definition';
 import { setEncounterSidebarHandoff } from '@/elements/encounter/view';
 import { VIEW_TYPE_DSE_SIDEBAR, DseSidebarView } from '@/framework/sidebar/DseSidebarView';
+import { PERSIST_DEBOUNCE_MS } from '@/framework/view';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 
 function makeHost(sourcePath: string): BlockHost & { containerEl: HTMLElement } {
@@ -188,7 +189,11 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		// re-pressing does not write.
 		expect(afterSecond).toBe(afterFirst);
 		expect(Notice.notices.some((n) => /tracker block created/i.test(n))).toBe(true);
-		expect(Notice.notices.some((n) => /already has an initiative tracker/i.test(n))).toBe(true);
+		// SC-153 FIX ROUND 2: THIS button does open the sidebar, so it is the one entitled to
+		// say so — the "Create tracker block" case below gets the other wording.
+		expect(
+			Notice.notices.some((n) => /already has an initiative tracker block — opening it/i.test(n)),
+		).toBe(true);
 		expect(Notice.notices.some((n) => /was refreshed/i.test(n))).toBe(false);
 
 		// Still one live panel, still bound (not degraded to the "not addressable" card).
@@ -198,6 +203,47 @@ describe('SC-153: "Open in sidebar" is idempotent', () => {
 		const panelEl = view.contentEl.querySelector('.dse-sidebar__panel') as HTMLElement;
 		expect(panelEl.getAttribute('data-dse-sidebar-unavailable')).not.toBe('true');
 		expect(panelEl.querySelector('[data-dse-element="initiative"]')).not.toBeNull();
+		plugin.onunload();
+	});
+
+	test('SC-153 fix round 2: "Create tracker block" re-press does not claim to open anything', async () => {
+		// Both buttons share writeTrackerBlock, but only "Open in sidebar" goes on to open a
+		// leaf. Fix round 1 gave the shared reuse Notice sidebar-specific wording ("— opening
+		// it."), so pressing "Create tracker block" twice announced a sidebar that never
+		// appeared (re-review probe P-P: the Notice fired with zero sidebar leaves).
+		const app = new App();
+		const plugin = makePlugin(app);
+		await plugin.onload();
+		app.vault.setFile('Session.md', '# Session\n');
+
+		const host = makeHost('Session.md');
+		await plugin.frameworkV2!.pipeline.run(encounterElement, 'party: {}\nmonsters: []', host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		const createButton = root.querySelector<HTMLButtonElement>(
+			'[aria-label="Create initiative tracker block"]',
+		)!;
+
+		createButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+		Notice.notices.length = 0;
+		createButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await flushAsync();
+
+		// Nothing was opened, so nothing may say it was — and the Notice names the manual
+		// regenerate instead, which is the one thing the user can actually do from here.
+		expect(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)).toHaveLength(0);
+		expect(Notice.notices.some((n) => /opening it/i.test(n))).toBe(false);
+		expect(Notice.notices.some((n) => /left unchanged\. Delete it to build a fresh one/i.test(n))).toBe(true);
+		// Still idempotent on the note itself.
+		expect(fenceCount(app.vault.getContent('Session.md')!)).toBe(1);
+
+		// The first press minted this encounter's `_dse_anchor` and scheduled its 400ms
+		// write-behind (ElementView.persist, PERSIST_DEBOUNCE_MS). `flushAsync` only pumps
+		// setTimeout(0) macrotasks, so that timer would still be armed when the test ends —
+		// and unlike every other case in this file, this one never opens a sidebar leaf, so
+		// `plugin.onunload()` has no panel to tear down and nothing flushes it. Left as-is it
+		// makes jest's worker teardown report "Active timers can also cause this". Drain it.
+		await new Promise((resolve) => setTimeout(resolve, PERSIST_DEBOUNCE_MS + 50));
 		plugin.onunload();
 	});
 

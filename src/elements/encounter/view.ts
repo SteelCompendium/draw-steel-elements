@@ -418,8 +418,14 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 *
 	 *  Task 4 review round 1, Finding 5 (LOW): `vault.process` wrapped in try/catch — an
 	 *  I/O failure now surfaces a Notice instead of an unhandled promise rejection,
-	 *  matching every other "never silent" branch in this method. */
-	private async writeTrackerBlock(resolved: RowResolution[]): Promise<TrackerBlockRef | null> {
+	 *  matching every other "never silent" branch in this method.
+	 *
+	 *  `opensSidebar` only ever selects the Notice wording (SC-153 fix round 2) — the write
+	 *  itself is identical for both buttons. See the Notice at the end of this method. */
+	private async writeTrackerBlock(
+		resolved: RowResolution[],
+		opensSidebar: boolean,
+	): Promise<TrackerBlockRef | null> {
 		const filePath = this.cx.host.sourcePath;
 		const file = this.cx.app.vault.getAbstractFileByPath(filePath);
 		if (!(file instanceof TFile)) {
@@ -486,12 +492,21 @@ export class EncounterView extends ElementView<EncounterModel> {
 			new Notice(`Draw Steel Elements: failed to write the initiative tracker block — ${errorMessage(e)}`);
 			return null;
 		}
+		// Says what actually happened: nothing was written. Anything warmer ("refreshed")
+		// would imply the tracker had been brought up to date with the encounter, which is
+		// precisely the destructive behaviour removed above.
+		//
+		// SC-153 FIX ROUND 2 — and it has to say it PER BUTTON. Both actions share this
+		// method, but only "Open in sidebar" goes on to open anything; "Create tracker block"
+		// just returns. A single "— opening it." string therefore told half its callers'
+		// users about a sidebar that never opened (re-review probe P-P: the Notice fired with
+		// zero sidebar leaves). The reuse branch is also the one moment the user is standing
+		// in front of the manual-regenerate gesture, so the non-opening variant names it.
 		new Notice(
 			reused
-				? // Says what actually happened: nothing was written. Anything warmer ("refreshed")
-					// would imply the tracker had been brought up to date with the encounter, which
-					// is precisely the destructive behaviour removed above.
-					'Draw Steel Elements: this encounter already has an initiative tracker block — opening it.'
+				? opensSidebar
+					? 'Draw Steel Elements: this encounter already has an initiative tracker block — opening it.'
+					: 'Draw Steel Elements: this encounter already has an initiative tracker block — left unchanged. Delete it to build a fresh one.'
 				: 'Draw Steel Elements: initiative tracker block created at the end of this note.',
 		);
 		return { filePath, lineStart };
@@ -525,7 +540,7 @@ export class EncounterView extends ElementView<EncounterModel> {
 	}
 
 	private async handleCreateTrackerBlock(resolved: RowResolution[]): Promise<void> {
-		await this.writeTrackerBlock(resolved);
+		await this.writeTrackerBlock(resolved, false);
 	}
 
 	/** Task 4 review round 1, Finding 5 (LOW): `sidebarHandoff` wrapped in try/catch —
@@ -534,7 +549,7 @@ export class EncounterView extends ElementView<EncounterModel> {
 	 *  written by this point (writeTrackerBlock above), so this failure is scoped to
 	 *  "couldn't open it in the sidebar," not "lost the tracker." */
 	private async handleOpenInSidebar(resolved: RowResolution[]): Promise<void> {
-		const ref = await this.writeTrackerBlock(resolved);
+		const ref = await this.writeTrackerBlock(resolved, true);
 		if (ref === null) return;
 		const { filePath, lineStart } = ref;
 		if (!sidebarHandoff) {

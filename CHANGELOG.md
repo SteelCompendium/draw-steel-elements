@@ -21,10 +21,15 @@ for what needs action.
   three presses left three trackers and three panels, while the sidebar kept showing
   the first one, so the panel you were looking at went stale as soon as a second
   tracker existed. The button is now idempotent: the first press creates the tracker,
-  and every press after that refreshes that same block in place and reveals the panel
-  it is already pinned to. An encounter recognises its own tracker by a durable id, so
-  a note with two encounters still gets one tracker each. Pinning any block that is
-  already pinned is now a no-op everywhere in the sidebar, not just for this button.
+  and every press after that binds to that same block and brings its panel back up
+  **without rewriting a single byte of it** — so a fight already in progress keeps its
+  round counter, its Stamina, its conditions and any combatants you added at the table.
+  The tracker is a snapshot of the encounter as it stood when it was built: if you
+  change the encounter afterwards, those edits deliberately do not reach an existing
+  tracker, and the way to get a fresh one is to delete the tracker block and press
+  again. An encounter recognises its own tracker by a durable id, so a note with two
+  encounters still gets one tracker each. Pinning any block that is already pinned is
+  now a no-op everywhere in the sidebar, not just for this button.
 - **Statblocks now look like the website out of the box** (SC-123). Two display
   settings shipped on the plugin's own historical look rather than the site's, and
   they were the last two that differed. **Characteristics** now default to the

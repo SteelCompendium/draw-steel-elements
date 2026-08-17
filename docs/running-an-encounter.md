@@ -59,9 +59,10 @@ Obsidian's right sidebar so it stays on screen while you flip between notes.
 ### The tracker is a snapshot, and that is on purpose
 
 **What works.** Press either button as many times as you like. The first press builds the
-tracker; after that they just reopen the one you already have, so you can pull the sidebar
-back up mid-fight without worrying about it. You will never end up with a pile of duplicate
-trackers, and nothing you have done in the fight is touched.
+tracker. After that **Open in sidebar** finds the tracker you already have and puts it back
+on screen, so you can pull the sidebar up again mid-fight without worrying about it; **Create
+tracker block** finds it too and simply leaves it alone. You will never end up with a pile of
+duplicate trackers, and nothing you have done in the fight is touched.
 
 **What deliberately doesn't.** The tracker is a copy of the encounter taken at the moment it
 was built. If you go back and change the encounter afterwards — add a monster, change the
