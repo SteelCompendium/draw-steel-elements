@@ -21,6 +21,7 @@ import type { SccAnchorResolver } from '@/refs/rewriteSccAnchors';
 import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
+import { watchPrintMedia } from './printMedia';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
 import { ANCHOR_KEY } from './sidebar/anchor';
@@ -391,6 +392,11 @@ export class ElementPipeline {
 			// D4 §1.4: pinned AFTER reflect() — registration order makes the
 			// override re-stamp last on any global change (OD-D4-3a).
 			applyPrefOverrides(root, view, prefOverrides, cx.prefs);
+			// SC-170: real @media print (Obsidian's Ctrl-P / "Export to PDF") must render
+			// the SAME print scheme as the on-screen preview twin. Registered LAST, after
+			// reflect() and the per-block pins, so its stamp is the one that survives while
+			// the page is on paper; it restores whatever they set on afterprint.
+			watchPrintMedia(root, view);
 			if (def.serialize) {
 				const serialize = def.serialize;
 				// D4: a block carrying prefs: must not lose it when replaceSource

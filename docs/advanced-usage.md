@@ -123,7 +123,10 @@ Everything renders in a print layout when you print or export to PDF, and the la
 picked in Settings carries over.
 
 - **Print preview** (Settings → Appearance) shows that layout on screen so you can check a
-  handout without printing it.
+  handout without printing it. What it shows is what Obsidian's **Export to PDF** produces:
+  both go through the same print layout, so the preview is a real proof, not an
+  approximation. (Before 7.0.0 the two could disagree — a PDF kept the on-screen card
+  plate, gradient and drop shadow that the preview correctly stripped.)
 - **Text size and Card size always print at 100%**, whatever you set on screen — a scale
   that helps you read a screen ruins a page.
 - **Villain actions are always open in print**, even with the collapsible band selected.

@@ -138,11 +138,13 @@ const steelLight = blockBody(
 	'Steel light',
 );
 const printNeutral = blockBody(
-	/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
+	// SC-170: the twin selector repeats the attribute to reach specificity (0,4,0) — see
+	// the print-layer comment in styles-source.css and theme-print.test.ts.
+	/(?:^|\n)[ \t]*\[data-dse-element\](?:\[data-dse-print="on"\])+[ \t]*\{([^}]*)\}/,
 	'print neutral twin',
 );
 const printSteel = blockBody(
-	/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
+	/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\[data-dse-print="on"\]\[data-dse-print\][ \t]*\{([^}]*)\}/,
 	'print Steel twin',
 );
 
@@ -332,7 +334,7 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 
 	test('both print delivery surfaces are present (@media print + preview twin)', () => {
 		expect(styleSheet).toMatch(/@media print\s*\{/);
-		expect(styleSheet).toMatch(/\[data-dse-element\]\[data-dse-print="on"\]\s*\{/);
+		expect(styleSheet).toMatch(/\[data-dse-element\](?:\[data-dse-print="on"\])+\s*\{/);
 	});
 });
 

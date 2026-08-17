@@ -5,13 +5,14 @@
 // saves the shot with an --ERROR suffix and exits nonzero naming the failure.
 // Flags: --element=<id> --bg=<dark|light> --fixture=<name> --readonly
 //
-// SC-144: the theme axis is gone. Steel is the only theme, so the sweep is 3 combos
-// (steel-dark, steel-light, steel-print) instead of 5, and there is no --theme flag to
-// filter on. Shot names keep the `steel-` prefix — the frozen `*--steel-print.png`
+// SC-144: the theme axis is gone. Steel is the only theme, so there is no --theme flag
+// to filter on. Shot names keep the `steel-` prefix — the frozen `*--steel-print.png`
 // baseline is keyed on it.
+// SC-170: 4 combos, not 3 — `steel-realprint` (real @media print) joined the twin.
 import { chromium } from 'playwright';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -29,12 +30,28 @@ const args = Object.fromEntries(
 		}),
 );
 
+// SC-170: `print` and `realprint` are the plugin's TWO print surfaces and they are
+// captured differently on purpose.
+//   print      — the on-screen preview TWIN: `?print=1` stamps data-dse-print="on",
+//                media stays `screen`. This is the frozen `*--steel-print.png` class.
+//   realprint  — real paper: NO attribute, Playwright `emulateMedia({media:'print'})`,
+//                i.e. exactly what Obsidian's Ctrl-P / "Export to PDF" renders. Before
+//                SC-170 nothing in the battery ever emulated print media, so the whole
+//                real-print surface had zero byte coverage — and it was carrying the
+//                full Steel plate into every PDF.
+// The two are expected to be BYTE-IDENTICAL (the plugin makes real print resolve
+// through the twin's own rules); `assertPrintTwinParity` below fails the run if they
+// ever diverge, which is the regression gate that catches the next leak.
 const COMBOS = [
 	{ theme: 'steel', bg: 'dark' },
 	{ theme: 'steel', bg: 'light' },
 	{ theme: 'steel', bg: 'dark', print: true },
+	{ theme: 'steel', bg: 'dark', realprint: true },
 ];
-const comboName = (c) => (c.print ? `${c.theme}-print` : `${c.theme}-${c.bg}`);
+const comboName = (c) =>
+	c.print ? `${c.theme}-print` : c.realprint ? `${c.theme}-realprint` : `${c.theme}-${c.bg}`;
+/** Only the realprint combo emulates the print MEDIUM; the twin stays on screen. */
+const mediaFor = (c) => (c.realprint ? 'print' : 'screen');
 
 const failures = [];
 
@@ -43,6 +60,8 @@ async function snap(page, params, outName, opts = {}) {
 	const onErr = (e) => pageErrors.push(String(e));
 	page.on('pageerror', onErr);
 	try {
+		// Set BEFORE goto: a root mounted under print media must see it at mount time.
+		await page.emulateMedia({ media: opts.media ?? 'screen' });
 		await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
 			timeout: 15000,
@@ -119,7 +138,7 @@ try {
 		process.exit(2);
 	}
 	let combos = COMBOS;
-	if (args.bg) combos = combos.filter((c) => c.bg === args.bg && !c.print);
+	if (args.bg) combos = combos.filter((c) => c.bg === args.bg && !c.print && !c.realprint);
 	if (combos.length === 0) {
 		console.error(`no combos match --bg=${args.bg}`);
 		process.exit(2);
@@ -143,7 +162,7 @@ try {
 				if (c.print) params.print = '1';
 				if (args.readonly) params.readonly = '1';
 				const suffix = args.readonly ? '--readonly' : '';
-				await snap(page, params, `${outId}--${comboName(c)}${suffix}`);
+				await snap(page, params, `${outId}--${comboName(c)}${suffix}`, { media: mediaFor(c) });
 			}
 		}
 	}
@@ -159,7 +178,7 @@ try {
 			if (c.print) params.print = '1';
 			if (args.readonly) params.readonly = '1';
 			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { media: mediaFor(c) });
 		}
 	}
 	// SC-117 Batch 6 (catalog consumer #16): interaction shots, declared by the page
@@ -173,7 +192,7 @@ try {
 			if (c.print) params.print = '1';
 			if (args.readonly) params.readonly = '1';
 			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { click: n.click });
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { click: n.click, media: mediaFor(c) });
 		}
 	}
 	// SC-123: preference-variant shots, declared by the page (manifest.prefShots —
@@ -196,7 +215,7 @@ try {
 			if (c.print) params.print = '1';
 			if (args.readonly) params.readonly = '1';
 			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { media: mediaFor(c) });
 		}
 	}
 	// SC-160: scroll-state shots, declared by the page (manifest.scrollShots — entry.ts
@@ -227,8 +246,8 @@ try {
 		}
 	}
 	if (!args.element) {
-		for (const c of combos.filter((c) => !c.print)) {
-			await snap(page, { gallery: '1', theme: c.theme, bg: c.bg }, `gallery--${comboName(c)}`);
+		for (const c of combos.filter((c) => !c.print && !c.realprint)) {
+			await snap(page, { gallery: '1', theme: c.theme, bg: c.bg }, `gallery--${comboName(c)}`, { media: mediaFor(c) });
 		}
 	}
 } catch (e) {
@@ -240,9 +259,52 @@ try {
 	await browser.close();
 }
 
+// SC-170 — the in-run PARITY ASSERTION, and the actual regression gate for this ticket.
+//
+// The preview twin and real paper are supposed to be the SAME rendering: the plugin
+// stamps data-dse-print="on" for the duration of real print media, so both surfaces
+// resolve through one set of rules, and the print value block outranks every theme
+// block on both. If a future Steel rule leaks onto paper — the pre-SC-170 state, where
+// paper kept the forged plate while the preview showed plain ink — these two PNGs stop
+// matching, byte for byte, and this fails the sweep.
+//
+// Byte equality is achievable (and therefore the assertion) rather than a looser
+// computed-style check because the twin does not just share the print VALUES: the print
+// RULES (force-open collapsibles, hidden inert chrome, break-inside, print-color-adjust)
+// are mirrored for the attribute surface too, so nothing is left that only `@media print`
+// can express.
+function assertPrintTwinParity() {
+	const twins = fs
+		.readdirSync(shotsDir)
+		.filter((f) => f.endsWith('--steel-print.png'))
+		.map((f) => f.slice(0, -'--steel-print.png'.length));
+	const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(path.join(shotsDir, f))).digest('hex');
+	const mismatched = [];
+	let compared = 0;
+	for (const id of twins) {
+		const real = `${id}--steel-realprint.png`;
+		if (!fs.existsSync(path.join(shotsDir, real))) continue; // narrowed run
+		compared++;
+		if (sha(`${id}--steel-print.png`) !== sha(real)) mismatched.push(id);
+	}
+	if (compared === 0) return;
+	if (mismatched.length) {
+		console.error(
+			`\nPRINT-TWIN PARITY VIOLATED — ${mismatched.length}/${compared} capture id(s) render ` +
+				`differently on paper than in the print preview:\n  ${mismatched.join('\n  ')}\n` +
+				`A Steel rule is reaching real @media print (or the print value block lost a ` +
+				`specificity race). See styles-source.css's print/export layer and ` +
+				`src/framework/printMedia.ts.`,
+		);
+		process.exit(1);
+	}
+	console.log(`\nprint-twin parity OK (${compared} capture ids byte-identical: preview twin === real print)`);
+}
+
 if (failures.length) {
 	console.error(`\n${failures.length} shot(s) had errors:`);
 	for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
 	process.exit(1);
 }
+assertPrintTwinParity();
 console.log(`\nall shots written to ${shotsDir}`);

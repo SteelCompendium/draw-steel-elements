@@ -9,7 +9,7 @@ still real Obsidian. Spec: workspace `docs/superpowers/dse-overhaul/F4-visual-ha
 
     npm run shots                                  # full sweep: every capture id ×
                                                    # steel-dark/steel-light + steel-print
-                                                   # + 2 galleries
+                                                   # + steel-realprint + 2 galleries
     npm run shots -- --element=statblock --bg=dark # narrowed
     npm run shots -- --readonly                    # read-only affordance variants
     npm run shot-url -- https://steelcompendium.io/v2/ visual-harness/shots/v2-home.png
@@ -17,14 +17,23 @@ still real Obsidian. Spec: workspace `docs/superpowers/dse-overhaul/F4-visual-ha
 (node via the workspace devbox: `devbox run -- bash -c "cd <this repo> && npm run shots"`.)
 
 Output: `visual-harness/shots/<element>--steel-<bg>.png`, `<element>--steel-print.png`,
-`gallery--steel-<bg>.png`. Deterministic names — diff before/after by filename. Narrowing
-with `--bg=` excludes the print shot — it's only part of full (unnarrowed) sweeps. A failed
-mount saves `…--ERROR.png` and exits 1: fix before trusting any shot. An unrecognized
-`--element=`/`--bg=` value is a different failure mode — no shots are attempted, the
-offending value is named on stderr, and it exits 2.
+`<element>--steel-realprint.png`, `gallery--steel-<bg>.png`. Deterministic names — diff
+before/after by filename. Narrowing with `--bg=` excludes both print shots — they're only
+part of full (unnarrowed) sweeps. A failed mount saves `…--ERROR.png` and exits 1: fix
+before trusting any shot. An unrecognized `--element=`/`--bg=` value is a different failure
+mode — no shots are attempted, the offending value is named on stderr, and it exits 2.
 
-**SC-144 — there is no theme axis.** Steel is the only theme, so the sweep is 3 combos, not
-5, and `--theme=` is gone. The `steel-` prefix stays in every filename (the frozen
+**SC-170 — the TWO print classes, and the assertion between them.** `--steel-print` is the
+on-screen preview **twin** (`?print=1` stamps `data-dse-print="on"`; the medium stays
+`screen`) and is the frozen class. `--steel-realprint` is real paper: no attribute,
+Playwright `emulateMedia({ media: 'print' })` — what Obsidian's Ctrl-P / "Export to PDF"
+actually renders. Nothing in the battery emulated the print medium before, so real print
+had **zero** byte coverage, and it was carrying the full Steel plate into every PDF. After
+each unnarrowed sweep `shoot.mjs` asserts the two classes are **byte-identical** per
+capture id and exits 1 naming the offenders. That assertion, not either class on its own,
+is the regression gate for a Steel rule reaching paper.
+
+**SC-144 — there is no theme axis.** Steel is the only theme, and `--theme=` is gone. The `steel-` prefix stays in every filename (the frozen
 `*--steel-print.png` baseline is keyed on it), and `entry.ts` still accepts a `theme=` query
 param — it just can't select a different look.
 

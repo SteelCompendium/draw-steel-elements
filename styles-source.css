@@ -9671,11 +9671,38 @@ button.dse-pr__row:hover {
    touch-min, font-mono, rule-fade, and role-* ("= Steel exact"), plus
    font-title/font-body/font-card-body/font-label/font-controls (SC-105 — the
    whole vocabulary, formerly font-display, is print-invariant).
+
+   ------------------------------------------------------------------------
+   SC-170 — WHY THE SELECTORS BELOW REPEAT AN ATTRIBUTE. It is specificity
+   arithmetic, not a typo, and deleting a repeat silently un-fixes the bug.
+
+   A print block only neutralizes a token if it OUTRANKS every theme block
+   that also defines it on the same element root. The two Steel token blocks
+   are:
+       :is([data-dse-element], .dse-modal)[data-dse-theme="steel"]              (0,2,0)
+       .theme-light :is([data-dse-element], .dse-modal)[data-dse-theme="steel"] (0,3,0)
+   The neutral block used to be a bare `[data-dse-element]` — (0,1,0) — so it
+   lost to BOTH: on paper (real Ctrl-P / Export-to-PDF) every token Steel
+   redefines survived (`--dse-card-bg`'s gradient, `--dse-border`,
+   `--dse-radius`, `--dse-bevel`), and only base-only tokens like `--dse-pad`
+   actually neutralized. The preview twin at (0,2,0) beat the DARK Steel block
+   on source order alone and so looked correct, which is exactly why nothing
+   noticed: it still lost to the LIGHT one, so the twin was wrong in a
+   light-theme vault too.
+
+   Every print surface below is therefore padded to (0,4,0) — one attribute
+   above the highest theme block — by repeating an attribute the matched
+   element is guaranteed to carry. `!important` would be the other way to win
+   and is deliberately NOT used: the font preferences stamp inline custom
+   properties on the root and are documented to apply "everywhere, including
+   print and export" (prefs catalog), which an !important print value would
+   override. Guarded by test/dom/framework/theme-print.test.ts, which parses
+   these selectors and asserts the arithmetic.
 */
 
 /* -- NEUTRAL print value block (both themes) — @media print surface -- */
 @media print {
-	[data-dse-element] {
+	[data-dse-element][data-dse-element][data-dse-element][data-dse-element] {
 		/* surfaces → white */
 		--dse-surface: #fff;
 		--dse-surface-raised: #fff;
@@ -9733,7 +9760,10 @@ button.dse-pr__row:hover {
 	}
 }
 /* -- …and the on-screen preview TWIN (same neutral values) -- */
-[data-dse-element][data-dse-print="on"] {
+/* SC-170: padded to (0,4,0) for the same reason as the @media print block above
+   — at its former (0,2,0) it lost to the .theme-light Steel block, so the twin
+   showed Steel-light surfaces/ink in a light vault. */
+[data-dse-element][data-dse-print="on"][data-dse-print="on"][data-dse-print="on"] {
 	--dse-surface: #fff;
 	--dse-surface-raised: #fff;
 	--dse-surface-sunken: #fff;
@@ -9796,7 +9826,10 @@ button.dse-pr__row:hover {
       villain red is scheme-invariant) — a deliberate ink-economy darkening for
       paper, which is why it appears here but NOT in the Steel light block. -- */
 @media print {
-	:is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
+	/* SC-170: padded to (0,4,0) — the light Steel block re-declares six of these
+	   seven act hues at (0,3,0), so at the former (0,2,0) a light-vault PDF kept
+	   the screen act spines. */
+	:is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-theme][data-dse-theme] {
 		--dse-act-main: #c0392b;
 		--dse-act-maneuver: #2874a6;
 		--dse-act-triggered: #1e8449;
@@ -9806,7 +9839,9 @@ button.dse-pr__row:hover {
 		--dse-act-villain: #b03a2e;
 	}
 }
-:is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-print="on"] {
+/* SC-170: padded to (0,4,0) — same rank as its @media print twin above, so the
+   two surfaces can never disagree by cascade order. */
+:is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-print="on"][data-dse-print] {
 	--dse-act-main: #c0392b;
 	--dse-act-maneuver: #2874a6;
 	--dse-act-triggered: #1e8449;

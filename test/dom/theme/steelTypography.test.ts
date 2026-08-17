@@ -281,8 +281,10 @@ describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
 	const steelDarkBody = rules.find(
 		(r) => r.selector === ':is([data-dse-element], .dse-modal)[data-dse-theme="steel"]',
 	)?.body;
-	const printNeutralBody = rules.find(
-		(r) => r.selector === '[data-dse-element][data-dse-print="on"]',
+	// SC-170: the neutral twin's selector repeats [data-dse-print="on"] to reach (0,4,0)
+	// so it outranks the .theme-light Steel token block; match it by prefix, not literal.
+	const printNeutralBody = rules.find((r) =>
+		/^\[data-dse-element\](\[data-dse-print="on"\])+$/.test(r.selector),
 	)?.body;
 
 	const CONTROLS_CHAIN = /--dse-font-controls:\s*var\(--dse-font-body\)\s*;/;

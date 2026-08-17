@@ -25,13 +25,26 @@ import { DSE_TOKEN_NAMES } from '../../../src/framework/tokens';
 
 const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-/** Body of the NEUTRAL preview twin `[data-dse-element][data-dse-print="on"]`. */
+// SC-170: every print SELECTOR below repeats an attribute on purpose — it is padded to
+// specificity (0,4,0) so it outranks both Steel token blocks (see the "SPECIFICITY" suite
+// at the bottom of this file, and the long comment on the print layer in
+// styles-source.css). The regexes therefore match the padded spellings; a rebuild that
+// drops a repeat fails here AND in the arithmetic suite.
+const NEUTRAL_TWIN_SELECTOR =
+	'[data-dse-element][data-dse-print="on"][data-dse-print="on"][data-dse-print="on"]';
+const NEUTRAL_MEDIA_SELECTOR =
+	'[data-dse-element][data-dse-element][data-dse-element][data-dse-element]';
+const STEEL_TWIN_SELECTOR =
+	':is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-print="on"][data-dse-print]';
+const STEEL_MEDIA_SELECTOR =
+	':is([data-dse-element], .dse-modal)[data-dse-theme="steel"][data-dse-theme][data-dse-theme]';
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Body of the NEUTRAL preview twin (the `[data-dse-print="on"]` surface). */
 function printNeutralBody(): string {
 	// FOOTGUN: `[^}]*` stops at the FIRST brace, so a CSS COMMENT containing `{` or `}`
 	// inside any token block silently truncates that block's body (values → undefined).
-	const m = sheet.match(
-		/(?:^|\n)[ \t]*\[data-dse-element\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
-	);
+	const m = sheet.match(new RegExp(`(?:^|\\n)[ \\t]*${esc(NEUTRAL_TWIN_SELECTOR)}[ \\t]*\\{([^}]*)\\}`));
 	if (!m) throw new Error('neutral print twin [data-dse-print="on"] not found in styles-source.css');
 	return m[1];
 }
@@ -40,17 +53,15 @@ function printNeutralBody(): string {
  *  Selector widened by SC-104 / FOLLOWUPS #31 (from the bare-presence
  *  `[data-dse-element]`) so modals also resolve these Steel print values. */
 function printSteelBody(): string {
-	const m = sheet.match(
-		/:is\(\[data-dse-element\], \.dse-modal\)\[data-dse-theme="steel"\]\[data-dse-print="on"\][ \t]*\{([^}]*)\}/,
-	);
+	const m = sheet.match(new RegExp(`${esc(STEEL_TWIN_SELECTOR)}[ \\t]*\\{([^}]*)\\}`));
 	if (!m) throw new Error('steel-scoped print twin not found in styles-source.css');
 	return m[1];
 }
 
-/** Body of the @media print NEUTRAL value block `@media print { [data-dse-element] { … } }`. */
+/** Body of the @media print NEUTRAL value block. */
 function printMediaNeutralBody(): string {
-	const m = sheet.match(/@media print\s*\{\s*\[data-dse-element\]\s*\{([^}]*)\}\s*\}/);
-	if (!m) throw new Error('@media print { [data-dse-element] } value block not found');
+	const m = sheet.match(new RegExp(`@media print\\s*\\{\\s*${esc(NEUTRAL_MEDIA_SELECTOR)}\\s*\\{([^}]*)\\}\\s*\\}`));
+	if (!m) throw new Error('@media print neutral value block not found');
 	return m[1];
 }
 
@@ -167,7 +178,7 @@ const PRINT_INVARIANT = [
 describe('D3 Task 5: print / export value layer', () => {
 	test('BOTH delivery surfaces exist: @media print AND the [data-dse-print="on"] twin', () => {
 		expect(sheet).toMatch(/@media print\s*\{/);
-		expect(sheet).toMatch(/\[data-dse-element\]\[data-dse-print="on"\]\s*\{/);
+		expect(sheet).toContain(NEUTRAL_TWIN_SELECTOR);
 	});
 
 	test('the neutral twin carries the Print column values VERBATIM', () => {
@@ -215,6 +226,69 @@ describe('D3 Task 5: print / export value layer', () => {
 		expect(valueIn(body, 'hover')).toBe('transparent');
 		expect(valueIn(body, 'radius')).toBe('0');
 		expect(valueIn(body, 'border')).toBe('#ccc');
+	});
+});
+
+// SC-170 — the print layer only neutralizes a token if it OUTRANKS the theme block that
+// also declares it. It did not: the neutral @media print block was a bare
+// `[data-dse-element]` (0,1,0) against Steel's (0,2,0) / (0,3,0), so every token Steel
+// redefines survived into real Ctrl-P / Export-to-PDF (the gradient card plate, the
+// border, the radius, the bevel) and the preview twin — (0,2,0), winning over dark Steel
+// on source order alone — was ALSO wrong under `.theme-light`.
+//
+// These are the arithmetic, asserted on the real sheet. They can fail: delete one
+// repeated attribute from any print selector in styles-source.css and the matching case
+// goes red with the exact numbers.
+describe('SC-170: the print layer outranks every theme token block', () => {
+	/** CSS specificity of a *simple* selector list entry, as (ids, classes+attrs+pseudos,
+	 *  types). Only the shapes this sheet actually uses; `:is(...)` contributes its most
+	 *  specific argument (all args here are single attributes/classes → one unit). */
+	function specificity(sel: string): [number, number, number] {
+		let rest = sel;
+		let cls = 0;
+		// :is(a, b) → max over args; every arg in this sheet is one attribute or class.
+		rest = rest.replace(/:is\([^)]*\)/g, () => {
+			cls += 1;
+			return '';
+		});
+		cls += (rest.match(/\[[^\]]*\]/g) ?? []).length;
+		rest = rest.replace(/\[[^\]]*\]/g, '');
+		cls += (rest.match(/\.[A-Za-z_-][\w-]*/g) ?? []).length;
+		const ids = (rest.match(/#[A-Za-z_-][\w-]*/g) ?? []).length;
+		return [ids, cls, 0];
+	}
+	const rank = ([a, b, c]: [number, number, number]) => a * 10000 + b * 100 + c;
+
+	/** The two blocks that declare Steel's token values on an element root. */
+	const STEEL_DARK = ':is([data-dse-element], .dse-modal)[data-dse-theme="steel"]';
+	const STEEL_LIGHT = '.theme-light :is([data-dse-element], .dse-modal)[data-dse-theme="steel"]';
+
+	test('the sheet still contains both Steel token blocks at the specificities assumed here', () => {
+		expect(sheet).toContain(`\n${STEEL_DARK} {`);
+		expect(sheet).toContain(`\n${STEEL_LIGHT} {`);
+		expect(specificity(STEEL_DARK)).toEqual([0, 2, 0]);
+		// The descendant `.theme-light` is what made this the block the print layer lost to.
+		expect(specificity(STEEL_LIGHT)).toEqual([0, 3, 0]);
+	});
+
+	test.each([
+		['neutral @media print', NEUTRAL_MEDIA_SELECTOR],
+		['neutral preview twin', NEUTRAL_TWIN_SELECTOR],
+		['Steel act @media print', STEEL_MEDIA_SELECTOR],
+		['Steel act preview twin', STEEL_TWIN_SELECTOR],
+	])('%s outranks BOTH Steel token blocks', (_label, selector) => {
+		expect(sheet).toContain(selector);
+		expect(rank(specificity(selector))).toBeGreaterThan(rank(specificity(STEEL_DARK)));
+		expect(rank(specificity(selector))).toBeGreaterThan(rank(specificity(STEEL_LIGHT)));
+	});
+
+	test('no print value block wins by !important (the font prefs must still apply on paper)', () => {
+		// The prefs catalog promises a chosen font "applies everywhere, including print and
+		// export"; those are inline custom properties on the root, which an !important
+		// print declaration would beat. Specificity is the sanctioned lever here.
+		expect(printNeutralBody()).not.toContain('!important');
+		expect(printMediaNeutralBody()).not.toContain('!important');
+		expect(printSteelBody()).not.toContain('!important');
 	});
 });
 

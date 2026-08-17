@@ -36,6 +36,17 @@ for what needs action.
   action band had no panel behind it. They now render the way they always did in the
   documentation images. Nothing about the design changed and no colour was altered; the
   styling was simply written in a form the app's older rendering engine silently threw away.
+- [BUGFIX] **PDF export now prints the print layout, not the screen one** (SC-170).
+  Exporting a note to PDF (or printing it) carried the full on-screen card treatment onto
+  the page — the gradient plate, its 1px frame and rounded corners, the raised bevel, a
+  drop shadow under every card, boxed characteristic cells and small-caps labels — even
+  though the print preview showed the plain, ink-economical layout that was supposed to go
+  to paper. The two disagreed because only the preview ever turned the screen styling off;
+  real printing merely tried to, and lost. Print preview and PDF export are now the same
+  rendering, so the preview is a genuine proof of what you will get, and a handout costs
+  what it should in ink. Light-mode vaults were hit hardest: PDF export always renders in
+  the light scheme, which is exactly the case where the old print rules were most
+  outranked.
 - [BUGFIX] **"Open in sidebar" stops piling up initiative trackers** (SC-153). Every
   press of an encounter block's "Open in sidebar" button appended another
   `ds-initiative` block to the note AND stacked another copy of it in the sidebar —
