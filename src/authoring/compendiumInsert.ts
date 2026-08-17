@@ -81,10 +81,25 @@ function extractDTO(model: unknown): unknown {
  * `partialFromModel`s (StatblockDTO/FeatureDTO/FeatureblockDTO) emit their model's own
  * render fields plus exactly this one, so an allow-list would silently DROP any field a
  * future SDK adds, while this list silently KEEPS it — the safe direction when the SDK
- * moves under us. Everything surviving here is a field the renderer reads (`type` is the
- * one constant: the SDK stamps it from `modelType()` and the DTO constructor overwrites
- * whatever a user types, but it is part of the documented block format and every
- * `example.yaml` opens with it, so it stays).
+ * moves under us. Everything surviving here is a field the renderer reads EXCEPT two
+ * documented format constants, both kept deliberately and both pinned by the SC-165 tests
+ * (`compendiumSearchModal.test.ts` — the liveness sweep excuses exactly these two, so a
+ * third one appearing is a test failure, not a silent addition):
+ *
+ * - **`type`** (all three families). The SDK stamps it from `modelType()` and the DTO
+ *   constructor overwrites whatever a user types, so it can never change a render. It
+ *   stays because every element's `example.yaml` opens with it and it is the documented
+ *   block format's first line.
+ * - **`feature_type`** (feature only). The SDK *does* read it when re-parsing —
+ *   `Feature.fromDTO` branches on `ability`/`trait`/`subtrait` and only falls back to
+ *   shape-recomputation when it is absent — but the CARD never asks the model for it:
+ *   `renderFeature.actionTypeOf` calls `config.feature.isTrait()`, which recomputes from
+ *   shape (no keywords/usage/distance/target). So it moves no pixel today. It stays
+ *   because it is line 2 of the documented `ds-feature` format, `FeatureblockConfig`
+ *   normalizes nested entries on it, and `docs/Features.md` lists it as required.
+ *
+ * A documented key the current renderer happens to ignore is not the same thing as
+ * transport — per the brief, when unsure, keep the field.
  *
  * SNAPSHOT OUTPUT ONLY. The synced compendium files keep their full DTO shape; the sync
  * format is not in question, only what gets pasted into a note as an editing base.

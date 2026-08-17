@@ -71,12 +71,13 @@ Searches statblocks, features and featureblocks, and pastes the entry's **full Y
 your note as an editable copy.
 
 **Why you'd want that:** it's the starting point for homebrew. Drop in a goblin, change its
-Stamina, give it a new ability, rename it — and it's yours. What lands in your note is
-trimmed to the lines you can edit: the bookkeeping the compendium keeps about where an
-entry came from is left out, so every line you see is one that changes the card. A
-snapshot deliberately does
-*not* keep up with the compendium afterwards; your edits are the whole point, and a sync
-that overwrote them would defeat it. If you want content that keeps updating, use **Insert
+Stamina, give it a new ability, rename it — and it's yours. What lands in your note is the
+entry's content, without the `metadata:` block the compendium keeps beside it. For an ability
+that block repeated most of the entry a second time — its name, its effects, its flavor text,
+its action type — and the card was always built from the real fields, so editing the copy
+changed nothing. Leaving it out keeps that trap out of your note. A snapshot deliberately does
+*not* keep up with the compendium afterwards; your edits are the whole point, and a sync that
+overwrote them would defeat it. If you want content that keeps updating, use **Insert
 compendium reference** instead.
 
 Snapshots are offered for statblocks, features and featureblocks only.

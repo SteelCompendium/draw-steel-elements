@@ -587,6 +587,23 @@ describe('SC-165 — the snapshot body is trimmed to the fields the renderer rea
 		},
 	);
 
+	// The FIDELITY axis, which the two sweeps around it leave open (SC-165 review, L3): both
+	// compare the snapshot only against MUTATIONS OF ITSELF, so a future SDK/DTO change that
+	// stopped emitting a live field altogether would sail past them — the key would simply
+	// never appear for the delete sweep to try, and the round trip would still match. This
+	// pins what a user actually cares about: the block you paste renders the SAME card as the
+	// entry you copied it from. Byte-identical for all three families today, so it costs
+	// nothing to hold.
+	test.each(SNAPSHOT_CASES)(
+		'%s: the snapshot renders the same card as the synced block it was taken from',
+		async (_family, element, code, rel) => {
+			const { deps, body, content } = await snapshot(code, rel);
+			expect(await renderBody(deps, element, body)).toBe(
+				await renderBody(deps, element, extractDsBlockText(content)),
+			);
+		},
+	);
+
 	test.each(SNAPSHOT_CASES)(
 		'%s: every other surviving top-level key changes the render when removed',
 		async (_family, element, code, rel, constants) => {

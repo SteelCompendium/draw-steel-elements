@@ -26,13 +26,13 @@ for what needs action.
   other features" — and the "Steel card" preset now writes exactly these defaults, so a
   fresh install shows "Steel card" rather than "Custom". This changes how existing
   statblocks render, which is why it lands before 7.0.0 ships rather than after.
-- [BUGFIX] **Snapshots no longer paste lines you can't edit** (SC-165). **Insert
-  Draw Steel: compendium block (snapshot)** copied the entry's bookkeeping into your
-  note alongside its content — a `metadata:` block that, for an ability, repeated the
-  name, the effects, the flavour text and the action type a second time. None of it
-  reached the card, so changing a value there did nothing and the duplicate quietly
-  contradicted the real one. Snapshots now contain only the fields that render, which
-  for an ability roughly halves the pasted block. Synced compendium files are
+- [BUGFIX] **Snapshots no longer paste a duplicate you can't edit** (SC-165). **Insert
+  Draw Steel: compendium block (snapshot)** copied the entry's `metadata:` block into
+  your note alongside its content — for an ability that block repeated most of the entry
+  a second time: its name, its effects, its flavor text, its action type. The card was
+  always built from the real fields, so changing a value under `metadata:` did nothing
+  and the dead copy quietly contradicted the live one. Snapshots now leave that block
+  out, which for an ability roughly halves what gets pasted. Synced compendium files are
   unchanged; this is only about what lands in your note.
 - [BUGFIX] **The compendium search modal is readable again** (SC-159). Every result
   ran its name, type and source together into one unbroken string — a goblin listed
