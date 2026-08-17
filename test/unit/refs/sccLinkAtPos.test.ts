@@ -90,7 +90,13 @@ describe('findSccLinkAtPos', () => {
 	// was never actually wrong — but it made the module's behaviour depend on hidden global
 	// state, and one early `return` added in the wrong place would have made a later call
 	// silently start scanning from the middle of the line. The pattern is now built per call;
-	// these pin the property so it can't regress into a shared object again.
+	// this pins the property so it can't regress into a shared object again.
+	//
+	// ONE test, not two (re-review R-2). A sibling case — "the first link is still found after
+	// a whole-line MISS" — was dropped as unfalsifiable: a `/g` regex resets `lastIndex` to 0
+	// by itself whenever `exec` returns null, so a miss can never leave state behind. The case
+	// below is the one that can actually catch it, because an early `return` mid-scan is
+	// exactly what parks `lastIndex` in the middle of the line.
 	test('no state carries between calls: repeating a call after scanning further returns the same answer', () => {
 		const line = '[first](scc.v1:a/b) then [second](scc.v1:c/d)';
 		const firstPos = 2;
@@ -102,15 +108,6 @@ describe('findSccLinkAtPos', () => {
 
 		expect(before).toBe('scc.v1:a/b');
 		expect(after).toBe(before);
-	});
-
-	test('no state carries between calls: the FIRST link on a line is still found after a miss', () => {
-		const line = '[only](scc.v1:a/b) trailing prose';
-		// The first call scans the ENTIRE line and finds nothing covering pos (the click is
-		// past every link), which is what leaves a `/g` regex's lastIndex parked at the end.
-		// The second call must still find the link at the start of the same line.
-		expect(findSccLinkAtPos(line, 0, line.length)).toBeNull();
-		expect(findSccLinkAtPos(line, 0, 2)?.href).toBe('scc.v1:a/b');
 	});
 });
 

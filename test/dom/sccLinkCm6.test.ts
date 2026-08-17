@@ -99,6 +99,48 @@ interface ViewOpts {
 	posAtCoords?: number | null;
 	/** Records whether the event survived past the extension (see `downstream` below). */
 	downstream?: string[];
+	/** Mount the editor in this Document instead of the main one (see popoutWindow). */
+	doc?: Document;
+}
+
+/**
+ * A REAL second window + document, the way a popout actually looks to this code — an iframe,
+ * not `document.implementation.createHTMLDocument()`. That factory produces a document with
+ * **no browsing context**, so its `defaultView` is `null`: the very property the popout-safety
+ * branch reads would fall back to the main `window` and the assertion would pass no matter what
+ * the code did (re-review R-1(ii)). An iframe's `contentWindow` is a genuine distinct Window,
+ * so `!== window` is a real difference an incorrect implementation cannot fake.
+ */
+const iframes: HTMLIFrameElement[] = [];
+function popoutWindow(): { win: Window & typeof globalThis; doc: Document } {
+	const iframe = document.createElement('iframe');
+	document.body.appendChild(iframe);
+	iframes.push(iframe);
+	const win = iframe.contentWindow as unknown as Window & typeof globalThis;
+	stubRects(win);
+	return { win, doc: win.document };
+}
+
+/**
+ * "Did the EXTENSION call preventDefault()?" — sampled at the only moment the answer is
+ * distinguishable.
+ *
+ * Reading `evt.defaultPrevented` after dispatch cannot answer it (re-review R-1(i)): CM6 calls
+ * `preventDefault()` itself on any event a handler claims by returning true, so the flag reads
+ * true whether or not the extension prevented anything — deleting the extension's own
+ * `preventDefault()` left all 17 tests green. CM6 does that AFTER the handler returns, though,
+ * so the flag sampled from INSIDE the extension's own side effect (the action it invokes on the
+ * follow path, which runs a few lines after its `preventDefault()`) is set by the extension and
+ * nothing else.
+ */
+function preventedWhenActionRan(actions: SccClickActions, evt: MouseEvent): { value: boolean | null } {
+	const box: { value: boolean | null } = { value: null };
+	const inner = actions.openVault.bind(actions);
+	actions.openVault = (linkpath, newLeaf): void => {
+		box.value = evt.defaultPrevented;
+		inner(linkpath, newLeaf);
+	};
+	return box;
 }
 
 /**
@@ -123,6 +165,8 @@ function downstreamObserver(log: string[]) {
 }
 
 const views: EditorView[] = [];
+/** Teardown for listeners a test puts on the SHARED jsdom `document` (see afterEach). */
+const docListenerRemovals: Array<() => void> = [];
 
 // jsdom implements no layout, and `Range` has no getClientRects at all. Whenever the
 // extension correctly DECLINES a mousedown, CM6's own selection machinery takes over and
@@ -131,11 +175,12 @@ const views: EditorView[] = [];
 // This affects only CM6's internals; nothing under test reads a rect (posAtCoords, the one
 // place real geometry would matter, is stubbed per view).
 const ZERO_RECT = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) };
-beforeAll(() => {
-	const proto = Range.prototype as unknown as Record<string, unknown>;
+function stubRects(w: Window & typeof globalThis): void {
+	const proto = w.Range.prototype as unknown as Record<string, unknown>;
 	proto.getClientRects = (): unknown => [ZERO_RECT];
 	proto.getBoundingClientRect = (): unknown => ZERO_RECT;
-});
+}
+beforeAll(() => stubRects(window as Window & typeof globalThis));
 
 function mkView(opts: ViewOpts): EditorView {
 	const extensions: Extension[] = [opts.extension];
@@ -153,8 +198,9 @@ function mkView(opts: ViewOpts): EditorView {
 		),
 		extensions,
 	});
-	const parent = document.createElement('div');
-	document.body.appendChild(parent);
+	const host = opts.doc ?? document;
+	const parent = host.createElement('div');
+	host.body.appendChild(parent);
 	const view = new EditorView({ state, parent });
 	const pos = opts.posAtCoords === undefined ? INSIDE_LINK : opts.posAtCoords;
 	(view as unknown as { posAtCoords: () => number | null }).posAtCoords = () => pos;
@@ -162,9 +208,15 @@ function mkView(opts: ViewOpts): EditorView {
 	return view;
 }
 
+/** Builds the MouseEvent a real browser would, in `view`'s own realm. */
+function mkEvent(view: EditorView, type: string, init: MouseEventInit = {}): MouseEvent {
+	const realm = (view.dom.ownerDocument.defaultView ?? window) as unknown as typeof window;
+	return new realm.MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+}
+
 /** Dispatches a real MouseEvent at the editor's content DOM, where CM6 binds its handlers. */
 function fire(view: EditorView, type: string, init: MouseEventInit = {}): MouseEvent {
-	const evt = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+	const evt = mkEvent(view, type, init);
 	view.contentDOM.dispatchEvent(evt);
 	return evt;
 }
@@ -176,6 +228,9 @@ afterEach(() => {
 	// dispatchEvent still returns normally, so it cannot corrupt an assertion. Views are torn
 	// down here rather than per-test so no test has to remember.
 	for (const view of views.splice(0)) view.destroy();
+	for (const iframe of iframes.splice(0)) iframe.remove();
+	// `document.body.innerHTML = ''` cannot reach listeners bound to `document` itself.
+	for (const remove of docListenerRemovals.splice(0)) remove();
 	document.body.innerHTML = '';
 });
 
@@ -185,9 +240,15 @@ describe('createSccLinkCm6Extension — Live Preview gestures (SC-135 phase 1b)'
 		const downstream: string[] = [];
 		const view = mkView({ downstream, extension: createSccLinkCm6Extension(stubResolver(), actions) });
 
-		const evt = fire(view, 'mousedown', { button: 0 });
+		const evt = mkEvent(view, 'mousedown', { button: 0 });
+		const preventedByUs = preventedWhenActionRan(actions, evt);
+		view.contentDOM.dispatchEvent(evt);
 
 		expect(actions.vaultCalls).toEqual([{ linkpath: LINKPATH, newLeaf: false }]);
+		// The extension preventDefault()s BEFORE it acts — that is what beats Obsidian's own
+		// external-link confirmation on this same click. Sampled inside the action rather than
+		// after dispatch, where CM6's own preventDefault would mask it (see the helper).
+		expect(preventedByUs.value).toBe(true);
 		expect(evt.defaultPrevented).toBe(true);
 		// Nothing behind it ran: no stray cursor placement, and Obsidian's own external-link
 		// confirmation never gets the chance to fire.
@@ -286,9 +347,13 @@ describe('createSccLinkCm6Extension — one physical click, one navigation (SC-1
 
 	test('no double-handling with phase 1\'s document-level DOM delegator also attached', () => {
 		const actions = stubActions();
+		// Detachable, and torn down in afterEach (re-review R-3). These are capture-phase
+		// listeners on the SHARED jsdom `document`: leaving them attached let a later test's
+		// click reach a previous test's `actions`, which was harmless only by declaration order.
 		const owner = {
 			registerDomEvent(el: Document, type: string, cb: (evt: MouseEvent) => void, options?: any) {
 				el.addEventListener(type, cb as EventListener, options);
+				docListenerRemovals.push(() => el.removeEventListener(type, cb as EventListener, options));
 			},
 		};
 		// Both mechanisms live at once, exactly as main.ts wires them.
@@ -339,18 +404,25 @@ describe('createSccLinkCm6Extension — non-events (SC-135 phase 1b)', () => {
 });
 
 describe('createSccLinkCm6Extension — resolution branches (SC-135 phase 1b)', () => {
-	test('a web resolution opens the redirect on the CLICKED editor\'s own window (popout-safe)', () => {
+	test('a web resolution opens the redirect on the CLICKED editor\'s own window, not the main one (popout-safe)', () => {
 		const actions = stubActions();
 		const url = 'https://steelcompendium.io/scc/mcdm.heroes.v1/rule.world/vasloria/';
+		// The editor lives in a genuinely separate window, as it would in an Obsidian popout.
+		const popout = popoutWindow();
 		const view = mkView({
+			doc: popout.doc,
 			extension: createSccLinkCm6Extension(stubResolver({ kind: 'web', url }), actions),
 		});
+		expect(view.dom.ownerDocument).toBe(popout.doc); // the premise, not the claim
 
 		fire(view, 'mousedown', { button: 0 });
 
 		expect(actions.webCalls).toHaveLength(1);
 		expect(actions.webCalls[0].url).toBe(url);
-		expect(actions.webCalls[0].win).toBe(view.dom.ownerDocument.defaultView);
+		// The claim: the POPOUT's window, and demonstrably not the main one. An implementation
+		// that reached for the global `window` would satisfy the first line and fail the second.
+		expect(actions.webCalls[0].win).toBe(popout.win);
+		expect(actions.webCalls[0].win).not.toBe(window);
 	});
 
 	test('an unresolved code shows a notice instead of navigating', () => {
@@ -429,11 +501,14 @@ describe('createSccLinkCm6Extension — the Prec.highest requirement (SC-135 pha
 		expect(log).toEqual([]); // and it stopped the core-like handler, as intended
 	});
 
-	test('the extension really is wrapped at highest precedence, not merely declared first', () => {
+	test('declared FIRST, it also wins — the reversed registration order is a no-regression case, not the precedence proof', () => {
+		// Honest title (re-review R-1(iii)): this arrangement passes on declaration order alone,
+		// so stripping Prec.highest leaves it green. It is worth keeping as the other half of the
+		// ordering matrix — the extension must work whichever side of a core-like handler it is
+		// declared on — but the test above, where the core-like handler is declared FIRST, is the
+		// one that actually proves Prec.highest is load-bearing.
 		const log: string[] = [];
 		const actions = stubActions();
-		// Registration order reversed: the core-like handler is declared LAST. Precedence,
-		// not declaration order, must still put the scc extension in front.
 		const state = EditorState.create({
 			doc: DOC,
 			selection: EditorSelection.create([EditorSelection.cursor(0)], 0),

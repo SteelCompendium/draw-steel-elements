@@ -152,7 +152,7 @@ What you see when you arrive depends on which view that note is in.
 
 ### What compendium links can't do yet
 
-Two things are deliberately not built yet. Neither is a bug, and neither stops links from
+A few things are deliberately not built yet. None of them is a bug, and none stops links from
 working — this section exists so you don't have to wonder.
 
 - **They don't show up in backlinks, the graph view, or "unlinked mentions."** Obsidian's
@@ -165,6 +165,18 @@ working — this section exists so you don't have to wonder.
   The `scc.v1:` form is deliberate: it points at an entry rather than at a file path, so
   your links keep working even when the compendium's folder layout changes in a later
   release. It isn't going away, but an alternative style is planned.
+- **While editing, a compendium link written inside code is still clickable.** If you put
+  one in a `` `code span` `` or a fenced code block — showing someone the syntax, say —
+  Reading view correctly treats it as plain text and does nothing when you click it. Live
+  Preview and Source mode don't yet make that distinction, so clicking it there can still
+  take you to the entry. Nothing in your note is changed; you just end up somewhere you
+  didn't ask to go.
+- **Link text containing square brackets isn't recognized while editing.** A link written
+  as `[the [big] one](scc.v1:...)` opens normally in Reading view, but in Live Preview and
+  Source mode clicking it won't take you anywhere — it just puts your cursor there, as if
+  it were ordinary text. Link text without brackets inside it works everywhere, and that is
+  what the compendium itself always writes, so this only comes up in links you type
+  yourself.
 
 ## Copying an entry to homebrew from
 

@@ -87,10 +87,11 @@ export interface DomEventOwner {
  * Attaches capture-phase `click` + `auxclick` (middle-click; browsers route the middle
  * button through auxclick, not click) listeners to `doc`, lifecycle-bound to `owner` —
  * `registerDomEvent` detaches them when `owner` tears down. Called once per window (main +
- * each popout, see registerSccLinkClickHandling below). `owner` can be the plugin itself
- * (everything detaches at plugin unload) or a per-window owner that can be released
- * earlier — which is what registerSccLinkClickHandling passes, so a closed popout stops
- * being retained the moment it closes rather than at unload (finding L-6).
+ * each popout, see registerSccLinkClickHandling below). In production `owner` is ALWAYS a
+ * per-window `DetachableDomEventOwner` from registerSccLinkClickHandling, so a closed popout
+ * stops being retained the moment it closes rather than at plugin unload (finding L-6); the
+ * parameter stays the wider `DomEventOwner` only so tests can attach against a plain object
+ * (any Component, the real Plugin included, still satisfies it structurally).
  *
  * Both listeners share ONE callback, and a middle click reaches only `auxclick` (never
  * `click`), so a physical click always runs the body exactly once — the double-fire that
