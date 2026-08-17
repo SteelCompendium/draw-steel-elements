@@ -260,6 +260,48 @@ describe('T-9: kit DOM through the REAL ElementPipeline (quick-start fixture)', 
 		expect(root.querySelectorAll('.dse-init__cell')).toHaveLength(5);
 	});
 
+	// SC-154 round 2. The turn indicator used to be built as a SIBLING of the row /
+	// group body, so it rendered as a detached box floating outside the card those
+	// share ("the hero turn tracker checkbox is separated from the hero's container"
+	// — Scott, 2026-08-16). The fix is structural, and only structure can guard it:
+	// no CSS assertion is available in jsdom, and every visible symptom follows from
+	// which parent the box is created in.
+	test('SC-154: the turn indicator is built INSIDE the card it belongs to, not beside it', async () => {
+		const { root } = await renderInit(quickStart);
+
+		const heroRow = root.querySelector('.dse-init__group--heroes .dse-init__row')!;
+		const heroTurnbox = heroRow.querySelector(':scope > .dse-init__turnbox');
+		expect(heroTurnbox).not.toBeNull();
+		// First child, so it reads as the row's leading control rather than trailing it.
+		expect(heroRow.firstElementChild).toBe(heroTurnbox);
+		// And nothing is left dangling next to the row inside the entry wrapper.
+		const heroEntry = root.querySelector('.dse-init__group--heroes .dse-init__entry')!;
+		expect(heroEntry.querySelector(':scope > .dse-init__turnbox')).toBeNull();
+
+		// Same move for an enemy group: inside the group's own header, not outside its body.
+		const groupHead = root.querySelector('.dse-init__grouphead')!;
+		expect(groupHead.firstElementChild).toBe(groupHead.querySelector(':scope > .dse-init__turnbox'));
+		const enemyEntry = root.querySelector('.dse-init__group--enemies .dse-init__entry')!;
+		expect(enemyEntry.querySelector(':scope > .dse-init__turnbox')).toBeNull();
+	});
+
+	// SC-154 round 2. The enemy detail row used to hang its stamina control directly
+	// off the row, where the hero row wraps it in `.dse-init__right` — the one
+	// structural difference between two rows that are otherwise the same shape, and
+	// the reason every narrow-width rule keyed on `.dse-init__right` skipped enemies.
+	test('SC-154: hero rows and enemy detail rows share the same right-hand column markup', async () => {
+		const { root } = await renderInit(quickStart);
+
+		for (const sel of ['.dse-init__group--heroes .dse-init__row', '.dse-init__detail']) {
+			const row = root.querySelector(sel)!;
+			const right = row.querySelector(':scope > .dse-init__right');
+			expect(right).not.toBeNull();
+			expect(right!.querySelector(':scope > .dse-init__health > .dse-init__stamina')).not.toBeNull();
+			// The health block is never a direct child of the row itself any more.
+			expect(row.querySelector(':scope > .dse-init__health')).toBeNull();
+		}
+	});
+
 	test('a11y: turn indicators are real toggle buttons; cells real aria-pressed buttons tagged data-instance-key (CB-6); stamina/malice/conditions labelled', async () => {
 		const tooltipSpy = jest.spyOn(obsidian, 'setTooltip');
 		const { root } = await renderInit(quickStart);

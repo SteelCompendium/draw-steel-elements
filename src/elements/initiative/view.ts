@@ -370,13 +370,13 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  writable; a static glyph span when read-only (state display, not a dead-end
 	 *  control). `toggle` flips the model and returns the new state. */
 	private buildTurnIndicator(
-		entry: HTMLElement,
+		parent: HTMLElement,
 		name: string,
 		taken: boolean,
 		toggle: (() => boolean) | null,
 		owner: Component,
 	): void {
-		const box = entry.createDiv({ cls: 'dse-init__turnbox' });
+		const box = parent.createDiv({ cls: 'dse-init__turnbox' });
 		if (toggle) {
 			const handle = iconButton(
 				box,
@@ -548,8 +548,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 	private buildCharacterRow(entry: HTMLElement, character: Hero, owner: Component): void {
 		const name = character.name ?? 'Hero';
+
+		// SC-154 round 2 — the turn indicator is now the ROW's own first child, not a
+		// sibling of it inside `entry` (Scott's example: "should read as part of the
+		// hero row container" — a layout fix, not a margin tweak). `rowEl` is created
+		// BEFORE `buildTurnIndicator` so the checkbox lands inside the same card the
+		// portrait/info/health share (background + hairline chrome, CSS ".dse-init__row"),
+		// instead of floating beside it as a visually detached box.
+		const rowEl = entry.createDiv({ cls: 'dse-init__row' });
 		this.buildTurnIndicator(
-			entry,
+			rowEl,
 			name,
 			character.has_taken_turn ?? false,
 			this.canWrite
@@ -560,8 +568,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 				: null,
 			owner,
 		);
-
-		const rowEl = entry.createDiv({ cls: 'dse-init__row' });
 
 		// Character Image
 		const imageEl = rowEl.createDiv({ cls: 'dse-init__portrait' });
@@ -600,8 +606,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 	// ------------------------------------------------------------------- group row
 
 	private buildEnemyGroupRow(entry: HTMLElement, group: EnemyGroup, owner: Component): void {
+		const groupEl = entry.createDiv({ cls: 'dse-init__groupbody' });
+
+		// Group Header — same SC-154 round 2 move as buildCharacterRow above: the turn
+		// indicator becomes the header row's own first child (inside the group's card)
+		// instead of a sibling floating outside `.dse-init__groupbody` entirely.
+		const groupHeader = groupEl.createDiv({ cls: 'dse-init__grouphead' });
 		this.buildTurnIndicator(
-			entry,
+			groupHeader,
 			group.name ?? 'Enemy group',
 			group.has_taken_turn ?? false,
 			this.canWrite
@@ -612,11 +624,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 				: null,
 			owner,
 		);
-
-		const groupEl = entry.createDiv({ cls: 'dse-init__groupbody' });
-
-		// Group Header
-		const groupHeader = groupEl.createDiv({ cls: 'dse-init__grouphead' });
 		groupHeader.createEl('h4', { text: group.name });
 
 		// Detailed Creature Row Container
@@ -776,7 +783,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner);
 
 		// Right: Health Info
-		const healthEl = container.createDiv({ cls: 'dse-init__health' });
+		// SC-154 round 2 — wrapped in the same `.dse-init__right` column the hero row has
+		// always used. It was the only structural difference between the two rows, and it
+		// cost the detail row every narrow-width rule keyed on `.dse-init__right` (the
+		// `.dse-sidebar` block's right-alignment, and this round's `margin-left: auto`):
+		// once the row wrapped, an enemy's stamina landed at the far LEFT of its own line
+		// while a hero's stayed right. Same markup now, same behaviour.
+		const rightEl = container.createDiv({ cls: 'dse-init__right' });
+		const healthEl = rightEl.createDiv({ cls: 'dse-init__health' });
 		const isSquadMinion = !!group.is_squad && creature.squad_role === 'minion';
 		const staminaEl = this.createStaminaControl(
 			healthEl,

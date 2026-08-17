@@ -616,13 +616,26 @@ code.dsa {
         margin-bottom: 10px;
     }
 
-    /* -- turn indicator: iconButton (aria-pressed) in the bordered box -- */
+    /* -- turn indicator: iconButton (aria-pressed) in the bordered box --
+       SC-154 round 2 — this box is now the row / group-header's own FIRST CHILD
+       (view.ts: buildCharacterRow / buildEnemyGroupRow), not a sibling floating
+       OUTSIDE the card via `.dse-init__entry` — Scott's round-2 example: the turn
+       checkbox must read as part of the hero's row, which is a layout change, not a
+       margin value. Three consequences live in this rule:
+       - `border-right: 0` + `border-radius: 5px 0 0 5px` are gone. That half-pill was
+         drawn to MERGE with whatever sat flush to its right; inside the card, with a
+         real gap after it, an open-ended box reads as a broken shape. Full radius now.
+       - `flex: 0 0 auto` — as a flex child the box used to be shrinkable, and
+         measurably WAS: at a plain 300px note pane it squeezed 23.4px → 15px, a
+         squashed non-square checkbox. It never shrinks now.
+       - its separation from its neighbour is the row's / group header's own
+         `column-gap: 10px` (see those rules), not a margin of its own. */
     .dse-init__turnbox {
         height: 1.5em;
         width: 1.5em;
+        flex: 0 0 auto;
         border: 1px solid var(--dse-rule);
-        border-right: 0;
-        border-radius: 5px 0 0 5px;
+        border-radius: 4px;
     }
 
     .dse-init__turn {
@@ -644,7 +657,9 @@ code.dsa {
         width: calc(100% - 2px);
         color: var(--dse-fg);
         background-color: var(--dse-surface);
-        border-radius: 4px 0 0 4px;
+        /* SC-154 round 2 — matches the box's own full radius above (was 4px 0 0 4px,
+           the left-only half of the old merged-pill shape). */
+        border-radius: 3px;
     }
 
     .dse-init__turn[data-taken] svg {
@@ -652,12 +667,36 @@ code.dsa {
         color: var(--dse-surface);
     }
 
-    /* -- row chrome: surface + the top-left hairline-fade pair (Legacy = today) -- */
+    /* -- row chrome: surface + the top-left hairline-fade pair -- */
+    /* SC-154 round 2 — THE inset both of Scott's container examples come back to.
+       This rule paints the card (its own surface + the two hairlines) for a hero row
+       and for an enemy group's body, and it used to declare `padding-top: 1px;
+       padding-right: 1em` — no left inset and no bottom inset at all. Measured
+       consequences on the hero card, every width and both schemes:
+         - the portrait sat at L0, flush against the card's own left edge
+           (Scott: "the hero profile pic div has no spacing on the left side");
+         - the [Main][Maneuver][Move][Triggered] toggle row sat at B0, its bottom
+           border ON the card's bottom edge (Scott: those buttons "dont have a bottom
+           margin").
+       Both are the card missing padding, not the children missing margins, so the
+       padding is what changes. `8px 12px` is not invented here — it is verbatim the
+       inset `.dse-party__member` (this element family's other content card) already
+       uses, so the two families now share one card rhythm. The 1px top was there to
+       keep content off the `::before` hairline; 8px keeps it off by more. The
+       absolutely-positioned hairlines are unaffected (they anchor to the padding-box
+       origin, which padding does not move). */
+    /* `box-sizing: border-box` is required, not decorative: both selectors also carry
+       `width: 100%` further down, and under the default content-box that means
+       "100% of the parent PLUS my padding" — i.e. every pixel of card padding pushed
+       the card past its own container's right edge. Measured at a plain 300px note
+       pane BEFORE this round, with only 16px of right padding: the hero row already
+       overflowed the tracker's content box by 2px and the group body by 6px. Widening
+       the padding without this line would have turned that into a 19px overhang. */
     .dse-init__group--heroes .dse-init__row,
     .dse-init__groupbody {
         position: relative;
-        padding-top: 1px;
-        padding-right: 1em;
+        box-sizing: border-box;
+        padding: 8px 12px;
         margin-bottom: 0.75em;
         background-color: var(--dse-surface);
 
@@ -715,12 +754,19 @@ code.dsa {
        this row's 0.85em font — the other three panel children (log/quick-add) are
        already narrower than that, so this doesn't widen the panel's overall footprint
        beyond what one control already needs. */
+    /* SC-154 round 2 — `320px` → `min(320px, 100%)`. A bare 320px is a max-width the
+       panel can still exceed, because its widest child (the quick-add row: two fixed
+       `em` inputs plus the Add button) has a min-content width of 288px that nothing
+       let it break. Measured at a plain 300px note pane: the panel rendered 288.4px
+       wide inside a 234px content box and hung 54.4px past the tracker's own padding,
+       so the Add button was half outside the element. Clamping to the container is
+       half the fix; `.dse-init__malice-quickadd` wrapping (below) is the other half. */
     .dse-init__malice-panel {
         display: flex;
         flex-direction: column;
         align-items: flex-end;
         gap: 4px;
-        max-width: 320px;
+        max-width: min(320px, 100%);
     }
 
     /* -- Malice: the kit stepper (CB-7 — its render() updates ONLY the value node) -- */
@@ -797,8 +843,11 @@ code.dsa {
         max-width: 100%;
     }
 
+    /* SC-154 round 2 — `margin: 0` left the heading's baseline box touching the first
+       log line / the empty-state sentence (measured sibling gap: 0px), so the two read
+       as one run-on paragraph rather than a label over a list. */
     .dse-init__malice-log-heading {
-        margin: 0;
+        margin: 0 0 2px;
         font-size: 1em;
         font-weight: 600;
         color: var(--dse-fg-muted);
@@ -817,8 +866,17 @@ code.dsa {
     }
 
     /* D8 §3.3: labeled quick-add for manual trigger-based gains. */
+    /* SC-154 round 2 — `flex-wrap: wrap` promoted from the `.dse-sidebar`-scoped block
+       at the bottom of this sheet into the base rule. That override only fires inside
+       a real Obsidian sidebar leaf; a merely narrow NOTE pane (split view, small
+       window) got nothing, and this row's fixed-width inputs then pushed the Add
+       button outside the tracker entirely (see the panel's max-width note above). With
+       wrap, a width that can't hold amount + label + Add moves whole controls to the
+       next line instead. No effect at any width that already fits — the row's
+       min-content width is unchanged. */
     .dse-init__malice-quickadd {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 4px;
     }
@@ -863,27 +921,49 @@ code.dsa {
         box-sizing: border-box;
     }
 
-    /* SC-154 — the turn-indicator box and the row content next to it had zero gap
-       (the row's own left padding was 0 — see .dse-init__row below — so the two
-       sat literally edge to edge). A small gap reads as "two related controls",
-       not "one button glued to a card". */
+    /* SC-154 round 1 added `gap: 8px` here, to separate the turn-indicator box from
+       the row beside it.
+       SC-154 round 2 — that gap treated the symptom backwards: turnbox and row were
+       two independent boxes side by side, so ANY value (0px or 8px) still reads as
+       "two things," never "one row" — which is exactly Scott's complaint. view.ts now
+       puts the turnbox INSIDE the row (hero) / the group header (enemies), so this
+       wrapper holds a single child and needs no gap of its own. Kept as a flex
+       wrapper: it is the DOM anchor several tests and the docs camera select on
+       (`.dse-init__entry .dse-init__name`, `…__entry:last-of-type .dse-init__cell`),
+       and it is what made the old two-box layout overflow a narrow pane (measured at
+       a plain 300px note: turnbox + a `width: 100%` row overflowed the tracker's
+       content box by 2px, the group body by 6px — both gone now that the wrapper has
+       one child). */
     .dse-init__entry {
         display: flex;
-        gap: 8px;
     }
 
+    /* SC-154 round 2 — was `padding: 1em`. Now inherits the shared card inset from the
+       chrome rule above (8px 12px), so a group's body and a hero's row present their
+       content at the SAME left edge instead of 16px vs 0px. */
     .dse-init__groupbody {
-        padding: 1em;
         width: 100%;
     }
 
+    /* SC-154 round 2 — now hosts the turn-indicator box as its own first child
+       (view.ts: buildEnemyGroupRow), so an enemy group's checkbox sits inside the
+       group's card next to its name, the same move the hero row gets.
+       - `justify-content: space-between` dropped: it was inert with the single `h4`
+         this rule has always had, but with the turnbox present it would shove the name
+         to the far right of the card instead of leaving it beside its checkbox.
+       - `h4 { margin: 0 }` (was `margin-top: 0`): the browser's ~21px default BOTTOM
+         margin made the heading's flex item 45.3px tall against 24px of visible text,
+         so `align-items: center` was centring the turnbox against dead space rather
+         than against the name. The header's separation from the detail row below is
+         now declared here, once, instead of coming from an h4 default. */
     .dse-init__grouphead {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
 
         h4 {
-            margin-top: 0;
+            margin: 0;
         }
     }
 
@@ -891,11 +971,33 @@ code.dsa {
         margin-bottom: 10px;
     }
 
-    /* -- character rows -- */
+    /* -- character rows --
+       SC-154 round 2 — `margin-bottom: 10px` dropped. The chrome rule above sets
+       `margin-bottom` on this same element with two classes' worth of specificity, so
+       it always won; this line never took effect (the computed value was always the
+       chrome rule's 0.75em ≈ 12px). Removed as dead and misleading rather than left
+       implying a value nothing ever applied. The row's own inset is the card padding
+       in that same chrome rule — see the note there. */
     .dse-init__row {
         display: flex;
+        /* SC-154 round 2 — `flex-wrap` + `row-gap` promoted out of the
+           `.dse-sidebar`-scoped block at the bottom of this sheet (which only fires
+           inside a real Obsidian sidebar leaf) so a merely narrow NOTE pane gets the
+           same escape hatch. Without it the row had no way to respond to a squeeze
+           except to push its right-hand stamina column outside the card — measured
+           19px past the card's right padding at a plain 300px pane. Now the stamina
+           column drops to its own line instead. No effect at any width where the row
+           already fits on one line. */
+        flex-wrap: wrap;
+        row-gap: 4px;
+        /* SC-154 round 2 — the row's separation between controls, declared ONCE here
+           instead of as a `margin-right` on the turn box plus a `margin-left` on the
+           info column plus another on the health block. Three margins meant three
+           values to keep in step, and — the visible cost — a margin survives a line
+           wrap, so at narrow widths the wrapped name column and the wrapped stamina
+           each sat 10px further right than the picture above them. A gap does not. */
+        column-gap: 10px;
         align-items: center;
-        margin-bottom: 10px;
         width: 100%;
     }
 
@@ -918,7 +1020,15 @@ code.dsa {
        stays visible everywhere) holding one Lucide glyph, sized to fill whichever
        slot it mounts into (60px row portrait here; 50px grid cell, overridden
        below). Shield vs. skull is the whole signal — no color is load-bearing
-       (Scott is colorblind). */
+       (Scott is colorblind).
+       SC-154 round 2 — `box-sizing: border-box` is a real bug fix, not tidying. With
+       the default content-box, this capsule's 1px border was ADDED to whatever size it
+       was given, so it always rendered 2px larger than the slot it stands in for:
+       62x62 where a real <img> is 60x60 in a row, and — the visible one — 52x52 inside
+       the enemy grid's 50x50 `.dse-init__cell-portrait` (which sizes it by 100%/100%),
+       measured overflowing its slot by 2px on the right and bottom in EVERY width and
+       scheme, crowding the stamina number beneath it. Border-box makes the capsule
+       exactly the size of the picture it replaces. */
     .dse-init__portrait-fallback {
         display: flex;
         align-items: center;
@@ -926,6 +1036,7 @@ code.dsa {
         width: 60px;
         height: 60px;
         flex: 0 0 auto;
+        box-sizing: border-box;
         border-radius: var(--dse-radius);
         background-color: var(--color-base-30);
         border: 1px solid var(--dse-border);
@@ -937,9 +1048,23 @@ code.dsa {
         }
     }
 
+    /* SC-154 round 2 — `flex: 1` → `flex: 1 1 auto` + `min-width: 0`, which is what
+       makes the row's new `flex-wrap` actually able to act. With the old `flex-basis:
+       0%`, this column contributed nothing to the row's "does this line fit?" sum, so
+       the row never wrapped and the overflow came out of the stamina column instead;
+       with an `auto` basis the row can see it doesn't fit and breaks. At any width
+       where the row fits on one line the computed width is identical either way (this
+       is the only growing item, so it absorbs all the free space regardless). */
     .dse-init__info {
-        flex: 1;
-        margin-left: 10px;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    /* SC-154 round 2 — keeps the stamina column hard right once the row wraps it onto
+       its own line (a no-op on a single line, where the growing info column already
+       pushes it there). */
+    .dse-init__right {
+        margin-left: auto;
     }
 
     .dse-init__name {
@@ -960,7 +1085,16 @@ code.dsa {
     /* D8 §7.2: the per-turn action checklist ([Main][Maneuver][Move][Triggered]) — small
        toggles under the name/conditions line. Pressed = the kit's own .dse-btn[data-pressed]
        accent fill (real buttons); the read-only static-span twin repeats it locally since a
-       plain span never picks up .dse-btn rules. */
+       plain span never picks up .dse-btn rules.
+       SC-154 round 2 — Scott's third example ("the 'main, maneuver, move, triggered'
+       buttons dont have a bottom margin") is fixed by the card, not here: this row is
+       the LAST child of `.dse-init__info`, which is the full height of the row, so its
+       clearance is whatever bottom padding the row's card has — which was zero. The
+       chrome rule further up now pads the card 8px 12px, which is what puts real space
+       under these toggles (measured after: 8px on the hero row, at every width and in
+       both schemes). Deliberately NOT also a `margin-bottom` here: that would
+       double-space the hero row and would still leave the card's own left/right/top
+       edges wrong, which is the same mistake round 1 made with the turnbox gap. */
     .dse-init__actions {
         margin-top: 4px;
         display: flex;
@@ -1018,10 +1152,10 @@ code.dsa {
     }
 
     /* -- stamina numbers: [data-state] keys the tokens (SC-5 eviction) -- */
-    .dse-init__health {
-        margin-left: 10px;
-    }
-
+    /* SC-154 round 2 — `.dse-init__health { margin-left: 10px }` is gone (the rule had
+       nothing else in it). The row's own `column-gap` separates every control along
+       the row now, in one declaration; as a per-child margin it also survived a line
+       wrap and indented whichever line this block landed on. */
     .dse-init__stamina {
         font-weight: bold;
     }
@@ -10132,12 +10266,13 @@ button.dse-pr__row:hover {
 	}
 
 	/* Row: was [portrait | info | right] in one line; now info takes the full
-	   width on its own line and stamina right-aligns on the line below it. */
-	.dse-init__row {
-		flex-wrap: wrap;
-		row-gap: 4px;
-	}
-
+	   width on its own line and stamina right-aligns on the line below it.
+	   SC-154 round 2 — the `flex-wrap: wrap; row-gap: 4px` that used to live here is
+	   gone because `.dse-init__row` now declares both in the BASE rule: a merely
+	   narrow note pane needed the same escape hatch and this selector, keyed on a
+	   real sidebar leaf, could never give it one. Only the flex-basis override —
+	   the genuinely sidebar-specific decision to give info a whole line rather than
+	   let it share one — remains. */
 	.dse-init__info {
 		flex-basis: 100%;
 	}
@@ -10173,12 +10308,13 @@ button.dse-pr__row:hover {
 	}
 
 	/* Reset/Advance round buttons and the quick-add inputs were clipped at the
-	   leaf edge (no wrap, fixed input widths) — let them wrap and shrink. */
-	.dse-init__round,
-	.dse-init__malice-quickadd {
-		flex-wrap: wrap;
-	}
-
+	   leaf edge (no wrap, fixed input widths) — let them shrink.
+	   SC-154 round 2 — the `flex-wrap: wrap` half of this pair is gone: both rows
+	   declare it in their base rules now (round in round 0, quick-add in round 2),
+	   for the same reason as `.dse-init__row` above — a narrow note pane is not a
+	   sidebar leaf and was getting none of it. The input-shrink override below is
+	   still sidebar-only, because it trades the placeholders' legibility for fit
+	   and that is only worth it at a real leaf's width. */
 	.dse-init__malice-quickadd-amount,
 	.dse-init__malice-quickadd-label {
 		width: auto;
