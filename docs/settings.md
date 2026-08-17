@@ -65,13 +65,26 @@ The individual settings:
 - **Sticky mini-header** — once a statblock's own header has scrolled out of view, pin a
   compact bar with its name, role and key stats to the top of the pane. On by default.
   Screen only: print, PDF export and canvas cards never show it.
-- **↳ Include secondary stats** — add a second line to that pinned bar with Movement, With
-  Captain, Immunity and Weakness. On by default; greyed out while the mini-header is off.
-  In a narrow pane (a sidebar leaf) the second line is dropped whatever this says — there
-  is no room for it.
+- **↳ Sticky mini-header: include secondary stats** — add a second line to that pinned bar
+  with Movement, With Captain, Immunity and Weakness. On by default; greyed out while the
+  mini-header is off. In a narrow pane (a sidebar leaf) the second line is dropped whatever
+  this says — there is no room for it. (It repeats "sticky mini-header" in its name on
+  purpose: it is the row directly above it that this belongs to, and a settings-search hit
+  arrives with no neighbours to say so. Don't confuse it with **Secondary stats** above,
+  which lays out the block on the card itself.)
 
 The two sticky settings are **not** part of a preset — picking a look never turns a scroll
 behaviour on or off, and changing them never re-derives the preset to **Custom**.
+
+Two things the mini-header deliberately does not do:
+
+- **A statblock inside a callout gets no pinned bar.** A callout's body is its own scroll
+  box that never actually scrolls, so there is no "scrolled past the header" moment for the
+  bar to appear at. The card itself is unaffected.
+- **At the very end of a long statblock the bar briefly covers a strip of the text below
+  it.** The bar is anchored to its own card, so in the last centimetre of that card's travel
+  it slides down over whatever follows before disappearing with it. Keep scrolling and it
+  clears.
 
 Under **Advanced**:
 

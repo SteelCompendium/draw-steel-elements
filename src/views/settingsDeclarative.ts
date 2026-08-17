@@ -88,6 +88,36 @@ export const PREVIEW_CLS = 'dse-settings-preview-row';
 /** Class on a chrome row (no name/control), so CSS can let its text span the full width. */
 export const CHROME_CLS = 'dse-settings-chrome-row';
 
+/*
+ * ── SC-160 fix round 1: WHY A DEPENDENT ROW IS NOT VISUALLY INDENTED ────────────────────
+ *
+ * The obvious ask for a sub-toggle is a real `margin-left` on the row. It is not available,
+ * and the reason is worth writing down so the next person does not re-derive it:
+ *
+ *  1. Obsidian 1.13's `SettingDefinitionBase` is `name` / `desc` / `aliases` / `searchable`
+ *     / `visible`. There is NO per-row class or id hook, and the rendered element carries
+ *     no distinguishing attribute (measured in a real 1.13 Settings popout: the dependent
+ *     row's element is exactly `class="setting-item mod-toggle"`, and both it and its
+ *     parent sit at the same `getBoundingClientRect().left`).
+ *  2. A GROUP does take `cls` — but `toPage()` below already wraps a page's rows in one
+ *     group, and a group may not nest inside a group (only settings and pages may), so a
+ *     one-row group around the dependent row is not expressible either.
+ *  3. `desc` accepts a DocumentFragment, which looks like the escape hatch: plant an empty
+ *     marker span and indent the row with `:has()`. It is a TRAP. Obsidian calls
+ *     `getSettingDefinitions()` only from `update()` and re-renders from the cached
+ *     `settingItems` (verified against the shipped 1.13.4 bundle — see the
+ *     `PluginSettingTab` mock's header). Appending a DocumentFragment MOVES its children
+ *     out, so the fragment is emptied by the first render and every render after it — every
+ *     re-open of the settings window, every page navigation — draws the row with NO
+ *     DESCRIPTION. Trading a working description for an indent is a bad trade, so the
+ *     indent is declined.
+ *
+ * What carries the relationship instead: the `↳` prefix on the label (`DEPENDENT_PREFIX`
+ * in SettingsTab.ts), the row's position directly beneath its parent, and — because a
+ * settings-search hit arrives with neither of those — the parent's own name inside the
+ * label. The state half (`disabled`) is real and verified; only the indent is absent.
+ */
+
 /** Turns a row into a definition. Returns null for a row that renders nothing. */
 function toDefinition(row: NavRow, section: NavSection): SettingDefinition | null {
 	if (row.chrome) {

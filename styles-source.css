@@ -6987,16 +6987,37 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
    "show this while that other element is off the top of the scroller" has no pre-115
    CSS spelling; it writes one class, `.dse-sb__sticky--stuck`.
 
-   INERT WHERE IT WOULD BE MEANINGLESS OR HARMFUL — all three via the ONE reveal rule
-   below, which is what re-enables the base layer's `display: none`:
-     · print / export / the print-preview twin → `:not([data-dse-print="on"])` plus the
-       `@media print` re-assertion at the end of this sheet. No box, so zero frozen
-       print pixels move.
+   INERT WHERE IT WOULD BE MEANINGLESS OR HARMFUL — every case via the ONE reveal rule
+   below, which is the only thing that re-enables the base layer's `display: none`:
+     · the on-screen print-preview twin → `:not([data-dse-print="on"])`.
+     · REAL printing / PDF export, where no `data-dse-print` attribute exists to be
+       excluded → the `@media screen` wrapper around the reveal rule. No box on paper, so
+       zero frozen print pixels move.
      · canvas cards and any other non-persisting host (embeds, exports) →
        `:not([data-dse-readonly])`. A canvas node is a fixed-size card the reader drags,
        not a scroll surface; a bar pinned inside one is noise. statblock/view.ts
        independently declines to wire an observer there, so it is inert twice over.
      · the preference being off → `[data-dse-sb-sticky='on']`.
+
+   ⚠ WHY THE PRINT HALF IS `@media screen` AROUND THE REVEAL AND NOT A `display: none` IN
+   `@media print` (SC-160 fix round 1, 2026-08-17 — the first shape was measured WRONG in
+   a real Obsidian). `@media` contributes NOTHING to specificity. This reveal rule is
+   (0,5,1); an entry in the sheet's shared `@media print { … display: none }` list is
+   `.dse-sb__sticky`, (0,1,0). The reveal therefore WINS under print media and the
+   re-assertion was inert — measured on Chromium 106 under emulated print media:
+   `getComputedStyle(anchor).display === 'block'`, with both rules reported as matching.
+   (Nothing was seen to print, because an unscrolled bar is `visibility: hidden` anyway
+   and obsidian's print path re-renders unscrolled — the guard was broken, not the
+   output. But it was documented as the belt that catches Ctrl-P, and it was not.)
+
+   Constraining the reveal instead of adding a competing declaration keeps the twin and
+   real print on ONE declaration path — the same rule answers both, one by attribute and
+   one by media — which is also the shape that composes with SC-170 (making real print
+   follow the twin sheet-wide): when real print starts carrying `data-dse-print="on"`,
+   this wrapper becomes redundant rather than a second, contradicting source of truth.
+   `test/dom/elements/statblockSticky.test.ts` now models the cascade (media
+   applicability × specificity) instead of grepping for a selector, because a grep cannot
+   tell a winning declaration from a losing one — which is exactly how this shipped.
 
    NARROW PANES get a compact treatment rather than an opt-out, via CONTAINER queries
    (Chromium 105, below the floor — pinned in cssSupportFloor.test.ts's
@@ -7008,18 +7029,20 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
    below 21rem the stat pills go too and the bar is just "which creature is this",
    which is the question a pinned header exists to answer.
 */
-[data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-readonly])[data-dse-sb-sticky='on'] > .dse-sb__sticky {
-	display: block;
-	/* The whole parking mechanism. `top: 0` and not the site's measured `--sticky-top`:
-	   Material pins a header + tab bar over its own scroller and has to be cleared,
-	   whereas an Obsidian scroll container's top edge IS the top of the visible area. */
-	position: sticky;
-	top: 0;
-	z-index: 3;
-	height: 0;
-	margin: 0;
-	container-type: inline-size;
-	container-name: dse-sb-sticky;
+@media screen {
+	[data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-readonly])[data-dse-sb-sticky='on'] > .dse-sb__sticky {
+		display: block;
+		/* The whole parking mechanism. `top: 0` and not the site's measured `--sticky-top`:
+		   Material pins a header + tab bar over its own scroller and has to be cleared,
+		   whereas an Obsidian scroll container's top edge IS the top of the visible area. */
+		position: sticky;
+		top: 0;
+		z-index: 3;
+		height: 0;
+		margin: 0;
+		container-type: inline-size;
+		container-name: dse-sb-sticky;
+	}
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner {
 	position: absolute;
@@ -9758,14 +9781,16 @@ button.dse-pr__row:hover {
 	/* Rule 4 — hide interactive-only chrome (inert on paper; the STATE they
 	   controlled prints as static text — the stepper VALUE/INPUT stays). The ±
 	   buttons are `.dse-btn` instances, so hiding `.dse-btn` removes them too.
-	   SC-160: the sticky mini-header joins the list — it is a SCROLL affordance, and
-	   paper does not scroll. Belt AND braces: the base layer already leaves
-	   `.dse-sb__sticky` at `display: none` and only a `:not([data-dse-print="on"])`
-	   rule turns it on, but real printing sets no such attribute, so without this line
-	   the reveal rule would still match under Ctrl-P. (The on-screen preview twin below
-	   needs no matching entry for the same reason in reverse — the attribute IS the
-	   exclusion there.) */
-	.dse-sb__sticky,
+
+	   These entries work because nothing else in the sheet sets `display` on them at a
+	   higher specificity. That is a PRECONDITION of this list, not a property of
+	   `@media print` — `@media` adds no specificity of its own. SC-160's sticky
+	   mini-header was briefly listed here and was measured inert on Chromium 106 for
+	   exactly that reason: its reveal rule is (0,5,1) and `.dse-sb__sticky` is (0,1,0),
+	   so the reveal won under print media. It is kept out of print by an `@media screen`
+	   wrapper around that reveal rule instead (see the STICKY MINI-HEADER block above).
+	   Before adding a selector here, check that no rule anywhere re-enables it more
+	   specifically; if one does, constrain THAT rule rather than adding a loser here. */
 	.dse-btn,
 	.dse-tabs__list,
 	.dse-cond--add,

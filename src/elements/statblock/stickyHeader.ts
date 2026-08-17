@@ -157,9 +157,24 @@ export function nearestScroller(anchor: HTMLElement): HTMLElement | null {
 	if (!view) return null;
 	for (let node = anchor.parentElement; node; node = node.parentElement) {
 		const style = view.getComputedStyle(node);
-		// `overlay` is legacy-Chromium for `auto`; `clip`/`hidden`/`visible` do NOT make a
-		// scrollport for sticky purposes (which is exactly why the site can put
-		// `overflow: clip` on its card and still stick to the page).
+		// `overlay` is legacy-Chromium for `auto`.
+		//
+		// `hidden` is deliberately NOT in this list, and the reason is not the one an
+		// earlier revision of this comment gave. `overflow: hidden` DOES establish a
+		// scroll container — and therefore a scrollport that `position: sticky` resolves
+		// against; only `clip` and `visible` do not. (Obsidian is full of `hidden`
+		// ancestors: `.callout`, `.view-content`, `.workspace-leaf-content`.) What we want
+		// here is the nearest ancestor that can actually SCROLL, because a scrollport the
+		// user can never move is a scrollport the bar can never usefully pin to, and an
+		// observer rooted at one would never fire.
+		//
+		// The consequence is a known, accepted divergence: where a `hidden` ancestor is
+		// NEARER than the first `auto`/`scroll` one, CSS parks the bar against the hidden
+		// one while this returns the scrolling one further out. No shipped layout hits it
+		// (in a callout, `.callout-content` is `auto` and is nearer than `.callout`'s
+		// `hidden`, so both agree) — but if one ever does, the symptom is a bar that
+		// reveals while parked somewhere the reader is not looking, and THIS is the line
+		// to revisit.
 		if (/(auto|scroll|overlay)/.test(`${style.overflowY} ${style.overflowX}`)) return node;
 	}
 	return null;

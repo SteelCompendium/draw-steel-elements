@@ -1049,14 +1049,37 @@ describe('SC-160 — dependent rows (dependsOn)', () => {
 	test('the sub-toggle is indented under its parent, adjacent to it, on the SAME page', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
-		const names = rowDefs(pageNamed(tab, 'Statblock display').items).map((d: Def) => d.name);
+		const rows = rowDefs(pageNamed(tab, 'Statblock display').items);
+		const names = rows.map((d: Def) => d.name);
 		const parentAt = names.indexOf('Sticky mini-header');
 		expect(parentAt).toBeGreaterThan(-1);
-		// The site's own spelling of a sub-toggle ("↳ include secondary stats"). Obsidian's
-		// declarative rows take no per-row class, so the indent lives in the NAME — which
-		// also means it survives into the native settings-search results, where a bare
-		// "Include secondary stats" would say nothing about what it belongs to.
-		expect(names[parentAt + 1]).toBe('↳ Include secondary stats');
+		// The site's own spelling of a sub-toggle, plus the PARENT'S NAME — SC-160 fix
+		// round 1. The row is really indented now (the marker below), but a settings-search
+		// hit arrives with neither the indent nor the row above it, and the bare "Include
+		// secondary stats" was indistinguishable there from the pre-existing "Secondary
+		// stats" two rows up. Naming it after its parent is what makes the two tellable
+		// apart wherever a row travels alone.
+		expect(names[parentAt + 1]).toBe('↳ Sticky mini-header: include secondary stats');
+		// …and it must stay distinguishable from the row it used to collide with.
+		expect(names).toContain('Secondary stats');
+		expect(names.filter((n: string) => n === 'Secondary stats')).toHaveLength(1);
+	});
+
+	test('the row is NOT visually indented — obsidian 1.13 offers no safe hook, so the label carries the whole relationship', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const rows = rowDefs(pageNamed(tab, 'Statblock display').items);
+		const child = rows.find((d: Def) => d.name === '\u21b3 Sticky mini-header: include secondary stats');
+		expect(child).toBeDefined();
+		// `desc` must stay a plain STRING. A DocumentFragment would be the only way to plant
+		// a CSS hook in a row, and it is a trap: obsidian caches the definitions and replays
+		// them, and appending a fragment MOVES its children out — so the row would render
+		// with no description at all from the second render onward. settingsDeclarative.ts
+		// documents the full derivation; this pins the decision so nobody re-tries it
+		// without reading it.
+		expect(typeof (child as unknown as { desc: unknown }).desc).toBe('string');
+		// The definition carries no class/indent field either, because none exists.
+		expect(Object.keys(child as object).sort()).toEqual(['aliases', 'control', 'desc', 'name']);
 	});
 
 	test('the sub-toggle\'s control is DISABLED while its parent is off, and live-enables when the parent flips', async () => {
@@ -1066,7 +1089,7 @@ describe('SC-160 — dependent rows (dependsOn)', () => {
 		renderAll(tab);
 
 		const parent = rowByName('Sticky mini-header').toggles[0];
-		const child = rowByName('↳ Include secondary stats').toggles[0];
+		const child = rowByName('↳ Sticky mini-header: include secondary stats').toggles[0];
 		// Both ship on, so the child starts live.
 		expect(parent.value).toBe(true);
 		expect(child.disabled).toBe(false);

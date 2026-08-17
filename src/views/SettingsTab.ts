@@ -60,12 +60,18 @@ const CUSTOM_FONT = '__custom__';
 const PRESET_HELP =
 	'A bundle of the statblock options below. Adjusting any single option re-derives "custom".';
 
-/** SC-160: the indent marker a dependent row's label carries, verbatim from the site's
- *  own sub-toggle (`&#8627;` + a space — settings-panel.js's "↳ include secondary
- *  stats"). Obsidian's declarative rows have no per-row class hook (only groups take a
- *  `cls`), so the indent has to live in the NAME. That is not a workaround being
- *  apologised for: the marker also survives into the native settings search results,
- *  where a bare "Include secondary stats" would give no clue what it belongs to. */
+/** SC-160: the marker a dependent row's label carries, verbatim from the site's own
+ *  sub-toggle (`&#8627;` + a space — settings-panel.js's "↳ include secondary stats").
+ *
+ *  It is in the NAME because obsidian 1.13 offers nowhere else to put it: there is no
+ *  per-row class hook and no safe element-bearing field, so the row cannot be visually
+ *  indented at all. The full derivation (including the `desc`-as-DocumentFragment trap
+ *  that looks like a way out and silently deletes the row's description on every render
+ *  after the first) is documented in settingsDeclarative.ts.
+ *
+ *  It also survives into the native settings search results, where a hit arrives with
+ *  neither the row above it nor any indent — which is why the dependent row's label names
+ *  its PARENT as well (see the `sbStickyMeta` descriptor in prefs/catalog.ts). */
 const DEPENDENT_PREFIX = '↳ ';
 
 /** SC-160: is a parent pref "on"? Toggle-shaped prefs come in two spellings — a real

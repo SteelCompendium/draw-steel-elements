@@ -425,8 +425,13 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 	d({
 		key: 'sbStickyMeta', default: 'on', attr: 'sb-stickymeta',
 		ui: {
-			group: 'Statblock display', label: 'Include secondary stats', control: 'toggle',
-			dependsOn: 'sbSticky',
+			// SC-160 fix round 1: named after its PARENT, not after what it adds. The bare
+			// "Include secondary stats" sat two rows below the pre-existing "Secondary
+			// stats" (the grid/ledger select for the card's own meta block) and was
+			// indistinguishable from it in the native settings search, where rows arrive
+			// without the indent or the row above them to explain the relationship.
+			group: 'Statblock display', label: 'Sticky mini-header: include secondary stats',
+			control: 'toggle', dependsOn: 'sbSticky',
 			help: 'Add a second line to the pinned mini-header with Movement, With Captain, Immunity and Weakness. On by default, matching the website. In a narrow pane (a sidebar leaf) the second line is dropped whatever this says — there is no room for it.',
 		},
 	}),

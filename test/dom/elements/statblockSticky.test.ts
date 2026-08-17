@@ -46,6 +46,127 @@ import humanBanditChief from '../../fixtures/statblock/human-bandit-chief.yaml';
 
 const SHEET = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
+// ——————————————————————————————————————————————————————————————————————————————
+// A minimal CSS CASCADE MODEL, for the print guard (SC-160 fix round 1)
+// ——————————————————————————————————————————————————————————————————————————————
+// Only enough of the cascade to answer one question: for an element matching
+// `.dse-sb__sticky` on a Steel, non-read-only, sticky-on root that carries NO
+// `data-dse-print` attribute (i.e. real paper), which `display` declaration WINS under a
+// given media type?
+//
+// Why this and not a browser: the visual harness never emulates print media — its
+// `steel-print` combo is the `data-dse-print="on"` ATTRIBUTE twin (shoot.mjs passes
+// `print=1` to the page, it does not call emulateMedia). So no shot, and therefore no
+// freeze byte, can ever see an `@media print` mistake. Modelling the cascade here is the
+// cheapest thing that can actually fail: delete the `@media screen` wrapper in
+// styles-source.css and these tests go red.
+//
+// Rules do not nest in this sheet (pinned by test/unit/build/cssNesting.test.ts), so a
+// brace walk that treats every `{` after a non-`@` prelude as a leaf rule is exact.
+
+type Specificity = [number, number, number];
+
+interface StickyDisplayRule {
+	/** One comma-split selector whose SUBJECT compound is `.dse-sb__sticky`. */
+	selector: string;
+	value: string;
+	/** Enclosing at-rule preludes, outermost first (e.g. `@media screen`). */
+	atRules: string[];
+	/** Source order, for the cascade's final tie-break. */
+	order: number;
+}
+
+/** `:not()` contributes its ARGUMENT's specificity and none of its own; the sheet uses
+ *  `:not()` only around simple attribute selectors, which the attribute counter already
+ *  sees, so subtracting `:not`/`:is`/`:where`/`:has` from the pseudo-class count is the
+ *  whole of the special-casing needed here. Pinned by a self-check test below. */
+function specificityOf(selector: string): Specificity {
+	const ids = (selector.match(/#[\w-]+/g) ?? []).length;
+	const attributes = (selector.match(/\[[^\]]*\]/g) ?? []).length;
+	const classes = (selector.match(/\.[-\w]+/g) ?? []).length;
+	const pseudoClasses = (selector.match(/:(?!:)[-\w]+/g) ?? []).filter(
+		(p) => !['not', 'is', 'where', 'has'].includes(p.slice(1)),
+	).length;
+	const pseudoElements = (selector.match(/::[-\w]+/g) ?? []).length;
+	const elements = (
+		selector.replace(/\[[^\]]*\]/g, '').match(/(?:^|[\s>+~(])[a-z][-\w]*/gi) ?? []
+	).length;
+	return [ids, attributes + classes + pseudoClasses, elements + pseudoElements];
+}
+
+function compareSpecificity(a: Specificity, b: Specificity): number {
+	for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
+	return 0;
+}
+
+/** Does a rule nested in `atRules` apply for `target`? `@supports`/`@container` are
+ *  assumed to apply (this question is about media, and no sticky `display` rule sits in
+ *  one); a feature-only query such as `(max-width: …)` names no media type and so does
+ *  not exclude either target. */
+function mediaApplies(target: 'screen' | 'print', atRules: readonly string[]): boolean {
+	for (const at of atRules) {
+		const match = /^@media\s+(.+)$/.exec(at);
+		if (!match) continue;
+		const named = match[1]
+			.split(',')
+			.map((q) => /^\s*(?:only\s+)?([a-z]+)/i.exec(q.trim())?.[1]?.toLowerCase())
+			.filter((t): t is string => !!t && ['screen', 'print', 'all'].includes(t));
+		if (named.length === 0) continue;
+		if (!named.some((t) => t === 'all' || t === target)) return false;
+	}
+	return true;
+}
+
+/** Every `display` declaration in the sheet whose selector's SUBJECT is `.dse-sb__sticky`
+ *  itself (so `.dse-sb__sticky-inner` / `-row2` / `--stuck` are correctly excluded). */
+function displayRulesForSticky(): StickyDisplayRule[] {
+	const src = SHEET.replace(/\/\*[\s\S]*?\*\//g, '');
+	const out: StickyDisplayRule[] = [];
+	const stack: { prelude: string; isAt: boolean }[] = [];
+	let buffer = '';
+	for (let i = 0; i < src.length; i++) {
+		const ch = src[i];
+		if (ch === '{') {
+			const prelude = buffer.trim();
+			buffer = '';
+			if (prelude.startsWith('@')) {
+				stack.push({ prelude, isAt: true });
+				continue;
+			}
+			const close = src.indexOf('}', i);
+			const end = close === -1 ? src.length : close;
+			const body = src.slice(i + 1, end);
+			const display = [...body.matchAll(/(?:^|;)\s*display\s*:\s*([^;]+)/g)].pop();
+			if (display) {
+				const atRules = stack.filter((f) => f.isAt).map((f) => f.prelude);
+				for (const selector of prelude.split(',').map((s) => s.trim()).filter(Boolean)) {
+					const subject = selector.split(/\s*[>+~]\s*|\s+/).pop() ?? '';
+					if (/\.dse-sb__sticky$/.test(subject)) {
+						out.push({ selector, value: display[1].trim(), atRules, order: out.length });
+					}
+				}
+			}
+			i = end;
+			continue;
+		}
+		if (ch === '}') {
+			stack.pop();
+			buffer = '';
+			continue;
+		}
+		buffer += ch;
+	}
+	return out;
+}
+
+/** The declaration the cascade actually picks for `target` media. */
+function winningDisplayForSticky(target: 'screen' | 'print'): StickyDisplayRule | undefined {
+	return displayRulesForSticky()
+		.filter((rule) => mediaApplies(target, rule.atRules))
+		.sort((a, b) => compareSpecificity(specificityOf(a.selector), specificityOf(b.selector)) || a.order - b.order)
+		.pop();
+}
+
 /** A statblock carrying every secondary field, so row 2 renders all four cells. */
 const WITH_CAPTAIN = `type: statblock
 name: Goblin Monarch
@@ -391,9 +512,73 @@ describe('SC-160 sticky mini-header — CSS contract', () => {
 		expect(reveal).toContain("[data-dse-sb-sticky='on']");
 	});
 
-	test('real printing (@media print, where no data-dse-print attribute exists) hides it too', () => {
-		const printBlocks = SHEET.split('@media print {').slice(1);
-		expect(printBlocks.some((block) => /\n\t\.dse-sb__sticky,/.test(block))).toBe(true);
+	// —— SC-160 fix round 1: the print guard, modelled as a CASCADE rather than grepped.
+	//
+	// The shipped version of this test asserted that `.dse-sb__sticky` APPEARED in an
+	// `@media print { … display: none }` list. It did, and it lost: `@media` contributes
+	// no specificity, so `.dse-sb__sticky` (0,1,0) never beat the reveal rule (0,5,1) and
+	// the anchor computed `display: block` under print media on a real Chromium 106. A
+	// grep cannot tell a winning declaration from a losing one, which is precisely how
+	// that shipped. These tests resolve the winner instead.
+
+	test('SPECIFICITY MODEL self-check — the model this file reasons with matches CSS', () => {
+		// The base off-switch: one class.
+		expect(specificityOf('.dse-sb__sticky')).toEqual([0, 1, 0]);
+		// The reveal rule: four attribute selectors (the two inside `:not()` count, the
+		// `:not()`s themselves do not) plus one class.
+		expect(
+			specificityOf(
+				'[data-dse-theme=\'steel\']:not([data-dse-print="on"]):not([data-dse-readonly])[data-dse-sb-sticky=\'on\'] > .dse-sb__sticky',
+			),
+		).toEqual([0, 5, 0]);
+		expect(compareSpecificity([0, 5, 0], [0, 1, 0])).toBeGreaterThan(0);
+		expect(compareSpecificity([0, 1, 0], [0, 1, 0])).toBe(0);
+		// `@media` adds nothing — the whole reason the first shape was inert. The model
+		// expresses that by keying applicability off media and ranking off specificity
+		// alone; these two facts together are what the print test relies on.
+		expect(mediaApplies('print', ['@media print'])).toBe(true);
+		expect(mediaApplies('print', ['@media screen'])).toBe(false);
+		expect(mediaApplies('screen', ['@media screen'])).toBe(true);
+		expect(mediaApplies('print', ['@container dse-sb-sticky (max-width: 21rem)'])).toBe(true);
+	});
+
+	test('REAL PRINTING (no data-dse-print attribute exists): the winning `display` on the anchor is none', () => {
+		// The scenario is a normal statblock on paper: Steel, not read-only, pref on, and
+		// NO `data-dse-print` attribute — so every attribute guard on the reveal rule is
+		// satisfied and only the media context can keep it out.
+		const winner = winningDisplayForSticky('print');
+		expect(winner).toBeDefined();
+		expect(winner!.value).toBe('none');
+		// …and it is the base off-switch that wins, not some other rule that happens to
+		// agree today.
+		expect(winner!.selector).toBe('.dse-sb__sticky');
+		// The reveal rule must be a NON-candidate under print, not merely an outranked
+		// one — that is the difference between the fix and the bug it replaces.
+		expect(
+			displayRulesForSticky()
+				.filter((r) => r.value === 'block')
+				.every((r) => !mediaApplies('print', r.atRules)),
+		).toBe(true);
+	});
+
+	test('ON SCREEN the same rule still reveals it (the fix must not disable the feature)', () => {
+		const winner = winningDisplayForSticky('screen');
+		expect(winner).toBeDefined();
+		expect(winner!.value).toBe('block');
+		expect(winner!.selector).toContain("[data-dse-sb-sticky='on']");
+	});
+
+	test('the print half is a constraint on the ONE reveal rule, not a second competing declaration', () => {
+		// SC-170 is making real print follow the `data-dse-print="on"` twin sheet-wide.
+		// A `@media print { … display: none }` entry would become a second source of
+		// truth to keep in sync; an `@media screen` wrapper just becomes redundant.
+		const reveal = displayRulesForSticky().find((r) => r.value === 'block');
+		expect(reveal).toBeDefined();
+		expect(reveal!.atRules).toContain('@media screen');
+		// Nothing may re-introduce the losing shape.
+		expect(
+			displayRulesForSticky().some((r) => r.atRules.some((a) => /^@media\s+print\b/.test(a))),
+		).toBe(false);
 	});
 
 	test('the secondary-stats sub-toggle is a display reflow keyed to the reflected attribute', () => {
@@ -437,8 +622,14 @@ describe('SC-160 sticky mini-header — CSS contract', () => {
 	});
 
 	test('every sticky rule outside the base off-switch is Steel- and print-scoped', () => {
+		// SC-160 fix round 1: trim leading indentation before judging. The reveal rule now
+		// lives inside `@media screen` and the tint rules inside `@supports`/`@container`,
+		// so an anchored `/^[^\s/]/` filter would silently stop checking exactly the rules
+		// this guard exists for. Indentation is not scoping.
 		const offenders = SHEET.split('\n')
-			.filter((line) => /^[^\s/].*\.dse-sb__sticky/.test(line) && line.trim().endsWith('{'))
+			.map((line) => line.trim())
+			.filter((line) => line.includes('.dse-sb__sticky') && line.endsWith('{'))
+			.filter((line) => !line.startsWith('/*'))
 			.filter((line) => !line.startsWith("[data-dse-theme='steel']:not([data-dse-print=\"on\"])"))
 			// the base off-switch itself, and the light-scheme shadow twin
 			.filter((line) => line !== '.dse-sb__sticky {')
