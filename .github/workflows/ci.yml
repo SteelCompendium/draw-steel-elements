@@ -42,6 +42,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # actions/checkout fetches ONLY the pushed ref (fetch-depth: 1, one refspec), so the
+      # runner has no `gh-pages` at all. mike then builds its gh-pages commit from nothing
+      # — a parentless commit — and `--push` is rejected as a non-fast-forward EVERY time:
+      #   ! [rejected]  gh-pages -> gh-pages (fetch first)
+      # That killed every deploy from SC-164's landing (9bb24c3) until this fix. This is
+      # mike's own documented CI requirement; fetching just the gh-pages TIP (--depth=1) is
+      # much cheaper than `fetch-depth: 0` on checkout, which would pull the full history of
+      # every branch — and gh-pages' history is the entire built site, rebuilt per deploy.
+      #
+      # Written with an EXPLICIT refspec rather than the bare `git fetch origin gh-pages`:
+      # the bare form only lands in FETCH_HEAD and relies on git *opportunistically*
+      # updating `origin/gh-pages` because checkout happens to leave the default wildcard
+      # refspec in place. Verified in the local scratch-remote repro: under a restricted
+      # refspec the bare form silently leaves no `origin/gh-pages`, mike orphans, and the
+      # push is rejected exactly as before. The explicit refspec cannot fail that way.
+      #
+      # `|| true`: on a repo whose gh-pages does not exist yet the fetch errors out, and
+      # that case genuinely needs no base commit — mike creating the branch from scratch is
+      # correct there. A real fetch failure still surfaces, as the push reject below.
+      - name: Fetch gh-pages so mike can build on it (else every push is a non-fast-forward)
+        run: git fetch --depth=1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages || true
+
       # main push: the RELEASED docs. <version> is read from manifest.json AT THIS SHA
       # (never hardcoded) — main only ever moves via the release fast-forward (SC-163),
       # so this is always the version that was just released. `--update-aliases` moves

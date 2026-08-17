@@ -745,6 +745,14 @@ for what needs action.
   `mkdocs gh-deploy --force` — a full-branch overwrite that would have wiped
   whichever version a given push didn't touch — is retired in favor of
   `mike deploy`. No plugin runtime code changed.
+- [INTERNAL] The mike docs deploy actually reaches gh-pages now (SC-164
+  follow-up). Every run since the entry above failed at the push with
+  `! [rejected] gh-pages -> gh-pages (fetch first)`: `actions/checkout`
+  fetches only the pushed ref, so the runner had no `gh-pages` and mike built
+  a parentless commit that could never fast-forward. `ci.yml` now fetches the
+  `gh-pages` tip (`--depth=1`, explicit refspec) before either deploy step.
+  Applies to the `main` → `latest` release deploy as much as the `develop` →
+  `dev` one. No plugin runtime code changed.
 
 ## 5.1.1
 
