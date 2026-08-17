@@ -432,6 +432,22 @@ export interface HarnessParams {
 	galleryIds?: string[];
 	/** SC-121 Batch 4: constrain #mount to this many CSS px (narrow-width coverage). */
 	width?: number;
+	/**
+	 * SC-160: turn #mount into a fixed-height SCROLL CONTAINER `scroll` CSS px tall and
+	 * scroll it to `scrollTo` before the shot.
+	 *
+	 * The sticky mini-header is the first surface in this repo whose whole behaviour is
+	 * "what happens once you have scrolled", and the harness had no way to express that:
+	 * the page is one long document and every capture is an element screenshot of #mount
+	 * at rest. Making #mount itself the scroller is the smallest honest version — it is a
+	 * REAL scroll container, so `position: sticky` resolves against it exactly as it
+	 * resolves against Obsidian's preview scroller or a sidebar leaf, and the element
+	 * screenshot of a fixed-height clipped box captures precisely the scrolled view. No
+	 * faked state, no attribute stamped by the camera.
+	 */
+	scroll?: number;
+	/** SC-160: how far to scroll that container before the shot (0 = the unscrolled twin). */
+	scrollTo?: number;
 	/** SC-123: preference values to apply BEFORE the mount (pref-variant coverage).
 	 *  Wire format is the compact `key:value,key:value` of the `prefs` query param. */
 	prefs?: Record<string, string>;
@@ -475,7 +491,13 @@ function coerceTheme(raw: string | null): DseThemeId {
 export function parseParams(search: string): HarnessParams {
 	const q = new URLSearchParams(search);
 	const width = Number(q.get('width'));
+	const scroll = Number(q.get('scroll'));
+	const scrollTo = Number(q.get('scrollTo'));
 	return {
+		scroll: Number.isFinite(scroll) && scroll > 0 ? scroll : undefined,
+		// 0 is a MEANINGFUL value here (the unscrolled twin), so this cannot use the
+		// `> 0 ? … : undefined` shape the width/scroll clamps use.
+		scrollTo: Number.isFinite(scrollTo) && scrollTo >= 0 ? scrollTo : undefined,
 		element: q.get('element') ?? undefined,
 		fixture: q.get('fixture') ?? 'default',
 		// SC-144: the `theme` param is still ACCEPTED (the camera keeps sending
@@ -630,6 +652,68 @@ export const PREF_SHOTS: {
 	},
 ];
 
+/**
+ * SC-160: SCROLL-STATE captures — the sticky mini-header.
+ *
+ * Every other list above photographs an element AT REST. This one exists because the
+ * surface under review only exists while the reader is scrolled: `#mount` becomes a real
+ * `overflow-y: auto` box `scroll` px tall, the page scrolls it to `scrollTo`, waits for
+ * the reveal to settle, and the existing `#mount` element screenshot then captures
+ * exactly the clipped, scrolled view. Same "own id, own manifest array" convention as
+ * NARROW_SHOTS / INTERACTION_SHOTS / PREF_SHOTS, so every name is new and the freeze
+ * baseline is untouched by construction.
+ *
+ * `scroll: 560` is the visible window; `scrollTo: 320` clears the statblock's head band
+ * (~150px) with room to spare, so the bar is fully revealed and there is card body
+ * beneath it to prove the bar is painting OVER content rather than sitting in flow.
+ */
+export const SCROLL_SHOTS: {
+	id: string;
+	element: string;
+	fixture: string;
+	scroll: number;
+	scrollTo: number;
+	width?: number;
+	prefs?: Record<string, string>;
+}[] = [
+	// The default state: sticky on, secondary stats on — what a fresh install renders.
+	{ id: 'statblock-sticky', element: 'statblock', fixture: 'with-captain', scroll: 560, scrollTo: 320 },
+	// The same scroll position BEFORE scrolling — the "no bar until you need it" twin, and
+	// the control that proves the anchor reserves no flow space (the card must lay out
+	// byte-identically to the ordinary `statblock--*` capture).
+	{ id: 'statblock-sticky-unscrolled', element: 'statblock', fixture: 'with-captain', scroll: 560, scrollTo: 0 },
+	// The sub-toggle off: row 1 only.
+	{
+		id: 'statblock-sticky-nometa',
+		element: 'statblock',
+		fixture: 'with-captain',
+		scroll: 560,
+		scrollTo: 320,
+		prefs: { sbStickyMeta: 'off' },
+	},
+	// The parent off: scrolled past the header with NO bar at all. Deliberately a separate
+	// picture from the unscrolled twin — they look similar and mean different things, and
+	// this is the one that would go wrong if the reveal rule lost its pref guard.
+	{
+		id: 'statblock-sticky-off',
+		element: 'statblock',
+		fixture: 'with-captain',
+		scroll: 560,
+		scrollTo: 320,
+		prefs: { sbSticky: 'off' },
+	},
+	// Sidebar-leaf width (the same 300px NARROW_SHOTS uses): the container-query compact
+	// treatment — no second row, no stat pills, just the truncating name + role.
+	{
+		id: 'statblock-sticky-narrow',
+		element: 'statblock',
+		fixture: 'with-captain',
+		scroll: 560,
+		scrollTo: 320,
+		width: 300,
+	},
+];
+
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
 	const app = new App();
@@ -780,6 +864,11 @@ export async function mountFromParams(
 	// what makes the element lay out at sidebar width. Always reset it (the page is
 	// re-navigated per shot, but mountFromParams is also called directly by tests).
 	mount.style.width = params.width ? `${params.width}px` : '';
+	// SC-160: the scroll-state captures. Always RESET both properties — the page is
+	// re-navigated per shot, but mountFromParams is also called directly by tests, where a
+	// leftover scroller would silently change what the next mount lays out in.
+	mount.style.height = params.scroll ? `${params.scroll}px` : '';
+	mount.style.overflowY = params.scroll ? 'auto' : '';
 	const ids = params.gallery
 		? (params.galleryIds ?? Object.keys(FIXTURES)).filter((id) => FIXTURES[id])
 		: [params.element ?? 'feature'];
@@ -790,7 +879,35 @@ export async function mountFromParams(
 	for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {
 		errors.push(`error card: ${(card.textContent ?? '').slice(0, 160)}`);
 	}
+	if (params.scroll !== undefined) await settleScroll(mount, params.scrollTo ?? 0, errors);
 	return { errors };
+}
+
+/**
+ * SC-160 — scroll the mount and WAIT for the sticky state to settle before the camera
+ * fires.
+ *
+ * IntersectionObserver delivers asynchronously, so a bare `scrollTop = n` followed by the
+ * boot's two rAF ticks is a race: sometimes the bar is revealed in the shot, sometimes it
+ * is not, and a golden that flickers is worse than no golden. Poll for the state the
+ * scroll should have produced instead. The stuck class is written by the observer
+ * regardless of the `sbSticky` preference (the pref is CSS-only), so this is the right
+ * wait even for the sticky-OFF capture — which is the point: that shot proves the CSS is
+ * off, not that the observer never ran.
+ *
+ * A scroll of 0 is the unscrolled twin and has nothing to wait for.
+ */
+async function settleScroll(mount: HTMLElement, scrollTo: number, errors: string[]): Promise<void> {
+	mount.scrollTop = scrollTo;
+	if (scrollTo === 0) return;
+	const deadline = Date.now() + 2000;
+	while (Date.now() < deadline) {
+		if (mount.querySelector('.dse-sb__sticky--stuck')) return;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	// Loud, not silent: a scroll capture that never reached the stuck state would
+	// otherwise photograph the resting card under a name promising the opposite.
+	errors.push(`scroll capture: no .dse-sb__sticky--stuck after scrolling to ${scrollTo}px`);
 }
 
 declare global {
@@ -805,6 +922,15 @@ declare global {
 				fixture: string;
 				prefs: Record<string, string>;
 			}[];
+			scrollShots: {
+				id: string;
+				element: string;
+				fixture: string;
+				scroll: number;
+				scrollTo: number;
+				width?: number;
+				prefs?: Record<string, string>;
+			}[];
 		};
 		__dseHarnessDone?: { errors: string[] };
 	}
@@ -817,6 +943,7 @@ if (typeof window !== 'undefined') {
 		narrowShots: NARROW_SHOTS,
 		interactionShots: INTERACTION_SHOTS,
 		prefShots: PREF_SHOTS,
+		scrollShots: SCROLL_SHOTS,
 	};
 	if (document.getElementById('mount')) {
 		void mountFromParams(document, parseParams(window.location.search)).then(async (r) => {

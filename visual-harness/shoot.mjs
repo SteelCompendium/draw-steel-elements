@@ -100,6 +100,9 @@ try {
 	// SC-123: preference-variant shots (manifest.prefShots — entry.ts PREF_SHOTS), same
 	// treatment as the two lists above.
 	const prefShots = manifest.prefShots ?? [];
+	// SC-160: scroll-state shots (manifest.scrollShots — entry.ts SCROLL_SHOTS), same
+	// treatment as the three lists above.
+	const scrollShots = manifest.scrollShots ?? [];
 	if (args.element) elements = elements.filter((e) => e.id === args.element);
 	// A narrow-shot/interaction-shot/pref-shot id (e.g. `perk-narrow`,
 	// `negotiation-pr-checked`, `statblock-charline-two`) is a legal --element value
@@ -109,7 +112,8 @@ try {
 		elements.length === 0 &&
 		!narrowShots.some((n) => n.id === args.element) &&
 		!interactionShots.some((n) => n.id === args.element) &&
-		!prefShots.some((n) => n.id === args.element)
+		!prefShots.some((n) => n.id === args.element) &&
+		!scrollShots.some((n) => n.id === args.element)
 	) {
 		console.error(`unknown --element=${args.element}`);
 		process.exit(2);
@@ -189,6 +193,33 @@ try {
 				bg: c.bg,
 				prefs: prefParam,
 			};
+			if (c.print) params.print = '1';
+			if (args.readonly) params.readonly = '1';
+			const suffix = args.readonly ? '--readonly' : '';
+			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
+		}
+	}
+	// SC-160: scroll-state shots, declared by the page (manifest.scrollShots — entry.ts
+	// SCROLL_SHOTS). The page turns #mount into a real scroll container and scrolls it
+	// before signalling done, so the ordinary `#mount` element screenshot below captures
+	// the clipped, SCROLLED view — no new screenshot path is needed here.
+	for (const n of scrollShots) {
+		if (args.element && args.element !== n.element && args.element !== n.id) continue;
+		for (const c of combos) {
+			const params = {
+				element: n.element,
+				fixture: n.fixture,
+				theme: c.theme,
+				bg: c.bg,
+				scroll: String(n.scroll),
+				scrollTo: String(n.scrollTo),
+			};
+			if (n.width) params.width = String(n.width);
+			if (n.prefs) {
+				params.prefs = Object.entries(n.prefs)
+					.map(([k, v]) => `${k}:${v}`)
+					.join(',');
+			}
 			if (c.print) params.print = '1';
 			if (args.readonly) params.readonly = '1';
 			const suffix = args.readonly ? '--readonly' : '';

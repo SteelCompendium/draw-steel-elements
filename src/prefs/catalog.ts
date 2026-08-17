@@ -71,6 +71,23 @@ declare module '../framework/seams/prefs' {
 		sbCharLine: 'one' | 'two';
 		sbCharBox: 'off' | 'on' | 'onword';
 		sbVillain: 'inline' | 'banded';
+		// —— SC-160: the site's sticky mini-header pair (`body[data-aug-sticky]` +
+		// `data-sb-stickymeta`, steel-statblock.css:524/577). Both default ON, site parity.
+		//
+		// NOT preset members, deliberately — the site's own presets never touch them
+		// either ("preset bundles never touch stickymeta / augs", settings-panel.js:711):
+		// they are an AUGMENTATION (does the reading surface do this at all?), not a
+		// layout decision, so bundling them into "Sourcebook" or "Index card" would make
+		// picking a look silently turn a scroll behaviour on or off.
+		//
+		// Both are PURE CSS REFLOWS over DOM the view always builds, which is what keeps
+		// them per-block overridable — unlike sbCharLine/sbCharBox/sbVillain above, whose
+		// value the view reads at BUILD time. The IntersectionObserver that reveals the bar
+		// is wired regardless of either value (statblock/view.ts), so a block-level
+		// `prefs: { sbSticky: off }` really does render a statblock with no pinned bar,
+		// and `sbStickyMeta: off` really does drop its second row.
+		sbSticky: 'on' | 'off';
+		sbStickyMeta: 'on' | 'off';
 		// —— Featureblock display (SC-123 — the site's data-fb-featstyle / data-fb-stats) ——
 		fbFeatureStyle: 'card' | 'flat';
 		fbStats: 'grid' | 'ledger';
@@ -126,6 +143,22 @@ export interface PrefUi {
 	step?: number;
 	/** Statblock preset-bundle member (§3.2). */
 	inPreset?: boolean;
+	/**
+	 * SC-160 — DEPENDENT ROW. Names the pref this one is a sub-toggle of: the settings
+	 * tab renders the row indented under its parent (a leading `↳`, the site's own
+	 * spelling) and DISABLES its control while the parent is off.
+	 *
+	 * Disabled rather than hidden, deliberately. A row that vanishes takes its value
+	 * with it — the reader cannot see what "include secondary stats" is currently set
+	 * to, cannot find it in the settings search, and gets a settings page whose height
+	 * changes as they toggle things. A greyed row states both facts at once: the setting
+	 * exists, and it is not doing anything right now because of the row above it.
+	 *
+	 * The parent must be a row EARLIER in the same group (the tab renders descriptors in
+	 * registration order and does no sorting), and "on" means `true` or the string
+	 * `'on'` — the same two spellings the toggle control already maps.
+	 */
+	dependsOn?: keyof DsePrefs;
 	/** Row not rendered (consumer not shipped: D5 rolling, F2 references). */
 	hidden?: boolean;
 	/** SC-112: secondary row — Task 8 renders these behind an "Advanced" disclosure. */
@@ -372,6 +405,29 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 				{ value: 'banded', label: 'Grouped in a collapsible band' },
 			],
 			help: 'Where a statblock\'s villain actions render. "Grouped" — the default, matching the website — collects them into one collapsible "Villain Actions" band below the rest. "Inline" lists them among the other features in source order instead. Print and export always show the band open.',
+		},
+	}),
+
+	// —— SC-160: the sticky mini-header pair. PRIMARY rows (not behind Advanced), for two
+	// reasons: the feature ships ON, so the row a reader looks for is the one that turns it
+	// OFF — burying the off-switch a page deeper is the wrong way round; and the sub-toggle
+	// has to sit directly beneath its parent for the indent to mean anything, so the pair
+	// cannot be split across the primary and Advanced pages. They go LAST in the group so
+	// the four curated layout knobs still lead (Scott's SC-112 balance), and they are not
+	// preset members (see the DsePrefs comment above). ——
+	d({
+		key: 'sbSticky', default: 'on', attr: 'sb-sticky',
+		ui: {
+			group: 'Statblock display', label: 'Sticky mini-header', control: 'toggle',
+			help: 'While a statblock\'s header has scrolled out of view, pin a compact bar with its name, role and key stats to the top of the pane. On by default, matching the website. Screen only — print, export and canvas cards never show it.',
+		},
+	}),
+	d({
+		key: 'sbStickyMeta', default: 'on', attr: 'sb-stickymeta',
+		ui: {
+			group: 'Statblock display', label: 'Include secondary stats', control: 'toggle',
+			dependsOn: 'sbSticky',
+			help: 'Add a second line to the pinned mini-header with Movement, With Captain, Immunity and Weakness. On by default, matching the website. In a narrow pane (a sidebar leaf) the second line is dropped whatever this says — there is no room for it.',
 		},
 	}),
 

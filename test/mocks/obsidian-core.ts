@@ -970,6 +970,11 @@ export class PluginSettingTab {
 	containerEl: any = typeof document !== 'undefined' ? document.createElement('div') : null;
 	/** The cache. Populated by update(), replayed by renderTab(). */
 	settingItems: any[] = [];
+	/** SC-160: every control this render bound, paired with the definition it came from —
+	 *  what `refreshDomState()` re-evaluates `disabled` against. Obsidian keeps the same
+	 *  association internally; without it a `disabled` PREDICATE would be read once at
+	 *  bind time and never again, which is precisely the bug a dependent row can have. */
+	private boundControls: { control: any; component: { setDisabled(v: boolean): unknown } }[] = [];
 	/** Cleanups returned by rendered `render` callbacks, invoked on teardown. */
 	private renderedCleanups: (() => void)[] = [];
 	/** Whether the tab is currently on screen — update() repaints only if it is. */
@@ -1013,7 +1018,24 @@ export class PluginSettingTab {
 		const container = this.containerEl as HTMLElement;
 		if (container) container.innerHTML = '';
 		this.rendered = true;
+		this.boundControls = [];
 		this.renderDefs(container, this.settingItems);
+	}
+
+	/**
+	 * SC-160 — obsidian 1.13's cheap re-evaluation pass: "Re-evaluate every `visible` and
+	 * `disabled` predicate against the current state and apply the result to the rendered
+	 * DOM… toggles CSS state in place, no re-render." Modelled here as "re-run each bound
+	 * control's `disabled` predicate", which is the half the plugin uses (a dependent row
+	 * greys out when its parent toggles off). Deliberately does NOT touch `settingItems`
+	 * or re-render — a mock that quietly rebuilt would hide the difference between this
+	 * and `update()`, and the difference is the whole reason to call this one.
+	 */
+	refreshDomState(): void {
+		for (const { control, component } of this.boundControls) {
+			const disabled = typeof control.disabled === 'function' ? control.disabled() : control.disabled;
+			component.setDisabled(disabled === true);
+		}
 	}
 
 	/** Obsidian tears rendered rows down on page navigation and on settings close.
@@ -1066,16 +1088,24 @@ export class PluginSettingTab {
 	private bindControl(setting: Setting, control: any): void {
 		const read = (): any => this.getControlValue(control.key);
 		const write = (value: unknown): void => void this.setControlValue(control.key, value);
+		// SC-160: obsidian evaluates `disabled` (boolean or predicate) on every render and
+		// applies it to the control it renders. Registered here so refreshDomState() can
+		// re-apply it without a re-render.
+		const track = (component: { setDisabled(v: boolean): unknown }): void => {
+			this.boundControls.push({ control, component });
+			const disabled = typeof control.disabled === 'function' ? control.disabled() : control.disabled;
+			component.setDisabled(disabled === true);
+		};
 		switch (control.type) {
 			case 'toggle':
-				setting.addToggle((t) => t.setValue(read() === true).onChange(write));
+				setting.addToggle((t) => track(t.setValue(read() === true).onChange(write)));
 				break;
 			case 'dropdown':
 				setting.addDropdown((d) => {
 					for (const [value, label] of Object.entries(control.options ?? {})) {
 						d.addOption(value, label as string);
 					}
-					d.setValue(String(read() ?? '')).onChange(write);
+					track(d.setValue(String(read() ?? '')).onChange(write));
 				});
 				break;
 			case 'text':
@@ -1083,16 +1113,18 @@ export class PluginSettingTab {
 			case 'folder':
 				setting.addText((t) => {
 					if (control.placeholder) t.setPlaceholder(control.placeholder);
-					t.setValue(String(read() ?? '')).onChange(write);
+					track(t.setValue(String(read() ?? '')).onChange(write));
 				});
 				break;
 			case 'slider':
 				setting.addSlider((sl) =>
-					sl
-						.setLimits(control.min, control.max, control.step)
-						.setValue(Number(read() ?? control.min))
-						.setDynamicTooltip()
-						.onChange(write),
+					track(
+						sl
+							.setLimits(control.min, control.max, control.step)
+							.setValue(Number(read() ?? control.min))
+							.setDynamicTooltip()
+							.onChange(write),
+					),
 				);
 				break;
 			default:

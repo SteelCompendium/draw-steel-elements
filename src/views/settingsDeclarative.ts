@@ -39,6 +39,15 @@ export interface NavRow {
 	/** Secondary row: moves to the section's nested "Advanced" page. */
 	advanced?: boolean;
 	/**
+	 * SC-160: this row is a SUB-TOGGLE of the row above it. The label is already
+	 * indented by the builder (a leading `↳`); this flag is what carries the state half
+	 * — a predicate obsidian re-evaluates on every render and on `refreshDomState()`,
+	 * returning true while the parent is off. Applies to `control` rows only (obsidian's
+	 * `disabled` lives on the control, not on the definition) — a `render` row owning its
+	 * own body owns its own disabling too.
+	 */
+	disabled?: () => boolean;
+	/**
 	 * The row's NATIVE binding. Present ⇒ obsidian renders the control, reads it through
 	 * the tab's `getControlValue` and writes it through `setControlValue` (which routes
 	 * into the PreferenceStore, so live apply is unchanged). Absent ⇒ `render` below owns
@@ -103,7 +112,13 @@ function toDefinition(row: NavRow, section: NavSection): SettingDefinition | nul
 	};
 	// control/render are mutually exclusive in the schema — TypeScript enforces it, so
 	// these are two separate returns rather than one object with both keys optional.
-	if (row.control) return { ...base, control: row.control };
+	// SC-160: `disabled` is merged INTO the control (obsidian puts it there, not on the
+	// definition), and only when the row declares one — an always-present `() => false`
+	// would be a behaviour change for every existing row.
+	if (row.control) {
+		const control = row.disabled ? { ...row.control, disabled: row.disabled } : row.control;
+		return { ...base, control };
+	}
 	const render = row.render;
 	// A label-only row (no control, no render) is still a legitimate definition: obsidian
 	// renders name + desc as a static informational row. Dropping it would make it vanish

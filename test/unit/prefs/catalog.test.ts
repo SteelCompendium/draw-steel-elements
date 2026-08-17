@@ -38,6 +38,10 @@ test('defaults match the v2 site\'s own SB_DEFAULTS (site-parity bar)', () => {
 	expect(store.get('sbCharLine')).toBe('two');       // value over label, like the site
 	expect(store.get('sbCharBox')).toBe('off');        // …with no boxed letter (site too)
 	expect(store.get('sbVillain')).toBe('banded');     // the collapsible Villain Actions band
+	// SC-160: the site ships both sticky toggles ON (settings-panel.js's
+	// `sb.augSticky !== false` default and SB_DEFAULTS.stickymeta = 'on').
+	expect(store.get('sbSticky')).toBe('on');
+	expect(store.get('sbStickyMeta')).toBe('on');
 	expect(store.get('fbFeatureStyle')).toBe('card');
 	expect(store.get('fbStats')).toBe('grid');         // was a hard-coded literal on the card
 	expect(store.get('collapsibleDefault')).toBe(true);     // old ComponentWrapper ?? true
@@ -179,6 +183,11 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbCharLine: 'sb-charline',
 		sbCharBox: 'sb-charbox',
 		sbVillain: 'sb-villain',
+		// SC-160 — the site's own two, `sb-`-prefixed like every other statblock-scoped
+		// attr here (the site spells them `body[data-aug-sticky]` / `data-sb-stickymeta`;
+		// the plugin has no body-level augmentation channel, both reflect per element root).
+		sbSticky: 'sb-sticky',
+		sbStickyMeta: 'sb-stickymeta',
 		fbFeatureStyle: 'fb-featstyle',
 		fbStats: 'fb-stats',
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
@@ -267,6 +276,11 @@ test('every preset writes the SAME member set, and that set is exactly the inPre
 	expect(members.size).toBe(9);
 	expect(members.has('fbFeatureStyle')).toBe(false);
 	expect(members.has('fbStats')).toBe(false);
+	// SC-160: nor are the two sticky toggles, for the site's own reason — "preset bundles
+	// never touch stickymeta / augs" (settings-panel.js:711). Picking "Sourcebook" must not
+	// silently turn a scroll behaviour on or off.
+	expect(members.has('sbSticky')).toBe(false);
+	expect(members.has('sbStickyMeta')).toBe(false);
 });
 
 test('the `steel` bundle IS the default state — a fresh install derives "Steel card", never "Custom"', () => {
@@ -312,4 +326,55 @@ test('SC-123 rows: statblock additions are SECONDARY (Scott\'s 3-primary-plus-ad
 	expect(GROUP_ORDER.indexOf('Featureblock display')).toBe(
 		GROUP_ORDER.indexOf('Statblock display') + 1,
 	);
+});
+
+// —— SC-160: the sticky mini-header pair + the `dependsOn` affordance it introduced ——
+
+test('SC-160 sticky rows: primary toggles at the END of Statblock display, per-block overridable', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const key of ['sbSticky', 'sbStickyMeta']) {
+		const descriptor = byKey.get(key)!;
+		const ui = prefUi(descriptor)!;
+		expect(ui.group).toBe('Statblock display');
+		expect(ui.control).toBe('toggle');
+		// PRIMARY, not Advanced: the feature ships ON, so the row a reader goes looking
+		// for is the one that turns it off — and the sub-toggle has to sit directly under
+		// its parent, which it cannot do across the primary/Advanced page split.
+		expect(ui.advanced ?? false).toBe(false);
+		expect(ui.inPreset ?? false).toBe(false);
+		// Unlike the conditional-DOM trio, both are pure CSS reflows over DOM the view
+		// always builds — so `prefs:` per block works and must stay allowed.
+		expect(descriptor.perBlock ?? true).toBe(true);
+	}
+	// Last in the group, after the four curated layout knobs and SC-123's five.
+	const statblockKeys = DSE_PREF_DESCRIPTORS.filter(
+		(d) => prefUi(d)?.group === 'Statblock display',
+	).map((d) => d.key as string);
+	expect(statblockKeys.slice(-2)).toEqual(['sbSticky', 'sbStickyMeta']);
+});
+
+test('SC-160 dependsOn: the sub-toggle names its parent, and the parent is an EARLIER row in the same group', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	expect(prefUi(byKey.get('sbSticky')!)!.dependsOn).toBeUndefined();
+	expect(prefUi(byKey.get('sbStickyMeta')!)!.dependsOn).toBe('sbSticky');
+
+	// The affordance's structural contract, asserted for EVERY dependent row rather than
+	// just this one: the settings tab renders descriptors in registration order and does
+	// no sorting, so a parent declared later would render a sub-toggle above the thing it
+	// is indented under. A parent on a different page (or behind Advanced while the child
+	// is not) would break the indent's meaning entirely.
+	const order = DSE_PREF_DESCRIPTORS.map((d) => d.key as string);
+	for (const descriptor of DSE_PREF_DESCRIPTORS) {
+		const ui = prefUi(descriptor);
+		const parentKey = ui?.dependsOn;
+		if (!parentKey) continue;
+		const parent = byKey.get(parentKey as string);
+		expect(parent).toBeDefined();
+		const parentUi = prefUi(parent!)!;
+		expect(parentUi.group).toBe(ui!.group);
+		expect(parentUi.advanced ?? false).toBe(ui!.advanced ?? false);
+		expect(order.indexOf(parentKey as string)).toBeLessThan(order.indexOf(descriptor.key as string));
+		// Only a toggle-shaped parent has an on/off state to depend ON.
+		expect(parentUi.control).toBe('toggle');
+	}
 });

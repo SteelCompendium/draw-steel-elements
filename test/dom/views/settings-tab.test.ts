@@ -225,7 +225,16 @@ describe('D4 §4 — DseSettingTab', () => {
 		await flushAsync(2);
 		expect(prefs.get('sbDensity')).toBe('comfortable');
 		expect(plugin.settings.prefs).toEqual({}); // OD-D4-4: default ⇒ deleted from disk shape
-	});
+		// SC-160: an explicit timeout, not a default 5 s one. This case (and "Reset all"
+		// below) does the most expensive thing in the suite — renderAll() mounts every
+		// page's live preview, then a reset writes EVERY descriptor and re-renders them
+		// all. It runs in ~1 s alone and comfortably under 5 s on an idle machine, but
+		// jest runs 100+ suites in parallel and on a loaded box these two were already
+		// intermittently crossing the line; two more descriptors is not the cause, it is
+		// just the straw. Raising the ceiling for the two heaviest cases is the honest
+		// fix — the alternative is a gate that reads red for reasons unrelated to the
+		// code under test, which trains people to skim it.
+	}, 20000);
 
 	test('"Reset all preferences" returns every pref, across groups, to its default', async () => {
 		const plugin = await makeLoadedPlugin();
@@ -240,7 +249,8 @@ describe('D4 §4 — DseSettingTab', () => {
 		await flushAsync(2);
 		expect(prefs.get('printPreview')).toBe('off');
 		expect(prefs.get('reduceMotion')).toBe(false);
-	});
+		// SC-160: same reasoning as the per-section reset above.
+	}, 20000);
 
 	test('the D3 temporary commands are gone from onload', async () => {
 		const plugin = await makeLoadedPlugin();
@@ -1022,5 +1032,86 @@ describe('SC-131 — registration order', () => {
 			'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
+	});
+});
+
+// —— SC-160: the `dependsOn` affordance (a dependent sub-toggle row). ——
+//
+// The catalog gained a notion it never had: a row that is a SUB-TOGGLE of the row above
+// it. Two halves, and each fails in its own quiet way if it regresses — the label indent
+// (a sub-toggle that reads like a peer setting is just a confusing extra checkbox), and
+// the disabled state (a control that still looks live while it can do nothing).
+describe('SC-160 — dependent rows (dependsOn)', () => {
+	beforeEach(() => {
+		Setting.created.length = 0;
+	});
+
+	test('the sub-toggle is indented under its parent, adjacent to it, on the SAME page', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const names = rowDefs(pageNamed(tab, 'Statblock display').items).map((d: Def) => d.name);
+		const parentAt = names.indexOf('Sticky mini-header');
+		expect(parentAt).toBeGreaterThan(-1);
+		// The site's own spelling of a sub-toggle ("↳ include secondary stats"). Obsidian's
+		// declarative rows take no per-row class, so the indent lives in the NAME — which
+		// also means it survives into the native settings-search results, where a bare
+		// "Include secondary stats" would say nothing about what it belongs to.
+		expect(names[parentAt + 1]).toBe('↳ Include secondary stats');
+	});
+
+	test('the sub-toggle\'s control is DISABLED while its parent is off, and live-enables when the parent flips', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		renderAll(tab);
+
+		const parent = rowByName('Sticky mini-header').toggles[0];
+		const child = rowByName('↳ Include secondary stats').toggles[0];
+		// Both ship on, so the child starts live.
+		expect(parent.value).toBe(true);
+		expect(child.disabled).toBe(false);
+
+		// Turning the parent off must grey the child out WITHOUT a re-render — the tab
+		// calls refreshDomState(), obsidian's cheap in-place pass. update() would rebuild
+		// the definitions and throw away the live preview docked on this page.
+		parent.trigger(false);
+		await flushAsync();
+		expect(prefs.get('sbSticky')).toBe('off');
+		expect(child.disabled).toBe(true);
+		// Disabled, not GONE: the value is still readable and still findable in search.
+		expect(child.value).toBe(true);
+		expect(prefs.get('sbStickyMeta')).toBe('on');
+
+		parent.trigger(true);
+		await flushAsync();
+		expect(child.disabled).toBe(false);
+	});
+
+	test('flipping an ORDINARY row does not disturb anything (the refresh is keyed to real dependents)', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		renderAll(tab);
+		const spy = jest.spyOn(tab as unknown as { refreshDomState(): void }, 'refreshDomState');
+		rowByName('Print preview').toggles[0].trigger(true);
+		await flushAsync();
+		expect(spy).not.toHaveBeenCalled();
+		spy.mockRestore();
+	});
+
+	test('toSettingDefinitions puts `disabled` on the CONTROL (where obsidian reads it), and only when declared', () => {
+		const page = toSettingDefinitions([
+			{
+				id: 'x',
+				label: 'X',
+				rows: [
+					{ label: 'Parent', control: { type: 'toggle', key: 'p' } },
+					{ label: '↳ Child', control: { type: 'toggle', key: 'c' }, disabled: () => true },
+				],
+			},
+		])[0] as Def;
+		const rows = rowDefs(page.items);
+		expect(rows[0].control.disabled).toBeUndefined();
+		expect(typeof rows[1].control.disabled).toBe('function');
+		expect(rows[1].control.disabled()).toBe(true);
 	});
 });

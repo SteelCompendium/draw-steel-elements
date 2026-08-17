@@ -15,6 +15,18 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- **Statblocks keep their name and stats in view while you scroll** (SC-160). Scroll a
+  long statblock and its header no longer disappears out of the top of the pane: once it
+  does, a compact bar pins itself there with the creature's name, role, the five primary
+  stats and the five characteristics, plus a second line for Movement, With Captain,
+  Immunity and Weakness. It is the website's mini-header, ported. Two new settings under
+  **Statblock display** control it — **Sticky mini-header** and **↳ Include secondary
+  stats**, both on by default, matching the website — and neither is part of a preset, so
+  picking a look never changes your scrolling. It works wherever a statblock scrolls: a
+  note in Reading view, a pop-out window, and a sidebar panel, where it reflows to just
+  the name and role because that is all a 300px-wide bar can usefully say. It is
+  deliberately absent where scrolling isn't a thing: print, PDF export, print preview,
+  and canvas cards.
 - [BUGFIX] **"Open in sidebar" stops piling up initiative trackers** (SC-153). Every
   press of an encounter block's "Open in sidebar" button appended another
   `ds-initiative` block to the note AND stacked another copy of it in the sidebar —

@@ -60,6 +60,22 @@ const CUSTOM_FONT = '__custom__';
 const PRESET_HELP =
 	'A bundle of the statblock options below. Adjusting any single option re-derives "custom".';
 
+/** SC-160: the indent marker a dependent row's label carries, verbatim from the site's
+ *  own sub-toggle (`&#8627;` + a space — settings-panel.js's "↳ include secondary
+ *  stats"). Obsidian's declarative rows have no per-row class hook (only groups take a
+ *  `cls`), so the indent has to live in the NAME. That is not a workaround being
+ *  apologised for: the marker also survives into the native settings search results,
+ *  where a bare "Include secondary stats" would give no clue what it belongs to. */
+const DEPENDENT_PREFIX = '↳ ';
+
+/** SC-160: is a parent pref "on"? Toggle-shaped prefs come in two spellings — a real
+ *  boolean, and the `'on'`/`'off'` strings the CSS-attribute prefs use (OD-D4-5) — and a
+ *  dependent row must read both, since which one a given parent uses is an implementation
+ *  detail of that parent's reflection channel, not of the dependency. */
+function isPrefOn(value: unknown): boolean {
+	return value === true || value === 'on';
+}
+
 /** Section label → stable nav id. */
 function slugify(label: string): string {
 	return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -174,7 +190,18 @@ export class DseSettingTab extends PluginSettingTab {
 		const saved = prefs.set(descriptor.key, next as DsePrefs[keyof DsePrefs]);
 		// A statblock option changing re-derives the preset label above it.
 		if (ui?.inPreset) this.presetDropdown?.setValue(deriveSbPreset(prefs));
+		// SC-160: …and a PARENT changing re-evaluates its dependents' `disabled`
+		// predicates. refreshDomState() is the cheap half of obsidian's pair (it toggles
+		// CSS state in place, no re-render) — `update()` would rebuild the definitions and
+		// throw away every live row, including the preview docked below.
+		if (this.hasDependents(prefs, descriptor.key)) this.refreshDomState();
 		return saved;
+	}
+
+	/** SC-160: does any descriptor declare `key` as its `dependsOn` parent? Derived from
+	 *  the catalog rather than hard-coded, so a second dependent pair needs no edit here. */
+	private hasDependents(prefs: PreferenceStore, key: keyof DsePrefs): boolean {
+		return prefs.descriptors().some((candidate) => prefUi(candidate)?.dependsOn === key);
 	}
 
 	/** The PrefDescriptor a control key names, or undefined when the key belongs to
@@ -266,8 +293,14 @@ export class DseSettingTab extends PluginSettingTab {
 			for (const descriptor of members) {
 				const ui = prefUi(descriptor);
 				if (!ui) continue;
+				const parent = ui.dependsOn;
 				rows.push({
-					label: ui.label,
+					// SC-160: a dependent row is indented into its parent and greyed out
+					// while that parent is off. `disabled` is a PREDICATE, not a snapshot —
+					// obsidian re-evaluates it on every render and on refreshDomState(),
+					// which setControlValue() below calls the moment a parent flips.
+					label: parent ? `${DEPENDENT_PREFIX}${ui.label}` : ui.label,
+					disabled: parent ? () => !isPrefOn(prefs.get(parent)) : undefined,
 					help: ui.help,
 					// SC-112 Task 8: secondary rows collapse behind the section's
 					// "Advanced" disclosure. The section reset below still covers them —

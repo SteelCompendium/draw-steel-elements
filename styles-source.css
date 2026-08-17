@@ -2382,6 +2382,25 @@ code.dsa {
 	color: var(--dse-act-villain);
 }
 
+/* -- SC-160 sticky mini-header: THE OFF SWITCH, and the only rule in the base layer.
+   Everything that makes the bar visible lives in the Steel screen layer far below; this
+   is the floor it falls back to.
+
+   That split is not stylistic tidiness, it is the freeze contract. The mini-header is
+   SCREEN-ONLY chrome that duplicates the card's own header, so on paper (and in the
+   on-screen print-preview twin, and inside an export) it must not merely be invisible —
+   it must generate NO BOX AT ALL, or a zero-height sticky anchor and an absolutely-
+   positioned bar would still be in the layout, and every frozen `*--steel-print.png`
+   would be back in play. `display: none` here is what guarantees the new DOM is worth
+   exactly zero print pixels: the reveal rule below re-enables it only under
+   `[data-dse-theme='steel']:not([data-dse-print="on"])`, and the `@media print` block at
+   the end of this sheet re-asserts the same for real Ctrl-P / Export-to-PDF (where no
+   `data-dse-print` attribute exists to be excluded).
+   Canvas gets the same treatment for a different reason — see the reveal rule. -- */
+.dse-sb__sticky {
+	display: none;
+}
+
 /* -- featureblock feature-style pref (SC-123 — the site's data-fb-featstyle; the
    twin of the statblock's own, and the reason the statblock's `flat` mode is
    allowed to keep its hands off a nested `.dse-fb`) -- */
@@ -6121,7 +6140,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
    `test/unit/build/cssSupportFloor.test.ts` is the guard: a new color-mix()
    declaration without an immediately-preceding static declaration of the same
    property fails there. Read that file's header for what the guard can and
-   cannot see. */
+   cannot see.
+
+   ⚠ CORRECTION (SC-160, 2026-08-17 — measured in a real Obsidian, Chromium
+   106.0.5249.199 / Electron 21.4.1). The "invalid at PARSE time" claim above holds
+   only when the enhanced declaration contains no `var()`. A declaration that
+   contains one parses fine and fails at COMPUTED-VALUE time instead — which happens
+   AFTER the cascade has already discarded the static declaration beneath it, so the
+   property is set to its `unset` value rather than to the fallback. Every
+   color-mix() declaration in this sheet contains a `var()`, so on the floor engine
+   the pairs below are inert: the property gets `unset`, not the static twin. Probed
+   in-app: the same pair with LITERAL colours keeps its static value; with `var()` it
+   computes to `rgba(0, 0, 0, 0)` / `background-image: none`.
+
+   The form that actually holds is an `@supports (background: color-mix(in srgb, red
+   14%, blue))` wrapper — a floor engine never enters the block, so the static
+   declaration outside it stands. The sticky mini-header (SC-160, far below) is
+   written that way and is the worked example; the pairs in this section are the
+   pre-existing instances, tracked as FOLLOWUPS #73. Keep the static-first adjacency
+   inside any @supports block you add: the guard reads source text and does not model
+   @supports. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__row {
 	--t: var(--dse-tier-low);
 	/* Plan 21 Task 2 — the site authors this row `.55rem .9rem` too
@@ -6921,6 +6959,328 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 	font-size: 1.25rem;
 	color: var(--dse-heading);
 	text-shadow: var(--dse-emboss);
+}
+
+/* ================================================================== */
+/*  SC-160 — STICKY MINI-HEADER (Steel, SCREEN ONLY)                  */
+/* ================================================================== */
+/*
+   The site's `.sb__sticky` augmentation, ported: while a statblock's own header has
+   scrolled out of the top of its scroll container, a compact bar pins there with the
+   creature's name, role, the five primary stats and the five characteristics, plus an
+   optional second row of secondary stats.
+
+   DOM (src/elements/statblock/stickyHeader.ts), a sibling BEFORE `.dse-sb`:
+     .dse-sb__sticky        zero-height `position: sticky` ANCHOR — reserves no flow
+     .dse-sb__sticky-inner  the visible bar, `position: absolute` inside the anchor
+   The split is mandatory, not cosmetic: the anchor precedes the real header, so a bar
+   that reserved flow space would push that header down as it appeared, moving the very
+   geometry the reveal is measured against (the site documents the same bistable loop as
+   its "summoner-minion jitter"). See stickyHeader.ts for the full argument, including
+   why the reveal is an IntersectionObserver here and a scroll-driven animation there.
+
+   WHAT CSS OWNS AND WHAT JS OWNS. CSS owns the PARKING, and it needs no help: a single
+   `position: sticky; top: 0` resolves against whatever the nearest scrolling ancestor
+   happens to be, which is a different element in every render context the plugin has —
+   the reading-view preview scroller, a sidebar leaf, a pop-out window's own scroller —
+   and the browser picks the right one for free. JS owns only the VISIBILITY, because
+   "show this while that other element is off the top of the scroller" has no pre-115
+   CSS spelling; it writes one class, `.dse-sb__sticky--stuck`.
+
+   INERT WHERE IT WOULD BE MEANINGLESS OR HARMFUL — all three via the ONE reveal rule
+   below, which is what re-enables the base layer's `display: none`:
+     · print / export / the print-preview twin → `:not([data-dse-print="on"])` plus the
+       `@media print` re-assertion at the end of this sheet. No box, so zero frozen
+       print pixels move.
+     · canvas cards and any other non-persisting host (embeds, exports) →
+       `:not([data-dse-readonly])`. A canvas node is a fixed-size card the reader drags,
+       not a scroll surface; a bar pinned inside one is noise. statblock/view.ts
+       independently declines to wire an observer there, so it is inert twice over.
+     · the preference being off → `[data-dse-sb-sticky='on']`.
+
+   NARROW PANES get a compact treatment rather than an opt-out, via CONTAINER queries
+   (Chromium 105, below the floor — pinned in cssSupportFloor.test.ts's
+   KNOWN_SAFE_BELOW_FLOOR). A media query would be wrong here and not merely imprecise:
+   a sidebar leaf is ~300px wide inside a 1400px WINDOW, so the viewport says nothing
+   about the space the bar actually has. The container is the anchor itself, which spans
+   the card. Two steps, both borrowed from the site's own phone treatment (FOLLOWUPS #23
+   in steel-statblock.css): below 34rem the second row goes and the name truncates;
+   below 21rem the stat pills go too and the bar is just "which creature is this",
+   which is the question a pinned header exists to answer.
+*/
+[data-dse-theme='steel']:not([data-dse-print="on"]):not([data-dse-readonly])[data-dse-sb-sticky='on'] > .dse-sb__sticky {
+	display: block;
+	/* The whole parking mechanism. `top: 0` and not the site's measured `--sticky-top`:
+	   Material pins a header + tab bar over its own scroller and has to be cleared,
+	   whereas an Obsidian scroll container's top edge IS the top of the visible area. */
+	position: sticky;
+	top: 0;
+	z-index: 3;
+	height: 0;
+	margin: 0;
+	container-type: inline-size;
+	container-name: dse-sb-sticky;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	padding: 0.5rem var(--dse-pad);
+	border-bottom: 1px solid var(--dse-role, var(--dse-metal-line));
+	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
+	/* THE OPAQUE GROUND. Opacity is load-bearing, not decorative: card content scrolls
+	   underneath this bar, so a transparent ground makes the pinned stats unreadable
+	   against the text sliding beneath them.
+	   Flat and var()-only ON PURPOSE — the role-tinted gradient is an ENHANCEMENT applied
+	   in the @supports block below, never here. See that block for why it cannot simply
+	   be the second half of a same-rule fallback pair. */
+	background: var(--dse-surface);
+	box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+	/* Hidden until the observer says otherwise. `visibility` as well as `opacity` so the
+	   bar is inert to hit-testing and to find-in-page while parked invisibly. */
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+/* -- THE PADDING BAND. `position: sticky` parks against the scroll container's CONTENT
+   box, but a scroll container's own top PADDING is still painted through: Obsidian's
+   reading view sets `padding-top: 32px` on `.markdown-preview-view`, and a sidebar
+   leaf's `.view-content` sets its own smaller value. Measured in the app, the bar
+   therefore parked 32px below the pane's top edge with card content scrolling visibly
+   in the strip above it — a pinned header with text sliding over its own head.
+
+   This pseudo-element extends the bar's ground upward and lets the SCROLLER clip it:
+   `overflow-y: auto` clips at the padding box, so a band of any height stops exactly at
+   the pane's top edge. That is what makes this context-independent — no measured
+   constant, no per-context rule, nothing to keep in sync with a theme that changes its
+   file margins. 100vh is simply "taller than any padding a scroller will ever have".
+
+   Its colour is the gradient's STARTING colour, not the flat ground, so band and bar
+   meet without a seam in both engines (floor: both flat; modern: both tinted). -- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 100%;
+	height: 100vh;
+	background: var(--dse-surface);
+	pointer-events: none;
+}
+/* -- the role-tinted plate: an ENHANCEMENT, gated behind @supports. ------------------
+   WHY A GATE AND NOT THE USUAL SAME-RULE FALLBACK PAIR. The house rule for `color-mix()`
+   (Chromium 111, above the 106 floor) is "static declaration first, enhanced declaration
+   immediately after, same property, same rule" — see the SUPPORT FLOOR note earlier in
+   this sheet. That idiom only works when the enhanced declaration is invalid at PARSE
+   time, which is true only if it contains no `var()`. Every color-mix() line in this
+   sheet does contain one, and a declaration containing `var()` parses fine and fails
+   later, at COMPUTED-VALUE time — which happens AFTER the cascade has already discarded
+   the static declaration beneath it. The property is then set to its `unset` value, not
+   to the fallback: for `background` that is fully transparent.
+
+   Measured, not reasoned: in real Obsidian (Chromium 106.0.5249.199 / Electron 21.4.1)
+   `background: var(--dse-surface); background: linear-gradient(…color-mix(…var(…)…)…)`
+   computes to `rgba(0, 0, 0, 0)` with `background-image: none` — the bar rendered
+   see-through and the pinned stats were illegible over the scrolling card body. The same
+   pair written with LITERAL colours does keep the static value, which is why the idiom
+   looks sound and why this failed silently everywhere but a real floor engine.
+
+   `@supports` is the fix that actually holds: a floor engine never enters the block, so
+   the flat `background: var(--dse-surface)` above stands untouched; a modern engine
+   enters it and paints the tint. The pair is repeated INSIDE the block to satisfy
+   cssSupportFloor.test.ts's same-rule adjacency scan, which reads source text and does
+   not model @supports. -- */
+@supports (background: color-mix(in srgb, red 14%, blue)) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner {
+		background: var(--dse-surface);
+		background: linear-gradient(180deg, color-mix(in srgb, var(--dse-role, var(--dse-metal)) 14%, var(--dse-surface)), var(--dse-surface));
+	}
+	/* The padding band takes the gradient's starting colour, so the two stay seamless. */
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner::before {
+		background: var(--dse-surface);
+		background: color-mix(in srgb, var(--dse-role, var(--dse-metal)) 14%, var(--dse-surface));
+	}
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner {
+	box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky--stuck > .dse-sb__sticky-inner {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+}
+
+/* -- row 1: identity on the left, stats pushed to the right rail -- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-row1 {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.3rem 1rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-id {
+	display: flex;
+	align-items: baseline;
+	gap: 0.55rem;
+	min-width: 0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-name {
+	font-family: var(--dse-font-title, inherit);
+	text-transform: uppercase;
+	letter-spacing: 0.01em;
+	font-size: 1.28rem;
+	line-height: 1.1;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-role {
+	font-family: var(--dse-font-label, inherit);
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
+	font-size: 1rem;
+	white-space: nowrap;
+	color: var(--dse-role, var(--dse-fg-muted));
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-stats {
+	display: flex;
+	align-items: stretch;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+	margin-left: auto;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-defs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-chars {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+	margin-left: 0.8rem;
+	padding-left: 1rem;
+	border-left: 1px solid var(--dse-metal-line);
+}
+/* The two pill shapes: value over label (stats) and value over initial (characteristics)
+   — the site's `.m` / `.c`, renamed into the plugin's `dse-` namespace. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-m,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-c {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	line-height: 1.06;
+	font-family: var(--dse-font-label, inherit);
+	font-variant: small-caps;
+	letter-spacing: 0.02em;
+	font-size: 0.72rem;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-m b,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-c b {
+	font-family: var(--dse-font-mono, monospace);
+	font-style: normal;
+	font-weight: 700;
+	font-size: 0.98rem;
+	color: var(--dse-heading);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-c i {
+	font-family: var(--dse-font-label, inherit);
+	font-style: normal;
+	font-variant: small-caps;
+	letter-spacing: 0.03em;
+	font-size: 0.68rem;
+	color: var(--dse-metal-bright);
+}
+
+/* -- row 2: the secondary stats, behind the `sbStickyMeta` sub-toggle -- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-row2 {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem 1.3rem;
+	margin-top: 0.5rem;
+	padding-top: 0.45rem;
+	border-top: 1px solid var(--dse-metal-faint);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-sm {
+	font-size: 0.82rem;
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-sm b {
+	font-family: var(--dse-font-label, inherit);
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
+	font-weight: 400;
+	margin-right: 0.35rem;
+	color: var(--dse-metal);
+}
+/* The sub-toggle itself (the site's `[data-sb-stickymeta="off"] .sb__sticky-row2`). A
+   pure reflow over DOM the view always builds, which is what lets a per-block
+   `prefs: { sbStickyMeta: off }` work — see catalog.ts. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-sb-stickymeta='off'] .dse-sb__sticky-row2 {
+	display: none;
+}
+
+/* -- narrow panes: step 1, at 34rem. Drop the second row, keep one truncating name
+   line, and let the stat pills take a full-width line of their own. -- */
+@container dse-sb-sticky (max-width: 34rem) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-row2 {
+		display: none;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-row1 {
+		gap: 0.25rem 0.7rem;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-id {
+		flex: 1 1 auto;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-name {
+		flex: 1 1 auto;
+		min-width: 0;
+		max-width: 100%;
+		font-size: 1rem;
+		/* `white-space`, not `text-wrap` — the latter is above the Chromium 106 floor
+		   (cssSupportFloor.test.ts's ABOVE_FLOOR_TOKENS). */
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-stats {
+		flex-basis: 100%;
+		margin-left: 0;
+		gap: 0.35rem 0.6rem;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-chars {
+		margin-left: 0;
+		padding-left: 0;
+		border-left: none;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-m,
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-c {
+		font-size: 0.64rem;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-m b,
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-c b {
+		font-size: 0.84rem;
+	}
+}
+
+/* -- narrow panes: step 2, at 21rem — a real Obsidian SIDEBAR LEAF (~300px, minus the
+   card's own padding). Ten stat pills on a 260px line is a wall of digits nobody reads;
+   what a pinned header is for at that width is "which creature is this", so the pills
+   stand down and the name + role keep the single line to themselves. Deliberately a
+   compact treatment rather than hiding the bar: the sidebar host exists to keep ONE
+   block in view across note navigation, which is exactly when knowing what you are
+   looking at matters most. -- */
+@container dse-sb-sticky (max-width: 21rem) {
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-stats {
+		display: none;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-inner {
+		padding: 0.35rem var(--dse-pad);
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__sticky-role {
+		font-size: 0.85rem;
+	}
 }
 
 /* ================================================================== */
@@ -9397,7 +9757,15 @@ button.dse-pr__row:hover {
 	}
 	/* Rule 4 — hide interactive-only chrome (inert on paper; the STATE they
 	   controlled prints as static text — the stepper VALUE/INPUT stays). The ±
-	   buttons are `.dse-btn` instances, so hiding `.dse-btn` removes them too. */
+	   buttons are `.dse-btn` instances, so hiding `.dse-btn` removes them too.
+	   SC-160: the sticky mini-header joins the list — it is a SCROLL affordance, and
+	   paper does not scroll. Belt AND braces: the base layer already leaves
+	   `.dse-sb__sticky` at `display: none` and only a `:not([data-dse-print="on"])`
+	   rule turns it on, but real printing sets no such attribute, so without this line
+	   the reveal rule would still match under Ctrl-P. (The on-screen preview twin below
+	   needs no matching entry for the same reason in reverse — the attribute IS the
+	   exclusion there.) */
+	.dse-sb__sticky,
 	.dse-btn,
 	.dse-tabs__list,
 	.dse-cond--add,

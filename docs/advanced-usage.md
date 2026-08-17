@@ -62,6 +62,8 @@ prefs:
 | `distTarget` | `grid`, `text`, `ledger` |
 | `fbFeatureStyle` | `card`, `flat` |
 | `fbStats` | `grid`, `ledger` |
+| `sbSticky` | `on`, `off` |
+| `sbStickyMeta` | `on`, `off` |
 | `reduceMotion` | `true`, `false` |
 | `printPreview` | `on`, `off` |
 | `portraits` | `on`, `off` |
@@ -94,7 +96,10 @@ Worth knowing:
   Steel sidebar**.
 
 Narrow panes are a real layout: elements reflow at sidebar width (the stamina cluster
-collapses to a two-line rail, for instance) rather than being squeezed.
+collapses to a two-line rail, for instance) rather than being squeezed. A statblock's
+[sticky mini-header](settings.md#statblock-display) reflows the same way: at sidebar width
+it drops the stat pills and the secondary-stats line and keeps just the creature's name and
+role, which is the question a pinned header is there to answer.
 
 ## Canvas
 
@@ -108,6 +113,9 @@ file to write back to, so anything interactive — spending a Recovery, marking 
 stepping a resource — is deliberately disabled rather than silently discarded, and each card
 carries a small "Read-only" badge. Use canvas for a **layout you look at**; keep the blocks
 you actually click in ordinary notes (or pin them to the sidebar).
+
+A canvas node is a fixed-size card you drag, not a scroll surface, so the statblock
+[sticky mini-header](settings.md#statblock-display) is inert there whatever the setting says.
 
 ## Print and PDF export
 

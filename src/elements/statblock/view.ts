@@ -52,6 +52,13 @@ import type { RenderMdCallback } from '@/framework/kit';
 import { actionTypeOf, crestIconFor, renderFeatureList } from '@/elements/feature/renderFeature';
 import { featureRollHooks } from '@/elements/feature/rollController';
 import { applyRoleTint, type DseRole } from '@/elements/roleTint';
+import {
+	renderStickyHeader,
+	wireStickyHeader,
+	type StickyChar,
+	type StickyHeaderParts,
+	type StickyPair,
+} from './stickyHeader';
 import { FeatureConfig } from '@model/FeatureConfig';
 import type { StatblockConfig } from '@model/StatblockConfig';
 import type { Statblock } from 'steel-compendium-sdk';
@@ -156,6 +163,88 @@ export function statblockHeaderParts(statblock: Statblock): {
 	};
 }
 
+/** One `.dse-sb__kv` cell of the secondary-stats grid: its `--<modifier>` suffix plus the
+ *  label/value pair, VERBATIM (legacy StatsView parity, incl. the '-' fallbacks). */
+interface StatblockKv extends StickyPair {
+	modifier: string;
+}
+
+/**
+ * SC-160 — the three pure extractions the full card AND the sticky mini-header both read.
+ *
+ * Hoisted out of renderMeta/renderChars for ONE reason: the mini-header must be unable to
+ * disagree with the header it stands in for. Two hand-written copies of "Stamina, or '-'"
+ * would drift the first time a fallback changed, and the reader would see one number in
+ * the card and another in the pinned bar. Same strings, one source.
+ *
+ * The five primary stats: Size / Speed / Stamina / Stability / Free Strike.
+ */
+function statblockDefenseCells(sb: Statblock): StickyPair[] {
+	return [
+		{ label: 'Size', value: `${sb.size ?? '-'}` },
+		{ label: 'Speed', value: `${sb.speed ?? '-'}` },
+		{ label: 'Stamina', value: `${sb.stamina ?? '-'}` },
+		{ label: 'Stability', value: `${sb.stability ?? '-'}` },
+		{ label: 'Free Strike', value: `${sb.freeStrike ?? '-'}` },
+	];
+}
+
+/** The secondary-stats cells in the FULL CARD's order. Legacy StatsView parity:
+ *  Immunity/Weakness/Movement always print (with the '-' fallback); the With Captain cell
+ *  only exists when the field does. */
+function statblockMetaCells(sb: Statblock): StatblockKv[] {
+	const cells: StatblockKv[] = [
+		{ modifier: 'immunity', label: 'Immunity', value: sb.immunities?.length ? sb.immunities.join(', ') : '-' },
+		{ modifier: 'weakness', label: 'Weakness', value: sb.weaknesses?.length ? sb.weaknesses.join(', ') : '-' },
+		{ modifier: 'movement', label: 'Movement', value: `${sb.movement ?? '-'}` },
+	];
+	if (sb.withCaptain) cells.push({ modifier: 'captain', label: 'With Captain', value: sb.withCaptain });
+	return cells;
+}
+
+/** The five characteristics in legacy order, values already formatted. */
+function statblockCharCells(sb: Statblock): StickyPair[] {
+	const chars = sb.characteristics;
+	return [
+		{ label: 'Might', value: formatCharacteristic(chars.might) },
+		{ label: 'Agility', value: formatCharacteristic(chars.agility) },
+		{ label: 'Reason', value: formatCharacteristic(chars.reason) },
+		{ label: 'Intuition', value: formatCharacteristic(chars.intuition) },
+		{ label: 'Presence', value: formatCharacteristic(chars.presence) },
+	];
+}
+
+/**
+ * SC-160 — everything the sticky mini-header renders, derived from the same extractions
+ * the card uses.
+ *
+ * Row 2's ORDER is the site's sticky order (Movement, With Captain, Immunity, Weakness —
+ * steel-etl `renderStatblockSticky`'s `metaPairs`), which deliberately differs from the
+ * full card's grid order above: in the bar the movement/captain pair is the thing a GM
+ * re-checks mid-turn, so it leads. Exported for the DOM tests.
+ */
+export function statblockStickyParts(sb: Statblock): StickyHeaderParts {
+	const header = statblockHeaderParts(sb);
+	const meta = statblockMetaCells(sb);
+	const byModifier = (modifier: string): StatblockKv | undefined =>
+		meta.find((cell) => cell.modifier === modifier);
+	const secondary = ['movement', 'captain', 'immunity', 'weakness']
+		.map(byModifier)
+		.filter((cell): cell is StatblockKv => cell !== undefined)
+		.map(({ label, value }) => ({ label, value }));
+	const characteristics: StickyChar[] = statblockCharCells(sb).map((cell) => ({
+		initial: cell.label.charAt(0).toUpperCase(),
+		value: cell.value,
+	}));
+	return {
+		name: header.name,
+		role: header.rightPrimary,
+		defenses: statblockDefenseCells(sb),
+		characteristics,
+		secondary,
+	};
+}
+
 export class StatblockElementView extends ElementView<StatblockConfig> {
 	/** SC-145: the `.dse-sb` card node onMount most recently created — tracked so
 	 *  authoringAnchor() below can anchor the generic authoring pencil to it instead of
@@ -185,6 +274,13 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const sb = model.statblock;
 		const renderMd: RenderMdCallback = (md, el) => this.renderMarkdown(md, el);
 
+		// SC-160: the sticky mini-header's zero-height anchor is emitted BEFORE the card —
+		// the same position the site gives it inside `.sb-wrap`, and the position that lets
+		// it park at the scroller's top edge once the card's own top has passed. It is
+		// `display: none` in every context but Steel-on-screen (see stickyHeader.ts), so
+		// this adds no box to print/export and cannot move a frozen print shot.
+		const sticky = renderStickyHeader(root, statblockStickyParts(sb));
+
 		const card = root.createDiv({ cls: 'dse-sb' });
 		this.cardEl = card;
 		// D4 (Plan 13 Task 3): density/featstyle/columns/stats arrive on the ELEMENT
@@ -197,6 +293,11 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 
 		// Role spine + header tint from the SDK combat role (fails-safe unmapped).
 		const role = applyRoleTint(card, header.role);
+		// The mini-header lives OUTSIDE the card, so it does not inherit the card's
+		// `--dse-role` alias — tint it from the same call, on the same fails-safe terms
+		// (unmapped role ⇒ neither attribute nor alias ⇒ monochrome). The site does the
+		// same thing for the same reason (`.sb__sticky-role[data-role=…]`).
+		applyRoleTint(sticky, header.role);
 
 		// -- cardHead (§3.8 fill; legacy header wording preserved verbatim — the
 		// fallback strings always rendered in the legacy header, so no slot is a gap) --
@@ -220,6 +321,14 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		this.renderMeta(card, model);
 		this.renderChars(card, model);
 		this.renderFeatures(card, model, renderMd);
+
+		// SC-160: the reveal. Skipped where the bar is inert by decree — a canvas card (or
+		// any host that can't persist: an embed, an export render) is `data-dse-readonly`
+		// and the CSS already hides the bar there, so an observer would only be work
+		// nobody can see. `cardHead` mounted `.dse-head` as the card's first child; that
+		// node IS the "real header" whose exit the observer waits for.
+		const headEl = card.querySelector<HTMLElement>('.dse-head');
+		if (headEl && this.cx.host.canPersist) wireStickyHeader(sticky, headEl, this);
 	}
 
 	/** SC-145: `.dse-sb` (not root) carries the card's visible border/background —
@@ -237,29 +346,18 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		const meta = card.createDiv({ cls: 'dse-sb__meta' });
 
 		const items = meta.createDiv({ cls: 'dse-sb__items' });
-		const item = (label: string, value: string): void => {
+		for (const { label, value } of statblockDefenseCells(sb)) {
 			const itemEl = items.createDiv({ cls: 'dse-sb__item' });
 			itemEl.createDiv({ cls: 'dse-sb__item-v', text: value });
 			itemEl.createDiv({ cls: 'dse-sb__item-l', text: label });
-		};
-		item('Size', `${sb.size ?? '-'}`);
-		item('Speed', `${sb.speed ?? '-'}`);
-		item('Stamina', `${sb.stamina ?? '-'}`);
-		item('Stability', `${sb.stability ?? '-'}`);
-		item('Free Strike', `${sb.freeStrike ?? '-'}`);
+		}
 
 		const grid = meta.createDiv({ cls: 'dse-sb__grid' });
-		const kv = (modifier: string, label: string, value: string): void => {
+		for (const { modifier, label, value } of statblockMetaCells(sb)) {
 			const kvEl = grid.createDiv({ cls: `dse-sb__kv dse-sb__kv--${modifier}` });
 			kvEl.createSpan({ cls: 'dse-sb__kv-l', text: label });
 			kvEl.createSpan({ cls: 'dse-sb__kv-v', text: value });
-		};
-		// Legacy StatsView parity: Immunity/Weakness/Movement always print (with the
-		// '-' fallback); the With Captain cell only exists when the field does.
-		kv('immunity', 'Immunity', sb.immunities?.length ? sb.immunities.join(', ') : '-');
-		kv('weakness', 'Weakness', sb.weaknesses?.length ? sb.weaknesses.join(', ') : '-');
-		kv('movement', 'Movement', `${sb.movement ?? '-'}`);
-		if (sb.withCaptain) kv('captain', 'With Captain', sb.withCaptain);
+		}
 	}
 
 	/** The .dse-sb__chars row: five verbatim "Name +N" pairs, legacy order.
@@ -301,27 +399,21 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 	 * earlier revision of this comment claimed that pairing "degrades to the default
 	 * look"; it does not, and cannot. */
 	private renderChars(card: HTMLElement, model: StatblockConfig): void {
-		const chars = model.statblock.characteristics;
 		const row = card.createDiv({ cls: 'dse-sb__chars' });
 		const split = this.charsAreSplit();
-		const pair = (label: string, value?: number): void => {
+		for (const { label, value } of statblockCharCells(model.statblock)) {
 			const cellEl = row.createDiv({ cls: 'dse-sb__char' });
 			if (!split) {
 				// LEGACY-FREEZE: one text node, exactly as before (see the doc comment).
-				cellEl.setText(`${label} ${formatCharacteristic(value)}`);
-				return;
+				cellEl.setText(`${label} ${value}`);
+				continue;
 			}
 			// Site DOM order (steel-statblock.css orders them with grid-areas/`order`):
 			// box, value, label — the boxed letter is the label's initial, verbatim.
 			cellEl.createSpan({ cls: 'dse-sb__char-box', text: label.charAt(0).toUpperCase() });
-			cellEl.createSpan({ cls: 'dse-sb__char-v', text: formatCharacteristic(value) });
+			cellEl.createSpan({ cls: 'dse-sb__char-v', text: value });
 			cellEl.createSpan({ cls: 'dse-sb__char-l', text: label });
-		};
-		pair('Might', chars.might);
-		pair('Agility', chars.agility);
-		pair('Reason', chars.reason);
-		pair('Intuition', chars.intuition);
-		pair('Presence', chars.presence);
+		}
 	}
 
 	/** True when either characteristics preference has moved off its default — the

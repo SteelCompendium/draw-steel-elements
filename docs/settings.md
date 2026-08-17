@@ -62,6 +62,16 @@ The individual settings:
 - **Feature columns** — **Single column** or **Side-by-side (wide)**.
 - **Secondary stats** — the Immunity / Weakness / Movement / With Captain block as a
   **Grid**, a **Grid (centered)**, or a hairline **Ledger**.
+- **Sticky mini-header** — once a statblock's own header has scrolled out of view, pin a
+  compact bar with its name, role and key stats to the top of the pane. On by default.
+  Screen only: print, PDF export and canvas cards never show it.
+- **↳ Include secondary stats** — add a second line to that pinned bar with Movement, With
+  Captain, Immunity and Weakness. On by default; greyed out while the mini-header is off.
+  In a narrow pane (a sidebar leaf) the second line is dropped whatever this says — there
+  is no room for it.
+
+The two sticky settings are **not** part of a preset — picking a look never turns a scroll
+behaviour on or off, and changing them never re-derives the preset to **Custom**.
 
 Under **Advanced**:
 
