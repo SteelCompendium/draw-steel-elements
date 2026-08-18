@@ -65,6 +65,26 @@ function printMediaNeutralBody(): string {
 	return m[1];
 }
 
+/** Body of the @media print STEEL-scoped (act spine) value block. Unlike the neutral one,
+ *  a block comment sits between `@media print {` and the selector, so the pattern allows
+ *  it. */
+function printMediaSteelBody(): string {
+	const m = sheet.match(
+		new RegExp(`@media print\\s*\\{(?:\\s*/\\*[\\s\\S]*?\\*/)?\\s*${esc(STEEL_MEDIA_SELECTOR)}\\s*\\{([^}]*)\\}\\s*\\}`),
+	);
+	if (!m) throw new Error('@media print Steel act value block not found');
+	return m[1];
+}
+
+/** property → value for every custom property declared in a rule body, comments stripped
+ *  (a comment quoting a declaration must not count as one). */
+function declMap(body: string): Record<string, string> {
+	const out: Record<string, string> = {};
+	const code = body.replace(/\/\*[\s\S]*?\*\//g, '');
+	for (const m of code.matchAll(/(?:^|[\s{;])(--dse-[a-z0-9-]+)\s*:\s*([^;]+);/g)) out[m[1]] = m[2].trim();
+	return out;
+}
+
 function valueIn(body: string, name: string): string | undefined {
 	const m = body.match(new RegExp(`(?:^|[\\s{;])--dse-${name}\\s*:\\s*([^;]+);`));
 	return m ? m[1].trim() : undefined;
@@ -278,8 +298,32 @@ describe('SC-170: the print layer outranks every theme token block', () => {
 		['Steel act preview twin', STEEL_TWIN_SELECTOR],
 	])('%s outranks BOTH Steel token blocks', (_label, selector) => {
 		expect(sheet).toContain(selector);
+		// SC-170 review (L-4): the exact tuple, not just the comparison. The realprint shot
+		// class resolves through the JS stamp (printMedia.ts), so no PNG anywhere proves the
+		// padding is still there — this is the structural pin for fix (a), and the reason a
+		// dropped repeat cannot pass unnoticed even though every capture stays green.
+		expect(specificity(selector)).toEqual([0, 4, 0]);
 		expect(rank(specificity(selector))).toBeGreaterThan(rank(specificity(STEEL_DARK)));
 		expect(rank(specificity(selector))).toBeGreaterThan(rank(specificity(STEEL_LIGHT)));
+	});
+
+	// SC-170 review fix (M-3). The print scheme is written TWICE in the sheet — once under
+	// `@media print` and once for the `[data-dse-print="on"]` twin — and nothing compared
+	// them. They had already drifted: the neutral `@media print` copy was missing
+	// `--dse-font-controls` (46 declarations vs 47) from SC-112 Task 3 until this fix.
+	//
+	// Byte gates cannot see this. Once watchPrintMedia stamps the attribute, the twin block
+	// wins on source order at equal specificity, so the `@media print` copy no longer
+	// paints anything the harness photographs — a wrong value there is invisible to jest,
+	// to the freeze check and to the print-twin parity assertion alike (proven: mutating a
+	// value in either copy left all three green). These two tests are the only thing
+	// standing between the copies and silent divergence, so they compare the FULL
+	// declaration map, property and value, not a representative sample.
+	test.each([
+		['neutral', () => printMediaNeutralBody(), () => printNeutralBody()],
+		['Steel act', () => printMediaSteelBody(), () => printSteelBody()],
+	])('%s: the @media print copy and the preview twin declare exactly the same thing', (_label, media, twin) => {
+		expect(declMap(media())).toEqual(declMap(twin()));
 	});
 
 	test('no print value block wins by !important (the font prefs must still apply on paper)', () => {

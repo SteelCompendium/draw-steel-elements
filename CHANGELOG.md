@@ -46,7 +46,9 @@ for what needs action.
   rendering, so the preview is a genuine proof of what you will get, and a handout costs
   what it should in ink. Light-mode vaults were hit hardest: PDF export always renders in
   the light scheme, which is exactly the case where the old print rules were most
-  outranked.
+  outranked. One smaller print bug went with it: buttons, tabs and other control text kept
+  the theme's serif when printed instead of the plain sans the preview uses — the printed
+  page and the preview now agree on that too.
 - [BUGFIX] **"Open in sidebar" stops piling up initiative trackers** (SC-153). Every
   press of an encounter block's "Open in sidebar" button appended another
   `ds-initiative` block to the note AND stacked another copy of it in the sidebar —

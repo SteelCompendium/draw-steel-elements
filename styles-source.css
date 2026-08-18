@@ -9720,6 +9720,15 @@ button.dse-pr__row:hover {
 		--dse-fg: #000;
 		--dse-fg-muted: #333;
 		--dse-fg-faint: #666;
+		/* SC-112 Task 3: pin Controls back to sans in print — see the twin's copy of
+		   this declaration below for the full reasoning. SC-170 review fix (M-3): this
+		   line was MISSING here (46 declarations vs the twin's 47) since SC-112, so the
+		   two "identical" print surfaces were not identical. It was invisible because the
+		   twin block wins on source order at equal specificity whenever
+		   data-dse-print="on" is set — which, since SC-170, is also the case on paper.
+		   theme-print.test.ts now asserts the two bodies declaration-for-declaration, so
+		   a one-sided edit can no longer land. */
+		--dse-font-controls: var(--font-text);
 		--dse-chip-bg: transparent;
 		/* accent → ink */
 		--dse-accent: #000;

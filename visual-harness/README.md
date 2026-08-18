@@ -33,9 +33,25 @@ each unnarrowed sweep `shoot.mjs` asserts the two classes are **byte-identical**
 capture id and exits 1 naming the offenders. That assertion, not either class on its own,
 is the regression gate for a Steel rule reaching paper.
 
-**SC-144 — there is no theme axis.** Steel is the only theme, and `--theme=` is gone. The `steel-` prefix stays in every filename (the frozen
-`*--steel-print.png` baseline is keyed on it), and `entry.ts` still accepts a `theme=` query
-param — it just can't select a different look.
+It also asserts **coverage**: a capture that produced one print class and not the other
+fails the run. Both halves exist because they catch different things — byte parity catches
+a Steel rule reaching paper, coverage catches a sweep loop that never shot the realprint
+combo at all (which otherwise looks like a clean run with two fewer files). Both read the
+list of captures **this run** wrote, not the directory, so a narrowed run can neither
+re-assert nor be reassured by leftovers from an earlier sweep.
+
+**Adding a sweep loop: go through `snap(page, combo, params, captureId)`.** The combo —
+not the call site — decides the print medium, the `print=1` param, the `--readonly`
+param/suffix and the output filename, so a new loop cannot forget any of them. The one
+loop that predated this rule (SC-160's `scrollShots`) shot five `*--steel-realprint.png`
+files under screen media before the assertion above caught it. Consequence worth knowing:
+under `--readonly` the gallery captures are now `gallery--steel-<bg>--readonly.png` rather
+than silently overwriting the plain gallery goldens with read-only renders.
+
+**SC-144 — there is no theme axis.** Steel is the only theme, and `--theme=` is gone. The
+`steel-` prefix stays in every filename (the frozen `*--steel-print.png` baseline is keyed
+on it), and `entry.ts` still accepts a `theme=` query param — it just can't select a
+different look.
 
 One-time setup: `npx playwright install chromium`.
 

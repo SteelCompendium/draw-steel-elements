@@ -396,6 +396,25 @@ export class ElementPipeline {
 			// the SAME print scheme as the on-screen preview twin. Registered LAST, after
 			// reflect() and the per-block pins, so its stamp is the one that survives while
 			// the page is on paper; it restores whatever they set on afterprint.
+			//
+			// The ordering is load-bearing, not stylistic: watchPrintMedia snapshots the
+			// CURRENT data-dse-print value to restore later, and stamps immediately if the
+			// root is born under print media. Run it BEFORE prefs.reflect() and that
+			// snapshot is `null` while reflect() then overwrites the print stamp with the
+			// `printPreview` value — i.e. paper would silently go back to the screen scheme.
+			//
+			// SC-170 review (L-1) — why the ERROR-CARD path below does NOT need this. A
+			// prepareModel failure escapes to the catch before cx.theme.apply() ever runs,
+			// so that root carries no data-dse-theme. theme.apply is the single writer of
+			// that attribute and it only ever stamps an element's own root (never
+			// document.body — seams/theme.ts), and all ~297 Steel rule blocks are prefixed
+			// with [data-dse-theme='steel']. Measured on the built sheet: an error-card root
+			// matches 0 of the 418 Steel-scoped selectors, and under real print media it
+			// already resolves the neutral print values (--dse-card-bg none, --dse-border
+			// #ccc, --dse-radius 0, --dse-bevel none, --dse-surface #fff, --dse-fg #000)
+			// from the @media print block at (0,4,0). There is no Steel plate on an error
+			// card to strip. A failure LATER (inside view.mount) is already covered — the
+			// watcher is registered before mount.
 			watchPrintMedia(root, view);
 			if (def.serialize) {
 				const serialize = def.serialize;

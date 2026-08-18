@@ -54,15 +54,30 @@ const comboName = (c) =>
 const mediaFor = (c) => (c.realprint ? 'print' : 'screen');
 
 const failures = [];
+/** Every capture this run actually wrote: `${captureId}${suffix}` → combo → file basename.
+ *  The parity assertion reads THIS, not the shots directory, so a narrowed run can never
+ *  re-assert (or be reassured by) stale files from an earlier full sweep. */
+const produced = new Map();
 
-async function snap(page, params, outName, opts = {}) {
+// SC-170 review fix (M-1/M-4): the COMBO — not the call site — decides the print medium,
+// the `print=1` query param, the `--readonly` param/suffix and the output name. Every
+// sweep loop below must hand its combo to `snap`, and there is no way to call `snap`
+// without one, so a newly added loop physically cannot forget them. It was exactly that
+// omission (SC-160's scrollShots loop, merged in after this work started, never passed a
+// `media` option) that shot five `*--steel-realprint.png` files under SCREEN media.
+async function snap(page, combo, params, captureId, opts = {}) {
+	const suffix = args.readonly ? '--readonly' : '';
+	const outName = `${captureId}--${comboName(combo)}${suffix}`;
+	const query = { ...params, theme: combo.theme, bg: combo.bg };
+	if (combo.print) query.print = '1';
+	if (args.readonly) query.readonly = '1';
 	const pageErrors = [];
 	const onErr = (e) => pageErrors.push(String(e));
 	page.on('pageerror', onErr);
 	try {
 		// Set BEFORE goto: a root mounted under print media must see it at mount time.
-		await page.emulateMedia({ media: opts.media ?? 'screen' });
-		await page.goto(`${pageUrl}?${new URLSearchParams(params)}`);
+		await page.emulateMedia({ media: mediaFor(combo) });
+		await page.goto(`${pageUrl}?${new URLSearchParams(query)}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, {
 			timeout: 15000,
 		});
@@ -80,9 +95,14 @@ async function snap(page, params, outName, opts = {}) {
 		const done = await page.evaluate(() => window.__dseHarnessDone);
 		const errors = [...done.errors, ...pageErrors];
 		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
-		if (params.gallery) await page.screenshot({ path: file, fullPage: true });
+		if (query.gallery) await page.screenshot({ path: file, fullPage: true });
 		else await page.locator('#mount').screenshot({ path: file });
 		if (errors.length) failures.push({ outName, errors });
+		else {
+			const key = `${captureId}${suffix}`;
+			if (!produced.has(key)) produced.set(key, new Map());
+			produced.get(key).set(comboName(combo), `${outName}.png`);
+		}
 		console.log(`${errors.length ? 'FAIL' : '  ok'} ${path.basename(file)}`);
 	} catch (e) {
 		failures.push({ outName, errors: ['exception: ' + String(e)] });
@@ -158,11 +178,7 @@ try {
 		for (const fixtureName of fixtureNames) {
 			const outId = fixtureName === 'default' ? e.id : `${e.id}-${fixtureName}`;
 			for (const c of combos) {
-				const params = { element: e.id, fixture: fixtureName, theme: c.theme, bg: c.bg };
-				if (c.print) params.print = '1';
-				if (args.readonly) params.readonly = '1';
-				const suffix = args.readonly ? '--readonly' : '';
-				await snap(page, params, `${outId}--${comboName(c)}${suffix}`, { media: mediaFor(c) });
+				await snap(page, c, { element: e.id, fixture: fixtureName }, outId);
 			}
 		}
 	}
@@ -174,11 +190,7 @@ try {
 	for (const n of narrowShots) {
 		if (args.element && args.element !== n.element && args.element !== n.id) continue;
 		for (const c of combos) {
-			const params = { element: n.element, fixture: n.fixture, theme: c.theme, bg: c.bg, width: String(n.width) };
-			if (c.print) params.print = '1';
-			if (args.readonly) params.readonly = '1';
-			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { media: mediaFor(c) });
+			await snap(page, c, { element: n.element, fixture: n.fixture, width: String(n.width) }, n.id);
 		}
 	}
 	// SC-117 Batch 6 (catalog consumer #16): interaction shots, declared by the page
@@ -188,11 +200,7 @@ try {
 	for (const n of interactionShots) {
 		if (args.element && args.element !== n.element && args.element !== n.id) continue;
 		for (const c of combos) {
-			const params = { element: n.element, fixture: n.fixture, theme: c.theme, bg: c.bg };
-			if (c.print) params.print = '1';
-			if (args.readonly) params.readonly = '1';
-			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { click: n.click, media: mediaFor(c) });
+			await snap(page, c, { element: n.element, fixture: n.fixture }, n.id, { click: n.click });
 		}
 	}
 	// SC-123: preference-variant shots, declared by the page (manifest.prefShots —
@@ -205,17 +213,7 @@ try {
 			.map(([k, v]) => `${k}:${v}`)
 			.join(',');
 		for (const c of combos) {
-			const params = {
-				element: n.element,
-				fixture: n.fixture,
-				theme: c.theme,
-				bg: c.bg,
-				prefs: prefParam,
-			};
-			if (c.print) params.print = '1';
-			if (args.readonly) params.readonly = '1';
-			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`, { media: mediaFor(c) });
+			await snap(page, c, { element: n.element, fixture: n.fixture, prefs: prefParam }, n.id);
 		}
 	}
 	// SC-160: scroll-state shots, declared by the page (manifest.scrollShots — entry.ts
@@ -228,8 +226,6 @@ try {
 			const params = {
 				element: n.element,
 				fixture: n.fixture,
-				theme: c.theme,
-				bg: c.bg,
 				scroll: String(n.scroll),
 				scrollTo: String(n.scrollTo),
 			};
@@ -239,15 +235,12 @@ try {
 					.map(([k, v]) => `${k}:${v}`)
 					.join(',');
 			}
-			if (c.print) params.print = '1';
-			if (args.readonly) params.readonly = '1';
-			const suffix = args.readonly ? '--readonly' : '';
-			await snap(page, params, `${n.id}--${comboName(c)}${suffix}`);
+			await snap(page, c, params, n.id);
 		}
 	}
 	if (!args.element) {
 		for (const c of combos.filter((c) => !c.print && !c.realprint)) {
-			await snap(page, { gallery: '1', theme: c.theme, bg: c.bg }, `gallery--${comboName(c)}`, { media: mediaFor(c) });
+			await snap(page, c, { gallery: '1' }, 'gallery');
 		}
 	}
 } catch (e) {
@@ -273,19 +266,46 @@ try {
 // RULES (force-open collapsibles, hidden inert chrome, break-inside, print-color-adjust)
 // are mirrored for the attribute surface too, so nothing is left that only `@media print`
 // can express.
+// SC-170 review fix (L-2): the comparison is driven by `produced` — what THIS run wrote —
+// not by a directory listing. A narrowed run used to re-hash whatever a previous full
+// sweep had left lying around and report a capture count it never took.
+//
+// SC-170 review fix (M-4), the COVERAGE half: a capture id that produced one print class
+// and not the other fails the run. Byte parity alone cannot see a missing capture — the
+// SC-160 regression that started this fix round produced both files, so only the byte
+// check caught it; a future loop that skips the realprint combo entirely would produce
+// neither complaint. Requiring the two classes to come in pairs closes that.
 function assertPrintTwinParity() {
-	const twins = fs
-		.readdirSync(shotsDir)
-		.filter((f) => f.endsWith('--steel-print.png'))
-		.map((f) => f.slice(0, -'--steel-print.png'.length));
 	const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(path.join(shotsDir, f))).digest('hex');
 	const mismatched = [];
+	const missingRealprint = [];
+	const missingTwin = [];
 	let compared = 0;
-	for (const id of twins) {
-		const real = `${id}--steel-realprint.png`;
-		if (!fs.existsSync(path.join(shotsDir, real))) continue; // narrowed run
+	for (const [key, byCombo] of produced) {
+		const twin = byCombo.get('steel-print');
+		const real = byCombo.get('steel-realprint');
+		if (!twin && !real) continue; // e.g. a --bg= narrowed run: neither print class shot
+		if (!real) {
+			missingRealprint.push(key);
+			continue;
+		}
+		if (!twin) {
+			missingTwin.push(key);
+			continue;
+		}
 		compared++;
-		if (sha(`${id}--steel-print.png`) !== sha(real)) mismatched.push(id);
+		if (sha(twin) !== sha(real)) mismatched.push(key);
+	}
+	if (missingRealprint.length || missingTwin.length) {
+		console.error(
+			`\nPRINT-CLASS COVERAGE VIOLATED — a capture produced one print class but not the ` +
+				`other, so the two surfaces were never compared:\n` +
+				missingRealprint.map((k) => `  ${k}: twin shot, NO realprint`).join('\n') +
+				(missingRealprint.length && missingTwin.length ? '\n' : '') +
+				missingTwin.map((k) => `  ${k}: realprint shot, NO twin`).join('\n') +
+				`\nEvery sweep loop must run the full COMBOS list through snap(page, combo, …).`,
+		);
+		process.exit(1);
 	}
 	if (compared === 0) return;
 	if (mismatched.length) {
