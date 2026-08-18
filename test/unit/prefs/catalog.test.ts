@@ -193,6 +193,11 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
+		// SC-154 round 3: deliberately attr-LESS. `reflect()` stamps every attr-bearing
+		// pref on EVERY element root, and this key means something only inside an
+		// initiative tracker — InitiativeView stamps `data-dse-init-controls` on its own
+		// root instead of making every card in the vault carry it.
+		initControls: null,
 		collapsibleDefault: null,
 		collapseDefault: null,
 		rollingEnabled: null,
@@ -202,13 +207,29 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 	});
 });
 
-test('every descriptor carries a PrefUi in a known group; no hidden rows remain (F2 fix wave removed the dead webLinkFallback scaffolding — sccWebFallback is the real, operational setting)', () => {
+// The hidden-row guard. It used to read "no hidden rows remain" (the F2 fix wave removed
+// the dead webLinkFallback scaffolding — sccWebFallback is the real, operational setting),
+// and it is still that guard: the allow-list below is exact, so any NEW hidden row fails
+// here and has to justify itself in this comment.
+//
+// SC-154 round 3 put exactly one key on it. `initControls` selects between three candidate
+// layouts for the initiative tracker's round/Malice cluster, built for Scott to choose
+// between on the ticket — a review switch, not a setting anyone should find in the
+// settings tab and be asked to have an opinion about. When he picks one, the winner
+// becomes the shipped layout, this key and the two losers are deleted, and this list goes
+// back to empty. If you are reading this long after 7.0.0 shipped, that deletion was
+// missed — that is what the allow-list is here to make loud.
+const EXPECTED_HIDDEN_ROWS = ['initControls'];
+
+test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
+	const hidden: string[] = [];
 	for (const d of DSE_PREF_DESCRIPTORS) {
 		const ui = prefUi(d);
 		expect(ui).toBeDefined();
 		expect(GROUP_ORDER).toContain(ui!.group);
-		expect(ui!.hidden).toBeFalsy();
+		if (ui!.hidden) hidden.push(d.key as string);
 	}
+	expect(hidden).toEqual(EXPECTED_HIDDEN_ROWS);
 });
 
 test('preset derivation: defaults = steel; one divergence = custom; applySbPreset round-trips', async () => {

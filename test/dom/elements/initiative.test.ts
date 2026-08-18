@@ -22,6 +22,7 @@ import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlo
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage, PrefDescriptor } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
@@ -81,6 +82,12 @@ function makeEnv(): { deps: ElementPipelineDeps; app: App } {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	// SC-154 round 3: the tracker now reads a catalog preference (`initControls`), and
+	// DsePreferenceStore.get THROWS on a key no descriptor was registered for — so a
+	// render-through-the-pipeline env has to carry the real catalog, the way main.ts
+	// does. Registering it changes nothing else here: every other default is the
+	// shipped one.
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
@@ -1129,6 +1136,8 @@ describe('T-9: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 
 		const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 		const prefs = createPreferenceStore(storage);
+		// SC-154 round 3: the real catalog, same reason as makeEnv above.
+		prefs.describe(DSE_PREF_DESCRIPTORS);
 		const theme = createThemeService(prefs, plugin as any);
 		const deps: ElementPipelineDeps = {
 			app: app as any,

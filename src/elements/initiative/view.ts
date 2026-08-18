@@ -100,11 +100,31 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// before onMount runs again — nothing accumulates on the view across rebuilds.
 		const owner = this.addChild(new Component());
 		const container = root.createDiv({ cls: 'dse-init' });
+		// SC-154 round 3: the control-cluster layout candidate (see prefs/catalog.ts —
+		// `stacked` is the shipped layout and the default). Stamped on the tracker's own
+		// root rather than reflected globally by the pref (no `attr` on the descriptor):
+		// the attribute means something only inside this element, and a reflected attr
+		// would land on every element root in the vault to say "stacked" forever.
+		container.setAttribute('data-dse-init-controls', this.controlsLayout);
 		this.buildUI(container, owner, model);
 	}
 
 	private get canWrite(): boolean {
 		return this.cx.host.canPersist;
+	}
+
+	/** SC-154 round 3 — which control-cluster layout this tracker builds.
+	 *
+	 *  CLAMPED, not passed through (the SC-144 `coerceTheme` lesson): anything that is
+	 *  not one of the three candidates resolves to the shipped `stacked` layout. That
+	 *  covers a hand-typed harness `?prefs=initControls:garbage`, a stale persisted
+	 *  value once the losing candidates are deleted, and a PreferenceStore that never
+	 *  had the descriptor registered (which is exactly what a lean test env has) —
+	 *  every one of which must render today's tracker rather than an attribute-stamped
+	 *  root matching no rule. */
+	private get controlsLayout(): 'stacked' | 'bar' | 'panels' | 'rail' {
+		const value = this.cx.prefs.get('initControls') as unknown;
+		return value === 'bar' || value === 'panels' || value === 'rail' ? value : 'stacked';
 	}
 
 	/** Open `modal` tracked as THE active modal: close-on-unload via the constructor's
@@ -206,6 +226,15 @@ export class InitiativeView extends ElementView<EncounterData> {
 			this.buildCharacterRow(heroesGroup.createDiv({ cls: 'dse-init__entry' }), hero, owner);
 		});
 
+		// SC-154 round 3 — the three layout candidates put the whole control cluster in
+		// its own full-width band BETWEEN the two groups, which is the point: the shipped
+		// `stacked` layout hangs it off the right of the "Enemy groups" heading, leaving
+		// the left half of that band empty (Scott, 2026-08-18: "They are all on the right
+		// side while leaving the left empty"). The band is built here, before the enemies
+		// group, so it reads as a divider between the heroes and the enemies rather than
+		// as decoration on one heading.
+		if (this.controlsLayout !== 'stacked') this.buildControlsBand(container, data, owner);
+
 		// Enemies.
 		const enemiesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--enemies' });
 		const enemiesHead = enemiesGroup.createDiv({ cls: 'dse-init__enemies-head' });
@@ -214,7 +243,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Malice panel (D8 spec §3): pool stepper + round/advance + spend-gain log +
 		// quick-add. Deliverable 2 (spendable monster malice features) is gated on
 		// F2 OD-1 + D6 and not built here (OD-6/plan header).
-		this.buildMalicePanel(enemiesHead, data, owner);
+		if (this.controlsLayout === 'stacked') this.buildMalicePanel(enemiesHead, data, owner);
 
 		data.enemy_groups.forEach((group) => {
 			this.buildEnemyGroupRow(enemiesGroup.createDiv({ cls: 'dse-init__entry' }), group, owner);
@@ -233,11 +262,27 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  rest of this view's read-only contract. */
 	private buildMalicePanel(container: HTMLElement, data: EncounterData, owner: Component): void {
 		const panel = container.createDiv({ cls: 'dse-init__malice-panel' });
+		this.buildMaliceTotal(panel, data, owner);
+		this.buildRoundControls(panel, data, owner);
+		this.buildMaliceLog(panel, data);
+		this.buildMaliceQuickAdd(panel, data, owner);
+	}
 
-		// Pool: the kit stepper (write) or a static value (read-only). CB-7 is fixed
-		// by construction — stepper.render() sets ONLY its value node, so the ± buttons
-		// survive every press (legacy's container.setText destroyed the chevrons).
-		const malice = panel.createDiv({ cls: 'dse-init__malice' });
+	/** Pool: the kit stepper (write) or a static value (read-only). CB-7 is fixed
+	 *  by construction — stepper.render() sets ONLY its value node, so the ± buttons
+	 *  survive every press (legacy's container.setText destroyed the chevrons).
+	 *
+	 *  SC-154 round 3 — `onTotalChange` exists for the `rail` layout, whose collapsed
+	 *  summary repeats the pool value. The stepper persists WITHOUT a rebuild (that is
+	 *  the point of the in-place path), so a repeat of the number elsewhere in the DOM
+	 *  would silently go stale on every ± press unless it is told. */
+	private buildMaliceTotal(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+		onTotalChange?: (value: number) => void,
+	): HTMLElement {
+		const malice = container.createDiv({ cls: 'dse-init__malice' });
 		if (this.canWrite) {
 			const handle = stepper(
 				malice,
@@ -248,6 +293,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					format: (v) => 'Malice: ' + v,
 					onChange: (v) => {
 						data.malice.value = v;
+						onTotalChange?.(v);
 						void this.persist();
 					},
 				},
@@ -259,7 +305,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 		} else {
 			malice.createDiv({ cls: 'dse-init__malice-value', text: 'Malice: ' + data.malice.value });
 		}
+		return malice;
+	}
 
+	private buildRoundControls(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+	): HTMLElement {
 		// Round counter (always shown — a state display) + two distinct write controls
 		// (task-9-review.md HIGH finding — these are NOT interchangeable):
 		//  - "Reset turns (this round)": mid-round correction — clears has_taken_turn +
@@ -268,7 +321,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		//  - "Advance round": the full round-boundary transition (round++, turn/action
 		//    clear, Malice round_gain) — calls the SAME advanceRound() the round control
 		//    elsewhere would call, so the two surfaces can't diverge, per the brief.
-		const roundRow = panel.createDiv({ cls: 'dse-init__round' });
+		const roundRow = container.createDiv({ cls: 'dse-init__round' });
 		const roundValueEl = roundRow.createSpan({
 			cls: 'dse-init__round-value',
 			text: `Round ${data.round ?? 1}`,
@@ -303,12 +356,39 @@ export class InitiativeView extends ElementView<EncounterData> {
 				owner,
 			).buttonEl.addClass('dse-init__round-advance');
 		}
+		return roundRow;
+	}
 
-		// Spend/gain log (spec §3.1 — "so the table can see where Malice went").
-		// Read-only rendering only: this is a display, never an editable list.
-		const logEl = panel.createDiv({ cls: 'dse-init__malice-log' });
-		logEl.createEl('h5', { cls: 'dse-init__malice-log-heading', text: 'Malice log' });
+	/** Spend/gain log (spec §3.1 — "so the table can see where Malice went").
+	 *  Read-only rendering only: this is a display, never an editable list.
+	 *
+	 *  SC-154 round 3 — `disclosure` swaps the `h5 + list` pair for a real `<details>`
+	 *  whose `<summary>` carries the entry count ("Malice log · 3 entries"). Same
+	 *  content, same classes on the parts; a native disclosure rather than a scripted
+	 *  one so keyboard/AT behaviour and the print force-open rules come for free. */
+	private buildMaliceLog(
+		container: HTMLElement,
+		data: EncounterData,
+		opts: { disclosure?: boolean } = {},
+	): HTMLElement {
 		const entries: MaliceLogEntry[] = data.malice.log ?? [];
+		const logEl = opts.disclosure
+			? container.createEl('details', {
+					cls: 'dse-init__malice-log dse-init__malice-log--disclosure',
+				})
+			: container.createDiv({ cls: 'dse-init__malice-log' });
+		if (opts.disclosure) {
+			const count =
+				entries.length === 0
+					? 'no entries'
+					: `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+			logEl.createEl('summary', {
+				cls: 'dse-init__malice-log-heading',
+				text: `Malice log · ${count}`,
+			});
+		} else {
+			logEl.createEl('h5', { cls: 'dse-init__malice-log-heading', text: 'Malice log' });
+		}
 		if (entries.length === 0) {
 			logEl.createDiv({
 				cls: 'dse-init__malice-log-empty',
@@ -324,12 +404,19 @@ export class InitiativeView extends ElementView<EncounterData> {
 				});
 			});
 		}
+		return logEl;
+	}
 
-		// Quick-add: labeled trigger-based gains (spec §3.3, e.g. "+3 Feytouched") —
-		// manual, appends to the log. Write-only; omitted entirely when read-only
-		// (F1 §4.4: no dead-end write affordance).
+	/** Quick-add: labeled trigger-based gains (spec §3.3, e.g. "+3 Feytouched") —
+	 *  manual, appends to the log. Write-only; omitted entirely when read-only
+	 *  (F1 §4.4: no dead-end write affordance). */
+	private buildMaliceQuickAdd(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+	): void {
 		if (this.canWrite) {
-			const quickAdd = panel.createDiv({ cls: 'dse-init__malice-quickadd' });
+			const quickAdd = container.createDiv({ cls: 'dse-init__malice-quickadd' });
 			const amountInput = quickAdd.createEl('input', {
 				cls: 'dse-init__malice-quickadd-amount',
 				type: 'number',
@@ -362,6 +449,110 @@ export class InitiativeView extends ElementView<EncounterData> {
 				owner,
 			).buttonEl.addClass('dse-init__malice-quickadd-btn');
 		}
+	}
+
+	// ------------------------------------------------- SC-154 round 3: layout candidates
+
+	/** The full-width control band the three candidate layouts share. Same pieces, same
+	 *  behaviour, same classes — only the container and the order differ, so a candidate
+	 *  can never quietly drop a control or grow a second copy of one. */
+	private buildControlsBand(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+	): void {
+		const layout = this.controlsLayout;
+		if (layout === 'bar') this.buildControlsBar(container, data, owner);
+		else if (layout === 'panels') this.buildControlsPanels(container, data, owner);
+		else if (layout === 'rail') this.buildControlsRail(container, data, owner);
+	}
+
+	/** OPTION 1 — command bar. One flat rule-bounded strip, laid out as a two-column
+	 *  grid: round state and its two controls at the LEFT edge (the half Scott's
+	 *  screenshot shows empty), the Malice pool and its quick-add held against the
+	 *  right, the log folded into a disclosure that opens a full-width drawer beneath.
+	 *  Nothing is a card — the strip reads as chrome between the two rosters rather
+	 *  than as a third roster.
+	 *
+	 *  The four pieces are SIBLINGS (not two side wrappers) because the grid places
+	 *  each one itself; that is what lets the whole thing collapse to a single left-
+	 *  aligned column at sidebar width with no wrapper left over holding a stale
+	 *  `margin-left: auto`. */
+	private buildControlsBar(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+	): void {
+		const band = container.createDiv({
+			cls: 'dse-init__controls dse-init__controls--bar',
+		});
+		const grid = band.createDiv({ cls: 'dse-init__bar-grid' });
+		this.buildRoundControls(grid, data, owner);
+		this.buildMaliceTotal(grid, data, owner);
+		this.buildMaliceQuickAdd(grid, data, owner);
+		this.buildMaliceLog(grid, data, { disclosure: true });
+	}
+
+	/** OPTION 2 — two forged panels. Two equal plates filling the band's width: "Round"
+	 *  (the counter large, its two controls beneath) and "Malice" (the pool large, the
+	 *  quick-add and the log beneath). Both plates wear the same surface + hairline
+	 *  chrome a hero row and an enemy group's body already wear, so the band belongs to
+	 *  the same card family as the rosters it sits between. */
+	private buildControlsPanels(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+	): void {
+		const band = container.createDiv({
+			cls: 'dse-init__controls dse-init__controls--panels',
+		});
+		const roundPlate = band.createDiv({ cls: 'dse-init__plate dse-init__plate--round' });
+		roundPlate.createDiv({ cls: 'dse-init__plate-label', text: 'Round' });
+		this.buildRoundControls(roundPlate, data, owner);
+		const malicePlate = band.createDiv({ cls: 'dse-init__plate dse-init__plate--malice' });
+		malicePlate.createDiv({ cls: 'dse-init__plate-label', text: 'Malice' });
+		this.buildMaliceTotal(malicePlate, data, owner);
+		this.buildMaliceQuickAdd(malicePlate, data, owner);
+		this.buildMaliceLog(malicePlate, data);
+	}
+
+	/** OPTION 3 — expanding rail. At rest the band is one line of state ("Round 3 ·
+	 *  Malice 7") with a chevron; opening it reveals the same controls the other two
+	 *  layouts show. A native `<details>`, so it keeps keyboard/AT behaviour and the
+	 *  sheet's existing print force-open rule reaches it (a printed handout shows the
+	 *  controls, not a closed twisty). */
+	private buildControlsRail(
+		container: HTMLElement,
+		data: EncounterData,
+		owner: Component,
+	): void {
+		const band = container.createEl('details', {
+			cls: 'dse-init__controls dse-init__controls--rail',
+		});
+		const summary = band.createEl('summary', { cls: 'dse-init__rail-summary' });
+		summary.createSpan({ cls: 'dse-init__rail-stat', text: `Round ${data.round ?? 1}` });
+		summary.createSpan({ cls: 'dse-init__rail-sep', text: '·' });
+		// The pool value repeated OUTSIDE the stepper: the stepper's own ± persists
+		// in place without a rebuild, so this node is handed the new value directly
+		// (buildMaliceTotal's onTotalChange) rather than being left to go stale.
+		const maliceStat = summary.createSpan({
+			cls: 'dse-init__rail-stat dse-init__rail-stat--malice',
+			text: `Malice ${data.malice.value}`,
+		});
+		const entries = data.malice.log ?? [];
+		if (entries.length > 0) {
+			summary.createSpan({
+				cls: 'dse-init__rail-hint',
+				text: `${entries.length} log ${entries.length === 1 ? 'entry' : 'entries'}`,
+			});
+		}
+		const body = band.createDiv({ cls: 'dse-init__rail-body' });
+		this.buildRoundControls(body, data, owner);
+		this.buildMaliceTotal(body, data, owner, (v) => {
+			maliceStat.setText(`Malice ${v}`);
+		});
+		this.buildMaliceQuickAdd(body, data, owner);
+		this.buildMaliceLog(body, data);
 	}
 
 	// ---------------------------------------------------------------- turn indicator

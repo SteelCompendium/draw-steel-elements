@@ -419,6 +419,46 @@ malice:
   value: 5
 `;
 
+// SC-154 round 3 — the fixture the three control-layout candidates are judged on. The
+// shipped `initiative` fixture is round 1 with an empty Malice log, which is the ONE state
+// where the cluster looks tidy: no log list, no multi-digit round. A layout proposal has to
+// be judged on a tracker mid-fight, so this one is round 3 with a real spend/gain history
+// (the log's own `max-height: 6em` scroll is reachable) and a pool that has moved off its
+// starting value. Same combatants as the default fixture so the only thing that differs
+// between the candidate shots and today's is the control cluster itself.
+const initiativeControls = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+    image: "images/frodo.png"
+  - name: "Samwise Gamgee"
+    max_stamina: 90
+    image: "images/sam.png"
+enemy_groups:
+  - name: "Mordor Forces"
+    creatures:
+      - name: "Orc"
+        max_stamina: 40
+        amount: 4
+        image: "images/orc.png"
+      - name: "Troll"
+        max_stamina: 150
+        amount: 1
+        image: "images/troll.png"
+round: 3
+malice:
+  value: 7
+  log:
+    - round: 1
+      amount: 3
+      label: "Round gain"
+    - round: 2
+      amount: -5
+      label: "Troll: Sweeping Club"
+    - round: 3
+      amount: 4
+      label: "Feytouched"
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -450,7 +490,11 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	// The element takes no config (definition.ts `parse: () => undefined`), so there is no
 	// second fixture to add here — a variant-2 entry would render an identical DOM.
 	'horizontal-rule': { default: horizontalRuleDefault },
-	initiative: { default: initiativeDefault, 'no-images': initiativeNoImages },
+	initiative: {
+		default: initiativeDefault,
+		'no-images': initiativeNoImages,
+		controls: initiativeControls,
+	},
 	kit: { default: kitDefault, collapsed: kitCollapsed },
 	montage: { default: montageDefault },
 	negotiation: { default: negotiationDefault, checked: negotiationChecked },
@@ -723,11 +767,19 @@ export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; 
  * One entry per NON-DEFAULT value of each new preference: the default value is
  * already the whole rest of the sweep.
  */
+/** SC-154 round 3 added `width` and `click` to this list's entries — the two axes the
+ *  other manifest arrays already own (NARROW_SHOTS / INTERACTION_SHOTS), which a
+ *  pref-varied capture could not reach before: a layout candidate has to be judged at
+ *  three widths, and two of the three candidates put content behind a disclosure whose
+ *  open state only exists after a real click. Both are optional and absent from every
+ *  pre-existing entry, so no existing capture changes. */
 export const PREF_SHOTS: {
 	id: string;
 	element: string;
 	fixture: string;
 	prefs: Record<string, string>;
+	width?: number;
+	click?: string;
 }[] = [
 	// Keyword display (`kwUsage`) — the chip band's other three presentations.
 	{ id: 'statblock-kwusage-text', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'text' } },
@@ -783,6 +835,55 @@ export const PREF_SHOTS: {
 		element: 'horizontal-rule',
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
+	},
+	// —— SC-154 round 3: the three control-cluster layout candidates ——
+	// Every entry below rides the `controls` fixture (round 3, a real Malice log) so the
+	// three options and the shipped layout are compared on IDENTICAL content and state.
+	// Three widths each — full note pane (the harness's 900px viewport), a half-split
+	// ~500px, and a 300px sidebar leaf — because "clean" at one width and broken at
+	// another is the defect this whole ticket is about.
+	//
+	// The shipped layout on the same fixture, for the comparison. Its full-width shot is
+	// already taken by the element sweep as `initiative-controls--*`, so only the two
+	// narrow widths need entries here.
+	{ id: 'initiative-stacked-500', element: 'initiative', fixture: 'controls', prefs: { initControls: 'stacked' }, width: 500 },
+	{ id: 'initiative-stacked-300', element: 'initiative', fixture: 'controls', prefs: { initControls: 'stacked' }, width: 300 },
+	// OPTION 1 — command bar.
+	{ id: 'initiative-opt1-bar', element: 'initiative', fixture: 'controls', prefs: { initControls: 'bar' } },
+	{ id: 'initiative-opt1-bar-500', element: 'initiative', fixture: 'controls', prefs: { initControls: 'bar' }, width: 500 },
+	{ id: 'initiative-opt1-bar-300', element: 'initiative', fixture: 'controls', prefs: { initControls: 'bar' }, width: 300 },
+	// …with the log disclosure opened: the state that proves the list drops onto its own
+	// line UNDER the strip instead of displacing the Malice half.
+	{
+		id: 'initiative-opt1-bar-open',
+		element: 'initiative',
+		fixture: 'controls',
+		prefs: { initControls: 'bar' },
+		click: 'summary.dse-init__malice-log-heading',
+	},
+	// OPTION 2 — two forged panels.
+	{ id: 'initiative-opt2-panels', element: 'initiative', fixture: 'controls', prefs: { initControls: 'panels' } },
+	{ id: 'initiative-opt2-panels-500', element: 'initiative', fixture: 'controls', prefs: { initControls: 'panels' }, width: 500 },
+	{ id: 'initiative-opt2-panels-300', element: 'initiative', fixture: 'controls', prefs: { initControls: 'panels' }, width: 300 },
+	// OPTION 3 — expanding rail. Its RESTING state is the whole proposal, so that is the
+	// shot at all three widths; the expanded state gets its own capture.
+	{ id: 'initiative-opt3-rail', element: 'initiative', fixture: 'controls', prefs: { initControls: 'rail' } },
+	{ id: 'initiative-opt3-rail-500', element: 'initiative', fixture: 'controls', prefs: { initControls: 'rail' }, width: 500 },
+	{ id: 'initiative-opt3-rail-300', element: 'initiative', fixture: 'controls', prefs: { initControls: 'rail' }, width: 300 },
+	{
+		id: 'initiative-opt3-rail-open',
+		element: 'initiative',
+		fixture: 'controls',
+		prefs: { initControls: 'rail' },
+		click: 'summary.dse-init__rail-summary',
+	},
+	{
+		id: 'initiative-opt3-rail-open-300',
+		element: 'initiative',
+		fixture: 'controls',
+		prefs: { initControls: 'rail' },
+		width: 300,
+		click: 'summary.dse-init__rail-summary',
 	},
 ];
 

@@ -921,6 +921,319 @@ code.dsa {
         box-sizing: border-box;
     }
 
+    /* ================================================================= */
+    /*  SC-154 round 3 — CONTROL-CLUSTER LAYOUT CANDIDATES               */
+    /* ================================================================= */
+    /* Scott, SC-154 2026-08-18: the round counter, the two turn controls, the Malice
+       pool, its log and its quick-add "are all on the right side while leaving the
+       left empty. They are scattered and overall just a mess … Propose a few options
+       for layout and ill pick one."
+       Three candidates, all built from the SAME view.ts piece-builders (buildRoundControls
+       / buildMaliceTotal / buildMaliceQuickAdd / buildMaliceLog), all reached only through
+       the hidden `initControls` preference whose default is the shipped `stacked` layout.
+       NOTHING below can match under the default, so the frozen print shots cannot move:
+       every selector needs a `.dse-init__controls*` class that `stacked` never builds.
+       Whichever one Scott picks becomes the default and the other two get deleted — this
+       is a decision surface, not four supported layouts. */
+
+    /* The band all three share: full content width, between the two rosters. */
+    .dse-init__controls {
+        box-sizing: border-box;
+        width: 100%;
+        margin: 0 0 12px;
+    }
+
+    /* ---- OPTION 1: the command bar ---- */
+    /* One flat strip, no card: hairline rules top and bottom, and a two-column grid
+       inside. Round state leads at the LEFT edge — the half Scott's screenshot shows
+       empty — and the Malice pool + quick-add are held against the right, so the band
+       is balanced instead of ragged. Two rows rather than one: at a real note's content
+       width (~700px) the round controls alone are ~430px and the quick-add ~290px, so a
+       literal single line would only ever exist by shortening the labels round 1
+       deliberately widened.
+       `container-type` (not a media query) because the thing that decides the layout is
+       the TRACKER's width — a note pane, a split, a sidebar leaf — never the window's. */
+    .dse-init__controls--bar {
+        container-type: inline-size;
+        container-name: dse-init-bar;
+        padding: 6px 0;
+        border-top: 1px solid var(--dse-rule);
+        border-bottom: 1px solid var(--dse-rule);
+    }
+
+    .dse-init__bar-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 16px;
+        row-gap: 6px;
+    }
+
+    /* `display: contents` dissolves the <details> wrapper so its summary and its list
+       are grid items in their own right — that is what lets one element be both an
+       inline chip in row 2 and a full-width drawer in row 3 (opening the log adds a
+       line UNDER the strip instead of displacing the Malice column). */
+    .dse-init__bar-grid .dse-init__malice-log--disclosure {
+        display: contents;
+    }
+
+    .dse-init__bar-grid .dse-init__round {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .dse-init__bar-grid .dse-init__malice {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+    }
+
+    .dse-init__bar-grid .dse-init__malice-quickadd {
+        grid-column: 2;
+        grid-row: 2;
+        justify-self: end;
+    }
+
+    .dse-init__bar-grid .dse-init__malice-log-heading {
+        grid-column: 1;
+        grid-row: 2;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        cursor: pointer;
+        /* `display: flex` already drops Chromium's disclosure triangle (the marker box
+           only exists on `display: list-item`); `list-style: none` covers Firefox. */
+        list-style: none;
+        font-size: 0.8em;
+        font-weight: 600;
+        color: var(--dse-fg-muted);
+    }
+
+    /* The twisty is DRAWN, not typed: SC-162's lesson is that a glyph the vault's font
+       lacks renders as tofu, and a caret is exactly the kind of character a book face
+       omits. Borders always paint. */
+    .dse-init__bar-grid .dse-init__malice-log-heading::before {
+        content: '';
+        width: 0;
+        height: 0;
+        border-left: 5px solid currentColor;
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+    }
+
+    .dse-init__bar-grid .dse-init__malice-log--disclosure[open] .dse-init__malice-log-heading::before {
+        transform: rotate(90deg);
+    }
+
+    .dse-init__bar-grid .dse-init__malice-log-list,
+    .dse-init__bar-grid .dse-init__malice-log-empty {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        max-width: 100%;
+        text-align: left;
+    }
+
+    /* Narrow: one left-aligned column, DOM order. Every placement above is re-declared
+       at the same specificity (later in the sheet, so it wins) rather than forced with
+       !important.
+       520px is MEASURED, not a round number. The right-hand column is `auto`, so it
+       takes the quick-add's max-content (~290px) and the round row gets whatever is
+       left; the round row's own min-content is its widest whole button, ~190px. Below
+       ~500px of band the 1fr column is squeezed under that and the nowrap buttons paint
+       outside themselves — caught by the audit probe at a 500px note pane, whose band is
+       434px. 520 puts that case safely in the stacked branch. */
+    @container dse-init-bar (max-width: 520px) {
+        .dse-init__bar-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .dse-init__bar-grid .dse-init__round,
+        .dse-init__bar-grid .dse-init__malice,
+        .dse-init__bar-grid .dse-init__malice-quickadd,
+        .dse-init__bar-grid .dse-init__malice-log-heading,
+        .dse-init__bar-grid .dse-init__malice-log-list,
+        .dse-init__bar-grid .dse-init__malice-log-empty {
+            grid-column: 1;
+            grid-row: auto;
+            justify-self: start;
+        }
+    }
+
+    /* ---- OPTION 2: two forged panels ---- */
+    /* Equal plates filling the band. `auto-fit` + a 200px floor is the whole responsive
+       story — no media query, no sidebar special case. The floor is MEASURED, not
+       guessed: a 500px note pane gives this band 434px (500 − the host wrapper's 34 −
+       the tracker's own 32 of `--dse-pad`), so two tracks need `2 × floor + 12 ≤ 434`,
+       i.e. a floor of 211 or less; 200 keeps a margin. A 300px sidebar leaf gives it
+       234px and drops to one stacked column. */
+    .dse-init__controls--panels {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    /* The same surface + hairline pair a hero row and an enemy group's body already
+       wear (the chrome rule above), so the band joins the card family it sits between
+       instead of introducing a third material. */
+    .dse-init__plate {
+        position: relative;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 8px 12px;
+        background-color: var(--dse-surface);
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 1px;
+            width: 12em;
+            max-width: 100%;
+            background: var(--dse-hairline-fade);
+        }
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 100%;
+            max-height: 12em;
+            background: linear-gradient(to bottom, var(--dse-rule), var(--dse-rule-fade));
+        }
+    }
+
+    .dse-init__plate-label {
+        font-size: 0.72em;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--dse-fg-muted);
+    }
+
+    /* Round plate: the counter is the headline, the two controls sit under it —
+       `flex: 1 1 100%` on the value inside the existing wrapping `.dse-init__round`
+       row, so no new DOM is needed to break the line. */
+    /* Content stays top-aligned inside a stretched plate. An earlier cut used
+       `align-content: space-between` to spend the round plate's spare height (the grid
+       stretches both plates to the taller one's height, and this one holds less), but
+       that distributes the row's LINES — so at a width where the two controls each take
+       their own line it opened a gap BETWEEN the two buttons, which reads as a bug, not
+       as breathing room. Spare height at the bottom of the shorter plate is the honest
+       version. */
+    .dse-init__plate--round .dse-init__round {
+        width: 100%;
+        row-gap: 8px;
+    }
+
+    .dse-init__plate--round .dse-init__round-value {
+        flex: 1 1 100%;
+        font-size: 2.1em;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--dse-fg);
+    }
+
+    /* Malice plate: the pool is its headline, at the same weight the round counter
+       gets, so the two plates read as a matched pair rather than one loud and one
+       quiet. */
+    .dse-init__plate--malice .dse-init__malice {
+        font-size: 1.8em;
+        line-height: 1.1;
+    }
+
+    .dse-init__plate--malice .dse-init__malice-log,
+    .dse-init__plate--malice .dse-init__malice-quickadd {
+        width: 100%;
+        text-align: left;
+    }
+
+    /* ---- OPTION 3: the expanding rail ---- */
+    /* At rest: one line of state and a chevron. Opened: the same controls the other two
+       candidates show. A native <details>, so keyboard and screen-reader behaviour are
+       the platform's, not a re-implementation. */
+    .dse-init__controls--rail {
+        border: 1px solid var(--dse-rule);
+        border-radius: 4px;
+        background-color: var(--dse-surface);
+    }
+
+    .dse-init__rail-summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        list-style: none;
+        font-size: 0.9em;
+    }
+
+    /* Drawn, not typed — same reasoning as the bar's twisty above. */
+    .dse-init__rail-summary::after {
+        content: '';
+        margin-left: auto;
+        width: 0;
+        height: 0;
+        border-left: 6px solid var(--dse-fg-muted);
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+    }
+
+    .dse-init__controls--rail[open] .dse-init__rail-summary::after {
+        transform: rotate(90deg);
+    }
+
+    .dse-init__rail-stat {
+        font-weight: 700;
+    }
+
+    .dse-init__rail-stat--malice {
+        color: var(--dse-malice);
+    }
+
+    .dse-init__rail-sep,
+    .dse-init__rail-hint {
+        color: var(--dse-fg-muted);
+    }
+
+    .dse-init__rail-hint {
+        font-size: 0.85em;
+    }
+
+    .dse-init__rail-body {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 10px 16px;
+        padding: 8px 10px 10px;
+        border-top: 1px solid var(--dse-rule);
+    }
+
+    /* The summary already states the round, so the body's copy of it would be the same
+       number twice, one line apart. The POOL is not the same case — the number inside
+       the stepper is the control's own value node (its ± live either side of it), so it
+       stays and the summary chip is kept in step by view.ts's onTotalChange. */
+    .dse-init__rail-body .dse-init__round-value {
+        display: none;
+    }
+
+    .dse-init__rail-body .dse-init__malice {
+        margin-left: auto;
+    }
+
+    .dse-init__rail-body .dse-init__malice-quickadd,
+    .dse-init__rail-body .dse-init__malice-log {
+        flex: 1 1 100%;
+        text-align: left;
+    }
+
     /* SC-154 round 1 added `gap: 8px` here, to separate the turn-indicator box from
        the row beside it.
        SC-154 round 2 — that gap treated the symptom backwards: turnbox and row were
