@@ -87,10 +87,23 @@ const rules: Rule[] = (() => {
 /** The BASE layer — everything a Chromium 106 engine actually applies. */
 const baseRules: Rule[] = rules.filter((r) => !r.gated);
 
-/** Every rule body whose selector list mentions `selector` AND is scoped to Steel. */
+/**
+ * Every BASE rule body whose selector list mentions `selector` AND is scoped to Steel.
+ *
+ * SC-171 review L-3: this used to read `rules`, which silently included the `@supports`
+ * enhancement twins — so a "this surface carries X" assertion could pass off the GATED body
+ * and say nothing at all about what a Chromium 106 engine paints. Base layer only; the gated
+ * layer has its own accessor below, so a contract has to name which one it means.
+ */
 const steelBlocksFor = (selector: string): string[] =>
-	rules
+	baseRules
 		.filter((r) => r.selector.includes(selector) && STEEL_SCOPE.test(r.selector))
+		.map((r) => r.body);
+
+/** The @supports-gated ENHANCEMENT twins for `selector` (SC-171). */
+const steelGatedBlocksFor = (selector: string): string[] =>
+	rules
+		.filter((r) => r.gated && r.selector.includes(selector) && STEEL_SCOPE.test(r.selector))
 		.map((r) => r.body);
 
 /**
@@ -201,12 +214,33 @@ describe('Steel material contract', () => {
 	});
 
 	describe('power-roll tiers', () => {
-		it('tier rows carry a tier-coloured wash under Steel', () => {
-			const blocks = steelBlocksFor('.dse-pr__row');
-			expect(blocks.length).toBeGreaterThan(0);
-			expect(
-				blocks.some((b) => /background-image:\s*linear-gradient\([^;]*color-mix\(/.test(b)),
-			).toBe(true);
+		// SC-171 review L-3 — the same two-part contract the notch families carry, for the
+		// surface that had the most rows broken on the floor engine. This assertion used to be
+		// a single `some(... color-mix ...)` over ALL rules, which after SC-171 passed off the
+		// gated twin's body and said nothing about the base layer. Both halves, named.
+		it('tier rows carry a FLAT wash in the base rule and the color-mix wash only behind the gate (SC-171)', () => {
+			const base = steelBlocksFor('.dse-pr__row');
+			expect(base.length).toBeGreaterThan(0);
+			// The floor engine's layer: the static `--tw` wash, and NO color-mix anywhere in it.
+			const withWash = base.filter((b) =>
+				/background-image:\s*linear-gradient\(90deg,\s*var\(--tw\),\s*transparent 60%\)/.test(b),
+			);
+			expect(withWash).toHaveLength(1);
+			for (const b of base) expect(b).not.toMatch(/color-mix/);
+
+			// The enhancement layer: exactly one gated twin, and it is where color-mix lives.
+			const gated = steelGatedBlocksFor('.dse-pr__row');
+			expect(gated).toHaveLength(1);
+			expect(gated[0]).toMatch(
+				/background-image:\s*linear-gradient\([^;]*color-mix\(in srgb, var\(--t\) 8%, transparent\)/,
+			);
+			// Static twin repeated first inside the block, for cssSupportFloor's adjacency scan.
+			const gatedWashes = Array.from(gated[0].matchAll(/background-image:[^;]+;/g)).map(
+				(m) => m[0],
+			);
+			expect(gatedWashes).toHaveLength(2);
+			expect(gatedWashes[0]).not.toMatch(/color-mix/);
+			expect(gatedWashes[1]).toMatch(/color-mix/);
 		});
 
 		it('the power-roll panel is framed under Steel', () => {

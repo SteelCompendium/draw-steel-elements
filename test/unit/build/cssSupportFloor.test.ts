@@ -66,11 +66,29 @@ import path from 'path';
 // `background-color: rgba(0, 0, 0, 0)` and `border-bottom: 0px none`, and every tier row lost
 // its wash. Every color-mix() declaration in this sheet contains a `var()`.
 //
-// `findUngatedColorMixViolations` is therefore the gate that can actually see the failure:
-// a `color-mix()` declaration carrying a `var()` MUST sit inside an `@supports` block whose
-// condition itself tests color-mix, so that a floor engine never enters the block and the
-// static declaration outside it is the only one it sees. Unlike the two scans above, this one
-// DOES model `@supports` — it walks brace depth and keeps the at-rule prelude stack.
+// `findUngatedColorMixViolations` is therefore the gate that can actually see the failure.
+// Unlike the two scans above, this one DOES model `@supports` — it walks brace depth and keeps
+// the at-rule prelude stack. It is TWO-SIDED (SC-171 review M-1), because gating is only half
+// of the fix:
+//
+//   1. `ungated`      — a `var()`-bearing `color-mix()` declaration MUST sit inside an
+//                       `@supports` block that really keeps a floor engine out.
+//   2. `no-base-twin` — and the property it enhances MUST also be declared statically OUTSIDE
+//                       that gate, in the same selector context. Gate the enhancement but
+//                       forget the base declaration and the floor engine gets NOTHING for that
+//                       property — the same bug, reached from the other side. Proven live
+//                       during the SC-171 review: deleting `.dse-pr__row`'s base
+//                       `background-image` and leaving its gate intact passed tsc, lint and all
+//                       2825 tests while every tier row rendered washless on Chromium 106.
+//
+// What counts as a gate is deliberately narrow (`isColorMixGatePrelude`, SC-171 review M-2):
+// `@supports not (… color-mix …)` applies ONLY on the floor engine, and
+// `@supports (display: grid) or (… color-mix …)` lets it in through the other arm — neither is
+// a gate. `and`-conjunctions are fine (one false conjunct fails the term).
+//
+// KNOWN LIMIT, accepted (SC-171 review N-6): the scan is order-blind. The doctrine also
+// requires the gate block to sit AFTER the rule it enhances — equal specificity means source
+// order decides the winner on a modern engine — and nothing here checks that.
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const SOURCE = path.join(repoRoot, 'styles-source.css');
@@ -416,72 +434,150 @@ export function findTokenViolations(rawCss: string): TokenViolation[] {
 }
 
 // ── SC-171: the @supports-gate scan ─────────────────────────────────────────────────────
+/**
+ * `ungated`      — a `var()`-bearing color-mix() declaration with no gate around it. The
+ *                  original SC-171 failure: the floor engine parses it, fails at
+ *                  computed-value time, and the property lands on `unset`.
+ * `no-base-twin` — a GATED color-mix() declaration with no static declaration of the same
+ *                  property, in the same selector context, OUTSIDE the gate. The same
+ *                  failure from the other side: the floor engine never enters the block,
+ *                  so it gets no declaration of that property at all (SC-171 review M-1).
+ */
+export type ColorMixViolationKind = 'ungated' | 'no-base-twin';
+
 export interface UngatedColorMixViolation {
 	/** 1-based source line of the offending declaration. */
 	line: number;
 	prop: string;
 	decl: string;
 	reason: string;
+	kind: ColorMixViolationKind;
+	/** Enclosing preludes with any color-mix gate removed — the layer a floor engine sees. */
+	context: string;
 }
 
-/** The literal gate the sheet uses everywhere; the scan accepts any @supports testing color-mix. */
+/** The literal gate the sheet uses everywhere. Any EQUIVALENT condition is accepted too. */
 export const COLOR_MIX_GATE = '@supports (background: color-mix(in srgb, red 14%, blue))';
 
-/** An enclosing prelude counts as a gate only if it is an @supports that probes color-mix. */
-function preludeGatesColorMix(prelude: string): boolean {
-	const p = prelude.trim();
-	return /^@supports\b/i.test(p) && p.includes('color-mix(');
+const norm = (s: string): string => s.trim().replace(/\s+/g, ' ');
+
+/**
+ * Split an `@supports` condition on TOP-LEVEL `or`, respecting parentheses.
+ * `(a) or (b)` → ['(a)', '(b)']; `(background: color-mix(in srgb, red, blue))` → one term
+ * (the inner `color-mix(...)` parens keep its contents at depth > 0).
+ */
+function splitTopLevelOr(cond: string): string[] {
+	const out: string[] = [];
+	let depth = 0;
+	let cur = '';
+	for (let i = 0; i < cond.length; i++) {
+		const ch = cond[i];
+		if (ch === '(') depth += 1;
+		else if (ch === ')') depth -= 1;
+		const atWordStart = i === 0 || /[\s)]/.test(cond[i - 1]);
+		if (depth === 0 && atWordStart && /^or\b/i.test(cond.slice(i))) {
+			out.push(cur);
+			cur = '';
+			i += 1; // consume the 'r' as well
+			continue;
+		}
+		cur += ch;
+	}
+	out.push(cur);
+	return out.map((s) => s.trim()).filter(Boolean);
 }
 
 /**
- * Flag every `color-mix()` declaration whose value also contains `var()` and which is NOT
- * inside an `@supports` block testing color-mix. See the SC-171 note in this file's header
- * for why the adjacency scan above cannot see this class.
+ * Does this enclosing prelude actually keep a floor engine OUT?
  *
- * Brace-depth walk over a comment-masked copy, carrying the stack of enclosing preludes
- * (selectors AND at-rules), so `@supports` nesting is modelled rather than ignored.
+ * SC-171 review M-2 — the first version of this asked only "is it an `@supports` whose text
+ * mentions color-mix", which accepted two conditions that a Chromium 106 engine happily
+ * enters:
+ *
+ *   • `@supports not (background: color-mix(…))` — the block applies ONLY where color-mix is
+ *     unsupported, i.e. exactly on the floor engine. The worst possible place to put a
+ *     color-mix() declaration, and the shape someone reaches for when writing a floor-only
+ *     fallback block. Any `not` in the condition is therefore disqualifying.
+ *   • `@supports (display: grid) or (background: color-mix(…))` — a floor engine enters
+ *     through the `display: grid` arm. So EVERY top-level disjunct must itself test
+ *     color-mix. `and` needs no such care: one false conjunct fails the whole term, so
+ *     `(display: grid) and (background: color-mix(…))` is safe and is accepted.
  */
-export function findUngatedColorMixViolations(rawCss: string): UngatedColorMixViolation[] {
+export function isColorMixGatePrelude(prelude: string): boolean {
+	const p = norm(prelude);
+	if (!/^@supports\b/i.test(p)) return false;
+	const cond = p.replace(/^@supports\b/i, '').trim();
+	if (!cond) return false;
+	if (/\bnot\b/i.test(cond)) return false;
+	return splitTopLevelOr(cond).every((d) => d.includes('color-mix('));
+}
+
+/**
+ * Rewrite every ACCEPTED color-mix gate in `css` into an `@supports` that is not a gate.
+ *
+ * SC-171 review L-4: the in-repo can-fail control used to neuter gates by string-replacing
+ * the exact `COLOR_MIX_GATE` literal, so an eleventh declaration behind a differently-worded
+ * but perfectly valid gate (e.g. `@supports (color: color-mix(in srgb, red, blue))`) was left
+ * gated — the control's count stayed at 10 and it passed while the inventory was stale.
+ * Neutering by the same predicate the scan uses closes that.
+ */
+export function neuterColorMixGates(css: string): string {
+	// Match against a comment-MASKED copy (same length, so offsets carry over) and splice the
+	// original by index. Matching the raw text instead lets a prelude quoted in the sheet's own
+	// prose start a match that runs through the comment and swallows the next REAL gate, which
+	// then survives the neutering — the first cut of this did exactly that.
+	const masked = maskComments(css);
+	const hits: { start: number; end: number }[] = [];
+	const re = /@supports[^{}]*\{/g;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(masked))) {
+		if (isColorMixGatePrelude(m[0].slice(0, -1))) {
+			hits.push({ start: m.index, end: m.index + m[0].length });
+		}
+	}
+	let out = css;
+	for (const h of hits.reverse()) {
+		out = out.slice(0, h.start) + '@supports (background: red) {' + out.slice(h.end);
+	}
+	return out;
+}
+
+interface ScannedDecl {
+	line: number;
+	prop: string;
+	value: string;
+	/** Enclosing preludes, outermost first, whitespace-normalised. */
+	stack: string[];
+}
+
+/** Every `prop: value` in the file, with the at-rule/selector stack it sits under. */
+function scanDeclarations(rawCss: string): ScannedDecl[] {
 	const masked = maskComments(rawCss);
-	const violations: UngatedColorMixViolation[] = [];
+	const out: ScannedDecl[] = [];
 	const stack: string[] = [];
 	let buf = '';
 	let line = 1;
 	let segLine = 0;
 
 	const flush = () => {
-		const text = buf.trim().replace(/\s+/g, ' ');
+		const text = norm(buf);
 		const at = segLine || line;
 		buf = '';
 		segLine = 0;
 		if (!text) return;
 		const colon = text.indexOf(':');
 		if (colon === -1) return;
-		const prop = text.slice(0, colon).trim();
-		const value = text.slice(colon + 1).trim();
-		if (!value.includes('color-mix(')) return;
-		// Same exemption as the adjacency scan (limit 4): a custom property's value is not
-		// parsed as a property value until it is substituted.
-		if (prop.startsWith('--')) return;
-		// A color-mix() with NO var() really is invalid at parse time, so the plain
-		// static-first adjacency pair (enforced by findFloorViolations) is sufficient there.
-		if (!value.includes('var(')) return;
-		if (stack.some(preludeGatesColorMix)) return;
-		violations.push({
+		out.push({
 			line: at,
-			prop,
-			decl: `${prop}: ${value}`,
-			reason:
-				`it contains \`var()\`, so a Chromium 106 engine parses it and then fails at ` +
-				`computed-value time — AFTER the cascade discarded the static \`${prop}\` above it, ` +
-				`leaving the property \`unset\`. Move it inside \`${COLOR_MIX_GATE}\` (repeating the ` +
-				`static twin inside the block) so the static declaration is the only one outside the gate.`,
+			prop: text.slice(0, colon).trim(),
+			value: text.slice(colon + 1).trim(),
+			stack: [...stack],
 		});
 	};
 
 	for (const ch of masked) {
 		if (ch === '{') {
-			stack.push(buf.trim().replace(/\s+/g, ' '));
+			stack.push(norm(buf));
 			buf = '';
 			segLine = 0;
 			continue;
@@ -499,6 +595,87 @@ export function findUngatedColorMixViolations(rawCss: string): UngatedColorMixVi
 		if (!buf && /\s/.test(ch)) continue; // skip leading whitespace of a segment
 		if (!segLine) segLine = line;
 		buf += ch;
+	}
+
+	return out;
+}
+
+/** The selector context a floor engine sees: the stack with any color-mix gate removed. */
+const contextOf = (stack: string[]): string =>
+	stack.filter((p) => !isColorMixGatePrelude(p)).join(' | ');
+
+/**
+ * The TWO-SIDED gate scan. See the SC-171 note in this file's header for why the adjacency
+ * scan above cannot see either half.
+ *
+ *  1. A `var()`-bearing `color-mix()` declaration must sit inside an `@supports` block that
+ *     really does keep a floor engine out (`isColorMixGatePrelude`).
+ *  2. …and the property it enhances must ALSO be declared statically OUTSIDE that gate, in
+ *     the same selector context — otherwise a floor engine, which never enters the block,
+ *     gets no declaration of that property at all. Gating alone is only half the fix.
+ *
+ * Brace-depth walk over a comment-masked copy carrying the prelude stack, so `@supports`
+ * nesting is modelled rather than ignored. Known limit, deliberate (SC-171 review N-6): the
+ * scan is order-blind — it does not check that the gate block sits AFTER the rule it
+ * enhances, which the doctrine requires because equal specificity makes source order decide.
+ */
+export function findUngatedColorMixViolations(rawCss: string): UngatedColorMixViolation[] {
+	const decls = scanDeclarations(rawCss);
+	const violations: UngatedColorMixViolation[] = [];
+
+	// Index of static (non-color-mix) declarations living OUTSIDE every color-mix gate.
+	const staticOutsideGate = new Set<string>();
+	for (const d of decls) {
+		if (d.prop.startsWith('--')) continue;
+		if (d.value.includes('color-mix(')) continue;
+		if (d.stack.some(isColorMixGatePrelude)) continue;
+		staticOutsideGate.add(`${contextOf(d.stack)} ${d.prop}`);
+	}
+
+	for (const d of decls) {
+		if (!d.value.includes('color-mix(')) continue;
+		// Same exemption as the adjacency scan (limit 4): a custom property's value is not
+		// parsed as a property value until it is substituted.
+		if (d.prop.startsWith('--')) continue;
+
+		const gated = d.stack.some(isColorMixGatePrelude);
+		const context = contextOf(d.stack);
+		const decl = `${d.prop}: ${d.value}`;
+
+		if (!gated) {
+			// A color-mix() with NO var() really is invalid at parse time, so the plain
+			// static-first adjacency pair (enforced by findFloorViolations) is sufficient there.
+			if (!d.value.includes('var(')) continue;
+			violations.push({
+				line: d.line,
+				prop: d.prop,
+				decl,
+				kind: 'ungated',
+				context,
+				reason:
+					`it contains \`var()\`, so a Chromium 106 engine parses it and then fails at ` +
+					`computed-value time — AFTER the cascade discarded the static \`${d.prop}\` above it, ` +
+					`leaving the property \`unset\`. Move it inside \`${COLOR_MIX_GATE}\` (repeating the ` +
+					`static twin inside the block) so the static declaration is the only one outside the gate.`,
+			});
+			continue;
+		}
+
+		if (!staticOutsideGate.has(`${context} ${d.prop}`)) {
+			violations.push({
+				line: d.line,
+				prop: d.prop,
+				decl,
+				kind: 'no-base-twin',
+				context,
+				reason:
+					`it is gated, but there is NO static \`${d.prop}\` declaration outside the gate for ` +
+					`\`${context}\`. A floor engine never enters the @supports block, so it gets no ` +
+					`\`${d.prop}\` at all — the same failure the gate exists to prevent, arrived at from ` +
+					`the other side. Declare the static value in the base rule (and keep the pair inside ` +
+					`the block too, for the adjacency scan).`,
+			});
+		}
 	}
 
 	return violations;
@@ -532,7 +709,21 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 
 	// ── SC-171 ───────────────────────────────────────────────────────────────────────
 	it('every var()-bearing color-mix() declaration sits inside an @supports color-mix gate', () => {
-		const violations = findUngatedColorMixViolations(rawCss);
+		const violations = findUngatedColorMixViolations(rawCss).filter((v) => v.kind === 'ungated');
+		expect(
+			violations
+				.map((v) => `styles-source.css:${v.line}  ${v.decl}\n    <-- ${v.reason}`)
+				.join('\n'),
+		).toBe('');
+	});
+
+	// SC-171 review M-1 — the other half. Gating an enhancement is only correct if the floor
+	// engine still has something to fall back ON; a gate with no static twin outside it leaves
+	// the property undeclared there, which is the very failure this ticket fixed.
+	it('every GATED color-mix() declaration has a static twin of the same property outside the gate', () => {
+		const violations = findUngatedColorMixViolations(rawCss).filter(
+			(v) => v.kind === 'no-base-twin',
+		);
 		expect(
 			violations
 				.map((v) => `styles-source.css:${v.line}  ${v.decl}\n    <-- ${v.reason}`)
@@ -545,11 +736,23 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		// every real gate prelude to one that does not test color-mix and re-run: each of the
 		// sheet's 10 declarations must now be reported by name. This is the live proof, run on
 		// the shipped stylesheet on every jest run — not a synthetic sample.
+		//
+		// SC-171 review L-4: neuter by the SAME predicate the scan uses, not by string-replacing
+		// the canonical literal — otherwise a declaration behind a differently-worded but valid
+		// gate stays gated, the count stays 10, and the control passes on a stale inventory.
 		const gates = rawCss.split(COLOR_MIX_GATE).length - 1;
 		expect(gates).toBeGreaterThanOrEqual(7); // the gates the sweep authored
-		const ungated = rawCss.split(COLOR_MIX_GATE).join('@supports (background: red)');
+		const ungated = neuterColorMixGates(rawCss);
+		// Structural proof that the neuterer actually disarmed everything: no @supports prelude
+		// left in the file is still accepted as a gate. (Comment-masked — the doctrine note
+		// quotes the canonical prelude in prose, which is not a gate and must not be counted.)
+		const stillGates = (maskComments(ungated).match(/@supports[^{}]*\{/g) ?? []).filter((m) =>
+			isColorMixGatePrelude(m.slice(0, -1)),
+		);
+		expect(stillGates).toEqual([]);
 		const violations = findUngatedColorMixViolations(ungated);
 		expect(violations.length).toBe(10);
+		expect(violations.every((v) => v.kind === 'ungated')).toBe(true);
 		// …and they are the surfaces SC-171 measured, by property.
 		const byProp = violations.reduce<Record<string, number>>((acc, v) => {
 			acc[v.prop] = (acc[v.prop] ?? 0) + 1;
@@ -563,6 +766,37 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		});
 	});
 
+	it('CAN-FAIL PROOF (M-1): deleting a base rule’s static twin is reported, by selector and property', () => {
+		// The live proof for the second half, run on the shipped stylesheet: take away the tier
+		// row's ungated `background-image` and leave its @supports block untouched — the exact
+		// shape that passed every gate during the SC-171 review — and the scan must name it.
+		const holed = rawCss.replace(
+			'\tbackground-image: linear-gradient(90deg, var(--tw), transparent 60%);\n}\n/* SC-171:',
+			'\n}\n/* SC-171:',
+		);
+		expect(holed).not.toBe(rawCss); // the anchor still exists; this control cannot go vacuous
+		const violations = findUngatedColorMixViolations(holed);
+		expect(violations).toHaveLength(1);
+		expect(violations[0].kind).toBe('no-base-twin');
+		expect(violations[0].prop).toBe('background-image');
+		expect(violations[0].context).toContain('.dse-pr__row');
+		expect(violations[0].reason).toContain('NO static `background-image` declaration outside');
+	});
+
+	it('CAN-FAIL PROOF (L-4): the neuterer disarms a differently-worded but valid gate too', () => {
+		const alt = `@supports (color: color-mix(in srgb, red, blue)) {\n\t.zz { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); }\n}\n`;
+		// Gated and twinned in its own right → clean before neutering…
+		expect(
+			findUngatedColorMixViolations(`.zz { background: #123; }\n${alt}`),
+		).toHaveLength(0);
+		// …and counted once the control disarms it, which the old literal-replace never did.
+		const violations = findUngatedColorMixViolations(
+			neuterColorMixGates(`.zz { background: #123; }\n${alt}`),
+		);
+		expect(violations).toHaveLength(1);
+		expect(violations[0].kind).toBe('ungated');
+	});
+
 	it('detector sanity: the @supports-gate scan flags exactly the ungated var() cases', () => {
 		const gate = COLOR_MIX_GATE;
 		const bare = `.a { background: #123456; background: color-mix(in srgb, var(--x) 40%, blue); }`;
@@ -572,8 +806,9 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		const literalPair = `.b { color: #123456; color: color-mix(in srgb, red 40%, blue); }`;
 		// A gate that does not actually probe color-mix must NOT count as a gate.
 		const wrongGate = `@supports (display: grid) { .c { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); } }`;
-		// Nesting: an inner @media inside the real gate is still gated.
-		const nested = `${gate} { @media screen { .d { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); } } }`;
+		// Nesting: an inner @media inside the real gate is still gated — and its base twin has
+		// to live in the SAME context (inside that @media, outside the gate).
+		const nested = `@media screen { .d { background: #123; } }\n${gate} { @media screen { .d { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); } } }`;
 		// Custom properties are exempt (limit 4).
 		const customProp = `.e { --w: color-mix(in srgb, var(--x) 4%, blue); }`;
 		// Prose in a comment must never be read as a declaration.
@@ -590,6 +825,74 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		expect(findUngatedColorMixViolations(customProp)).toHaveLength(0);
 		expect(findUngatedColorMixViolations(inComment)).toHaveLength(0);
 		expect(findUngatedColorMixViolations(noTrailingSemi)).toHaveLength(1);
+	});
+
+	// ── SC-171 review M-1: the two-sided half, on synthetic samples ──────────────────
+	it('detector sanity: a gate with no static twin outside it is a violation', () => {
+		const gate = COLOR_MIX_GATE;
+		const orphan = `.a { color: red; }\n${gate} {\n\t.a { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); }\n}`;
+		const twinned = `.a { color: red; background: #123; }\n${gate} {\n\t.a { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); }\n}`;
+		// A twin of a DIFFERENT property does not count…
+		const wrongProp = `.a { background-image: none; }\n${gate} {\n\t.a { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); }\n}`;
+		// …nor does one on a different selector…
+		const wrongSelector = `.other { background: #123; }\n${gate} {\n\t.a { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); }\n}`;
+		// …nor does a "twin" that is itself a color-mix (it fails on the floor engine too).
+		const twinIsAlsoMixed = `.a { background: color-mix(in srgb, var(--y) 4%, blue); }\n${gate} {\n\t.a { background: color-mix(in srgb, var(--y) 4%, blue); background: color-mix(in srgb, var(--x) 4%, blue); }\n}`;
+
+		expect(findUngatedColorMixViolations(orphan)).toHaveLength(1);
+		expect(findUngatedColorMixViolations(orphan)[0].kind).toBe('no-base-twin');
+		expect(findUngatedColorMixViolations(orphan)[0].prop).toBe('background');
+		expect(findUngatedColorMixViolations(twinned)).toHaveLength(0);
+		expect(findUngatedColorMixViolations(wrongProp)).toHaveLength(1);
+		expect(findUngatedColorMixViolations(wrongSelector)).toHaveLength(1);
+		// the ungated "twin" is reported as ungated; BOTH gated lines are still twinless
+		expect(findUngatedColorMixViolations(twinIsAlsoMixed).map((v) => v.kind).sort()).toEqual([
+			'no-base-twin',
+			'no-base-twin',
+			'ungated',
+		]);
+	});
+
+	// ── SC-171 review M-2: only a POSITIVE color-mix support test is a gate ──────────
+	it('gate acceptance: rejects `not`, rejects an `or` a floor engine can enter, accepts `and`', () => {
+		const mix = 'background: color-mix(in srgb, red 14%, blue)';
+		expect(isColorMixGatePrelude(COLOR_MIX_GATE)).toBe(true);
+		expect(isColorMixGatePrelude(`@supports (color: color-mix(in srgb, red, blue))`)).toBe(true);
+		// `and`: one false conjunct fails the whole term, so the floor engine stays out.
+		expect(isColorMixGatePrelude(`@supports (display: grid) and (${mix})`)).toBe(true);
+		expect(isColorMixGatePrelude(`@supports (${mix}) and (display: grid)`)).toBe(true);
+		// every disjunct tests color-mix → still safe
+		expect(
+			isColorMixGatePrelude(`@supports (${mix}) or (color: color-mix(in srgb, red, blue))`),
+		).toBe(true);
+
+		// `not` INVERTS the test: the block applies only where color-mix is missing.
+		expect(isColorMixGatePrelude(`@supports not (${mix})`)).toBe(false);
+		expect(isColorMixGatePrelude(`@supports (display: grid) and (not (${mix}))`)).toBe(false);
+		// `or`: the floor engine walks in through the other arm.
+		expect(isColorMixGatePrelude(`@supports (display: grid) or (${mix})`)).toBe(false);
+		expect(isColorMixGatePrelude(`@supports (${mix}) or (display: grid)`)).toBe(false);
+		// not an @supports at all
+		expect(isColorMixGatePrelude('@media screen')).toBe(false);
+		expect(isColorMixGatePrelude("[data-dse-theme='steel'] .dse-sb")).toBe(false);
+		expect(isColorMixGatePrelude('@supports (display: grid)')).toBe(false);
+	});
+
+	it('CAN-FAIL PROOF (M-2): `not(...)` and a permissive `or` are reported, not silently accepted', () => {
+		const mix = 'background: color-mix(in srgb, red 14%, blue)';
+		const decl = '.a { background: #123; background: color-mix(in srgb, var(--x) 4%, blue); }';
+		// Both of these were accepted as gates before the review and are entered by a
+		// Chromium 106 engine — `not` EXCLUSIVELY so.
+		const notGate = `@supports not (${mix}) {\n\t${decl}\n}`;
+		const orGate = `@supports (display: grid) or (${mix}) {\n\t${decl}\n}`;
+		const andGate = `.a { background: #123; }\n@supports (display: grid) and (${mix}) {\n\t${decl}\n}`;
+
+		expect(findUngatedColorMixViolations(notGate)).toHaveLength(1);
+		expect(findUngatedColorMixViolations(notGate)[0].kind).toBe('ungated');
+		expect(findUngatedColorMixViolations(orGate)).toHaveLength(1);
+		expect(findUngatedColorMixViolations(orGate)[0].kind).toBe('ungated');
+		// the safe conjunction is still accepted, so the rule is not merely "reject anything odd"
+		expect(findUngatedColorMixViolations(andGate)).toHaveLength(0);
 	});
 
 	it('detector sanity: the gate scan reports a usable source line', () => {
