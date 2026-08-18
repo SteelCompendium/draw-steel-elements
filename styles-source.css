@@ -10259,32 +10259,43 @@ button.dse-pr__row:hover {
 	border: 1px solid var(--dse-border);
 	border-bottom: 0;
 	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
-	/* Literal, like the SC-10 card lift-shadow: an UPWARD cast, so the panel reads as
-	   floating over the element above it and resting on the element below. */
-	box-shadow: 0 -2px 6px rgb(0 0 0 / 30%);
+	/* SC-169 ROUND 3 — style E3, the HAIRLINE CROWN, is the shipped material (Scott, SC-169
+	   2026-08-18: "Option D and E3. Sanctioned" — round 2 offered E1 chamfer / E2 bronze edge
+	   / E3 crown and he took the most restrained one).
+	     - a single bright hairline along the TOP edge: a light catch on the plate's lip, the
+	       same `inset 0 1px 0 rgba(255,255,255,…)` gesture `--dse-bevel` uses on every other
+	       raised Steel surface, so the panel is made of the same material as the cards;
+	     - an UPWARD-cast shadow, so the panel reads as floating over the element above it and
+	       resting on the element below.
+	   Deliberately NO `clip-path` and NO `filter` (both of which E1 needed): the panel's
+	   silhouette is a plain rounded box, so it cannot clip its own shadow, cannot clip a
+	   focus ring, and stays a pure paint change over the geometry above. Light theme retunes
+	   both halves — see the `body.theme-light` arm below. */
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
+		0 -3px 7px rgb(0 0 0 / 34%);
 	opacity: 0;
 	pointer-events: none;
 }
 
-/* SC-169 round 2 — the HFS CHARACTER pass (Scott: "something like having the left border be
-   a diagonal instead of a vertical line would give it a bit of character").
-   E1, the CHAMFERED TAB: the panel's leading edge is cut back at ~45°, the way a forged
-   plate is bevelled where it would otherwise leave a sharp corner. `clip-path` rather than a
-   rotated pseudo-element so the BORDER follows the cut too, and a matching left pad so the
-   first glyph never crowds the diagonal. Print never sees any of it (the whole block is
-   print-excluded), and the chamfer is a pure paint change: the panel's box, and therefore
-   every placement measurement above, is unaffected. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome {
-	--dse-chrome-chamfer: 0.7em;
-	padding-left: calc(1px + var(--dse-chrome-chamfer) * 0.6);
-	border-top-left-radius: 0;
-	clip-path: polygon(var(--dse-chrome-chamfer) 0, 100% 0, 100% 100%, 0 100%);
-	/* `clip-path` clips a box-shadow away entirely, so the lift has to be re-cast as a
-	   FILTER — which follows the clipped silhouette, diagonal included, and is the only
-	   shadow that can read as "this plate has a bevelled edge" rather than "this rectangle
-	   has a shadow". Same direction and weight as the box-shadow it replaces. */
-	box-shadow: none;
-	filter: drop-shadow(0 -2px 4px rgb(0 0 0 / 32%));
+/* E3's light-theme twin. A white hairline over the light plate (`--dse-surface-raised`
+   #edf0f0) would be a ~2% luminance step — the round-2 render's honest weakness ("in light
+   mode it is nearly invisible"). So on light the crown is carried by CONTRAST rather than by
+   brightness alone: the hairline goes to full white, and the plate's own top border is
+   deepened one step, so the sequence top-to-bottom reads dark edge → bright lip → plate,
+   which is what a light catch on a lifted edge actually looks like. The cast shadow is
+   lightened to match: 34% black under a light card reads as grime, not lift. Same
+   `body.theme-light [data-dse-theme='steel']` convention as every other light override in
+   this sheet. The deepened edge is a LITERAL (one step down from light `--dse-border`,
+   #c8cdd0) rather than a `color-mix()` of the token: this is a per-surface value like the
+   hardcoded light washes elsewhere in this sheet, and a literal keeps the panel off the
+   SC-171 support-floor ladder (`color-mix()` needs a static twin plus an `@supports` gate,
+   which is a lot of machinery for one hairline). */
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome {
+	border-top-color: #a9b1b5;
+	box-shadow:
+		inset 0 1px 0 rgb(255 255 255 / 100%),
+		0 -3px 7px rgb(0 0 0 / 15%);
 }
 
 /* Hover-reveal: the cursor over the container OR over the panel (which is a descendant
@@ -10342,6 +10353,27 @@ button.dse-pr__row:hover {
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-collapsed='on'] > .dse-chrome-summary {
 	display: flex;
+}
+/* SC-169 ROUND 3 — a collapsed element must be ONE bar, not a bar inside a box.
+   Found by the rollout, and invisible before it: the three prototype elements all draw their
+   card frame on a NESTED node (`.dse-sb`, `.dse-hero`, `.dse-stamina__cluster`), which the
+   rule above hides along with everything else, so their collapsed form was already a bare
+   summary bar. Roughly half the newly opted-in families paint the plate on the ROOT instead
+   (the shared card-ground selector list — feature, featureblock, counter, and all six GM
+   trackers), and the root is the one node collapse cannot hide: it is what carries the
+   attribute and hosts the bar. Result was the summary bar nested inside the element's own
+   still-painted, still-padded plate — a visible double frame on nine elements.
+   So while collapsed, the root stops painting: the bar brings its own frame, and there is
+   exactly one. Margins are deliberately untouched (block rhythm between elements is not part
+   of the plate), and the border is made transparent rather than removed so the box does not
+   change width. `!important` for the same reason the two rules above use it — the plate
+   declarations come from a long, per-family selector list of equal-or-greater specificity
+   later in this sheet, and a framework invariant must not depend on winning that race. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome][data-dse-collapsed='on'] {
+	padding: 0 !important;
+	background: none !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
 }
 /* SC-169 round 2, Scott's ruling 4: "only show the expand icon when an Element is
    collapsed… lets keep it simple". The floating panel is suppressed OUTRIGHT while

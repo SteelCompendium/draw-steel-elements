@@ -121,7 +121,15 @@ describe('SC-145: authoring pencil anchors to the card frame, not blindly to roo
 		expect(btn!.parentElement).not.toBe(root);
 	});
 
-	test('narrow card (counter — root itself is the visible box, unchanged since D2): pencil still mounts as a direct child of root', async () => {
+	// SC-169 ROUND 3 SUPERSEDES the counter case of this fix, the same way it superseded the
+	// statblock case below — `ds-counter` opted into chrome in the rollout, so its pencil is a
+	// panel item now. What this case still uniquely proves is the OTHER anchor shape: counter's
+	// `authoringAnchor()` is ROOT (the card plate CSS borders root directly for this element,
+	// unlike statblock's nested `.dse-sb`), so it pins that the panel — and therefore the
+	// pencil — lands on root for a root-anchored element and does NOT wander into the nested
+	// `.dse-counter` wrapper. The pre-chrome "direct child of root" contract is still under
+	// test above, on `wideCardDef()`, which declares no chrome slot.
+	test('narrow card (counter — root itself is the visible box): the chrome panel, and the pencil in it, mount on ROOT', async () => {
 		const { deps } = makeCompendiumDeps();
 		await withAuthoringControlsOn(deps);
 		const pipeline = new ElementPipeline(deps);
@@ -130,12 +138,17 @@ describe('SC-145: authoring pencil anchors to the card frame, not blindly to roo
 		await pipeline.run(counterElement, 'name: Health\ncurrent_value: 7\nmax_value: 20\nmin_value: 0\n', host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const btn = root.querySelector<HTMLElement>(EDIT_BTN);
-		expect(btn).not.toBeNull();
-		// counter's own content lives in a NESTED `.dse-counter` wrapper, but the card
-		// plate CSS borders ROOT directly for this element — so the pencil belongs on
-		// root, exactly as it did before this fix (non-regression).
-		expect(btn!.parentElement).toBe(root);
+		const buttons = root.querySelectorAll<HTMLElement>(EDIT_BTN);
+		expect(buttons).toHaveLength(1); // never two pencils
+		const btn = buttons[0];
+		const panel = root.querySelector('.dse-chrome');
+		expect(panel).not.toBeNull();
+		expect(btn.parentElement).toBe(panel);
+		expect(btn.getAttribute('data-dse-chrome-item')).toBe('edit');
+		// The anchor is root itself for this element, so the panel is root's own child …
+		expect(panel!.parentElement).toBe(root);
+		expect(root.classList.contains('dse-chrome-anchor')).toBe(true);
+		// … and nothing of the chrome ended up inside the element's content wrapper.
 		expect(root.querySelector('.dse-counter')!.contains(btn)).toBe(false);
 	});
 

@@ -154,13 +154,34 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 	});
 
 	it('a NON-chrome element is untouched apart from the brand-new `collapsed:` key', async () => {
-		// The blast-radius guard: `ds-skills` still parses its own ComponentWrapper pair, so
-		// the ~30 elements that have not opted into chrome behave exactly as before.
+		// The blast-radius guard, on an element that is still opted OUT after the ROUND 3
+		// rollout: `ds-hr` declares no `chrome` slot, so the pipeline never claims the legacy
+		// pair and emits no chrome DOM or attributes at all.
+		const { horizontalRuleElement } = await import('@/elements/horizontal-rule/definition');
+		expect(horizontalRuleElement.chrome).toBeUndefined();
+		const { root } = await render(horizontalRuleElement, '', 'ds-hr');
+		expect(root.querySelector('.dse-chrome')).toBeNull();
+		expect(root.querySelector('.dse-chrome-summary')).toBeNull();
+		expect(root.hasAttribute('data-dse-chrome')).toBe(false);
+	});
+
+	it('ROUND 3 — `ds-skills` opts in and keeps ownership of the legacy pair', async () => {
+		// The rollout's one new `collapseKeysOwnedByModel` element. Two things must hold at
+		// once: the framework reads `collapsible:`/`collapse_default:` for the PANEL, and the
+		// model still parses them for its own ComponentWrapper wrapper — which is only true
+		// while the pipeline leaves them in the body.
 		const { skillsElement } = await import('@/elements/skills/definition');
-		expect(skillsElement.chrome).toBeUndefined();
+		expect(skillsElement.chrome).toBeDefined();
+		expect(skillsElement.collapseKeysOwnedByModel).toBe(true);
+
+		const data: Record<string, unknown> = { collapsible: false, collapse_default: true, skills: ['climb'] };
+		const keys = extractCollapseKeys(data, false);
+		expect(keys).toMatchObject({ collapsible: false, collapseDefault: true });
+		expect(data).toEqual({ collapsible: false, collapse_default: true, skills: ['climb'] });
+
+		// `collapsible: false` therefore removes the PANEL as well as the inner wrapper.
 		const { root } = await render(skillsElement, 'collapsible: false\nskills:\n  - climb\n', 'ds-skills');
-		// The WHOLE-ELEMENT wrapper is absent (the per-group collapsibles inside the list are
-		// a different mechanism and stay).
+		expect(root.querySelector('.dse-chrome')).toBeNull();
 		expect(root.querySelector(':scope > .dse-collapse')).toBeNull();
 		expect(root.querySelector(':scope > .dse-skills')).not.toBeNull();
 	});

@@ -131,7 +131,7 @@ featureblock rather than a statblock.
 ## Authoring
 
 - **Show edit button on rendered blocks** (off by default) — adds a pencil to each rendered
-  block that opens a form editor. See
+  block, in its [element menu](common-element-fields.md#the-menu), that opens a form editor. See
   [Writing and editing blocks](writing-blocks.md#edit-a-rendered-block-with-a-form).
 
 ## Compendium

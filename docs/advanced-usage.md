@@ -163,7 +163,8 @@ Plus the trackers, which are documented field by field:
 
 Two authoring aids worth turning on while you write: **autocomplete inside a block** (start
 typing a field name and Obsidian suggests the ones that element accepts — always on), and
-the **form editor** (Settings → Authoring), which gives every rendered block a pencil that
+the **form editor** (Settings → Authoring), which gives every rendered block a pencil (in its
+[element menu](common-element-fields.md#the-menu)) that
 opens a validating form with a live preview. Both are described in
 [Writing and editing blocks](writing-blocks.md).
 

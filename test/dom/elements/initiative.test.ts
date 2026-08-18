@@ -41,6 +41,7 @@ import { styleGuardFindings } from '../kit/styleGuard';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
 import statblockRefs from '../../fixtures/initiative/statblock-refs.yaml';
+import { buttonsOutsideChrome } from '../_chromeTestUtils';
 
 const IT_ALIASES = ['ds-it', 'ds-init', 'ds-initiative', 'ds-initiative-tracker'] as const;
 
@@ -883,7 +884,16 @@ describe('T-9: canPersist=false — inert tracker, zero writes (F1 §4.4)', () =
 
 		// … but EVERY write affordance is gone: not one <button> in the whole tracker
 		// (turn indicators, cells, stamina render as static state displays).
-		expect(root.querySelectorAll('button')).toHaveLength(0);
+		//
+		// SC-169 round 3 — `ds-initiative` now carries the framework chrome panel, and it
+		// carries it HERE TOO, deliberately: collapse/expand is a reading convenience, not a
+		// write. It moves no data, persists only to the SessionStore, and never touches the
+		// note — so a read-only render (sidebar, canvas, an un-editable embed) is exactly the
+		// context where folding a big tracker down to one line is most useful. The edit item is
+		// the write affordance in that panel, and it is separately gated on `host.canPersist`,
+		// so it is absent here; the assertion below pins that.
+		expect(buttonsOutsideChrome(root)).toEqual([]);
+		expect(root.querySelectorAll('.dse-chrome [data-dse-chrome-item="edit"]')).toHaveLength(0);
 		expect(root.querySelector('.dse-init__actionbar')).toBeNull();
 		expect(root.querySelectorAll('.dse-init__malice .dse-stepper__btn')).toHaveLength(0);
 		expect(root.querySelectorAll('.dse-cond--add')).toHaveLength(0);

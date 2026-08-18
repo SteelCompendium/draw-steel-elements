@@ -1,35 +1,131 @@
-# Common Element Fields
+# The element menu, and collapsing a block
 
-Some elements can be collapsed, using three fields you can set on the block itself:
+Almost every element the plugin draws — statblocks, ability cards, hero sheets, the
+trackers — carries the same small menu, and the same way of folding itself down to one line.
+This page explains both.
 
-| Field              | Type      | Description                                                                                | Required | Default Value |
-|--------------------|-----------|--------------------------------------------------------------------------------------------|----------|---------------|
-| `collapsible`      | `boolean` | If `false`, the element cannot be collapsed — no collapse control is shown.                 | No       | `true`        |
-| `collapsed`        | `boolean` | If `true`, the element starts collapsed when the note is opened.                            | No       | `false`       |
-| `collapse_default` | `boolean` | The same thing as `collapsed`, in the older spelling. Kept so existing notes keep working.  | No       | `false`       |
+## The menu
 
-`collapsed` and `collapse_default` mean exactly the same thing. If a block somehow sets
-both, `collapsed` wins.
+Move your mouse over an element and a small panel of icon buttons appears at its **top right
+corner**, sitting just above the card's edge:
 
-Where they apply:
+- **Collapse** (a chevron) is always there, and is always the rightmost button.
+- **Edit** (a pencil) appears only if you have turned on *Show edit button on rendered blocks*
+  in [Settings](settings.md#authoring). It opens the same
+  [form editor](writing-blocks.md#edit-a-rendered-block-with-a-form) the insert commands use.
 
-- **[Skills](skills-element.md)** honours `collapsible` and `collapse_default` on its own
-  disclosure header.
-- Every element with the **standard menu panel** — currently the
-  **[Statblock](statblock-element.md)**, the **[Hero Sheet](hero-suite.md)** and the
-  **[Stamina Bar](stamina-bar.md)** — honours all three. Collapsing one of these shows a
-  single line with the element's type, its name and an expand button, and the panel's
-  collapse control disappears while it is collapsed so there is only ever one way back.
-  If `collapsible: false` leaves the panel with nothing in it, no panel is shown at all.
+More buttons will be added here over time; new ones appear to the *left*, so the collapse
+chevron never moves.
 
-Collapsing something this way is remembered for the rest of your Obsidian session and is
-**never written into your note**. It also never affects printing: a collapsed element prints
-in full, and the menu panel is absent from print and from an exported PDF.
+The panel is invisible until you point at the element, so it stays out of your way while
+you're reading. Two exceptions, both deliberate:
 
-Blocks that don't list these fields follow the global defaults on the
-**[Element defaults](settings.md#element-defaults)** settings page — **Collapsible by
-default** and **Start collapsed** — so you can decide once for your whole vault instead of
-writing the fields into every block.
+- **On phones and tablets** there is no mouse to point with, so the panel is always visible.
+- **When you print** (or export a PDF) the panel is not there at all.
 
-Other elements have their own collapsing behaviour built in (statblock feature bands, for
-example) and ignore these two fields.
+You can also reach it from the keyboard: tab into an element and the panel appears.
+
+## Collapsing
+
+Click the collapse chevron and the whole element folds down to a single line — its type, its
+name, and an expand button on the right:
+
+```
+STATBLOCK: Human Bandit Chief                                    ⌄
+HERO: Torin Stonefist                                            ⌄
+STAMINA (15/20)                                                  ⌄
+ENCOUNTER: Ambush at the Ford (EV 42)                            ⌄
+SKILLS (12 selected)                                             ⌄
+```
+
+Elements that have a name show it. Elements that don't — a standalone Stamina bar, a
+conditions strip — show the number that matters instead. Some show both.
+
+While an element is collapsed the hover menu is hidden: the expand button on the line is the
+only control, so there is never a second, differently-placed way to open it back up.
+
+**Nothing is lost when you collapse.** The element is still there, just hidden, so expanding
+it is instant and any state (a half-filled tracker, a scrolled statblock) is exactly where you
+left it.
+
+### What is remembered, and where
+
+Collapsing something by clicking is remembered **for the rest of your Obsidian session** and
+is **never written into your note**. Restart Obsidian and everything is back to whatever the
+note (or your settings) says it should be.
+
+If you want a block to *start* collapsed every time, that is a field you write in the block —
+see below.
+
+### Printing
+
+Collapsing is a reading convenience, not a content decision, so it never reaches paper:
+
+- a collapsed element **prints in full**;
+- the menu panel is **absent** from print and from an exported PDF.
+
+## The three fields
+
+You can set any of these on the block itself, as a top-level line:
+
+| Field              | Type      | What it does                                                                               | Required | Default |
+|--------------------|-----------|--------------------------------------------------------------------------------------------|----------|---------|
+| `collapsible`      | `boolean` | If `false`, the element can't be collapsed at all — no collapse control is shown.           | No       | `true`  |
+| `collapsed`        | `boolean` | If `true`, the element starts collapsed when you open the note.                             | No       | `false` |
+| `collapse_default` | `boolean` | Exactly the same as `collapsed`, in an older spelling. Kept so existing notes keep working. | No       | `false` |
+
+For example:
+
+````markdown
+```ds-statblock
+collapsed: true
+type: statblock
+name: Human Bandit Chief
+...
+```
+````
+
+`collapsed` and `collapse_default` mean the same thing. If a block sets both, `collapsed`
+wins.
+
+If you collapse or expand a block by clicking, **your click wins** over what the block says,
+for the rest of the session.
+
+If `collapsible: false` would leave the menu with nothing in it, no menu is shown either — the
+element renders exactly as it would have before this feature existed.
+
+### Setting it once for your whole vault
+
+Rather than writing the fields into every block, you can set the default on the
+**[Element defaults](settings.md#element-defaults)** settings page — **Collapsible by default**
+and **Start collapsed**. A field written in a block always beats the setting.
+
+## Which elements have this
+
+Every element that draws a card: statblocks, ability cards and featureblocks, the compendium
+reference block, every hero-suite element (hero sheet, stamina bar, conditions, heroic
+resource, surges, hero tokens, skills, characteristics, values row, counter) and every GM
+tracker (initiative, negotiation, encounter builder, montage, project, party).
+
+Two elements deliberately don't, because there would be nothing to fold or nowhere to put the
+menu: the [horizontal rule](horizontal-rule.md) (`ds-hr`) and the [dice roller](Roll.md)
+(`ds-roll`).
+
+The [Skills](skills-element.md) element additionally keeps its own "Skills" disclosure header
+inside the card; the three fields above drive both it and the element menu together.
+
+### One limitation worth knowing
+
+A [compendium reference](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
+block's body is *only* the entry's code:
+
+````markdown
+```ds-scc
+mcdm.heroes.v1/kit/panther
+```
+````
+
+There is nowhere in that to put a `collapsed: true` line — adding one makes the block invalid,
+because the body has to be the code and nothing else. So a reference block **can't be set to
+start collapsed**; you collapse it by hand, and that is remembered for the session like
+everywhere else. (Collapsing one shows the entry's real name — "KIT: Panther" — not the code.)

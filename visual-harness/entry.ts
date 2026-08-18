@@ -378,6 +378,20 @@ const staminaBarCollapsed = `collapsed: true\n${staminaBarDefault}`;
 const staminaBarCollapseDefault = `collapse_default: true\n${staminaBarWinded}`;
 const staminaBarNotCollapsible = `collapsible: false\n${staminaBarWinded}`;
 
+// SC-169 ROUND 3 (the rollout) — three more authored-collapsed fixtures, one per ANCHOR
+// SHAPE the rollout introduced, so the collapsed bar is photographed on each rather than
+// only on the three prototype elements:
+//   kit       — the nested `.dse-card` frame all eleven display families share, reached
+//               through withReference/RefUnwrapView;
+//   feature   — a static card whose FRAME IS ITS ROOT (the other anchor shape);
+//   encounter — a large persisted GM tracker, the case where folding actually buys a reader
+//               something, and the one whose summary carries computed detail (EV).
+// Same single-sourcing rule as the prototype three: prefix the existing example, so the
+// collapsed shot and the expanded golden are the same block.
+const kitCollapsed = `collapsed: true\n${kitDefault}`;
+const featureCollapsed = `collapsed: true\n${featureDefault}`;
+const encounterCollapsed = `collapsed: true\n${encounterDefault}`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -388,8 +402,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	conditions: { default: conditionsDefault },
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
-	encounter: { default: encounterDefault },
-	feature: { default: featureDefault, spend: featureSpend, villain: featureVillain },
+	encounter: { default: encounterDefault, collapsed: encounterCollapsed },
+	feature: { default: featureDefault, spend: featureSpend, villain: featureVillain, collapsed: featureCollapsed },
 	featureblock: {
 		default: featureblockDefault,
 		advancement: featureblockAdvancement,
@@ -410,7 +424,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	// second fixture to add here — a variant-2 entry would render an identical DOM.
 	'horizontal-rule': { default: horizontalRuleDefault },
 	initiative: { default: initiativeDefault },
-	kit: { default: kitDefault },
+	kit: { default: kitDefault, collapsed: kitCollapsed },
 	montage: { default: montageDefault },
 	negotiation: { default: negotiationDefault, checked: negotiationChecked },
 	party: { default: partyDefault },
@@ -492,6 +506,18 @@ export interface HarnessParams {
 	/** SC-169: force the `Platform.isMobile` branch of the chrome (always-visible panel +
 	 *  reserved top space) without a mobile Obsidian. */
 	mobile?: boolean;
+	/**
+	 * SC-169 round 3: after everything has mounted, CLICK each element's collapse control.
+	 *
+	 * The rollout put the panel on thirty-one elements, and photographing a collapsed one
+	 * used to require its own `collapsed: true` fixture — thirty-one near-duplicate fixture
+	 * constants for one line of output each. This does it from the camera instead, and it
+	 * does it by driving the REAL control rather than stamping `data-dse-collapsed` on the
+	 * root: a shot taken this way proves the toggle works, not merely that the CSS for the
+	 * attribute exists. (The authored-`collapsed:` path keeps its own fixtures — that is a
+	 * different claim, about the YAML key, and it is worth its own pictures.)
+	 */
+	collapse?: boolean;
 }
 
 /** SC-123: `kwUsage:text,sbCharBox:on` → `{ kwUsage: 'text', sbCharBox: 'on' }`.
@@ -580,6 +606,7 @@ export function parseParams(search: string): HarnessParams {
 		stack: parseStackParam(q.get('stack')),
 		pad: Number.isFinite(pad) && pad > 0 ? pad : undefined,
 		mobile: q.get('mobile') === '1',
+		collapse: q.get('collapse') === '1',
 	};
 }
 
@@ -908,6 +935,33 @@ export const CHROME_SHOTS: {
 		],
 		pad: 24,
 	},
+	// (10) SC-169 ROUND 3 — the panel on a WAVE-1 card family. `ds-kit` stands for all eleven
+	// display families: they share one view (DisplayCardView), one anchor (`.dse-card`) and
+	// one chrome slot (the displayFamily factory's), so a panel that is right here is right on
+	// all of them — and this is the nested-anchor-through-RefUnwrapView path, which is how
+	// every reference-capable family reaches the pipeline. `authoringControls` ON so the
+	// two-item panel and the relocated pencil are both in frame.
+	{
+		id: 'chrome-hover-card',
+		stack: [{ element: 'kit', fixture: 'default' }],
+		hover: '[data-dse-element="kit"]',
+		pad: 56,
+		prefs: { authoringControls: 'true' },
+	},
+	// (11) SC-169 ROUND 3 — the collapsed bar across the rollout's three anchor shapes in one
+	// frame: a display card (nested `.dse-card`), a static card whose frame IS its root
+	// (feature), and a large GM tracker (encounter, the case where folding earns its keep).
+	// Read alongside `chrome-collapsed-trio`, which is the same picture for the prototype
+	// three; together they are every summary shape — name-only, name+detail, detail-only.
+	{
+		id: 'chrome-collapsed-rollout',
+		stack: [
+			{ element: 'kit', fixture: 'collapsed' },
+			{ element: 'feature', fixture: 'collapsed' },
+			{ element: 'encounter', fixture: 'collapsed' },
+		],
+		pad: 24,
+	},
 ];
 
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
@@ -1084,6 +1138,23 @@ export async function mountFromParams(
 			: [{ element: params.element ?? 'feature', fixture: params.fixture }];
 	for (const target of targets) {
 		await mountOne(pipeline, registry, mount, target.element, target.fixture, params, errors);
+	}
+	// SC-169 round 3 — `collapse=1`: fold every mounted element via its own control. Done
+	// AFTER the whole stack has mounted so the clicks cannot race a later element's async
+	// mount, and reported as an error if an element that should have one has no control —
+	// a silently-expanded element in a "collapsed forms" shot is the failure this guards.
+	if (params.collapse) {
+		for (const root of Array.from(mount.querySelectorAll<HTMLElement>('[data-dse-chrome]'))) {
+			const toggle = root.querySelector<HTMLElement>('.dse-chrome [data-dse-chrome-item="collapse"]');
+			if (!toggle) {
+				errors.push(`collapse=1: ${root.getAttribute('data-dse-element')} has no collapse control`);
+				continue;
+			}
+			toggle.click();
+			if (root.getAttribute('data-dse-collapsed') !== 'on') {
+				errors.push(`collapse=1: ${root.getAttribute('data-dse-element')} did not collapse`);
+			}
+		}
 	}
 	// Error cards the pipeline rendered (parse/schema/render failures) count as failures.
 	for (const card of Array.from(mount.querySelectorAll('.dse-error-card'))) {

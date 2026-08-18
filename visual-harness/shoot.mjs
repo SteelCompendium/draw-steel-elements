@@ -133,10 +133,25 @@ async function snap(page, combo, params, captureId, opts = {}) {
 // deliberately hard-coded here rather than read from `.dse-chrome-anchor`: reading the
 // anchor would let a future anchor bug pass by measuring the panel against whatever the
 // panel was positioned against, which is the tautology this gate exists to break.
+//
+// SC-169 ROUND 3 widened this from the three prototype elements to seven, chosen to cover
+// every distinct ANCHOR SHAPE the rollout produces rather than to be exhaustive (thirty-one
+// families through one gate would cost thirty-one page loads for six answers):
+//   - a NESTED card frame reached through withReference/RefUnwrapView … statblock (.dse-sb),
+//     kit (.dse-card — the shape all eleven display families share);
+//   - a framed ROOT … feature, counter, negotiation (a static card, a small persisted card
+//     and a large GM tracker — three different content widths on the same anchor shape);
+//   - a view-supplied nested anchor … stamina-bar (.dse-stamina__cluster), hero (.dse-hero).
+// A single inset number has to come out of all seven, which is Scott's ruling stated as
+// arithmetic.
 const CHROME_PLACEMENT_CASES = [
 	{ element: 'statblock', fixture: 'default', frame: '.dse-sb' },
 	{ element: 'hero', fixture: 'default', frame: '.dse-hero' },
 	{ element: 'stamina-bar', fixture: 'winded', frame: '.dse-stamina__cluster' },
+	{ element: 'kit', fixture: 'default', frame: '.dse-card' },
+	{ element: 'feature', fixture: 'default', frame: '[data-dse-element="feature"]' },
+	{ element: 'counter', fixture: 'default', frame: '[data-dse-element="counter"]' },
+	{ element: 'negotiation', fixture: 'default', frame: '[data-dse-element="negotiation"]' },
 ];
 /** Sub-pixel slack: layout rounds at the device-pixel grid, not the CSS-pixel grid. */
 const PLACEMENT_EPSILON = 0.5;

@@ -13,9 +13,23 @@
 // byte-identical replacement (contrast values-row/definition.ts, whose processor never
 // shielded).
 import type { ElementDefinition } from '@/framework/registry';
+import type { ElementChrome } from '@/framework/chrome/types';
 import { Characteristics } from '@model/Characteristics';
 import { CharacteristicsElementView } from './view';
 import characteristicsExample from './example.yaml';
+
+/**
+ * SC-169 ROLLOUT wave 2 — the five scores ARE the element, and in Draw Steel they are
+ * always read in one fixed order (Might, Agility, Reason, Intuition, Presence), so the
+ * slash-separated line is the same line the open row shows, minus the headings:
+ * "CHARACTERISTICS (2/1/0/2/-1)".
+ */
+const characteristicsChrome: ElementChrome<Characteristics> = {
+	summary: ({ model }) => ({
+		label: 'Characteristics',
+		detail: [model.might, model.agility, model.reason, model.intuition, model.presence].join('/'),
+	}),
+};
 
 export const characteristicsElement: ElementDefinition<Characteristics> = {
 	id: 'characteristics',
@@ -25,5 +39,6 @@ export const characteristicsElement: ElementDefinition<Characteristics> = {
 	parse: (data) => Characteristics.parse(data),
 	autoResolveRefs: false,
 	createView: (cx) => new CharacteristicsElementView(cx),
+	chrome: characteristicsChrome,
 	authoring: { example: characteristicsExample },
 };

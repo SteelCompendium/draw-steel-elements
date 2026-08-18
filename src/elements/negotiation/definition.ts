@@ -2,10 +2,25 @@
 // NegotiationTrackerProcessor. Persisted shape; parse/serialize are Task 4's byte-compat
 // model wrappers around @model/NegotiationData.
 import type { ElementDefinition } from '@/framework/registry';
+import type { ElementChrome } from '@/framework/chrome/types';
 import type { NegotiationData } from '@model/NegotiationData';
 import { parse, serialize } from './model';
 import { NegotiationView } from './view';
 import negotiationExample from './example.yaml';
+
+/**
+ * SC-169 ROLLOUT wave 2 — the spec's worked example, verbatim: "Negotiation: Lord Saxton
+ * (Interest 3 \u00b7 Patience 4)". Both numbers are load-bearing (either hitting its floor
+ * ends the negotiation), so this is the one summary that spends its detail budget on two
+ * labelled values instead of a fraction.
+ */
+const negotiationChrome: ElementChrome<NegotiationData> = {
+	summary: ({ model }) => ({
+		label: 'Negotiation',
+		name: model.name || undefined,
+		detail: `Interest ${model.current_interest} \u00b7 Patience ${model.current_patience}`,
+	}),
+};
 
 export const negotiationElement: ElementDefinition<NegotiationData> = {
 	id: 'negotiation',
@@ -19,5 +34,6 @@ export const negotiationElement: ElementDefinition<NegotiationData> = {
 	parse,
 	serialize,
 	createView: (cx) => new NegotiationView(cx),
+	chrome: negotiationChrome,
 	authoring: { example: negotiationExample },
 };

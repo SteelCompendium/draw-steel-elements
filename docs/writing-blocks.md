@@ -36,7 +36,10 @@ suggested yet.
 ## Edit a rendered block with a form
 
 Turn on **Settings → Draw Steel Elements → Authoring → "Show edit button on rendered
-blocks"** and every rendered block gains a small pencil. Clicking it opens a form with one
+blocks"** and every rendered block gains a small pencil — in the
+[element menu](common-element-fields.md#the-menu) at the block's top-right corner for the
+elements that have one, and in the card's own corner for the few that don't. Clicking it
+opens a form with one
 control per field, a live preview of the card as you change it, and a Save button that
 stays disabled while the block is invalid. Saving writes the block back into your note
 through the same path the trackers use, so nothing else in the note is touched.

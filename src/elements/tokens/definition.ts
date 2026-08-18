@@ -3,11 +3,21 @@
 // ds-party's own hero_tokens stepper or to a future ds-hero's `state.tokens_ref`
 // read-through (Task 9 owns that wiring; this task ships only the canonical block).
 import type { ElementDefinition } from '@/framework/registry';
+import type { ElementChrome } from '@/framework/chrome/types';
 import tokensSchemaYaml from './schema.yaml';
 import tokensExample from './example.yaml';
 import { parse, serialize } from './model';
 import type { TokenPoolModel } from './model';
 import { TokenPoolContainer } from './view';
+
+/**
+ * SC-169 ROLLOUT wave 2 — an OPTIONAL name plus the count. `label:` is the author's own
+ * name for the pool when they gave one ("HERO TOKENS: Table Pool (3)"); without it the line
+ * is just the label and the tally.
+ */
+const tokensChrome: ElementChrome<TokenPoolModel> = {
+	summary: ({ model }) => ({ label: 'Hero tokens', name: model.label || undefined, detail: String(model.tokens) }),
+};
 
 export const tokensElement: ElementDefinition<TokenPoolModel> = {
 	id: 'hero-tokens',
@@ -19,5 +29,6 @@ export const tokensElement: ElementDefinition<TokenPoolModel> = {
 	parse,
 	serialize,
 	createView: (cx) => new TokenPoolContainer(cx),
+	chrome: tokensChrome,
 	authoring: { example: tokensExample },
 };

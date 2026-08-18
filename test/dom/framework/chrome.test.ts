@@ -26,6 +26,39 @@ import { statblockElement } from '@/elements/statblock/definition';
 import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import { heroElement } from '@/elements/hero/definition';
 import { counterElement } from '@/elements/counter/definition';
+// SC-169 round 3 — the rollout roster below names every element that did (and did not) opt
+// into chrome, so this suite imports the full public set rather than the three prototypes.
+import { horizontalRuleElement } from '@/elements/horizontal-rule/definition';
+import { rollElement } from '@/elements/roll/definition';
+import { featureElement } from '@/elements/feature/definition';
+import { featureblockElement } from '@/elements/featureblock/definition';
+import { sccElement } from '@/elements/scc/definition';
+import {
+	kitElement,
+	conditionElement,
+	treasureElement,
+	ancestryElement,
+	cultureElement,
+	careerElement,
+	classElement,
+	titleElement,
+	perkElement,
+	complicationElement,
+	ruleElement,
+} from '@/elements/display';
+import { conditionsElement } from '@/elements/conditions/definition';
+import { resourceElement } from '@/elements/resource/definition';
+import { surgesElement } from '@/elements/surges/definition';
+import { tokensElement } from '@/elements/tokens/definition';
+import { skillsElement } from '@/elements/skills/definition';
+import { encounterElement } from '@/elements/encounter/definition';
+import { montageElement } from '@/elements/montage/definition';
+import { projectElement } from '@/elements/project/definition';
+import { partyElement } from '@/elements/party/definition';
+import { initiativeElement } from '@/elements/initiative/definition';
+import { characteristicsElement } from '@/elements/characteristics/definition';
+import { valuesRowElement } from '@/elements/values-row/definition';
+import { negotiationElement } from '@/elements/negotiation/definition';
 import { setChromeMobileOverride, CHROME_COLLAPSE_SLOT } from '@/framework/chrome';
 import { extractCollapseKeys, withCollapseKeys } from '@/framework/chrome/collapsedKey';
 import { makeCompendiumDeps } from '../elements/_refHarness';
@@ -93,12 +126,11 @@ afterEach(() => setChromeMobileOverride(undefined));
 // ---------------------------------------------------------------- 1. opt-in
 describe('SC-169 §1 — the `chrome` slot is the opt-in, and absence changes nothing', () => {
 	test('an element WITHOUT the slot emits no chrome DOM and no chrome attributes', async () => {
-		const { root } = await render(
-			counterElement,
-			'name: Health\ncurrent_value: 7\nmax_value: 20\nmin_value: 0\n',
-			'ds-counter',
-		);
-		expect(counterElement.chrome).toBeUndefined();
+		// `ds-hr` is one of the two elements the ROUND 3 rollout deliberately left out (it has
+		// no body, no name and nothing to fold), so it is the standing witness that "no slot"
+		// really is zero extra DOM and zero extra attributes.
+		const { root } = await render(horizontalRuleElement, '', 'ds-hr');
+		expect(horizontalRuleElement.chrome).toBeUndefined();
 		expect(root.querySelector('.dse-chrome')).toBeNull();
 		expect(root.querySelector('.dse-chrome-summary')).toBeNull();
 		expect(root.querySelector('.dse-chrome-anchor')).toBeNull();
@@ -106,10 +138,64 @@ describe('SC-169 §1 — the `chrome` slot is the opt-in, and absence changes no
 		expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
 	});
 
-	test('the three SC-169 prototype elements DO declare it; trivial elements never will', () => {
-		expect(statblockElement.chrome).toBeDefined();
-		expect(staminaBarElement.chrome).toBeDefined();
-		expect(heroElement.chrome).toBeDefined();
+	// SC-169 ROUND 3 — the ROLLOUT ROSTER, pinned. This is the one place the "which elements
+	// carry the standard panel" decision is written down as an executable fact rather than as
+	// prose in a spec: adding an element to the plugin and forgetting to decide either way now
+	// fails here, and so does silently dropping a family's slot in a refactor.
+	//
+	// The OUT list is the whole justification for the IN list being everything else: `ds-hr` is
+	// a horizontal rule (no body, no name, nothing to fold) and `ds-roll` is an inline dice
+	// affordance, not a card. `ds-scc` is deliberately IN despite the spec's original §10
+	// "never" list — see the long note on its definition: post-SC-149 it is the only public
+	// reference element, so it is the only way a real vault ever sees the wave-1 families.
+	describe('ROUND 3 — the rollout roster', () => {
+		const IN: [string, { chrome?: unknown }][] = [
+			// wave 1 — the reference-capable card families
+			['statblock', statblockElement],
+			['feature', featureElement],
+			['featureblock', featureblockElement],
+			['kit', kitElement],
+			['condition', conditionElement],
+			['treasure', treasureElement],
+			['ancestry', ancestryElement],
+			['culture', cultureElement],
+			['career', careerElement],
+			['class', classElement],
+			['title', titleElement],
+			['perk', perkElement],
+			['complication', complicationElement],
+			['rule', ruleElement],
+			['scc', sccElement],
+			// wave 2 — the hero suite and the GM trackers
+			['hero', heroElement],
+			['stamina-bar', staminaBarElement],
+			['conditions', conditionsElement],
+			['heroic-resource', resourceElement],
+			['surges', surgesElement],
+			['hero-tokens', tokensElement],
+			['skills', skillsElement],
+			['encounter', encounterElement],
+			['montage', montageElement],
+			['project', projectElement],
+			['party', partyElement],
+			['initiative', initiativeElement],
+			['counter', counterElement],
+			['characteristics', characteristicsElement],
+			['values-row', valuesRowElement],
+			['negotiation', negotiationElement],
+		];
+		const OUT: [string, { chrome?: unknown }][] = [
+			['horizontal-rule', horizontalRuleElement],
+			['roll', rollElement],
+		];
+
+		test.each(IN)('%s declares the chrome slot', (_id, def) => {
+			expect(def.chrome).toBeDefined();
+		});
+
+		test.each(OUT)('%s deliberately does NOT', (_id, def) => {
+			expect(def.chrome).toBeUndefined();
+		});
 	});
 
 	test('an element WITH the slot stamps the root and mounts both nodes', async () => {

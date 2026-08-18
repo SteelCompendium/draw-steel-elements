@@ -36,6 +36,7 @@ import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import angulotlMalice from '../../fixtures/featureblock/angulotl-malice.yaml';
+import { interactiveOutsideChrome } from '../_chromeTestUtils';
 
 const FB_ALIASES = ['ds-fb', 'ds-featureblock'] as const;
 
@@ -463,7 +464,9 @@ describe('Plan 09 Task 6a: featureblock re-cast onto the D2 kit card grammar (§
 	test('static: rendering never writes back (no replaceSource) and mounts NO interactive controls', async () => {
 		const { root, host } = await renderFeatureblock(WITH_STATS);
 		expect(host.replaceSource).not.toHaveBeenCalled();
-		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
+		// SC-169 round 3 — see the same assertion in feature.test.ts: the CARD stays inert;
+		// the framework chrome panel is excluded from the sweep, not asserted away.
+		expect(interactiveOutsideChrome(root)).toEqual([]);
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 

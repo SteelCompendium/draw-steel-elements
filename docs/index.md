@@ -177,6 +177,7 @@ your existing copy to the new paths so Obsidian keeps your links working — see
 
 ## Shared behaviour
 
-- [Common element fields](common-element-fields.md) — collapsing a block.
+- [The element menu, and collapsing a block](common-element-fields.md) — the hover menu every
+  element carries, and the three fields that control folding.
 - [Settings](settings.md) — appearance, fonts, statblock layout presets, rolling, and the
   per-block `prefs:` override for advanced users.

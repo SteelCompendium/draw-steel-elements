@@ -13,9 +13,23 @@
 // shield, so opting out keeps behavior byte-identical rather than introducing a new
 // listener no user-facing bug ever required (same rationale as horizontal-rule).
 import type { ElementDefinition } from '@/framework/registry';
+import type { ElementChrome } from '@/framework/chrome/types';
 import { KeyValuePairs } from '@model/KeyValuePairs';
 import { ValuesRowElementView } from './view';
 import valuesRowExample from './example.yaml';
+
+/**
+ * SC-169 ROLLOUT wave 2 — a values row is already one line, so its folded form saves no
+ * height; it opts in for CONSISTENCY (every card-like element carries the same panel, and
+ * the panel is where the edit affordance and every future item live). The detail is the
+ * pair count, worded for the same reason party's is.
+ */
+const valuesRowChrome: ElementChrome<KeyValuePairs> = {
+	summary: ({ model }) => ({
+		label: 'Values',
+		detail: `${model.values.length} ${model.values.length === 1 ? 'value' : 'values'}`,
+	}),
+};
 
 export const valuesRowElement: ElementDefinition<KeyValuePairs> = {
 	id: 'values-row',
@@ -26,5 +40,6 @@ export const valuesRowElement: ElementDefinition<KeyValuePairs> = {
 	autoResolveRefs: false,
 	noClickShield: true,
 	createView: (cx) => new ValuesRowElementView(cx),
+	chrome: valuesRowChrome,
 	authoring: { example: valuesRowExample },
 };

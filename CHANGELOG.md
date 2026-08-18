@@ -16,20 +16,24 @@ Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
 - **A standard menu panel on every card element, and a one-line collapsed form** (SC-169).
-  Hover a statblock, hero sheet or stamina bar and a small panel appears at its top-right,
-  in the shape of a window's title-bar controls: icon-only, short, and it grows leftward as
-  items are added, so the collapse button never moves. It always carries collapse/expand,
-  and — when **Show edit button** is on — the edit pencil now lives there instead of in the
-  card's corner. Collapsed, an element becomes one line: its type, its name, and an expand
-  button ("HERO: Torin Stonefist", "STATBLOCK: Goblin Stinker", "STAMINA (31/48)"). A block
+  Hover any element that draws a card — statblocks, ability cards, featureblocks, compendium
+  references, the whole hero suite, every GM tracker — and a small panel appears at its
+  top-right, in the shape of a window's title-bar controls: icon-only, short, and it grows
+  leftward as items are added, so the collapse button never moves. It always carries
+  collapse/expand, and — when **Show edit button** is on — the edit pencil now lives there
+  instead of in the card's corner. Collapsed, an element becomes one line: its type, its name,
+  and an expand button ("HERO: Torin Stonefist", "STATBLOCK: Goblin Stinker",
+  "STAMINA (31/48)", "ENCOUNTER: Ambush at the Ford (EV 42)", "SKILLS (12 selected)"). A block
   that references a compendium entry shows that entry's real name, not its code. Three
   block keys control it: `collapsed:` (start collapsed), `collapse_default:` (the same
   thing, the older spelling) and `collapsible: false` (no collapse control at all, and no
-  panel if that leaves it empty); the **Collapsed by default** and **Collapsible** settings
-  are the fallback when a block says nothing. Collapsing something is remembered for the
-  session and never edits your note, and the panel never appears in print or in an
+  panel if that leaves it empty); the **Collapsible by default** and **Start collapsed**
+  settings are the fallback when a block says nothing. Collapsing something is remembered for
+  the session and never edits your note, and the panel never appears in print or in an
   exported PDF — a collapsed element prints in full. On mobile the panel is always visible
-  instead of waiting for a hover.
+  instead of waiting for a hover. The two elements that deliberately don't get one are the
+  horizontal rule and the dice roller. See
+  [the element menu](docs/common-element-fields.md) for the whole feature.
 - **The stamina bar's "Stamina Bar" header is gone** (SC-169). It was a second collapse
   control with its own look, doing what the new panel now does for every element. Notes are
   unaffected: a `collapse_default: true` block still starts collapsed, just as the one-line

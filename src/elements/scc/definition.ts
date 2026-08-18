@@ -208,6 +208,31 @@ const sccBase: ElementDefinition<never> = {
 	createView: () => {
 		throw new Error(`Unsupported block body. ${WHAT_IT_TAKES}`);
 	},
+	// SC-169 ROLLOUT — `ds-scc` DOES opt in, and it is the one place the spec's original
+	// "never" list (§10: horizontal-rule / roll / scc) is deliberately overturned. The list
+	// was reasoning from "trivial or bodiless"; `ds-scc` is neither. Post-SC-149 it is the
+	// ONLY public reference element — `ds-kit` & co. are no longer code-block languages — so
+	// every wave-1 card family a user can actually write reaches the screen through THIS
+	// definition, and the pipeline reads `def.chrome` off the block's own def, not off the
+	// family it resolves to. Leaving the slot off here would have made the entire wave-1
+	// rollout invisible in a real vault while looking complete in the harness.
+	//
+	// What this slot's BODY does is almost nothing, and that is correct: its PRESENCE is the
+	// opt-in (`withReference` emits a chrome slot iff the base declares one), while the line a
+	// reader actually sees comes from the two layers above it. Every `ds-scc` body parses to
+	// `{kind:'ref'}` or `{kind:'invalid'}`, never `inline`, so `liftChrome`'s non-inline arm
+	// supplies the honest pre-resolution fallback — the element's name plus the code the
+	// author typed — and `RefUnwrapView.chromeSummary()` overrides that on every collapse once
+	// the lookup settles, answering from the RESOLVED family's own slot and real model
+	// ("KIT: Panther", "STATBLOCK: Goblin Stinker"). The summary below is therefore only
+	// reached if some future body shape parses inline, and it degrades to the type name alone
+	// rather than inventing one.
+	//
+	// One authored-default gap rides along, unfixable here: the body IS the code, so there is
+	// nowhere to put `collapsed: true` (`collapsed: true\n<code>` is two lines and this
+	// element refuses those, by design). The user's own collapse works and is session-
+	// persisted. See the spec's open question 3.
+	chrome: { summary: ({ def }) => ({ label: def.name }) },
 	authoring: { example: sccExample },
 };
 

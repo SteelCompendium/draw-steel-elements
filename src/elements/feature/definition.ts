@@ -10,10 +10,22 @@
 // unset.
 import type { ElementDefinition } from '@/framework/registry';
 import { withReference } from '@/elements/shared/withReference';
+import type { ElementChrome } from '@/framework/chrome/types';
 import { FEATURE_TYPE_RE } from '@/services/typeAdapters';
 import { FeatureConfig } from '@model/FeatureConfig';
 import { FeatureElementView } from './view';
 import featureExample from './example.yaml';
+
+/**
+ * SC-169 ROLLOUT wave 1 — the NAME case. `Feature.name` is optional in the SDK model (a
+ * bare trait may carry only effects), and `summary()` returning no `name` is a supported
+ * shape: the collapsed line then reads just "FEATURE", which is honest, rather than an
+ * invented title. Declared on the BASE def in terms of the real `FeatureConfig`;
+ * `withReference` lifts it (liftChrome), so a whole-block-reference body needs nothing here.
+ */
+const featureChrome: ElementChrome<FeatureConfig> = {
+	summary: ({ model }) => ({ label: 'Feature', name: model.feature.name || undefined }),
+};
 
 // D6 Task 4 (spec §1, §7) — the block body may be inline YAML (unchanged, below) OR a
 // whole-block reference (scc:/scc.v1:/bare-slug/@path/[[wikilink]]) to a compendium
@@ -31,6 +43,7 @@ const baseFeatureElement: ElementDefinition<FeatureConfig> = {
 	parse: (_data, raw) => FeatureConfig.readYaml(raw),
 	autoResolveRefs: false,
 	createView: (cx) => new FeatureElementView(cx),
+	chrome: featureChrome,
 	authoring: { example: featureExample, sdkModel: 'feature' },
 };
 

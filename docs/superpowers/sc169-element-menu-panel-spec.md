@@ -1,13 +1,22 @@
 # SC-169 — Standard element menu panel + whole-element collapse
 
-**Status:** spec + working prototype, awaiting Scott's taste gate on SC-169.
+**Status:** ROUND 3 (rollout) complete. Scott's taste gate is closed — *"Option D and E3.
+Sanctioned"* (SC-169, 2026-08-18) — and the panel is live on all 31 card-like elements.
 **Scope of this document:** the framework contract, the CSS contract, collapse semantics,
-mobile rules, print exclusion, the rollout plan, and the open questions.
-**Not in scope yet:** rolling the panel out beyond the three prototype elements, and the
-`DESIGN.md` entry (that lands with the rollout, per the workspace routing table).
+mobile rules, print exclusion, the rollout, and what remains open.
 
-Canon for everything below: the SC-169 description plus Scott's four rulings
-(SC-169 comment, 2026-08-16).
+Canon for everything below: the SC-169 description, Scott's four rulings of 2026-08-16, his
+six rulings of 2026-08-18 (round 2), and his round-3 pick of ownership option **D** + style
+**E3**.
+
+**Round 3 in one paragraph.** E1's chamfer was replaced by E3's hairline crown as the shipped
+material (§3.1b); every card-like element opted in — 15 reference-capable families in wave 1
+(including `ds-scc`, overturning this doc's original "never" list — §10) and 16 hero-suite /
+GM-tracker elements in wave 2; the placement gate widened from 3 element families to 7; one
+real defect the rollout exposed was fixed (a collapsed root-framed element rendered a box
+inside a box — §4.3a); and the whole thing moved **zero** frozen print bytes beyond the 10
+stamina lines round 2 already had sanctioned. User docs, `DESIGN.md` and both changelogs
+landed with it.
 
 ---
 
@@ -79,9 +88,13 @@ That means statblock/feature/featureblock and all eleven internal display-family
 declare chrome **once, on their base def, in terms of their real model** — which is the
 whole rollout, mechanically.
 
-Known limitation, deliberately deferred (§9 open question 5): for a *reference* body the
-resolved entity lives inside `RefUnwrapView`, not in the model the pipeline holds, so the
-collapsed line reads `Statblock: scc.v1:…` rather than the creature's name.
+That was true of the ROUND-1 limitation too — for a *reference* body the resolved entity lives
+inside `RefUnwrapView`, not in the model the pipeline holds, so the lifted fallback can only
+report the code the author typed. **Round 2 closed it** (Scott's ruling 5): the framework asks
+the VIEW first via `ElementView.chromeSummary()`, and `RefUnwrapView` answers with the resolved
+entry's model through whichever definition actually rendered it, so `scc.v1:…goblin-stinker`
+folds to "STATBLOCK: Goblin Stinker". The lifted fallback remains as the honest pre-resolution
+line. See §4.3.
 
 ---
 
@@ -106,12 +119,12 @@ DOM (`src/framework/chrome/mountChrome.ts`), all of it appended after `view.moun
 
 | Requirement (SC-169) | How |
 |---|---|
-| top-right, **outside** the container, overlapping above its top edge | `position: absolute; right: .6em; bottom: 100%; margin-bottom: -1px` on the anchor |
+| top-right, **outside** the container, overlapping above its top edge | `position: absolute` against the anchor, `right: calc(var(--dse-chrome-inset) - …frame-border-right)`, `bottom: calc(100% + …frame-border-top)` — the round-2 geometry (§3.1a); round 1's `right: .6em` + `margin-bottom: -1px` are gone |
 | hidden until the cursor is over the container **or the panel** | `opacity: 0; pointer-events: none`, flipped by `[data-dse-chrome]:hover .dse-chrome`. The panel is a DESCENDANT of the root, so hovering it keeps the root `:hover` even though it paints outside the box. `:focus-within` is the keyboard twin. |
 | icon-only, short, OS-window-controls form factor | kit `iconButton` with no `text` → `.dse-btn--icon`; the panel overrides the kit box to a flat, borderless 1.7em × 1.5em control |
 | **grows right-to-left** as items are added | the panel is right-anchored and the collapse toggle is kept as its LAST child (`pushItem` re-appends it), so new items extend leftward from a fixed anchor |
-| native to High-Fantasy Steel | `--dse-surface-raised` / `--dse-border` / `--dse-radius` / `--dse-hover`; square bottom corners, no bottom border, an upward-cast shadow |
-| may overlap the element above, but ownership must read | it is seated ON the card's top edge with the shared 1px hairline (`margin-bottom: -1px`), reads as a tab attached to the card below it |
+| native to High-Fantasy Steel | `--dse-surface-raised` / `--dse-border` / `--dse-radius` / `--dse-hover`; square bottom corners, no bottom border, a bright top hairline and an upward-cast shadow (style E3, §3.1b) |
+| may overlap the element above, but ownership must read | its bottom edge lands exactly ON the card frame's border-box top, so the card's own unbroken 1px border is the panel's floor — ownership option D (§3.1a) |
 | no reserved top margin on desktop | the panel is out of flow; only mobile reserves space (§6) |
 
 ### 3.1 The panel is anchored to the CARD FRAME, not to the root
@@ -182,6 +195,35 @@ CSS trap worth recording: the containing-block rule needs **both** forms,
 With only the descendant arm, root-anchored elements get no containing block and the panel
 positions against the initial containing block — measured at viewport `y = -24` on the hero
 sheet, i.e. invisible.
+
+### 3.1b ROUND 3 — E3, the hairline crown, is the shipped material
+
+Scott picked **E3** over the shipped E1 chamfer and over E2's bronze edge. What that means in
+the sheet, replacing the whole E1 block:
+
+- **no `clip-path`, no `filter`.** E1 needed both — `clip-path` to cut the leading edge so the
+  border followed the diagonal, and a `drop-shadow()` filter because `clip-path` clips a
+  `box-shadow` away entirely. Both are gone, so the panel's silhouette is a plain rounded box
+  again: it cannot clip its own shadow, cannot clip a focus ring, and the top-left radius
+  comes back.
+- **the crown:** `inset 0 1px 0 rgba(255,255,255,.22)` — the same gesture `--dse-bevel` uses
+  on every other raised Steel surface, which is what makes the panel read as the same material
+  as the cards — plus `0 -3px 7px rgb(0 0 0 / 34%)`, an upward cast.
+- **D's geometry is untouched.** E3 is a pure paint change; the panel's box, and therefore
+  every number `assertChromePlacement` measures, is identical. Verified: 10.00px inset,
+  0.00px border overlap, now across seven element families.
+
+**The light-theme arm is new, and is not what the round-2 render showed.** E3's honest weakness
+at the taste gate was that in light mode it was *nearly invisible*: a white hairline over
+`--dse-surface-raised` (#edf0f0) is a ~2% luminance step. On light the crown is therefore
+carried by contrast rather than brightness — the hairline goes to full white and the plate's
+own top border is deepened one step (`#a9b1b5`, a literal rather than a `color-mix()` of the
+token, which keeps the panel off the SC-171 support-floor ladder), so the sequence reads dark
+edge → bright lip → plate. The cast shadow drops to 15% black; 34% under a light card reads as
+grime, not lift.
+
+Evidence: `.superpowers/sdd/sc169/evidence/round3/hover-kit--{dark,light}.png` and the
+`chrome-border-{winded,dying}` captures.
 
 ### 3.2 The edit item
 
@@ -319,6 +361,26 @@ Collapse is implemented by attribute, not by unmounting: `data-dse-collapsed="on
 root, and CSS hides every root child except the panel and the summary bar. The element's
 view stays mounted, so expanding is instant and no state is lost.
 
+### 4.3a ROUND 3 — the collapsed root stops painting (a defect the rollout exposed)
+
+The rule above hides root's CHILDREN. It cannot hide the root, which is the node carrying the
+attribute and hosting the summary bar — and that is fine only for an element whose visible card
+frame is a *nested* node. All three prototype elements were that shape (`.dse-sb`,
+`.dse-hero`, `.dse-stamina__cluster`), so the bug was invisible in rounds 1 and 2.
+
+Roughly half the newly opted-in families paint the plate on the ROOT instead — the shared
+card-ground selector list in `styles-source.css` covers `feature`, `featureblock`, `counter`
+and all six GM trackers. Collapsed, those rendered the summary bar nested inside the element's
+own still-painted, still-padded plate: a visible **box inside a box**, on nine elements.
+
+Fixed by one rule in the COLLAPSED block: while collapsed, the root drops its padding,
+background, border colour and shadow, so the bar's own frame is the only frame. `!important`,
+for the same reason the two rules beside it use it. Margins are deliberately left alone (block
+rhythm between elements is not part of the plate) and the border is made transparent rather
+than removed, so the box does not change width. Pinned in
+`test/dom/framework/chromeRollout.test.ts`; the before/after is visible between the two
+generations of `evidence/round3/collapsed-wave2-trackers--dark.png`.
+
 ---
 
 ## 5. CSS contract
@@ -451,57 +513,96 @@ untouched by construction. A widening is optional and is a landing decision.
 | `ds-stamina`'s own wrapper | remove it; use the consistent chrome | §4.2a |
 | placement consistency | one geometry, same inset everywhere, assert it | §3.1a |
 
-### 9b. STILL OPEN
+### 9b. ANSWERED by Scott at the ROUND 3 gate (2026-08-18): *"Option D and E3. Sanctioned"*
 
-1. **Which ownership treatment ships.** D (panel stops exactly on the border) is shipped as
-   the default because it is the only one of the four that needs no over-painting trick and
-   therefore cannot crop a coloured frame under any element's CSS. B (tucked, with the card's
-   border colour carried along the panel's bottom edge) is the close second and reads slightly
-   more "attached". A and C are shown for contrast; C's tail necessarily crosses the border.
-2. **Which HFS character style ships.** E1 (chamfered leading edge, Scott's own example) is
-   the shipped default; E2 (bronze leading edge) and E3 (hairline crown) are alternatives.
-3. **A whole-block REFERENCE body cannot carry an authored `collapsed:`.** The body IS the
+1. **Which ownership treatment ships → D.** The panel stops exactly on the frame's border-box
+   top. It was already the shipped default and stays; B/A/C are not carried in the sheet.
+2. **Which HFS character style ships → E3**, the hairline crown, replacing E1's chamfer. See
+   §3.1b for exactly what changed, including the light-theme retune the round-2 render's
+   "nearly invisible on light" note demanded.
+3. **The 10-line stamina print rebaseline** is sanctioned by the same comment (it was the
+   explicit ask in the round-2 gate). Regenerated from the rebased tree at round 3 and
+   byte-identical to round 2's: `.superpowers/sdd/sc169/rebaseline{.txt,-README.md}`.
+
+### 9c. STILL OPEN
+
+1. **A whole-block REFERENCE body cannot carry an authored `collapsed:`.** The body IS the
    reference, so `collapsed: true\nscc.v1:…` is not valid YAML and error-cards. The user's own
    collapse works and is session-persisted. Options if this matters: accept it; support a
    mapping form (`ref: <code>` + `collapsed: true`); or let a fenced-block info string carry
-   framework keys. No work done here — flagged only.
-4. **`collapsible: false` on `ds-stamina` is a behaviour change.** The flag used to be ignored
+   framework keys. No work done here — flagged only. **Round 3 widened this**: it is not only
+   `ds-scc`. `ds-rule` (`genericCard`) has a RAW-MARKDOWN body, so a `collapsed:` line turns it
+   into invalid YAML too. Same root cause (the body is not a mapping), same workaround (the
+   user's own, session-persisted collapse), same three options. Documented for users in
+   `docs/common-element-fields.md` → "One limitation worth knowing".
+2. **`ds-skills` still has two collapse mechanisms.** Its own "Skills" disclosure header plus
+   the element menu — the double affordance Scott's ruling 3 retired on `ds-stamina`. Not taken
+   in round 3 because removing it moves 2 more frozen print lines, outside the sanction given.
+   Filed as workspace `FOLLOWUPS.md` #76; §10 has the detail.
+3. **`collapsible: false` on `ds-stamina` is a behaviour change.** The flag used to be ignored
    (§4.2a). Any existing note that set it will now lose its collapse control. Believed rare
    and believed correct; say if you would rather keep the quirk.
-5. **The two global collapse preferences now reach every chrome element.** `collapseDefault`
+4. **The two global collapse preferences now reach every chrome element.** `collapseDefault`
    / `collapsibleDefault` used to affect only `ds-skills` and `ds-stamina`'s inner wrappers.
    They are the middle rung of the chrome ladder now, so turning `collapseDefault` on will
    start every chrome-bearing card collapsed. Both keep their current defaults (`false` /
    `true`), so nobody is affected until they opt in — but the blast radius grows at rollout.
-6. **`withPrefOverrides` double-emit.** The same round-trip hazard `withCollapseKeys` guards
+5. **`withPrefOverrides` double-emit.** The same round-trip hazard `withCollapseKeys` guards
    against exists, unguarded, for `prefs:` on a raw-splicing serializer (`ds-hero`).
    Pre-existing; should it become a FOLLOWUPS item?
-7. **Does the existing edit pencil belong in print at all?** It currently does not (print
+6. **Does the existing edit pencil belong in print at all?** It currently does not (print
    rule 4 hides `.dse-btn`) — stated so nobody "fixes" it later.
-8. **A pre-existing freeze drift on `origin/develop`.** Six `hero*--steel-{print,realprint}`
-   lines do not reproduce from `da96da2` on this machine. Not SC-169's; see
-   `.superpowers/sdd/sc169/rebaseline-README.md`.
+7. ~~**A pre-existing freeze drift on `origin/develop`.**~~ **CLOSED at round 3, not a
+   defect.** The six `hero{,-sparse,-narrow}--steel-{print,realprint}` lines were the SC-156
+   rebaseline landing mid-flight; after rebasing onto `3bc7685` they reproduce clean and
+   `check-freeze.sh` reports only the 10 sanctioned stamina lines.
 
 ---
 
-## 10. Rollout plan (after the taste gate)
+## 10. Rollout — DONE (round 3, 2026-08-18)
 
-**Wave 1 — reference-capable card families (mechanical).** `statblock` (done),
-`feature`, `featureblock`, and the eleven internal display-family elements
-(`kit`/`condition`/`treasure`/`ancestry`/`culture`/`career`/`class`/`title`/`perk`/
-`complication`/`rule`). All are `withReference`-wrapped, so each is one `chrome` slot on
-its base def and `liftChrome` handles the rest. Their `authoringAnchor()` already returns
-`.dse-card` / `.dse-sb`, so the panel is correctly anchored with no view change.
-Summary: `{ label: <family>, name: model.name }`.
+**31 elements in, 2 out.** The roster is pinned executably in
+`test/dom/framework/chrome.test.ts` ("ROUND 3 — the rollout roster") and every collapsed line
+in `test/dom/framework/chromeRollout.test.ts`, so the decision cannot quietly rot.
 
-**Wave 2 — the hero suite + GM subsystems (each needs a summary decision).**
-`hero` (done), `stamina-bar` (done), `conditions`, `resource`, `surges`, `tokens`,
-`initiative`, `encounter`, `montage`, `project`, `party`, `negotiation`, `counter`,
-`skills`, `characteristics`, `values-row`. Several want key data:
-`Resource: Ferocity (4)`, `Initiative: Round 3`, `Conditions (2)`.
+**Wave 1 — reference-capable card families (15).** `statblock`, `feature`, `featureblock`,
+the eleven internal display families, and `ds-scc`. All are `withReference`-wrapped, so each
+is one `chrome` slot on its base def and `liftChrome` handles the rest; their
+`authoringAnchor()` already returns `.dse-card`/`.dse-sb`, so no view changed. The eleven
+display families cost exactly **two** slots, not eleven: one in `displayFamily()` (whose
+summary is `layout.title(model)` — the very string the expanded card prints in its head, so
+folding can never show a different name than unfolding) and one in `genericCard()` for
+`ds-rule`.
 
-**Never** — trivial or bodiless elements: `horizontal-rule`, `roll`, `scc`.
+**`ds-scc` is IN, overturning this document's original "never" list.** That list reasoned from
+"trivial or bodiless"; `ds-scc` is neither — it renders a full statblock/kit/feature card. It
+is also, post-SC-149, the **only public reference element** (`ds-kit` & co. are no longer
+code-block languages), and the pipeline reads `def.chrome` off the block's own def, never off
+the family it resolves to. Leaving it out would have made all of wave 1 invisible in a real
+vault while looking complete in the harness. Its slot's *presence* is the opt-in; the line a
+reader sees comes from `liftChrome`'s non-inline arm before resolution and from
+`RefUnwrapView.chromeSummary()` after it, so a synced code folds to "KIT: Panther".
 
-**At landing, also:** decide the freeze widening for the new fixtures; add the
-`DESIGN.md` entry for the chrome (component map + the hover-chrome rule); add a
-`CHANGELOG.md` bullet; document `collapsed:` in the user docs; resolve open questions 1–7.
+**Wave 2 — the hero suite + GM subsystems (16).** `hero`, `stamina-bar`, `conditions`,
+`resource`, `surges`, `tokens`, `skills`, `characteristics`, `values-row`, `counter`,
+`encounter`, `montage`, `project`, `party`, `initiative`, `negotiation`. Summary grammar
+decisions are in the round-3 report's opt-in table; the shape of the reasoning is: a bare
+number where it is unambiguous ("Surges (3)"), a fraction for a track ("Stamina (15/20)"), and
+**worded** where a bare number would read two ways ("Skills (3 selected)", "Party (2 heroes)").
+
+`ds-skills` is the one wave-2 element that also sets `collapseKeysOwnedByModel` (with
+`ds-stamina`): `collapsible:`/`collapse_default:` are real ComponentWrapper model fields there,
+so the framework reads them but must not pop them. It also still carries its own "Skills"
+disclosure header — the double affordance ruling 3 retired on `ds-stamina`. Removing it moves
+2 more frozen print lines, outside the sanction given, so it is filed as workspace
+`FOLLOWUPS.md` #76 rather than taken here.
+
+**Never, and still never:** `horizontal-rule` (no body, no name, nothing to fold) and `roll`
+(an inline dice affordance, not a card).
+
+**Landed with the rollout:** the `DESIGN.md` entry ("The element chrome panel" — form factor,
+D geometry, E3 material, hover/mobile/print rules, the collapsed-line grammar); the user-facing
+page `docs/common-element-fields.md`, rewritten as "The element menu, and collapsing a block",
+with the pencil references in `writing-blocks.md`/`settings.md`/`advanced-usage.md` pointed at
+it; bullets in both changelogs. The freeze widening for the 5 new capture ids is a landing
+decision for the orchestrator (all new names — additions-only, no sanction needed).

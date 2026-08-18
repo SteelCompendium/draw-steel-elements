@@ -36,6 +36,7 @@ import { RefUnwrapView } from '../../../src/elements/shared/RefUnwrapView';
 import { styleGuardFindings } from '../kit/styleGuard';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import magmaTitan from '../../fixtures/feature/magma-titan.yaml';
+import { interactiveOutsideChrome } from '../_chromeTestUtils';
 
 const FT_ALIASES = ['ds-ft', 'ds-feat', 'ds-feature'] as const;
 
@@ -715,7 +716,12 @@ keywords:
 	test('static: rendering never writes back and mounts NO interactive controls', async () => {
 		const { root, host } = await renderBlock(FULL);
 		expect(host.replaceSource).not.toHaveBeenCalled();
-		expect(root.querySelector('button, input, select, textarea, [tabindex]')).toBeNull();
+		// SC-169 round 3: the CARD is still inert — what this test has always been about. The
+		// framework's chrome panel (collapse/expand) is not the card's content: it is the same
+		// standard affordance every element now carries, it writes only to the session, and it
+		// is excluded here rather than asserted away, so a real control creeping into the
+		// feature body still fails.
+		expect(interactiveOutsideChrome(root)).toEqual([]);
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 

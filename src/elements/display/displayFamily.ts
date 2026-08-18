@@ -68,6 +68,15 @@ export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ReferenceElemen
 		autoResolveRefs: false,
 		parse: (data, raw) => fromData(isPlainObject(data) ? data : parseYaml(raw)) as M,
 		createView: (cx) => new DisplayCardView<M>(cx, d.layout),
+		// SC-169 ROLLOUT wave 1 — all TEN typed display families opt in from this one line,
+		// which is the point of the factory: the collapsed name is `layout.title(model)`, the
+		// exact string the expanded card prints in its own head (`DisplayCardView.renderHead`),
+		// so folding a card can never show a different name than unfolding it. The label is
+		// the descriptor's human `name` ("Kit", "Treasure", …). `withReference` lifts the slot
+		// through the ref wrapper for the whole-block-reference case (liftChrome), and
+		// `RefUnwrapView.chromeSummary()` re-asks this same slot with the RESOLVED model once
+		// the lookup settles — so a `ds-scc` code folds to the entry's real name, not the code.
+		chrome: { summary: ({ model }) => ({ label: d.name, name: d.layout.title(model) || undefined }) },
 		authoring: { example: d.example },
 	};
 
@@ -140,6 +149,18 @@ export function genericCard(cfg: GenericCardDescriptor): ReferenceElement<Generi
 		// so genericLayout's type badge only ever appears in hybrid (by-SCC) mode.
 		parse: (_data, raw) => ({ name: cfg.name, type: '', body: raw }),
 		createView: (cx) => new DisplayCardView<GenericNote>(cx, genericLayout),
+		// SC-169 ROLLOUT wave 1 — the eleventh display family (`ds-rule`). Same rule as
+		// displayFamily above: the collapsed name is what the card's own head prints. Inline
+		// bodies have no frontmatter to source a name from, so `GenericNote.name` is the
+		// descriptor's name and the line reads just "RULE"; a resolved by-SCC body carries the
+		// real entry name. The `!== cfg.name` guard is what suppresses the inline case's
+		// degenerate "RULE: Rule" — the placeholder title is the label repeated, not a name.
+		chrome: {
+			summary: ({ model }) => {
+				const title = genericLayout.title(model);
+				return { label: cfg.name, name: title && title !== cfg.name ? title : undefined };
+			},
+		},
 		authoring: { example: cfg.example },
 	};
 	return withReference(base, { sccType: cfg.sccType });

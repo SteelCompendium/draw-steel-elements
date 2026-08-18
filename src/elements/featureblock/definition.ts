@@ -13,10 +13,25 @@
 // unset.
 import type { ElementDefinition } from '@/framework/registry';
 import { withReference } from '@/elements/shared/withReference';
+import type { ElementChrome } from '@/framework/chrome/types';
 import { FEATUREBLOCK_TYPE_RE } from '@/services/typeAdapters';
 import { FeatureblockConfig } from '@model/FeatureblockConfig';
 import { FeatureblockElementView } from './view';
 import featureblockExample from './example.yaml';
+
+/**
+ * SC-169 ROLLOUT wave 1 — the NAME case with one useful number. A featureblock is a set of
+ * features under a title, and the count is the one figure a reader wants from a folded card
+ * ("FEATUREBLOCK: Shadow Tricks (4)"); the individual feature names are what the expanded
+ * card is for.
+ */
+const featureblockChrome: ElementChrome<FeatureblockConfig> = {
+	summary: ({ model }) => ({
+		label: 'Featureblock',
+		name: model.featureblock.name || undefined,
+		detail: model.featureblock.features?.length ? String(model.featureblock.features.length) : undefined,
+	}),
+};
 
 // D6 Task 4 (spec §1, §7) — the block body may be inline YAML (unchanged, below) OR a
 // whole-block reference (scc:/scc.v1:/bare-slug/@path/[[wikilink]]) to a compendium
@@ -34,6 +49,7 @@ const baseFeatureblockElement: ElementDefinition<FeatureblockConfig> = {
 	parse: (_data, raw) => FeatureblockConfig.readYaml(raw),
 	autoResolveRefs: false,
 	createView: (cx) => new FeatureblockElementView(cx),
+	chrome: featureblockChrome,
 	authoring: { example: featureblockExample, sdkModel: 'featureblock' },
 };
 
