@@ -10199,21 +10199,60 @@ button.dse-pr__row:hover {
 [data-dse-theme='steel']:not([data-dse-print="on"]).dse-chrome-anchor,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-anchor {
 	position: relative;
+	/* SC-169 round 2 — THE placement number, declared once. The panel's right edge sits
+	   this far inside the card frame's visible right edge, on every element. A px value on
+	   purpose: an `em` would resolve against whatever font-size the card happens to set and
+	   move the panel with it. */
+	--dse-chrome-inset: 10px;
 }
 
+/* SC-169 round 2 — PLACEMENT and LAYERING, Scott's two rulings of 2026-08-18.
+   ("The placement of the menu panel should be consistent across the Elements… As for
+    layering… the panel should not cover the Element's border.")
+
+   PLACEMENT. Three things made the offset differ per element in round 1, and all three are
+   fixed here:
+     1. `margin: 0`. `.dse-sb`'s own body gutter (`.dse-sb > * { margin-inline: 24px }`)
+        applied to the panel too, because the panel is one of `.dse-sb`'s children — the
+        statblock's panel sat 24px further left than every other element's. Measured before
+        the fix: 34.6px inset on statblock vs 9.6px on hero/stamina.
+     2. a px inset, not an em one. `em` resolves against the panel's inherited font-size, so
+        any element that scales its card text would have moved the panel with it.
+     3. `--dse-chrome-frame-border-*`. An absolutely positioned child is offset from its
+        containing block's PADDING box, but what a reader measures against is the card
+        frame's BORDER box. `mountChrome` republishes the anchor's own border widths (the
+        one number CSS cannot read) and they are subtracted here, so the panel's right edge
+        sits `--dse-chrome-inset` inside the VISIBLE frame edge on every element — 1px for
+        an element whose anchor is the framed card (`ds-statblock`), 0 for one whose anchor
+        is an unframed wrapper (`ds-hero`, `ds-stamina`).
+   test/dom/framework/chromePlacement.test.ts pins the result across the three.
+
+   LAYERING (option D, shipped). The panel's bottom margin edge lands EXACTLY on the card
+   frame's border-box top: it never paints into the border row, so the frame's 1px hairline
+   — including `ds-stamina`'s amber winded / red dying state colour — renders complete and
+   unbroken beneath the whole panel. Round 1 pulled the panel 1px DOWN (`margin-bottom:-1px`,
+   the "shared hairline" seated-tab read) which is exactly what cropped those coloured
+   borders. The card's own top border is now the panel's floor, which is why the panel still
+   has no bottom border and square bottom corners: the line under it belongs to the card. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome {
 	display: flex;
 	align-items: stretch;
 	position: absolute;
 	/* Right-anchored: the collapse toggle is the panel's last child, so it stays the
 	   rightmost control and every added item extends the panel LEFTWARD. */
-	right: 0.6em;
-	/* Fully above the container's top edge… */
-	bottom: 100%;
-	/* …then pulled down by exactly the shared 1px hairline so the panel's bottom edge
-	   and the card's top edge are the SAME line — the "attached tab" read that tells you
-	   which element the panel belongs to when it overlaps the one above. */
-	margin-bottom: -1px;
+	right: calc(var(--dse-chrome-inset) - var(--dse-chrome-frame-border-right, 0px));
+	/* Fully above the frame's BORDER-box top edge — never on the border itself. */
+	bottom: calc(100% + var(--dse-chrome-frame-border-top, 0px));
+	/* The panel is a child of the card frame, so any `> *` gutter that card applies to its
+	   own content displaces it too (see PLACEMENT note 1). `!important` for the same reason
+	   the collapse rule below uses it: this is a FRAMEWORK invariant that has to hold across
+	   every element that opts in, and the rules it must beat are per-element and arbitrarily
+	   specific — statblock's is
+	   `[data-dse-theme='steel']:not([data-dse-print='on']) .dse-sb > :not(.dse-head)`
+	   (0,4,0), and the next element's could be higher again. Enumerating them, or racing
+	   them on specificity, would make correct placement depend on which rule a future author
+	   happened to write. "No element's content gutter may move the chrome" is the rule. */
+	margin: 0 !important;
 	z-index: 3;
 	padding: 0 1px;
 	background: var(--dse-surface-raised);
@@ -10225,6 +10264,27 @@ button.dse-pr__row:hover {
 	box-shadow: 0 -2px 6px rgb(0 0 0 / 30%);
 	opacity: 0;
 	pointer-events: none;
+}
+
+/* SC-169 round 2 — the HFS CHARACTER pass (Scott: "something like having the left border be
+   a diagonal instead of a vertical line would give it a bit of character").
+   E1, the CHAMFERED TAB: the panel's leading edge is cut back at ~45°, the way a forged
+   plate is bevelled where it would otherwise leave a sharp corner. `clip-path` rather than a
+   rotated pseudo-element so the BORDER follows the cut too, and a matching left pad so the
+   first glyph never crowds the diagonal. Print never sees any of it (the whole block is
+   print-excluded), and the chamfer is a pure paint change: the panel's box, and therefore
+   every placement measurement above, is unaffected. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome {
+	--dse-chrome-chamfer: 0.7em;
+	padding-left: calc(1px + var(--dse-chrome-chamfer) * 0.6);
+	border-top-left-radius: 0;
+	clip-path: polygon(var(--dse-chrome-chamfer) 0, 100% 0, 100% 100%, 0 100%);
+	/* `clip-path` clips a box-shadow away entirely, so the lift has to be re-cast as a
+	   FILTER — which follows the clipped silhouette, diagonal included, and is the only
+	   shadow that can read as "this plate has a bevelled edge" rather than "this rectangle
+	   has a shadow". Same direction and weight as the box-shadow it replaces. */
+	box-shadow: none;
+	filter: drop-shadow(0 -2px 4px rgb(0 0 0 / 32%));
 }
 
 /* Hover-reveal: the cursor over the container OR over the panel (which is a descendant
@@ -10282,6 +10342,16 @@ button.dse-pr__row:hover {
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-collapsed='on'] > .dse-chrome-summary {
 	display: flex;
+}
+/* SC-169 round 2, Scott's ruling 4: "only show the expand icon when an Element is
+   collapsed… lets keep it simple". The floating panel is suppressed OUTRIGHT while
+   collapsed — not merely emptied of its other items — so a collapsed element is one line
+   with one control, and hovering it cannot summon a second, differently-placed expand
+   affordance above the bar. The collapsed bar's own always-visible expand button (in flow,
+   below) is the whole interface. `!important` and a `:hover`-proof selector because the
+   reveal rules above are what this has to beat. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-collapsed='on'] .dse-chrome {
+	display: none !important;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary {
 	align-items: center;

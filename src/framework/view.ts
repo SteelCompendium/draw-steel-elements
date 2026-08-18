@@ -17,6 +17,7 @@ import { Component, MarkdownRenderer } from 'obsidian';
 import type { RenderContext } from './context';
 import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
 import { wrapMarkdownTables } from './mdTableWrap';
+import type { ElementSummary } from './chrome/types';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -87,6 +88,21 @@ export abstract class ElementView<M> extends Component {
 	 */
 	authoringAnchor(): HTMLElement {
 		return this.rootEl;
+	}
+
+	/**
+	 * SC-169 round 2 (Scott's ruling 5) — a VIEW-level override for the collapsed one-line
+	 * form, consulted before `def.chrome.summary(model)` every time the element collapses.
+	 *
+	 * Only a view whose real model is not the model the pipeline parsed needs this. That is
+	 * exactly one shape today: `RefUnwrapView`, where the parsed model is `{kind:'ref', raw}`
+	 * — the SCC code the author typed — and the resolved statblock/feature/creature only
+	 * exists after an async round-trip inside the view. Returning `undefined` (the default,
+	 * and the honest answer before resolution settles) falls back to the definition's own
+	 * summary.
+	 */
+	chromeSummary(): ElementSummary | undefined {
+		return undefined;
 	}
 
 	/**

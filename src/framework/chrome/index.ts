@@ -8,5 +8,13 @@ export type {
 } from './types';
 export { mountChrome, CHROME_COLLAPSE_SLOT } from './mountChrome';
 export type { MountChromeOptions } from './mountChrome';
-export { COLLAPSED_KEY, extractCollapsedDefault, withCollapsedDefault } from './collapsedKey';
+export {
+	COLLAPSED_KEY,
+	COLLAPSIBLE_KEY,
+	COLLAPSE_DEFAULT_KEY,
+	extractCollapseKeys,
+	resolveCollapseState,
+	withCollapseKeys,
+} from './collapsedKey';
+export type { CollapseKeys } from './collapsedKey';
 export { isChromeMobile, setChromeMobileOverride } from './platform';

@@ -71,7 +71,8 @@ export interface ElementChrome<M = unknown> {
 /** Handle returned by `mountChrome` — the pipeline keeps it only to add late items. */
 export interface ChromeHandle {
 	readonly panelEl: HTMLElement;
-	readonly summaryEl: HTMLElement;
+	/** Absent when the element declared `collapsible: false` (no one-line form exists). */
+	readonly summaryEl: HTMLElement | undefined;
 	isCollapsed(): boolean;
 	setCollapsed(collapsed: boolean): void;
 	/** Append one more item to the panel, left of the collapse toggle. */

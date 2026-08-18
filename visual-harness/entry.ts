@@ -366,6 +366,18 @@ const statblockCollapsed = `collapsed: true\n${statblockDefault}`;
 const heroCollapsed = `collapsed: true\n${heroDefault}`;
 const staminaBarCollapsed = `collapsed: true\n${staminaBarDefault}`;
 
+// SC-169 round 2 (Scott's ruling 2 + the ds-stamina backward-compat requirement). Two
+// fixtures for the two legacy spellings, on the one element that has always owned them as
+// real model fields:
+//   `collapse_default: true`  — the key an existing vault note already uses. It used to
+//     start the old "Stamina Bar" disclosure header closed; with that header gone (ruling
+//     3) it must still start the ELEMENT collapsed, now via the panel. This fixture is the
+//     picture of that promise being kept.
+//   `collapsible: false`      — no collapse control at all, and (with no other menu item)
+//     no panel either. On this element the flag used to be dead weight; it is honoured now.
+const staminaBarCollapseDefault = `collapse_default: true\n${staminaBarWinded}`;
+const staminaBarNotCollapsible = `collapsible: false\n${staminaBarWinded}`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -413,6 +425,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		winded: staminaBarWinded,
 		dying: staminaBarDying,
 		collapsed: staminaBarCollapsed,
+		'collapse-default': staminaBarCollapseDefault,
+		'not-collapsible': staminaBarNotCollapsible,
 	},
 	statblock: {
 		default: statblockDefault,
@@ -836,6 +850,62 @@ export const CHROME_SHOTS: {
 			{ element: 'stamina-bar', fixture: 'winded' },
 		],
 		mobile: true,
+		pad: 24,
+	},
+	// (6) SC-169 round 2 — PLACEMENT CONSISTENCY (Scott's first ruling). Three DIFFERENT
+	// element families in one frame with every panel visible at once, which is the only way
+	// a difference in the offset from the card's right edge is visible rather than
+	// remembered between two shots. Mobile mode is the reveal mechanism purely because it is
+	// the one that shows all three simultaneously — it changes opacity and the root's top
+	// margin, never the panel's own placement rules, which are the thing under review.
+	// `authoringControls` ON so the two-item and one-item panels are both represented (the
+	// hero sheet opts out of the generic pencil), proving the right edge is what is pinned
+	// and the panel grows leftward from it.
+	// The NUMBERS behind this picture are asserted in test/dom/framework/chromePlacement.test.ts.
+	{
+		id: 'chrome-placement-trio',
+		stack: [
+			{ element: 'statblock', fixture: 'default' },
+			{ element: 'hero', fixture: 'sparse' },
+			{ element: 'stamina-bar', fixture: 'winded' },
+		],
+		mobile: true,
+		pad: 24,
+		prefs: { authoringControls: 'true' },
+	},
+	// (7) SC-169 round 2 — THE BORDER PROOF (Scott's second ruling: "the panel should not
+	// cover the Element's border"). A WINDED stamina bar, whose plate draws a 1px AMBER
+	// frame, hovered so the panel is up. The panel's bottom edge now stops on the frame's
+	// border-box top instead of 1px inside it, so the amber line runs unbroken beneath the
+	// whole panel. Tight `pad` and a single element so the top-right corner is large in
+	// frame — this shot exists to be looked at closely.
+	{
+		id: 'chrome-border-winded',
+		stack: [{ element: 'stamina-bar', fixture: 'winded' }],
+		hover: '[data-dse-element="stamina-bar"]',
+		pad: 40,
+		prefs: { authoringControls: 'true' },
+	},
+	// (8) The DYING twin — a 1px RED frame. Same proof, the other state colour, because the
+	// two colours have different luminance against the plate and a crop that hides in one
+	// can be obvious in the other.
+	{
+		id: 'chrome-border-dying',
+		stack: [{ element: 'stamina-bar', fixture: 'dying' }],
+		hover: '[data-dse-element="stamina-bar"]',
+		pad: 40,
+	},
+	// (9) SC-169 round 2 — the two LEGACY collapse spellings on `ds-stamina`, side by side:
+	// `collapse_default: true` (top) must start collapsed through the panel now that the old
+	// "Stamina Bar" header is gone, and `collapsible: false` (bottom) must render no panel
+	// and no collapse at all. One frame, because the pair is the backward-compatibility
+	// claim and it is only convincing together.
+	{
+		id: 'chrome-legacy-keys',
+		stack: [
+			{ element: 'stamina-bar', fixture: 'collapse-default' },
+			{ element: 'stamina-bar', fixture: 'not-collapsible' },
+		],
 		pad: 24,
 	},
 ];

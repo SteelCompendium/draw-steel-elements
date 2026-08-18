@@ -22,7 +22,8 @@ import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
-import { extractCollapsedDefault, withCollapsedDefault } from './chrome/collapsedKey';
+import { extractCollapseKeys, resolveCollapseState, withCollapseKeys } from './chrome/collapsedKey';
+import type { CollapseKeys } from './chrome/collapsedKey';
 import { mountChrome } from './chrome/mountChrome';
 import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
@@ -71,6 +72,22 @@ export class ElementStageError extends Error {
 function isAuthoringControlsOn(prefs: PreferenceStore): boolean {
 	if (!prefs.descriptors().some((d) => d.key === 'authoringControls')) return false;
 	return prefs.get('authoringControls') === true;
+}
+
+/**
+ * SC-169 round 2 — the same defensive read `isAuthoringControlsOn` needs, for the two
+ * collapse preferences. Several test harnesses build a bare PreferenceStore that describes
+ * only the BUILTIN theme descriptor, and `PreferenceStore.get()` throws for an undescribed
+ * key (§3.6), so a strict read here would break every such harness on every render. "Not
+ * registered" resolves to the catalog's own default for that key.
+ */
+function readCollapsePref(
+	prefs: PreferenceStore,
+	key: 'collapsibleDefault' | 'collapseDefault',
+	fallback: boolean,
+): boolean {
+	if (!prefs.descriptors().some((d) => d.key === key)) return fallback;
+	return prefs.get(key) === true;
 }
 
 /** Runs `fn`, tagging any thrown error with `stage` (unless already tagged). */
@@ -209,8 +226,9 @@ export interface PrepareModelDeps {
 export interface PreparedModel<M> {
 	readonly model: M;
 	readonly prefOverrides: Partial<DsePrefs> | undefined;
-	/** SC-169: the reserved `collapsed:` key's value, or undefined when absent. */
-	readonly collapsedDefault: boolean | undefined;
+	/** SC-169: the three reserved collapse keys as authored, plus exactly which of them
+	 *  were popped out of the block body (the serializer wrapper's re-emit list). */
+	readonly collapseKeys: CollapseKeys;
 }
 
 /**
@@ -262,13 +280,20 @@ export async function prepareModel<M>(
 	// enters the semantic model).
 	const prefOverrides = extractPrefOverrides(rawData, prefs);
 
-	// SC-169: the reserved top-level `collapsed:` key — the AUTHORED default for the
-	// whole-element collapse. Popped here for exactly the reasons `prefs:` is: schemas
-	// (all `additionalProperties: false`) never see it, and it never enters any semantic
-	// model. Only meaningful for a def that declares the `chrome` slot; popping it
-	// unconditionally keeps the reserved-key vocabulary uniform across every element and
-	// keeps prepareModel's two callers identical.
-	const collapsedDefault = extractCollapsedDefault(rawData);
+	// SC-169: the three reserved top-level collapse keys (`collapsed:`, `collapsible:`,
+	// `collapse_default:`) — the AUTHORED whole-element collapse contract. Popped here for
+	// exactly the reasons `prefs:` is: schemas (six of them `additionalProperties: false`)
+	// never see them, and they never enter any semantic model. The exception is a definition
+	// that declares `collapseKeysOwnedByModel` — `ds-stamina`/`ds-skills`, where
+	// `collapsible:`/`collapse_default:` are real ComponentWrapper model fields; there the
+	// framework READS them without removing them, which is what keeps an existing note's
+	// `collapse_default: true` working (and byte-stable) after SC-169. See collapsedKey.ts.
+	// `collapsible:`/`collapse_default:` are claimed only for a CHROME-BEARING element whose
+	// own model does not own them. A definition without the slot is left completely alone
+	// (`ds-skills` keeps parsing its ComponentWrapper pair exactly as before); `ds-stamina`
+	// has the slot AND owns them, so they are read in place rather than removed.
+	const claimLegacyKeys = def.chrome !== undefined && def.collapseKeysOwnedByModel !== true;
+	const collapseKeys = extractCollapseKeys(rawData, claimLegacyKeys);
 
 	// Step 3: validate (F1 §2.4.2). Invalid -> throw the ValidationResult itself
 	// (self-describing to renderErrorCard — no ElementStageError tag needed, same as
@@ -304,7 +329,7 @@ export async function prepareModel<M>(
 		model = runStage('render', () => def.parse(rawData, source));
 	}
 
-	return { model, prefOverrides, collapsedDefault };
+	return { model, prefOverrides, collapseKeys };
 }
 
 /** Services bundle ElementPipeline needs beyond app/plugin/settings (F1 §2.2's onload
@@ -388,7 +413,7 @@ export class ElementPipeline {
 			// catch below, which renders it via renderErrorCard exactly as the old inline
 			// early-return did (isValidationResult recognizes a raw ValidationResult however
 			// it arrives).
-			const { model, prefOverrides, collapsedDefault } = await prepareModel(def, source, {
+			const { model, prefOverrides, collapseKeys } = await prepareModel(def, source, {
 				prefs,
 				refs: cx.refs,
 				validation,
@@ -431,11 +456,14 @@ export class ElementPipeline {
 			watchPrintMedia(root, view);
 			if (def.serialize) {
 				let serialize = def.serialize;
-				// SC-169: a block carrying the reserved `collapsed:` key must not lose it
-				// either — same round-trip hazard, same wrapper shape. Applied BEFORE the
-				// prefs wrapper, so the emitted body reads `prefs:` … `collapsed:` … body.
-				if (collapsedDefault !== undefined) {
-					serialize = withCollapsedDefault(serialize, collapsedDefault);
+				// SC-169: a block carrying a reserved collapse key must not lose it either —
+				// same round-trip hazard, same wrapper shape. Applied BEFORE the prefs
+				// wrapper, so the emitted body reads `prefs:` … `collapsed:` … body. Only the
+				// keys actually POPPED are re-emitted: a `ds-stamina` whose own model still
+				// owns `collapse_default:` serializes it itself, and re-emitting would
+				// duplicate the line.
+				if (Object.keys(collapseKeys.popped).length > 0) {
+					serialize = withCollapseKeys(serialize, collapseKeys.popped);
 				}
 				// D4: a block carrying prefs: must not lose it when replaceSource
 				// rewrites the body from serialize(model).
@@ -469,6 +497,15 @@ export class ElementPipeline {
 			// card-corner pencil on paper — which is why `statblock--steel-print.png` and
 			// `statblock-edit-btn--steel-print.png` carry the SAME hash in the freeze baseline.
 			if (def.chrome) {
+				// SC-169 round 2 (ruling 2): block keys > the two global collapse preferences
+				// > the built-in defaults, the same three-tier ladder D4 §1.3 gave the
+				// ComponentWrapper pair. `collapsibleDefault` defaults true and
+				// `collapseDefault` defaults false, so an install that has touched neither
+				// gets exactly the prototype's behaviour.
+				const { collapsible, collapsedDefault } = resolveCollapseState(collapseKeys, {
+					collapsibleDefault: readCollapsePref(prefs, 'collapsibleDefault', true),
+					collapseDefault: readCollapsePref(prefs, 'collapseDefault', false),
+				});
 				mountChrome(
 					{
 						root,
@@ -477,6 +514,8 @@ export class ElementPipeline {
 						ctx: { model, def: { id: def.id, name: def.name } },
 						persist: { session, blockKey: host.blockKey(), slot: 'chrome' },
 						collapsedDefault,
+						collapsible,
+						summary: () => view.chromeSummary(),
 						pipelineItems: showEdit
 							? [
 									{

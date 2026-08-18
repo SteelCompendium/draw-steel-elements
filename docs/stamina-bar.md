@@ -32,8 +32,16 @@ Clicking on the bar allows you to adjust the stamina values directly.
 
 ## Field Definitions
 
-The Stamina Bar is always collapsible, and honours `collapse_default:` from the
-[Common Element Fields](common-element-fields.md).
+The Stamina Bar can be collapsed from its standard menu panel (hover the bar; the control is
+at the top-right), and honours `collapsible:`, `collapsed:` and `collapse_default:` from the
+[Common Element Fields](common-element-fields.md). Collapsed, it reads as one line —
+`STAMINA (31/48)`.
+
+> **Changed in 7.0.0.** The bar used to carry its own "Stamina Bar" disclosure header. That
+> header is gone; the menu panel does the same job the same way every other card element
+> does. Existing blocks are unaffected — `collapse_default: true` still starts the element
+> collapsed — with one exception: `collapsible: false` used to be silently ignored here and
+> is honoured now.
 
 Below is a detailed description of each field used in the stamina bar element, including their types, 
 default values, and whether they are required.

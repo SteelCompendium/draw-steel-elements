@@ -256,69 +256,84 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 		expect(notice.textContent).toBe('Sheet style is not implemented, use default style');
 	});
 
-	describe('whole-element wrapper = kit collapsible (collapse_default YAML contract; NOT session-tracked)', () => {
-		test('wraps the bar in ONE .dse-collapse titled "Stamina Bar", expanded by default', async () => {
+	describe('whole-element collapse = FRAMEWORK CHROME (SC-169 round 2 replaced the kit collapsible)', () => {
+		// Scott's SC-169 ruling 3 (2026-08-18): "Remove the old. Replace with the consistent
+		// option that all card elements use." This element used to mount its OWN kit
+		// collapsible — a "Stamina Bar" disclosure header above the bar, seeded from
+		// `collapse_default`, deliberately NOT session-tracked. Framework chrome now provides
+		// whole-element collapse for every card element, so that header would have been a
+		// second, differently-shaped collapse on the same element.
+		//
+		// These four cases are the previous four, rewritten against the new mechanism: same
+		// YAML in, same user-visible promise out, different DOM. The one intentional
+		// behaviour change is `collapsible: false`, which is now HONOURED.
+		test('mounts the bar straight onto root — no .dse-collapse, no "Stamina Bar" header', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
 			await pipeline.run(staminaBarElement, BASIC_YAML, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			const wrapper = root.querySelector(':scope > .dse-collapse') as HTMLElement;
-			expect(wrapper).not.toBeNull();
-			const header = wrapper.querySelector(':scope > .dse-collapse__header') as HTMLButtonElement;
-			expect(header.tagName).toBe('BUTTON');
-			expect(header.getAttribute('aria-expanded')).toBe('true');
-			expect(header.querySelector('.dse-collapse__title')?.textContent).toBe('Stamina Bar');
-			const region = wrapper.querySelector(':scope > .dse-collapse__region') as HTMLElement;
-			expect(region.hidden).toBe(false);
-			expect(region.querySelector('.dse-stamina')).not.toBeNull();
-			// The old kit ComponentWrapper chrome is gone.
+			expect(root.querySelector('.dse-collapse')).toBeNull();
+			expect(root.querySelector('.dse-collapse__header')).toBeNull();
+			expect(root.textContent).not.toContain('Stamina Bar');
+			expect(root.querySelector('.dse-stamina')).not.toBeNull();
+			expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
+			// The chrome panel is what replaced it.
+			expect(root.querySelector('.dse-chrome [data-dse-chrome-item="collapse"]')).not.toBeNull();
+			// The old kit ComponentWrapper chrome remains gone too.
 			expect(root.querySelector('.ds-kit-eye-container')).toBeNull();
 			expect(root.querySelector('.ds-kit-collapsed-wrapper')).toBeNull();
 		});
 
-		test('collapse_default: true starts collapsed (region hidden — content stays in the DOM)', async () => {
+		test('collapse_default: true still starts collapsed — now via the panel (content stays in the DOM)', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
 			await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapse_default: true`, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-			const region = root.querySelector(':scope > .dse-collapse > .dse-collapse__region') as HTMLElement;
-			expect(header.getAttribute('aria-expanded')).toBe('false');
-			expect(region.hidden).toBe(true);
-			expect(region.querySelector('.dse-stamina')).not.toBeNull(); // hidden, not skipped
+			expect(root.getAttribute('data-dse-collapsed')).toBe('on');
+			expect(root.querySelector('.dse-chrome-summary__label')?.textContent).toBe('Stamina');
+			expect(root.querySelector('.dse-stamina')).not.toBeNull(); // hidden by CSS, not skipped
 		});
 
-		test('collapsible: false in the YAML is NOT honored — the legacy Vue quirk is preserved (StaminaBar.vue always passed `!disable_click`, never `model.collapsible`)', async () => {
+		test('collapsible: false IS honored now — no panel, no collapse (the legacy Vue quirk is retired)', async () => {
+			// Previously this flag was dead weight: StaminaBar.vue always passed
+			// `!disable_click`, never `model.collapsible`, so the element was always collapsible
+			// no matter what the block said. The key has always been in the schema, documented
+			// as "whether the component can be collapsed or not"; it means that now.
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
 
 			await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapsible: false`, host);
 
 			const root = host.containerEl.firstElementChild as HTMLElement;
-			// The collapse affordance is still rendered (collapsible is hardcoded true).
-			expect(root.querySelector(':scope > .dse-collapse > .dse-collapse__header')).not.toBeNull();
+			expect(root.querySelector('.dse-chrome')).toBeNull();
+			expect(root.querySelector('.dse-chrome-summary')).toBeNull();
+			expect(root.hasAttribute('data-dse-chrome')).toBe(false);
+			expect(root.querySelector('.dse-stamina')).not.toBeNull();
 		});
 
-		test('NOT session-tracked: a remount with the same blockKey starts fresh from collapse_default (unlike Skills)', async () => {
+		test('IS session-tracked now: a remount with the same blockKey remembers the user toggle', async () => {
+			// The other intentional change. The old wrapper passed no SessionPersist, so every
+			// reading-mode echo-rebuild threw the reader's collapse away and re-read the YAML.
+			// Chrome persists per (blockKey, slot) like every other element, and still never
+			// writes the note.
 			const deps = makeDeps();
 
 			const hostA = makeHost();
 			await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, hostA);
 			const rootA = hostA.containerEl.firstElementChild as HTMLElement;
-			const headerA = rootA.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-			headerA.click(); // user collapses
-			expect(headerA.getAttribute('aria-expanded')).toBe('false');
+			const toggleA = rootA.querySelector('[data-dse-chrome-item="collapse"]') as HTMLButtonElement;
+			toggleA.click(); // user collapses
+			expect(rootA.getAttribute('data-dse-collapsed')).toBe('on');
 
 			// Same deps (same SessionStore) + same blockKey: the echo-rebuild equivalent.
 			const hostB = makeHost();
 			await new ElementPipeline(deps).run(staminaBarElement, BASIC_YAML, hostB);
 			const rootB = hostB.containerEl.firstElementChild as HTMLElement;
-			const headerB = rootB.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-			expect(headerB.getAttribute('aria-expanded')).toBe('true'); // fresh, not remembered
+			expect(rootB.getAttribute('data-dse-collapsed')).toBe('on');
 		});
 	});
 

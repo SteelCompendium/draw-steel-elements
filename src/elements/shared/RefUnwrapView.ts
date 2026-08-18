@@ -17,6 +17,7 @@ import { renderErrorCard } from '@/framework/pipeline';
 import type { RenderContext } from '@/framework/context';
 import type { ElementDefinition } from '@/framework/registry';
 import type { ResolvedRef } from '@/framework/seams/refs';
+import type { ElementSummary } from '@/framework/chrome/types';
 import { extractFirstDsBlockText } from '@/services/typeAdapters';
 import type { RefOrInline, RefSource, WithReferenceOptions } from './withReference';
 
@@ -62,6 +63,15 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 	 *  subclass does NOT define onUpdate; defining one here (needed for the degrade ladder)
 	 *  opts out of that default, so this view must do its own child cleanup. */
 	private mountedChild?: ElementView<M>;
+	/**
+	 * SC-169 round 2 (Scott's ruling 5: "the collapsed form should show the actual name, not
+	 * the scc entity"). The model+definition that were ACTUALLY mounted — for a whole-block
+	 * reference that is the resolved compendium entry, which is the only place the creature's
+	 * real name exists. Recorded on the success path of `mountBase` only; every error/web/
+	 * unresolved card leaves it unset, so the collapsed line degrades to the definition's own
+	 * summary (type name + the reference text the author typed) rather than lying.
+	 */
+	private resolved?: { model: M; def: ElementDefinition<M> };
 
 	constructor(
 		cx: RenderContext,
@@ -102,11 +112,29 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		return this.mountedChild?.authoringAnchor() ?? this.rootEl;
 	}
 
+	/**
+	 * SC-169 round 2 (ruling 5) — the collapsed one-line form for a reference body reports
+	 * the RESOLVED entry's name ("Statblock: Human Bandit Chief"), never the code. Delegates
+	 * to whichever definition actually rendered (`baseForType` may have picked a different
+	 * family than this wrapper's own base, which is also the right label to show), with its
+	 * real typed model. Undefined until a resolution succeeds — the framework then falls back
+	 * to `liftChrome`'s honest "type name + the reference text" line.
+	 */
+	chromeSummary(): ElementSummary | undefined {
+		const resolved = this.resolved;
+		if (!resolved?.def.chrome) return undefined;
+		return resolved.def.chrome.summary({
+			model: resolved.model,
+			def: { id: resolved.def.id, name: resolved.def.name },
+		});
+	}
+
 	protected async onUpdate(model: RefOrInline<M>): Promise<void> {
 		if (this.mountedChild) {
 			this.removeChild(this.mountedChild);
 			this.mountedChild = undefined;
 		}
+		this.resolved = undefined;
 		this.rootEl.empty();
 		// SC-149 (H-1): a previous successful mount may have re-stamped the root with the
 		// RESOLVED family's element id (see mountBase). Put the block's own id back before
@@ -308,6 +336,9 @@ export class RefUnwrapView<M> extends ElementView<RefOrInline<M>> {
 		const view = resolved.createView(this.cx);
 		if (source && isSourceAware(view)) view.setSource(source);
 		this.mountedChild = view;
+		// SC-169 round 2 (ruling 5): remember WHAT was mounted, so the collapsed one-line
+		// form can name the resolved entry instead of echoing the author's code.
+		this.resolved = { model, def: resolved };
 		this.addChild(view);
 		await view.mount(root, model);
 	}

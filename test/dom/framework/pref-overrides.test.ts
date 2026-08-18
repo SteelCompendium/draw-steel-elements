@@ -386,7 +386,11 @@ describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness
 		expect(declaredRoot.querySelector(':scope > .dse-collapse')).not.toBeNull();
 	});
 
-	test('stamina-bar: collapseDefault=true global seeds the wrapper closed when the block omits collapse_default:', async () => {
+	// SC-169 round 2: `ds-stamina` no longer mounts its own kit collapsible (Scott's ruling
+	// 3) — framework chrome answers the same two keys and the same pref ladder, and the
+	// visible state is now `[data-dse-collapsed]` on the element root rather than
+	// `aria-expanded` on a disclosure header. The LADDER under test is unchanged.
+	test('stamina-bar: collapseDefault=true global starts the element collapsed when the block omits collapse_default:', async () => {
 		const deps = makeDeps();
 		await deps.prefs.set('collapseDefault', true);
 		const pipeline = new ElementPipeline(deps);
@@ -395,8 +399,7 @@ describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness
 		await pipeline.run(staminaBarElement, BASIC_STAM_YAML, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
-		expect(header.getAttribute('aria-expanded')).toBe('false');
+		expect(root.getAttribute('data-dse-collapsed')).toBe('on');
 	});
 
 	// —— Amendment pins (task-5-report-d4.md "Continuation") ——————————————————————
@@ -411,9 +414,8 @@ describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness
 		await pipeline.run(staminaBarElement, BASIC_STAM_YAML, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
 		// RENDER honors the pref: seeded closed.
-		expect(header.getAttribute('aria-expanded')).toBe('false');
+		expect(root.getAttribute('data-dse-collapsed')).toBe('on');
 
 		// BYTES stay untouched: the model materializes the same hard default
 		// (`collapse_default: false`) it always has — serialize() never sees the
@@ -434,10 +436,9 @@ describe('behavioral collapse-default prefs (D4 §1.3, AMENDED — declared-ness
 		await pipeline.run(staminaBarElement, yaml, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		const header = root.querySelector(':scope > .dse-collapse > .dse-collapse__header') as HTMLButtonElement;
 		// RENDER: the declared value wins over the pref — starts OPEN despite the
 		// global pref saying closed.
-		expect(header.getAttribute('aria-expanded')).toBe('true');
+		expect(root.hasAttribute('data-dse-collapsed')).toBe(false);
 
 		// BYTES: unaffected either way (declared or not, the model always materializes
 		// a concrete value) — confirms the declared branch is just as byte-stable as

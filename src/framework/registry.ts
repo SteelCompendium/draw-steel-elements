@@ -139,6 +139,19 @@ export interface ElementDefinition<M = unknown> {
 	 */
 	chrome?: ElementChrome<M>;
 	/**
+	 * SC-169 round 2 — this element's own MODEL owns the `collapsible:` /
+	 * `collapse_default:` keys (they are ComponentWrapper fields, validated by
+	 * `component-wrapper-1.0.0` and re-emitted by the element's own serializer).
+	 *
+	 * The framework still READS them as the authored collapse contract, but must not POP
+	 * them off the block body the way it pops `collapsed:` — doing so would hide them from
+	 * `def.parse`, let ComponentWrapper's constructor substitute its own `?? true`/`?? false`
+	 * defaults, and rewrite the author's values on the next write-back. Two definitions set
+	 * it: `ds-stamina` and (once it opts into chrome) `ds-skills`. See
+	 * `framework/chrome/collapsedKey.ts` for the full precedence table.
+	 */
+	collapseKeysOwnedByModel?: boolean;
+	/**
 	 * SC-158 — this element's body has an EXACT, non-YAML grammar, so the framework must
 	 * never write its own metadata into it.
 	 *

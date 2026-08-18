@@ -15,6 +15,26 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- **A standard menu panel on every card element, and a one-line collapsed form** (SC-169).
+  Hover a statblock, hero sheet or stamina bar and a small panel appears at its top-right,
+  in the shape of a window's title-bar controls: icon-only, short, and it grows leftward as
+  items are added, so the collapse button never moves. It always carries collapse/expand,
+  and — when **Show edit button** is on — the edit pencil now lives there instead of in the
+  card's corner. Collapsed, an element becomes one line: its type, its name, and an expand
+  button ("HERO: Torin Stonefist", "STATBLOCK: Goblin Stinker", "STAMINA (31/48)"). A block
+  that references a compendium entry shows that entry's real name, not its code. Three
+  block keys control it: `collapsed:` (start collapsed), `collapse_default:` (the same
+  thing, the older spelling) and `collapsible: false` (no collapse control at all, and no
+  panel if that leaves it empty); the **Collapsed by default** and **Collapsible** settings
+  are the fallback when a block says nothing. Collapsing something is remembered for the
+  session and never edits your note, and the panel never appears in print or in an
+  exported PDF — a collapsed element prints in full. On mobile the panel is always visible
+  instead of waiting for a hover.
+- **The stamina bar's "Stamina Bar" header is gone** (SC-169). It was a second collapse
+  control with its own look, doing what the new panel now does for every element. Notes are
+  unaffected: a `collapse_default: true` block still starts collapsed, just as the one-line
+  summary instead of a closed header. One thing does change — `collapsible: false` on a
+  stamina bar used to be silently ignored, and is honoured now.
 - **Statblocks keep their name and stats in view while you scroll** (SC-160). Scroll a
   long statblock and its header no longer disappears out of the top of the pane: once it
   does, a compact bar pins itself there with the creature's name, role, the five primary

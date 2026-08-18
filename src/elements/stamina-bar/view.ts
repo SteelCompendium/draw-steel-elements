@@ -1,7 +1,9 @@
-// Plan 09 Task 3 (D2 §3.5) — StaminaBarView on the D2 kit. The whole-element wrapper is
-// the kit collapsible (title "Stamina Bar", seeded from collapse_default, NO
-// SessionPersist — this element was never session-tracked: every mount starts fresh
-// from the YAML, exactly as the Vue component did). The bar renders the .dse-stamina
+// Plan 09 Task 3 (D2 §3.5) — StaminaBarView on the D2 kit.
+//
+// SC-169 round 2 (Scott's ruling 3) REMOVED this view's whole-element wrapper: it used to
+// mount a kit collapsible titled "Stamina Bar", seeded from `collapse_default`, with NO
+// SessionPersist. Framework chrome now owns whole-element collapse for every card element
+// — see onMount for what moved and what that changed. The bar renders the .dse-stamina
 // grammar: state COLOR via the [data-state] class rules on the --dse-stamina-* tokens,
 // fill widths via --dse-fill/--dse-temp-fill setProperty geometry (SC-5 — zero inline
 // colors/widths; the only .style use is `setProperty("--dse-*", …)`).
@@ -31,7 +33,6 @@
 // write path.
 import { ElementView } from '@/framework/view';
 import {
-	collapsible,
 	openManagedModal,
 	renderRecoveriesStrip,
 	renderStaminaBar,
@@ -41,13 +42,8 @@ import {
 import type { RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
 import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
-import { resolveCollapsePrefs } from '@/prefs/catalog';
 
 const READ_ONLY_TOOLTIP = 'Read-only in this context';
-
-/** Title shown in the whole-element collapsible header (the old ComponentWrapper
- *  componentName, previously visible only in the collapsed rail). */
-const WRAPPER_TITLE = 'Stamina Bar';
 
 /** Maps the StaminaBar model's fields onto the kit's neutral value shape. */
 function staminaValues(model: StaminaBar): StaminaBarValues {
@@ -60,7 +56,7 @@ function staminaValues(model: StaminaBar): StaminaBarValues {
 
 export class StaminaBarView extends ElementView<StaminaBar> {
 	private barEl: HTMLElement | null = null;
-	/** The kit collapsible's region — the framed card (see authoringAnchor below). */
+	/** The `.dse-stamina__cluster` plate — the framed card (see authoringAnchor below). */
 	private cardEl: HTMLElement | null = null;
 	// D7 Task 4: only populated when model.recoveries_max is defined (renderRecoveries's
 	// early-return guard) — null on every legacy block, which is also how
@@ -68,30 +64,38 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 	private recStrip: RecoveriesStripHandle | null = null;
 
 	protected onMount(root: HTMLElement, model: StaminaBar): void {
-		// Whole-element wrapper: ONE kit collapsible (replaces the old kit
-		// ComponentWrapper). Legacy quirk preserved verbatim (D1 spec §"Step 3"):
-		// StaminaBar.vue always passed `!disable_click` — never `model.collapsible` —
-		// as ComponentWrapper's `collapsible` prop, and in every reachable production
-		// render that was `true`, so the YAML `collapsible` flag is deliberately NOT
-		// honored: the element is always collapsible. Seeded from collapse_default
-		// with NO SessionPersist (unlike Skills): not session-tracked, matching the
-		// legacy element. D4 §1.3 (Plan 13, amended): the collapse_default SEED now
-		// falls back to the collapseDefault pref when the block doesn't set it — the
-		// `collapsible` half of resolveCollapsePrefs's result is deliberately unused
-		// here, preserving the same quirk.
-		const { collapseDefault } = resolveCollapsePrefs(model, this.cx.prefs);
-		const wrapper = collapsible(root, { title: WRAPPER_TITLE, open: !collapseDefault }, this);
-		this.cardEl = wrapper.contentEl;
-		this.renderBar(wrapper.contentEl, model);
+		// SC-169 round 2, Scott's ruling 3: "Remove the old. Replace with the consistent
+		// option that all card elements use."
+		//
+		// This element used to wrap itself in a kit `collapsible()` — a "Stamina Bar"
+		// disclosure header above the framed bar, seeded from `collapse_default`, whose only
+		// job was whole-element collapse. Framework chrome (SC-169) now provides exactly that
+		// for every card element, so the header was a SECOND collapse mechanism on the same
+		// element with a different look, a different affordance and a different (non-session)
+		// persistence rule. It is gone; the bar mounts straight onto root.
+		//
+		// The two YAML keys the header consumed did NOT go away — they were promoted. A block
+		// with `collapse_default: true` still starts collapsed and a block with
+		// `collapsible: false` still cannot be collapsed; both are now read by the framework
+		// (definition.ts's `collapseKeysOwnedByModel`, framework/chrome/collapsedKey.ts) and
+		// answered by the panel. Two deliberate behaviour changes come with that:
+		//   - the collapsed form is the standard one-line summary ("Stamina (15/20)"), not a
+		//     bare titled header;
+		//   - `collapsible: false` is now HONOURED. The legacy quirk (D1 spec §"Step 3":
+		//     StaminaBar.vue always passed `!disable_click`, never `model.collapsible`, so
+		//     the flag was dead weight) is retired — a key that has always been in the schema
+		//     and documented as "whether the component can be collapsed or not" should mean
+		//     what it says.
+		// A user's live toggle is now session-persisted like every other element's, where the
+		// old wrapper deliberately passed no SessionPersist.
+		this.renderBar(root, model);
 	}
 
 	/** SC-145's contract (ElementView.authoringAnchor) — "the node that carries the
-	 *  element's visible card frame". For this element that is the kit collapsible's
-	 *  REGION, not root: root also holds the wrapper's own "Stamina Bar" disclosure
-	 *  header, which sits above the framed bar. Read by SC-169's chrome as the node the
-	 *  menu panel is seated on, so the panel hugs the bar's top edge instead of floating
-	 *  in the header's leading. (The D9 pencil follows it too — but that pencil is now
-	 *  the chrome's own panel item for any chrome-bearing element, so nothing moves.) */
+	 *  element's visible card frame". For this element that is the `.dse-stamina__cluster`
+	 *  plate: the state-coloured (amber winded / red dying) 1px frame a reader sees. SC-169
+	 *  round 2 reads it as the node the menu panel is seated ABOVE, which is what keeps the
+	 *  panel from cropping that coloured border. Falls back to root before the bar exists. */
 	authoringAnchor(): HTMLElement {
 		return this.cardEl ?? this.rootEl;
 	}
@@ -104,9 +108,10 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		const canPersist = this.cx.host.canPersist;
 		// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, unresolvable
 		// canvas nodes) -> render read-only (visible but inert) instead of a dead-end click.
-		// collapsible hides (never rebuilds) its region, so the bar mounts exactly once
-		// per onMount and view-bound listeners are correct (the old per-expand-cycle
-		// contentOwner machinery is gone — same shift as Skills, Plan 09 Task 2).
+		// The bar mounts exactly once per onMount, so view-bound listeners are correct (the
+		// old per-expand-cycle contentOwner machinery is gone — same shift as Skills, Plan 09
+		// Task 2); chrome's collapse HIDES the mounted DOM rather than rebuilding it, so that
+		// stays true.
 		this.barEl = renderStaminaBar(container, staminaValues(model), {
 			height: model.height,
 			style: renderStyle,
@@ -115,6 +120,11 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 			onClick: canPersist ? () => this.openEditModal() : undefined,
 			readOnlyTooltip: READ_ONLY_TOOLTIP,
 		});
+		// SC-169 round 2: the chrome/authoring anchor. `.dse-stamina__cluster` is the plate
+		// that draws the visible (and, when winded/dying, state-coloured) 1px frame — see
+		// authoringAnchor(). Null on the `style: sheet` branch, which renders a notice and no
+		// bar at all; the fallback to root is then correct.
+		this.cardEl = this.barEl?.querySelector<HTMLElement>('.dse-stamina__cluster') ?? null;
 
 		// D7 Task 4: gated entirely on recoveries_max presence — a legacy block (no
 		// recoveries* fields) mounts none of this, matching the pre-Task-4 DOM exactly.

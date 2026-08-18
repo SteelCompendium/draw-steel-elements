@@ -236,6 +236,17 @@ keywords:
   range honestly, temporary Stamina as a real segment, clickable Recovery
   markers, Catch Breath, and the Winded/Dying states said more than one way.
   See [Stamina Bar](stamina-bar.md).
+- **A standard menu panel on card elements** — hover a statblock, hero sheet or
+  stamina bar and a small icon panel appears at its top-right, carrying
+  collapse/expand and (when **Show edit button** is on) the edit pencil, which
+  moved there from the card's corner. Collapsed, an element is one line: type,
+  name, expand. Block keys: `collapsed:`, `collapse_default:` and
+  `collapsible:` — see
+  [Common Element Fields](common-element-fields.md).
+  **One thing to know:** the Stamina Bar's own "Stamina Bar" disclosure header
+  is gone, replaced by that panel. Your blocks need no change —
+  `collapse_default: true` still starts collapsed — except that
+  `collapsible: false`, previously ignored on a stamina bar, is honoured now.
 - **Rebuilt settings** — [ten pages](settings.md) instead of one long scroll,
   searchable from Obsidian's own settings search, with a live preview of the
   card you're changing and seven more of the website's statblock layout

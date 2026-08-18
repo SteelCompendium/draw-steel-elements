@@ -118,6 +118,95 @@ async function snap(page, combo, params, captureId, opts = {}) {
 	}
 }
 
+// SC-169 round 2 — Scott's two placement/layering rulings, as a GATE rather than a picture.
+//
+//   "The placement of the menu panel should be consistent across the Elements. In some of
+//    the screenshots it looks like the panel is closer to the right than others."
+//   "The panel should not cover the Element's border."
+//
+// Both are cross-element geometry facts, and jsdom (where the rest of the suite lives)
+// computes no layout at all — so this is the only place in the battery that can actually
+// measure them. Same shape as `assertPrintTwinParity`: it fails the sweep, loudly, naming
+// what moved.
+//
+// Each entry names the node that draws the element's VISIBLE CARD FRAME. That is
+// deliberately hard-coded here rather than read from `.dse-chrome-anchor`: reading the
+// anchor would let a future anchor bug pass by measuring the panel against whatever the
+// panel was positioned against, which is the tautology this gate exists to break.
+const CHROME_PLACEMENT_CASES = [
+	{ element: 'statblock', fixture: 'default', frame: '.dse-sb' },
+	{ element: 'hero', fixture: 'default', frame: '.dse-hero' },
+	{ element: 'stamina-bar', fixture: 'winded', frame: '.dse-stamina__cluster' },
+];
+/** Sub-pixel slack: layout rounds at the device-pixel grid, not the CSS-pixel grid. */
+const PLACEMENT_EPSILON = 0.5;
+
+async function assertChromePlacement(page) {
+	const measured = [];
+	for (const c of CHROME_PLACEMENT_CASES) {
+		const query = new URLSearchParams({
+			stack: `${c.element}:${c.fixture}`,
+			theme: 'steel',
+			bg: 'dark',
+			pad: '56',
+			prefs: 'authoringControls:true',
+		});
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+		await page.locator('[data-dse-element]').first().hover();
+		const m = await page.evaluate((frameSel) => {
+			const frame = document.querySelector(frameSel);
+			const panel = document.querySelector('.dse-chrome');
+			if (!frame || !panel) return null;
+			const f = frame.getBoundingClientRect();
+			const p = panel.getBoundingClientRect();
+			return {
+				// How far the panel's right edge sits INSIDE the card frame's visible right
+				// edge. This is the number Scott saw differ between elements.
+				inset: f.right - p.right,
+				// Positive = clear air between the panel's bottom and the frame's top border
+				// row; 0 = resting exactly on it; NEGATIVE = painting over the border, which
+				// is what cropped the amber winded / red dying frame in round 1.
+				gap: f.top - p.bottom,
+			};
+		}, c.frame);
+		if (!m) {
+			console.error(
+				`\nCHROME PLACEMENT: could not measure ${c.element}:${c.fixture} — ` +
+					`missing ${c.frame} or .dse-chrome. Did the element stop opting into chrome?`,
+			);
+			process.exit(1);
+		}
+		measured.push({ ...c, ...m });
+	}
+	const covering = measured.filter((m) => m.gap < -PLACEMENT_EPSILON);
+	if (covering.length) {
+		console.error(
+			`\nCHROME LAYERING VIOLATED — the menu panel paints over the card's top border on ` +
+				`${covering.length} element(s), so a coloured state border renders cropped:\n` +
+				covering.map((m) => `  ${m.element}:${m.fixture}  overlap ${(-m.gap).toFixed(2)}px`).join('\n') +
+				`\nSee styles-source.css → "Element chrome" → LAYERING.`,
+		);
+		process.exit(1);
+	}
+	const insets = measured.map((m) => m.inset);
+	const spread = Math.max(...insets) - Math.min(...insets);
+	if (spread > PLACEMENT_EPSILON) {
+		console.error(
+			`\nCHROME PLACEMENT INCONSISTENT — the panel sits a different distance from the ` +
+				`card's right edge on different elements (spread ${spread.toFixed(2)}px):\n` +
+				measured.map((m) => `  ${m.element}:${m.fixture}  inset ${m.inset.toFixed(2)}px`).join('\n') +
+				`\nSee styles-source.css → "Element chrome" → PLACEMENT.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nchrome placement OK (${measured.length} element families: inset ` +
+			`${insets[0].toFixed(2)}px from the card's right edge, 0 border overlap)`,
+	);
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 900, height: 1200 },
@@ -278,6 +367,10 @@ try {
 		for (const c of combos.filter((c) => !c.print && !c.realprint)) {
 			await snap(page, c, { gallery: '1' }, 'gallery');
 		}
+		// SC-169 round 2 — the geometry gate behind `chrome-placement-trio` and
+		// `chrome-border-winded`. Skipped on a narrowed run for the same reason the gallery
+		// is: it needs its own navigations and proves a cross-element invariant.
+		await assertChromePlacement(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself

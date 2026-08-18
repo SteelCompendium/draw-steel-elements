@@ -123,9 +123,54 @@ ROOT's top edge instead leaves it floating in dead space for any element whose f
 starts lower than its root; measured on `ds-stamina`, whose root also holds the kit
 collapsible's "Stamina Bar" header.
 
-Consequence: `StaminaBarView` gained an `authoringAnchor()` override returning the kit
-collapsible's region (its framed card). Nothing else moved — the D9 pencil is a chrome
-panel item for any chrome-bearing element, so the anchor's other consumer is unaffected.
+Consequence: `StaminaBarView` gained an `authoringAnchor()` override. Round 2 sharpened it
+to the `.dse-stamina__cluster` plate — the node that actually draws the visible frame, and
+whose 1px border turns amber when winded and red when dying. (Round 1 returned the kit
+collapsible's region, which is a bare wrapper with no border of its own; that header is gone
+now anyway, §4.2a.) Nothing else moved — the D9 pencil is a chrome panel item for any
+chrome-bearing element, so the anchor's other consumer is unaffected.
+
+### 3.1a ROUND 2 — one placement geometry, and the panel never covers the border
+
+Scott, 2026-08-18: *"The placement of the menu panel should be consistent across the
+Elements… the panel should not cover the Element's border."* Both were real, and both had
+concrete causes that the round-1 shots showed but did not explain.
+
+**Placement.** Measured on the round-1 branch, the panel's inset from the card's right edge
+was **34.6px on `ds-statblock` vs 9.6px on `ds-hero` / `ds-stamina`**. Three causes, all
+fixed:
+
+1. **An inherited content gutter.** The panel is a child of the card frame, so statblock's
+   own `.dse-sb > :not(.dse-head) { margin-left/right: 1.5rem }` applied to it too — 24 of
+   the 25px. That rule is (0,4,0) and beat the panel's own, so the fix is
+   `margin: 0 !important` on the panel: "no element's content gutter may move the chrome" is
+   a framework invariant, and racing arbitrary per-element selectors on specificity would
+   make correct placement depend on what a future author happens to write.
+2. **An `em` inset.** `right: 0.6em` resolves against whatever font-size the card sets. The
+   inset is now one named token, `--dse-chrome-inset: 10px`, declared once on the anchor.
+3. **Padding box vs border box.** An absolutely positioned child is offset from its
+   containing block's PADDING box; what a reader measures against is the frame's BORDER box.
+   The two differ by the frame's own border width for any element whose anchor IS the framed
+   card. CSS cannot read that width, so `mountChrome` measures it once at mount and
+   republishes it as `--dse-chrome-frame-border-{top,right}`, which the sheet subtracts.
+   (A style read, not a layout read — border widths are not layout-dependent — and a detached
+   node yields 0, i.e. the pre-correction geometry, never a crash.)
+
+**Layering.** Round 1 pulled the panel 1px DOWN (`margin-bottom: -1px`) so panel and card
+shared one hairline — the "seated tab" read. That is exactly what cropped `ds-stamina`'s
+state-coloured frame. The panel's bottom margin edge now lands **exactly on the frame's
+border-box top**, so the card's own 1px border is the panel's floor and paints complete and
+unbroken beneath the whole plate. The panel keeps no bottom border and square bottom corners:
+the line under it belongs to the card.
+
+**Measured after, all three families: inset `10.00px`, border overlap `0.00px`.**
+
+**The gate is `assertChromePlacement` in `visual-harness/shoot.mjs`**, not a jest test. jsdom
+computes no layout — every `getBoundingClientRect` there is zeros — so a jest assertion could
+only ever pass vacuously. The harness measures the rendered page in Chromium and fails
+`npm run shots`, naming which element moved and by how much.
+`test/dom/framework/chromeRound2.test.ts` pins the CSS declarations the measurement depends
+on, so a regression is also named in the suite.
 
 CSS trap worth recording: the containing-block rule needs **both** forms,
 
@@ -166,43 +211,78 @@ Generalised from the pattern that already exists (ruling 1):
   kit collapsible's contract.
 - **Toggling NEVER writes the note.**
 
-### 4.1 The key is `collapsed:`, not `collapse_default:` — and why
+### 4.1 Three keys, one ladder (ROUND 2 — supersedes the single-key design)
 
-The existing vocabulary is the ComponentWrapper pair `collapsible:` / `collapse_default:`
-(`framework/dependencySchemas.ts`; models `Skills` and `StaminaBar`). Neither spelling is
-reusable:
+Round 1 shipped `collapsed:` alone and argued the other two spellings away. Scott's ruling
+of 2026-08-18 — *"`collapsed` is great. Elements should also get `collapsible` and
+`collapse_default`"* — replaces that. All three are reserved framework keys now:
 
-- **`collapsible:` is the wrong axis.** Whether an element can be collapsed at all is
-  decided by its definition's `chrome` slot, not by the author — and the key is already
-  dead weight where it is declared (`stamina-bar/view.ts` honours `collapse_default` and
-  deliberately ignores `collapsible`).
-- **`collapse_default:` is already taken, on one of the three prototype elements.** On
-  `ds-stamina` a top-level `collapse_default: true` means "start the INNER Stamina Bar
-  wrapper collapsed". If the framework claimed the same spelling, one key would mean two
-  things on one block, and popping it before `def.parse` would silently break every
-  existing `ds-stamina` / `ds-skills` block that uses it.
+| key | meaning |
+|---|---|
+| `collapsible: <bool>` | CAN this element collapse at all? `false` removes the collapse control — and if nothing else would be in the panel, the panel is not mounted at all. |
+| `collapsed: <bool>` | the authored initial state. The canonical spelling. |
+| `collapse_default: <bool>` | a **synonym** of `collapsed:`, kept because it is the spelling the pre-SC-169 vocabulary already used. |
 
-`collapsed:` is unambiguous, reads as state (matching HTML's own `hidden` / `open`), and is
-short. It is a framework **reserved key**: an element must not declare a field with that
-name. (See §9 open question 1 — Scott may prefer a namespaced spelling.)
+**Precedence, per key, highest first** — the same three-tier ladder D4 §1.3 gave the
+ComponentWrapper pair (block key > global preference > built-in):
 
-### 4.2 Reserved-key mechanics
+- `collapsible:` → the `collapsibleDefault` preference (default `true`)
+- `collapsed:` → `collapse_default:` → the `collapseDefault` preference (default `false`)
 
-Exactly the D4 `prefs:` mechanics (`framework/prefOverrides.ts`), reused verbatim:
+`collapsed:` beats `collapse_default:` when a block sets both. They are two spellings of one
+fact, and "the canonical, more specific name wins" is the only rule that does not require the
+reader to know which key was invented first.
 
-1. `prepareModel` pops `collapsed:` off the parsed body **before** schema validation, so no
+Because both global preferences default to the values above, an install that has touched
+neither behaves exactly as the round-1 prototype did.
+
+### 4.2 Reserved-key mechanics — and the backward-compatibility rule
+
+Exactly the D4 `prefs:` mechanics (`framework/prefOverrides.ts`), reused:
+
+1. `prepareModel` pops a reserved key off the parsed body **before** schema validation, so no
    element schema needs an `additionalProperties` hole, and **before** `def.parse`, so it
    never enters a semantic model.
 2. A non-boolean value warns to the console and is ignored; the block still renders.
-3. For a persisted element the serializer is wrapped (`withCollapsedDefault`) so a
-   play-state write-back cannot delete the author's key.
+3. For a persisted element the serializer is wrapped (`withCollapseKeys`) so a play-state
+   write-back cannot delete the author's keys.
 
-`withCollapsedDefault` carries **one guard `withPrefOverrides` does not**: it prepends only
-when the serialized body does not already declare `collapsed:` at column 0. `ds-hero`
-splices the author's raw definition text back verbatim
-(`HeroModel.serializeStateSplice`), so the key is already in the output and prepending
-unconditionally would emit it twice. (`withPrefOverrides` has the same latent double-emit
-against a raw-splicing serializer — filed, not fixed here: §9 open question 6.)
+**Who pops what.** `collapsed:` is a brand-new spelling no element owns, so it is always
+popped. `collapsible:` / `collapse_default:` are NOT new — they are real ComponentWrapper
+**model fields** on `ds-stamina` and `ds-skills` (validated by `component-wrapper-1.0.0`,
+materialised onto the model, re-emitted by the element's own serializer). Popping those would
+hide them from `def.parse`, let ComponentWrapper's constructor substitute its own
+`?? true` / `?? false`, and rewrite the author's values on the next write-back. So the
+pipeline claims the pair only when **both**:
+
+- the definition declares the `chrome` slot — a non-chrome element is left completely alone,
+  which is what keeps the ~30 un-rolled-out elements (`ds-skills` included) byte-identical;
+  **and**
+- the definition does not set `collapseKeysOwnedByModel` — the flag `ds-stamina` sets, which
+  switches the read to non-destructive.
+
+That combination is the whole backward-compatibility story for §4.2a below.
+
+### 4.2a `ds-stamina`: the old header is gone, the keys are not
+
+Scott's ruling 3: *"Remove the old. Replace with the consistent option that all card elements
+use."* `ds-stamina` used to mount its own kit `collapsible()` — a "Stamina Bar" disclosure
+header above the framed bar. That is removed; the bar mounts straight onto root.
+
+An existing vault note is unaffected in the way that matters: `collapse_default: true` still
+starts the element collapsed, now through the panel, and the block body is byte-identical
+(the model still owns and re-emits the key). Two deliberate behaviour changes ride along:
+
+- **`collapsible: false` is now honoured.** The legacy quirk (D1 spec §"Step 3":
+  `StaminaBar.vue` always passed `!disable_click`, never `model.collapsible`, so the flag was
+  dead weight) is retired. A key that has always been in the schema, documented as "whether
+  the component can be collapsed or not", should mean what it says.
+- **The user's toggle is session-persisted now.** The old wrapper passed no `SessionPersist`,
+  so a reading-mode echo-rebuild threw the reader's collapse away. Chrome persists per
+  (blockKey, slot) like every other element — and still never writes the note.
+
+This moves 10 frozen print lines (5 stamina capture ids × twin + realprint). The ready-to-apply
+rebaseline and its before/after evidence are in `.superpowers/sdd/sc169/`.
 
 ### 4.3 The collapsed form
 
@@ -214,6 +294,26 @@ One line: `LABEL: Name (detail)` on the left, an always-visible expand button on
 
 The expand button is **in flow, inside the collapsed bar** — not the hover panel. A
 collapsed element must not be a dead end anywhere hover is unavailable (touch, stylus).
+
+**Round 2, ruling 4 — while collapsed, that button is the ONLY control.** *"For now, only
+show the expand icon when an Element is collapsed… lets keep it simple."* The floating panel
+is suppressed outright under `[data-dse-collapsed='on']`, not merely emptied of its other
+items, so hovering a collapsed element cannot summon a second, differently-placed expand
+affordance above the bar.
+
+**Round 2, ruling 5 — a reference body shows the RESOLVED name, never the code.** *"I think
+the collapsed form should show the actual name, not the scc entity."* A whole-block reference
+parses to a `{kind:'ref', raw}` wrapper, so the definition's own `summary()` can only see the
+code the author typed. `ElementView.chromeSummary()` is the seam: the framework consults the
+VIEW first, every time the element collapses, and `RefUnwrapView` answers with the resolved
+entry's model through whichever definition actually rendered it — so `scc.v1:…goblin-stinker`
+collapses to "STATBLOCK: Goblin Stinker". Before a resolution succeeds the override returns
+`undefined` and the honest fallback (type name + the reference text) is used, so a failed
+reference never shows a name it does not have.
+
+**Known gap:** a bare whole-block reference body IS the reference, so there is nowhere to put
+a `collapsed:` line — `collapsed: true\nscc.v1:…` is not valid YAML. The authored default is
+unreachable for ref bodies today; the user's own collapse (session-persisted) is not. See §9.
 
 Collapse is implemented by attribute, not by unmounting: `data-dse-collapsed="on"` on the
 root, and CSS hides every root child except the panel and the summary bar. The element's
@@ -287,8 +387,20 @@ card-corner pencil on paper. Proof in the baseline itself —
 `statblock--steel-print.png` and `statblock-edit-btn--steel-print.png` carry the **same
 sha256**. Moving the pencil into the panel therefore changes no print byte.
 
-Measured: `check-freeze.sh` → `freeze OK (67/67 steel-print PNGs byte-identical)` with the
-prototype live on three elements.
+Measured (round 1, against the then-67-line baseline): `freeze OK (67/67 steel-print PNGs
+byte-identical)` with the prototype live on three elements.
+
+**Round 2 moves 10 lines, and only those.** Removing `ds-stamina`'s "Stamina Bar" header
+(§4.2a) is real DOM leaving the flow, so the five `ds-stamina` capture ids move on BOTH print
+classes (twin + realprint, together — the SC-170 invariant). `ds-hero` and `ds-statblock` are
+byte-identical to `origin/develop` despite carrying the same chrome, which is the standing
+proof that the panel itself is print-invisible. Ready-to-apply lines, before/after PNGs and
+the sanction rationale: `.superpowers/sdd/sc169/rebaseline.txt` + `rebaseline-README.md`.
+
+**Unrelated, recorded because it will be mistaken for this work:** `check-freeze.sh` already
+fails on `origin/develop` (`da96da2`) itself, on 6 `hero{,-sparse,-narrow}--steel-{print,realprint}`
+lines. Reproduced by a full sweep at a detached `origin/develop`, deterministic across two
+runs. Not SC-169's; diagnose separately.
 
 A cheap standing version of the same claim is a CSS-text gate in
 `test/dom/framework/chrome.test.ts` §6: every `.dse-chrome*` rule is either a pure
@@ -316,6 +428,9 @@ harness params — `stack=` (mount several elements in a column, no gallery head
 | `chrome-stacked-hover` | **ownership**: two adjacent elements, the lower one hovered, its panel painted above its own top edge |
 | `chrome-collapsed-trio` | all three collapsed summary shapes in one image |
 | `chrome-mobile` | always-visible panels + reserved top space, no hover |
+| `chrome-placement-trio` | **round 2**: three families, every panel visible at once — the same inset from each card's right edge |
+| `chrome-border-winded` / `chrome-border-dying` | **round 2**: the amber / red state frame renders complete beneath the panel |
+| `chrome-legacy-keys` | **round 2**: `collapse_default: true` starts collapsed via the panel; `collapsible: false` renders no panel at all |
 | `{statblock,hero,stamina-bar}-collapsed` | each element's authored-collapsed form, per element |
 
 24 new shot names (8 capture ids × 3 combos), all new names, so the freeze baseline is
@@ -323,31 +438,49 @@ untouched by construction. A widening is optional and is a landing decision.
 
 ---
 
-## 9. Open questions for Scott
+## 9. Open questions
 
-1. **The YAML key spelling.** `collapsed: true` (shipped) vs a namespaced
-   `dse_collapsed: true`. `collapsed:` is nicer to type; namespacing removes any chance of
-   ever colliding with an element's own field, the way `collapse_default:` already collides.
-2. **Attachment treatment.** The panel currently reads as a tab seated on the card's top
-   edge (shared hairline, square bottom corners, upward shadow). Alternatives if it does
-   not read strongly enough: a downward notch/tail bridging into the card, or tucking the
-   panel a few pixels *under* the card's top edge.
-3. **Should the panel also carry the collapse affordance while the element is collapsed?**
-   Today the collapsed bar has its own always-visible expand button and the panel is
-   inside the hidden card, so an author cannot reach *Edit* without expanding first.
-4. **Does the existing edit pencil belong in print at all?** It currently does not (print
-   rule 4 hides `.dse-btn`) — this is stated so nobody "fixes" it later.
-5. **Reference-body summaries.** A `ds-statblock` whose body is an SCC code collapses to
-   the reference text, not the creature's name. Fixing it needs a view-driven chrome
-   refresh after async resolution. Worth doing at rollout, or acceptable?
-6. **`withPrefOverrides` double-emit.** The same round-trip hazard `withCollapsedDefault`
-   guards against exists, unguarded, for `prefs:` on a raw-splicing serializer (`ds-hero`).
+### 9a. ANSWERED by Scott, 2026-08-18 (round 2 implements all of these)
+
+| round-1 question | ruling | where it lives now |
+|---|---|---|
+| YAML key spelling | keep `collapsed:`, **add** `collapsible:` and `collapse_default:` | §4.1 / §4.2 |
+| attachment treatment | do not cover the border; four options to review, ship the cleanest | §3.1a, and the A/B/C/D renders |
+| panel while collapsed | **only** the expand icon, keep it simple | §4.3 |
+| reference-body summaries | show the resolved name, never the code | §4.3 |
+| `ds-stamina`'s own wrapper | remove it; use the consistent chrome | §4.2a |
+| placement consistency | one geometry, same inset everywhere, assert it | §3.1a |
+
+### 9b. STILL OPEN
+
+1. **Which ownership treatment ships.** D (panel stops exactly on the border) is shipped as
+   the default because it is the only one of the four that needs no over-painting trick and
+   therefore cannot crop a coloured frame under any element's CSS. B (tucked, with the card's
+   border colour carried along the panel's bottom edge) is the close second and reads slightly
+   more "attached". A and C are shown for contrast; C's tail necessarily crosses the border.
+2. **Which HFS character style ships.** E1 (chamfered leading edge, Scott's own example) is
+   the shipped default; E2 (bronze leading edge) and E3 (hairline crown) are alternatives.
+3. **A whole-block REFERENCE body cannot carry an authored `collapsed:`.** The body IS the
+   reference, so `collapsed: true\nscc.v1:…` is not valid YAML and error-cards. The user's own
+   collapse works and is session-persisted. Options if this matters: accept it; support a
+   mapping form (`ref: <code>` + `collapsed: true`); or let a fenced-block info string carry
+   framework keys. No work done here — flagged only.
+4. **`collapsible: false` on `ds-stamina` is a behaviour change.** The flag used to be ignored
+   (§4.2a). Any existing note that set it will now lose its collapse control. Believed rare
+   and believed correct; say if you would rather keep the quirk.
+5. **The two global collapse preferences now reach every chrome element.** `collapseDefault`
+   / `collapsibleDefault` used to affect only `ds-skills` and `ds-stamina`'s inner wrappers.
+   They are the middle rung of the chrome ladder now, so turning `collapseDefault` on will
+   start every chrome-bearing card collapsed. Both keep their current defaults (`false` /
+   `true`), so nobody is affected until they opt in — but the blast radius grows at rollout.
+6. **`withPrefOverrides` double-emit.** The same round-trip hazard `withCollapseKeys` guards
+   against exists, unguarded, for `prefs:` on a raw-splicing serializer (`ds-hero`).
    Pre-existing; should it become a FOLLOWUPS item?
-7. **`ds-stamina`'s own wrapper.** The element already has a whole-element collapse — the
-   kit collapsible's "Stamina Bar" header. Chrome now provides that framework-wide, so the
-   wrapper is redundant. Removing it is a visible change **and** moves
-   `stamina-bar--steel-print.png` (a sanctioned rebaseline), so it is a rollout decision,
-   not a prototype one.
+7. **Does the existing edit pencil belong in print at all?** It currently does not (print
+   rule 4 hides `.dse-btn`) — stated so nobody "fixes" it later.
+8. **A pre-existing freeze drift on `origin/develop`.** Six `hero*--steel-{print,realprint}`
+   lines do not reproduce from `da96da2` on this machine. Not SC-169's; see
+   `.superpowers/sdd/sc169/rebaseline-README.md`.
 
 ---
 

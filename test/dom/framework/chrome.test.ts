@@ -27,7 +27,7 @@ import { staminaBarElement } from '@/elements/stamina-bar/definition';
 import { heroElement } from '@/elements/hero/definition';
 import { counterElement } from '@/elements/counter/definition';
 import { setChromeMobileOverride, CHROME_COLLAPSE_SLOT } from '@/framework/chrome';
-import { extractCollapsedDefault, withCollapsedDefault } from '@/framework/chrome/collapsedKey';
+import { extractCollapseKeys, withCollapseKeys } from '@/framework/chrome/collapsedKey';
 import { makeCompendiumDeps } from '../elements/_refHarness';
 import { FRAMEWORK_V2_DEPENDENCY_SCHEMAS } from 'main';
 
@@ -248,21 +248,21 @@ describe('SC-169 §3 — whole-element collapse', () => {
 // ---------------------------------------------------------------- 4. round-trip
 describe('SC-169 §4 — the `collapsed:` key survives a write-back', () => {
 	it('re-emits the key for a model-serializing element', () => {
-		const wrapped = withCollapsedDefault(() => 'max_stamina: 48\n', true);
+		const wrapped = withCollapseKeys(() => 'max_stamina: 48\n', { collapsed: true });
 		expect(wrapped(undefined)).toBe('collapsed: true\nmax_stamina: 48\n');
 	});
 
 	it('does NOT double it for a serializer that splices the raw body back (ds-hero)', () => {
 		const raw = 'collapsed: true\nname: Torin Stonefist\nstate:\n  stamina: 4\n';
-		const wrapped = withCollapsedDefault(() => raw, true);
+		const wrapped = withCollapseKeys(() => raw, { collapsed: true });
 		expect(wrapped(undefined)).toBe(raw);
 	});
 
 	it('pops the key off the parsed data (mutating), leaving everything else', () => {
 		const data: Record<string, unknown> = { collapsed: true, name: 'x' };
-		expect(extractCollapsedDefault(data)).toBe(true);
+		expect(extractCollapseKeys(data).collapsed).toBe(true);
 		expect(data).toEqual({ name: 'x' });
-		expect(extractCollapsedDefault({ name: 'x' })).toBeUndefined();
+		expect(extractCollapseKeys({ name: 'x' }).collapsed).toBeUndefined();
 	});
 });
 

@@ -34,5 +34,11 @@ export const staminaBarElement: ElementDefinition<StaminaBar> = {
 	serialize,
 	createView: (cx) => new StaminaBarView(cx),
 	chrome: staminaBarChrome,
+	// SC-169 round 2 (Scott's ruling 2, backward compatibility): `collapsible:` and
+	// `collapse_default:` are ComponentWrapper MODEL fields on this element — in the schema,
+	// on the model, re-emitted by its own serializer. The framework reads them as the
+	// authored collapse contract but must not pop them off the block body. See
+	// framework/chrome/collapsedKey.ts.
+	collapseKeysOwnedByModel: true,
 	authoring: { example: staminaExample },
 };
