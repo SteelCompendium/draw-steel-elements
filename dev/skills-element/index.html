@@ -406,7 +406,7 @@
   <span class="md-ellipsis">
     
   
-    Common Element Fields
+    The element menu, and collapsing a block
   
 
     
@@ -1266,8 +1266,13 @@ custom_skills:
 <p>This code block will render the character's skills and custom skills in a formatted display.</p>
 <p><img alt="Skills" src="../Media/skills.png" /></p>
 <h2 id="field-definitions">Field Definitions<a class="headerlink" href="#field-definitions" title="Permanent link">&para;</a></h2>
-<p>The Skills Element supports the <a href="../common-element-fields/">Common Element Fields</a>
-(<code>collapsible</code> and <code>collapse_default</code>).</p>
+<p>The Skills Element supports all three
+<a href="../common-element-fields/">common element fields</a> (<code>collapsible</code>, <code>collapsed</code> and
+<code>collapse_default</code>). As of 7.0.0 it also carries the standard
+<a href="../common-element-fields/#the-menu">element menu</a>, so it has two ways to fold: the "Skills"
+disclosure header inside the card, which hides the skill list, and the menu's collapse
+control, which folds the whole block to one line (<code>SKILLS (12 selected)</code>). The three fields
+drive both.</p>
 <p>Below is a detailed description of each field used in the skills element, including their types, default values, and whether they are required.</p>
 <table>
 <thead>

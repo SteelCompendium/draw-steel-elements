@@ -406,7 +406,7 @@
   <span class="md-ellipsis">
     
   
-    Common Element Fields
+    The element menu, and collapsing a block
   
 
     
@@ -1276,8 +1276,17 @@ temp_stamina: 5
 Clicking on the bar allows you to adjust the stamina values directly.</p>
 <p><img alt="stamina bar modal" src="../Media/stamina-bar-modal.png" /></p>
 <h2 id="field-definitions">Field Definitions<a class="headerlink" href="#field-definitions" title="Permanent link">&para;</a></h2>
-<p>The Stamina Bar is always collapsible, and honours <code>collapse_default:</code> from the
-<a href="../common-element-fields/">Common Element Fields</a>.</p>
+<p>The Stamina Bar can be collapsed from its standard menu panel (hover the bar; the control is
+at the top-right), and honours <code>collapsible:</code>, <code>collapsed:</code> and <code>collapse_default:</code> from the
+<a href="../common-element-fields/">Common Element Fields</a>. Collapsed, it reads as one line —
+<code>STAMINA (31/48)</code>.</p>
+<blockquote>
+<p><strong>Changed in 7.0.0.</strong> The bar used to carry its own "Stamina Bar" disclosure header. That
+header is gone; the menu panel does the same job the same way every other card element
+does. Existing blocks are unaffected — <code>collapse_default: true</code> still starts the element
+collapsed — with one exception: <code>collapsible: false</code> used to be silently ignored here and
+is honoured now.</p>
+</blockquote>
 <p>Below is a detailed description of each field used in the stamina bar element, including their types, 
 default values, and whether they are required.</p>
 <table>

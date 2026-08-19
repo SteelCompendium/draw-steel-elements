@@ -406,7 +406,7 @@
   <span class="md-ellipsis">
     
   
-    Common Element Fields
+    The element menu, and collapsing a block
   
 
     
@@ -1463,6 +1463,17 @@ has both an old and a new key for the same value, the new key always wins.</p>
   range honestly, temporary Stamina as a real segment, clickable Recovery
   markers, Catch Breath, and the Winded/Dying states said more than one way.
   See <a href="../stamina-bar/">Stamina Bar</a>.</li>
+<li><strong>A standard menu panel on card elements</strong> — hover a statblock, hero sheet or
+  stamina bar and a small icon panel appears at its top-right, carrying
+  collapse/expand and (when <strong>Show edit button</strong> is on) the edit pencil, which
+  moved there from the card's corner. Collapsed, an element is one line: type,
+  name, expand. Block keys: <code>collapsed:</code>, <code>collapse_default:</code> and
+  <code>collapsible:</code> — see
+  <a href="../common-element-fields/">Common Element Fields</a>.
+  <strong>One thing to know:</strong> the Stamina Bar's own "Stamina Bar" disclosure header
+  is gone, replaced by that panel. Your blocks need no change —
+  <code>collapse_default: true</code> still starts collapsed — except that
+  <code>collapsible: false</code>, previously ignored on a stamina bar, is honoured now.</li>
 <li><strong>Rebuilt settings</strong> — <a href="../settings/">ten pages</a> instead of one long scroll,
   searchable from Obsidian's own settings search, with a live preview of the
   card you're changing and seven more of the website's statblock layout
