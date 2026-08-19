@@ -5,11 +5,12 @@
 // construction, validation, ref resolution, the click shield, theme/pref stamping,
 // lifecycle wiring, error rendering) is this file's job. Task 10 wires ElementPipeline
 // instances into Obsidian via ElementRegistry + registerMarkdownCodeBlockProcessor.
-import { parseYaml } from 'obsidian';
+import { Component, parseYaml } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
 import type { DSESettings } from '@model/Settings';
 import type { ElementDefinition } from './registry';
 import { createRenderContext } from './context';
+import { registerAfterRender } from './view';
 import type { BlockHost } from './host/BlockHost';
 import type { ThemeService } from './seams/theme';
 import type { PreferenceStore } from './seams/prefs';
@@ -22,9 +23,15 @@ import type { CompendiumIndex } from '@/services/CompendiumIndex';
 import type { DsePrefs } from './seams/prefs';
 import { extractPrefOverrides, applyPrefOverrides, withPrefOverrides } from './prefOverrides';
 import { watchPrintMedia } from './printMedia';
-import { extractCollapseKeys, resolveCollapseState, withCollapseKeys } from './chrome/collapsedKey';
+import {
+	extractCollapseKeys,
+	peelLeadingCollapseKeys,
+	resolveCollapseState,
+	withCollapseKeys,
+	withPeeledKeys,
+} from './chrome/collapsedKey';
 import type { CollapseKeys } from './chrome/collapsedKey';
-import { mountChrome } from './chrome/mountChrome';
+import { ensureCollapseInvariant, mountChrome } from './chrome/mountChrome';
 import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
@@ -259,17 +266,62 @@ export async function prepareModel<M>(
 	// Step 2: parse (F1 §2.4.1). Parse failure -> propagate (tagged "parse"); the whole-
 	// block-reference rescue mirrors run()'s own comment above `parseYaml` verbatim.
 	let rawData: unknown;
+	// SC-169 fix round 1 (M-1): the body `def.parse` finally sees. Only ever differs from
+	// `source` when the collapse-key rescue below fires — i.e. for a body YAML could not
+	// parse UNTIL the framework's own leading key lines were peeled off it.
+	let bodySource = source;
+	let peeledKeys: Record<string, boolean> = {};
 	try {
 		rawData = runStage<unknown>('parse', () => parseYaml(source));
 	} catch (error) {
-		const trimmed = source.trim();
-		if (def.acceptsWholeBlockRef && trimmed.startsWith('@') && !trimmed.includes('\n')) {
-			rawData = trimmed;
+		// SC-169 FIX ROUND 1 (M-1) — the PROSE/REFERENCE-body rescue, tried first because
+		// it is the only branch that can turn a hard parse failure into a normal render.
+		//
+		// `collapsed:`/`collapsible:`/`collapse_default:` are documented as "a top-level
+		// line you write in the block", and on a mapping body they are popped out of the
+		// PARSED data. A body that is not a mapping has no parsed data to pop them from:
+		// `collapsed: true` followed by prose (`ds-rule`) or by a bare SCC code (`ds-scc`,
+		// or any whole-block `scc.v1:` reference) is a mapping key followed by a scalar,
+		// which YAML rejects outright — so following the documentation error-carded the
+		// block. Peel the leading key lines off the SOURCE and re-parse what is left; the
+		// keys are recorded exactly as if they had been popped, and `def.parse` receives
+		// the body the author actually meant to write.
+		//
+		// Strictly a rescue: a body that already parses never reaches this catch, so every
+		// YAML-mapping element keeps byte-identical behaviour. If the re-parse also fails
+		// the ORIGINAL error is what propagates — the peel must never rewrite the message a
+		// user sees for an unrelated syntax mistake.
+		const peel = peelLeadingCollapseKeys(source);
+		const peeledTrimmed = peel.source.trim();
+		let rescued = false;
+		if (Object.keys(peel.peeled).length > 0) {
+			try {
+				rawData = parseYaml(peel.source);
+				rescued = true;
+			} catch {
+				/* not a collapse-key problem after all — fall through to the ladder below */
+			}
+		}
+		if (rescued) {
+			bodySource = peel.source;
+			peeledKeys = peel.peeled;
+		} else if (def.acceptsWholeBlockRef && peeledTrimmed.startsWith('@') && !peeledTrimmed.includes('\n')) {
+			// The peel applies to this arm too, so `collapsed: true` above an `@path` body
+			// behaves like `collapsed: true` above any other body.
+			rawData = peeledTrimmed;
+			bodySource = peel.source;
+			peeledKeys = peel.peeled;
 		} else if (def.parseHandlesRawBody) {
 			// SC-149 fix round (M-3): this def's parse reads `raw` and owns its own error
 			// messages, so an unparseable body is its business, not a pipeline failure.
 			// `data` is undefined — exactly what such a parse already ignores.
+			// SC-169 fix round 1: it still gets the PEELED body — the framework's own keys
+			// are never part of "the body this def owns", and `ds-scc`'s message about what
+			// a legal body looks like should describe what the author wrote, not what the
+			// author wrote plus a framework line.
 			rawData = undefined;
+			bodySource = peel.source;
+			peeledKeys = peel.peeled;
 		} else {
 			throw error;
 		}
@@ -293,7 +345,9 @@ export async function prepareModel<M>(
 	// (`ds-skills` keeps parsing its ComponentWrapper pair exactly as before); `ds-stamina`
 	// has the slot AND owns them, so they are read in place rather than removed.
 	const claimLegacyKeys = def.chrome !== undefined && def.collapseKeysOwnedByModel !== true;
-	const collapseKeys = extractCollapseKeys(rawData, claimLegacyKeys);
+	// SC-169 fix round 1 (M-1): fold in anything the non-mapping-body rescue above peeled
+	// off the source text. `withPeeledKeys` is a no-op for every body that parses.
+	const collapseKeys = withPeeledKeys(extractCollapseKeys(rawData, claimLegacyKeys), peeledKeys);
 
 	// Step 3: validate (F1 §2.4.2). Invalid -> throw the ValidationResult itself
 	// (self-describing to renderErrorCard — no ElementStageError tag needed, same as
@@ -320,13 +374,13 @@ export async function prepareModel<M>(
 	let model: M;
 	if (def.resolveRefs) {
 		const resolveRefs = def.resolveRefs;
-		model = runStage('render', () => def.parse(rawData, source));
+		model = runStage('render', () => def.parse(rawData, bodySource));
 		model = await runStageAsync('reference', () => resolveRefs(model, refs));
 	} else if (def.autoResolveRefs === true) {
 		const resolved = await runStageAsync('reference', () => refs.resolveDeep(rawData, sourcePath));
-		model = runStage('render', () => def.parse(resolved, source));
+		model = runStage('render', () => def.parse(resolved, bodySource));
 	} else {
-		model = runStage('render', () => def.parse(rawData, source));
+		model = runStage('render', () => def.parse(rawData, bodySource));
 	}
 
 	return { model, prefOverrides, collapseKeys };
@@ -469,24 +523,54 @@ export class ElementPipeline {
 				// rewrites the body from serialize(model).
 				view.setSerializer(prefOverrides ? withPrefOverrides(serialize, prefOverrides) : serialize);
 			}
-			host.addChild(view);
-			await runStageAsync('render', () => view.mount(root, model));
+			// SC-169 FIX ROUND 1 (H-1) — everything below this line is PIPELINE-owned DOM
+			// appended into DOM the VIEW owns, so it has to be re-appended every time the
+			// view rebuilds itself (`ElementView.update()` → `rootEl.empty()` + `onMount`).
+			// Registered as the view's afterRender hook BEFORE mount — so a rebuild
+			// triggered from inside `onMount` is covered too — and called once explicitly
+			// after mount for the first render. See `ElementView.setAfterRender`.
+			//
+			// Everything the hook needs is read LAZILY, at call time: `view.authoringAnchor()`
+			// (a brand-new node after every rebuild), the current model (passed in), and the
+			// `authoringControls` pref (which may have flipped since mount — indeed flipping
+			// a pref is one of the things that triggers a rebuild).
+			let chromeOwner: Component | undefined;
+			let pencilEl: HTMLElement | undefined;
 
-			// D9 (Plan 15 Task 5): opt-in reading-mode edit affordance. Default OFF
-			// (authoringControls) ⇒ this branch never runs ⇒ rendered DOM is unchanged.
-			// Gated on canPersist (never on embeds/exports); writes go through the SAME
-			// host.replaceSource path (no parallel writer). D7 Task 9: also gated on
-			// `!def.noAuthoringButton` — `ds-hero` opts out because it mounts its OWN
-			// "Edit definition" header affordance (same openFormEditor/schema, placed next
-			// to `[respite]` per spec §3.2, not a redundant trailing pencil).
-			// SC-145: mounted into `view.authoringAnchor()`, NOT unconditionally `root` —
-			// see that method's doc (framework/view.ts) for why a bare `root` target left
-			// the button visually outside the card for every view whose visible card frame
-			// is a nested child div (the D6 display-family `.dse-card` / statblock's
-			// `.dse-sb`) rather than root itself.
-			// SC-169: the edit affordance's GATE is unchanged; only its LOCATION moves when
-			// the element opted into chrome.
-			const showEdit = cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs);
+			const mountPipelineChrome = (current: M): void => {
+				// One Component per (re)mount, owned by the view: unloading it detaches every
+				// listener the previous panel registered, so a long-lived view that rebuilds
+				// many times does not accumulate handlers on detached nodes. `removeChild` is
+				// a no-op when the default update() path already unloaded it.
+				if (chromeOwner) view.removeChild(chromeOwner);
+				pencilEl?.remove();
+				pencilEl = undefined;
+				// Defensive: a hypothetical `onUpdate` that rebuilds WITHOUT emptying root
+				// would otherwise leave the old nodes behind and we would mount a second set.
+				root.querySelectorAll('.dse-chrome, .dse-chrome-summary').forEach((n) => n.remove());
+				chromeOwner = new Component();
+				view.addChild(chromeOwner);
+
+				// D9 (Plan 15 Task 5): opt-in reading-mode edit affordance. Default OFF
+				// (authoringControls) ⇒ this branch never runs ⇒ rendered DOM is unchanged.
+				// Gated on canPersist (never on embeds/exports); writes go through the SAME
+				// host.replaceSource path (no parallel writer). D7 Task 9: also gated on
+				// `!def.noAuthoringButton` — `ds-hero` opts out because it mounts its OWN
+				// "Edit definition" header affordance (same openFormEditor/schema, placed next
+				// to `[respite]` per spec §3.2, not a redundant trailing pencil).
+				// SC-145: mounted into `view.authoringAnchor()`, NOT unconditionally `root` —
+				// see that method's doc (framework/view.ts) for why a bare `root` target left
+				// the button visually outside the card for every view whose visible card frame
+				// is a nested child div (the D6 display-family `.dse-card` / statblock's
+				// `.dse-sb`) rather than root itself.
+				// SC-169: the edit affordance's GATE is unchanged; only its LOCATION moves when
+				// the element opted into chrome.
+				const showEdit = cx.host.canPersist && !def.noAuthoringButton && isAuthoringControlsOn(prefs);
+				mountChromeFor(current, showEdit, chromeOwner);
+				// H-1's safety net, run after EVERY render including the first: the collapsed
+				// attribute and the one-line bar must never exist apart. See its doc comment.
+				ensureCollapseInvariant(root);
+			};
 
 			// SC-169: the standard menu panel + whole-element collapse. Opt-in via the
 			// `chrome` slot; a def without it renders exactly the DOM it rendered before.
@@ -496,55 +580,72 @@ export class ElementPipeline {
 			// { display: none }` (styles-source.css, print rule 4) already hides the
 			// card-corner pencil on paper — which is why `statblock--steel-print.png` and
 			// `statblock-edit-btn--steel-print.png` carry the SAME hash in the freeze baseline.
-			if (def.chrome) {
-				// SC-169 round 2 (ruling 2): block keys > the two global collapse preferences
-				// > the built-in defaults, the same three-tier ladder D4 §1.3 gave the
-				// ComponentWrapper pair. `collapsibleDefault` defaults true and
-				// `collapseDefault` defaults false, so an install that has touched neither
-				// gets exactly the prototype's behaviour.
-				const { collapsible, collapsedDefault } = resolveCollapseState(collapseKeys, {
-					collapsibleDefault: readCollapsePref(prefs, 'collapsibleDefault', true),
-					collapseDefault: readCollapsePref(prefs, 'collapseDefault', false),
-				});
-				mountChrome(
-					{
-						root,
-						anchor: view.authoringAnchor(),
-						chrome: def.chrome,
-						ctx: { model, def: { id: def.id, name: def.name } },
-						persist: { session, blockKey: host.blockKey(), slot: 'chrome' },
-						collapsedDefault,
-						collapsible,
-						summary: () => view.chromeSummary(),
-						pipelineItems: showEdit
-							? [
-									{
-										id: 'edit',
-										icon: 'pencil',
-										label: `Edit ${def.name}`,
-										onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
-									} satisfies ChromeMenuItem,
-								]
-							: [],
-					},
-					view,
-				);
-			} else if (showEdit) {
-				// D9 (Plan 15 Task 5) / SC-145: mounted into `view.authoringAnchor()`, NOT
-				// unconditionally `root` — see that method's doc (framework/view.ts) for why a
-				// bare `root` target left the button visually outside the card for every view
-				// whose visible card frame is a nested child div.
-				iconButton(
-					view.authoringAnchor(),
-					{
-						icon: 'pencil',
-						label: `Edit ${def.name}`,
-						variant: 'ghost',
-						onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
-					},
-					view,
-				);
-			}
+			const mountChromeFor = (current: M, showEdit: boolean, owner: Component): void => {
+				if (def.chrome) {
+					const chrome = def.chrome;
+					const ctx = { model: current, def: { id: def.id, name: def.name } };
+					// SC-169 round 2 (ruling 2): block keys > the two global collapse preferences
+					// > the built-in defaults, the same three-tier ladder D4 §1.3 gave the
+					// ComponentWrapper pair. `collapsibleDefault` defaults true and
+					// `collapseDefault` defaults false, so an install that has touched neither
+					// gets exactly the prototype's behaviour.
+					const { collapsible, collapsedDefault } = resolveCollapseState(collapseKeys, {
+						collapsibleDefault: readCollapsePref(prefs, 'collapsibleDefault', true),
+						collapseDefault: readCollapsePref(prefs, 'collapseDefault', false),
+					});
+					mountChrome(
+						{
+							root,
+							anchor: view.authoringAnchor(),
+							chrome,
+							ctx,
+							persist: { session, blockKey: host.blockKey(), slot: 'chrome' },
+							collapsedDefault,
+							// SC-169 fix round 1 (L-1): the author's key AND the element's own
+							// per-model veto. ANDed, so the veto can only ever remove the control
+							// — see ElementChrome.collapsible.
+							collapsible: collapsible && (chrome.collapsible?.(ctx) ?? true),
+							summary: () => view.chromeSummary(),
+							pipelineItems: showEdit
+								? [
+										{
+											id: 'edit',
+											icon: 'pencil',
+											label: `Edit ${def.name}`,
+											onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
+										} satisfies ChromeMenuItem,
+									]
+								: [],
+						},
+						owner,
+					);
+				} else if (showEdit) {
+					// D9 (Plan 15 Task 5) / SC-145: mounted into `view.authoringAnchor()`, NOT
+					// unconditionally `root` — see that method's doc (framework/view.ts) for why a
+					// bare `root` target left the button visually outside the card for every view
+					// whose visible card frame is a nested child div.
+					pencilEl = iconButton(
+						view.authoringAnchor(),
+						{
+							icon: 'pencil',
+							label: `Edit ${def.name}`,
+							variant: 'ghost',
+							onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
+						},
+						owner,
+					).buttonEl;
+				}
+			};
+
+			// SC-169 fix round 1 (H-1): registered BEFORE mount, so even a rebuild kicked off
+			// from inside `onMount` re-attaches the panel. Keyed on ROOT, not on the view —
+			// see framework/view.ts's AFTER_RENDER note for why (a `ds-scc`/`ds-statblock`
+			// body re-renders through a CHILD view mounted onto this same root).
+			registerAfterRender(root, () => mountPipelineChrome(view.currentModel()));
+			host.addChild(view);
+			await runStageAsync('render', () => view.mount(root, model));
+			// The first render's leg. `update()` runs the hook itself from here on.
+			mountPipelineChrome(model);
 		} catch (error) {
 			// ONE error boundary for the whole pipeline (F1 §2.4) — no per-element
 			// try/catch. renderErrorCard always clears root first, so a render-stage

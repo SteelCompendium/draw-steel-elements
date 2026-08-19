@@ -114,18 +114,30 @@ menu: the [horizontal rule](horizontal-rule.md) (`ds-hr`) and the [dice roller](
 The [Skills](skills-element.md) element additionally keeps its own "Skills" disclosure header
 inside the card; the three fields above drive both it and the element menu together.
 
-### One limitation worth knowing
+### Blocks that aren't a list of fields
 
-A [compendium reference](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
-block's body is *only* the entry's code:
+Two kinds of block don't have a list of `field: value` lines to add one more to: a
+[compendium reference](compendium-sync.md#referencing-a-compendium-entry-in-your-notes),
+whose body is only the entry's code, and a rule block, whose body is plain prose.
+
+The three fields still work on both — write them as the **first lines of the block**, above
+the code or the prose:
 
 ````markdown
 ```ds-scc
+collapsed: true
 mcdm.heroes.v1/kit/panther
 ```
 ````
 
-There is nowhere in that to put a `collapsed: true` line — adding one makes the block invalid,
-because the body has to be the code and nothing else. So a reference block **can't be set to
-start collapsed**; you collapse it by hand, and that is remembered for the session like
-everywhere else. (Collapsing one shows the entry's real name — "KIT: Panther" — not the code.)
+````markdown
+```ds-rule
+collapsed: true
+Whenever a creature has an enemy adjacent to them…
+```
+````
+
+They are read and removed before the rest of the block is, so the code is still the whole
+reference and the prose is still exactly what you wrote. (Collapsing a reference shows the
+entry's real name — "KIT: Panther" — not the code.) In a block that *is* a list of fields, a
+collapse field can go anywhere in the list, like any other field.

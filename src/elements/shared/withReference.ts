@@ -165,5 +165,13 @@ function liftChrome<M>(
 			? ({ model, def }) =>
 					model.kind === 'inline' ? (chrome.items?.({ model: model.model, def }) ?? []) : []
 			: undefined,
+		// SC-169 FIX ROUND 1 (L-1): an INVALID body is a notice card explaining what to
+		// write instead ("`not a code` is not a full SCC code. …"), and a collapsed element
+		// paints nothing but its one-liner — which for this model has no name to show, so
+		// folding would replace the explanation with a bare "SCC REFERENCE" bar. Refuse the
+		// collapse control for that model only; a well-formed reference that merely fails to
+		// RESOLVE keeps it (the author's code is a real, nameable thing and the honest
+		// "Statblock: scc.v1:…" line is worth folding).
+		collapsible: ({ model }) => model.kind !== 'invalid',
 	};
 }

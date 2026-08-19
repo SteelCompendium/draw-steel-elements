@@ -42,6 +42,30 @@ import { isChromeMobile } from './platform';
 export const CHROME_COLLAPSE_SLOT = 'chrome.collapsed';
 
 /**
+ * SC-169 FIX ROUND 1 (H-1) — the last-resort safety net: a collapsed element must never be
+ * a blank hole in the note.
+ *
+ * `data-dse-collapsed="on"` lives on the element ROOT, and the collapse rule hides every
+ * one of root's children that is not chrome. The one-line summary bar is therefore the
+ * ONLY thing a collapsed element paints, and the expand button on it is the only way back.
+ * So the attribute and the bar are two halves of one state: if the bar is ever missing
+ * while the attribute is set, the block renders as nothing at all AND offers no way to
+ * recover — the exact failure H-1 reproduced (a rebuild dropped the bar and left the
+ * attribute behind).
+ *
+ * The primary fix is that the pipeline re-mounts chrome after every rebuild. This runs
+ * immediately after that, as an assertion with a safe fallback rather than a hope: if the
+ * bar is somehow still absent, drop the attribute so the element renders EXPANDED. A
+ * forgotten fold is a nuisance; an invisible, unrecoverable block is data the reader
+ * cannot reach.
+ */
+export function ensureCollapseInvariant(root: HTMLElement): void {
+	if (root.getAttribute('data-dse-collapsed') !== 'on') return;
+	if (root.querySelector(':scope > .dse-chrome-summary') !== null) return;
+	root.removeAttribute('data-dse-collapsed');
+}
+
+/**
  * SC-169 round 2, Scott's PLACEMENT ruling ("the panel must sit at the same offset from the
  * card's right edge on every element").
  *

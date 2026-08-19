@@ -28,7 +28,9 @@ for what needs action.
   block keys control it: `collapsed:` (start collapsed), `collapse_default:` (the same
   thing, the older spelling) and `collapsible: false` (no collapse control at all, and no
   panel if that leaves it empty); the **Collapsible by default** and **Start collapsed**
-  settings are the fallback when a block says nothing. Collapsing something is remembered for
+  settings are the fallback when a block says nothing. All three work on blocks that are not
+  a list of fields too — a compendium reference or a rule block takes them as its first
+  lines, above the code or the prose. Collapsing something is remembered for
   the session and never edits your note, and the panel never appears in print or in an
   exported PDF — a collapsed element prints in full. On mobile the panel is always visible
   instead of waiting for a hover. The two elements that deliberately don't get one are the

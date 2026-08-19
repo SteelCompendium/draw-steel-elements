@@ -66,6 +66,22 @@ export interface ElementChrome<M = unknown> {
 	 * element ships one in v1.
 	 */
 	items?(ctx: ElementChromeContext<M>): ChromeMenuItem[];
+	/**
+	 * SC-169 FIX ROUND 1 (L-1) — "can THIS model be collapsed at all?", asked per render.
+	 *
+	 * Distinct from the author's `collapsible:` key (which is a per-block preference the
+	 * pipeline resolves) and from the slot's presence (which is the per-ELEMENT opt-in):
+	 * this is the element saying that for the particular thing it just rendered, folding
+	 * would hide something the reader must see. Returning false is ANDed with the author's
+	 * key, so it can only ever remove the control, never force one on.
+	 *
+	 * The one implementer is `withReference`'s lifted slot, for a body that is not a valid
+	 * reference at all: `ds-scc` answers a bad body with a plain-language notice card
+	 * explaining what to write instead, and a collapsed element paints nothing but its
+	 * one-liner — so folding it would replace the explanation with a bare "SCC REFERENCE"
+	 * bar and hide the only thing on screen worth reading.
+	 */
+	collapsible?(ctx: ElementChromeContext<M>): boolean;
 }
 
 /** Handle returned by `mountChrome` — the pipeline keeps it only to add late items. */

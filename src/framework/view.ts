@@ -22,6 +22,49 @@ import type { ElementSummary } from './chrome/types';
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
 
+// ---------------------------------------------------------------------------------
+// SC-169 FIX ROUND 1 (H-1) — the "an element root just got re-rendered" hook.
+//
+// Everything the PIPELINE appends after `mount()` — the SC-169 chrome panel, the collapsed
+// one-line bar, the D9 authoring pencil — is DOM the view knows nothing about, sitting in
+// DOM the view owns. `update()`'s default path empties `rootEl` and re-runs `onMount`, so
+// all of it is destroyed, and nothing put it back: mounting happened exactly once, in
+// `run()`.
+//
+// For the pencil that was a cosmetic loss (SC-145; its pref is default-OFF). For chrome it
+// was a data-visibility bug: `data-dse-collapsed` lives on the root and SURVIVES `empty()`,
+// so a collapsed element came back with the attribute set, no summary bar, and every
+// rebuilt child hidden by the collapse rule — a zero-height invisible block with no expand
+// control anywhere. Reproduced in real Obsidian by collapsing a statblock and toggling
+// "Enable dice rolling", and reachable from a dozen other places besides
+// (`setCharacteristicProvider`, every GM tracker's own buttons,
+// `SidebarPanel.handleExternalChange`).
+//
+// KEYED ON THE ROOT ELEMENT, not on the view, and that is the whole design decision. The
+// view that re-renders a root is not always the view the pipeline mounted: `RefUnwrapView`
+// mounts a CHILD ElementView onto the very same root node, and for a `ds-statblock` /
+// `ds-feature` body it is that CHILD which subscribes to the roll preferences and calls
+// `this.update(...)`. A hook stored on the pipeline's own view instance would simply never
+// fire for the most common trigger there is. Keying on the node means every rebuilder —
+// parent, child, or any wrapper written later — finds the same hook with no cooperation
+// and nothing to forward. A WeakMap so a detached root is collectable as usual.
+type AfterRenderHook = () => void;
+const AFTER_RENDER = new WeakMap<HTMLElement, AfterRenderHook>();
+
+/**
+ * Register the pipeline's "re-attach my DOM" hook for an element root. Called once per
+ * block, BEFORE `view.mount()` — so a rebuild triggered from inside `onMount` is covered
+ * too — and never invoked by `mount()` itself (the pipeline runs the first leg directly).
+ */
+export function registerAfterRender(root: HTMLElement, hook: AfterRenderHook): void {
+	AFTER_RENDER.set(root, hook);
+}
+
+/** Run the hook registered for `root`, if any. No-op for every unregistered node. */
+export function runAfterRender(root: HTMLElement): void {
+	AFTER_RENDER.get(root)?.();
+}
+
 /**
  * F1 §3.3 — the abstract view lifecycle base every DSE element mounts/updates/persists
  * through. A view owns DOM (rootEl) and the current model; RenderContext (cx) owns
@@ -126,20 +169,33 @@ export abstract class ElementView<M> extends Component {
 	}
 
 	/**
+	 * The model this view last rendered. Public so the pipeline's afterRender hook (below)
+	 * can rebuild its own DOM against current data without the pipeline having to shadow
+	 * every `update(model)` call itself.
+	 */
+	currentModel(): M {
+		return this.model;
+	}
+
+	/**
 	 * Apply a changed model. Delegates to onUpdate when the subclass provides it;
 	 * otherwise rebuilds per F1 §3.3's default: unload this view's own children (so
 	 * anything the previous onMount added via this.addChild tears down correctly),
 	 * empty rootEl, and run onMount again against the new model.
+	 *
+	 * BOTH branches end in the afterRender hook (SC-169 fix round 1): a subclass that
+	 * defines `onUpdate` is not exempt — `RefUnwrapView`'s empties `rootEl` too.
 	 */
 	async update(model: M): Promise<void> {
 		this.model = model;
 		if (this.onUpdate) {
 			await this.onUpdate(model);
-			return;
+		} else {
+			this.unloadOwnedChildren();
+			this.rootEl.empty();
+			await this.onMount(this.rootEl, model);
 		}
-		this.unloadOwnedChildren();
-		this.rootEl.empty();
-		await this.onMount(this.rootEl, model);
+		runAfterRender(this.rootEl);
 	}
 
 	/**

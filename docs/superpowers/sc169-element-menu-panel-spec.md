@@ -353,9 +353,14 @@ collapses to "STATBLOCK: Goblin Stinker". Before a resolution succeeds the overr
 `undefined` and the honest fallback (type name + the reference text) is used, so a failed
 reference never shows a name it does not have.
 
-**Known gap:** a bare whole-block reference body IS the reference, so there is nowhere to put
-a `collapsed:` line — `collapsed: true\nscc.v1:…` is not valid YAML. The authored default is
-unreachable for ref bodies today; the user's own collapse (session-persisted) is not. See §9.
+**Round-3 known gap, CLOSED in fix round 1 (review M-1).** A bare whole-block reference body
+IS the reference and a `ds-rule` body is prose, so `collapsed: true\n<body>` was a mapping key
+followed by a scalar — invalid YAML, and the block error-carded. The pipeline now PEELS
+leading `collapsed:`/`collapsible:`/`collapse_default:` lines off the source and re-parses
+what is left, but only as a rescue for a body YAML could not parse otherwise — so a mapping
+body is byte-untouched and keeps being popped from the parsed data exactly as before. Both
+body shapes can now be authored collapsed. See `framework/chrome/collapsedKey.ts`
+(`peelLeadingCollapseKeys`) and `test/dom/framework/chromeRerender.test.ts`.
 
 Collapse is implemented by attribute, not by unmounting: `data-dse-collapsed="on"` on the
 root, and CSS hides every root child except the panel and the summary bar. The element's
@@ -528,13 +533,13 @@ untouched by construction. A widening is optional and is a landing decision.
 
 1. **A whole-block REFERENCE body cannot carry an authored `collapsed:`.** The body IS the
    reference, so `collapsed: true\nscc.v1:…` is not valid YAML and error-cards. The user's own
-   collapse works and is session-persisted. Options if this matters: accept it; support a
-   mapping form (`ref: <code>` + `collapsed: true`); or let a fenced-block info string carry
-   framework keys. No work done here — flagged only. **Round 3 widened this**: it is not only
-   `ds-scc`. `ds-rule` (`genericCard`) has a RAW-MARKDOWN body, so a `collapsed:` line turns it
-   into invalid YAML too. Same root cause (the body is not a mapping), same workaround (the
-   user's own, session-persisted collapse), same three options. Documented for users in
-   `docs/common-element-fields.md` → "One limitation worth knowing".
+   collapse works and is session-persisted. **Round 3 widened this** to `ds-rule`
+   (`genericCard`), whose body is raw markdown — same root cause, the body is not a mapping.
+   **RESOLVED in fix round 1 (review M-1): a fourth option was taken** — the pipeline peels
+   leading framework-key lines off the raw source and re-parses, as a rescue for bodies that
+   fail to parse otherwise. Both shapes can now be authored collapsed, no mapping form and no
+   info-string syntax needed, and every mapping body is untouched. User docs:
+   `docs/common-element-fields.md` → "Blocks that aren't a list of fields".
 2. **`ds-skills` still has two collapse mechanisms.** Its own "Skills" disclosure header plus
    the element menu — the double affordance Scott's ruling 3 retired on `ds-stamina`. Not taken
    in round 3 because removing it moves 2 more frozen print lines, outside the sanction given.

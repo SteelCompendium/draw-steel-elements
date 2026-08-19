@@ -119,6 +119,81 @@ export function resolveCollapseState(
 	};
 }
 
+// ---------------------------------------------------------------------------------
+// SC-169 FIX ROUND 1 (M-1) — the same three keys on a body that is NOT a YAML mapping.
+//
+// `extractCollapseKeys` above reads the keys off PARSED data, which only exists for a
+// body YAML can parse into a mapping. Two shipped card families have bodies that are
+// nothing of the kind:
+//
+//   * `ds-rule` (and every `genericCard`) — the body is free PROSE;
+//   * `ds-scc` (and any whole-block `scc.v1:` reference body) — the body IS the code.
+//
+// For both, writing the documented `collapsed: true` line produced a YAML *parse error
+// card* ("Implicit keys need to be on a single line"), because `collapsed: true\n<prose>`
+// is a mapping key followed by a bare scalar. The docs invited exactly that on "every
+// element that draws a card", so the feature's own instructions broke the block.
+//
+// The fix keeps the contract uniform — "a framework key is a top-level line at the top of
+// the block" — by peeling those lines off the SOURCE TEXT before it is parsed, so what
+// every downstream consumer sees is the body the author meant to write. Deliberately:
+//
+//   * LEADING lines only, and only lines that are exactly `<key>: <true|false>`. A
+//     `collapsed:` appearing anywhere else in a prose body is prose, not a directive.
+//   * used ONLY as a parse RESCUE (pipeline.ts) — a body that already parses is never
+//     peeled, so every YAML-mapping element keeps byte-identical behaviour and the keys
+//     keep being popped from the parsed data exactly as before.
+const LEADING_KEY_LINE_RE = new RegExp(
+	`^(${COLLAPSED_KEY}|${COLLAPSIBLE_KEY}|${COLLAPSE_DEFAULT_KEY})[ \\t]*:[ \\t]*(true|false)[ \\t]*$`,
+);
+
+export interface PeeledCollapseKeys {
+	/** `source` with the leading framework-key lines removed. Unchanged when none matched. */
+	readonly source: string;
+	/** The keys that were removed, in the same shape as `CollapseKeys.popped`. */
+	readonly peeled: Record<string, boolean>;
+}
+
+/**
+ * Peel leading `collapsed:`/`collapsible:`/`collapse_default:` lines off a raw block body.
+ *
+ * Returns the original string and an empty map when the first line is not one of them, so
+ * a caller can treat "nothing peeled" as "this rescue does not apply" without a second
+ * check. A repeated key keeps the FIRST occurrence, matching YAML's own "first wins" for
+ * the mapping case is not the rule — but a duplicate here is an authoring mistake either
+ * way and the first line is the one a reader sees.
+ */
+export function peelLeadingCollapseKeys(source: string): PeeledCollapseKeys {
+	const lines = source.split('\n');
+	const peeled: Record<string, boolean> = {};
+	let i = 0;
+	for (; i < lines.length; i++) {
+		const match = LEADING_KEY_LINE_RE.exec(lines[i]);
+		if (!match) break;
+		if (!(match[1] in peeled)) peeled[match[1]] = match[2] === 'true';
+	}
+	if (i === 0) return { source, peeled: {} };
+	return { source: lines.slice(i).join('\n'), peeled };
+}
+
+/**
+ * Fold peeled keys into the `CollapseKeys` read off the parsed data.
+ *
+ * A peeled key WINS: it was literally written at the top of the block and has been removed
+ * from the body, so nothing downstream can see it any more — there is no second reading of
+ * the same fact to defer to. It also joins `popped`, so a persisted element's write-back
+ * re-emits it (the same round-trip guarantee `collapsed:` already has on a mapping body).
+ */
+export function withPeeledKeys(keys: CollapseKeys, peeled: Record<string, boolean>): CollapseKeys {
+	if (Object.keys(peeled).length === 0) return keys;
+	return {
+		collapsible: peeled[COLLAPSIBLE_KEY] ?? keys.collapsible,
+		collapsed: peeled[COLLAPSED_KEY] ?? keys.collapsed,
+		collapseDefault: peeled[COLLAPSE_DEFAULT_KEY] ?? keys.collapseDefault,
+		popped: { ...keys.popped, ...peeled },
+	};
+}
+
 /** A top-level (column-0) declaration of `key` in an already-serialized block body. */
 const topLevelRe = (key: string): RegExp => new RegExp(`^${key}\\s*:`, 'mu');
 
