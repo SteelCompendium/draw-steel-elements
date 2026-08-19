@@ -45,7 +45,7 @@
 // That combination is what makes an existing `ds-stamina` block with `collapse_default: true`
 // still start collapsed after SC-169 removed that element's own "Stamina Bar" header (Q3):
 // same key, same effect, new mechanism, and the byte-identical block body it always had.
-import { stringifyYaml } from 'obsidian';
+import { parseYaml, stringifyYaml } from 'obsidian';
 
 /** The canonical authored-state key. Framework-reserved: no element may declare it. */
 export const COLLAPSED_KEY = 'collapsed';
@@ -138,14 +138,53 @@ export function resolveCollapseState(
 // the block" — by peeling those lines off the SOURCE TEXT before it is parsed, so what
 // every downstream consumer sees is the body the author meant to write. Deliberately:
 //
-//   * LEADING lines only, and only lines that are exactly `<key>: <true|false>`. A
-//     `collapsed:` appearing anywhere else in a prose body is prose, not a directive.
+//   * LEADING lines only. A `collapsed:` appearing anywhere else in a prose body is prose,
+//     not a directive.
 //   * used ONLY as a parse RESCUE (pipeline.ts) — a body that already parses is never
 //     peeled, so every YAML-mapping element keeps byte-identical behaviour and the keys
 //     keep being popped from the parsed data exactly as before.
-const LEADING_KEY_LINE_RE = new RegExp(
-	`^(${COLLAPSED_KEY}|${COLLAPSIBLE_KEY}|${COLLAPSE_DEFAULT_KEY})[ \\t]*:[ \\t]*(true|false)[ \\t]*$`,
+//
+// POLISH ROUND (re-review L-A). "Is this line one of the three keys set to a boolean?" is
+// answered by PARSING THE LINE with the same `parseYaml` the mapping path uses, not by a
+// hand-written value pattern. The two readings of the same three keys must agree, and a
+// literal alternation cannot keep that promise: YAML's core schema says `true|True|TRUE|
+// false|False|FALSE` (and `!!bool true`, and a trailing `# comment`) are booleans while
+// `yes`/`no`/`on`/`off` are STRINGS — which the mapping path warns about and ignores
+// (`extractCollapseKeys`), so the peel must ignore them too rather than invent a second
+// vocabulary. The original `(true|false)` pattern accepted neither `True` (a boolean
+// everywhere else in the block) nor a `\r`-terminated line, so a CRLF note — any file
+// authored outside Obsidian on Windows — silently lost the whole M-1 rescue and got the
+// parse-error card back.
+//
+// Line endings: the source is split on `\n` and each candidate is tested with its trailing
+// `\r` removed (a lone `\r` at the end of a one-line document is part of the SCALAR —
+// `parseYaml('collapsed: true\r')` is `{collapsed: 'true\r'}`, not a boolean). The lines
+// that survive are re-joined with `\n` and keep their own `\r`, so a CRLF body is handed
+// on byte-identical apart from the peeled lines.
+const KEY_LINE_PREFIX_RE = new RegExp(
+	`^(${COLLAPSED_KEY}|${COLLAPSIBLE_KEY}|${COLLAPSE_DEFAULT_KEY})[ \\t]*:`,
 );
+
+/** `{key, value}` when `line` is exactly one of the three keys set to a YAML boolean. */
+function readCollapseKeyLine(line: string): { key: string; value: boolean } | undefined {
+	const candidate = line.endsWith('\r') ? line.slice(0, -1) : line;
+	const named = KEY_LINE_PREFIX_RE.exec(candidate);
+	if (!named) return undefined;
+	let parsed: unknown;
+	try {
+		parsed = parseYaml(candidate);
+	} catch {
+		return undefined;
+	}
+	if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+	const record = parsed as Record<string, unknown>;
+	const keys = Object.keys(record);
+	// Exactly this one key: a flow mapping (`collapsed: {a: 1}`) or anything that parsed
+	// into more than the key line's own pair is not a framework directive.
+	if (keys.length !== 1 || keys[0] !== named[1]) return undefined;
+	const value = record[named[1]];
+	return typeof value === 'boolean' ? { key: named[1], value } : undefined;
+}
 
 export interface PeeledCollapseKeys {
 	/** `source` with the leading framework-key lines removed. Unchanged when none matched. */
@@ -168,9 +207,9 @@ export function peelLeadingCollapseKeys(source: string): PeeledCollapseKeys {
 	const peeled: Record<string, boolean> = {};
 	let i = 0;
 	for (; i < lines.length; i++) {
-		const match = LEADING_KEY_LINE_RE.exec(lines[i]);
-		if (!match) break;
-		if (!(match[1] in peeled)) peeled[match[1]] = match[2] === 'true';
+		const read = readCollapseKeyLine(lines[i]);
+		if (!read) break;
+		if (!(read.key in peeled)) peeled[read.key] = read.value;
 	}
 	if (i === 0) return { source, peeled: {} };
 	return { source: lines.slice(i).join('\n'), peeled };

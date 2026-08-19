@@ -292,6 +292,86 @@ describe('SC-169 fix round 1, M-1 — the collapse keys on a non-mapping body', 
 		});
 	});
 
+	// ---------------------------------------------------------------------------------
+	// POLISH ROUND (re-review L-A): the peel and the mapping-body reading must accept the
+	// SAME values for the same three keys. The first cut hand-wrote `(true|false)` and
+	// anchored on `[ \t]*$`, so `collapsed: True` (a boolean everywhere else in the block)
+	// and every CRLF note (any file authored outside Obsidian on Windows) silently lost the
+	// rescue and got the parse-error card back.
+	it('accepts every value YAML reads as a boolean, and only those', () => {
+		// YAML core schema booleans — all six spellings, plus the tag and a trailing comment.
+		for (const value of ['true', 'True', 'TRUE', '!!bool true']) {
+			expect(peelLeadingCollapseKeys(`collapsed: ${value}\nprose`)).toEqual({
+				source: 'prose',
+				peeled: { collapsed: true },
+			});
+		}
+		for (const value of ['false', 'False', 'FALSE']) {
+			expect(peelLeadingCollapseKeys(`collapsed: ${value}\nprose`)).toEqual({
+				source: 'prose',
+				peeled: { collapsed: false },
+			});
+		}
+		expect(peelLeadingCollapseKeys('collapsed: true # why\nprose')).toEqual({
+			source: 'prose',
+			peeled: { collapsed: true },
+		});
+		// NOT booleans in YAML's core schema: the mapping path warns and ignores these
+		// (extractCollapseKeys), so the peel leaves them for whoever owns the body.
+		for (const value of ['yes', 'no', 'on', 'off', 'y', 'n', '1', 'maybe', 'tRue']) {
+			expect(peelLeadingCollapseKeys(`collapsed: ${value}\nprose`)).toEqual({
+				source: `collapsed: ${value}\nprose`,
+				peeled: {},
+			});
+		}
+		// Not a mapping at all to YAML ⇒ not a directive here either.
+		expect(peelLeadingCollapseKeys('collapsed:true\nprose')).toEqual({
+			source: 'collapsed:true\nprose',
+			peeled: {},
+		});
+	});
+
+	it('peels through CRLF line endings and hands the rest on byte-identically', () => {
+		expect(peelLeadingCollapseKeys('collapsed: true\r\nSome prose.\r\nMore prose.\r\n')).toEqual({
+			source: 'Some prose.\r\nMore prose.\r\n',
+			peeled: { collapsed: true },
+		});
+		expect(peelLeadingCollapseKeys('collapsible: false\r\ncollapse_default: True\r\nx\r\n')).toEqual({
+			source: 'x\r\n',
+			peeled: { collapsible: false, collapse_default: true },
+		});
+		// A lone trailing \r belongs to the SCALAR (`parseYaml('collapsed: true\r')` is
+		// `{collapsed: 'true\r'}`), so the whole-document case has to strip it too.
+		expect(peelLeadingCollapseKeys('collapsed: true\r')).toEqual({ source: '', peeled: { collapsed: true } });
+	});
+
+	test('a CRLF prose body honours `collapsed:` (L-A: the whole rescue used to be lost)', async () => {
+		const deps = makeDeps();
+		const host = makeHost('ds-rule');
+		await new ElementPipeline(deps).run(ruleElement, 'collapsed: true\r\nSome rule prose.\r\n\r\nA second paragraph.\r\n', host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(collapsedState(root)).toMatchObject({ attr: 'on', bar: true });
+	});
+
+	test('`collapsed: True` reads the same on a reference body as on a mapping body', async () => {
+		// The agreement that matters: one spelling, one answer, whatever shape the body is.
+		const deps = makeDeps();
+		const mapping = makeHost('ds-statblock');
+		await new ElementPipeline(deps).run(statblockElement, `collapsed: True\n${STATBLOCK_BODY}`, mapping);
+		const mappingRoot = mapping.containerEl.firstElementChild as HTMLElement;
+		expect(collapsedState(mappingRoot)).toMatchObject({ attr: 'on', bar: true });
+
+		const { vault, deps: refDeps } = makeCompendiumDeps();
+		for (const { id, schema } of FRAMEWORK_V2_DEPENDENCY_SCHEMAS) refDeps.validation.addDependencySchema(id, schema);
+		loadMdDseFixture(vault, 'kit/panther.md');
+		const refHost = makeRefHost('ds-scc');
+		await new ElementPipeline(refDeps).run(sccElement, 'collapsed: True\nscc.v1:mcdm.heroes.v1/kit/panther', refHost);
+		const refRoot = refHost.containerEl.firstElementChild as HTMLElement;
+		expect(refRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		expect(collapsedState(refRoot)).toMatchObject({ attr: 'on', bar: true, text: 'Kit: Panther' });
+	});
+
 	it('peeled keys win over the parsed-data reading and join the re-emit list', () => {
 		expect(withPeeledKeys({ collapsed: false, popped: {} }, { collapsed: true })).toEqual({
 			collapsible: undefined,
