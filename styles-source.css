@@ -10201,6 +10201,18 @@ button.dse-pr__row:hover {
 	.dse-collapse__chevron {
 		display: none;
 	}
+	/* SC-154 (promotion-round review) — Rule 3's companion for the Malice log: the
+	   drawer force-opens, but the list inside kept its SCREEN scroll cap
+	   (`max-height: 6em; overflow-y: auto`), and overflow scroll does not exist on
+	   paper — a log past ~5 entries printed with its older entries clipped. The
+	   selector repeats the base rule's ancestry because that rule nests under
+	   `[data-dse-element="initiative"] .dse-init` (0,3,0) and `@media` adds no
+	   specificity of its own — the SC-160 sticky lesson; a bare class here would
+	   silently lose. */
+	[data-dse-element="initiative"] .dse-init .dse-init__malice-log-list {
+		max-height: none;
+		overflow-y: visible;
+	}
 	/* Rule 4 — hide interactive-only chrome (inert on paper; the STATE they
 	   controlled prints as static text — the stepper VALUE/INPUT stays). The ±
 	   buttons are `.dse-btn` instances, so hiding `.dse-btn` removes them too.
@@ -10260,6 +10272,13 @@ button.dse-pr__row:hover {
 /* -- …the same RULES for the on-screen preview twin (scoped under the attr) -- */
 [data-dse-print="on"] .dse-collapse__region[hidden] {
 	display: block !important;
+}
+/* SC-154 — the Malice-log scroll-cap lift, twin copy (see the @media print block
+   above for the specificity arithmetic; the extra attribute here outranks the
+   (0,3,0) base rule the same way). */
+[data-dse-print="on"][data-dse-element="initiative"] .dse-init .dse-init__malice-log-list {
+	max-height: none;
+	overflow-y: visible;
 }
 /* SC-10 card lift-shadow: same ink-economy zero for the preview twin. */
 [data-dse-print="on"][data-dse-theme='steel'][data-dse-element='feature'],
