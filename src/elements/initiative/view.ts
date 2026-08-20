@@ -54,7 +54,7 @@ import { Component, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
-import { buttonRow, iconButton, stepper, buildConditionIcons as kitBuildConditionIcons } from '@/framework/kit';
+import { buttonRow, collapsible, iconButton, stepper, buildConditionIcons as kitBuildConditionIcons } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
@@ -100,31 +100,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// before onMount runs again — nothing accumulates on the view across rebuilds.
 		const owner = this.addChild(new Component());
 		const container = root.createDiv({ cls: 'dse-init' });
-		// SC-154 round 3: the control-cluster layout candidate (see prefs/catalog.ts —
-		// `stacked` is the shipped layout and the default). Stamped on the tracker's own
-		// root rather than reflected globally by the pref (no `attr` on the descriptor):
-		// the attribute means something only inside this element, and a reflected attr
-		// would land on every element root in the vault to say "stacked" forever.
-		container.setAttribute('data-dse-init-controls', this.controlsLayout);
 		this.buildUI(container, owner, model);
 	}
 
 	private get canWrite(): boolean {
 		return this.cx.host.canPersist;
-	}
-
-	/** SC-154 round 3 — which control-cluster layout this tracker builds.
-	 *
-	 *  CLAMPED, not passed through (the SC-144 `coerceTheme` lesson): anything that is
-	 *  not one of the three candidates resolves to the shipped `stacked` layout. That
-	 *  covers a hand-typed harness `?prefs=initControls:garbage`, a stale persisted
-	 *  value once the losing candidates are deleted, and a PreferenceStore that never
-	 *  had the descriptor registered (which is exactly what a lean test env has) —
-	 *  every one of which must render today's tracker rather than an attribute-stamped
-	 *  root matching no rule. */
-	private get controlsLayout(): 'stacked' | 'bar' | 'panels' | 'rail' {
-		const value = this.cx.prefs.get('initControls') as unknown;
-		return value === 'bar' || value === 'panels' || value === 'rail' ? value : 'stacked';
 	}
 
 	/** Open `modal` tracked as THE active modal: close-on-unload via the constructor's
@@ -226,61 +206,40 @@ export class InitiativeView extends ElementView<EncounterData> {
 			this.buildCharacterRow(heroesGroup.createDiv({ cls: 'dse-init__entry' }), hero, owner);
 		});
 
-		// SC-154 round 3 — the three layout candidates put the whole control cluster in
-		// its own full-width band BETWEEN the two groups, which is the point: the shipped
-		// `stacked` layout hangs it off the right of the "Enemy groups" heading, leaving
-		// the left half of that band empty (Scott, 2026-08-18: "They are all on the right
-		// side while leaving the left empty"). The band is built here, before the enemies
-		// group, so it reads as a divider between the heroes and the enemies rather than
-		// as decoration on one heading.
-		if (this.controlsLayout !== 'stacked') this.buildControlsBand(container, data, owner);
+		// SC-154 round 3 (Scott picked this layout, 2026-08-20) — the whole control
+		// cluster (round + turn controls, Malice pool, quick-add, log) sits in its own
+		// full-width command bar BETWEEN the two groups, which is the point: the old
+		// layout hung it off the right of the "Enemy groups" heading, leaving the left
+		// half of that band empty (Scott, 2026-08-18: "They are all on the right side
+		// while leaving the left empty"). Built here, before the enemies group, so it
+		// reads as a divider between the heroes and the enemies rather than as
+		// decoration on one heading. The controls themselves are D8 spec §3 (pool
+		// stepper + round/advance + spend-gain log + quick-add); Deliverable 2
+		// (spendable monster malice features) is gated on F2 OD-1 + D6 and not built
+		// here (OD-6/plan header).
+		this.buildControlsBar(container, data, owner);
 
-		// Enemies.
+		// Enemies. (The `.dse-init__enemies-head` wrapper died with the old stacked
+		// layout — it existed to hold the heading and the Malice panel side by side;
+		// with the controls in the bar above, the heading stands alone, exactly like
+		// the heroes group's.)
 		const enemiesGroup = container.createDiv({ cls: 'dse-init__group dse-init__group--enemies' });
-		const enemiesHead = enemiesGroup.createDiv({ cls: 'dse-init__enemies-head' });
-		enemiesHead.createEl('h3', { text: 'Enemy groups' });
-
-		// Malice panel (D8 spec §3): pool stepper + round/advance + spend-gain log +
-		// quick-add. Deliverable 2 (spendable monster malice features) is gated on
-		// F2 OD-1 + D6 and not built here (OD-6/plan header).
-		if (this.controlsLayout === 'stacked') this.buildMalicePanel(enemiesHead, data, owner);
+		enemiesGroup.createEl('h3', { text: 'Enemy groups' });
 
 		data.enemy_groups.forEach((group) => {
 			this.buildEnemyGroupRow(enemiesGroup.createDiv({ cls: 'dse-init__entry' }), group, owner);
 		});
 	}
 
-	// -------------------------------------------------------------- Malice panel
-
-	/** The Malice panel (D8 spec §3, Deliverable 1): the pool (kit stepper, CB-7
-	 *  unchanged), the round counter + shared "Advance round" control (spec §7.2),
-	 *  a spend/gain log (`malice.log`), and a labeled quick-add for manual
-	 *  trigger-based gains (spec §3.3 — never a formulaic default). All new writes
-	 *  go through the existing persist()/rebuildAndPersist() paths — no new write
-	 *  machinery. Read-only renders every piece as static/inert (F1 §4.4): no
-	 *  stepper buttons, no Advance-round button, no quick-add inputs — matching the
-	 *  rest of this view's read-only contract. */
-	private buildMalicePanel(container: HTMLElement, data: EncounterData, owner: Component): void {
-		const panel = container.createDiv({ cls: 'dse-init__malice-panel' });
-		this.buildMaliceTotal(panel, data, owner);
-		this.buildRoundControls(panel, data, owner);
-		this.buildMaliceLog(panel, data);
-		this.buildMaliceQuickAdd(panel, data, owner);
-	}
+	// -------------------------------------------------------------- Malice controls
 
 	/** Pool: the kit stepper (write) or a static value (read-only). CB-7 is fixed
 	 *  by construction — stepper.render() sets ONLY its value node, so the ± buttons
-	 *  survive every press (legacy's container.setText destroyed the chevrons).
-	 *
-	 *  SC-154 round 3 — `onTotalChange` exists for the `rail` layout, whose collapsed
-	 *  summary repeats the pool value. The stepper persists WITHOUT a rebuild (that is
-	 *  the point of the in-place path), so a repeat of the number elsewhere in the DOM
-	 *  would silently go stale on every ± press unless it is told. */
+	 *  survive every press (legacy's container.setText destroyed the chevrons). */
 	private buildMaliceTotal(
 		container: HTMLElement,
 		data: EncounterData,
 		owner: Component,
-		onTotalChange?: (value: number) => void,
 	): HTMLElement {
 		const malice = container.createDiv({ cls: 'dse-init__malice' });
 		if (this.canWrite) {
@@ -293,7 +252,6 @@ export class InitiativeView extends ElementView<EncounterData> {
 					format: (v) => 'Malice: ' + v,
 					onChange: (v) => {
 						data.malice.value = v;
-						onTotalChange?.(v);
 						void this.persist();
 					},
 				},
@@ -362,40 +320,49 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** Spend/gain log (spec §3.1 — "so the table can see where Malice went").
 	 *  Read-only rendering only: this is a display, never an editable list.
 	 *
-	 *  SC-154 round 3 — `disclosure` swaps the `h5 + list` pair for a real `<details>`
-	 *  whose `<summary>` carries the entry count ("Malice log · 3 entries"). Same
-	 *  content, same classes on the parts; a native disclosure rather than a scripted
-	 *  one so keyboard/AT behaviour and the print force-open rules come for free. */
+	 *  SC-154 — a disclosure whose header carries the entry count ("Malice log ·
+	 *  3 entries"), so the list stops being a permanently-open block nobody reads
+	 *  mid-fight. The kit `collapsible` (round 3 shipped a native `<details>`;
+	 *  swapped at the promotion round) because the kit is the shape the sheet's
+	 *  print layer already force-opens (Rule 3: `.dse-collapse__region[hidden]`,
+	 *  both print classes) — a closed `<details>`' content cannot be revealed by
+	 *  CSS at this repo's Chromium floor, so the native form printed a shut twisty
+	 *  on a handout. Session-persisted open state is the second win: quick-add
+	 *  runs rebuildAndPersist, which tore a `<details>`' open state down with the
+	 *  DOM every time an entry was logged. */
 	private buildMaliceLog(
 		container: HTMLElement,
 		data: EncounterData,
-		opts: { disclosure?: boolean } = {},
+		owner: Component,
 	): HTMLElement {
 		const entries: MaliceLogEntry[] = data.malice.log ?? [];
-		const logEl = opts.disclosure
-			? container.createEl('details', {
-					cls: 'dse-init__malice-log dse-init__malice-log--disclosure',
-				})
-			: container.createDiv({ cls: 'dse-init__malice-log' });
-		if (opts.disclosure) {
-			const count =
-				entries.length === 0
-					? 'no entries'
-					: `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
-			logEl.createEl('summary', {
-				cls: 'dse-init__malice-log-heading',
-				text: `Malice log · ${count}`,
-			});
-		} else {
-			logEl.createEl('h5', { cls: 'dse-init__malice-log-heading', text: 'Malice log' });
-		}
+		const count =
+			entries.length === 0
+				? 'no entries'
+				: `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+		const handle = collapsible(
+			container,
+			{
+				title: `Malice log · ${count}`,
+				open: false,
+				persist: {
+					session: this.cx.session,
+					blockKey: this.cx.host.blockKey(),
+					slot: 'malice.log',
+				},
+			},
+			owner,
+		);
+		handle.rootEl.addClass('dse-init__malice-log');
+		handle.headerEl.addClass('dse-init__malice-log-heading');
+		const body = handle.contentEl;
 		if (entries.length === 0) {
-			logEl.createDiv({
+			body.createDiv({
 				cls: 'dse-init__malice-log-empty',
 				text: 'No Malice spent or gained yet.',
 			});
 		} else {
-			const list = logEl.createEl('ul', { cls: 'dse-init__malice-log-list' });
+			const list = body.createEl('ul', { cls: 'dse-init__malice-log-list' });
 			entries.forEach((entry) => {
 				const sign = entry.amount >= 0 ? '+' : '';
 				list.createEl('li', {
@@ -404,7 +371,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				});
 			});
 		}
-		return logEl;
+		return handle.rootEl;
 	}
 
 	/** Quick-add: labeled trigger-based gains (spec §3.3, e.g. "+3 Feytouched") —
@@ -451,33 +418,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 		}
 	}
 
-	// ------------------------------------------------- SC-154 round 3: layout candidates
+	// ------------------------------------------------------- SC-154: the command bar
 
-	/** The full-width control band the three candidate layouts share. Same pieces, same
-	 *  behaviour, same classes — only the container and the order differ, so a candidate
-	 *  can never quietly drop a control or grow a second copy of one. */
-	private buildControlsBand(
-		container: HTMLElement,
-		data: EncounterData,
-		owner: Component,
-	): void {
-		const layout = this.controlsLayout;
-		if (layout === 'bar') this.buildControlsBar(container, data, owner);
-		else if (layout === 'panels') this.buildControlsPanels(container, data, owner);
-		else if (layout === 'rail') this.buildControlsRail(container, data, owner);
-	}
-
-	/** OPTION 1 — command bar. One flat rule-bounded strip, laid out as a two-column
-	 *  grid: round state and its two controls at the LEFT edge (the half Scott's
-	 *  screenshot shows empty), the Malice pool and its quick-add held against the
-	 *  right, the log folded into a disclosure that opens a full-width drawer beneath.
-	 *  Nothing is a card — the strip reads as chrome between the two rosters rather
-	 *  than as a third roster.
+	/** The command bar (SC-154 round 3's Option 1 — Scott's pick, 2026-08-20). One flat
+	 *  rule-bounded strip, laid out as a two-column grid: round state and its two
+	 *  controls at the LEFT edge (the half Scott's screenshot showed empty), the Malice
+	 *  pool and its quick-add held against the right, the log folded into a disclosure
+	 *  that opens a full-width drawer beneath. Nothing is a card — the strip reads as
+	 *  chrome between the two rosters rather than as a third roster.
 	 *
 	 *  The four pieces are SIBLINGS (not two side wrappers) because the grid places
 	 *  each one itself; that is what lets the whole thing collapse to a single left-
 	 *  aligned column at sidebar width with no wrapper left over holding a stale
-	 *  `margin-left: auto`. */
+	 *  `margin-left: auto`. The four shared piece-builders (buildRoundControls /
+	 *  buildMaliceTotal / buildMaliceQuickAdd / buildMaliceLog) are the D8 spec §3
+	 *  controls, unchanged in behaviour. */
 	private buildControlsBar(
 		container: HTMLElement,
 		data: EncounterData,
@@ -490,69 +445,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		this.buildRoundControls(grid, data, owner);
 		this.buildMaliceTotal(grid, data, owner);
 		this.buildMaliceQuickAdd(grid, data, owner);
-		this.buildMaliceLog(grid, data, { disclosure: true });
-	}
-
-	/** OPTION 2 — two forged panels. Two equal plates filling the band's width: "Round"
-	 *  (the counter large, its two controls beneath) and "Malice" (the pool large, the
-	 *  quick-add and the log beneath). Both plates wear the same surface + hairline
-	 *  chrome a hero row and an enemy group's body already wear, so the band belongs to
-	 *  the same card family as the rosters it sits between. */
-	private buildControlsPanels(
-		container: HTMLElement,
-		data: EncounterData,
-		owner: Component,
-	): void {
-		const band = container.createDiv({
-			cls: 'dse-init__controls dse-init__controls--panels',
-		});
-		const roundPlate = band.createDiv({ cls: 'dse-init__plate dse-init__plate--round' });
-		roundPlate.createDiv({ cls: 'dse-init__plate-label', text: 'Round' });
-		this.buildRoundControls(roundPlate, data, owner);
-		const malicePlate = band.createDiv({ cls: 'dse-init__plate dse-init__plate--malice' });
-		malicePlate.createDiv({ cls: 'dse-init__plate-label', text: 'Malice' });
-		this.buildMaliceTotal(malicePlate, data, owner);
-		this.buildMaliceQuickAdd(malicePlate, data, owner);
-		this.buildMaliceLog(malicePlate, data);
-	}
-
-	/** OPTION 3 — expanding rail. At rest the band is one line of state ("Round 3 ·
-	 *  Malice 7") with a chevron; opening it reveals the same controls the other two
-	 *  layouts show. A native `<details>`, so it keeps keyboard/AT behaviour and the
-	 *  sheet's existing print force-open rule reaches it (a printed handout shows the
-	 *  controls, not a closed twisty). */
-	private buildControlsRail(
-		container: HTMLElement,
-		data: EncounterData,
-		owner: Component,
-	): void {
-		const band = container.createEl('details', {
-			cls: 'dse-init__controls dse-init__controls--rail',
-		});
-		const summary = band.createEl('summary', { cls: 'dse-init__rail-summary' });
-		summary.createSpan({ cls: 'dse-init__rail-stat', text: `Round ${data.round ?? 1}` });
-		summary.createSpan({ cls: 'dse-init__rail-sep', text: '·' });
-		// The pool value repeated OUTSIDE the stepper: the stepper's own ± persists
-		// in place without a rebuild, so this node is handed the new value directly
-		// (buildMaliceTotal's onTotalChange) rather than being left to go stale.
-		const maliceStat = summary.createSpan({
-			cls: 'dse-init__rail-stat dse-init__rail-stat--malice',
-			text: `Malice ${data.malice.value}`,
-		});
-		const entries = data.malice.log ?? [];
-		if (entries.length > 0) {
-			summary.createSpan({
-				cls: 'dse-init__rail-hint',
-				text: `${entries.length} log ${entries.length === 1 ? 'entry' : 'entries'}`,
-			});
-		}
-		const body = band.createDiv({ cls: 'dse-init__rail-body' });
-		this.buildRoundControls(body, data, owner);
-		this.buildMaliceTotal(body, data, owner, (v) => {
-			maliceStat.setText(`Malice ${v}`);
-		});
-		this.buildMaliceQuickAdd(body, data, owner);
-		this.buildMaliceLog(body, data);
+		this.buildMaliceLog(grid, data, owner);
 	}
 
 	// ---------------------------------------------------------------- turn indicator

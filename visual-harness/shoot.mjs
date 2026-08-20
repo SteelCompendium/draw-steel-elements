@@ -329,14 +329,7 @@ try {
 			.map(([k, v]) => `${k}:${v}`)
 			.join(',');
 		for (const c of combos) {
-			// SC-154 round 3: `width` and `click` are optional on a pref shot now (a layout
-			// candidate has to be shot at three widths, and a disclosure's open state only
-			// exists after a real click). Both go THROUGH snap() — the width as an ordinary
-			// query param like NARROW_SHOTS, the click as the same `opts.click` the
-			// interaction loop uses — so the print-media/realprint handling stays central.
-			const params = { element: n.element, fixture: n.fixture, prefs: prefParam };
-			if (n.width) params.width = String(n.width);
-			await snap(page, c, params, n.id, n.click ? { click: n.click } : {});
+			await snap(page, c, { element: n.element, fixture: n.fixture, prefs: prefParam }, n.id);
 		}
 	}
 	// SC-160: scroll-state shots, declared by the page (manifest.scrollShots — entry.ts

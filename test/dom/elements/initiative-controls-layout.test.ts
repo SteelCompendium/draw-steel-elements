@@ -1,20 +1,18 @@
-// SC-154 round 3 — the initiative tracker's control-cluster LAYOUT CANDIDATES.
+// SC-154 — the initiative tracker's round/Malice COMMAND BAR (round 3's Option 1,
+// Scott's pick 2026-08-20: "Option 1, sanctioned").
 //
-// Scott (SC-154, 2026-08-18) asked for options to pick between: the round counter, the two
-// turn controls, the Malice pool, its quick-add and its log all hang off the right of the
-// "Enemy groups" heading today, leaving the left of that band empty. Three candidates were
-// built behind the hidden `initControls` preference — `bar`, `panels`, `rail` — with the
-// shipped layout (`stacked`) as its default.
-//
-// What these tests are FOR, given the candidates are temporary: the two properties that
-// must hold no matter which one Scott picks.
-//   1. The default is unchanged. A tracker rendered with no preference set builds the
-//      exact same cluster in the exact same place as before this key existed — that is
-//      what keeps the frozen print shots still, and what makes the losing candidates safe
-//      to delete later.
-//   2. No candidate loses or duplicates a control. All four layouts are assembled from
-//      the same four piece-builders, so the invariant worth pinning is per-layout counts:
-//      exactly one round row, one pool, one quick-add and one log, always.
+// Round 3 built three candidate layouts behind a hidden `initControls` preference; the
+// promotion round made the bar THE layout and deleted the losing candidates, the old
+// stacked cluster (the Malice panel hanging off the enemies heading) and the preference
+// itself. What stays pinned here:
+//   1. The bar is a single full-width band between the two rosters — the exact placement
+//      Scott picked — and the stacked layout's containers are gone, not merely emptied.
+//   2. No control was lost or duplicated in the promotion: exactly one round row, one
+//      pool, one quick-add and one log, with the log's entries intact.
+//   3. The log is a kit collapsible (closed at rest, count in the header) — the shape the
+//      print layer force-opens (styles-source.css print Rule 3), which is what makes a
+//      printed handout show the log. The native-<details> form round 3 shipped could not
+//      be opened by CSS at the repo's Chromium floor.
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -65,14 +63,13 @@ function makeHost(): BlockHost & { containerEl: HTMLElement } {
 	} as unknown as BlockHost & { containerEl: HTMLElement };
 }
 
-async function render(layout?: string): Promise<HTMLElement> {
+async function render(): Promise<HTMLElement> {
 	const app = new App();
 	app.vault.setFile('Media/token_1.png', '');
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
 	prefs.describe(DSE_PREF_DESCRIPTORS);
-	if (layout !== undefined) await prefs.set('initControls', layout as never);
 	const deps: ElementPipelineDeps = {
 		app: app as never,
 		plugin: plugin as never,
@@ -89,36 +86,14 @@ async function render(layout?: string): Promise<HTMLElement> {
 	return host.containerEl.querySelector('.dse-init') as HTMLElement;
 }
 
-describe('SC-154 round 3: initiative control-cluster layout candidates', () => {
-	test('the DEFAULT is the shipped stacked layout — cluster inside the enemies head, no band', async () => {
+describe('SC-154: the round/Malice command bar', () => {
+	test('ONE full-width bar between the two rosters; the stacked-era containers are gone', async () => {
 		const root = await render();
-		expect(root.getAttribute('data-dse-init-controls')).toBe('stacked');
-		// The cluster still lives in its historical parent…
-		const panel = root.querySelector('.dse-init__enemies-head > .dse-init__malice-panel');
-		expect(panel).not.toBeNull();
-		// …in its historical order, all four pieces as direct children.
-		expect([...panel!.children].map((c) => c.className)).toEqual([
-			'dse-init__malice',
-			'dse-init__round',
-			'dse-init__malice-log',
-			'dse-init__malice-quickadd',
-		]);
-		// …and no candidate band exists at all.
-		expect(root.querySelector('.dse-init__controls')).toBeNull();
-	});
-
-	test.each([
-		['bar', 'dse-init__controls--bar'],
-		['panels', 'dse-init__controls--panels'],
-		['rail', 'dse-init__controls--rail'],
-	])('%s builds ONE full-width band between the two groups, and no stacked panel', async (layout, cls) => {
-		const root = await render(layout);
-		expect(root.getAttribute('data-dse-init-controls')).toBe(layout);
 		const bands = root.querySelectorAll('.dse-init__controls');
 		expect(bands).toHaveLength(1);
-		expect(bands[0].classList.contains(cls)).toBe(true);
+		expect(bands[0].classList.contains('dse-init__controls--bar')).toBe(true);
 		// A direct child of the tracker root, sitting between the heroes group and the
-		// enemies group — the "full-width strip between the rosters" the proposal is.
+		// enemies group — the "full-width strip between the rosters" Scott picked.
 		const kids = [...root.children];
 		const heroes = kids.findIndex((c) => c.classList.contains('dse-init__group--heroes'));
 		const enemies = kids.findIndex((c) => c.classList.contains('dse-init__group--enemies'));
@@ -126,70 +101,54 @@ describe('SC-154 round 3: initiative control-cluster layout candidates', () => {
 		expect(heroes).toBeGreaterThanOrEqual(0);
 		expect(band).toBe(heroes + 1);
 		expect(enemies).toBe(band + 1);
-		// The stacked layout's own container is gone, not merely emptied.
+		// The stacked layout's own containers are gone, not merely emptied — and no
+		// review-switch attribute is stamped anywhere.
 		expect(root.querySelector('.dse-init__malice-panel')).toBeNull();
+		expect(root.querySelector('.dse-init__enemies-head')).toBeNull();
+		expect(root.hasAttribute('data-dse-init-controls')).toBe(false);
 	});
 
-	test.each([undefined, 'bar', 'panels', 'rail'])(
-		'%s keeps exactly one of every control — nothing dropped, nothing duplicated',
-		async (layout) => {
-			const root = await render(layout);
-			for (const sel of [
-				'.dse-init__round',
-				'.dse-init__round-value',
-				'.dse-init__round-reset',
-				'.dse-init__round-advance',
-				'.dse-init__malice',
-				'.dse-init__malice-log',
-				'.dse-init__malice-log-list',
-				'.dse-init__malice-quickadd',
-				'.dse-init__malice-quickadd-amount',
-				'.dse-init__malice-quickadd-label',
-				'.dse-init__malice-quickadd-btn',
-			]) {
-				expect([sel, root.querySelectorAll(sel).length]).toEqual([sel, 1]);
-			}
-			// The log's two entries survive every layout.
-			expect(root.querySelectorAll('.dse-init__malice-log-entry')).toHaveLength(2);
-		},
-	);
-
-	test('an unrecognised value falls back to the shipped layout rather than stamping it', async () => {
-		const root = await render('no-such-layout');
-		expect(root.getAttribute('data-dse-init-controls')).toBe('stacked');
-		expect(root.querySelector('.dse-init__controls')).toBeNull();
-		expect(root.querySelector('.dse-init__malice-panel')).not.toBeNull();
+	test('exactly one of every control — nothing dropped, nothing duplicated in the promotion', async () => {
+		const root = await render();
+		for (const sel of [
+			'.dse-init__round',
+			'.dse-init__round-value',
+			'.dse-init__round-reset',
+			'.dse-init__round-advance',
+			'.dse-init__malice',
+			'.dse-init__malice-log',
+			'.dse-init__malice-log-list',
+			'.dse-init__malice-quickadd',
+			'.dse-init__malice-quickadd-amount',
+			'.dse-init__malice-quickadd-label',
+			'.dse-init__malice-quickadd-btn',
+		]) {
+			expect([sel, root.querySelectorAll(sel).length]).toEqual([sel, 1]);
+		}
+		// The log's two entries survive.
+		expect(root.querySelectorAll('.dse-init__malice-log-entry')).toHaveLength(2);
 	});
 
-	test('bar folds the log into a <details> whose summary carries the entry count', async () => {
-		const root = await render('bar');
-		const log = root.querySelector('.dse-init__malice-log') as HTMLDetailsElement;
-		expect(log.tagName).toBe('DETAILS');
-		expect(log.open).toBe(false);
-		expect(log.querySelector('summary')!.textContent).toBe('Malice log · 2 entries');
-	});
-
-	test('rail states round and pool in its summary, and does NOT repeat the round inside', async () => {
-		const root = await render('rail');
-		const band = root.querySelector('.dse-init__controls--rail') as HTMLDetailsElement;
-		expect(band.tagName).toBe('DETAILS');
-		expect(band.open).toBe(false);
-		const summary = band.querySelector('.dse-init__rail-summary')!;
-		expect(summary.textContent).toContain('Round 3');
-		expect(summary.textContent).toContain('Malice 7');
-		expect(summary.textContent).toContain('2 log entries');
-		// The round readout inside the drawer is the same node the other layouts use; it
-		// is hidden by CSS, not removed, so the aria-live region survives.
-		expect(band.querySelector('.dse-init__rail-body .dse-init__round-value')).not.toBeNull();
-	});
-
-	test("rail's summary pool tracks the stepper, which persists WITHOUT a rebuild", async () => {
-		const root = await render('rail');
-		const stat = root.querySelector('.dse-init__rail-stat--malice')!;
-		expect(stat.textContent).toBe('Malice 7');
-		const plus = root.querySelectorAll<HTMLElement>('.dse-init__malice .dse-stepper__btn');
-		// The stepper renders [−, value, +]; the last button is the increment.
-		plus[plus.length - 1].click();
-		expect(stat.textContent).toBe('Malice 8');
+	test('the log is a kit collapsible: closed at rest, count in the header, region force-openable', async () => {
+		const root = await render();
+		const log = root.querySelector('.dse-init__malice-log')!;
+		// The kit shape — root carries .dse-collapse, header is a real button, region
+		// hides via the `hidden` ATTRIBUTE. That attribute is the whole print story:
+		// print Rule 3 (`.dse-collapse__region[hidden] { display: block !important }`,
+		// both print classes) is what puts the log on a printed handout, and it can
+		// only match this shape — a native <details>' closed content is unreachable
+		// from CSS at the repo's Chromium floor.
+		expect(log.classList.contains('dse-collapse')).toBe(true);
+		const header = log.querySelector<HTMLButtonElement>('button.dse-init__malice-log-heading')!;
+		expect(header).not.toBeNull();
+		expect(header.textContent).toContain('Malice log · 2 entries');
+		expect(header.getAttribute('aria-expanded')).toBe('false');
+		const region = log.querySelector<HTMLElement>('.dse-collapse__region')!;
+		expect(region.hidden).toBe(true);
+		// A real toggle opens it.
+		header.click();
+		expect(header.getAttribute('aria-expanded')).toBe('true');
+		expect(region.hidden).toBe(false);
+		expect(region.querySelectorAll('.dse-init__malice-log-entry')).toHaveLength(2);
 	});
 });

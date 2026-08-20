@@ -82,11 +82,10 @@ function makeEnv(): { deps: ElementPipelineDeps; app: App } {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
-	// SC-154 round 3: the tracker now reads a catalog preference (`initControls`), and
-	// DsePreferenceStore.get THROWS on a key no descriptor was registered for — so a
-	// render-through-the-pipeline env has to carry the real catalog, the way main.ts
-	// does. Registering it changes nothing else here: every other default is the
-	// shipped one.
+	// SC-154: carry the real pref catalog, the way main.ts does — DsePreferenceStore.get
+	// THROWS on a key no descriptor was registered for, so a render-through-the-pipeline
+	// env should never be one cx.prefs.get away from a throw a real vault can't have.
+	// Registering it changes nothing else here: every default is the shipped one.
 	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
@@ -931,8 +930,8 @@ describe('T-9: canPersist=false — inert tracker, zero writes (F1 §4.4)', () =
 		expect(root.querySelector('.dse-init__malice-value')!.textContent).toBe('Malice: 5');
 		expect(root.querySelectorAll('.dse-init__cell')).toHaveLength(5);
 
-		// … but EVERY write affordance is gone: not one <button> in the whole tracker
-		// (turn indicators, cells, stamina render as static state displays).
+		// … but EVERY write affordance is gone: (almost) not one <button> in the whole
+		// tracker (turn indicators, cells, stamina render as static state displays).
 		//
 		// SC-169 round 3 — `ds-initiative` now carries the framework chrome panel, and it
 		// carries it HERE TOO, deliberately: collapse/expand is a reading convenience, not a
@@ -941,7 +940,14 @@ describe('T-9: canPersist=false — inert tracker, zero writes (F1 §4.4)', () =
 		// context where folding a big tracker down to one line is most useful. The edit item is
 		// the write affordance in that panel, and it is separately gated on `host.canPersist`,
 		// so it is absent here; the assertion below pins that.
-		expect(buttonsOutsideChrome(root)).toEqual([]);
+		//
+		// SC-154 — the Malice log's disclosure header is the SAME class of control as the
+		// chrome collapse (a kit collapsible: reads state, session-only persistence, never
+		// touches the note), so it is the ONE button allowed to survive read-only. The
+		// exact-list assertion keeps this a closed set — any new button is still a failure.
+		expect(buttonsOutsideChrome(root)).toEqual([
+			'dse-collapse__header dse-init__malice-log-heading',
+		]);
 		expect(root.querySelectorAll('.dse-chrome [data-dse-chrome-item="edit"]')).toHaveLength(0);
 		expect(root.querySelector('.dse-init__actionbar')).toBeNull();
 		expect(root.querySelectorAll('.dse-init__malice .dse-stepper__btn')).toHaveLength(0);
@@ -1136,7 +1142,7 @@ describe('T-9: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 
 		const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 		const prefs = createPreferenceStore(storage);
-		// SC-154 round 3: the real catalog, same reason as makeEnv above.
+		// SC-154: the real catalog, same reason as makeEnv above.
 		prefs.describe(DSE_PREF_DESCRIPTORS);
 		const theme = createThemeService(prefs, plugin as any);
 		const deps: ElementPipelineDeps = {

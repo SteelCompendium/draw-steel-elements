@@ -260,14 +260,21 @@ at most one triggered action each round), so it clears on "Advance round" but no
 "Reset turns (this round)". The checklist is purely a bookkeeping aid; nothing else in
 the tracker reads it.
 
-### Malice
+### The Command Bar (Round + Malice)
+
+All round and Malice controls sit in a single full-width bar between the Heroes and the
+Enemy Groups: the round counter and its two controls at the left edge, the Malice pool
+and quick-add at the right, and the Malice log folded into a disclosure that opens a
+full-width drawer beneath the bar. In a narrow pane (a split view or the sidebar) the
+bar stacks into a single column.
 
 **Adjusting the pool**: Use the up and down arrows next to the villain power display to
 increase or decrease the value.
 
-**Malice log**: A small read-only list under the pool shows every gain/spend
-(`R<round>: +/-<amount> — <label>`), most recent additions preserved, oldest entries
-dropped once the log exceeds 50 entries.
+**Malice log**: Click "Malice log · N entries" to open a small read-only list of every
+gain/spend (`R<round>: +/-<amount> — <label>`), most recent additions preserved, oldest
+entries dropped once the log exceeds 50 entries. Printed handouts always show the log
+open.
 
 **Quick-add**: Enter an amount and a label (e.g. "3" / "Feytouched") and click "Add" to
 log a manual, trigger-based Malice gain (or spend, using a negative amount) without

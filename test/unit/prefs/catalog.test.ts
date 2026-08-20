@@ -193,11 +193,6 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
-		// SC-154 round 3: deliberately attr-LESS. `reflect()` stamps every attr-bearing
-		// pref on EVERY element root, and this key means something only inside an
-		// initiative tracker — InitiativeView stamps `data-dse-init-controls` on its own
-		// root instead of making every card in the vault carry it.
-		initControls: null,
 		collapsibleDefault: null,
 		collapseDefault: null,
 		rollingEnabled: null,
@@ -212,14 +207,12 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // and it is still that guard: the allow-list below is exact, so any NEW hidden row fails
 // here and has to justify itself in this comment.
 //
-// SC-154 round 3 put exactly one key on it. `initControls` selects between three candidate
-// layouts for the initiative tracker's round/Malice cluster, built for Scott to choose
-// between on the ticket — a review switch, not a setting anyone should find in the
-// settings tab and be asked to have an opinion about. When he picks one, the winner
-// becomes the shipped layout, this key and the two losers are deleted, and this list goes
-// back to empty. If you are reading this long after 7.0.0 shipped, that deletion was
-// missed — that is what the allow-list is here to make loud.
-const EXPECTED_HIDDEN_ROWS = ['initControls'];
+// The list has been non-empty exactly once: SC-154 round 3's `initControls`, a review
+// switch for three candidate tracker layouts. Scott picked one (2026-08-20), the winner
+// became the shipped layout, and the key + losers were deleted — the promised return to
+// empty. A hidden row is a review-time device, never a shipped state; anything that
+// appears here must carry its own deletion plan.
+const EXPECTED_HIDDEN_ROWS: string[] = [];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

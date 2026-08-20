@@ -122,7 +122,13 @@ for what needs action.
   indicator no longer sits glued to the row beside it, the Malice quick-add
   "Amount"/label boxes are wide enough for their own placeholder text, and the
   encounter roster table scrolls horizontally instead of silently losing its Count
-  and EV columns at sidebar width.
+  and EV columns at sidebar width. The round and Malice controls also moved out of
+  the "Enemy groups" heading's right edge — where they left the whole left half of
+  that band empty — into a single **command bar** between the heroes and the
+  enemies: round counter and its two controls at the left, Malice pool and
+  quick-add at the right, and the Malice log folded into a "Malice log · N
+  entries" disclosure that opens a full-width drawer (and always prints open, so a
+  handout shows the log). In a narrow pane the bar stacks into one column.
 - [FIX] **Initiative tracker rows show a proper placeholder instead of a broken-image
   icon** (SC-162). A hero or creature with no `image:` set, or one whose image can't
   actually be loaded, used to leave the browser's own broken-image glyph in the

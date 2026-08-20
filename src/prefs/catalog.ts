@@ -95,20 +95,6 @@ declare module '../framework/seams/prefs' {
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
 		staminaRecoveryPopover: boolean;
-		// —— SC-154 round 3: WHERE the initiative tracker's round/Malice controls live.
-		//
-		// `stacked` is the shipped layout verbatim (the cluster hangs off the right of the
-		// "Enemy groups" heading), so the default renders byte-identically to before this
-		// key existed — the frozen print shots are the proof.
-		//
-		// The other three are LAYOUT CANDIDATES built for Scott to choose between (SC-154,
-		// 2026-08-18: "Propose a few options for layout and ill pick one"). They are
-		// deliberately `ui.hidden` — the settings tab must not offer four tracker layouts
-		// as a shipped feature. Once one is picked it becomes the default and the losers
-		// are deleted along with this key; nothing here is a promise to keep supporting
-		// four shapes. The value is read at BUILD time (the band is a different DOM, not a
-		// reflow), so it is not per-block overridable.
-		initControls: 'stacked' | 'bar' | 'panels' | 'rail';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -491,23 +477,6 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 	// asked for this as an option, not as the default: "can we allow for the ALT stepper
 	// popover as an optional setting. I think it looks really good and some players may
 	// want it."
-	// SC-154 round 3 — the initiative tracker's control-cluster layout candidates. Hidden
-	// (the row is never rendered): this is a review switch for the three options on the
-	// ticket, not a shipped setting. See the DsePrefs comment above.
-	d({
-		key: 'initControls', default: 'stacked',
-		ui: {
-			group: 'Element defaults', label: 'Initiative tracker controls', control: 'select',
-			hidden: true,
-			options: [
-				{ value: 'stacked', label: 'Stacked beside the heading (current)' },
-				{ value: 'bar', label: 'Command bar' },
-				{ value: 'panels', label: 'Two panels' },
-				{ value: 'rail', label: 'Expanding rail' },
-			],
-			help: 'Where the round counter, turn controls, Malice pool, quick-add and Malice log sit in an initiative tracker.',
-		},
-	}),
 	d({
 		key: 'staminaRecoveryPopover', default: false,
 		ui: {
