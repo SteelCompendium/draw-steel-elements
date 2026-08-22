@@ -84,7 +84,11 @@ test('SC-123: every new pref hook keys off a ROOT attribute too, one non-default
 	expect(sheet).toMatch(/\[data-dse-kwusage='ledger'\] \.dse-feature__meta-chips/);
 	expect(sheet).toMatch(/\[data-dse-disttarget='text'\] \.dse-feature__meta-rail/);
 	expect(sheet).toMatch(/\[data-dse-disttarget='ledger'\] \.dse-feature__meta-rail/);
-	expect(sheet).toMatch(/\[data-dse-element='statblock'\]\[data-dse-sb-charline='two'\] \.dse-sb__char/);
+	// SC-152 round 3: the charline arm is shared by statblock/characteristics/hero
+	// via :is() — the statblock must still be a named member of that arm.
+	expect(sheet).toMatch(
+		/:is\(\[data-dse-element='statblock'\], \[data-dse-element='characteristics'\], \[data-dse-element='hero'\]\)\[data-dse-sb-charline='two'\] \.dse-sb__char/,
+	);
 	expect(sheet).toMatch(/\[data-dse-sb-charbox='on'\] \.dse-sb__char-box/);
 	expect(sheet).toMatch(/\[data-dse-sb-charbox='onword'\] \.dse-sb__char-box/);
 	expect(sheet).toMatch(/\[data-dse-element='featureblock'\]\[data-dse-fb-featstyle='flat'\]/);

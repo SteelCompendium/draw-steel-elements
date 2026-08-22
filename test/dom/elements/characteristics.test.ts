@@ -16,6 +16,7 @@ import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { createThemeService } from '../../../src/framework/seams/theme';
 import { createPreferenceStore } from '../../../src/framework/seams/prefs';
+import { DSE_PREF_DESCRIPTORS } from '../../../src/prefs/catalog';
 import { createRollService } from '../../../src/framework/roll/service';
 import type { PrefsStorage } from '../../../src/framework/seams/prefs';
 import { createReferenceService } from '../../../src/framework/seams/refs';
@@ -64,6 +65,10 @@ function makeDeps(): ElementPipelineDeps {
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);
+	// SC-152 round 3: the view resolves the statblock's sbCharLine/sbCharBox shape
+	// prefs (charsAreSplit), and DsePreferenceStore.get THROWS on an undescribed key
+	// — carry the real catalog, the way main.ts does.
+	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
@@ -141,60 +146,75 @@ describe('Plan 07 Task 5: characteristics ElementDefinition (F1 §6 step 2)', ()
 	});
 });
 
-describe('Plan 09 Task 1: characteristics rendered through the REAL ElementPipeline (.dse-statgrid)', () => {
-	test('renders ONE .dse-statgrid directly under the element root; NO legacy .ds-characteristics-* DOM survives', async () => {
+describe('SC-152 round 3: characteristics rendered through the REAL ElementPipeline (the statblock .dse-sb__chars row)', () => {
+	test('renders ONE .dse-sb__chars directly under the element root; NO legacy DOM and NO statgrid survives', async () => {
 		const { root } = await renderCharacteristics(SAMPLE);
 
-		const grid = root.querySelector(':scope > .dse-statgrid');
-		expect(grid).not.toBeNull();
-		expect(root.querySelectorAll('.dse-statgrid')).toHaveLength(1);
+		const row = root.querySelector(':scope > .dse-sb__chars');
+		expect(row).not.toBeNull();
+		expect(root.querySelectorAll('.dse-sb__chars')).toHaveLength(1);
 		expect(root.querySelector('[class*="ds-characteristics"]')).toBeNull();
+		// The old element-private statgrid is GONE — ds-char renders the statblock's
+		// row through the shared kit builder (Scott: "they are exactly the same data").
+		expect(root.querySelector('.dse-statgrid')).toBeNull();
 	});
 
-	test('root carries data-dse-element="characteristics" + data-dse-theme (the attr that scopes the shared statgrid CSS)', async () => {
+	test('root carries data-dse-element="characteristics" + data-dse-theme (the attrs that scope the shared chars CSS)', async () => {
 		const { root } = await renderCharacteristics(SAMPLE);
 
 		expect(root.getAttribute('data-dse-element')).toBe('characteristics');
 		expect(root.getAttribute('data-dse-theme')).toBe('steel');
 	});
 
-	test('cells: always the five fixed characteristics, each a __value over a __label', async () => {
+	test('cells: the five fixed characteristics in the statblock SPLIT shape (box/value/label) with SIGNED values — the SC-123 default pair', async () => {
 		const { root } = await renderCharacteristics(SAMPLE);
 
-		const cells = root.querySelectorAll('.dse-statgrid > .dse-statgrid__cell');
+		const cells = root.querySelectorAll('.dse-sb__chars > .dse-sb__char');
 		expect(cells).toHaveLength(5);
 		for (const cell of Array.from(cells)) {
 			const children = Array.from(cell.children).map((el) => el.className);
-			expect(children).toEqual(['dse-statgrid__value', 'dse-statgrid__label']);
+			expect(children).toEqual(['dse-sb__char-box', 'dse-sb__char-v', 'dse-sb__char-l']);
 		}
 
-		const values = Array.from(root.querySelectorAll('.dse-statgrid__value')).map((el) => el.textContent);
-		const labels = Array.from(root.querySelectorAll('.dse-statgrid__label')).map((el) => el.textContent);
-		expect(values).toEqual(['2', '1', '0', '-1', '3']);
+		const values = Array.from(root.querySelectorAll('.dse-sb__char-v')).map((el) => el.textContent);
+		const labels = Array.from(root.querySelectorAll('.dse-sb__char-l')).map((el) => el.textContent);
+		expect(values).toEqual(['+2', '+1', '+0', '-1', '+3']);
 		expect(labels).toEqual(['Might', 'Agility', 'Reason', 'Intuition', 'Presence']);
 	});
 
-	test('SC-5 eviction: value_height/name_height arrive as --dse-value-scale/--dse-label-scale via setProperty — NO inline font-size anywhere', async () => {
+	test('the merged pref pair (sbCharLine one + sbCharBox off) renders the statblock merged cells, and a pref change REMOUNTS the shape', async () => {
+		const { root, deps } = await renderCharacteristics(SAMPLE);
+		// Default pair (two/off) renders split — proven above. Move to the merged pair:
+		await deps.prefs.set('sbCharLine', 'one');
+		const merged = root.querySelectorAll('.dse-sb__char');
+		expect(merged).toHaveLength(5);
+		for (const cell of Array.from(merged)) {
+			expect(cell.children).toHaveLength(0);
+		}
+		expect(merged[0].textContent).toBe('Might +2');
+	});
+
+	test('SC-5 eviction: value_height/name_height arrive as --dse-value-scale/--dse-label-scale via setProperty — NO inline font-size anywhere. value_height is normalised by its default (÷3) so scale 1 = the statblock numeral size', async () => {
 		const { root } = await renderCharacteristics(SAMPLE);
 
-		const grid = root.querySelector('.dse-statgrid') as HTMLElement;
-		expect(grid.style.getPropertyValue('--dse-value-scale')).toBe('2');
-		expect(grid.style.getPropertyValue('--dse-label-scale')).toBe('1');
+		const row = root.querySelector('.dse-sb__chars') as HTMLElement;
+		expect(row.style.getPropertyValue('--dse-value-scale')).toBe(String(2 / 3));
+		expect(row.style.getPropertyValue('--dse-label-scale')).toBe('1');
 
 		for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
 			expect(el.style.fontSize).toBe('');
 		}
 	});
 
-	test('omitted characteristics default to 0; omitted heights default to scale 3/1', async () => {
+	test('omitted characteristics default to 0 (rendered "+0"); omitted heights land at scale 1/1 — pixel-identical to the statblock rail', async () => {
 		const { root } = await renderCharacteristics('might: 4\n');
 
-		const values = Array.from(root.querySelectorAll('.dse-statgrid__value')).map((el) => el.textContent);
-		expect(values).toEqual(['4', '0', '0', '0', '0']);
+		const values = Array.from(root.querySelectorAll('.dse-sb__char-v')).map((el) => el.textContent);
+		expect(values).toEqual(['+4', '+0', '+0', '+0', '+0']);
 
-		const grid = root.querySelector('.dse-statgrid') as HTMLElement;
-		expect(grid.style.getPropertyValue('--dse-value-scale')).toBe('3');
-		expect(grid.style.getPropertyValue('--dse-label-scale')).toBe('1');
+		const row = root.querySelector('.dse-sb__chars') as HTMLElement;
+		expect(row.style.getPropertyValue('--dse-value-scale')).toBe('1');
+		expect(row.style.getPropertyValue('--dse-label-scale')).toBe('1');
 	});
 
 	test('D2 §5: zero inline color — no element carries style.color or any non---dse-* inline declaration', async () => {
@@ -241,8 +261,8 @@ describe('Plan 09 Task 1: characteristics rendered through the REAL ElementPipel
 			const onDocMousedown = () => bubbledToDocument++;
 			document.addEventListener('mousedown', onDocMousedown);
 			try {
-				const grid = root.querySelector('.dse-statgrid') as HTMLElement;
-				grid.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+				const row = root.querySelector('.dse-sb__chars') as HTMLElement;
+				row.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 				expect(bubbledToDocument).toBe(0);
 			} finally {
 				document.removeEventListener('mousedown', onDocMousedown);
@@ -259,7 +279,7 @@ describe('Plan 09 Task 1: characteristics rendered through the REAL ElementPipel
 		expect(root.querySelector('.dse-error-card-title')!.textContent).toContain(
 			'Characteristics: failed to render',
 		);
-		expect(root.querySelector('.dse-statgrid')).toBeNull();
+		expect(root.querySelector('.dse-sb__chars')).toBeNull();
 	});
 });
 
@@ -290,7 +310,7 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-char*, Reg
 		registerSpy.mockRestore();
 	});
 
-	test('rendering a ds-char block through the wired processor produces the characteristics statgrid DOM (end-to-end)', async () => {
+	test('rendering a ds-char block through the wired processor produces the shared chars-row DOM (end-to-end)', async () => {
 		const app = new App();
 		const plugin = new (DrawSteelAdmonitionPlugin as any)(app, { id: 'draw-steel-elements', version: 'test' });
 		await plugin.onload();
@@ -303,6 +323,6 @@ describe('T-5: registered EXACTLY ONCE — framework registry owns ds-char*, Reg
 
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('characteristics');
-		expect(root.querySelector(':scope > .dse-statgrid .dse-statgrid__cell')).not.toBeNull();
+		expect(root.querySelector(':scope > .dse-sb__chars .dse-sb__char')).not.toBeNull();
 	});
 });

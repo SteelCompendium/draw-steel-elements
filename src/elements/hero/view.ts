@@ -44,7 +44,7 @@ import type { PanelHost } from '@/framework/kit';
 import { openManagedModal } from '@/framework/kit';
 import { StaminaBar, recoveryHealAmount } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
-import { iconButton, renderCharacteristicsGrid, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
+import { charsAreSplit, iconButton, renderCharacteristicsRow, renderRecoveriesStrip, renderStaminaBar, undoNotice, updateStaminaBar, tabs } from '@/framework/kit';
 import type { CharacteristicsValues, IconButtonHandle, RecoveriesStripHandle, StaminaBarValues } from '@/framework/kit';
 import { openFormEditor } from '@/authoring/FormModal';
 import { FeatureConfig } from '@model/FeatureConfig';
@@ -294,7 +294,13 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	private renderCharacteristicsRegion(container: HTMLElement, model: HeroModel): void {
 		const region = this.region(container, 'characteristics', 'Characteristics');
 		const values: CharacteristicsValues = model.defn.characteristics;
-		renderCharacteristicsGrid(region, values);
+		// SC-152 round 3: same shared row as the statblock and ds-char — one renderer
+		// for the same five numbers, following the same two shape prefs. The sheet
+		// does NOT subscribe them to a remount here: a hero sheet re-render is
+		// expensive (stamina steppers, tabs, session state) and these prefs change
+		// from the settings tab, whose preview re-mounts on its own; the next
+		// note render picks the shape up.
+		renderCharacteristicsRow(region, values, { split: charsAreSplit(this.cx.prefs) });
 	}
 
 	// ---------------------------------------------------------------- stamina

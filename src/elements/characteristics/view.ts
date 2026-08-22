@@ -19,12 +19,26 @@
 // color anywhere in code. Static element: no persistence, no listeners (the legacy
 // processor's manual capture-phase click shield stays replaced by the pipeline default).
 import { ElementView } from '@/framework/view';
-import { renderCharacteristicsGrid } from '@/framework/kit';
+import { charsAreSplit, renderCharacteristicsRow } from '@/framework/kit';
+import type { RenderContext } from '@/framework/context';
 import type { Characteristics } from '@model/Characteristics';
 
 export class CharacteristicsElementView extends ElementView<Characteristics> {
+	constructor(cx: RenderContext) {
+		super(cx);
+		// SC-152 round 3: the element renders the statblock's characteristics row
+		// (Scott: "they are exactly the same data"), so it follows the same two shape
+		// prefs — and, like the statblock, they change the DOM SHAPE, so they need a
+		// remount, not a reflow (statblock/view.ts's constructor is the pattern).
+		const remount = (): void => {
+			if (this.rootEl) void this.update(this.model);
+		};
+		cx.prefs.subscribe('sbCharLine', this, remount);
+		cx.prefs.subscribe('sbCharBox', this, remount);
+	}
+
 	protected onMount(root: HTMLElement, model: Characteristics): void {
-		renderCharacteristicsGrid(
+		renderCharacteristicsRow(
 			root,
 			{
 				might: model.might,
@@ -33,7 +47,15 @@ export class CharacteristicsElementView extends ElementView<Characteristics> {
 				intuition: model.intuition,
 				presence: model.presence,
 			},
-			{ valueHeight: model.value_height, nameHeight: model.name_height },
+			{
+				split: charsAreSplit(this.cx.prefs),
+				// The YAML knobs predate the unification (statgrid era: "font-size in
+				// em", value default 3). Normalised by the default so scale 1 = the
+				// statblock's own numeral size and the knob keeps its proportional
+				// meaning — see the scale rules in styles-source.css (SC-152 round 3).
+				valueHeight: model.value_height / 3,
+				nameHeight: model.name_height,
+			},
 		);
 	}
 }

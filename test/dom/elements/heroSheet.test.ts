@@ -124,7 +124,9 @@ describe('D7 Task 9: all seven regions mount', () => {
 		const { root } = await renderHero();
 		expect(root.getAttribute('data-dse-element')).toBe('hero');
 
-		expect(region(root, 'characteristics')?.querySelector('.dse-statgrid')).not.toBeNull();
+		// SC-152 round 3: the region renders the statblock's shared chars row
+		// (kit renderCharacteristicsRow), not the old element-private statgrid.
+		expect(region(root, 'characteristics')?.querySelector('.dse-sb__chars')).not.toBeNull();
 		expect(region(root, 'stamina')?.querySelector('.dse-stamina')).not.toBeNull();
 		expect(region(root, 'resource')?.querySelector('.dse-res__stepper')).not.toBeNull();
 		expect(region(root, 'surges')?.querySelector('.dse-surge__stepper')).not.toBeNull();

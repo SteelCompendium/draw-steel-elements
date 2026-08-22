@@ -33,7 +33,7 @@ import type {
 	StaminaBarValues,
 	StaminaBarRenderOptions,
 	CharacteristicsValues,
-	CharacteristicsGridOptions,
+	CharacteristicsRowOptions,
 	ConditionIconEntry,
 	ConditionIconInput,
 	ConditionIconsOptions,
@@ -169,7 +169,9 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 		expect(typeof kit.HeroPanel).toBe('function'); // abstract class
 		expect(typeof kit.renderStaminaBar).toBe('function');
 		expect(typeof kit.updateStaminaBar).toBe('function');
-		expect(typeof kit.renderCharacteristicsGrid).toBe('function');
+		expect(typeof kit.renderCharacteristicsRow).toBe('function');
+		expect(typeof kit.formatCharacteristic).toBe('function');
+		expect(typeof kit.charsAreSplit).toBe('function');
 		expect(typeof kit.buildConditionIcons).toBe('function');
 		// …and the retired F1 helpers are no longer on the barrel (Plan 09 Task 10).
 		expect((kit as Record<string, unknown>).mountCollapsibleHeading).toBeUndefined();
@@ -190,7 +192,7 @@ describe('Plan 08 Task 5: kit barrel (@/framework/kit)', () => {
 			m?: RollBarHandle; n?: RollResultCardHandle;
 			// The D7 Task 1 hero-panel contract + extracted render core option/value types.
 			o?: PanelHost; p?: StaminaBarValues; q?: StaminaBarRenderOptions;
-			r?: CharacteristicsValues; s?: CharacteristicsGridOptions;
+			r?: CharacteristicsValues; s?: CharacteristicsRowOptions;
 			t?: ConditionIconEntry; u?: ConditionIconInput; v?: ConditionIconsOptions;
 		} = {};
 		expect(probe).toEqual({});

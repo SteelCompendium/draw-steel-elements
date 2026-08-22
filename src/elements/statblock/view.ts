@@ -47,7 +47,7 @@
 import { setIcon } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
-import { cardHead, collapsible, divider } from '@/framework/kit';
+import { cardHead, charsAreSplit, collapsible, divider, formatCharacteristic, renderCharacteristicsRow } from '@/framework/kit';
 import type { RenderMdCallback } from '@/framework/kit';
 import { actionTypeOf, crestIconFor, renderFeatureList } from '@/elements/feature/renderFeature';
 import { featureRollHooks } from '@/elements/feature/rollController';
@@ -69,14 +69,6 @@ import type { Statblock } from 'steel-compendium-sdk';
  *  kit collapsible. */
 const VILLAIN_BAND_TITLE = 'Villain Actions';
 const VILLAIN_BAND_SLOT = 'sb.band.villain';
-
-/** The legacy StatsView.formatCharacteristic, VERBATIM (word/number parity). */
-function formatCharacteristic(value?: number): string {
-	if (value === undefined || isNaN(value)) {
-		return 'N/A';
-	}
-	return value >= 0 ? `+${value}` : `${value}`;
-}
 
 /**
  * SC-10 Task 4 — the cardHead crest's glyph for the statblock's OWN head, keyed to
@@ -360,66 +352,37 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		}
 	}
 
-	/** The .dse-sb__chars row: five verbatim "Name +N" pairs, legacy order.
+	/** The .dse-sb__chars row — rendered by the SHARED kit builder since SC-152
+	 * round 3 (framework/kit/CharacteristicsGrid.ts, renderCharacteristicsRow): the
+	 * SC-123 merged/split shape contract and the SC-10 merged-node freeze history
+	 * live on that function's doc comment now, because ds-char and the hero sheet
+	 * render the same row through the same code. Statblock-specific facts that stay
+	 * here:
 	 *
-	 * TWO SHAPES, chosen by preference (SC-123). At the DEFAULT pair
-	 * (`sbCharLine: 'one'`, `sbCharBox: 'off'`) each cell stays ONE merged text node,
-	 * byte-for-byte what the element has always emitted; any other combination emits
-	 * the site's three-part split (`.dse-sb__char-box` / `-v` / `-l`, mirroring
-	 * `.sb__char-*`), which the CSS then lays out as a boxed letter and/or a
-	 * value-over-label stack.
-	 *
-	 * Why the merged node cannot simply be replaced: SC-10 Task 4 tried exactly that
-	 * and reverted it. Even with identical concatenated textContent, wrapping the SAME
-	 * text in two inline <span>s shifted Chromium's sub-pixel text shaping/hinting —
-	 * pixel-diffed as a 6×24px patch (62 pixels) inside the word "Agility" itself,
-	 * nowhere near the split point, i.e. the mere presence of a sibling inline box
-	 * changed anti-aliasing on glyphs the split never touched. That failed the freeze
-	 * gate, which at the time covered the screen shots too. Gating the split on a
-	 * non-default preference kept the frozen cameras on the merged node while still
-	 * shipping the site's two presentations to anyone who asks for them.
-	 *
-	 * SC-144 note: that freeze pressure is GONE — the legacy shots were retired and
-	 * only `*--steel-print.png` is frozen now. So "should the site-faithful split be
-	 * the default?" is a live design question again, deliberately NOT answered here
-	 * (changing it is visible to every user; it needs its own ticket). Both shapes
-	 * stay reachable and tested either way.
-	 *
-	 * Consequence worth knowing: because the SHAPE (not just the styling) depends on
-	 * these two prefs, they re-render rather than reflow — the constructor subscribes
-	 * both keys to a remount, the same mechanism D5's rolling prefs use. And they are
-	 * GLOBAL-ONLY: both descriptors carry `perBlock: false`, so a per-block `prefs:`
-	 * map warns and ignores them (`prefOverrides.ts`). That is not squeamishness —
-	 * prefOverrides runs after this view has mounted and re-stamps the ATTRIBUTE only,
-	 * so honouring the override would pair the global DOM shape with a local attribute.
-	 * Measured before the guard (SC-123 review M-1): global `two` + block `one`
-	 * rendered the literal `"+2Might"` — value and word concatenated, no box, no
-	 * layout, because `one`/`off` is the default pair and by the sheet's own convention
-	 * no selector names it, so the split spans fall through to bare inline boxes. An
-	 * earlier revision of this comment claimed that pairing "degrades to the default
-	 * look"; it does not, and cannot. */
+	 * - The two shape prefs re-RENDER rather than reflow — the constructor
+	 *   subscribes `sbCharLine`/`sbCharBox` to a remount, the same mechanism D5's
+	 *   rolling prefs use.
+	 * - They are GLOBAL-ONLY (`perBlock: false`): prefOverrides runs after mount and
+	 *   re-stamps the ATTRIBUTE only, so honouring a per-block override would pair
+	 *   the global DOM shape with a local attribute. Measured before the guard
+	 *   (SC-123 review M-1): global `two` + block `one` rendered the literal
+	 *   "+2Might" — the split spans fell through to bare inline boxes. */
 	private renderChars(card: HTMLElement, model: StatblockConfig): void {
-		const row = card.createDiv({ cls: 'dse-sb__chars' });
-		const split = this.charsAreSplit();
-		for (const { label, value } of statblockCharCells(model.statblock)) {
-			const cellEl = row.createDiv({ cls: 'dse-sb__char' });
-			if (!split) {
-				// LEGACY-FREEZE: one text node, exactly as before (see the doc comment).
-				cellEl.setText(`${label} ${value}`);
-				continue;
-			}
-			// Site DOM order (steel-statblock.css orders them with grid-areas/`order`):
-			// box, value, label — the boxed letter is the label's initial, verbatim.
-			cellEl.createSpan({ cls: 'dse-sb__char-box', text: label.charAt(0).toUpperCase() });
-			cellEl.createSpan({ cls: 'dse-sb__char-v', text: value });
-			cellEl.createSpan({ cls: 'dse-sb__char-l', text: label });
-		}
+		// SC-152 round 3: the row builder moved VERBATIM to the kit
+		// (framework/kit/CharacteristicsGrid.ts, renderCharacteristicsRow) so ds-char
+		// and the hero sheet render characteristics through the same code — same
+		// classes, same DOM order, same merged/split contract, byte-identical output
+		// for this element. The SC-123 shape history and the SC-10 merged-node freeze
+		// rationale live on the kit function's doc comment.
+		renderCharacteristicsRow(card, model.statblock.characteristics, {
+			split: this.charsAreSplit(),
+		});
 	}
 
 	/** True when either characteristics preference has moved off its default — the
 	 *  single place that decides between the merged text node and the split DOM. */
 	private charsAreSplit(): boolean {
-		return this.cx.prefs.get('sbCharLine') !== 'one' || this.cx.prefs.get('sbCharBox') !== 'off';
+		return charsAreSplit(this.cx.prefs);
 	}
 
 	/** The feature list on Task 5's shared grammar, behind the legacy ◆ rule

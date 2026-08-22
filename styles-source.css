@@ -2543,6 +2543,12 @@ code.dsa {
 
 /* -- characteristics prefs (SC-123 — the site's data-sb-charline /
    data-sb-charbox): how each Might/Agility/… cell reads.
+   SC-152 round 3: every arm below is shared by THREE surfaces —
+   `:is(statblock, characteristics, hero)` — because the standalone ds-char element
+   and the hero sheet's Characteristics region now render the SAME `.dse-sb__chars`
+   row through the same kit builder (framework/kit/CharacteristicsGrid.ts; Scott:
+   "they are exactly the same data"). `:is()` keeps the specificity identical to the
+   old single-attribute prefix, so nothing moves for the statblock.
    ────────────────────────────────────────────────────────────────────
    DOM CONTRACT, and why it is conditional. At the DEFAULT pair
    (charline=one, charbox=off) statblock/view.ts still emits ONE merged text node
@@ -2592,56 +2598,56 @@ code.dsa {
 	color: var(--dse-fg-muted);
 }
 /* two-line: value over label (the site's default presentation) */
-[data-dse-element='statblock'][data-dse-sb-charline='two'] .dse-sb__char {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'] .dse-sb__char {
 	display: grid;
 	justify-items: center;
 	align-content: center;
 	gap: 0.1rem;
 }
-[data-dse-element='statblock'][data-dse-sb-charline='two'] .dse-sb__char-v {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'] .dse-sb__char-v {
 	font-size: calc(var(--font-ui-large) * 1.4);
 }
 /* …with a boxed letter: [box][value] over [label]. SITE QUIRK, reproduced
    deliberately (SC-146 audit S5): at charline=two, `on` and `onword` are the same
    picture — the word is in the label row either way, so only charline=one can drop
    it. */
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char,
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char,
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char {
 	grid-template-columns: auto auto;
 	grid-template-areas: 'box val' 'lbl lbl';
 	justify-content: center;
 	column-gap: 0.4rem;
 	row-gap: 0.12rem;
 }
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-box,
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-box {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-box,
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-box {
 	grid-area: box;
 	align-self: center;
 }
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-v,
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-v {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-v,
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-v {
 	grid-area: val;
 }
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-l,
-[data-dse-element='statblock'][data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-l {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='on'] .dse-sb__char-l,
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'][data-dse-sb-charbox='onword'] .dse-sb__char-l {
 	grid-area: lbl;
 }
 /* one line + a boxed letter: [box][word][value] on one centered row. Center- (not
    baseline-) aligned for the same reason the site gives: baseline lets the taller
    box ride above the digits. */
-[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero']):is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 0.4rem;
 }
-[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-box {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero']):is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-box {
 	order: 1;
 }
-[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-l {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero']):is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-l {
 	order: 2;
 }
-[data-dse-element='statblock']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-v {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero']):is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-v {
 	order: 3;
 	/* the site's own one-line numeral size (`[data-sb-charline="one"] .sb__char-v
 	   { font-size: 1.25rem }`, steel-statblock.css:231) — review L-4. Without it the
@@ -2650,13 +2656,33 @@ code.dsa {
 	font-size: 1.25rem;
 }
 /* the box itself, revealed by either boxed value */
-[data-dse-element='statblock'][data-dse-sb-charbox='on'] .dse-sb__char-box,
-[data-dse-element='statblock'][data-dse-sb-charbox='onword'] .dse-sb__char-box {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charbox='on'] .dse-sb__char-box,
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charbox='onword'] .dse-sb__char-box {
 	display: grid;
 }
 /* letter-only, one line: the box replaces the spelled-out word */
-[data-dse-element='statblock'][data-dse-sb-charbox='on']:not([data-dse-sb-charline='two']) .dse-sb__char-l {
+:is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charbox='on']:not([data-dse-sb-charline='two']) .dse-sb__char-l {
 	display: none;
+}
+
+/* -- ds-char's value_height / name_height knobs on the shared row (SC-152 round 3).
+   The knobs predate the unification (statgrid era: "font-size in em", value default
+   3) — the VIEW normalises value_height by its default (÷3) into --dse-value-scale,
+   so scale 1 = the statblock's own numeral size exactly and the knob keeps its
+   proportional meaning (value_height: 6 = twice the statblock numeral). At scale 1
+   both calcs below compute to the statblock's own values, so an un-knobbed ds-char
+   is pixel-identical to the statblock rail. Scoped to the characteristics element
+   only — the statblock and the hero region never carry the vars and must never
+   inherit a knob. The knobs only differentiate value/label in the SPLIT shapes
+   (the SC-123 default); the merged cell is one text node and scales as one. */
+[data-dse-element='characteristics'][data-dse-sb-charline='two'] .dse-sb__char-v {
+	font-size: calc(var(--font-ui-large) * 1.4 * var(--dse-value-scale, 1));
+}
+[data-dse-element='characteristics']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-v {
+	font-size: calc(1.25rem * var(--dse-value-scale, 1));
+}
+[data-dse-element='characteristics'] .dse-sb__char-l {
+	font-size: calc(1em * var(--dse-label-scale, 1));
 }
 
 /* -- villain-actions pref (SC-123 / FOLLOWUPS #54 — the site's data-sb-villain):

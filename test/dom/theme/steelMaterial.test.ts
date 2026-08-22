@@ -1531,10 +1531,12 @@ describe('Steel material contract', () => {
 		});
 
 		it('the stat row reuses the shipped boxed-cell grammar, not a bespoke one', () => {
-			// ds-characteristics / ds-values-row / the hero sheet's Characteristics region
-			// all render the same `.dse-statgrid`, which is the statblock primary row's
-			// value-over-label shape — so the cell joins the existing sunken-cell list and
-			// the label takes `.dse-sb__item-l`'s small-caps + tracking.
+			// ds-values-row renders the `.dse-statgrid` (the statblock primary row's
+			// value-over-label shape) — so the cell joins the existing sunken-cell list
+			// and the label takes `.dse-sb__item-l`'s small-caps + tracking.
+			// (Round 3: ds-characteristics and the hero region moved OFF the statgrid
+			// onto the statblock's own `.dse-sb__chars` row — Scott: "they are exactly
+			// the same data" — so values-row is the grammar's remaining element user.)
 			const sunken = rules.find((r) =>
 				/background:\s*var\(--dse-surface-sunken\)/.test(r.body) &&
 				r.selector.includes('.dse-init__cell'),

@@ -84,8 +84,8 @@ export type {
 } from './RecoveriesStrip';
 export { UNDO_NOTICE_MS, undoNotice } from './undoNotice';
 export type { UndoNoticeHandle } from './undoNotice';
-export { renderCharacteristicsGrid } from './CharacteristicsGrid';
-export type { CharacteristicsValues, CharacteristicsGridOptions } from './CharacteristicsGrid';
+export { renderCharacteristicsRow, formatCharacteristic, charsAreSplit } from './CharacteristicsGrid';
+export type { CharacteristicsValues, CharacteristicsRowOptions } from './CharacteristicsGrid';
 export { buildConditionIcons } from './conditionIcons';
 export type { ConditionIconEntry, ConditionIconInput, ConditionIconsOptions } from './conditionIcons';
 
