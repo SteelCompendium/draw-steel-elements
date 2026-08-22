@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // visual-harness/mocks/sc186-shoot.mjs — captures the SC-186 design-option mocks
-// (option a/b/c × dark/light) as PNGs. Run sc186-build.mjs first.
-// Usage: node visual-harness/mocks/sc186-shoot.mjs [--out=<dir>]
+// (option a/b/c × dark/light, option d × state × dark/light) as PNGs. Run
+// sc186-build.mjs first.
+// Usage: node visual-harness/mocks/sc186-shoot.mjs [--out=<dir>] [--only=<option>]
 // Default out dir: visual-harness/shots (gitignored; sc186-* names collide with
 // nothing in the freeze baseline by construction).
 import { chromium } from 'playwright';
@@ -21,7 +22,14 @@ const SHOTS = [
 	{ option: 'a', name: 'drawer' },
 	{ option: 'b', name: 'workbench' },
 	{ option: 'c', name: 'twomodal' },
+	{ option: 'd', name: 'activelist-list', state: 'list' },
+	{ option: 'd', name: 'activelist-autocomplete', state: 'autocomplete' },
+	{ option: 'd', name: 'activelist-edit', state: 'edit' },
 ];
+
+const onlyArg = process.argv.find((a) => a.startsWith('--only='));
+const only = onlyArg ? onlyArg.slice('--only='.length).toLowerCase() : null;
+const shots = only ? SHOTS.filter((s) => s.option === only) : SHOTS;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({
@@ -30,9 +38,9 @@ const page = await browser.newPage({
 });
 
 let failures = 0;
-for (const { option, name } of SHOTS) {
+for (const { option, name, state } of shots) {
 	for (const bg of ['dark', 'light']) {
-		const url = `${pageUrl}?option=${option}&bg=${bg}`;
+		const url = `${pageUrl}?option=${option}&bg=${bg}${state ? `&state=${state}` : ''}`;
 		const out = path.join(outDir, `sc186-opt${option.toUpperCase()}-${name}-${bg}.png`);
 		try {
 			await page.goto(url, { waitUntil: 'networkidle' });

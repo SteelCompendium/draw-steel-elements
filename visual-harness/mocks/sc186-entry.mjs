@@ -12,6 +12,12 @@
 //   ?option=c  — Option C: TWO modals, both redesigned — the picker gains
 //                per-row quick duration chips; the customize modal becomes a
 //                forged surface (coin preview, sunken sections).
+//   ?option=d  — Option D: ONE modal; vertical list of currently ACTIVE
+//                conditions only (glyph + name + badges + delete), plus an
+//                "Add condition" affordance that becomes an autocomplete
+//                combobox (typed filtering over known conditions + an
+//                "Add custom" row for novel strings).
+//                &state=list|autocomplete|edit picks the captured moment.
 //   &bg=dark|light — body theme class, same convention as the harness page.
 //
 // Honesty notes (mirrored in the SC-186 report): the DOM is hand-authored to
@@ -407,6 +413,128 @@ function optionC(stage) {
 	]);
 }
 
+/* ------------------------------------------------------------- Option D --- */
+/* One modal; a vertical list of currently ACTIVE conditions only. Each row:
+   colored glyph + name (+ "custom" tag for unregistered keys), at-a-glance
+   duration/effect badges, a customize cog, and a delete button at the right
+   edge. Below the list, "Add condition" — pressed, it becomes an autocomplete
+   combobox whose dropdown filters known conditions as you type and always
+   offers an "Add custom: <text>" row so custom statblock abilities work.
+   Add/delete apply live; the footer is a single Done.                        */
+
+/** Custom (unregistered) condition — gets the fallback glyph. */
+const HEXED = { key: 'hexed', displayName: 'Hexed', iconName: 'circle-dashed' };
+
+const ACTIVE_D = [
+	{ cfg: CONDITIONS[0], color: '#c0392b', dur: 'Save Ends' }, // Bleeding
+	{ cfg: CONDITIONS[6], dur: 'EoT' }, // Slowed
+	{ cfg: HEXED, color: '#7d3c98', dur: 'EoE', fx: 'glow', custom: true },
+];
+
+/** An active-condition row: glyph, name, badges, cog + delete on the right. */
+function alRow(list, entry, opts = {}) {
+	const row = el(list, 'div', 'dse-condal__row');
+	row.setAttribute('role', 'listitem');
+	if (opts.open) row.classList.add('dse-condal__row--open');
+	const glyph = el(row, 'span', 'dse-condal__glyph');
+	if (entry.color) glyph.style.setProperty('--dse-condition-color', entry.color);
+	setIcon(glyph, entry.cfg.iconName, 18);
+	el(row, 'span', 'dse-condal__name', entry.cfg.displayName);
+	if (entry.custom) el(row, 'span', 'dse-condal__tag', 'custom');
+	if (entry.dur) el(row, 'span', 'dse-cond-item__dur', entry.dur);
+	if (entry.fx) el(row, 'span', 'dse-cond-item__dur', entry.fx);
+	kitBtn(row, {
+		icon: 'cog',
+		label: `Customize ${entry.cfg.displayName}`,
+		variant: 'ghost',
+		pressed: !!opts.open,
+		cls: 'dse-condal__act',
+	});
+	kitBtn(row, {
+		icon: 'trash-2',
+		label: `Remove ${entry.cfg.displayName}`,
+		variant: 'ghost',
+		cls: 'dse-condal__act dse-condal__act--delete',
+	});
+	return row;
+}
+
+/** Inline editor panel under an open row (same field grammar as A/B). */
+function alEditor(list, { dur, color, fx }) {
+	const ed = el(list, 'div', 'dse-condal__editor');
+	durationChips(field(ed, 'Duration'), { active: dur });
+	swatchRow(field(ed, 'Color'), { active: color });
+	effectChips(field(ed, 'Effect'), { active: fx });
+	return ed;
+}
+
+function alMenuRow(menu, cfg, opts = {}) {
+	const item = el(menu, 'div', 'dse-condal__menu-item');
+	item.setAttribute('role', 'option');
+	item.setAttribute('aria-selected', String(!!opts.active));
+	if (opts.active) item.classList.add('dse-condal__menu-item--active');
+	const ic = el(item, 'span', 'dse-condal__glyph');
+	setIcon(ic, cfg.iconName, 16);
+	el(item, 'span', 'dse-condal__menu-name', cfg.displayName);
+	return item;
+}
+
+/** The add affordance: a dashed button, or (open) the combobox + dropdown. */
+function alAdd(parent, { open }) {
+	const wrap = el(parent, 'div', 'dse-condal__addwrap');
+	if (!open) {
+		kitBtn(wrap, {
+			icon: 'plus',
+			text: 'Add condition',
+			label: 'Add condition',
+			cls: 'dse-condal__add',
+		});
+		return;
+	}
+	const box = el(wrap, 'div', 'dse-condal__combobox');
+	box.setAttribute('role', 'combobox');
+	box.setAttribute('aria-expanded', 'true');
+	box.setAttribute('aria-haspopup', 'listbox');
+	const search = el(box, 'span', 'dse-condal__search');
+	setIcon(search, 'search', 15);
+	// Mock stand-in for the real <input>: typed text + a caret bar.
+	const input = el(box, 'span', 'dse-condal__input', 'co');
+	el(input, 'span', 'dse-condal__cursor');
+
+	const menu = el(wrap, 'div', 'dse-condal__menu');
+	menu.setAttribute('role', 'listbox');
+	menu.setAttribute('aria-label', 'Matching conditions');
+	alMenuRow(menu, PSEUDO[2], { active: true }); // Covered
+	alMenuRow(menu, PSEUDO[3], {}); // Concealed
+	alMenuRow(menu, PSEUDO[13], {}); // Unconscious
+	dividerH(menu);
+	const custom = el(menu, 'div', 'dse-condal__menu-item dse-condal__menu-custom');
+	custom.setAttribute('role', 'option');
+	custom.setAttribute('aria-selected', 'false');
+	const plus = el(custom, 'span', 'dse-condal__glyph');
+	setIcon(plus, 'plus', 16);
+	const text = el(custom, 'span', 'dse-condal__menu-name');
+	text.append('Add custom: ');
+	el(text, 'strong', undefined, '“co”');
+}
+
+function optionD(stage, state) {
+	const { modal, body } = modalBox(stage, { title: 'Conditions', width: 480 });
+
+	const list = el(body, 'div', 'dse-condal__list');
+	list.setAttribute('role', 'list');
+	list.setAttribute('aria-label', 'Active conditions');
+	for (const entry of ACTIVE_D) {
+		const isEdit = state === 'edit' && entry.cfg.key === 'slowed';
+		alRow(list, entry, { open: isEdit });
+		if (isEdit) alEditor(list, { dur: 'eot', color: undefined, fx: 'static' });
+	}
+
+	alAdd(body, { open: state === 'autocomplete' });
+
+	footer(modal, [{ text: 'Done', label: 'Done', variant: 'accent' }]);
+}
+
 /* ------------------------------------------------------------------ mount -- */
 
 const q = new URLSearchParams(location.search);
@@ -417,6 +545,7 @@ const stage = document.getElementById('stage');
 const option = (q.get('option') || 'a').toLowerCase();
 if (option === 'a') optionA(stage);
 else if (option === 'b') optionB(stage);
+else if (option === 'd') optionD(stage, (q.get('state') || 'list').toLowerCase());
 else optionC(stage);
 
 document.body.setAttribute('data-sc186-ready', option);

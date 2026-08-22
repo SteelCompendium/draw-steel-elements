@@ -420,3 +420,164 @@
 	text-transform: uppercase;
 	color: var(--dse-fg-muted);
 }
+
+/* -- Option D: active-list manager + autocomplete add ---------------------- */
+
+.dse-condal__list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4em;
+}
+/* Each active condition is a small forged chip-row (raised, like the strip's
+   condition chips) — the list holds only what is actually on the creature. */
+.dse-condal__row {
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	padding: 0.28em 0.4em 0.28em 0.6em;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface);
+}
+[data-dse-theme='steel']:not([data-dse-print='on']) .dse-condal__row {
+	background-image: var(--dse-sheen-soft);
+	box-shadow: var(--dse-chip-bevel);
+}
+/* The row whose inline editor is open (accent border all-around; DESIGN.md
+   rule 7 — never a colored left edge). */
+.dse-condal__row--open {
+	border-color: var(--dse-accent);
+}
+.dse-condal__glyph {
+	display: inline-flex;
+	color: var(--dse-condition-color, var(--dse-fg-muted));
+}
+.dse-condal__name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+/* Unregistered (user-typed) conditions carry a quiet dashed tag. */
+.dse-condal__tag {
+	font-size: 0.62em;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	padding: 0.12em 0.5em;
+	border: 1px dashed var(--dse-border-strong, var(--dse-border));
+	border-radius: var(--dse-radius);
+	color: var(--dse-fg-muted);
+}
+
+/* Inline editor under the open row — same sunken niche + field grammar as
+   Option A's drawer, one column. */
+.dse-condal__editor {
+	display: flex;
+	flex-direction: column;
+	gap: 0.55em;
+	margin: -0.05em 0 0.25em;
+	padding: var(--dse-pad);
+	background: var(--dse-surface-sunken, var(--dse-surface));
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+[data-dse-theme='steel']:not([data-dse-print='on']) .dse-condal__editor {
+	box-shadow: var(--dse-bevel);
+}
+
+/* The add affordance / combobox swap in one anchor so the dropdown can float. */
+.dse-condal__addwrap {
+	position: relative;
+	margin-top: 0.7em;
+}
+.dse-condal__add {
+	width: 100%;
+	justify-content: center;
+	border-style: dashed;
+	color: var(--dse-fg-muted);
+}
+.dse-condal__combobox {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	padding: 0.35em 0.65em;
+	border: 1px solid var(--dse-accent);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken, var(--dse-surface));
+}
+[data-dse-theme='steel']:not([data-dse-print='on']) .dse-condal__combobox {
+	box-shadow: var(--dse-bevel);
+}
+.dse-condal__search {
+	display: inline-flex;
+	color: var(--dse-fg-muted);
+}
+.dse-condal__input {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: inline-flex;
+	align-items: center;
+	color: var(--dse-fg);
+}
+/* Mock caret (the real control is an <input>; animations are frozen). */
+.dse-condal__cursor {
+	width: 1px;
+	height: 1.15em;
+	margin-left: 1px;
+	background: var(--dse-fg);
+}
+
+/* Dropdown: a small forged card floating under the combobox. */
+.dse-condal__menu {
+	position: absolute;
+	top: calc(100% + 0.4em);
+	left: 0;
+	right: 0;
+	z-index: 3;
+	padding: 0.3em;
+	background: var(--dse-card-bg, var(--background-primary));
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+}
+[data-dse-theme='steel']:not([data-dse-print='on']) .dse-condal__menu {
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+}
+body.theme-light .dse-condal__menu {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print='on']) .dse-condal__menu {
+	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.dse-condal__menu > .dse-hr {
+	margin: 0.25em 0.3em;
+}
+.dse-condal__menu-item {
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	padding: 0.3em 0.5em;
+	border-radius: var(--dse-radius);
+	cursor: pointer;
+}
+.dse-condal__menu-item:hover,
+.dse-condal__menu-item--active {
+	background-color: var(--dse-hover);
+}
+.dse-condal__menu-name {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+/* The always-present escape hatch: create whatever was typed. */
+.dse-condal__menu-custom .dse-condal__glyph {
+	color: var(--dse-accent);
+}
+.dse-condal__menu-custom .dse-condal__menu-name {
+	color: var(--dse-fg-muted);
+}
+.dse-condal__menu-custom strong {
+	color: var(--dse-fg);
+	font-weight: 600;
+}
