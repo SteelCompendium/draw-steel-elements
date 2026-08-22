@@ -16,6 +16,25 @@
 // role="img"> whose enabled/disabled state is conveyed by shape (solid vs hollow box via
 // `[data-on]` CSS) + an aria-label — never color alone (§4), never a control.
 //
+// SC-182 — three authored LAYOUTS via the YAML `style:` enum (list | ledger | chips;
+// Scott's round-1 ruling: "implement both the ledger and chips options … set the style
+// in the yaml"). `list` (the default, and the value an absent key takes) renders the
+// classic checklist DOM byte-identically to before the field existed; the two others
+// stamp `data-skills-style` on `.dse-skills` — the hook every SC-182 Steel screen rule
+// keys on — and add a per-group owned/total tally in the header button.
+//
+// SC-182 — UNOWNED-SKILL VISIBILITY is one state with two writers:
+//   initial   the authored `only_show_selected:` key (unchanged semantics), and
+//   runtime   the menu-panel eye toggle (chromeItems below), whose flips persist in
+//             SessionStore at (blockKey, 'unowned-hidden') — session beats YAML, the
+//             same "block key seeds, session overrides" ladder the collapse state uses.
+//             Session-only: toggling NEVER writes the note.
+// While hidden, the `list` style keeps the legacy only_show_selected DOM verbatim (bare
+// h3 headings, no group collapse — Vue parity, pinned by skills.test.ts); the ledger and
+// chips styles keep their collapsible groups and tallies and simply render only the
+// owned items — the tally's owned/total is exactly the "3 of 11 shown" context the
+// filtered view needs.
+//
 // Preserves D1's fix of the latent Vue crash: SkillList.vue indexed
 // `fullSkillData.value[customSkill.skill_group]` and unconditionally `.push()`ed onto it,
 // crashing for ANY skill_group that didn't match one of the 5 built-in SKILL_DATA keys.
@@ -23,24 +42,25 @@
 // unmatched/absent skill_group → the "Custom Skills" bucket) exactly.
 import { ElementView } from '@/framework/view';
 import { collapsible } from '@/framework/kit';
-import { Skills, CustomSkill } from '@model/Skills';
+import type { ChromeMenuItem } from '@/framework/chrome/types';
+import { Skills, CustomSkill, type SkillsStyle } from '@model/Skills';
 import { SKILL_DATA, SkillInfo } from '@utils/SkillsData';
 import { toProperCase } from '@utils/common';
 import { resolveCollapsePrefs } from '@/prefs/catalog';
-import type { DsePrefs } from '@/framework/seams/prefs';
 
 /** SessionStore slot for the whole-element collapsible open-state (F1 §4.3). Stores the
  *  kit's OPEN boolean (true = expanded) — the inverse sense of the old ComponentWrapper
  *  'collapsed' slot it replaces (session-only state; nothing outlives a plugin reload). */
 const WRAPPER_OPEN_SLOT = 'open';
 
+/** SC-182: SessionStore slot for the menu-panel unowned-visibility toggle. Stores the
+ *  HIDDEN boolean (true = unowned skills hidden); absent = follow the block's own
+ *  `only_show_selected:` key. Session-only, per block, never written to the note. */
+const UNOWNED_HIDDEN_SLOT = 'unowned-hidden';
+
 /** Title shown in the whole-element collapsible header (the old ComponentWrapper
  *  componentName, previously visible only in the collapsed rail). */
 const WRAPPER_TITLE = 'Skill List';
-
-/** SC-182: the hidden `skillsLook` pref's value set (src/prefs/catalog.ts owns the
- *  catalog entry; this alias just keeps the view's signatures readable). */
-type SkillsLook = DsePrefs['skillsLook'];
 
 /** Internal-only bucket key for custom skills with no (or no matching) skill_group — never
  *  displayed; see groupDisplayName below for the user-facing label. */
@@ -122,21 +142,57 @@ export class SkillsView extends ElementView<Skills> {
 		this.renderGroups(wrapper.contentEl, model);
 	}
 
+	/** SC-182: is the unowned half of the catalog currently hidden? Session (the menu
+	 *  toggle's writes) beats the authored `only_show_selected:` key. */
+	private unownedHidden(model: Skills): boolean {
+		return this.cx.session.get<boolean>(this.blockKey, UNOWNED_HIDDEN_SLOT) ?? model.only_show_selected;
+	}
+
+	/**
+	 * SC-182 — the menu-panel eye toggle (Scott's round-1 ask: "a button in the ds-skill
+	 * menu panel to show/hide unowned skills so the user can toggle easily"). A
+	 * view-contributed item (ElementView.chromeItems): the panel is rebuilt on every
+	 * render, so icon + label always reflect the CURRENT state, and the click handler
+	 * persists the flip to SessionStore and re-renders through the standard update()
+	 * path — which also remounts the panel with the flipped icon. Session-only, so the
+	 * toggle is legitimate on read-only hosts too (same reasoning as the chrome
+	 * collapse: no note writes).
+	 */
+	chromeItems(): ChromeMenuItem[] {
+		if (!this.model) return [];
+		const hidden = this.unownedHidden(this.model);
+		return [
+			{
+				id: 'skills-unowned',
+				icon: hidden ? 'eye' : 'eye-off',
+				label: hidden ? 'Show unowned skills' : 'Hide unowned skills',
+				onClick: () => {
+					this.cx.session.set(this.blockKey, UNOWNED_HIDDEN_SLOT, !this.unownedHidden(this.model));
+					void this.update(this.model);
+				},
+			},
+		];
+	}
+
 	private renderGroups(container: HTMLElement, model: Skills): void {
 		const grouped = buildGroupedSkillData(model.custom_skills);
 		const activeSkills = buildActiveSkills(model);
 		const listContainer = container.createDiv({ cls: 'dse-skills' });
-		// SC-182 — the layout candidates behind the hidden `skillsLook` pref (the SC-154
-		// round-3 `initControls` pattern). `list` (the default) is the shipped checklist
-		// VERBATIM: no attribute is stamped and renderGroup takes its untouched path, so
-		// the default DOM — and every frozen print pair — is byte-identical to before
-		// this key existed. A candidate stamps `data-skills-look` on the container (the
-		// hook every SC-182 Steel screen rule keys on) and adds one owned/total tally
-		// per group header; read once at BUILD time, like every conditional-DOM pref.
-		const look = this.cx.prefs.get('skillsLook');
-		if (look !== 'list') listContainer.setAttribute('data-skills-look', look);
+		// SC-182 — the authored layout (YAML `style:`). `list` (the default) is the
+		// classic checklist VERBATIM: no attribute is stamped and renderGroup takes its
+		// untouched path, so a block without the key renders — and prints — the exact
+		// DOM it always has. A non-default style stamps `data-skills-style`, the hook
+		// every SC-182 Steel screen rule keys on.
+		//
+		// Destructured rather than read as a member: the shared kit style guard
+		// (test/dom/kit/styleGuard.ts) blanket-bans the `.style` token to catch inline
+		// DOM styling, and a YAML field that happens to be NAMED `style` would trip the
+		// same scan.
+		const { style } = model;
+		if (style !== 'list') listContainer.setAttribute('data-skills-style', style);
+		const hideUnowned = this.unownedHidden(model);
 		for (const [groupKey, skills] of Object.entries(grouped)) {
-			this.renderGroup(listContainer, groupKey, skills, activeSkills, model.only_show_selected, look);
+			this.renderGroup(listContainer, groupKey, skills, activeSkills, hideUnowned, style);
 		}
 	}
 
@@ -145,14 +201,15 @@ export class SkillsView extends ElementView<Skills> {
 		groupKey: string,
 		skills: SkillInfo[],
 		activeSkills: string[],
-		onlyShowSelected: boolean,
-		look: SkillsLook,
+		hideUnowned: boolean,
+		style: SkillsStyle,
 	): void {
 		const hasSkill = (name: string): boolean =>
 			activeSkills.some((active) => active.toLowerCase() === name.toLowerCase());
 
-		if (onlyShowSelected) {
-			// Vue parity: bare heading, no collapse toggle in this mode (SkillGroup.vue's
+		if (hideUnowned && style === 'list') {
+			// Vue parity, unchanged since D1: the classic checklist's hidden-unowned form
+			// is a bare heading with no collapse toggle (SkillGroup.vue's
 			// `v-if="onlyShowSelected"` branch). Group headers still show even with zero
 			// matching skills (docs/skills-element.md).
 			const groupEl = parent.createDiv({ cls: 'dse-skills__group' });
@@ -177,15 +234,15 @@ export class SkillsView extends ElementView<Skills> {
 			this,
 		);
 		group.rootEl.addClass('dse-skills__group');
-		// SC-182 candidates only (never at the default look): a per-group owned/total
+		// SC-182 ledger/chips only (never the classic list): a per-group owned/total
 		// tally at the header's right edge — the scan a player actually does ("how many
 		// Lore skills do I have?") without opening the group. A track-style fraction
 		// ("3/11", the stamina "15/20" grammar) — unambiguous in a header that already
-		// names the group. Rendered inside the header <button>, so the group's
-		// accessible name reads "crafting, 1/8" — the tally is information, not
-		// decoration, and it must survive the collapsed state (which is exactly when
-		// it earns its place).
-		if (look !== 'list') {
+		// names the group, and exactly the context the hidden-unowned form needs (the
+		// total says how much of the catalog is folded away). Rendered inside the header
+		// <button>, so the group's accessible name reads "crafting, 1/8" and the tally
+		// survives the collapsed state.
+		if (style !== 'list') {
 			const owned = skills.filter((skill) => hasSkill(skill.name)).length;
 			group.headerEl.createSpan({
 				cls: 'dse-skills__tally',
@@ -194,7 +251,12 @@ export class SkillsView extends ElementView<Skills> {
 		}
 		const list = group.contentEl.createEl('ul', { cls: 'dse-skills__list' });
 		for (const skill of skills) {
-			this.renderSkillItem(list, skill, hasSkill(skill.name));
+			const owned = hasSkill(skill.name);
+			// SC-182: the ledger/chips hidden-unowned form keeps the collapsible group +
+			// tally and simply omits the unowned items (the `list` style's hidden form is
+			// the legacy branch above).
+			if (hideUnowned && !owned) continue;
+			this.renderSkillItem(list, skill, owned);
 		}
 	}
 

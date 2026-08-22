@@ -486,6 +486,16 @@ custom_skills:
     has_skill: true
     description: "Crew and pilot a ship."
 `;
+// SC-182 round 2 — the two shipped non-default layouts (YAML `style:` enum; Scott:
+// "implement both … Allow the user to set the style in the yaml"), each prefixed onto
+// the SAME hero-picks content so every skills shot is the same character. The `-hidden`
+// twins are the `only_show_selected: true` form — the state the menu panel's eye toggle
+// flips to at runtime — photographed per layout because hiding changes each layout's
+// silhouette differently (ledger niches shrink; chip fields reduce to the forged few).
+const skillsLedger = `style: ledger\n${skillsHeroPicks}`;
+const skillsChips = `style: chips\n${skillsHeroPicks}`;
+const skillsLedgerHidden = `style: ledger\nonly_show_selected: true\n${skillsHeroPicks}`;
+const skillsChipsHidden = `style: chips\nonly_show_selected: true\n${skillsHeroPicks}`;
 
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
@@ -531,7 +541,17 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	project: { default: projectDefault },
 	roll: { default: rollDefault },
 	rule: { default: ruleDefault },
-	skills: { default: skillsDefault, 'hero-picks': skillsHeroPicks },
+	skills: {
+		default: skillsDefault,
+		'hero-picks': skillsHeroPicks,
+		// SC-182: the shipped `style:` layouts (capture ids `skills-ledger--*` /
+		// `skills-chips--*` stay stable with the round-1 review shots) + their
+		// hidden-unowned twins.
+		ledger: skillsLedger,
+		chips: skillsChips,
+		'ledger-hidden': skillsLedgerHidden,
+		'chips-hidden': skillsChipsHidden,
+	},
 	'stamina-bar': {
 		default: staminaBarDefault,
 		recoveries: staminaBarRecoveries,
@@ -758,9 +778,16 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// full-width bar is covered by the element sweep's `initiative-controls--*`.
 	{ id: 'initiative-controls-narrow', element: 'initiative', fixture: 'controls', width: 300 },
 	// SC-182 — the DEFAULT checklist at a sidebar leaf, on the realistic fixture: the
-	// apples-to-apples "before" for the two candidate-narrow pref shots below (their
-	// full-width "before" is the element sweep's own `skills-hero-picks--*`).
+	// apples-to-apples "before" for the two styled narrow twins below (their full-width
+	// "before" is the element sweep's own `skills-hero-picks--*`).
 	{ id: 'skills-narrow', element: 'skills', fixture: 'hero-picks', width: 300 },
+	// SC-182 round 2 — the two shipped `style:` layouts at the sidebar width (ids stable
+	// with the round-1 review shots; the layouts became YAML fixtures when the hidden
+	// review pref was deleted, so these moved from PREF_SHOTS to plain narrow entries).
+	// The ledger's single-column branch and the chips' tighter wrap are both width
+	// behaviours, which is exactly what this list exists to photograph.
+	{ id: 'skills-ledger-narrow', element: 'skills', fixture: 'ledger', width: 300 },
+	{ id: 'skills-chips-narrow', element: 'skills', fixture: 'chips', width: 300 },
 ];
 
 /**
@@ -819,10 +846,6 @@ export const PREF_SHOTS: {
 	element: string;
 	fixture: string;
 	prefs: Record<string, string>;
-	/** SC-182 (re-adding SC-154 round 3's scaffolding): a design-candidate pref shot
-	 *  needs its sidebar-width twin — routed through shoot.mjs's central snap() as an
-	 *  ordinary query param, exactly like NARROW_SHOTS. */
-	width?: number;
 }[] = [
 	// Keyword display (`kwUsage`) — the chip band's other three presentations.
 	{ id: 'statblock-kwusage-text', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'text' } },
@@ -879,17 +902,6 @@ export const PREF_SHOTS: {
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
 	},
-	// SC-182: the two ds-skills layout CANDIDATES (hidden `skillsLook` pref, default
-	// `list` = the shipped checklist — covered by the element sweep + skills-narrow).
-	// Each candidate at the main pane and at the 300px sidebar leaf, on the realistic
-	// hero-picks fixture, so Scott judges the density/scanability claims at both the
-	// widths a reading-mode element actually renders. Disposable ids: the winner's
-	// promotion replaces these with permanent element-sweep coverage (the SC-154
-	// promote pattern).
-	{ id: 'skills-ledger', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'ledger' } },
-	{ id: 'skills-ledger-narrow', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'ledger' }, width: 300 },
-	{ id: 'skills-chips', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'chips' } },
-	{ id: 'skills-chips-narrow', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'chips' }, width: 300 },
 ];
 
 /**
@@ -995,6 +1007,17 @@ export const CHROME_SHOTS: {
 		id: 'chrome-hover-hero',
 		stack: [{ element: 'hero', fixture: 'default' }],
 		hover: '[data-dse-element="hero"]',
+		pad: 56,
+	},
+	// (2b) SC-182 — the first VIEW-contributed panel item (ElementView.chromeItems):
+	// ds-skills' show/hide-unowned eye toggle, left of the collapse control. On the
+	// ledger fixture so the panel is judged against the layout it will actually be used
+	// with; authoringControls stays off, so the two buttons in frame are exactly the
+	// toggle + collapse.
+	{
+		id: 'chrome-skills-menu',
+		stack: [{ element: 'skills', fixture: 'ledger' }],
+		hover: '[data-dse-element="skills"]',
 		pad: 56,
 	},
 	// (3) OWNERSHIP — the shot the design decision hangs on. Two elements vertically
@@ -1353,7 +1376,6 @@ declare global {
 				element: string;
 				fixture: string;
 				prefs: Record<string, string>;
-				width?: number;
 			}[];
 			scrollShots: {
 				id: string;

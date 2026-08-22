@@ -17,7 +17,7 @@ import { Component, MarkdownRenderer } from 'obsidian';
 import type { RenderContext } from './context';
 import { rewriteSccAnchors } from '@/refs/rewriteSccAnchors';
 import { wrapMarkdownTables } from './mdTableWrap';
-import type { ElementSummary } from './chrome/types';
+import type { ChromeMenuItem, ElementSummary } from './chrome/types';
 
 /** Write-behind debounce window for persist() (F1 §4.2, "~400ms trailing", OD-3 default). */
 export const PERSIST_DEBOUNCE_MS = 400;
@@ -146,6 +146,23 @@ export abstract class ElementView<M> extends Component {
 	 */
 	chromeSummary(): ElementSummary | undefined {
 		return undefined;
+	}
+
+	/**
+	 * SC-182 — VIEW-contributed menu-panel items, the stateful twin of the definition's
+	 * `chrome.items()` (which sees only `{model, def}` and so can express nothing that
+	 * depends on session state or needs to re-render the view). Collected fresh on every
+	 * chrome (re)mount — the pipeline's afterRender hook rebuilds the panel — so an item's
+	 * icon/label may reflect current state, and an `onClick` that toggles state and then
+	 * calls `this.update(this.model)` gets a freshly-painted button for free.
+	 *
+	 * Items render LEFT of the collapse toggle (right of the pipeline's edit pencil),
+	 * per the panel's right-to-left growth rule. Default: none — every element renders
+	 * exactly the panel it rendered before this seam existed. First implementer:
+	 * SkillsView's show/hide-unowned toggle.
+	 */
+	chromeItems(): ChromeMenuItem[] {
+		return [];
 	}
 
 	/**

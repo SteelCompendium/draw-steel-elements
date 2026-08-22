@@ -329,13 +329,7 @@ try {
 			.map(([k, v]) => `${k}:${v}`)
 			.join(',');
 		for (const c of combos) {
-			// SC-182 (re-adding SC-154 round 3's scaffolding): `width` is optional on a
-			// pref shot — a layout candidate has to be shot at the sidebar width too. It
-			// goes THROUGH snap() as an ordinary query param like NARROW_SHOTS, so the
-			// print-media/realprint handling stays central.
-			const params = { element: n.element, fixture: n.fixture, prefs: prefParam };
-			if (n.width) params.width = String(n.width);
-			await snap(page, c, params, n.id);
+			await snap(page, c, { element: n.element, fixture: n.fixture, prefs: prefParam }, n.id);
 		}
 	}
 	// SC-160: scroll-state shots, declared by the page (manifest.scrollShots — entry.ts

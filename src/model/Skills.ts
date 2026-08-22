@@ -11,9 +11,15 @@ interface RawSkillsData {
     skills?: string[];
     custom_skills?: unknown[];
     only_show_selected?: boolean;
+    style?: string;
     collapsible?: boolean;
     collapse_default?: boolean;
 }
+
+/** SC-182: the authored layout. Schema-validated (SkillsSchema.yaml `style` enum,
+ *  trim+toLowerCase transforms) before parse; `list` is the classic checklist and the
+ *  default when the key is absent. */
+export type SkillsStyle = 'list' | 'ledger' | 'chips';
 
 interface RawCustomSkillData {
     name?: string;
@@ -26,6 +32,7 @@ export class Skills extends ComponentWrapper{
 	skills: string[];
 	custom_skills: CustomSkill[];
 	only_show_selected: boolean;
+	style: SkillsStyle;
 
 	public static parseYaml(source: string) {
 		try {
@@ -53,14 +60,17 @@ export class Skills extends ComponentWrapper{
 		if (raw.custom_skills && Array.isArray(raw.custom_skills)) {
 			raw.custom_skills.forEach((cs: unknown) => custom_skills.push(CustomSkill.parse(cs)));
 		}
-		return new Skills(raw.collapsible as boolean, raw.collapse_default as boolean, skills, custom_skills, raw.only_show_selected as boolean);
+		return new Skills(raw.collapsible as boolean, raw.collapse_default as boolean, skills, custom_skills, raw.only_show_selected as boolean, raw.style as SkillsStyle | undefined);
 	}
 
-	constructor(collapsible: boolean, collapse_default: boolean, skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean) {
+	constructor(collapsible: boolean, collapse_default: boolean, skills: string[], custom_skills: CustomSkill[], only_show_selected: boolean, style?: SkillsStyle) {
         super(collapsible, collapse_default);
 		this.skills = skills;
 		this.custom_skills = custom_skills;
 		this.only_show_selected = only_show_selected ?? false;
+		// Schema-validated when the pipeline ran (style enum); the `?? 'list'` covers the
+		// absent key and direct constructor callers.
+		this.style = style ?? 'list';
 	}
 }
 

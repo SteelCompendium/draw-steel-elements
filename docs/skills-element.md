@@ -45,11 +45,51 @@ Below is a detailed description of each field used in the skills element, includ
 | `skills`             | `array` of `string`      | A list of standard skills the character possesses.                           | No       | `[]`          |
 | `custom_skills`      | `array` of `CustomSkill` | A list of custom skills defined by the user. See **CustomSkill** below.      | No       | `[]`          |
 | `only_show_selected` | `boolean`                | If `true`, will hide skills that are not selected (Group headers still show) | No       | `false`       |
+| `style`              | `string`                 | The layout: `list`, `ledger` or `chips`. See **Layouts** below.              | No       | `list`        |
 
 ### Notes:
 
 - The `skills` field is an array of skill names (strings) that the character has.
 - The `custom_skills` field allows you to define custom skills with additional properties.
+
+## Layouts (`style`)
+
+Under the Steel theme the skill list can render in three layouts, chosen per block:
+
+- **`list`** (the default) — the classic one-column checklist, exactly as it has always
+  rendered.
+- **`ledger`** — the skill groups become a responsive grid of recessed panels, each with a
+  small-caps group title and an **owned/total tally** (`3/11`) in its header; owned skills
+  carry a solid ◆ mark and full-weight ink. Roughly three columns in a normal note pane,
+  one column in a sidebar leaf.
+- **`chips`** — each group is a thin titled band over an inline-wrapped run of skill chips:
+  owned skills are raised steel chips with a solid ◆, unowned skills are faint ghost
+  chips. The whole catalog fits in about one screen.
+
+```
+~~~ds-skills
+style: chips
+skills:
+  - Heal
+  - Sneak
+~~~
+```
+
+Print and export always use the classic list form regardless of `style` — paper gets the
+reference layout.
+
+## Showing/hiding unowned skills
+
+`only_show_selected: true` starts the block with unowned skills hidden (in the `list`
+layout this is the classic filtered rendering; `ledger` and `chips` keep their group
+panels and tallies and just omit the unowned entries — the tally still reads `3/11`, so
+you can see how much of the catalog is folded away).
+
+The block's [element menu](common-element-fields.md#the-menu) also carries an **eye
+toggle** ("Hide unowned skills" / "Show unowned skills"), so you can flip the same state
+at the table without editing the note. The YAML key sets the starting state; the toggle's
+choice wins for the rest of the session (per block, never written back to the note —
+exactly like the collapse controls).
 
 ## CustomSkill Definitions
 

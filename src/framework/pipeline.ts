@@ -606,16 +606,22 @@ export class ElementPipeline {
 							// — see ElementChrome.collapsible.
 							collapsible: collapsible && (chrome.collapsible?.(ctx) ?? true),
 							summary: () => view.chromeSummary(),
-							pipelineItems: showEdit
-								? [
-										{
-											id: 'edit',
-											icon: 'pencil',
-											label: `Edit ${def.name}`,
-											onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
-										} satisfies ChromeMenuItem,
-									]
-								: [],
+							// SC-182: the view's own stateful items (ElementView.chromeItems) ride
+							// after the pencil, so the visual order is pencil · view items ·
+							// collapse. Collected fresh per (re)mount — see the seam's doc.
+							pipelineItems: [
+								...(showEdit
+									? [
+											{
+												id: 'edit',
+												icon: 'pencil',
+												label: `Edit ${def.name}`,
+												onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
+											} satisfies ChromeMenuItem,
+										]
+									: []),
+								...view.chromeItems(),
+							],
 						},
 						owner,
 					);

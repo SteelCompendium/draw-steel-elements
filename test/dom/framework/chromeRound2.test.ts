@@ -179,9 +179,20 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 		expect(keys).toMatchObject({ collapsible: false, collapseDefault: true });
 		expect(data).toEqual({ collapsible: false, collapse_default: true, skills: ['climb'] });
 
-		// `collapsible: false` therefore removes the PANEL as well as the inner wrapper.
+		// `collapsible: false` removes the collapse control and the inner wrapper — but
+		// since SC-182 the skills VIEW contributes its own menu item (the show/hide-
+		// unowned eye, ElementView.chromeItems), so the panel now SURVIVES carrying
+		// exactly that one item. This is mountChrome's designed "no panel only if that
+		// leaves it empty" semantics (SC-169 ruling 2) finally meeting a surviving item:
+		// the eye toggle is session-only state, not a collapse affordance, and taking it
+		// away because the block opted out of FOLDING would conflate two unrelated
+		// controls.
 		const { root } = await render(skillsElement, 'collapsible: false\nskills:\n  - climb\n', 'ds-skills');
-		expect(root.querySelector('.dse-chrome')).toBeNull();
+		const items = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]')).map((el) =>
+			el.getAttribute('data-dse-chrome-item'),
+		);
+		expect(items).toEqual(['skills-unowned']); // the eye survives; NO collapse item
+		expect(root.querySelector('.dse-chrome-summary')).toBeNull(); // no one-line form either
 		expect(root.querySelector(':scope > .dse-collapse')).toBeNull();
 		expect(root.querySelector(':scope > .dse-skills')).not.toBeNull();
 	});

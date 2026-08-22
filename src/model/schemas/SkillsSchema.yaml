@@ -14,6 +14,23 @@ allOf:
             default: false
             errorMessage: only_show_selected must be true or false
 
+        style:
+            type: string
+            description: |
+                Which layout the skill list renders in (SC-182).
+                list — the classic one-column checklist (the default).
+                ledger — a responsive grid of group panels with owned/total tallies.
+                chips — each group as an inline-wrapped run of skill chips.
+            transform:
+              - trim
+              - toLowerCase
+            enum:
+              - list
+              - ledger
+              - chips
+            default: list
+            errorMessage: style must be one of list, ledger, chips
+
         skills:
             type: array
             description: Array of skill names the character possesses
@@ -127,4 +144,4 @@ unevaluatedProperties:
     const: false
     errorMessage: |
         Skills object must not have extra properties.
-        Allowed: only_show_selected, skills, custom_skills.
+        Allowed: only_show_selected, style, skills, custom_skills.
