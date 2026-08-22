@@ -501,6 +501,76 @@ const skillsChips = `style: chips\n${skillsPicksBody}`;
 const skillsLedgerHidden = `style: ledger\nonly_show_selected: true\n${skillsPicksBody}`;
 const skillsChipsHidden = `style: chips\nonly_show_selected: true\n${skillsPicksBody}`;
 
+// SC-183 — the tracker with real stamina STATES. The other three initiative fixtures
+// are all full-health, which is the one state where a stamina redesign cannot be
+// judged: no winded/dying frame, no temp plate, no wound, no pool damage. This one is
+// the mid-fight roster the SC-183 instruments were designed against, one row per state
+// the SC-132 cluster distinguishes:
+//   - Frodo: winded (34/80 ≤ half) WITH temp stamina (the bolted-on cap + the base-max
+//     index mark that appears when temp widens the scale);
+//   - Samwise: DYING (-12/90 — the wound growing leftward from the zero bulkhead);
+//   - Orcs: mixed damage across the instance grid (healthy / winded / at-death's-door),
+//     so the cell minis differ per cell; Troll winded;
+//   - a minion SQUAD with a wounded shared pool, one DEAD minion (the cell that keeps
+//     its textual DEAD readout and mounts no gauge) and a captain.
+const initiativeFight = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+    current_stamina: 34
+    temp_stamina: 10
+    image: "images/frodo.png"
+  - name: "Samwise Gamgee"
+    max_stamina: 90
+    current_stamina: -12
+    image: "images/sam.png"
+enemy_groups:
+  - name: "Mordor Forces"
+    creatures:
+      - name: "Orc"
+        max_stamina: 40
+        amount: 3
+        image: "images/orc.png"
+        instances:
+          - id: 1
+            current_stamina: 36
+          - id: 2
+            current_stamina: 17
+          - id: 3
+            current_stamina: 4
+      - name: "Troll"
+        max_stamina: 150
+        amount: 1
+        image: "images/troll.png"
+        instances:
+          - id: 1
+            current_stamina: 70
+  - name: "Goblin Squad"
+    is_squad: true
+    minion_stamina_pool: 9
+    creatures:
+      - name: "Goblin"
+        max_stamina: 4
+        amount: 5
+        squad_role: minion
+        instances:
+          - id: 1
+          - id: 2
+            isDead: true
+          - id: 3
+          - id: 4
+          - id: 5
+      - name: "Goblin Captain"
+        max_stamina: 40
+        amount: 1
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 18
+round: 3
+malice:
+  value: 7
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -536,6 +606,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		default: initiativeDefault,
 		'no-images': initiativeNoImages,
 		controls: initiativeControls,
+		fight: initiativeFight,
 	},
 	kit: { default: kitDefault, collapsed: kitCollapsed },
 	montage: { default: montageDefault },
@@ -792,6 +863,12 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// behaviours, which is exactly what this list exists to photograph.
 	{ id: 'skills-ledger-narrow', element: 'skills', fixture: 'ledger', width: 300 },
 	{ id: 'skills-chips-narrow', element: 'skills', fixture: 'chips', width: 300 },
+	// SC-183 — the mid-fight stamina fixture at the two constrained widths the tracker
+	// really renders at: 500px (a split-pane note — the width where the plate's identity
+	// lane starts wrapping its action toggles) and 300px (the sidebar leaf). The
+	// full-width plate is covered by the element sweep's `initiative-fight--*`.
+	{ id: 'initiative-fight-500', element: 'initiative', fixture: 'fight', width: 500 },
+	{ id: 'initiative-fight-narrow', element: 'initiative', fixture: 'fight', width: 300 },
 ];
 
 /**
@@ -829,6 +906,19 @@ export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; 
 			fixture: 'controls',
 			click: 'button.dse-init__malice-log-heading',
 		},
+		// SC-183 — a NON-DEFAULT creature selected: clicking Orc #3 (4/40, at death's
+		// door) proves the detail row rebuild carries the stamina instrument (creature
+		// coordinate model, no dying reserve), the selection ring on the clicked cell,
+		// and the two staying in sync — the state the resting shot can never show
+		// because the default selection is always the first instance.
+		// (`data-instance-key` is only unique WITHIN a group — CB-6's own contract — so
+		// the selector pins the first enemy group's entry too.)
+		{
+			id: 'initiative-cell-selected',
+			element: 'initiative',
+			fixture: 'fight',
+			click: '.dse-init__group--enemies .dse-init__entry:first-of-type .dse-init__cell[data-instance-key="0-3"]',
+		},
 	];
 
 /**
@@ -850,6 +940,10 @@ export const PREF_SHOTS: {
 	element: string;
 	fixture: string;
 	prefs: Record<string, string>;
+	/** SC-183: optional narrow-axis override, routed through snap() exactly like
+	 *  NARROW_SHOTS' width — a preference whose whole point is a layout needs its
+	 *  narrow branch photographed under the same pref. */
+	width?: number;
 }[] = [
 	// Keyword display (`kwUsage`) — the chip band's other three presentations.
 	{ id: 'statblock-kwusage-text', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'text' } },
@@ -906,6 +1000,12 @@ export const PREF_SHOTS: {
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
 	},
+	// SC-183 — the RAIL layout candidate (hidden `initStamina` review switch, the
+	// SC-154 round-3 pattern): the same mid-fight fixture as the default plate sweep,
+	// at the same three widths, so the A/B is judged like-for-like.
+	{ id: 'initiative-rail', element: 'initiative', fixture: 'fight', prefs: { initStamina: 'rail' } },
+	{ id: 'initiative-rail-500', element: 'initiative', fixture: 'fight', prefs: { initStamina: 'rail' }, width: 500 },
+	{ id: 'initiative-rail-narrow', element: 'initiative', fixture: 'fight', prefs: { initStamina: 'rail' }, width: 300 },
 ];
 
 /**

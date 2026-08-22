@@ -241,6 +241,10 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbStickyMeta: 'sb-stickymeta',
 		fbFeatureStyle: 'fb-featstyle',
 		fbStats: 'fb-stats',
+		// SC-183 — the tracker's stamina-bar layout A/B (hidden review switch, the
+		// SC-154 initControls pattern): attr-reflected because both layouts are one
+		// DOM and the value is a pure Steel-screen CSS reflow.
+		initStamina: 'init-stamina',
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
@@ -258,14 +262,19 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // and it is still that guard: the allow-list below is exact, so any NEW hidden row fails
 // here and has to justify itself in this comment.
 //
-// The list has been non-empty exactly twice: SC-154 round 3's `initControls` (three
+// The list has been non-empty exactly twice before: SC-154 round 3's `initControls` (three
 // candidate tracker layouts; Scott picked one 2026-08-20, key + losers deleted) and
 // SC-182 round 1's `skillsLook` (two candidate ds-skills layouts; Scott ruled 2026-08-22
 // "implement both … set the style in the yaml", so the key was deleted in favour of the
 // per-block YAML `style:` enum — BOTH candidates shipped, review switch gone). Each time
 // the promised return to empty happened. A hidden row is a review-time device, never a
 // shipped state; anything that appears here must carry its own deletion plan.
-const EXPECTED_HIDDEN_ROWS: string[] = [];
+//
+// SC-183 `initStamina` is the third: the tracker stamina-bar layout A/B (plate vs
+// rail) awaiting Scott's pick on the ticket. Deletion plan: the promotion round makes
+// the winner unconditional and deletes the key, the loser's CSS branch and this entry —
+// exactly the SC-154 promotion shape (dse commit 5360fe9).
+const EXPECTED_HIDDEN_ROWS: string[] = ['initStamina'];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

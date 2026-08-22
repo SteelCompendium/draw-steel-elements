@@ -54,8 +54,19 @@ import { Component, setIcon } from 'obsidian';
 import type { Modal } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { RenderContext } from '@/framework/context';
-import { buttonRow, collapsible, iconButton, stepper, buildConditionIcons as kitBuildConditionIcons } from '@/framework/kit';
-import type { IconButtonHandle } from '@/framework/kit';
+import {
+	buttonRow,
+	collapsible,
+	iconButton,
+	renderStaminaBar,
+	renderStaminaGauge,
+	staminaState,
+	stepper,
+	updateStaminaBar,
+	updateStaminaGauge,
+	buildConditionIcons as kitBuildConditionIcons,
+} from '@/framework/kit';
+import type { IconButtonHandle, StaminaBarValues, StaminaGaugeOptions } from '@/framework/kit';
 import { ConditionManager } from '@utils/Conditions';
 import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
@@ -576,6 +587,126 @@ export class InitiativeView extends ElementView<EncounterData> {
 		return el;
 	}
 
+	// ------------------------------------------------- SC-183: stamina instruments
+
+	/** The three numbers + gauge geometry an actor's stamina INSTRUMENT renders — the
+	 *  SC-132 kit cluster (row bars) and the bare kit gauge (grid-cell minis) both feed
+	 *  off this one mapping, so the two can never disagree about what a squad pool or a
+	 *  creature's coordinate model is:
+	 *   - hero: own numbers, the hero dying reserve (heroes fight on down to -max/2);
+	 *   - creature/captain: own numbers, NO reserve (creatures die at 0 — the bulkhead
+	 *     collapses onto the channel's left edge, staminaGauge.ts's own contract);
+	 *   - squad minion: the SHARED pool over max x amount with per-minion death ticks —
+	 *     verbatim the graduations MinionStaminaPoolModal draws — and `null` for a DEAD
+	 *     instance, whose cell/detail keeps the textual DEAD readout instead of a bar
+	 *     that would misreport the (still living) pool as this corpse's stamina. */
+	private staminaSpecFor(
+		character: Hero | CreatureInstance,
+		creature?: Creature,
+		group?: EnemyGroup,
+	): { values: StaminaBarValues; gauge: StaminaGaugeOptions } | null {
+		if (group?.is_squad && creature?.squad_role === 'minion') {
+			if ((character as CreatureInstance).isDead) return null;
+			const per = creature.max_stamina ?? 0;
+			const amount = creature.amount ?? 0;
+			const max = per * amount;
+			const ticks: number[] = [];
+			if (per > 0 && max > 0) {
+				for (let i = 1; i < amount; i++) ticks.push((i * per) / max);
+			}
+			return {
+				values: { current: group.minion_stamina_pool ?? 0, temp: 0, max },
+				gauge: { dyingZone: false, ticks },
+			};
+		}
+		const max = this.isHero(character) ? character.max_stamina : creature?.max_stamina ?? 0;
+		return {
+			values: {
+				current: character.current_stamina ?? 0,
+				temp: character.temp_stamina ?? 0,
+				max: max ?? 0,
+			},
+			gauge: { dyingZone: this.isHero(character) },
+		};
+	}
+
+	/** The row-level kit stamina bar (SC-183): the REAL SC-132 component — cluster,
+	 *  gauge, state ladder — mounted as the row's last child. Base/print hide it
+	 *  (`.dse-init__bar` in the base sheet), so paper keeps the compact numeric readout
+	 *  and only the Steel screen renders the instrument; the numeric control stays in
+	 *  the DOM as the keyboard/AT write path (visually stood down by the Steel layer).
+	 *  Clicking the bar opens the SAME modal the numeric control opens. Returns null
+	 *  only when no honest bar exists (dead squad minion). */
+	private buildRowStamina(
+		rowEl: HTMLElement,
+		character: Hero | CreatureInstance,
+		creature: Creature | undefined,
+		group: EnemyGroup | undefined,
+		onClick: (() => void) | null,
+		owner: Component,
+	): HTMLElement | null {
+		const spec = this.staminaSpecFor(character, creature, group);
+		if (!spec) return null;
+		const bar = renderStaminaBar(rowEl, spec.values, {
+			canPersist: this.canWrite,
+			owner,
+			onClick: this.canWrite && onClick ? onClick : undefined,
+			gauge: spec.gauge,
+		});
+		bar?.addClass('dse-init__bar');
+		return bar;
+	}
+
+	/** Targeted refresh of a row bar built above (modal-apply path). */
+	private refreshRowStamina(
+		barEl: HTMLElement | null,
+		character: Hero | CreatureInstance,
+		creature?: Creature,
+		group?: EnemyGroup,
+	): void {
+		if (!barEl) return;
+		const spec = this.staminaSpecFor(character, creature, group);
+		if (spec) updateStaminaBar(barEl, spec.values);
+	}
+
+	/** The grid cell's MINI gauge (SC-183): the bare kit gauge under the cell's numeric
+	 *  readout — no crest, no numerals of its own (the cell's number stays). The wrapper
+	 *  carries `.dse-stamina__cluster` so it rides the SAME base-hide and `--dse-st`
+	 *  state ladder the full cluster rides (the modal previews' `--preview` convention);
+	 *  `--mini` + `.dse-init__cell-gauge` scope the tracker's own sizing. */
+	private buildCellGauge(
+		cellEl: HTMLElement,
+		instance: CreatureInstance,
+		creature: Creature,
+		group: EnemyGroup,
+	): void {
+		const spec = this.staminaSpecFor(instance, creature, group);
+		if (!spec) return;
+		const mini = cellEl.createDiv({
+			cls: 'dse-stamina__cluster dse-stamina__cluster--mini dse-init__cell-gauge',
+		});
+		renderStaminaGauge(mini, spec.gauge);
+		this.refreshCellGauge(mini, instance, creature, group);
+	}
+
+	/** Targeted refresh of a cell mini (build + the CB-6 grid-cell sync). */
+	private refreshCellGauge(
+		mini: HTMLElement | null,
+		instance: CreatureInstance,
+		creature: Creature,
+		group?: EnemyGroup,
+	): void {
+		if (!mini) return;
+		const spec = this.staminaSpecFor(instance, creature, group);
+		const gauge = mini.querySelector<HTMLElement>(':scope > .dse-stamina__gauge');
+		if (!spec || !gauge) return;
+		// Same wrapper stamps updateCluster applies on the full cluster, so the
+		// `--dse-st` ladder and temp visibility key identically.
+		mini.setAttribute('data-state', staminaState(spec.values));
+		mini.setAttribute('data-temp', (spec.values.temp ?? 0) > 0 ? 'on' : 'off');
+		updateStaminaGauge(gauge, spec.values, spec.gauge);
+	}
+
 	// -------------------------------------------------------------------- portrait
 
 	/** SC-162 — a themed fallback in place of the browser's broken-image icon,
@@ -664,27 +795,34 @@ export class InitiativeView extends ElementView<EncounterData> {
 		this.buildConditionIcons(conditionsEl, character, owner);
 		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), character, name, owner);
 
-		// Right: Health Info
+		// Right: Health Info. ONE modal-open closure shared by the numeric control and
+		// the SC-183 row bar, so the two affordances cannot drift; its apply callback
+		// repaints BOTH readouts (text + instrument) in place.
 		const rightEl = rowEl.createDiv({ cls: 'dse-init__right' });
 		const healthEl = rightEl.createDiv({ cls: 'dse-init__health' });
+		let barEl: HTMLElement | null = null;
+		const openHeroStamina = (): void => {
+			const staminaBar = StaminaBar.fromHero(character);
+			this.openModal(
+				new StaminaEditModal(this.cx.app, staminaBar, true, character.name, () => {
+					staminaBar.updateHero(character);
+					this.updateStaminaDisplay(staminaEl, character);
+					this.refreshRowStamina(barEl, character);
+					void this.persist();
+				}),
+			);
+		};
 		const staminaEl = this.createStaminaControl(
 			healthEl,
 			`Edit stamina: ${name}`,
-			this.canWrite
-				? () => {
-						const staminaBar = StaminaBar.fromHero(character);
-						this.openModal(
-							new StaminaEditModal(this.cx.app, staminaBar, true, character.name, () => {
-								staminaBar.updateHero(character);
-								this.updateStaminaDisplay(staminaEl, character);
-								void this.persist();
-							}),
-						);
-					}
-				: null,
+			this.canWrite ? openHeroStamina : null,
 			owner,
 		);
 		this.updateStaminaDisplay(staminaEl, character);
+
+		// SC-183 — the row's real stamina instrument (Steel screen only; base/print keep
+		// the numeric readout above).
+		barEl = this.buildRowStamina(rowEl, character, undefined, undefined, openHeroStamina, owner);
 	}
 
 	// ------------------------------------------------------------------- group row
@@ -837,6 +975,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 				const staminaEl = cellEl.createSpan({ cls: 'dse-init__stamina dse-init__cell-stamina' });
 				this.updateStaminaDisplay(staminaEl, instance, creature, group);
+
+				// SC-183 — the collapsed cell's MINI stamina variant: the bare kit gauge
+				// under the numbers (Steel screen only; base/print keep the cell as-is).
+				this.buildCellGauge(cellEl, instance, creature, group);
 			});
 		});
 	}
@@ -876,39 +1018,47 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const rightEl = container.createDiv({ cls: 'dse-init__right' });
 		const healthEl = rightEl.createDiv({ cls: 'dse-init__health' });
 		const isSquadMinion = !!group.is_squad && creature.squad_role === 'minion';
+		// SC-183: one modal-open closure shared by the numeric control and the row bar
+		// (same move as buildCharacterRow) — pool modal for squad minions, the unified
+		// stamina modal for everything else.
+		let barEl: HTMLElement | null = null;
+		const openDetailStamina = (): void => {
+			if (isSquadMinion) {
+				// For minions in a squad: the pool modal. Persist callback
+				// refreshes the affected UI (this detail row, as legacy did)
+				// and saves.
+				this.openModal(
+					new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
+						container.empty();
+						this.buildDetailedCreatureRow(
+							container,
+							creature,
+							instance,
+							instanceKey,
+							group,
+							groupBodyEl,
+							owner,
+						);
+						void this.persist();
+					}),
+				);
+			} else {
+				// For normal creatures and captains
+				this.openCreatureStaminaModal(instance, creature, staminaEl, groupBodyEl, instanceKey, barEl);
+			}
+		};
 		const staminaEl = this.createStaminaControl(
 			healthEl,
 			`Edit stamina: ${name}`,
-			this.canWrite
-				? () => {
-						if (isSquadMinion) {
-							// For minions in a squad: the pool modal. Persist callback
-							// refreshes the affected UI (this detail row, as legacy did)
-							// and saves.
-							this.openModal(
-								new MinionStaminaPoolModal(this.cx.app, group, creature, () => {
-									container.empty();
-									this.buildDetailedCreatureRow(
-										container,
-										creature,
-										instance,
-										instanceKey,
-										group,
-										groupBodyEl,
-										owner,
-									);
-									void this.persist();
-								}),
-							);
-						} else {
-							// For normal creatures and captains
-							this.openCreatureStaminaModal(instance, creature, staminaEl, groupBodyEl, instanceKey);
-						}
-					}
-				: null,
+			this.canWrite ? openDetailStamina : null,
 			owner,
 		);
 		this.updateStaminaDisplay(staminaEl, instance, creature, group);
+
+		// SC-183 — the detail row's stamina instrument: the creature coordinate model
+		// (no dying reserve), or the shared pool with death ticks for a squad minion; a
+		// DEAD minion instance builds none and keeps the textual DEAD readout.
+		barEl = this.buildRowStamina(container, instance, creature, group, openDetailStamina, owner);
 	}
 
 	// ------------------------------------------------------ creature stamina modal
@@ -919,12 +1069,17 @@ export class InitiativeView extends ElementView<EncounterData> {
 		staminaEl: HTMLElement,
 		groupBodyEl: HTMLElement,
 		instanceKey: string,
+		barEl?: HTMLElement | null,
 	): void {
 		const staminaBar = StaminaBar.fromCreature(instance, creature);
 		this.openModal(
 			new StaminaEditModal(this.cx.app, staminaBar, false, creature.name, () => {
 				staminaBar.updateCreature(instance);
 				this.updateStaminaDisplay(staminaEl, instance, creature);
+				// SC-183: the detail row's bar repaints with the same numbers (only
+				// passed from the detail-row path — the grid dblclick path has no row
+				// bar in hand, exactly like its numeric refresh).
+				this.refreshRowStamina(barEl ?? null, instance, creature);
 				void this.persist();
 
 				// CB-6: refresh THE instance's own grid cell, found by data-instance-key
@@ -936,6 +1091,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 				if (gridCell) {
 					this.updateStaminaDisplay(gridCell, instance, creature);
 				}
+				// SC-183: …and the same cell's mini gauge (same CB-6 keyed lookup).
+				this.refreshCellGauge(
+					groupBodyEl.querySelector<HTMLElement>(
+						`.dse-init__cell[data-instance-key="${instanceKey}"] .dse-init__cell-gauge`,
+					),
+					instance,
+					creature,
+				);
 			}),
 		);
 	}

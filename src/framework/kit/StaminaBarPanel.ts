@@ -14,6 +14,7 @@
 import { setIcon, setTooltip } from 'obsidian';
 import type { Component } from 'obsidian';
 import { renderStaminaGauge, staminaState, updateStaminaGauge } from './staminaGauge';
+import type { StaminaGaugeOptions } from './staminaGauge';
 
 /** The three numbers a stamina bar renders — deliberately NOT the `StaminaBar` model
  *  (kit stays decoupled from element-owned model shapes); callers map their model's
@@ -41,6 +42,12 @@ export interface StaminaBarRenderOptions {
 	/** SC-132: build the Steel cluster (default true). The modal previews mount their own
 	 *  gauge directly and pass false — they are not the whole instrument. */
 	cluster?: boolean;
+	/** SC-183: options for the cluster's gauge. Defaults to `{ dyingZone: true }` (the
+	 *  hero coordinate model every pre-SC-183 caller implicitly got). The initiative
+	 *  tracker passes `{ dyingZone: false }` for creature bars (no negative range —
+	 *  creatures die at 0) and `{ dyingZone: false, ticks }` for a squad's shared minion
+	 *  pool (per-minion death graduations, the same ticks MinionStaminaPoolModal draws). */
+	gauge?: StaminaGaugeOptions;
 }
 
 const SHEET_STYLE_NOTICE = 'Sheet style is not implemented, use default style';
@@ -112,7 +119,7 @@ export function renderStaminaBar(
 	// a theme switch), so a DOM that branched on the theme would be wrong the instant the
 	// user flipped it. Legacy and print therefore keep the legacy track above, byte for
 	// byte, and the Steel screen layer swaps which of the two is visible.
-	if (opts.cluster !== false) buildCluster(bar);
+	if (opts.cluster !== false) buildCluster(bar, { dyingZone: true, ...opts.gauge });
 
 	updateStaminaBar(bar, s);
 
@@ -209,7 +216,7 @@ const STATE_LABEL: Record<'healthy' | 'winded' | 'dying', string> = {
 
 /** Builds the cluster into `bar`. Ornament (the crest) is aria-hidden; the numerals are
  *  ordinary text, so AT reads "Stamina 11 / 30 +4" without any ARIA of its own. */
-function buildCluster(bar: HTMLElement): HTMLElement {
+function buildCluster(bar: HTMLElement, gaugeOpts: StaminaGaugeOptions): HTMLElement {
 	const cluster = bar.createDiv({ cls: 'dse-stamina__cluster' });
 
 	// Column 1, both rows. `.dse-crest` is the kit's own heraldic shield frame, so the
@@ -232,7 +239,7 @@ function buildCluster(bar: HTMLElement): HTMLElement {
 	nums.createSpan({ cls: 'dse-stamina__ctemp' });
 
 	// Row 2: the gauge, full remaining width.
-	renderStaminaGauge(cluster, { dyingZone: true });
+	renderStaminaGauge(cluster, gaugeOpts);
 	return cluster;
 }
 
@@ -263,5 +270,10 @@ function updateCluster(bar: HTMLElement, s: StaminaBarValues): void {
 	cluster.querySelector<HTMLElement>('.dse-stamina__ctemp')?.setText(temp > 0 ? `+${temp}` : '');
 
 	const gauge = cluster.querySelector<HTMLElement>(':scope > .dse-stamina__gauge');
-	if (gauge) updateStaminaGauge(gauge, s, { dyingZone: true });
+	// SC-183: the gauge is self-describing — renderStaminaGauge stamps `data-zone="off"`
+	// when built without the dying reserve, so a targeted update re-derives the SAME
+	// geometry option from the DOM instead of threading render-time options through
+	// `updateStaminaBar`'s pure (root, values) signature. (`ticks` never matter here:
+	// they are placed at build and staminaGaugeGeometry does not read them.)
+	if (gauge) updateStaminaGauge(gauge, s, { dyingZone: gauge.getAttribute('data-zone') !== 'off' });
 }

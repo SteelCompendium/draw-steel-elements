@@ -102,6 +102,22 @@ declare module '../framework/seams/prefs' {
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
 		staminaRecoveryPopover: boolean;
+		// —— SC-183: WHERE the initiative tracker's row stamina bar sits.
+		//
+		// Both values are the SAME additive DOM (the SC-132 kit cluster mounted as the
+		// row's last child, base/print-hidden); the attr only chooses the Steel screen
+		// layout, so this is a pure CSS reflow — no rebuild, and the frozen print pairs
+		// are untouched by either value by construction.
+		//
+		// `plate` (default, the recommendation): the row is a two-lane forged plate —
+		// identity lane on top, the full-width cluster (state word, readout, gauge)
+		// beneath, the stamina element's own presence hierarchy. `rail` is the LAYOUT
+		// CANDIDATE built for Scott's SC-183 review (the SC-154 round-3 pattern): the
+		// one-line dense form — the cluster's rail shape held against the row's right
+		// edge where the numeric readout used to sit. Deliberately `ui.hidden`; once
+		// Scott picks, the loser and this key are deleted (nothing here is a promise to
+		// keep supporting two tracker shapes).
+		initStamina: 'plate' | 'rail';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -550,6 +566,22 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 			group: 'Element defaults', label: 'Edit Recoveries with a popover', control: 'toggle',
 			advanced: true,
 			help: 'Clicking the recovery markers opens a small − / + popover instead of setting the count directly. Off — the default — sets the count on click, and every change offers an Undo.',
+		},
+	}),
+
+	// SC-183 — the initiative tracker's stamina-bar layout candidates. Hidden (the row
+	// is never rendered): a review switch for the A/B on the ticket, not a shipped
+	// setting. See the DsePrefs comment above.
+	d({
+		key: 'initStamina', default: 'plate', attr: 'init-stamina',
+		ui: {
+			group: 'Element defaults', label: 'Initiative tracker stamina bar', control: 'select',
+			hidden: true,
+			options: [
+				{ value: 'plate', label: 'Plate (full-width bar lane, recommended)' },
+				{ value: 'rail', label: 'Rail (one-line bar in the row)' },
+			],
+			help: 'SC-183 review switch: where each tracker row mounts its stamina bar.',
 		},
 	}),
 

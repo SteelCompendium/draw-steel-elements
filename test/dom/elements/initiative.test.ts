@@ -1216,3 +1216,195 @@ describe('T-9: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		);
 	});
 });
+
+describe('SC-183: the tracker adopts the real stamina instruments (kit bar + cell minis)', () => {
+	// The squad fixture with a wounded pool and one DEAD minion — the two states the
+	// shared squad.yaml (full pool, nobody dead) cannot express.
+	const SQUAD_FIGHT = `heroes:
+  - name: "Aragorn"
+    max_stamina: 120
+enemy_groups:
+  - name: "Goblin Squad"
+    is_squad: true
+    minion_stamina_pool: 9
+    creatures:
+      - name: "Goblin"
+        max_stamina: 4
+        amount: 5
+        squad_role: minion
+        instances:
+          - id: 1
+          - id: 2
+            isDead: true
+          - id: 3
+          - id: 4
+          - id: 5
+malice:
+  value: 0
+`;
+
+	test('every hero row mounts the REAL kit bar as its last child: cluster + hero gauge (dying reserve), numerals off the model, clickable', async () => {
+		const { root } = await renderInit(quickStart);
+		const rows = root.querySelectorAll('.dse-init__group--heroes .dse-init__row');
+		expect(rows.length).toBe(2);
+		rows.forEach((row) => {
+			const bar = row.lastElementChild as HTMLElement;
+			expect(bar.hasClass('dse-stamina')).toBe(true);
+			expect(bar.hasClass('dse-init__bar')).toBe(true);
+			// The write affordance: the bar is clickable exactly when the host can persist.
+			expect(bar.hasClass('dse-stamina--clickable')).toBe(true);
+			// The SC-132 cluster, with the HERO coordinate model (dying reserve present).
+			const gauge = bar.querySelector('.dse-stamina__cluster > .dse-stamina__gauge') as HTMLElement;
+			expect(gauge).not.toBeNull();
+			expect(gauge.getAttribute('data-zone')).toBeNull();
+		});
+		const frodoBar = rows[0].lastElementChild as HTMLElement;
+		expect(frodoBar.querySelector('.dse-stamina__ccur')!.textContent).toBe('80');
+		expect(frodoBar.querySelector('.dse-stamina__cmax')!.textContent).toBe('80');
+	});
+
+	test('clicking the hero bar opens the SAME stamina modal; apply refreshes numeric readout AND bar in place, one write', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(quickStart);
+
+		const bar = root.querySelector('.dse-init__group--heroes .dse-init__row > .dse-init__bar') as HTMLElement;
+		const gauge = bar.querySelector('.dse-stamina__gauge') as HTMLElement;
+		const pourBefore = gauge.style.getPropertyValue('--dse-pour-w');
+		bar.click();
+
+		const modalEl = lastModal();
+		expect(modalEl.classList.contains('modal-container')).toBe(true);
+		expect(modalEl.querySelector('.dse-modal__title')!.textContent).toBe('Frodo Baggins Stamina');
+
+		commitStepperValue(modalEl, 30);
+		modalApplyBtn(modalEl).click();
+
+		// Both readouts repaint, no rebuild: the numeric text AND the bar's own numbers.
+		expect(
+			root.querySelector('.dse-init__group--heroes .dse-init__stamina')!.textContent,
+		).toBe('30/80');
+		expect(bar.querySelector('.dse-stamina__ccur')!.textContent).toBe('30');
+		expect(gauge.getAttribute('data-state')).toBe('winded');
+		expect(gauge.style.getPropertyValue('--dse-pour-w')).not.toBe(pourBefore);
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toBe(
+			legacyBytes(quickStart, (m) => {
+				m.heroes[0].current_stamina = 30;
+			}),
+		);
+	});
+
+	test('enemy detail row bar rides the CREATURE coordinate model (data-zone="off", no dying reserve)', async () => {
+		const { root } = await renderInit(quickStart);
+		const bar = root.querySelector('.dse-init__detail.dse-init__row > .dse-init__bar') as HTMLElement;
+		expect(bar).not.toBeNull();
+		const gauge = bar.querySelector('.dse-stamina__cluster > .dse-stamina__gauge') as HTMLElement;
+		expect(gauge.getAttribute('data-zone')).toBe('off');
+		expect(bar.querySelector('.dse-stamina__ccur')!.textContent).toBe('40');
+	});
+
+	test('creature modal apply syncs the detail bar AND the right cell mini (CB-6 keyed), not its neighbours', async () => {
+		jest.useFakeTimers();
+		const { root } = await renderInit(quickStart);
+
+		const detailBar = root.querySelector('.dse-init__detail.dse-init__row > .dse-init__bar') as HTMLElement;
+		(root.querySelector('.dse-init__detail .dse-init__stamina') as HTMLElement).click();
+		commitStepperValue(lastModal(), 10);
+		modalApplyBtn(lastModal()).click();
+
+		// Detail bar repainted in place (10/40 => winded on the creature model).
+		expect(detailBar.querySelector('.dse-stamina__ccur')!.textContent).toBe('10');
+		// The instance's OWN cell mini went winded; a neighbour cell did not.
+		const editedMini = root.querySelector(
+			'.dse-init__cell[data-instance-key="0-1"] .dse-init__cell-gauge',
+		) as HTMLElement;
+		const otherMini = root.querySelector(
+			'.dse-init__cell[data-instance-key="0-2"] .dse-init__cell-gauge',
+		) as HTMLElement;
+		expect(editedMini.getAttribute('data-state')).toBe('winded');
+		expect(otherMini.getAttribute('data-state')).toBe('healthy');
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+	});
+
+	test('every grid cell carries a mini gauge (bare kit gauge in a cluster-classed wrapper); numeric cell text is untouched', async () => {
+		const { root } = await renderInit(quickStart);
+		const cells = root.querySelectorAll('.dse-init__cell');
+		expect(cells.length).toBe(5); // 4 orcs + 1 troll
+		cells.forEach((cell) => {
+			const mini = cell.querySelector(':scope > .dse-init__cell-gauge') as HTMLElement;
+			expect(mini).not.toBeNull();
+			// Rides the SAME base-hide + --dse-st ladder the full cluster rides.
+			expect(mini.classList.contains('dse-stamina__cluster')).toBe(true);
+			expect(mini.getAttribute('data-state')).toBe('healthy');
+			expect(mini.querySelector('.dse-stamina__gauge')!.getAttribute('data-zone')).toBe('off');
+		});
+	});
+
+	test('squad: pool bar with per-minion death ticks; the DEAD instance builds NO instruments and keeps its DEAD readout', async () => {
+		const { root } = await renderInit(SQUAD_FIGHT);
+
+		// Detail row bar = the SHARED pool (9 of 4x5=20), winded on the pool scale,
+		// with amount-1 = 4 death graduations.
+		const bar = root.querySelector('.dse-init__detail.dse-init__row > .dse-init__bar') as HTMLElement;
+		expect(bar.querySelector('.dse-stamina__ccur')!.textContent).toBe('9');
+		expect(bar.querySelector('.dse-stamina__cmax')!.textContent).toBe('20');
+		expect(bar.querySelectorAll('.dse-stamina__gidx--tick').length).toBe(4);
+
+		// Cells: living minions carry the pool mini; the dead one carries none and
+		// still says DEAD.
+		const deadCell = root.querySelector('.dse-init__cell[data-instance-key="0-2"]') as HTMLElement;
+		expect(deadCell.querySelector('.dse-init__cell-gauge')).toBeNull();
+		expect(deadCell.querySelector('.dse-init__cell-stamina')!.textContent).toBe('DEAD');
+		const livingCell = root.querySelector('.dse-init__cell[data-instance-key="0-1"]') as HTMLElement;
+		const livingMini = livingCell.querySelector('.dse-init__cell-gauge') as HTMLElement;
+		expect(livingMini).not.toBeNull();
+		expect(livingMini.querySelectorAll('.dse-stamina__gidx--tick').length).toBe(4);
+	});
+
+	test('read-only: bars render inert (no clickable modifier, no buttons added), minis still present', async () => {
+		const { root } = await renderInit(quickStart, { canPersist: false });
+		const bar = root.querySelector('.dse-init__group--heroes .dse-init__row > .dse-init__bar') as HTMLElement;
+		expect(bar).not.toBeNull();
+		expect(bar.hasClass('dse-stamina--clickable')).toBe(false);
+		expect(bar.querySelector('button')).toBeNull();
+		expect(root.querySelector('.dse-init__cell .dse-init__cell-gauge')).not.toBeNull();
+	});
+
+	test('initStamina pref (hidden A/B switch): reflected as data-dse-init-stamina, default plate, live reflow to rail', async () => {
+		const { root, deps } = await renderInit(quickStart);
+		expect(root.getAttribute('data-dse-init-stamina')).toBe('plate');
+		await deps.prefs.set('initStamina', 'rail');
+		expect(root.getAttribute('data-dse-init-stamina')).toBe('rail');
+		// A reflow, not a rebuild: the same bar element is still mounted.
+		expect(root.querySelector('.dse-init__row > .dse-init__bar')).not.toBeNull();
+	});
+
+	test('CSS contract: the instruments are base-hidden inside the .dse-init block, and every reveal rule carries the Steel screen guard', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+
+		// The base hide (what keeps base + BOTH print classes byte-identical): inside the
+		// [data-dse-element="initiative"] .dse-init block, the two instrument nodes are
+		// display:none with NO theme scope.
+		const block = sheet.match(/\[data-dse-element="initiative"\]\s+\.dse-init\s*\{[\s\S]*?\n\}/)![0];
+		expect(block).toMatch(/\.dse-init__bar,\s*\n\s*\.dse-init__cell-gauge\s*\{\s*\n\s*display:\s*none;/);
+
+		// Every OTHER selector mentioning the two instrument classes must carry the full
+		// Steel screen guard — a reveal rule without :not([data-dse-print="on"]) would
+		// paint the bar into the frozen print pairs.
+		const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+		const selectorLines = noComments
+			.split('\n')
+			// (?![\w-]) so SC-154's `.dse-init__bar-grid` — a different node, the command
+			// bar's grid — is not swept into this contract.
+			.filter((l) => /\.dse-init__(bar(?![\w-])|cell-gauge)/.test(l))
+			.filter((l) => /[{,]\s*$/.test(l.trim()) || l.includes('{'));
+		expect(selectorLines.length).toBeGreaterThan(0);
+		for (const line of selectorLines) {
+			const trimmed = line.trim();
+			if (trimmed === '.dse-init__bar,' || trimmed.startsWith('.dse-init__cell-gauge {')) continue; // the base hide
+			expect(trimmed).toContain(`[data-dse-theme='steel']:not([data-dse-print="on"])`);
+		}
+	});
+});

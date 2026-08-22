@@ -329,7 +329,12 @@ try {
 			.map(([k, v]) => `${k}:${v}`)
 			.join(',');
 		for (const c of combos) {
-			await snap(page, c, { element: n.element, fixture: n.fixture, prefs: prefParam }, n.id);
+			// SC-183: optional narrow-axis override (entry.ts PREF_SHOTS `width`), the
+			// same param NARROW_SHOTS routes — a layout pref's narrow branch is part of
+			// the pref's own picture.
+			const params = { element: n.element, fixture: n.fixture, prefs: prefParam };
+			if (n.width) params.width = String(n.width);
+			await snap(page, c, params, n.id);
 		}
 	}
 	// SC-160: scroll-state shots, declared by the page (manifest.scrollShots — entry.ts

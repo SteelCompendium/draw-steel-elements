@@ -146,6 +146,50 @@ describe('D7 Task 1: kit/StaminaBarPanel — renderStaminaBar', () => {
 		expect(registerSpy).toHaveBeenCalledWith(bar, 'click', onClick);
 	});
 
+	// —— SC-183: the `gauge` render option (the initiative tracker's creature/pool bars) ——
+
+	test('gauge: { dyingZone: false } builds the cluster gauge WITHOUT the hero dying reserve (data-zone="off"), and updateStaminaBar keeps that geometry', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 10, temp: 0, max: 40 }, {
+			canPersist: true,
+			gauge: { dyingZone: false },
+		})!;
+
+		const gauge = bar.querySelector('.dse-stamina__cluster > .dse-stamina__gauge') as HTMLElement;
+		expect(gauge.getAttribute('data-zone')).toBe('off');
+		// No reserve: the zero bulkhead collapses onto the channel's left edge.
+		expect(dseVar(gauge, '--dse-zone')).toBe(0);
+		expect(dseVar(gauge, '--dse-pour-w')).toBeCloseTo((10 / 40) * 100, 2);
+
+		// The targeted update must RE-DERIVE dyingZone from the gauge itself (its
+		// data-zone attr), not silently reapply the hero default — the regression this
+		// pins: an update that assumed { dyingZone: true } would recompute the pour on a
+		// zone-shifted ruler and the bar would jump on the first edit.
+		updateStaminaBar(bar, { current: 20, temp: 0, max: 40 });
+		expect(dseVar(gauge, '--dse-zone')).toBe(0);
+		expect(dseVar(gauge, '--dse-pour-w')).toBeCloseTo(50, 2);
+	});
+
+	test('gauge: ticks render as --tick graduations at the given channel fractions (the minion-pool cell mini)', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 9, temp: 0, max: 20 }, {
+			canPersist: true,
+			gauge: { dyingZone: false, ticks: [0.25, 0.5, 0.75] },
+		})!;
+		const ticks = bar.querySelectorAll<HTMLElement>('.dse-stamina__gidx--tick');
+		expect(ticks.length).toBe(3);
+		expect(ticks[0].style.getPropertyValue('--dse-tick-x')).toBe('25%');
+		expect(ticks[2].style.getPropertyValue('--dse-tick-x')).toBe('75%');
+	});
+
+	test('gauge option omitted — the pre-SC-183 hero default is unchanged (dying reserve present)', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 10, temp: 0, max: 20 }, { canPersist: true })!;
+		const gauge = bar.querySelector('.dse-stamina__cluster > .dse-stamina__gauge') as HTMLElement;
+		expect(gauge.getAttribute('data-zone')).toBeNull();
+		expect(dseVar(gauge, '--dse-zone')).toBeGreaterThan(0);
+	});
+
 	test("style: 'sheet' renders the notice instead of the bar, and returns null", () => {
 		const root = document.createElement('div');
 		const bar = renderStaminaBar(root, { current: 1, temp: 0, max: 2 }, {

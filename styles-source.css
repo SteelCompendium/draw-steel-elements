@@ -1299,6 +1299,24 @@ code.dsa {
         max-width: 100%;
     }
 
+    /* SC-183 — the tracker's stamina INSTRUMENTS are Steel-screen-only chrome, hidden
+       here in the base layer exactly the way SC-132 hides the cluster and SC-169 hides
+       the chrome panel: the view builds them UNCONDITIONALLY (the theme is a live CSS
+       attribute; nothing re-renders on a flip), and a display:none node contributes no
+       box — so the base sheet and BOTH print classes render byte-for-byte what they
+       rendered before SC-183, numeric readouts and all. The reveal rules live in the
+       SC-183 Steel section (after the SC-132 cluster block) and every one carries the
+       standing [data-dse-theme='steel']:not([data-dse-print="on"]) guard.
+       `.dse-init__bar` is the row-level kit bar (its cluster child is ALSO hidden by
+       the SC-132 base rule — this hides the bar root and its legacy track with it);
+       `.dse-init__cell-gauge` is the grid cell's mini gauge wrapper (base-hidden twice
+       over: it carries .dse-stamina__cluster too — stated here so the tracker's own
+       block names every node it owns). */
+    .dse-init__bar,
+    .dse-init__cell-gauge {
+        display: none;
+    }
+
     @media (max-width: 599px) {
         .dse-init__grid {
             grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
@@ -9917,6 +9935,324 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 }
 
 /* END SC-182 Steel skills layouts */
+
+/* ================================================================== */
+/*   SC-183 — the initiative tracker adopts the stamina instruments    */
+/* ================================================================== */
+/*
+   Scott's SC-183 brief: "We spent a lot of time making the stamina element look awesome.
+   We should use those designs in the initiative tracker." So this section PORTS, it does
+   not invent: every material below is the SC-132 cluster's own (the 104deg translucent-
+   black plate gradient over --dse-card-bg, --dse-metal-faint hairlines, --dse-bevel, the
+   whole-frame winded/dying states — DESIGN.md rule 7: no colored left-borders, a state
+   paints the WHOLE frame), and the instruments themselves are the SC-132 kit components
+   (renderStaminaBar's cluster in the rows, the bare gauge in the grid cells), not
+   imitations.
+
+   THE DOM IS ADDITIVE AND BASE-HIDDEN (see the `.dse-init__bar`/`.dse-init__cell-gauge`
+   rule in the base block): the numeric readouts stay in the DOM, so base and BOTH print
+   classes render byte-for-byte what they rendered before SC-183. Everything here is the
+   Steel screen layer, and every rule carries the standing
+   `[data-dse-theme='steel']:not([data-dse-print="on"])` guard — on the ELEMENT ROOT
+   selector, since the tracker's root carries both data-dse-theme and data-dse-element.
+
+   TWO LAYOUTS behind the hidden `initStamina` pref (data-dse-init-stamina, the SC-154
+   round-3 review-switch pattern — one DOM, the attr only reflows it):
+     plate (default)  the row becomes a two-lane forged plate: identity lane (turn box,
+                      portrait, name/conditions/actions) on top, the full cluster —
+                      state word, big readout, gauge — as the bottom lane. The stamina
+                      element's own presence hierarchy ("the current stamina value pops
+                      with its larger font … really helps catch the eye", SC-132).
+     rail             the one-line dense form: the cluster's rail shape (no crest, no
+                      state word — SC-132's own rail rulings) held against the row's
+                      right edge where the numeric readout used to sit.
+
+   STATES ARE SAID ≥3 WAYS in both layouts (Scott is colourblind): the row frame's
+   colour, the gauge's length/position, the numeral's colour — plus the state word and
+   crest silhouette on the plate. The numeric readout is not deleted for AT/keyboard:
+   `.dse-init__right` stands down to a visually-hidden box that RETURNS on
+   :focus-within, so the labelled stamina button stays the keyboard write path.
+*/
+
+/* -- 1. The instruments become visible ----------------------------------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar {
+	display: block;
+	min-width: 0;
+}
+
+/* The numeric readout stands down while a bar is present (a dead squad minion's row
+   builds no bar, so its DEAD readout stays visible by construction). Visually hidden,
+   not display:none: the button keeps its tab stop and label, and the box comes back
+   while focused so a keyboard user can see where they are. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(> .dse-init__bar) .dse-init__right:not(:focus-within) {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	overflow: hidden;
+	/* The classic sr-only clip, NOT `clip-path`: powerRollPanel.test.ts pins the badge
+	   polygons as "the first clip-path after the selector", and a clip-path here would
+	   sit between the t1 badge's first mention and its polygon. `clip` is CSS2 —
+	   supported everywhere this plugin runs — and this is a hidden box, not geometry. */
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* -- 2. Row and group cards wear the stamina plate ------------------------------ */
+/* The SC-132 cluster's own ground, verbatim (104deg translucent-black band over the
+   plate token), replacing the base layer's flat --dse-surface + hairline-fade pair. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12)), var(--dse-card-bg);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row,
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.02)), var(--dse-card-bg);
+}
+/* The base layer's top/left hairline-fade ornament pair reads as an OPEN card edge;
+   a bordered plate closes all four edges, so the open-edge gesture stands down. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row::after,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody::after {
+	display: none;
+}
+
+/* The selected creature's detail row: a recessed slot INSIDE the group plate (the
+   gauge channel's own milled-slot language, one register up), so the open creature
+   reads as seated in the group rather than as a second plate fighting the first. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row {
+	position: relative;
+	box-sizing: border-box;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.22);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 3px;
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row {
+	background: rgba(0, 0, 0, 0.045);
+}
+
+/* -- 3. Winded and dying paint the row's WHOLE frame (SC-132 §7, ported) -------- */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-stamina__cluster[data-state='winded']) {
+	border-color: var(--dse-stamina-winded);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-stamina__cluster[data-state='dying']) {
+	border-color: var(--dse-stamina-dying);
+	background:
+		linear-gradient(104deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0.86)),
+		var(--dse-stamina-dying);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-stamina__cluster[data-state='dying']) {
+	background:
+		linear-gradient(104deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
+		var(--dse-stamina-dying);
+}
+
+/* -- 4. The cluster stands down to a naked instrument --------------------------- */
+/* The ROW carries the plate now, so the cluster's own chrome (ground, border, bevel,
+   dying flood) comes off — the rail form's own move (SC-132 §9), one context over.
+   This also reaches the cell minis (they carry .dse-stamina__cluster), which is
+   correct: a mini is never its own plate either. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cluster {
+	padding: 0;
+	background: none;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	row-gap: 0.3rem;
+	column-gap: 0.6rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cluster[data-state='dying'] {
+	background: none;
+	border-color: transparent;
+}
+/* No "stamina" label in a tracker row: the gauge-under-the-name idiom is
+   self-describing here, and the word would fight the actor's name one line up —
+   the same call the hero sheet's region title already makes (SC-132 §8). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__clabel {
+	display: none;
+}
+/* Hero rows keep the crest at the hero sheet's step-down size (SC-132 §8's own
+   numbers, nudge re-derived at 9.56% of box height) — the living state icon is the
+   one channel the portrait doesn't carry. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest {
+	width: 2.2em;
+	height: 2.5em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest-glyph {
+	--dse-crest-nudge: -0.24em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest-glyph svg {
+	width: 1.15em;
+	height: 1.15em;
+}
+/* Tracker rows are denser than the standalone element: the readout steps down from
+   2.05em but stays the headline (Scott: the big current value "really helps catch
+   the eye with important information"). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cnums {
+	font-size: 1.7em;
+}
+
+/* ENEMY detail rows drop the crest and the identity lane: a creature's "Dying" is not
+   a rules state (creatures die at 0 — the word would be wrong), and the skull crest
+   would double the portrait one column over. Numerals + gauge + frame carry it,
+   exactly the rail's own arithmetic (SC-132 §9). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail .dse-stamina__crest,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail .dse-stamina__cid {
+	display: none;
+}
+
+/* -- 5. PLATE (default): the two-lane row grid ---------------------------------- */
+/* Keyed on :not(rail) so a root that never had the attr reflected still renders the
+   recommended layout. The row's flex base becomes a grid: identity lane on row 1, the
+   bar as the full lane beneath it, the portrait spanning both — the row IS the SC-132
+   cluster's shape with the portrait standing where the crest stands. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row {
+	display: grid;
+	grid-template-columns: auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto;
+	column-gap: 10px;
+	row-gap: 6px;
+	align-items: center;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__turnbox {
+	grid-row: 1;
+	grid-column: 1;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__portrait {
+	grid-row: 1 / 3;
+	grid-column: 2;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__info {
+	grid-row: 1;
+	grid-column: 3;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__bar {
+	grid-row: 2;
+	grid-column: 3;
+}
+/* The detail row: same two lanes, no turn box column. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-rows: auto auto;
+	column-gap: 10px;
+	row-gap: 6px;
+	align-items: center;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row > .dse-init__portrait {
+	grid-row: 1 / 3;
+	grid-column: 1;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row > .dse-init__info {
+	grid-row: 1;
+	grid-column: 2;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row > .dse-init__bar {
+	grid-row: 2;
+	grid-column: 2;
+}
+/* The enemy cluster's empty crest column (its two members are display:none above)
+   would still cost a column gap; collapse it so the gauge sits flush left. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail .dse-stamina__cluster {
+	grid-template-columns: 0 minmax(0, 1fr) auto;
+	column-gap: 0;
+}
+
+/* -- 6. RAIL (candidate): the one-line row -------------------------------------- */
+/* The base flex row stays; the bar takes the right-hand slot the numeric readout
+   held, in the cluster's rail form (SC-132 §9, verbatim rulings: no crest, no state
+   word, compact readout, elastic gauge). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar {
+	flex: 0 1 16rem;
+	min-width: 9rem;
+	margin-left: auto;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__cluster {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 1.75rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__crest,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__cid {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__cnums {
+	flex: 0 0 auto;
+	font-size: 1.15em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__gauge {
+	flex: 1 1 4rem;
+	min-width: 3rem;
+	--dse-ch-h: 0.5rem;
+	/* Unitless 0 would void the marks' calc() — this must carry a unit (SC-132 §9). */
+	--dse-g-pad: 0px;
+	padding-top: 0;
+}
+
+/* -- 6b. The tracker's narrow form: the bar stands down to numerals + gauge ------ */
+/* At a sidebar-leaf width the plate's cluster row cannot hold crest + state word +
+   readout (measured at 300px: the word and the numerals collide in the same track), so
+   below the threshold the identity members come off and the readout steps down — the
+   SC-132 rail's own arithmetic (§9: the state stays said by the frame, the numeral's
+   colour and the gauge). A CONTAINER query, not a media query: the thing that decides
+   is the TRACKER's width (a note pane, a split, a sidebar leaf), never the window's —
+   the same reasoning as the SC-154 command bar's own query. Steel-screen-scoped like
+   everything here, so base/print layout (which has no bar at all) is untouched.
+   420px: the cluster row needs ~240px (crest 35 + word ~70 + readout ~110 + gaps) and
+   the lane sits right of the turnbox+portrait+padding (~130px) — 420 puts the failing
+   widths safely in the stood-down branch while a 500px split keeps the full form. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init {
+	container-type: inline-size;
+	container-name: dse-init-host;
+}
+@container dse-init-host (max-width: 420px) {
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__crest,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cid {
+		display: none;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cnums {
+		font-size: 1.3em;
+	}
+	/* The empty crest column would still cost its two column gaps. */
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cluster {
+		grid-template-columns: 0 minmax(0, 1fr) auto;
+		column-gap: 0;
+	}
+}
+
+/* -- 7. The grid cells' MINI variant -------------------------------------------- */
+/* The bare kit gauge under the cell's numbers — the same instrument at stud scale.
+   The cells themselves take the recessed-slot ground (the detail row's, one size
+   down); the selection ring's --dse-select border is untouched (:not guard). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell {
+	background: rgba(0, 0, 0, 0.22);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell {
+	background: rgba(0, 0, 0, 0.045);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell:not([data-selected]) {
+	border-color: var(--dse-metal-faint);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell-gauge {
+	display: block;
+	width: 100%;
+	margin-top: 4px;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell-gauge .dse-stamina__gauge {
+	--dse-ch-h: 0.32rem;
+	--dse-g-pad: 0px;
+	padding-top: 0;
+}
+
+/* END SC-183 tracker stamina */
 
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */
