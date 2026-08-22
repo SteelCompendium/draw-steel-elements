@@ -293,15 +293,22 @@ export class ConditionsModal extends DseModal {
 		}
 	}
 
-	/** SC-186 fix-round MED-1: writing an EXPLICIT duration (any preset, including
-	 *  "Until removed") also clears a legacy duration-encoding `effect` string if one is
-	 *  present — symmetric with `setEffect`'s migration. Without this, `resolveDuration`
-	 *  keeps reading the stale `effect` text as a fallback, so "Until removed" against a
-	 *  hand-authored `effect: "save ends"` condition was a silent no-op (the badge never
-	 *  changed) that still fired a spurious write. */
+	/** SC-186 fix-round MED-1 (widened in the micro-round, LOW-A): writing an EXPLICIT
+	 *  duration (any preset, including "Until removed") also clears a legacy
+	 *  duration-encoding `effect` string if one is present — symmetric with
+	 *  `setEffect`'s migration. Without this, `resolveDuration` keeps reading the stale
+	 *  `effect` text as a fallback, so "Until removed" against a hand-authored
+	 *  `effect: "save ends"` condition was a silent no-op (the badge never changed) that
+	 *  still fired a spurious write. LOW-A: the cleanup must run on EVERY explicit
+	 *  duration write, not only when `entry.duration` started undefined — a condition
+	 *  that already carries a first-class `duration` (e.g. `{effect:'eot',
+	 *  duration:'save-ends'}`, hand-authored or written by a pre-fix build) still has a
+	 *  DEAD legacy `effect` string riding along; picking a DIFFERENT duration preset
+	 *  must clear it too, or `resolveDuration` falls back to it the instant `duration`
+	 *  is later cleared via "Until removed". */
 	private setDuration(index: number, value: ConditionDuration | undefined): void {
 		const entry = this.conditions[index];
-		if (entry.duration === undefined && isLegacyDurationText(entry.effect)) {
+		if (isLegacyDurationText(entry.effect)) {
 			entry.effect = undefined;
 		}
 		entry.duration = value;
@@ -473,7 +480,13 @@ export class ConditionsModal extends DseModal {
 				// document-level outside-close fired first and tore the item down
 				// before its `click` could ever run). preventDefault() here keeps focus
 				// in the input, so neither that listener nor any blur races this pick.
+				// SC-186 micro-round LOW-B: `evt.button !== 0` guard — a plain
+				// `mousedown` fires for EVERY button, so without this a right-click
+				// (button 2) or middle-click (button 1) picked the match too, and the
+				// preventDefault() above additionally suppressed the right-click's own
+				// context menu. Left-click only.
 				this.lifecycle.registerDomEvent(item, 'mousedown', (evt: MouseEvent) => {
+					if (evt.button !== 0) return;
 					evt.preventDefault();
 					this.pickMatch(match);
 				});
@@ -512,6 +525,13 @@ export class ConditionsModal extends DseModal {
 
 		renderMenu();
 		input.focus();
+		// SC-186 micro-round INFO (finishes HIGH-1): the menu is in normal flow now
+		// (HIGH-1), so at 8+ active rows the modal body can genuinely need to scroll to
+		// show it — nudge it into view the moment it opens rather than leaving it below
+		// the fold until the user scrolls manually.
+		// Guarded: jsdom does not implement scrollIntoView (precedent:
+		// framework/sidebar/SidebarPanel.ts).
+		menu.scrollIntoView?.({ block: 'nearest' });
 
 		this.comboReset = () => {
 			input.value = '';
@@ -524,15 +544,19 @@ export class ConditionsModal extends DseModal {
 	/** Picks a known or custom match: adds the condition and applies live, then keeps
 	 *  the combobox open (cleared + refocused) for rapid multi-add (spec: "type, Enter,
 	 *  type, Enter"). Esc or an outside click — not a pick — is what collapses it.
-	 *  SC-186 fix-round MED-2: never adds a DUPLICATE key — focuses the existing row's
-	 *  cog instead (and leaves the combobox open, query untouched, so the user can see
-	 *  what matched and keep typing). */
+	 *  SC-186 fix-round MED-2 (refined in the micro-round, LOW-D): never adds a
+	 *  DUPLICATE key. The acknowledgment is `scrollIntoView` on the existing row, NOT
+	 *  moving focus there — `focusRowCog` used to yank focus out of the input while the
+	 *  combobox stayed visibly open, so keystrokes went nowhere and the matched row
+	 *  could be off-screen with no cue why typing had stopped working. Focus and the
+	 *  query text are left exactly where they were. */
 	private pickMatch(match: Match): void {
 		const key = match.kind === 'known' ? match.config.key : slugConditionKey(match.text);
 		if (!key) return; // blank/punctuation-only custom text is a no-op
 		const existingIndex = this.conditions.findIndex((c) => c.key === key);
 		if (existingIndex !== -1) {
-			this.focusRowCog(existingIndex);
+			const rows = this.listEl.querySelectorAll<HTMLElement>('.dse-condal__row');
+			rows[existingIndex]?.scrollIntoView?.({ block: 'nearest' }); // guarded, see above
 			return;
 		}
 		this.conditions.push({ key });

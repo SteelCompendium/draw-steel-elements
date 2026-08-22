@@ -94,6 +94,8 @@ At the table:
 
 - **Conditions** — the `+` in a row opens the Conditions manager: type to add (including
   a custom one for anything the catalog doesn't cover), click the trash icon to remove.
+  For a quick single removal you can skip the manager and click the condition's own icon
+  in the row instead.
 
 ![The conditions manager](Media/initiative-tracker-add-conditions.png)
 

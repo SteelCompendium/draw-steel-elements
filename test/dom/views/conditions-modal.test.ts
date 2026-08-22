@@ -3,8 +3,9 @@
 // DOM shape, add via the real combobox (known + custom), delete, the inline row editor
 // writing duration/color/effect, the duration-round-trip regression (the old
 // Customize-clobber bug), the fallback glyph for unregistered keys, badge rendering, and
-// the SC-186 fix-round findings (HIGH-1/2, MED-1/2/3/4, LOW-3/4 — see ConditionsModal.ts's
-// file header for the causal explanation of each).
+// the SC-186 fix-round findings (HIGH-1/2, MED-1/2/3/4, LOW-3/4) and the micro-round
+// residuals (LOW-A/B/D + the HIGH-1 scrollIntoView nicety) — see ConditionsModal.ts's
+// file header for the causal explanation of each.
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConditionsModal } from '@views/ConditionsModal';
@@ -255,6 +256,25 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')).toBeNull();
 	});
 
+	test('SC-186 micro-round LOW-A: a condition that ALREADY has a first-class duration still carries a DEAD legacy effect string, which any explicit duration write must also clear', () => {
+		// The bug: setDuration's cleanup only ran when `entry.duration` STARTED
+		// undefined. `{effect: 'eot', duration: 'save-ends'}` (hand-authored, or written
+		// by a pre-fix build) already has a first-class `duration`, so the guard skipped
+		// the legacy `effect` text entirely — picking a DIFFERENT preset (here, "End of
+		// Turn") emitted `{key, effect: 'eot'}` with `duration` cleared but the dead
+		// `effect: 'eot'` left behind, and resolveDuration() immediately fell back to
+		// THAT the moment `duration` was gone, flipping the badge to "EoT" regardless of
+		// which preset was actually clicked.
+		const onChange = jest.fn();
+		const { container } = makeModal([{ key: 'bleeding', effect: 'eot', duration: 'save-ends' }], onChange);
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
+		const editor = container.querySelector('.dse-condal__editor') as HTMLElement;
+		(editor.querySelector('button[aria-label="End of Turn"]') as HTMLElement).click();
+
+		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', duration: 'eot' }]); // no dangling effect
+		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')?.textContent).toBe('EoT');
+	});
+
 	test('picking a swatch writes `color` live via the VALIDATED property', () => {
 		const onChange = jest.fn();
 		const { container } = makeModal(['bleeding'], onChange);
@@ -327,6 +347,23 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		const input = openCombobox(container);
 		expect(container.querySelector('.dse-condal__add')).toBeNull();
 		expect(document.activeElement).toBe(input);
+	});
+
+	test('SC-186 micro-round INFO (finishes HIGH-1): opening the combobox scrolls the dropdown into view', () => {
+		// jsdom doesn't implement scrollIntoView, so this spies on the prototype (like
+		// the guarded call site itself expects to find nothing in test but SOMETHING in
+		// a real browser) to confirm the call happens at all, on the menu specifically.
+		const spy = jest.fn();
+		(HTMLElement.prototype as any).scrollIntoView = spy;
+		try {
+			const { container } = makeModal([]);
+			openCombobox(container);
+			const menu = container.querySelector('.dse-condal__menu');
+			expect(spy).toHaveBeenCalledWith({ block: 'nearest' });
+			expect(spy.mock.instances[spy.mock.instances.length - 1]).toBe(menu);
+		} finally {
+			delete (HTMLElement.prototype as any).scrollIntoView;
+		}
 	});
 
 	test('SC-186 fix-round MED-4: role="combobox" is on the INPUT (not the wrapper), with aria-controls the listbox', () => {
@@ -462,6 +499,24 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		expect(document.activeElement).toBe(container.querySelector('.dse-condal__input'));
 	});
 
+	test('SC-186 micro-round LOW-B: a right-click (or middle-click) on a match does NOT pick it', () => {
+		// The bug: `mousedown` fires for every button, so binding the pick straight to it
+		// (HIGH-2's own fix) meant right-click (button 2) and middle-click (button 1)
+		// both added the condition — and preventDefault() on a right-click additionally
+		// suppressed the browser's own context menu. Left-click (button 0) only.
+		const onChange = jest.fn();
+		const { container } = makeModal([], onChange);
+		const input = openCombobox(container);
+		typeQuery(input, 'Bleeding');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		const item = menu.querySelector('.dse-condal__menu-item') as HTMLElement;
+
+		item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 }));
+
+		expect(onChange).not.toHaveBeenCalled();
+		expect(rows(container)).toHaveLength(0);
+	});
+
 	test('picking the "Add custom: <text>" row adds `{ key: slug(text) }` and a CUSTOM-tagged row', () => {
 		const onChange = jest.fn();
 		const { container } = makeModal([], onChange);
@@ -477,7 +532,11 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		expect(row.querySelector('.dse-condal__glyph')?.getAttribute('data-icon')).toBe('circle-dashed');
 	});
 
-	test('SC-186 fix-round MED-2: picking a match that ALREADY EXISTS never adds a duplicate — focuses the existing row instead', () => {
+	test('SC-186 fix-round MED-2 (refined LOW-D): picking a match that ALREADY EXISTS never adds a duplicate, and leaves focus + the query in the input', () => {
+		// LOW-D: the original MED-2 fix moved focus to the existing row's cog as the
+		// "acknowledgment" — which yanked focus OUT of the input while the combobox
+		// stayed visibly open, so further keystrokes went nowhere. The row is now
+		// scrolled into view instead; focus and the typed query are left untouched.
 		const onChange = jest.fn();
 		const { container } = makeModal(['bleeding'], onChange);
 		const input = openCombobox(container);
@@ -486,13 +545,19 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		const item = Array.from(menu.querySelectorAll('.dse-condal__menu-item')).find(
 			(i) => i.querySelector('.dse-condal__menu-name')?.textContent === 'Bleeding',
 		) as HTMLElement;
+
+		const existingRow = rowByName(container, 'Bleeding');
+		const scrollSpy = jest.fn();
+		existingRow.scrollIntoView = scrollSpy;
+
 		mousedownPick(item);
 
 		expect(onChange).not.toHaveBeenCalled(); // no add, no write
 		expect(rows(container)).toHaveLength(1);
-		expect(document.activeElement).toBe(
-			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
-		);
+		expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest' });
+		// Focus and the query stayed in the input — nothing was yanked away.
+		expect(document.activeElement).toBe(container.querySelector('.dse-condal__input'));
+		expect((container.querySelector('.dse-condal__input') as HTMLInputElement).value).toBe('Bleeding');
 	});
 
 	test('rapid multi-add: two picks in a row without reopening produce two rows', () => {

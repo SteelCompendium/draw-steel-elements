@@ -352,7 +352,10 @@ Customizing a Condition:
 
 Removing a Condition:
 
-- Click the trash icon on the condition's row.
+- Inside the manager: click the trash icon on the condition's row.
+- Or skip the manager entirely: click the condition's own icon directly in the tracker
+	row (each condition icon is itself a remove button) — the fastest way to clear a
+	single condition without opening anything.
 
 When you're done, click "Done" (or just close the modal) — every change was already
 applied as you made it.
