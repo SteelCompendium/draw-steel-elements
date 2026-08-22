@@ -16,12 +16,17 @@
 // role="img"> whose enabled/disabled state is conveyed by shape (solid vs hollow box via
 // `[data-on]` CSS) + an aria-label — never color alone (§4), never a control.
 //
-// SC-182 — three authored LAYOUTS via the YAML `style:` enum (list | ledger | chips;
+// SC-182 — three authored LAYOUTS via the YAML `style:` enum (ledger | chips | list;
 // Scott's round-1 ruling: "implement both the ledger and chips options … set the style
-// in the yaml"). `list` (the default, and the value an absent key takes) renders the
-// classic checklist DOM byte-identically to before the field existed; the two others
-// stamp `data-skills-style` on `.dse-skills` — the hook every SC-182 Steel screen rule
-// keys on — and add a per-group owned/total tally in the header button.
+// in the yaml"; round-2 ruling: "land it. Set the default to `ledger`" — so an ABSENT
+// key means `ledger`). `list` is the classic checklist, kept as an explicit value that
+// renders the pre-SC-182 DOM byte-identically; the two styled layouts stamp
+// `data-skills-style` on `.dse-skills` — the hook every SC-182 Steel screen rule keys
+// on — and add a per-group owned/total tally in the header button. PRINT is style-
+// independent by construction: the Steel layout rules stand down (:not print guard)
+// and the tally is print-hidden (both print surfaces, styles-source.css beside the
+// base tally rule), so paper always renders the classic checklist and the frozen
+// `skills--steel-print/realprint` pair survives the default flip byte-identically.
 //
 // SC-182 — UNOWNED-SKILL VISIBILITY is one state with two writers:
 //   initial   the authored `only_show_selected:` key (unchanged semantics), and
@@ -178,11 +183,10 @@ export class SkillsView extends ElementView<Skills> {
 		const grouped = buildGroupedSkillData(model.custom_skills);
 		const activeSkills = buildActiveSkills(model);
 		const listContainer = container.createDiv({ cls: 'dse-skills' });
-		// SC-182 — the authored layout (YAML `style:`). `list` (the default) is the
-		// classic checklist VERBATIM: no attribute is stamped and renderGroup takes its
-		// untouched path, so a block without the key renders — and prints — the exact
-		// DOM it always has. A non-default style stamps `data-skills-style`, the hook
-		// every SC-182 Steel screen rule keys on.
+		// SC-182 — the authored layout (YAML `style:`; absent = `ledger` since the
+		// round-3 default flip). `list` is the classic checklist VERBATIM: no attribute
+		// is stamped and renderGroup takes its pre-SC-182 path. The styled layouts
+		// stamp `data-skills-style`, the hook every SC-182 Steel screen rule keys on.
 		//
 		// Destructured rather than read as a member: the shared kit style guard
 		// (test/dom/kit/styleGuard.ts) blanket-bans the `.style` token to catch inline

@@ -459,16 +459,16 @@ malice:
       label: "Feytouched"
 `;
 
-// SC-182 — the REALISTIC skills state the layout candidates are judged on. The D9
-// `default` fixture (2 skills + 1 custom) is the palette's minimal example and shows a
-// list that is almost all catalog; a real hero owns ~6-10 skills spread unevenly across
-// groups, which is exactly the scan ("which ones do I have?") the overhaul is for. Eight
-// built-ins across four groups (crafting deliberately owns ZERO — a candidate must keep
+// SC-182 — the REALISTIC skills state the layouts are judged on. The D9 `default`
+// fixture (2 skills + 1 custom) is the palette's minimal example and shows a list that
+// is almost all catalog; a real hero owns ~6-10 skills spread unevenly across groups,
+// which is exactly the scan ("which ones do I have?") the overhaul is for. Eight
+// built-ins across four groups (crafting deliberately owns ZERO — a layout must keep
 // an unowned group readable, not just skip it), one custom skill merged into a built-in
 // group and one landing in the "Custom Skills" bucket, so every grouping rule renders.
 // Harness-local (same convention as heroSparse/featureVillain — not an edit to the D9
 // example); new shot names (`skills-hero-picks--*`) cannot collide with a frozen name.
-const skillsHeroPicks = `skills:
+const skillsPicksBody = `skills:
   - climb
   - endurance
   - hide
@@ -486,16 +486,20 @@ custom_skills:
     has_skill: true
     description: "Crew and pilot a ship."
 `;
-// SC-182 round 2 — the two shipped non-default layouts (YAML `style:` enum; Scott:
-// "implement both … Allow the user to set the style in the yaml"), each prefixed onto
-// the SAME hero-picks content so every skills shot is the same character. The `-hidden`
-// twins are the `only_show_selected: true` form — the state the menu panel's eye toggle
-// flips to at runtime — photographed per layout because hiding changes each layout's
+// SC-182 — every layout at the SAME hero-picks content, so all skills shots are one
+// character. Round 3 flipped the bare-block default to `ledger` (Scott: "land it. Set
+// the default to `ledger`"), so `hero-picks` now pins the CLASSIC checklist via an
+// explicit `style: list` — keeping its screen bytes (and skills-narrow's) continuous
+// with the rounds-1/2 "before" captures, and keeping it distinct from `ledger` (which
+// is byte-identical to what a bare block renders at this content). The `-hidden` twins
+// are the `only_show_selected: true` form — the state the menu panel's eye toggle flips
+// to at runtime — photographed per layout because hiding changes each layout's
 // silhouette differently (ledger niches shrink; chip fields reduce to the forged few).
-const skillsLedger = `style: ledger\n${skillsHeroPicks}`;
-const skillsChips = `style: chips\n${skillsHeroPicks}`;
-const skillsLedgerHidden = `style: ledger\nonly_show_selected: true\n${skillsHeroPicks}`;
-const skillsChipsHidden = `style: chips\nonly_show_selected: true\n${skillsHeroPicks}`;
+const skillsHeroPicks = `style: list\n${skillsPicksBody}`;
+const skillsLedger = `style: ledger\n${skillsPicksBody}`;
+const skillsChips = `style: chips\n${skillsPicksBody}`;
+const skillsLedgerHidden = `style: ledger\nonly_show_selected: true\n${skillsPicksBody}`;
+const skillsChipsHidden = `style: chips\nonly_show_selected: true\n${skillsPicksBody}`;
 
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },

@@ -18,9 +18,10 @@ allOf:
             type: string
             description: |
                 Which layout the skill list renders in (SC-182).
-                list — the classic one-column checklist (the default).
-                ledger — a responsive grid of group panels with owned/total tallies.
+                ledger — a responsive grid of group panels with owned/total tallies
+                (the default; Scott's round-2 ruling).
                 chips — each group as an inline-wrapped run of skill chips.
+                list — the classic one-column checklist.
             transform:
               - trim
               - toLowerCase
@@ -28,7 +29,7 @@ allOf:
               - list
               - ledger
               - chips
-            default: list
+            default: ledger
             errorMessage: style must be one of list, ledger, chips
 
         skills:

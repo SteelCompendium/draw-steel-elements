@@ -2,15 +2,17 @@
 // show/hide-unowned toggle.
 //
 // Round 1 built `ledger`/`chips` as review candidates behind a hidden pref; Scott's
-// ruling (2026-08-22: "I actually like both of these options. Can you implement both
-// … Allow the user to set the style in the yaml … a button in the ds-skill menu panel
-// to show/hide unowned skills") shipped BOTH, per block, and deleted the pref.
+// round-1 ruling (2026-08-22: "I actually like both of these options. Can you implement
+// both … Allow the user to set the style in the yaml … a button in the ds-skill menu
+// panel to show/hide unowned skills") shipped BOTH, per block, and deleted the pref.
+// His round-2 ruling ("land it. Set the default to `ledger`") then flipped what an
+// ABSENT key means: bare blocks render the ledger.
 //
-// What is pinned HARD here is the DEFAULT: a block without `style:` must render the
-// exact DOM the element rendered before the field existed — no `data-skills-style`
-// attribute, no tally nodes, outerHTML-identical to an explicit `style: list` (the
-// frozen print pairs are the byte-level twin of this guarantee). The layouts' own
-// contracts and the toggle's behaviour/persistence are the shipped feature surface.
+// The two identity pins here are therefore: (1) a bare block ≡ an explicit
+// `style: ledger`, DOM-identical; (2) an explicit `style: list` still renders the
+// classic pre-SC-182 checklist EXACTLY — no attribute, no tally nodes. Print stays the
+// classic form for every style (the frozen skills print pair moved ZERO bytes across
+// the default flip — the tally is print-hidden, pinned in the CSS-contract block).
 import * as fs from 'fs';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
@@ -122,25 +124,33 @@ async function settle(): Promise<void> {
 	await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-describe('SC-182: the DEFAULT (no style: key) is untouched — the hard pin', () => {
-	test('default mount renders NO data-skills-style attribute and NO tally nodes', async () => {
+describe('SC-182 round 3: the default flip — bare block = ledger; explicit list = the classic checklist', () => {
+	// The kit collapsible's region ids come from a module-global counter, so they
+	// differ across mounts by construction — normalize them before comparing; every
+	// other byte must match.
+	const normalize = (el: HTMLElement) => el.outerHTML.replace(/dse-collapse-region-\d+/g, 'R');
+
+	test('a bare block (no style: key) renders the LEDGER: data-skills-style="ledger" + tallies', async () => {
 		const root = await mountSkills(PICKS_YAML);
+		const list = root.querySelector('.dse-skills') as HTMLElement;
+		expect(list.getAttribute('data-skills-style')).toBe('ledger');
+		expect(group(root, 'Exploration').querySelector('.dse-skills__tally')?.textContent).toBe('2/11');
+	});
+
+	test('a bare block is identical DOM to an explicit style: ledger', async () => {
+		const absent = await mountSkills(PICKS_YAML);
+		const explicit = await mountSkills(`style: ledger\n${PICKS_YAML}`);
+		expect(normalize(explicit)).toBe(normalize(absent));
+	});
+
+	test('an explicit style: list still renders the classic pre-SC-182 checklist: NO attribute, NO tally nodes', async () => {
+		const root = await mountSkills(`style: list\n${PICKS_YAML}`);
 		expect(root.querySelector('[data-skills-style]')).toBeNull();
 		expect(root.querySelector('.dse-skills__tally')).toBeNull();
 	});
 
-	test('an explicit style: list is identical DOM to the key being absent', async () => {
-		// The kit collapsible's region ids come from a module-global counter, so they
-		// differ across mounts by construction — normalize them before comparing; every
-		// other byte must match.
-		const normalize = (el: HTMLElement) => el.outerHTML.replace(/dse-collapse-region-\d+/g, 'R');
-		const absent = await mountSkills(PICKS_YAML);
-		const explicit = await mountSkills(`style: list\n${PICKS_YAML}`);
-		expect(normalize(explicit)).toBe(normalize(absent));
-	});
-
 	test('the classic list group header stays exactly chevron + title (no tally slipped in)', async () => {
-		const root = await mountSkills(PICKS_YAML);
+		const root = await mountSkills(`style: list\n${PICKS_YAML}`);
 		const header = group(root, 'Crafting').querySelector(':scope > .dse-collapse__header') as HTMLElement;
 		expect(Array.from(header.children).map((c) => c.className)).toEqual([
 			'dse-collapse__chevron',
@@ -223,7 +233,9 @@ describe('SC-182: hidden-unowned rendering per layout (only_show_selected seeds 
 	});
 
 	test('list + only_show_selected keeps the LEGACY DOM verbatim (bare h3, no collapse) — Vue parity untouched', async () => {
-		const root = await mountSkills(`only_show_selected: true\n${PICKS_YAML}`);
+		// Explicit `style: list` since the round-3 default flip — the legacy filtered
+		// DOM belongs to the classic style.
+		const root = await mountSkills(`style: list\nonly_show_selected: true\n${PICKS_YAML}`);
 		const exploration = group(root, 'Exploration');
 		expect(exploration.classList.contains('dse-collapse')).toBe(false);
 		expect(exploration.querySelector(':scope > .dse-skills__group-title')).not.toBeNull();
@@ -293,7 +305,8 @@ describe('SC-182: the menu-panel show/hide-unowned toggle', () => {
 		const session = createSessionStore();
 		const pipeline = new ElementPipeline(makeDeps(session));
 		const host = makeHost();
-		await pipeline.run(skillsElement, PICKS_YAML, host);
+		// Explicit since the round-3 default flip (a bare block is ledger now).
+		await pipeline.run(skillsElement, `style: list\n${PICKS_YAML}`, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		unownedToggle(root).click();
@@ -329,6 +342,22 @@ describe('SC-182: CSS contract for the layouts section', () => {
 				expect(selector).toContain('.dse-skills[data-skills-style');
 			}
 		}
+	});
+
+	test('PRINT IS STYLE-INDEPENDENT: the tally is hidden on BOTH print surfaces (the zero-freeze-delta guarantee)', () => {
+		// The round-3 default flip was sanctioned to move frozen bytes, but it didn't
+		// have to: paper renders the classic checklist for every style because (a) all
+		// layout rules above carry :not([data-dse-print="on"]) and none exists under
+		// @media print (the guard test), and (b) the tally — the one structural node a
+		// styled layout adds — is display:none on the attr-stamped preview twin AND
+		// under real @media print (which carries no attribute). Both arms must exist:
+		// shoot.mjs's print-twin parity check fails if they ever diverge.
+		expect(sheet).toMatch(
+			/\[data-dse-element='skills'\]\[data-dse-print='on'\] \.dse-skills__tally \{\n\tdisplay: none;\n\}/,
+		);
+		expect(sheet).toMatch(
+			/@media print \{\n\t\[data-dse-element='skills'\] \.dse-skills__tally \{\n\t\tdisplay: none;\n\t\}\n\}/,
+		);
 	});
 
 	test('no color literals — the layouts compose tokens only (DESIGN.md rule 3)', () => {

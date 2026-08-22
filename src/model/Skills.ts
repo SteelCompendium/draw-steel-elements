@@ -17,8 +17,9 @@ interface RawSkillsData {
 }
 
 /** SC-182: the authored layout. Schema-validated (SkillsSchema.yaml `style` enum,
- *  trim+toLowerCase transforms) before parse; `list` is the classic checklist and the
- *  default when the key is absent. */
+ *  trim+toLowerCase transforms) before parse. `ledger` is the default when the key is
+ *  absent (Scott's round-2 ruling: "land it. Set the default to `ledger`"); `list` is
+ *  the classic checklist, kept as an explicit value. */
 export type SkillsStyle = 'list' | 'ledger' | 'chips';
 
 interface RawCustomSkillData {
@@ -68,9 +69,11 @@ export class Skills extends ComponentWrapper{
 		this.skills = skills;
 		this.custom_skills = custom_skills;
 		this.only_show_selected = only_show_selected ?? false;
-		// Schema-validated when the pipeline ran (style enum); the `?? 'list'` covers the
-		// absent key and direct constructor callers.
-		this.style = style ?? 'list';
+		// Schema-validated when the pipeline ran (style enum); the `?? 'ledger'` covers
+		// the absent key and direct constructor callers — the SC-182 round-3 default
+		// flip (Scott: "land it. Set the default to `ledger`"). Keep in sync with the
+		// schema's own `default:`.
+		this.style = style ?? 'ledger';
 	}
 }
 

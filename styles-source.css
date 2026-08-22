@@ -3046,17 +3046,36 @@ code.dsa {
 	}
 
 	/* SC-182: the per-group owned/total tally ("3/11"). ONLY the ledger/chips styles
-	   build this node (view.ts renders it when the YAML `style:` is non-default), so
-	   this base rule can never touch the classic checklist — it exists so a styled
-	   block's print/export twin (where the Steel screen rules below stand down) still
-	   shows a tidily right-aligned quiet figure instead of raw header text.
-	   Theme-agnostic on purpose: it styles DOM, not the Steel look. */
+	   build this node (view.ts renders it for every `style:` but the classic `list` —
+	   and since the round-3 default flip, an ABSENT key means `ledger`), so this base
+	   rule can never touch a `style: list` block. Screen-only in effect: the pair of
+	   print rules right below the block hides it on paper. Theme-agnostic on purpose:
+	   it styles DOM, not the Steel look. */
 	.dse-skills__tally {
 		margin-left: auto;
 		font-size: 0.75em;
 		font-weight: 400;
 		color: var(--dse-fg-muted);
 		font-variant-numeric: tabular-nums;
+	}
+}
+
+/* SC-182 round 3 — PRINT IS STYLE-INDEPENDENT, deliberately and in bytes. Paper always
+   renders the classic checklist whatever `style:` says: the Steel layout rules already
+   stand down in print (every one carries :not([data-dse-print="on"]) and none exists
+   under @media print), and the tally — the ONE structural node a styled layout adds —
+   is hidden on BOTH print surfaces here (the attr-stamped preview twin and real
+   @media-print paper, which carries no attribute — shoot.mjs's realprint combo). This
+   pair is what let Scott's sanctioned `ledger` default flip land with a ZERO freeze
+   delta: the frozen skills--steel-print/realprint bytes are reproduced exactly, tally
+   nodes and data-skills-style attribute notwithstanding. Also the honest reading of
+   the docs' promise ("Print and export always use the classic list form"). */
+[data-dse-element='skills'][data-dse-print='on'] .dse-skills__tally {
+	display: none;
+}
+@media print {
+	[data-dse-element='skills'] .dse-skills__tally {
+		display: none;
 	}
 }
 
@@ -9392,14 +9411,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
    HAS inside a catalog of ones they don't, so both layouts spend their effort on
    density and owned-vs-unowned contrast, not on plate chrome.
 
-   Round 1 built these as review candidates behind a hidden pref; Scott's ruling
-   (SC-182, 2026-08-22: "I actually like both of these options. Can you implement both
-   … Allow the user to set the style in the yaml") shipped BOTH as supported layouts,
-   selected per block by the YAML `style:` enum (SkillsSchema.yaml — list | ledger |
-   chips; SkillsView stamps `data-skills-style` on `.dse-skills` for the non-default
-   two). `list` — the default, and what an absent key means — stamps NO attribute and
-   builds NO tally DOM, so nothing below can match a block that predates the field:
-   the frozen print pairs are untouched by construction.
+   Round 1 built these as review candidates behind a hidden pref; Scott's round-1
+   ruling (SC-182, 2026-08-22: "I actually like both of these options. Can you
+   implement both … Allow the user to set the style in the yaml") shipped BOTH as
+   supported layouts, selected per block by the YAML `style:` enum (SkillsSchema.yaml —
+   ledger | chips | list; SkillsView stamps `data-skills-style` on `.dse-skills` for
+   ledger/chips). His round-2 ruling ("land it. Set the default to `ledger`") made
+   `ledger` what an ABSENT key means; `list` — the classic checklist — stays an
+   explicit value that stamps NO attribute and builds NO tally DOM, rendering the
+   pre-SC-182 DOM verbatim. The frozen print pair stays untouched EITHER way: print is
+   style-independent (see the print-tally pair beside the base skills block).
 
      ledger  "CODEX LEDGER" — the checklist kept, but re-set as a responsive grid of
              recessed codex niches (the trait-card vocabulary): each group is a sunken
@@ -9436,11 +9457,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
    `list` hidden form is the legacy bare-heading branch, untouched.
 
    SCOPE: every rule carries [data-dse-theme='steel']:not([data-dse-print="on"]) AND
-   keys on .dse-skills[data-skills-style=…], which only exists when the YAML asked for
-   a non-default style — belt and braces for the freeze. Print of a styled block falls
-   back to the base checklist plus the base tally rule (skills base block): paper gets
-   the conservative reference form whatever the screen style says (same answer the
-   statblock's screen-only chrome gives).
+   keys on .dse-skills[data-skills-style=…] (stamped for ledger/chips only) — belt and
+   braces for the freeze. Print of ANY style renders the classic checklist pixel-for-
+   pixel: these rules stand down and the tally is print-hidden (the pair beside the
+   base skills block), so paper gets the reference form whatever the screen style says
+   — the same answer the statblock's screen-only chrome gives, and what keeps the
+   frozen skills print pair byte-stable across the ledger default flip.
 */
 
 /* -- Shared by both styles: the group title becomes a quiet small-caps metal

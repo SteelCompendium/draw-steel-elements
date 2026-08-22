@@ -45,7 +45,7 @@ Below is a detailed description of each field used in the skills element, includ
 | `skills`             | `array` of `string`      | A list of standard skills the character possesses.                           | No       | `[]`          |
 | `custom_skills`      | `array` of `CustomSkill` | A list of custom skills defined by the user. See **CustomSkill** below.      | No       | `[]`          |
 | `only_show_selected` | `boolean`                | If `true`, will hide skills that are not selected (Group headers still show) | No       | `false`       |
-| `style`              | `string`                 | The layout: `list`, `ledger` or `chips`. See **Layouts** below.              | No       | `list`        |
+| `style`              | `string`                 | The layout: `ledger`, `chips` or `list`. See **Layouts** below.              | No       | `ledger`      |
 
 ### Notes:
 
@@ -56,15 +56,15 @@ Below is a detailed description of each field used in the skills element, includ
 
 Under the Steel theme the skill list can render in three layouts, chosen per block:
 
-- **`list`** (the default) — the classic one-column checklist, exactly as it has always
-  rendered.
-- **`ledger`** — the skill groups become a responsive grid of recessed panels, each with a
-  small-caps group title and an **owned/total tally** (`3/11`) in its header; owned skills
-  carry a solid ◆ mark and full-weight ink. Roughly three columns in a normal note pane,
-  one column in a sidebar leaf.
+- **`ledger`** (the default) — the skill groups become a responsive grid of recessed
+  panels, each with a small-caps group title and an **owned/total tally** (`3/11`) in its
+  header; owned skills carry a solid ◆ mark and full-weight ink. Roughly three columns in
+  a normal note pane, one column in a sidebar leaf.
 - **`chips`** — each group is a thin titled band over an inline-wrapped run of skill chips:
   owned skills are raised steel chips with a solid ◆, unowned skills are faint ghost
   chips. The whole catalog fits in about one screen.
+- **`list`** — the classic one-column checklist, exactly as it rendered before 7.0.0's
+  overhaul.
 
 ```
 ~~~ds-skills

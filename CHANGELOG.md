@@ -15,15 +15,17 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
-- **The skill list gets two new layouts and an unowned-skills toggle** (SC-182). A
-  `ds-skills` block can now choose its layout with a `style:` key — `list` (the classic
-  checklist, still the default), `ledger` (a responsive grid of group panels with
-  owned/total tallies and ◆ marks) or `chips` (each group as an inline run of skill
-  chips: owned = raised steel, unowned = faint ghosts — the whole catalog in about one
-  screen). The block's menu panel also gains an eye toggle to show/hide unowned skills
-  at the table: `only_show_selected:` sets the starting state, the toggle's choice wins
-  for the session, per block, and nothing is written back to the note. Print always
-  uses the classic list form. Blocks without a `style:` key render exactly as before.
+- **The skill list gets a new look, two selectable layouts, and an unowned-skills
+  toggle** (SC-182). A `ds-skills` block now renders as a **ledger** by default — a
+  responsive grid of group panels with owned/total tallies (`3/11`) and ◆ marks, about
+  a third the height of the old wall — and can choose its layout with a `style:` key:
+  `ledger`, `chips` (each group as an inline run of skill chips: owned = raised steel,
+  unowned = faint ghosts — the whole catalog in about one screen) or `list` (the
+  classic checklist, exactly as before). The block's menu panel also gains an eye
+  toggle to show/hide unowned skills at the table: `only_show_selected:` sets the
+  starting state, the toggle's choice wins for the session, per block, and nothing is
+  written back to the note. Print and PDF export always use the classic list form,
+  whatever `style:` says.
 - [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
   against its parent card's left and right edges with no frame of its own. It now

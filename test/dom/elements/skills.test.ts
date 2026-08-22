@@ -447,7 +447,11 @@ describe('Plan 09 Task 2: skills rendered through the REAL ElementPipeline (kit 
 		test('filters items to only the selected skills; group headers are PLAIN headings (no collapsible), and empty groups still show', async () => {
 			const pipeline = new ElementPipeline(makeDeps());
 			const host = makeHost();
-			const yaml = ['only_show_selected: true', 'skills:', '  - climb'].join('\n');
+			// SC-182 round 3: the bare-block default is now `style: ledger`, whose hidden
+			// form keeps collapsible groups — this LEGACY filtered DOM (bare h3, no
+			// collapse; Vue parity) belongs to the classic `list` style, so the block
+			// names it explicitly. Semantics of only_show_selected itself are unchanged.
+			const yaml = ['style: list', 'only_show_selected: true', 'skills:', '  - climb'].join('\n');
 
 			await pipeline.run(skillsElement, yaml, host);
 
