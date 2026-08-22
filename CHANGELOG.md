@@ -40,6 +40,19 @@ for what needs action.
   opening Customize on a duration you'd written by hand and saving would silently erase
   it. Every entry point — the conditions strip, the hero sheet, and the initiative
   tracker — opens the same modal.
+- **The initiative tracker adopts the stamina bar's design** (SC-183). Every hero row
+  and every opened enemy row in the tracker now carries the real stamina instrument the
+  `ds-stamina` element ships — state word, big current-value readout, temp-stamina
+  plate, and the forged gauge (heroes keep the dying reserve; creatures pour from
+  zero; a minion squad's row shows the shared pool with per-minion death graduations).
+  The collapsed creature cells in the grid get a mini gauge under their numbers, so a
+  glance down the roster reads like a glance across health bars. Winded and dying now
+  paint the whole row's frame — amber border when winded, red frame and ground when
+  dying — the same treatment the stamina element wears. Clicking a bar opens the same
+  stamina editor the numbers always opened; every existing control (turn checkboxes,
+  conditions, action checklist, Malice bar, minion pools, double-click editing) works
+  exactly as before, and print layouts are unchanged — paper keeps the compact numeric
+  tracker.
 - [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
   against its parent card's left and right edges with no frame of its own. It now
