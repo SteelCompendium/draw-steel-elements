@@ -145,13 +145,16 @@ for what needs action.
   (SC-152). The trackers and the reference cards have had the Steel plate — the
   forged gradient ground, hairline edge, rounded corner and soft bevel — since the
   look shipped, but the pieces you actually build a character sheet from did not:
-  Characteristics, Values row, Skills, Heroic resource, Surges, Hero tokens and
+  Characteristics, Values row, Heroic resource, Surges, Hero tokens and
   Conditions all rendered as bare text on the page, so a sheet made of them read as
   an undifferentiated run of lines with the odd styled block (a Counter) floating in
-  it. All seven now carry the same plate, so a sheet reads as a set of matching
-  panels. The characteristics row gets one step more, because its shape already
-  existed elsewhere: its cells become the same boxed, small-caps-labelled stat
-  plates the statblock's Size / Speed / Stamina row draws. The plate is written as a
+  it. All six now carry the same plate, so a sheet reads as a set of matching
+  panels. The characteristics element goes one further: it renders the statblock's
+  own characteristics rail — same code, same CSS, same signed values, following the
+  same two Characteristics display settings — because they are exactly the same
+  five numbers (the hero sheet's Characteristics region does too). `ds-skills` is
+  deliberately left bare for now: it needs a real overhaul, not a frame (tracked
+  separately). The plate is written as a
   screen treatment; a real Ctrl-P / Export-to-PDF currently carries it through
   anyway, along with the other Steel surfaces, and getting print back to a plain,
   ink-cheap rendering is tracked separately as SC-170.
