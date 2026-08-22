@@ -193,6 +193,9 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
+		// SC-182: read at BUILD time by SkillsView (the candidates add tally DOM) — no
+		// attr; the view stamps its own data-skills-look hook, and only off-default.
+		skillsLook: null,
 		collapsibleDefault: null,
 		collapseDefault: null,
 		rollingEnabled: null,
@@ -207,12 +210,17 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // and it is still that guard: the allow-list below is exact, so any NEW hidden row fails
 // here and has to justify itself in this comment.
 //
-// The list has been non-empty exactly once: SC-154 round 3's `initControls`, a review
-// switch for three candidate tracker layouts. Scott picked one (2026-08-20), the winner
-// became the shipped layout, and the key + losers were deleted — the promised return to
-// empty. A hidden row is a review-time device, never a shipped state; anything that
-// appears here must carry its own deletion plan.
-const EXPECTED_HIDDEN_ROWS: string[] = [];
+// The list has been non-empty exactly once before: SC-154 round 3's `initControls`, a
+// review switch for three candidate tracker layouts. Scott picked one (2026-08-20), the
+// winner became the shipped layout, and the key + losers were deleted — the promised
+// return to empty. A hidden row is a review-time device, never a shipped state; anything
+// that appears here must carry its own deletion plan.
+//
+// SC-182 `skillsLook` is the second occupant, same pattern: two ds-skills layout
+// candidates ("ledger" / "chips") for Scott to choose between, default `list` = the
+// shipped checklist verbatim. Deletion plan: the pick is promoted to the default and
+// the key + the loser's CSS/tests are deleted, returning this list to empty.
+const EXPECTED_HIDDEN_ROWS: string[] = ['skillsLook'];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

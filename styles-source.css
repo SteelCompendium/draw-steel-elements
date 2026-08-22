@@ -3044,6 +3044,20 @@ code.dsa {
 			text-transform: uppercase;
 		}
 	}
+
+	/* SC-182: the per-group owned/total tally ("3/11"). ONLY the candidate looks build
+	   this node (view.ts renders it when the hidden skillsLook pref is non-default), so
+	   this base rule can never touch the shipped checklist — it exists so a candidate's
+	   print/export twin (where the Steel screen rules below stand down) still shows a
+	   tidily right-aligned quiet figure instead of raw header text. Theme-agnostic on
+	   purpose: it styles DOM, not the Steel look. */
+	.dse-skills__tally {
+		margin-left: auto;
+		font-size: 0.75em;
+		font-weight: 400;
+		color: var(--dse-fg-muted);
+		font-variant-numeric: tabular-nums;
+	}
 }
 
 /* ==================== */
@@ -9364,6 +9378,212 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 }
 
 /* END SC-132 Steel stamina cluster */
+
+/* ================================================================== */
+/*   SC-182 — Steel SKILLS overhaul: the two layout CANDIDATES        */
+/* ================================================================== */
+/*
+   ds-skills is a 54-skill, 5-group reference list with owned/unowned marks — the last
+   plugin-only surface with no Steel treatment. SC-152 tried the shared forged card
+   plate and produced one card two viewports tall with the diagonal gradient stretched
+   into a page-length wash; Scott pulled it out ("Ignore ds-skills for now. They need an
+   overhaul") and steelMaterial.test.ts pins the exclusion. The overhaul is therefore
+   STRUCTURE first: what a reader does here is scan for the handful of skills a hero
+   HAS inside a catalog of ones they don't, so both candidates spend their effort on
+   density and owned-vs-unowned contrast, not on plate chrome.
+
+   Both are reached through the hidden `skillsLook` preference (src/prefs/catalog.ts,
+   the SC-154 round-3 `initControls` pattern). The default (`list`) stamps NO attribute
+   and builds NO tally DOM, so nothing below can match the shipped checklist — the
+   frozen print pairs are untouched by construction. Whichever candidate wins is
+   promoted to the default and the loser (and the pref) is deleted.
+
+     ledger  "CODEX LEDGER" — the checklist kept, but re-set as a responsive grid of
+             recessed codex niches (the trait-card vocabulary): each group is a sunken
+             panel (--dse-surface-sunken over the page, --dse-metal-faint hairline,
+             --dse-bevel lip) with a small-caps metal group title and an owned/total
+             tally. Rows tighten, the 1em checkbox becomes the brand's ◆ diamond
+             (a rotated square — shape, not a new icon), and OWNED rows carry full ink
+             + weight while unowned rows stand down to muted. ~3 columns at the main
+             pane, 1 at a 300px sidebar leaf (auto-fill minmax, no container query
+             needed).
+
+     chips   "MUSTER CHIPS" — maximum density: each group is a thin band (small-caps
+             metal title, a --dse-hairline-fade rule filling the line, the tally at
+             the right edge) over an inline-wrapped run of seals. An owned skill is a
+             forged chip — --dse-chip-bg ground, --dse-sheen, --dse-metal-line border,
+             --dse-chip-bevel, metal-bright ink, solid ◆ — standing out of a field of
+             ghost chips (transparent, faint hairline, faint ink, hollow ◆). The whole
+             catalog lands in roughly one viewport.
+
+   MATERIAL: tokens only — no new colors, no gradients as page chrome (the sheen is
+   the site's own chip-surface overlay), NO colored left borders (DESIGN.md rule 7).
+   Saturated color appears once, semantically: the owned mark's --dse-accent fill,
+   the same "selected" accent the default checklist already uses. OWNED is said at
+   least three hue-free ways (Scott is colorblind): solid-vs-hollow mark, ink
+   grade/weight, and (chips) the raised-vs-ghost chip material. Light scheme rides
+   the token layer (surface-sunken, the metal family, sheen and the chip pair all
+   flip in the Steel LIGHT block below) — zero literals here, so no
+   body.theme-light twins.
+
+   SCOPE: every rule carries [data-dse-theme='steel']:not([data-dse-print="on"]) AND
+   keys on .dse-skills[data-skills-look=…], which only exists on a candidate mount —
+   belt and braces for the freeze. Print of a candidate falls back to the base
+   checklist plus the base tally rule (skills base block), which is the correct
+   conservative paper answer while the candidates are disposable.
+*/
+
+/* -- Shared by both candidates: the group title becomes a quiet small-caps metal
+      label (the RECOVERIES-eyebrow grammar), replacing the base 1.2em heading —
+      in a dense reference list the group names are wayfinding, not content. Covers
+      both header forms: the kit collapsible's title span and the bare h3 that
+      only_show_selected renders. The base :first-letter uppercase keeps the lead
+      capital inside the small caps. -- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look] .dse-collapse__title,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look] .dse-skills__group-title {
+	font-size: 0.92em;
+	font-weight: 600;
+	font-variant: small-caps;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal-bright);
+	text-shadow: var(--dse-emboss);
+}
+/* The tally is base-styled (skills base block); Steel only aligns its figures. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look] .dse-skills__tally {
+	letter-spacing: 0.03em;
+}
+/* Both candidates re-shape the mark from a 1em checkbox into the brand ◆ (a rotated
+   square — the .dse-hr__diamond gesture, not a new icon). Solid accent = owned,
+   hollow faint outline = unowned: state stays shape-first, exactly the base
+   contract, one size down. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look] .dse-skills__mark {
+	width: 0.46em;
+	height: 0.46em;
+	margin: 0 0.6em 0 0.2em;
+	border: 1px solid var(--dse-fg-faint);
+	border-radius: 1px;
+	transform: rotate(45deg);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look] .dse-skills__mark[data-on] {
+	border-color: var(--dse-accent);
+}
+
+/* -- Candidate 1: CODEX LEDGER ------------------------------------------------- */
+/*  The niche grid. minmax(14em, 1fr): 14em ≈ 224px comfortably fits the longest
+    row ("criminal underworld" + mark + padding), giving 3 columns at the ~760px
+    main pane and a clean single column at a 300px sidebar leaf. align-items:start
+    lets a collapsed niche shrink to its header instead of stretching to its row. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(14em, 1fr));
+	gap: 0.55em;
+	align-items: start;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] > .dse-skills__group {
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+	padding: 0.3em 0.55em 0.5em;
+	min-width: 0;
+}
+/* The bare-h3 form (only_show_selected) has no header button padding to lean on. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] .dse-skills__group-title {
+	margin: 0.2em 0 0.35em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] .dse-skills__list {
+	margin: 0.15em 0 0;
+}
+/* Rows tighten: the base 0.3em rhythm is a hero-sheet rhythm, not a ledger's. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] .dse-skills__item {
+	margin-bottom: 0.1em;
+	font-size: 0.92em;
+	line-height: 1.4;
+}
+/* Owned reads first: full ink + weight against muted unowned rows — the second
+   hue-free channel beside the solid/hollow ◆. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] .dse-skills__name {
+	color: var(--dse-fg-muted);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='ledger'] .dse-skills__item:has(> .dse-skills__mark[data-on]) .dse-skills__name {
+	color: var(--dse-fg);
+	font-weight: 600;
+}
+
+/* -- Candidate 2: MUSTER CHIPS ------------------------------------------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] > .dse-skills__group {
+	margin-bottom: 0.65em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-collapse__header {
+	padding: 0.15em 0.1em;
+	gap: 0.45em;
+}
+/* The band: title, then a fading steel rule carrying the eye to the right-edge
+   tally (the divider grammar — --dse-hairline-fade). Flex on the TITLE keeps the
+   rule between the words and the tally; ::first-letter cannot apply to a flex
+   container, so the label reads as uniform small caps here (deliberate — quieter). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-collapse__title,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__group-title {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-collapse__title::after,
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__group-title::after {
+	content: '';
+	flex: 1 1 auto;
+	height: 1px;
+	background: var(--dse-hairline-fade);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__group-title {
+	margin: 0 0 0.1em;
+}
+/* The muster: an inline-wrapped run of seals per group. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3em 0.35em;
+	margin: 0.35em 0 0;
+}
+/* Ghost chip (unowned): present but stood down — transparent ground, faint
+   hairline, faint ink, hollow micro-◆. The catalog stays legible (hover still
+   surfaces each skill's use via the base title attr) without competing. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__item {
+	display: inline-flex;
+	align-items: center;
+	margin: 0;
+	padding: 0.08em 0.55em 0.1em 0.45em;
+	border: 1px solid var(--dse-border);
+	border-radius: 0.9em;
+	font-size: 0.85em;
+	line-height: 1.35;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__name {
+	color: var(--dse-fg-faint);
+}
+/* Forged chip (owned): the site's one real forged-chip surface (the ability cost
+   chip) — sheen over chip ground, metal-line border, chip bevel, metal-bright
+   ink. Raised material + brighter ink + solid ◆ = three hue-free channels. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__item:has(> .dse-skills__mark[data-on]) {
+	background-color: var(--dse-chip-bg);
+	background-image: var(--dse-sheen);
+	border-color: var(--dse-metal-line);
+	box-shadow: var(--dse-chip-bevel);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__item:has(> .dse-skills__mark[data-on]) .dse-skills__name {
+	color: var(--dse-metal-bright);
+	font-weight: 600;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-look='chips'] .dse-skills__mark {
+	width: 0.4em;
+	height: 0.4em;
+	margin: 0 0.45em 0 0;
+	flex: 0 0 auto;
+}
+
+/* END SC-182 Steel skills candidates */
 
 /* ================================================================== */
 /*   --dse-* Steel LIGHT variant — value override layer (D3 Task 4)   */

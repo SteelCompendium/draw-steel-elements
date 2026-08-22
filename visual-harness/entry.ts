@@ -459,6 +459,34 @@ malice:
       label: "Feytouched"
 `;
 
+// SC-182 — the REALISTIC skills state the layout candidates are judged on. The D9
+// `default` fixture (2 skills + 1 custom) is the palette's minimal example and shows a
+// list that is almost all catalog; a real hero owns ~6-10 skills spread unevenly across
+// groups, which is exactly the scan ("which ones do I have?") the overhaul is for. Eight
+// built-ins across four groups (crafting deliberately owns ZERO — a candidate must keep
+// an unowned group readable, not just skip it), one custom skill merged into a built-in
+// group and one landing in the "Custom Skills" bucket, so every grouping rule renders.
+// Harness-local (same convention as heroSparse/featureVillain — not an edit to the D9
+// example); new shot names (`skills-hero-picks--*`) cannot collide with a frozen name.
+const skillsHeroPicks = `skills:
+  - climb
+  - endurance
+  - hide
+  - sneak
+  - track
+  - alertness
+  - magic
+  - history
+custom_skills:
+  - name: Falconry
+    has_skill: true
+    skill_group: exploration
+    description: "Train and fly a falcon."
+  - name: Sailing
+    has_skill: true
+    description: "Crew and pilot a ship."
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -503,7 +531,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	project: { default: projectDefault },
 	roll: { default: rollDefault },
 	rule: { default: ruleDefault },
-	skills: { default: skillsDefault },
+	skills: { default: skillsDefault, 'hero-picks': skillsHeroPicks },
 	'stamina-bar': {
 		default: staminaBarDefault,
 		recoveries: staminaBarRecoveries,
@@ -729,6 +757,10 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// log chip, the wrapped quick-add and the round buttons are all present. The
 	// full-width bar is covered by the element sweep's `initiative-controls--*`.
 	{ id: 'initiative-controls-narrow', element: 'initiative', fixture: 'controls', width: 300 },
+	// SC-182 — the DEFAULT checklist at a sidebar leaf, on the realistic fixture: the
+	// apples-to-apples "before" for the two candidate-narrow pref shots below (their
+	// full-width "before" is the element sweep's own `skills-hero-picks--*`).
+	{ id: 'skills-narrow', element: 'skills', fixture: 'hero-picks', width: 300 },
 ];
 
 /**
@@ -787,6 +819,10 @@ export const PREF_SHOTS: {
 	element: string;
 	fixture: string;
 	prefs: Record<string, string>;
+	/** SC-182 (re-adding SC-154 round 3's scaffolding): a design-candidate pref shot
+	 *  needs its sidebar-width twin — routed through shoot.mjs's central snap() as an
+	 *  ordinary query param, exactly like NARROW_SHOTS. */
+	width?: number;
 }[] = [
 	// Keyword display (`kwUsage`) — the chip band's other three presentations.
 	{ id: 'statblock-kwusage-text', element: 'statblock', fixture: 'default', prefs: { kwUsage: 'text' } },
@@ -843,6 +879,17 @@ export const PREF_SHOTS: {
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
 	},
+	// SC-182: the two ds-skills layout CANDIDATES (hidden `skillsLook` pref, default
+	// `list` = the shipped checklist — covered by the element sweep + skills-narrow).
+	// Each candidate at the main pane and at the 300px sidebar leaf, on the realistic
+	// hero-picks fixture, so Scott judges the density/scanability claims at both the
+	// widths a reading-mode element actually renders. Disposable ids: the winner's
+	// promotion replaces these with permanent element-sweep coverage (the SC-154
+	// promote pattern).
+	{ id: 'skills-ledger', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'ledger' } },
+	{ id: 'skills-ledger-narrow', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'ledger' }, width: 300 },
+	{ id: 'skills-chips', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'chips' } },
+	{ id: 'skills-chips-narrow', element: 'skills', fixture: 'hero-picks', prefs: { skillsLook: 'chips' }, width: 300 },
 ];
 
 /**
@@ -1306,6 +1353,7 @@ declare global {
 				element: string;
 				fixture: string;
 				prefs: Record<string, string>;
+				width?: number;
 			}[];
 			scrollShots: {
 				id: string;

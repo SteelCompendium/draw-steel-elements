@@ -95,6 +95,18 @@ declare module '../framework/seams/prefs' {
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
 		staminaRecoveryPopover: boolean;
+		// —— SC-182: HOW the ds-skills element lays out its five groups + marks.
+		//
+		// `list` is the shipped look verbatim (the one-column checklist): the view takes
+		// the exact code path it took before this key existed — no attribute, no tally
+		// nodes — so the default DOM and every frozen print pair are byte-identical to
+		// before. The other two are DESIGN CANDIDATES built for Scott to choose between
+		// (SC-182; the SC-154 round-3 `initControls` pattern): deliberately `ui.hidden` —
+		// the settings tab must not offer three skills layouts as a shipped feature. Once
+		// one is picked it becomes the default and the loser is deleted along with this
+		// key. The value is read at BUILD time (the candidates add tally DOM), so it is
+		// not per-block overridable (attr-less keys are global-only anyway).
+		skillsLook: 'list' | 'ledger' | 'chips';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -477,6 +489,22 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 	// asked for this as an option, not as the default: "can we allow for the ALT stepper
 	// popover as an optional setting. I think it looks really good and some players may
 	// want it."
+	// SC-182 — the ds-skills layout candidates. Hidden (the row is never rendered): this
+	// is a review switch for the two options on the ticket, not a shipped setting. See
+	// the DsePrefs comment above.
+	d({
+		key: 'skillsLook', default: 'list',
+		ui: {
+			group: 'Element defaults', label: 'Skills list layout', control: 'select',
+			hidden: true,
+			options: [
+				{ value: 'list', label: 'Checklist (current)' },
+				{ value: 'ledger', label: 'Codex ledger' },
+				{ value: 'chips', label: 'Muster chips' },
+			],
+			help: 'How a ds-skills block lays out the five skill groups and their owned/unowned marks.',
+		},
+	}),
 	d({
 		key: 'staminaRecoveryPopover', default: false,
 		ui: {

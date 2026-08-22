@@ -27,6 +27,7 @@ import { Skills, CustomSkill } from '@model/Skills';
 import { SKILL_DATA, SkillInfo } from '@utils/SkillsData';
 import { toProperCase } from '@utils/common';
 import { resolveCollapsePrefs } from '@/prefs/catalog';
+import type { DsePrefs } from '@/framework/seams/prefs';
 
 /** SessionStore slot for the whole-element collapsible open-state (F1 §4.3). Stores the
  *  kit's OPEN boolean (true = expanded) — the inverse sense of the old ComponentWrapper
@@ -36,6 +37,10 @@ const WRAPPER_OPEN_SLOT = 'open';
 /** Title shown in the whole-element collapsible header (the old ComponentWrapper
  *  componentName, previously visible only in the collapsed rail). */
 const WRAPPER_TITLE = 'Skill List';
+
+/** SC-182: the hidden `skillsLook` pref's value set (src/prefs/catalog.ts owns the
+ *  catalog entry; this alias just keeps the view's signatures readable). */
+type SkillsLook = DsePrefs['skillsLook'];
 
 /** Internal-only bucket key for custom skills with no (or no matching) skill_group — never
  *  displayed; see groupDisplayName below for the user-facing label. */
@@ -121,8 +126,17 @@ export class SkillsView extends ElementView<Skills> {
 		const grouped = buildGroupedSkillData(model.custom_skills);
 		const activeSkills = buildActiveSkills(model);
 		const listContainer = container.createDiv({ cls: 'dse-skills' });
+		// SC-182 — the layout candidates behind the hidden `skillsLook` pref (the SC-154
+		// round-3 `initControls` pattern). `list` (the default) is the shipped checklist
+		// VERBATIM: no attribute is stamped and renderGroup takes its untouched path, so
+		// the default DOM — and every frozen print pair — is byte-identical to before
+		// this key existed. A candidate stamps `data-skills-look` on the container (the
+		// hook every SC-182 Steel screen rule keys on) and adds one owned/total tally
+		// per group header; read once at BUILD time, like every conditional-DOM pref.
+		const look = this.cx.prefs.get('skillsLook');
+		if (look !== 'list') listContainer.setAttribute('data-skills-look', look);
 		for (const [groupKey, skills] of Object.entries(grouped)) {
-			this.renderGroup(listContainer, groupKey, skills, activeSkills, model.only_show_selected);
+			this.renderGroup(listContainer, groupKey, skills, activeSkills, model.only_show_selected, look);
 		}
 	}
 
@@ -132,6 +146,7 @@ export class SkillsView extends ElementView<Skills> {
 		skills: SkillInfo[],
 		activeSkills: string[],
 		onlyShowSelected: boolean,
+		look: SkillsLook,
 	): void {
 		const hasSkill = (name: string): boolean =>
 			activeSkills.some((active) => active.toLowerCase() === name.toLowerCase());
@@ -162,6 +177,21 @@ export class SkillsView extends ElementView<Skills> {
 			this,
 		);
 		group.rootEl.addClass('dse-skills__group');
+		// SC-182 candidates only (never at the default look): a per-group owned/total
+		// tally at the header's right edge — the scan a player actually does ("how many
+		// Lore skills do I have?") without opening the group. A track-style fraction
+		// ("3/11", the stamina "15/20" grammar) — unambiguous in a header that already
+		// names the group. Rendered inside the header <button>, so the group's
+		// accessible name reads "crafting, 1/8" — the tally is information, not
+		// decoration, and it must survive the collapsed state (which is exactly when
+		// it earns its place).
+		if (look !== 'list') {
+			const owned = skills.filter((skill) => hasSkill(skill.name)).length;
+			group.headerEl.createSpan({
+				cls: 'dse-skills__tally',
+				text: `${owned}/${skills.length}`,
+			});
+		}
 		const list = group.contentEl.createEl('ul', { cls: 'dse-skills__list' });
 		for (const skill of skills) {
 			this.renderSkillItem(list, skill, hasSkill(skill.name));
