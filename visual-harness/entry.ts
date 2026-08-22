@@ -513,18 +513,40 @@ const skillsChipsHidden = `style: chips\nonly_show_selected: true\n${skillsPicks
 //     so the cell minis differ per cell; Troll winded;
 //   - a minion SQUAD with a wounded shared pool, one DEAD minion (the cell that keeps
 //     its textual DEAD readout and mounts no gauge) and a captain.
+//
+// SC-183 ROUND 2 additions, each because a round-2 surface is invisible without it:
+//   - `has_taken_turn` on Frodo and on the Mordor Forces group — the turn-economy
+//     candidates (§11) are ENTIRELY about the difference between "has gone" and "has
+//     not", so a fixture where nobody has gone photographs none of them;
+//   - real `conditions` on both heroes and on the selected orc — the WINDED/DYING chip
+//     now sits on the conditions row, and a chip beside an EMPTY row would not show the
+//     thing under review (does the word crowd the icons?);
+//   - `actions` part-spent on Frodo — the action pips' pressed state is half of what the
+//     candidates are being judged on.
 const initiativeFight = `heroes:
   - name: "Frodo Baggins"
     max_stamina: 80
     current_stamina: 34
     temp_stamina: 10
     image: "images/frodo.png"
+    has_taken_turn: true
+    conditions:
+      - key: "slowed"
+      - key: "frightened"
+    actions:
+      main: true
+      maneuver: false
+      move: true
+      triggered: false
   - name: "Samwise Gamgee"
     max_stamina: 90
     current_stamina: -12
     image: "images/sam.png"
+    conditions:
+      - key: "prone"
 enemy_groups:
   - name: "Mordor Forces"
+    has_taken_turn: true
     creatures:
       - name: "Orc"
         max_stamina: 40
@@ -533,6 +555,8 @@ enemy_groups:
         instances:
           - id: 1
             current_stamina: 36
+            conditions:
+              - key: "grabbed"
           - id: 2
             current_stamina: 17
           - id: 3
@@ -1000,12 +1024,19 @@ export const PREF_SHOTS: {
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
 	},
-	// SC-183 — the RAIL layout candidate (hidden `initStamina` review switch, the
-	// SC-154 round-3 pattern): the same mid-fight fixture as the default plate sweep,
-	// at the same three widths, so the A/B is judged like-for-like.
-	{ id: 'initiative-rail', element: 'initiative', fixture: 'fight', prefs: { initStamina: 'rail' } },
-	{ id: 'initiative-rail-500', element: 'initiative', fixture: 'fight', prefs: { initStamina: 'rail' }, width: 500 },
-	{ id: 'initiative-rail-narrow', element: 'initiative', fixture: 'fight', prefs: { initStamina: 'rail' }, width: 300 },
+	// SC-183 round 2 — the TURN-ECONOMY candidates (hidden `initTurn` review switch, the
+	// SC-154 round-3 pattern). Round 1's plate/rail pair is gone: Scott picked plate, so
+	// plate is unconditional and the rail shots retired with its CSS. These three are the
+	// open question he asked for options on — the turn-taken indicator and the
+	// [Main][Maneuver][Move][Triggered] row. Same mid-fight fixture as the default sweep
+	// so the four options are judged like-for-like, plus the narrow branch of the one
+	// that reflows the identity lane hardest (`gutter`), where a candidate is most
+	// likely to fall over.
+	{ id: 'initiative-turn-spine', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'spine' } },
+	{ id: 'initiative-turn-spine-narrow', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'spine' }, width: 300 },
+	{ id: 'initiative-turn-dim', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'dim' } },
+	{ id: 'initiative-turn-gutter', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'gutter' } },
+	{ id: 'initiative-turn-gutter-narrow', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'gutter' }, width: 300 },
 ];
 
 /**

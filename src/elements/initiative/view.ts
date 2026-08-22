@@ -511,11 +511,22 @@ export class InitiativeView extends ElementView<EncounterData> {
 	/** The four slot definitions, in the order the spec lists them (§7.2): "[Main]
 	 *  [Maneuver] [Move] [Triggered]". Shared by both hero rows and enemy creature
 	 *  instance detail rows (D8 spec §7.3 puts `actions` on Hero AND CreatureInstance). */
-	private static readonly ACTION_SLOTS: ReadonlyArray<{ key: keyof ActorActions; label: string }> = [
-		{ key: 'main', label: 'Main' },
-		{ key: 'maneuver', label: 'Maneuver' },
-		{ key: 'move', label: 'Move' },
-		{ key: 'triggered', label: 'Triggered' },
+	/** SC-183 r2 — each slot also carries a SILHOUETTE, for the candidate treatments that
+	 *  shrink the checklist to pips (Scott: the actions row "is taking up too much space"
+	 *  and, if kept at all, "should be minimal overhead"). Four distinguishable shapes,
+	 *  not four colours (Scott is colourblind), and not initials — "Main", "Maneuver" and
+	 *  "Move" all start with M, so a letter pip would be ambiguous by construction. The
+	 *  glyph is additive, base-hidden DOM: the button's real text and label are untouched,
+	 *  so AT and print read exactly what they read before. */
+	private static readonly ACTION_SLOTS: ReadonlyArray<{
+		key: keyof ActorActions;
+		label: string;
+		icon: string;
+	}> = [
+		{ key: 'main', label: 'Main', icon: 'swords' },
+		{ key: 'maneuver', label: 'Maneuver', icon: 'wrench' },
+		{ key: 'move', label: 'Move', icon: 'footprints' },
+		{ key: 'triggered', label: 'Triggered', icon: 'zap' },
 	];
 
 	/** The per-turn action checklist (D8 spec §7.2): four keyboard-accessible toggles bound
@@ -533,8 +544,15 @@ export class InitiativeView extends ElementView<EncounterData> {
 		name: string,
 		owner: Component,
 	): void {
-		InitiativeView.ACTION_SLOTS.forEach(({ key, label }) => {
+		InitiativeView.ACTION_SLOTS.forEach(({ key, label, icon }) => {
 			const pressed = actor.actions?.[key] ?? false;
+			/** The slot's base-hidden silhouette + its `data-slot` stamp (SC-183 r2). */
+			const decorate = (el: HTMLElement): void => {
+				el.setAttribute('data-slot', key);
+				const glyph = el.createSpan({ cls: 'dse-init__action-icon' });
+				glyph.setAttribute('aria-hidden', 'true');
+				setIcon(glyph, icon);
+			};
 			if (this.canWrite) {
 				const handle = iconButton(
 					container,
@@ -558,9 +576,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 					owner,
 				);
 				handle.buttonEl.addClass('dse-init__action-toggle');
+				decorate(handle.buttonEl);
 			} else {
 				const el = container.createSpan({ cls: 'dse-init__action-toggle', text: label });
 				el.toggleAttribute('data-pressed', pressed);
+				decorate(el);
 			}
 		});
 	}
@@ -604,7 +624,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		character: Hero | CreatureInstance,
 		creature?: Creature,
 		group?: EnemyGroup,
-	): { values: StaminaBarValues; gauge: StaminaGaugeOptions } | null {
+	): { values: StaminaBarValues; gauge: StaminaGaugeOptions; pool: boolean } | null {
 		if (group?.is_squad && creature?.squad_role === 'minion') {
 			if ((character as CreatureInstance).isDead) return null;
 			const per = creature.max_stamina ?? 0;
@@ -617,6 +637,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 			return {
 				values: { current: group.minion_stamina_pool ?? 0, temp: 0, max },
 				gauge: { dyingZone: false, ticks },
+				pool: true,
 			};
 		}
 		const max = this.isHero(character) ? character.max_stamina : creature?.max_stamina ?? 0;
@@ -627,7 +648,71 @@ export class InitiativeView extends ElementView<EncounterData> {
 				max: max ?? 0,
 			},
 			gauge: { dyingZone: this.isHero(character) },
+			pool: false,
 		};
+	}
+
+	/* ------------------------------------------------------------------ SC-183 r2:
+	   THE STATE CHIP, AND WHY A SQUAD POOL NEVER GETS ONE.
+
+	   Round 2 moves the WINDED/DYING word out of the stamina lane and onto the
+	   conditions row (Scott, 2026-08-22: "The 'winded' or 'dying' text should move to
+	   the conditions row"), which is where it belongs anyway: it IS a condition-shaped
+	   fact about the actor, and the lane it left is now pure instrument.
+
+	   The word is still a WORD — never colour alone (Scott is colourblind). The amber /
+	   red framing stays as the second and third channels (chip border + the whole-row
+	   frame), and the gauge's length is the fourth.
+
+	   WHICH WORD is a rules question, and round 2 answered it from the books:
+	     - hero      → "Winded" / "Dying". Heroes (Draw Steel Heroes, "Stamina and
+	                   Death") are the only creatures that HAVE a dying state.
+	     - creature  → "Winded" / "Dead". "When a nonhero creature's Stamina is reduced
+	                   to 0, they die or are knocked unconscious" — a monster at 0 is not
+	                   dying, it is out, so printing "Dying" on an orc was simply wrong.
+	     - squad pool → NO CHIP AT ALL. "Because minion Stamina is tracked as a pool,
+	                   minions can't be winded, can't regain Stamina, and can't gain
+	                   temporary Stamina during a battle" (Draw Steel Monsters, "Using
+	                   Minions"). A squad is not a creature and has no winded value, so
+	                   round 1's amber "winded" frame on a half-spent pool was asserting
+	                   a state the game does not define. `pool: true` suppresses the
+	                   chip, the row's state frame and the gauge's state colour; the
+	                   pool's truth is its LENGTH and its per-minion death ticks.
+	     - a captain  is an ordinary non-minion creature: "A captain's Stamina isn't
+	                   added to a minion squad's Stamina pool, and is tracked as for any
+	                   other creature in combat" — so a captain is winded normally and
+	                   keeps the full treatment. */
+
+	/** The chip's word for a state, given whether the actor is a hero (see above). */
+	private stateWord(state: 'healthy' | 'winded' | 'dying', isHeroActor: boolean): string {
+		if (state === 'winded') return 'Winded';
+		if (state === 'dying') return isHeroActor ? 'Dying' : 'Dead';
+		return '';
+	}
+
+	/** Repaints the row's state chip from the actor's current numbers. Re-queries the
+	 *  chip from the row (no stored reference — `updateStaminaBar`'s own convention), so
+	 *  a conditions rebuild that replaced the chip can never leave a stale handle. */
+	private refreshRowState(
+		rowEl: HTMLElement,
+		character: Hero | CreatureInstance,
+		creature?: Creature,
+		group?: EnemyGroup,
+	): void {
+		const chip = rowEl.querySelector<HTMLElement>(
+			':scope .dse-init__conditions > .dse-init__state',
+		);
+		if (!chip) return;
+		const spec = this.staminaSpecFor(character, creature, group);
+		// No honest spec (a dead squad minion) or a shared pool: no state to say.
+		if (!spec || spec.pool) {
+			chip.setAttribute('data-state', 'none');
+			chip.setText('');
+			return;
+		}
+		const state = staminaState(spec.values);
+		chip.setAttribute('data-state', state);
+		chip.setText(this.stateWord(state, this.isHero(character)));
 	}
 
 	/** The row-level kit stamina bar (SC-183): the REAL SC-132 component — cluster,
@@ -654,6 +739,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 			gauge: spec.gauge,
 		});
 		bar?.addClass('dse-init__bar');
+		// SC-183 r2: a shared minion pool has no rules state (see the state-chip note
+		// above) — the attribute lets the Steel layer stand the state ladder down for
+		// exactly these bars without any of the state selectors having to know what a
+		// squad is.
+		if (spec.pool) bar?.setAttribute('data-pool', 'on');
 		return bar;
 	}
 
@@ -685,6 +775,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const mini = cellEl.createDiv({
 			cls: 'dse-stamina__cluster dse-stamina__cluster--mini dse-init__cell-gauge',
 		});
+		// Same pool stand-down as the row bars (SC-183 r2).
+		if (spec.pool) mini.setAttribute('data-pool', 'on');
 		renderStaminaGauge(mini, spec.gauge);
 		this.refreshCellGauge(mini, instance, creature, group);
 	}
@@ -705,6 +797,38 @@ export class InitiativeView extends ElementView<EncounterData> {
 		mini.setAttribute('data-state', staminaState(spec.values));
 		mini.setAttribute('data-temp', (spec.values.temp ?? 0) > 0 ? 'on' : 'off');
 		updateStaminaGauge(gauge, spec.values, spec.gauge);
+	}
+
+	/** The captain badge (SC-183 r2). Crown + WORD — the word is what carries the meaning
+	 *  (Scott is colourblind), the crown is the silhouette channel and the amber/red ink
+	 *  is the third. Base-hidden like every other SC-183 instrument, so print renders the
+	 *  box it rendered before. Not a control: promoting a captain has no legal target in
+	 *  the shipped model (see buildEnemyGroupRow's note), and a button that cannot act is
+	 *  a dead-end affordance (F1 §4.4). */
+	/** A squad's captain creature and whether they are still standing. A non-hero creature
+	 *  is out at 0 ("When a nonhero creature's Stamina is reduced to 0, they die or are
+	 *  knocked unconscious", Draw Steel Heroes) — and "down" is precisely the state the
+	 *  rules' replacement clause keys on, so the roster announces when a swap is legal. */
+	private squadCaptain(group: EnemyGroup): { captain: Creature | undefined; down: boolean } {
+		const captain = group.is_squad
+			? group.creatures.find((c) => c.squad_role === 'captain')
+			: undefined;
+		const down =
+			!!captain && (captain.instances ?? []).every((inst) => (inst.current_stamina ?? 0) <= 0);
+		return { captain, down };
+	}
+
+	private buildCaptainBadge(parent: HTMLElement, down: boolean): HTMLElement {
+		const badge = parent.createSpan({ cls: 'dse-init__captain' });
+		badge.setAttribute('data-down', down ? 'on' : 'off');
+		const glyph = badge.createSpan({ cls: 'dse-init__captain-glyph' });
+		glyph.setAttribute('aria-hidden', 'true');
+		setIcon(glyph, 'crown');
+		badge.createSpan({
+			cls: 'dse-init__captain-word',
+			text: down ? 'Captain down' : 'Captain',
+		});
+		return badge;
 	}
 
 	// -------------------------------------------------------------------- portrait
@@ -792,7 +916,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const infoEl = rowEl.createDiv({ cls: 'dse-init__info' });
 		infoEl.createDiv({ cls: 'dse-init__name', text: character.name });
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
-		this.buildConditionIcons(conditionsEl, character, owner);
+		this.buildConditionRow(conditionsEl, rowEl, character, owner);
 		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), character, name, owner);
 
 		// Right: Health Info. ONE modal-open closure shared by the numeric control and
@@ -808,6 +932,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 					staminaBar.updateHero(character);
 					this.updateStaminaDisplay(staminaEl, character);
 					this.refreshRowStamina(barEl, character);
+					// SC-183 r2: the state word lives on the conditions row now, so an
+					// edit has to repaint it there too (same closure, so the numeric
+					// readout, the instrument and the word cannot drift).
+					this.refreshRowState(rowEl, character);
 					void this.persist();
 				}),
 			);
@@ -827,8 +955,46 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 	// ------------------------------------------------------------------- group row
 
+	/* ------------------------------------------------------------------ SC-183 r2:
+	   THE SQUAD CAPTAIN.
+
+	   Scott, 2026-08-22: "it should be clear who the squad leader is AND it should be
+	   easy to change the squad leader when needed."
+
+	   Rules (Draw Steel Monsters, "Using Minions"): the role is called CAPTAIN — "Any
+	   non-Mount, non-minion creature, who speaks a language that a squad of minions can
+	   understand can be attached to that squad as a captain… A squad of minions can have
+	   only one captain"; the captain keeps their own Stamina ("A captain's Stamina isn't
+	   added to a minion squad's Stamina pool"); and each minion "gains the benefits noted
+	   at the 'With Captain' entry on their stat block". The replacement rule is explicit:
+	   "If a squad of minions loses their captain, a new allied creature can become that
+	   squad's captain at the start of the next round (no action required)."
+
+	   WHAT THIS SHIPS (clarity, in full): the group body is stamped `data-squad` and
+	   `data-captain=up|down`; every squad cell is stamped `data-squad-role`; the captain's
+	   cell and detail row carry a crown badge whose WORD ("Captain" / "Captain down")
+	   carries the meaning, with the crown as the second channel and colour only as the
+	   third. The captain's cell is pulled to the head of the roster (a Steel `order`
+	   reflow — no DOM reorder, so print is untouched), so "who is the captain" is answered
+	   by the first cell in the squad, every time. "Captain down" is the state the rules'
+	   replacement clause actually keys on, so the tracker announces the moment a swap
+	   becomes legal.
+
+	   WHAT IT DOES NOT SHIP, AND WHY (reported to Scott rather than guessed): a
+	   one-click CHANGE-captain affordance. `squad_role` lives on the CREATURE, the pool
+	   lives on the GROUP (`EnemyGroup.minion_stamina_pool`), and parse caps a squad at
+	   two creatures — one minion type plus at most one captain. So inside the shipped
+	   model there is never a second candidate to promote: "change the captain" has no
+	   legal target until a group can hold more than one squad / more than two creatures.
+	   That is exactly the model change GH issue #67 ("Support multiple minion squads in
+	   the same group") requires, and it is claimed by an outside contributor — see the
+	   round-2 report for the proposed split. */
 	private buildEnemyGroupRow(entry: HTMLElement, group: EnemyGroup, owner: Component): void {
 		const groupEl = entry.createDiv({ cls: 'dse-init__groupbody' });
+
+		const { captain, down: captainDown } = this.squadCaptain(group);
+		if (group.is_squad) groupEl.setAttribute('data-squad', 'on');
+		if (captain) groupEl.setAttribute('data-captain', captainDown ? 'down' : 'up');
 
 		// Group Header — same SC-154 round 2 move as buildCharacterRow above: the turn
 		// indicator becomes the header row's own first child (inside the group's card)
@@ -960,7 +1126,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 								}),
 							);
 						} else {
-							this.openCreatureStaminaModal(instance, creature, staminaEl, groupEl, instanceKey);
+							this.openCreatureStaminaModal(
+								instance,
+								creature,
+								staminaEl,
+								groupEl,
+								instanceKey,
+								null,
+								null,
+								group,
+							);
 						}
 					});
 				} else {
@@ -969,6 +1144,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 				cellEl.setAttribute('data-instance-key', instanceKey);
 				if (selected) cellEl.setAttribute('data-selected', '');
+
+				// SC-183 r2 — the squad roster says which cell is the captain. The
+				// attribute is free (it renders no box), and the badge is base-hidden
+				// like every other r2 instrument, so print is byte-unchanged.
+				if (group.is_squad && creature.squad_role) {
+					cellEl.setAttribute('data-squad-role', creature.squad_role);
+					if (creature.squad_role === 'captain') {
+						this.buildCaptainBadge(cellEl, captainDown);
+					}
+				}
 
 				const imgEl = cellEl.createSpan({ cls: 'dse-init__cell-portrait' });
 				this.renderPortrait(imgEl, 'enemy', creature.image ?? null, creature.name);
@@ -995,6 +1180,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		owner: Component,
 	): void {
 		container.addClass('dse-init__row');
+		// SC-183 r2 — the open creature's squad role, so the detail row says "this is the
+		// captain" as plainly as the roster cell does.
+		if (group.is_squad && creature.squad_role) {
+			container.setAttribute('data-squad-role', creature.squad_role);
+		}
 
 		// Left: Creature Image
 		const imageEl = container.createDiv({ cls: 'dse-init__portrait' });
@@ -1003,9 +1193,12 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// Middle: Creature Info
 		const name = `${creature.name} #${instance.id}`;
 		const infoEl = container.createDiv({ cls: 'dse-init__info' });
-		infoEl.createDiv({ cls: 'dse-init__name', text: name });
+		const nameEl = infoEl.createDiv({ cls: 'dse-init__name', text: name });
+		if (group.is_squad && creature.squad_role === 'captain') {
+			this.buildCaptainBadge(nameEl, this.squadCaptain(group).down);
+		}
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
-		this.buildConditionIcons(conditionsEl, instance, owner);
+		this.buildConditionRow(conditionsEl, container, instance, owner, creature, group);
 		this.buildActionChecklist(infoEl.createDiv({ cls: 'dse-init__actions' }), instance, name, owner);
 
 		// Right: Health Info
@@ -1044,7 +1237,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 				);
 			} else {
 				// For normal creatures and captains
-				this.openCreatureStaminaModal(instance, creature, staminaEl, groupBodyEl, instanceKey, barEl);
+				this.openCreatureStaminaModal(
+					instance,
+					creature,
+					staminaEl,
+					groupBodyEl,
+					instanceKey,
+					barEl,
+					container,
+					group,
+				);
 			}
 		};
 		const staminaEl = this.createStaminaControl(
@@ -1063,6 +1265,22 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 	// ------------------------------------------------------ creature stamina modal
 
+	/** SC-183 r2 — repaints the squad's captain state in place after a stamina edit. A
+	 *  captain crossing 0 flips the squad from "has a captain" to "captain down", which is
+	 *  the moment the rules allow a replacement — so it must not wait for a coarse rebuild.
+	 *  No-op on a group with no captain. */
+	private refreshCaptainState(groupBodyEl: HTMLElement, group: EnemyGroup): void {
+		const { captain, down } = this.squadCaptain(group);
+		if (!captain) return;
+		groupBodyEl.setAttribute('data-captain', down ? 'down' : 'up');
+		groupBodyEl.querySelectorAll<HTMLElement>('.dse-init__captain').forEach((badge) => {
+			badge.setAttribute('data-down', down ? 'on' : 'off');
+			badge
+				.querySelector<HTMLElement>('.dse-init__captain-word')
+				?.setText(down ? 'Captain down' : 'Captain');
+		});
+	}
+
 	private openCreatureStaminaModal(
 		instance: CreatureInstance,
 		creature: Creature,
@@ -1070,12 +1288,19 @@ export class InitiativeView extends ElementView<EncounterData> {
 		groupBodyEl: HTMLElement,
 		instanceKey: string,
 		barEl?: HTMLElement | null,
+		/** SC-183 r2: the detail row, when the caller has one — the state chip lives on
+		 *  its conditions line and repaints with the rest. The grid dblclick path has no
+		 *  row in hand, exactly like its numeric refresh. */
+		rowEl?: HTMLElement | null,
+		group?: EnemyGroup,
 	): void {
 		const staminaBar = StaminaBar.fromCreature(instance, creature);
 		this.openModal(
 			new StaminaEditModal(this.cx.app, staminaBar, false, creature.name, () => {
 				staminaBar.updateCreature(instance);
 				this.updateStaminaDisplay(staminaEl, instance, creature);
+				if (rowEl) this.refreshRowState(rowEl, instance, creature, group);
+				if (group) this.refreshCaptainState(groupBodyEl, group);
 				// SC-183: the detail row's bar repaints with the same numbers (only
 				// passed from the detail-row path — the grid dblclick path has no row
 				// bar in hand, exactly like its numeric refresh).
@@ -1148,12 +1373,48 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 	// -------------------------------------------------------------- condition icons
 
+	/** SC-183 r2 — the CONDITIONS ROW: the state chip, then the condition icons, then the
+	 *  add affordance. Scott's ruling moved the WINDED/DYING word here from the stamina
+	 *  lane; putting it in the same container (rather than in a new wrapper around it)
+	 *  keeps the print/base DOM box-identical, because the chip is `display: none` in the
+	 *  base sheet and a display:none node contributes no box — the same additive,
+	 *  base-hidden contract every SC-183 instrument rides.
+	 *
+	 *  This method owns the container's whole content, so a condition add/remove rebuilds
+	 *  the chip along with the icons instead of `empty()`ing it away. Callers never hold
+	 *  the chip: `refreshRowState` re-queries it from the row. */
+	private buildConditionRow(
+		conditionsEl: HTMLElement,
+		rowEl: HTMLElement,
+		character: Hero | CreatureInstance,
+		owner: Component,
+		creature?: Creature,
+		group?: EnemyGroup,
+	): void {
+		conditionsEl.empty();
+		conditionsEl.createSpan({ cls: 'dse-init__state', attr: { 'data-state': 'none' } });
+		this.buildConditionIcons(conditionsEl, character, owner, () =>
+			this.buildConditionRow(conditionsEl, rowEl, character, owner, creature, group),
+		);
+		this.refreshRowState(rowEl, character, creature, group);
+	}
+
 	private buildConditionIcons(
 		container: HTMLElement,
 		character: Hero | CreatureInstance,
 		owner: Component,
+		/** SC-183 r2: how to re-render the container after a conditions change. Defaults
+		 *  to the pre-r2 behaviour (empty + rebuild the icons alone); the tracker rows
+		 *  pass the whole conditions row, so the state chip survives an add/remove. */
+		rebuild?: () => void,
 	): void {
 		const conditions = character.conditions || [];
+		const rerender =
+			rebuild ??
+			((): void => {
+				container.empty();
+				this.buildConditionIcons(container, character, owner);
+			});
 
 		// D7 Task 1 (spec §2.1/§2.3): the per-entry icon rendering (interactive
 		// iconButton in write mode, static span + applyConditionColor/Effect in
@@ -1183,8 +1444,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 				// SC-186 fix-round report, "INFO-2" — closing that gap needs identity-
 				// or key-based removal, a restructuring out of this fix round's scope).
 				character.conditions = (character.conditions || []).filter((entry) => entry !== conditionEntry);
-				container.empty();
-				this.buildConditionIcons(container, character, owner);
+				// SC-183 r2: `rerender` (the whole conditions row when the tracker rows pass
+				// one) rather than a bare icons rebuild, so the state chip survives a removal.
+				rerender();
 				void this.persist();
 			},
 		});
@@ -1201,8 +1463,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					this.openModal(
 						new ConditionsModal(this.cx.app, character, this.conditionManager, (updated) => {
 							character.conditions = updated;
-							container.empty();
-							this.buildConditionIcons(container, character, owner);
+							rerender();
 							void this.persist();
 						}),
 					);

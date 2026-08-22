@@ -1317,6 +1317,19 @@ code.dsa {
         display: none;
     }
 
+    /* SC-183 ROUND 2 — two more base-hidden instruments, same contract as the pair
+       above (built unconditionally, revealed only by the Steel screen layer, so both
+       print classes render byte-for-byte what they rendered before):
+       `.dse-init__state` is the WINDED/DYING chip Scott moved onto the conditions row
+       out of the stamina lane, and `.dse-init__captain` is the squad-captain badge.
+       Kept as their own rule rather than appended to the list above so the chip/badge
+       can be reasoned about (and their reveal guard tested) as round-2 additions. */
+    .dse-init__state,
+    .dse-init__captain,
+    .dse-init__action-icon {
+        display: none;
+    }
+
     @media (max-width: 599px) {
         .dse-init__grid {
             grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
@@ -9956,22 +9969,36 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
    `[data-dse-theme='steel']:not([data-dse-print="on"])` guard — on the ELEMENT ROOT
    selector, since the tracker's root carries both data-dse-theme and data-dse-element.
 
-   TWO LAYOUTS behind the hidden `initStamina` pref (data-dse-init-stamina, the SC-154
-   round-3 review-switch pattern — one DOM, the attr only reflows it):
-     plate (default)  the row becomes a two-lane forged plate: identity lane (turn box,
-                      portrait, name/conditions/actions) on top, the full cluster —
-                      state word, big readout, gauge — as the bottom lane. The stamina
-                      element's own presence hierarchy ("the current stamina value pops
-                      with its larger font … really helps catch the eye", SC-132).
-     rail             the one-line dense form: the cluster's rail shape (no crest, no
-                      state word — SC-132's own rail rulings) held against the row's
-                      right edge where the numeric readout used to sit.
+   ROUND 2 — SCOTT'S RULING (SC-183 comment, 2026-08-22). The plate/rail A/B is over:
+   "The `plate` approach is generally better: I mostly like the stamina bar taking up a
+   significant portion of the width." So PLATE IS NOW THE ONE LAYOUT — the `initStamina`
+   pref, the whole rail attribute branch and the rail shots are deleted, and the plate
+   rules below are unconditional. Three further rulings landed with it:
 
-   STATES ARE SAID ≥3 WAYS in both layouts (Scott is colourblind): the row frame's
-   colour, the gauge's length/position, the numeral's colour — plus the state word and
-   crest silhouette on the plate. The numeric readout is not deleted for AT/keyboard:
-   `.dse-init__right` stands down to a visually-hidden box that RETURNS on
-   :focus-within, so the labelled stamina button stays the keyboard write path.
+     1. "We likely dont need to have the crest" — the crest comes off tracker rows
+        EVERYWHERE (heroes included). The portrait is already the row's silhouette and
+        the state now has its own chip; a shield beside a portrait was two icons doing
+        one job. §4 hides it and collapses its column.
+     2. "The 'winded' or 'dying' text should move to the conditions row" — §6. The
+        cluster's `.dse-stamina__cid` (label + state word) stands down and the tracker
+        renders its own `.dse-init__state` chip beside the condition icons instead.
+        The WORD still carries the meaning (Scott is colourblind); the amber/red chip
+        border and the whole-row frame are the second and third channels.
+     3. The turn-taken box and the [Main][Maneuver][Move][Triggered] row are both "out
+        of place" and want rethinking — §10 carries three CANDIDATES behind the hidden
+        `initTurn` review switch, default `current` (= this section's own layout, so the
+        default picture cannot move while the options are being judged).
+
+   Round 2 also fixes a RULES bug round 1 shipped: a squad's shared minion pool used to
+   take the amber "winded" frame. "Because minion Stamina is tracked as a pool, minions
+   can't be winded" (Draw Steel Monsters, "Using Minions") and a squad is not a creature,
+   so the state ladder stands down entirely on `[data-pool='on']` bars — §7.
+
+   STATES ARE SAID ≥3 WAYS (Scott is colourblind): the state chip's WORD, the row
+   frame's colour, the gauge's length/position, and the numeral's colour. The numeric
+   readout is not deleted for AT/keyboard: `.dse-init__right` stands down to a
+   visually-hidden box that RETURNS on :focus-within, so the labelled stamina button
+   stays the keyboard write path.
 */
 
 /* -- 1. The instruments become visible ----------------------------------------- */
@@ -10039,16 +10066,19 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 }
 
 /* -- 3. Winded and dying paint the row's WHOLE frame (SC-132 §7, ported) -------- */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-stamina__cluster[data-state='winded']) {
+/* `.dse-init__bar:not([data-pool='on'])` is the round-2 rules fix, not a tidy-up: a
+   squad's shared pool bar must never wear a creature state (see §7). Because the state
+   is read through the BAR, a pool row simply never matches these selectors. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-init__bar:not([data-pool='on']) .dse-stamina__cluster[data-state='winded']) {
 	border-color: var(--dse-stamina-winded);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-stamina__cluster[data-state='dying']) {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-init__bar:not([data-pool='on']) .dse-stamina__cluster[data-state='dying']) {
 	border-color: var(--dse-stamina-dying);
 	background:
 		linear-gradient(104deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0.86)),
 		var(--dse-stamina-dying);
 }
-body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-stamina__cluster[data-state='dying']) {
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] :is(.dse-init__group--heroes .dse-init__row, .dse-init__detail.dse-init__row):has(.dse-init__bar:not([data-pool='on']) .dse-stamina__cluster[data-state='dying']) {
 	background:
 		linear-gradient(104deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
 		var(--dse-stamina-dying);
@@ -10072,25 +10102,30 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	background: none;
 	border-color: transparent;
 }
-/* No "stamina" label in a tracker row: the gauge-under-the-name idiom is
-   self-describing here, and the word would fight the actor's name one line up —
-   the same call the hero sheet's region title already makes (SC-132 §8). */
+/* ROUND 2 — THE CREST AND THE IDENTITY LANE COME OFF EVERY TRACKER ROW.
+   Scott, 2026-08-22: "We likely dont need to have the crest." Round 1 kept it on hero
+   rows as "the living state icon"; that argument does not survive the rest of his
+   ruling, because the state word left the lane too (§6) and the row already has a
+   60px portrait one column over — a shield beside a portrait was two silhouettes
+   doing one job, spending the height that made the actions row feel cramped.
+   `.dse-stamina__clabel` (the word "stamina") was already hidden for the same reason
+   the hero sheet hides it: the gauge-under-the-name idiom is self-describing, and the
+   word would fight the actor's name one line up (SC-132 §8).
+   The whole `.dse-stamina__cid` goes with it — it is now an empty box, since the state
+   word it used to hold is rendered by the tracker itself on the conditions row. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cid,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__clabel {
 	display: none;
 }
-/* Hero rows keep the crest at the hero sheet's step-down size (SC-132 §8's own
-   numbers, nudge re-derived at 9.56% of box height) — the living state icon is the
-   one channel the portrait doesn't carry. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest {
-	width: 2.2em;
-	height: 2.5em;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest-glyph {
-	--dse-crest-nudge: -0.24em;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__crest-glyph svg {
-	width: 1.15em;
-	height: 1.15em;
+/* With columns 1 and 2 empty the cluster is a two-column instrument: the readout hard
+   right, the gauge full width beneath. Zero-width first column + no column gap, so the
+   gauge sits flush with the row's left edge instead of paying for boxes that render
+   nothing (a `display: none` grid child still leaves its TRACK, and the track still
+   costs its gaps). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cluster {
+	grid-template-columns: 0 minmax(0, 1fr) auto;
+	column-gap: 0;
 }
 /* Tracker rows are denser than the standalone element: the readout steps down from
    2.05em but stays the headline (Scott: the big current value "really helps catch
@@ -10099,21 +10134,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	font-size: 1.7em;
 }
 
-/* ENEMY detail rows drop the crest and the identity lane: a creature's "Dying" is not
-   a rules state (creatures die at 0 — the word would be wrong), and the skull crest
-   would double the portrait one column over. Numerals + gauge + frame carry it,
-   exactly the rail's own arithmetic (SC-132 §9). */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail .dse-stamina__crest,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail .dse-stamina__cid {
-	display: none;
-}
-
-/* -- 5. PLATE (default): the two-lane row grid ---------------------------------- */
-/* Keyed on :not(rail) so a root that never had the attr reflected still renders the
-   recommended layout. The row's flex base becomes a grid: identity lane on row 1, the
-   bar as the full lane beneath it, the portrait spanning both — the row IS the SC-132
-   cluster's shape with the portrait standing where the crest stands. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row {
+/* -- 5. THE TWO-LANE ROW GRID (the "plate", now unconditional) ------------------ */
+/* Scott picked this over the rail candidate on 2026-08-22 ("The `plate` approach is
+   generally better: I mostly like the stamina bar taking up a significant portion of the
+   width"), so it is no longer keyed on a pref — it is simply the tracker's layout, and
+   the rail arm is deleted rather than left as a second shape to keep supporting.
+   The row's flex base becomes a grid: identity lane on row 1, the bar as the full lane
+   beneath it, the portrait spanning both. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row {
 	display: grid;
 	grid-template-columns: auto auto minmax(0, 1fr);
 	grid-template-rows: auto auto;
@@ -10121,24 +10149,24 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	row-gap: 6px;
 	align-items: center;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__turnbox {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__turnbox {
 	grid-row: 1;
 	grid-column: 1;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__portrait {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__portrait {
 	grid-row: 1 / 3;
 	grid-column: 2;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__info {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__info {
 	grid-row: 1;
 	grid-column: 3;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__group--heroes .dse-init__row > .dse-init__bar {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__bar {
 	grid-row: 2;
 	grid-column: 3;
 }
 /* The detail row: same two lanes, no turn box column. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
 	grid-template-rows: auto auto;
@@ -10146,89 +10174,168 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	row-gap: 6px;
 	align-items: center;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row > .dse-init__portrait {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row > .dse-init__portrait {
 	grid-row: 1 / 3;
 	grid-column: 1;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row > .dse-init__info {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row > .dse-init__info {
 	grid-row: 1;
 	grid-column: 2;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail.dse-init__row > .dse-init__bar {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row > .dse-init__bar {
 	grid-row: 2;
 	grid-column: 2;
 }
-/* The enemy cluster's empty crest column (its two members are display:none above)
-   would still cost a column gap; collapse it so the gauge sits flush left. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:not([data-dse-init-stamina='rail']) .dse-init__detail .dse-stamina__cluster {
-	grid-template-columns: 0 minmax(0, 1fr) auto;
-	column-gap: 0;
-}
+/* -- 6. THE STATE CHIP on the conditions row ------------------------------------ */
+/* Scott, 2026-08-22: "The 'winded' or 'dying' text should move to the conditions row."
+   It reads correctly there for a reason beyond space: winded/dying IS a condition-shaped
+   fact about the actor, so it belongs with the other things currently true of them, and
+   the stamina lane is left as pure instrument.
 
-/* -- 6. RAIL (candidate): the one-line row -------------------------------------- */
-/* The base flex row stays; the bar takes the right-hand slot the numeric readout
-   held, in the cluster's rail form (SC-132 §9, verbatim rulings: no crest, no state
-   word, compact readout, elastic gauge). */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar {
-	flex: 0 1 16rem;
-	min-width: 9rem;
-	margin-left: auto;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__cluster {
-	display: flex;
+   The chip is a WORD first (Scott is colourblind — the word is the meaning, never the
+   colour), framed in the state's own hue as the second channel, with the whole-row frame
+   as the third. `healthy`/`none` render nothing at all: a status that is always on stops
+   being a status (SC-132 §2's own ruling about the cluster's word, kept). "none" is what
+   a squad pool and a dead minion get — see §7.
+
+   `.dse-init__conditions` is a 24px flex row in the base sheet, so the chip simply
+   becomes its first item; no wrapper was added, which is what keeps the base/print DOM
+   box-identical (a display:none node contributes no box). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__conditions > .dse-init__state {
+	display: inline-flex;
 	align-items: center;
-	gap: 0.5rem;
-	min-height: 1.75rem;
+	margin-right: 0.4rem;
+	padding: 0.05em 0.45em;
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	font-size: 0.82em;
+	line-height: 1.5;
+	white-space: nowrap;
+	color: var(--dse-st, var(--dse-stamina-winded));
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__crest,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__cid {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__conditions > .dse-init__state[data-state='winded'] {
+	--dse-st: var(--dse-stamina-winded);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__conditions > .dse-init__state[data-state='dying'] {
+	--dse-st: var(--dse-stamina-dying);
+}
+/* Healthy, pool and dead-minion chips render no box at all. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__conditions > .dse-init__state:is([data-state='healthy'], [data-state='none']) {
 	display: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__cnums {
-	flex: 0 0 auto;
-	font-size: 1.15em;
+
+/* -- 7. A SQUAD POOL HAS NO STATE (round-2 rules fix) --------------------------- */
+/* "Because minion Stamina is tracked as a pool, minions can't be winded, can't regain
+   Stamina, and can't gain temporary Stamina during a battle" (Draw Steel Monsters,
+   "Using Minions"), and a squad is not a creature with a winded value of its own — so
+   there is no such thing as a winded squad. Round 1 nonetheless painted the amber frame
+   on a half-spent pool, which asserted a state the game does not define.
+
+   The row frame is already handled by §3's `:not([data-pool='on'])` guard; this block
+   takes the state colour off the pool's own instrument, so the pour keeps ONE colour
+   whatever the level. Nothing is lost: the pool's real information is its LENGTH and
+   its per-minion death ticks (each tick crossed is one dead minion — the graduations
+   MinionStaminaPoolModal draws), and those are untouched.
+   A CAPTAIN is not affected by any of this: "A captain's Stamina isn't added to a minion
+   squad's Stamina pool, and is tracked as for any other creature in combat", so a
+   captain's bar is an ordinary creature bar and keeps the full ladder. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar[data-pool='on'] .dse-stamina__cluster,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell-gauge[data-pool='on'] {
+	--dse-st: var(--dse-stamina-healthy);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-stamina='rail'] .dse-init__bar .dse-stamina__gauge {
-	flex: 1 1 4rem;
-	min-width: 3rem;
-	--dse-ch-h: 0.5rem;
-	/* Unitless 0 would void the marks' calc() — this must carry a unit (SC-132 §9). */
-	--dse-g-pad: 0px;
-	padding-top: 0;
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar[data-pool='on'] .dse-stamina__cluster .dse-stamina__ccur {
+	color: var(--dse-heading);
 }
 
-/* -- 6b. The tracker's narrow form: the bar stands down to numerals + gauge ------ */
-/* At a sidebar-leaf width the plate's cluster row cannot hold crest + state word +
-   readout (measured at 300px: the word and the numerals collide in the same track), so
-   below the threshold the identity members come off and the readout steps down — the
-   SC-132 rail's own arithmetic (§9: the state stays said by the frame, the numeral's
-   colour and the gauge). A CONTAINER query, not a media query: the thing that decides
-   is the TRACKER's width (a note pane, a split, a sidebar leaf), never the window's —
-   the same reasoning as the SC-154 command bar's own query. Steel-screen-scoped like
-   everything here, so base/print layout (which has no bar at all) is untouched.
-   420px: the cluster row needs ~240px (crest 35 + word ~70 + readout ~110 + gaps) and
-   the lane sits right of the turnbox+portrait+padding (~130px) — 420 puts the failing
-   widths safely in the stood-down branch while a 500px split keeps the full form. */
+/* -- 8. THE SQUAD CAPTAIN ------------------------------------------------------- */
+/* Scott, 2026-08-22: "it should be clear who the squad leader is." The rules call the
+   role CAPTAIN (Draw Steel Monsters, "Using Minions" — "attached to that squad as a
+   captain"; "leader" is an unrelated organization type), a squad has at most one, and
+   the captain's death is the event the replacement clause keys on: "If a squad of
+   minions loses their captain, a new allied creature can become that squad's captain at
+   the start of the next round."
+
+   Three channels again, word first: the badge WORD ("Captain" / "Captain down"), the
+   crown silhouette, and the ink. Plus a fourth that costs nothing — the captain's cell
+   is pulled to the FRONT of the squad roster with `order`, a pure Steel reflow of a
+   grid item (the DOM order is untouched, so print is unaffected), so "who is the
+   captain" is answered by the first cell every time. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+	padding: 0.05em 0.4em;
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.07em;
+	font-size: 0.75em;
+	font-weight: normal;
+	line-height: 1.5;
+	white-space: nowrap;
+	color: var(--dse-metal);
+}
+/* On the detail row the badge sits beside the creature's name, which is bold — the
+   badge is an annotation on that name, not a second heading. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__name > .dse-init__captain {
+	margin-left: 0.5em;
+	vertical-align: middle;
+}
+/* In a roster cell it is the cell's own caption line, above the portrait. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell > .dse-init__captain {
+	margin-bottom: 3px;
+	max-width: 100%;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain-glyph {
+	display: inline-flex;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain-glyph svg {
+	width: 1em;
+	height: 1em;
+}
+/* Captain down: the squad has lost its "With Captain" benefits and may take a new
+   captain at the start of the next round. Said by the word, then by the colour. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain[data-down='on'] {
+	color: var(--dse-stamina-dying);
+}
+/* The captain leads the roster (see the note above — `order` only, never a DOM move). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell[data-squad-role='captain'] {
+	order: -1;
+	border-color: var(--dse-metal-faint);
+	box-shadow: inset 0 0 0 1px var(--dse-metal-faint);
+}
+/* …but a SELECTED captain still shows the selection ring, unshadowed by the above. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell[data-squad-role='captain'][data-selected] {
+	border-color: var(--dse-select);
+	box-shadow: 0 0 5px var(--dse-select);
+}
+
+/* -- 9. The tracker's narrow form ----------------------------------------------- */
+/* A CONTAINER query, not a media query: the thing that decides is the TRACKER's width
+   (a note pane, a split, a sidebar leaf), never the window's — the same reasoning as the
+   SC-154 command bar's own query. Steel-screen-scoped like everything here, so base/print
+   layout (which has no bar at all) is untouched.
+
+   Round 2 did most of this block's job for it: the crest and the identity lane are gone
+   at EVERY width now (§4), so all that is left below the threshold is stepping the
+   readout down so a 1.7em numeral does not dominate a 300px leaf. 420px is kept as the
+   threshold: it is where the lane (right of turnbox + portrait + padding, ~130px) stops
+   being able to hold the full-size readout beside a legible gauge. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init {
 	container-type: inline-size;
 	container-name: dse-init-host;
 }
 @container dse-init-host (max-width: 420px) {
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__crest,
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cid {
-		display: none;
-	}
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cnums {
 		font-size: 1.3em;
 	}
-	/* The empty crest column would still cost its two column gaps. */
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cluster {
-		grid-template-columns: 0 minmax(0, 1fr) auto;
-		column-gap: 0;
-	}
 }
 
-/* -- 7. The grid cells' MINI variant -------------------------------------------- */
+/* -- 10. The grid cells' MINI variant ------------------------------------------- */
 /* The bare kit gauge under the cell's numbers — the same instrument at stud scale.
    The cells themselves take the recessed-slot ground (the detail row's, one size
    down); the selection ring's --dse-select border is untouched (:not guard). */
@@ -10250,6 +10357,240 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	--dse-ch-h: 0.32rem;
 	--dse-g-pad: 0px;
 	padding-top: 0;
+}
+
+/* ================================================================== */
+/*   11. TURN-ECONOMY CANDIDATES (hidden `initTurn` review switch)      */
+/* ================================================================== */
+/*
+   Scott, SC-183 comment 2026-08-22, on the two controls this section reshapes:
+
+     "the actions taken (main, maneuver, etc) is taking up too much space. At the same
+      time, they are the same general idea as the turn-taken box on the left-side of the
+      hero portrait which is also horribly out of place now. I think we need to spend
+      some time figuring out a good solution here."
+     "Goal of the turn-taken tracker … is to quickly and easily see who has taken their
+      turn within a round at a glance. Originally it was outside the container so a quick
+      scan down the left side would get the user the info they needed. Not opposed to
+      keeping that design, but maybe we can do better"
+     "The actions-taken tracker within each hero's container is more niche … it should be
+      minimal overhead and avoids cluttering the UI. That said, if its going to be
+      included at all, each one needs to be a one-click (like it is today) because having
+      multiple clicks (like a dropdown or something) is too much overhead when a
+      GM/Director is running a combat."
+
+   So this is OPTIONS, not a pick. Three candidates behind `data-dse-init-turn`, default
+   `current` = the layout above, unchanged, so the default picture cannot drift while the
+   options are judged (the SC-154 round-3 review-switch pattern).
+
+   THE INVARIANTS EVERY CANDIDATE KEEPS, by construction:
+     - ONE CLICK PER ACTION. Every candidate reflows the same four real
+       `button.dse-init__action-toggle` elements with the same single-click handlers.
+       No candidate introduces a menu, a popover or a second click. (This is why they are
+       CSS: a candidate physically cannot change the interaction.)
+     - The turn control stays the row's first child and stays one click.
+     - Every state keeps a non-colour channel: the check/dot glyph swap on the turn
+       control (§4.7) and, on the pip treatments, four distinct SILHOUETTES rather than
+       four tints (Scott is colourblind). Initials were rejected outright — Main,
+       Maneuver and Move all begin with M.
+*/
+
+/* -- 11a. `spine` — the turn state becomes the row's left EDGE ------------------ */
+/* Answers the scan goal literally: the turn control grows into a full-height spine on
+   the row's left edge, so a glance down the left side of the tracker reads who has gone
+   without landing on any individual row. The actions, meanwhile, stop owning a line of
+   their own and fold up onto the conditions row, held right — the cheapest possible way
+   to make them "minimal overhead" while keeping their words (no decoding). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__group--heroes .dse-init__row > .dse-init__turnbox {
+	grid-row: 1 / 3;
+	align-self: stretch;
+	width: 0.8em;
+	height: auto;
+	border-radius: 3px;
+	background: var(--dse-surface);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__grouphead > .dse-init__turnbox {
+	align-self: stretch;
+	width: 0.8em;
+	height: auto;
+	border-radius: 3px;
+	background: var(--dse-surface);
+}
+/* The glyph rides at the TOP of the spine (where the eye enters the row) instead of
+   stretching to fill it; the spine's own fill is what carries the state at a distance. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__turnbox .dse-init__turn svg {
+	margin: 2px 0 0;
+	width: 100%;
+	height: 0.7em;
+	background-color: transparent;
+	border-radius: 0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__turnbox:has(.dse-init__turn[data-taken]) {
+	background: var(--dse-turn-done);
+	border-color: var(--dse-turn-done);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__turnbox:has(.dse-init__turn[data-taken]) .dse-init__turn svg {
+	color: var(--dse-surface);
+}
+/* The identity lane becomes one wrapping flex row: the name takes a line of its own,
+   then conditions and the (shrunken) action chips share the next one. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__info {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	column-gap: 8px;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__name {
+	flex: 1 0 100%;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__actions {
+	margin-top: 0;
+	margin-left: auto;
+	gap: 3px;
+	font-size: 0.62em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__action-toggle {
+	padding: 0 4px;
+}
+
+/* -- 11b. `dim` — the turn state is the row's own MATERIAL ---------------------- */
+/* The row that has gone reads as spent stock: dimmed and desaturated, so the rows still
+   in play are the only bright things on screen — the scan target is the absence of dim,
+   which is even faster than reading a column of checkboxes. The check glyph stays (dim
+   is never the only channel), but the box shrinks out of the way. The actions become
+   four silhouette pips parked in the row's top-right corner, off the identity lane
+   entirely. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__group--heroes .dse-init__row:has(> .dse-init__turnbox .dse-init__turn[data-taken]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]) {
+	opacity: 0.5;
+	filter: saturate(0.55);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__turnbox {
+	width: 1.15em;
+	height: 1.15em;
+	border-color: var(--dse-metal-faint);
+}
+/* Four pips in the corner. `position: absolute` against the row (which already declares
+   `position: relative` for its hairline ornaments), so the identity lane reclaims the
+   whole line the checklist used to occupy. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__actions {
+	position: absolute;
+	top: 6px;
+	right: 10px;
+	margin-top: 0;
+	gap: 3px;
+	font-size: 1em;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__action-toggle,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__action-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.35em;
+	height: 1.35em;
+	padding: 0;
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 3px;
+	color: var(--dse-fg-muted);
+}
+/* The pip shows the SILHOUETTE; the word stays in the DOM as the button's accessible
+   name (and its tooltip), it just stops being painted. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-toggle .dse-btn__text {
+	display: none;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-icon {
+	display: inline-flex;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-icon svg {
+	width: 0.85em;
+	height: 0.85em;
+}
+/* Pressed = "spent": the pip fills, exactly as the word chip does today. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-toggle:is([data-pressed], [aria-pressed='true']) {
+	background: var(--dse-accent);
+	border-color: var(--dse-accent);
+	color: var(--dse-accent-fg);
+}
+
+/* -- 11c. `gutter` — one left column owns the whole turn economy ---------------- */
+/* The synthesis Scott's two paragraphs point at: turn-taken and actions-taken are "the
+   same general idea", so they share one narrow column at the row's left edge — the turn
+   control on top (the left-side scan, preserved) with the four action pips as a 2x2 grid
+   directly beneath it. The identity lane is left holding only name and conditions, and
+   the stamina lane keeps the full width Scott asked for.
+   `display: contents` on the info column is what makes this possible without touching
+   the DOM: it dissolves the wrapper so name/conditions/actions become grid items of the
+   row itself and can be placed independently. Steel-screen-only, so print still renders
+   the real nested boxes.
+
+   FOOTGUN, hit and fixed in this round: `display: contents` changes the BOX tree, not
+   the DOM tree, so `.dse-init__row > .dse-init__name` still does not match — the child
+   combinator reads parentage, and the name's parent is `.dse-init__info` no matter what
+   it is displayed as. The placements below therefore all spell out
+   `> .dse-init__info > …`. Get this wrong and the rules silently do nothing while
+   auto-placement scatters the members across the grid, which is exactly how the first
+   cut of this candidate rendered. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row {
+	grid-template-rows: auto auto auto;
+	align-items: start;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row {
+	grid-template-rows: auto auto auto;
+	align-items: start;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__info {
+	display: contents;
+}
+/* Hero row: gutter is column 1, portrait column 2, content column 3. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__portrait {
+	grid-row: 1 / 4;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__info > .dse-init__name {
+	grid-row: 1;
+	grid-column: 3;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__info > .dse-init__conditions {
+	grid-row: 2;
+	grid-column: 3;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__bar {
+	grid-row: 3;
+	grid-column: 3;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__info > .dse-init__actions {
+	grid-row: 2 / 4;
+	grid-column: 1;
+}
+/* Detail row: no turn box, so the gutter holds the pips alone under the portrait. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__portrait {
+	grid-row: 1 / 3;
+	grid-column: 1;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__info > .dse-init__name {
+	grid-row: 1;
+	grid-column: 2;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__info > .dse-init__conditions {
+	grid-row: 2;
+	grid-column: 2;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__bar {
+	grid-row: 3;
+	grid-column: 2;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__info > .dse-init__actions {
+	grid-row: 3;
+	grid-column: 1;
+	justify-self: center;
+}
+/* The 2x2 pip block itself. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__actions {
+	display: grid;
+	grid-template-columns: repeat(2, auto);
+	gap: 3px;
+	margin-top: 6px;
+	font-size: 1em;
+	justify-content: start;
 }
 
 /* END SC-183 tracker stamina */

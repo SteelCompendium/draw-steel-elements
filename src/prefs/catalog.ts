@@ -102,22 +102,44 @@ declare module '../framework/seams/prefs' {
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
 		staminaRecoveryPopover: boolean;
-		// —— SC-183: WHERE the initiative tracker's row stamina bar sits.
+		// —— SC-183 round 2: HOW the tracker says "this actor has gone" and "these
+		// actions are spent".
 		//
-		// Both values are the SAME additive DOM (the SC-132 kit cluster mounted as the
-		// row's last child, base/print-hidden); the attr only chooses the Steel screen
-		// layout, so this is a pure CSS reflow — no rebuild, and the frozen print pairs
-		// are untouched by either value by construction.
+		// Round 1's `initStamina` plate/rail A/B is GONE — Scott picked plate
+		// (2026-08-22: "The `plate` approach is generally better"), so plate is now the
+		// one unconditional tracker layout and the key, the rail CSS and its shots were
+		// deleted. This is the round-2 review switch that replaces it, for the one open
+		// question in his ruling: the turn-taken dot and the
+		// [Main][Maneuver][Move][Triggered] row both need rethinking, and he asked for
+		// options rather than a pick ("I think we need to spend some time figuring out a
+		// good solution here").
 		//
-		// `plate` (default, the recommendation): the row is a two-lane forged plate —
-		// identity lane on top, the full-width cluster (state word, readout, gauge)
-		// beneath, the stamina element's own presence hierarchy. `rail` is the LAYOUT
-		// CANDIDATE built for Scott's SC-183 review (the SC-154 round-3 pattern): the
-		// one-line dense form — the cluster's rail shape held against the row's right
-		// edge where the numeric readout used to sit. Deliberately `ui.hidden`; once
-		// Scott picks, the loser and this key are deleted (nothing here is a promise to
-		// keep supporting two tracker shapes).
-		initStamina: 'plate' | 'rail';
+		// EVERY value renders the SAME DOM — the turn box is still the row's first child
+		// and the four action toggles are still four real one-click buttons in
+		// `.dse-init__actions` (his hard constraint: "each one needs to be a one-click
+		// … because having multiple clicks … is too much overhead when a GM/Director is
+		// running a combat"). The attr only reflows them, so no candidate can change
+		// behaviour, and none of them can move a frozen print pair.
+		//
+		//   current (default)  round 2's baseline: the bordered turn box at the row's
+		//                      left and the four word-labelled toggles on their own line.
+		//   spine              the turn box becomes a full-height SPINE on the row's left
+		//                      edge (the at-a-glance scan down the left side Scott named
+		//                      as the original goal), and the action toggles fold up onto
+		//                      the conditions line, costing no line of their own.
+		//   dim                the whole row carries the turn state as SPENT MATERIAL
+		//                      (dimmed, desaturated plate + a check on the box), and the
+		//                      actions shrink to four pips tucked at the identity lane's
+		//                      right edge.
+		//   gutter             one narrow left column carries the whole turn economy: the
+		//                      turn control on top, the four actions as a 2x2 pip grid
+		//                      beneath it, freeing the identity lane entirely.
+		//
+		// Deliberately `ui.hidden` — a review-time device, never a shipped state. Deletion
+		// plan: Scott picks, the winner becomes unconditional, and this key, the losing
+		// CSS branches and the catalog-test entry are deleted (the SC-154 `5360fe9`
+		// promotion shape, which is exactly what round 2 just did to `initStamina`).
+		initTurn: 'current' | 'spine' | 'dim' | 'gutter';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -569,19 +591,22 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
-	// SC-183 — the initiative tracker's stamina-bar layout candidates. Hidden (the row
-	// is never rendered): a review switch for the A/B on the ticket, not a shipped
-	// setting. See the DsePrefs comment above.
+	// SC-183 round 2 — the turn-taken / actions-taken candidates. Hidden (the row is
+	// never rendered): a review switch for the options on the ticket, not a shipped
+	// setting. See the DsePrefs comment above for what each value does and why every
+	// value is the same DOM.
 	d({
-		key: 'initStamina', default: 'plate', attr: 'init-stamina',
+		key: 'initTurn', default: 'current', attr: 'init-turn',
 		ui: {
-			group: 'Element defaults', label: 'Initiative tracker stamina bar', control: 'select',
+			group: 'Element defaults', label: 'Initiative tracker turn economy', control: 'select',
 			hidden: true,
 			options: [
-				{ value: 'plate', label: 'Plate (full-width bar lane, recommended)' },
-				{ value: 'rail', label: 'Rail (one-line bar in the row)' },
+				{ value: 'current', label: 'Current (turn box left, action toggles on their own line)' },
+				{ value: 'spine', label: 'Spine (full-height turn spine, actions on the conditions line)' },
+				{ value: 'dim', label: 'Dim (spent-row treatment, actions as corner pips)' },
+				{ value: 'gutter', label: 'Gutter (turn + action pips in one left column)' },
 			],
-			help: 'SC-183 review switch: where each tracker row mounts its stamina bar.',
+			help: 'SC-183 review switch: how the tracker shows who has taken their turn and which actions are spent.',
 		},
 	}),
 

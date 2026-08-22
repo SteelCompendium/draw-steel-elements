@@ -241,10 +241,12 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbStickyMeta: 'sb-stickymeta',
 		fbFeatureStyle: 'fb-featstyle',
 		fbStats: 'fb-stats',
-		// SC-183 — the tracker's stamina-bar layout A/B (hidden review switch, the
-		// SC-154 initControls pattern): attr-reflected because both layouts are one
-		// DOM and the value is a pure Steel-screen CSS reflow.
-		initStamina: 'init-stamina',
+		// SC-183 round 2 — the tracker's turn-economy candidates (hidden review switch,
+		// the SC-154 initControls pattern): attr-reflected because every candidate is
+		// one DOM and the value is a pure Steel-screen CSS reflow. (Round 1's
+		// `initStamina` plate/rail A/B lived here until Scott picked plate — key and
+		// loser deleted, per its own deletion plan below.)
+		initTurn: 'init-turn',
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
@@ -270,11 +272,22 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // the promised return to empty happened. A hidden row is a review-time device, never a
 // shipped state; anything that appears here must carry its own deletion plan.
 //
-// SC-183 `initStamina` is the third: the tracker stamina-bar layout A/B (plate vs
-// rail) awaiting Scott's pick on the ticket. Deletion plan: the promotion round makes
-// the winner unconditional and deletes the key, the loser's CSS branch and this entry —
-// exactly the SC-154 promotion shape (dse commit 5360fe9).
-const EXPECTED_HIDDEN_ROWS: string[] = ['initStamina'];
+// SC-183 `initStamina` was the third: the tracker stamina-bar layout A/B (plate vs
+// rail). Scott picked plate on 2026-08-22 ("The `plate` approach is generally better"),
+// so round 2 executed that deletion plan exactly as written — plate became
+// unconditional, and the key, the rail CSS branch, the rail shots and this entry all
+// went. Three for three: a hidden row has always ended in its own deletion.
+//
+// SC-183 `initTurn` is the fourth, and the list is non-empty for the same reason it was
+// the previous three times — an open question Scott asked for OPTIONS on rather than a
+// pick: how the tracker should show who has taken their turn and which actions are
+// spent ("I think we need to spend some time figuring out a good solution here",
+// SC-183, 2026-08-22). Three candidates (`spine`, `dim`, `gutter`) against a default of
+// `current`, which renders today's layout so the default picture cannot drift while
+// they are judged. Deletion plan, identical to its predecessors': Scott picks, the
+// winner becomes unconditional, and the key, the losing CSS branches, the candidate
+// shots and this entry are deleted (the SC-154 `5360fe9` promotion shape).
+const EXPECTED_HIDDEN_ROWS: string[] = ['initTurn'];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

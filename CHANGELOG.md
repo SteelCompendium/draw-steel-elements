@@ -42,17 +42,31 @@ for what needs action.
   tracker — opens the same modal.
 - **The initiative tracker adopts the stamina bar's design** (SC-183). Every hero row
   and every opened enemy row in the tracker now carries the real stamina instrument the
-  `ds-stamina` element ships — state word, big current-value readout, temp-stamina
-  plate, and the forged gauge (heroes keep the dying reserve; creatures pour from
-  zero; a minion squad's row shows the shared pool with per-minion death graduations).
-  The collapsed creature cells in the grid get a mini gauge under their numbers, so a
-  glance down the roster reads like a glance across health bars. Winded and dying now
-  paint the whole row's frame — amber border when winded, red frame and ground when
-  dying — the same treatment the stamina element wears. Clicking a bar opens the same
-  stamina editor the numbers always opened; every existing control (turn checkboxes,
-  conditions, action checklist, Malice bar, minion pools, double-click editing) works
-  exactly as before, and print layouts are unchanged — paper keeps the compact numeric
-  tracker.
+  `ds-stamina` element ships — a big current-value readout, the temp-stamina plate, and
+  the forged gauge running the full width of the row (heroes keep the dying reserve;
+  creatures pour from zero; a minion squad's row shows the shared pool with per-minion
+  death graduations). The collapsed creature cells in the grid get a mini gauge under
+  their numbers, so a glance down the roster reads like a glance across health bars.
+  **Winded** and **Dying** are now called out as a labelled chip on the actor's
+  conditions line, with the whole row's frame taking the state's colour behind it —
+  amber when winded, a red frame and ground when dying. A monster at 0 Stamina reads
+  **Dead** rather than "Dying", which is the actual rule: only heroes have a dying
+  state. Clicking a bar opens the same stamina editor the numbers always opened; every
+  existing control (turn checkboxes, conditions, action checklist, Malice bar, minion
+  pools, double-click editing) works exactly as before, and print layouts are unchanged
+  — paper keeps the compact numeric tracker.
+- **Minion squads are no longer shown as "winded"** (SC-183). A squad's shared Stamina
+  pool used to take the amber winded frame once it dropped below half. It shouldn't:
+  *"Because minion Stamina is tracked as a pool, minions can't be winded"* — and a
+  squad isn't a creature with a winded value of its own. The pool now reads by length
+  and by its per-minion death ticks alone. A squad's **captain** is unaffected, because
+  a captain's Stamina is tracked separately from the pool — they go winded like any
+  other creature.
+- **The squad captain is called out on the roster** (SC-183). A squad's captain now
+  leads its grid of creatures, badged with a crown and the word "Captain", and is
+  marked the same way on the opened detail row. Drop the captain to 0 and the badge
+  turns to **"Captain down"** — the cue that the squad has lost its *With Captain*
+  benefits and, per the rules, may take a new captain at the start of the next round.
 - [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
   against its parent card's left and right edges with no frame of its own. It now

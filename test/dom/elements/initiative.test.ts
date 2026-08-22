@@ -1372,39 +1372,356 @@ malice:
 		expect(root.querySelector('.dse-init__cell .dse-init__cell-gauge')).not.toBeNull();
 	});
 
-	test('initStamina pref (hidden A/B switch): reflected as data-dse-init-stamina, default plate, live reflow to rail', async () => {
-		const { root, deps } = await renderInit(quickStart);
-		expect(root.getAttribute('data-dse-init-stamina')).toBe('plate');
-		await deps.prefs.set('initStamina', 'rail');
-		expect(root.getAttribute('data-dse-init-stamina')).toBe('rail');
-		// A reflow, not a rebuild: the same bar element is still mounted.
-		expect(root.querySelector('.dse-init__row > .dse-init__bar')).not.toBeNull();
-	});
-
 	test('CSS contract: the instruments are base-hidden inside the .dse-init block, and every reveal rule carries the Steel screen guard', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
 		// The base hide (what keeps base + BOTH print classes byte-identical): inside the
-		// [data-dse-element="initiative"] .dse-init block, the two instrument nodes are
-		// display:none with NO theme scope.
+		// [data-dse-element="initiative"] .dse-init block, the instrument nodes are
+		// display:none with NO theme scope. Round 1's pair, then round 2's three.
 		const block = sheet.match(/\[data-dse-element="initiative"\]\s+\.dse-init\s*\{[\s\S]*?\n\}/)![0];
 		expect(block).toMatch(/\.dse-init__bar,\s*\n\s*\.dse-init__cell-gauge\s*\{\s*\n\s*display:\s*none;/);
+		expect(block).toMatch(
+			/\.dse-init__state,\s*\n\s*\.dse-init__captain,\s*\n\s*\.dse-init__action-icon\s*\{\s*\n\s*display:\s*none;/,
+		);
 
-		// Every OTHER selector mentioning the two instrument classes must carry the full
-		// Steel screen guard — a reveal rule without :not([data-dse-print="on"]) would
-		// paint the bar into the frozen print pairs.
+		// Every OTHER selector mentioning an instrument class must carry the full Steel
+		// screen guard — a reveal rule without :not([data-dse-print="on"]) would paint
+		// the instrument into the frozen print pairs.
 		const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
 		const selectorLines = noComments
 			.split('\n')
 			// (?![\w-]) so SC-154's `.dse-init__bar-grid` — a different node, the command
-			// bar's grid — is not swept into this contract.
-			.filter((l) => /\.dse-init__(bar(?![\w-])|cell-gauge)/.test(l))
+			// bar's grid — is not swept into this contract. `state`/`captain` take the
+			// same guard so a stray hyphenated cousin cannot slip in unnoticed.
+			.filter((l) =>
+				/\.dse-init__(bar(?![\w-])|cell-gauge|state(?![\w-])|captain|action-icon)/.test(l),
+			)
 			.filter((l) => /[{,]\s*$/.test(l.trim()) || l.includes('{'));
 		expect(selectorLines.length).toBeGreaterThan(0);
+		const baseHides = ['.dse-init__bar,', '.dse-init__state,', '.dse-init__captain,'];
 		for (const line of selectorLines) {
 			const trimmed = line.trim();
-			if (trimmed === '.dse-init__bar,' || trimmed.startsWith('.dse-init__cell-gauge {')) continue; // the base hide
+			if (baseHides.includes(trimmed)) continue;
+			if (trimmed.startsWith('.dse-init__cell-gauge {')) continue;
+			if (trimmed.startsWith('.dse-init__action-icon {')) continue;
 			expect(trimmed).toContain(`[data-dse-theme='steel']:not([data-dse-print="on"])`);
 		}
+	});
+});
+
+/* ==================================================================== */
+/*  SC-183 ROUND 2 — Scott's ruling (2026-08-22)                         */
+/* ==================================================================== */
+describe('SC-183 round 2: crest dropped, state word on the conditions row, squad captain, turn candidates', () => {
+	/** A hero at exactly half max (winded, inclusive) and one below zero (dying). */
+	const STATES = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+    current_stamina: 40
+    conditions:
+      - key: "slowed"
+  - name: "Samwise Gamgee"
+    max_stamina: 90
+    current_stamina: -12
+  - name: "Aragorn"
+    max_stamina: 100
+enemy_groups:
+  - name: "Mordor Forces"
+    creatures:
+      - name: "Orc"
+        max_stamina: 40
+        amount: 1
+        instances:
+          - id: 1
+            current_stamina: 0
+malice:
+  value: 0
+`;
+
+	/** A squad WITH a captain — the shape the captain treatment is about. */
+	const SQUAD_CAPTAIN = `heroes:
+  - name: "Aragorn"
+    max_stamina: 120
+enemy_groups:
+  - name: "Goblin Squad"
+    is_squad: true
+    minion_stamina_pool: 9
+    creatures:
+      - name: "Goblin"
+        max_stamina: 4
+        amount: 5
+        squad_role: minion
+        instances:
+          - id: 1
+          - id: 2
+          - id: 3
+          - id: 4
+          - id: 5
+      - name: "Goblin Captain"
+        max_stamina: 40
+        amount: 1
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 18
+malice:
+  value: 0
+`;
+
+	/** The same squad after its captain has been dropped to 0. */
+	const SQUAD_CAPTAIN_DOWN = SQUAD_CAPTAIN.replace('current_stamina: 18', 'current_stamina: 0');
+
+	const stateChip = (row: Element): HTMLElement =>
+		row.querySelector('.dse-init__conditions > .dse-init__state') as HTMLElement;
+
+	// ---------------------------------------------------------------- the state chip
+
+	test('the WINDED/DYING word is a chip on the CONDITIONS row, not in the stamina lane', async () => {
+		const { root } = await renderInit(STATES);
+		const rows = root.querySelectorAll('.dse-init__group--heroes .dse-init__row');
+
+		// It is the conditions row's FIRST child, so it reads before the icons.
+		const winded = rows[0].querySelector('.dse-init__conditions')!.firstElementChild as HTMLElement;
+		expect(winded.hasClass('dse-init__state')).toBe(true);
+		expect(winded.getAttribute('data-state')).toBe('winded');
+		expect(winded.textContent).toBe('Winded');
+
+		// …and it did NOT displace the condition icons that were already there.
+		expect(rows[0].querySelectorAll('.dse-init__conditions .dse-cond').length).toBeGreaterThan(0);
+
+		// The stamina lane no longer carries the word: the kit still BUILDS `cstate`
+		// (that DOM is the standalone element's and print's), but the tracker's own
+		// chip is where the tracker says it.
+		expect(stateChip(rows[1]).textContent).toBe('Dying');
+		expect(stateChip(rows[1]).getAttribute('data-state')).toBe('dying');
+
+		// Healthy says nothing at all — a status that is always on stops being a status.
+		expect(stateChip(rows[2]).getAttribute('data-state')).toBe('healthy');
+		expect(stateChip(rows[2]).textContent).toBe('');
+	});
+
+	test('a non-hero creature at 0 reads "Dead", never "Dying" — dying is a hero-only state', async () => {
+		// Draw Steel Heroes: "When a nonhero creature's Stamina is reduced to 0, they die
+		// or are knocked unconscious" — only heroes have a dying state.
+		const { root } = await renderInit(STATES);
+		const detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		expect(stateChip(detail).getAttribute('data-state')).toBe('dying');
+		expect(stateChip(detail).textContent).toBe('Dead');
+	});
+
+	test('the chip survives a condition add/remove (the conditions row rebuilds around it)', async () => {
+		const { root } = await renderInit(STATES);
+		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		expect(stateChip(row).textContent).toBe('Winded');
+
+		// Removing the hero's one condition rebuilds the container — the chip must come
+		// back with it, or the state word would silently vanish mid-fight.
+		(row.querySelector('.dse-init__conditions button.dse-cond') as HTMLElement).click();
+		expect(row.querySelectorAll('.dse-init__conditions .dse-cond:not(.dse-cond--add)').length).toBe(0);
+		expect(stateChip(row).textContent).toBe('Winded');
+		expect(stateChip(row).getAttribute('data-state')).toBe('winded');
+	});
+
+	test('a stamina edit repaints the chip in place, alongside the numeric readout and the bar', async () => {
+		const { root } = await renderInit(STATES);
+		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		expect(stateChip(row).textContent).toBe('Winded');
+
+		(row.querySelector('.dse-init__bar') as HTMLElement).click();
+		const modal = lastModal();
+		commitStepperValue(modal, -20);
+		modalApplyBtn(modal).click();
+
+		// -20 of 80 → dying, said by the chip as well as by the bar.
+		expect(stateChip(row).textContent).toBe('Dying');
+		expect(stateChip(row).getAttribute('data-state')).toBe('dying');
+	});
+
+	// -------------------------------------------------------- the squad has no state
+
+	test('a squad pool bar is stamped data-pool and its chip says NOTHING — minions cannot be winded', async () => {
+		// "Because minion Stamina is tracked as a pool, minions can't be winded, can't
+		// regain Stamina, and can't gain temporary Stamina during a battle" (Draw Steel
+		// Monsters, "Using Minions"). Round 1 painted the amber winded frame on a
+		// half-spent pool; this is the fix, and the fix's regression guard.
+		const { root } = await renderInit(SQUAD_CAPTAIN);
+		const detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		const bar = detail.querySelector(':scope > .dse-init__bar') as HTMLElement;
+
+		// 9 of 20 IS at-or-below half, so the raw ladder would say "winded" here.
+		expect(bar.querySelector('.dse-stamina__cluster')!.getAttribute('data-state')).toBe('winded');
+		// …which is exactly why the pool marks itself, and why the chip stays silent.
+		expect(bar.getAttribute('data-pool')).toBe('on');
+		expect(stateChip(detail).getAttribute('data-state')).toBe('none');
+		expect(stateChip(detail).textContent).toBe('');
+
+		// The cell minis carry the same stamp, so the ladder stands down there too.
+		const mini = root.querySelector('.dse-init__cell[data-squad-role="minion"] .dse-init__cell-gauge');
+		expect(mini!.getAttribute('data-pool')).toBe('on');
+	});
+
+	test('a CAPTAIN keeps the ordinary creature ladder — their Stamina is not in the pool', async () => {
+		// "A captain's Stamina isn't added to a minion squad's Stamina pool, and is
+		// tracked as for any other creature in combat" (Draw Steel Monsters).
+		const { root } = await renderInit(SQUAD_CAPTAIN);
+		const captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		captainCell.click();
+		const detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		const bar = detail.querySelector(':scope > .dse-init__bar') as HTMLElement;
+		expect(bar.getAttribute('data-pool')).toBeNull();
+		// 18 of 40 is at-or-below half: an ordinary winded creature.
+		expect(stateChip(detail).textContent).toBe('Winded');
+	});
+
+	// ------------------------------------------------------------------- the captain
+
+	test('the squad roster says who the captain is: group stamps, cell stamps, and a badge whose WORD carries it', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN);
+		const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+		expect(body.getAttribute('data-squad')).toBe('on');
+		expect(body.getAttribute('data-captain')).toBe('up');
+
+		const cells = root.querySelectorAll('.dse-init__cell');
+		const roles = Array.from(cells).map((c) => c.getAttribute('data-squad-role'));
+		expect(roles.filter((r) => r === 'captain').length).toBe(1);
+		expect(roles.filter((r) => r === 'minion').length).toBe(5);
+
+		const captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		const badge = captainCell.querySelector('.dse-init__captain') as HTMLElement;
+		expect(badge).not.toBeNull();
+		// The WORD is the signal (Scott is colourblind) — never the crown or the hue alone.
+		expect(badge.querySelector('.dse-init__captain-word')!.textContent).toBe('Captain');
+		expect(badge.getAttribute('data-down')).toBe('off');
+		expect(badge.querySelector('.dse-init__captain-glyph')!.getAttribute('aria-hidden')).toBe('true');
+
+		// Minion cells carry no badge — the captain is the exception, not the rule.
+		expect(root.querySelector('.dse-init__cell[data-squad-role="minion"] .dse-init__captain')).toBeNull();
+	});
+
+	test('a downed captain is announced — the moment the rules allow a replacement', async () => {
+		// "If a squad of minions loses their captain, a new allied creature can become
+		// that squad's captain at the start of the next round" (Draw Steel Monsters).
+		const { root } = await renderInit(SQUAD_CAPTAIN_DOWN);
+		const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+		expect(body.getAttribute('data-captain')).toBe('down');
+		const badge = root.querySelector('.dse-init__captain') as HTMLElement;
+		expect(badge.getAttribute('data-down')).toBe('on');
+		expect(badge.querySelector('.dse-init__captain-word')!.textContent).toBe('Captain down');
+	});
+
+	test('dropping the captain to 0 flips the badge in place, without a rebuild', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN);
+		const captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		captainCell.click();
+		const detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+
+		(detail.querySelector(':scope > .dse-init__bar') as HTMLElement).click();
+		const modal = lastModal();
+		commitStepperValue(modal, 0);
+		modalApplyBtn(modal).click();
+
+		const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+		expect(body.getAttribute('data-captain')).toBe('down');
+		root.querySelectorAll('.dse-init__captain-word').forEach((w) => {
+			expect(w.textContent).toBe('Captain down');
+		});
+	});
+
+	test('a non-squad group is stamped with nothing — squad_role is meaningless outside a squad', async () => {
+		const { root } = await renderInit(quickStart);
+		const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+		expect(body.getAttribute('data-squad')).toBeNull();
+		expect(body.getAttribute('data-captain')).toBeNull();
+		expect(root.querySelector('.dse-init__captain')).toBeNull();
+		expect(root.querySelector('[data-squad-role]')).toBeNull();
+	});
+
+	// ------------------------------------------------------- the turn-economy switch
+
+	test('initTurn pref (hidden review switch): reflected as data-dse-init-turn, default current, live reflow to each candidate', async () => {
+		const { root, deps } = await renderInit(quickStart);
+		expect(root.getAttribute('data-dse-init-turn')).toBe('current');
+		for (const value of ['spine', 'dim', 'gutter'] as const) {
+			await deps.prefs.set('initTurn', value);
+			expect(root.getAttribute('data-dse-init-turn')).toBe(value);
+		}
+	});
+
+	test('every candidate is a pure REFLOW: the DOM and the one-click handlers are identical at every value', async () => {
+		// Scott's hard constraint: "each one needs to be a one-click (like it is today)
+		// because having multiple clicks (like a dropdown or something) is too much
+		// overhead when a GM/Director is running a combat." The candidates are CSS, so
+		// this is true by construction — and this test is what keeps it true.
+		const { root, deps } = await renderInit(quickStart);
+		const shape = (): string =>
+			[
+				root.querySelectorAll('.dse-init__turnbox').length,
+				root.querySelectorAll('button.dse-init__turn').length,
+				root.querySelectorAll('button.dse-init__action-toggle').length,
+				(root.querySelector('.dse-init__row')!.firstElementChild as HTMLElement).className,
+			].join('|');
+		const before = shape();
+		for (const value of ['spine', 'dim', 'gutter', 'current'] as const) {
+			await deps.prefs.set('initTurn', value);
+			expect(shape()).toBe(before);
+		}
+
+		// And the four toggles still take exactly one click each to flip.
+		const firstRow = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		const toggles = firstRow.querySelectorAll<HTMLElement>('button.dse-init__action-toggle');
+		expect(toggles.length).toBe(4);
+		toggles.forEach((t) => {
+			expect(t.getAttribute('aria-pressed')).toBe('false');
+			t.click();
+			expect(t.getAttribute('aria-pressed')).toBe('true');
+		});
+	});
+
+	test('each action toggle carries its slot key and a base-hidden silhouette (never an initial — Main/Maneuver/Move all start with M)', async () => {
+		const { root } = await renderInit(quickStart);
+		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		const toggles = row.querySelectorAll<HTMLElement>('button.dse-init__action-toggle');
+		expect(Array.from(toggles).map((t) => t.getAttribute('data-slot'))).toEqual([
+			'main',
+			'maneuver',
+			'move',
+			'triggered',
+		]);
+		// Four DISTINCT silhouettes (colour is never the channel; Scott is colourblind).
+		const icons = Array.from(toggles).map((t) =>
+			(t.querySelector('.dse-init__action-icon') as HTMLElement).getAttribute('data-icon'),
+		);
+		expect(new Set(icons).size).toBe(4);
+		// The accessible name is untouched — the glyph is decoration on top of the word.
+		expect(toggles[0].getAttribute('aria-label')).toContain('Main');
+		expect(toggles[0].textContent).toContain('Main');
+	});
+
+	test('read-only action slots get the same stamps, still with no buttons', async () => {
+		const { root } = await renderInit(quickStart, { canPersist: false });
+		const spans = root.querySelectorAll<HTMLElement>('span.dse-init__action-toggle');
+		expect(spans.length).toBeGreaterThan(0);
+		expect(root.querySelectorAll('button.dse-init__action-toggle').length).toBe(0);
+		expect(spans[0].getAttribute('data-slot')).toBe('main');
+		expect(spans[0].querySelector('.dse-init__action-icon')).not.toBeNull();
+	});
+
+	// --------------------------------------------------------------- the crest is out
+
+	test('CSS contract: the crest and the cluster identity lane are hidden on every tracker row', () => {
+		// Scott, 2026-08-22: "We likely dont need to have the crest" — heroes included,
+		// which is what round 1 kept it for. The kit still builds it (the standalone
+		// element and the hero sheet want it); the tracker hides it.
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const noComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+		const hide = noComments.match(
+			/\[data-dse-element='initiative'\] \.dse-init \.dse-stamina__crest,[\s\S]{0,400}?\{\s*\n\s*display: none;/,
+		);
+		expect(hide).not.toBeNull();
+		expect(hide![0]).toContain('.dse-stamina__cid');
+		expect(hide![0]).toContain(`[data-dse-theme='steel']:not([data-dse-print="on"])`);
+
+		// The rail branch is GONE — Scott picked plate, so there is no second layout.
+		expect(sheet).not.toContain(`[data-dse-init-stamina='rail']`);
 	});
 });
