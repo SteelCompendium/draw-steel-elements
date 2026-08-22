@@ -133,7 +133,7 @@ button, and the Winded and Dying states.
 
 **[Conditions](hero-suite.md#conditions-ds-conditions)** — `ds-conditions`, `ds-cond`
 
-A conditions strip for a single hero or creature, with the same condition picker the
+A conditions strip for a single hero or creature, with the same Conditions manager the
 initiative tracker uses.
 
 **[Heroic resource](hero-suite.md#heroic-resource-ds-resource)** — `ds-resource`

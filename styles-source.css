@@ -1849,7 +1849,7 @@ code.dsa {
 /* The small duration/effect badge riding a row (shared by list rows) — mirrors the
    conditions strip's own .dse-cond-chip__duration badge vocabulary at a slightly
    smaller scale, since this row already carries the glyph + name + two act buttons. */
-.dse-cond-item__dur {
+.dse-condal__dur {
 	flex: 0 0 auto;
 	font-size: 0.72em;
 	line-height: 1.4;
@@ -1970,7 +1970,6 @@ code.dsa {
 /* -- the add affordance: a dashed button, or (open) the combobox + dropdown -- */
 
 .dse-condal__addwrap {
-	position: relative;
 	margin-top: 0.7em;
 }
 .dse-condal__add {
@@ -2008,14 +2007,17 @@ code.dsa {
 	color: var(--dse-fg);
 }
 
-/* Dropdown: a small forged card floating under the combobox, scrollable so the
-   empty-query full-catalog listing never grows the modal. */
+/* Dropdown: SC-186 fix-round HIGH-1 — a small forged card in NORMAL FLOW below the
+   combobox (never `position: absolute`). Absolute positioning used to measure its own
+   232px against the COMBOBOX's offset parent while the actual clipping ancestor is
+   `.dse-modal__body` (max-height: 70vh; overflow-y: auto — which computes overflow-x:
+   auto too, clipping in BOTH axes): the menu rendered entirely outside the scrollable
+   body box at 0/3/8 rows, measured in a real Chromium, never visible. In flow, the menu
+   is simply more body CONTENT — the body grows to fit it (up to its own 70vh cap) and
+   scrolls the ordinary way, and the menu's own max-height + overflow-y keeps a long
+   catalog listing from making the body enormous on its own. */
 .dse-condal__menu {
-	position: absolute;
-	top: calc(100% + 0.4em);
-	left: 0;
-	right: 0;
-	z-index: 3;
+	margin-top: 0.4em;
 	max-height: 220px;
 	overflow-y: auto;
 	padding: 0.3em;
@@ -2033,9 +2035,6 @@ body.theme-light .dse-condal__menu {
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal__menu {
 	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.12);
 }
-.dse-condal__menu > .dse-hr {
-	margin: 0.25em 0.3em;
-}
 .dse-condal__menu-item {
 	display: flex;
 	align-items: center;
@@ -2052,7 +2051,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	flex: 1 1 auto;
 	min-width: 0;
 }
-/* The always-present escape hatch: create whatever was typed. */
+/* The always-present escape hatch: create whatever was typed. SC-186 fix-round MED-4:
+   the boundary above this row is now a styled edge, not a `role="separator"` element
+   INSIDE the listbox (a real `<div role="listbox">`'s only valid children are
+   `role="option"` — a stray separator broke that contract). `:not(:first-child)` skips
+   the border when the custom row is the ONLY match (an empty-catalog edge case). */
+.dse-condal__menu-custom:not(:first-child) {
+	margin-top: 0.25em;
+	padding-top: 0.55em;
+	border-top: 1px solid var(--dse-border);
+}
 .dse-condal__menu-custom .dse-condal__glyph {
 	color: var(--dse-accent);
 }
@@ -7405,12 +7413,13 @@ body.theme-light
        (verified live on the gnoll page: `[data-sb-featstyle="card"]`). The ornate
        recipe the site keeps for `featstyle: flat` is a preference the plugin does
        not implement.
-     - .dse-condal__menu > .dse-hr (ConditionsModal, SC-186 — the retired
-       ConditionSelectModal's picker-list divider lived here before it) → plugin-only
-       chrome with no site counterpart; a functional, ornament-less separator. Left
-       alone deliberately — the ornate rule is a CONTENT ornament, not a UI separator.
+   (ConditionsModal's add-combobox dropdown, SC-186, used to have a THIRD surface here —
+   the retired ConditionSelectModal's picker-list `.dse-hr` divider, carried forward into
+   `.dse-condal__menu`. The SC-186 fix round removed it: a `role="separator"` element
+   isn't a valid child of the dropdown's `role="listbox"`, so the boundary above the
+   "Add custom" row is now a styled top border instead — no `.dse-hr` there anymore.)
    Scoped to [data-dse-element='horizontal-rule'] rather than bare `.dse-hr`: that
-   class is a shared kit primitive (kit/divider.ts) used by all four surfaces above,
+   class is a shared kit primitive (kit/divider.ts) used by all three surfaces above,
    each with its own frozen shots — and FOLLOWUPS #56's roleless statblock keeps a
    `.dse-sb > .dse-hr` that must stay the plain section break, not become an ornament.
    Material tier (the whole rule is colour/ornament), so it carries the print

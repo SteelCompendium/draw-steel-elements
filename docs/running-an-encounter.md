@@ -92,9 +92,10 @@ At the table:
 
 ![The stamina editor](Media/initiative-tracker-stamina-modal.png)
 
-- **Conditions** — the `+` in a row opens the picker. Click a condition to remove it.
+- **Conditions** — the `+` in a row opens the Conditions manager: type to add (including
+  a custom one for anything the catalog doesn't cover), click the trash icon to remove.
 
-![The condition picker](Media/initiative-tracker-add-conditions.png)
+![The conditions manager](Media/initiative-tracker-add-conditions.png)
 
 - **Minion squads** — a squad shares one Stamina pool. Click a minion to select it, then
   click the pool to open its editor, which walks you through which minions die.

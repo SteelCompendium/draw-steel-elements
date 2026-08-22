@@ -1002,7 +1002,24 @@ export class InitiativeView extends ElementView<EncounterData> {
 			owner,
 			canRemove: this.canWrite,
 			onRemove: (conditionEntry) => {
-				character.conditions = conditions.filter((entry) => entry !== conditionEntry);
+				// SC-186 fix-round INFO-2: filter `character.conditions` FRESH here,
+				// never the `conditions` closure snapshot captured when this row was
+				// built. Two remove clicks fired in quick succession both rebuild this
+				// row (container.empty() + buildConditionIcons), and a click landing on
+				// an already-detached (but still listener-bound) icon from an EARLIER
+				// generation used to filter ITS OWN captured snapshot instead of the
+				// CURRENT array — silently resurrecting whatever an intervening click
+				// had already removed. Reading `character.conditions` fresh closes that
+				// gap for entries that keep stable object identity across THIS view's
+				// own rebuilds (it always does — this method never clones entries).
+				// NOTE: this is a narrower fix than "any stale click is safe" — the
+				// filter predicate below is still REFERENCE equality
+				// (`entry !== conditionEntry`), so it cannot match an entry whose
+				// identity changed elsewhere in the meantime (e.g. ConditionsModal's own
+				// internal representation clones every entry on every emitChange() —
+				// SC-186 fix-round report, "INFO-2" — closing that gap needs identity-
+				// or key-based removal, a restructuring out of this fix round's scope).
+				character.conditions = (character.conditions || []).filter((entry) => entry !== conditionEntry);
 				container.empty();
 				this.buildConditionIcons(container, character, owner);
 				void this.persist();

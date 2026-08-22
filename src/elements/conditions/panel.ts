@@ -150,14 +150,35 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 		if (ended) this.removeCondition(entry);
 	}
 
+	// SC-186 fix-round HIGH-4: ConditionsModal applies live (onChange fires on every
+	// add/delete/customize, not just Done), but `this.onChange` is the CONTAINER's
+	// persist-triggering callback — calling it mid-session schedules a debounced
+	// `ElementView.persist()` that, ~400ms later, does a real `host.replaceSource()`.
+	// In reading mode that echo-rebuilds this element's block: the pipeline unloads the
+	// OLD ConditionsPanel (this) and mounts a fresh one, and `openManagedModal`'s
+	// `owner.register(() => modal.close())` fires on that unload — closing the
+	// STILL-OPEN modal out from under the user, mid-edit. Fix: keep the strip visually
+	// live via `updatePanel` (a pure DOM refresh, no persist) on every change, but defer
+	// the actual persisting `this.onChange(...)` call to modal CLOSE (Done, Escape, or
+	// any other dismissal) — by then there is nothing left to unload out from under.
+	// The initiative tracker's own modal-opening path (`InitiativeView.openModal`) needs
+	// no equivalent fix: it never calls `openManagedModal`, so nothing there registers
+	// an owner-unload auto-close in the first place.
 	private openAddModal(): void {
 		const holder: ConditionHolder = { conditions: this.current };
-		openManagedModal(
+		let pendingList: Condition[] | null = null;
+		const modal = openManagedModal(
 			this,
 			() =>
 				new ConditionsModal(this.cx.app, holder, this.mgr, (updated) => {
-					this.onChange(updated);
+					pendingList = updated;
+					this.updatePanel(updated);
 				}),
 		);
+		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
+		modal.onClose = () => {
+			inheritedOnClose();
+			if (pendingList) this.onChange(pendingList);
+		};
 	}
 }

@@ -230,6 +230,58 @@ describe('D7 Task 2/SC-186: "+ add condition" opens ConditionsModal with a plain
 
 		jest.useRealTimers();
 	});
+
+	test('SC-186 fix-round HIGH-4: the strip refreshes live while the modal is open, but persist is deferred to modal close', async () => {
+		// The bug: ConditionsModal applies live (onChange on every mutation), and the
+		// OLD wiring forwarded that straight into the container's persist-triggering
+		// onChange. persist() debounces ~400ms into a real replaceSource() call, which
+		// (in reading mode) echo-rebuilds this element — unloading the OLD
+		// ConditionsPanel, whose `openManagedModal` owner-unload registration then
+		// closed the STILL-OPEN modal out from under the user, mid-edit. Fix: the strip
+		// still refreshes live (a pure DOM update via updatePanel, no persist), but the
+		// actual persisting onChange call is deferred until the modal is closed.
+		jest.useFakeTimers();
+		const { root, host } = await renderConditions();
+
+		addBtn(root)!.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('button[aria-label="Add condition"]') as HTMLElement).click();
+		const input = modalEl.querySelector('.dse-condal__input') as HTMLInputElement;
+		input.value = 'Frightened';
+		input.dispatchEvent(new Event('input'));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+		// Live DOM refresh already happened — the strip shows the new chip immediately,
+		// modal still open.
+		expect(chips(root)).toHaveLength(4);
+		expect(chipByName(root, 'Frightened')).toBeDefined();
+
+		// But NOT a single persist, even well past the debounce window.
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 3);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+
+		// Closing the modal flushes exactly one persist with the final state.
+		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect(host.replaceSource.mock.calls[0][0]).toContain('frightened');
+
+		jest.useRealTimers();
+	});
+
+	test('SC-186 fix-round HIGH-4: opening the modal and closing it with NO edits persists nothing', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderConditions();
+
+		addBtn(root)!.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		expect(host.replaceSource).not.toHaveBeenCalled();
+
+		jest.useRealTimers();
+	});
 });
 
 describe('D7 Task 2: remove ✕ drops a chip and persists', () => {

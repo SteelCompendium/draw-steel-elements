@@ -307,7 +307,7 @@ export const DOCS_SHOTS = [
 		trigger: '[data-dse-element="initiative"] .dse-init__stamina',
 		ready: '.dse-modal .dse-modal__body',
 	},
-	// docs/initiative-tracker.md — the condition picker.
+	// docs/initiative-tracker.md — the conditions manager (SC-186, ConditionsModal).
 	{
 		out: 'initiative-tracker-add-conditions.png',
 		source: 'obsidian',
@@ -317,8 +317,13 @@ export const DOCS_SHOTS = [
 		// The initiative tracker labels its own affordance "Add Condition" (the ds-conditions
 		// panel uses lower-case "condition") and tags it `.dse-cond--add`.
 		trigger: '[data-dse-element="initiative"] .dse-cond--add',
-		ready: '.dse-modal .dse-cond-list',
-		then: '.dse-cond-list .dse-cond-item button',
+		// SC-186: opens ConditionsModal (the Option D active-list manager) -- the
+		// retired AddConditionsModal/CustomizeConditionModal and their .dse-cond-list
+		// picker grid are gone. ready/then now target the new modal's classes; then
+		// opens the add combobox (the redesign's most novel surface) instead of
+		// selecting a picker row.
+		ready: '.dse-modal .dse-condal__list',
+		then: '.dse-modal button[aria-label="Add condition"]',
 	},
 	// docs/initiative-tracker.md — the minion stamina pool, only reachable from a squad.
 	{

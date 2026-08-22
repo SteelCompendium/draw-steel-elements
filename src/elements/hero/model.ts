@@ -174,6 +174,13 @@ function parseDefn(data: Record<string, unknown>): HeroDefn {
 	return defn;
 }
 
+/** SC-186 fix-round HIGH-3: the enum `Condition.duration` validates against — matches
+ *  `resolveDuration()`'s KNOWN_DURATIONS (elements/conditionDuration.ts), duplicated as a
+ *  literal here rather than imported so a malformed value in the note degrades to
+ *  "absent" (silent, like `color`/`effect` never having validated their string content
+ *  either) instead of throwing and failing the whole hero block over one bad field. */
+const HERO_CONDITION_DURATIONS = new Set<string>(['eot', 'save-ends', 'eoe']);
+
 function parseCondition(entry: unknown, index: number): Condition {
 	if (typeof entry === 'string') {
 		if (entry.trim() === '') {
@@ -188,6 +195,14 @@ function parseCondition(entry: unknown, index: number): Condition {
 	const condition: Condition = { key: data.key };
 	if (typeof data.color === 'string') condition.color = data.color;
 	if (typeof data.effect === 'string') condition.effect = data.effect;
+	// SC-186 fix-round HIGH-3: this parser (the hero flagship's `state.conditions`) was
+	// the FIFTH condition-normalize site missed by the original duration rollout —
+	// dropping `duration` here erased it from memory on every parse, so the NEXT save
+	// (any unrelated hero edit) permanently deleted a modal-written or hand-authored
+	// duration from the note.
+	if (typeof data.duration === 'string' && HERO_CONDITION_DURATIONS.has(data.duration)) {
+		condition.duration = data.duration as Condition['duration'];
+	}
 	return condition;
 }
 

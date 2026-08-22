@@ -47,6 +47,17 @@ export function resolveDuration(entry: Pick<Condition, 'duration' | 'effect'>): 
 	return legacyDurationFromEffect(entry.effect);
 }
 
+/**
+ * True when `effect` is itself one of the legacy duration-encoding strings (not a real
+ * CSS pulse effect). SC-186 fix-round MED-1: `ConditionsModal.setDuration` needs this to
+ * clear a stale legacy encoding when the user makes an EXPLICIT duration choice —
+ * otherwise `resolveDuration` keeps reading the old `effect` text as a fallback and an
+ * explicit "Until removed" (which only ever clears `duration`) is a silent no-op.
+ */
+export function isLegacyDurationText(effect: string | undefined): boolean {
+	return legacyDurationFromEffect(effect) !== undefined;
+}
+
 /** The panel/badge text vocabulary (spec §1.5) — null when the condition carries no
  *  duration (renders no badge). */
 export function durationBadgeText(duration: ConditionDuration | undefined): string | null {

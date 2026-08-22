@@ -74,7 +74,7 @@ wrote by hand is left alone.
 
 ## Conditions (`ds-conditions`)
 
-A conditions strip for one hero or creature, using the same condition picker as the
+A conditions strip for one hero or creature, using the same Conditions manager as the
 [initiative tracker](initiative-tracker.md#conditions).
 
 ```markdown

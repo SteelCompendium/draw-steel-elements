@@ -2,7 +2,9 @@
 // replaces the retired two-modal AddConditionsModal/CustomizeConditionModal flow. Pins
 // DOM shape, add via the real combobox (known + custom), delete, the inline row editor
 // writing duration/color/effect, the duration-round-trip regression (the old
-// Customize-clobber bug), the fallback glyph for unregistered keys, and badge rendering.
+// Customize-clobber bug), the fallback glyph for unregistered keys, badge rendering, and
+// the SC-186 fix-round findings (HIGH-1/2, MED-1/2/3/4, LOW-3/4 — see ConditionsModal.ts's
+// file header for the causal explanation of each).
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConditionsModal } from '@views/ConditionsModal';
@@ -48,6 +50,13 @@ function typeQuery(input: HTMLInputElement, text: string): void {
 
 function pressKey(input: HTMLInputElement, key: string): void {
 	input.dispatchEvent(new KeyboardEvent('keydown', { key }));
+}
+
+/** SC-186 fix-round HIGH-2: picks are bound to `mousedown` (not `click`) so a real
+ *  browser's focus-shift-on-mousedown-away-from-input can never race the pick. Tests
+ *  must dispatch the same event the production affordance uses. */
+function mousedownPick(item: HTMLElement): void {
+	item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 }
 
 afterEach(() => {
@@ -115,18 +124,18 @@ describe('SC-186: each row — glyph, name, badges, cog + delete', () => {
 	test('duration badge renders from the first-class `duration` field', () => {
 		const { container } = makeModal([{ key: 'bleeding', duration: 'save-ends' }]);
 		const row = rowByName(container, 'Bleeding');
-		expect(row.querySelector('.dse-cond-item__dur')?.textContent).toBe('Save Ends');
+		expect(row.querySelector('.dse-condal__dur')?.textContent).toBe('Save Ends');
 	});
 
 	test('duration badge falls back to the legacy effect-string parse when `duration` is absent', () => {
 		const { container } = makeModal([{ key: 'slowed', effect: 'EoT' }]);
 		const row = rowByName(container, 'Slowed');
-		expect(row.querySelector('.dse-cond-item__dur')?.textContent).toBe('EoT');
+		expect(row.querySelector('.dse-condal__dur')?.textContent).toBe('EoT');
 	});
 
 	test('no duration -> no duration badge', () => {
 		const { container } = makeModal(['restrained']);
-		expect(rowByName(container, 'Restrained').querySelector('.dse-cond-item__dur')).toBeNull();
+		expect(rowByName(container, 'Restrained').querySelector('.dse-condal__dur')).toBeNull();
 	});
 
 	test('the color rides the VALIDATED --dse-condition-color property, never el.style.color', () => {
@@ -148,6 +157,27 @@ describe('SC-186: each row — glyph, name, badges, cog + delete', () => {
 		expect(onChange).toHaveBeenCalledWith([{ key: 'bleeding' }]);
 		expect(holder.conditions).toEqual([{ key: 'bleeding' }]);
 	});
+
+	test('SC-186 fix-round MED-3: deleting a row focuses the row that shifted into its slot, not <body>', () => {
+		const { container } = makeModal(['bleeding', 'slowed', 'restrained']);
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Remove Bleeding"]') as HTMLElement).click();
+		// "Slowed" shifted from index 1 to index 0 — its cog should be focused.
+		const cog = rowByName(container, 'Slowed').querySelector('button[aria-label="Customize Slowed"]');
+		expect(document.activeElement).toBe(cog);
+	});
+
+	test('SC-186 fix-round MED-3: deleting the LAST row focuses the shifted-into-place row, not the deleted one', () => {
+		const { container } = makeModal(['bleeding', 'slowed']);
+		(rowByName(container, 'Slowed').querySelector('button[aria-label="Remove Slowed"]') as HTMLElement).click();
+		const cog = rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]');
+		expect(document.activeElement).toBe(cog);
+	});
+
+	test('SC-186 fix-round MED-3: deleting the ONLY row focuses the "+ Add condition" button, not <body>', () => {
+		const { container } = makeModal(['bleeding']);
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Remove Bleeding"]') as HTMLElement).click();
+		expect(document.activeElement).toBe(container.querySelector('button[aria-label="Add condition"]'));
+	});
 });
 
 describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', () => {
@@ -168,6 +198,14 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		expect(container.querySelector('.dse-condal__editor')).toBeNull();
 	});
 
+	test('SC-186 fix-round MED-3: toggling the editor keeps focus on the same row\'s cog', () => {
+		const { container } = makeModal(['bleeding']);
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
+	});
+
 	test('only one editor is open at a time', () => {
 		const { container } = makeModal(['bleeding', 'slowed']);
 		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
@@ -186,10 +224,10 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		(editor.querySelector('button[aria-label="Save Ends"]') as HTMLElement).click();
 
 		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', duration: 'save-ends' }]);
-		expect(rowByName(container, 'Bleeding').querySelector('.dse-cond-item__dur')?.textContent).toBe('Save Ends');
+		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')?.textContent).toBe('Save Ends');
 	});
 
-	test('"Until removed" clears an existing duration', () => {
+	test('"Until removed" clears an existing first-class duration', () => {
 		const onChange = jest.fn();
 		const { container } = makeModal([{ key: 'bleeding', duration: 'eot' }], onChange);
 		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
@@ -197,6 +235,24 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		(editor.querySelector('button[aria-label="Until removed"]') as HTMLElement).click();
 
 		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding' }]);
+	});
+
+	test('SC-186 fix-round MED-1 REGRESSION: "Until removed" against a LEGACY effect-string duration actually clears it (was a silent no-op)', () => {
+		// The bug: setDuration only ever wrote `duration`, so on a condition whose ONLY
+		// duration signal was the legacy `effect: "save ends"` text, clicking "Until
+		// removed" wrote `duration: undefined` — a value resolveDuration() already
+		// treats as "fall through to the legacy effect string" — so the badge never
+		// changed and the click was invisible (while still firing a spurious write).
+		const onChange = jest.fn();
+		const { container } = makeModal([{ key: 'bleeding', effect: 'save ends' }], onChange);
+		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')?.textContent).toBe('Save Ends');
+
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
+		const editor = container.querySelector('.dse-condal__editor') as HTMLElement;
+		(editor.querySelector('button[aria-label="Until removed"]') as HTMLElement).click();
+
+		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding' }]); // effect cleared too
+		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')).toBeNull();
 	});
 
 	test('picking a swatch writes `color` live via the VALIDATED property', () => {
@@ -244,14 +300,24 @@ describe('SC-186: the inline row editor (cog) — Duration / Color / Effect', ()
 		// migrate the legacy duration into the first-class field, not destroy it.
 		const onChange = jest.fn();
 		const { container } = makeModal([{ key: 'bleeding', effect: 'save ends' }], onChange);
-		expect(rowByName(container, 'Bleeding').querySelector('.dse-cond-item__dur')?.textContent).toBe('Save Ends');
+		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')?.textContent).toBe('Save Ends');
 
 		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
 		const editor = container.querySelector('.dse-condal__editor') as HTMLElement;
 		(editor.querySelector('button[aria-label="glow"]') as HTMLElement).click();
 
 		expect(onChange).toHaveBeenLastCalledWith([{ key: 'bleeding', duration: 'save-ends', effect: 'glow' }]);
-		expect(rowByName(container, 'Bleeding').querySelector('.dse-cond-item__dur')?.textContent).toBe('Save Ends');
+		expect(rowByName(container, 'Bleeding').querySelector('.dse-condal__dur')?.textContent).toBe('Save Ends');
+	});
+
+	test('SC-186 fix-round MED-3: picking a chip in the editor keeps focus on the row\'s cog', () => {
+		const { container } = makeModal(['bleeding']);
+		(rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]') as HTMLElement).click();
+		const editor = container.querySelector('.dse-condal__editor') as HTMLElement;
+		(editor.querySelector('button[aria-label="Save Ends"]') as HTMLElement).click();
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
 	});
 });
 
@@ -260,8 +326,44 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		const { container } = makeModal([]);
 		const input = openCombobox(container);
 		expect(container.querySelector('.dse-condal__add')).toBeNull();
-		expect(input.getAttribute('role')).toBe('searchbox');
 		expect(document.activeElement).toBe(input);
+	});
+
+	test('SC-186 fix-round MED-4: role="combobox" is on the INPUT (not the wrapper), with aria-controls the listbox', () => {
+		const { container } = makeModal([]);
+		const input = openCombobox(container);
+		expect(input.getAttribute('role')).toBe('combobox');
+		expect(input.getAttribute('aria-haspopup')).toBe('listbox');
+		expect(input.getAttribute('aria-expanded')).toBe('true');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		expect(menu.id).toBeTruthy();
+		expect(input.getAttribute('aria-controls')).toBe(menu.id);
+		// The wrapper div carries no combobox role of its own.
+		expect(container.querySelector('.dse-condal__combobox')?.getAttribute('role')).toBeNull();
+	});
+
+	test('SC-186 fix-round MED-4: aria-activedescendant tracks the highlighted option by id', () => {
+		const { container } = makeModal([]);
+		const input = openCombobox(container);
+		typeQuery(input, 'co');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		const activeItem = menu.querySelector('.dse-condal__menu-item--active') as HTMLElement;
+		expect(activeItem.id).toBeTruthy();
+		expect(input.getAttribute('aria-activedescendant')).toBe(activeItem.id);
+
+		pressKey(input, 'ArrowDown');
+		const newActive = menu.querySelector('.dse-condal__menu-item--active') as HTMLElement;
+		expect(newActive.id).not.toBe(activeItem.id);
+		expect(input.getAttribute('aria-activedescendant')).toBe(newActive.id);
+	});
+
+	test('SC-186 fix-round MED-4: the dropdown listbox never contains a role="separator" child', () => {
+		const { container } = makeModal([]);
+		const input = openCombobox(container);
+		typeQuery(input, 'co');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		expect(menu.querySelector('[role="separator"]')).toBeNull();
+		Array.from(menu.children).forEach((child) => expect(child.getAttribute('role')).toBe('option'));
 	});
 
 	test('typing filters the dropdown; the first match is keyboard-highlighted', () => {
@@ -321,6 +423,45 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		expect(document.activeElement).toBe(stillInput);
 	});
 
+	test('SC-186 fix-round HIGH-2 REGRESSION: a MOUSE pick (mousedown, not click) adds the condition', () => {
+		// The bug: picks were bound to `click`. A real browser blurs the input on
+		// `mousedown` even against this non-focusable `<div role="option">`, which fired
+		// the (now-removed) `focusout` auto-close BEFORE the subsequent `click` could
+		// ever run — a mouse pick silently did nothing. jsdom's `.click()` never
+		// exercised this because it doesn't replicate that focus-shift-on-mousedown
+		// behavior, so this regression test dispatches the REAL event sequence a mouse
+		// produces (mousedown only — never `.click()`) against the production listener.
+		const onChange = jest.fn();
+		const { container } = makeModal([], onChange);
+		const input = openCombobox(container);
+		typeQuery(input, 'Bleeding');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		const item = menu.querySelector('.dse-condal__menu-item') as HTMLElement;
+
+		mousedownPick(item);
+
+		expect(onChange).toHaveBeenCalledWith([{ key: 'bleeding' }]);
+		expect(rowByName(container, 'Bleeding')).toBeDefined();
+	});
+
+	test('SC-186 fix-round HIGH-2 REGRESSION #2: a successful mouse pick does NOT spuriously close the combobox', () => {
+		// A second, subtler instance of the same class of bug: the pick handler's own
+		// re-render (renderList()/comboReset()) DETACHES the clicked item from the DOM
+		// mid-bubble, so the document-level outside-close listener (which runs AFTER the
+		// item's own mousedown handler, per bubble order) must not mistake "the node I
+		// was dispatched from is no longer attached to addWrapEl" for "the click landed
+		// outside addWrapEl" — composedPath(), not a post-hoc .contains() check, is what
+		// makes that distinction correctly.
+		const { container } = makeModal([]);
+		const input = openCombobox(container);
+		typeQuery(input, 'Bleeding');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		mousedownPick(menu.querySelector('.dse-condal__menu-item') as HTMLElement);
+
+		expect(container.querySelector('.dse-condal__combobox')).not.toBeNull(); // still open
+		expect(document.activeElement).toBe(container.querySelector('.dse-condal__input'));
+	});
+
 	test('picking the "Add custom: <text>" row adds `{ key: slug(text) }` and a CUSTOM-tagged row', () => {
 		const onChange = jest.fn();
 		const { container } = makeModal([], onChange);
@@ -328,12 +469,30 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		typeQuery(input, 'Hexed By The Witch');
 		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
 		const customItem = menu.querySelector('.dse-condal__menu-custom') as HTMLElement;
-		customItem.click();
+		mousedownPick(customItem);
 
 		expect(onChange).toHaveBeenCalledWith([{ key: 'hexed-by-the-witch' }]);
 		const row = rowByName(container, 'Hexed By The Witch');
 		expect(row.querySelector('.dse-condal__tag')?.textContent).toBe('custom');
 		expect(row.querySelector('.dse-condal__glyph')?.getAttribute('data-icon')).toBe('circle-dashed');
+	});
+
+	test('SC-186 fix-round MED-2: picking a match that ALREADY EXISTS never adds a duplicate — focuses the existing row instead', () => {
+		const onChange = jest.fn();
+		const { container } = makeModal(['bleeding'], onChange);
+		const input = openCombobox(container);
+		typeQuery(input, 'Bleeding');
+		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
+		const item = Array.from(menu.querySelectorAll('.dse-condal__menu-item')).find(
+			(i) => i.querySelector('.dse-condal__menu-name')?.textContent === 'Bleeding',
+		) as HTMLElement;
+		mousedownPick(item);
+
+		expect(onChange).not.toHaveBeenCalled(); // no add, no write
+		expect(rows(container)).toHaveLength(1);
+		expect(document.activeElement).toBe(
+			rowByName(container, 'Bleeding').querySelector('button[aria-label="Customize Bleeding"]'),
+		);
 	});
 
 	test('rapid multi-add: two picks in a row without reopening produce two rows', () => {
@@ -361,15 +520,35 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		expect(document.activeElement).toBe(addBtn);
 	});
 
-	test('blur (focus leaving the wrap entirely) collapses the combobox', () => {
+	test('SC-186 fix-round LOW-4: Escape inside the combobox does not bubble past this modal (stopPropagation)', () => {
 		const { container } = makeModal([]);
 		const input = openCombobox(container);
+		const outerHandler = jest.fn();
+		// A real Obsidian Modal closes itself on an Escape that reaches its own Scope —
+		// simulated here as a bubble-phase listener on an ancestor of the input.
+		container.addEventListener('keydown', outerHandler);
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		expect(outerHandler).not.toHaveBeenCalled();
+	});
+
+	test('SC-186 fix-round HIGH-2: outside-close is a single DOCUMENT-level mousedown, not focusout', () => {
+		const { container } = makeModal([]);
+		openCombobox(container);
 		const outside = document.createElement('button');
 		document.body.appendChild(outside);
-		input.dispatchEvent(new FocusEvent('focusout', { relatedTarget: outside, bubbles: true }));
+
+		outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 
 		expect(container.querySelector('.dse-condal__combobox')).toBeNull();
 		outside.remove();
+	});
+
+	test('a mousedown INSIDE the add control (e.g. the search icon) does not close the combobox', () => {
+		const { container } = makeModal([]);
+		openCombobox(container);
+		const searchIcon = container.querySelector('.dse-condal__search') as HTMLElement;
+		searchIcon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		expect(container.querySelector('.dse-condal__combobox')).not.toBeNull();
 	});
 
 	test('blank/punctuation-only custom text is a no-op (never adds an empty-key condition)', () => {
@@ -378,7 +557,7 @@ describe('SC-186: add — the real combobox (arrow keys + Enter, Escape, known +
 		const input = openCombobox(container);
 		typeQuery(input, '???');
 		const menu = container.querySelector('.dse-condal__menu') as HTMLElement;
-		(menu.querySelector('.dse-condal__menu-custom') as HTMLElement).click();
+		mousedownPick(menu.querySelector('.dse-condal__menu-custom') as HTMLElement);
 
 		expect(onChange).not.toHaveBeenCalled();
 		expect(rows(container)).toHaveLength(0);
@@ -423,6 +602,13 @@ describe('SC-186: managed lifecycle + hygiene', () => {
 		expect(styleGuardFindings(scanned)).toEqual([]);
 	});
 
+	test('SC-186 fix-round HIGH-2 source hygiene: item picks bind mousedown (not click), with preventDefault', () => {
+		const src = fs.readFileSync(path.join(__dirname, '../../../src/views/ConditionsModal.ts'), 'utf8');
+		const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+		expect(code).toMatch(/registerDomEvent\(item, 'mousedown'/);
+		expect(code).not.toMatch(/registerDomEvent\(item, 'click'/);
+	});
+
 	test('CSS: the retired picker/customize chrome is evicted; the new modal classes exist', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 		expect(sheet).not.toMatch(/\.dse-cond-list\b/);
@@ -434,6 +620,14 @@ describe('SC-186: managed lifecycle + hygiene', () => {
 		expect(sheet).toMatch(/\.dse-condal__editor\s*\{/);
 		expect(sheet).toMatch(/\.dse-condal__combobox\s*\{/);
 		expect(sheet).toMatch(/\.dse-condal__menu\s*\{/);
+		expect(sheet).toMatch(/\.dse-condal__dur\s*\{/);
+	});
+
+	test('SC-186 fix-round HIGH-1: the dropdown menu is NOT position:absolute (renders in normal flow, so the modal body can scroll to it)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const block = sheet.match(/\.dse-condal__menu\s*\{[^}]*\}/);
+		expect(block).not.toBeNull();
+		expect(block![0]).not.toMatch(/position:\s*absolute/);
 	});
 
 	test('CSS: every Steel visual treatment for the new classes carries the Steel scoping rule', () => {

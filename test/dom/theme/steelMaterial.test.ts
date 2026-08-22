@@ -627,11 +627,13 @@ describe('Steel material contract', () => {
 		};
 
 		it('is HOST-scoped to the horizontal-rule element, never to the bare .dse-hr kit primitive', () => {
-			// `.dse-hr` is shared by FOUR surfaces (this element, .dse-sb, .dse-fb and the
-			// ConditionSelectModal's .dse-cond-list), three of which the site draws
-			// differently or not at all — and FOLLOWUPS #56's roleless statblock now keeps a
-			// `.dse-sb > .dse-hr` that must stay a plain section break, not become an
-			// ornament. A bare `.dse-hr` rule would reach all four and move frozen shots.
+			// `.dse-hr` is shared by THREE surfaces (this element, .dse-sb, .dse-fb — SC-186
+			// fix round: ConditionsModal's add-combobox dropdown no longer uses a `.dse-hr`
+			// divider at all, replaced by a styled border since a role="separator" isn't a
+			// valid role="listbox" child), two of which the site draws differently or not at
+			// all — and FOLLOWUPS #56's roleless statblock now keeps a `.dse-sb > .dse-hr`
+			// that must stay a plain section break, not become an ornament. A bare `.dse-hr`
+			// rule would reach all three and move frozen shots.
 			expect(ornate.length).toBeGreaterThan(0);
 			for (const r of ornate) {
 				expect(STEEL_SCOPE.test(r.selector)).toBe(true);
@@ -640,7 +642,7 @@ describe('Steel material contract', () => {
 				expect(r.selector).toContain(':not([data-dse-print="on"])');
 			}
 			// No OTHER Steel rule anywhere in the sheet paints the kit rule's parts, which is
-			// what keeps the other three surfaces (and their frozen shots) untouched.
+			// what keeps the other two surfaces (and their frozen shots) untouched.
 			const unscopedOrnament = rules.filter(
 				(r) =>
 					STEEL_SCOPE.test(r.selector) &&

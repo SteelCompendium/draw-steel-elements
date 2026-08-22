@@ -330,22 +330,32 @@ Conditions represent status effects affecting heroes or creatures, such as "daze
 
 ![initiative-tracker-add-conditions](Media/initiative-tracker-add-conditions.png)
 
-Adding a Condition to a Hero or Creature:
+Click the "+" icon in the conditions section to open the **Conditions** manager for
+that hero or creature. It shows exactly what's currently active — not a catalog to pick
+from:
 
-- Click the "+" icon in the conditions section.
-- Select conditions from the list by clicking them.
-- Click "Add Conditions".
+Adding a Condition:
 
-Optionally, you can customize the appearance of the condition:
+- Click "+ Add condition" (or just start typing) to open the type-ahead search.
+- Type to filter the known conditions, then press ↑/↓ and Enter (or click a match) to
+	add it.
+- If nothing matches — a bespoke condition from a homebrew statblock, for example — the
+	list always ends with an **"Add custom: ..."** row that adds whatever you typed.
+- The search box stays open afterward, so you can add several conditions in a row.
 
-- Open the condition customization modal:
-	- Click the "cog" icon when hovering over the condition in the "Add Conditions" modal **OR**
-	- Double-click the condition in the "Add Conditions" modal.
-- Change the color or effect with the provided selectors.
+Customizing a Condition:
+
+- Click the "cog" icon on a condition's row to open its Duration / Color / Effect editor
+	inline, under the row.
+- Duration is End of Turn, Save Ends, End of Encounter, or Until Removed (the default).
+- Changes apply immediately — there's no separate Save button.
 
 Removing a Condition:
 
-- Click on the condition icon to remove it.
+- Click the trash icon on the condition's row.
+
+When you're done, click "Done" (or just close the modal) — every change was already
+applied as you made it.
 
 ### Data Persistence
 

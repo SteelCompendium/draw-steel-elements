@@ -29,19 +29,36 @@
 // duration the moment Customize was opened and saved (the select's options don't include
 // duration strings, so it silently fell back to 'static'). Here, duration and effect are
 // separate controls that each write ONLY their own field on their own click — there is no
-// "write every control back on Save" step at all. `setEffect` additionally MIGRATES any
-// legacy effect-string duration into the first-class `duration` field before it
-// overwrites `effect`, so even a condition that has never been touched by this modal
-// before keeps its duration the first time its visual effect is changed.
+// "write every control back on Save" step at all. `setEffect` MIGRATES any legacy
+// effect-string duration into the first-class `duration` field before it overwrites
+// `effect`; `setDuration` (SC-186 fix-round MED-1) does the symmetric cleanup — clearing a
+// legacy duration-encoding `effect` string the moment the user makes an EXPLICIT duration
+// choice (including "Until removed"), so that choice is never a silent no-op against a
+// resolveDuration() fallback that's still reading the old text.
+//
+// SC-186 FIX ROUND (independent review, real-Chromium-measured findings):
+//   HIGH-1 — the add-combobox's dropdown used to be `position: absolute`, which the
+//     modal body's `overflow-y: auto` scroll container clipped entirely off-screen at
+//     0/3/8 rows. It now renders in NORMAL FLOW below the combobox (own max-height +
+//     overflow-y so it scrolls in place; see styles-source.css's `.dse-condal__menu`).
+//   HIGH-2 — a real browser blurs the previously-focused `<input>` on `mousedown` even
+//     when the mousedown target isn't itself focusable, which used to fire the (removed)
+//     `focusout` auto-close BEFORE the item's `click` ever ran — a mouse pick silently
+//     did nothing. Picks are now bound to the item's own `mousedown` with
+//     `preventDefault()` (keeps focus in the input, so no blur/close races the pick at
+//     all), and outside-close is a single DOCUMENT-level `mousedown` listener instead of
+//     `focusout` (belt and braces — catches a real click-away without depending on focus
+//     timing).
 import type { App } from 'obsidian';
 import { setIcon } from 'obsidian';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager, ConditionConfig } from '@utils/Conditions';
-import { DseModal, divider, iconButton } from '@/framework/kit';
+import { DseModal, iconButton } from '@/framework/kit';
 import { applyConditionColor, applyConditionEffect, CONDITION_EFFECTS } from '@/elements/conditionColor';
 import {
 	resolveDuration,
 	durationBadgeText,
+	isLegacyDurationText,
 	type ConditionDuration,
 } from '@/elements/conditionDuration';
 import { FALLBACK_CONDITION_ICON, titleCaseConditionKey, slugConditionKey } from '@/elements/conditionDisplay';
@@ -72,6 +89,11 @@ function field(parent: HTMLElement, label: string): HTMLElement {
 	return row.createDiv({ cls: 'dse-cond-field__control' });
 }
 
+/** Module-scoped counter for the combobox's aria-controls/aria-activedescendant ids
+ *  (SC-186 fix-round MED-4) — unique per combobox OPEN, matching managedModal.ts's
+ *  own `titleCounter` convention for the same reason (never collide across instances). */
+let condalComboIdCounter = 0;
+
 export class ConditionsModal extends DseModal {
 	private holder: ConditionHolder;
 	private mgr: ConditionManager;
@@ -82,8 +104,7 @@ export class ConditionsModal extends DseModal {
 	private listEl!: HTMLElement;
 	private addWrapEl!: HTMLElement;
 	/** Set while the combobox is open: clears + refocuses the SAME input/menu after a
-	 *  pick, so rapid multi-add never tears down and rebuilds the `<input>` (which would
-	 *  fire a real blur/focusout mid-pick and race the auto-close handler below). */
+	 *  pick, so rapid multi-add never tears down and rebuilds the `<input>`. */
 	private comboReset: (() => void) | null = null;
 
 	constructor(
@@ -110,13 +131,27 @@ export class ConditionsModal extends DseModal {
 		this.listEl.setAttribute('aria-label', 'Active conditions');
 
 		this.addWrapEl = this.body.createDiv({ cls: 'dse-condal__addwrap' });
-		// One listener for the life of the modal (not re-registered on every
-		// renderAdd() rebuild): focusout bubbles, so it survives the combobox's DOM
-		// being torn down and rebuilt on every keystroke-free re-render.
-		this.lifecycle.registerDomEvent(this.addWrapEl, 'focusout', (evt: FocusEvent) => {
+		// SC-186 fix-round HIGH-2: a single DOCUMENT-level mousedown, registered once for
+		// the modal's lifetime, is the outside-close mechanism — not `focusout` (which a
+		// real browser can fire on the input from a mousedown on a non-focusable target,
+		// racing an in-progress pick). Item picks (below) preventDefault() their own
+		// mousedown so focus never leaves the input in the first place; this listener is
+		// the belt-and-braces catch for an ACTUAL click away from the whole add control.
+		// activeDocument (not the global `document`) — popout-window compatibility: a
+		// modal opened while a popout window is focused must listen on THAT window's
+		// document, not always the main one (obsidianmd/prefer-active-doc).
+		this.lifecycle.registerDomEvent(activeDocument, 'mousedown', (evt: MouseEvent) => {
 			if (!this.addOpen) return;
-			const next = evt.relatedTarget as Node | null;
-			if (next && this.addWrapEl.contains(next)) return; // focus moved WITHIN the wrap
+			// composedPath() (not target + .contains()) — a SUCCESSFUL pick mutates the
+			// DOM (renderList()/comboReset() empty and rebuild the list/menu) during its
+			// OWN mousedown handler, which runs before this document-level listener
+			// (bubble order): by the time this callback runs, the picked item may already
+			// be a DETACHED node, and `addWrapEl.contains(detachedNode)` is always false
+			// — which would close the combobox right after every successful add.
+			// composedPath() is captured at dispatch time and stays accurate regardless
+			// of DOM mutations that happen mid-bubble.
+			const path = typeof evt.composedPath === 'function' ? evt.composedPath() : [evt.target];
+			if (path.includes(this.addWrapEl)) return; // inside the add control
 			this.closeAdd();
 		});
 
@@ -130,7 +165,10 @@ export class ConditionsModal extends DseModal {
 
 	/** The one path every mutation flows through: mirrors the normalized list onto the
 	 *  caller's holder and hands a FRESH array to onChange (SC-186: apply live — every
-	 *  add/delete/customize fires this, not just Done). */
+	 *  add/delete/customize fires this, not just Done). Callers that also need to defer
+	 *  the actual PERSIST until modal close (elements/conditions/panel.ts's
+	 *  openAddModal — SC-186 fix-round HIGH-4) do so on THEIR side; this modal's own
+	 *  contract is unchanged. */
 	private emitChange(): void {
 		this.holder.conditions = this.conditions;
 		this.onChangeCb(this.conditions.map((c) => ({ ...c })));
@@ -144,6 +182,17 @@ export class ConditionsModal extends DseModal {
 			this.renderRow(entry, index);
 			if (this.openEditorIndex === index) this.renderEditor(entry, index);
 		});
+	}
+
+	/** SC-186 fix-round MED-3: `renderList()` empties and rebuilds the whole list, which
+	 *  otherwise dumps keyboard focus to `<body>` after every row interaction. Every
+	 *  mutating method below re-focuses an EQUIVALENT control afterward — the row's cog
+	 *  (its first `.dse-condal__act`) is the stable anchor for both row-level actions
+	 *  (toggle/customize) and in-editor chip picks, since the editor stays open at the
+	 *  same row across a chip click. */
+	private focusRowCog(index: number): void {
+		const rows = this.listEl.querySelectorAll<HTMLElement>('.dse-condal__row');
+		rows[index]?.querySelector<HTMLButtonElement>('.dse-condal__act')?.focus();
 	}
 
 	private renderRow(entry: Condition, index: number): void {
@@ -164,10 +213,14 @@ export class ConditionsModal extends DseModal {
 		rowEl.createSpan({ cls: 'dse-condal__name', text: displayName });
 		if (!config) rowEl.createSpan({ cls: 'dse-condal__tag', text: 'custom' });
 
+		// SC-186 fix-round LOW-3: `.dse-condal__dur` (was `.dse-cond-item__dur` — the old
+		// prefix belonged to the retired picker-row grammar and reads as a trap: a
+		// styles-source.css deletion test scanning for that literal prefix would miss it
+		// because `_` is a word character, so `\b` never fires after "item").
 		const durationText = durationBadgeText(resolveDuration(entry));
-		if (durationText) rowEl.createSpan({ cls: 'dse-cond-item__dur', text: durationText });
+		if (durationText) rowEl.createSpan({ cls: 'dse-condal__dur', text: durationText });
 		if (entry.effect && (CONDITION_EFFECTS as readonly string[]).includes(entry.effect)) {
-			rowEl.createSpan({ cls: 'dse-cond-item__dur', text: entry.effect });
+			rowEl.createSpan({ cls: 'dse-condal__dur', text: entry.effect });
 		}
 
 		iconButton(
@@ -197,6 +250,7 @@ export class ConditionsModal extends DseModal {
 	private toggleEditor(index: number): void {
 		this.openEditorIndex = this.openEditorIndex === index ? null : index;
 		this.renderList();
+		this.focusRowCog(index);
 	}
 
 	private removeAt(index: number): void {
@@ -207,6 +261,13 @@ export class ConditionsModal extends DseModal {
 		}
 		this.emitChange();
 		this.renderList();
+		// MED-3: focus the row that shifted into this slot; the previous row if this was
+		// the last one; the add button if the list is now empty — never <body>.
+		if (this.conditions.length === 0) {
+			this.addWrapEl.querySelector<HTMLButtonElement>('.dse-condal__add')?.focus();
+		} else {
+			this.focusRowCog(Math.min(index, this.conditions.length - 1));
+		}
 	}
 
 	// ------------------------------------------------------------- inline row editor
@@ -232,10 +293,21 @@ export class ConditionsModal extends DseModal {
 		}
 	}
 
+	/** SC-186 fix-round MED-1: writing an EXPLICIT duration (any preset, including
+	 *  "Until removed") also clears a legacy duration-encoding `effect` string if one is
+	 *  present — symmetric with `setEffect`'s migration. Without this, `resolveDuration`
+	 *  keeps reading the stale `effect` text as a fallback, so "Until removed" against a
+	 *  hand-authored `effect: "save ends"` condition was a silent no-op (the badge never
+	 *  changed) that still fired a spurious write. */
 	private setDuration(index: number, value: ConditionDuration | undefined): void {
-		this.conditions[index].duration = value;
+		const entry = this.conditions[index];
+		if (entry.duration === undefined && isLegacyDurationText(entry.effect)) {
+			entry.effect = undefined;
+		}
+		entry.duration = value;
 		this.emitChange();
 		this.renderList();
+		this.focusRowCog(index);
 	}
 
 	private renderSwatches(parent: HTMLElement, entry: Condition, index: number): void {
@@ -263,6 +335,7 @@ export class ConditionsModal extends DseModal {
 		this.conditions[index].color = hex;
 		this.emitChange();
 		this.renderList();
+		this.focusRowCog(index);
 	}
 
 	private renderEffectChips(parent: HTMLElement, entry: Condition, index: number): void {
@@ -291,6 +364,7 @@ export class ConditionsModal extends DseModal {
 		entry.effect = fx === 'static' ? undefined : fx;
 		this.emitChange();
 		this.renderList();
+		this.focusRowCog(index);
 	}
 
 	// --------------------------------------------------------- add: button / combobox
@@ -334,21 +408,27 @@ export class ConditionsModal extends DseModal {
 	}
 
 	private renderCombobox(): void {
-		const box = this.addWrapEl.createDiv({ cls: 'dse-condal__combobox' });
-		box.setAttribute('role', 'combobox');
-		box.setAttribute('aria-expanded', 'true');
-		box.setAttribute('aria-haspopup', 'listbox');
+		const comboId = `dse-condal-combo-${++condalComboIdCounter}`;
+		const menuId = `${comboId}-menu`;
 
+		const box = this.addWrapEl.createDiv({ cls: 'dse-condal__combobox' });
 		const searchIcon = box.createSpan({ cls: 'dse-condal__search' });
 		setIcon(searchIcon, 'search');
 
 		const input = box.createEl('input', { cls: 'dse-condal__input' });
 		input.type = 'text';
-		input.setAttribute('role', 'searchbox');
+		// SC-186 fix-round MED-4: role="combobox" belongs on the INPUT (the WAI-ARIA
+		// combobox pattern's editable element), not the wrapping div — aria-expanded/
+		// aria-controls/aria-activedescendant all ride the same element.
+		input.setAttribute('role', 'combobox');
+		input.setAttribute('aria-expanded', 'true');
+		input.setAttribute('aria-haspopup', 'listbox');
 		input.setAttribute('aria-autocomplete', 'list');
+		input.setAttribute('aria-controls', menuId);
 		input.setAttribute('aria-label', 'Add condition');
 
 		const menu = this.addWrapEl.createDiv({ cls: 'dse-condal__menu' });
+		menu.id = menuId;
 		menu.setAttribute('role', 'listbox');
 		menu.setAttribute('aria-label', 'Matching conditions');
 
@@ -357,15 +437,24 @@ export class ConditionsModal extends DseModal {
 			const matches = this.matchesFor(input.value);
 			activeIndex = Math.max(0, Math.min(activeIndex, matches.length - 1));
 			menu.empty();
+			let activeItemId: string | null = null;
 			matches.forEach((match, i) => {
-				if (match.kind === 'custom' && matches.length > 1) divider(menu, { axis: 'h' });
+				// SC-186 fix-round MED-4: no `role="separator"` divider INSIDE the
+				// listbox (its only valid children are `role="option"`) — the boundary
+				// before the custom row is styled instead (`.dse-condal__menu-custom`'s
+				// own top border in styles-source.css).
+				const itemId = `${menuId}-item-${i}`;
 				const item = menu.createDiv({
 					cls: `dse-condal__menu-item${match.kind === 'custom' ? ' dse-condal__menu-custom' : ''}`,
 				});
+				item.id = itemId;
 				item.setAttribute('role', 'option');
 				const active = i === activeIndex;
 				item.setAttribute('aria-selected', String(active));
-				if (active) item.addClass('dse-condal__menu-item--active');
+				if (active) {
+					item.addClass('dse-condal__menu-item--active');
+					activeItemId = itemId;
+				}
 				const glyph = item.createSpan({ cls: 'dse-condal__glyph' });
 				if (match.kind === 'known') {
 					setIcon(glyph, match.config.iconName);
@@ -376,8 +465,20 @@ export class ConditionsModal extends DseModal {
 					nameEl.createSpan({ text: 'Add custom: ' });
 					nameEl.createEl('strong', { text: `"${match.text}"` });
 				}
-				this.lifecycle.registerDomEvent(item, 'click', () => this.pickMatch(match));
+				// SC-186 fix-round HIGH-2: pick on `mousedown` + preventDefault(), NOT
+				// `click`. A real browser blurs the currently-focused `<input>` on
+				// mousedown even against a non-focusable target (jsdom does not
+				// replicate this, which is why the original `click`-only binding read
+				// as fine in tests but silently ate every real mouse pick — the
+				// document-level outside-close fired first and tore the item down
+				// before its `click` could ever run). preventDefault() here keeps focus
+				// in the input, so neither that listener nor any blur races this pick.
+				this.lifecycle.registerDomEvent(item, 'mousedown', (evt: MouseEvent) => {
+					evt.preventDefault();
+					this.pickMatch(match);
+				});
 			});
+			input.setAttribute('aria-activedescendant', activeItemId ?? '');
 		};
 
 		this.lifecycle.registerDomEvent(input, 'input', () => {
@@ -400,6 +501,11 @@ export class ConditionsModal extends DseModal {
 				if (match) this.pickMatch(match);
 			} else if (evt.key === 'Escape') {
 				evt.preventDefault();
+				// SC-186 fix-round LOW-4: stopPropagation() so closing the DROPDOWN
+				// doesn't ALSO close the whole MODAL — Obsidian's Scope closes the
+				// modal on an unhandled Escape reaching it (precedent:
+				// kit/stepper.ts's own draft-revert Escape handler).
+				evt.stopPropagation();
 				this.closeAdd();
 			}
 		});
@@ -417,11 +523,18 @@ export class ConditionsModal extends DseModal {
 
 	/** Picks a known or custom match: adds the condition and applies live, then keeps
 	 *  the combobox open (cleared + refocused) for rapid multi-add (spec: "type, Enter,
-	 *  type, Enter"). Esc or blur — not a pick — is what collapses it. Resets the SAME
-	 *  input/menu in place (never tears down the combobox) — see `comboReset`'s doc. */
+	 *  type, Enter"). Esc or an outside click — not a pick — is what collapses it.
+	 *  SC-186 fix-round MED-2: never adds a DUPLICATE key — focuses the existing row's
+	 *  cog instead (and leaves the combobox open, query untouched, so the user can see
+	 *  what matched and keep typing). */
 	private pickMatch(match: Match): void {
 		const key = match.kind === 'known' ? match.config.key : slugConditionKey(match.text);
 		if (!key) return; // blank/punctuation-only custom text is a no-op
+		const existingIndex = this.conditions.findIndex((c) => c.key === key);
+		if (existingIndex !== -1) {
+			this.focusRowCog(existingIndex);
+			return;
+		}
 		this.conditions.push({ key });
 		this.emitChange();
 		this.renderList();

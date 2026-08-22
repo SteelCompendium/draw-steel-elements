@@ -758,6 +758,40 @@ describe('T-9: persisted mutations — exactly ONE debounced write each, byte-co
 			}),
 		);
 	});
+
+	test('SC-186 fix-round INFO-2: two STALE remove clicks (captured before either fires) both land, neither resurrects the other', async () => {
+		// The bug this guards: the row's onRemove closure used to filter the `conditions`
+		// ARRAY SNAPSHOT captured when the row was built, not `character.conditions` at
+		// WRITE time. Capture two remove buttons from the SAME render generation, then
+		// fire them in sequence (the second is now "stale" — its row was already
+		// rebuilt by the first click's container.empty()+rebuild, but the DETACHED
+		// button's listener still fires on `.click()`, as SC-186's own live-apply modal
+		// callbacks already relied on happening for the initiative row itself). With the
+		// OLD code, the second click's closure filtered ITS OWN captured snapshot (both
+		// conditions still present) instead of `character.conditions` as it actually
+		// stood after the first removal — silently RESURRECTING the first click's
+		// removal. Reading `character.conditions` fresh at write time (not a snapshot)
+		// closes that gap for any consumer whose entries keep stable object identity
+		// across renders (this element's own icon rebuild never clones entries — unlike
+		// ConditionsModal's own internal representation, where identity across an
+		// add/delete round-trip is a separate, larger concern noted in the SC-186
+		// fix-round report, not fixed by this one-line change).
+		jest.useFakeTimers();
+		const { root, host } = await renderInit(squad);
+
+		const icons = root.querySelectorAll('.dse-init__group--heroes .dse-cond');
+		const [staleRemoveGrabbed, staleRemoveBleeding] = [icons[0], icons[1]] as HTMLElement[];
+
+		staleRemoveGrabbed.click(); // removes "grabbed"; rebuilds the row (fresh closures)
+		staleRemoveBleeding.click(); // STALE — captured before either click, same generation
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = host.replaceSource.mock.calls[0][0] as string;
+		expect(written).not.toContain('grabbed');
+		expect(written).not.toContain('bleeding');
+	});
 });
 
 describe('T-9: minion stamina pool — the Task-3 decoupled modal through the view', () => {

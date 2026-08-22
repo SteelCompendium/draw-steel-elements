@@ -22,11 +22,27 @@ export function titleCaseConditionKey(key: string): string {
 		.join(' ');
 }
 
+/** The longest slug this function will ever return (SC-186 fix-round LOW-2) — a
+ *  generous cap on a condition NAME, not a real limit anyone should hit by typing. */
+const MAX_SLUG_LENGTH = 64;
+
 /** Typed custom-condition text -> a `Condition.key` slug (SettingsTab.ts's `slugify`
- *  convention, src/views/SettingsTab.ts). Blank/punctuation-only input slugs to ''. */
+ *  convention, src/views/SettingsTab.ts, extended for SC-186 fix-round LOW-2):
+ *  NFKD-normalizes first so an accented Latin letter degrades to its base letter rather
+ *  than being dropped outright ("Ünholy" -> "unholy", not "nholy" — NFKD decomposes 'Ü'
+ *  into 'U' + a combining diaeresis, which the character-class strip below then removes
+ *  as a combining mark, leaving the base letter), then clamps length. Blank/
+ *  punctuation-only input slugs to ''. */
 export function slugConditionKey(text: string): string {
-	return text
+	const slug = text
+		.normalize('NFKD')
+		// Combining Diacritical Marks block (U+0300-U+036F) — what NFKD decomposes an
+		// accented letter INTO (e.g. 'U+00DC Ü' -> 'U+0055 U' + 'U+0308 combining
+		// diaeresis'); stripping this range is what turns "Ünholy" into "unholy"
+		// instead of dropping the accented letter's base character entirely.
+		.replace(/[\u0300-\u036f]/g, '')
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-|-$/g, '');
+	return slug.length > MAX_SLUG_LENGTH ? slug.slice(0, MAX_SLUG_LENGTH).replace(/-+$/, '') : slug;
 }

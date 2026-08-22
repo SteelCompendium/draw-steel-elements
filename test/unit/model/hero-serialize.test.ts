@@ -83,6 +83,38 @@ describe('D7 Task 7: hero model parse (spec §3.1 shape)', () => {
 	});
 });
 
+describe('SC-186 fix-round HIGH-3: state.conditions[].duration survives parse -> serialize -> parse', () => {
+	const src = [
+		'name: X',
+		'level: 1',
+		'characteristics: { might: 0, agility: 0, reason: 0, intuition: 0, presence: 0 }',
+		'state:',
+		'  stamina: { current: 10, temp: 0 }',
+		'  conditions:',
+		'    - key: bleeding',
+		'      duration: save-ends',
+	].join('\n');
+
+	test('parse carries the first-class duration through (the 5th normalize site, previously missed)', () => {
+		const model = parseLikePipeline(src);
+		expect(model.state.conditions).toEqual([{ key: 'bleeding', duration: 'save-ends' }]);
+	});
+
+	test('a second parse -> serialize pass does NOT erase it (the bug: reload wipes memory, next save deletes the field)', () => {
+		const m1 = parseLikePipeline(src);
+		const s1 = serialize(m1);
+		const m2 = parseLikePipeline(s1); // simulates reopening the note
+		expect(m2.state.conditions).toEqual([{ key: 'bleeding', duration: 'save-ends' }]);
+		expect(serialize(m2)).toBe(s1); // and a subsequent unrelated save doesn't drop it either
+	});
+
+	test('an invalid duration string degrades to absent rather than throwing (matches color/effect leniency)', () => {
+		const bad = src.replace('duration: save-ends', 'duration: not-a-real-value');
+		const model = parseLikePipeline(bad);
+		expect(model.state.conditions).toEqual([{ key: 'bleeding' }]);
+	});
+});
+
 describe('D7 Task 7: serialize is the state-scoped splice (spec §3.4/OD-2)', () => {
 	test('round-trip: the defn region is byte-identical to the input; only state: is re-emitted', () => {
 		const model = parseLikePipeline(heroExample);
