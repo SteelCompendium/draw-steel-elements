@@ -2161,25 +2161,34 @@ interchangeable:</p>
 <h3 id="conditions">Conditions<a class="headerlink" href="#conditions" title="Permanent link">&para;</a></h3>
 <p>Conditions represent status effects affecting heroes or creatures, such as "dazed" or "slowed".</p>
 <p><img alt="initiative-tracker-add-conditions" src="../Media/initiative-tracker-add-conditions.png" /></p>
-<p>Adding a Condition to a Hero or Creature:</p>
+<p>Click the "+" icon in the conditions section to open the <strong>Conditions</strong> manager for
+that hero or creature. It shows exactly what's currently active — not a catalog to pick
+from:</p>
+<p>Adding a Condition:</p>
 <ul>
-<li>Click the "+" icon in the conditions section.</li>
-<li>Select conditions from the list by clicking them.</li>
-<li>Click "Add Conditions".</li>
+<li>Click "+ Add condition" (or just start typing) to open the type-ahead search.</li>
+<li>Type to filter the known conditions, then press ↑/↓ and Enter (or click a match) to
+    add it.</li>
+<li>If nothing matches — a bespoke condition from a homebrew statblock, for example — the
+    list always ends with an <strong>"Add custom: ..."</strong> row that adds whatever you typed.</li>
+<li>The search box stays open afterward, so you can add several conditions in a row.</li>
 </ul>
-<p>Optionally, you can customize the appearance of the condition:</p>
+<p>Customizing a Condition:</p>
 <ul>
-<li>Open the condition customization modal:<ul>
-<li>Click the "cog" icon when hovering over the condition in the "Add Conditions" modal <strong>OR</strong></li>
-<li>Double-click the condition in the "Add Conditions" modal.</li>
-</ul>
-</li>
-<li>Change the color or effect with the provided selectors.</li>
+<li>Click the "cog" icon on a condition's row to open its Duration / Color / Effect editor
+    inline, under the row.</li>
+<li>Duration is End of Turn, Save Ends, End of Encounter, or Until Removed (the default).</li>
+<li>Changes apply immediately — there's no separate Save button.</li>
 </ul>
 <p>Removing a Condition:</p>
 <ul>
-<li>Click on the condition icon to remove it.</li>
+<li>Inside the manager: click the trash icon on the condition's row.</li>
+<li>Or skip the manager entirely: click the condition's own icon directly in the tracker
+    row (each condition icon is itself a remove button) — the fastest way to clear a
+    single condition without opening anything.</li>
 </ul>
+<p>When you're done, click "Done" (or just close the modal) — every change was already
+applied as you made it.</p>
 <h3 id="data-persistence">Data Persistence<a class="headerlink" href="#data-persistence" title="Permanent link">&para;</a></h3>
 <p>All interactions with the tracker update the underlying YAML data in the code block. This ensures that your encounter state is preserved even after closing and reopening the note.</p>
 <h3 id="pinning-to-the-sidebar">Pinning to the Sidebar<a class="headerlink" href="#pinning-to-the-sidebar" title="Permanent link">&para;</a></h3>
