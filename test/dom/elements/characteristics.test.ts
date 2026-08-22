@@ -1,14 +1,11 @@
-// Plan 09 Task 1 (D2 §3.3) — Characteristics on the shared `.dse-statgrid` grammar: the
-// characteristicsElement definition + CharacteristicsElementView, driven through the REAL
-// ElementPipeline (static-element harness mirroring feature.test.ts / values-row.test.ts;
-// T-5 registration blocks mirroring their onload() suites). The redesign folds the deleted
-// legacy Characteristics/CharacteristicsView into onMount: one `.dse-statgrid` of the five
-// fixed characteristic `__cell`s (`__value` over `__label`) — the SAME grammar
-// values-row/view.ts renders ([data-dse-element] distinguishes them at the CSS level; the
-// shared CSS contract lives in values-row.test.ts). SC-5 eviction: value_height/name_height
-// become --dse-value-scale/--dse-label-scale custom properties — never inline font-size,
-// never inline color. Unlike Values Row, the legacy processor DID arm the capture-phase
-// click shield, so the framework default (shield ON, noClickShield unset) stays.
+// Plan 09 Task 1 (D2 §3.3), rebuilt for SC-152 round 3 — the characteristics element on
+// the statblock's shared `.dse-sb__chars` rail (kit renderCharacteristicsRow): split
+// shape at the SC-123 default prefs, merged one-text-node cells at the opt-in one/off
+// pair (with a remount on pref change), signed values, and the value_height/name_height
+// knobs as normalised --dse-value-scale/--dse-label-scale setProperty geometry (SC-5:
+// never inline font-size). The kit builder's own contract is pinned in
+// test/dom/kit/characteristicsGrid.test.ts; this suite pins the ELEMENT: pipeline
+// wiring, root attrs, shield, error card, and single registration.
 import * as fs from 'fs';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';

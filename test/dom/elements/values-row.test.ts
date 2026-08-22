@@ -225,19 +225,20 @@ describe('Plan 09 Task 1: values-row rendered through the REAL ElementPipeline (
 		expect(styleGuardFindings(src)).toEqual([]);
 	});
 
-	test('CSS contract: .dse-statgrid is scoped under ALL THREE element roots (incl. hero, SC-10 task 6), consumes --dse-fg/--dse-fg-muted + the scale properties, and keeps the @media column flip', () => {
+	test('CSS contract: .dse-statgrid is scoped under the values-row root ONLY (SC-152 round 3 moved ds-char + the hero region to the statblock rail), consumes --dse-fg/--dse-fg-muted + the scale properties, and keeps the @media column flip', () => {
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 
-		// One shared block scoped under all three [data-dse-element] roots (D2 §3.2/3.3;
-		// [data-dse-element="hero"] added SC-10 task 6 — the hero sheet reuses the same
-		// kit builder for its Characteristics region and needs the same flex grid, not an
-		// unstyled div stack).
-		expect(sheet).toMatch(
-			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="hero"\]\s+\.dse-statgrid\s*\{/,
-		);
+		// SC-152 round 3: values-row is the statgrid grammar's ONLY element user —
+		// ds-characteristics and the hero sheet's Characteristics region render the
+		// statblock's `.dse-sb__chars` rail now, so their arms LEFT this selector.
+		// A resurrected characteristics/hero statgrid arm here would be dead CSS at
+		// best and a cascade hazard at worst — pin the one-root shape.
+		expect(sheet).toMatch(/\[data-dse-element="values-row"\]\s+\.dse-statgrid\s*\{/);
+		expect(sheet).not.toMatch(/\[data-dse-element="characteristics"\]\s+\.dse-statgrid/);
+		expect(sheet).not.toMatch(/\[data-dse-element="hero"\]\s+\.dse-statgrid/);
 
 		const block = sheet.match(
-			/\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="hero"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
+			/\[data-dse-element="values-row"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
 		);
 		expect(block).not.toBeNull();
 		expect(block![0]).toMatch(/var\(--dse-fg\)/);
@@ -246,15 +247,15 @@ describe('Plan 09 Task 1: values-row rendered through the REAL ElementPipeline (
 		expect(block![0]).toMatch(/calc\(var\(--dse-label-scale/);
 
 		// Today's <=600px column flip, preserved (D2 §3.2 "today's @media column flip") —
-		// a top-level media rule re-selecting all three statgrid roots (see the CSS
+		// a top-level media rule re-selecting the statgrid root (see the CSS
 		// comment: a nested `& {}` inside @media gets mangled by esbuild's minifier).
 		const media = sheet.match(
-			/@media\s*\(max-width:\s*600px\)\s*\{\s*\n\s*\[data-dse-element="values-row"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="characteristics"\]\s+\.dse-statgrid,\s*\n\s*\[data-dse-element="hero"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
+			/@media\s*\(max-width:\s*600px\)\s*\{\s*\n\s*\[data-dse-element="values-row"\]\s+\.dse-statgrid\s*\{[\s\S]*?\n\}/,
 		);
 		expect(media).not.toBeNull();
 		expect(media![0]).toMatch(/flex-direction:\s*column/);
 
-		// The old legacy class block is gone (both elements now render the statgrid).
+		// The old legacy class block is gone.
 		expect(sheet).not.toMatch(/\.ds-values-row-container/);
 		expect(sheet).not.toMatch(/\.ds-characteristics-container/);
 	});

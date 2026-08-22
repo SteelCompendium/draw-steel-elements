@@ -1,23 +1,26 @@
-// Plan 09 Task 1 (D2 §3.3) — CharacteristicsElementView on the shared `.dse-statgrid`
-// grammar.
+// Plan 09 Task 1 (D2 §3.3), rebuilt for SC-152 round 3 — CharacteristicsElementView on
+// the statblock's own `.dse-sb__chars` rail (Scott: "The characteristics here should
+// probably be the same css and code that is used in the statblocks… they are exactly
+// the same data").
 //
-// The redesign folds the deleted legacy Characteristics/CharacteristicsView into onMount:
-// one flat `.dse-statgrid` of the five fixed characteristic `.dse-statgrid__cell`s, each
-// a `__value` (big, --dse-fg) over a `__label` (muted, --dse-fg-muted) — the SAME grammar
-// values-row/view.ts renders; the root's [data-dse-element="characteristics"] attr is
-// what scopes/distinguishes it at the CSS level (styles-source.css scopes `.dse-statgrid`
-// under both element roots).
+// One shared builder (framework/kit/CharacteristicsGrid.ts, renderCharacteristicsRow)
+// renders the row for the statblock, this element and the hero sheet's Characteristics
+// region: signed values via formatCharacteristic, and the SC-123 merged/split shape
+// contract driven by the same `sbCharLine`/`sbCharBox` preferences (resolved through
+// the kit's charsAreSplit so the three surfaces can never disagree). Those two prefs
+// change the DOM SHAPE, so this view subscribes them to a remount — the statblock
+// constructor's exact pattern. The old element-private `.dse-statgrid` grammar remains
+// only for ds-values-row (values-row/view.ts builds it inline).
 //
-// D7 Task 1 (spec §2.1/§2.3): the grid builder now lives in the shared kit core
-// (framework/kit/CharacteristicsGrid.ts, renderCharacteristicsGrid) — zero behavior
-// change: identical DOM, identical --dse-value-scale/--dse-label-scale geometry.
-//
-// SC-5 eviction (D2 §5): the value_height/name_height YAML knobs no longer become inline
+// SC-5 eviction (D2 §5): the value_height/name_height YAML knobs never become inline
 // `font-size` — they arrive as the --dse-value-scale / --dse-label-scale custom
-// properties (sanctioned `--dse-*` geometry via setProperty), consumed by the
-// stylesheet's `calc(var(--dse-…-scale) * 1em)` font sizes. No other `.style` access, no
-// color anywhere in code. Static element: no persistence, no listeners (the legacy
-// processor's manual capture-phase click shield stays replaced by the pipeline default).
+// properties (sanctioned `--dse-*` geometry via setProperty), consumed by
+// characteristics-scoped stylesheet calcs; value_height is normalised ÷3 (its old
+// statgrid default) so scale 1 = the statblock's own numeral size. The knobs apply in
+// the split shapes only — the merged cell is one text node, no spans to scale. No
+// other `.style` access, no color anywhere in code. No persistence (the legacy
+// processor's manual capture-phase click shield stays replaced by the pipeline
+// default).
 import { ElementView } from '@/framework/view';
 import { charsAreSplit, renderCharacteristicsRow } from '@/framework/kit';
 import type { RenderContext } from '@/framework/context';

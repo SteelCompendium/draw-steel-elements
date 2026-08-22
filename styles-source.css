@@ -2550,18 +2550,18 @@ code.dsa {
    "they are exactly the same data"). `:is()` keeps the specificity identical to the
    old single-attribute prefix, so nothing moves for the statblock.
    ────────────────────────────────────────────────────────────────────
-   DOM CONTRACT, and why it is conditional. At the DEFAULT pair
-   (charline=one, charbox=off) statblock/view.ts still emits ONE merged text node
-   per cell ("Might +2") — the exact node the LEGACY-FREEZE gate is pinned to (a
+   DOM CONTRACT, and why it is conditional. At the MERGED pair
+   (charline=one, charbox=off) the shared builder emits ONE merged text node per
+   cell ("Might +2") — the shape the old LEGACY-FREEZE gate was pinned to (a
    label/value split was tried in SC-10 Task 4 and reverted: two inline <span>s
    shifted Chromium's sub-pixel text shaping enough to move bytes in glyphs the
    split never touched). Any OTHER combination builds the three-part split
-   (.dse-sb__char-box / -v / -l, the site's `.sb__char-*`), so the frozen shots keep
-   the merged node and only opted-in users ever see the split. That also means every
-   selector below is unreachable at defaults, which is what lets them be
-   theme-agnostic (Legacy gets the modes too) without touching a frozen pixel.
-   `one` is the DEFAULT value, so it is never named: the one-line arms are keyed off
-   the boxed-letter values, the only way to reach split DOM at charline=one. -- */
+   (.dse-sb__char-box / -v / -l, the site's `.sb__char-*`). NOTE the defaults
+   MOVED: SC-123 shipped `sbCharLine: 'two'` as the default (prefs/catalog.ts), so
+   the split IS the default shape now and the two-line arms below are live out of
+   the box — the frozen `*--steel-print.png` bytes were re-pinned then. `one` is
+   still never named in a selector: the one-line arms are keyed off the
+   boxed-letter values, the only way to reach split DOM at charline=one. -- */
 .dse-sb__char-box {
 	display: none;
 	box-sizing: border-box;
@@ -2673,8 +2673,10 @@ code.dsa {
    both calcs below compute to the statblock's own values, so an un-knobbed ds-char
    is pixel-identical to the statblock rail. Scoped to the characteristics element
    only — the statblock and the hero region never carry the vars and must never
-   inherit a knob. The knobs only differentiate value/label in the SPLIT shapes
-   (the SC-123 default); the merged cell is one text node and scales as one. */
+   inherit a knob. The knobs apply in the SPLIT shapes only (the SC-123 default):
+   the merged cell is one text node with no -v/-l spans for these rules to reach,
+   so at the opt-in merged pair the knobs are INERT by design — anyone flipping
+   Characteristics to "One line" gets the statblock's own merged rhythm. */
 [data-dse-element='characteristics'][data-dse-sb-charline='two'] .dse-sb__char-v {
 	font-size: calc(var(--font-ui-large) * 1.4 * var(--dse-value-scale, 1));
 }
@@ -2683,6 +2685,17 @@ code.dsa {
 }
 [data-dse-element='characteristics'] .dse-sb__char-l {
 	font-size: calc(1em * var(--dse-label-scale, 1));
+}
+
+/* -- SC-152 round-3 review (finding 4): the old statgrid carried `overflow-x: auto`,
+   so a too-narrow ds-char / hero region scrolled instead of spilling. The statblock
+   rail has never had that guard, and unification adopts the rail — but the two NEW
+   surfaces keep the safety net, screen-only so print (which always fits at the
+   harness width) is untouched and the statblock's own rail stays exactly as it
+   ships everywhere else. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='characteristics'] .dse-sb__chars,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='hero'] .dse-sb__chars {
+	overflow-x: auto;
 }
 
 /* -- villain-actions pref (SC-123 / FOLLOWUPS #54 — the site's data-sb-villain):
@@ -2916,14 +2929,13 @@ code.dsa {
    --dse-label-scale custom properties set by the views (SC-5: sanctioned --dse-*
    geometry via setProperty — never inline font-size); --dse-surface is the Steel
    theme's "engraved plate" hook (D3), Legacy stays the bare row.
-   [data-dse-element="hero"] (D7 Task 9) reuses the SAME kit builder
-   (renderCharacteristicsGrid, framework/kit/CharacteristicsGrid.ts) for its
-   Characteristics region — added here so that region gets this same flex grid instead
-   of falling through to an unstyled div stack (bug fix, SC-10 task 6: the hero sheet's
-   root carries [data-dse-element="hero"], which this rule never matched). */
-[data-dse-element="values-row"] .dse-statgrid,
-[data-dse-element="characteristics"] .dse-statgrid,
-[data-dse-element="hero"] .dse-statgrid {
+   SC-152 round 3: values-row is the grammar's ONLY remaining element user —
+   ds-characteristics and the hero sheet's Characteristics region moved onto the
+   statblock's own `.dse-sb__chars` row (framework/kit/CharacteristicsGrid.ts,
+   renderCharacteristicsRow; Scott: "they are exactly the same data"), so their
+   arms left this selector (a `.dse-statgrid` can no longer exist under either
+   root). values-row builds its grid inline in values-row/view.ts. */
+[data-dse-element="values-row"] .dse-statgrid {
 	width: 100%;
 	overflow-x: auto;
 	display: flex;
@@ -2954,9 +2966,7 @@ code.dsa {
    rewritten by esbuild's CSS minifier into bare declarations after a nested rule —
    which older Chromium drops. */
 @media (max-width: 600px) {
-	[data-dse-element="values-row"] .dse-statgrid,
-	[data-dse-element="characteristics"] .dse-statgrid,
-	[data-dse-element="hero"] .dse-statgrid {
+	[data-dse-element="values-row"] .dse-statgrid {
 		flex-direction: column;
 		align-items: center;
 
@@ -8027,9 +8037,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	box-shadow: var(--dse-bevel);
 }
 
-/* -- 3b. SC-152: the stat ROW (ds-characteristics / ds-values-row, and the hero
-      sheet's own Characteristics region — all three render the same
-      `.dse-statgrid` from framework/kit/CharacteristicsGrid.ts) is the same
+/* -- 3b. SC-152: the stat ROW (ds-values-row — since round 3 the grammar's only
+      element user; it builds its `.dse-statgrid` inline in values-row/view.ts,
+      while ds-characteristics and the hero region render the statblock's
+      `.dse-sb__chars` rail instead) is the same
       value-over-label grammar the statblock's primary row already draws as boxed
       cells (`.dse-sb__item`, ~6717 + its small-caps `-l` twin). It was the one
       character-sheet panel whose structure already MATCHED a shipped Steel
