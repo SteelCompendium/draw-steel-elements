@@ -4396,6 +4396,58 @@ Shared globals
 body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature {
 	background: rgba(0, 0, 0, 0.022);
 }
+
+/* ── SC-168: the STANDALONE feature element's nested cards join the same frame ──
+   The SC-102 comment above ("a nested card is always … under .dse-sb/.dse-fb") had a
+   false premise: the standalone Feature element recurses too (effect.features →
+   renderFeatureList → .dse-feature__nested), and those nested cards fell through every
+   crack at once — the SC-101 frame anchors on .dse-sb/.dse-fb (misses them), the
+   standalone suppression's `padding-left: 0` REACHES them (its selector is
+   `.dse-feature[data-dse-act]`, not top-level-only), and nothing ever sets a right
+   inset. Net: an inner feature rendered flush against its parent card's content edges
+   (Scott's SC-168 screenshot; live computed probe: padding-left 0 / padding-right 0 /
+   no fill).
+
+   Fix = JOIN the S-4 convention, not a new margin: same recipe, value for value (list
+   gap .65rem; radius 9px; padding .7/.85/.78/.85rem; translucent-black fill + light
+   twin; act lane calc(3px + .85rem) with the spine as the card's rounded left edge).
+   A SEPARATE arm rather than a third member of the :is() anchor because the TIER
+   differs: the sb/fb geometry is structure (reaches print, S-1(a)), while this arm is
+   deliberately screen-only — the feature-family `*--steel-print.png` bytes are frozen,
+   the reported defect is a screen one, and print keeps today's flush look until a
+   sanctioned rebaseline says otherwise. steelMaterial.test.ts pins the recipe identity
+   so the two arms cannot drift, and pins the whole set to `.dse-feature__nested >` so
+   the TOP-LEVEL standalone card stays frameless/spineless (SC-102 part 2, the site's
+   .sc-ability look — those suppressions above are untouched and still win on the
+   top-level card, which the SC-168 arms never match).
+   COMPOUND anchor, no space: theme + print-guard + element attrs all sit on the ONE
+   pipeline root node (pipeline.ts) — the same descendant-form trap SC-102's tests
+   document. Multi-level recursion (a nested card's own nested list) frames each level,
+   exactly as sb/fb do. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested {
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature {
+	border-radius: 9px;
+	padding-top: 0.7rem;
+	padding-right: 0.85rem;
+	padding-bottom: 0.78rem;
+	padding-left: 0.85rem;
+	background: rgba(0, 0, 0, 0.16);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature {
+	background: rgba(0, 0, 0, 0.022);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature[data-dse-act] {
+	padding-left: calc(3px + 0.85rem);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='feature'] .dse-feature__nested > .dse-feature[data-dse-act]::before {
+	display: block;
+	border-top-left-radius: 9px;
+	border-bottom-left-radius: 9px;
+}
 /* …and the statblock `flat` FEATURE-STYLE mode keeps its dense, frameless run.
    The site has the identical hazard and solves it by ordering ("Keep ALL featstyle
    mode rules AFTER this block", steel-statblock.css:258) — here the mode rules win

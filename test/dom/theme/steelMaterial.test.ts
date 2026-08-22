@@ -789,10 +789,14 @@ describe('Steel material contract', () => {
 		});
 
 		it('is structure tier — no print exclusion, so it reaches print (S-1(a))', () => {
+			// SC-168 carve-out: the NESTED-card restore rules (`.dse-feature__nested > …`)
+			// are deliberately screen-only (they keep feature print shots frozen), so this
+			// structure-tier pin covers only the top-level suppression rules.
 			const standalone = rules.filter(
 				(r) =>
 					r.selector.includes("[data-dse-element='feature']") &&
-					/\.dse-feature\[data-dse-act\]/.test(r.selector),
+					/\.dse-feature\[data-dse-act\]/.test(r.selector) &&
+					!r.selector.includes('.dse-feature__nested'),
 			);
 			expect(standalone.length).toBeGreaterThan(0);
 			for (const r of standalone) {
@@ -859,10 +863,16 @@ describe('Steel material contract', () => {
 			// Any Steel rule that paints frame geometry/fill on a nested option must go
 			// through the shared :is() anchor. A `.dse-fb .dse-feature__nested > .dse-feature`
 			// (or `.dse-sb …`) rule carrying the recipe is the fork this pins against.
+			// ONE sanctioned second anchor since SC-168: the standalone feature element's
+			// nested cards (`[data-dse-element='feature'] …`, screen-only) — that arm cannot
+			// share the :is() block because its tier differs (print-guarded, where the sb/fb
+			// geometry reaches print), and its own describe below pins its recipe to this
+			// block's values so the two cannot drift.
 			const forks = nestedOptionRules.filter(
 				(r) =>
 					STEEL_SCOPE.test(r.selector) &&
 					!r.selector.includes(':is(.dse-sb, .dse-fb)') &&
+					!/\[data-dse-element=['"]feature['"]\]/.test(r.selector) &&
 					/(border-radius:\s*9px|background:\s*rgba\(0,\s*0,\s*0,\s*0\.(16|022)\))/.test(r.body),
 			);
 			expect(forks).toHaveLength(0);
@@ -931,11 +941,15 @@ describe('Steel material contract', () => {
 			}
 		});
 
-		it('does not reach the kit / display card family or the standalone Feature element', () => {
+		it('does not reach the kit / display card family; reaches the standalone Feature element only for NESTED cards, screen-only (SC-168)', () => {
 			// CardLayout.ts:382 + layouts.ts:235 mount the SAME renderFeatureList into a
 			// `.dse-card`; the standalone element root wears neither .dse-sb nor .dse-fb.
-			// Both must miss the frame by construction — this is what keeps
-			// kit--steel-print.png frozen.
+			// The kit family must miss the frame by construction — this is what keeps
+			// kit--steel-print.png frozen. Since SC-168 the standalone feature element's
+			// nested cards DO wear the frame, but (a) only through the nested combinator
+			// (the TOP-LEVEL standalone card stays frameless, per SC-102 part 2) and
+			// (b) only behind the print guard — which is what keeps feature--steel-print.png
+			// (and the other feature-family print twins) frozen.
 			// Rules that PAINT a frame — the `flat` mode rules below cancel one
 			// (background: none / border-radius: 0) and are deliberately not in scope.
 			const frameRules = nestedOptionRules.filter(
@@ -945,9 +959,13 @@ describe('Steel material contract', () => {
 			);
 			expect(frameRules.length).toBeGreaterThan(0);
 			for (const r of frameRules) {
-				expect(r.selector).toContain(':is(.dse-sb, .dse-fb)');
 				expect(r.selector).not.toContain('.dse-card');
-				expect(r.selector).not.toContain("[data-dse-element='feature']");
+				if (/\[data-dse-element=['"]feature['"]\]/.test(r.selector)) {
+					expect(r.selector).toContain('.dse-feature__nested > .dse-feature');
+					expect(r.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+				} else {
+					expect(r.selector).toContain(':is(.dse-sb, .dse-fb)');
+				}
 			}
 		});
 
@@ -1094,6 +1112,181 @@ describe('Steel material contract', () => {
 			expect(pill).toBeDefined();
 			expect(pill!.body).toMatch(/background-image:\s*var\(--dse-sheen\)/);
 			expect(pill!.body).toMatch(/box-shadow:\s*var\(--dse-chip-bevel\)/);
+		});
+	});
+
+	/**
+	 * SC-168 — the standalone Feature element's NESTED cards join the S-4 frame.
+	 *
+	 * The defect: a `.dse-feature__nested > .dse-feature` under the standalone pipeline
+	 * root ([data-dse-element='feature'] — the effect.features recursion) got NO frame
+	 * (the SC-101 anchor names only .dse-sb/.dse-fb), no fill, and 0 left/right padding —
+	 * SC-102's standalone suppression (`padding-left: 0` on `.dse-feature[data-dse-act]`)
+	 * reaches nested cards too, because its comment's premise ("a nested card is always
+	 * under .dse-sb/.dse-fb") was wrong. Result: the inner feature rendered flush against
+	 * its parent card's content edges (Scott's screenshot on the ticket).
+	 *
+	 * The fix joins the existing nested-card convention instead of inventing a margin:
+	 * the same recipe as the sb/fb frame (gap / 9px radius / .7 .85 .78 .85rem padding /
+	 * translucent-black fill / act lane + spine as the card's left edge), as a SEPARATE
+	 * screen-only arm — it cannot share the :is() block because the sb/fb geometry is
+	 * structure tier (reaches print) while this arm is print-guarded on purpose: the
+	 * feature-family `*--steel-print.png` bytes are frozen, and the report is a screen
+	 * defect. The recipe-identity test below is what keeps the two arms from drifting.
+	 */
+	describe('standalone-feature nested cards join the frame (SC-168)', () => {
+		const NESTED_ANCHOR =
+			'[data-dse-theme=\'steel\']:not([data-dse-print="on"])[data-dse-element=\'feature\']';
+		const exactRule = (selector: string) => {
+			const r = rules.find((x) => x.selector.replace(/\s+/g, ' ').trim() === selector);
+			expect(r).toBeDefined();
+			return r!;
+		};
+
+		const listRule = () =>
+			exactRule(`${NESTED_ANCHOR} .dse-feature__nested`);
+		const frameRule = () =>
+			exactRule(`${NESTED_ANCHOR} .dse-feature__nested > .dse-feature`);
+		const lightRule = () =>
+			exactRule(`body.theme-light ${NESTED_ANCHOR} .dse-feature__nested > .dse-feature`);
+		const laneRule = () =>
+			exactRule(`${NESTED_ANCHOR} .dse-feature__nested > .dse-feature[data-dse-act]`);
+		const barRule = () =>
+			exactRule(`${NESTED_ANCHOR} .dse-feature__nested > .dse-feature[data-dse-act]::before`);
+
+		it('separates nested cards with the real list gap (flex column, not padding rhythm)', () => {
+			const r = listRule();
+			expect(r.body).toMatch(/display:\s*flex/);
+			expect(r.body).toMatch(/flex-direction:\s*column/);
+			expect(r.body).toMatch(/gap:\s*0\.65rem/);
+		});
+
+		it('carries the EXACT sb/fb frame recipe — the anti-drift pin the fork exemption relies on', () => {
+			const shared = rules.find(
+				(r) =>
+					STEEL_SCOPE.test(r.selector) &&
+					r.selector.includes(':is(.dse-sb, .dse-fb) .dse-feature__nested > .dse-feature') &&
+					/border-radius:\s*9px/.test(r.body),
+			);
+			expect(shared).toBeDefined();
+			const arm = frameRule();
+			// Same longhand geometry, value for value.
+			for (const decl of [
+				/border-radius:\s*9px/,
+				/padding-top:\s*0\.7rem/,
+				/padding-right:\s*0\.85rem/,
+				/padding-bottom:\s*0\.78rem/,
+				/padding-left:\s*0\.85rem/,
+			]) {
+				expect(shared!.body).toMatch(decl);
+				expect(arm.body).toMatch(decl);
+			}
+			// Same material: translucent BLACK (bleed-through), never --dse-surface-sunken,
+			// with the same light twin.
+			expect(arm.body).toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*0\.16\)/);
+			expect(arm.body).not.toContain('--dse-surface-sunken');
+			expect(lightRule().body).toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*0\.022\)/);
+		});
+
+		it('restores the act lane and the spine as the card\'s rounded left edge (sb/fb values)', () => {
+			expect(laneRule().body).toMatch(/padding-left:\s*calc\(3px \+ 0\.85rem\)/);
+			const bar = barRule();
+			expect(bar.body).toMatch(/display:\s*block/);
+			expect(bar.body).toMatch(/border-top-left-radius:\s*9px/);
+			expect(bar.body).toMatch(/border-bottom-left-radius:\s*9px/);
+		});
+
+		it('every arm is screen-only AND compound on the pipeline root (no descendant-form footgun)', () => {
+			for (const r of [listRule(), frameRule(), lightRule(), laneRule(), barRule()]) {
+				// The guard is what keeps feature-family *--steel-print.png bytes frozen.
+				expect(r.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+				// theme + print-guard + element attrs share ONE root node (pipeline.ts) —
+				// a space between them matches nothing (the trap SC-102's tests document).
+				expect(r.selector.replace(/\s+/g, ' ')).toMatch(
+					/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\)\[data-dse-element='feature'\]/,
+				);
+			}
+		});
+
+		it('leaves the TOP-LEVEL standalone card frameless — SC-102 part 2 is untouched', () => {
+			// The suppression pair must survive verbatim (the standalone ability card has no
+			// spine and no lane, matching the site's .sc-ability)…
+			exactRule("[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before");
+			exactRule("[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]");
+			// …and every SC-168 arm reaches ONLY nested cards.
+			for (const r of [frameRule(), lightRule(), laneRule(), barRule()]) {
+				expect(r.selector).toContain('.dse-feature__nested > .dse-feature');
+			}
+		});
+
+		/**
+		 * CAN-FAIL PROOF, in a real cascade rather than in rule text: feed jsdom the REAL
+		 * extracted rule bodies and assert a nested card under the standalone root computes
+		 * the frame's insets — and that WITHOUT the SC-168 arms the same DOM computes
+		 * padding-left 0 (the SC-102 suppression reaching the nested card) and no
+		 * padding-right at all. That flush state IS the shipped defect.
+		 */
+		describe('cascade proof (jsdom)', () => {
+			function computePadding(withFix: boolean): { left: string; right: string } {
+				const baseNested = rules.find(
+					(r) => r.selector.trim() === '.dse-feature__nested > .dse-feature',
+				)!;
+				const steelLane = rules.find(
+					(r) =>
+						r.selector.trim() === "[data-dse-theme='steel'] .dse-feature[data-dse-act]",
+				)!;
+				const suppression = rules.find(
+					(r) =>
+						r.selector.replace(/\s+/g, ' ').trim() ===
+						"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]",
+				)!;
+				const style = document.createElement('style');
+				style.textContent =
+					`${baseNested.selector}{${baseNested.body}}` +
+					`${steelLane.selector}{${steelLane.body}}` +
+					`${suppression.selector}{${suppression.body}}` +
+					(withFix
+						? `${frameRule().selector}{${frameRule().body}}` +
+							`${laneRule().selector}{${laneRule().body}}`
+						: '');
+				const root = document.createElement('div');
+				root.setAttribute('data-dse-theme', 'steel');
+				root.setAttribute('data-dse-element', 'feature');
+				const outer = document.createElement('div');
+				outer.className = 'dse-feature';
+				const section = document.createElement('div');
+				section.className = 'dse-section';
+				const list = document.createElement('div');
+				list.className = 'dse-feature__nested';
+				const inner = document.createElement('div');
+				inner.className = 'dse-feature';
+				inner.setAttribute('data-dse-act', 'trait');
+				list.appendChild(inner);
+				section.appendChild(list);
+				outer.appendChild(section);
+				root.appendChild(outer);
+				document.head.appendChild(style);
+				document.body.appendChild(root);
+				try {
+					const cs = getComputedStyle(inner);
+					return { left: cs.paddingLeft, right: cs.paddingRight };
+				} finally {
+					style.remove();
+					root.remove();
+				}
+			}
+
+			it('with the fix, the nested card computes the lane + frame insets', () => {
+				const { left, right } = computePadding(true);
+				expect(left).toBe('calc(3px + 0.85rem)');
+				expect(right).toBe('0.85rem');
+			});
+
+			it('without the fix, the same DOM computes flush insets (the shipped defect)', () => {
+				const { left, right } = computePadding(false);
+				expect(left).toMatch(/^0(px)?$/);
+				expect(['', '0', '0px']).toContain(right);
+			});
 		});
 	});
 
