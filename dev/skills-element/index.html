@@ -920,6 +920,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#layouts-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layouts (style)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showinghiding-unowned-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Showing/hiding unowned skills
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#customskill-definitions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1200,6 +1222,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#layouts-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layouts (style)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showinghiding-unowned-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Showing/hiding unowned skills
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#customskill-definitions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1306,6 +1350,13 @@ drive both.</p>
 <td>No</td>
 <td><code>false</code></td>
 </tr>
+<tr>
+<td><code>style</code></td>
+<td><code>string</code></td>
+<td>The layout: <code>ledger</code>, <code>chips</code> or <code>list</code>. See <strong>Layouts</strong> below.</td>
+<td>No</td>
+<td><code>ledger</code></td>
+</tr>
 </tbody>
 </table>
 <h3 id="notes">Notes:<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h3>
@@ -1313,6 +1364,38 @@ drive both.</p>
 <li>The <code>skills</code> field is an array of skill names (strings) that the character has.</li>
 <li>The <code>custom_skills</code> field allows you to define custom skills with additional properties.</li>
 </ul>
+<h2 id="layouts-style">Layouts (<code>style</code>)<a class="headerlink" href="#layouts-style" title="Permanent link">&para;</a></h2>
+<p>Under the Steel theme the skill list can render in three layouts, chosen per block:</p>
+<ul>
+<li><strong><code>ledger</code></strong> (the default) — the skill groups become a responsive grid of recessed
+  panels, each with a small-caps group title and an <strong>owned/total tally</strong> (<code>3/11</code>) in its
+  header; owned skills carry a solid ◆ mark and full-weight ink. Roughly three columns in
+  a normal note pane, one column in a sidebar leaf.</li>
+<li><strong><code>chips</code></strong> — each group is a thin titled band over an inline-wrapped run of skill chips:
+  owned skills are raised steel chips with a solid ◆, unowned skills are faint ghost
+  chips. The whole catalog fits in about one screen.</li>
+<li><strong><code>list</code></strong> — the classic one-column checklist, exactly as it rendered before 7.0.0's
+  overhaul.</li>
+</ul>
+<div class="highlight"><pre><span></span><code>~~~ds-skills
+style: chips
+skills:
+  - Heal
+  - Sneak
+~~~
+</code></pre></div>
+<p>Print and export always use the classic list form regardless of <code>style</code> — paper gets the
+reference layout.</p>
+<h2 id="showinghiding-unowned-skills">Showing/hiding unowned skills<a class="headerlink" href="#showinghiding-unowned-skills" title="Permanent link">&para;</a></h2>
+<p><code>only_show_selected: true</code> starts the block with unowned skills hidden (in the <code>list</code>
+layout this is the classic filtered rendering; <code>ledger</code> and <code>chips</code> keep their group
+panels and tallies and just omit the unowned entries — the tally still reads <code>3/11</code>, so
+you can see how much of the catalog is folded away).</p>
+<p>The block's <a href="../common-element-fields/#the-menu">element menu</a> also carries an <strong>eye
+toggle</strong> ("Hide unowned skills" / "Show unowned skills"), so you can flip the same state
+at the table without editing the note. The YAML key sets the starting state; the toggle's
+choice wins for the rest of the session (per block, never written back to the note —
+exactly like the collapse controls).</p>
 <h2 id="customskill-definitions">CustomSkill Definitions<a class="headerlink" href="#customskill-definitions" title="Permanent link">&para;</a></h2>
 <p>Each custom skill in the <code>custom_skills</code> array can be defined using the following fields:</p>
 <table>
