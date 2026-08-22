@@ -4777,7 +4777,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 		[data-dse-element='counter'],
 		[data-dse-element='characteristics'],
 		[data-dse-element='values-row'],
-		[data-dse-element='skills'],
 		[data-dse-element='heroic-resource'],
 		[data-dse-element='surges'],
 		[data-dse-element='hero-tokens'],
@@ -4802,7 +4801,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]):is(
 		[data-dse-element='counter'],
 		[data-dse-element='characteristics'],
 		[data-dse-element='values-row'],
-		[data-dse-element='skills'],
 		[data-dse-element='heroic-resource'],
 		[data-dse-element='surges'],
 		[data-dse-element='hero-tokens'],
@@ -7955,7 +7953,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 		[data-dse-element='counter'],
 		[data-dse-element='characteristics'],
 		[data-dse-element='values-row'],
-		[data-dse-element='skills'],
 		[data-dse-element='conditions']
 	):not([data-dse-error-stage]) {
 	padding: var(--dse-pad);

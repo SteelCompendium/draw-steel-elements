@@ -1352,12 +1352,14 @@ describe('Steel material contract', () => {
 			return r as Rule;
 		};
 
-		/** The seven panels SC-152 brought into the family.
-		 *  `hero` is NOT one of them — see the dedicated test below. */
+		/** The six panels SC-152 brought into the family.
+		 *  `hero` is NOT one of them — see the dedicated test below. `skills` was in
+		 *  the first round and Scott pulled it back out (SC-152 review, 2026-08-22:
+		 *  "Ignore ds-skills for now. They need an overhaul") — SC-182 owns its real
+		 *  treatment; see the exclusion test below. */
 		const SHEET_PANELS = [
 			'characteristics',
 			'values-row',
-			'skills',
 			'heroic-resource',
 			'surges',
 			'hero-tokens',
@@ -1478,6 +1480,17 @@ describe('Steel material contract', () => {
 			}
 		});
 
+		it('skills is deliberately NOT plated — SC-182 owns its overhaul', () => {
+			// Round 1 put ds-skills on the plate; it became one card two viewports tall
+			// with the diagonal gradient stretched into a page-length wash. Scott's
+			// ruling (SC-152, 2026-08-22): "Ignore ds-skills for now. They need an
+			// overhaul." The element ships UNPLATED until SC-182 redesigns it — putting
+			// it back on the list should be that ticket's decision, not a drive-by.
+			expect(plateDark().selector).not.toContain(`[data-dse-element='skills']`);
+			expect(plateLight().selector).not.toContain(`[data-dse-element='skills']`);
+			expect(rootPadding().selector).not.toContain(`[data-dse-element='skills']`);
+		});
+
 		it('the hero sheet keeps its plate on the inner .dse-hero, one node down', () => {
 			// The other half of the previous test: `hero` is out of the shared list because
 			// it is ALREADY plated, not because the sheet is meant to be bare. This is a
@@ -1509,7 +1522,7 @@ describe('Steel material contract', () => {
 			// those blocks (compound selector), pinned by
 			// test/dom/elements/{resource,surges}.test.ts; the split here is unchanged and
 			// is now true in the DOM as well: all three sit at a 17px ink inset.
-			for (const id of ['characteristics', 'values-row', 'skills', 'conditions']) {
+			for (const id of ['characteristics', 'values-row', 'conditions']) {
 				expect(rootPadding().selector).toContain(`[data-dse-element='${id}']`);
 			}
 			for (const id of ['heroic-resource', 'surges', 'hero-tokens']) {
