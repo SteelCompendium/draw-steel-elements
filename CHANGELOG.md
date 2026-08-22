@@ -15,6 +15,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
+  standalone ability/feature card (an `effect.features` sub-feature) rendered flush
+  against its parent card's left and right edges with no frame of its own. It now
+  wears the same nested-card treatment statblock and featureblock sub-features have
+  had since 7.0.0's structural pass — its own rounded plate, proper insets, and the
+  action-type spine as the card's left edge. Print is unchanged.
 - **A standard menu panel on every card element, and a one-line collapsed form** (SC-169).
   Hover any element that draws a card — statblocks, ability cards, featureblocks, compendium
   references, the whole hero suite, every GM tracker — and a small panel appears at its
