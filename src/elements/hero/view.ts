@@ -57,6 +57,7 @@ import type { ResourceSlice } from '@/elements/resource/panel';
 import { SurgePanel } from '@/elements/surges/panel';
 import type { SurgeSlice } from '@/elements/surges/panel';
 import { ConditionsPanel } from '@/elements/conditions/panel';
+import { resolveDuration } from '@/elements/conditionDuration';
 import type { CharacteristicProvider } from '@/framework/roll/binding';
 import type { CharacteristicName } from '@/framework/roll/types';
 import type { SessionStore } from '@/framework/session';
@@ -276,17 +277,16 @@ export class HeroSheetView extends ElementView<HeroModel> {
 		if (recMax !== null) model.state.recoveries = recMax;
 		model.state.surges = 0;
 		// spec §3.2/OD-8: clear end-of-encounter conditions only (save-ends/EoT survive
-		// a respite — only EoE is scoped "clear" by the header action).
-		model.state.conditions = (model.state.conditions ?? []).filter((c) => this.conditionDuration(c) !== 'eoe');
+		// a respite — only EoE is scoped "clear" by the header action). SC-186:
+		// resolveDuration prefers the first-class `duration` field and falls back to the
+		// legacy `effect`-string parse, so hand-authored `effect: eoe` YAML keeps working
+		// unchanged alongside conditions the new modal writes as `duration: 'eoe'`.
+		model.state.conditions = (model.state.conditions ?? []).filter((c) => resolveDuration(c) !== 'eoe');
 
 		this.refreshStaminaRegion(model);
 		this.surgePanel?.updatePanel(this.surgeSlice(model));
 		this.refreshConditionsRegion(model);
 		void this.persist();
-	}
-
-	private conditionDuration(c: Condition): string {
-		return (c.effect ?? '').trim().toLowerCase();
 	}
 
 	// ---------------------------------------------------------------- characteristics
@@ -549,7 +549,7 @@ export class HeroSheetView extends ElementView<HeroModel> {
 	}
 
 	/** recon delta 7: `model.state` (a `{conditions}` ConditionHolder) is handed to the
-	 *  LOOSENED ConditionsPanel/AddConditionsModal (Task 2) verbatim — never conformed
+	 *  LOOSENED ConditionsPanel/ConditionsModal (SC-186) verbatim — never conformed
 	 *  to a fabricated Hero/CreatureInstance shape. */
 	private refreshConditionsRegion(model: HeroModel): void {
 		this.conditionsPanel?.updatePanel(model.state.conditions ?? []);

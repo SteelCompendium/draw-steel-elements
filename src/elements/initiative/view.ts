@@ -61,7 +61,7 @@ import { Images } from '@utils/Images';
 import { StaminaBar } from '@model/StaminaBar';
 import { StaminaEditModal } from '@views/StaminaEditModal';
 import { ResetEncounterModal } from '@views/ResetEncounterModal';
-import { AddConditionsModal } from '@views/ConditionSelectModal';
+import { ConditionsModal } from '@views/ConditionsModal';
 import { MinionStaminaPoolModal } from '@views/MinionStaminaPoolModal';
 import { appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
 import {
@@ -996,8 +996,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// iconButton in write mode, static span + applyConditionColor/Effect in
 		// read-only mode) is now the shared kit core, framework/kit/conditionIcons.ts —
 		// identical DOM/click/color/effect behavior, just relocated. The "Add Condition"
-		// affordance below (element-specific: opens AddConditionsModal, a src/views/ UI
-		// shell) stays here.
+		// affordance below (element-specific: opens ConditionsModal, SC-186, a src/views/
+		// UI shell) stays here.
 		kitBuildConditionIcons(container, conditions, this.conditionManager, {
 			owner,
 			canRemove: this.canWrite,
@@ -1019,8 +1019,8 @@ export class InitiativeView extends ElementView<EncounterData> {
 				tooltip: 'Add Condition',
 				onClick: () => {
 					this.openModal(
-						new AddConditionsModal(this.cx.app, character, this.conditionManager, (newConditions) => {
-							character.conditions = (character.conditions || []).concat(newConditions);
+						new ConditionsModal(this.cx.app, character, this.conditionManager, (updated) => {
+							character.conditions = updated;
 							container.empty();
 							this.buildConditionIcons(container, character, owner);
 							void this.persist();

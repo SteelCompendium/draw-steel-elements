@@ -128,10 +128,20 @@ export interface Condition {
     key: string;
     color?: string;
     effect?: string;
+    /** SC-186 — additive, first-class duration (absent = "until removed"). Preferred
+     *  over the legacy free-text `effect`-string duration vocabulary
+     *  ('save ends' | 'eot' | 'eoe', case/whitespace-insensitive) that predates this
+     *  field: readers should resolve via `resolveDuration()`
+     *  (src/elements/conditionDuration.ts), which prefers this field and falls back to
+     *  the tolerant `effect` parse, so hand-authored YAML with only `effect: eot` etc.
+     *  keeps working unchanged. `effect` remains the separate CSS pulse-effect field
+     *  ('blink' | 'glow' | 'glow-pulse' | 'breathing' | 'blur-pulse') — the two no
+     *  longer share one slot. */
+    duration?: 'eot' | 'save-ends' | 'eoe';
 }
 
 /** D7 Task 2 (spec §4.4, recon delta 7) — the structural superset of `Hero |
- *  CreatureInstance` that `AddConditionsModal`'s ctor widens to, so `ds-conditions`'s
+ *  CreatureInstance` that `ConditionsModal`'s ctor widens to, so `ds-conditions`'s
  *  standalone hero-sheet play-state (which is NOT a full CreatureInstance — no id,
  *  statblock ref, or initiative order) can open the SAME modal without fabricating
  *  those encounter-only fields. `conditions` is optional (mirroring
@@ -247,13 +257,15 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
                     return {
                         key: cond,
                         color: undefined,
-                        effect: undefined
+                        effect: undefined,
+                        duration: undefined
                     }
                 } else if (typeof cond === "object" && cond.key) {
                     return {
                         key: cond.key,
                         color: cond.color ?? undefined,
                         effect: cond.effect ?? undefined,
+                        duration: cond.duration ?? undefined,
                     };
                 } else {
                     throw new Error(`Invalid condition format for hero '${hero.name}'.`);
@@ -386,13 +398,15 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
                                     return {
                                         key: cond,
                                         color: undefined,
-                                        effect: undefined
+                                        effect: undefined,
+                                        duration: undefined
                                     }
                                 } else if (typeof cond === "object" && cond.key) {
                                     return {
                                         key: cond.key,
                                         color: cond.color ?? undefined,
                                         effect: cond.effect ?? undefined,
+                                        duration: cond.duration ?? undefined,
                                     };
                                 } else {
                                     throw new Error(
@@ -431,13 +445,15 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
                                     return {
                                         key: cond,
                                         color: undefined,
-                                        effect: undefined
+                                        effect: undefined,
+                                        duration: undefined
                                     }
                                 } else if (typeof cond === "object" && cond.key) {
                                     return {
                                         key: cond.key,
                                         color: cond.color ?? undefined,
                                         effect: cond.effect ?? undefined,
+                                        duration: cond.duration ?? undefined,
                                     };
                                 } else {
                                     throw new Error(

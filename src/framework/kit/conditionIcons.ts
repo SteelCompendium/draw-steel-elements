@@ -4,8 +4,8 @@
 // display both build identical `.dse-cond` icon markup off the same code.
 //
 // Scope note: only the per-entry icon rendering moved here — NOT the "Add Condition"
-// affordance (that opens `AddConditionsModal`, a `src/views/` UI shell with its own
-// mutate/persist wiring specific to the initiative tracker; it stays in
+// affordance (that opens `ConditionsModal` (SC-186), a `src/views/` UI shell with its
+// own mutate/persist wiring specific to the initiative tracker; it stays in
 // InitiativeView, called after this function, exactly as before).
 //
 // Boundary note: `applyConditionColor`/`applyConditionEffect` (the validated
@@ -14,8 +14,10 @@
 // (F1 OD-8; kit-index.test.ts enforces it with a real import scan, not just lint). The
 // two tiny, pure DOM helpers are therefore duplicated here rather than imported —
 // same validated behavior, zero coupling. `src/elements/conditionColor.ts` is
-// untouched; its other call sites (ConditionSelectModal, CustomizeConditionModal,
-// MinionStaminaPoolModal, InitiativeView's own add-condition path) are unaffected.
+// untouched; its other call sites (ConditionsModal, MinionStaminaPoolModal,
+// InitiativeView's own add-condition path) are unaffected. SC-186's fallback glyph/
+// title-case helpers (elements/conditionDisplay.ts) are duplicated here for the same
+// boundary reason — see FALLBACK_ICON/titleCaseKey below.
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { iconButton } from './iconButton';
@@ -44,6 +46,20 @@ export interface ConditionIconsOptions {
 
 const CONDITION_EFFECTS = ['blink', 'glow', 'glow-pulse', 'breathing', 'blur-pulse'] as const;
 
+/** SC-186 fallback glyph for an unregistered (custom) condition key — duplicate of
+ *  elements/conditionDisplay.ts's FALLBACK_CONDITION_ICON (see file header for why this
+ *  isn't an import). */
+const FALLBACK_ICON = 'circle-dashed';
+
+/** Duplicate of elements/conditionDisplay.ts's titleCaseConditionKey (see file header). */
+function titleCaseKey(key: string): string {
+	return key
+		.split(/[-_\s]+/)
+		.filter(Boolean)
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(' ');
+}
+
 /** Duplicate of elements/conditionColor.ts's applyConditionColor (see file header for
  *  why this isn't an import). */
 function applyConditionColor(el: HTMLElement, color: string | undefined): void {
@@ -70,8 +86,11 @@ function applyConditionEffect(el: HTMLElement, effect: string | undefined): void
  * InitiativeView.buildConditionIcons's per-entry loop, initiative/view.ts:858).
  * Interactive (`iconButton`, click-to-remove) when `opts.canRemove`, else a static,
  * non-interactive span — identical DOM either way to the pre-extraction private
- * method. String entries and `{key, color?, effect?}` entries are both accepted;
- * entries the manager doesn't recognize are skipped.
+ * method. String entries and `{key, color?, effect?}` entries are both accepted.
+ * SC-186: entries the manager doesn't recognize (custom/unregistered keys) render a
+ * generic fallback glyph (circle-dashed) with a title-cased key as the accessible
+ * name/tooltip, instead of being silently skipped — the only escape hatch for a
+ * statblock's bespoke condition.
  */
 export function buildConditionIcons(
 	container: HTMLElement,
@@ -92,7 +111,10 @@ export function buildConditionIcons(
 		}
 
 		const condition = mgr.getAnyConditionByKey(conditionKey);
-		if (!condition) continue;
+		// SC-186: unregistered keys no longer skip — they render the fallback glyph +
+		// title-cased key (a custom statblock condition, e.g. "hexed" -> "Hexed").
+		const iconName = condition?.iconName ?? FALLBACK_ICON;
+		const displayName = condition?.displayName ?? titleCaseKey(conditionKey);
 
 		// Click-to-remove is a write — read-only renders a static state glyph.
 		let iconEl: HTMLElement;
@@ -100,17 +122,17 @@ export function buildConditionIcons(
 			iconEl = iconButton(
 				container,
 				{
-					icon: condition.iconName,
-					label: `Remove condition: ${condition.displayName}`,
-					tooltip: condition.displayName,
+					icon: iconName,
+					label: `Remove condition: ${displayName}`,
+					tooltip: displayName,
 					onClick: () => opts.onRemove?.(conditionEntry),
 				},
 				opts.owner,
 			).buttonEl;
 		} else {
 			iconEl = container.createSpan();
-			setIcon(iconEl, condition.iconName);
-			tooltip(iconEl, condition.displayName);
+			setIcon(iconEl, iconName);
+			tooltip(iconEl, displayName);
 		}
 		iconEl.addClass('dse-cond');
 

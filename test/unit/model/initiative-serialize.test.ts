@@ -94,6 +94,26 @@ describe('T-1: serialize(parse(src)) is byte-compatible with the legacy writer',
 		expect(model.heroes[0].has_taken_turn).toBe(true);
 	});
 
+	test('SC-186: a hand-authored duration field round-trips through parse+serialize AND matches the legacy oracle', async () => {
+		const src = [
+			'heroes:',
+			'  - name: Frodo',
+			'    max_stamina: 80',
+			'    conditions:',
+			'      - key: bleeding',
+			'        duration: save-ends',
+			'        effect: glow',
+			'enemy_groups: []',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+
+		const model = parseLikePipeline(src);
+		expect(model).toEqual(await legacyMaterialize(src));
+		expect(model.heroes[0].conditions).toEqual([{ key: 'bleeding', duration: 'save-ends', effect: 'glow' }]);
+		expect(serialize(model)).toBe(await legacyWriterBytes(src));
+	});
+
 	test('output is trimmed (no trailing newline), matching legacy writer + replaceSource', () => {
 		const out = serialize(parseLikePipeline(quickStart));
 		expect(out).not.toMatch(/\n$/);

@@ -346,7 +346,10 @@ describe('D3 Task 5: print RULES (real kit class names, verified by grep)', () =
 	test('interactive-only chrome is hidden (.dse-btn / tab bar / add-condition / toggles)', () => {
 		// A single display:none rule-list containing every interactive-only kit class.
 		const rule = sheet.match(/@media print\s*\{[\s\S]*?\}\s*\}/g)?.join('\n') ?? sheet;
-		for (const cls of ['.dse-btn', '.dse-tabs__list', '.dse-cond--add', '.dse-cond-item__toggle', '.dse-cond-item__cog']) {
+		// SC-186: .dse-cond-item__toggle/.dse-cond-item__cog were the retired
+		// AddConditionsModal picker's own row classes (ConditionsModal never renders
+		// them) — removed from both print-hide lists as genuinely dead selectors.
+		for (const cls of ['.dse-btn', '.dse-tabs__list', '.dse-cond--add']) {
 			expect(sheet.includes(cls)).toBe(true);
 		}
 		// …grouped into a display:none block (real classes present in a hide rule).

@@ -27,6 +27,24 @@ describe('T-1: parseEncounterData — happy path', () => {
 		]);
 	});
 
+	test('SC-186: a hand-authored duration field passes through the legacy hero-condition normalizer', async () => {
+		const src = [
+			'heroes:',
+			'  - name: Frodo',
+			'    max_stamina: 80',
+			'    conditions:',
+			'      - key: bleeding',
+			'        duration: save-ends',
+			'enemy_groups: []',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const data = await parse(src);
+		expect(data.heroes[0].conditions).toEqual([
+			{ key: 'bleeding', color: undefined, effect: undefined, duration: 'save-ends' },
+		]);
+	});
+
 	test('creature instances auto-created with 1-based ids and full stamina', async () => {
 		const data = await parse(quickStart);
 		const orc = data.enemy_groups[0].creatures[0];

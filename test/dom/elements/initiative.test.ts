@@ -710,15 +710,20 @@ describe('T-9: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
-	test('condition add (hero): AddConditionsModal -> icons rebuilt in place -> one write with the new condition', async () => {
+	test('condition add (hero): ConditionsModal -> icons rebuilt in place -> one write with the new condition', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);
 
 		(root.querySelector('.dse-init__group--heroes .dse-cond--add') as HTMLElement).click();
-		// Task 8: the modal is a kit managedModal — rows/footer are labelled kit buttons.
+		// SC-186: the modal is the Option D manager — "+ Add condition" swaps in a real
+		// combobox; type + Enter picks the top match, Done closes.
 		const modalEl = lastModal();
-		(modalEl.querySelector('button[aria-label="Bleeding"]') as HTMLElement).click();
-		(modalEl.querySelector('.dse-modal__footer button[aria-label="Add Conditions"]') as HTMLElement).click();
+		(modalEl.querySelector('button[aria-label="Add condition"]') as HTMLElement).click();
+		const input = modalEl.querySelector('.dse-condal__input') as HTMLInputElement;
+		input.value = 'Bleeding';
+		input.dispatchEvent(new Event('input'));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
 
 		const heroConditions = root.querySelectorAll('.dse-init__group--heroes .dse-cond');
 		expect(heroConditions).toHaveLength(1);

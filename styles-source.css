@@ -1767,76 +1767,301 @@ code.dsa {
 }
 
 /* ============================================================== */
-/*  Condition modals (D2 §3.x, Plan 09 Task 8): .dse-cond / .dse-cust  */
+/*  ConditionsModal (SC-186, Option D "active list" manager): .dse-condal  */
 /* ============================================================== */
-/* Both condition modals ride the kit .dse-modal scaffold; rows, cogs, and footers
-   are kit .dse-btn (their own chrome) — layout only here. The user-picked condition
-   color rides the VALIDATED --dse-condition-color scoped property
-   (applyConditionColor, OD-8/SD-2 — never el.style.color); absent/invalid input
-   falls back to --dse-fg-muted through the var() default. */
+/* Replaces the retired two-modal AddConditionsModal/CustomizeConditionModal picker +
+   customize flow (the old picker-grid and customize-preview rule blocks are evicted).
+   Rides the kit
+   .dse-modal scaffold; rows, cogs, delete, and footer are kit .dse-btn (their own
+   chrome) — layout only here. The user-picked condition color rides the VALIDATED
+   --dse-condition-color scoped property (applyConditionColor, OD-8/SD-2 — never
+   el.style.color); absent/invalid input falls back to --dse-fg-muted through the
+   var() default. Screen-only chrome by construction: the modal is never inside a
+   [data-dse-element] root, so no print rule can reach it and no frozen shot can move —
+   still, every Steel visual treatment below carries the Steel scoping rule
+   ([data-dse-theme='steel']:not([data-dse-print="on"])) for consistency with the rest
+   of the sheet. */
 
-.dse-cond-list {
+.dse-condal-modal {
+	width: 480px;
+	max-width: calc(100vw - 4em);
+}
+
+.dse-condal__list {
 	display: flex;
-	flex-wrap: wrap;
-}
-/* The kit divider between conditions and pseudo-conditions must break the wrap row. */
-.dse-cond-list > .dse-hr {
-	width: 100%;
-	margin: 0.5em 0;
+	flex-direction: column;
+	gap: 0.4em;
 }
 
-.dse-cond-item {
-	position: relative;
+/* Each active condition is a small forged chip-row (raised, matching the conditions
+   strip's own .dse-cond-chip vocabulary) — the list holds only what is actually on
+   the creature, never a full catalog. */
+.dse-condal__row {
 	display: flex;
 	align-items: center;
-	width: calc(50% - 2em);
-	margin: 0 1em 0.25em 1em;
-	box-sizing: border-box;
-	border: 2px solid transparent;
+	gap: 0.55em;
+	padding: 0.28em 0.4em 0.28em 0.6em;
+	border: 1px solid var(--dse-border);
 	border-radius: var(--dse-radius);
-	transition: background-color 0.2s;
+	background: var(--dse-surface);
 }
-.dse-cond-item:hover {
-	background-color: var(--dse-hover);
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal__row {
+	background-image: var(--dse-sheen-soft);
+	box-shadow: var(--dse-chip-bevel);
 }
-/* Selection reads on the ROW (the legacy accent border), keyed to aria-selected. */
-.dse-cond-item[aria-selected='true'] {
+/* The row whose inline editor is open — accent border ALL AROUND (DESIGN.md rule 7 —
+   never a colored left edge). */
+.dse-condal__row--open {
 	border-color: var(--dse-accent);
 }
-
-/* The row toggle: a ghost kit button filling the row. Its aria-pressed state is
-   announced, but the VISUAL selection is the row border above — so the kit's
-   pressed accent-fill is flattened here (higher specificity than .dse-btn[data-pressed]). */
-.dse-cond-item__toggle {
-	flex: 1 1 auto;
-	min-width: 0;
-	justify-content: flex-start;
-	/* keep the label clear of the absolutely-positioned cog */
-	padding-right: var(--dse-touch-min);
-}
-.dse-cond-item .dse-btn[data-pressed] {
-	background: transparent;
-	color: var(--dse-fg);
-	border-color: transparent;
-}
-.dse-cond-item__toggle .dse-btn__icon {
-	font-size: 1.5em;
+.dse-condal__glyph {
+	display: inline-flex;
 	color: var(--dse-condition-color, var(--dse-fg-muted));
 }
-
-/* The customize cog reveals on hover AND focus (§3.x — a11y, not hover-only).
-   visibility (not display) keeps it in the tab order the moment the row gains
-   :focus-within via its toggle. */
-.dse-cond-item__cog {
-	position: absolute;
-	right: 0;
-	top: 50%;
-	transform: translateY(-50%);
-	visibility: hidden;
+.dse-condal__name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
-.dse-cond-item:hover .dse-cond-item__cog,
-.dse-cond-item:focus-within .dse-cond-item__cog {
-	visibility: visible;
+/* Unregistered (custom, user-typed) conditions carry a quiet dashed tag. */
+.dse-condal__tag {
+	font-size: 0.62em;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	padding: 0.12em 0.5em;
+	border: 1px dashed var(--dse-border-strong, var(--dse-border));
+	border-radius: var(--dse-radius);
+	color: var(--dse-fg-muted);
+}
+.dse-condal__act {
+	flex: 0 0 auto;
+}
+.dse-condal__act--delete {
+	color: var(--dse-fg-muted);
+}
+.dse-condal__act--delete:hover {
+	color: var(--dse-danger, var(--dse-fg));
+}
+
+/* The small duration/effect badge riding a row (shared by list rows) — mirrors the
+   conditions strip's own .dse-cond-chip__duration badge vocabulary at a slightly
+   smaller scale, since this row already carries the glyph + name + two act buttons. */
+.dse-cond-item__dur {
+	flex: 0 0 auto;
+	font-size: 0.72em;
+	line-height: 1.4;
+	padding: 0.05em 0.5em;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface);
+	color: var(--dse-fg-muted);
+	white-space: nowrap;
+}
+
+/* Inline editor under the open row — a sunken niche with the same labeled-field
+   grammar the row itself will never need more than once at a time. */
+.dse-condal__editor {
+	display: flex;
+	flex-direction: column;
+	gap: 0.55em;
+	margin: -0.05em 0 0.25em;
+	padding: var(--dse-pad);
+	background: var(--dse-surface-sunken, var(--dse-surface));
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal__editor {
+	box-shadow: var(--dse-bevel);
+}
+
+.dse-cond-field {
+	display: flex;
+	align-items: center;
+	gap: 0.7em;
+}
+.dse-cond-field__label {
+	flex: 0 0 4.6em;
+	font-size: 0.72em;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--dse-fg-muted);
+}
+.dse-cond-field__control {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4em;
+}
+
+/* -- shared chip/swatch grammar: Duration + Effect segmented controls, Color row -- */
+
+.dse-durseg {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35em;
+}
+.dse-optchip {
+	font: inherit;
+	font-size: 0.8em;
+	line-height: 1.4;
+	padding: 0.12em 0.6em;
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface);
+	color: var(--dse-fg-muted);
+	cursor: pointer;
+	white-space: nowrap;
+}
+.dse-optchip:hover {
+	background-color: var(--dse-hover);
+	color: var(--dse-fg);
+}
+/* Selection = accent border all around (DESIGN.md rule 7 — never a colored left edge). */
+.dse-optchip[aria-pressed='true'] {
+	border-color: var(--dse-accent);
+	color: var(--dse-fg);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-optchip[aria-pressed='true'] {
+	background-image: var(--dse-sheen-soft);
+	box-shadow: var(--dse-chip-bevel);
+}
+
+.dse-swatches {
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+}
+.dse-swatch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5em;
+	height: 1.5em;
+	padding: 0;
+	border: 1px solid var(--dse-border-strong, var(--dse-border));
+	border-radius: 50%;
+	background: var(--dse-swatch, var(--dse-surface));
+	cursor: pointer;
+}
+.dse-swatch[aria-pressed='true'] {
+	outline: 2px solid var(--dse-accent);
+	outline-offset: 2px;
+}
+.dse-swatch--custom {
+	color: var(--dse-fg-muted);
+	background: var(--dse-surface);
+}
+.dse-swatch--custom input[type='color'] {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	cursor: pointer;
+}
+
+/* -- the add affordance: a dashed button, or (open) the combobox + dropdown -- */
+
+.dse-condal__addwrap {
+	position: relative;
+	margin-top: 0.7em;
+}
+.dse-condal__add {
+	width: 100%;
+	justify-content: center;
+	border-style: dashed;
+	color: var(--dse-fg-muted);
+}
+.dse-condal__combobox {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	padding: 0.35em 0.65em;
+	border: 1px solid var(--dse-accent);
+	border-radius: var(--dse-radius);
+	background: var(--dse-surface-sunken, var(--dse-surface));
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal__combobox {
+	box-shadow: var(--dse-bevel);
+}
+.dse-condal__search {
+	display: inline-flex;
+	color: var(--dse-fg-muted);
+}
+/* A real <input> reset to the combobox's own chrome — no UA border/background/outline,
+   inherits the modal's font/color like every other kit control. */
+.dse-condal__input {
+	flex: 1 1 auto;
+	min-width: 0;
+	border: none;
+	background: none;
+	outline: none;
+	padding: 0;
+	font: inherit;
+	color: var(--dse-fg);
+}
+
+/* Dropdown: a small forged card floating under the combobox, scrollable so the
+   empty-query full-catalog listing never grows the modal. */
+.dse-condal__menu {
+	position: absolute;
+	top: calc(100% + 0.4em);
+	left: 0;
+	right: 0;
+	z-index: 3;
+	max-height: 220px;
+	overflow-y: auto;
+	padding: 0.3em;
+	background: var(--dse-card-bg, var(--background-primary));
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal__menu {
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+}
+body.theme-light .dse-condal__menu {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal__menu {
+	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.dse-condal__menu > .dse-hr {
+	margin: 0.25em 0.3em;
+}
+.dse-condal__menu-item {
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	padding: 0.3em 0.5em;
+	border-radius: var(--dse-radius);
+	cursor: pointer;
+}
+.dse-condal__menu-item:hover,
+.dse-condal__menu-item--active {
+	background-color: var(--dse-hover);
+}
+.dse-condal__menu-name {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+/* The always-present escape hatch: create whatever was typed. */
+.dse-condal__menu-custom .dse-condal__glyph {
+	color: var(--dse-accent);
+}
+.dse-condal__menu-custom .dse-condal__menu-name {
+	color: var(--dse-fg-muted);
+}
+.dse-condal__menu-custom strong {
+	color: var(--dse-fg);
+	font-weight: 600;
 }
 
 /* -- SC-159: the compendium search modal's suggestion rows -------------------- *
@@ -1945,33 +2170,6 @@ code.dsa {
 	margin-top: 0.2em;
 	color: var(--text-muted);
 	font-size: 0.9em;
-}
-
-/* CustomizeConditionModal body: tools column beside the live preview. */
-.dse-cust {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	gap: var(--dse-pad);
-}
-.dse-cust__row {
-	margin-top: 1em;
-	display: flex;
-	align-items: center;
-	justify-content: flex-start;
-}
-.dse-cust__row label {
-	width: 4em;
-	margin-right: 1em;
-}
-.dse-cust__preview {
-	height: 2em;
-	flex: 1 1 auto;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	font-size: 1.5em;
-	color: var(--dse-condition-color, var(--dse-fg-muted));
 }
 
 /* ===================== */
@@ -7207,9 +7405,10 @@ body.theme-light
        (verified live on the gnoll page: `[data-sb-featstyle="card"]`). The ornate
        recipe the site keeps for `featstyle: flat` is a preference the plugin does
        not implement.
-     - .dse-cond-list > .dse-hr (ConditionSelectModal) → plugin-only chrome with no
-       site counterpart; a functional, ornament-less wrap-breaker. Left alone
-       deliberately — the ornate rule is a CONTENT ornament, not a UI separator.
+     - .dse-condal__menu > .dse-hr (ConditionsModal, SC-186 — the retired
+       ConditionSelectModal's picker-list divider lived here before it) → plugin-only
+       chrome with no site counterpart; a functional, ornament-less separator. Left
+       alone deliberately — the ornate rule is a CONTENT ornament, not a UI separator.
    Scoped to [data-dse-element='horizontal-rule'] rather than bare `.dse-hr`: that
    class is a shared kit primitive (kit/divider.ts) used by all four surfaces above,
    each with its own frozen shots — and FOLLOWUPS #56's roleless statblock keeps a
@@ -10670,8 +10869,6 @@ button.dse-pr__row:hover {
 	.dse-btn,
 	.dse-tabs__list,
 	.dse-cond--add,
-	.dse-cond-item__toggle,
-	.dse-cond-item__cog,
 	/* SC-169: the element menu panel and its collapsed one-line form are SCREEN chrome —
 	   completely absent from print, in desktop and mobile modes alike. Redundant with the
 	   base `display:none` in the "Element chrome" section at the foot of this file; listed
@@ -10732,8 +10929,6 @@ button.dse-pr__row:hover {
 [data-dse-print="on"] .dse-btn,
 [data-dse-print="on"] .dse-tabs__list,
 [data-dse-print="on"] .dse-cond--add,
-[data-dse-print="on"] .dse-cond-item__toggle,
-[data-dse-print="on"] .dse-cond-item__cog,
 /* SC-169 — see the @media print twin above. */
 [data-dse-print="on"] .dse-chrome,
 [data-dse-print="on"] .dse-chrome-summary {

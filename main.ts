@@ -323,8 +323,8 @@ export function registerFrameworkElementDefinitions(registry: ElementRegistry): 
 	registry.register(partyElement);
 	// D7 Task 2 (spec §4.4) — Conditions strip: the first hero-suite element and the
 	// first real HeroPanel consumer (Task 1 only extracted the contract); reuses the
-	// initiative tracker's ConditionManager/AddConditionsModal/CustomizeConditionModal
-	// verbatim (§2.4), no compendium dep, no hard gate.
+	// initiative tracker's ConditionManager/ConditionsModal (SC-186) verbatim (§2.4),
+	// no compendium dep, no hard gate.
 	registry.register(conditionsElement);
 	// D7 Task 3 (spec §4.1) — Heroic resource tracker: class-aware via the static
 	// RESOURCE_BY_CLASS map (resourceByClass.ts), no compendium dep, no hard gate.

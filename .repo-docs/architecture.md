@@ -523,10 +523,12 @@ free, derived from `def.schema`/`def.authoring`.
 ### Views (`src/views/`)
 
 - **Responsibility:** Obsidian modal dialogs for interactive elements.
-- **Key modals:** `ConditionSelectModal` (pick conditions), `CustomizeConditionModal`
-  (modify condition details), `MinionStaminaPoolModal` (manage minion shared stamina),
-  `StaminaEditModal` (edit stamina values), `ResetEncounterModal` (reset initiative
-  tracker), `SettingsTab` (plugin settings UI).
+- **Key modals:** `ConditionsModal` (SC-186 — manage an actor's active conditions: add
+  via autocomplete, delete, and an inline Duration/Color/Effect editor per row; replaced
+  the older two-modal `ConditionSelectModal`/`CustomizeConditionModal` pair),
+  `MinionStaminaPoolModal` (manage minion shared stamina), `StaminaEditModal` (edit
+  stamina values), `ResetEncounterModal` (reset initiative tracker), `SettingsTab`
+  (plugin settings UI).
 
 ## Data Flow
 

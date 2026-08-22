@@ -1,7 +1,7 @@
 // D7 Task 2 (spec §4.4) — ds-conditions through the REAL ElementPipeline: chips with
-// icon/name/duration badge, "+ add condition" opening the (widened) AddConditionsModal
-// with a plain ConditionHolder (not a fabricated Hero/CreatureInstance), remove ✕
-// persisting, and a save-ends chip's d10 save via a seeded RollService (never
+// icon/name/duration badge, "+ add condition" opening the (SC-186, widened)
+// ConditionsModal with a plain ConditionHolder (not a fabricated Hero/CreatureInstance),
+// remove ✕ persisting, and a save-ends chip's d10 save via a seeded RollService (never
 // NATIVE_DICE/Math.random in tests).
 import * as fs from 'fs';
 import * as path from 'path';
@@ -170,7 +170,7 @@ describe('D7 Task 2: three chips render with correct duration badges (example.ya
 	});
 });
 
-describe('D7 Task 2: "+ add condition" opens AddConditionsModal with a plain ConditionHolder', () => {
+describe('D7 Task 2/SC-186: "+ add condition" opens ConditionsModal with a plain ConditionHolder', () => {
 	afterEach(() => {
 		jest.restoreAllMocks();
 	});
@@ -178,8 +178,8 @@ describe('D7 Task 2: "+ add condition" opens AddConditionsModal with a plain Con
 	test('constructs the REAL modal with {conditions}, never a fabricated Hero/CreatureInstance', async () => {
 		// Spy on DseModal.prototype.open (a plain method, not a constructor — class
 		// constructors can't be jest.spyOn'd for `new` without extra ceremony) so we can
-		// recover the actual AddConditionsModal INSTANCE `open()` was called on, then
-		// reflect its private `character` field — same "cast at the boundary" convention
+		// recover the actual ConditionsModal INSTANCE `open()` was called on, then
+		// reflect its private `holder` field — same "cast at the boundary" convention
 		// as initiative.test.ts's `(modal as any).containerEl`. The modal is otherwise
 		// completely REAL: unmocked construction, unmocked render.
 		const openSpy = jest.spyOn(DseModal.prototype, 'open');
@@ -188,7 +188,7 @@ describe('D7 Task 2: "+ add condition" opens AddConditionsModal with a plain Con
 		addBtn(root)!.click();
 
 		expect(openSpy).toHaveBeenCalledTimes(1);
-		const holder = (openSpy.mock.instances[0] as unknown as { character: Record<string, unknown> }).character;
+		const holder = (openSpy.mock.instances[0] as unknown as { holder: Record<string, unknown> }).holder;
 		// A ConditionHolder is EXACTLY {conditions}: no isHero/max_stamina/id/statblock —
 		// the encounter-only fields a real Hero/CreatureInstance would carry.
 		expect(Object.keys(holder)).toEqual(['conditions']);
@@ -207,14 +207,18 @@ describe('D7 Task 2: "+ add condition" opens AddConditionsModal with a plain Con
 		expect(src).toMatch(/ConditionHolder/);
 	});
 
-	test('completing the real add flow (select Frightened, Add Conditions) adds a chip and persists', async () => {
+	test('completing the real add flow (type "Frightened", Enter, Done) adds a chip and persists', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderConditions();
 
 		addBtn(root)!.click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
-		(modalEl.querySelector('button[aria-label="Frightened"]') as HTMLElement).click();
-		(modalEl.querySelector('.dse-modal__footer button[aria-label="Add Conditions"]') as HTMLElement).click();
+		(modalEl.querySelector('button[aria-label="Add condition"]') as HTMLElement).click();
+		const input = modalEl.querySelector('.dse-condal__input') as HTMLInputElement;
+		input.value = 'Frightened';
+		input.dispatchEvent(new Event('input'));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		(modalEl.querySelector('.dse-modal__footer button[aria-label="Done"]') as HTMLElement).click();
 
 		const rebuiltRoot = host.containerEl.firstElementChild as HTMLElement;
 		expect(chips(rebuiltRoot)).toHaveLength(4);

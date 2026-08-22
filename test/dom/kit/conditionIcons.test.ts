@@ -47,7 +47,7 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 		expect(iconOf(icons[1])).toBe('droplet'); // bleeding
 	});
 
-	test('unrecognized condition keys are skipped', () => {
+	test('SC-186: unrecognized condition keys render a fallback glyph + title-cased key (never skipped)', () => {
 		const root = document.createElement('div');
 		const mgr = new ConditionManager();
 
@@ -56,7 +56,11 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 			canRemove: true,
 		});
 
-		expect(root.querySelectorAll('.dse-cond')).toHaveLength(1);
+		const icons = root.querySelectorAll('.dse-cond');
+		expect(icons).toHaveLength(2);
+		expect(iconOf(icons[0])).toBe('circle-dashed');
+		expect(icons[0].getAttribute('aria-label')).toBe('Remove condition: Not A Real Condition');
+		expect(iconOf(icons[1])).toBe('hand'); // grabbed, unaffected
 	});
 
 	test('canRemove: true — real iconButtons; click invokes onRemove with the exact entry', () => {

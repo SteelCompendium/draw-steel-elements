@@ -61,9 +61,12 @@ export { resetEncounter } from '@drawSteelAdmonition/EncounterData';
 
 /**
  * Legacy condition normalization: strings become {key} and objects are re-built as
- * key/color/effect. Transcribed once — the three legacy inline copies
+ * key/color/effect/duration. Transcribed once — the three legacy inline copies
  * (EncounterData.ts:137-154 hero, :276-295 minion instance, :321-340 regular instance)
- * differ only in the throw message, injected here as a lazy closure.
+ * differ only in the throw message, injected here as a lazy closure. SC-186: `duration`
+ * is additive and passed through the same way as `color`/`effect` (present-or-undefined,
+ * never fabricated) — both EncounterData.ts's three legacy copies and this one carry it
+ * so the async oracle (`parseEncounterData`) and this sync split stay byte-compat.
  */
 function normalizeConditions(
 	conditions: (string | Condition)[] | undefined,
@@ -76,12 +79,14 @@ function normalizeConditions(
 					key: cond,
 					color: undefined,
 					effect: undefined,
+					duration: undefined,
 				};
 			} else if (typeof cond === 'object' && cond.key) {
 				return {
 					key: cond.key,
 					color: cond.color ?? undefined,
 					effect: cond.effect ?? undefined,
+					duration: cond.duration ?? undefined,
 				};
 			} else {
 				throw new Error(invalidMessage());

@@ -32,6 +32,13 @@ describe('D7 Task 2: conditions model parse (spec §4.4 schema)', () => {
 		expect(model.conditions).toEqual([{ key: 'bleeding', color: '#ff0000' }]);
 	});
 
+	test('SC-186: an object entry carries the additive duration field, independent of effect', () => {
+		const model = parseLikePipeline(
+			'conditions:\n  - key: bleeding\n    duration: save-ends\n    effect: glow',
+		);
+		expect(model.conditions).toEqual([{ key: 'bleeding', duration: 'save-ends', effect: 'glow' }]);
+	});
+
 	test('a blank block materializes an empty conditions[] default rather than throwing', () => {
 		expect(parseLikePipeline('').conditions).toEqual([]);
 	});
@@ -65,6 +72,27 @@ describe('D7 Task 2: serialize is byte-stable (deterministic key-only -> bare st
 	test('a condition with only an effect serializes as the full object, not a bare string', () => {
 		const model = parseLikePipeline('conditions:\n  - key: bleeding\n    effect: save ends');
 		expect(serialize(model)).toBe('conditions:\n  - key: bleeding\n    effect: save ends');
+	});
+
+	test('SC-186: a condition with only a duration serializes as the full object, not a bare string', () => {
+		const model = parseLikePipeline('conditions:\n  - key: bleeding\n    duration: eot');
+		expect(serialize(model)).toBe('conditions:\n  - key: bleeding\n    duration: eot');
+	});
+
+	test('SC-186 regression: duration round-trips independently of effect (the old Customize-clobber bug)', () => {
+		// The bug this schema fix exists for: a duration value must survive being
+		// serialized/reparsed even when an unrelated visual effect is also present —
+		// neither field may clobber the other on the way through. normalizeEntry always
+		// emits key -> color -> effect -> duration (assignment order), regardless of the
+		// source YAML's field order.
+		const model = parseLikePipeline(
+			'conditions:\n  - key: bleeding\n    duration: save-ends\n    effect: glow',
+		);
+		const out = serialize(model);
+		expect(out).toBe('conditions:\n  - key: bleeding\n    effect: glow\n    duration: save-ends');
+		expect(parseLikePipeline(out).conditions).toEqual([
+			{ key: 'bleeding', duration: 'save-ends', effect: 'glow' },
+		]);
 	});
 
 	test('clearing a condition\'s last customization drops it back to a bare string on the next persist', () => {

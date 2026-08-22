@@ -174,11 +174,18 @@ const MODAL_SHOTS = [
 	{
 		id: 'modal-conditions',
 		note: 'conditions',
+		// SC-186: opens ConditionsModal (the Option D active-list manager) -- the
+		// retired AddConditionsModal/CustomizeConditionModal and their .dse-cond-list
+		// picker grid are gone. Trigger is unchanged (the panel's own add-condition
+		// button keeps the same aria-label); ready/then now target the new modal's
+		// classes, both present regardless of whether the note's conditions list is
+		// empty.
 		trigger: '[data-dse-element="conditions"] button[aria-label="Add condition"]',
-		ready: '.dse-modal .dse-cond-list',
-		// Select one row so the shot carries the aria-pressed/selected styling, not just
-		// the resting grid (the icon grid is batch-1 review I-1's density worry).
-		then: '.dse-cond-list .dse-cond-item button',
+		ready: '.dse-modal .dse-condal__list',
+		// Opens the add combobox -- the redesign's most novel surface (type-ahead
+		// autocomplete + the always-present Add-custom row) -- instead of just the
+		// resting active-list view.
+		then: '.dse-modal button[aria-label="Add condition"]',
 	},
 	{
 		id: 'modal-form',

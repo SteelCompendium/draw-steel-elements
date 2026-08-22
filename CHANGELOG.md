@@ -26,6 +26,20 @@ for what needs action.
   starting state, the toggle's choice wins for the session, per block, and nothing is
   written back to the note. Print and PDF export always use the classic list form,
   whatever `style:` says.
+- [FEATURE] **A single Conditions manager, with custom conditions and duration**
+  (SC-186). The old "Add Conditions" picker + its "Customize Condition" child modal are
+  replaced by one compact **Conditions** modal that shows exactly what's on the actor —
+  not a 24-row catalog. Each active condition is a row with its icon, name, any duration/
+  effect badges, a customize cog, and a delete button; changes apply immediately, so
+  there's no "Add Conditions" button to remember to press. "+ Add condition" turns into a
+  type-ahead box that filters the known conditions as you type and always offers
+  **Add custom: "‹what you typed›"** — so a statblock's bespoke condition (a curse, a
+  boss mechanic) is now something you can track at all, with its own fallback icon.
+  Duration (End of Turn / Save Ends / End of Encounter) is now its own field instead of
+  being crammed into the same slot as the visual effect, which also fixes a bug where
+  opening Customize on a duration you'd written by hand and saving would silently erase
+  it. Every entry point — the conditions strip, the hero sheet, and the initiative
+  tracker — opens the same modal.
 - [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
   against its parent card's left and right edges with no frame of its own. It now

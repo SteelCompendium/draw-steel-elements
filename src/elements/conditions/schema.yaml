@@ -2,8 +2,8 @@
 # `type` includes "null" so a completely EMPTY ds-conditions block is valid — it starts
 # with no conditions (parse materializes `conditions: []`). Each entry is either a bare
 # string (no duration — spec §4.4) or an object with a required `key` plus optional
-# `color`/`effect` (reusing the initiative tracker's `Condition` shape verbatim,
-# EncounterData.ts).
+# `color`/`effect`/`duration` (reusing the initiative tracker's `Condition` shape
+# verbatim, EncounterData.ts; `duration` is SC-186's additive first-class field).
 # Dialect: 2019-09 like every other element schema — the plugin-scoped AJV is
 # Ajv2019, and an unregistered $schema URI (e.g. draft-07) throws at compile.
 $schema: "https://json-schema.org/draft/2019-09/schema"
@@ -28,4 +28,8 @@ properties:
               type: string
             effect:
               type: string
-              description: Duration ("save ends", "EoT", "EoE") — or a customize-modal CSS pulse effect name.
+              description: A customize-modal CSS pulse effect name, or (legacy) a free-text duration ("save ends", "EoT", "EoE") — see `duration` for the first-class field.
+            duration:
+              type: string
+              enum: ["eot", "save-ends", "eoe"]
+              description: SC-186 — additive, first-class duration. Absent = "until removed". Preferred over the legacy `effect`-string duration vocabulary, which still parses as a fallback.

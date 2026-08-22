@@ -4,9 +4,9 @@
 // buildConditionIcons, static/read mode: the chip's own ✕ handles removal, not the icon
 // click, unlike the initiative tracker's compact icon-only row) + name + a duration badge
 // for the three known values (save-ends/EoT/EoE, spec §1.5) + remove ✕. "+ add condition"
-// opens the SAME AddConditionsModal/CustomizeConditionModal the initiative tracker uses
-// (§2.4), now widened to accept a minimal `ConditionHolder` (`{conditions}`) instead of a
-// fabricated Hero/CreatureInstance (recon delta 7 — see ConditionSelectModal.ts).
+// opens the SAME ConditionsModal (SC-186) the initiative tracker uses — see below and
+// recon delta 7 (ConditionsModal.ts) for the minimal `ConditionHolder` (`{conditions}`)
+// widening that keeps this panel from fabricating a Hero/CreatureInstance.
 //
 // Data flow follows §2.2 exactly: this panel NEVER mutates its own `current` slice on a
 // user action — it computes the next array and calls `onChange(patch)`, letting the
@@ -21,40 +21,19 @@
 // when present; else a simple prompt"). Rolling always computes/display a result — even
 // read-only, per F1 §4.4/D7 §3's "Rolls (view-only) still work" — but only REMOVES the
 // condition (a write) when `!host.readOnly`.
+//
+// SC-186: "+ add condition" now opens ConditionsModal (the Option D manager modal,
+// src/views/ConditionsModal.ts) instead of the retired AddConditionsModal/
+// CustomizeConditionModal two-modal flow. It manages the FULL active list live (add,
+// delete, customize all apply immediately via onChange) rather than staging an
+// additive "Add Conditions" set, so this panel's onChange callback now REPLACES
+// `this.current` with the modal's updated list rather than concatenating.
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
-import { AddConditionsModal } from '@views/ConditionSelectModal';
+import { ConditionsModal } from '@views/ConditionsModal';
+import { resolveDuration, durationBadgeText, isSaveEnds } from '@/elements/conditionDuration';
+import { titleCaseConditionKey } from '@/elements/conditionDisplay';
 import { HeroPanel, buildConditionIcons, iconButton, openManagedModal } from '@/framework/kit';
-
-/** Normalizes an `effect` string for duration matching — case/whitespace-insensitive,
- *  since the field is free text (spec §4.4 gives no strict enum). */
-function normalizedEffect(effect: string | undefined): string {
-	return (effect ?? '').trim().toLowerCase();
-}
-
-/** The three known duration labels (spec §1.5/§4.4). Any other `effect` value (absent,
- *  or one of the customize-modal's CSS pulse names) shows no badge — this panel only
- *  recognizes duration semantics, never the initiative tracker's visual-effect
- *  vocabulary (applyConditionEffect, kit/conditionIcons.ts, still runs on the icon
- *  itself regardless — the two concerns ride the SAME field but don't conflict: an
- *  unrecognized value is a no-op for both). */
-function durationBadgeText(effect: string | undefined): string | null {
-	switch (normalizedEffect(effect)) {
-		case 'save ends':
-			return 'Save Ends';
-		case 'eot':
-			return 'EoT';
-		case 'eoe':
-			return 'EoE';
-		default:
-			return null;
-	}
-}
-
-/** Only "save ends" offers the d10-save affordance (spec §4.4: "roll d10, 6+ ends"). */
-function isSaveEnds(effect: string | undefined): boolean {
-	return normalizedEffect(effect) === 'save ends';
-}
 
 export class ConditionsPanel extends HeroPanel<Condition[]> {
 	private readonly mgr = new ConditionManager();
@@ -101,7 +80,7 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 
 	private renderChip(entry: Condition): void {
 		const config = this.mgr.getAnyConditionByKey(entry.key);
-		const displayName = config?.displayName ?? entry.key;
+		const displayName = config?.displayName ?? titleCaseConditionKey(entry.key);
 		const chipEl = this.stripEl.createDiv({ cls: 'dse-cond-chip' });
 
 		// Icon: the kit core, in its STATIC (non-interactive) mode — this chip's own
@@ -112,12 +91,13 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 
 		chipEl.createSpan({ cls: 'dse-cond-chip__name', text: displayName });
 
-		const duration = durationBadgeText(entry.effect);
-		if (duration) {
-			chipEl.createSpan({ cls: 'dse-cond-chip__duration', text: duration });
+		const duration = resolveDuration(entry);
+		const durationText = durationBadgeText(duration);
+		if (durationText) {
+			chipEl.createSpan({ cls: 'dse-cond-chip__duration', text: durationText });
 		}
 
-		if (isSaveEnds(entry.effect)) {
+		if (isSaveEnds(duration)) {
 			const resultEl = chipEl.createSpan({ cls: 'dse-cond-chip__save-result' });
 			const saveBtn = iconButton(
 				chipEl,
@@ -175,8 +155,8 @@ export class ConditionsPanel extends HeroPanel<Condition[]> {
 		openManagedModal(
 			this,
 			() =>
-				new AddConditionsModal(this.cx.app, holder, this.mgr, (added) => {
-					this.onChange(this.current.concat(added));
+				new ConditionsModal(this.cx.app, holder, this.mgr, (updated) => {
+					this.onChange(updated);
 				}),
 		);
 	}

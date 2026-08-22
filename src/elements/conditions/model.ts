@@ -33,6 +33,7 @@ function normalizeEntry(entry: unknown, index: number): Condition {
 		const normalized: Condition = { key: e.key };
 		if (e.color !== undefined) normalized.color = e.color;
 		if (e.effect !== undefined) normalized.effect = e.effect;
+		if (e.duration !== undefined) normalized.duration = e.duration; // SC-186, additive
 		return normalized;
 	}
 	throw new Error(`Condition at index ${index} must be a string, or an object with a 'key'.`);
@@ -61,9 +62,11 @@ export function parse(input: unknown, _raw: string): ConditionsModel {
 }
 
 /** Down-converts one normalized Condition to its authored form: key-only -> bare
- *  string (spec §4.4), else the full `{key, color?, effect?}` object. */
+ *  string (spec §4.4), else the full `{key, color?, effect?, duration?}` object
+ *  (SC-186: `duration` joins `color`/`effect` in the "any field set -> full object"
+ *  test). */
 function toDtoEntry(c: Condition): string | Condition {
-	return c.color === undefined && c.effect === undefined ? c.key : c;
+	return c.color === undefined && c.effect === undefined && c.duration === undefined ? c.key : c;
 }
 
 /** serialize(model): stringifyYaml({conditions: [...down-converted]}).trim() — the
