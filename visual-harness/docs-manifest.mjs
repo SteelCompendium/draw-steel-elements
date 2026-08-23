@@ -241,7 +241,9 @@ export const DOCS_SHOTS = [
 	{ out: 'negotiation.png', source: 'browser', element: 'negotiation' },
 	{ out: 'initiative-tracker.png', source: 'browser', element: 'initiative' },
 	// docs/hero-suite.md
-	{ out: 'hero.png', source: 'browser', element: 'hero' },
+	// SC-190: `hero.png` (a rendered `ds-hero` card) is deliberately NOT captured here —
+	// `ds-hero` is registered but unadvertised (definition.ts's `hidden: true`), and its
+	// own doc section is withdrawn, so there is no page left for this image to illustrate.
 	{ out: 'conditions.png', source: 'browser', element: 'conditions' },
 	{ out: 'heroic-resource.png', source: 'browser', element: 'heroic-resource' },
 	{ out: 'surges.png', source: 'browser', element: 'surges' },
@@ -251,14 +253,16 @@ export const DOCS_SHOTS = [
 	{ out: 'montage.png', source: 'browser', element: 'montage' },
 	{ out: 'project.png', source: 'browser', element: 'project' },
 	{ out: 'party.png', source: 'browser', element: 'party' },
-	// The README/docs hero image: a CURATED gallery (entry.ts's `gallery=<ids>` subset —
+	// The README/docs sample image: a CURATED gallery (entry.ts's `gallery=<ids>` subset —
 	// the full sweep gallery is every element and 24 000 px tall, which is review evidence,
-	// not a picture for the top of a README). Four elements that say what the plugin is:
-	// a creature, an ability, a fight, a hero.
+	// not a picture for the top of a README). Three elements that say what the plugin is:
+	// a creature, an ability, a fight. (SC-190: `hero` dropped out of this curated set —
+	// `ds-hero` is unadvertised, and the top-of-README showcase is exactly the kind of
+	// surface that would advertise it.)
 	{
 		out: 'sample.png',
 		source: 'browser',
-		gallery: ['feature', 'initiative', 'hero'],
+		gallery: ['feature', 'initiative', 'statblock'],
 		dpr: 1,
 	},
 

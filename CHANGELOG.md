@@ -75,6 +75,13 @@ for what needs action.
   draws one at all, only its "Cards" mode does. The bar is gone in both places, and the ◆
   divider between consecutive features (added between two features, never before the
   first or trailing after the last) is unchanged.
+- **The hero sheet (`ds-hero`) is held back from this release** (SC-190). Its edit
+  modal and rendered card both need more work before they're ready to advertise as
+  supported, so it doesn't appear in the docs, the command palette, or `/ds` — only
+  the four standalone hero trackers (heroic resource, surges, conditions, hero
+  tokens) ship as documented in 7.0.0. The code isn't going anywhere: a
+  hand-written `~~~ds-hero` block still renders and stays fully interactive, this is
+  just not yet a feature we're pointing anyone at. Planned for a later 7.x release.
 - **The skill list gets a new look, two selectable layouts, and an unowned-skills
   toggle** (SC-182). A `ds-skills` block now renders as a **ledger** by default — a
   responsive grid of group panels with owned/total tallies (`3/11`) and ◆ marks, about

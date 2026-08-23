@@ -211,10 +211,8 @@ keywords:
 
 ## What's new in 7.0.0, at a glance
 
-- **Hero suite** — a full [hero sheet](hero-suite.md) (`ds-hero`) in one block:
-  stamina with recoveries, heroic resource, surges, conditions, and clickable
-  abilities with dice rolling. Also available as standalone trackers for heroic
-  resource, surges, conditions, and a shared party-wide hero token pool.
+- **[Hero trackers](hero-suite.md)** — new standalone blocks for heroic resource, surges,
+  conditions, and a shared party-wide hero token pool.
 - **One block renders any compendium entry** — sync the compendium and a
   [`ds-scc` block](compendium-sync.md#referencing-a-compendium-entry-in-your-notes)
   whose body is an entry's code renders that entry, whatever it is: a kit, a
@@ -236,7 +234,7 @@ keywords:
   range honestly, temporary Stamina as a real segment, clickable Recovery
   markers, Catch Breath, and the Winded/Dying states said more than one way.
   See [Stamina Bar](stamina-bar.md).
-- **A standard menu panel on card elements** — hover a statblock, hero sheet or
+- **A standard menu panel on card elements** — hover a statblock, featureblock or
   stamina bar and a small icon panel appears at its top-right, carrying
   collapse/expand and (when **Show edit button** is on) the edit pencil, which
   moved there from the card's corner. Collapsed, an element is one line: type,

@@ -90,8 +90,8 @@ Worth knowing:
 - The panel is bound to that specific block, in that specific note. The plugin adds a small
   `_dse_anchor` marker to the block so it can find it again — that's what that line is.
 - One sidebar can hold several panels at once; they stack.
-- Trackers are what this is for — initiative, montage, project, party, a hero sheet. Pin the
-  one you're using this session.
+- Trackers are what this is for — initiative, montage, project, party, a heroic resource or
+  surge counter. Pin the one you're using this session.
 - Open or focus the panel any time with the crossed-swords ribbon icon, or **Open Draw
   Steel sidebar**.
 
@@ -159,7 +159,7 @@ The three stable authoring surfaces, each fully documented:
 
 Plus the trackers, which are documented field by field:
 [initiative](initiative-tracker.md), [negotiation](negotiation-tracker.md),
-[Director's trackers](gm-trackers.md), [hero sheets](hero-suite.md).
+[Director's trackers](gm-trackers.md), [hero trackers](hero-suite.md).
 
 Two authoring aids worth turning on while you write: **autocomplete inside a block** (start
 typing a field name and Obsidian suggests the ones that element accepts — always on), and

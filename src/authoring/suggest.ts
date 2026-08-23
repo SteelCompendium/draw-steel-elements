@@ -45,10 +45,11 @@ export class DsElementSuggest extends EditorSuggest<ElementDefinition> {
 
 	getSuggestions(context: EditorSuggestContext): ElementDefinition[] {
 		const q = context.query;
-		if (q === '') return this.registry.all().slice();
-		return this.registry
-			.all()
-			.filter((d) => d.name.toLowerCase().includes(q) || d.aliases.some((a) => a.includes(q)));
+		// SC-190: `hidden` defs (e.g. `ds-hero`) stay registered but never appear in `/ds` —
+		// this is a discovery surface, and the whole point is that nobody stumbles onto it.
+		const advertised = this.registry.all().filter((d) => !d.hidden);
+		if (q === '') return advertised;
+		return advertised.filter((d) => d.name.toLowerCase().includes(q) || d.aliases.some((a) => a.includes(q)));
 	}
 
 	renderSuggestion(def: ElementDefinition, el: HTMLElement): void {

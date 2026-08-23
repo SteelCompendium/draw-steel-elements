@@ -182,9 +182,9 @@ Verified by comparing F4 and F5 shots of the same element side by side:
 The images in `README.md` and `docs/**` are not hand-taken screenshots any more. One command
 regenerates all of them from the real plugin:
 
-    npm run docs-shots                        # everything (~4 min)
-    npm run docs-shots -- --only=hero.png     # one image
-    npm run docs-shots -- --browser-only      # skip the Obsidian half (no display used)
+    npm run docs-shots                          # everything (~4 min)
+    npm run docs-shots -- --only=statblock.png  # one image
+    npm run docs-shots -- --browser-only        # skip the Obsidian half (no display used)
 
 **Run it before every release** (it is a step in the README's Release checklist). Docs images
 went stale silently for two years because nothing could regenerate them; now the fix is a

@@ -12,7 +12,7 @@ screenshots; this page is the reference.
 ### Type `/ds`
 
 In the editor, type **`/ds`** on an empty line. A list of every element appears; keep
-typing to filter it (`/dsstat`, `/dshero`, …). Pick one and the trigger is replaced with a
+typing to filter it (`/dsstat`, `/dsroll`, …). Pick one and the trigger is replaced with a
 complete, filled-in example block you can edit.
 
 ### Or use the command palette
@@ -20,7 +20,7 @@ complete, filled-in example block you can edit.
 Every element also has its own command: open the
 [command palette](https://help.obsidian.md/Plugins/Command+palette) and search for
 **Insert Draw Steel:** — for example *Insert Draw Steel: Statblock*, *Insert Draw Steel:
-Initiative tracker*, *Insert Draw Steel: Hero sheet*. The block is inserted at your cursor.
+Initiative tracker*, *Insert Draw Steel: Featureblock*. The block is inserted at your cursor.
 
 Both routes insert; neither ever overwrites text you already wrote.
 
@@ -44,9 +44,7 @@ control per field, a live preview of the card as you change it, and a Save butto
 stays disabled while the block is invalid. Saving writes the block back into your note
 through the same path the trackers use, so nothing else in the note is touched.
 
-The setting is off by default; the insert commands and `/ds` work either way. The
-[hero sheet](hero-suite.md#hero-sheet-ds-hero) has its own **Edit definition** button in
-its header instead, whatever this setting says.
+The setting is off by default; the insert commands and `/ds` work either way.
 
 ## Insert content from the compendium
 

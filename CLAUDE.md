@@ -50,8 +50,12 @@ moves. Run it before a release; details in `visual-harness/README.md`.
   `ds-encounter`/`ds-montage`/`ds-project`/`ds-party` — + 5 D7 hero-suite elements —
   `ds-hero`/`ds-conditions`/`ds-resource`/`ds-surges`/`ds-tokens`); every legacy processor
   is retired (`src/drawSteelAdmonition/` holds only `EncounterData` + negotiation
-  sub-views the framework reuses). Framework v2 replaced Vue 3 — see
-  `.repo-docs/architecture.md` for the full picture.
+  sub-views the framework reuses). **`ds-hero` is `hidden: true` as of 7.0.0** (SC-190,
+  `registry.ts`'s `ElementDefinition.hidden`): fully registered and functional, but
+  withheld from every discovery surface (`insert.ts`, `suggest.ts`) and the public docs
+  pending edit-modal/rendered-content QoL work; the other four D7 elements are
+  unaffected. Framework v2 replaced Vue 3 (2026-04-06 revert
+  decision, executed by D1) — see `.repo-docs/architecture.md` for the full picture.
 - **Sidebar host (D8)**: `src/framework/sidebar/` + `src/framework/host/
   SidebarBlockHost.ts` give any element a persistent `ItemView` leaf mount
   (`mode: "sidebar"`), zero element-code changes required — a running-session tracker

@@ -19,9 +19,14 @@ export function insertScaffold(editor: Editor, def: ElementDefinition): void {
 	editor.setCursor(advancePosition(insertionPoint, scaffold.text, scaffold.cursorOffset));
 }
 
-/** Register `insert-<id>` for every element in the registry (loop, no per-element code). */
+/**
+ * Register `insert-<id>` for every ADVERTISED element in the registry (loop, no
+ * per-element code). SC-190: a `hidden` def (e.g. `ds-hero`) stays fully registered — it
+ * just gets no command-palette entry, so it isn't a thing a user stumbles onto.
+ */
 export function registerInsertCommands(plugin: Plugin, registry: ElementRegistry): void {
 	for (const def of registry.all()) {
+		if (def.hidden) continue;
 		plugin.addCommand({
 			id: `insert-${def.id}`,
 			name: `Insert Draw Steel: ${def.name}`,

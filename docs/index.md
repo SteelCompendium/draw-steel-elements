@@ -1,6 +1,6 @@
 # Draw Steel Elements Plugin for Obsidian
 
-Statblocks, ability cards, initiative and negotiation trackers, hero sheets and a synced
+Statblocks, ability cards, initiative and negotiation trackers, hero trackers and a synced
 copy of the Draw Steel Compendium — all inside your Obsidian vault.
 
 _The Draw Steel Elements Obsidian Plugin is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2024 MCDM Productions, LLC._
@@ -19,7 +19,7 @@ running a fight, assuming no YAML or markdown knowledge.
 
 - **[Getting started](getting-started.md)** — install, sync, your first element, your first fight
 - **[Run an encounter](running-an-encounter.md)** — build it, then run it
-- **[Track your hero](tracking-your-hero.md)** — the hero sheet and the standalone trackers
+- **[Track your hero](hero-suite.md)** — Stamina, heroic resource, surges and conditions, one tracker at a time
 - **[Customize a monster](customizing-a-monster.md)** — the homebrew loop
 - **[Style your statblocks](styling-statblocks.md)** — presets and the display settings
 - **[Advanced usage](advanced-usage.md)** — per-block overrides, the sidebar, canvas, print, rolling
@@ -116,13 +116,7 @@ A downtime project's goal, its prerequisites, and every respite roll that went i
 The whole party in one table: level, victories, XP, renown, wealth and the shared hero
 token pool.
 
-### Hero sheets
-
-**[Hero sheet](hero-suite.md#hero-sheet-ds-hero)** — `ds-hero`
-
-One hero in one block: Stamina and Recoveries, heroic resource, surges, conditions, and
-their abilities as expandable, rollable cards. Class, ancestry, kit and abilities can all
-be pulled from the synced compendium by code.
+### Hero trackers
 
 **[Stamina bar](stamina-bar.md)** — `ds-stamina-bar`, `ds-stamina`, `ds-stam`
 

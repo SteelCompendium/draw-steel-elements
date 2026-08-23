@@ -15,14 +15,29 @@ function makeRegistry() {
 	return r;
 }
 
-test('registers exactly one insert-<id> command per element, sentence-cased', () => {
+test('registers exactly one insert-<id> command per ADVERTISED element, sentence-cased', () => {
 	const plugin = new Plugin(new App());
 	const registry = makeRegistry();
 	registerInsertCommands(plugin as never, registry);
-	expect(plugin.commands).toHaveLength(registry.all().length); // one per registered element
+	// SC-190: `hidden` defs (`ds-hero`) stay registered but get no command — one command per
+	// NON-hidden element, not one per registered element.
+	const advertisedCount = registry.all().filter((d) => !d.hidden).length;
+	expect(plugin.commands).toHaveLength(advertisedCount);
 	const roll = plugin.commands.find((c) => c.id === 'insert-roll');
 	expect(roll.name).toBe('Insert Draw Steel: Roll');
 	expect(typeof roll.editorCallback).toBe('function');
+});
+
+// SC-190: `ds-hero`'s edit modal and rendered card need more QoL work before the element is
+// advertised as supported (Scott's ruling) — it stays registered (an existing block still
+// renders, see heroSheet.test.ts) but must not get a command-palette entry, or the palette
+// itself is the thing that lets a user stumble onto it.
+test('ds-hero stays registered but gets no insert-<id> command (SC-190, unadvertised)', () => {
+	const plugin = new Plugin(new App());
+	const registry = makeRegistry();
+	expect(registry.get('hero')).toBeDefined(); // still registered — existing notes keep working
+	registerInsertCommands(plugin as never, registry);
+	expect(plugin.commands.find((c) => c.id === 'insert-hero')).toBeUndefined();
 });
 
 // D6 Task 11 (wiring sweep), retargeted by SC-149: same pure-loop guarantee — the public

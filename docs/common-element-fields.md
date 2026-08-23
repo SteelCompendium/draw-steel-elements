@@ -1,7 +1,7 @@
 # The element menu, and collapsing a block
 
-Almost every element the plugin draws — statblocks, ability cards, hero sheets, the
-trackers — carries the same small menu, and the same way of folding itself down to one line.
+Almost every element the plugin draws — statblocks, ability cards, the hero trackers, the
+GM trackers — carries the same small menu, and the same way of folding itself down to one line.
 This page explains both.
 
 ## The menu
@@ -32,7 +32,6 @@ name, and an expand button on the right:
 
 ```
 STATBLOCK: Human Bandit Chief                                    ⌄
-HERO: Torin Stonefist                                            ⌄
 STAMINA (15/20)                                                  ⌄
 ENCOUNTER: Ambush at the Ford (EV 42)                            ⌄
 SKILLS (12 selected)                                             ⌄
@@ -103,9 +102,9 @@ and **Start collapsed**. A field written in a block always beats the setting.
 ## Which elements have this
 
 Every element that draws a card: statblocks, ability cards and featureblocks, the compendium
-reference block, every hero-suite element (hero sheet, stamina bar, conditions, heroic
-resource, surges, hero tokens, skills, characteristics, values row, counter) and every GM
-tracker (initiative, negotiation, encounter builder, montage, project, party).
+reference block, every hero-suite element (stamina bar, conditions, heroic resource, surges,
+hero tokens, skills, characteristics, values row, counter) and every GM tracker (initiative,
+negotiation, encounter builder, montage, project, party).
 
 Two elements deliberately don't, because there would be nothing to fold or nowhere to put the
 menu: the [horizontal rule](horizontal-rule.md) (`ds-hr`) and the [dice roller](Roll.md)

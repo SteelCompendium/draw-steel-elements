@@ -173,6 +173,21 @@ export interface ElementDefinition<M = unknown> {
 	 * FAILURE. An element can want either without the other; `ds-scc` happens to want both.
 	 */
 	strictBody?: boolean;
+	/**
+	 * SC-190 — this element stays fully REGISTERED (still wired into
+	 * `registerMarkdownCodeBlockProcessor` for every alias, so an existing note keeps
+	 * rendering byte-for-byte) but is withheld from every DISCOVERY surface: `insert.ts`'s
+	 * `registerInsertCommands` skips it (no command-palette entry), and `suggest.ts`'s `/ds`
+	 * EditorSuggest never lists it (neither the empty-query "list all" nor a filtered
+	 * query). Default false (advertised — every element before this one). Distinct from the
+	 * ten SC-149 display-family elements: those are UNREGISTERED (only reachable through
+	 * `ds-scc`), because they were never meant to be typed directly. This flag is for an
+	 * element that IS meant to be typed directly by someone who already knows its name —
+	 * just not yet promoted to the docs/palette/`/ds` list. `ds-hero` sets this: the sheet's
+	 * edit modal and rendered content need more work before it's advertised as supported
+	 * (Scott's ruling, SC-190) — the code stays, the advertising doesn't. Revisit in 7.1+.
+	 */
+	hidden?: boolean;
 }
 
 /**

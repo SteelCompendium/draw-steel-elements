@@ -39,6 +39,13 @@ export const heroElement: ElementDefinition<HeroModel> = {
 	// sheet mounts its OWN "Edit definition" header affordance instead (spec §3.2
 	// placement, next to `[respite]`).
 	noAuthoringButton: true,
+	// SC-190 — withheld from 7.0.0's release: the edit modal and the rendered card both
+	// need more QoL work before this is advertised as a supported feature (Scott's
+	// ruling). The element stays fully registered — an existing `ds-hero` block keeps
+	// rendering and the compendium-resolution/sidebar/chrome machinery is untouched —
+	// it's just absent from the command palette, `/ds`, and the docs. Revisit in 7.1+
+	// (flip this back to false/omit it once the follow-up ships).
+	hidden: true,
 	authoring: {
 		example: heroExample,
 		// task-7-review.md's flagged footgun: `state` is a root-level schema sibling of

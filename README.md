@@ -1,6 +1,6 @@
 # Draw Steel Elements Plugin for Obsidian
 
-Statblocks, ability cards, initiative and negotiation trackers, hero sheets and a synced
+Statblocks, ability cards, initiative and negotiation trackers, hero trackers and a synced
 copy of the Draw Steel Compendium — all inside your Obsidian vault.
 
 _The Draw Steel Elements Obsidian Plugin is an independent product published under the
@@ -82,11 +82,10 @@ Then either:
 Any tracker can be pinned to a **persistent sidebar panel** so it stays visible while you
 navigate between notes — see [Pinning to the sidebar](./docs/writing-blocks.md#pinning-a-block-to-the-sidebar).
 
-### Hero sheets
+### Hero trackers
 
 | Element | Block | What it does |
 |---|---|---|
-| [Hero sheet](./docs/hero-suite.md#hero-sheet-ds-hero) | `ds-hero` | A whole hero in one block: Stamina, heroic resource, surges, conditions and clickable abilities. |
 | [Stamina bar](./docs/stamina-bar.md) | `ds-stamina-bar`, `ds-stam` | Stamina, temporary Stamina, Recoveries, Winded/Dying. |
 | [Conditions](./docs/hero-suite.md#conditions-ds-conditions) | `ds-conditions`, `ds-cond` | A conditions strip for one hero or creature. |
 | [Heroic resource](./docs/hero-suite.md#heroic-resource-ds-resource) | `ds-resource` | Ferocity, Focus, Piety, … tracked by class. |
@@ -132,7 +131,7 @@ Full documentation: **[docs/index.md](./docs/index.md)** (also published at
 
 Guides: [Getting started](./docs/getting-started.md) ·
 [Run an encounter](./docs/running-an-encounter.md) ·
-[Track your hero](./docs/tracking-your-hero.md) ·
+[Track your hero](./docs/hero-suite.md) ·
 [Customize a monster](./docs/customizing-a-monster.md) ·
 [Style your statblocks](./docs/styling-statblocks.md) ·
 [Advanced usage](./docs/advanced-usage.md)

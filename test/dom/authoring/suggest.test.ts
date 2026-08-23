@@ -94,12 +94,27 @@ test('onTrigger does NOT fire when a still-open ds- fence is followed by a line 
 	expect(s.onTrigger({ line: 3, ch: 7 }, editor as never, null)).toBeNull();
 });
 
-test('getSuggestions filters by name and alias; empty query lists all', () => {
+test('getSuggestions filters by name and alias; empty query lists all ADVERTISED elements', () => {
 	const s = makeSuggest();
 	s.context = { editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: '' };
-	expect(s.getSuggestions({ ...s.context!, query: '' })).toHaveLength(s['registry'].all().length);
+	// SC-190: `hidden` defs (`ds-hero`) are excluded — empty query lists every NON-hidden
+	// registered element, not every registered element.
+	const advertisedCount = s['registry'].all().filter((d: { hidden?: boolean }) => !d.hidden).length;
+	expect(s.getSuggestions({ ...s.context!, query: '' })).toHaveLength(advertisedCount);
 	const stam = s.getSuggestions({ ...s.context!, query: 'stam' });
 	expect(stam.some((d) => d.id === 'stamina-bar')).toBe(true);
+});
+
+// SC-190: `ds-hero` stays registered (typing the fence by hand still renders — see
+// heroSheet.test.ts) but must never appear in `/ds`, empty query or filtered — the
+// suggester IS a discovery surface, and hiding the element means it isn't in this list.
+test('the /ds suggest never lists ds-hero, empty query or filtered (SC-190, unadvertised)', () => {
+	const s = makeSuggest();
+	expect(s['registry'].get('hero')).toBeDefined(); // still registered
+	const all = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: '' });
+	expect(all.map((d) => d.id)).not.toContain('hero');
+	const filtered = s.getSuggestions({ editor: null as never, file: null as never, start: { line: 0, ch: 0 }, end: { line: 0, ch: 0 }, query: 'hero' });
+	expect(filtered.map((d) => d.id)).not.toContain('hero');
 });
 
 // D6 Task 11 (wiring sweep), retargeted by SC-149: the suggester is a pure loop over the

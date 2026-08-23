@@ -22,7 +22,7 @@ That's it — there is nothing to configure yet.
 
 ## 2. Learn the one keyboard shortcut that matters
 
-Everything the plugin draws — statblocks, trackers, hero sheets — only appears in
+Everything the plugin draws — statblocks, ability cards, trackers — only appears in
 Obsidian's **Reading view**. In **Editing view** you see the text you wrote instead.
 
 **`Ctrl + E`** (**`Cmd + E`** on a Mac) switches between them. You will use it constantly.
@@ -133,7 +133,7 @@ and numbers — they read exactly as they look. The full field list is in
 
 - **[Run an encounter](running-an-encounter.md)** — build the fight from compendium
   monsters, with a difficulty budget, then hand it to the tracker.
-- **[Track your hero](tracking-your-hero.md)** — a whole character in one block.
+- **[Track your hero](hero-suite.md)** — Stamina, heroic resource, surges and conditions.
 - **[Customize a monster](customizing-a-monster.md)** — the homebrew loop.
 - **[Style your statblocks](styling-statblocks.md)** — make cards look the way you like.
 - **[Settings](settings.md)** — a tour of every page.
