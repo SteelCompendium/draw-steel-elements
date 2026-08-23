@@ -1975,7 +1975,7 @@ malice:
 <li><code>name</code> (string, required): The name of the enemy group.</li>
 <li><code>creatures</code> (list of creatures, required): List of creature definitions.</li>
 <li><code>is_squad</code> (boolean, optional): Indicates if the creatures in this group are a squad of minions. Defaults to <code>false</code>.</li>
-<li><code>minion_stamina_pool</code> (number, managed): The current combined stamina pool of the minion group. Managed by the tracker.</li>
+<li><code>minion_stamina_pool</code> (number, managed): The current combined stamina pool of the group's minion squad. Managed by the tracker. A group holding <strong>more than one</strong> squad keeps each squad's pool on the minion creature itself (see the creature field of the same name) and leaves this one unset.</li>
 <li><code>has_taken_turn</code> (boolean, managed): Indicates if the group has taken a turn. Managed by the tracker.</li>
 <li><code>selectedInstanceKey</code> (string, managed): The key of the currently selected creature instance. Managed by the tracker.</li>
 </ul>
@@ -1988,7 +1988,9 @@ malice:
 <li><code>amount</code> (number, required): The number of instances of this creature.</li>
 <li><code>instances</code> (list of CreatureInstance, managed): List of creature instances. Managed by the tracker.</li>
 <li><code>image</code> (string, optional): Path to the creature's image.</li>
-<li><code>squad_role</code> (string, optional): If this Enemy Group is a squad, indicates if the creature role is <code>captain</code> or <code>minion</code></li>
+<li><code>squad_role</code> (string, optional): If this Enemy Group is a squad, the creature's role in it — <code>minion</code> (a squad sharing one stamina pool), <code>captain</code> (attached to one squad), or <code>attached</code> (travelling with the squad, not currently its captain). Every creature in a squad group must declare one.</li>
+<li><code>captain_of</code> (string, optional): For a <code>captain</code> in a group holding <strong>more than one</strong> squad, the <code>name</code> of the minion creature they lead. Omit it in a one-squad group — a captain with no <code>captain_of</code> leads the group's first squad.</li>
+<li><code>minion_stamina_pool</code> (number, managed): A <code>minion</code> creature's own shared stamina pool, used when the group holds more than one squad. Managed by the tracker; a one-squad group keeps its pool on the enemy group instead, so existing encounters are unchanged.</li>
 </ul>
 <h4 id="creature-instance-fields">Creature Instance Fields<a class="headerlink" href="#creature-instance-fields" title="Permanent link">&para;</a></h4>
 <ul>
@@ -2045,8 +2047,10 @@ malice:
 <p>In this case, the <code>Thorn Dragon</code>'s name, max stamina (or stamina), and image will be automatically loaded. You can still override these values by explicitly providing them in the YAML.</p>
 <h3 id="minions-and-captains">Minions and Captains<a class="headerlink" href="#minions-and-captains" title="Permanent link">&para;</a></h3>
 <p>Minions are groups of weaker creatures that share a combined stamina pool and act together in combat. They are managed differently from regular creatures in the Initiative Tracker.</p>
-<p>To define a minion group, set the <code>is_squad</code> field to <code>true</code> in the enemy group definition.  In a <code>creature</code> object, set the <code>squad_role</code> field to <code>minion</code>.  </p>
-<p>Additionally, you can add another <code>creature</code> object to the Enemy group (squad) and set its <code>squad_role</code> to <code>captain</code>.  This has no effect right now, but may change in the future.</p>
+<p>To define a minion group, set the <code>is_squad</code> field to <code>true</code> in the enemy group definition.  In a <code>creature</code> object, set the <code>squad_role</code> field to <code>minion</code>.</p>
+<p><strong>More than one squad per group.</strong> A squad group may hold several <code>minion</code> creatures, and each one is its own squad with its own stamina pool — the shape published encounters use when a single group fields, say, two squads of the same minion (Delian Tomb, Encounter W1). Nothing changes for a group with one squad: its pool stays where it always was, on the enemy group.</p>
+<p><strong>Captains.</strong> Add another <code>creature</code> to the group with <code>squad_role: captain</code>. The tracker marks the captain's roster cell with a crown badge and a forged frame, pulls it to the front of the squad, and calls out "Captain down" when the captain drops to 0 — the moment the rules allow a replacement.</p>
+<p><strong>Changing the captain.</strong> Click a creature's cell to open it, then click the badge beside its name: the captain's badge reads <strong>Captain</strong> and relieves them; any other non-minion creature's reads <strong>Make captain</strong> and promotes it (naming the squad, when the group holds more than one). A relieved captain becomes <code>squad_role: attached</code> and stays in the group. Minions are never captain candidates — the rules require a non-minion creature.</p>
 <h3 id="malice">Malice<a class="headerlink" href="#malice" title="Permanent link">&para;</a></h3>
 <h4 id="fields">Fields<a class="headerlink" href="#fields" title="Permanent link">&para;</a></h4>
 <ul>
@@ -2070,7 +2074,10 @@ malice:
 <p>Once your encounter is defined, the Initiative Tracker provides an interactive UI in your note.</p>
 <h3 id="heroes_1">Heroes<a class="headerlink" href="#heroes_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Turn Indicator</strong>: Click on the circle icon next to a hero's name to mark whether they have taken their turn.</li>
+<li><strong>Turn Indicator</strong>: Click a hero's <strong>portrait</strong> to mark whether they have taken their
+    turn — a struck steel seal presses into the portrait's lower-right corner once they
+    have. (With portraits turned off there is no picture to click, so the circle
+    checkbox next to the name takes over as the control instead.)</li>
 <li><strong>Stamina Management</strong>: Click on the hero's stamina display to open a modal where you can:<ul>
 <li>Apply damage or healing.</li>
 <li>Adjust temporary stamina points.</li>
@@ -2080,7 +2087,8 @@ malice:
 </ul>
 <h3 id="enemy-groups_1">Enemy Groups<a class="headerlink" href="#enemy-groups_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Turn Indicator</strong>: Similar to heroes, click on the circle icon next to the enemy group's name.</li>
+<li><strong>Turn Indicator</strong>: An enemy group has no portrait to click, so it keeps the circle
+    checkbox next to its name as its turn control.</li>
 <li><strong>Creature Grid</strong>:<ul>
 <li><strong>Selection</strong>: Click on a creature instance to view its details.</li>
 <li><strong>Health Management</strong>:<ul>
