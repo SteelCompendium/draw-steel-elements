@@ -244,6 +244,10 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
+		// SC-189 round 2: a PURE CSS fork (no view reads it), so it reflects like every
+		// other presentation pref. `current` — the default — is stamped but keyed on by
+		// nothing, so the shipped look and the frozen print pairs are untouched.
+		chromeSeat: 'chrome-seat',
 		collapsibleDefault: null,
 		collapseDefault: null,
 		rollingEnabled: null,
@@ -274,7 +278,15 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // good. I like that."). All three executed their deletion plans verbatim in the very
 // next round — winner unconditional, key + losing CSS + candidate shots gone. Five for
 // five: a hidden row has always ended in its own deletion.
-const EXPECTED_HIDDEN_ROWS: string[] = [];
+//
+// SC-189 round 2's `chromeSeat` is the sixth: four candidate answers to "the menu panel
+// feels detached on cards with headers" after round 1's border-top-color fix was rejected
+// (Scott, 2026-08-23: "I dont think I like adding a unique border-top-color here. it feels
+// off. What are some alternatives?"). Default `current` = today's look verbatim, so the
+// default picture cannot drift while the four are judged. Deletion plan: Scott picks, the
+// winner becomes unconditional, and this key + the losing CSS branches + the candidate
+// shots are deleted, returning this list to empty.
+const EXPECTED_HIDDEN_ROWS: string[] = ['chromeSeat'];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

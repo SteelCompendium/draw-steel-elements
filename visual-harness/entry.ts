@@ -1412,6 +1412,33 @@ export const CHROME_SHOTS: {
 		],
 		pad: 24,
 	},
+	// (12) SC-189 ROUND 2 — the panel-SEATING candidates, one frame each.
+	//
+	// The complaint is about a seam that only exists on cards with a role-tinted header
+	// band ("the menu panel feels off... almost looks 1 pixel too low" — measured as a
+	// ΔL ≈ 34-37 contrast step, not a position error), so every frame stacks the two
+	// headered families with a headerless one: statblock (role band), featureblock
+	// (unconditional band) and feature (no band, the CONTROL that already reads seated and
+	// which no candidate may disturb). `mobile: true` is the reveal mechanism for the same
+	// reason `chrome-placement-trio` uses it — it is the only mode that shows all three
+	// panels at once, and it changes opacity and the root's top margin, never the panel's
+	// own seating rules, which are the thing under review. `authoringControls` ON so the
+	// panel carries two items, as it does in the report crops.
+	//
+	// `chrome-seat-current` is the before-picture; the other four are the candidates.
+	// Disposable ids, deleted with the losing branches when Scott picks — and new names, so
+	// invisible to the freeze baseline by construction.
+	...(['current', 'hush', 'crown', 'ledge', 'drop'] as const).map((seat) => ({
+		id: `chrome-seat-${seat}`,
+		stack: [
+			{ element: 'statblock', fixture: 'default' },
+			{ element: 'featureblock', fixture: 'default' },
+			{ element: 'feature', fixture: 'default' },
+		],
+		mobile: true,
+		pad: 24,
+		prefs: { chromeSeat: seat, authoringControls: 'true' },
+	})),
 ];
 
 

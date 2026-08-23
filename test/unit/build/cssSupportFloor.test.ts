@@ -734,8 +734,15 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 	it('CAN-FAIL PROOF: neutering the sheet’s own gates makes the scan report every declaration', () => {
 		// The assertion above is only meaningful if the scan would fire on THIS file. Rewrite
 		// every real gate prelude to one that does not test color-mix and re-run: each of the
-		// sheet's 10 declarations must now be reported by name. This is the live proof, run on
+		// sheet's 16 declarations must now be reported by name. This is the live proof, run on
 		// the shipped stylesheet on every jest run — not a synthetic sample.
+		//
+		// The inventory is a COUNT OF THE SHEET, so it moves whenever the sheet grows a
+		// color-mix() surface. 10 → 16 with SC-189 round 2's four seating candidates: `hush`
+		// re-mixes each head band's gradient (2 × background) and `crown` re-mixes the chrome
+		// panel's fill and edge on both headered families (2 × background, 2 × border-color).
+		// Those six live behind a hidden review pref and go away with the losing branches when
+		// Scott picks, which takes this back to 10.
 		//
 		// SC-171 review L-4: neuter by the SAME predicate the scan uses, not by string-replacing
 		// the canonical literal — otherwise a declaration behind a differently-worded but valid
@@ -751,17 +758,19 @@ describe('SC-121: above-floor CSS features carry a static fallback (Chromium 106
 		);
 		expect(stillGates).toEqual([]);
 		const violations = findUngatedColorMixViolations(ungated);
-		expect(violations.length).toBe(10);
+		expect(violations.length).toBe(16);
 		expect(violations.every((v) => v.kind === 'ungated')).toBe(true);
-		// …and they are the surfaces SC-171 measured, by property.
+		// …and they are the surfaces SC-171 measured, plus SC-189 round 2's candidates, by
+		// property.
 		const byProp = violations.reduce<Record<string, number>>((acc, v) => {
 			acc[v.prop] = (acc[v.prop] ?? 0) + 1;
 			return acc;
 		}, {});
 		expect(byProp).toEqual({
-			background: 5,
+			background: 9, // 5 SC-171 + 2 SC-189 `hush` bands + 2 SC-189 `crown` panels
 			'background-image': 1,
 			'border-bottom': 2,
+			'border-color': 2, // SC-189 `crown`
 			'box-shadow': 2,
 		});
 	});

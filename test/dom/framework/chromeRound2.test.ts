@@ -108,6 +108,79 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 	});
 });
 
+// ------------------------------------------ SC-189 R2: the seating candidates (hidden pref)
+// Round 1's diagnosis stands (the panel's POSITION is exact, the defect is a contrast seam
+// against the header band) but its fix — recolouring the frame's `border-top-color` — was
+// rejected by Scott and is reverted. Four candidates now sit behind the hidden `chromeSeat`
+// pref. jsdom computes neither layout nor colour arithmetic, so — the same discipline §1/§2
+// state above — what is pinned here is the CSS CONTRACT: that the default is inert, that
+// every candidate is Steel-screen-scoped, and that none of them reaches a headerless card.
+// The PICTURES are `chrome-seat-*` in the shot sweep and the round-2 report's crops; the
+// NUMBERS are in the report.
+describe('SC-189 R2 — chrome-panel seating candidates', () => {
+	const SEATS = ['hush', 'crown', 'ledge', 'drop'] as const;
+
+	test('round 1\'s rejected border-top-color fix is gone', () => {
+		// Scott, 2026-08-23: "I dont think I like adding a unique border-top-color here."
+		expect(CSS).not.toContain("[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb[data-dse-role] {\n\tborder-top-color:");
+	});
+
+	test('the default (`current`) is INERT — no rule keys on it', () => {
+		// This is what keeps today's rendering, and every frozen print pair, untouched.
+		expect(CSS).not.toContain("[data-dse-chrome-seat='current']");
+	});
+
+	test.each(SEATS)('`%s` exists and every one of its selectors is Steel-screen-scoped', (seat) => {
+		const needle = `[data-dse-chrome-seat='${seat}']`;
+		expect(CSS).toContain(needle);
+		for (const line of CSS.split('\n')) {
+			if (!line.includes(needle)) continue;
+			expect(line).toContain("[data-dse-theme='steel']");
+			expect(line).toContain(':not([data-dse-print="on"])');
+		}
+	});
+
+	test.each(SEATS)('`%s` never reaches a headerless card', (seat) => {
+		// The seam is header-specific — a headerless `feature`/`hero`/`stamina-bar`/`kit`
+		// card measured ΔL ≈ 0.5 and must stay byte-identical. Every candidate selector is
+		// therefore keyed on a headered family: `.dse-sb[data-dse-role]` (the statblock draws
+		// a band only when a role mapped), `.dse-fb`/`.dse-sb` reached through the statblock
+		// plate, or the featureblock root.
+		const needle = `[data-dse-chrome-seat='${seat}']`;
+		const headered = /\.dse-sb|\.dse-fb|\[data-dse-element='featureblock'\]/;
+		// Every line that names this candidate is the HEAD of one of its selectors and
+		// carries the family key on the same line (the sheet is authored that way on
+		// purpose, so this check can be a grep rather than a CSS parser).
+		const lines = CSS.split('\n').filter((l) => l.includes(needle));
+		expect(lines.length).toBeGreaterThan(0);
+		for (const line of lines) expect(line).toMatch(headered);
+	});
+
+	test('`drop` is the only candidate that moves the panel, and it moves it DOWN into the band', () => {
+		// SC-169 ruling 2 ("the panel should not cover the Element's border") survives: drop
+		// re-anchors the panel to `top`, entirely inside the card, rather than pulling the
+		// crown down across the border row the way round 1 of SC-169 did with margin-bottom.
+		const start = CSS.indexOf("[data-dse-chrome-seat='drop']");
+		const block = CSS.slice(start, CSS.indexOf('}', CSS.indexOf('{', start)));
+		expect(block).toContain('top: calc(var(--dse-chrome-inset) - var(--dse-chrome-frame-border-top, 0px))');
+		expect(block).toContain('bottom: auto');
+		expect(block).not.toContain('margin-bottom: -');
+	});
+
+	test('no candidate hardcodes a font-size (SC-185)', () => {
+		for (const seat of SEATS) {
+			const needle = `[data-dse-chrome-seat='${seat}']`;
+			let from = CSS.indexOf(needle);
+			while (from !== -1) {
+				const open = CSS.indexOf('{', from);
+				const block = CSS.slice(open, CSS.indexOf('}', open));
+				expect(block).not.toContain('font-size');
+				from = CSS.indexOf(needle, open);
+			}
+		}
+	});
+});
+
 // ------------------------------------------------------------------ 2. layering
 describe('SC-169 R2 §2 — the panel never covers the card border', () => {
 	test('the panel stops ABOVE the frame border-box top, with no negative pull', () => {
