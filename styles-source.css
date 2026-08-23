@@ -7507,6 +7507,49 @@ body.theme-light
 	}
 }
 
+/* SC-189 — the chrome panel's stated "floor" (DESIGN.md, LAYERING: "the card's own
+   unbroken 1px border is the panel's floor") is, on every OTHER element, the shared
+   plate's plain `border: 1px solid var(--dse-border)` (~:5115) — and --dse-border is only
+   12% alpha in dark Steel (~:4518), which reads fine sitting over a card's own plain
+   --dse-card-bg ground (a "feature" card, measured ΔL ≈ 0.5 across that seam — see the
+   probe in sc189-report.md). But the band directly above (statblock/featureblock's own
+   `.dse-head`, ~:7275/:7400) is a role-tinted plate that paints edge-to-edge starting 1px
+   below that SAME border, and is dramatically brighter than either the border or the
+   panel's own --dse-surface-raised fill above it (measured ΔL ≈ 34-37 across the seam on
+   both families, roleless included — the statblock example fixture maps a role via
+   `organization`). The 12%-alpha hairline all but disappears against that jump, so the
+   floor DESIGN.md describes as "unbroken" is technically present but not perceptibly
+   there — the panel reads as an unrelated chip resting over a differently-toned surface
+   rather than the crown of the SAME plate. This is SC-189 ("the menu panel feels
+   off... almost looks 1 pixel too low") — not a position defect (mountChrome's
+   `--dse-chrome-frame-border-*` math lands the panel's bottom EXACTLY on this border,
+   0.00px gap, verified three ways: getBoundingClientRect delta, an injected marker line,
+   and a raster elementFromPoint scan — see sc189-report.md), but the border that's
+   supposed to make the seam read as deliberate is too faint to do that job next to a
+   vivid band.
+   Fix: give the frame's OWN top border the SAME accent its band already carries on the
+   band's own bottom border — reusing each band's EXISTING fallback chain exactly (not a
+   third, slightly-different grey) rather than inventing new color coupling. Touches ONLY
+   border-top-color (a longhand override, always higher-specificity than the shared
+   plate's shorthand at ~:5115, so cascade order doesn't matter) — the panel's own E3
+   material and the band's own vivid color are both untouched.
+   Gated identically to the bands themselves: statblock only when a role actually mapped
+   ([data-dse-role] — an unmapped statblock draws no band at all, ~:7251, and needs no
+   floor upgrade either; `--dse-role` is therefore always set here, no fallback needed,
+   matching the band rule's own `@supports` block at ~7296-7307 which needs none either);
+   featureblock unconditionally with the SAME `var(--dse-role, var(--dse-role-leader))`
+   fallback its own band uses at ~7414, matching its own unconditional band. Screen-only
+   ([data-dse-theme='steel']:not([data-dse-print="on"])) like every rule in this section —
+   print is unaffected by construction (freeze stays 196/196). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb[data-dse-role] {
+	border-top-color: var(--dse-role);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not(
+		[data-dse-error-stage]
+	) {
+	border-top-color: var(--dse-role, var(--dse-role-leader));
+}
+
 /* -- Featureblock head-band notch twin (SC-101 fix round, M-1): Task 2 gave the statblock
    this notch (~:5283-5323) and explicitly deferred the featureblock twin to "if S-4 = (a)"
    (task-2-report.md); S-4 IS (a) — the nested-card frame above is SHARED — so the twin was

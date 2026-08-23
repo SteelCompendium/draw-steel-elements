@@ -108,6 +108,51 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 	});
 });
 
+// ------------------------------------------------------------------ SC-189: seated, not detached
+// The panel's POSITION was already exact (gap 0.00px, proven above and by
+// `assertChromePlacement`) — SC-189 ("the menu panel feels off... almost looks 1 pixel too
+// low") was a MATERIAL defect: the frame's own top border (the panel's documented "floor",
+// §2 below) is only 12%-alpha `--dse-border`, which disappears next to a role-tinted header
+// band that starts immediately beneath it — measured ΔL ≈ 34-37 at the seam on statblock/
+// featureblock, vs ΔL ≈ 0.5 on a headerless `feature` card (sc189-report.md carries the
+// pixel probes). jsdom computes no color arithmetic (`color-mix()`, gradients) any more than
+// it computes layout, so — same discipline as §1/§2 above — this pins the CSS CONTRACT a
+// future refactor could silently delete, not the rendered color itself.
+describe('SC-189 — the frame\'s own top border reads as deliberate next to a header band', () => {
+	test('a role-bearing statblock frame borrows its OWN band accent for the top border', () => {
+		expect(CSS).toContain(
+			"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb[data-dse-role] {\n\tborder-top-color: var(--dse-role);\n}",
+		);
+	});
+
+	test("featureblock's unconditional band gets the same treatment, same fallback as its own band", () => {
+		const start = CSS.indexOf(
+			"[data-dse-theme='steel']:not([data-dse-print=\"on\"])[data-dse-element='featureblock']:not(\n\t\t[data-dse-error-stage]\n\t) {\n\tborder-top-color:",
+		);
+		expect(start).toBeGreaterThan(-1);
+		const block = CSS.slice(start, CSS.indexOf('}', start));
+		expect(block).toContain('border-top-color: var(--dse-role, var(--dse-role-leader));');
+	});
+
+	test('a headerless element (feature) gets no such override — nothing to fix there', () => {
+		// The fix is scoped to `.dse-sb[data-dse-role]` and the featureblock root only; a
+		// bare `[data-dse-element='feature']` border-top-color override would mean the fix
+		// leaked onto a family that measured fine before it (ΔL ≈ 0.5, sc189-report.md).
+		expect(CSS).not.toMatch(/\[data-dse-element='feature'\][^{]*\{\s*border-top-color/);
+	});
+
+	test('the override is screen-only — print stays byte-identical (freeze 196/196)', () => {
+		const start = CSS.indexOf('/* SC-189 —');
+		expect(start).toBeGreaterThan(-1);
+		const block = CSS.slice(start, CSS.indexOf('border-top-color: var(--dse-role, var(--dse-role-leader));', start));
+		// Every selector introduced by the SC-189 block carries the print exclusion.
+		const ruleLines = block.split('\n').filter((l) => l.includes('[data-dse-theme=\'steel\']') && l.includes('{') === false && l.trim().startsWith('['));
+		for (const line of ruleLines) {
+			expect(line).toContain(':not([data-dse-print="on"])');
+		}
+	});
+});
+
 // ------------------------------------------------------------------ 2. layering
 describe('SC-169 R2 §2 — the panel never covers the card border', () => {
 	test('the panel stops ABOVE the frame border-box top, with no negative pull', () => {
