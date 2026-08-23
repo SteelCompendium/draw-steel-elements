@@ -16,6 +16,9 @@
 import { setIcon } from 'obsidian';
 import type { App } from 'obsidian';
 import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdmonition/EncounterData';
+// SC-183 r3 / GH #67 — the pool is addressed per SQUAD now (a group may hold several).
+// Reading `group.minion_stamina_pool` directly would show squad 2 the squad-1 pool.
+import { minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 import { DseModal, iconButton } from '@/framework/kit';
@@ -59,7 +62,7 @@ export class MinionStaminaPoolModal extends DseModal {
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
-		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
+		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
 
 		// -- The preview bar (shared template) with a tick at each minion death point --
 		const ticks: number[] = [];
@@ -200,7 +203,7 @@ export class MinionStaminaPoolModal extends DseModal {
 					// Parens matter: `len ?? 0 * max` parses as `len ?? (0 * max)` and clamps
 					// the pool to the alive-minion COUNT instead of count * max (CB-1).
 					const maxStamina = (this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0) * minionMaxStamina;
-					this.group.minion_stamina_pool = Math.min(maxStamina, Math.max(0, newStamina));
+					setMinionPool(this.group, this.creature, Math.min(maxStamina, Math.max(0, newStamina)));
 
 					// Update the minion instances based on the selected checkboxes
 					const checkedMinions = this.minionCheckboxes.filter((item) => item.checkbox.checked);
@@ -244,7 +247,7 @@ export class MinionStaminaPoolModal extends DseModal {
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = aliveMinions * minionMaxStamina;
-		const poolCurrentStamina = this.group.minion_stamina_pool ?? poolMaxStamina;
+		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
 		// How many minions should die for this much damage (legacy verbatim).
 		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / minionMaxStamina);

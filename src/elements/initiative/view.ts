@@ -82,8 +82,14 @@ import {
 	EnemyGroup,
 	Hero,
 	advanceRound as advanceRoundModel,
+	captainOfSquad,
+	minionCreatures,
+	minionPoolOf,
+	promoteCaptain,
+	relieveCaptain,
 	resetEncounter,
 	resetRound as resetRoundModel,
+	squadOfCaptain,
 } from './model';
 import type { ActorActions, MaliceLogEntry } from './model';
 
@@ -461,16 +467,52 @@ export class InitiativeView extends ElementView<EncounterData> {
 
 	// ---------------------------------------------------------------- turn indicator
 
+	/* ------------------------------------------------------------------ SC-183 r3:
+	   THE PORTRAIT IS THE TURN CONTROL.
+
+	   Scott, 2026-08-22: "I think we actually can drop the dedicated checkbox for taking
+	   turns and instead use the portrait to toggle whether someone has taken a turn."
+
+	   WHAT SHIPS, and the one deliberate deviation, stated rather than smuggled:
+
+	   On the Steel SCREEN — the only surface a user ever clicks — the dedicated checkbox
+	   is gone. The portrait carries a full-bleed overlay button (`.dse-init__portrait-toggle`)
+	   that is the turn toggle: one click, `aria-pressed`, its own accessible label, a real
+	   tab stop, and a hover/focus affordance so it still reads as a control. Which VISUAL
+	   treatment marks a spent portrait is `initPortrait`'s four candidates (styles-source
+	   §12) — every one of them is CSS over this same DOM.
+
+	   The checkbox BOX itself stays in the DOM and stays visible in PRINT, where it is
+	   `display: none`'d on the Steel screen. Two reasons, both load-bearing:
+	     1. a printed tracker has no portrait to click — a tick box you fill in with a pen
+	        is what "turn taken" means on paper, and deleting it would leave the printed
+	        sheet with no way to record a turn at all;
+	     2. deleting a rendered box changes the print DOM, which moves every frozen
+	        `initiative*--steel-print` byte for no user-visible gain on the surface Scott
+	        was talking about.
+	   So: exactly ONE live control at a time (the box is display:none on screen, the
+	   overlay is display:none in the base/print sheet), never two.
+
+	   THE PORTRAITS-OFF EXCEPTION. `data-dse-portraits="off"` hides portraits entirely; a
+	   portrait-only turn control would vanish with them. The Steel layer therefore puts
+	   the checkbox BACK (and stands the overlay down) under that preference — see §12's
+	   own rule. Pinned by a test, because it is the one way this design can lose a
+	   control. */
+
 	/** The turn indicator: a kit iconButton (aria-pressed + [data-taken], §4.3) when
 	 *  writable; a static glyph span when read-only (state display, not a dead-end
-	 *  control). `toggle` flips the model and returns the new state. */
+	 *  control). `toggle` flips the model and returns the new state.
+	 *
+	 *  SC-183 r3 — returns a `repaint` hook so the PORTRAIT overlay (the screen's real
+	 *  control) and this box can never disagree about the state: whichever one is
+	 *  clicked, both repaint from the same model read. */
 	private buildTurnIndicator(
 		parent: HTMLElement,
 		name: string,
 		taken: boolean,
 		toggle: (() => boolean) | null,
 		owner: Component,
-	): void {
+	): { repaint: (taken: boolean) => void } {
 		const box = parent.createDiv({ cls: 'dse-init__turnbox' });
 		if (toggle) {
 			const handle = iconButton(
@@ -482,8 +524,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 					tooltip: 'Toggle to mark turn taken',
 					onClick: () => {
 						const nowTaken = toggle();
-						handle.setPressed(nowTaken);
-						this.updateTurnGlyph(handle.buttonEl, nowTaken);
+						this.repaintTurn(box, nowTaken);
 						void this.persist();
 					},
 				},
@@ -496,6 +537,63 @@ export class InitiativeView extends ElementView<EncounterData> {
 			el.createSpan({ cls: 'dse-init__turn-glyph' });
 			this.updateTurnGlyph(el, taken);
 		}
+		return { repaint: (now: boolean) => this.repaintTurn(box, now) };
+	}
+
+	/** Repaints EVERY turn affordance a row owns from one state read: the checkbox (print's
+	 *  control) and the portrait overlay (the screen's). Walks up to the row so either
+	 *  control's click repaints the other — the two can never drift. */
+	private repaintTurn(fromEl: HTMLElement, taken: boolean): void {
+		const row = fromEl.closest('.dse-init__row, .dse-init__grouphead') ?? fromEl;
+		row.querySelectorAll<HTMLElement>('.dse-init__turn').forEach((el) => {
+			this.updateTurnGlyph(el, taken);
+			if (el.tagName === 'BUTTON') el.setAttribute('aria-pressed', String(taken));
+		});
+		row.querySelectorAll<HTMLElement>('.dse-init__portrait-toggle').forEach((el) => {
+			el.toggleAttribute('data-taken', taken);
+			el.setAttribute('aria-pressed', String(taken));
+			el.querySelector<HTMLElement>('.dse-init__pt-word')?.setText(taken ? 'Done' : 'To go');
+		});
+	}
+
+	/** SC-183 r3 — the portrait's turn overlay: a REAL button covering the portrait, so
+	 *  "click the portrait" is one click, keyboard-reachable and announced. Additive and
+	 *  base-hidden like every other SC-183 instrument (print keeps the checkbox), so both
+	 *  print classes render exactly the boxes they rendered before.
+	 *
+	 *  It carries TWO non-colour channels of its own, on top of whatever mark the active
+	 *  `initPortrait` candidate paints: `aria-pressed` for AT, and a real WORD
+	 *  ("Done" / "To go") that every candidate is free to show or hide — the `seal` and
+	 *  `shutter` candidates paint it, the others carry it as the accessible name. */
+	private buildPortraitToggle(
+		portraitEl: HTMLElement,
+		name: string,
+		taken: boolean,
+		toggle: (() => boolean) | null,
+		owner: Component,
+	): void {
+		if (!toggle) return;
+		const handle = iconButton(
+			portraitEl,
+			{
+				label: `Toggle turn taken: ${name}`,
+				pressed: taken,
+				tooltip: 'Click the portrait to mark this turn taken',
+				onClick: () => {
+					const nowTaken = toggle();
+					this.repaintTurn(portraitEl, nowTaken);
+					void this.persist();
+				},
+			},
+			owner,
+		);
+		const el = handle.buttonEl;
+		el.addClass('dse-init__portrait-toggle');
+		const mark = el.createSpan({ cls: 'dse-init__pt-mark' });
+		mark.setAttribute('aria-hidden', 'true');
+		setIcon(mark, 'check');
+		el.createSpan({ cls: 'dse-init__pt-word', text: taken ? 'Done' : 'To go' });
+		el.toggleAttribute('data-taken', taken);
 	}
 
 	/** In-place turn repaint: [data-taken] for the CSS (--dse-turn-done) + the check/dot
@@ -635,7 +733,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				for (let i = 1; i < amount; i++) ticks.push((i * per) / max);
 			}
 			return {
-				values: { current: group.minion_stamina_pool ?? 0, temp: 0, max },
+				values: { current: minionPoolOf(group, creature) ?? 0, temp: 0, max },
 				gauge: { dyingZone: false, ticks },
 				pool: true,
 			};
@@ -799,36 +897,116 @@ export class InitiativeView extends ElementView<EncounterData> {
 		updateStaminaGauge(gauge, spec.values, spec.gauge);
 	}
 
-	/** The captain badge (SC-183 r2). Crown + WORD — the word is what carries the meaning
-	 *  (Scott is colourblind), the crown is the silhouette channel and the amber/red ink
-	 *  is the third. Base-hidden like every other SC-183 instrument, so print renders the
-	 *  box it rendered before. Not a control: promoting a captain has no legal target in
-	 *  the shipped model (see buildEnemyGroupRow's note), and a button that cannot act is
-	 *  a dead-end affordance (F1 §4.4). */
-	/** A squad's captain creature and whether they are still standing. A non-hero creature
-	 *  is out at 0 ("When a nonhero creature's Stamina is reduced to 0, they die or are
-	 *  knocked unconscious", Draw Steel Heroes) — and "down" is precisely the state the
-	 *  rules' replacement clause keys on, so the roster announces when a swap is legal. */
-	private squadCaptain(group: EnemyGroup): { captain: Creature | undefined; down: boolean } {
-		const captain = group.is_squad
-			? group.creatures.find((c) => c.squad_role === 'captain')
-			: undefined;
-		const down =
-			!!captain && (captain.instances ?? []).every((inst) => (inst.current_stamina ?? 0) <= 0);
-		return { captain, down };
+	/** Is this captain out? A non-hero creature is out at 0 ("When a nonhero creature's
+	 *  Stamina is reduced to 0, they die or are knocked unconscious", Draw Steel Heroes) —
+	 *  and "down" is precisely the state the rules' replacement clause keys on, so the
+	 *  roster announces the moment a swap becomes legal. */
+	private isCaptainDown(captain: Creature): boolean {
+		return (captain.instances ?? []).every((inst) => (inst.current_stamina ?? 0) <= 0);
 	}
 
-	private buildCaptainBadge(parent: HTMLElement, down: boolean): HTMLElement {
-		const badge = parent.createSpan({ cls: 'dse-init__captain' });
-		badge.setAttribute('data-down', down ? 'on' : 'off');
-		const glyph = badge.createSpan({ cls: 'dse-init__captain-glyph' });
-		glyph.setAttribute('aria-hidden', 'true');
-		setIcon(glyph, 'crown');
-		badge.createSpan({
-			cls: 'dse-init__captain-word',
-			text: down ? 'Captain down' : 'Captain',
-		});
-		return badge;
+	/** The group's captains and whether ANY of them is down (a group may hold several
+	 *  squads since GH #67, so this is the group-level summary the body attribute
+	 *  carries; per-creature state is on each badge). */
+	private squadCaptains(group: EnemyGroup): { captains: Creature[]; anyDown: boolean } {
+		const captains = group.is_squad
+			? group.creatures.filter((c) => c.squad_role === 'captain')
+			: [];
+		return { captains, anyDown: captains.some((c) => this.isCaptainDown(c)) };
+	}
+
+	/** Which squad a promotion would attach to: the first squad currently WITHOUT a
+	 *  captain (the case the rules' replacement clause is about), else the first squad
+	 *  — whose captain the promotion then replaces. Naming it in the button's label is
+	 *  what keeps this a ONE-click control in a multi-squad group (Scott's standing
+	 *  constraint: no dropdowns mid-combat). */
+	private promotionTarget(group: EnemyGroup): Creature | undefined {
+		const squads = minionCreatures(group);
+		return squads.find((minion) => !captainOfSquad(group, minion)) ?? squads[0];
+	}
+
+	/* ------------------------------------------------------------------ SC-183 r3:
+	   THE CAPTAIN BADGE IS NOW THE CHANGE-CAPTAIN CONTROL.
+
+	   Round 2 shipped the badge as a static span and reported why it could not be a
+	   button: `squad_role` was per-creature, the pool was per-group, and parse capped a
+	   squad group at two creatures — so a group never held a second candidate to promote
+	   and a promote button would have been a dead-end affordance (F1 §4.4). GH #67
+	   ("Support multiple minion squads in the same group") is that model change, and it
+	   is done in this round (EncounterData's squad-helper block), so the affordance now
+	   has real targets and ships.
+
+	   ONE affordance, one click, three states, and the WORD carries every one of them
+	   (Scott is colourblind — the crown is the silhouette channel, the ink is only third):
+	     - the captain            → "Captain" / "Captain down", aria-pressed=true; click
+	                                relieves them (the squad keeps the creature).
+	     - a promotable creature  → "Make captain" (+ the squad's name when the group holds
+	                                more than one), aria-pressed=false; click promotes.
+	     - a minion, or read-only → no control at all; the captain still shows its word. */
+	private buildCaptainBadge(
+		parent: HTMLElement,
+		creature: Creature,
+		group: EnemyGroup,
+		owner: Component,
+		opts: { control: boolean } = { control: true },
+	): HTMLElement | null {
+		const isCaptain = creature.squad_role === 'captain';
+		const down = isCaptain && this.isCaptainDown(creature);
+		// A minion is never a captain candidate ("Any non-Mount, non-minion creature …",
+		// Draw Steel Monsters), and a read-only render never gets a write affordance.
+		const promotable =
+			opts.control && this.canWrite && !isCaptain && creature.squad_role !== 'minion';
+		if (!isCaptain && !promotable) return null;
+
+		const squads = minionCreatures(group);
+		const target = isCaptain ? squadOfCaptain(group, creature) : this.promotionTarget(group);
+		if (!isCaptain && !target) return null;
+		const word = isCaptain ? (down ? 'Captain down' : 'Captain') : 'Make captain';
+		// Only name the squad when there is more than one to name — a one-squad group's
+		// badge reads exactly as it did in round 2.
+		const suffix = !isCaptain && squads.length > 1 && target ? `: ${target.name}` : '';
+
+		const paint = (el: HTMLElement): void => {
+			el.addClass('dse-init__captain');
+			el.setAttribute('data-down', down ? 'on' : 'off');
+			el.setAttribute('data-role', isCaptain ? 'captain' : 'candidate');
+			// Whose badge this is — `refreshCaptainState` needs it to repaint the right
+			// captain's word after a stamina edit now that a group can hold several.
+			el.setAttribute('data-captain-for', creature.name);
+			const glyph = el.createSpan({ cls: 'dse-init__captain-glyph' });
+			glyph.setAttribute('aria-hidden', 'true');
+			setIcon(glyph, 'crown');
+			el.createSpan({ cls: 'dse-init__captain-word', text: word + suffix });
+		};
+
+		if (!opts.control || !this.canWrite || !target) {
+			const badge = parent.createSpan();
+			paint(badge);
+			return badge;
+		}
+
+		const handle = iconButton(
+			parent,
+			{
+				label: isCaptain
+					? `Relieve ${creature.name} as captain`
+					: `Make ${creature.name} captain of ${target.name}`,
+				pressed: isCaptain,
+				tooltip: isCaptain ? 'Relieve as captain' : 'Make captain',
+				onClick: () => {
+					if (isCaptain) relieveCaptain(creature);
+					else promoteCaptain(group, creature, target);
+					// A captain change moves the roster's leading cell (the Steel `order`
+					// reflow), every badge's word and the group's own state attribute, so
+					// this is the one tracker mutation that legitimately wants the coarse
+					// rebuild rather than an in-place repaint.
+					void this.rebuildAndPersist();
+				},
+			},
+			owner,
+		);
+		paint(handle.buttonEl);
+		return handle.buttonEl;
 	}
 
 	// -------------------------------------------------------------------- portrait
@@ -847,7 +1025,15 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  in). Decorative (aria-hidden): the actor's name is already visible text right
 	 *  next to every portrait this mounts into. */
 	private renderPortraitFallback(container: HTMLElement, kind: 'hero' | 'enemy'): void {
-		container.empty();
+		// SC-183 r3 — was `container.empty()`. The hero portrait now also hosts the TURN
+		// OVERLAY button, and both failure paths here are ASYNC (an image-resolution
+		// rejection, or an `error` event on an <img> that already mounted), so emptying
+		// the container would delete the row's turn control at an arbitrary later moment —
+		// silently, and only for actors whose portrait happens to be missing. Remove
+		// exactly the picture nodes this method owns instead.
+		container
+			.querySelectorAll(':scope > img, :scope > .dse-init__portrait-fallback')
+			.forEach((node) => node.remove());
 		const fallback = container.createSpan({ cls: 'dse-init__portrait-fallback' });
 		fallback.setAttribute('aria-hidden', 'true');
 		setIcon(fallback, kind === 'hero' ? 'shield' : 'skull');
@@ -895,22 +1081,20 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// portrait/info/health share (background + hairline chrome, CSS ".dse-init__row"),
 		// instead of floating beside it as a visually detached box.
 		const rowEl = entry.createDiv({ cls: 'dse-init__row' });
-		this.buildTurnIndicator(
-			rowEl,
-			name,
-			character.has_taken_turn ?? false,
-			this.canWrite
-				? () => {
-						character.has_taken_turn = !(character.has_taken_turn ?? false);
-						return character.has_taken_turn;
-					}
-				: null,
-			owner,
-		);
+		const toggleTurn = this.canWrite
+			? (): boolean => {
+					character.has_taken_turn = !(character.has_taken_turn ?? false);
+					return character.has_taken_turn;
+				}
+			: null;
+		this.buildTurnIndicator(rowEl, name, character.has_taken_turn ?? false, toggleTurn, owner);
 
-		// Character Image
+		// Character Image — SC-183 r3: also THE turn control on the Steel screen (see
+		// buildPortraitToggle's note). The overlay is the portrait wrapper's last child so
+		// it stacks above the image without the image needing a stacking context.
 		const imageEl = rowEl.createDiv({ cls: 'dse-init__portrait' });
 		this.renderPortrait(imageEl, 'hero', character.image ?? null, character.name);
+		this.buildPortraitToggle(imageEl, name, character.has_taken_turn ?? false, toggleTurn, owner);
 
 		// Middle: Character Info
 		const infoEl = rowEl.createDiv({ cls: 'dse-init__info' });
@@ -980,21 +1164,26 @@ export class InitiativeView extends ElementView<EncounterData> {
 	   replacement clause actually keys on, so the tracker announces the moment a swap
 	   becomes legal.
 
-	   WHAT IT DOES NOT SHIP, AND WHY (reported to Scott rather than guessed): a
-	   one-click CHANGE-captain affordance. `squad_role` lives on the CREATURE, the pool
-	   lives on the GROUP (`EnemyGroup.minion_stamina_pool`), and parse caps a squad at
-	   two creatures — one minion type plus at most one captain. So inside the shipped
-	   model there is never a second candidate to promote: "change the captain" has no
-	   legal target until a group can hold more than one squad / more than two creatures.
-	   That is exactly the model change GH issue #67 ("Support multiple minion squads in
-	   the same group") requires, and it is claimed by an outside contributor — see the
-	   round-2 report for the proposed split. */
+	   ROUND 3 — THE OTHER HALF, "easy to change the captain", NOW SHIPS. Round 2 reported
+	   that it could not be built honestly: `squad_role` was per-creature, the pool was
+	   per-GROUP, and parse capped a squad group at two creatures (one minion type + at
+	   most one captain), so a group never held a second candidate to promote. GH issue #67
+	   ("Support multiple minion squads in the same group" — Delian Tomb W1 group 3 is two
+	   "flows of the river" squads in one group) is exactly that model change, and this
+	   round does it: the caps are gone, the pool resolves per SQUAD, and a third role
+	   `attached` names a non-minion creature travelling with the squad that is not
+	   currently its captain. See EncounterData's squad-helper block for the model and the
+	   back-compat rule, and `buildCaptainBadge` for the one-click control. */
 	private buildEnemyGroupRow(entry: HTMLElement, group: EnemyGroup, owner: Component): void {
 		const groupEl = entry.createDiv({ cls: 'dse-init__groupbody' });
 
-		const { captain, down: captainDown } = this.squadCaptain(group);
+		const { captains, anyDown } = this.squadCaptains(group);
 		if (group.is_squad) groupEl.setAttribute('data-squad', 'on');
-		if (captain) groupEl.setAttribute('data-captain', captainDown ? 'down' : 'up');
+		if (captains.length > 0) groupEl.setAttribute('data-captain', anyDown ? 'down' : 'up');
+		// SC-183 r3 / GH #67 — how many squads this group holds, so the Steel layer can
+		// tell a one-squad group (the historical shape) from a multi-squad one without
+		// counting cells.
+		if (group.is_squad) groupEl.setAttribute('data-squads', String(minionCreatures(group).length));
 
 		// Group Header — same SC-154 round 2 move as buildCharacterRow above: the turn
 		// indicator becomes the header row's own first child (inside the group's card)
@@ -1150,8 +1339,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 				// like every other r2 instrument, so print is byte-unchanged.
 				if (group.is_squad && creature.squad_role) {
 					cellEl.setAttribute('data-squad-role', creature.squad_role);
+					// The ROSTER CELL is itself a <button> (the instance selector), so it
+					// can only ever hold a STATIC badge — a nested button would be invalid
+					// HTML and its click would fight the cell's own. The cell therefore
+					// answers "who is the captain" (round 2's job, unchanged) and the
+					// change-captain CONTROL lives on the detail row, next to every other
+					// per-creature control (stamina, conditions, actions).
 					if (creature.squad_role === 'captain') {
-						this.buildCaptainBadge(cellEl, captainDown);
+						this.buildCaptainBadge(cellEl, creature, group, owner, { control: false });
 					}
 				}
 
@@ -1194,8 +1389,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const name = `${creature.name} #${instance.id}`;
 		const infoEl = container.createDiv({ cls: 'dse-init__info' });
 		const nameEl = infoEl.createDiv({ cls: 'dse-init__name', text: name });
-		if (group.is_squad && creature.squad_role === 'captain') {
-			this.buildCaptainBadge(nameEl, this.squadCaptain(group).down);
+		// SC-183 r3 — THE change-captain affordance. On the opened creature's name line:
+		// "Captain" (click to relieve) for the captain, "Make captain" for any other
+		// non-minion creature in the squad group. Base-hidden, so print is unchanged.
+		if (group.is_squad && creature.squad_role) {
+			this.buildCaptainBadge(nameEl, creature, group, owner);
 		}
 		const conditionsEl = infoEl.createDiv({ cls: 'dse-init__conditions' });
 		this.buildConditionRow(conditionsEl, container, instance, owner, creature, group);
@@ -1270,15 +1468,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  the moment the rules allow a replacement — so it must not wait for a coarse rebuild.
 	 *  No-op on a group with no captain. */
 	private refreshCaptainState(groupBodyEl: HTMLElement, group: EnemyGroup): void {
-		const { captain, down } = this.squadCaptain(group);
-		if (!captain) return;
-		groupBodyEl.setAttribute('data-captain', down ? 'down' : 'up');
-		groupBodyEl.querySelectorAll<HTMLElement>('.dse-init__captain').forEach((badge) => {
-			badge.setAttribute('data-down', down ? 'on' : 'off');
-			badge
-				.querySelector<HTMLElement>('.dse-init__captain-word')
-				?.setText(down ? 'Captain down' : 'Captain');
-		});
+		const { captains, anyDown } = this.squadCaptains(group);
+		if (captains.length === 0) return;
+		groupBodyEl.setAttribute('data-captain', anyDown ? 'down' : 'up');
+		// SC-183 r3 — only the CAPTAIN badges carry a down state; the "Make captain"
+		// candidates keep their word whatever the captains are doing.
+		groupBodyEl
+			.querySelectorAll<HTMLElement>(".dse-init__captain[data-role='captain']")
+			.forEach((badge) => {
+				const owner = captains.find((c) => c.name === badge.getAttribute('data-captain-for'));
+				const down = owner ? this.isCaptainDown(owner) : anyDown;
+				badge.setAttribute('data-down', down ? 'on' : 'off');
+				badge
+					.querySelector<HTMLElement>('.dse-init__captain-word')
+					?.setText(down ? 'Captain down' : 'Captain');
+			});
 	}
 
 	private openCreatureStaminaModal(
@@ -1349,7 +1553,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 				staminaEl.textContent = `DEAD`;
 				setState('dead');
 			} else {
-				const currentStamina = group.minion_stamina_pool ?? 0;
+				const currentStamina = minionPoolOf(group, creature) ?? 0;
 				staminaEl.textContent = `${currentStamina}/${creature.max_stamina * creature.amount} (${creature.max_stamina})`;
 				setState(null);
 			}

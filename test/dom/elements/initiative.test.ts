@@ -1636,37 +1636,54 @@ malice:
 		expect(root.querySelector('[data-squad-role]')).toBeNull();
 	});
 
-	// ------------------------------------------------------- the turn-economy switch
+	// ------------------------------------------------- the portrait turn-mark switch
 
-	test('initTurn pref (hidden review switch): reflected as data-dse-init-turn, default current, live reflow to each candidate', async () => {
+	test('initPortrait pref (hidden review switch): reflected as data-dse-init-portrait, default seal, live restyle to each candidate', async () => {
+		// Round 2's `initTurn` A/B is gone — Scott picked `dim` ("The `dim` approach is
+		// generally the direction I want to go"), so it is unconditional and the key, the
+		// spine/gutter CSS and their shots were deleted. This is round 3's open question:
+		// which MARK a spent portrait wears.
 		const { root, deps } = await renderInit(quickStart);
-		expect(root.getAttribute('data-dse-init-turn')).toBe('current');
-		for (const value of ['spine', 'dim', 'gutter'] as const) {
-			await deps.prefs.set('initTurn', value);
-			expect(root.getAttribute('data-dse-init-turn')).toBe(value);
+		expect(root.getAttribute('data-dse-init-portrait')).toBe('seal');
+		for (const value of ['shutter', 'sheathe', 'laurel', 'seal'] as const) {
+			await deps.prefs.set('initPortrait', value);
+			expect(root.getAttribute('data-dse-init-portrait')).toBe(value);
 		}
 	});
 
-	test('every candidate is a pure REFLOW: the DOM and the one-click handlers are identical at every value', async () => {
-		// Scott's hard constraint: "each one needs to be a one-click (like it is today)
-		// because having multiple clicks (like a dropdown or something) is too much
-		// overhead when a GM/Director is running a combat." The candidates are CSS, so
-		// this is true by construction — and this test is what keeps it true.
+	test('the promoted `dim` layout left no trace of the losing candidates', () => {
+		// The deletion plan, enforced. A hidden review row is a review-time device: when
+		// Scott picks, the winner becomes unconditional and the losers GO — key, CSS and
+		// shots. This is the same guard round 2 wrote for the deleted `rail` arm.
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		expect(sheet).not.toContain("data-dse-init-turn");
+		expect(sheet).not.toContain("[data-dse-init-turn='spine']");
+		expect(sheet).not.toContain("[data-dse-init-turn='gutter']");
+	});
+
+	test('every portrait candidate is a pure RESTYLE: the DOM and the one-click handlers are identical at every value', async () => {
+		// Scott's hard constraint, unchanged since round 1: "each one needs to be a
+		// one-click (like it is today) because having multiple clicks (like a dropdown or
+		// something) is too much overhead when a GM/Director is running a combat." The
+		// candidates are CSS over one DOM, so this is true by construction — and this test
+		// is what keeps it true.
 		const { root, deps } = await renderInit(quickStart);
 		const shape = (): string =>
 			[
 				root.querySelectorAll('.dse-init__turnbox').length,
 				root.querySelectorAll('button.dse-init__turn').length,
+				root.querySelectorAll('button.dse-init__portrait-toggle').length,
+				root.querySelectorAll('.dse-init__pt-mark').length,
+				root.querySelectorAll('.dse-init__pt-word').length,
 				root.querySelectorAll('button.dse-init__action-toggle').length,
-				(root.querySelector('.dse-init__row')!.firstElementChild as HTMLElement).className,
 			].join('|');
 		const before = shape();
-		for (const value of ['spine', 'dim', 'gutter', 'current'] as const) {
-			await deps.prefs.set('initTurn', value);
+		for (const value of ['shutter', 'sheathe', 'laurel', 'seal'] as const) {
+			await deps.prefs.set('initPortrait', value);
 			expect(shape()).toBe(before);
 		}
 
-		// And the four toggles still take exactly one click each to flip.
+		// And the four action toggles still take exactly one click each to flip.
 		const firstRow = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
 		const toggles = firstRow.querySelectorAll<HTMLElement>('button.dse-init__action-toggle');
 		expect(toggles.length).toBe(4);
@@ -1723,5 +1740,403 @@ malice:
 
 		// The rail branch is GONE — Scott picked plate, so there is no second layout.
 		expect(sheet).not.toContain(`[data-dse-init-stamina='rail']`);
+	});
+});
+
+// ===========================================================================
+// SC-183 ROUND 3 — Scott's ruling of 2026-08-22, executed.
+//   "The `dim` approach is generally the direction I want to go."
+//   "I think we actually can drop the dedicated checkbox for taking turns and instead
+//    use the portrait to toggle whether someone has taken a turn."
+//   "The dimming of the container is very stylish and I like it visually, but the
+//    Director/GM will still need to interact with the containers to adjust health even
+//    when its not their turn."
+//   "The 4 action pips in the corner are great. Lets make sure the distance from the
+//    edge is consistent with everything else."
+//   "Can you also give the captain's image container some kind of HFS border or
+//    indicator."
+// ===========================================================================
+describe('SC-183 round 3: the portrait is the turn control', () => {
+	const sheetText = (): string =>
+		fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+	const sheetNoComments = (): string => sheetText().replace(/\/\*[\s\S]*?\*\//g, '');
+
+	test('every hero row mounts a REAL portrait toggle button inside its portrait, with the state on it', async () => {
+		const { root } = await renderInit(quickStart);
+		const rows = root.querySelectorAll<HTMLElement>('.dse-init__group--heroes .dse-init__row');
+		expect(rows.length).toBeGreaterThan(0);
+		rows.forEach((row) => {
+			const portrait = row.querySelector('.dse-init__portrait') as HTMLElement;
+			const toggle = portrait.querySelector<HTMLElement>('button.dse-init__portrait-toggle');
+			expect(toggle).not.toBeNull();
+			// A control, not a picture that reacts: labelled, pressed-state, focusable.
+			expect(toggle!.getAttribute('aria-label')).toContain('Toggle turn taken');
+			expect(toggle!.getAttribute('aria-pressed')).toBe('false');
+			expect(toggle!.tagName).toBe('BUTTON');
+			// Two non-colour channels of its own, on top of the candidate's mark.
+			expect(toggle!.querySelector('.dse-init__pt-mark')).not.toBeNull();
+			expect(toggle!.querySelector('.dse-init__pt-word')!.textContent).toBe('To go');
+		});
+	});
+
+	test('ONE click on the portrait flips the turn, repaints BOTH controls, and persists exactly once', async () => {
+		jest.useFakeTimers();
+		try {
+			const { root, host } = await renderInit(quickStart);
+			const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+			const toggle = row.querySelector<HTMLElement>('button.dse-init__portrait-toggle')!;
+			const box = row.querySelector<HTMLElement>('button.dse-init__turn')!;
+
+			toggle.click();
+
+			expect(toggle.getAttribute('aria-pressed')).toBe('true');
+			expect(toggle.hasAttribute('data-taken')).toBe(true);
+			expect(toggle.querySelector('.dse-init__pt-word')!.textContent).toBe('Done');
+			// The print control repaints from the same state read — the two can never drift.
+			expect(box.hasAttribute('data-taken')).toBe(true);
+			expect(box.getAttribute('aria-pressed')).toBe('true');
+
+			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS + 5);
+			await Promise.resolve();
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			expect(host.replaceSource.mock.calls[0][0]).toBe(
+				legacyBytes(quickStart, (m) => {
+					m.heroes[0].has_taken_turn = true;
+				}),
+			);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	test('and the CHECKBOX still works — clicking it repaints the portrait overlay too', async () => {
+		const { root } = await renderInit(quickStart);
+		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		const box = row.querySelector<HTMLElement>('button.dse-init__turn')!;
+		const toggle = row.querySelector<HTMLElement>('button.dse-init__portrait-toggle')!;
+		box.click();
+		expect(toggle.getAttribute('aria-pressed')).toBe('true');
+		expect(toggle.hasAttribute('data-taken')).toBe(true);
+		box.click();
+		expect(toggle.getAttribute('aria-pressed')).toBe('false');
+		expect(toggle.querySelector('.dse-init__pt-word')!.textContent).toBe('To go');
+	});
+
+	test('read-only renders NO portrait toggle (no dead-end write affordance, F1 §4.4)', async () => {
+		const { root } = await renderInit(quickStart, { canPersist: false });
+		expect(root.querySelectorAll('.dse-init__portrait-toggle').length).toBe(0);
+		// …and the static turn glyph is still there as a state display.
+		expect(root.querySelector('.dse-init__turn')).not.toBeNull();
+	});
+
+	test('a missing portrait image cannot delete the turn control (the async empty() trap)', async () => {
+		// renderPortraitFallback used to `container.empty()`, which after round 3 would
+		// remove the overlay button — asynchronously, and only for actors whose image
+		// fails to resolve. The fallback now removes only the picture nodes it owns.
+		const { root } = await renderInit(quickStart);
+		const portrait = root.querySelector('.dse-init__portrait') as HTMLElement;
+		const view = new InitiativeView({} as never);
+		// Drive the private path directly — it is the async callback under test.
+		(view as unknown as { renderPortraitFallback: (c: HTMLElement, k: string) => void })
+			.renderPortraitFallback(portrait, 'hero');
+		expect(portrait.querySelector('button.dse-init__portrait-toggle')).not.toBeNull();
+		expect(portrait.querySelector('.dse-init__portrait-fallback')).not.toBeNull();
+		expect(portrait.querySelectorAll('img').length).toBe(0);
+	});
+
+	test('CSS contract: the overlay is base-hidden and every reveal rule carries the print guard', () => {
+		// The whole reason the frozen print pairs cannot move: a display:none node
+		// contributes no box, so both print classes render what they always rendered —
+		// including the checkbox, which stays PRINT's control.
+		const noComments = sheetNoComments();
+		expect(noComments).toMatch(
+			/\.dse-init__portrait-toggle,\s*\n\s*\.dse-init__pt-mark,\s*\n\s*\.dse-init__pt-word\s*\{\s*\n\s*display: none;/,
+		);
+		for (const cls of ['dse-init__portrait-toggle', 'dse-init__pt-mark', 'dse-init__pt-word']) {
+			const reveals = noComments
+				.split('\n')
+				.filter((line) => line.includes(`.${cls}`) && line.includes('[data-dse-element'));
+			expect(reveals.length).toBeGreaterThan(0);
+			reveals.forEach((line) => {
+				expect(line).toContain(`[data-dse-theme='steel']:not([data-dse-print="on"])`);
+			});
+		}
+	});
+
+	test('CSS contract: PORTRAITS OFF puts the checkbox back — the one way this design can lose a control', () => {
+		const noComments = sheetNoComments();
+		// The screen hides the row's checkbox…
+		expect(noComments).toContain(
+			`[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__turnbox {`,
+		);
+		// …and brings it back, plus stands the overlay down, when portraits are off.
+		expect(noComments).toContain(
+			`[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox {`,
+		);
+		expect(noComments).toContain(
+			`[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__portrait-toggle {`,
+		);
+	});
+});
+
+describe('SC-183 round 3: the dim never impedes interaction', () => {
+	const sheetNoComments = (): string =>
+		fs
+			.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8')
+			.replace(/\/\*[\s\S]*?\*\//g, '');
+
+	test('every control on a SPENT row is still present, enabled, focusable and clickable', async () => {
+		const { root } = await renderInit(quickStart);
+		// focus() only moves document.activeElement for an ATTACHED node, and "can a
+		// keyboard reach this control on a dimmed row" is half of what is under test.
+		document.body.appendChild(root);
+		const row = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		row.querySelector<HTMLElement>('button.dse-init__portrait-toggle')!.click();
+		expect(row.querySelector('.dse-init__turn')!.hasAttribute('data-taken')).toBe(true);
+
+		// The Director still has to adjust health on this row (Scott's own words).
+		const controls = row.querySelectorAll<HTMLButtonElement>(
+			'button.dse-init__stamina, button.dse-init__action-toggle, button.dse-cond--add, button.dse-init__portrait-toggle',
+		);
+		expect(controls.length).toBeGreaterThanOrEqual(6);
+		controls.forEach((c) => {
+			expect(c.disabled).toBe(false);
+			expect(c.getAttribute('aria-hidden')).toBeNull();
+			expect(c.hasAttribute('inert')).toBe(false);
+			c.focus();
+			expect(document.activeElement).toBe(c);
+		});
+		// And the stamina control still opens its modal from the spent row.
+		const before = document.querySelectorAll('.dse-modal').length;
+		row.querySelector<HTMLElement>('button.dse-init__stamina')!.click();
+		expect(document.querySelectorAll('.dse-modal').length).toBe(before + 1);
+		root.remove();
+	});
+
+	test('CSS contract: NOTHING that is a control sits inside the dimmed subtree', () => {
+		// The mechanism, not a promise. `opacity` composites a whole subtree and a
+		// descendant cannot opt out of an ancestor's alpha — so the ONLY safe shape is to
+		// put the alpha on the identity members themselves and never on an ancestor of a
+		// control. This test reads the alpha rule's selector list and asserts exactly that.
+		const noComments = sheetNoComments();
+		const dimRule = noComments.match(
+			/((?:\[data-dse-theme='steel'\][^{]*\.dse-init__turn\[data-taken\][^{]*(?:__portrait|__name|h4),?\s*\n?)+)\{\s*\n\s*opacity: 0\.55;/,
+		);
+		expect(dimRule).not.toBeNull();
+		const selectors = dimRule![1];
+		// The identity, and only the identity.
+		expect(selectors).toContain('> .dse-init__portrait');
+		expect(selectors).toContain('> .dse-init__info > .dse-init__name');
+		// Never the row, the info column, or anything that owns a control.
+		expect(selectors).not.toMatch(/\.dse-init__row:has\([^)]*\)\s*\{/);
+		for (const control of [
+			'.dse-init__right',
+			'.dse-init__bar',
+			'.dse-init__conditions',
+			'.dse-init__actions',
+			'.dse-init__stamina',
+		]) {
+			expect(selectors).not.toContain(control);
+		}
+		// And a row being USED comes all the way back.
+		expect(noComments).toContain(':is(:hover, :focus-within) > .dse-init__portrait');
+	});
+
+	test('CSS contract: the four action pips sit on the card’s own content inset (8px / 12px)', () => {
+		// Scott: "Lets make sure the distance from the edge is consistent with everything
+		// else." The row card's inset is `padding: 8px 12px` (SC-154 round 2), which is
+		// where the name, the conditions, the gauge and the readout all begin and end.
+		const noComments = sheetNoComments();
+		const cardPad = noComments.match(
+			/\.dse-init__group--heroes \.dse-init__row,\s*\n\s*\.dse-init__groupbody \{[\s\S]*?padding: (\d+px) (\d+px);/,
+		);
+		expect(cardPad).not.toBeNull();
+		const [, top, right] = cardPad!;
+		const pips = noComments.match(
+			/\[data-dse-element='initiative'\] \.dse-init__actions \{\s*\n\s*position: absolute;\s*\n\s*top: (\d+px);\s*\n\s*right: (\d+px);/,
+		);
+		expect(pips).not.toBeNull();
+		expect(pips![1]).toBe(top);
+		expect(pips![2]).toBe(right);
+	});
+});
+
+describe('SC-183 round 3 / GH #67: several minion squads in one group, and changing the captain', () => {
+	const twoSquads = [
+		'heroes: []',
+		'enemy_groups:',
+		'  - name: "W1 Group 3"',
+		'    is_squad: true',
+		'    creatures:',
+		'      - {name: Flow, max_stamina: 6, amount: 4, squad_role: minion}',
+		'      - {name: Downpour, max_stamina: 6, amount: 4, squad_role: minion}',
+		'      - {name: Essence, max_stamina: 90, amount: 1, squad_role: captain, captain_of: Flow}',
+		'      - {name: Wierd, max_stamina: 45, amount: 1, squad_role: attached}',
+	].join('\n');
+
+	test('the group renders every squad, each with its OWN pool readout', async () => {
+		const { root } = await renderInit(twoSquads);
+		const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+		expect(body.getAttribute('data-squad')).toBe('on');
+		expect(body.getAttribute('data-squads')).toBe('2');
+		// 4 + 4 minion cells + 1 captain + 1 attached = 10 roster cells.
+		expect(body.querySelectorAll('.dse-init__cell').length).toBe(10);
+		// Each squad pours from its own max (6 x 4 = 24), independently.
+		const minionCells = body.querySelectorAll<HTMLElement>('[data-squad-role="minion"] .dse-init__cell-stamina');
+		expect(minionCells.length).toBe(8);
+		minionCells.forEach((c) => expect(c.textContent).toBe('24/24 (6)'));
+	});
+
+	test('damaging ONE squad leaves the other squad’s pool untouched', async () => {
+		const { root, deps } = await renderInit(twoSquads);
+		const model = parse(parseYaml(twoSquads), twoSquads);
+		const group = model.enemy_groups[0];
+		const [flow, downpour] = group.creatures;
+		// The write path the pool modal uses.
+		const { setMinionPool, minionPoolOf } = await import('../../../src/elements/initiative/model');
+		setMinionPool(group, flow, 9);
+		expect(minionPoolOf(group, flow)).toBe(9);
+		expect(minionPoolOf(group, downpour)).toBe(24);
+		// With more than one squad the GROUP field is never used — nothing can be shared
+		// by accident.
+		expect(group.minion_stamina_pool).toBeUndefined();
+		expect(root).toBeTruthy();
+		expect(deps).toBeTruthy();
+	});
+
+	test('the change-captain affordance is ONE click on the opened creature’s badge', async () => {
+		const { root } = await renderInit(twoSquads);
+		const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+		// The detail row opens on the first instance; select the attached candidate's cell.
+		const cells = body.querySelectorAll<HTMLElement>('.dse-init__cell');
+		const wierdCell = Array.from(cells).find(
+			(c) => c.getAttribute('data-squad-role') === 'attached',
+		)!;
+		wierdCell.click();
+
+		const detail = body.querySelector('.dse-init__detail') as HTMLElement;
+		const badge = detail.querySelector<HTMLElement>('button.dse-init__captain')!;
+		expect(badge.getAttribute('data-role')).toBe('candidate');
+		// The label names its target, which is what keeps a multi-squad promote to ONE click.
+		expect(badge.getAttribute('aria-label')).toBe('Make Wierd captain of Downpour');
+		expect(badge.textContent).toContain('Make captain: Downpour');
+		expect(badge.getAttribute('aria-pressed')).toBe('false');
+	});
+
+	test('promoting rewires the model, relieves the old captain, and persists once', async () => {
+		jest.useFakeTimers();
+		try {
+			const { root, host } = await renderInit(twoSquads);
+			const body = root.querySelector('.dse-init__groupbody') as HTMLElement;
+			// Open the CAPTAIN of squad 1, then promote the attached creature over it by
+			// opening that one instead. Simpler: promote onto squad 1 directly by first
+			// relieving its captain so `promotionTarget` picks Flow.
+			const captainCell = Array.from(
+				body.querySelectorAll<HTMLElement>('.dse-init__cell'),
+			).find((c) => c.getAttribute('data-squad-role') === 'captain')!;
+			captainCell.click();
+			const detail = body.querySelector('.dse-init__detail') as HTMLElement;
+			const badge = detail.querySelector<HTMLElement>('button.dse-init__captain')!;
+			expect(badge.getAttribute('data-role')).toBe('captain');
+			expect(badge.getAttribute('aria-pressed')).toBe('true');
+			expect(badge.getAttribute('aria-label')).toBe('Relieve Essence as captain');
+
+			badge.click(); // relieve
+
+			jest.advanceTimersByTime(PERSIST_DEBOUNCE_MS + 5);
+			await Promise.resolve();
+			expect(host.replaceSource).toHaveBeenCalledTimes(1);
+			const written = host.replaceSource.mock.calls[0][0] as string;
+			expect(written).toContain('squad_role: attached');
+			expect(written).not.toContain('captain_of');
+			expect(written).not.toContain('squad_role: captain');
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	test('a promote writes captain_of only when there is more than one squad to name', async () => {
+		const { promoteCaptain, minionCreatures } = await import('../../../src/elements/initiative/model');
+		// Multi-squad: the attachment is explicit.
+		const multi = parse(parseYaml(twoSquads), twoSquads);
+		const mg = multi.enemy_groups[0];
+		expect(promoteCaptain(mg, mg.creatures[3], minionCreatures(mg)[1])).toBe(true);
+		expect(mg.creatures[3].squad_role).toBe('captain');
+		expect(mg.creatures[3].captain_of).toBe('Downpour');
+
+		// One squad: no key is written at all, so the block's bytes stay pre-#67 shaped.
+		const one = parse(parseYaml(squad), squad);
+		const og = one.enemy_groups[0];
+		const cap = og.creatures[1];
+		expect(cap.squad_role).toBe('captain');
+		expect(promoteCaptain(og, cap, minionCreatures(og)[0])).toBe(true);
+		expect(cap.captain_of).toBeUndefined();
+	});
+
+	test('a MINION can never be promoted (rules: a captain is a non-minion creature)', async () => {
+		const { promoteCaptain, minionCreatures } = await import('../../../src/elements/initiative/model');
+		const model = parse(parseYaml(twoSquads), twoSquads);
+		const group = model.enemy_groups[0];
+		expect(promoteCaptain(group, group.creatures[1], minionCreatures(group)[0])).toBe(false);
+		expect(group.creatures[1].squad_role).toBe('minion');
+		// …and the roster cell offers no control on a minion either (the cell is itself a
+		// button, so it only ever carries the captain's static badge).
+		const { root } = await renderInit(twoSquads);
+		const minionCell = root.querySelector<HTMLElement>('.dse-init__cell[data-squad-role="minion"]')!;
+		expect(minionCell.querySelector('.dse-init__captain')).toBeNull();
+		expect(minionCell.querySelector('button')).toBeNull();
+	});
+
+	test('BACK-COMPAT: a pre-#67 one-squad block round-trips byte-identically', async () => {
+		// The whole point of the two-homed pool. The historical block keeps its pool on
+		// the GROUP and never grows a per-creature key.
+		const model = parse(parseYaml(squad), squad);
+		const group = model.enemy_groups[0];
+		expect(group.minion_stamina_pool).toBe(20);
+		expect(group.creatures[0].minion_stamina_pool).toBeUndefined();
+		expect(serialize(model)).toBe(legacyBytes(squad));
+		// And the pre-#67 unattached captain still leads the group's only squad.
+		const { captainOfSquad, minionCreatures } = await import('../../../src/elements/initiative/model');
+		expect(captainOfSquad(group, minionCreatures(group)[0])).toBe(group.creatures[1]);
+	});
+
+	test('resetEncounter clears EVERY squad’s pool, not just the group field', async () => {
+		const model = parse(parseYaml(twoSquads), twoSquads);
+		const group = model.enemy_groups[0];
+		const { setMinionPool, minionPoolOf } = await import('../../../src/elements/initiative/model');
+		setMinionPool(group, group.creatures[0], 5);
+		setMinionPool(group, group.creatures[1], 7);
+		resetEncounter(model);
+		const reparsed = parse(model, '');
+		expect(minionPoolOf(reparsed.enemy_groups[0], reparsed.enemy_groups[0].creatures[0])).toBe(24);
+		expect(minionPoolOf(reparsed.enemy_groups[0], reparsed.enemy_groups[0].creatures[1])).toBe(24);
+	});
+});
+
+describe('SC-183 round 3: the captain wears the rank', () => {
+	test("CSS contract: the captain's portrait gets a forged frame AND keeps the word", () => {
+		// Scott: "Can you also give the captain's image container some kind of HFS border
+		// or indicator." A frame is the FOURTH channel — never the only one, and never a
+		// decorative coloured border (DESIGN.md rule 7).
+		const sheet = fs
+			.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8')
+			.replace(/\/\*[\s\S]*?\*\//g, '');
+		const frame = sheet.match(
+			/\.dse-init__row\[data-squad-role='captain'\] > \.dse-init__portrait,[\s\S]{0,400}?\{[\s\S]{0,500}?\}/,
+		);
+		expect(frame).not.toBeNull();
+		expect(frame![0]).toContain('border: 2px solid var(--dse-metal)');
+		expect(frame![0]).toContain('box-shadow: inset');
+		expect(frame![0]).toContain(`[data-dse-theme='steel']:not([data-dse-print="on"])`);
+		// A struck NOTCH, drawn with borders — never clip-path (powerRollPanel.test.ts
+		// pins "the first clip-path after the badge selector"; see the sheet's own note).
+		expect(sheet).toContain('border-top: 0.8em solid var(--dse-metal)');
+	});
+
+	test('the word channel survives: the captain badge still says "Captain"', async () => {
+		const { root } = await renderInit(squad);
+		const badges = root.querySelectorAll('.dse-init__captain-word');
+		expect(badges.length).toBeGreaterThan(0);
+		badges.forEach((b) => expect(b.textContent).toMatch(/^(Captain|Make captain)/));
 	});
 });

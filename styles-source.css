@@ -1330,6 +1330,19 @@ code.dsa {
         display: none;
     }
 
+    /* SC-183 ROUND 3 — the PORTRAIT TURN OVERLAY, same contract again. On the Steel
+       screen this button IS the turn toggle and the checkbox above stands down; here in
+       the base layer the opposite holds — the overlay renders no box and PRINT keeps the
+       checkbox it has always printed (a tick box you fill in with a pen is what "turn
+       taken" means on paper, and paper has no portrait to click). Because a display:none
+       node contributes no box, both print classes render byte-for-byte what they rendered
+       before round 3. Exactly one of the two controls is ever live. */
+    .dse-init__portrait-toggle,
+    .dse-init__pt-mark,
+    .dse-init__pt-word {
+        display: none;
+    }
+
     @media (max-width: 599px) {
         .dse-init__grid {
             grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
@@ -10095,8 +10108,21 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	border: none;
 	border-radius: 0;
 	box-shadow: none;
-	row-gap: 0.3rem;
+	/* ROUND 3 — Scott: "the stamina bar is lower than it needs to be." Three stacked
+	   gaps put it there, and this is the first: the cluster's own row gap between the
+	   readout and the gauge (0.45rem in the standalone element, already stepped down to
+	   0.3rem for the tracker in round 2). The tracker is a ROW, not a plate — the
+	   readout and its gauge are one object here, so they close up. The other two are the
+	   gauge's own `--dse-g-pad` (§5) and the row grid's `row-gap` (§5). */
+	row-gap: 0.1rem;
 	column-gap: 0.6rem;
+}
+/* The gauge's top padding exists on the standalone plate so the index marks have room
+   to sit outside the channel; at tracker scale it is pure dead height under the
+   numeral. The marks still render (they are positioned against `--dse-ch-h`), just
+   without the plate's breathing room. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init :is(.dse-stamina__cslash, .dse-stamina__cmax) {
+	--dse-g-pad: 0.08rem;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cluster[data-state='dying'] {
 	background: none;
@@ -10134,6 +10160,52 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	font-size: 1.7em;
 }
 
+/* ROUND 3 — THE INSTRUMENT BECOMES ONE LINE. This is the decisive half of Scott's "the
+   stamina bar is lower than it needs to be", and it is a composition fix, not a spacing
+   one.
+
+   The standalone SC-132 plate stacks its readout over its gauge, which is right for a
+   plate: two bands, a squarish object, the numeral given a whole line of prominence.
+   Ported into a tracker ROW the same stack produced a two-band block whose first band was
+   ONE right-aligned numeral with the entire row's width empty beside it — so the row paid
+   a full line of height for a number, and the bar was pushed to the very bottom of a tall
+   card. Read down a roster it looked like a void with a number parked at its right edge.
+
+   Inline, the two are one instrument: the gauge takes the width and the numeral sits at
+   its right end, vertically centred against it. The row loses a whole band of height, the
+   bar rises to sit directly under the conditions line, and the portrait — which did not
+   move — becomes proportionally the row's anchor, which is the other half of Scott's
+   note ("the hero portrait is too small"). The bar still spends most of the row's width,
+   which is the thing he picked the plate FOR in round 1 ("I mostly like the stamina bar
+   taking up a significant portion of the width"). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cnums {
+	grid-area: 1 / 3 / 3 / 4;
+	align-self: center;
+	margin-left: 0.6rem;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__gauge {
+	grid-area: 1 / 2 / 3 / 3;
+	align-self: center;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cluster {
+	align-items: center;
+}
+/* NOT the cell minis: a 50px stud has no numeral inside its cluster to sit beside (the
+   cell's own text readout is a sibling), so the rule is scoped to the ROW bar. */
+
+/* …and at sidebar width it stacks again. Below the container threshold the scarce axis
+   flips from vertical to horizontal: a 1.3em numeral beside the gauge at 300px leaves the
+   gauge too short to read a level off, and a row is allowed to be tall in a sidebar. */
+@container dse-init-host (max-width: 420px) {
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cnums {
+		grid-area: 1 / 3 / 2 / 4;
+		margin-left: 0;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__gauge {
+		grid-area: 2 / 2 / 3 / 4;
+	}
+}
+
 /* -- 5. THE TWO-LANE ROW GRID (the "plate", now unconditional) ------------------ */
 /* Scott picked this over the rail candidate on 2026-08-22 ("The `plate` approach is
    generally better: I mostly like the stamina bar taking up a significant portion of the
@@ -10141,13 +10213,32 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    the rail arm is deleted rather than left as a second shape to keep supporting.
    The row's flex base becomes a grid: identity lane on row 1, the bar as the full lane
    beneath it, the portrait spanning both. */
+/* ROUND 3 — THE REBALANCE. Scott: "look at the overall layout of the hero/monster
+   containers to make sure things feel balanced. For example, right now the hero portrait
+   is too small and the stamina bar is lower than it needs to be."
+
+   Both are symptoms of one thing: round 2's row spent its height on GAPS and its width on
+   a lane that no longer had to be narrow. Four numbers move, and they move together:
+
+     1. `row-gap: 6px → 2px`. The identity lane and the instrument are one actor's card,
+        not two stacked blocks — 6px between them read as a seam.
+     2. the portrait grows 60px → 76px (§5b). It is the row's only picture and its only
+        control now (the turn toggle, §12), so it is the row's anchor; at 60px it was
+        smaller than the numeral beside it. 76px is deliberately still SHORTER than the
+        row's own content stack (~87px), so a bigger portrait costs the row no height at
+        all — it fills space the row was already reserving.
+     3. the turn box's column disappears from the grid on screen (§12), giving the
+        portrait and the identity lane the ~26px it held.
+     4. `align-items: center` → `start` + an explicit centred portrait: with a two-row
+        span, centring every item made row 2 centre its bar inside whatever height the
+        span produced, which is the third of the three gaps that pushed the bar down. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row {
 	display: grid;
 	grid-template-columns: auto auto minmax(0, 1fr);
 	grid-template-rows: auto auto;
 	column-gap: 10px;
-	row-gap: 6px;
-	align-items: center;
+	row-gap: 2px;
+	align-items: start;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__turnbox {
 	grid-row: 1;
@@ -10156,6 +10247,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__portrait {
 	grid-row: 1 / 3;
 	grid-column: 2;
+	align-self: center;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row > .dse-init__info {
 	grid-row: 1;
@@ -10171,12 +10263,43 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	grid-template-columns: auto minmax(0, 1fr);
 	grid-template-rows: auto auto;
 	column-gap: 10px;
-	row-gap: 6px;
-	align-items: center;
+	row-gap: 2px;
+	align-items: start;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row > .dse-init__portrait {
 	grid-row: 1 / 3;
 	grid-column: 1;
+	align-self: center;
+}
+
+/* -- 5b. THE PORTRAIT'S SCALE (round 3) ----------------------------------------- */
+/* Screen-only, so print keeps the 60px picture it has always printed and the frozen
+   pairs cannot move. The fallback capsule (SC-162's shield/skull) tracks the same
+   number — it exists to be exactly the size of the picture it stands in for.
+   The GRID CELL portrait is deliberately NOT scaled: a roster of 50px studs is a
+   different instrument (a count, not an identity), and growing it would cost the cells
+   their columns at every width. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait {
+	position: relative;
+	width: 76px;
+	height: 76px;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait img,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait .dse-init__portrait-fallback {
+	width: 76px;
+	height: 76px;
+	border-radius: var(--dse-radius);
+}
+/* The identity lane's name reserves the corner pips' width (§11) so a long actor name
+   can never run under them. Only the NAME needs it — the pips are one line tall and the
+   conditions row sits below them. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__info > .dse-init__name {
+	padding-right: 7em;
+}
+/* Round 3 — the conditions line's 5px lead was the fourth gap in the stack; the state
+   chip and the icons are the name's own annotations, so they sit close under it. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__info > .dse-init__conditions {
+	margin-top: 1px;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__detail.dse-init__row > .dse-init__info {
 	grid-row: 1;
@@ -10314,6 +10437,82 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	box-shadow: 0 0 5px var(--dse-select);
 }
 
+/* -- 8b. THE CAPTAIN'S PORTRAIT WEARS THE RANK (round 3) ------------------------ */
+/* Scott, 2026-08-22: "Can you also give the captain's image container some kind of HFS
+   border or indicator."
+
+   A FORGED SETTING, not a coloured outline (DESIGN.md rule 7 bans the decorative accent
+   border, and a hue alone would be invisible to Scott anyway). Three layers, all of them
+   materials the Steel language already owns:
+     1. an outer 2px `--dse-metal` frame — the picture is MOUNTED, not merely bordered;
+     2. an inset catch-light + shadow pair (`--dse-bevel`'s own logic, inlined at portrait
+        scale) so the frame reads as milled metal with the picture recessed inside it;
+     3. a struck corner NOTCH at the top-left, the same 45° cut the statblock head band
+        uses — a silhouette, so the rank survives greyscale.
+   The crown+WORD badge stays exactly where it was: the frame is the fourth channel, never
+   the only one. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row[data-squad-role='captain'] > .dse-init__portrait,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell[data-squad-role='captain'] .dse-init__cell-portrait {
+	position: relative;
+	box-sizing: border-box;
+	padding: 2px;
+	border: 2px solid var(--dse-metal);
+	border-radius: calc(var(--dse-radius) + 2px);
+	background: linear-gradient(150deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.3));
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row[data-squad-role='captain'] > .dse-init__portrait,
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell[data-squad-role='captain'] .dse-init__cell-portrait {
+	background: linear-gradient(150deg, rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0.1));
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+/* The struck notch: a 45° corner cut in the frame's own metal, so the mount reads as
+   forged rather than as a rectangle with a sticker on it. `::before` is free on both
+   hosts — the portrait wrapper and the cell-portrait span each carry only an
+   <img>/fallback.
+   FOOTGUN, hit and fixed here: the triangle is drawn with BORDERS, not `clip-path`.
+   powerRollPanel.test.ts pins the tier badges' polygons as "the first `clip-path` after
+   the selector" in the built sheet, so ANY new clip-path anywhere downstream of those
+   badge rules is read as one of them and fails that test with a wildly confusing diff.
+   The same trap is already documented one section up for `clip: rect()` vs `clip-path`
+   in §1's visually-hidden rule — this is its second sighting. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row[data-squad-role='captain'] > .dse-init__portrait::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__cell[data-squad-role='captain'] .dse-init__cell-portrait::before {
+	content: '';
+	position: absolute;
+	top: -2px;
+	left: -2px;
+	width: 0;
+	height: 0;
+	border-top: 0.8em solid var(--dse-metal);
+	border-right: 0.8em solid transparent;
+	pointer-events: none;
+}
+
+/* -- 8c. THE CHANGE-CAPTAIN CONTROL (round 3) ----------------------------------- */
+/* Scott, round 1: "it should be easy to change the squad leader when needed." The badge
+   IS the control now (GH #67 gave it real targets — see view.ts's own note): the
+   captain's badge relieves, every other non-minion creature's badge promotes. One click,
+   never a menu. A candidate's badge is a GHOST of the captain's — same crown, same shape,
+   hollow ink — so the two states are told apart by weight and word, not by hue. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] button.dse-init__captain {
+	min-height: 0;
+	min-width: 0;
+	background: none;
+	cursor: pointer;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain[data-role='candidate'] {
+	color: var(--dse-fg-muted);
+	border-style: dashed;
+	opacity: 0.75;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] button.dse-init__captain:is(:hover, :focus-visible) {
+	color: var(--dse-accent);
+	border-color: var(--dse-accent);
+	border-style: solid;
+	opacity: 1;
+}
+
 /* -- 9. The tracker's narrow form ----------------------------------------------- */
 /* A CONTAINER query, not a media query: the thing that decides is the TRACKER's width
    (a note pane, a split, a sidebar leaf), never the window's — the same reasoning as the
@@ -10360,129 +10559,163 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 }
 
 /* ================================================================== */
-/*   11. TURN-ECONOMY CANDIDATES (hidden `initTurn` review switch)      */
+/*   11. THE SPENT ROW + THE CORNER PIPS (round 3: `dim` promoted)      */
 /* ================================================================== */
 /*
-   Scott, SC-183 comment 2026-08-22, on the two controls this section reshapes:
+   SCOTT'S ROUND-3 RULING (SC-183 comment, 2026-08-22): "The `dim` approach is generally
+   the direction I want to go." So the round-2 A/B is over: `dim` is now the tracker's
+   own layout, the `spine` and `gutter` branches are deleted rather than left as two more
+   shapes to keep supporting, and the `initTurn` key, its A/B test and its five candidate
+   shots go with them — the same promotion shape SC-154's `5360fe9` established and
+   round 2 applied to `initStamina`.
 
-     "the actions taken (main, maneuver, etc) is taking up too much space. At the same
-      time, they are the same general idea as the turn-taken box on the left-side of the
-      hero portrait which is also horribly out of place now. I think we need to spend
-      some time figuring out a good solution here."
-     "Goal of the turn-taken tracker … is to quickly and easily see who has taken their
-      turn within a round at a glance. Originally it was outside the container so a quick
-      scan down the left side would get the user the info they needed. Not opposed to
-      keeping that design, but maybe we can do better"
-     "The actions-taken tracker within each hero's container is more niche … it should be
-      minimal overhead and avoids cluttering the UI. That said, if its going to be
-      included at all, each one needs to be a one-click (like it is today) because having
-      multiple clicks (like a dropdown or something) is too much overhead when a
-      GM/Director is running a combat."
+   TWO THINGS CHANGED IN THE PROMOTION, both from the same comment.
 
-   So this is OPTIONS, not a pick. Three candidates behind `data-dse-init-turn`, default
-   `current` = the layout above, unchanged, so the default picture cannot drift while the
-   options are judged (the SC-154 round-3 review-switch pattern).
+   1. "The dimming of the container is very stylish and I like it visually, but the
+       Director/GM will still need to interact with the containers to adjust health even
+       when its not their turn."
 
-   THE INVARIANTS EVERY CANDIDATE KEEPS, by construction:
-     - ONE CLICK PER ACTION. Every candidate reflows the same four real
-       `button.dse-init__action-toggle` elements with the same single-click handlers.
-       No candidate introduces a menu, a popover or a second click. (This is why they are
-       CSS: a candidate physically cannot change the interaction.)
-     - The turn control stays the row's first child and stays one click.
-     - Every state keeps a non-colour channel: the check/dot glyph swap on the turn
-       control (§4.7) and, on the pip treatments, four distinct SILHOUETTES rather than
-       four tints (Scott is colourblind). Initials were rejected outright — Main,
-       Maneuver and Move all begin with M.
+      Round 2's candidate did this with `opacity: .5; filter: saturate(.55)` on the ROW.
+      That is exactly the shape of the problem he names: `opacity` composites the whole
+      subtree, a descendant cannot opt out of an ancestor's alpha, and the things it
+      washes out are precisely the ones the Director still has to use — the stamina
+      numeral, the gauge, the condition icons, the action pips. (They stayed clickable —
+      alpha does not hit-test — but a control you have to squint at is impeded whether or
+      not the pointer lands on it.)
+
+      So the dim is REBUILT, not tuned. Nothing that is a control is dimmed at all:
+        - the row's GROUND goes quiet (a flatter, cooler plate) and its border drops to
+          the faintest metal — that is where "spent stock" actually lives, and it is the
+          bulk of what the eye scans;
+        - the IDENTITY recedes: the portrait and the name take the alpha, because they
+          are what identifies a row you no longer need to act on;
+        - the INSTRUMENTS AND CONTROLS keep full contrast: `.dse-init__right`,
+          `.dse-init__bar`, `.dse-init__conditions` and `.dse-init__actions` are outside
+          the dimmed subtree by construction (the alpha is on siblings, never on an
+          ancestor of theirs), so the numeral, the gauge, its state colour, the condition
+          icons and the four pips read exactly as they do on a row still in play.
+      And on top of that, a row that is being USED comes all the way back:
+      `:hover, :focus-within` restores the identity to full — so reaching into a spent
+      row to edit its stamina un-spends its look for as long as you are in it. The
+      transition is the house 0.15s (DESIGN.md rule 4: hover-lift and 0.15–0.2s
+      transitions, nothing else).
+
+   2. "The 4 action pips in the corner are great. Lets make sure the distance from the
+       edge is consistent with everything else."
+
+      They sat at `top: 6px; right: 10px`, which matched nothing. The row card's own
+      content inset is `8px 12px` (SC-154 round 2, itself taken verbatim from
+      `.dse-party__member` so the two families share one card rhythm), and that is what
+      "everything else" in this row means: the name, the conditions, the gauge and the
+      readout all begin and end on those edges. The pips now do too — they are content
+      sitting in the card's top-right corner, so they line up with the content, not with
+      an arbitrary pair of numbers.
+
+      (The element CHROME panel's `--dse-chrome-inset: 10px` is the other placement
+      number in the system, and it is deliberately NOT the one used here: that inset
+      measures an OUT-OF-FLOW panel against the element root's visible frame, from
+      outside it. These pips are in-card content. Using the chrome number would align
+      them to a frame two levels up and half a pixel out of step with everything they
+      actually sit beside.)
 */
 
-/* -- 11a. `spine` — the turn state becomes the row's left EDGE ------------------ */
-/* Answers the scan goal literally: the turn control grows into a full-height spine on
-   the row's left edge, so a glance down the left side of the tracker reads who has gone
-   without landing on any individual row. The actions, meanwhile, stop owning a line of
-   their own and fold up onto the conditions row, held right — the cheapest possible way
-   to make them "minimal overhead" while keeping their words (no decoding). */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__group--heroes .dse-init__row > .dse-init__turnbox {
-	grid-row: 1 / 3;
-	align-self: stretch;
-	width: 0.8em;
-	height: auto;
-	border-radius: 3px;
-	background: var(--dse-surface);
+/* -- 11a. The spent row: quiet GROUND, receded identity, live controls ---------- */
+/* The spent ground is a TEXTURE change, not only a brightness change: a fine milled
+   hatch over a darker, flatter plate. Texture is what makes the state readable down a
+   whole roster at a glance (and in both schemes, and in greyscale) without taking a
+   single lumen off anything the Director has to read. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row:has(.dse-init__turn[data-taken]),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]) {
+	background:
+		repeating-linear-gradient(
+			135deg,
+			rgba(0, 0, 0, 0.17) 0,
+			rgba(0, 0, 0, 0.17) 3px,
+			rgba(255, 255, 255, 0.018) 3px,
+			rgba(255, 255, 255, 0.018) 6px
+		),
+		linear-gradient(104deg, rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0.44)),
+		var(--dse-card-bg);
+	border-color: var(--dse-metal-faint);
+	box-shadow: none;
+	transition: background 0.15s ease, border-color 0.15s ease;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__grouphead > .dse-init__turnbox {
-	align-self: stretch;
-	width: 0.8em;
-	height: auto;
-	border-radius: 3px;
-	background: var(--dse-surface);
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row:has(.dse-init__turn[data-taken]),
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]) {
+	background:
+		repeating-linear-gradient(
+			135deg,
+			rgba(0, 0, 0, 0.055) 0,
+			rgba(0, 0, 0, 0.055) 3px,
+			rgba(255, 255, 255, 0.5) 3px,
+			rgba(255, 255, 255, 0.5) 6px
+		),
+		linear-gradient(104deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.075)),
+		var(--dse-card-bg);
 }
-/* The glyph rides at the TOP of the spine (where the eye enters the row) instead of
-   stretching to fill it; the spine's own fill is what carries the state at a distance. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__turnbox .dse-init__turn svg {
-	margin: 2px 0 0;
-	width: 100%;
-	height: 0.7em;
-	background-color: transparent;
-	border-radius: 0;
+/* The identity — and ONLY the identity — takes the alpha. Listing the two members
+   explicitly (rather than dimming the row and exempting the rest) is the whole point:
+   `opacity` on an ancestor cannot be undone by a descendant, so there is no way to
+   write the exemption if the alpha ever moves up a level. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]) > .dse-init__portrait,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]) > .dse-init__info > .dse-init__name,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]) > .dse-init__grouphead > h4 {
+	opacity: 0.55;
+	filter: saturate(0.5);
+	transition: opacity 0.15s ease, filter 0.15s ease;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__turnbox:has(.dse-init__turn[data-taken]) {
-	background: var(--dse-turn-done);
-	border-color: var(--dse-turn-done);
+/* The INSTRUMENT is dimmed a little too — but only a little, and it is measured, not
+   guessed: the numeral and the gauge fills stay above the 4.5:1 body-text bar against
+   the spent ground at this alpha (the round-3 report carries the probe's numbers). It is
+   here so the row's biggest coloured object joins the recession instead of shouting from
+   a quiet card; anything lower would start to cost legibility, which is the whole thing
+   Scott's note is about. The condition icons, the state chip, the four pips and the
+   focusable numeric control are NOT in this list — they stay at full strength. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]) > .dse-init__bar {
+	opacity: 0.82;
+	transition: opacity 0.15s ease;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__turnbox:has(.dse-init__turn[data-taken]) .dse-init__turn svg {
-	color: var(--dse-surface);
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__bar {
+	opacity: 1;
 }
-/* The identity lane becomes one wrapping flex row: the name takes a line of its own,
-   then conditions and the (shrunken) action chips share the next one. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__info {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	column-gap: 8px;
+/* A row being USED is not a spent row. Hover or keyboard focus anywhere inside it brings
+   the identity back to full — the direct answer to "the Director/GM will still need to
+   interact with the containers … even when its not their turn". */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__portrait,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__info > .dse-init__name,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]):is(:hover, :focus-within) > .dse-init__grouphead > h4 {
+	opacity: 1;
+	filter: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__name {
-	flex: 1 0 100%;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__actions {
-	margin-top: 0;
-	margin-left: auto;
-	gap: 3px;
-	font-size: 0.62em;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='spine'] .dse-init__action-toggle {
-	padding: 0 4px;
-}
-
-/* -- 11b. `dim` — the turn state is the row's own MATERIAL ---------------------- */
-/* The row that has gone reads as spent stock: dimmed and desaturated, so the rows still
-   in play are the only bright things on screen — the scan target is the absence of dim,
-   which is even faster than reading a column of checkboxes. The check glyph stays (dim
-   is never the only channel), but the box shrinks out of the way. The actions become
-   four silhouette pips parked in the row's top-right corner, off the identity lane
-   entirely. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__group--heroes .dse-init__row:has(> .dse-init__turnbox .dse-init__turn[data-taken]),
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]) {
-	opacity: 0.5;
-	filter: saturate(0.55);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__turnbox {
-	width: 1.15em;
-	height: 1.15em;
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within),
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]):is(:hover, :focus-within) {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12)), var(--dse-card-bg);
 	border-color: var(--dse-metal-faint);
 }
-/* Four pips in the corner. `position: absolute` against the row (which already declares
-   `position: relative` for its hairline ornaments), so the identity lane reclaims the
-   whole line the checklist used to occupy. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__actions {
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__group--heroes .dse-init__row:has(.dse-init__turn[data-taken]):is(:hover, :focus-within),
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__groupbody:has(> .dse-init__grouphead .dse-init__turn[data-taken]):is(:hover, :focus-within) {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.02)), var(--dse-card-bg);
+}
+/* Motion preference: the restore is instant rather than absent, so the affordance still
+   works with animation off. */
+@media (prefers-reduced-motion: reduce) {
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row *,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row {
+		transition-duration: 0s;
+	}
+}
+
+/* -- 11b. The four action pips, on the card's own content inset ----------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__actions {
 	position: absolute;
-	top: 6px;
-	right: 10px;
+	/* THE consistency numbers: the row card's `padding: 8px 12px` (see §11's note). */
+	top: 8px;
+	right: 12px;
 	margin-top: 0;
 	gap: 3px;
 	font-size: 1em;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='dim'] .dse-init__action-toggle,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__action-toggle {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -10494,103 +10727,321 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	color: var(--dse-fg-muted);
 }
 /* The pip shows the SILHOUETTE; the word stays in the DOM as the button's accessible
-   name (and its tooltip), it just stops being painted. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-toggle .dse-btn__text {
+   name (and its tooltip), it just stops being painted. Four distinguishable SHAPES, not
+   four tints (Scott is colourblind) — and never initials, since Main, Maneuver and Move
+   all begin with M. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle .dse-btn__text {
 	display: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-icon {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-icon {
 	display: inline-flex;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-icon svg {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-icon svg {
 	width: 0.85em;
 	height: 0.85em;
 }
-/* Pressed = "spent": the pip fills, exactly as the word chip does today. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative']:is([data-dse-init-turn='dim'], [data-dse-init-turn='gutter']) .dse-init__action-toggle:is([data-pressed], [aria-pressed='true']) {
+/* Pressed = "spent": the pip fills, exactly as the word chip did. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle:is([data-pressed], [aria-pressed='true']) {
 	background: var(--dse-accent);
 	border-color: var(--dse-accent);
 	color: var(--dse-accent-fg);
 }
 
-/* -- 11c. `gutter` — one left column owns the whole turn economy ---------------- */
-/* The synthesis Scott's two paragraphs point at: turn-taken and actions-taken are "the
-   same general idea", so they share one narrow column at the row's left edge — the turn
-   control on top (the left-side scan, preserved) with the four action pips as a 2x2 grid
-   directly beneath it. The identity lane is left holding only name and conditions, and
-   the stamina lane keeps the full width Scott asked for.
-   `display: contents` on the info column is what makes this possible without touching
-   the DOM: it dissolves the wrapper so name/conditions/actions become grid items of the
-   row itself and can be placed independently. Steel-screen-only, so print still renders
-   the real nested boxes.
+/* ================================================================== */
+/*   12. THE PORTRAIT IS THE TURN CONTROL                              */
+/*       (+ the hidden `initPortrait` candidate switch)                */
+/* ================================================================== */
+/*
+   Scott, 2026-08-22: "I think we actually can drop the dedicated checkbox for taking
+   turns and instead use the portrait to toggle whether someone has taken a turn. Im not
+   sure what I want to do to indicate it though… fading would look great, but its a bit
+   subtle and not very discoverable. A 'check' overlay on the portrait is also an option,
+   but its not as pretty. What other options do you think might be viable?"
 
-   FOOTGUN, hit and fixed in this round: `display: contents` changes the BOX tree, not
-   the DOM tree, so `.dse-init__row > .dse-init__name` still does not match — the child
-   combinator reads parentage, and the name's parent is `.dse-init__info` no matter what
-   it is displayed as. The placements below therefore all spell out
-   `> .dse-init__info > …`. Get this wrong and the rules silently do nothing while
-   auto-placement scatters the members across the grid, which is exactly how the first
-   cut of this candidate rendered. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row {
-	grid-template-rows: auto auto auto;
-	align-items: start;
+   TWO SEPARATE THINGS, and only the second is undecided.
+
+   SETTLED — the control. The checkbox is gone from the screen; the portrait is the
+   toggle. It is a REAL button (`.dse-init__portrait-toggle`, view.ts) laid over the
+   picture: one click, `aria-pressed`, its own accessible name, a tab stop, and a
+   hover/focus affordance so it still reads as a control rather than as a picture that
+   happens to react. The checkbox BOX stays in the DOM and stays PRINT's control — see
+   view.ts's own note for both reasons (paper has no portrait to click; and deleting a
+   rendered box would move every frozen `initiative*` print pair for no screen gain).
+   Exactly one of the two is live at a time.
+
+   THE PORTRAITS-OFF EXCEPTION, at the bottom of this section: `data-dse-portraits="off"`
+   hides portraits, which would take the turn control with them. Under that preference
+   the checkbox comes back and the overlay stands down. This is the one way the design
+   can lose a control, so it is a rule AND a test, not a note.
+
+   UNDECIDED — the MARK. Four candidates behind `data-dse-init-portrait`, all of them the
+   same DOM (one button, one mark node, one word node) and the same single click, so no
+   candidate can change behaviour and none can move a frozen pair. Neither of the two
+   Scott already named is among them: plain fading is what he called too subtle, and a
+   bare check overlay is what he called not pretty. What every candidate must do instead:
+     - be readable at a GLANCE down a full roster (that is the whole job of the tracker),
+     - never carry its meaning in colour alone (the mark is a SHAPE and, where it fits,
+       a WORD; `aria-pressed` is the third channel),
+     - stay legible at a 300px sidebar leaf,
+     - and still look like a control before it is pressed (the hover/focus ghost).
+*/
+
+/* -- 12a. The overlay control (all candidates) ---------------------------------- */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle {
+	display: flex;
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	align-items: flex-end;
+	justify-content: center;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	border-radius: var(--dse-radius);
+	overflow: hidden;
+	cursor: pointer;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row {
-	grid-template-rows: auto auto auto;
-	align-items: start;
+/* The mark and the word are the two channels every candidate paints with; both start
+   invisible so an untaken portrait is just a portrait. */
+/* `display` is what the base sheet hides them with, so the screen layer has to hand it
+   back before `opacity` means anything — a candidate that only sets opacity on a
+   display:none node paints nothing at all (hit, and fixed, in this round's first sweep:
+   `shutter`'s DONE word was invisible for exactly this reason). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-mark,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-word {
+	display: block;
+	opacity: 0;
+	pointer-events: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__info {
-	display: contents;
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-word {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	font-size: 0.62em;
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.12em;
+	line-height: 1.6;
+	text-align: center;
+	color: var(--dse-heading);
+	background: rgba(0, 0, 0, 0.62);
 }
-/* Hero row: gutter is column 1, portrait column 2, content column 3. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__portrait {
-	grid-row: 1 / 4;
+/* THE DISCOVERABILITY AFFORDANCE. Before it is pressed the portrait must still say "I am
+   a control": on hover/focus it lifts a faint steel wash and a GHOST of the same mark the
+   candidate will strike, so the gesture is learnable without a label. Focus-visible gets
+   the real focus ring the kit puts on every other control. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible)::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: rgba(77, 184, 199, 0.16);
+	border: 1px solid var(--dse-accent);
+	border-radius: var(--dse-radius);
+	transition: background 0.15s ease;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__info > .dse-init__name {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:hover:not([data-taken]) .dse-init__pt-mark {
+	opacity: 0.45;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-mark svg {
+	width: 1.6em;
+	height: 1.6em;
+}
+
+/* -- 12b. `seal` — a struck steel seal in the corner (DEFAULT) ------------------ */
+/* Addition, not subtraction: the picture stays fully lit and legible — the answer to
+   "fading … is a bit subtle" — and the state arrives as a milled disc pressed into the
+   portrait's lower-right corner, bearing the brand's ◆ diamond, with the frame turning to
+   engraved metal around it. At roster scale the eye reads a row of discs; up close it
+   reads a stamp. Word channel: the seal's disc plus the `aria-pressed` state; the printed
+   word is not shown (it would fight the seal for the same corner). */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] {
+	box-shadow: inset 0 0 0 2px var(--dse-metal), inset 0 0 12px rgba(0, 0, 0, 0.55);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
+	opacity: 1;
+	position: absolute;
+	right: 3px;
+	bottom: 3px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.1em;
+	height: 2.1em;
+	border-radius: 50%;
+	background: radial-gradient(circle at 32% 28%, #e9eef1, #939ea4 58%, #4c555a);
+	border: 1px solid rgba(0, 0, 0, 0.55);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+	color: #23282b;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
+	display: none;
+}
+/* The ◆ is the brand's own connective mark (DESIGN.md, "The ◆ diamond motif"), struck
+   into the disc rather than drawn on it: a rotated square with an inset shadow. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before {
+	content: '';
+	width: 0.78em;
+	height: 0.78em;
+	transform: rotate(45deg);
+	background: rgba(0, 0, 0, 0.55);
+	box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* -- 12c. `shutter` — a slatted portcullis drops over the portrait -------------- */
+/* The loudest of the four at roster scale: the whole tile changes TEXTURE, not just its
+   brightness, so a scan down the column separates "gone" from "to go" without focusing
+   on any row. The slats are a repeating linear-gradient over a translucent ground, so
+   the face stays half-visible behind them (you can still tell who it is) and the word
+   DONE is cut across the middle as the second channel. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='shutter'] .dse-init__portrait-toggle[data-taken] {
+	background:
+		repeating-linear-gradient(
+			180deg,
+			rgba(0, 0, 0, 0.72) 0,
+			rgba(0, 0, 0, 0.72) 3px,
+			rgba(190, 200, 206, 0.34) 3px,
+			rgba(190, 200, 206, 0.34) 5px
+		);
+	box-shadow: inset 0 0 0 2px var(--dse-metal);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='shutter'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-word {
+	opacity: 1;
+	top: 50%;
+	bottom: auto;
+	transform: translateY(-50%);
+	font-size: 0.72em;
+	letter-spacing: 0.22em;
+	background: rgba(0, 0, 0, 0.8);
+	color: #e7edf0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='shutter'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
+	opacity: 0;
+}
+
+/* -- 12d. `sheathe` — cold stone and crossed blades ----------------------------- */
+/* The portrait goes COLD: fully desaturated (a greyscale filter, not an alpha — the
+   picture keeps all of its contrast, it just loses its life) and struck with an X of two
+   milled bars. Two independent non-colour channels, which is why this one survives both
+   colourblindness and a 300px leaf: the tile turns grey AND gains a shape no other state
+   has. The rim goes to a bright catch-light so the frame still reads as metal. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__row > .dse-init__portrait:has(.dse-init__portrait-toggle[data-taken]) img,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__row > .dse-init__portrait:has(.dse-init__portrait-toggle[data-taken]) .dse-init__portrait-fallback {
+	filter: grayscale(1) contrast(1.08) brightness(0.92);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] {
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), inset 0 0 0 3px rgba(0, 0, 0, 0.45);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
+	opacity: 1;
+	position: absolute;
+	inset: 0;
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
+	display: none;
+}
+/* The two struck bars. `::before`/`::after` on the mark node, each a full-width 4px bar
+   rotated to the diagonal — a shape the tracker uses nowhere else, so it can only mean
+   this. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before,
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: -14%;
+	width: 128%;
+	height: 4px;
+	background: linear-gradient(180deg, #e2e8eb, #8e989e 55%, #4c555a);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before {
+	transform: translateY(-50%) rotate(38deg);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::after {
+	transform: translateY(-50%) rotate(-38deg);
+}
+
+/* -- 12e. `laurel` — a forged ring and a TURN DONE banner ----------------------- */
+/* The gentlest of the four ON THE PICTURE: nothing covers it and nothing greys it, so
+   the mark itself is entirely added chrome. (The picture is still touched by §11a's row
+   recession — that is the promoted `dim` layout, not this candidate; the difference is
+   that no candidate rule takes anything away here.) A forged ring closes around the
+   portrait — it is SET into the frame — and a banner along its foot carries the word.
+   The ring is a double box-shadow rather than a border so it eats none of the picture. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='laurel'] .dse-init__portrait-toggle[data-taken] {
+	box-shadow:
+		inset 0 0 0 3px var(--dse-metal),
+		inset 0 0 0 4px rgba(0, 0, 0, 0.55),
+		inset 0 2px 0 rgba(255, 255, 255, 0.28);
+	border-radius: var(--dse-radius);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='laurel'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-word {
+	opacity: 1;
+	left: 3px;
+	right: 3px;
+	bottom: 3px;
+	font-size: 0.58em;
+	letter-spacing: 0.14em;
+	background: linear-gradient(180deg, rgba(120, 130, 137, 0.95), rgba(52, 60, 65, 0.95));
+	color: #eef3f5;
+	border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='laurel'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
+	opacity: 0;
+}
+
+/* -- 12f. The checkbox stands down (and comes back when portraits are off) ------ */
+/* On the Steel screen the hero row's checkbox is gone: the portrait is the control. The
+   GROUP header keeps its checkbox, deliberately — a group has no portrait to click, and
+   inventing one would mean inventing an identity the encounter data does not have.
+   (A spent group is still obvious: §11a quiets its whole body.) */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__turnbox {
+	display: none;
+}
+/* THE EXCEPTION. With portraits off there is no portrait to click, so the checkbox is
+   the control again and the overlay stands down. Without this pair the preference would
+   silently delete the turn toggle. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__row > .dse-init__turnbox {
+	display: block;
 	grid-row: 1;
-	grid-column: 3;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__info > .dse-init__conditions {
-	grid-row: 2;
-	grid-column: 3;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__bar {
-	grid-row: 3;
-	grid-column: 3;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__group--heroes .dse-init__row > .dse-init__info > .dse-init__actions {
-	grid-row: 2 / 4;
 	grid-column: 1;
 }
-/* Detail row: no turn box, so the gutter holds the pips alone under the portrait. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__portrait {
-	grid-row: 1 / 3;
-	grid-column: 1;
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-portraits='off'] .dse-init__portrait-toggle {
+	display: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__info > .dse-init__name {
-	grid-row: 1;
-	grid-column: 2;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__info > .dse-init__conditions {
-	grid-row: 2;
-	grid-column: 2;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__bar {
-	grid-row: 3;
-	grid-column: 2;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__detail.dse-init__row > .dse-init__info > .dse-init__actions {
-	grid-row: 3;
-	grid-column: 1;
-	justify-self: center;
-}
-/* The 2x2 pip block itself. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-turn='gutter'] .dse-init__actions {
-	display: grid;
-	grid-template-columns: repeat(2, auto);
-	gap: 3px;
-	margin-top: 6px;
-	font-size: 1em;
-	justify-content: start;
+
+/* -- 12g. Narrow (300px sidebar leaf) ------------------------------------------- */
+/* The pips shrink so the name's reservation can shrink with them, and the portrait steps
+   down — at 300px a 76px picture is a quarter of the pane. Every candidate's mark is
+   sized in `em` off the toggle, so they all follow without a rule of their own. */
+@container dse-init-host (max-width: 420px) {
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait img,
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait .dse-init__portrait-fallback {
+		width: 60px;
+		height: 60px;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle {
+		width: 1.15em;
+		height: 1.15em;
+	}
+	/* THE PIPS LEAVE THE CORNER at sidebar width. Measured at 300px: the identity lane is
+	   ~205px, the four pips reserve ~95px of it, and what is left cannot hold a name —
+	   "Aragorn son of Arathorn" wrapped to FOUR lines and doubled the row's height. So
+	   below the threshold the pips come back into flow and take a line of their own, held
+	   right: vertical space is cheap in a sidebar and horizontal space is not. The name
+	   gets its full width back with it. */
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__actions {
+		position: static;
+		margin-top: 3px;
+		margin-left: auto;
+		justify-content: flex-end;
+	}
+	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__info > .dse-init__name {
+		padding-right: 0;
+	}
 }
 
 /* END SC-183 tracker stamina */

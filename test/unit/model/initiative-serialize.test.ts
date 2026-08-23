@@ -303,18 +303,13 @@ describe('T-1: merge-independent error surface still fires SYNCHRONOUSLY from pa
 	const squadYaml = (creatures: string) =>
 		['heroes: []', 'enemy_groups:', '  - name: Squad', '    is_squad: true', '    creatures:', creatures].join('\n');
 
-	test('squad-role validation suite', () => {
-		expect(() =>
-			parseLikePipeline(
-				squadYaml(
-					[
-						'      - {name: A, max_stamina: 4, amount: 1, squad_role: minion}',
-						'      - {name: B, max_stamina: 4, amount: 1, squad_role: minion}',
-						'      - {name: C, max_stamina: 40, amount: 1, squad_role: captain}',
-					].join('\n'),
-				),
-			),
-		).toThrow("Squad 'Squad' can have at most two creatures (minions and an optional captain).");
+	test('squad-role validation suite (post-#67: only the rules that still have meaning)', () => {
+		// SC-183 r3 / GH #67 removed two of the five checks this suite used to assert,
+		// because supporting multiple squads in one group IS the issue: the "at most two
+		// creatures" and "only one minion creature type" caps are gone (their inversions
+		// are pinned in encounter-data.test.ts, against the async oracle). What is left is
+		// what still has meaning, and it fires synchronously from the split exactly as it
+		// always did.
 		expect(() => parseLikePipeline(squadYaml('      - {name: A, max_stamina: 4, amount: 1}'))).toThrow(
 			"Creature 'A' in squad 'Squad' must have a 'squad_role' of 'minion' or 'captain'.",
 		);
@@ -322,18 +317,19 @@ describe('T-1: merge-independent error surface still fires SYNCHRONOUSLY from pa
 			parseLikePipeline(squadYaml('      - {name: A, max_stamina: 4, amount: 1, squad_role: boss}')),
 		).toThrow("Creature 'A' in squad 'Squad' has an invalid 'squad_role' value.");
 		expect(() =>
+			parseLikePipeline(squadYaml('      - {name: Cap, max_stamina: 40, amount: 1, squad_role: captain}')),
+		).toThrow("Squad 'Squad' must have at least one minion creature.");
+		expect(() =>
 			parseLikePipeline(
 				squadYaml(
 					[
 						'      - {name: A, max_stamina: 4, amount: 2, squad_role: minion}',
-						'      - {name: B, max_stamina: 4, amount: 2, squad_role: minion}',
+						'      - {name: C, max_stamina: 40, amount: 1, squad_role: captain}',
+						'      - {name: D, max_stamina: 40, amount: 1, squad_role: captain}',
 					].join('\n'),
 				),
 			),
-		).toThrow("Squad 'Squad' can have only one minion creature type.");
-		expect(() =>
-			parseLikePipeline(squadYaml('      - {name: Cap, max_stamina: 40, amount: 1, squad_role: captain}')),
-		).toThrow("Squad 'Squad' must have at least one minion creature.");
+		).toThrow("Squad 'Squad' can have at most one captain creature.");
 	});
 
 	test('creature amount validation stays in parse (amount is never statblock-sourced)', () => {

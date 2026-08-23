@@ -110,7 +110,7 @@ An enemy group represents a collection of creatures that act together in the ini
 - `name` (string, required): The name of the enemy group.
 - `creatures` (list of creatures, required): List of creature definitions.
 - `is_squad` (boolean, optional): Indicates if the creatures in this group are a squad of minions. Defaults to `false`.
-- `minion_stamina_pool` (number, managed): The current combined stamina pool of the minion group. Managed by the tracker.
+- `minion_stamina_pool` (number, managed): The current combined stamina pool of the group's minion squad. Managed by the tracker. A group holding **more than one** squad keeps each squad's pool on the minion creature itself (see the creature field of the same name) and leaves this one unset.
 - `has_taken_turn` (boolean, managed): Indicates if the group has taken a turn. Managed by the tracker.
 - `selectedInstanceKey` (string, managed): The key of the currently selected creature instance. Managed by the tracker.
 
@@ -124,7 +124,9 @@ Each creature in the creatures list has the following fields:
 - `amount` (number, required): The number of instances of this creature.
 - `instances` (list of CreatureInstance, managed): List of creature instances. Managed by the tracker.
 - `image` (string, optional): Path to the creature's image.
-- `squad_role` (string, optional): If this Enemy Group is a squad, indicates if the creature role is `captain` or `minion`
+- `squad_role` (string, optional): If this Enemy Group is a squad, the creature's role in it — `minion` (a squad sharing one stamina pool), `captain` (attached to one squad), or `attached` (travelling with the squad, not currently its captain). Every creature in a squad group must declare one.
+- `captain_of` (string, optional): For a `captain` in a group holding **more than one** squad, the `name` of the minion creature they lead. Omit it in a one-squad group — a captain with no `captain_of` leads the group's first squad.
+- `minion_stamina_pool` (number, managed): A `minion` creature's own shared stamina pool, used when the group holds more than one squad. Managed by the tracker; a one-squad group keeps its pool on the enemy group instead, so existing encounters are unchanged.
 
 #### Creature Instance Fields
 
@@ -195,9 +197,13 @@ In this case, the `Thorn Dragon`'s name, max stamina (or stamina), and image wil
 
 Minions are groups of weaker creatures that share a combined stamina pool and act together in combat. They are managed differently from regular creatures in the Initiative Tracker.
 
-To define a minion group, set the `is_squad` field to `true` in the enemy group definition.  In a `creature` object, set the `squad_role` field to `minion`.  
+To define a minion group, set the `is_squad` field to `true` in the enemy group definition.  In a `creature` object, set the `squad_role` field to `minion`.
 
-Additionally, you can add another `creature` object to the Enemy group (squad) and set its `squad_role` to `captain`.  This has no effect right now, but may change in the future.
+**More than one squad per group.** A squad group may hold several `minion` creatures, and each one is its own squad with its own stamina pool — the shape published encounters use when a single group fields, say, two squads of the same minion (Delian Tomb, Encounter W1). Nothing changes for a group with one squad: its pool stays where it always was, on the enemy group.
+
+**Captains.** Add another `creature` to the group with `squad_role: captain`. The tracker marks the captain's roster cell with a crown badge and a forged frame, pulls it to the front of the squad, and calls out "Captain down" when the captain drops to 0 — the moment the rules allow a replacement.
+
+**Changing the captain.** Click a creature's cell to open it, then click the badge beside its name: the captain's badge reads **Captain** and relieves them; any other non-minion creature's reads **Make captain** and promotes it (naming the squad, when the group holds more than one). A relieved captain becomes `squad_role: attached` and stays in the group. Minions are never captain candidates — the rules require a non-minion creature.
 
 ### Malice
 

@@ -595,6 +595,132 @@ malice:
   value: 7
 `;
 
+// SC-183 round 3 — a FULL ROSTER, which is the only scale the turn indicator can
+// honestly be judged at. Scott's stated goal for it is "to quickly and easily see who
+// has taken their turn within a round at a glance"; a two-hero fixture cannot show
+// whether a mark is scannable down a column, so this one is five heroes with three
+// spent and two still to go, deliberately NOT alternating (2 gone, 1 to go, 1 gone,
+// 1 to go) so the eye has to find the pattern rather than being handed it. Mixed
+// stamina states ride along so the rebalanced row composition is visible at every
+// state in one shot. Harness-local, new names — cannot collide with a frozen shot.
+const initiativeRoster = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+    current_stamina: 34
+    temp_stamina: 10
+    image: "portraits/1.svg"
+    has_taken_turn: true
+    conditions:
+      - key: "slowed"
+    actions:
+      main: true
+      maneuver: false
+      move: true
+      triggered: false
+  - name: "Samwise Gamgee"
+    max_stamina: 90
+    current_stamina: -12
+    image: "portraits/2.svg"
+    has_taken_turn: true
+    conditions:
+      - key: "prone"
+  - name: "Meriadoc Brandybuck"
+    max_stamina: 72
+    current_stamina: 72
+    image: "portraits/3.svg"
+  - name: "Peregrin Took"
+    max_stamina: 68
+    current_stamina: 51
+    image: "portraits/4.svg"
+    has_taken_turn: true
+    actions:
+      main: true
+      maneuver: true
+      move: false
+      triggered: false
+  - name: "Aragorn son of Arathorn"
+    max_stamina: 120
+    current_stamina: 44
+    image: "portraits/5.svg"
+enemy_groups:
+  - name: "Mordor Forces"
+    has_taken_turn: true
+    creatures:
+      - name: "Orc"
+        max_stamina: 40
+        amount: 3
+        image: "portraits/6.svg"
+        instances:
+          - id: 1
+            current_stamina: 36
+          - id: 2
+            current_stamina: 17
+          - id: 3
+            current_stamina: 4
+round: 3
+malice:
+  value: 7
+`;
+
+// SC-183 round 3 / GH #67 — TWO MINION SQUADS IN ONE GROUP, the Delian Tomb W1 shape the
+// issue is filed on ("Four flows of the river (minion squad)" twice, in group 3). Before
+// this round `parse` rejected this outright (a squad group was capped at two creatures
+// and one minion type), so no fixture could exist. It also carries the two creatures the
+// change-captain affordance needs: a captain attached to the first squad by `captain_of`,
+// and an `attached` creature — a promotable candidate with no squad of its own.
+const initiativeSquads = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+    current_stamina: 62
+    image: "portraits/1.svg"
+enemy_groups:
+  - name: "Water Wolves"
+    is_squad: true
+    creatures:
+      - name: "Flow of the River"
+        max_stamina: 6
+        amount: 4
+        image: "portraits/1.svg"
+        squad_role: minion
+        minion_stamina_pool: 15
+        instances:
+          - id: 1
+          - id: 2
+          - id: 3
+          - id: 4
+      - name: "Sudden Downpour"
+        max_stamina: 6
+        amount: 4
+        image: "portraits/2.svg"
+        squad_role: minion
+        minion_stamina_pool: 24
+        instances:
+          - id: 1
+          - id: 2
+          - id: 3
+          - id: 4
+      - name: "Essence of Change"
+        max_stamina: 90
+        amount: 1
+        image: "portraits/6.svg"
+        squad_role: captain
+        captain_of: "Flow of the River"
+        instances:
+          - id: 1
+            current_stamina: 71
+      - name: "Water Wierd"
+        max_stamina: 45
+        amount: 1
+        image: "portraits/3.svg"
+        squad_role: attached
+        instances:
+          - id: 1
+            current_stamina: 45
+round: 2
+malice:
+  value: 4
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -631,6 +757,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		'no-images': initiativeNoImages,
 		controls: initiativeControls,
 		fight: initiativeFight,
+		roster: initiativeRoster,
+		squads: initiativeSquads,
 	},
 	kit: { default: kitDefault, collapsed: kitCollapsed },
 	montage: { default: montageDefault },
@@ -893,6 +1021,17 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// full-width plate is covered by the element sweep's `initiative-fight--*`.
 	{ id: 'initiative-fight-500', element: 'initiative', fixture: 'fight', width: 500 },
 	{ id: 'initiative-fight-narrow', element: 'initiative', fixture: 'fight', width: 300 },
+	// SC-183 round 3 — the LAYOUT REBALANCE evidence (Scott: "the hero portrait is too
+	// small and the stamina bar is lower than it needs to be"), at the three widths the
+	// tracker really renders at. `roster` is five heroes, so the rebalanced row rhythm is
+	// judged as a column and not as one card; the full-width twin is the element sweep's
+	// own `initiative-roster--*`.
+	{ id: 'initiative-roster-500', element: 'initiative', fixture: 'roster', width: 500 },
+	{ id: 'initiative-roster-narrow', element: 'initiative', fixture: 'roster', width: 300 },
+	// SC-183 round 3 / GH #67 — the two-squad group at a split-pane width, where a group
+	// that now holds four creature entries (two squads + a captain + an attached
+	// candidate) is most likely to crowd its roster grid.
+	{ id: 'initiative-squads-500', element: 'initiative', fixture: 'squads', width: 500 },
 ];
 
 /**
@@ -1024,19 +1163,24 @@ export const PREF_SHOTS: {
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
 	},
-	// SC-183 round 2 — the TURN-ECONOMY candidates (hidden `initTurn` review switch, the
-	// SC-154 round-3 pattern). Round 1's plate/rail pair is gone: Scott picked plate, so
-	// plate is unconditional and the rail shots retired with its CSS. These three are the
-	// open question he asked for options on — the turn-taken indicator and the
-	// [Main][Maneuver][Move][Triggered] row. Same mid-fight fixture as the default sweep
-	// so the four options are judged like-for-like, plus the narrow branch of the one
-	// that reflows the identity lane hardest (`gutter`), where a candidate is most
-	// likely to fall over.
-	{ id: 'initiative-turn-spine', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'spine' } },
-	{ id: 'initiative-turn-spine-narrow', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'spine' }, width: 300 },
-	{ id: 'initiative-turn-dim', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'dim' } },
-	{ id: 'initiative-turn-gutter', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'gutter' } },
-	{ id: 'initiative-turn-gutter-narrow', element: 'initiative', fixture: 'fight', prefs: { initTurn: 'gutter' }, width: 300 },
+	// SC-183 round 3 — the PORTRAIT TURN-MARK candidates (hidden `initPortrait` review
+	// switch, the SC-154 round-3 pattern). Round 2's four turn-economy layouts are gone:
+	// Scott picked `dim`, so it is unconditional and the spine/gutter shots retired with
+	// their CSS. The open question now is which MARK a spent portrait wears, and it can
+	// only be judged at ROSTER scale — the whole job of the indicator is an at-a-glance
+	// scan — so these run on the five-hero `roster` fixture (3 spent, 2 to go), not on the
+	// two-hero mid-fight one. The recommendation also gets its light twin and its 300px
+	// narrow branch, the two places a mark is most likely to fall over.
+	{ id: 'initiative-mark-seal', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'seal' } },
+	{ id: 'initiative-mark-shutter', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'shutter' } },
+	{ id: 'initiative-mark-sheathe', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'sheathe' } },
+	{ id: 'initiative-mark-laurel', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'laurel' } },
+	{ id: 'initiative-mark-sheathe-narrow', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'sheathe' }, width: 300 },
+	// SC-183 round 3 — PORTRAITS OFF over the promoted layout: the one configuration in
+	// which a portrait-only turn control would disappear, so the checkbox has to come back
+	// (styles-source §12f). A shot, not just a test, because "the control is gone" is
+	// exactly the class of regression a human notices instantly and a selector does not.
+	{ id: 'initiative-portraits-off', element: 'initiative', fixture: 'roster', prefs: { portraits: 'off' } },
 ];
 
 /**
@@ -1273,6 +1417,46 @@ export const CHROME_SHOTS: {
 	},
 ];
 
+
+/* SC-183 round 3 — REAL PORTRAIT PIXELS for the round-3 review fixtures.
+   Every initiative fixture before this round rendered SHIELD/SKULL fallbacks: the mock
+   vault's `getResourcePath` returns `app://vault/<path>`, which no browser can load, so
+   every `<img>` fired its error handler and SC-162's fallback capsule took over. That is
+   fine for the layout fixtures — and it is exactly what the frozen print shots contain,
+   so it must not change for them — but it makes the round-3 turn-mark candidates
+   unjudgeable: three of the four act ON the picture (a seal pressed into its corner, a
+   portcullis over it, a desaturation of it), and a monochrome shield glyph has nothing to
+   desaturate.
+
+   So: an inline SVG bust per hero, distinct in hue and value, served as a data: URI —
+   and served ONLY for paths under `portraits/`, which no pre-round-3 fixture uses. Every
+   existing fixture keeps its `images/…` paths and therefore keeps its fallback capsules,
+   byte for byte. */
+function harnessPortrait(hue: number): string {
+	const svg =
+		`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">` +
+		`<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+		`<stop offset="0" stop-color="hsl(${hue},52%,44%)"/>` +
+		`<stop offset="1" stop-color="hsl(${hue + 26},44%,18%)"/>` +
+		`</linearGradient></defs>` +
+		`<rect width="120" height="120" fill="url(#g)"/>` +
+		`<circle cx="60" cy="44" r="20" fill="hsl(${hue + 14},38%,84%)"/>` +
+		`<path d="M20 120c3-25 19-36 40-36s37 11 40 36z" fill="hsl(${hue + 14},38%,84%)"/>` +
+		`<path d="M0 0h120v6H0z" fill="hsla(0,0%,100%,0.35)"/>` +
+		`</svg>`;
+	return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+/** `portraits/<n>.svg` → a real picture. Paths outside `portraits/` are untouched. */
+export const HARNESS_PORTRAITS: Record<string, string> = {
+	'portraits/1.svg': harnessPortrait(210),
+	'portraits/2.svg': harnessPortrait(20),
+	'portraits/3.svg': harnessPortrait(132),
+	'portraits/4.svg': harnessPortrait(330),
+	'portraits/5.svg': harnessPortrait(46),
+	'portraits/6.svg': harnessPortrait(268),
+};
+
 /** Real service instances — the same convention as the dom tests' makeDeps(). */
 export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServiceInternal } {
 	const app = new App();
@@ -1281,6 +1465,11 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
 	// rejections during render (same seeding as test/dom/elements/initiative.test.ts's
 	// makeEnv()).
 	app.vault.setFile(DEFAULT_SETTINGS.defaultImagePath, '');
+	// SC-183 round 3 — the round-3 fixtures' real portraits (see HARNESS_PORTRAITS).
+	for (const path of Object.keys(HARNESS_PORTRAITS)) app.vault.setFile(path, '');
+	const realResourcePath = app.vault.getResourcePath.bind(app.vault);
+	app.vault.getResourcePath = (file: { path: string }): string =>
+		HARNESS_PORTRAITS[file.path] ?? realResourcePath(file as never);
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
 	const prefs = createPreferenceStore(storage);

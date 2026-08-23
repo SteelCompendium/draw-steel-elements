@@ -44,7 +44,23 @@
 // unchanged legacy parseEncounterData on ref-free inputs.
 import { stringifyYaml } from 'obsidian';
 import type { Condition, EncounterData } from '@drawSteelAdmonition/EncounterData';
-import { appendMaliceLogEntry } from '@drawSteelAdmonition/EncounterData';
+import {
+	appendMaliceLogEntry,
+	minionPoolOf,
+	setMinionPool,
+	validateSquad,
+} from '@drawSteelAdmonition/EncounterData';
+
+export {
+	captainOfSquad,
+	minionCreatures,
+	minionPoolOf,
+	promoteCaptain,
+	relieveCaptain,
+	setMinionPool,
+	squadOfCaptain,
+	validateSquad,
+} from '@drawSteelAdmonition/EncounterData';
 
 export type {
 	ActorActions,
@@ -141,39 +157,10 @@ export function parse(input: unknown, _raw: string): EncounterData {
 			// Squad-specific validation (:174-208) — merge-independent (squad_role is never
 			// statblock-sourced) and, exactly like legacy, it runs BEFORE the creature loop
 			// (i.e. before the merge even in legacy), so its creature.name interpolation
-			// matches legacy byte-for-byte too.
-			if (group.creatures.length > 2) {
-				throw new Error(
-					`Squad '${group.name}' can have at most two creatures (minions and an optional captain).`,
-				);
-			}
-			let minionCount = 0;
-			let captainCount = 0;
-			group.creatures.forEach((creature) => {
-				if (!creature.squad_role) {
-					throw new Error(
-						`Creature '${creature.name}' in squad '${group.name}' must have a 'squad_role' of 'minion' or 'captain'.`,
-					);
-				}
-				if (creature.squad_role === 'minion') {
-					minionCount += 1;
-				} else if (creature.squad_role === 'captain') {
-					captainCount += 1;
-				} else {
-					throw new Error(
-						`Creature '${creature.name}' in squad '${group.name}' has an invalid 'squad_role' value.`,
-					);
-				}
-			});
-			if (minionCount === 0) {
-				throw new Error(`Squad '${group.name}' must have at least one minion creature.`);
-			}
-			if (minionCount > 1) {
-				throw new Error(`Squad '${group.name}' can have only one minion creature type.`);
-			}
-			if (captainCount > 1) {
-				throw new Error(`Squad '${group.name}' can have at most one captain creature.`);
-			}
+			// matches legacy byte-for-byte too. SC-183 r3 / GH #67 lifted the two-creature
+			// and one-minion-type caps; the surviving rules live in `validateSquad`, shared
+			// verbatim with the async oracle so the split cannot drift from it.
+			validateSquad(group);
 		}
 
 		for (const creature of group.creatures) {
@@ -200,9 +187,13 @@ export function parse(input: unknown, _raw: string): EncounterData {
 				// defeating the `== null` re-init check forever. Leaving the pool unset
 				// defers its initialization to Task 2's post-merge pass. Unreachable for
 				// ref-free input, so byte-compat is unaffected.
-				if (group.minion_stamina_pool == null && typeof creature.max_stamina === 'number') {
+				// SC-183 r3 / GH #67: resolved and written per SQUAD. `setMinionPool` keeps
+				// a one-squad group's pool on the GROUP (its historical home — so an
+				// existing block's bytes are untouched) and only materializes per-creature
+				// pools for a group that really holds more than one squad.
+				if (minionPoolOf(group, creature) == null && typeof creature.max_stamina === 'number') {
 					// Initialize the pool to total stamina (max_stamina * amount).
-					group.minion_stamina_pool = creature.max_stamina * creature.amount;
+					setMinionPool(group, creature, creature.max_stamina * creature.amount);
 				}
 				// Initialize instances for minions (for conditions only).
 				if (!creature.instances || creature.instances.length !== creature.amount) {

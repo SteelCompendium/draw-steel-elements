@@ -1,4 +1,4 @@
-import { parseEncounterData } from '@drawSteelAdmonition/EncounterData';
+import { parseEncounterData, captainOfSquad, minionCreatures, minionPoolOf } from '@drawSteelAdmonition/EncounterData';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App } from '../../mocks/obsidian';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
@@ -119,15 +119,26 @@ describe('T-2: parseEncounterData — error surface (user-facing message contrac
 	const squadYaml = (creatures: string) =>
 		['heroes: []', 'enemy_groups:', '  - name: Squad', '    is_squad: true', '    creatures:', creatures].join('\n');
 
-	test('squad with more than two creatures', async () => {
+	// SC-183 r3 / GH #67 — this used to be "squad with more than two creatures" (a
+	// rejection). Supporting several squads in one group IS the issue, so the same input
+	// is now the feature: two squads plus a captain parse, and each squad gets its OWN
+	// pool. The captain, naming no squad, leads the first (the pre-#67 meaning of an
+	// unattached captain, preserved).
+	test('GH #67: two minion squads plus a captain in one group parse, with a pool each', async () => {
 		const creatures = [
 			'      - {name: A, max_stamina: 4, amount: 1, squad_role: minion}',
-			'      - {name: B, max_stamina: 4, amount: 1, squad_role: minion}',
+			'      - {name: B, max_stamina: 4, amount: 3, squad_role: minion}',
 			'      - {name: C, max_stamina: 40, amount: 1, squad_role: captain}',
 		].join('\n');
-		await expect(parse(squadYaml(creatures))).rejects.toThrow(
-			"Squad 'Squad' can have at most two creatures (minions and an optional captain).",
-		);
+		const data = await parse(squadYaml(creatures));
+		const [a, b, c] = data.enemy_groups[0].creatures;
+		expect(minionPoolOf(data.enemy_groups[0], a)).toBe(4);
+		expect(minionPoolOf(data.enemy_groups[0], b)).toBe(12);
+		// Neither squad's pool leaked onto the GROUP: with more than one squad the group
+		// field stays unset, so nothing can silently share a pool.
+		expect(data.enemy_groups[0].minion_stamina_pool).toBeUndefined();
+		expect(captainOfSquad(data.enemy_groups[0], a)).toBe(c);
+		expect(captainOfSquad(data.enemy_groups[0], b)).toBeUndefined();
 	});
 
 	test('squad creature missing squad_role', async () => {
@@ -144,14 +155,46 @@ describe('T-2: parseEncounterData — error surface (user-facing message contrac
 		);
 	});
 
-	test('squad with two minion creature types', async () => {
+	// SC-183 r3 / GH #67 — also inverted: two minion creature types used to be rejected
+	// ("can have only one minion creature type"); they are now two squads.
+	test('GH #67: two minion creature types are two squads, not an error', async () => {
 		const creatures = [
 			'      - {name: A, max_stamina: 4, amount: 2, squad_role: minion}',
 			'      - {name: B, max_stamina: 4, amount: 2, squad_role: minion}',
 		].join('\n');
+		const data = await parse(squadYaml(creatures));
+		expect(minionCreatures(data.enemy_groups[0]).map((c) => c.name)).toEqual(['A', 'B']);
+	});
+
+	test('GH #67: a captain naming a squad that is not in the group is rejected', async () => {
+		const creatures = [
+			'      - {name: A, max_stamina: 4, amount: 2, squad_role: minion}',
+			'      - {name: B, max_stamina: 4, amount: 2, squad_role: minion}',
+			'      - {name: C, max_stamina: 40, amount: 1, squad_role: captain, captain_of: Nobody}',
+		].join('\n');
 		await expect(parse(squadYaml(creatures))).rejects.toThrow(
-			"Squad 'Squad' can have only one minion creature type.",
+			"Captain 'C' in squad 'Squad' names a 'captain_of' minion ('Nobody') that is not in this group.",
 		);
+	});
+
+	test('GH #67: two captains on the SAME squad are still rejected (the rules\u2019 own cap)', async () => {
+		const creatures = [
+			'      - {name: A, max_stamina: 4, amount: 2, squad_role: minion}',
+			'      - {name: C, max_stamina: 40, amount: 1, squad_role: captain}',
+			'      - {name: D, max_stamina: 40, amount: 1, squad_role: captain}',
+		].join('\n');
+		await expect(parse(squadYaml(creatures))).rejects.toThrow(
+			"Squad 'Squad' can have at most one captain creature.",
+		);
+	});
+
+	test("GH #67: 'attached' is a valid squad_role (what a relieved captain becomes)", async () => {
+		const creatures = [
+			'      - {name: A, max_stamina: 4, amount: 2, squad_role: minion}',
+			'      - {name: D, max_stamina: 40, amount: 1, squad_role: attached}',
+		].join('\n');
+		const data = await parse(squadYaml(creatures));
+		expect(data.enemy_groups[0].creatures[1].squad_role).toBe('attached');
 	});
 
 	test('squad without any minions', async () => {

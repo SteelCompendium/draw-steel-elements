@@ -246,7 +246,7 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// one DOM and the value is a pure Steel-screen CSS reflow. (Round 1's
 		// `initStamina` plate/rail A/B lived here until Scott picked plate — key and
 		// loser deleted, per its own deletion plan below.)
-		initTurn: 'init-turn',
+		initPortrait: 'init-portrait',
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
@@ -272,22 +272,23 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // the promised return to empty happened. A hidden row is a review-time device, never a
 // shipped state; anything that appears here must carry its own deletion plan.
 //
-// SC-183 `initStamina` was the third: the tracker stamina-bar layout A/B (plate vs
-// rail). Scott picked plate on 2026-08-22 ("The `plate` approach is generally better"),
-// so round 2 executed that deletion plan exactly as written — plate became
-// unconditional, and the key, the rail CSS branch, the rail shots and this entry all
-// went. Three for three: a hidden row has always ended in its own deletion.
+// SC-183 `initStamina` was the third (plate vs rail; Scott picked plate on 2026-08-22,
+// "The `plate` approach is generally better") and SC-183 `initTurn` the fourth (four
+// turn-economy layouts; Scott picked `dim` on 2026-08-22, "The `dim` approach is
+// generally the direction I want to go"). Both executed their deletion plans verbatim in
+// the very next round — winner unconditional, key + losing CSS + candidate shots gone.
+// Four for four: a hidden row has always ended in its own deletion.
 //
-// SC-183 `initTurn` is the fourth, and the list is non-empty for the same reason it was
-// the previous three times — an open question Scott asked for OPTIONS on rather than a
-// pick: how the tracker should show who has taken their turn and which actions are
-// spent ("I think we need to spend some time figuring out a good solution here",
-// SC-183, 2026-08-22). Three candidates (`spine`, `dim`, `gutter`) against a default of
-// `current`, which renders today's layout so the default picture cannot drift while
-// they are judged. Deletion plan, identical to its predecessors': Scott picks, the
-// winner becomes unconditional, and the key, the losing CSS branches, the candidate
-// shots and this entry are deleted (the SC-154 `5360fe9` promotion shape).
-const EXPECTED_HIDDEN_ROWS: string[] = ['initTurn'];
+// SC-183 `initPortrait` is the fifth, and the list is non-empty for the same reason it
+// was the previous four times — an open question Scott asked for OPTIONS on rather than
+// a pick. The portrait is the turn toggle now; what MARK a spent portrait wears is
+// undecided ("Im not sure what I want to do to indicate it though… What other options do
+// you think might be viable?", SC-183, 2026-08-22). Four candidates (`seal`, `shutter`,
+// `sheathe`, `laurel`), every one the same DOM and the same single click. Deletion plan,
+// identical to its predecessors': Scott picks, the winner becomes unconditional, and the
+// key, the losing CSS branches, the candidate shots and this entry are deleted (the
+// SC-154 `5360fe9` promotion shape).
+const EXPECTED_HIDDEN_ROWS: string[] = ['initPortrait'];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

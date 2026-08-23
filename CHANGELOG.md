@@ -52,9 +52,9 @@ for what needs action.
   amber when winded, a red frame and ground when dying. A monster at 0 Stamina reads
   **Dead** rather than "Dying", which is the actual rule: only heroes have a dying
   state. Clicking a bar opens the same stamina editor the numbers always opened; every
-  existing control (turn checkboxes, conditions, action checklist, Malice bar, minion
-  pools, double-click editing) works exactly as before, and print layouts are unchanged
-  — paper keeps the compact numeric tracker.
+  existing control (turn tracking, conditions, action checklist, Malice bar, minion
+  pools, double-click editing) still does exactly what it did, and print layouts are
+  unchanged — paper keeps the compact numeric tracker.
 - **Minion squads are no longer shown as "winded"** (SC-183). A squad's shared Stamina
   pool used to take the amber winded frame once it dropped below half. It shouldn't:
   *"Because minion Stamina is tracked as a pool, minions can't be winded"* — and a
@@ -62,11 +62,37 @@ for what needs action.
   and by its per-minion death ticks alone. A squad's **captain** is unaffected, because
   a captain's Stamina is tracked separately from the pool — they go winded like any
   other creature.
-- **The squad captain is called out on the roster** (SC-183). A squad's captain now
-  leads its grid of creatures, badged with a crown and the word "Captain", and is
-  marked the same way on the opened detail row. Drop the captain to 0 and the badge
-  turns to **"Captain down"** — the cue that the squad has lost its *With Captain*
-  benefits and, per the rules, may take a new captain at the start of the next round.
+- **The squad captain is called out on the roster — and you can change who it is**
+  (SC-183, GitHub #67). A squad's captain now leads its grid of creatures, badged with a
+  crown and the word "Captain", its portrait set into a forged steel frame with a struck
+  corner notch, and marked the same way on the opened detail row. Drop the captain to 0
+  and the badge turns to **"Captain down"** — the cue that the squad has lost its *With
+  Captain* benefits and, per the rules, may take a new captain at the start of the next
+  round. That swap is now one click: open any other non-minion creature in the group and
+  press the **Make captain** badge beside its name. The old captain stays in the group as
+  an ordinary attached creature.
+- **An enemy group can hold more than one minion squad** (GitHub #67). A group used to be
+  capped at two creatures and a single minion type, which made published encounters that
+  field two squads side by side — the Delian Tomb's Encounter W1, two squads of *flows of
+  the river* in one group — impossible to write down. A group may now hold as many minion
+  squads as it needs, plus their captains and any attached creatures, and **each squad
+  tracks its own Stamina pool**: damage one and the other is untouched. Existing encounter
+  blocks are unaffected in every respect, down to the bytes written back to your note.
+- **The portrait is the turn toggle** (SC-183). The little dot-checkbox beside each hero
+  is gone from the tracker: click the hero's **portrait** to mark their turn taken, click
+  again to undo. A spent row reads as spent material — its plate goes to a dark milled
+  hatch and its portrait and name recede — so a glance down the list finds who is still to
+  go without reading anything. Everything on that row stays fully lit and fully usable
+  (the Director still has to adjust Stamina on rows that have already gone), and hovering
+  or tabbing into a spent row brings it all the way back. If you turn portraits off, the
+  checkbox returns — there's nothing to click otherwise. Printed trackers keep the tick
+  box, which is what a turn marker means on paper.
+- **The hero and monster rows are rebalanced** (SC-183). The portrait is markedly bigger,
+  the four action pips sit on the card's own inset like everything else in the row, and
+  the Stamina instrument is now one line — the gauge across the row with the big current
+  value at its right end, instead of a number stranded on a line of its own above the bar.
+  Rows are shorter and read as one object. At sidebar width the pips take their own line
+  and the instrument stacks again, so nothing gets crushed.
 - [FIX] **Inner features get real breathing room** (SC-168). A feature nested inside a
   standalone ability/feature card (an `effect.features` sub-feature) rendered flush
   against its parent card's left and right edges with no frame of its own. It now

@@ -65,7 +65,29 @@ export interface Creature {
     instances?: CreatureInstance[];
     image?: string;
     isHero: boolean;
-    squad_role?: "minion" | "captain";
+    /** SC-183 r3 / GH #67 — the creature's place in a squad group.
+     *  - `minion`   — a minion SQUAD. Its Stamina is a shared pool (see
+     *                 `minion_stamina_pool` below). A group may now hold SEVERAL of
+     *                 these (issue #67: Delian Tomb W1 group 3 is two squads of
+     *                 "flows of the river" in one group).
+     *  - `captain`  — attached to one squad as its captain (`captain_of`).
+     *  - `attached` — SC-183 r3, additive: a non-minion creature travelling with the
+     *                 squad that is not (currently) a captain. This is what a relieved
+     *                 captain becomes, and what a promotable candidate is; it behaves
+     *                 exactly like an ordinary creature in every other respect. Old
+     *                 encounter YAML never contains it. */
+    squad_role?: "minion" | "captain" | "attached";
+    /** SC-183 r3 / GH #67 — WHICH squad this captain leads, by the minion creature's
+     *  `name`. ABSENT (the only shape old YAML has) means "the group's first minion
+     *  creature", which is what a one-squad group has always meant. Only written when a
+     *  group holds more than one squad, so single-squad blocks keep their exact bytes. */
+    captain_of?: string;
+    /** SC-183 r3 / GH #67 — this minion squad's own shared Stamina pool. ABSENT means
+     *  "use the group's `minion_stamina_pool`", which is where a one-squad group has
+     *  always kept it and still keeps it — so an existing block never grows this key.
+     *  Only a group with 2+ minion creatures materializes per-creature pools. Always
+     *  read through `minionPoolOf` / write through `setMinionPool`, never directly. */
+    minion_stamina_pool?: number;
     statblock?: unknown; // To allow property fallback
 }
 
@@ -75,7 +97,161 @@ export interface EnemyGroup {
     has_taken_turn?: boolean;
     selectedInstanceKey?: string;
     is_squad?: boolean;
+    /** The shared minion pool of a group holding exactly ONE minion squad — the
+     *  historical home, kept as the back-compat carrier (see `Creature.minion_stamina_pool`
+     *  for the multi-squad case). Read through `minionPoolOf`, write through
+     *  `setMinionPool`. */
     minion_stamina_pool?: number;
+}
+
+/* ---------------------------------------------------------------- squad helpers
+   SC-183 r3 / GH #67 ("Support multiple minion squads in the same group").
+
+   The pre-#67 model could not express the Delian Tomb W1 case: `parse` capped a squad
+   group at two creatures and at ONE minion creature type, and the shared pool lived on
+   the GROUP — so a group could hold exactly one squad. #67 relaxes both caps, which
+   means the pool has to become addressable per squad.
+
+   THE BACK-COMPAT RULE, and why it is a resolution pair rather than a migration: an
+   existing block must serialize to the same bytes it parsed from, so the group field
+   cannot simply be moved onto the creature. Instead the pool has TWO homes and one
+   resolution order — the creature's own field wins, the group's is the fallback — and
+   the writer only ever materializes the creature field when the group actually holds
+   more than one squad. A one-squad block therefore never grows a key it did not have,
+   and a multi-squad block (which could not previously parse at all, so it has no
+   bytes to be compatible with) gets per-squad pools. */
+
+/** Every minion-squad creature in a group, in declaration order. */
+export function minionCreatures(group: EnemyGroup): Creature[] {
+    return group.is_squad ? group.creatures.filter((c) => c.squad_role === "minion") : [];
+}
+
+/** The live pool value for one minion squad — creature field first, group field as the
+ *  historical fallback. `undefined` only before initialization. */
+export function minionPoolOf(group: EnemyGroup, creature: Creature): number | undefined {
+    return creature.minion_stamina_pool ?? group.minion_stamina_pool;
+}
+
+/** Writes one squad's pool back to whichever field is the LIVE one for it (see the
+ *  back-compat rule above): the creature's own, if it already has one or if the group
+ *  holds more than one squad; otherwise the group's. */
+export function setMinionPool(group: EnemyGroup, creature: Creature, value: number): void {
+    if (creature.minion_stamina_pool != null || minionCreatures(group).length > 1) {
+        creature.minion_stamina_pool = value;
+    } else {
+        group.minion_stamina_pool = value;
+    }
+}
+
+/** The captain attached to ONE squad. A captain names its squad with `captain_of`; a
+ *  captain with no `captain_of` (every pre-#67 block) leads the group's first squad. */
+export function captainOfSquad(group: EnemyGroup, minion: Creature): Creature | undefined {
+    if (!group.is_squad) return undefined;
+    const captains = group.creatures.filter((c) => c.squad_role === "captain");
+    const named = captains.find((c) => c.captain_of === minion.name);
+    if (named) return named;
+    return minionCreatures(group)[0] === minion
+        ? captains.find((c) => c.captain_of == null)
+        : undefined;
+}
+
+/** Which squad a captain leads (the inverse of `captainOfSquad`). */
+export function squadOfCaptain(group: EnemyGroup, captain: Creature): Creature | undefined {
+    return minionCreatures(group).find((minion) => captainOfSquad(group, minion) === captain);
+}
+
+/** SC-183 r3 — promote `creature` to captain of `minion`'s squad, one call, no other
+ *  side effects: the squad's previous captain (if any, and if not `creature` itself) is
+ *  relieved to `attached`, and `captain_of` is written only when the group holds more
+ *  than one squad (so a one-squad group's YAML keeps its exact pre-#67 key set).
+ *  Returns false when the promotion is not legal (not a squad group, or the target is
+ *  itself a minion — "a captain is any non-Mount, non-minion creature", Draw Steel
+ *  Monsters, "Using Minions"). */
+export function promoteCaptain(group: EnemyGroup, creature: Creature, minion: Creature): boolean {
+    if (!group.is_squad || creature.squad_role === "minion") return false;
+    if (!minionCreatures(group).includes(minion)) return false;
+    const previous = captainOfSquad(group, minion);
+    if (previous && previous !== creature) {
+        previous.squad_role = "attached";
+        delete previous.captain_of;
+    }
+    // A creature can only captain one squad, so leaving it as another squad's captain
+    // would double-book it.
+    delete creature.captain_of;
+    creature.squad_role = "captain";
+    if (minionCreatures(group).length > 1) creature.captain_of = minion.name;
+    return true;
+}
+
+/** SC-183 r3 — the inverse: the squad keeps its creature, loses its captain. */
+export function relieveCaptain(creature: Creature): void {
+    creature.squad_role = "attached";
+    delete creature.captain_of;
+}
+
+/** SC-183 r3 / GH #67 — squad validation, transcribed ONCE and shared by both parse
+ *  paths (the async oracle in this file and the sync split in
+ *  `elements/initiative/model.ts`), so the two can no longer drift on what a legal squad
+ *  group is. Runs BEFORE the creature loop in both, exactly as the legacy block did, so
+ *  the `creature.name` interpolations still match legacy byte-for-byte.
+ *
+ *  WHAT #67 RELAXED, and why each cap went:
+ *   - "at most two creatures": the whole point of #67 — a group holds several squads
+ *     (Delian Tomb W1 group 3 is two "flows of the river" squads) plus captains and
+ *     attached creatures.
+ *   - "only one minion creature type": same; each minion creature is now its own squad
+ *     with its own pool.
+ *   - "at most one captain creature": relaxed to at most one captain PER SQUAD, which is
+ *     what the rules actually say ("A squad of minions can have only one captain") and
+ *     which for a one-squad group is the identical constraint, identical message. */
+export function validateSquad(group: EnemyGroup): void {
+    let minionCount = 0;
+    group.creatures.forEach((creature) => {
+        if (!creature.squad_role) {
+            throw new Error(
+                `Creature '${creature.name}' in squad '${group.name}' must have a 'squad_role' of 'minion' or 'captain'.`
+            );
+        }
+        if (creature.squad_role === "minion") {
+            minionCount += 1;
+        } else if (creature.squad_role !== "captain" && creature.squad_role !== "attached") {
+            throw new Error(
+                `Creature '${creature.name}' in squad '${group.name}' has an invalid 'squad_role' value.`
+            );
+        }
+    });
+    if (minionCount === 0) {
+        throw new Error(`Squad '${group.name}' must have at least one minion creature.`);
+    }
+    // A captain naming a squad must name one that exists, or the attachment is silently
+    // inert — the exact failure mode `captain_of` was added to make impossible.
+    const minions = minionCreatures(group);
+    const minionNames = new Set(minions.map((m) => m.name));
+    for (const captain of group.creatures.filter((c) => c.squad_role === "captain")) {
+        if (captain.captain_of != null && !minionNames.has(captain.captain_of)) {
+            throw new Error(
+                `Captain '${captain.name}' in squad '${group.name}' names a 'captain_of' minion ('${captain.captain_of}') that is not in this group.`
+            );
+        }
+    }
+    // One captain per squad (the rules' own cap). For a single-squad group this is the
+    // pre-#67 "at most one captain creature" check, message included.
+    const unattachedCaptains = group.creatures.filter(
+        (c) => c.squad_role === "captain" && c.captain_of == null
+    );
+    if (unattachedCaptains.length > 1) {
+        throw new Error(`Squad '${group.name}' can have at most one captain creature.`);
+    }
+    for (const minion of minions) {
+        const named = group.creatures.filter(
+            (c) => c.squad_role === "captain" && c.captain_of === minion.name
+        );
+        if (named.length > 1) {
+            throw new Error(
+                `Squad '${group.name}' can have at most one captain per minion squad ('${minion.name}' has ${named.length}).`
+            );
+        }
+    }
 }
 
 /** A single Malice pool event — a spend (Deliverable 2, D8 spec §3.2) or a manual
@@ -180,6 +356,12 @@ export function resetEncounter(data: EncounterData) {
         group.selectedInstanceKey = undefined;
         if (group.is_squad) {
             group.minion_stamina_pool = undefined;
+            // SC-183 r3 / GH #67 — a multi-squad group keeps its pools on the creatures,
+            // so clearing only the group field would leave every squad but the first at
+            // its mid-fight value after a reset.
+            group.creatures.forEach((creatureType) => {
+                if (creatureType.squad_role === "minion") creatureType.minion_stamina_pool = undefined;
+            });
         }
         group.creatures.forEach((creatureType) => {
             // Instances (and any per-instance `actions` they carried, D8 spec §7.3) are
@@ -291,39 +473,14 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
         group.is_squad = group.is_squad ?? false;
 
         if (group.is_squad) {
-            // Squad-specific validation
-            if (group.creatures.length > 2) {
-                throw new Error(
-                    `Squad '${group.name}' can have at most two creatures (minions and an optional captain).`
-                );
-            }
-            let minionCount = 0;
-            let captainCount = 0;
-            group.creatures.forEach((creature) => {
-                if (!creature.squad_role) {
-                    throw new Error(
-                        `Creature '${creature.name}' in squad '${group.name}' must have a 'squad_role' of 'minion' or 'captain'.`
-                    );
-                }
-                if (creature.squad_role === "minion") {
-                    minionCount += 1;
-                } else if (creature.squad_role === "captain") {
-                    captainCount += 1;
-                } else {
-                    throw new Error(
-                        `Creature '${creature.name}' in squad '${group.name}' has an invalid 'squad_role' value.`
-                    );
-                }
-            });
-            if (minionCount === 0) {
-                throw new Error(`Squad '${group.name}' must have at least one minion creature.`);
-            }
-            if (minionCount > 1) {
-                throw new Error(`Squad '${group.name}' can have only one minion creature type.`);
-            }
-            if (captainCount > 1) {
-                throw new Error(`Squad '${group.name}' can have at most one captain creature.`);
-            }
+            // Squad-specific validation. SC-183 r3 / GH #67: the "at most two creatures"
+            // and "only one minion creature type" caps are GONE — a group may hold several
+            // squads (Delian Tomb W1) plus their captains and any attached creatures. What
+            // survives is what still has meaning: every creature declares a role, the group
+            // holds at least one squad, and no squad has two captains. (Transcribed in
+            // lockstep with the sync split in elements/initiative/model.ts — the two parse
+            // paths are byte-compat oracles for each other.)
+            validateSquad(group);
         }
 
         for (const [creatureIndex, creature] of group.creatures.entries()) {
@@ -367,10 +524,14 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
             // Initialize instances
             if (group.is_squad && creature.squad_role === "minion") {
                 // For minions in a squad, they share a stamina pool
-                // Initialize the shared stamina pool
-                if (group.minion_stamina_pool == null) {
+                // Initialize the shared stamina pool. SC-183 r3 / GH #67: resolved per
+                // SQUAD now, and written back through setMinionPool — which keeps a
+                // one-squad group's value on the GROUP (its historical home, so the block
+                // serializes to the same bytes) and only materializes a per-creature pool
+                // once a group actually holds more than one squad.
+                if (minionPoolOf(group, creature) == null) {
                     // Initialize the pool to total stamina (max_stamina * amount)
-                    group.minion_stamina_pool = creature.max_stamina * creature.amount;
+                    setMinionPool(group, creature, creature.max_stamina * creature.amount);
                 }
                 // Initialize instances for minions (for conditions only)
                 if (!creature.instances || creature.instances.length !== creature.amount) {

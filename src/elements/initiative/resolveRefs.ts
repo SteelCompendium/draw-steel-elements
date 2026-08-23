@@ -31,6 +31,7 @@
 //      divergence on the first write-back of a ref-bearing block, accepted by Plan 06.)
 import type { ReferenceService, ResolvedRef } from '@/framework/seams/refs';
 import type { EncounterData } from './model';
+import { minionPoolOf, setMinionPool } from './model';
 
 /** The fields the legacy merge reads off a resolved statblock payload. */
 interface StatblockFields {
@@ -181,8 +182,9 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
 				// parse's NaN-guard deliberately left the pool unset when max_stamina was
 				// still statblock-sourced; with max merged + validated, apply the legacy
 				// init. `== null` keeps an explicit or parse-initialized pool untouched.
-				if (group.minion_stamina_pool == null) {
-					group.minion_stamina_pool = creature.max_stamina * creature.amount;
+				// SC-183 r3 / GH #67 — per SQUAD (see EncounterData's squad-helper note).
+				if (minionPoolOf(group, creature) == null) {
+					setMinionPool(group, creature, creature.max_stamina * creature.amount);
 				}
 				// Squad-minion instances carry no per-instance stamina (legacy :256-264).
 			} else {
