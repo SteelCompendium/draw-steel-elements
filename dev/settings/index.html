@@ -1348,11 +1348,30 @@ Nothing changes unless you change it.</p>
   text font.</li>
 <li><strong>Text size</strong> (60%–140%) and <strong>Card size</strong> (80%–120%) — scale the text inside elements,
   or whole statblock and ability cards. Print and export always use 100%.</li>
-<li>Under <strong>Advanced</strong>: <strong>Card body font</strong>, <strong>Label font</strong> and <strong>Monospace font</strong> for the
-  smaller text slots.</li>
+<li><strong>Small text size</strong>, <strong>Large text size</strong>, <strong>Control text size</strong> (all 80%–120%) — these
+  three do something different from <strong>Text size</strong> above: instead of scaling an element as
+  a whole, they change how far each <em>kind</em> of text sits from the body text.<ul>
+<li><strong>Small text size</strong> covers everything quieter than the body: labels, captions,
+  hints, chips, log lines, tallies. Turn it up if the small print in the trackers is
+  hard to read.</li>
+<li><strong>Large text size</strong> covers everything louder: card names, band titles, and the big
+  display numbers on a statblock.</li>
+<li><strong>Control text size</strong> covers buttons, steppers, tabs and collapse headers. Turn it
+  down if the buttons shout louder than the content.</li>
 </ul>
+</li>
+</ul>
+<p>100% on all three is the shipped look. The live preview reacts as you drag, so you can
+  see the effect on a real statblock before you commit.
+- Under <strong>Advanced</strong>: <strong>Card body font</strong>, <strong>Label font</strong> and <strong>Monospace font</strong> for the
+  smaller text slots.</p>
 <p>Font and size settings apply everywhere, including print and export, and are global —
-they can't be overridden per block.</p>
+they can't be overridden per block. (The two exceptions are <strong>Text size</strong> and <strong>Card
+size</strong>, which are screen-only so a printout always fits the page, and <strong>Control text
+size</strong>, since buttons don't print at all.)</p>
+<p>Sizes are always stated <em>relative</em> to your own theme's text size rather than in fixed
+pixels, so a Draw Steel element inherits your reading font size automatically — if you
+change your Obsidian text size, everything here follows without you touching a slider.</p>
 <h2 id="statblock-display">Statblock display<a class="headerlink" href="#statblock-display" title="Permanent link">&para;</a></h2>
 <p>How statblocks are laid out. Start with the <strong>Preset</strong>:</p>
 <ul>
