@@ -102,47 +102,6 @@ declare module '../framework/seams/prefs' {
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
 		staminaRecoveryPopover: boolean;
-		// —— SC-183 round 3: WHICH MARK a portrait wears once its actor has gone.
-		//
-		// The two review switches before it are both gone, each by its own deletion plan.
-		// Round 1's `initStamina` (plate vs rail) ended when Scott picked plate; round 2's
-		// `initTurn` (current / spine / dim / gutter) ended when he picked `dim`
-		// (2026-08-22: "The `dim` approach is generally the direction I want to go"), so the
-		// dim treatment is now the tracker's unconditional layout and the key, the two
-		// losing CSS branches and their shots are deleted.
-		//
-		// The same ruling opened the ONE question this key exists for. The dedicated turn
-		// checkbox is gone from the screen and the PORTRAIT is the turn toggle — but: "Im
-		// not sure what I want to do to indicate it though… fading would look great, but its
-		// a bit subtle and not very discoverable. A 'check' overlay on the portrait is also
-		// an option, but its not as pretty. What other options do you think might be
-		// viable?" So: four candidates, none of them the two he already named.
-		//
-		// EVERY value renders the SAME DOM — one `.dse-init__portrait-toggle` button over the
-		// portrait, with one mark node and one word node inside it. The attr only restyles
-		// them, so no candidate can change behaviour (one click, always), and none of them
-		// can move a frozen print pair (the whole overlay is base-hidden).
-		//
-		//   seal (default)  a struck STEEL SEAL presses into the portrait's lower-right
-		//                   corner — a milled disc bearing the brand diamond, with the frame
-		//                   turning to engraved metal around it. Addition, not subtraction:
-		//                   the picture stays fully legible, which is what "fading is too
-		//                   subtle" asks for.
-		//   shutter         a portcullis drops over the portrait: milled horizontal slats at
-		//                   partial opacity with the word DONE cut across the middle. The
-		//                   loudest at roster scale — the whole tile changes texture.
-		//   sheathe         the portrait goes cold — desaturated to stone — and takes a
-		//                   struck X of crossed blades plus a rim-light on the frame. Shape
-		//                   and grayscale, so it survives colourblindness and a 300px leaf.
-		//   laurel          a forged wreath ring closes around the portrait and a small
-		//                   banner along its foot reads TURN DONE. Nothing dims at all; the
-		//                   state is entirely added chrome.
-		//
-		// Deliberately `ui.hidden` — a review-time device, never a shipped state. Deletion
-		// plan: Scott picks, the winner becomes unconditional, and this key, the losing CSS
-		// branches, the candidate shots and the catalog-test entry are deleted (the SC-154
-		// `5360fe9` promotion shape, run three times now).
-		initPortrait: 'seal' | 'shutter' | 'sheathe' | 'laurel';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -594,25 +553,11 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
-	// SC-183 round 3 — the PORTRAIT turn-mark candidates. Hidden (the row is never
-	// rendered): a review switch for the options on the ticket, not a shipped setting.
-	// Round 2's `initTurn` is deleted here — Scott picked `dim`, which is now the
-	// tracker's own layout. See the DsePrefs comment above for what each value paints and
-	// why every value is the same DOM and the same single click.
-	d({
-		key: 'initPortrait', default: 'seal', attr: 'init-portrait',
-		ui: {
-			group: 'Element defaults', label: 'Initiative tracker turn mark', control: 'select',
-			hidden: true,
-			options: [
-				{ value: 'seal', label: 'Seal (a struck steel seal in the portrait\u2019s corner)' },
-				{ value: 'shutter', label: 'Shutter (a slatted portcullis over the portrait)' },
-				{ value: 'sheathe', label: 'Sheathe (cold stone + crossed blades)' },
-				{ value: 'laurel', label: 'Laurel (a forged ring and a TURN DONE banner)' },
-			],
-			help: 'SC-183 review switch: how a portrait shows that its actor has taken their turn.',
-		},
-	}),
+	// SC-183 round 3's `initPortrait` (seal / shutter / sheathe / laurel) is deleted here
+	// — Scott picked `seal` (2026-08-23: "Seal option looks good. I like that."), which is
+	// now the tracker's unconditional portrait turn-mark; the key, the three losing CSS
+	// branches and their shots are deleted (the SC-154 `5360fe9` promotion shape, run four
+	// times now).
 
 	// —— Rolling (D5, Plan 14: OD-D4-1a's hidden rows go live + the master switch) ——
 	d({

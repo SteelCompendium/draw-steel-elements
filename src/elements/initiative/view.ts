@@ -478,9 +478,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	   On the Steel SCREEN — the only surface a user ever clicks — the dedicated checkbox
 	   is gone. The portrait carries a full-bleed overlay button (`.dse-init__portrait-toggle`)
 	   that is the turn toggle: one click, `aria-pressed`, its own accessible label, a real
-	   tab stop, and a hover/focus affordance so it still reads as a control. Which VISUAL
-	   treatment marks a spent portrait is `initPortrait`'s four candidates (styles-source
-	   §12) — every one of them is CSS over this same DOM.
+	   tab stop, and a hover/focus affordance so it still reads as a control. The visual
+	   treatment that marks a spent portrait is a struck STEEL SEAL (styles-source §12b) —
+	   Scott's promotion-round pick (2026-08-23: "Seal option looks good. I like that."),
+	   unconditional now that the round-3 `initPortrait` review switch is deleted.
 
 	   The checkbox BOX itself stays in the DOM and stays visible in PRINT, where it is
 	   `display: none`'d on the Steel screen. Two reasons, both load-bearing:
@@ -561,10 +562,10 @@ export class InitiativeView extends ElementView<EncounterData> {
 	 *  base-hidden like every other SC-183 instrument (print keeps the checkbox), so both
 	 *  print classes render exactly the boxes they rendered before.
 	 *
-	 *  It carries TWO non-colour channels of its own, on top of whatever mark the active
-	 *  `initPortrait` candidate paints: `aria-pressed` for AT, and a real WORD
-	 *  ("Done" / "To go") that every candidate is free to show or hide — the `seal` and
-	 *  `shutter` candidates paint it, the others carry it as the accessible name. */
+	 *  It carries TWO non-colour channels of its own, on top of the `seal` mark itself
+	 *  (styles-source §12b): `aria-pressed` for AT, and a real WORD ("Done" / "To go")
+	 *  that stays present in the DOM as the mark's text backer even though `seal` never
+	 *  paints it visibly (permanently opacity:0 — see §12a's note). */
 	private buildPortraitToggle(
 		portraitEl: HTMLElement,
 		name: string,

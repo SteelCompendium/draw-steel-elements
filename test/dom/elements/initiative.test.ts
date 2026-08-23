@@ -1638,53 +1638,43 @@ malice:
 
 	// ------------------------------------------------- the portrait turn-mark switch
 
-	test('initPortrait pref (hidden review switch): reflected as data-dse-init-portrait, default seal, live restyle to each candidate', async () => {
-		// Round 2's `initTurn` A/B is gone — Scott picked `dim` ("The `dim` approach is
-		// generally the direction I want to go"), so it is unconditional and the key, the
-		// spine/gutter CSS and their shots were deleted. This is round 3's open question:
-		// which MARK a spent portrait wears.
-		const { root, deps } = await renderInit(quickStart);
-		expect(root.getAttribute('data-dse-init-portrait')).toBe('seal');
-		for (const value of ['shutter', 'sheathe', 'laurel', 'seal'] as const) {
-			await deps.prefs.set('initPortrait', value);
-			expect(root.getAttribute('data-dse-init-portrait')).toBe(value);
-		}
+	test('the portrait wears the `seal` mark unconditionally — no data-dse-init-portrait attribute at all', async () => {
+		// SC-183 round 3's four candidates (`seal`, `shutter`, `sheathe`, `laurel`) were a
+		// hidden review switch behind `initPortrait`. Scott's promotion round-4 pick
+		// (2026-08-23: "Seal option looks good. I like that.") deleted the key entirely —
+		// `seal`'s rules apply unconditionally now, so the tracker root carries no
+		// `data-dse-init-portrait` attribute at all (there is nothing left to switch).
+		const { root } = await renderInit(quickStart);
+		expect(root.hasAttribute('data-dse-init-portrait')).toBe(false);
 	});
 
-	test('the promoted `dim` layout left no trace of the losing candidates', () => {
+	test('the promoted `dim` layout and the promoted `seal` mark left no trace of their losing candidates', () => {
 		// The deletion plan, enforced. A hidden review row is a review-time device: when
 		// Scott picks, the winner becomes unconditional and the losers GO — key, CSS and
-		// shots. This is the same guard round 2 wrote for the deleted `rail` arm.
+		// shots. This is the same guard round 2 wrote for the deleted `rail`/`spine`/`gutter`
+		// arms, extended for round 4's `shutter`/`sheathe`/`laurel`.
 		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
 		expect(sheet).not.toContain("data-dse-init-turn");
 		expect(sheet).not.toContain("[data-dse-init-turn='spine']");
 		expect(sheet).not.toContain("[data-dse-init-turn='gutter']");
+		expect(sheet).not.toContain("data-dse-init-portrait");
+		expect(sheet).not.toContain("[data-dse-init-portrait='shutter']");
+		expect(sheet).not.toContain("[data-dse-init-portrait='sheathe']");
+		expect(sheet).not.toContain("[data-dse-init-portrait='laurel']");
+		expect(sheet).not.toContain("[data-dse-init-portrait='seal']");
 	});
 
-	test('every portrait candidate is a pure RESTYLE: the DOM and the one-click handlers are identical at every value', async () => {
+	test('the portrait toggle and the four action toggles each take exactly one click', async () => {
 		// Scott's hard constraint, unchanged since round 1: "each one needs to be a
 		// one-click (like it is today) because having multiple clicks (like a dropdown or
-		// something) is too much overhead when a GM/Director is running a combat." The
-		// candidates are CSS over one DOM, so this is true by construction — and this test
-		// is what keeps it true.
-		const { root, deps } = await renderInit(quickStart);
-		const shape = (): string =>
-			[
-				root.querySelectorAll('.dse-init__turnbox').length,
-				root.querySelectorAll('button.dse-init__turn').length,
-				root.querySelectorAll('button.dse-init__portrait-toggle').length,
-				root.querySelectorAll('.dse-init__pt-mark').length,
-				root.querySelectorAll('.dse-init__pt-word').length,
-				root.querySelectorAll('button.dse-init__action-toggle').length,
-			].join('|');
-		const before = shape();
-		for (const value of ['shutter', 'sheathe', 'laurel', 'seal'] as const) {
-			await deps.prefs.set('initPortrait', value);
-			expect(shape()).toBe(before);
-		}
-
-		// And the four action toggles still take exactly one click each to flip.
+		// something) is too much overhead when a GM/Director is running a combat."
+		const { root } = await renderInit(quickStart);
 		const firstRow = root.querySelector('.dse-init__group--heroes .dse-init__row') as HTMLElement;
+		const portraitToggle = firstRow.querySelector<HTMLElement>('button.dse-init__portrait-toggle')!;
+		expect(portraitToggle.getAttribute('aria-pressed')).toBe('false');
+		portraitToggle.click();
+		expect(portraitToggle.getAttribute('aria-pressed')).toBe('true');
+
 		const toggles = firstRow.querySelectorAll<HTMLElement>('button.dse-init__action-toggle');
 		expect(toggles.length).toBe(4);
 		toggles.forEach((t) => {

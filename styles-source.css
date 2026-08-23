@@ -10155,9 +10155,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 }
 /* Tracker rows are denser than the standalone element: the readout steps down from
    2.05em but stays the headline (Scott: the big current value "really helps catch
-   the eye with important information"). */
+   the eye with important information"). SC-185 adoption: it's a display stat VALUE
+   meant to be read across a roster, so it's the --dse-fs-numeral role (1.75em default,
+   inert to a hairline over the pre-scale 1.7em). */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init .dse-stamina__cnums {
-	font-size: 1.7em;
+	font-size: var(--dse-fs-numeral);
 }
 
 /* ROUND 3 — THE INSTRUMENT BECOMES ONE LINE. This is the decisive half of Scott's "the
@@ -10334,7 +10336,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.09em;
-	font-size: 0.82em;
+	/* SC-185 adoption: a small-caps bordered CHIP, exactly the case --dse-fs-label
+	   names ("card-header eyebrows and decks, chips"); precedent .dse-sb__char-l. */
+	font-size: var(--dse-fs-label);
 	line-height: 1.5;
 	white-space: nowrap;
 	color: var(--dse-st, var(--dse-stamina-winded));
@@ -10396,7 +10400,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.07em;
-	font-size: 0.75em;
+	/* SC-185 adoption: the same small-caps CHIP grammar as the state badge above —
+	   --dse-fs-label. */
+	font-size: var(--dse-fs-label);
 	font-weight: normal;
 	line-height: 1.5;
 	white-space: nowrap;
@@ -10530,7 +10536,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 }
 @container dse-init-host (max-width: 420px) {
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__bar .dse-stamina__cnums {
-		font-size: 1.3em;
+		/* SC-185 adoption: derived off the same --dse-fs-numeral role the full-width
+		   readout (§8) now carries, stepped down ~25% — the ratio the pre-scale
+		   1.7em → 1.3em pairing had. */
+		font-size: calc(var(--dse-fs-numeral) * 0.75);
 	}
 }
 
@@ -10713,7 +10722,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	right: 12px;
 	margin-top: 0;
 	gap: 3px;
-	font-size: 1em;
+	/* SC-185 adoption: the em basis for the four pip icons, which are interactive
+	   one-click controls — --dse-fs-control (inert: its default is 1em). */
+	font-size: var(--dse-fs-control);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle {
 	display: inline-flex;
@@ -10749,7 +10760,6 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 
 /* ================================================================== */
 /*   12. THE PORTRAIT IS THE TURN CONTROL                              */
-/*       (+ the hidden `initPortrait` candidate switch)                */
 /* ================================================================== */
 /*
    Scott, 2026-08-22: "I think we actually can drop the dedicated checkbox for taking
@@ -10758,35 +10768,32 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    subtle and not very discoverable. A 'check' overlay on the portrait is also an option,
    but its not as pretty. What other options do you think might be viable?"
 
-   TWO SEPARATE THINGS, and only the second is undecided.
+   TWO SEPARATE THINGS, both now settled.
 
-   SETTLED — the control. The checkbox is gone from the screen; the portrait is the
-   toggle. It is a REAL button (`.dse-init__portrait-toggle`, view.ts) laid over the
-   picture: one click, `aria-pressed`, its own accessible name, a tab stop, and a
-   hover/focus affordance so it still reads as a control rather than as a picture that
-   happens to react. The checkbox BOX stays in the DOM and stays PRINT's control — see
-   view.ts's own note for both reasons (paper has no portrait to click; and deleting a
-   rendered box would move every frozen `initiative*` print pair for no screen gain).
-   Exactly one of the two is live at a time.
+   THE CONTROL. The checkbox is gone from the screen; the portrait is the toggle. It is a
+   REAL button (`.dse-init__portrait-toggle`, view.ts) laid over the picture: one click,
+   `aria-pressed`, its own accessible name, a tab stop, and a hover/focus affordance so it
+   still reads as a control rather than as a picture that happens to react. The checkbox
+   BOX stays in the DOM and stays PRINT's control — see view.ts's own note for both
+   reasons (paper has no portrait to click; and deleting a rendered box would move every
+   frozen `initiative*` print pair for no screen gain). Exactly one of the two is live at
+   a time.
 
    THE PORTRAITS-OFF EXCEPTION, at the bottom of this section: `data-dse-portraits="off"`
    hides portraits, which would take the turn control with them. Under that preference
    the checkbox comes back and the overlay stands down. This is the one way the design
    can lose a control, so it is a rule AND a test, not a note.
 
-   UNDECIDED — the MARK. Four candidates behind `data-dse-init-portrait`, all of them the
-   same DOM (one button, one mark node, one word node) and the same single click, so no
-   candidate can change behaviour and none can move a frozen pair. Neither of the two
-   Scott already named is among them: plain fading is what he called too subtle, and a
-   bare check overlay is what he called not pretty. What every candidate must do instead:
-     - be readable at a GLANCE down a full roster (that is the whole job of the tracker),
-     - never carry its meaning in colour alone (the mark is a SHAPE and, where it fits,
-       a WORD; `aria-pressed` is the third channel),
-     - stay legible at a 300px sidebar leaf,
-     - and still look like a control before it is pressed (the hover/focus ghost).
+   THE MARK. Round 3 built four candidates behind a hidden `initPortrait` review switch
+   (`seal`, `shutter`, `sheathe`, `laurel`), all of them the same DOM (one button, one
+   mark node, one word node) and the same single click, so no candidate could change
+   behaviour and none could move a frozen pair. Scott's promotion-round pick (2026-08-23:
+   "Seal option looks good. I like that.") settled it: `seal` is now the tracker's ONE
+   portrait turn-mark, unconditionally — the `shutter`/`sheathe`/`laurel` CSS, the
+   `initPortrait` key and its A/B test are deleted (the SC-154 `5360fe9` promotion shape).
 */
 
-/* -- 12a. The overlay control (all candidates) ---------------------------------- */
+/* -- 12a. The overlay control -------------------------------------------------- */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle {
 	display: flex;
 	position: absolute;
@@ -10803,12 +10810,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	overflow: hidden;
 	cursor: pointer;
 }
-/* The mark and the word are the two channels every candidate paints with; both start
-   invisible so an untaken portrait is just a portrait. */
+/* The mark and the word are the two channels the toggle paints with; both start
+   invisible so an untaken portrait is just a portrait. `seal` (below) only ever uses the
+   mark — the word node stays present (view.ts still stamps it "Done"/"To go" as a text
+   backer) but permanently opacity:0, which is why it carries no candidate-specific
+   override any more. */
 /* `display` is what the base sheet hides them with, so the screen layer has to hand it
-   back before `opacity` means anything — a candidate that only sets opacity on a
-   display:none node paints nothing at all (hit, and fixed, in this round's first sweep:
-   `shutter`'s DONE word was invisible for exactly this reason). */
+   back before `opacity` means anything — a rule that only sets opacity on a
+   display:none node paints nothing at all (hit, and fixed, in round 3's first sweep). */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-mark,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__pt-word {
 	display: block;
@@ -10820,7 +10829,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	left: 0;
 	right: 0;
 	bottom: 0;
-	font-size: 0.62em;
+	/* SC-185 adoption: --dse-fs-micro — closest role to a tag-scale word; the node is
+	   permanently invisible (see the note above) so the exact ratio has no visible
+	   effect, but a font-size still has to be a role per the contract. */
+	font-size: var(--dse-fs-micro);
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.12em;
@@ -10830,9 +10842,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	background: rgba(0, 0, 0, 0.62);
 }
 /* THE DISCOVERABILITY AFFORDANCE. Before it is pressed the portrait must still say "I am
-   a control": on hover/focus it lifts a faint steel wash and a GHOST of the same mark the
-   candidate will strike, so the gesture is learnable without a label. Focus-visible gets
-   the real focus ring the kit puts on every other control. */
+   a control": on hover/focus it lifts a faint steel wash and a GHOST of the seal mark, so
+   the gesture is learnable without a label. Focus-visible gets the real focus ring the
+   kit puts on every other control. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle:is(:hover, :focus-visible)::after {
 	content: '';
 	position: absolute;
@@ -10850,17 +10862,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	height: 1.6em;
 }
 
-/* -- 12b. `seal` — a struck steel seal in the corner (DEFAULT) ------------------ */
+/* -- 12b. `seal` — a struck steel seal in the corner (THE mark, unconditional) ---- */
 /* Addition, not subtraction: the picture stays fully lit and legible — the answer to
    "fading … is a bit subtle" — and the state arrives as a milled disc pressed into the
    portrait's lower-right corner, bearing the brand's ◆ diamond, with the frame turning to
    engraved metal around it. At roster scale the eye reads a row of discs; up close it
    reads a stamp. Word channel: the seal's disc plus the `aria-pressed` state; the printed
    word is not shown (it would fight the seal for the same corner). */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] {
 	box-shadow: inset 0 0 0 2px var(--dse-metal), inset 0 0 12px rgba(0, 0, 0, 0.55);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
 	opacity: 1;
 	position: absolute;
 	right: 3px;
@@ -10876,12 +10888,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 	color: #23282b;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
 	display: none;
 }
 /* The ◆ is the brand's own connective mark (DESIGN.md, "The ◆ diamond motif"), struck
    into the disc rather than drawn on it: a rotated square with an inset shadow. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='seal'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before {
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before {
 	content: '';
 	width: 0.78em;
 	height: 0.78em;
@@ -10890,109 +10902,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
-/* -- 12c. `shutter` — a slatted portcullis drops over the portrait -------------- */
-/* The loudest of the four at roster scale: the whole tile changes TEXTURE, not just its
-   brightness, so a scan down the column separates "gone" from "to go" without focusing
-   on any row. The slats are a repeating linear-gradient over a translucent ground, so
-   the face stays half-visible behind them (you can still tell who it is) and the word
-   DONE is cut across the middle as the second channel. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='shutter'] .dse-init__portrait-toggle[data-taken] {
-	background:
-		repeating-linear-gradient(
-			180deg,
-			rgba(0, 0, 0, 0.72) 0,
-			rgba(0, 0, 0, 0.72) 3px,
-			rgba(190, 200, 206, 0.34) 3px,
-			rgba(190, 200, 206, 0.34) 5px
-		);
-	box-shadow: inset 0 0 0 2px var(--dse-metal);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='shutter'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-word {
-	opacity: 1;
-	top: 50%;
-	bottom: auto;
-	transform: translateY(-50%);
-	font-size: 0.72em;
-	letter-spacing: 0.22em;
-	background: rgba(0, 0, 0, 0.8);
-	color: #e7edf0;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='shutter'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
-	opacity: 0;
-}
-
-/* -- 12d. `sheathe` — cold stone and crossed blades ----------------------------- */
-/* The portrait goes COLD: fully desaturated (a greyscale filter, not an alpha — the
-   picture keeps all of its contrast, it just loses its life) and struck with an X of two
-   milled bars. Two independent non-colour channels, which is why this one survives both
-   colourblindness and a 300px leaf: the tile turns grey AND gains a shape no other state
-   has. The rim goes to a bright catch-light so the frame still reads as metal. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__row > .dse-init__portrait:has(.dse-init__portrait-toggle[data-taken]) img,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__row > .dse-init__portrait:has(.dse-init__portrait-toggle[data-taken]) .dse-init__portrait-fallback {
-	filter: grayscale(1) contrast(1.08) brightness(0.92);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] {
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), inset 0 0 0 3px rgba(0, 0, 0, 0.45);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
-	opacity: 1;
-	position: absolute;
-	inset: 0;
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark svg {
-	display: none;
-}
-/* The two struck bars. `::before`/`::after` on the mark node, each a full-width 4px bar
-   rotated to the diagonal — a shape the tracker uses nowhere else, so it can only mean
-   this. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::after {
-	content: '';
-	position: absolute;
-	top: 50%;
-	left: -14%;
-	width: 128%;
-	height: 4px;
-	background: linear-gradient(180deg, #e2e8eb, #8e989e 55%, #4c555a);
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::before {
-	transform: translateY(-50%) rotate(38deg);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='sheathe'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark::after {
-	transform: translateY(-50%) rotate(-38deg);
-}
-
-/* -- 12e. `laurel` — a forged ring and a TURN DONE banner ----------------------- */
-/* The gentlest of the four ON THE PICTURE: nothing covers it and nothing greys it, so
-   the mark itself is entirely added chrome. (The picture is still touched by §11a's row
-   recession — that is the promoted `dim` layout, not this candidate; the difference is
-   that no candidate rule takes anything away here.) A forged ring closes around the
-   portrait — it is SET into the frame — and a banner along its foot carries the word.
-   The ring is a double box-shadow rather than a border so it eats none of the picture. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='laurel'] .dse-init__portrait-toggle[data-taken] {
-	box-shadow:
-		inset 0 0 0 3px var(--dse-metal),
-		inset 0 0 0 4px rgba(0, 0, 0, 0.55),
-		inset 0 2px 0 rgba(255, 255, 255, 0.28);
-	border-radius: var(--dse-radius);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='laurel'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-word {
-	opacity: 1;
-	left: 3px;
-	right: 3px;
-	bottom: 3px;
-	font-size: 0.58em;
-	letter-spacing: 0.14em;
-	background: linear-gradient(180deg, rgba(120, 130, 137, 0.95), rgba(52, 60, 65, 0.95));
-	color: #eef3f5;
-	border-top: 1px solid rgba(255, 255, 255, 0.3);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'][data-dse-init-portrait='laurel'] .dse-init__portrait-toggle[data-taken] .dse-init__pt-mark {
-	opacity: 0;
-}
-
-/* -- 12f. The checkbox stands down (and comes back when portraits are off) ------ */
+/* -- 12c. The checkbox stands down (and comes back when portraits are off) ------ */
 /* On the Steel screen the hero row's checkbox is gone: the portrait is the control. The
    GROUP header keeps its checkbox, deliberately — a group has no portrait to click, and
    inventing one would mean inventing an identity the encounter data does not have.
@@ -11012,10 +10922,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	display: none;
 }
 
-/* -- 12g. Narrow (300px sidebar leaf) ------------------------------------------- */
+/* -- 12d. Narrow (300px sidebar leaf) ------------------------------------------- */
 /* The pips shrink so the name's reservation can shrink with them, and the portrait steps
-   down — at 300px a 76px picture is a quarter of the pane. Every candidate's mark is
-   sized in `em` off the toggle, so they all follow without a rule of their own. */
+   down — at 300px a 76px picture is a quarter of the pane. The seal mark is sized in
+   `em` off the toggle, so it follows without a rule of its own. */
 @container dse-init-host (max-width: 420px) {
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait,
 	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__row > .dse-init__portrait img,

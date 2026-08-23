@@ -80,12 +80,15 @@ for what needs action.
   blocks are unaffected in every respect, down to the bytes written back to your note.
 - **The portrait is the turn toggle** (SC-183). The little dot-checkbox beside each hero
   is gone from the tracker: click the hero's **portrait** to mark their turn taken, click
-  again to undo. A spent row reads as spent material — its plate goes to a dark milled
-  hatch and its portrait and name recede — so a glance down the list finds who is still to
-  go without reading anything. Everything on that row stays fully lit and fully usable
-  (the Director still has to adjust Stamina on rows that have already gone), and hovering
-  or tabbing into a spent row brings it all the way back. If you turn portraits off, the
-  checkbox returns — there's nothing to click otherwise. Printed trackers keep the tick
+  again to undo. A taken turn strikes a small **steel seal** into the portrait's lower-right
+  corner — a milled disc bearing the brand's ◆ diamond, the frame turning to engraved metal
+  around it — so a glance down a full roster reads as a row of seals rather than something
+  you have to squint at. A spent row also reads as spent material — its plate goes to a dark
+  milled hatch and its portrait and name recede — so a glance down the list finds who is
+  still to go without reading anything. Everything on that row stays fully lit and fully
+  usable (the Director still has to adjust Stamina on rows that have already gone), and
+  hovering or tabbing into a spent row brings it all the way back. If you turn portraits off,
+  the checkbox returns — there's nothing to click otherwise. Printed trackers keep the tick
   box, which is what a turn marker means on paper.
 - **The hero and monster rows are rebalanced** (SC-183). The portrait is markedly bigger,
   the four action pips sit on the card's own inset like everything else in the row, and

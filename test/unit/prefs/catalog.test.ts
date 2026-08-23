@@ -241,12 +241,6 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		sbStickyMeta: 'sb-stickymeta',
 		fbFeatureStyle: 'fb-featstyle',
 		fbStats: 'fb-stats',
-		// SC-183 round 2 — the tracker's turn-economy candidates (hidden review switch,
-		// the SC-154 initControls pattern): attr-reflected because every candidate is
-		// one DOM and the value is a pure Steel-screen CSS reflow. (Round 1's
-		// `initStamina` plate/rail A/B lived here until Scott picked plate — key and
-		// loser deleted, per its own deletion plan below.)
-		initPortrait: 'init-portrait',
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
@@ -273,22 +267,14 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // shipped state; anything that appears here must carry its own deletion plan.
 //
 // SC-183 `initStamina` was the third (plate vs rail; Scott picked plate on 2026-08-22,
-// "The `plate` approach is generally better") and SC-183 `initTurn` the fourth (four
+// "The `plate` approach is generally better"), SC-183 `initTurn` the fourth (four
 // turn-economy layouts; Scott picked `dim` on 2026-08-22, "The `dim` approach is
-// generally the direction I want to go"). Both executed their deletion plans verbatim in
-// the very next round — winner unconditional, key + losing CSS + candidate shots gone.
-// Four for four: a hidden row has always ended in its own deletion.
-//
-// SC-183 `initPortrait` is the fifth, and the list is non-empty for the same reason it
-// was the previous four times — an open question Scott asked for OPTIONS on rather than
-// a pick. The portrait is the turn toggle now; what MARK a spent portrait wears is
-// undecided ("Im not sure what I want to do to indicate it though… What other options do
-// you think might be viable?", SC-183, 2026-08-22). Four candidates (`seal`, `shutter`,
-// `sheathe`, `laurel`), every one the same DOM and the same single click. Deletion plan,
-// identical to its predecessors': Scott picks, the winner becomes unconditional, and the
-// key, the losing CSS branches, the candidate shots and this entry are deleted (the
-// SC-154 `5360fe9` promotion shape).
-const EXPECTED_HIDDEN_ROWS: string[] = ['initPortrait'];
+// generally the direction I want to go"), and SC-183 `initPortrait` the fifth (four
+// portrait turn-mark candidates; Scott picked `seal` on 2026-08-23, "Seal option looks
+// good. I like that."). All three executed their deletion plans verbatim in the very
+// next round — winner unconditional, key + losing CSS + candidate shots gone. Five for
+// five: a hidden row has always ended in its own deletion.
+const EXPECTED_HIDDEN_ROWS: string[] = [];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

@@ -325,7 +325,9 @@ try {
 	// pref that changes DOM shape is captured as it is really built.
 	for (const n of prefShots) {
 		if (args.element && args.element !== n.element && args.element !== n.id) continue;
-		const prefParam = Object.entries(n.prefs)
+		// SC-183 promotion round: prefs is now optional (a shot kept alive under its own
+		// id after its preference was promoted and deleted has nothing left to vary).
+		const prefParam = Object.entries(n.prefs ?? {})
 			.map(([k, v]) => `${k}:${v}`)
 			.join(',');
 		for (const c of combos) {

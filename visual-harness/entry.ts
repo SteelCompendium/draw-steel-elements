@@ -1102,7 +1102,10 @@ export const PREF_SHOTS: {
 	id: string;
 	element: string;
 	fixture: string;
-	prefs: Record<string, string>;
+	/** Optional as of the SC-183 promotion round: a shot kept alive under its own id for
+	 *  review-history continuity (e.g. `initiative-mark-seal`) after its preference was
+	 *  promoted to unconditional and deleted has nothing left to vary. */
+	prefs?: Record<string, string>;
 	/** SC-183: optional narrow-axis override, routed through snap() exactly like
 	 *  NARROW_SHOTS' width — a preference whose whole point is a layout needs its
 	 *  narrow branch photographed under the same pref. */
@@ -1163,22 +1166,16 @@ export const PREF_SHOTS: {
 		fixture: 'default',
 		prefs: { authoringControls: 'true' },
 	},
-	// SC-183 round 3 — the PORTRAIT TURN-MARK candidates (hidden `initPortrait` review
-	// switch, the SC-154 round-3 pattern). Round 2's four turn-economy layouts are gone:
-	// Scott picked `dim`, so it is unconditional and the spine/gutter shots retired with
-	// their CSS. The open question now is which MARK a spent portrait wears, and it can
-	// only be judged at ROSTER scale — the whole job of the indicator is an at-a-glance
-	// scan — so these run on the five-hero `roster` fixture (3 spent, 2 to go), not on the
-	// two-hero mid-fight one. The recommendation also gets its light twin and its 300px
-	// narrow branch, the two places a mark is most likely to fall over.
-	{ id: 'initiative-mark-seal', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'seal' } },
-	{ id: 'initiative-mark-shutter', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'shutter' } },
-	{ id: 'initiative-mark-sheathe', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'sheathe' } },
-	{ id: 'initiative-mark-laurel', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'laurel' } },
-	{ id: 'initiative-mark-sheathe-narrow', element: 'initiative', fixture: 'roster', prefs: { initPortrait: 'sheathe' }, width: 300 },
+	// SC-183 promotion round — the portrait's turn-mark. Round 3 built four candidates
+	// behind a hidden `initPortrait` review switch, judged at ROSTER scale (the whole job
+	// of the indicator is an at-a-glance scan) on the five-hero `roster` fixture (3 spent,
+	// 2 to go). Scott picked `seal` (2026-08-23: "Seal option looks good. I like that."):
+	// the mark is unconditional now and the review switch is deleted, so this shot is a
+	// plain roster capture kept under its own id for continuity with the review history.
+	{ id: 'initiative-mark-seal', element: 'initiative', fixture: 'roster' },
 	// SC-183 round 3 — PORTRAITS OFF over the promoted layout: the one configuration in
 	// which a portrait-only turn control would disappear, so the checkbox has to come back
-	// (styles-source §12f). A shot, not just a test, because "the control is gone" is
+	// (styles-source §12c). A shot, not just a test, because "the control is gone" is
 	// exactly the class of regression a human notices instantly and a selector does not.
 	{ id: 'initiative-portraits-off', element: 'initiative', fixture: 'roster', prefs: { portraits: 'off' } },
 ];
@@ -1699,7 +1696,7 @@ declare global {
 				id: string;
 				element: string;
 				fixture: string;
-				prefs: Record<string, string>;
+				prefs?: Record<string, string>;
 			}[];
 			scrollShots: {
 				id: string;

@@ -234,7 +234,10 @@ Once your encounter is defined, the Initiative Tracker provides an interactive U
 
 ### Heroes
 
-- **Turn Indicator**: Click on the circle icon next to a hero's name to mark whether they have taken their turn.
+- **Turn Indicator**: Click a hero's **portrait** to mark whether they have taken their
+	turn — a struck steel seal presses into the portrait's lower-right corner once they
+	have. (With portraits turned off there is no picture to click, so the circle
+	checkbox next to the name takes over as the control instead.)
 - **Stamina Management**: Click on the hero's stamina display to open a modal where you can:
 	- Apply damage or healing.
 	- Adjust temporary stamina points.
@@ -242,7 +245,8 @@ Once your encounter is defined, the Initiative Tracker provides an interactive U
 
 ### Enemy Groups
 
-- **Turn Indicator**: Similar to heroes, click on the circle icon next to the enemy group's name.
+- **Turn Indicator**: An enemy group has no portrait to click, so it keeps the circle
+	checkbox next to its name as its turn control.
 - **Creature Grid**:
 	- **Selection**: Click on a creature instance to view its details.
 	- **Health Management**:
