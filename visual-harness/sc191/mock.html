@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SC-191 montage design candidates</title>
+<!-- The REAL plugin environment: Obsidian's vendored theme vars + the compiled
+     styles-source.css (dist/harness.css, produced by `npm run harness:build`).
+     candidates.css is the only new sheet — it is NOT part of the shipped plugin,
+     so nothing here can move a frozen shot. -->
+<link rel="stylesheet" href="../vars.css">
+<link rel="stylesheet" href="../dist/harness.css">
+<link rel="stylesheet" href="candidates.css">
+<style>
+	/* deterministic shots — same convention as visual-harness/index.html */
+	*, *::before, *::after { transition: none !important; animation: none !important; }
+	body { margin: 0; padding: 24px; }
+	#mount { margin: 0 auto; }
+</style>
+</head>
+<body class="theme-dark">
+<div id="mount"></div>
+<script src="mock.js"></script>
+</body>
+</html>

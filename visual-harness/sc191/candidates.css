@@ -1,0 +1,1060 @@
+/* SC-191 — montage overhaul DESIGN ROUND: candidate stylesheet.
+ *
+ * NOT SHIPPED. This file is loaded only by visual-harness/sc191/mock.html; it is not
+ * imported by main.ts and it is not part of styles-source.css, so nothing here can
+ * reach a user, a frozen shot, or the print baseline.
+ *
+ * It still plays by the plugin's rules so that a chosen candidate can be lifted into
+ * styles-source.css with edits, not a rewrite:
+ *   - every colour is a --dse-* token (DESIGN.md rule 3 — compose, never invent);
+ *   - every font-size is one of the nine --dse-fs-* ROLE tokens (SC-185 contract);
+ *   - no decorative colored left-border anywhere (DESIGN.md rule 7, SC-132);
+ *   - state is carried by SHAPE, MATERIAL, POSITION and WORDS before colour, because
+ *     Scott is colourblind (the same discipline SC-132's stamina crest ladder uses);
+ *   - both schemes are defined; light is a real twin, not an afterthought.
+ *
+ * The material vocabulary is deliberately the stamina instrument's, since that is the
+ * "specialized" bar Scott named: milled channels (inset dark + hairline metal border),
+ * engraved regions (135deg hatch), raised plates (--dse-metal-grad + --dse-chip-bevel),
+ * small-caps lowercase metal labels, and the outlined-cell-that-fills marker from the
+ * recoveries strip (styles-source.css ~9273) — which is already Scott's own answer to
+ * "make a limited quantity countable at a glance".
+ */
+
+/* ================================================================== */
+/*  0. Shared shell                                                    */
+/* ================================================================== */
+
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx {
+	/* The card plate recipe every other Steel card uses (.dse-hero ~8191). The montage
+	   element has NO plate today — it renders as a bare stack of steppers, which is a
+	   large part of why it does not read as an instrument. */
+	background: var(--dse-card-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+	padding: var(--dse-pad);
+	color: var(--dse-fg);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx {
+	box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx__head {
+	margin-bottom: 0.7rem;
+}
+
+/* -- The Director's brief -------------------------------------------------
+   Description sits between the head and the instrument, indented off a ◆ seed so
+   it reads as a caption on the card rather than as body copy that happens to be
+   there. It never crowds the tracker because it is the one element allowed to
+   wrap freely and the tracker below it is a fixed-height instrument. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx__brief {
+	position: relative;
+	margin: 0 0 0.85rem;
+	padding: 0.55rem 0.7rem 0.55rem 1.35rem;
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx__brief::before {
+	content: '◆';
+	position: absolute;
+	left: 0.55rem;
+	top: 0.5rem;
+	font-size: var(--dse-fs-micro);
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx__brief-text {
+	margin: 0;
+	font-size: var(--dse-fs-secondary);
+	line-height: 1.5;
+	color: var(--dse-fg-muted);
+	font-style: italic;
+}
+
+/* ================================================================== */
+/*  1. The marker — one hero's action                                  */
+/* ================================================================== */
+/* FIVE channels, colour LAST:
+ *   position  above / below the axis (candidates A, and the row in B)
+ *   silhouette success is chamfered on its OUTER face (a roof), failure on its
+ *             outer face pointing the other way (a keel), assist is a plain ring
+ *   material  success = raised polished plate; failure = recessed engraved hatch;
+ *             assist = hollow outline
+ *   glyph     a real ✓ / ✕ / + icon
+ *   word      the lane labels in the gutter, and the ledger's own captions
+ */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	padding: 0.16em 0.4em;
+	border: 1px solid var(--dse-metal-line);
+	border-radius: 2px;
+	line-height: 1;
+	white-space: nowrap;
+	--mtx-ink: var(--dse-metal-bright);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark__glyph {
+	display: inline-flex;
+	color: var(--mtx-ink);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark__glyph svg {
+	width: 0.85em;
+	height: 0.85em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark__who {
+	/* THE ATTRIBUTION SLOT. Two engraved characters — a monogram, mono-spaced so a
+	   column of them lines up. Today this is free text from a `by:` key; a future
+	   ds-party binding resolves it to a real hero and can colour/tooltip it. */
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-micro);
+	letter-spacing: 0.06em;
+	color: var(--dse-fg-muted);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark__skill {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.05em;
+	color: var(--dse-metal);
+}
+
+/* success — a raised, polished plate with a chamfered top edge (the roof) */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark[data-kind='success'] {
+	background: var(--dse-sheen), rgba(0, 0, 0, 0.22);
+	border-color: var(--dse-turn-done);
+	box-shadow: var(--dse-chip-bevel);
+	clip-path: polygon(0 26%, 12% 0, 88% 0, 100% 26%, 100% 100%, 0 100%);
+	--mtx-ink: var(--dse-turn-done);
+}
+/* failure — recessed, engraved, chamfered on the BOTTOM edge (the keel) */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark[data-kind='failure'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 6px),
+		rgba(0, 0, 0, 0.34);
+	border-color: var(--dse-danger);
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+	clip-path: polygon(0 0, 100% 0, 100% 74%, 88% 100%, 12% 100%, 0 74%);
+	--mtx-ink: var(--dse-danger);
+}
+/* assist — an action that produced no tally. Hollow, square, quiet. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark[data-kind='assist'] {
+	background: none;
+	border-style: dashed;
+	border-color: var(--dse-metal-faint);
+	--mtx-ink: var(--dse-fg-faint);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark[data-kind='success'] {
+	background: var(--dse-sheen), rgba(255, 255, 255, 0.6);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-mark[data-kind='failure'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.085) 0 1px, transparent 1px 6px),
+		rgba(0, 0, 0, 0.05);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+/* ================================================================== */
+/*  2. Slot tracks — "how many are left" made countable                */
+/* ================================================================== */
+/* The recoveries strip's gesture (styles-source.css ~9273), rotated where needed:
+   the OUTLINE is permanent, so the track's LENGTH always states the Director's
+   limit, and the fill only ever states progress. "One from Total Success" is then
+   literally one unfilled cell — no arithmetic, no colour. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__slot,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-slots__slot {
+	display: block;
+	border: 1px solid var(--dse-metal-line);
+	border-radius: 1px;
+	background: none;
+}
+/* horizontal tracks (candidates B and C) */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__slot {
+	width: 100%;
+	height: 0.9em;
+	transform: skewX(-12deg);
+	flex: 1 1 0;
+	min-width: 0.42em;
+}
+/* vertical tracks (candidate A's TOTAL column) */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-slots__slot {
+	width: 1.5em;
+	height: 0.5em;
+	transform: skewX(-12deg);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] [data-filled='on'] {
+	background: var(--dse-metal-grad);
+	border-color: var(--dse-metal-bright);
+	box-shadow: var(--dse-chip-bevel);
+}
+/* The filled cell takes the track's semantic tint as a HAIRLINE, never a fill —
+   DESIGN.md: saturated colour is a thin border/glyph, and here the shape already
+   said everything. */
+[data-dse-element='montage'][data-dse-theme='steel'] [data-kind='success'] [data-filled='on'] {
+	border-color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] [data-kind='failure'] [data-filled='on'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 5px),
+		rgba(0, 0, 0, 0.4);
+	border-color: var(--dse-danger);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+/* The GOAL cell: the limit itself, marked as an edge in the material rather than a
+   colour — a two-tone seam on its outer face, the same gesture the stamina gauge
+   uses for the zero bulkhead. */
+[data-dse-element='montage'][data-dse-theme='steel'] [data-goal='on'] {
+	border-color: var(--dse-metal-bright);
+	box-shadow: inset -2px 0 0 var(--dse-metal-bright), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-slots[data-dir='up'] .mtx-slots__slot[data-goal='on'] {
+	box-shadow: inset 0 2px 0 var(--dse-metal-bright), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-slots[data-dir='down'] .mtx-slots__slot[data-goal='on'] {
+	box-shadow: inset 0 -2px 0 var(--dse-metal-bright), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] [data-kind='failure'] [data-filled='on'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 5px),
+		rgba(0, 0, 0, 0.07);
+	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] [data-goal='on'] {
+	border-color: var(--dse-metal);
+}
+
+/* ================================================================== */
+/*  3. The verdict band — the rules made visible                       */
+/* ================================================================== */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 0.4rem 1rem;
+	margin-top: 0.9rem;
+	padding: 0.6rem 0.8rem;
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+	--mtx-band: var(--dse-metal);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.02));
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict[data-band='total'] {
+	--mtx-band: var(--dse-vp);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict[data-band='partial'] {
+	--mtx-band: var(--dse-accent);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict[data-band='failure'] {
+	--mtx-band: var(--dse-danger);
+}
+
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__now {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-width: 0;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__crest {
+	display: inline-flex;
+	color: var(--mtx-band);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__crest svg {
+	width: 1.35em;
+	height: 1.35em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__words {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__eyebrow {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__word {
+	font-size: var(--dse-fs-subheading);
+	font-weight: 700;
+	line-height: 1.15;
+	color: var(--mtx-band);
+	text-shadow: var(--dse-emboss);
+}
+
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__stats {
+	display: flex;
+	align-items: stretch;
+	gap: 0.9rem;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-stat {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35em;
+	white-space: nowrap;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-stat__value {
+	font-size: var(--dse-fs-heading);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-stat[data-kind='success'] .mtx-stat__value {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-stat[data-kind='failure'] .mtx-stat__value {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-stat__label {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.07em;
+	color: var(--dse-fg-muted);
+}
+
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__rules {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.15rem 0.8rem;
+	padding-top: 0.45rem;
+	border-top: 1px solid var(--dse-metal-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__rule {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-faint);
+}
+
+/* THE BRINK. One success from Total Success is the state Scott asked to see at a
+   glance, so it is announced FOUR ways at once: a literal sentence, a ◆ mark, a
+   full-width banner that only exists in this state, and (last) the gold band tint. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__alert {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0.15rem -0.8rem -0.6rem;
+	padding: 0.35rem 0.8rem;
+	background: linear-gradient(90deg, rgba(224, 176, 80, 0.16), rgba(224, 176, 80, 0));
+	border-top: 1px solid var(--dse-vp);
+	border-radius: 0 0 var(--dse-radius) var(--dse-radius);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__alert-mark {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-vp);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__alert-text {
+	font-size: var(--dse-fs-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	font-weight: 700;
+	color: var(--dse-vp);
+}
+
+/* ================================================================== */
+/*  CANDIDATE A — "The Muster Rail"                                    */
+/* ================================================================== */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__wrap {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: 0.15rem;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail {
+	display: grid;
+	/* Three lanes: the success stack, the axis, the failure stack. Every column
+	   contributes one cell to each lane, so the axis is a single unbroken line all
+	   the way across regardless of how tall either stack gets. */
+	grid-template-rows: minmax(2.4em, auto) auto minmax(2.4em, auto);
+	/* Column 1 is the label gutter (content-sized); every round column after it is an
+	   implicit auto column, so the rail widens with `rounds:` without any JS. */
+	grid-template-columns: auto;
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(4.2em, 1fr);
+	align-items: stretch;
+	min-width: max-content;
+}
+
+/* The gutter: the lane WORDS. This is the channel that survives greyscale. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__gutter {
+	display: contents;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.3em;
+	padding-right: 0.7rem;
+	white-space: nowrap;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane--up {
+	align-items: flex-end;
+	padding-bottom: 0.2em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane--down {
+	align-items: flex-start;
+	padding-top: 0.35em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane-mark {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane--up .mtx-rail__lane-mark {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane--down .mtx-rail__lane-mark {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane-word,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__axis-label {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__axis-label {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	padding-right: 0.7rem;
+	white-space: nowrap;
+}
+
+/* A round column */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col {
+	display: contents;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__up,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__down {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.22em;
+	padding: 0 0.3em;
+}
+/* Successes stack UP from the axis, so the newest marker sits furthest out and the
+   stack always touches the rail — the column reads as a bar built of tiles. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__up {
+	/* column-reverse so the FIRST entry of the round seats on the rail and later ones
+	   stack outward — the column then grows the way a bar chart does, upward from the
+	   axis, instead of hanging from the top of the lane. */
+	flex-direction: column-reverse;
+	justify-content: flex-start;
+	padding-bottom: 0.28em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__down {
+	justify-content: flex-start;
+	padding-top: 0.28em;
+}
+/* The axis itself: a milled rail with each round's number seated in it. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__axis {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 1.5em;
+	background: rgba(0, 0, 0, 0.32);
+	border-top: 1px solid var(--dse-metal-faint);
+	border-bottom: 1px solid var(--dse-metal-faint);
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__axis {
+	background: rgba(0, 0, 0, 0.07);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__num {
+	font-size: var(--dse-fs-label);
+	font-family: var(--dse-font-mono);
+	font-variant-numeric: tabular-nums;
+	color: var(--dse-metal);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__num--total {
+	font-family: inherit;
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal-bright);
+}
+/* The round in play: the rail is polished under it and its number brightens. Marked
+   with an engraved caret so "now" is a shape, not a shade. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col[data-state='current'] .mtx-col__axis {
+	background: rgba(77, 184, 199, 0.14);
+	border-top-color: var(--dse-accent);
+	border-bottom-color: var(--dse-accent);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col[data-state='current'] .mtx-col__num {
+	color: var(--dse-accent);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col[data-state='current'] .mtx-col__num::after {
+	content: ' ◂now';
+	font-family: inherit;
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.08em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col[data-state='future'] .mtx-col__num {
+	color: var(--dse-fg-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__assists {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.25em;
+	margin-top: 0.15em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__assists-n,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col__assists-w {
+	font-size: var(--dse-fs-micro);
+	color: var(--dse-fg-faint);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.06em;
+}
+
+/* The TOTAL column, behind a real bulkhead. Everything left of the seam is history;
+   everything right of it is the goal. Sticky so a horizontally-scrolled rail can
+   never lose the one column a Director is actually asking about. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__up,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__axis,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__down {
+	position: sticky;
+	right: 0;
+	margin-left: 0.9em;
+	padding-left: 0.9em;
+	border-left: 2px solid var(--dse-metal-bright);
+	background: var(--dse-card-bg);
+}
+/* The milled ground is layered OVER the card plate rather than replacing it: a
+   translucent black alone would let the scrolled round columns show through the
+   sticky plate. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__axis {
+	background: linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.32)), var(--dse-card-bg);
+	padding-right: 0.6em;
+}
+/* The sticky plate has to paint OVER the scrolled history, not under it. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__up,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__axis,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__down {
+	z-index: 2;
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-col--tally .mtx-col__axis {
+	background: linear-gradient(rgba(0, 0, 0, 0.07), rgba(0, 0, 0, 0.07)), var(--dse-card-bg);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-slots {
+	display: flex;
+	flex-direction: column;
+	gap: 0.22em;
+}
+
+/* ================================================================== */
+/*  CANDIDATE B — "The Twin Channel"                                   */
+/* ================================================================== */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-inst {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 0.45rem 0.75rem;
+	padding: 0.7rem 0.85rem;
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-inst {
+	background: linear-gradient(104deg, rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.02));
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch {
+	display: contents;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	white-space: nowrap;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__mark {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch[data-kind='success'] .mtx-ch__mark {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch[data-kind='failure'] .mtx-ch__mark {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__word {
+	font-size: var(--dse-fs-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal);
+}
+/* The channel: a milled slot holding `limit` countable cells. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__track {
+	display: flex;
+	gap: 0.3em;
+	align-items: center;
+	padding: 0.22em 0.3em;
+	background: rgba(0, 0, 0, 0.32);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 3px;
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__track {
+	background: rgba(0, 0, 0, 0.07);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+}
+/* The round IN PLAY: an accent-lit empty cell, never a filled one — a filled cell
+   means "spent", and a montage whose last round is still being played is not over. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch[data-kind='round'] .mtx-ch__slot[data-now='on'] {
+	background: rgba(77, 184, 199, 0.22);
+	border-color: var(--dse-accent);
+	box-shadow: none;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch[data-kind='round'] .mtx-ch__slot[data-filled='on'] {
+	background: var(--dse-metal-faint);
+	border-color: var(--dse-metal-line);
+	box-shadow: none;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__read {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.4em;
+	white-space: nowrap;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__count {
+	font-size: var(--dse-fs-subheading);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: var(--dse-heading);
+	text-shadow: var(--dse-emboss);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__tail {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.06em;
+	color: var(--dse-fg-muted);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-inst[data-brink='on'] .mtx-ch[data-kind='success'] .mtx-ch__tail {
+	color: var(--dse-vp);
+	font-weight: 700;
+}
+
+/* The ledger: history as rounds of prose-ish chips, not a chart. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger {
+	margin-top: 0.9rem;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__head {
+	font-size: var(--dse-fs-label);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal);
+	padding-bottom: 0.3rem;
+	border-bottom: 1px solid var(--dse-metal-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__round {
+	display: grid;
+	grid-template-columns: 4.6em minmax(0, 1fr);
+	align-items: baseline;
+	gap: 0.6rem;
+	padding: 0.4rem 0;
+	border-bottom: 1px solid var(--dse-border);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__tag {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.25em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__tag-w {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.08em;
+	color: var(--dse-fg-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__tag-n {
+	font-size: var(--dse-fs-label);
+	font-family: var(--dse-font-mono);
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__round[data-state='current'] .mtx-ledger__tag-n,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__round[data-state='current'] .mtx-ledger__tag-w {
+	color: var(--dse-accent);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__line {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__empty {
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+}
+
+/* ================================================================== */
+/*  CANDIDATE C — "The Muster Board"                                   */
+/* ================================================================== */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board {
+	display: grid;
+	/* `repeat(var(--n), …)` is not legal CSS, so the expanded track list arrives as one
+	   custom property from the view (`--mtx-cols`). The narrow block below still wins,
+	   because it declares grid-template-columns directly and sits later in the sheet. */
+	grid-template-columns: var(--mtx-cols, auto 1fr auto 1fr);
+	align-items: stretch;
+	gap: 1px;
+	background: var(--dse-metal-faint);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: var(--dse-radius);
+	overflow: hidden;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board > * {
+	background: var(--dse-surface-sunken);
+	padding: 0.35em 0.5em;
+	display: flex;
+	align-items: center;
+	gap: 0.3em;
+	min-width: 0;
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board > * {
+	background: rgba(0, 0, 0, 0.03);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__corner,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__rhead,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__thead,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__shead,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__footlab {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-metal);
+	background: rgba(0, 0, 0, 0.34);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__corner,
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__rhead,
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__thead,
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__shead,
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__footlab {
+	background: rgba(0, 0, 0, 0.08);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__rhead {
+	justify-content: center;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__rhead[data-state='current'] {
+	background: rgba(77, 184, 199, 0.16);
+	color: var(--dse-accent);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__rhead-n {
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-label);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__name {
+	gap: 0.45em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__mono {
+	font-family: var(--dse-font-mono);
+	font-size: var(--dse-fs-micro);
+	letter-spacing: 0.06em;
+	color: var(--dse-fg-faint);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 2px;
+	padding: 0.1em 0.25em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__who {
+	font-size: var(--dse-fs-secondary);
+	color: var(--dse-fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* THE CELL — one hero, one round. Material and silhouette carry the result; the
+   glyph repeats it; the skill word underneath repeats it again as text. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell {
+	flex-direction: column;
+	justify-content: center;
+	gap: 0.1em;
+	text-align: center;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell .mtx-mark__glyph {
+	display: inline-flex;
+	color: var(--dse-fg-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell .mtx-mark__glyph svg {
+	width: 1em;
+	height: 1em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='success'] {
+	background: var(--dse-sheen), rgba(0, 0, 0, 0.2);
+	box-shadow: inset 0 2px 0 var(--dse-turn-done), var(--dse-bevel);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='success'] .mtx-mark__glyph {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='failure'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 6px),
+		rgba(0, 0, 0, 0.36);
+	box-shadow: inset 0 -2px 0 var(--dse-danger), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='failure'] .mtx-mark__glyph {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='assist'] .mtx-mark__glyph {
+	color: var(--dse-fg-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='none'][data-state='current'] {
+	background: rgba(77, 184, 199, 0.09);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='success'] {
+	background: var(--dse-sheen), rgba(255, 255, 255, 0.55);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell[data-kind='failure'] {
+	background:
+		repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.085) 0 1px, transparent 1px 6px),
+		rgba(0, 0, 0, 0.06);
+	box-shadow: inset 0 -2px 0 var(--dse-danger), inset 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__skill {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.05em;
+	color: var(--dse-fg-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__pending {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.07em;
+	color: var(--dse-fg-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__total {
+	justify-content: center;
+	gap: 0.3em;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--dse-fs-secondary);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__total-s {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__total-f {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__total-sep {
+	color: var(--dse-fg-faint);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__skills {
+	flex-wrap: wrap;
+	gap: 0.25em;
+}
+/* The skill ledger — the rules' "can't reuse the same skill" made visible per hero. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__chip {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.05em;
+	color: var(--dse-fg-muted);
+	background: var(--dse-chip-bg);
+	border: 1px solid var(--dse-metal-faint);
+	border-radius: 2px;
+	padding: 0.08em 0.35em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot {
+	justify-content: center;
+	gap: 0.5em;
+	background: rgba(0, 0, 0, 0.34);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot {
+	background: rgba(0, 0, 0, 0.08);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot-s,
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot-f {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.2em;
+	font-size: var(--dse-fs-label);
+	font-variant-numeric: tabular-nums;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot-s {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot-f {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__foot-m {
+	font-size: var(--dse-fs-micro);
+}
+/* The goal corner — the "total column" of Scott's sketch, relocated to where a
+   table's grand total belongs: the bottom-right corner, spanning the tally and
+   ledger columns. */
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goal {
+	grid-column: span 2;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0.2em;
+	padding: 0.4em 0.6em;
+	background: rgba(0, 0, 0, 0.34);
+}
+body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goal {
+	background: rgba(0, 0, 0, 0.08);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goal[data-brink='on'] {
+	box-shadow: inset 0 0 0 1px var(--dse-vp);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goalrow {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goaltrack {
+	display: flex;
+	gap: 0.25em;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goalmark {
+	font-size: var(--dse-fs-micro);
+	color: var(--dse-metal);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goalrow[data-kind='success'] .mtx-board__goalmark {
+	color: var(--dse-turn-done);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goalrow[data-kind='failure'] .mtx-board__goalmark {
+	color: var(--dse-danger);
+}
+[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goalnum {
+	font-size: var(--dse-fs-label);
+	font-variant-numeric: tabular-nums;
+	color: var(--dse-heading);
+	white-space: nowrap;
+}
+
+/* ================================================================== */
+/*  Narrow width (a 300px Obsidian sidebar leaf)                       */
+/* ================================================================== */
+/* The mock page pins #mount to a fixed width, so a width query on the VIEWPORT is
+   the honest stand-in here. Production would use `@container` on the element root,
+   exactly like `.dse-stamina`'s 400px rail switch (styles-source.css ~9479). */
+@media (max-width: 420px) {
+	/* THE CREST STANDS DOWN. A `--lg` shield is ~2.8em wide and the head's name track
+	   is the member that pays for it — at 300px the deck line ("5 heroes · one action
+	   each per round") wrapped one word per line. Same stand-down move the recoveries
+	   eyebrow makes at 250px. */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx__head .dse-crest {
+		display: none;
+	}
+	/* THE HEAD'S RIGHT RAIL STANDS DOWN TOO. `.dse-head` has no narrow form in this
+	   plugin (the SITE stacks its columns at <=30em; the port never did), so at 300px
+	   the rail's content-sized column starves the name/deck track and the deck wraps
+	   one word per line. The montage's counts all live in the instrument below, so the
+	   rail is pure redundancy here — the round chip stays, the two count chips go.
+	   FOLLOW-UP: give `.dse-head` a real narrow form for every element, not just this
+	   one (see the report). */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx__head .dse-head__primary--right,
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx__head .dse-head__deck--right {
+		display: none;
+	}
+
+	/* A: the rail keeps its geometry and SCROLLS; the total column is sticky, so the
+	   goal stays on screen while the history slides under it. The lane WORDS stand
+	   down to their ▲/▼ marks — but their grid CELLS must not, or `grid-auto-flow:
+	   column` reflows every later cell by one lane and the rail shears. */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane-word {
+		display: none;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__lane,
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-rail__axis-label {
+		padding-right: 0.35rem;
+	}
+
+	/* The verdict band stacks: the word over the numbers over the rules. */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-verdict__stats {
+		flex-wrap: wrap;
+		gap: 0.5rem 0.9rem;
+	}
+
+	/* B: the instrument becomes ONE column — label, then channel, then readout, three
+	   rows per track. (A two-column narrow grid put each channel's readout on the same
+	   row as the NEXT channel's label.) */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-inst {
+		grid-template-columns: minmax(0, 1fr);
+		row-gap: 0.15rem;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__read {
+		padding-bottom: 0.35rem;
+		flex-wrap: wrap;
+		white-space: normal;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ch__tail {
+		white-space: normal;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__round {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.2rem;
+	}
+	/* The SKILL gives way, never the monogram: at a sidebar width "who did this" is
+	   the fact a Director is scanning for, and the skill is recoverable from the
+	   per-hero ledger. */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-ledger__line .mtx-mark__skill {
+		display: none;
+	}
+
+	/* C: five matrix columns cannot survive 300px, so the board re-lays as one band
+	   per hero — name, that hero's rounds as full-width rows, then the skill ledger.
+	   Each cell has to say WHICH round it is, since the column header is gone. */
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__corner,
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__rhead,
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__thead,
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__shead,
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__footlab {
+		display: none;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__name {
+		border-top: 1px solid var(--dse-metal-bright);
+		background: rgba(0, 0, 0, 0.34);
+	}
+	body.theme-light [data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__name {
+		background: rgba(0, 0, 0, 0.08);
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell {
+		flex-direction: row;
+		justify-content: flex-start;
+		gap: 0.45em;
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__cell::before {
+		content: 'rd ' attr(data-round);
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.07em;
+		color: var(--dse-fg-faint);
+		font-family: var(--dse-font-mono);
+	}
+	[data-dse-element='montage'][data-dse-theme='steel'] .mtx-board__goal {
+		grid-column: span 1;
+	}
+}
