@@ -112,6 +112,30 @@ export const DSE_TOKEN_NAMES = [
 	//    the coverage guards. --
 	'text-scale',
 	'card-scale',
+	// -- SC-185: THE TYPE-SIZE ROLE SCALE. Nine ROLE tokens (what the text IS,
+	//    never how big it should look) plus three USER knobs. Every role is an
+	//    `em` RATIO, so the root of the scale is whatever the host theme gives the
+	//    note — the plugin states no absolute size and cannot fight a theme's
+	//    typography. The knobs are stamped inline per element root by the
+	//    smallTextScale/largeTextScale/controlTextScale prefs (catalog.ts, via
+	//    snap()); at their default of 1 every role computes to the literal it was
+	//    transcribed from, which is what makes adoption a zero-pixel rename.
+	//    All twelve are theme- AND print-invariant: a caption is a caption on
+	//    paper, and the size prefs apply everywhere including print/export, the
+	//    same contract the --dse-font-* family pickers carry. Authoring rules:
+	//    .repo-docs/font-sizes.md; enforced by test/unit/build/fontSizeContract.test.ts. --
+	'fs-small-scale',
+	'fs-large-scale',
+	'fs-control-scale',
+	'fs-heading',
+	'fs-subheading',
+	'fs-numeral',
+	'fs-body',
+	'fs-control',
+	'fs-secondary',
+	'fs-label',
+	'fs-caption',
+	'fs-micro',
 ] as const;
 
 /** The narrowed token-name union (D2 §6 / F1 §3.5). `cssVar(name)` → `var(--dse-<name>)`. */

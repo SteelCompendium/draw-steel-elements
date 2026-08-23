@@ -218,13 +218,15 @@
    DSE_TOKEN_NAMES pins the count — token-coverage.test.ts).
 */
 .dse-card__title {
-	font-size: 1.15em;
+	/* SC-185 adoption (inert: --dse-fs-subheading is `calc(1.15em * 1)` at defaults). */
+	font-size: var(--dse-fs-subheading);
 	font-weight: bold;
 	line-height: 1.2;
 	color: var(--dse-heading);
 }
 .dse-card__subtitle {
-	font-size: 0.9em;
+	/* SC-185 adoption (inert: --dse-fs-secondary is `calc(0.9em * 1)` at defaults). */
+	font-size: var(--dse-fs-secondary);
 	color: var(--dse-fg-muted);
 	margin-top: 0.15em;
 }
@@ -245,7 +247,8 @@
 	background: var(--dse-chip-bg);
 	border: 1px solid var(--dse-border);
 	color: var(--dse-badge-fg);
-	font-size: 0.85em;
+	/* SC-185 adoption (inert: --dse-fs-label is `calc(0.85em * 1)` at defaults). */
+	font-size: var(--dse-fs-label);
 }
 .dse-card__badge--keyword {
 	border-color: var(--dse-accent);
@@ -2582,7 +2585,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	font-weight: bold;
 }
 .dse-sb__item-l {
-	font-size: 0.9em;
+	/* SC-185 adoption (inert: --dse-fs-secondary is `calc(0.9em * 1)` at defaults). */
+	font-size: var(--dse-fs-secondary);
 	color: var(--dse-fg-muted);
 }
 /* The Immunity/Weakness + Movement/With Captain kv cells: a 2-col grid keeping
@@ -4331,6 +4335,74 @@ Shared globals
 	   print-excluded — print/export always renders 1:1. */
 	--dse-text-scale: 1;
 	--dse-card-scale: 1;
+
+	/* -- SC-185: THE TYPE-SIZE ROLE SCALE (NOT theme values) -- */
+	/*
+	   THE standard way to set a font size in this plugin. Every `font-size` in
+	   this sheet must resolve to one of the nine ROLE tokens below (optionally
+	   through a documented calc() over one). A bare literal — `font-size: 0.85em`,
+	   `0.82rem`, `14px` — is prohibited for new work and fails
+	   test/unit/build/fontSizeContract.test.ts, which carries an allowlist of the
+	   sites that predate this scale (SC-185 round 1's inventory) and shrinks as
+	   they are adopted. Full rules, per-role guidance and the adoption ledger:
+	   .repo-docs/font-sizes.md.
+
+	   ROLES, NOT T-SHIRT SIZES. Pick the token that describes what the text IS
+	   (a label, a caption, a card headline), never how big you want it to look.
+	   That is the whole point: two elements that agree about what a "label" is
+	   agree about its size for free, which is the failure SC-185 exists to fix
+	   (116 font-size declarations across 30 distinct values before this block).
+
+	   RATIOS, NOT SIZES. Every role is an `em` ratio against the element's own
+	   inherited size, so the ROOT of the scale is whatever the user's theme gives
+	   the note. The plugin therefore never states an absolute size and never
+	   fights a theme's typography — a bigger reading font makes every DSE role
+	   bigger, in proportion, with no setting touched. This is deliberately NOT
+	   how Obsidian's own `--font-ui-*` variables work: those are absolute px tied
+	   to the INTERFACE font-size slider, so mixing them with em-based card text
+	   is exactly what makes two sizes drift apart when a user moves either slider
+	   (see .repo-docs/font-sizes.md → "Why not Obsidian's variables?"). Obsidian's UI
+	   vars stay legitimate on genuine Obsidian-chrome surfaces (modal furniture,
+	   suggest popups); they are not a size vocabulary for note content.
+
+	   THE THREE *-scale MULTIPLIERS ARE THE USER KNOBS
+	   (smallTextScale / largeTextScale / controlTextScale in prefs/catalog.ts).
+	   Each stamps a snap()-normalized non-1 value INLINE per element root and
+	   REMOVES it at 1 (site remove-on-default semantics), so these :root
+	   declarations are what every root resolves at defaults — and every role
+	   below then computes to exactly the literal it was transcribed from, which
+	   is what makes adopting a token a zero-pixel rename.
+
+	   Theme- and print-INVARIANT: no theme or print block overrides any of these.
+	   A caption is still a caption on paper, and the size prefs are documented to
+	   apply everywhere including print/export — the same contract the six
+	   font-FAMILY pickers (--dse-font-*) already carry, and deliberately unlike
+	   --dse-text-scale/--dse-card-scale above, whose consumer rules are
+	   print-excluded because they are a whole-element zoom.
+	*/
+	--dse-fs-small-scale: 1;
+	--dse-fs-large-scale: 1;
+	--dse-fs-control-scale: 1;
+	/* Above body — headline text inside a card. heading = the thing the card is
+	   named after (a statblock/ability name); subheading = a band or group title
+	   under it; numeral = a display stat VALUE meant to be read across a table. */
+	--dse-fs-heading: calc(1.25em * var(--dse-fs-large-scale));
+	--dse-fs-subheading: calc(1.15em * var(--dse-fs-large-scale));
+	--dse-fs-numeral: calc(1.75em * var(--dse-fs-large-scale));
+	/* Body — the element's own reading size, i.e. the host note's. Also the
+	   explicit "stop inheriting a smaller/larger context" reset. */
+	--dse-fs-body: 1em;
+	/* Interactive control text: buttons, steppers, tabs, collapse headers, inputs.
+	   Its own knob because a control's text answers to the user's tolerance for
+	   chrome, not to the reading size (SC-185: "reset button font is too large"). */
+	--dse-fs-control: calc(1em * var(--dse-fs-control-scale));
+	/* Below body — the quiet tiers. secondary = supporting prose and dense tables;
+	   label = field labels, eyebrows, decks, chips; caption = hints, log lines,
+	   small badges; micro = tallies, tags, superscript markers. */
+	--dse-fs-secondary: calc(0.9em * var(--dse-fs-small-scale));
+	--dse-fs-label: calc(0.85em * var(--dse-fs-small-scale));
+	--dse-fs-caption: calc(0.8em * var(--dse-fs-small-scale));
+	--dse-fs-micro: calc(0.7em * var(--dse-fs-small-scale));
 }
 
 /* -- Mono slot: the reachable re-home (SC-121 batch 3 / workspace FOLLOWUPS #45) --
@@ -5559,6 +5631,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-tabs__tab,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row {
 	font-family: var(--dse-font-controls);
+}
+/* SC-185 — the SIZE twin of the Controls font-family rule above, over the exact
+   same six selectors, so "Control text size" governs the same set the Controls
+   font picker does. PROVABLY INERT at the default: all six carry the kit-base
+   `font: inherit` (~:9990, 9996, 9922, 10057, 10097, 10305), whose font-size
+   component IS the parent's computed size — `1em` is the same number, and
+   --dse-fs-control is `calc(1em * 1)` until a user moves the slider. Nothing in
+   the sheet loses: every rule that deliberately re-sizes a control in context
+   (e.g. the initiative bar's log heading) is a descendant selector at higher
+   specificity than this (0,3,0). Print-excluded by the shared anchor, like its
+   font-family twin — a control's size is screen chrome, and this keeps the
+   slider structurally unable to move a frozen print byte. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__value,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-btn,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-collapse__header,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-tabs__tab,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row {
+	font-size: var(--dse-fs-control);
 }
 /* Mono (--dse-font-mono) is DELIBERATELY NOT widened here. Its consumer
    rule (.dse-rollcard__breakdown, ~:5180) was ALREADY unscoped — no
@@ -7578,7 +7669,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__kv-l {
 	font-variant: small-caps;
 	letter-spacing: 0.05em;
-	font-size: 0.8em;
+	/* SC-185 adoption (inert: --dse-fs-caption is `calc(0.8em * 1)` at defaults). */
+	font-size: var(--dse-fs-caption);
 	font-weight: normal;
 	color: var(--dse-fg-muted);
 }
@@ -7690,7 +7782,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__ch
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-l {
 	font-variant: small-caps;
 	letter-spacing: 0.04em;
-	font-size: 0.85em;
+	/* SC-185 adoption (inert: --dse-fs-label is `calc(0.85em * 1)` at defaults). */
+	font-size: var(--dse-fs-label);
 	text-shadow: none;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb__char-box {
@@ -10249,12 +10342,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
    headline, deck = quiet detail. */
 .dse-head__eyebrow,
 .dse-head__deck {
-	font-size: 0.85em;
+	/* SC-185 adoption (inert: --dse-fs-label is `calc(0.85em * 1)` at defaults). */
+	font-size: var(--dse-fs-label);
 	line-height: 1.2;
 	color: var(--dse-fg-muted);
 }
 .dse-head__primary--left {
-	font-size: 1.25em;
+	/* SC-185 adoption (inert: --dse-fs-heading is `calc(1.25em * 1)` at defaults). */
+	font-size: var(--dse-fs-heading);
 	line-height: 1.15;
 	/* §6: --dse-heading carries the color; the bold weight is this widget's rule. */
 	font-weight: bold;
@@ -10422,7 +10517,10 @@ button.dse-pr__row:hover {
 	width: 3em;
 	max-height: 1em;
 	text-align: center;
-	font-size: 0.8em;
+	/* SC-185 adoption (inert: --dse-fs-caption is `calc(0.8em * 1)` at defaults). The
+	   badge's width/max-height/clip-path are all em-relative to THIS size, so the
+	   whole tier badge scales as one shape when the caption knob moves. */
+	font-size: var(--dse-fs-caption);
 	font-weight: bold;
 	color: var(--dse-badge-fg);
 }
@@ -10448,7 +10546,8 @@ button.dse-pr__row:hover {
 	clip-path: polygon(0 0.2em, 0.2em 0, calc(100% - 0.4em) 0, calc(100% - 0.2em) 0.2em, calc(100% - 0.2em) calc(50% - 0.2em), 100% 50%, calc(100% - 0.2em) calc(50% + 0.2em), calc(100% - 0.2em) calc(100% - 0.2em), calc(100% - 0.4em) 100%, 0.2em 100%, 0 calc(100% - 0.2em), 0 0.2em, 1px calc(0.2em + 0.41px), 1px calc(100% - 0.2em - 0.41px), calc(0.2em + 0.41px) calc(100% - 1px), calc(100% - 0.4em - 0.41px) calc(100% - 1px), calc(100% - 0.2em - 3px) calc(100% - 0.2em - 0.41px), calc(100% - 0.2em - 3px) calc(0.2em + 0.41px), calc(100% - 0.4em - 0.41px) 1px, calc(0.2em + 0.41px) 1px, 1px calc(0.2em + 0.41px));
 }
 .dse-pr__badge-text {
-	font-size: 0.9em;
+	/* SC-185 adoption (inert: --dse-fs-secondary is `calc(0.9em * 1)` at defaults). */
+	font-size: var(--dse-fs-secondary);
 }
 .dse-pr__badge--crit .dse-pr__badge-text {
 	padding-right: 3px;

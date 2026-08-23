@@ -46,6 +46,16 @@
 - **Constants:** UPPER_SNAKE_CASE (`DEFAULT_SETTINGS`)
 - **Code block tags:** lowercase with hyphens, `ds-` prefix (`ds-feature`, `ds-stamina-bar`)
 - **CSS classes:** lowercase with hyphens, `ds-` prefix (`ds-container`, `ds-multiline`, `ds-vue-wrapper`)
+- **Font sizes come from the `--dse-fs-*` role scale — a hardcoded `font-size` is
+  prohibited.** Nine role tokens (`heading`/`subheading`/`numeral`/`body`/`control`/
+  `secondary`/`label`/`caption`/`micro`), all `em` ratios so the plugin never states an
+  absolute size and never fights the user's theme. Pick the role that says what the text
+  IS, never how big it should look. Obsidian's absolute `--font-ui-*` interface sizes are
+  on the same prohibition (they track a different slider from note text, which is how sizes
+  drift apart). Full rules, the per-role table, and what the scale does NOT replace:
+  [font-sizes.md](font-sizes.md). Gated by
+  `test/unit/build/fontSizeContract.test.ts`, which also forbids inline `style.fontSize`
+  from TypeScript.
 - **CSS browser support floor is Chromium 106** (the oldest Electron a supported Obsidian
   desktop still ships). Any above-floor feature needs a floor-safe fallback, and a
   `var()`-bearing `color-mix()` needs an `@supports` **gate** around the enhanced

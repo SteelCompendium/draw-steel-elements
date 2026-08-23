@@ -22,7 +22,7 @@
 import type { PreferenceStore, PrefDescriptor, DsePrefs } from '../framework/seams/prefs';
 import { declaredCollapsePrefs } from '@model/ComponentWrapper';
 import { CURATED_FONTS, DEFAULT_FONT_OPTION, fontCss } from './fontStacks';
-import { CARD_SCALE, TEXT_SCALE, snap } from './scale';
+import { CARD_SCALE, TEXT_SCALE, TYPE_SCALE, snap } from './scale';
 
 declare module '../framework/seams/prefs' {
 	interface DsePrefs {
@@ -42,6 +42,13 @@ declare module '../framework/seams/prefs' {
 		// snap()-normalized, 1 is the inert default → toCss null → no inline var) ——
 		textScale: number;
 		cardScale: number;
+		// —— Type-role sizes (SC-185 — css-reflected multipliers over the
+		// --dse-fs-* role scale; snap()-normalized, 1 is the inert default →
+		// toCss null → no inline var). These retune the RATIO between a role and
+		// the element's body text; textScale above zooms the whole element. ——
+		smallTextScale: number;
+		largeTextScale: number;
+		controlTextScale: number;
 		// —— Statblock display (presentation; OD-D4-6 curated four) ——
 		sbFeatureStyle: 'card' | 'flat';
 		sbDensity: 'comfortable' | 'compact';
@@ -286,6 +293,66 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 			group: 'Typography', label: 'Card size', control: 'slider',
 			min: CARD_SCALE.min, max: CARD_SCALE.max, step: CARD_SCALE.step,
 			help: 'Scale whole statblock and ability cards (80%–120%). Applies to every Draw Steel element; print and export always use 100%.',
+		},
+	}),
+
+	// —— SC-185 type-role sizes: the three knobs over the --dse-fs-* role scale
+	// (styles-source.css :root, "THE TYPE-SIZE ROLE SCALE"). Same css-bearing,
+	// inert-at-default shape as the two scales above — snap()-normalized, 1 →
+	// toCss null → removeProperty — so a vault that never opens Settings renders
+	// byte-identically to one that has never heard of them.
+	//
+	// WHY THREE AND NOT ONE. Text size above already zooms an element as a whole;
+	// what it cannot do is change the RELATIONSHIP between sizes, which is the
+	// actual complaint SC-185 was filed for ("the malice log font is super tiny,
+	// the reset button font is too large"). Those two symptoms point in OPPOSITE
+	// directions, so one knob can never fix both. The split follows the scale's own
+	// three bands: below body (small), above body (large), and interactive controls
+	// — which get their own knob because a control's text answers to how much UI
+	// chrome a reader tolerates, not to their reading size.
+	//
+	// PRIMARY rows, not Advanced: these are the rows a reader goes looking for
+	// after noticing something is the wrong size, and burying the answer to a
+	// legibility problem one page deeper is the wrong way round.
+	//
+	// Unlike textScale/cardScale, these apply IN PRINT AND EXPORT too — the same
+	// contract the six font-family pickers carry. A whole-element zoom on paper
+	// breaks page fitting; a ±20% nudge to the caption/label ratio does not, and a
+	// reader who needs bigger small text needs it on the printout as well.
+	d({
+		key: 'smallTextScale', default: 1,
+		css: {
+			varName: '--dse-fs-small-scale',
+			toCss: (v) => { const n = snap(v, TYPE_SCALE); return n === TYPE_SCALE.default ? null : String(n); },
+		},
+		ui: {
+			group: 'Typography', label: 'Small text size', control: 'slider',
+			min: TYPE_SCALE.min, max: TYPE_SCALE.max, step: TYPE_SCALE.step,
+			help: 'Size of text below the body size — labels, captions, hints, chips, log lines and tallies — relative to the element\'s body text (80%–120%). 100% keeps today\'s look. Applies everywhere, including print and export.',
+		},
+	}),
+	d({
+		key: 'largeTextScale', default: 1,
+		css: {
+			varName: '--dse-fs-large-scale',
+			toCss: (v) => { const n = snap(v, TYPE_SCALE); return n === TYPE_SCALE.default ? null : String(n); },
+		},
+		ui: {
+			group: 'Typography', label: 'Large text size', control: 'slider',
+			min: TYPE_SCALE.min, max: TYPE_SCALE.max, step: TYPE_SCALE.step,
+			help: 'Size of text above the body size — card names, band titles and display stat numbers — relative to the element\'s body text (80%–120%). 100% keeps today\'s look. Applies everywhere, including print and export.',
+		},
+	}),
+	d({
+		key: 'controlTextScale', default: 1,
+		css: {
+			varName: '--dse-fs-control-scale',
+			toCss: (v) => { const n = snap(v, TYPE_SCALE); return n === TYPE_SCALE.default ? null : String(n); },
+		},
+		ui: {
+			group: 'Typography', label: 'Control text size', control: 'slider',
+			min: TYPE_SCALE.min, max: TYPE_SCALE.max, step: TYPE_SCALE.step,
+			help: 'Size of text on buttons, steppers, tabs and collapse headers, relative to the element\'s body text (80%–120%). 100% keeps today\'s look. Controls are screen-only chrome, so this never affects print or export.',
 		},
 	}),
 

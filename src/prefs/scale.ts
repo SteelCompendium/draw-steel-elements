@@ -24,6 +24,21 @@ export const TEXT_SCALE: ScaleRange = { min: 0.6, max: 1.4, step: 0.05, default:
 export const CARD_SCALE: ScaleRange = { min: 0.8, max: 1.2, step: 0.05, default: 1 };
 
 /**
+ * Type-ROLE range (SC-185) — the small/large/control text knobs over the
+ * --dse-fs-* role scale. Deliberately the SAME numbers as CARD_SCALE (a separate
+ * constant, not an alias, because the two govern different things and either may
+ * move on its own): symmetric about 1.0, so all five Typography sliders' thumbs
+ * sit at the same centre track position at 100%.
+ *
+ * ±20% is a nudge, not a zoom: the whole-element zoom already exists as
+ * TEXT_SCALE. What these do is retune the RATIO between a role and the body — at
+ * 1.2 a `label` reaches 1.02em, i.e. body size, which is the intended ceiling for
+ * "the small text is too small to read" and is exactly as far as that complaint
+ * can sensibly go before the role stops being a small-text role at all.
+ */
+export const TYPE_SCALE: ScaleRange = { min: 0.8, max: 1.2, step: 0.05, default: 1 };
+
+/**
  * Clamp `value` into the range and snap to the nearest step, returning the
  * range's default when `value` is not a finite number (site settings-core.js
  * snap(), including its parseFloat coercion of strings and the ×100 rounding

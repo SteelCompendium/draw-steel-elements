@@ -159,9 +159,19 @@ const printSteel = blockBody(
 // SC-112 Task 7: text-scale/card-scale are USER-scale multipliers, not theme
 // values — no theme block ever overrides them (their consumer rules are
 // print-excluded instead), so they are invariant in BOTH sets below.
+// SC-185: the twelve --dse-fs-* type-role tokens join for the same reason as the
+// two scales above — they are ROLE RATIOS and USER knobs, not theme values. A
+// caption reads at the same ratio to its body text under any theme; only the size
+// that ratio resolves against changes, and that comes from the host, not from us.
+const FS_TOKENS = [
+	'fs-small-scale', 'fs-large-scale', 'fs-control-scale',
+	'fs-heading', 'fs-subheading', 'fs-numeral', 'fs-body', 'fs-control',
+	'fs-secondary', 'fs-label', 'fs-caption', 'fs-micro',
+];
 const STEEL_INVARIANT = new Set([
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
 	'text-scale', 'card-scale',
+	...FS_TOKENS,
 ]);
 // SC-105: the whole font vocabulary (title/body/card-body/label/controls) was
 // print-invariant — none of these 5 tokens were overridden in a print block,
@@ -174,6 +184,13 @@ const PRINT_INVARIANT = new Set([
 	'touch-min', 'font-mono', 'rule-fade', 'badge-fg', // badge-fg: SC-10 invariant
 	'font-title', 'font-body', 'font-card-body', 'font-label', // SC-105
 	'text-scale', 'card-scale', // SC-112 Task 7: print-excluded CONSUMERS, no print value override
+	// SC-185: the type-role scale is print-invariant BY DESIGN, not by omission. A
+	// caption is still a caption on paper, and the size prefs are documented to
+	// apply everywhere including print/export — the same contract the --dse-font-*
+	// family pickers carry (and the reason the print blocks avoid !important). The
+	// one exception is the CONTROL role, whose single consumer rule is itself
+	// print-excluded, so it cannot reach paper either way.
+	...FS_TOKENS,
 	...DSE_TOKEN_NAMES.filter((n) => n.startsWith('role-')), // "= Steel (exact)"
 ]);
 
@@ -279,6 +296,21 @@ const BASE_MAP: Record<string, string> = {
 	// SC-112 Task 7: user-scale multipliers — 1 = inert default (freeze bar).
 	'text-scale': '1',
 	'card-scale': '1',
+	// SC-185: the type-size ROLE scale. Knobs default to 1; every role is an `em`
+	// ratio wrapped in a calc() over its band's knob, so at defaults each computes
+	// to exactly the literal it was transcribed from (the zero-pixel bar).
+	'fs-small-scale': '1',
+	'fs-large-scale': '1',
+	'fs-control-scale': '1',
+	'fs-heading': 'calc(1.25em * var(--dse-fs-large-scale))',
+	'fs-subheading': 'calc(1.15em * var(--dse-fs-large-scale))',
+	'fs-numeral': 'calc(1.75em * var(--dse-fs-large-scale))',
+	'fs-body': '1em',
+	'fs-control': 'calc(1em * var(--dse-fs-control-scale))',
+	'fs-secondary': 'calc(0.9em * var(--dse-fs-small-scale))',
+	'fs-label': 'calc(0.85em * var(--dse-fs-small-scale))',
+	'fs-caption': 'calc(0.8em * var(--dse-fs-small-scale))',
+	'fs-micro': 'calc(0.7em * var(--dse-fs-small-scale))',
 };
 
 describe('D3 Task 6: build guard — every token covered by base + Steel + Print (§7.3)', () => {
@@ -302,8 +334,10 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// SC-112 Task 7: +2 invariant (text-scale/card-scale — user-scale
 		// multipliers, never theme-overridden) = 6 → 8; overridden stays 67.
 		// SC-102: +1 overridden (act-villain, union 75 → 76) = 67 → 68.
+		// SC-185: +12 invariant (the --dse-fs-* type-role scale — role ratios and
+		// user knobs, never theme-overridden) = 8 → 20; overridden stays 68.
 		expect(overridden.length).toBe(68);
-		expect(STEEL_INVARIANT.size).toBe(8);
+		expect(STEEL_INVARIANT.size).toBe(20);
 	});
 
 	test('EVERY union token is overridden in a Print block OR map-marked print-invariant', () => {
@@ -320,7 +354,9 @@ describe('D3 Task 6: build guard — every token covered by base + Steel + Print
 		// removes font-controls too (now overridden, not invariant) = 21 → 20.
 		// SC-112 Task 7: +2 (text-scale/card-scale — the scale CONSUMER rules are
 		// print-excluded, so no print block ever overrides the tokens) = 20 → 22.
-		expect(PRINT_INVARIANT.size).toBe(22);
+		// SC-185: +12 (the --dse-fs-* type-role scale — print-invariant BY DESIGN;
+		// see the set's own comment) = 22 → 34.
+		expect(PRINT_INVARIANT.size).toBe(34);
 		expect(overridden.length + PRINT_INVARIANT.size).toBe(DSE_TOKEN_NAMES.length);
 	});
 

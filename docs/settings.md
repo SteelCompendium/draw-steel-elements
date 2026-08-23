@@ -35,11 +35,30 @@ Choosing a statblock look, with pictures:
   text font.
 - **Text size** (60%–140%) and **Card size** (80%–120%) — scale the text inside elements,
   or whole statblock and ability cards. Print and export always use 100%.
+- **Small text size**, **Large text size**, **Control text size** (all 80%–120%) — these
+  three do something different from **Text size** above: instead of scaling an element as
+  a whole, they change how far each *kind* of text sits from the body text.
+    - **Small text size** covers everything quieter than the body: labels, captions,
+      hints, chips, log lines, tallies. Turn it up if the small print in the trackers is
+      hard to read.
+    - **Large text size** covers everything louder: card names, band titles, and the big
+      display numbers on a statblock.
+    - **Control text size** covers buttons, steppers, tabs and collapse headers. Turn it
+      down if the buttons shout louder than the content.
+
+  100% on all three is the shipped look. The live preview reacts as you drag, so you can
+  see the effect on a real statblock before you commit.
 - Under **Advanced**: **Card body font**, **Label font** and **Monospace font** for the
   smaller text slots.
 
 Font and size settings apply everywhere, including print and export, and are global —
-they can't be overridden per block.
+they can't be overridden per block. (The two exceptions are **Text size** and **Card
+size**, which are screen-only so a printout always fits the page, and **Control text
+size**, since buttons don't print at all.)
+
+Sizes are always stated *relative* to your own theme's text size rather than in fixed
+pixels, so a Draw Steel element inherits your reading font size automatically — if you
+change your Obsidian text size, everything here follows without you touching a slider.
 
 ## Statblock display
 

@@ -78,9 +78,16 @@ function steelDefinitions(): string[] {
 // test/dom/theme/steelTypography.test.ts for the chain shape).
 // SC-112 Task 7: text-scale/card-scale join — user-scale multipliers (the
 // prefs stamp them inline per root), never overridden by any theme block.
+// SC-185: the twelve --dse-fs-* type-role tokens join for the same reason — role
+// RATIOS and user knobs, not theme values. A caption keeps the same ratio to its
+// body text under any theme; only what that ratio resolves against changes, and
+// that comes from the host note, not from the theme block.
 const THEME_INVARIANT = [
 	'page-bg', 'pad', 'touch-min', 'font-mono', 'rule-fade', 'badge-fg',
 	'text-scale', 'card-scale',
+	'fs-small-scale', 'fs-large-scale', 'fs-control-scale',
+	'fs-heading', 'fs-subheading', 'fs-numeral', 'fs-body', 'fs-control',
+	'fs-secondary', 'fs-label', 'fs-caption', 'fs-micro',
 ] as const;
 
 /**
@@ -256,8 +263,10 @@ describe('D3 Task 3: Steel theme value block ([data-dse-theme="steel"])', () => 
 		// SC-112 Task 7: +2 invariant (text-scale/card-scale, union 73 → 75) —
 		// 67 overridden / 6 → 8 invariant.
 		// SC-102: +1 overridden (act-villain, union 75 → 76) — 67 → 68.
+		// SC-185: +12 invariant (the --dse-fs-* type-role scale, union 76 → 88) —
+		// 68 overridden / 8 → 20 invariant.
 		expect(overridden.length).toBe(68);
-		expect(THEME_INVARIANT.length).toBe(8);
+		expect(THEME_INVARIANT.length).toBe(20);
 		expect(overridden.length + THEME_INVARIANT.length).toBe(DSE_TOKEN_NAMES.length);
 	});
 

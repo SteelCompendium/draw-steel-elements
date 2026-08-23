@@ -153,6 +153,52 @@ test('size scales: Typography slider rows carrying the site ranges on the ui sha
 	expect(prefUi(byKey.get('cardScale')!)!.label).toBe('Card size');
 });
 
+// —— SC-185: the three type-ROLE knobs over the --dse-fs-* scale ——
+//
+// Same descriptor shape as the two above (css-bearing, attr-less, snapped, 1 → null), and
+// asserted alongside them so the pair can't drift. What is DELIBERATELY different is print:
+// textScale/cardScale are a whole-element zoom and their consumer rules are print-excluded,
+// while these retune role RATIOS and apply on paper too — the same contract the six
+// font-family pickers carry. The one that does not is controlTextScale, whose consumer rule
+// (the shared .dse-btn/.dse-stepper/... size rule) is itself print-excluded, because
+// controls are screen chrome.
+const TYPE_SCALE_CASES = [
+	// [key, varName, label, printClause]
+	['smallTextScale', '--dse-fs-small-scale', 'Small text size', 'including print and export'],
+	['largeTextScale', '--dse-fs-large-scale', 'Large text size', 'including print and export'],
+	['controlTextScale', '--dse-fs-control-scale', 'Control text size', 'never affects print or export'],
+] as const;
+
+test('SC-185 type-role scales: css-bearing --dse-fs-*-scale knobs, attr-less, snapped, 1 → null', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const [key, varName, label, printClause] of TYPE_SCALE_CASES) {
+		const descriptor = byKey.get(key);
+		expect(descriptor).toBeDefined();
+		expect(descriptor!.default).toBe(1);
+		expect(descriptor!.attr).toBeUndefined();
+		expect(descriptor!.css!.varName).toBe(varName);
+		// The INERTNESS BAR: at the default the pref removes its inline property, so the
+		// :root literal stands and every role computes to the value it was transcribed
+		// from. This assertion is what makes "adopting a token moves zero pixels" true.
+		expect(descriptor!.css!.toCss(1 as never)).toBeNull();
+		expect(descriptor!.css!.toCss(1.1 as never)).toBe('1.1');
+		expect(descriptor!.css!.toCss(5 as never)).toBe('1.2'); // clamps to TYPE_SCALE.max
+		expect(descriptor!.css!.toCss(0 as never)).toBe('0.8'); // clamps to TYPE_SCALE.min
+		expect(descriptor!.css!.toCss(1.001 as never)).toBeNull(); // snaps back to 1
+		expect(descriptor!.css!.toCss(NaN as never)).toBeNull();
+
+		const ui = prefUi(descriptor!)!;
+		expect(ui.group).toBe('Typography');
+		expect(ui.control).toBe('slider');
+		expect(ui.label).toBe(label);
+		expect(ui.min).toBe(0.8);
+		expect(ui.max).toBe(1.2);
+		expect(ui.step).toBe(0.05);
+		expect(ui.advanced).toBeUndefined(); // primary rows: a legibility fix must not be buried
+		expect(ui.help).toContain(printClause);
+	}
+});
+
 test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs have none', () => {
 	const attrs = Object.fromEntries(
 		DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d.attr ?? null]),
@@ -171,6 +217,11 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// SC-112 Task 7 size scales: css-bearing, never attr-reflected (global-only)
 		textScale: null,
 		cardScale: null,
+		// SC-185 type-role size knobs: same shape — css-bearing (--dse-fs-*-scale),
+		// never attr-reflected, global-only.
+		smallTextScale: null,
+		largeTextScale: null,
+		controlTextScale: null,
 		sbFeatureStyle: 'sb-featstyle',
 		sbDensity: 'density',         // BUILT name (spec draft said sb-density; built wins)
 		sbColumns: 'sb-columns',

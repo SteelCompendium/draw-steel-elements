@@ -125,6 +125,13 @@ moves. Run it before a release; details in `visual-harness/README.md`.
 
 ## Important Constraints
 
+- **NEVER hardcode a `font-size`.** Sizes come from the nine `--dse-fs-*` role tokens
+  (`:root` in `styles-source.css`, "THE TYPE-SIZE ROLE SCALE") — all `em` ratios, so the
+  plugin never states an absolute size and never fights the user's theme. Obsidian's
+  absolute `--font-ui-*` sizes are prohibited in element content for the same reason.
+  Read [`.repo-docs/font-sizes.md`](.repo-docs/font-sizes.md) before writing CSS that sets
+  a size; `test/unit/build/fontSizeContract.test.ts` gates it (allowlist of pre-scale
+  sites; it only shrinks).
 - **Reading mode only** -- no Live Preview support
 - Output must be CJS format for Obsidian
 - Target ES2018

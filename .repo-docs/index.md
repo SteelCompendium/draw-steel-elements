@@ -100,6 +100,7 @@ draw-steel-elements/
 | Agent Role | Start here | Then read |
 |------------|-----------|-----------|
 | **Code review** | [conventions.md](conventions.md) | [architecture.md](architecture.md), [troubleshooting.md](troubleshooting.md) |
+| **CSS / styling work** | [font-sizes.md](font-sizes.md) | [conventions.md](conventions.md) (support floor), the workspace `DESIGN.md` |
 | **Bug fix / debug** | [troubleshooting.md](troubleshooting.md) | [development.md](development.md), [architecture.md](architecture.md) |
 | **Feature implementation** | [architecture.md](architecture.md) | [conventions.md](conventions.md), [development.md](development.md), [decisions/](decisions/) |
 | **Codebase migration** | [architecture.md](architecture.md) | [integration.md](integration.md), [conventions.md](conventions.md), [decisions/](decisions/) |
@@ -126,5 +127,6 @@ draw-steel-elements/
 | [integration.md](integration.md) | Upstream/downstream dependencies and cross-repo workflows |
 | [ci-cd.md](ci-cd.md) | CI pipeline, release process, and branch strategy |
 | [conventions.md](conventions.md) | Code style, naming, and commit conventions |
+| [font-sizes.md](font-sizes.md) | The `--dse-fs-*` type-size role scale — **read before writing any CSS that sets a size** (hardcoded `font-size` is prohibited and gated) |
 | [troubleshooting.md](troubleshooting.md) | Known issues, common errors, and prohibitions |
 | [decisions/](decisions/) | Architecture decision records and project decision log |
