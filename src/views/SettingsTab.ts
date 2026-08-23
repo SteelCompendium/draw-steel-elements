@@ -33,7 +33,7 @@ import {
 	type SbPresetId,
 } from '@/prefs/catalog';
 import { snap, type ScaleRange } from '@/prefs/scale';
-import { mountSettingsPreview } from '@views/SettingsPreview';
+import { mountSettingsPreview, type PreviewSubject } from '@views/SettingsPreview';
 import {
 	toSettingDefinitions,
 	type NavRow,
@@ -58,7 +58,7 @@ const CUSTOM_FONT = '__custom__';
 /** The Preset row's description — hoisted so it is BOTH the rendered desc and the
  *  row's search key (SC-131), never two copies that can drift. */
 const PRESET_HELP =
-	'A bundle of the statblock options below. Adjusting any single option re-derives "custom".';
+	'A bundle of the statblock options below, plus the two Feature display options. Adjusting any single one of them re-derives "custom".';
 
 /** SC-160: the marker a dependent row's label carries, verbatim from the site's own
  *  sub-toggle (`&#8627;` + a space — settings-panel.js's "↳ include secondary stats").
@@ -74,6 +74,17 @@ const PRESET_HELP =
  *  neither the row above it nor any indent — which is why the dependent row's label names
  *  its PARENT as well (see the `sbStickyMeta` descriptor in prefs/catalog.ts). */
 const DEPENDENT_PREFIX = '↳ ';
+
+/** SC-123/SC-193: the preview SUBJECT follows the section. A statblock preview under the
+ *  Featureblock page would show nothing that page can change (no `.dse-fb` anywhere in
+ *  it), and the same is true of the Feature page (which restyles the ability card itself).
+ *  Anything not listed keeps the statblock every reflected section previewed before
+ *  SC-123 — it is the richest sample, so it is the right default for the pages whose
+ *  settings (fonts, sizes, motion, print) reach every element alike. */
+const PREVIEW_SUBJECT_BY_GROUP: Readonly<Record<string, PreviewSubject>> = {
+	'Featureblock display': 'featureblock',
+	'Feature display': 'feature',
+};
 
 /** SC-160: is a parent pref "on"? Toggle-shaped prefs come in two spellings — a real
  *  boolean, and the `'on'`/`'off'` strings the CSS-attribute prefs use (OD-D4-5) — and a
@@ -328,22 +339,19 @@ export class DseSettingTab extends PluginSettingTab {
 				label: groupName,
 				onReset: () => void this.resetDescriptors(prefs, members),
 				rows,
-				// The live statblock preview belongs wherever the settings on screen can
-				// visibly change it — i.e. any group holding a REFLECTED descriptor (an
-				// `attr` in the data-dse-* vocabulary or a `css` custom property). That is
-				// Appearance, Typography and Statblock display today, derived rather than
-				// listed, so a future reflected group inherits it for free. D-pages makes
-				// this cheap: each page is its own view, so a preview mounts at most once.
+				// The live preview belongs wherever the settings on screen can visibly
+				// change it — i.e. any group holding a REFLECTED descriptor (an `attr` in
+				// the data-dse-* vocabulary or a `css` custom property). That is
+				// Appearance, Typography, Statblock display, Featureblock display and
+				// Feature display today, derived rather than listed, so a future reflected
+				// group inherits it for free. D-pages makes this cheap: each page is its
+				// own view, so a preview mounts at most once.
 				// Each MOUNT owns its Component and hands back the teardown. Obsidian stores a
 				// render callback's return value as that row's `cleanup` and invokes it when
 				// the row goes away (page navigation, settings close, re-render), so the
 				// preview's pref subscriptions die with the DOM that showed them — and,
 				// critically, a fresh owner is created on every mount rather than once per
 				// definitions build. Definitions are cached and replayed; mounts are not.
-				// SC-123: the preview SUBJECT follows the section — the Featureblock display
-				// page previews a featureblock, since a statblock shows nothing that page
-				// can change. Every other reflected section keeps the statblock it has
-				// previewed since D4.
 				renderPreview: this.sectionShowsPreview(members)
 					? (container) => {
 						const owner = new Component();
@@ -352,7 +360,7 @@ export class DseSettingTab extends PluginSettingTab {
 							container,
 							this.plugin,
 							owner,
-							groupName === 'Featureblock display' ? 'featureblock' : 'statblock',
+							PREVIEW_SUBJECT_BY_GROUP[groupName] ?? 'statblock',
 						);
 						return () => owner.unload();
 					}

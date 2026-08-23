@@ -12178,53 +12178,42 @@ button.dse-pr__row:hover {
 }
 
 /* ================================================================== */
-/* SC-131 — SETTINGS: keeping the live preview on screen               */
+/* SETTINGS: the live preview panel (SC-131, rebuilt by SC-187)        */
 /* ================================================================== */
-/* Scoped entirely to `.dse-settings-page`, a class we put on the group wrapping each
-   settings PAGE's rows — it only ever exists inside the plugin's own settings tab.
-   Nothing here can match inside a rendered [data-dse-element], so the legacy/print
-   freeze is untouched by construction. The settings tab is Obsidian-native chrome, so
-   this deliberately styles with Obsidian's own variables and carries NO
-   [data-dse-theme='steel'] gate (there is no Steel/Legacy story here).
+/* Scoped entirely to `.dse-settings-page` / `.dse-settings-preview*`, classes we put on
+   the group wrapping each settings PAGE's rows and on the preview row inside it — they
+   only ever exist inside the plugin's own settings tab. Nothing here can match inside a
+   rendered [data-dse-element], so the print freeze is untouched by construction.
 
-   THE PROBLEM. The statblock preview is what tells you what a setting actually does, and
-   a preview you have to scroll to is a preview you stop looking at — change a toggle,
-   scroll down, scroll back, repeat. Uncapped the preview is ~3900px on its own.
+   NO [data-dse-theme='steel'] GATE HERE, DELIBERATELY, and it is the one place in this
+   sheet where that is correct: the settings tab is Obsidian's own chrome, not a Draw
+   Steel element, so it styles with Obsidian's variables (--background-*, --text-*,
+   --size-4-*, --radius-*) and follows whatever theme the vault is wearing. The Steel
+   scoping rule exists to keep screen-only rules out of the frozen print scheme; a rule
+   that can only match inside a settings modal can never reach a print capture at all.
+   (Type SIZES are still the plugin's own --dse-fs-* role scale — SC-185's contract has
+   no chrome exemption, and "eyebrow label" is exactly what --dse-fs-label names.)
 
-   WHAT THE NUMBERS SAID. Measured in a real 1.13 settings window (1200px, this repo's
-   evidence run): D-pages already fixed most of it — the Statblock display page is 1039px
-   against a 970px viewport, so its preview is essentially in view already. Typography is
-   the outlier at 3091px, because its six font rows carry long descriptions. So the job is
-   to keep the preview visible on a page that scrolls, not to rebuild the layout.
+   THE SHAPE: a captioned panel at the END of the page, in normal flow, sized to its
+   content. `settingsDeclarative.previewDefinition` carries the full derivation of why it
+   is no longer the bottom-docked sticky pane SC-131 shipped (and why last beat first);
+   the CSS consequences are:
 
-   THE SHAPE: a bottom-docked preview. The pane is `position: sticky; bottom: 0`, so it
-   rides the bottom edge of the scroll viewport while the controls scroll behind it, and
-   settles into its natural place once you reach the end of the page. Two columns was the
-   obvious alternative and was measured out: Obsidian caps the settings content card at
-   ~700px, so a side-by-side split leaves ~390px of controls against a ~290px statblock —
-   both too narrow. Docking keeps the statblock at the FULL card width (the width it is
-   designed to be read at) and costs only the vertical space it occupies. */
+     • NO max-height and NO overflow on the host. Obsidian's `.vertical-tab-content` is
+       the only scroller in the settings pane, which is SC-187's headline fix — the old
+       `max-height: min(22rem, 40vh); overflow: auto` was a second scrollbar nested inside
+       obsidian's own, over content up to 10x its height.
+     • NO `position: sticky` / `z-index` / opaque background / drop shadow. Nothing floats,
+       so nothing occludes a row, and the panel needs no lift to separate itself from
+       something it is no longer sitting on top of.
+     • The row keeps the group's own horizontal padding instead of zeroing it, so the
+       panel's edges line up with every row label above and below it. */
 
-.dse-settings-page > .setting-items {
-	/* The rows and the preview are siblings here (obsidian nests them one level below the
-	   group element our class lands on) — this is the flow the sticky pane rides. */
-	position: relative;
-}
-
-/* The preview row is a panel, not a labelled control: no name column, no row padding. */
+/* The preview row is a panel, not a labelled control: one full-width column, no name
+   column. The group's padding (--setting-items-padding-*) is left alone on purpose — it
+   is what aligns the panel with the rows. */
 .dse-settings-preview-row {
 	display: block;
-	border-top: none;
-	padding: 0;
-	/* Docks to the bottom of the settings viewport while the controls scroll behind it,
-	   then settles at the page's end. Capped at 40% of the viewport so it never becomes
-	   the page it was meant to preview. */
-	position: sticky;
-	bottom: 0;
-	z-index: 1;
-	/* Opaque: a sticky pane sits over the rows it floats above. */
-	background: var(--background-primary);
-	padding-top: 0.5rem;
 }
 
 .dse-settings-preview-row > .setting-item-control {
@@ -12235,15 +12224,40 @@ button.dse-pr__row:hover {
 
 .dse-settings-preview {
 	margin: 0;
-	max-height: min(22rem, 40vh);
-	overflow: auto;
+}
+
+/* The caption. Without it the sample is just an unexplained statblock sitting in the
+   settings window; with it the frame below reads as a deliberate sample stage. */
+.dse-settings-preview__label {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 0.15em 0.6em;
+	margin-bottom: var(--size-4-2);
+	color: var(--text-muted);
+	/* SC-185 role scale: this IS a card-header eyebrow, which is what `label` names. */
+	font-size: var(--dse-fs-label);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.dse-settings-preview__label-hint {
+	color: var(--text-faint);
+	font-weight: normal;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+/* The stage: a recessed well one step darker/lighter than the settings card the rows sit
+   in (--background-primary inside --setting-items-background), so the sample reads as
+   inset into the surface rather than laid on top of it. No shadow, no accent spine
+   (DESIGN.md rule 7) — the frame is the whole treatment. */
+.dse-settings-preview__stage {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
-	padding: 0.5rem;
+	padding: var(--size-4-3);
 	background: var(--background-primary);
-	/* A soft lift so the docked pane reads as floating over the rows behind it rather
-	   than as a row that happens to be stuck. */
-	box-shadow: 0 -2px 8px rgb(0 0 0 / 12%);
 }
 
 /* A chrome row (the compendium safety sentence, the sync status line) is prose, not a

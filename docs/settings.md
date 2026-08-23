@@ -7,10 +7,16 @@ You can also just search: Obsidian's own settings search (the box at the top of 
 settings window) indexes every Draw Steel Elements setting, so typing "font", "density" or
 "malice" finds the right row from anywhere and jumps straight to it.
 
-Three pages — Appearance, Typography and Statblock display — show a **live preview** docked
-at the bottom while you scroll, so you can see what a setting does before you leave the
-page. Each page also has a **Reset** action that puts that page's settings back to their
-defaults.
+Five pages — Appearance, Typography, Statblock display, Featureblock display and Feature
+display — end with a **live preview**: a labelled sample that re-renders as you change the
+settings above it, so you can see what an option does before you leave the page. It shows
+the whole sample rather than a cropped window onto one, and it never scrolls on its own —
+the settings pane is the only thing that scrolls. Each page also has a **Reset** action
+that puts that page's settings back to their defaults.
+
+(One setting the preview can't show you is **Sticky mini-header**, because it is a
+behaviour of a scrolling reading pane and a settings window isn't one. Everything else on
+these pages moves the sample.)
 
 Every setting ships on the value that reproduces what the plugin renders out of the box.
 Nothing changes unless you change it.
@@ -70,9 +76,10 @@ How statblocks are laid out. Start with the **Preset**:
 
 ![The Statblock display settings page](Media/settings-statblock.png)
 
-A preset writes all nine settings below it. Change any one of them afterwards and the
-preset box reads **Custom** — nothing is lost, it's just no longer one of the three named
-bundles.
+A preset writes nine settings: the seven below it, plus the two on the
+[Feature display](#feature-display) page (they're bundled by the website's presets too).
+Change any one of them afterwards and the preset box reads **Custom** — nothing is lost,
+it's just no longer one of the three named bundles.
 
 The individual settings:
 
@@ -107,9 +114,6 @@ Two things the mini-header deliberately does not do:
 
 Under **Advanced**:
 
-- **Keyword display** — the keyword and action-type band as **Chips**, **Inline text**, a
-  **Grid**, or a **Ledger**. Applies to every ability card.
-- **Distance + target** — the same three treatments for the distance/target rail.
 - **Characteristics** — the familiar **One line** ("Might +2"), or the value stacked over
   the word.
 - **Boxed first letter** — a small framed M / A / R / I / P beside each characteristic,
@@ -125,6 +129,21 @@ featureblock rather than a statblock.
 - **Feature style** — cards or a flat list.
 - **Stat line** — the Stamina / Size / EV header as paired cells or as full-width rows with
   the value right-aligned.
+
+## Feature display
+
+How an **ability card** itself is laid out — the card the [Feature element](feature.md)
+renders on its own, and the same card wherever it appears inside a statblock or a
+featureblock. The preview on this page is a standalone ability card.
+
+- **Keyword display** — the keyword and action-type band as **Chips** (the default),
+  **Inline text**, a **Grid**, or a **Ledger**.
+- **Distance + target** — the same treatments for the Distance / Target rail.
+
+Both are part of the statblock **Preset**, so picking a preset on the
+[Statblock display](#statblock-display) page writes them, and changing either one here
+re-derives that preset to **Custom**. (They lived on that page until recently, filed under
+its Advanced list — they were always ability-card settings, so this is where they belong.)
 
 ## Element defaults
 

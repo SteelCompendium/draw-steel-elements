@@ -83,7 +83,9 @@ export interface NavSection {
 
 /** Class on the group wrapping a page's rows — the preview layout hooks it. */
 export const PAGE_CLS = 'dse-settings-page';
-/** Class on the preview row: CSS docks it to the bottom of the settings viewport. */
+/** Class on the preview row: CSS turns it from a name/control pair into a full-width
+ *  panel. (Before SC-187 it also docked the row to the bottom of the scroll viewport;
+ *  see `previewDefinition` for why that is gone.) */
 export const PREVIEW_CLS = 'dse-settings-preview-row';
 /** Class on a chrome row (no name/control), so CSS can let its text span the full width. */
 export const CHROME_CLS = 'dse-settings-chrome-row';
@@ -181,7 +183,44 @@ function asCleanup(value: void | (() => void)): (() => void) | undefined {
 	return typeof value === 'function' ? value : undefined;
 }
 
-/** The live preview, as a nameless unsearchable row CSS lifts into the sticky column. */
+/**
+ * The live preview, as a nameless unsearchable row CSS turns into a full-width panel.
+ *
+ * SC-187 — WHY IT IS NO LONGER DOCKED TO THE BOTTOM OF THE VIEWPORT.
+ *
+ * SC-131 made this row `position: sticky; bottom: 0`, so it rode the bottom edge of the
+ * scroll viewport while the rows scrolled behind it. The dock is what forced the two
+ * defects Scott filed SC-187 for, and they are the same defect twice:
+ *
+ *  1. A pane that floats over a scrolling page has to be BOUNDED, so the preview host
+ *     carried `max-height: min(22rem, 40vh); overflow: auto` — a second scroller inside
+ *     obsidian's `.vertical-tab-content`. Measured on the Statblock display page: a
+ *     350 px porthole over 3646 px of statblock, with obsidian's own 938/1183 scroller
+ *     around it. On the Featureblock page — which does not scroll at all — the ONLY
+ *     scrollbar on screen belonged to the preview.
+ *  2. Being opaque and floating, it COVERED the rows it was previewing. On Typography it
+ *     sat across the middle of the "Card size" row's description and hid the three
+ *     SC-185 sliders entirely, which is the "floating card in a hole" reading.
+ *
+ * In-flow at the end of the page answers both without a cap: it can never occlude a row
+ * because it is never out of flow, and with no bound it sizes to its content, so
+ * obsidian's scroller is the only scroller in the pane.
+ *
+ * FIRST vs. LAST was measured before it was decided. Leading the page reads well — the
+ * sample answers "what does this page affect?" on arrival — but the abridged statblock is
+ * still ~1600px, which pushes every row of the Statblock display page off the first
+ * screen. A settings page's job is its settings; the preview is the confirmation you
+ * glance at after moving one. So it stays last, where the rows are immediately usable and
+ * the panel's head sits just under them (the Statblock page's rows total ~780px against a
+ * ~940px viewport, so the sample starts on the first screen anyway) — which is the
+ * position the dock was faking, minus the occlusion and minus the porthole.
+ *
+ * The cost, stated plainly: on a page taller than the viewport, changing a row near the
+ * top no longer happens with the sample on screen. That is a real trade against a fake
+ * one — the docked sample was cropped to its header and stat rail, so a Feature style /
+ * Feature columns / Keyword display change was already happening entirely below its own
+ * fold. A sample you can read beats a sample you can see a tenth of.
+ */
 function previewDefinition(section: NavSection): SettingDefinition | null {
 	const renderPreview = section.renderPreview;
 	if (!renderPreview) return null;
@@ -249,13 +288,17 @@ function toPage(section: NavSection): SettingDefinitionPage | null {
 	if (nested) items.push(nested);
 	const reset = resetDefinition(section);
 	if (reset) items.push(reset);
+	// SC-187 keeps the preview LAST — a settings page's job is its settings, and a
+	// ~1600px sample above them would push every row off the first screen. What changed
+	// is that it is now IN FLOW there instead of floating over the rows; see
+	// previewDefinition.
 	const preview = previewDefinition(section);
 	if (preview) items.push(preview);
 	if (!items.length) return null;
-	// Everything on the page lives in one classed group, which is what gives the CSS a
-	// single container holding both the rows and the preview — the bottom-docked,
-	// always-visible preview layout. The group carries no heading: the page title is
-	// already the section name.
+	// Everything on the page lives in one classed group, so the preview panel and the rows
+	// share one container and one background — the panel reads as the top of the settings
+	// card rather than as something dropped on top of it. The group carries no heading:
+	// the page title is already the section name.
 	const group: SettingDefinitionGroup = {
 		type: 'group',
 		cls: `${PAGE_CLS} ${PAGE_CLS}--${section.id}`,

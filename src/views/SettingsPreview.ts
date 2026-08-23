@@ -13,10 +13,51 @@ import type { Component } from 'obsidian';
 import type DrawSteelAdmonitionPlugin from 'main';
 import type { BlockHost } from '@/framework/host/BlockHost';
 
-/** The canned preview statblock. VERBATIM copy of the pinned known-good fixture
- *  test/fixtures/statblock/human-bandit-chief.yaml — do NOT hand-write a new
- *  statblock shape here; if the fixture moves, copy the new canonical one. */
+/**
+ * The canned preview statblock — the Human Bandit Chief's HEADER verbatim from the pinned
+ * known-good fixture (test/fixtures/statblock/human-bandit-chief.yaml) over an
+ * ABRIDGED feature list.
+ *
+ * SC-187: it used to be the whole fixture, all eight features, and that was the ticket's
+ * root cause. A settings PREVIEW is a sample, not a specimen: at the settings card's width
+ * the full statblock renders 3646 px tall, which is why the preview host had to be a
+ * 352 px porthole with its own scrollbar (a second scroller inside obsidian's, Scott's
+ * "biggest issue") and why what you actually SAW of it stopped just past the stat rail —
+ * you could never see a feature card, i.e. the thing half the settings on that page
+ * change. Three features render ~1/4 as tall and the porthole is gone.
+ *
+ * The three are chosen so that EVERY setting that can move this preview still visibly
+ * moves it, which is the constraint any future edit here has to keep:
+ *   • the header block (name/level/role/organization/keywords/EV, the primary stat row,
+ *     the Immunity/Weakness/Movement block, the characteristics rail) is untouched, so
+ *     Density, Secondary stats, Characteristics and Boxed first letter all still preview.
+ *   • ONE signature ability with a power roll and a Malice-cost effect + ONE trait — two
+ *     non-villain features, which is the minimum for Feature columns ("side-by-side") to
+ *     show two columns, and enough for Feature style (cards/flat), Keyword display and
+ *     Distance + target to show their work.
+ *   • ONE villain action, so Villain actions (inline vs. its own collapsible band) has
+ *     something to band.
+ * Effect prose is trimmed to one clause each; nothing about the SHAPE of the data changed.
+ *
+ * `prefs: { sbSticky: "off" }` — the shipped per-block override (prefOverrides.ts;
+ * `sbSticky` is one of the keys explicitly documented as per-block overridable) — and it
+ * is load-bearing, not decoration. Uncapping the host makes the sample taller than the
+ * settings viewport, so SC-160's IntersectionObserver stuck the mini-header, whose
+ * scrollport here is the SETTINGS PANE: it pinned a creature name and stat line over the
+ * settings page's own titlebar and over the rows it is supposed to be previewing. That
+ * bar's contract is "pin to the top of the READING pane while a long statblock scrolls
+ * past"; a settings modal has no reading pane, and a floating strip over the settings rows
+ * is the exact defect SC-187 removes. Turning it off per block is the honest fix — a CSS
+ * override would have to out-specify (or `!important`-beat) the five-attribute reveal rule
+ * and would trip SC-160's own "every sticky rule is Steel- and print-scoped" contract.
+ * Consequence, stated so nobody re-adds it as a bug: the "Sticky mini-header" row has no
+ * visible effect on this preview. It never did — the old 352px porthole could not show a
+ * scroll behaviour either — and a settings sample is structurally the wrong place to
+ * demonstrate one.
+ */
 export const PREVIEW_STATBLOCK_YAML = `type: statblock
+prefs:
+  sbSticky: "off"
 name: Human Bandit Chief
 level: 3
 role: ""
@@ -57,57 +98,15 @@ features:
         tier1: 8 damage; pull 1
         tier2: 12 damage; pull 2
         tier3: 15 damage; pull 3
-      - name: Effect
-        effect: Any target who is adjacent to the bandit chief after the power roll is
-          resolved takes 3 corruption damage.
       - cost: 2 Malice
         effect: This ability targets one additional target.
-  - type: feature
-    feature_type: ability
-    name: Kneel, Peasant!
-    icon: 🗡
-    keywords:
-      - Melee
-    usage: Maneuver
-    distance: Melee 1
-    target: One enemy
-    effects:
-      - roll: Power Roll + 2
-        tier1: Push 1; M < 1 prone
-        tier2: Push 2; M < 2 prone
-        tier3: Push 4; M < 3 prone
-      - cost: 2 Malice
-        effect: The ability takes the Area keyword, loses the Melee keyword, and is a 1
-          burst that targets each enemy in the area.
-  - type: feature
-    feature_type: ability
-    name: Bloodstones
-    icon: ❗️
-    keywords:
-      - Magic
-    usage: Triggered action
-    distance: Self
-    target: Self
-    trigger: The bandit chief makes a power roll.
-    effects:
-      - name: Effect
-        effect: The bandit chief takes 5 corruption damage and increases the outcome of
-          the power roll by one tier. This damage can't be reduced in any way.
   - type: feature
     feature_type: trait
     name: End Effect
     icon: ⭐️
     effects:
       - effect: At the end of each of their turns, the bandit chief can take 5 damage to
-          end one effect on them that can be ended by a saving throw. This
-          damage can't be reduced in any way.
-  - type: feature
-    feature_type: trait
-    name: Supernatural Insight
-    icon: ⭐️
-    effects:
-      - effect: The bandit chief ignores concealment if it's granted by a supernatural
-          effect.
+          end one effect on them that can be ended by a saving throw.
   - type: feature
     feature_type: ability
     name: Shoot!
@@ -121,37 +120,6 @@ features:
     effects:
       - name: Effect
         effect: Each target makes a ranged free strike.
-  - type: feature
-    feature_type: ability
-    name: Form Up!
-    icon: ☠️
-    ability_type: Villain Action 2
-    keywords:
-      - Area
-    usage: "-"
-    distance: 10 burst
-    target: Each ally in the area
-    effects:
-      - name: Effect
-        effect: Each target shifts up to their speed. Additionally, until the end of the
-          encounter, while the bandit chief or any ally is adjacent to a target,
-          they have damage immunity 2.
-  - type: feature
-    feature_type: ability
-    name: Lead From the Front
-    icon: ☠️
-    ability_type: Villain Action 3
-    keywords:
-      - "-"
-    usage: "-"
-    distance: Self
-    target: Self
-    effects:
-      - name: Effect
-        effect: The bandit chief shifts up to 10 squares regardless of their speed.
-          During or after this movement, they can use their Whip and Magic
-          Longsword against up to four targets. Additionally, one ally adjacent
-          to each target can make a free strike against that target.
 `;
 
 /** SC-123: the Featureblock display section's own preview subject. A statblock
@@ -192,22 +160,92 @@ features:
           damage and is weakened (save ends).
 `;
 
+/** SC-193: the Feature display section's subject — a STANDALONE ability card, the one
+ *  host neither of the other two previews shows on its own. Deliberately the same
+ *  signature ability the statblock preview carries, so the two pages are visibly showing
+ *  the same grammar in two containers rather than two unrelated samples. Everything the
+ *  page's two rows restyle is present: keywords + action type (the `kwUsage` band) and
+ *  distance + target (the `distTarget` rail). */
+export const PREVIEW_FEATURE_YAML = `type: feature
+feature_type: ability
+name: Whip and Magic Longsword
+icon: 🗡
+ability_type: Signature Ability
+keywords:
+  - Magic
+  - Melee
+  - Strike
+  - Weapon
+usage: Main action
+distance: Melee 2
+target: Two enemies or objects
+effects:
+  - roll: Power Roll + 2
+    tier1: 8 damage; pull 1
+    tier2: 12 damage; pull 2
+    tier3: 15 damage; pull 3
+  - cost: 2 Malice
+    effect: This ability targets one additional target.
+`;
+
+/** The three canned subjects a settings page can preview. */
+export type PreviewSubject = 'statblock' | 'featureblock' | 'feature';
+
+const PREVIEW_YAML: Record<PreviewSubject, string> = {
+	statblock: PREVIEW_STATBLOCK_YAML,
+	featureblock: PREVIEW_FEATUREBLOCK_YAML,
+	feature: PREVIEW_FEATURE_YAML,
+};
+
+/** Class on the panel wrapping the caption + the mounted sample. */
+export const PREVIEW_CLS = 'dse-settings-preview';
+/** Class on the caption line above the sample. */
+export const PREVIEW_LABEL_CLS = 'dse-settings-preview__label';
+/** Class on the framed well the element root mounts into. */
+export const PREVIEW_STAGE_CLS = 'dse-settings-preview__stage';
+
+/**
+ * SC-187 — the captioned panel, built without mounting anything into it.
+ *
+ * A bare card dropped into a settings page is an unexplained statblock; the caption is
+ * what makes it "this is the sample these settings are changing", and it is also what
+ * lets the frame read as a deliberate sample stage rather than as a slab. Split out from
+ * the mount so the panel's DOM has exactly one definition — the production mount below
+ * and the SC-187 evidence harness both call this rather than each hand-rolling it.
+ *
+ * Returns the STAGE (the framed well). The element root mounts as a direct child of it,
+ * so every existing `.dse-settings-preview [data-dse-element]` selector — the tests, the
+ * settings-evidence camera — keeps matching.
+ */
+export function buildPreviewPanel(containerEl: HTMLElement): HTMLElement {
+	const wrap = containerEl.createDiv({ cls: PREVIEW_CLS });
+	const label = wrap.createDiv({ cls: PREVIEW_LABEL_CLS });
+	label.createSpan({ text: 'Preview' });
+	label.createSpan({
+		cls: `${PREVIEW_LABEL_CLS}-hint`,
+		// "above" because the panel is the LAST row on the page (settingsDeclarative's
+		// toPage) — keep the two in step if that ever moves.
+		text: 'updates live as you change the settings above',
+	});
+	return wrap.createDiv({ cls: PREVIEW_STAGE_CLS });
+}
+
 export function mountSettingsPreview(
 	containerEl: HTMLElement,
 	plugin: DrawSteelAdmonitionPlugin,
 	owner: Component,
 	/** Which canned block to preview. Defaults to the statblock — the subject every
 	 *  reflected section had before SC-123 added a featureblock-only one. */
-	subject: 'statblock' | 'featureblock' = 'statblock',
+	subject: PreviewSubject = 'statblock',
 ): void {
 	const fw = plugin.frameworkV2;
 	const def = fw?.registry.get(subject);
 	if (!fw || !def) return; // framework not constructed (never in practice): no preview
-	const wrap = containerEl.createDiv({ cls: 'dse-settings-preview' });
+	const stage = buildPreviewPanel(containerEl);
 	const host: BlockHost = {
 		mode: 'reading',
 		sourcePath: '',
-		containerEl: wrap,
+		containerEl: stage,
 		canPersist: true,
 		addChild: (child) => {
 			owner.addChild(child);
@@ -217,8 +255,7 @@ export function mountSettingsPreview(
 		replaceSource: async () => false,
 		blockKey: () => `dse-settings-preview:${subject}`,
 	};
-	const yaml = subject === 'featureblock' ? PREVIEW_FEATUREBLOCK_YAML : PREVIEW_STATBLOCK_YAML;
-	fw.pipeline.run(def, yaml, host).catch((error) => {
+	fw.pipeline.run(def, PREVIEW_YAML[subject], host).catch((error) => {
 		console.error('Draw Steel Elements: settings preview failed to render', error);
 	});
 }

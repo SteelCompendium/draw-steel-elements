@@ -7,7 +7,7 @@ import DrawSteelAdmonitionPlugin from 'main';
 import { DseSettingTab } from '@views/SettingsTab';
 import { toSettingDefinitions } from '@views/settingsDeclarative';
 import { App, Plugin, Setting, Component, Notice, flushAsync } from '../../mocks/obsidian';
-import { SB_PRESETS } from '../../../src/prefs/catalog';
+import { SB_PRESETS, applySbPreset, deriveSbPreset } from '../../../src/prefs/catalog';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import type { CompendiumManifest } from '@/data/manifest';
 
@@ -110,7 +110,7 @@ describe('D4 §4 — DseSettingTab', () => {
 		// inserts Typography after Appearance.
 		expect(pageNames(tab)).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
-			'Element defaults', 'Rolling', 'Authoring',
+			'Feature display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 		const names = Setting.created.map((s) => s.name);
@@ -745,7 +745,7 @@ describe('SC-131 — declarative settings definitions', () => {
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		expect(pageNames(tab)).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
-			'Element defaults', 'Rolling', 'Authoring',
+			'Feature display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 		// Path A: the imperative renderer is deleted outright, not left as a fallback.
@@ -863,12 +863,14 @@ describe('SC-131 — declarative settings definitions', () => {
 		// future reflected group inherits a preview without being listed anywhere.
 		expect(pages(tab).filter(hasPreview).map((p) => p.name)).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
+			'Feature display',
 		]);
 	});
 
-	// SC-123: …and the SUBJECT follows the section. A statblock preview under the
-	// Featureblock page would show nothing either row can change (no `.dse-fb` in it).
-	test('the Featureblock display page previews a FEATUREBLOCK; every other page keeps the statblock', async () => {
+	// SC-123 / SC-193: …and the SUBJECT follows the section. A statblock preview under the
+	// Featureblock page would show nothing either row can change (no `.dse-fb` in it), and
+	// the same holds for the Feature page, whose rows restyle the ability card itself.
+	test('each display page previews its OWN element; every other page keeps the statblock', async () => {
 		const plugin = await makeLoadedPlugin();
 		const tab = new DseSettingTab(plugin.app as never, plugin);
 		const previewOf = async (page: string): Promise<HTMLElement | null> => {
@@ -881,8 +883,66 @@ describe('SC-131 — declarative settings definitions', () => {
 		};
 		expect((await previewOf('Featureblock display'))?.getAttribute('data-dse-element'))
 			.toBe('featureblock');
+		expect((await previewOf('Feature display'))?.getAttribute('data-dse-element'))
+			.toBe('feature');
 		expect((await previewOf('Statblock display'))?.getAttribute('data-dse-element'))
 			.toBe('statblock');
+		expect((await previewOf('Typography'))?.getAttribute('data-dse-element'))
+			.toBe('statblock');
+	});
+
+	// —— SC-193: the Feature display page itself ——
+	//
+	// Scott: "There are settings for Featureblocks and statblocks, but not Features."
+	// The two ability-card preferences existed and already reached a standalone feature;
+	// they were filed under Statblock display → Advanced, where nobody would find them.
+	test('SC-193: Feature display is a real page holding the two ability-card rows, as PRIMARY rows with a reset', async () => {
+		const plugin = await makeLoadedPlugin();
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const page = pageNamed(tab, 'Feature display');
+		expect(page.items).toHaveLength(1);
+		expect(page.items[0].cls).toContain('dse-settings-page--feature-display');
+		const names = rowDefs(page.items).map((d) => d.name);
+		// Primary rows — no nested Advanced page, mirroring Featureblock display.
+		expect(names).toEqual(['Keyword display', 'Distance + target', 'Reset feature display', '']);
+		expect(page.items[0].items.some((i: Def) => i.type === 'page')).toBe(false);
+		// …and they are gone from the page they used to hide on.
+		const statblockNames = rowDefs(pageNamed(tab, 'Statblock display').items).map((d) => d.name);
+		expect(statblockNames).not.toContain('Keyword display');
+		expect(statblockNames).not.toContain('Distance + target');
+	});
+
+	test('SC-193: the moved rows still bind natively and still live-apply to a mounted root', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		const byName = new Map(rowDefs(pageNamed(tab, 'Feature display').items).map((d) => [d.name, d]));
+		expect(byName.get('Keyword display')!.control).toMatchObject({ type: 'dropdown', key: 'kwUsage' });
+		expect(byName.get('Distance + target')!.control).toMatchObject({ type: 'dropdown', key: 'distTarget' });
+		const owner: any = new Component();
+		owner.load();
+		const root = document.createElement('div');
+		prefs.reflect(root, owner);
+		await (tab as any).setControlValue('kwUsage', 'ledger');
+		expect(prefs.get('kwUsage')).toBe('ledger');
+		expect(root.getAttribute('data-dse-kwusage')).toBe('ledger');
+		await (tab as any).setControlValue('distTarget', 'text');
+		expect(root.getAttribute('data-dse-disttarget')).toBe('text');
+	});
+
+	// The cross-page consequence of the move, pinned because it is the one thing about
+	// SC-193 a reader could reasonably call surprising: the statblock PRESET still owns
+	// these two keys, so moving one still re-derives the preset to "custom".
+	test('SC-193: the Feature display rows remain statblock preset members', async () => {
+		const plugin = await makeLoadedPlugin();
+		const prefs = plugin.frameworkV2!.services.prefs;
+		const tab = new DseSettingTab(plugin.app as never, plugin);
+		expect(deriveSbPreset(prefs)).toBe('steel');
+		await (tab as any).setControlValue('kwUsage', 'ledger');
+		expect(deriveSbPreset(prefs)).toBe('custom');
+		// …and applying a preset from the Statblock page writes them back.
+		await applySbPreset(prefs, 'steel');
+		expect(prefs.get('kwUsage')).toBe('crest');
 	});
 
 	test('a native control write still live-applies to a mounted root (prefs.set path)', async () => {
@@ -1029,7 +1089,7 @@ describe('SC-131 — registration order', () => {
 		// After the framework is built, the full ten (SC-123 added Featureblock display).
 		expect(builds[builds.length - 1]).toEqual([
 			'Appearance', 'Typography', 'Statblock display', 'Featureblock display',
-			'Element defaults', 'Rolling', 'Authoring',
+			'Feature display', 'Element defaults', 'Rolling', 'Authoring',
 			'Compendium', 'Links', 'Initiative tracker',
 		]);
 	});

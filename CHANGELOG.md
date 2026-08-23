@@ -15,6 +15,30 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **The settings preview is no longer a porthole with its own scrollbar**
+  (SC-187). Every settings page that shows a live sample used to dock it to the bottom
+  of the window in a fixed 350px box — which meant a second scrollbar nested inside
+  Obsidian's own (on the Statblock display page, 350px of window onto a 3,646px
+  statblock), a sample cropped to its header so you never actually saw a feature card,
+  and an opaque panel floating across the settings it was previewing (on Typography it
+  covered the "Card size" row and all three text-size sliders outright). The sample is
+  now a **labelled panel at the end of the page**, in normal flow, sized to whatever it
+  is showing: one scrollbar in the settings window, nothing covered, and the whole
+  sample readable. The canned statblock was also cut from eight abilities to three
+  chosen to keep every setting on the page demonstrable, so the sample reads as a
+  sample. One consequence worth knowing: **Sticky mini-header** has no visible effect in
+  the preview — it is a scrolling-reading-pane behaviour, and a settings window is not
+  one.
+- [FIX] **Features have their own settings page** (SC-193). **Keyword display** and
+  **Distance + target** control the ability card itself — standalone, and everywhere it
+  appears inside a statblock or featureblock — but they were filed under *Statblock
+  display → Advanced*, where nobody looking for feature settings would find them. They
+  now sit on a **Feature display** page beside *Statblock display* and *Featureblock
+  display*, with a standalone ability card in its preview. Nothing changes about what
+  they do or what they default to, and they are still written by the statblock
+  **Preset** (as they are on the website), so changing either still re-derives that
+  preset to "Custom".
+
 - **The skill list gets a new look, two selectable layouts, and an unowned-skills
   toggle** (SC-182). A `ds-skills` block now renders as a **ledger** by default — a
   responsive grid of group panels with owned/total tallies (`3/11`) and ◆ marks, about

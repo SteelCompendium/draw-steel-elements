@@ -384,7 +384,8 @@ test('the non-default bundles carry the SITE\'s values for every new member (set
 
 test('SC-123 rows: statblock additions are SECONDARY (Scott\'s 3-primary-plus-advanced balance); the featureblock pair is its own section', () => {
 	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
-	for (const key of ['kwUsage', 'distTarget', 'sbCharLine', 'sbCharBox', 'sbVillain']) {
+	// SC-193 moved kwUsage/distTarget off this page — see the Feature display test below.
+	for (const key of ['sbCharLine', 'sbCharBox', 'sbVillain']) {
 		const ui = prefUi(byKey.get(key)!)!;
 		expect(ui.group).toBe('Statblock display');
 		expect(ui.advanced).toBe(true);
@@ -401,6 +402,40 @@ test('SC-123 rows: statblock additions are SECONDARY (Scott\'s 3-primary-plus-ad
 	}
 	expect(GROUP_ORDER.indexOf('Featureblock display')).toBe(
 		GROUP_ORDER.indexOf('Statblock display') + 1,
+	);
+});
+
+// —— SC-193: "There are settings for Featureblocks and statblocks, but not Features" ——
+//
+// The gap was a MISFILING, not a missing feature: `kwUsage`/`distTarget` style the ability
+// CARD (`.dse-feature__meta-*`, with no `[data-dse-element]` qualifier anywhere in their
+// CSS), so they have always applied to a standalone `ds-feature` — while living on the
+// Statblock display page's Advanced sub-page. This pins the correction in both directions
+// so a future edit cannot quietly file an ability-card setting under a container again.
+test('SC-193 Feature display: the two ability-card prefs are PRIMARY rows of their own section, and gone from Statblock display', () => {
+	const byKey = new Map(DSE_PREF_DESCRIPTORS.map((d) => [d.key as string, d]));
+	for (const key of ['kwUsage', 'distTarget']) {
+		const ui = prefUi(byKey.get(key)!)!;
+		expect(ui.group).toBe('Feature display');
+		expect(ui.control).toBe('select');
+		// Primary, like Featureblock display's pair: a two-row page whose only rows sit
+		// behind a nested "Advanced" would render an empty page.
+		expect(ui.advanced ?? false).toBe(false);
+		// Still bundled by the statblock presets — the site bundles them too, and the
+		// plugin follows. The help text says so out loud since the cause (the Preset row)
+		// and the effect are now on different pages.
+		expect(ui.inPreset).toBe(true);
+		expect(ui.help).toContain('Custom');
+		// Reflected, which is what earns the section its live preview for free.
+		expect(byKey.get(key)!.attr).toBeDefined();
+	}
+	// Nothing else moved onto the new page…
+	const featureKeys = DSE_PREF_DESCRIPTORS.filter((d) => prefUi(d)?.group === 'Feature display')
+		.map((d) => d.key as string);
+	expect(featureKeys).toEqual(['kwUsage', 'distTarget']);
+	// …and the section sits after the two container sections, widest-first.
+	expect(GROUP_ORDER.indexOf('Feature display')).toBe(
+		GROUP_ORDER.indexOf('Featureblock display') + 1,
 	);
 });
 

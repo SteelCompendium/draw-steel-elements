@@ -37,9 +37,13 @@ Side-by-side is worth a look if you read on a wide window:
 
 ![A statblock in two columns](Media/statblock-side-by-side.png)
 
-Under **Advanced** on the same page are five more, all matching the website's own options:
-**Keyword display**, **Distance + target**, **Characteristics**, **Boxed first letter** and
-**Villain actions** (listed inline, or gathered into one collapsible band).
+Under **Advanced** on the same page are three more, all matching the website's own options:
+**Characteristics**, **Boxed first letter** and **Villain actions** (listed inline, or
+gathered into one collapsible band).
+
+Two more that a preset also writes — **Keyword display** and **Distance + target** — live
+on the **Feature display** page, because they restyle the ability card itself wherever it
+appears rather than the statblock around it.
 
 Feature blocks — Malice, Dynamic Terrain — have their own page,
 **Featureblock display**, with the same idea and a featureblock in the preview.

@@ -59,6 +59,8 @@ declare module '../framework/seams/prefs' {
 		// (renderFeature.ts's .dse-feature__meta-chips / -rail), so they reach every
 		// card — statblock, featureblock and standalone — where the site's
 		// data-sb-kwusage/-disttarget only reach its statblock feature block.
+		// **SC-193 moved those two onto their own "Feature display" page** for exactly
+		// that reason; they remain statblock PRESET members (see SB_PRESET_MEMBERS).
 		// sbCharLine/sbCharBox/sbVillain are statblock-only, like the site's.
 		//
 		// EVERY DEFAULT HERE NOW MATCHES THE SITE'S OWN SB_DEFAULTS verbatim, including
@@ -116,16 +118,23 @@ export type PrefGroup =
 	| 'Typography'
 	| 'Statblock display'
 	| 'Featureblock display'
+	| 'Feature display'
 	| 'Element defaults'
 	| 'Rolling'
 	| 'Authoring';
 
-/** Section order in the settings tab. */
+/** Section order in the settings tab.
+ *
+ *  The three display groups run widest-container-first — Statblock, Featureblock,
+ *  Feature — which is also the order a reader meets them: a statblock CONTAINS
+ *  featureblock-shaped stat headers and ability cards, a featureblock contains ability
+ *  cards, and an ability card is the atom. */
 export const GROUP_ORDER: readonly PrefGroup[] = [
 	'Appearance',
 	'Typography',
 	'Statblock display',
 	'Featureblock display',
+	'Feature display',
 	'Element defaults',
 	'Rolling',
 	'Authoring',
@@ -397,39 +406,15 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
-	// —— SC-123: the site's remaining statblock layout settings. All five are
+	// —— SC-123: the site's remaining statblock layout settings. All three are
 	// SECONDARY rows (ui.advanced) — Scott's "3 primary + advanced" balance from
 	// SC-112: the primary page keeps the preset plus the four curated knobs, and the
 	// long tail lives one page deeper rather than flat. Each is still a preset member
 	// (SB_PRESET_MEMBERS), so the bundles write them regardless of which page shows
-	// them, and the section reset covers them (SettingsTab iterates members, not rows). ——
-	d({
-		key: 'kwUsage', default: 'crest', attr: 'kwusage',
-		ui: {
-			group: 'Statblock display', inPreset: true, advanced: true,
-			label: 'Keyword display', control: 'select',
-			options: [
-				{ value: 'crest', label: 'Chips' },
-				{ value: 'text', label: 'Inline text' },
-				{ value: 'grid', label: 'Grid' },
-				{ value: 'ledger', label: 'Ledger' },
-			],
-			help: 'Layout of the keyword + action-type band on ability cards. "Chips" — the default — keeps today\'s look: boxed keyword chips with the action type at the far right. Applies to every ability card (statblock, featureblock and standalone) under the Steel theme.',
-		},
-	}),
-	d({
-		key: 'distTarget', default: 'grid', attr: 'disttarget',
-		ui: {
-			group: 'Statblock display', inPreset: true, advanced: true,
-			label: 'Distance + target', control: 'select',
-			options: [
-				{ value: 'grid', label: 'Grid' },
-				{ value: 'text', label: 'Inline text' },
-				{ value: 'ledger', label: 'Ledger' },
-			],
-			help: 'Layout of the Distance/Target rail on ability cards. "Grid" — the default — keeps today\'s two boxed cells. Applies to every ability card (statblock, featureblock and standalone) under the Steel theme.',
-		},
-	}),
+	// them, and the section reset covers them (SettingsTab iterates members, not rows).
+	//
+	// SC-123's other two — kwUsage / distTarget — moved to the "Feature display" group
+	// below (SC-193): they are ability-card settings, not statblock settings. ——
 	// —— The three CONDITIONAL-DOM keys (perBlock: false). statblock/view.ts reads them
 	// at BUILD time — charsAreSplit() picks the merged "Might +2" text node vs the
 	// three-part split, renderFeatures() picks inline vs one collapsible band — so they
@@ -521,6 +506,60 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 			group: 'Featureblock display', label: 'Stat line', control: 'select',
 			options: [{ value: 'grid', label: 'Grid' }, { value: 'ledger', label: 'Ledger' }],
 			help: 'Layout of a featureblock\'s loose stat header (Stamina / Size / EV …). "Grid" — the default — is today\'s two-per-row pairing; "Ledger" gives each stat its own full-width row with the value right-aligned.',
+		},
+	}),
+
+	// —— Feature display (SC-193 — "There are settings for Featureblocks and statblocks,
+	// but not Features").
+	//
+	// THE ROOT CAUSE, and why this section is a MOVE rather than two new preferences.
+	// The plugin renders three ability-card hosts — a statblock's feature list, a
+	// featureblock's option list, and a standalone `ds-feature` block — and exactly two
+	// preferences govern the card itself: `kwUsage` (the keyword + action-type band) and
+	// `distTarget` (the Distance/Target rail). Both reflect onto EVERY element root and
+	// their CSS is element-agnostic (`[data-dse-kwusage=…] .dse-feature__meta-*`, no
+	// `[data-dse-element]` qualifier), so both have always applied to a standalone
+	// feature — they were merely FILED under "Statblock display → Advanced", where a
+	// reader looking for feature settings would never find them and where their own help
+	// text had to end with "applies to every ability card" to undo the filing. There is
+	// no missing preview registration and no element-definition gap: `sectionShowsPreview`
+	// derives a page's preview from its reflected descriptors, so this section gets one
+	// for free (SettingsPreview gained the `feature` subject to go with it).
+	//
+	// PRIMARY rows, not Advanced: a two-row page whose only rows hide behind a nested
+	// "Advanced" page would be an empty page. Featureblock display sets the precedent —
+	// two primary rows, no Advanced, no preset.
+	//
+	// STILL STATBLOCK PRESET MEMBERS (`inPreset: true`, SB_PRESET_MEMBERS unchanged):
+	// the site bundles them into its Statblock presets and the plugin follows. So the
+	// Statblock display page's Preset row writes these two rows on this page, and moving
+	// either one re-derives that preset to "Custom" — which is why both help strings say
+	// so out loud, since the cause and the effect are now on different pages. ——
+	d({
+		key: 'kwUsage', default: 'crest', attr: 'kwusage',
+		ui: {
+			group: 'Feature display', inPreset: true,
+			label: 'Keyword display', control: 'select',
+			options: [
+				{ value: 'crest', label: 'Chips' },
+				{ value: 'text', label: 'Inline text' },
+				{ value: 'grid', label: 'Grid' },
+				{ value: 'ledger', label: 'Ledger' },
+			],
+			help: 'Layout of the keyword + action-type band on ability cards. "Chips" — the default — keeps today\'s look: boxed keyword chips with the action type at the far right. Applies to every ability card — standalone, and inside statblocks and featureblocks. Part of the statblock preset, so changing it re-derives that preset to "Custom".',
+		},
+	}),
+	d({
+		key: 'distTarget', default: 'grid', attr: 'disttarget',
+		ui: {
+			group: 'Feature display', inPreset: true,
+			label: 'Distance + target', control: 'select',
+			options: [
+				{ value: 'grid', label: 'Grid' },
+				{ value: 'text', label: 'Inline text' },
+				{ value: 'ledger', label: 'Ledger' },
+			],
+			help: 'Layout of the Distance/Target rail on ability cards. "Grid" — the default — keeps today\'s two boxed cells. Applies to every ability card — standalone, and inside statblocks and featureblocks. Part of the statblock preset, so changing it re-derives that preset to "Custom".',
 		},
 	}),
 
