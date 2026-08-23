@@ -38,7 +38,12 @@ for what needs action.
   they do or what they default to, and they are still written by the statblock
   **Preset** (as they are on the website), so changing either still re-derives that
   preset to "Custom".
-
+- [BUGFIX] **"Flat list" feature style now matches the website** (SC-188). Turning on
+  Flat list — for a statblock's own features or a featureblock's options — used to leave
+  a colored square bar down the left edge of every feature; the website's flat list never
+  draws one at all, only its "Cards" mode does. The bar is gone in both places, and the ◆
+  divider between consecutive features (added between two features, never before the
+  first or trailing after the last) is unchanged.
 - **The skill list gets a new look, two selectable layouts, and an unowned-skills
   toggle** (SC-182). A `ds-skills` block now renders as a **ledger** by default — a
   responsive grid of group panels with owned/total tallies (`3/11`) and ◆ marks, about

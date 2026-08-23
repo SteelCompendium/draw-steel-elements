@@ -725,27 +725,45 @@ describe('Steel material contract', () => {
 		// renderFeature.ts's header comment and statblock/featureblock view.ts's
 		// renderFeatureList calls).
 
-		it('suppresses the spine bar EXACTLY under the standalone pipeline root, and nowhere else in the sheet', () => {
+		it('suppresses the spine bar under the standalone pipeline root — and, since SC-188, at exactly two other legitimate places', () => {
 			// A whole-file scan (not merely Steel-scoped), so a stray suppression that
 			// ALSO reached the nested/nested-list context — which would break Task 3's
 			// villain statblock spines — fails this test too, not just the wrong one.
+			// SC-188 legitimately adds two more matches here: the sb/fb `flat` feature-style
+			// modes now hide the bar outright too (own test above pins those two by name),
+			// because the site's flat mode never draws a border-left at all. Anything beyond
+			// these three is a stray suppression reaching a context it shouldn't.
+			// Loosened from a literal `.dse-feature[data-dse-act]::before` substring match
+			// (SC-188): the two flat-mode hides insert `:not(.dse-fb *)`/nothing between
+			// `[data-dse-act]` and `::before`, so match on selector SHAPE (ends in
+			// `::before`, carries the act attribute) instead of exact adjacency.
 			const suppressions = rules.filter(
 				(r) =>
 					/display:\s*none\s*;/.test(r.body) &&
-					/\.dse-feature\[data-dse-act\]::before/.test(r.selector),
+					r.selector.includes('[data-dse-act]') &&
+					r.selector.trim().endsWith('::before'),
 			);
-			expect(suppressions).toHaveLength(1);
-			const [rule] = suppressions;
+			expect(suppressions).toHaveLength(3);
+			const standalone = suppressions.find(
+				(r) =>
+					r.selector.replace(/\s+/g, ' ').trim() ===
+					"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before",
+			);
+			expect(standalone).toBeDefined();
 			// COMPOUND, no space, between the theme and element attribute selectors — the
 			// pipeline stamps data-dse-theme AND data-dse-element on the SAME root node
 			// (pipeline.ts), never on ancestor/descendant nodes. A descendant-combinator
 			// form (a space there) asks the root to be its own descendant and matches
 			// NOTHING — a real regression this repo hit once already (ground-truth
 			// verified with a live Playwright DOM dump, not assumed).
-			expect(rule.selector.replace(/\s+/g, ' ').trim()).toBe(
-				"[data-dse-theme='steel'][data-dse-element='feature'] .dse-feature[data-dse-act]::before",
-			);
-			expect(STEEL_SCOPE.test(rule.selector)).toBe(true);
+			expect(STEEL_SCOPE.test(standalone!.selector)).toBe(true);
+			// …and the other two are exactly the SC-188 flat-mode bar-hides (statblock +
+			// featureblock), never a third stray context.
+			const flatHides = suppressions.filter((r) => r !== standalone);
+			expect(flatHides).toHaveLength(2);
+			for (const r of flatHides) {
+				expect(r.selector).toMatch(/\[data-dse-(sb|fb)-featstyle='flat'\]/);
+			}
 		});
 
 		it('never regresses to the descendant-combinator form (theme/element attrs share ONE node, not two)', () => {
@@ -976,7 +994,7 @@ describe('Steel material contract', () => {
 				(r) =>
 					STEEL_SCOPE.test(r.selector) && r.selector.includes("[data-dse-sb-featstyle='flat']"),
 			);
-			expect(flat.length).toBeGreaterThanOrEqual(3);
+			expect(flat.length).toBeGreaterThanOrEqual(2);
 			expect(flat.some((r) => /gap:\s*0\s*;/.test(r.body))).toBe(true);
 			const card = flat.find((r) => /background:\s*none/.test(r.body));
 			expect(card).toBeDefined();
@@ -984,28 +1002,39 @@ describe('Steel material contract', () => {
 			// …and the light twin is restated, because the frame's own light rule
 			// out-specifies a plain mode rule.
 			expect(card!.selector).toContain('body.theme-light');
-			// The act lane needs the SAME light arm for the SAME reason — a single-arm
-			// restore is out-specified by the light twin above and the spine lands on top
-			// of the first character in light + flat. (Found by a live computed-style
-			// probe; this assertion is what keeps it found.)
-			const lane = flat.find((r) => /padding-left:\s*calc\(3px \+ 0\.55em\)/.test(r.body));
-			expect(lane).toBeDefined();
-			expect(lane!.selector).toContain('body.theme-light');
+			// SC-188: no act-lane padding reservation survives — the bar it used to reserve
+			// space for is now hidden outright (see the test below), so a
+			// `[data-dse-act]` feature takes the SAME `padding-left: 0` as every other flat
+			// feature. A reservation reappearing here would mean the bar-hide regressed.
+			expect(flat.some((r) => /padding-left:\s*calc\(3px/.test(r.body))).toBe(false);
 			// Sheet convention (pref-reflection.test.ts): the DEFAULT value is never named.
 			expect(css).not.toContain("data-dse-sb-featstyle='card'");
 		});
 
-		it('flat mode also cancels the BAR\'s card-only left radius (fix round, L-1)', () => {
-			const barReset = rules.find(
-				(r) =>
-					STEEL_SCOPE.test(r.selector) &&
-					r.selector.includes("[data-dse-sb-featstyle='flat']") &&
-					r.selector.includes('[data-dse-act]') &&
-					r.selector.trim().endsWith('::before'),
-			);
-			expect(barReset).toBeDefined();
-			expect(barReset!.body).toMatch(/border-top-left-radius:\s*0\s*;/);
-			expect(barReset!.body).toMatch(/border-bottom-left-radius:\s*0\s*;/);
+		it("SC-188: flat mode hides the act-colored bar outright — the site's flat mode draws NO left-border at all", () => {
+			// Ground truth, read from the generated site CSS itself (not assumed): flat mode
+			// never sets `border-left` anywhere — only `[data-sb-featstyle="card"] .sb__feat`
+			// does (v2 docs/stylesheets/steel-statblock.css:301-306 /
+			// steel-featureblock.css:161) — so a flat feature renders against the shared kill
+			// block's `border: none` instead. The plugin's SC-101 fix round previously only
+			// cancelled the bar's border-radius (leaving a squared but still-COLORED bar) on
+			// the wrong assumption that the site kept a square spine in flat mode; SC-188
+			// (Scott's ticket screenshot) is that gap made visible. Same fix, both families.
+			for (const style of ['sb-featstyle', 'fb-featstyle']) {
+				const barHide = rules.find(
+					(r) =>
+						STEEL_SCOPE.test(r.selector) &&
+						r.selector.includes(`[data-dse-${style}='flat']`) &&
+						r.selector.includes('[data-dse-act]') &&
+						r.selector.trim().endsWith('::before'),
+				);
+				expect(barHide).toBeDefined();
+				expect(barHide!.body).toMatch(/display:\s*none\s*;/);
+				// The old radius-only cancel must not survive alongside/instead of the hide —
+				// a regression back to "squared but visible" would still pass a bare
+				// `display: none` substring check if the radius lines were merely re-added.
+				expect(barHide!.body).not.toMatch(/border-(top|bottom)-left-radius/);
+			}
 		});
 
 		it("flat mode stops at the statblock's OWN options — a nested featureblock keeps its card frame (fix round, L-2)", () => {
@@ -1021,9 +1050,38 @@ describe('Steel material contract', () => {
 					r.selector.includes("[data-dse-sb-featstyle='flat']") &&
 					r.selector.includes('.dse-feature__nested'),
 			);
-			expect(flatOptionRules.length).toBeGreaterThanOrEqual(4); // gap, card+light, act-lane+light, bar radius
+			expect(flatOptionRules.length).toBeGreaterThanOrEqual(3); // gap, card+light, bar hide
 			for (const r of flatOptionRules) {
 				expect(r.selector).toMatch(/:not\(\.dse-fb \*\)/);
+			}
+		});
+
+		it("SC-188: the flat-mode separator (SC-146 fix 6) fires only BETWEEN consecutive features — never before the first, never after the last", () => {
+			// The recipe uses the adjacent-sibling combinator `.dse-feature + .dse-feature`,
+			// not a `:not(:first-child)`-style exclusion — which is what structurally
+			// guarantees "no separator before the first feature, none trailing after the
+			// last" (there is no such thing as a sibling after the last element to trigger
+			// one). Both families, both the divider layers (`::before`, repurposed onto the
+			// element's own background per the CSS comment) and the diamond (`::after`).
+			for (const style of ['sb-featstyle', 'fb-featstyle']) {
+				const separator = rules.find(
+					(r) =>
+						STEEL_SCOPE.test(r.selector) &&
+						r.selector.includes(`[data-dse-${style}='flat']`) &&
+						/\.dse-feature \+ \.dse-feature/.test(r.selector) &&
+						!r.selector.trim().endsWith('::after'),
+				);
+				expect(separator).toBeDefined();
+				expect(separator!.body).toMatch(/linear-gradient\(to right, transparent, var\(--dse-metal-line\)\)/);
+				const diamond = rules.find(
+					(r) =>
+						STEEL_SCOPE.test(r.selector) &&
+						r.selector.includes(`[data-dse-${style}='flat']`) &&
+						/\.dse-feature \+ \.dse-feature/.test(r.selector) &&
+						r.selector.trim().endsWith('::after'),
+				);
+				expect(diamond).toBeDefined();
+				expect(diamond!.body).toMatch(/transform:\s*rotate\(45deg\)/);
 			}
 		});
 

@@ -4897,29 +4897,27 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse
 	padding-bottom: 0.25rem;
 	padding-left: 0;
 }
-/* Both arms again, and for the same reason: the `body.theme-light` arm above is
-   (0,6,1) and would otherwise out-specify a single (0,6,0) lane restore, leaving the
-   spine overlapping the first character in light+flat. (Caught by a live
-   getComputedStyle probe, not by reading the cascade — light `padding-left` came back
-   0px while dark came back 11.8px.) */
-[data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *),
-body.theme-light [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *) {
-	padding-left: calc(3px + 0.55em);
-}
-/* SC-101 fix round, L-1: the arms above cancel the frame's own background/border-radius/
-   padding, but not the BAR's `::before` left radii (~:3506-3509) — a 3px-wide bar under a
-   9px `border-top/bottom-left-radius` that the UA clamps to ~1.5px, cosmetically negligible
-   but a card-only ornament surviving into the explicitly frameless mode (the site's flat
-   mode uses a plain square `border-left`). Cancelled here on the same specificity footing;
-   no `body.theme-light` twin needed — the bar radius carries no light/dark divergence, so
-   there is no out-specified light arm to restate. */
+/* SC-188 (Scott, ticket screenshots: "Flat List… without left-borders" on the site vs.
+   still bordered on the plugin) — the site's flat mode draws NO left-border/spine at
+   all. Confirmed straight from the generated site CSS, not assumed:
+   v2 docs/stylesheets/steel-statblock.css:301-306 / steel-featureblock.css:161 put
+   `border-left: 3px solid var(--act)` behind a `[data-*-featstyle="card"]` qualifier —
+   flat mode never sets `border-left` anywhere, so a flat feature renders against the
+   shared kill block instead (`.sb .sb__feat { border: none; … }`,
+   steel-statblock.css:260-263). The SC-101 fix round below (superseded — kept, corrected,
+   rather than deleted, so the wrong assumption stays legible for the next reader) believed
+   the site kept a SQUARED spine in flat mode and only cancelled the bar's border-radius,
+   which left a colored square bar the site never draws. Fix: hide the bar outright
+   (`display: none`) instead of squaring it. Its act-lane padding reservation goes with it,
+   unneeded now — `[data-dse-act]` features fall through to the same `padding-left: 0` the
+   general flat arm above already gives every OTHER feature, matching the site, whose own
+   flat padding rule never special-cases `[data-action]` either. No `body.theme-light` twin
+   needed: `display` carries no light/dark divergence. */
 [data-dse-theme='steel'][data-dse-element='statblock'][data-dse-sb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]:not(.dse-fb *)::before {
-	border-top-left-radius: 0;
-	border-bottom-left-radius: 0;
+	display: none;
 }
-/* SC-123 — the FEATUREBLOCK twin of the three arms above (the site's
-   `data-fb-featstyle`, settings-panel.js:44-45). Same declarations, same
-   specificity footing, same light-twin restatement; no `:not(.dse-fb *)` guard
+/* SC-123 — the FEATUREBLOCK twin of the arm above (the site's `data-fb-featstyle`,
+   settings-panel.js:44-45); same SC-188 fix, same rationale. No `:not(.dse-fb *)` guard
    because here the options are SUPPOSED to be the ones inside `.dse-fb` — this is
    the pref that owns them. Default `card` is never named (default-value
    convention), so nothing below is reachable until a user opts in.
@@ -4938,13 +4936,8 @@ body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-
 	padding-bottom: 0.25rem;
 	padding-left: 0;
 }
-[data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act],
-body.theme-light [data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act] {
-	padding-left: calc(3px + 0.55em);
-}
 [data-dse-theme='steel'][data-dse-element='featureblock'][data-dse-fb-featstyle='flat'] .dse-feature__nested > .dse-feature[data-dse-act]::before {
-	border-top-left-radius: 0;
-	border-bottom-left-radius: 0;
+	display: none;
 }
 
 /* SC-146 fix 6 (audit judgment C2, Scott-approved) — ◆ diamond separator
