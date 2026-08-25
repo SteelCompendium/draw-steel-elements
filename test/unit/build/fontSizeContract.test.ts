@@ -167,8 +167,6 @@ export const key = (d: Decl): string => `${d.selector} :: ${d.value}`;
 export const ALLOWLIST: readonly string[] = [
 	"span.dsa, code.dsa :: var(--tag-size)",
 	"[data-dse-element=\"initiative\"] .dse-init >> .dse-init__actions :: 0.75em",
-	"[data-dse-element=\"initiative\"] .dse-init >> .dse-init__cell-stamina :: 14px",
-	"[data-dse-element=\"initiative\"] .dse-init >> .dse-init__cell-stamina :: 12px",
 	".dse-sedit__temp-title :: var(--font-ui-small)",
 	".dse-sedit__info :: var(--font-ui-large)",
 	".dse-condal__tag :: 0.62em",

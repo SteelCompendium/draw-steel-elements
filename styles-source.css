@@ -1293,7 +1293,12 @@ code.dsa {
 
     .dse-init__cell-stamina {
         display: block;
-        font-size: 14px;
+        /* SC-185 round 3 (category F): --dse-fs-body, NOT --dse-fs-label. Measured, this
+           node sits inside a 13.6px (--dse-fs-control) cell, so an `em` here is relative
+           to 13.6px and not to the note: body renders 13.6px — the number the audit's
+           "label" row was actually aiming at — where label itself would compound down to
+           11.56px, a 17% shrink nobody asked for. */
+        font-size: var(--dse-fs-body);
         word-wrap: break-word;
         text-align: center;
         max-width: 100%;
@@ -1353,7 +1358,9 @@ code.dsa {
         }
 
         .dse-init__cell-stamina {
-            font-size: 12px;
+            /* one role down, matching the absolute pair it replaces (14/12px):
+               --dse-fs-secondary is 12.24px against this cell's 13.6px basis. */
+            font-size: var(--dse-fs-secondary);
         }
     }
 }
