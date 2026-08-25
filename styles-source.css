@@ -409,7 +409,7 @@ code.dsa {
 	padding-left: var(--size-4-4);
 	color: var(--text-muted);
 	font-family: var(--font-monospace);
-	font-size: var(--font-smaller);
+	font-size: var(--dse-fs-label);
 }
 
 .dse-error-card-list-item {
@@ -456,7 +456,7 @@ code.dsa {
 
 .dse-ref-notice__hint {
 	color: var(--text-muted);
-	font-size: var(--font-smaller);
+	font-size: var(--dse-fs-label);
 	margin-top: var(--size-4-1);
 	overflow-wrap: anywhere;
 }
@@ -486,7 +486,7 @@ code.dsa {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	color: var(--text-muted);
-	font-size: var(--font-smallest);
+	font-size: var(--dse-fs-caption);
 	font-weight: var(--font-semibold);
 	line-height: 1;
 	pointer-events: none;
