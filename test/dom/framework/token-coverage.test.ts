@@ -306,7 +306,10 @@ const BASE_MAP: Record<string, string> = {
 	'fs-subheading': 'calc(1.15em * var(--dse-fs-large-scale))',
 	'fs-numeral': 'calc(1.75em * var(--dse-fs-large-scale))',
 	'fs-body': '1em',
-	'fs-control': 'calc(1em * var(--dse-fs-control-scale))',
+	// SC-185 round 2 (C-1): retuned from 1em — a bare .dse-btn computed 16px against
+	// a native Obsidian button's 13.33px. The sole consumer rule is print-excluded,
+	// so this moves zero frozen print bytes.
+	'fs-control': 'calc(0.85em * var(--dse-fs-control-scale))',
 	'fs-secondary': 'calc(0.9em * var(--dse-fs-small-scale))',
 	'fs-label': 'calc(0.85em * var(--dse-fs-small-scale))',
 	'fs-caption': 'calc(0.8em * var(--dse-fs-small-scale))',

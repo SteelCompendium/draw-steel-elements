@@ -130,7 +130,14 @@ habit.
 SC-185 round 1 shipped the scale, the settings, this document and the guard, and adopted
 **11 declarations** as proof (the shared card-header grammar, the generic `.dse-card`
 frame, the statblock's label tier, the power-roll tier badge, and the shared control-text
-rule). **106 declarations remain hardcoded** — that is exactly `ALLOWLIST.length` in the
-guard, so the number is checkable rather than claimed. Round 2 sweeps them; the
-audit that classifies each one (inert rename vs. real rendering change) is in the workspace
-at `.superpowers/sdd/sc185/sc185-report.md`.
+rule).
+
+SC-185 round 2 (2026-08-25) adopted the **44 inert-available** declarations the round-1
+audit identified — a pure rename, each swap byte-identical (freeze 210/210, zero
+mismatches; shots byte-identical across two runs). It also applied **C-1**: retuned
+`--dse-fs-control`'s default from `1em` to `0.85em` (a bare `.dse-btn` computed 16px
+against a native Obsidian button's 13.33px). **62 declarations remain hardcoded** — that is
+exactly `ALLOWLIST.length` in the guard. Of those, 8 belong to the other, deliberate scale
+systems (`--dse-text-scale`, `--dse-value-scale`/`--dse-label-scale`) and stay as they are;
+the remaining 54 are real rendering changes awaiting Scott's sanction, grouped by visual
+effect in `.superpowers/sdd/sc185/sc185-round2-report.md`.

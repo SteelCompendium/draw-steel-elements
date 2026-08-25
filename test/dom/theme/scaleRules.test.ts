@@ -12,7 +12,8 @@ import path from 'path';
  *  - the CARD rule (`zoom: var(--dse-card-scale)`) exists on the card hosts
  *    (.dse-sb/.dse-card descendants + the feature/featureblock root-compound)
  *    and is print-excluded;
- *  - BOTH nested resets exist (a nested element root resets font-size to 1em; a
+ *  - BOTH nested resets exist (a nested element root resets font-size to
+ *    var(--dse-fs-body), the role-scale token for "1em" since SC-185 round 2; a
  *    card host under a second element root resets zoom to 1) and are
  *    source-ordered AFTER their scale rule — a referenced card (by-SCC kit
  *    mounting a real nested feature) scales exactly once, like the site's
@@ -69,11 +70,11 @@ describe('SC-112 Task 7: text-scale consumer', () => {
 		expect(norm(textRule.body)).toContain('font-size: calc(1em * var(--dse-text-scale))');
 	});
 
-	test('the nested-root reset exists (font-size: 1em), print-guarded, ordered AFTER', () => {
+	test('the nested-root reset exists (font-size: var(--dse-fs-body)), print-guarded, ordered AFTER', () => {
 		const reset = only(
 			(r) =>
 				/\[data-dse-element\]\s+\[data-dse-element\]/.test(r.selector) &&
-				norm(r.body).includes('font-size: 1em'),
+				norm(r.body).includes('font-size: var(--dse-fs-body)'),
 			'nested element-root font-size reset',
 		);
 		expect(reset.selector).toContain(PRINT_GUARD);

@@ -15,6 +15,12 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **Buttons and other controls are no longer oversized** (SC-185). A bare button
+  ("Reset Encounter State" and its neighbours) rendered about 23% larger than a native
+  Obsidian button beside it. Control text now defaults to 0.85em instead of 1em — 13.6px
+  at a 16px note, within 0.6px of Obsidian's own control text size — so every
+  un-contextualised button, stepper, tab, collapse header and input shrinks to match.
+  Tune it further with the **Control text size** slider under Settings → Typography.
 - [FIX] **The settings preview is no longer a porthole with its own scrollbar**
   (SC-187). Every settings page that shows a live sample used to dock it to the bottom
   of the window in a fixed 350px box — which meant a second scrollbar nested inside

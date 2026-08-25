@@ -607,13 +607,17 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	// neighboring label (verified live: `.dse-tiles__value` 16px, the nested ability
 	// card's own `.dse-section__title` 1em/16px).
 	describe('kit band-head font-size (SC-143)', () => {
-		it('.dse-card__band-head is 1em (16px against the ambient card font), not the old 0.8em (12.8px)', () => {
+		it('.dse-card__band-head is var(--dse-fs-body) (1em, 16px against the ambient card font), not the old 0.8em (12.8px)', () => {
+			// SC-185 round 2 adopted the literal `1em` onto the role scale's --dse-fs-body
+			// token — same computed value (--dse-fs-body has no scale multiplier), so this
+			// stays the inert 1em/16px this test was written to pin; only the source text
+			// changed from a bare literal to the token that means it.
 			const blocks = steelBlocksFor('.dse-card__band-head');
 			expect(blocks.length).toBeGreaterThan(0);
 			for (const b of blocks) {
 				const decl = b.match(/font-size:\s*([^;]+);/);
 				expect(decl).not.toBeNull();
-				expect(decl![1].trim()).toBe('1em');
+				expect(decl![1].trim()).toBe('var(--dse-fs-body)');
 			}
 			// The regression this guards against: the old undersized numeral coming back.
 			expect(blocks.some((b) => /font-size:\s*0\.8em\s*;/.test(b))).toBe(false);

@@ -779,7 +779,7 @@ code.dsa {
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
-        font-size: 0.85em;
+        font-size: var(--dse-fs-label);
         color: var(--dse-fg-muted);
     }
 
@@ -796,7 +796,7 @@ code.dsa {
        .dse-collapse); its heading styling lives in the bar-grid rules below, the
        only context the log renders in. */
     .dse-init__malice-log {
-        font-size: 0.8em;
+        font-size: var(--dse-fs-caption);
         color: var(--dse-fg-muted);
         max-width: 100%;
     }
@@ -951,7 +951,7 @@ code.dsa {
         width: auto;
         margin: 0;
         padding: 2px 4px;
-        font-size: 0.8em;
+        font-size: var(--dse-fs-caption);
         font-weight: 600;
         color: var(--dse-fg-muted);
     }
@@ -1433,7 +1433,7 @@ code.dsa {
 	top: 0;
 	display: flex;
 	height: 100%;
-	font-size: 0.7em;
+	font-size: var(--dse-fs-micro);
 	justify-content: center;
 	align-items: center;
 	border-top-left-radius: calc(var(--radius-s) - 1px);
@@ -1578,7 +1578,7 @@ code.dsa {
 	border-radius: var(--dse-radius);
 	background: var(--dse-chip-bg);
 	border: 1px solid var(--dse-border);
-	font-size: 0.85em;
+	font-size: var(--dse-fs-label);
 }
 .dse-stamina-rec__status[data-state="winded"] {
 	border-color: var(--dse-stamina-winded);
@@ -1648,7 +1648,7 @@ code.dsa {
 }
 
 .dse-stamina-rec__pop-title {
-	font-size: 0.85em;
+	font-size: var(--dse-fs-label);
 	color: var(--dse-fg-muted);
 }
 
@@ -1955,7 +1955,7 @@ code.dsa {
 }
 .dse-optchip {
 	font: inherit;
-	font-size: 0.8em;
+	font-size: var(--dse-fs-caption);
 	line-height: 1.4;
 	padding: 0.12em 0.6em;
 	border: 1px solid var(--dse-border);
@@ -2189,7 +2189,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	border-radius: var(--radius-s, 4px);
 	background: var(--background-secondary);
 	color: var(--text-muted);
-	font-size: 0.8em;
+	font-size: var(--dse-fs-caption);
 	line-height: 1.5;
 	white-space: nowrap;
 }
@@ -2212,7 +2212,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	margin-top: 0.2em;
 	color: var(--text-muted);
 	font-family: var(--font-monospace);
-	font-size: 0.85em;
+	font-size: var(--dse-fs-label);
 	overflow-wrap: anywhere;
 }
 
@@ -2224,7 +2224,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 .dse-compendium-suggest__hint {
 	margin-top: 0.2em;
 	color: var(--text-muted);
-	font-size: 0.9em;
+	font-size: var(--dse-fs-secondary);
 }
 
 /* ===================== */
@@ -2776,7 +2776,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 }
 [data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv-l {
 	order: 1;
-	font-size: inherit;
+	font-size: var(--dse-fs-body);
 }
 /* SC-146 fix 3 — the site's third mode (steel-statblock.css:169-172): same
    framed cell as 'grid', but the value sits ABOVE the label and both centre.
@@ -3379,7 +3379,7 @@ Shared globals
 
 	.dse-enc__party {
 		color: var(--dse-fg-muted);
-		font-size: 0.9em;
+		font-size: var(--dse-fs-secondary);
 	}
 
 	.dse-enc__roster-heading {
@@ -3420,7 +3420,7 @@ Shared globals
 		th {
 			color: var(--dse-fg-muted);
 			font-weight: normal;
-			font-size: 0.85em;
+			font-size: var(--dse-fs-label);
 		}
 	}
 
@@ -3521,12 +3521,12 @@ Shared globals
 	}
 
 	.dse-mt__tally-label {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 	}
 
 	.dse-mt__tally-limit {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 	}
 
@@ -3582,7 +3582,7 @@ Shared globals
 		border-radius: var(--dse-radius);
 		background: var(--dse-chip-bg);
 		color: var(--dse-fg-muted);
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 	}
 
 	.dse-mt__record {
@@ -3641,13 +3641,13 @@ Shared globals
 
 	.dse-prj__progress-text {
 		margin-top: 0.25em;
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 	}
 
 	.dse-prj__prereqs {
 		margin-top: 0.75em;
-		font-size: 0.9em;
+		font-size: var(--dse-fs-secondary);
 		color: var(--dse-fg-muted);
 	}
 
@@ -3692,7 +3692,7 @@ Shared globals
 		padding: 0.1em 0.5em;
 		border-radius: var(--dse-radius);
 		background: var(--dse-chip-bg);
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		font-weight: bold;
 	}
 
@@ -3728,7 +3728,7 @@ Shared globals
 		align-items: center;
 		gap: 0.35em;
 		color: var(--dse-fg-muted);
-		font-size: 0.9em;
+		font-size: var(--dse-fs-secondary);
 	}
 }
 
@@ -3771,7 +3771,7 @@ Shared globals
 
 	.dse-party__member-deck,
 	.dse-party__member-ref {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 	}
 
@@ -3790,12 +3790,12 @@ Shared globals
 	}
 
 	.dse-party__stat-label {
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		color: var(--dse-fg-muted);
 	}
 
 	.dse-party__hint {
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		color: var(--dse-fg-faint);
 		align-self: flex-end;
 	}
@@ -3893,7 +3893,7 @@ Shared globals
 	}
 
 	.dse-cond-chip__duration {
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		color: var(--dse-fg-muted);
 		border: 1px solid var(--dse-border);
 		border-radius: var(--dse-radius);
@@ -3901,7 +3901,7 @@ Shared globals
 	}
 
 	.dse-cond-chip__save-result {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 		min-width: 1.5em;
 		text-align: center;
@@ -3950,7 +3950,7 @@ Shared globals
 	}
 
 	.dse-res__hint {
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		color: var(--dse-fg-faint);
 	}
 }
@@ -3979,7 +3979,7 @@ Shared globals
 	}
 
 	.dse-surge__hint {
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		color: var(--dse-fg-faint);
 	}
 }
@@ -4053,7 +4053,7 @@ Shared globals
 	}
 
 	.dse-hero-ref-issue {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 		border: 1px solid var(--dse-border);
 		border-radius: var(--dse-radius);
@@ -4107,7 +4107,7 @@ Shared globals
 	}
 
 	.dse-hero__wound-badge {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 		min-height: 1.2em;
 	}
@@ -4151,7 +4151,7 @@ Shared globals
 
 	.dse-hero__ability-cost,
 	.dse-hero__ability-type {
-		font-size: 0.8em;
+		font-size: var(--dse-fs-caption);
 		color: var(--dse-fg-muted);
 		border: 1px solid var(--dse-border);
 		border-radius: var(--dse-radius);
@@ -4159,7 +4159,7 @@ Shared globals
 	}
 
 	.dse-hero__ability-issue {
-		font-size: 0.85em;
+		font-size: var(--dse-fs-label);
 		color: var(--dse-fg-muted);
 	}
 
@@ -4438,8 +4438,13 @@ Shared globals
 	--dse-fs-body: 1em;
 	/* Interactive control text: buttons, steppers, tabs, collapse headers, inputs.
 	   Its own knob because a control's text answers to the user's tolerance for
-	   chrome, not to the reading size (SC-185: "reset button font is too large"). */
-	--dse-fs-control: calc(1em * var(--dse-fs-control-scale));
+	   chrome, not to the reading size (SC-185: "reset button font is too large").
+	   0.85em (SC-185 round 2, C-1): a bare .dse-btn computed 16px against a native
+	   Obsidian button's 13.33px (--font-ui-small is 13px) — every un-contextualised
+	   DSE control rendered ~23% too large. 0.85em -> 13.6px at a 16px note, within
+	   0.6px of Obsidian's native control text. Print-excluded by both consumer
+	   rules (~:5689, ~:10720), so this moves zero frozen print bytes. */
+	--dse-fs-control: calc(0.85em * var(--dse-fs-control-scale));
 	/* Below body — the quiet tiers. secondary = supporting prose and dense tables;
 	   label = field labels, eyebrows, decks, chips; caption = hints, log lines,
 	   small badges; micro = tallies, tags, superscript markers. */
@@ -5671,15 +5676,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 }
 /* SC-185 — the SIZE twin of the Controls font-family rule above, over the exact
    same six selectors, so "Control text size" governs the same set the Controls
-   font picker does. PROVABLY INERT at the default: all six carry the kit-base
-   `font: inherit` (~:9990, 9996, 9922, 10057, 10097, 10305), whose font-size
-   component IS the parent's computed size — `1em` is the same number, and
-   --dse-fs-control is `calc(1em * 1)` until a user moves the slider. Nothing in
-   the sheet loses: every rule that deliberately re-sizes a control in context
-   (e.g. the initiative bar's log heading) is a descendant selector at higher
-   specificity than this (0,3,0). Print-excluded by the shared anchor, like its
-   font-family twin — a control's size is screen chrome, and this keeps the
-   slider structurally unable to move a frozen print byte. */
+   font picker does. Round 1 landed this at 1em (provably inert: all six carry
+   the kit-base `font: inherit`, so the round-1 default matched the parent's
+   computed size exactly). Round 2's C-1 retuned the token itself to 0.85em —
+   see the :root definition (~:4442) — so this rule now renders SMALLER than
+   its round-1 baseline; the token change, not this selector, carries that
+   correction. Nothing in the sheet loses: every rule that deliberately
+   re-sizes a control in context (e.g. the initiative bar's log heading) is a
+   descendant selector at higher specificity than this (0,3,0). Print-excluded
+   by the shared anchor, like its font-family twin — a control's size is
+   screen chrome, and this keeps the slider structurally unable to move a
+   frozen print byte. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__input,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__value,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-btn,
@@ -5720,7 +5727,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    the outermost root applies the scale exactly once. Source-ordered after the
    scale rule AND higher specificity (0,3,0 > 0,2,0): wins either way. */
 [data-dse-element] [data-dse-element]:not([data-dse-print="on"]) {
-	font-size: 1em;
+	font-size: var(--dse-fs-body);
 }
 /* CARD: the site zooms exactly ONE wrapper (v2 extra.css:61 —
    `.sb-wrap, .ds-card-wrap { zoom: var(--sc-card-scale, 1) }`). The plugin's
@@ -6204,7 +6211,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.07em;
-	font-size: 1em;
+	font-size: var(--dse-fs-body);
 	color: var(--dse-metal);
 	margin-bottom: 0.45em;
 	padding-bottom: 0.25em;
@@ -6615,7 +6622,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 /* the keyword run reads as prose in this mode (the site drops the chip's small-caps
    there too); the action type keeps its small-caps classifier voice */
 [data-dse-theme='steel'][data-dse-kwusage='text'] .dse-feature__meta-cell--keywords {
-	font-size: 1em;
+	font-size: var(--dse-fs-body);
 	font-variant: normal;
 	text-transform: none;
 	letter-spacing: normal;
@@ -6664,7 +6671,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	   computed-value time on paper and the framed mode would print unframed. */
 	border: 1px solid var(--dse-rule);
 	border-radius: var(--dse-radius);
-	font-size: 1em;
+	font-size: var(--dse-fs-body);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--keywords,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='grid'] .dse-feature__meta-cell--type {
@@ -6713,7 +6720,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	/* print-safe hairline, re-coloured for Steel screen below — see the grid arm */
 	border-bottom: 1px solid var(--dse-rule);
 	border-radius: 0;
-	font-size: 1em;
+	font-size: var(--dse-fs-body);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--keywords,
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kwusage='ledger'] .dse-feature__meta-cell--type,
@@ -7178,7 +7185,7 @@ body.theme-light
 	   INSIDE the row's own 27.2px text line box and the row height is unchanged.
 	   All em-based, so SC-112's text-scale extremes ride it unchanged. */
 	max-height: none;
-	font-size: 0.9em;
+	font-size: var(--dse-fs-secondary);
 	padding: 0.32em 0.28em;
 }
 /* SC-121 B-3 — the tier-1 badge reads "²11" in real Obsidian (content-breaking:
@@ -8928,7 +8935,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.09em;
-	font-size: 0.9em;
+	font-size: var(--dse-fs-secondary);
 	white-space: nowrap;
 	min-width: 0;
 	overflow: hidden;
@@ -9299,7 +9306,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.09em;
-	font-size: 0.8em;
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-fg-muted);
 }
 /* R6 — the OUTLINED CELL that fills in (Scott's literal "▱▱▱▱▱▱"). The outline is
@@ -9579,7 +9586,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	}
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cnums {
 		flex: 0 0 auto;
-		font-size: 1.15em;
+		font-size: var(--dse-fs-subheading);
 	}
 	/* The gauge is the elastic member: it takes whatever the line has left. */
 	[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gauge {
@@ -9927,7 +9934,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	padding: 0.08em 0.55em 0.1em 0.45em;
 	border: 1px solid var(--dse-border);
 	border-radius: 0.9em;
-	font-size: 0.85em;
+	font-size: var(--dse-fs-label);
 	line-height: 1.35;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-style='chips'] .dse-skills__name {
@@ -10716,7 +10723,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	margin-top: 0;
 	gap: 3px;
 	/* SC-185 adoption: the em basis for the four pip icons, which are interactive
-	   one-click controls — --dse-fs-control (inert: its default is 1em). */
+	   one-click controls — --dse-fs-control (0.85em since round 2's C-1; this
+	   rule is print-excluded by its own selector anchor, so the retune moves
+	   zero frozen print bytes here either). */
 	font-size: var(--dse-fs-control);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__action-toggle {
@@ -11295,7 +11304,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 .dse-form__label {
 	display: block;
 	margin: var(--dse-pad) 0 0.3em;
-	font-size: 0.85em;
+	font-size: var(--dse-fs-label);
 	color: var(--dse-fg-muted);
 }
 .dse-form__raw {
@@ -11305,7 +11314,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	min-height: 10em;
 	resize: vertical;
 	font-family: var(--dse-font-mono);
-	font-size: 0.9em;
+	font-size: var(--dse-fs-secondary);
 	line-height: 1.45;
 }
 
@@ -12143,7 +12152,7 @@ button.dse-pr__row:hover {
 
 	/* Denser chips so two fit per line at this width more often. */
 	.dse-init__actions {
-		font-size: 0.7em;
+		font-size: var(--dse-fs-micro);
 	}
 
 	/* Reset/Advance round buttons and the quick-add inputs were clipped at the
