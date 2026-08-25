@@ -1143,8 +1143,12 @@ describe('Steel material contract', () => {
 			expect(mini!.body).toMatch(/line-height:\s*1\.04/);
 			expect(mini!.body).toMatch(/color:\s*var\(--dse-role,\s*var\(--dse-heading\)\)/);
 			// em, not the site's rem literal — the site's rem base is 20px, the plugin's 16px
-			// (gap inventory §A); 1.35em holds the site's mini/name RATIO at the plugin's scale.
-			expect(mini!.body).toMatch(/font-size:\s*1\.35em/);
+			// (gap inventory §A); the mini holds the site's mini/name RATIO at the plugin's
+			// scale. SC-185 round 3 (category H) states that ratio instead of transcribing its
+			// product: --dse-fs-heading IS the name slot, and 1.25em * 1.08 = the 1.35em this
+			// used to read — same pixels (21.6px, probed), and the ratio now survives the
+			// Large text size knob instead of being silently broken by it.
+			expect(mini!.body).toMatch(/font-size:\s*calc\(var\(--dse-fs-heading\)\s*\*\s*1\.08\)/);
 			// The Steel flat-chip block small-caps + tracks every --chip slot; the mini is neither.
 			expect(mini!.body).toMatch(/font-variant:\s*normal/);
 			expect(mini!.body).toMatch(/letter-spacing:\s*normal/);

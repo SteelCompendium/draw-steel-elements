@@ -1167,7 +1167,7 @@ code.dsa {
         display: flex;
         flex-wrap: wrap;
         gap: 4px;
-        font-size: 0.75em;
+        font-size: var(--dse-fs-micro);
     }
 
     button.dse-init__action-toggle {
@@ -1882,7 +1882,7 @@ code.dsa {
 }
 /* Unregistered (custom, user-typed) conditions carry a quiet dashed tag. */
 .dse-condal__tag {
-	font-size: 0.62em;
+	font-size: var(--dse-fs-micro);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	padding: 0.12em 0.5em;
@@ -1905,7 +1905,7 @@ code.dsa {
    smaller scale, since this row already carries the glyph + name + two act buttons. */
 .dse-condal__dur {
 	flex: 0 0 auto;
-	font-size: 0.72em;
+	font-size: var(--dse-fs-micro);
 	line-height: 1.4;
 	padding: 0.05em 0.5em;
 	border: 1px solid var(--dse-border);
@@ -1938,7 +1938,7 @@ code.dsa {
 }
 .dse-cond-field__label {
 	flex: 0 0 4.6em;
-	font-size: 0.72em;
+	font-size: var(--dse-fs-micro);
 	letter-spacing: 0.07em;
 	text-transform: uppercase;
 	color: var(--dse-fg-muted);
@@ -3261,7 +3261,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	   bare h3 (only_show_selected mode) — sized/cased like the old group title. */
 	.dse-collapse__title,
 	.dse-skills__group-title {
-		font-size: 1.2em;
+		font-size: var(--dse-fs-subheading);
 		text-transform: lowercase;
 
 		&:first-letter {
@@ -3316,6 +3316,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	   rule can never touch a `style: list` block. Screen-only in effect: the pair of
 	   print rules right below the block hides it on paper. Theme-agnostic on purpose:
 	   it styles DOM, not the Steel look. */
+	/* SC-185 round 3 (category H) deliberately did NOT put this on the role scale.
+	   Measured 10.2px, because it is nested inside a --dse-fs-control (0.85em)
+	   collapse header — so --dse-fs-micro would compute 9.52px here and make the
+	   plugin's smallest text smaller still. That is the C-2 compounding shape (a
+	   size stated relative to a parent that is itself sized), not a snap, and it
+	   wants the compounding fixed rather than the literal renamed. */
 	.dse-skills__tally {
 		margin-left: auto;
 		font-size: 0.75em;
@@ -5777,8 +5783,11 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    set in the SAME rule: the plugin authors ratio 1.2 (16.32/13.6) where the site
    uses 1.0, so at 18px an unchanged 1.2 would swing to 21.6 vs 18 and OPEN a
    line-height gap; 1 matches the site. 1.125em = 18px at the head's 16px base. */
+/* SC-185 round 3 (category H): DERIVED, not snapped. 1.125em is 0.9x the name slot
+   by the port above, so calc(--dse-fs-heading * 0.9) is byte-identical today (18px)
+   and keeps the ratio when the Large text size knob moves. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-head__deck--chip {
-	font-size: 1.125em;
+	font-size: calc(var(--dse-fs-heading) * 0.9);
 	line-height: 1;
 }
 
@@ -5822,7 +5831,9 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	border: none;
 	/* font-family: SC-112 Task 5 widened this to Legacy too — see the
 	   consolidated theme-agnostic font-family block, ~:3678. */
-	font-size: 1.125em;
+	/* SC-185 round 3 (category H): same 0.9x derivation as the deck chip above — the
+	   comment's own arithmetic, expressed instead of transcribed. 18px, unchanged. */
+	font-size: calc(var(--dse-fs-heading) * 0.9);
 	line-height: 1.04;
 	text-transform: uppercase;
 	font-variant: normal;
@@ -5919,7 +5930,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	   theme-agnostic (SC-112 Task 5's Legacy font-slot gate), so this selector is an
 	   arm of the consolidated font-family block instead (~:3996). Same treatment the
 	   sibling card-head --mini block already takes. */
-	font-size: 1.35em;
+	/* SC-185 round 3 (category H): DERIVED. The comment above states this number's
+	   whole provenance — 1.08x the name slot (1.25em) — so the RATIO is what belongs
+	   in the sheet. calc(--dse-fs-heading * 1.08) = 1.35em exactly; 21.6px, unchanged. */
+	font-size: calc(var(--dse-fs-heading) * 1.08);
 	line-height: 1.04;
 	text-transform: uppercase;
 	font-variant: normal;
@@ -6073,7 +6087,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 	align-self: center;
 	align-items: center;
 	margin-right: 0.9em;
-	font-size: 1.1em;
+	font-size: var(--dse-fs-subheading);
 	line-height: 1;
 }
 
@@ -6273,7 +6287,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
 	border: 1px solid var(--dse-metal-faint);
 	border-radius: var(--dse-radius);
 	padding: 0.65rem 0.8rem;
-	font-size: 0.92em;
+	font-size: var(--dse-fs-secondary);
 	line-height: 1.5;
 	color: var(--dse-fg);
 }
@@ -6425,7 +6439,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 	   the stamina-recovery status and the roll bar's fixed-char pill — none of which the audit
 	   sampled against a site counterpart. */
 	background: rgba(255, 255, 255, 0.02);
-	font-size: 1.1em;
+	font-size: var(--dse-fs-subheading);
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.04em;
@@ -6553,7 +6567,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-featur
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.08em;
-	font-size: 0.78em;
+	font-size: var(--dse-fs-caption);
 	font-weight: normal;
 	color: var(--dse-fg-faint);
 }
@@ -6773,7 +6787,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.08em;
-	font-size: 0.78em;
+	font-size: var(--dse-fs-caption);
 	font-weight: normal;
 	color: var(--dse-fg-faint);
 }
@@ -8556,7 +8570,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	border-collapse: separate;
 	border-spacing: 0;
 	border: none;
-	font-size: 0.92em;
+	font-size: var(--dse-fs-secondary);
 	line-height: 1.5;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) table:not([class]) :is(th, td) {
@@ -8932,7 +8946,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	font-variant: small-caps;
 	text-transform: lowercase;
 	letter-spacing: 0.07em;
-	font-size: 0.82em;
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-metal);
 }
 /* The word carries a state next to a 2em numeral, so it cannot be a whisper. Nowrap
@@ -9839,7 +9853,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
       capital inside the small caps. -- */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-style] .dse-collapse__title,
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-style] .dse-skills__group-title {
-	font-size: 0.92em;
+	font-size: var(--dse-fs-secondary);
 	font-weight: 600;
 	font-variant: small-caps;
 	letter-spacing: 0.09em;
@@ -9895,7 +9909,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 /* Rows tighten: the base 0.3em rhythm is a hero-sheet rhythm, not a ledger's. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-skills[data-skills-style='ledger'] .dse-skills__item {
 	margin-bottom: 0.1em;
-	font-size: 0.92em;
+	font-size: var(--dse-fs-secondary);
 	line-height: 1.4;
 }
 /* Owned reads first: full ink + weight against muted unowned rows — the second
@@ -11744,7 +11758,7 @@ button.dse-pr__row:hover {
 .dse-tiles__label {
 	margin-top: 0.1em;
 	line-height: 1.05;
-	font-size: 0.68em;
+	font-size: var(--dse-fs-micro);
 }
 
 /* -- The framework-default focus ring (D2 §4.5, Plan 08 Task 5) -- */
@@ -12570,7 +12584,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	font-family: var(--dse-font-title);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary__label {
-	font-size: 0.82em;
+	font-size: var(--dse-fs-caption);
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: var(--dse-fg-muted);
