@@ -123,14 +123,36 @@ gate and jest.)
 
 Two severities:
 
-- **`GAP`** — a real difference. Rules 1–3 are the original **material** checks, all in the
-  "site is richer than the plugin" direction, because that is the failure mode that shipped a
-  flat theme before. Rules 4–7 are the **type/space/ink** checks added in plan 21 task 1 (and
-  widened in its fix round), which catch the *other* failure mode the material checks are
-  blind to: a surface that is already forged (gradient + bevel + hairline all present) but
-  still reads cramped, sans, over-tracked and flat-grey because nothing measured padding,
-  margin, line-height, tracking, the body font or the ink.
+- **`GAP`** — a real difference. Rules 1–3 (plus 1b, added SC-126) are the **material** checks,
+  mostly in the "site is richer than the plugin" direction, because that is the failure mode
+  that shipped a flat theme before. Rules 4–7 are the **type/space/ink** checks added in plan
+  21 task 1 (and widened in its fix round), which catch the *other* failure mode the material
+  checks are blind to: a surface that is already forged (gradient + bevel + hairline all
+  present) but still reads cramped, sans, over-tracked and flat-grey because nothing measured
+  padding, margin, line-height, tracking, the body font or the ink.
   1. site has a `background-image` (gradient/sheen), plugin has `none`;
+  1b. **wash polarity** (`bg-polarity`, SC-126 step 1) — the site's `background-color` sits on
+     one end of the translucent-black/white range and the plugin's sits on the other (or one
+     is opaque-white where the other is translucent-black). This is narrower than a full
+     `background-color` comparison on purpose: it buckets each side into `black`
+     (average RGB channel ≤ 40), `white` (average RGB channel ≥ 200), or leaves it
+     unclassified — a fully transparent fill (`alpha === 0`, regardless of hue — the
+     `rgba(0,0,0,0)` vs `rgba(255,255,255,0)` case is invisible either way and must never
+     fire) or a real mid-grey/tinted wash in between. It fires only when both sides classify
+     and land in opposite buckets. Thresholds are derived from the real spread in both
+     committed inventories (see `bgFamily` in `compare.cjs`), not intuition: every mapped
+     pair's `background-color` today, both sides, both schemes, is either fully transparent
+     or `rgba(0,0,0,{.16,.18,.02,.024})` — a single family, nothing in between — while the
+     historical SC-117 defect (pre-fix `--dse-surface-sunken`, git `169d62f^`) sat at
+     `rgba(220,226,230,.06)` dark / opaque `#eaeeef` light, average channel ~225–237, nowhere
+     near either real bucket. Can-fail proof, using those exact reconstructed historical
+     values: `test/unit/parity/compare.test.ts` → "`bg-polarity` catches the SC-117
+     wrong-wash-direction defect". `bg-polarity` is `material` — **never declarable**, same as
+     `bg`. **What it deliberately does NOT catch:** a hue/tint mismatch between two washes
+     that are both black-family (or both white-family), and any wash that isn't
+     near-achromatic (a colour-mix or role-tinted fill lands as unclassified `mid`, silently).
+     A full `background-color` comparison remains separately-scoped, larger work — see "Known
+     limitation" below.
   2. site has a `box-shadow` (bevel/lift), plugin has `none`;
   3. site has a visible hairline on an edge — `border-top` **or `border-bottom`** — and the
      plugin has `border-<edge>-style: none` there. Both edges matter: nearly every head
@@ -304,22 +326,32 @@ Two severities:
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
-- **Known limitation — `background-color` is sampled but never compared.** `compare.cjs:323-324`
-  is the entire `bg` rule: `if (owns(pair,'bg') && !isFlat(s['background-image']) &&
-  isFlat(p['background-image'])) add('GAP', …)`. It reads `background-image` only — `bg` fires
-  strictly on **site-gradient + plugin-flat**, and never looks at `background-color` at all,
-  even though `background-color` **is** already captured into both inventories
-  (`site-capture.mjs`/`plugin-capture.mjs`) for every mapped pair, in both schemes — the data
-  exists, the comparison doesn't. SC-117 is the near-miss this leaves open: 13 declaration
-  sites washed the wrong **polarity** (translucent white where the site sits on translucent
-  black) across both schemes, and every pair above passed clean the whole time, because
-  neither side's `background-image` was `none`. `bg` stays a `material` rule (never
-  declarable — see "Which classes are declarable"), so closing this gap only ever tightens the
-  gate. **Future fix shape, as its own ticket, not a rider on any wave:** start narrow — a
-  polarity-only check (site fill translucent-black vs. plugin fill translucent-white/opaque)
-  would have caught SC-117 on day one and is close to noise-free; a full `background-color`
-  comparison is separately-scoped, larger work (it will surface a burst of new rows across the
-  mapped pairs that all need triage on landing).
+- **Known limitation — `background-color` is sampled and now polarity-checked, but not fully
+  compared (SC-126 step 1 of 2).** `compare.cjs`'s `bg` rule (1) reads `background-image` only
+  — it fires strictly on **site-gradient + plugin-flat** and never looks at
+  `background-color` at all. That is the hole SC-117 slipped through: 13 declaration sites
+  washed the wrong **polarity** (translucent white where the site sits on translucent black)
+  across both schemes, and every pair passed clean the whole time, because neither side's
+  `background-image` was `none`.
+
+  **What SC-126 step 1 closed:** a new `bg-polarity` rule (1b) buckets each side's
+  `background-color` into `black` / `white` / unclassified (transparent or a real mid-grey/
+  tinted wash) and fires when the two sides land in *opposite* buckets — exactly the SC-117
+  shape. Reconstructed from the real pre-fix values in git history (`169d62f^`) and proven
+  can-fail against them: see rule 1b above and
+  `test/unit/parity/compare.test.ts` → "`bg-polarity` catches the SC-117 wrong-wash-direction
+  defect". `bg-polarity` is `material` (never declarable — see "Which classes are
+  declarable"), so closing this only ever tightens the gate.
+
+  **What step 1 deliberately does NOT do (still open, step 2):** it is a coarse
+  black-vs-white bucket, not a value comparison. It says nothing about *how far apart* two
+  same-family washes are (two different blacks, two different whites), nothing about hue on a
+  coloured/tinted fill (anything that isn't near-achromatic lands as unclassified `mid` and is
+  silently skipped), and nothing about a polarity-correct wash that's simply the wrong alpha.
+  A full `background-color` comparison — closing all of that — is separately-scoped, larger
+  work: it will surface a burst of new rows across the mapped pairs that all need individual
+  triage against the site on landing, which is why it is its own step rather than a rider on
+  this one.
 
 ## Splitting a collapsed node (`owns`)
 
@@ -372,7 +404,7 @@ would be inert). **Nothing in the shipped map uses `excludes` today** — the ho
 "add the sibling pair that measures the rule" or "drop `owns` and declare the rows that
 surfaces", which is what `statblock-wrap` now does.
 
-Valid rule names: `bg`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
+Valid rule names: `bg`, `bg-polarity`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
 `line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,
 `margin-top`, `margin-bottom`, `body-font`, `letter-spacing`, `ink`.
 
@@ -419,7 +451,7 @@ whether a divergence in it may ever be excused:
 
 | Class | Rules | Declarable? |
 |---|---|---|
-| **material** | `bg`, `shadow`, `hairline-top`, `hairline-bottom` | **NEVER** |
+| **material** | `bg`, `bg-polarity`, `shadow`, `hairline-top`, `hairline-bottom` | **NEVER** |
 | geometry | `padding-top/right/bottom/left`, `margin-top`, `margin-bottom` | yes |
 | typography | `font-size`, `line-height`, `body-font`, `letter-spacing` | yes |
 | ink | `ink` | yes |

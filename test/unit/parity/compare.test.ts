@@ -324,10 +324,10 @@ describe('parity compare — MATERIAL rules can never be declared away', () => {
 	});
 
 	test('the non-declarable set is exactly the material rules', () => {
-		expect(NON_DECLARABLE_RULES).toEqual(['bg', 'shadow', 'hairline-top', 'hairline-bottom']);
+		expect(NON_DECLARABLE_RULES).toEqual(['bg', 'bg-polarity', 'shadow', 'hairline-top', 'hairline-bottom']);
 	});
 
-	test.each(['bg', 'shadow', 'hairline-top', 'hairline-bottom'])(
+	test.each(['bg', 'bg-polarity', 'shadow', 'hairline-top', 'hairline-bottom'])(
 		'declaring "%s" is a hard contract error',
 		(rule) => {
 			const errs = validateMap(
@@ -359,6 +359,88 @@ describe('parity compare — MATERIAL rules can never be declared away', () => {
 		});
 		expect(r.counts.gap).toBe(2);
 		expect(wouldExitZero(r)).toBe(false);
+	});
+});
+
+// ── SC-126 step 1: the `bg-polarity` wash-direction check ────────────────────────────
+// `bg` (rule 1) only ever compares `background-image`, so SC-117's entire defect class —
+// 13 declaration sites washed translucent-WHITE where the site sits on translucent-BLACK,
+// both schemes — sailed through fully green (git 169d62f documents the historical values
+// reconstructed below). This is the can-fail proof for the rule that closes that hole.
+describe('parity compare — `bg-polarity` catches the SC-117 wrong-wash-direction defect', () => {
+	// The real historical defect, reconstructed from git history (169d62f^, pre-fix
+	// `--dse-surface-sunken`): Steel dark resolved to a 6%-WHITE wash, Steel light to an
+	// OPAQUE near-white plate. The site's own `.sc-ability__section` measures translucent
+	// BLACK in both schemes (post-fix baseline, still true today).
+	test('the real SC-117 dark-scheme value (6%-white wash) is a GAP against the site black', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			plug: inv('.p', { 'background-color': 'rgba(220, 226, 230, 0.06)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-polarity' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(wouldExitZero(r)).toBe(false);
+	});
+
+	test('the real SC-117 light-scheme value (opaque near-white) is a GAP against the site black', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.02)' }),
+			plug: inv('.p', { 'background-color': 'rgb(234, 238, 239)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-polarity' && x.scheme === 'light');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(wouldExitZero(r)).toBe(false);
+	});
+
+	test('`bg-polarity` is MATERIAL — the defect cannot be declared away', () => {
+		const errs = validateMap(
+			onePairMap({ declaredDeferrals: [{ pair: 'p', rule: 'bg-polarity', why: 'FOLLOWUPS #99 — looks fine' }] }),
+		);
+		expect(errs.join('\n')).toContain('can NEVER be declared');
+	});
+
+	// ── noise guards: today's real tree is either transparent or a same-family wash on
+	// both sides in every mapped pair, and this rule must stay silent on all of it. ──
+	test('identical washes on both sides never fire (today\'s real green state)', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			plug: inv('.p', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+	});
+
+	test('fully transparent on both sides never fires, even with opposite RGB literals', () => {
+		// The textbook false positive named in the ticket: rgba(0,0,0,0) vs
+		// rgba(255,255,255,0) are pixel-identical (invisible) and must not be flagged.
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0)' }),
+			plug: inv('.p', { 'background-color': 'rgba(255, 255, 255, 0)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+	});
+
+	test('a mid-grey on either side is left unclassified, not forced into a bucket', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			plug: inv('.p', { 'background-color': 'rgba(128, 128, 128, 0.5)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+	});
+
+	test('a site value that is transparent never fires against a plugin wash of the opposite family', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0)' }),
+			plug: inv('.p', { 'background-color': 'rgba(255, 255, 255, 0.5)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
 	});
 });
 

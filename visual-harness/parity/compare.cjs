@@ -16,6 +16,7 @@
 // silently inert entry.
 const ALL_RULES = [
 	'bg',
+	'bg-polarity',
 	'shadow',
 	'hairline-top',
 	'hairline-bottom',
@@ -51,6 +52,7 @@ const KNOWN_RULES = [...ALL_RULES, ...CAPTURE_RULES];
 // NON_DECLARABLE_CLASSES.
 const RULE_CLASS = {
 	bg: 'material',
+	'bg-polarity': 'material',
 	shadow: 'material',
 	'hairline-top': 'material',
 	'hairline-bottom': 'material',
@@ -113,6 +115,39 @@ const ink = (v) => {
 	if (!m) return null;
 	const a = m[4] === undefined ? 1 : m[5] === '%' ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
 	return { r: +m[1], g: +m[2], b: +m[3], a };
+};
+
+// ── SC-126 step 1: wash POLARITY, not a full background-color comparison ───────────────
+// `bgFamily` buckets a computed background-color into a coarse polarity class for rule 1b
+// ONLY (below). It is deliberately narrow — see README.md "Known limitation" for the full
+// story and why a full colour comparison is separately-scoped, larger work.
+//
+// Thresholds are derived from the REAL spread in both committed inventories, not
+// intuition: every mapped pair's background-color today, in both schemes, on both site
+// and plugin, is either fully transparent or a near-pure achromatic wash —
+// rgba(0,0,0,{.16,.18,.02,.024}) — with nothing else in the data. The historical SC-117
+// defect (pre-fix `--dse-surface-sunken`, git 169d62f^) sat at rgba(220,226,230,.06) dark
+// / opaque #eaeeef light — average channel ~225/~237 — nowhere near either real bucket, so
+// a wide gap between BLACK_MAX and WHITE_MIN costs nothing today and still catches that
+// defect with room to spare.
+//   - alpha === 0            -> unclassified (`null`). A fully transparent fill is
+//     invisible regardless of hue — flagging rgba(0,0,0,0) against rgba(255,255,255,0)
+//     would be the textbook false positive this rule must never produce.
+//   - average RGB channel <= BLACK_MAX -> 'black'
+//   - average RGB channel >= WHITE_MIN -> 'white'
+//   - anything else (a real mid-grey, or a coloured/tinted wash) -> unclassified (`null`).
+//     A future coloured or half-tone surface fill must not be forced into a black/white
+//     bucket it doesn't belong in — leaving it unclassified means this rule stays silent
+//     on it rather than guessing, which is what keeps it near-noise-free.
+const BG_BLACK_MAX = 40;
+const BG_WHITE_MIN = 200;
+const bgFamily = (v) => {
+	const c = ink(v);
+	if (!c || c.a <= 0) return null;
+	const avg = (c.r + c.g + c.b) / 3;
+	if (avg <= BG_BLACK_MAX) return 'black';
+	if (avg >= BG_WHITE_MIN) return 'white';
+	return null;
 };
 
 const firstIn = (inv, scheme, sel) => {
@@ -322,6 +357,27 @@ function compare({ site, plug, map }) {
 			// 1. Material: site has a gradient, plugin is flat.
 			if (owns(pair, 'bg') && !isFlat(s['background-image']) && isFlat(p['background-image']))
 				add('GAP', scheme, pair, 'bg', `flat surface: site background-image="${s['background-image']}", plugin="none"`);
+			// 1b. Material: WRONG WASH POLARITY (SC-126 step 1). Site sits on a
+			// translucent-BLACK fill, plugin on translucent-WHITE (or opaque), or vice
+			// versa. This is the SC-117 defect class: 13 declaration sites washed the
+			// wrong direction in both schemes and rule 1 above never caught any of them,
+			// because it only ever looks at background-image — neither side's was
+			// `none`. Deliberately narrow (see bgFamily above and README.md "Known
+			// limitation"): fires only when BOTH sides are a classifiable, visible,
+			// near-achromatic wash and they land on OPPOSITE ends of the range. A full
+			// background-color comparison is separately-scoped, larger work.
+			if (owns(pair, 'bg-polarity')) {
+				const sf = bgFamily(s['background-color']);
+				const pf = bgFamily(p['background-color']);
+				if (sf && pf && sf !== pf)
+					add(
+						'GAP',
+						scheme,
+						pair,
+						'bg-polarity',
+						`wrong wash polarity: site background-color="${s['background-color']}" (${sf}), plugin="${p['background-color']}" (${pf})`,
+					);
+			}
 			// 2. Material: site has a bevel/shadow, plugin has none.
 			if (owns(pair, 'shadow') && !isFlat(s['box-shadow']) && isFlat(p['box-shadow']))
 				add('GAP', scheme, pair, 'shadow', `no bevel: site box-shadow="${s['box-shadow']}", plugin="none"`);
