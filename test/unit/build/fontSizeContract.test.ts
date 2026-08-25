@@ -219,12 +219,6 @@ export const ALLOWLIST: readonly string[] = [
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-stamina__ctemp :: 0.34em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-skills[data-skills-style] .dse-collapse__title, [data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-skills[data-skills-style] .dse-skills__group-title :: 0.92em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-skills[data-skills-style='ledger'] .dse-skills__item :: 0.92em",
-	"[data-dse-element] .dse-rollbar__net :: var(--font-ui-smaller)",
-	"[data-dse-element] .dse-rollbar__char-fixed :: var(--font-ui-smaller)",
-	"[data-dse-element] .dse-rollcard__crit-note :: var(--font-ui-smaller)",
-	"[data-dse-element] .dse-rollcard__breakdown :: var(--font-ui-smaller)",
-	"[data-dse-element] .dse-rollcard__delegate :: var(--font-ui-smaller)",
-	"[data-dse-element='roll'] .dse-roll__expr :: var(--font-ui-smaller)",
 	".dse-tiles__label :: 0.68em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome-summary__label :: 0.82em",
 ];

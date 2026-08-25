@@ -11479,12 +11479,19 @@ button.dse-pr__row:hover {
 	border-radius: var(--dse-radius);
 	background-color: var(--dse-surface-sunken);
 }
+/* SC-185 round 3 (category A) — the six roll surfaces come off Obsidian's
+   --font-ui-smaller. Two reasons, not one: (1) it is an absolute px size keyed to
+   the INTERFACE font-size slider, and a roll card is note content; (2) it is not
+   declared in the harness's vendored vars.css, so every shot of these nodes was
+   pinned at their INHERITED 16px while a real vault renders 12px — probed, not
+   assumed. --dse-fs-caption is 12.8px, i.e. +0.8px in a real vault and the end of
+   the harness/vault divergence. */
 [data-dse-element] .dse-rollbar__net {
-	font-size: var(--font-ui-smaller);
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-fg-muted);
 }
 [data-dse-element] .dse-rollbar__char-fixed {
-	font-size: var(--font-ui-smaller);
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-fg);
 	background-color: var(--dse-chip-bg);
 	border-radius: var(--dse-radius);
@@ -11502,16 +11509,16 @@ button.dse-pr__row:hover {
 	color: var(--dse-heading);
 }
 [data-dse-element] .dse-rollcard__crit-note {
-	font-size: var(--font-ui-smaller);
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-warn);
 }
 [data-dse-element] .dse-rollcard__breakdown {
 	font-family: var(--dse-font-mono);
-	font-size: var(--font-ui-smaller);
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-fg-muted);
 }
 [data-dse-element] .dse-rollcard__delegate {
-	font-size: var(--font-ui-smaller);
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-fg-faint);
 	font-style: italic;
 }
@@ -11532,7 +11539,7 @@ button.dse-pr__row:hover {
 	background-color: var(--dse-surface);
 }
 [data-dse-element='roll'] .dse-roll__expr {
-	font-size: var(--font-ui-smaller);
+	font-size: var(--dse-fs-caption);
 	color: var(--dse-fg-muted);
 }
 /* (§4.5 focus ring: consolidated into the shared kit :focus-visible rule below.) */
