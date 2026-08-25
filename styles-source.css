@@ -8972,7 +8972,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	justify-self: end;
 	justify-content: flex-end;
 	gap: 0.18em;
-	font-size: 2.05em;
+	font-size: calc(var(--dse-fs-numeral) * 41 / 35);
 	line-height: 1.02;
 	font-variant-numeric: tabular-nums;
 	color: var(--dse-heading);
@@ -8988,6 +8988,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__cluster:is([data-state='winded'], [data-state='dying']) .dse-stamina__ccur {
 	color: var(--dse-st);
 }
+/* THE TWO SUB-GLYPHS BELOW STAY BARE `em`, AND THAT IS THE RIGHT ANSWER (SC-185
+   round 3, category G — they keep their allowlist entries deliberately). They are
+   CHILDREN of .dse-stamina__cnums, so their `em` already resolves against the
+   readout's own computed size: `0.46em` IS "46% of the numeral", by construction,
+   and it tracks the role token automatically now that the parent carries it.
+   Re-stating them as calc(var(--dse-fs-numeral) * N) would NOT be the same number —
+   the token's own 1.75em would resolve against the 2.05em-sized parent and the two
+   would COMPOUND. Measured today: cnums 32.8px, slash/max 15.088px (= 32.8 x 0.46),
+   temp 11.152px (= 32.8 x 0.34). A role token cannot express a fraction of a sized
+   parent; the literal can, so the literal stays. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) :is(.dse-stamina__cslash, .dse-stamina__cmax) {
 	color: var(--dse-metal);
 	font-size: 0.46em;

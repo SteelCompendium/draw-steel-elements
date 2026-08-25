@@ -204,7 +204,6 @@ export const ALLOWLIST: readonly string[] = [
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb__sticky-role :: 0.85rem",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) table:not([class]) :: 0.92em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-stamina__clabel :: 0.82em",
-	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-stamina__cnums :: 2.05em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) :is(.dse-stamina__cslash, .dse-stamina__cmax) :: 0.46em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-stamina__ctemp :: 0.34em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-skills[data-skills-style] .dse-collapse__title, [data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-skills[data-skills-style] .dse-skills__group-title :: 0.92em",
