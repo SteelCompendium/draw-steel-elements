@@ -2625,7 +2625,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	text-align: center;
 }
 .dse-sb__item-v {
-	font-size: calc(var(--font-ui-large) * 1.5);
+	font-size: var(--dse-fs-numeral);
 	font-weight: bold;
 }
 .dse-sb__item-l {
@@ -2677,7 +2677,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	padding-top: 0.25rem;
 }
 [data-dse-element='statblock'][data-dse-density='compact'] .dse-sb__item-v {
-	font-size: var(--font-ui-large);
+	font-size: var(--dse-fs-heading);
 }
 [data-dse-element='statblock'][data-dse-density='compact'] .dse-sb__items {
 	padding-bottom: 0.25rem;
@@ -2765,7 +2765,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	padding: 0.15rem 0;
 }
 [data-dse-element='statblock'][data-dse-sb-stats='ledger'] .dse-sb__kv-v {
-	font-size: var(--font-ui-medium);
+	font-size: var(--dse-fs-body);
 	order: 2;
 	/* SC-146 FIX ROUND 1, M3 — site: `.sb__field-v { text-align: right }`
 	   (steel-statblock.css:190). `justify-content: space-between` above
@@ -2859,7 +2859,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	gap: 0.1rem;
 }
 :is([data-dse-element='statblock'], [data-dse-element='characteristics'], [data-dse-element='hero'])[data-dse-sb-charline='two'] .dse-sb__char-v {
-	font-size: calc(var(--font-ui-large) * 1.4);
+	font-size: var(--dse-fs-numeral);
 }
 /* …with a boxed letter: [box][value] over [label]. SITE QUIRK, reproduced
    deliberately (SC-146 audit S5): at charline=two, `on` and `onword` are the same
@@ -2931,8 +2931,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
    the merged cell is one text node with no -v/-l spans for these rules to reach,
    so at the opt-in merged pair the knobs are INERT by design — anyone flipping
    Characteristics to "One line" gets the statblock's own merged rhythm. */
+/* SC-185 round 3 (category B): the statblock rail's own two-line numeral moved to
+   the --dse-fs-numeral role, so this knobbed ds-char twin moves with it. The two
+   must stay numerically equal at scale 1 (the paragraph above is the contract);
+   they cannot if one rides the note font and the other the interface slider. */
 [data-dse-element='characteristics'][data-dse-sb-charline='two'] .dse-sb__char-v {
-	font-size: calc(var(--font-ui-large) * 1.4 * var(--dse-value-scale, 1));
+	font-size: calc(var(--dse-fs-numeral) * var(--dse-value-scale, 1));
 }
 [data-dse-element='characteristics']:is([data-dse-sb-charbox='on'], [data-dse-sb-charbox='onword']):not([data-dse-sb-charline='two']) .dse-sb__char-v {
 	font-size: calc(1.25rem * var(--dse-value-scale, 1));
