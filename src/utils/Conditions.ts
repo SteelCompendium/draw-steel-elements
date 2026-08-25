@@ -13,9 +13,22 @@ export class ConditionManager {
 		{ key: 'prone', displayName: 'Prone', iconName: 'bed' },
 		{ key: 'restrained', displayName: 'Restrained', iconName: 'navigation-off' },
 		{ key: 'slowed', displayName: 'Slowed', iconName: 'snail' },
+		// SC-197: taunted is one of the nine real Draw Steel rules conditions (Core Rules
+		// p.28-ish "Conditions" list) — it belongs here, alphabetically before weakened,
+		// not under pseudoConditions below. It was misfiled from the start; see
+		// pseudoConditions' header comment for what actually distinguishes the two lists.
+		{ key: 'taunted', displayName: 'Taunted', iconName: 'mouse-pointer-click' },
 		{ key: 'weakened', displayName: 'Weakened', iconName: 'trending-down' },
 	];
 
+	// "Pseudo" conditions are everything the plugin renders through the same
+	// condition-chip/icon UI that is NOT one of the game's rules-defined conditions:
+	// combat states (marked, defending, flanking, high-ground, covered, concealed,
+	// hidden, sneaking, invisible), stamina-derived states (dying, dead, unconscious,
+	// winded, falling), and UI bookkeeping (used-triggered-action). None of these are
+	// listed in the Core Rules' "Conditions" section, and none of them end via a saving
+	// throw the way a real condition does — they're tracked here purely because the
+	// same chip/icon affordance is the natural place to surface them on an actor.
 	private pseudoConditions: ConditionConfig[] = [
 		{ key: 'marked', displayName: 'Marked', iconName: 'locate-fixed' },
 		{ key: 'used-triggered-action', displayName: 'Triggered Action Used', iconName: 'repeat' },
@@ -32,7 +45,6 @@ export class ConditionManager {
 		{ key: 'sneaking', displayName: 'Sneaking', iconName: 'more-horizontal' },
 		{ key: 'unconscious', displayName: 'Unconscious', iconName: 'zap-off' },
 		{ key: 'winded', displayName: 'Winded', iconName: 'wind' },
-		{ key: 'taunted', displayName: 'Taunted', iconName: 'mouse-pointer-click' },
 	];
 
 	public getAnyConditionByKey(key: string): ConditionConfig | undefined {
