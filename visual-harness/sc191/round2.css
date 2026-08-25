@@ -1,0 +1,1810 @@
+/* SC-191 ROUND 2 — six visual treatments of Candidate C's board.
+ *
+ * NOT SHIPPED. Loaded only by visual-harness/sc191/mock2.html; not imported by main.ts,
+ * not part of styles-source.css. Nothing here can reach a user, a frozen shot or the
+ * print baseline.
+ *
+ * It still plays by the plugin's rules so a chosen treatment lifts in with edits rather
+ * than a rewrite:
+ *   - every colour is a --dse-* token (DESIGN.md rule 3 — compose, never invent);
+ *   - every font-size is one of the nine --dse-fs-* ROLE tokens (SC-185 contract) — no
+ *     literal sizes anywhere in this file, so nothing here would need an allowlist entry;
+ *   - no decorative coloured left-border (DESIGN.md rule 7 / SC-132);
+ *   - state is carried by SHAPE, MATERIAL, POSITION, GLYPH and WORDS before colour,
+ *     because Scott is colourblind. Every screenshot survives greyscale.
+ *
+ * ONE DOM, SIX SKINS. `[data-treat]` on the card root is the only difference between
+ * the six treatments — the information architecture Scott approved does not move.
+ *
+ * Native CSS nesting is used throughout (the same style styles-source.css uses) purely
+ * so the `[data-dse-element='montage'][data-dse-theme='steel']` scope is stated once.
+ */
+
+[data-dse-element='montage'][data-dse-theme='steel'] {
+	/* ============================================================== */
+	/*  0. The card plate + brief                                      */
+	/* ============================================================== */
+	/* The montage element has NO Steel card frame today — it renders as a bare stack of
+	   steppers, which is most of why it does not read as an instrument. */
+	.mt2 {
+		position: relative;
+		background: var(--dse-card-bg);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+		padding: var(--dse-pad);
+		color: var(--dse-fg);
+
+		body.theme-light & {
+			box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+		}
+	}
+
+	.mt2__head {
+		margin-bottom: 0.7rem;
+	}
+
+	.mt2__brief {
+		position: relative;
+		margin: 0 0 0.85rem;
+		padding: 0.5rem 0.7rem 0.5rem 1.35rem;
+		background: var(--dse-surface-sunken);
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: var(--dse-radius);
+
+		&::before {
+			content: '◆';
+			position: absolute;
+			left: 0.55rem;
+			top: 0.46rem;
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-metal);
+		}
+	}
+	.mt2__brief-text {
+		margin: 0;
+		font-size: var(--dse-fs-secondary);
+		line-height: 1.5;
+		color: var(--dse-fg-muted);
+		font-style: italic;
+	}
+
+	/* screen-reader-only text inside icon-only controls */
+	.mt2-sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+
+	/* ============================================================== */
+	/*  1. The board skeleton (shared by all six treatments)           */
+	/* ============================================================== */
+	.mt2-boardwrap {
+		position: relative;
+	}
+	.mt2-board {
+		display: grid;
+		/* `repeat(var(--n), …)` is not legal CSS, so the expanded track list arrives from
+		   the view as one custom property. */
+		grid-template-columns: var(--mt2-cols, auto 1fr auto);
+		align-items: stretch;
+	}
+	.mt2-board > * {
+		display: flex;
+		align-items: center;
+		gap: 0.3em;
+		min-width: 0;
+		padding: 0.4em 0.55em;
+		position: relative;
+	}
+
+	/* -- header row ------------------------------------------------- */
+	.mt2-board__corner,
+	.mt2-board__thead,
+	.mt2-board__footlab {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.11em;
+		color: var(--dse-metal);
+	}
+	.mt2-board__thead,
+	.mt2-board__grand,
+	.mt2-board__total {
+		justify-content: flex-end;
+	}
+	.mt2-board__rhead {
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.05em;
+		text-align: center;
+	}
+	.mt2-rhead__pip {
+		display: none; /* only the "stages" treatment uses the waypoint */
+	}
+	.mt2-rhead__title {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.3em;
+	}
+	.mt2-rhead__w {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.11em;
+		color: var(--dse-metal);
+	}
+	.mt2-rhead__n {
+		font-size: var(--dse-fs-subheading);
+		font-family: var(--dse-font-mono);
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		line-height: 1;
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	/* The round in play says so IN WORDS under its number — the accent tint is the last
+	   channel, never the only one. */
+	.mt2-rhead__sub {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		color: var(--dse-fg-faint);
+	}
+	.mt2-board__rhead[data-state='current'] {
+		.mt2-rhead__n,
+		.mt2-rhead__sub {
+			color: var(--dse-accent);
+		}
+		.mt2-rhead__sub {
+			font-weight: 700;
+		}
+	}
+	.mt2-board__rhead[data-state='future'] .mt2-rhead__n {
+		color: var(--dse-fg-faint);
+		text-shadow: none;
+	}
+
+	/* -- hero name column ------------------------------------------- */
+	.mt2-board__name {
+		gap: 0.45em;
+	}
+	.mt2-crest {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: 1.7em;
+		height: 1.7em;
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: 2px;
+		background: var(--dse-chip-bg);
+	}
+	.mt2-crest__mono {
+		font-family: var(--dse-font-mono);
+		font-size: var(--dse-fs-micro);
+		letter-spacing: 0.05em;
+		color: var(--dse-fg-muted);
+	}
+	.mt2-board__who {
+		font-size: var(--dse-fs-secondary);
+		color: var(--dse-fg);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	/* THE PER-ROW RECORD CONTROL. Hover/focus-revealed on desktop (it is redundant with
+	   the current round's socket), always visible on a coarse pointer, and the primary
+	   path at narrow width where the matrix has re-laid. */
+	.mt2-board__rowact {
+		margin-left: auto;
+		flex: none;
+		opacity: 0;
+		color: var(--dse-metal);
+
+		svg {
+			width: 0.85em;
+			height: 0.85em;
+		}
+	}
+	.mt2-board__name:hover .mt2-board__rowact,
+	.mt2-board__rowact:focus-visible {
+		opacity: 1;
+	}
+	@media (pointer: coarse) {
+		.mt2-board__rowact {
+			opacity: 1;
+		}
+	}
+
+	/* -- a cell: one hero's action in one round --------------------- */
+	.mt2-board__cell {
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.12em;
+		text-align: center;
+		cursor: pointer;
+	}
+	.mt2-cell__face {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.08em;
+		width: 100%;
+		min-width: 0;
+	}
+	.mt2-cell__glyph {
+		display: inline-flex;
+		color: var(--dse-fg-faint);
+
+		svg {
+			width: 1.05em;
+			height: 1.05em;
+		}
+	}
+	.mt2-cell__glyph--none svg {
+		width: 0.8em;
+		height: 0.8em;
+	}
+	.mt2-cell__skill {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.05em;
+		color: var(--dse-fg-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100%;
+	}
+	.mt2-cell__skill--none {
+		color: var(--dse-fg-faint);
+	}
+	.mt2-board__cell[data-kind='success'] .mt2-cell__glyph {
+		color: var(--dse-turn-done);
+	}
+	.mt2-board__cell[data-kind='failure'] .mt2-cell__glyph {
+		color: var(--dse-danger);
+	}
+	.mt2-board__cell[data-kind='assist'] .mt2-cell__glyph {
+		color: var(--dse-metal);
+	}
+
+	/* THE CORRECTION AFFORDANCE — Scott's "that 13 was really a 17". Hover/focus reveals
+	   a pencil pip; the whole cell is the tap target, so touch is never gesture-only. */
+	.mt2-cell__pip {
+		position: absolute;
+		top: 0.15em;
+		right: 0.2em;
+		display: inline-flex;
+		color: var(--dse-accent);
+		opacity: 0;
+
+		svg {
+			width: 0.7em;
+			height: 0.7em;
+		}
+	}
+	.mt2-board__cell:hover .mt2-cell__pip,
+	.mt2-board__cell:focus-visible .mt2-cell__pip,
+	.mt2-board__cell[data-hover='on'] .mt2-cell__pip {
+		opacity: 1;
+	}
+	.mt2-board__cell[data-hover='on'] {
+		outline: 1px solid var(--dse-accent);
+		outline-offset: -1px;
+	}
+
+	/* THE OPEN SOCKET — an empty cell in the round in play. The three mini controls are
+	   PERSISTENT, not hover-revealed: one tap records the common case whole, which is the
+	   whole reason this structure beats a form. Tapping the socket itself opens the sheet
+	   when the skill matters. */
+	.mt2-cell__quick {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.18em;
+	}
+	.mt2-quick {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.45em;
+		height: 1.45em;
+		padding: 0;
+		background: var(--dse-chip-bg);
+		border: 1px solid var(--dse-metal-line);
+		border-radius: 2px;
+		color: var(--dse-metal);
+		cursor: pointer;
+
+		svg {
+			width: 0.8em;
+			height: 0.8em;
+		}
+
+		&:hover {
+			border-color: var(--dse-accent);
+			color: var(--dse-accent);
+		}
+	}
+	.mt2-quick[data-kind='success'] {
+		color: var(--dse-turn-done);
+	}
+	.mt2-quick[data-kind='failure'] {
+		color: var(--dse-danger);
+	}
+	.mt2-cell__hint {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.08em;
+		color: var(--dse-fg-faint);
+	}
+
+	/* -- the ghost "add a round" lane + "add a hero" row ------------- */
+	/* Both controls sit WHERE THE THING THEY MAKE WOULD APPEAR — a Director extending a
+	   montage looks past the last round, not in a menu. Both are duplicated in the ⋯
+	   overflow, because the lane stands down at sidebar width. */
+	.mt2-board__addcol,
+	.mt2-board__addcell,
+	.mt2-board__addfoot {
+		justify-content: center;
+		padding-inline: 0.1em;
+		border-left: 1px dashed var(--dse-metal-faint);
+		color: var(--dse-fg-faint);
+	}
+	.mt2-board__addcol {
+		cursor: pointer;
+
+		&:hover {
+			color: var(--dse-accent);
+		}
+	}
+	.mt2-board__addglyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.85em;
+			height: 0.85em;
+		}
+	}
+	.mt2-board__addrow {
+		grid-column: 1 / -1;
+		justify-content: flex-start;
+		gap: 0.4em;
+		padding-block: 0.35em;
+		border-top: 1px dashed var(--dse-metal-faint);
+		color: var(--dse-fg-faint);
+		cursor: pointer;
+
+		&:hover {
+			color: var(--dse-accent);
+		}
+	}
+	.mt2-board__addword {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+	}
+
+	/* -- tallies ---------------------------------------------------- */
+	/* A tally is glyph + number, never a bare coloured number: the ✓ / ✕ is what makes
+	   the two columns readable in greyscale. */
+	.mt2-tally {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.15em;
+		font-size: var(--dse-fs-label);
+		font-variant-numeric: tabular-nums;
+		color: var(--dse-fg-muted);
+	}
+	.mt2-tally__glyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.72em;
+			height: 0.72em;
+		}
+	}
+	.mt2-tally[data-kind='success'] {
+		color: var(--dse-turn-done);
+	}
+	.mt2-tally[data-kind='failure'] {
+		color: var(--dse-danger);
+	}
+	.mt2-tally--grand {
+		font-size: var(--dse-fs-subheading);
+		font-weight: 700;
+		text-shadow: var(--dse-emboss);
+	}
+	.mt2-board__foot {
+		justify-content: center;
+		gap: 0.6em;
+	}
+	.mt2-board__grand {
+		gap: 0.55em;
+	}
+
+	/* ============================================================== */
+	/*  2. The progress band — the Director's limits, made countable   */
+	/* ============================================================== */
+	/* Round 1's C crammed these into the bottom-right corner of the table, next to the
+	   round-tally row, where they were unreadable. Given their own full-width band under
+	   the board they become the card's second focal point after the title. */
+	.mt2-progress {
+		display: grid;
+		gap: 0.3em 0.7em;
+		margin-top: 0.7rem;
+		padding: 0.55rem 0.7rem;
+		background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: var(--dse-radius);
+		box-shadow: var(--dse-bevel);
+
+		body.theme-light & {
+			background: linear-gradient(104deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.02));
+		}
+	}
+	.mt2-prog {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.6em;
+	}
+	.mt2-prog__label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3em;
+		white-space: nowrap;
+	}
+	.mt2-prog__glyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.85em;
+			height: 0.85em;
+		}
+	}
+	.mt2-prog[data-kind='success'] .mt2-prog__glyph {
+		color: var(--dse-turn-done);
+	}
+	.mt2-prog[data-kind='failure'] .mt2-prog__glyph {
+		color: var(--dse-danger);
+	}
+	.mt2-prog__word {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		color: var(--dse-metal);
+	}
+	.mt2-prog__read {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.4em;
+		white-space: nowrap;
+	}
+	.mt2-prog__count {
+		font-size: var(--dse-fs-subheading);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	.mt2-prog__tail {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.07em;
+		color: var(--dse-fg-muted);
+	}
+	.mt2-progress[data-brink='on'] .mt2-prog[data-kind='success'] .mt2-prog__tail {
+		color: var(--dse-vp);
+		font-weight: 700;
+	}
+
+	/* The countable track: the recoveries strip's gesture (styles-source.css ~9273) —
+	   the OUTLINE is permanent so the track's LENGTH always states the Director's limit,
+	   and only the FILL states progress. "One from Total Success" is then literally one
+	   unfilled cell: no arithmetic, no colour. */
+	.mt2-track {
+		display: flex;
+		align-items: center;
+		gap: 0.28em;
+		min-width: 0;
+	}
+	.mt2-track__slot {
+		display: block;
+		flex: 1 1 0;
+		min-width: 0.42em;
+		height: 0.95em;
+		border: 1px solid var(--dse-metal-line);
+		border-radius: 1px;
+		background: none;
+		transform: skewX(-12deg);
+	}
+	.mt2-track__slot[data-filled='on'] {
+		background: var(--dse-metal-grad);
+		border-color: var(--dse-metal-bright);
+		box-shadow: var(--dse-chip-bevel);
+	}
+	.mt2-track[data-kind='success'] .mt2-track__slot[data-filled='on'] {
+		border-color: var(--dse-turn-done);
+	}
+	.mt2-track[data-kind='failure'] .mt2-track__slot[data-filled='on'] {
+		background:
+			repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 5px),
+			rgba(0, 0, 0, 0.4);
+		border-color: var(--dse-danger);
+		box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+
+		body.theme-light & {
+			background:
+				repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.07);
+			box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+		}
+	}
+	/* The GOAL cell — the limit itself, marked as an edge in the material rather than a
+	   colour: a two-tone seam on its outer face, the gesture the stamina gauge uses for
+	   its zero bulkhead. */
+	.mt2-track__slot[data-goal='on'] {
+		border-color: var(--dse-metal-bright);
+		box-shadow: inset -2px 0 0 var(--dse-metal-bright), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+
+		body.theme-light & {
+			border-color: var(--dse-metal);
+		}
+	}
+
+	/* ============================================================== */
+	/*  3. The verdict band                                            */
+	/* ============================================================== */
+	.mt2-verdict {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.4rem 1rem;
+		margin-top: 0.6rem;
+		padding: 0.55rem 0.8rem;
+		background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: var(--dse-radius);
+		box-shadow: var(--dse-bevel);
+		--mt2-band: var(--dse-metal);
+
+		body.theme-light & {
+			background: linear-gradient(104deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.02));
+		}
+
+		&[data-band='total'] {
+			--mt2-band: var(--dse-vp);
+		}
+		&[data-band='partial'] {
+			--mt2-band: var(--dse-accent);
+		}
+		&[data-band='failure'] {
+			--mt2-band: var(--dse-danger);
+		}
+		/* The FOURTH band round 1 asked for. A montage at 0/0 is not a Total Failure; it
+		   has not started, and it now says so in words with a neutral crest. */
+		&[data-band='pending'] {
+			--mt2-band: var(--dse-metal);
+		}
+	}
+	.mt2-verdict__now {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		min-width: 0;
+	}
+	.mt2-verdict__crest {
+		display: inline-flex;
+		color: var(--mt2-band);
+
+		svg {
+			width: 1.35em;
+			height: 1.35em;
+		}
+	}
+	.mt2-verdict__words {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.mt2-verdict__eyebrow {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		color: var(--dse-metal);
+	}
+	.mt2-verdict__word {
+		font-size: var(--dse-fs-subheading);
+		font-weight: 700;
+		line-height: 1.15;
+		color: var(--mt2-band);
+		text-shadow: var(--dse-emboss);
+	}
+	.mt2-verdict__stats {
+		display: flex;
+		align-items: stretch;
+		gap: 0.9rem;
+	}
+	.mt2-stat {
+		display: flex;
+		align-items: baseline;
+		gap: 0.35em;
+		white-space: nowrap;
+	}
+	.mt2-stat__value {
+		font-size: var(--dse-fs-heading);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	.mt2-stat[data-kind='success'] .mt2-stat__value {
+		color: var(--dse-turn-done);
+	}
+	.mt2-stat[data-kind='failure'] .mt2-stat__value {
+		color: var(--dse-danger);
+	}
+	.mt2-stat__label {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.07em;
+		color: var(--dse-fg-muted);
+	}
+	.mt2-verdict__rules {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.15rem 0.8rem;
+		padding-top: 0.4rem;
+		border-top: 1px solid var(--dse-metal-faint);
+	}
+	.mt2-verdict__rule {
+		font-size: var(--dse-fs-caption);
+		color: var(--dse-fg-faint);
+	}
+	/* THE BRINK. Announced four ways at once — a literal sentence, a ◆ mark, a band that
+	   only EXISTS in this state, and (last) the gold tint. */
+	.mt2-verdict__alert {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.15rem -0.8rem -0.55rem;
+		padding: 0.32rem 0.8rem;
+		background: linear-gradient(90deg, rgba(224, 176, 80, 0.16), rgba(224, 176, 80, 0));
+		border-top: 1px solid var(--dse-vp);
+		border-radius: 0 0 var(--dse-radius) var(--dse-radius);
+	}
+	.mt2-verdict__alert-mark {
+		font-size: var(--dse-fs-caption);
+		color: var(--dse-vp);
+	}
+	.mt2-verdict__alert-text {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		font-weight: 700;
+		color: var(--dse-vp);
+	}
+
+	/* ============================================================== */
+	/*  4. The persistent action bar + ⋯ overflow                      */
+	/* ============================================================== */
+	.mt2-bar {
+		position: relative;
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.4em;
+		margin-top: 0.7rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--dse-border);
+	}
+	.mt2-bar__btn {
+		font-size: var(--dse-fs-control);
+
+		svg {
+			width: 0.9em;
+			height: 0.9em;
+		}
+	}
+	/* The ⋯ sits hard right, so the three frequent controls read as one group and the
+	   rare/destructive ones are visibly a different class of thing. */
+	.mt2-bar__more {
+		margin-left: auto;
+	}
+	.mt2-menu {
+		position: absolute;
+		right: 0;
+		bottom: calc(100% - 0.2rem);
+		z-index: 6;
+		display: flex;
+		flex-direction: column;
+		min-width: 11em;
+		padding: 0.25em;
+		background: var(--dse-surface-raised);
+		border: 1px solid var(--dse-border);
+		border-radius: var(--dse-radius);
+		box-shadow: var(--dse-bevel), 0 8px 20px rgba(0, 0, 0, 0.45);
+	}
+	.mt2-menu__item {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+		padding: 0.35em 0.5em;
+		border-radius: 2px;
+		color: var(--dse-fg);
+
+		&:hover {
+			background: var(--dse-hover);
+		}
+	}
+	.mt2-menu__item--danger {
+		color: var(--dse-danger);
+		margin-top: 0.15em;
+		border-top: 1px solid var(--dse-border);
+		padding-top: 0.45em;
+	}
+	.mt2-menu__glyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.85em;
+			height: 0.85em;
+		}
+	}
+	.mt2-menu__text {
+		font-size: var(--dse-fs-control);
+	}
+
+	/* ============================================================== */
+	/*  5. The record / correct sheet                                  */
+	/* ============================================================== */
+	/* In the plugin this is a kit `managedModal` (the SC-186 ConditionsModal precedent).
+	   Drawn in place here so the data-entry path is visible in a screenshot — Scott's
+	   objection to round 1's Candidate B was that he could not see how a Director enters
+	   anything. */
+	.mt2-sheet__scrim {
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.55);
+		border-radius: var(--dse-radius);
+
+		body.theme-light & {
+			background: rgba(0, 0, 0, 0.28);
+		}
+	}
+	.mt2-sheet {
+		width: min(26em, 88%);
+		padding: 0.9rem 1rem;
+		background: var(--dse-card-bg);
+		border: 1px solid var(--dse-metal-line);
+		border-radius: var(--dse-radius);
+		box-shadow: var(--dse-bevel), 0 14px 34px rgba(0, 0, 0, 0.5);
+	}
+	.mt2-sheet__head {
+		display: flex;
+		flex-direction: column;
+		padding-bottom: 0.5rem;
+		margin-bottom: 0.6rem;
+		border-bottom: 1px solid var(--dse-metal-faint);
+	}
+	.mt2-sheet__eyebrow {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.11em;
+		color: var(--dse-metal);
+	}
+	.mt2-sheet__title {
+		font-size: var(--dse-fs-subheading);
+		font-weight: 700;
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	.mt2-sheet__field {
+		display: grid;
+		grid-template-columns: 4.4em minmax(0, 1fr);
+		align-items: start;
+		gap: 0.5em;
+		padding: 0.28rem 0;
+	}
+	.mt2-sheet__label {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		color: var(--dse-metal);
+		padding-top: 0.35em;
+	}
+	.mt2-sheet__body {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3em;
+	}
+	.mt2-sheet__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25em;
+		padding: 0.2em 0.5em;
+		font-size: var(--dse-fs-label);
+		color: var(--dse-fg-muted);
+		background: var(--dse-chip-bg);
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: 2px;
+
+		&[data-on='on'] {
+			color: var(--dse-heading);
+			border-color: var(--dse-accent);
+			background: var(--dse-sheen), rgba(0, 0, 0, 0.2);
+			box-shadow: var(--dse-chip-bevel);
+		}
+	}
+	.mt2-sheet__chipglyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.8em;
+			height: 0.8em;
+		}
+	}
+	.mt2-sheet__chip--result[data-kind='success'] .mt2-sheet__chipglyph {
+		color: var(--dse-turn-done);
+	}
+	.mt2-sheet__chip--result[data-kind='failure'] .mt2-sheet__chipglyph {
+		color: var(--dse-danger);
+	}
+	.mt2-sheet__input {
+		flex: 1 1 8em;
+		padding: 0.3em 0.5em;
+		font-size: var(--dse-fs-control);
+		color: var(--dse-fg);
+		background: var(--dse-surface-sunken);
+		border: 1px solid var(--dse-border);
+		border-radius: 2px;
+	}
+	.mt2-sheet__note {
+		flex: 1 1 100%;
+		font-size: var(--dse-fs-micro);
+		font-style: italic;
+		color: var(--dse-warn);
+	}
+	.mt2-sheet__foot {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.45em;
+		margin-top: 0.7rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--dse-metal-faint);
+
+		.dse-btn {
+			font-size: var(--dse-fs-control);
+		}
+		svg {
+			width: 0.9em;
+			height: 0.9em;
+		}
+	}
+
+	/* ############################################################## */
+	/*  TREATMENT 1 — "SET"                                            */
+	/*  The control. No new ornament at all: only rhythm, spacing,     */
+	/*  weight and alignment. Included because Scott's "ugly and       */
+	/*  stale" may be a TYPOGRAPHY complaint, not a missing-ornament   */
+	/*  one — and if it is, this is the cheapest and most durable fix. */
+	/* ############################################################## */
+	.mt2[data-treat='set'] {
+		/* Rows, not boxes. A table is read along its rows, so only the rows are ruled;
+		   round 1's C drew a full 1px lattice, which is what made it read as a
+		   spreadsheet rather than a card. */
+		.mt2-board > * {
+			padding: 0.55em 0.6em;
+			border-bottom: 1px solid var(--dse-border);
+		}
+		.mt2-board__corner,
+		.mt2-board__rhead,
+		.mt2-board__thead,
+		.mt2-board__addcol {
+			padding-bottom: 0.4em;
+			border-bottom: 2px solid var(--dse-metal-line);
+		}
+		/* Hero names get real headline weight — in round 1 they were the same size as the
+		   skill words under the glyphs, so nothing anchored a row. */
+		.mt2-board__who {
+			font-size: var(--dse-fs-subheading);
+			font-family: var(--dse-font-title);
+			color: var(--dse-heading);
+		}
+		.mt2-crest {
+			display: none;
+		}
+		/* The round in play is a column-wide wash plus an accent rule under its head —
+		   position and words already said which round it is. */
+		.mt2-board__rhead[data-state='current'] {
+			border-bottom-color: var(--dse-accent);
+		}
+		.mt2-board__cell[data-state='current'] {
+			background: rgba(77, 184, 199, 0.06);
+		}
+		/* Result carried without a single new material: the glyph, plus a hairline SHELF
+		   on the face the result points to — above for a success, below for a failure. */
+		.mt2-board__cell[data-kind='success'] .mt2-cell__face {
+			border-top: 2px solid var(--dse-turn-done);
+			padding-top: 0.22em;
+		}
+		.mt2-board__cell[data-kind='failure'] .mt2-cell__face {
+			border-bottom: 2px solid var(--dse-danger);
+			padding-bottom: 0.22em;
+		}
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__face {
+			border-top: 2px dotted var(--dse-metal-faint);
+			padding-top: 0.22em;
+		}
+		.mt2-board__footlab,
+		.mt2-board__foot,
+		.mt2-board__grand,
+		.mt2-board__addfoot {
+			border-bottom: none;
+			border-top: 2px solid var(--dse-metal-line);
+			padding-top: 0.5em;
+		}
+		.mt2-board__addrow {
+			border-bottom: none;
+		}
+		/* The two bands lose their milled ground here — this treatment's whole thesis is
+		   that hierarchy comes from type and space. */
+		.mt2-progress,
+		.mt2-verdict {
+			background: none;
+			border: none;
+			box-shadow: none;
+			padding-inline: 0;
+			border-top: 1px solid var(--dse-border);
+			border-radius: 0;
+		}
+		.mt2-verdict__alert {
+			margin-inline: 0;
+			padding-inline: 0.6rem;
+		}
+	}
+
+	/* ############################################################## */
+	/*  TREATMENT 2 — "FORGED PLATE"                                   */
+	/*  One raised steel plate with the grid CHISELLED into it: the    */
+	/*  lines are grooves (a dark score + a light catch below it), not */
+	/*  borders. Successes stand proud of the plate; failures are pits.*/
+	/* ############################################################## */
+	.mt2[data-treat='plate'] {
+		.mt2-board {
+			background: var(--dse-sheen), var(--dse-surface-raised);
+			border: 1px solid var(--dse-metal-line);
+			border-radius: var(--dse-radius);
+			box-shadow: var(--dse-bevel), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+			overflow: hidden;
+		}
+		/* THE ENGRAVED GRID. A groove = a dark score on the cell's right/bottom edge with
+		   a bright catch immediately inside it, so the line reads as cut INTO the metal
+		   rather than drawn on top of it. */
+		.mt2-board > * {
+			padding: 0.5em 0.55em;
+			box-shadow:
+				inset -1px 0 0 rgba(0, 0, 0, 0.45),
+				inset -2px 0 0 rgba(255, 255, 255, 0.045),
+				inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+				inset 0 -2px 0 rgba(255, 255, 255, 0.045);
+
+			body.theme-light & {
+				box-shadow:
+					inset -1px 0 0 rgba(0, 0, 0, 0.16),
+					inset -2px 0 0 rgba(255, 255, 255, 0.75),
+					inset 0 -1px 0 rgba(0, 0, 0, 0.16),
+					inset 0 -2px 0 rgba(255, 255, 255, 0.75);
+			}
+		}
+		/* Header + foot are milled bands sunk into the plate. */
+		.mt2-board__corner,
+		.mt2-board__rhead,
+		.mt2-board__thead,
+		.mt2-board__footlab,
+		.mt2-board__foot,
+		.mt2-board__grand {
+			background: rgba(0, 0, 0, 0.3);
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.06);
+			}
+		}
+		.mt2-rhead__w,
+		.mt2-board__corner,
+		.mt2-board__thead,
+		.mt2-board__footlab {
+			color: var(--dse-metal-bright);
+		}
+		/* The round in play is a CHANNEL cut down the plate — a real recess, top to
+		   bottom, so the working column is a place rather than a tint. */
+		.mt2-board__rhead[data-state='current'],
+		.mt2-board__cell[data-state='current'],
+		.mt2-board__foot[data-state='current'] {
+			/* A recess, not a black hole: the first cut sank this to ~0.34 alpha over the
+			   sunken surface and the record controls inside it went nearly invisible.
+			   The channel has to read as cut into the plate AND still be the brightest
+			   place to work. */
+			background: linear-gradient(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.16)), rgba(77, 184, 199, 0.07);
+			box-shadow:
+				inset 2px 0 4px rgba(0, 0, 0, 0.45),
+				inset -2px 0 4px rgba(0, 0, 0, 0.45),
+				inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.07);
+				box-shadow: inset 2px 0 4px rgba(0, 0, 0, 0.13), inset -2px 0 4px rgba(0, 0, 0, 0.13);
+			}
+		}
+		.mt2-board__rhead[data-state='current'] {
+			box-shadow:
+				inset 2px 0 4px rgba(0, 0, 0, 0.45),
+				inset -2px 0 4px rgba(0, 0, 0, 0.45),
+				inset 0 2px 0 var(--dse-accent);
+		}
+		/* SUCCESS — a tile standing proud: lit on its top edge, shadowed on its bottom,
+		   with a chamfer mark in the semantic colour on the face it points to. */
+		.mt2-board__cell[data-kind='success'] {
+			background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(0, 0, 0, 0.08)), rgba(255, 255, 255, 0.02);
+			box-shadow:
+				inset 0 2px 0 var(--dse-turn-done),
+				inset 0 3px 0 rgba(255, 255, 255, 0.12),
+				inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+				inset -1px 0 0 rgba(0, 0, 0, 0.45);
+
+			body.theme-light & {
+				background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(0, 0, 0, 0.035));
+				box-shadow:
+					inset 0 2px 0 var(--dse-turn-done),
+					inset 0 -2px 3px rgba(0, 0, 0, 0.1),
+					inset -1px 0 0 rgba(0, 0, 0, 0.16);
+			}
+		}
+		/* FAILURE — a pit: engraved hatch, deep inner shadow, keel mark on its bottom. */
+		.mt2-board__cell[data-kind='failure'] {
+			background:
+				repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.055) 0 1px, transparent 1px 6px),
+				rgba(0, 0, 0, 0.44);
+			box-shadow:
+				inset 0 -2px 0 var(--dse-danger),
+				inset 0 3px 7px rgba(0, 0, 0, 0.7),
+				inset -1px 0 0 rgba(0, 0, 0, 0.45);
+
+			body.theme-light & {
+				background:
+					repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 6px),
+					rgba(0, 0, 0, 0.08);
+				box-shadow: inset 0 -2px 0 var(--dse-danger), inset 0 2px 5px rgba(0, 0, 0, 0.2);
+			}
+		}
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__face {
+			border-top: 1px dashed var(--dse-metal-faint);
+			border-bottom: 1px dashed var(--dse-metal-faint);
+			padding-block: 0.15em;
+		}
+		.mt2-board__who {
+			color: var(--dse-heading);
+			text-shadow: var(--dse-emboss);
+			font-size: var(--dse-fs-secondary);
+		}
+		.mt2-crest {
+			background: var(--dse-metal-grad);
+			border-color: var(--dse-metal-bright);
+			box-shadow: var(--dse-chip-bevel);
+		}
+		.mt2-crest__mono {
+			color: var(--dse-accent-fg);
+		}
+	}
+
+	/* ############################################################## */
+	/*  TREATMENT 3 — "COIN TRAY"                                      */
+	/*  A milled tray of empty SOCKETS; recording an action drops a    */
+	/*  struck coin into one. Borrows the recoveries strip's own       */
+	/*  "outline is permanent, fill is progress" logic and applies it  */
+	/*  to the matrix — so an un-started montage looks like a tray     */
+	/*  waiting to be filled, which is exactly what it is.             */
+	/* ############################################################## */
+	.mt2[data-treat='tray'] {
+		.mt2-board {
+			gap: 0.3em;
+			padding: 0.45em;
+			background: var(--dse-surface-sunken);
+			border: 1px solid var(--dse-metal-line);
+			border-radius: var(--dse-radius);
+			box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5), var(--dse-bevel);
+
+			body.theme-light & {
+				box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.14), var(--dse-bevel);
+			}
+		}
+		.mt2-board > * {
+			padding: 0.3em 0.45em;
+		}
+		/* The rim: headers and labels sit ON the tray, not in a socket. */
+		.mt2-board__corner,
+		.mt2-board__thead,
+		.mt2-board__footlab {
+			color: var(--dse-metal-bright);
+		}
+		.mt2-board__rhead {
+			padding-block: 0.25em 0.4em;
+			border-bottom: 1px solid var(--dse-metal-faint);
+		}
+		.mt2-board__rhead[data-state='current'] {
+			border-bottom-color: var(--dse-accent);
+		}
+		/* EVERY body cell is a socket — a well cut into the tray. An empty one is
+		   visibly, materially empty, which is the affordance: something goes here. */
+		.mt2-board__cell {
+			padding: 0.32em;
+			background: rgba(0, 0, 0, 0.34);
+			border-radius: 3px;
+			box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.62), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.06);
+				box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+			}
+		}
+		.mt2-board__cell[data-state='current'][data-kind='none'] {
+			box-shadow:
+				inset 0 2px 5px rgba(0, 0, 0, 0.62),
+				inset 0 0 0 1px var(--dse-accent);
+		}
+		/* THE COIN. Struck metal, chamfered on the face its meaning points to: a success
+		   is a roof, a failure is a keel. Material, silhouette, glyph and word all say the
+		   same thing before any colour does. */
+		.mt2-board__cell[data-kind='success'] .mt2-cell__face,
+		.mt2-board__cell[data-kind='failure'] .mt2-cell__face,
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__face {
+			padding: 0.28em 0.2em;
+			border: 1px solid var(--dse-metal-line);
+			border-radius: 2px;
+		}
+		.mt2-board__cell[data-kind='success'] .mt2-cell__face {
+			background: var(--dse-sheen), rgba(255, 255, 255, 0.05);
+			border-color: var(--dse-turn-done);
+			box-shadow: var(--dse-chip-bevel);
+			clip-path: polygon(0 22%, 9% 0, 91% 0, 100% 22%, 100% 100%, 0 100%);
+
+			body.theme-light & {
+				background: var(--dse-sheen), rgba(255, 255, 255, 0.85);
+			}
+		}
+		.mt2-board__cell[data-kind='failure'] .mt2-cell__face {
+			background:
+				repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 6px),
+				rgba(0, 0, 0, 0.42);
+			border-color: var(--dse-danger);
+			box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
+			clip-path: polygon(0 0, 100% 0, 100% 78%, 91% 100%, 9% 100%, 0 78%);
+
+			body.theme-light & {
+				background:
+					repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 6px),
+					rgba(0, 0, 0, 0.07);
+				box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.2);
+			}
+		}
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__face {
+			background: none;
+			border-style: dashed;
+			border-color: var(--dse-metal-faint);
+		}
+		/* An empty PAST cell is an empty socket with nothing in it, and says so. */
+		.mt2-board__cell[data-kind='none'][data-state='past'] .mt2-cell__glyph {
+			color: var(--dse-fg-faint);
+			opacity: 0.55;
+		}
+		.mt2-board__name {
+			padding-left: 0.15em;
+		}
+		.mt2-board__who {
+			color: var(--dse-heading);
+			text-shadow: var(--dse-emboss);
+		}
+		/* The monogram is a small stamped tile — the same struck-metal idea at label size,
+		   so the roster column belongs to the tray. */
+		.mt2-crest {
+			background: var(--dse-sheen), rgba(0, 0, 0, 0.25);
+			border-color: var(--dse-metal-line);
+			box-shadow: var(--dse-chip-bevel);
+		}
+		.mt2-crest__mono {
+			color: var(--dse-metal-bright);
+		}
+		.mt2-board__foot,
+		.mt2-board__grand {
+			border-top: 1px solid var(--dse-metal-faint);
+			margin-top: 0.15em;
+			padding-top: 0.4em;
+		}
+		.mt2-board__footlab {
+			margin-top: 0.15em;
+			padding-top: 0.4em;
+			border-top: 1px solid var(--dse-metal-faint);
+		}
+		.mt2-board__addcol,
+		.mt2-board__addcell,
+		.mt2-board__addfoot {
+			border-left: 1px dashed var(--dse-metal-faint);
+		}
+	}
+
+	/* ############################################################## */
+	/*  TREATMENT 4 — "MUSTER LEDGER"                                  */
+	/*  A ship's-log page: ruled lines, small-caps column heads over a */
+	/*  double rule, a money column, and results written as INK rather */
+	/*  than built as objects. No boxes anywhere.                      */
+	/* ############################################################## */
+	.mt2[data-treat='ledger'] {
+		.mt2-board {
+			background: var(--dse-surface-sunken);
+			border-radius: var(--dse-radius);
+			padding: 0.2em 0.6em 0.4em;
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.018);
+			}
+		}
+		.mt2-board > * {
+			padding: 0.5em 0.5em;
+			border-bottom: 1px solid var(--dse-metal-faint);
+		}
+		/* The head rule is a real DOUBLE rule — the one piece of ledger grammar that does
+		   more work than any box: it says "everything below is entries". */
+		.mt2-board__corner,
+		.mt2-board__rhead,
+		.mt2-board__thead,
+		.mt2-board__addcol {
+			padding-bottom: 0.35em;
+			border-bottom: 3px double var(--dse-metal-line);
+		}
+		.mt2-board__corner,
+		.mt2-board__thead,
+		.mt2-board__footlab,
+		.mt2-rhead__w {
+			font-size: var(--dse-fs-label);
+			letter-spacing: 0.14em;
+			color: var(--dse-metal-bright);
+		}
+		.mt2-rhead__n {
+			font-family: var(--dse-font-title);
+			font-size: var(--dse-fs-subheading);
+		}
+		/* Hero names are written, not labelled: the title face at reading size. */
+		.mt2-board__who {
+			font-family: var(--dse-font-title);
+			font-size: var(--dse-fs-subheading);
+			color: var(--dse-heading);
+		}
+		.mt2-crest {
+			display: none;
+		}
+		/* The money column: one vertical hairline before the tally, the only vertical
+		   rule on the page. */
+		.mt2-board__thead,
+		.mt2-board__total,
+		.mt2-board__grand {
+			border-left: 1px solid var(--dse-metal-line);
+		}
+		.mt2-board__cell[data-state='current'] {
+			background: rgba(77, 184, 199, 0.05);
+		}
+		.mt2-cell__glyph svg {
+			width: 1.15em;
+			height: 1.15em;
+		}
+		.mt2-cell__skill {
+			font-variant: normal;
+			text-transform: none;
+			font-style: italic;
+			font-size: var(--dse-fs-caption);
+			letter-spacing: 0;
+		}
+		/* A ledger cancels an entry by STRIKING IT, which is a shape channel that needs no
+		   colour at all — so a failure reads as a failure in greyscale, in print, and to a
+		   colourblind reader. */
+		.mt2-board__cell[data-kind='failure'] .mt2-cell__skill {
+			text-decoration: line-through;
+			text-decoration-color: var(--dse-danger);
+		}
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__skill::before {
+			content: '(';
+		}
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__skill::after {
+			content: ')';
+		}
+		.mt2-board__footlab,
+		.mt2-board__foot,
+		.mt2-board__grand,
+		.mt2-board__addfoot {
+			border-bottom: none;
+			border-top: 3px double var(--dse-metal-line);
+			padding-top: 0.45em;
+		}
+		.mt2-board__addcol,
+		.mt2-board__addcell,
+		.mt2-board__addfoot {
+			border-left: none;
+		}
+		.mt2-board__addrow {
+			border-bottom: none;
+		}
+		/* Both bands drop their metal and become ruled sections of the same page. */
+		.mt2-progress,
+		.mt2-verdict {
+			background: none;
+			border: none;
+			border-top: 1px solid var(--dse-metal-line);
+			border-radius: 0;
+			box-shadow: none;
+			padding-inline: 0.1rem;
+		}
+		.mt2-track__slot {
+			transform: none;
+			border-radius: 0;
+		}
+		.mt2-verdict__word {
+			font-family: var(--dse-font-title);
+		}
+		.mt2-verdict__alert {
+			margin-inline: 0;
+		}
+	}
+
+	/* ############################################################## */
+	/*  TREATMENT 5 — "STAGE MAP"                                      */
+	/*  Rounds stop being columns of a table and become STAGES of a    */
+	/*  journey: a route runs across the header, each round is a       */
+	/*  waypoint on it, and the stage in play is a lit panel running   */
+	/*  the full height of the board.                                  */
+	/* ############################################################## */
+	.mt2[data-treat='stages'] {
+		.mt2-board {
+			border: 1px solid var(--dse-metal-faint);
+			border-radius: var(--dse-radius);
+			background: var(--dse-surface-sunken);
+			overflow: hidden;
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.02);
+			}
+		}
+		.mt2-board > * {
+			padding: 0.45em 0.5em;
+		}
+		/* THE ROUTE. One hairline painted across every round head at the waypoint's
+		   height, so consecutive heads join into a single continuous road. */
+		.mt2-board__rhead {
+			padding-top: 0.9em;
+			background-image: linear-gradient(to right, var(--dse-metal-line) 0 100%);
+			background-repeat: no-repeat;
+			background-size: 100% 1px;
+			background-position: 0 0.95em;
+		}
+		.mt2-rhead__pip {
+			display: inline-block;
+			width: 0.62em;
+			height: 0.62em;
+			margin-bottom: 0.18em;
+			border: 1px solid var(--dse-metal-line);
+			border-radius: 50%;
+			background: var(--dse-surface-sunken);
+		}
+		.mt2-board__rhead[data-state='past'] .mt2-rhead__pip {
+			background: var(--dse-metal-grad);
+			border-color: var(--dse-metal-bright);
+			box-shadow: var(--dse-chip-bevel);
+		}
+		/* The stage IN PLAY is a bigger, differently-SHAPED waypoint (a diamond), not just
+		   a differently-coloured one. */
+		.mt2-board__rhead[data-state='current'] .mt2-rhead__pip {
+			width: 0.85em;
+			height: 0.85em;
+			border-radius: 0;
+			border-color: var(--dse-accent);
+			background: var(--dse-accent);
+			transform: rotate(45deg);
+			margin-bottom: 0.3em;
+		}
+		.mt2-board__rhead[data-state='future'] .mt2-rhead__pip {
+			border-style: dashed;
+		}
+		/* The stage's column: past stages recessed, the live stage a raised lit panel,
+		   future stages barely there. */
+		.mt2-board__cell[data-state='past'],
+		.mt2-board__foot[data-state='past'],
+		.mt2-board__rhead[data-state='past'] {
+			background-color: rgba(0, 0, 0, 0.18);
+
+			body.theme-light & {
+				background-color: rgba(0, 0, 0, 0.035);
+			}
+		}
+		.mt2-board__cell[data-state='current'],
+		.mt2-board__foot[data-state='current'],
+		.mt2-board__rhead[data-state='current'] {
+			background-color: rgba(77, 184, 199, 0.1);
+			box-shadow: inset 1px 0 0 var(--dse-accent), inset -1px 0 0 var(--dse-accent);
+		}
+		.mt2-board__cell[data-state='future'] {
+			opacity: 0.55;
+		}
+		.mt2-board__cell {
+			border-bottom: 1px solid var(--dse-metal-faint);
+		}
+		.mt2-board__name {
+			border-bottom: 1px solid var(--dse-metal-faint);
+		}
+		.mt2-board__total {
+			border-bottom: 1px solid var(--dse-metal-faint);
+		}
+		.mt2-board__cell[data-kind='success'] .mt2-cell__face {
+			border-top: 2px solid var(--dse-turn-done);
+			padding-top: 0.18em;
+		}
+		.mt2-board__cell[data-kind='failure'] .mt2-cell__face {
+			border-bottom: 2px solid var(--dse-danger);
+			padding-bottom: 0.18em;
+		}
+		/* THE MILEPOST. Each stage's foot cell becomes a small plate carrying that leg's
+		   tally — where a map would put the distance marker. */
+		.mt2-board__foot {
+			flex-direction: column;
+			gap: 0.1em;
+			padding-block: 0.4em;
+		}
+		.mt2-board__footlab,
+		.mt2-board__foot,
+		.mt2-board__grand,
+		.mt2-board__addfoot {
+			border-top: 1px solid var(--dse-metal-line);
+		}
+		.mt2-board__who {
+			color: var(--dse-heading);
+		}
+		.mt2-crest {
+			border-radius: 50%;
+		}
+		/* The add-a-round lane reads as "the road continues" here, which is the one place
+		   the affordance is nearly self-explaining. */
+		.mt2-board__addcol {
+			background-image: linear-gradient(to right, var(--dse-metal-faint) 0 100%);
+			background-repeat: no-repeat;
+			background-size: 100% 1px;
+			background-position: 0 0.95em;
+		}
+	}
+
+	/* ############################################################## */
+	/*  TREATMENT 6 — "CREST ROSTER"                                   */
+	/*  The heraldic vocabulary, used hard: every hero row is led by a */
+	/*  real shield crest and is a banded plate; results are stamped   */
+	/*  seals rather than glyphs in a box.                             */
+	/* ############################################################## */
+	.mt2[data-treat='roster'] {
+		.mt2-board {
+			border: 1px solid var(--dse-metal-line);
+			border-radius: var(--dse-radius);
+			overflow: hidden;
+		}
+		.mt2-board > * {
+			padding: 0.45em 0.5em;
+		}
+		.mt2-board__corner,
+		.mt2-board__rhead,
+		.mt2-board__thead,
+		.mt2-board__addcol {
+			background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
+			border-bottom: 1px solid var(--dse-metal-line);
+			color: var(--dse-metal-bright);
+
+			body.theme-light & {
+				background: linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.05));
+			}
+		}
+		/* Banded rows. The band is the row's identity, so the eye tracks a hero across
+		   the whole width without a single vertical rule. */
+		.mt2-board__name,
+		.mt2-board__cell,
+		.mt2-board__total,
+		.mt2-board__addcell {
+			background: var(--dse-sheen-soft), rgba(255, 255, 255, 0.015);
+			border-bottom: 1px solid var(--dse-metal-faint);
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.012);
+			}
+		}
+		/* THE CREST. The real Steel shield silhouette + metal gradient, carrying the
+		   hero's monogram instead of a Lucide glyph. */
+		.mt2-crest {
+			width: 2em;
+			height: 2.3em;
+			border: none;
+			border-radius: 0;
+			background: var(--dse-metal-grad);
+			clip-path: var(--dse-crest-shape);
+			align-items: flex-start;
+			padding-top: 0.32em;
+		}
+		.mt2-crest__mono {
+			font-size: var(--dse-fs-micro);
+			font-weight: 700;
+			/* The ink that sits ON metal. --dse-accent-fg is the token whose whole job is
+			   "readable against the theme's own filled surface" (#0f1214 in Steel dark,
+			   #fff in Steel light), and --dse-metal-grad inverts between the two schemes —
+			   so this one token is correct in both. A literal would be wrong in one. */
+			color: var(--dse-accent-fg);
+			letter-spacing: 0.04em;
+		}
+		.mt2-board__name {
+			gap: 0.5em;
+			padding-block: 0.35em;
+		}
+		.mt2-board__who {
+			font-family: var(--dse-font-title);
+			font-size: var(--dse-fs-subheading);
+			color: var(--dse-heading);
+			text-shadow: var(--dse-emboss);
+		}
+		/* THE SEAL. A struck disc: raised and polished for a success, pressed and dark for
+		   a failure, an open ring for an assist. Round shape + glyph + word, three
+		   channels before the ring's colour. */
+		.mt2-cell__glyph {
+			width: 1.65em;
+			height: 1.65em;
+			align-items: center;
+			justify-content: center;
+			border: 1px solid var(--dse-metal-line);
+			border-radius: 50%;
+
+			svg {
+				width: 0.85em;
+				height: 0.85em;
+			}
+		}
+		.mt2-board__cell[data-kind='success'] .mt2-cell__glyph {
+			background: var(--dse-metal-grad);
+			border-color: var(--dse-turn-done);
+			border-width: 2px;
+			box-shadow: var(--dse-chip-bevel);
+			color: var(--dse-accent-fg);
+		}
+		.mt2-board__cell[data-kind='failure'] .mt2-cell__glyph {
+			background:
+				repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.5);
+			border-color: var(--dse-danger);
+			border-width: 2px;
+			box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
+
+			body.theme-light & {
+				background:
+					repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 5px),
+					rgba(0, 0, 0, 0.1);
+				box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.22);
+			}
+		}
+		.mt2-board__cell[data-kind='assist'] .mt2-cell__glyph {
+			border-style: dashed;
+		}
+		.mt2-board__cell[data-kind='none'] .mt2-cell__glyph {
+			border: none;
+		}
+		/* The row's tally is a small nameplate rather than loose numerals. */
+		.mt2-board__total {
+			gap: 0.4em;
+		}
+		.mt2-tally {
+			padding: 0.1em 0.35em;
+			border: 1px solid var(--dse-metal-faint);
+			border-radius: 2px;
+			background: var(--dse-chip-bg);
+		}
+		.mt2-board__footlab,
+		.mt2-board__foot,
+		.mt2-board__grand,
+		.mt2-board__addfoot {
+			background: linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.42));
+			border-top: 1px solid var(--dse-metal-line);
+
+			body.theme-light & {
+				background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.1));
+			}
+		}
+		.mt2-board__rhead[data-state='current'] {
+			box-shadow: inset 0 -2px 0 var(--dse-accent);
+		}
+		.mt2-board__cell[data-state='current'] {
+			background: rgba(77, 184, 199, 0.07);
+		}
+	}
+
+	/* ############################################################## */
+	/*  A FINISHED MONTAGE                                             */
+	/* ############################################################## */
+	/* Nothing is left to record, so the working affordances are gone rather than dead:
+	   the sockets, the quick controls and the add-lanes all stand down and the board is
+	   sealed with a metal ring. */
+	.mt2[data-complete='on'] {
+		/* The add-lane and the add-a-hero row are not RENDERED at all when complete (see
+		   mock2.js) — hiding grid items with `display:none` would desync them from the
+		   `--mt2-cols` track list and shear every row by a column. Only the row button,
+		   which is not a grid item, is hidden here. */
+		.mt2-board__rowact {
+			display: none;
+		}
+		.mt2-board {
+			box-shadow: var(--dse-bevel), inset 0 0 0 1px var(--dse-metal-line);
+		}
+		.mt2-board__cell {
+			cursor: default;
+		}
+	}
+
+	/* ############################################################## */
+	/*  NARROW — a 300px Obsidian sidebar leaf                         */
+	/* ############################################################## */
+	/* The mock pins #mount to a fixed width, so a VIEWPORT query is the honest stand-in.
+	   Production must use `@container` on the element root, exactly like `.dse-stamina`'s
+	   400px rail switch (styles-source.css ~9479), or a sidebar leaf inside a wide window
+	   never switches. */
+	@media (max-width: 420px) {
+		/* The crest costs ~2.8em of head width; at 300px the deck wraps one word per
+		   line without this. Same stand-down the recoveries eyebrow makes at 250px. */
+		.mt2__head .dse-crest {
+			display: none;
+		}
+		/* `.dse-head` still has no narrow form in this plugin (the SITE stacks its
+		   columns at <=30em; the port never did) — a follow-up beyond this ticket. The
+		   two count chips are pure redundancy here, since the progress band below states
+		   both, so they stand down and the round chip stays. */
+		.mt2__head .dse-head__primary--right,
+		.mt2__head .dse-head__deck--right {
+			display: none;
+		}
+
+		/* THE MATRIX RE-LAYS. Five round columns cannot survive 300px, so the board
+		   becomes one BAND PER HERO: a name header, that hero's rounds as full-width
+		   rows, then the row tally. Each cell has to name its own round, because the
+		   column header that used to do it is gone. */
+		.mt2-board {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0;
+			padding: 0;
+		}
+		.mt2-board__corner,
+		.mt2-board__rhead,
+		.mt2-board__thead,
+		.mt2-board__footlab,
+		.mt2-board__addcol,
+		.mt2-board__addcell,
+		.mt2-board__addfoot {
+			display: none;
+		}
+		.mt2-board__name {
+			border-top: 1px solid var(--dse-metal-line);
+			background: rgba(0, 0, 0, 0.3);
+			padding: 0.4em 0.5em;
+
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.07);
+			}
+		}
+		/* At this width the per-row record button is the PRIMARY control, so it stops
+		   being hover-revealed. */
+		.mt2-board__rowact {
+			opacity: 1;
+		}
+		.mt2-board__cell {
+			flex-direction: row;
+			justify-content: flex-start;
+			gap: 0.5em;
+			padding: 0.35em 0.5em 0.35em 0.6em;
+			text-align: left;
+
+			&::before {
+				content: 'rd ' attr(data-round);
+				flex: none;
+				font-family: var(--dse-font-mono);
+				font-size: var(--dse-fs-micro);
+				font-variant: small-caps;
+				text-transform: lowercase;
+				letter-spacing: 0.07em;
+				color: var(--dse-fg-faint);
+			}
+		}
+		.mt2-cell__face {
+			flex-direction: row;
+			justify-content: flex-start;
+			gap: 0.45em;
+			width: auto;
+		}
+		.mt2-cell__quick {
+			margin-left: auto;
+		}
+		/* The per-hero tally has to name itself here: the "Tally" column header it used
+		   to sit under no longer exists. */
+		.mt2-board__total {
+			justify-content: flex-start;
+			gap: 0.7em;
+			padding: 0.25em 0.5em 0.5em 0.6em;
+
+			&::before {
+				content: 'tally';
+				font-size: var(--dse-fs-micro);
+				font-variant: small-caps;
+				text-transform: lowercase;
+				letter-spacing: 0.09em;
+				color: var(--dse-fg-faint);
+			}
+		}
+		/* The per-round foot cells go: unlabelled they are four anonymous number pairs at
+		   the bottom of a stack of hero bands, and every fact they carry is already in the
+		   progress band below. The grand total stays, and says what it is. */
+		.mt2-board__foot {
+			display: none;
+		}
+		.mt2-board__grand {
+			justify-content: flex-start;
+			gap: 0.7em;
+			border-top: 1px solid var(--dse-metal-line);
+
+			&::before {
+				content: 'montage total';
+				font-size: var(--dse-fs-micro);
+				font-variant: small-caps;
+				text-transform: lowercase;
+				letter-spacing: 0.09em;
+				color: var(--dse-metal);
+			}
+		}
+		/* The bands and the verdict stack. */
+		.mt2-prog {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.15em;
+		}
+		.mt2-verdict {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.mt2-verdict__stats {
+			flex-wrap: wrap;
+			gap: 0.4rem 0.9rem;
+		}
+		/* The action bar keeps every control — nothing important may be hover-only or
+		   off-screen at the table. `End round` sheds its number to fit. */
+		.mt2-bar {
+			gap: 0.3em;
+		}
+		.mt2-bar__btn .dse-btn__text {
+			font-size: var(--dse-fs-caption);
+		}
+	}
+}
