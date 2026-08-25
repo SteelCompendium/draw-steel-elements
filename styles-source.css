@@ -12699,7 +12699,50 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 
 /* Panel buttons: OS-window-controls density. Flat, borderless, muted until hovered —
-   the panel frame is the affordance, not each glyph. */
+   the panel frame is the affordance, not each glyph.
+
+   SC-189 ROUND 3 — `box-shadow: none` is the fix for THREE of Scott's four reported
+   defects, and it is here rather than in a `chromeSeat` candidate because the bug is in
+   the base panel, so `current` and every candidate are wrong in the same way.
+
+   THE LEAK. A kit `.dse-btn` is a real `<button>`, so Obsidian's own app.css reaches it:
+     button:not(.clickable-icon) { background-color: …; box-shadow: var(--input-shadow); }
+     button:hover                { background-color: …; box-shadow: var(--input-shadow-hover); }
+   `--input-shadow` is a FIVE-layer plate shadow (Obsidian 1.8.10, dark):
+     inset 0 .5px .5px .5px rgba(255,255,255,.09),   <- a bright ring on the inner perimeter
+     0 2px 4px rgba(0,0,0,.15), 0 1px 1.5px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.2)
+   The rule above already re-grounds `background`, `border`, `border-radius` and `color`,
+   but nothing in this sheet ever declared `box-shadow` for a chrome button, so all five
+   layers survived — invisible to the camera, because the harness ships none of Obsidian's
+   `button` defaults, and only ever visible in a real vault. What it painted (measured at
+   deviceScaleFactor 2 on an Artillery statblock, dark):
+     1. the inset ring stacked UNDER the panel's own E3 crown, so the top hairline read
+        `rgb(94,98,101)` instead of E3's `rgb(82,86,89)` — a second, brighter layer laid
+        over the panel's lip — and outlined every button on its other three sides, drawing
+        a bright divider between the two glyphs and a bright line just inside the panel's
+        own border;
+     2. the three DOWNWARD drop shadows darkened the panel's own fill along its inner
+        edges (`rgb(30,35,37)` against the true `--dse-surface-raised` `rgb(34,39,43)`) —
+        "a shadow below the menu panel";
+     3. and, because the buttons stretch to the panel's content box and the panel has no
+        bottom padding or bottom border, those same drop shadows spilled ~2.5px BELOW the
+        panel onto the card's top border row, taking it from `rgb(48,52,56)` down to
+        `rgb(28,31,32)` — darker than the page behind the card. That is why the card's
+        hairline appeared to be cut off exactly across the panel's span (and why the panel
+        looked seated one pixel too low: nothing moved, the border under it went out).
+   Light is the same leak with the polarity flipped — there `--input-shadow` leads with
+   `inset 0 0 0 1px rgba(0,0,0,.12)`, which greyed the whole panel interior from
+   `rgb(237,240,240)` to `rgb(201,203,203)`.
+
+   `none` — not a retuned value — because the panel's material is E3 and E3 is declared
+   once, on the panel itself (`.dse-chrome`'s crown + upward cast shadow). A panel button
+   is a glyph on that plate, not a plate of its own, so it must carry no shadow at all.
+   This also neutralises the plugin's own `--dse-chip-bevel` (the Steel control-sheen rule,
+   ~:8585, whose selector is (0,8,0) and therefore beats this one) should a chrome button
+   ever stop being a `--btn--ghost`, and Obsidian's `button:focus-visible` box-shadow ring,
+   which the kit deliberately replaces with its own `outline` ring (~:11927).
+   Gated by `assertChromeHostLeak` in visual-harness/shoot.mjs, which injects Obsidian's
+   two real declarations and re-measures the border row on and off the panel's span. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome .dse-btn {
 	min-width: 1.7em;
 	min-height: 1.5em;
@@ -12707,6 +12750,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	background: transparent;
 	border: 0;
 	border-radius: 0;
+	box-shadow: none;
 	color: var(--dse-fg-muted);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome .dse-btn:hover:not([disabled]) {
@@ -12817,10 +12861,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 /* The collapsed bar's own expand button is IN FLOW and always visible (the hover panel
    is not reachable on a touch device, and a collapsed element must never be a dead end). */
+/* SC-189 round 3 — `box-shadow: none` for the same reason the floating panel's buttons
+   carry it (see the long note there): this is the other chrome button, it is the same kit
+   `.dse-btn` on the same transparent ground, and Obsidian's `button` `--input-shadow`
+   reaches it identically. The collapsed bar declares its own `--dse-bevel`; the control
+   inside it is a glyph, not a second plate. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary .dse-btn {
 	flex: none;
 	background: transparent;
 	border: 0;
+	box-shadow: none;
 	color: var(--dse-fg-muted);
 }
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary .dse-btn:hover:not([disabled]) {

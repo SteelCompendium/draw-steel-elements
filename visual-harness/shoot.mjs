@@ -222,6 +222,179 @@ async function assertChromePlacement(page) {
 	);
 }
 
+// SC-189 ROUND 3 — the HOST-LEAK gate. Scott's four defects of 2026-08-25 all traced to one
+// cause: a kit `.dse-btn` is a real `<button>`, so Obsidian's own app.css reaches it, and
+// nothing in styles-source.css ever declared `box-shadow` for a chrome button. The panel
+// therefore wore Obsidian's five-layer `--input-shadow` — a bright inset ring stacked under
+// the panel's own E3 crown, and three DOWNWARD drop shadows that spilled past the panel's
+// (border-less, padding-less) bottom edge onto the card's top border row.
+//
+// The camera could never see it: `visual-harness/index.html` ships none of Obsidian's
+// `button` defaults, so every shot in this sweep renders a host that does not exist. That is
+// the structural gap this assertion closes — it INJECTS the two real declarations (copied
+// verbatim from /opt/Obsidian/resources/obsidian.asar → app.css, Obsidian 1.8.10) and then
+// measures, so the rule that neutralises them is pinned rather than assumed.
+//
+// It runs on its own navigations and captures nothing, so no shot's bytes depend on it.
+const OBSIDIAN_HOST_BUTTON_CSS = `
+.theme-dark {
+  --input-shadow: inset 0 0.5px 0.5px 0.5px rgba(255, 255, 255, 0.09),
+    0 2px 4px 0 rgba(0,0,0,.15), 0 1px 1.5px 0 rgba(0,0,0,.1),
+    0 1px 2px 0 rgba(0,0,0,.2), 0 0 0 0 transparent;
+  --input-shadow-hover: inset 0 0.5px 1px 0.5px rgba(255, 255, 255, 0.16),
+    0 2px 3px 0 rgba(0,0,0,.3), 0 1px 1.5px 0 rgba(0,0,0,.2),
+    0 1px 2px 0 rgba(0,0,0,.4), 0 0 0 0 transparent;
+}
+.theme-light {
+  --input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 2px 3px 0 rgba(0,0,0,.05), 0 1px 1.5px 0 rgba(0,0,0,.03),
+    0 1px 2px 0 rgba(0,0,0,.04), 0 0 0 0 transparent;
+  --input-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17),
+    0 2px 3px 0 rgba(0,0,0,.1), 0 1px 1.5px 0 rgba(0,0,0,.03),
+    0 1px 2px 0 rgba(0,0,0,.04), 0 0 0 0 transparent;
+}
+button:not(.clickable-icon) { background-color: var(--interactive-normal); box-shadow: var(--input-shadow); }
+button:hover { background-color: var(--interactive-hover); box-shadow: var(--input-shadow-hover); }
+`;
+
+// The families the panel has to look right on, one per CARD SHAPE and — for the statblock —
+// per ROLE HUE, because Scott reported this on an Artillery band (purple) and every earlier
+// round only ever looked at the leader-grey one. `role` is applied exactly the way
+// src/elements/roleTint.ts applies it (attribute + the --dse-role alias).
+const CHROME_HOSTLEAK_CASES = [
+	{ element: 'statblock', frame: '.dse-sb', role: 'artillery' },
+	{ element: 'statblock', frame: '.dse-sb', role: 'harrier' },
+	{ element: 'statblock', frame: '.dse-sb', role: null },
+	{ element: 'featureblock', frame: '[data-dse-element="featureblock"]', role: null },
+	{ element: 'feature', frame: '[data-dse-element="feature"]', role: null },
+	{ element: 'hero', frame: '.dse-hero', role: null },
+	{ element: 'stamina-bar', frame: '.dse-stamina__cluster', role: null },
+	{ element: 'kit', frame: '.dse-card', role: null },
+];
+/** Max per-channel darkening of the card's top border row allowed under the panel.
+ *  Measured floor is 3/255: the tail of the panel's OWN sanctioned E3 upward cast shadow
+ *  (`0 -3px 7px`), which Chromium blurs a fraction of a pixel past the panel's bottom edge.
+ *  The defect this catches was 20/255 (dark) — it drove the border row BELOW the page
+ *  background behind the card, which is what "the border cuts off at the corner" looked
+ *  like. 8 sits clear of both. */
+const BORDER_OCCLUSION_MAX = 8;
+
+/** Decode a PNG buffer and read pixels, using the page's own canvas (no new dependency). */
+async function readPixels(page, buf, points) {
+	return page.evaluate(
+		async ({ url, pts }) => {
+			const img = new Image();
+			img.src = url;
+			await img.decode();
+			const c = document.createElement('canvas');
+			c.width = img.width;
+			c.height = img.height;
+			const g = c.getContext('2d');
+			g.drawImage(img, 0, 0);
+			return pts.map(([x, y]) => [...g.getImageData(x, y, 1, 1).data].slice(0, 3));
+		},
+		{ url: 'data:image/png;base64,' + buf.toString('base64'), pts: points },
+	);
+}
+
+async function assertChromeHostLeak(page) {
+	const problems = [];
+	let checked = 0;
+	for (const bg of ['dark', 'light']) {
+		for (const c of CHROME_HOSTLEAK_CASES) {
+			const query = new URLSearchParams({
+				stack: `${c.element}:default`,
+				theme: 'steel',
+				bg,
+				pad: '56',
+				prefs: 'authoringControls:true',
+			});
+			const id = `${c.element}${c.role ? `[${c.role}]` : ''}/${bg}`;
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${query}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
+			if (c.role) {
+				await page.evaluate(
+					({ sel, role }) => {
+						const card = document.querySelector(sel);
+						card.setAttribute('data-dse-role', role);
+						card.style.setProperty('--dse-role', `var(--dse-role-${role})`);
+					},
+					{ sel: c.frame, role: c.role },
+				);
+			}
+			// Hover WITHOUT locator.hover(): that scrolls a tall card into view and takes the
+			// above-the-edge panel off the top of the frame, which is the thing being sampled.
+			const probe = await page.evaluate((sel) => {
+				const f = document.querySelector(sel);
+				const panel = document.querySelector('.dse-chrome');
+				if (!f || !panel) return null;
+				const r = f.getBoundingClientRect();
+				return { x: r.left + 20, y: r.top + 20 };
+			}, c.frame);
+			if (!probe) {
+				problems.push(`${id}: missing ${c.frame} or .dse-chrome`);
+				continue;
+			}
+			await page.mouse.move(probe.x, probe.y);
+			const m = await page.evaluate((sel) => {
+				const f = document.querySelector(sel).getBoundingClientRect();
+				const p = document.querySelector('.dse-chrome').getBoundingClientRect();
+				const shadows = [...document.querySelectorAll('.dse-chrome .dse-btn, .dse-chrome-summary .dse-btn')].map(
+					(b) => getComputedStyle(b).boxShadow,
+				);
+				return {
+					shadows,
+					frameTop: f.top,
+					frameLeft: f.left,
+					panelMidX: (p.left + p.right) / 2,
+					panelBottom: p.bottom,
+					gap: f.top - p.bottom,
+				};
+			}, c.frame);
+			checked += 1;
+			// (a) The rule that does the work. `none`, on every chrome button, in both schemes.
+			const leaked = m.shadows.filter((s) => s !== 'none');
+			if (m.shadows.length === 0) problems.push(`${id}: no chrome buttons found to check`);
+			if (leaked.length) problems.push(`${id}: chrome button box-shadow is "${leaked[0]}", expected "none"`);
+			// (b) The consequence, in pixels: the card's top border row must read the same
+			//     UNDER the panel as it does 40px to the panel's left, i.e. the hairline is
+			//     continuous across the panel's whole horizontal span.
+			if (m.gap < -PLACEMENT_EPSILON) continue; // already reported by assertChromePlacement
+			const y = Math.floor((m.frameTop + 0.25) * 2); // dsf 2, first device row of the border
+			const under = Math.round(m.panelMidX * 2);
+			const off = Math.round((m.frameLeft + 40) * 2);
+			const buf = await page.screenshot();
+			const [pu, po] = await readPixels(page, buf, [
+				[under, y],
+				[off, y],
+			]);
+			const worst = Math.max(...[0, 1, 2].map((i) => po[i] - pu[i]));
+			if (worst > BORDER_OCCLUSION_MAX) {
+				problems.push(
+					`${id}: the card's top border is occluded under the panel — ` +
+						`rgb(${pu}) under vs rgb(${po}) off, darkened by ${worst}/255 ` +
+						`(max ${BORDER_OCCLUSION_MAX})`,
+				);
+			}
+		}
+	}
+	if (problems.length) {
+		console.error(
+			`\nCHROME HOST-LEAK VIOLATED — with Obsidian's real \`button\` defaults present the ` +
+				`menu panel does not hold its own material:\n` +
+				problems.map((p) => `  ${p}`).join('\n') +
+				`\nSee styles-source.css → "Element chrome" → the panel-buttons block (SC-189 round 3).`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nchrome host-leak OK (${checked} family/scheme combos: chrome buttons carry no host ` +
+			`box-shadow, card top border continuous under the panel)`,
+	);
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 900, height: 1200 },
@@ -393,6 +566,9 @@ try {
 		// `chrome-border-winded`. Skipped on a narrowed run for the same reason the gallery
 		// is: it needs its own navigations and proves a cross-element invariant.
 		await assertChromePlacement(page);
+		// SC-189 round 3 — the host-leak gate (see the block above). Same "own navigations,
+		// captures nothing" shape, so it is skipped on a narrowed run for the same reason.
+		await assertChromeHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself

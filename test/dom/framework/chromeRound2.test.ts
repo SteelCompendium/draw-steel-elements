@@ -181,6 +181,77 @@ describe('SC-189 R2 — chrome-panel seating candidates', () => {
 	});
 });
 
+// --------------------------------------------- SC-189 R3: the host's button chrome
+// Scott's four defects of 2026-08-25 ("some layer bleeding over the top side", "a shadow
+// below the menu panel", "the border around the card cuts off on the corner", "the panel is
+// one pixel too low") were ONE cause with four faces, and it was not geometry: the panel's
+// box is exactly where SC-169 put it (`gap` = 0.00px, re-measured this round on every
+// family). A kit `.dse-btn` is a real `<button>`, so Obsidian's app.css
+// `button:not(.clickable-icon) { box-shadow: var(--input-shadow) }` reaches it, and this
+// sheet re-grounded the button's background, border, radius and colour but never its
+// box-shadow — so each glyph wore Obsidian's five-layer plate shadow, whose downward half
+// spilled past the panel's border-less, padding-less bottom edge onto the card's top
+// border row.
+//
+// jsdom applies no author cascade to a real <button> here and computes no colour, so the
+// same discipline §1/§2 state above applies: what is pinned HERE is the declaration, and
+// the measurement is `assertChromeHostLeak` in visual-harness/shoot.mjs, which injects
+// Obsidian's real rules into Chromium and re-reads the border row on and off the panel.
+describe('SC-189 R3 — the chrome panel neutralises the HOST\'s button chrome', () => {
+	/** A declaration block, by the exact selector line that opens it. */
+	const blockFor = (selector: string): string => {
+		const start = CSS.indexOf(`${selector} {`);
+		expect(start).toBeGreaterThan(-1);
+		return CSS.slice(start, CSS.indexOf('}', start));
+	};
+	const PANEL_BTN = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome .dse-btn";
+	const SUMMARY_BTN = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome-summary .dse-btn";
+
+	test.each([
+		['the floating panel', PANEL_BTN],
+		['the collapsed bar', SUMMARY_BTN],
+	])('%s re-grounds box-shadow to `none`', (_label, selector) => {
+		const block = blockFor(selector);
+		// `none`, not a retuned value: E3 is declared once, on the panel itself. A button in
+		// the panel is a glyph on that plate, never a plate of its own.
+		expect(block).toMatch(/\n\tbox-shadow: none;/);
+		// The three the rule already had — kept together, because dropping any one of them
+		// re-opens the same class of leak from a different Obsidian declaration.
+		expect(block).toContain('background: transparent;');
+		expect(block).toContain('border: 0;');
+	});
+
+	test('both resets are Steel-scoped and print-excluded', () => {
+		// The panel is `display:none` in the unscoped base and print never reveals it, so a
+		// reset that reached print would be dead weight at best and a frozen-byte move at
+		// worst. Both halves of the scope, per the sheet's theming contract.
+		for (const selector of [PANEL_BTN, SUMMARY_BTN]) {
+			expect(selector).toContain("[data-dse-theme='steel']");
+			expect(selector).toContain(':not([data-dse-print="on"])');
+			expect(CSS).toContain(`${selector} {`);
+		}
+	});
+
+	test('neither reset hardcodes a font-size (SC-185)', () => {
+		for (const selector of [PANEL_BTN, SUMMARY_BTN]) expect(blockFor(selector)).not.toContain('font-size');
+	});
+
+	test('the fix is in the BASE panel, not inside a `chromeSeat` candidate arm', () => {
+		// The defect is in the panel every card wears, so `current` and all four candidates
+		// have to be fixed by the same declaration. A candidate-scoped reset would fix only
+		// whichever seat happened to be selected.
+		for (const selector of [PANEL_BTN, SUMMARY_BTN]) expect(selector).not.toContain('chrome-seat');
+	});
+
+	test('the panel keeps its OWN E3 material (the reset is on the buttons only)', () => {
+		// Scott sanctioned E3 on SC-169 ("Option D and E3. Sanctioned"); this round removes a
+		// leak, it does not retune the crown or the upward cast shadow.
+		const block = panelBlock();
+		expect(block).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.22)');
+		expect(block).toContain('0 -3px 7px rgb(0 0 0 / 34%)');
+	});
+});
+
 // ------------------------------------------------------------------ 2. layering
 describe('SC-169 R2 §2 — the panel never covers the card border', () => {
 	test('the panel stops ABOVE the frame border-box top, with no negative pull', () => {
