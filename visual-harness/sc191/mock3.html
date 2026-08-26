@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SC-191 round 3 — one base, three axes</title>
+<!-- The REAL plugin environment: Obsidian's vendored theme vars + the compiled
+     styles-source.css (dist/harness.css, produced by `npm run harness:build`).
+     round3.css is the only new sheet — it is NOT part of the shipped plugin, so
+     nothing here can move a frozen shot. -->
+<link rel="stylesheet" href="../vars.css">
+<link rel="stylesheet" href="../dist/harness.css">
+<link rel="stylesheet" href="round2.css">
+<link rel="stylesheet" href="round3.css">
+<style>
+	/* deterministic shots — same convention as visual-harness/index.html */
+	*, *::before, *::after { transition: none !important; animation: none !important; }
+	body { margin: 0; padding: 24px; }
+	#mount { margin: 0 auto; }
+</style>
+</head>
+<body class="theme-dark">
+<div id="mount"></div>
+<script src="mock3.js"></script>
+</body>
+</html>
