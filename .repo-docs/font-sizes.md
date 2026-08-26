@@ -141,3 +141,11 @@ exactly `ALLOWLIST.length` in the guard. Of those, 8 belong to the other, delibe
 systems (`--dse-text-scale`, `--dse-value-scale`/`--dse-label-scale`) and stay as they are;
 the remaining 54 are real rendering changes awaiting Scott's sanction, grouped by visual
 effect in `.superpowers/sdd/sc185/sc185-round2-report.md`.
+
+SC-185 round 3 (2026-08-26) adopted six of the eight categories Scott approved from that
+54-strong list — roll surfaces (A), the statblock's display values (B), DSE notice/badge
+chrome (D), the initiative cell readout (F), the stamina readout's derivation (G), and the
+30-values-to-9-roles snap/derive tail (H); the stamina-editor modal chrome (C) and the
+statblock sticky header + char box (E) were not taken and stay hardcoded. **98 declarations
+now sit on the role scale** (up from 55 after round 2), and the shrink-only allowlist stands
+at **26 entries** — down from 62, `ALLOWLIST.length` in the guard.
