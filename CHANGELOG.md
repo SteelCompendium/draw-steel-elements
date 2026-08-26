@@ -15,6 +15,16 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **The note no longer jumps to the top when you click a tracker control**
+  (SC-198). Ticking an action, spending malice or nudging stamina writes the note, and
+  Obsidian rebuilds the whole reading view whenever a note changes — which briefly
+  collapsed the page's height and made the browser clamp your scroll position back to
+  the top. On a session note that is mostly one long initiative tracker that happened on
+  every single click. The plugin now holds the page at its current height across that
+  rebuild, so the scroll position is never lost. Measured on a 4800px note: scroll
+  position 2596px → 0 before, 2596px → 2596px (never moved) after. The brief flash while
+  Obsidian re-renders is unchanged — that is Obsidian's own rebuild, not something the
+  plugin drives. A tracker in the sidebar was already immune and still is.
 - [FIX] **Buttons and other controls are no longer oversized** (SC-185). A bare button
   ("Reset Encounter State" and its neighbours) rendered about 23% larger than a native
   Obsidian button beside it. Control text now defaults to 0.85em instead of 1em — 13.6px

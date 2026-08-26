@@ -35,6 +35,7 @@
 import { MarkdownRenderChild, TFile } from 'obsidian';
 import type { Component, MarkdownPostProcessorContext, Plugin } from 'obsidian';
 import type { BlockHost, BlockInfo, RenderMode } from './BlockHost';
+import type { PreviewScrollPin } from './previewScrollPin';
 
 /** Matches a fence-open line, capturing the fence run and the language token. */
 const OPEN_FENCE = /^([`~]{3,})(\S*)/;
@@ -67,6 +68,9 @@ export class ReadingModeBlockHost implements BlockHost {
 		private readonly ctx: MarkdownPostProcessorContext,
 		/** Fallback label only — never used to reconstruct a fence (see file header). */
 		private readonly alias: string,
+		/** SC-198. Plugin-scoped, shared by every host; omitted (null) in unit tests and in
+		 *  any caller that has no preview to protect. See previewScrollPin.ts. */
+		private readonly scrollPin: PreviewScrollPin | null = null,
 	) {
 		this.containerEl = el;
 		this.renderChild = new MarkdownRenderChild(el);
@@ -112,6 +116,12 @@ export class ReadingModeBlockHost implements BlockHost {
 		const section = this.ctx.getSectionInfo(this.containerEl);
 		if (!section) return false;
 		const { lineStart, lineEnd } = section;
+
+		// SC-198: hold the preview's height across the rebuild this write is about to
+		// provoke, so the browser never clamps scrollTop away. Synchronous and immediately
+		// before the write by design — the pin has to already be in place when Obsidian's
+		// file watcher fires. Never throws and never blocks the write.
+		this.scrollPin?.pin(this.containerEl);
 
 		let wrote = false;
 		await this.plugin.app.vault.process(abstractFile, (content) => {

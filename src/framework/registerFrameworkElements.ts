@@ -21,6 +21,7 @@ import type { Plugin, MarkdownPostProcessorContext } from 'obsidian';
 import type { ElementRegistry } from './registry';
 import type { ElementPipeline } from './pipeline';
 import { ReadingModeBlockHost } from './host/ReadingModeBlockHost';
+import { PreviewScrollPin } from './host/previewScrollPin';
 
 /**
  * The subset of `ElementFrameworkV2` (main.ts) this wiring loop needs. A narrow structural
@@ -41,12 +42,17 @@ export interface FrameworkElementsBundle {
  * time it is called, matching `main.ts onload`'s single call site.
  */
 export function registerFrameworkElements(plugin: Plugin, framework: FrameworkElementsBundle): void {
+	// SC-198: one pin per plugin, shared by every host so blocks sharing a scroller share
+	// its pin rather than fighting over it, and so unload can drop any pin still held.
+	const scrollPin = new PreviewScrollPin();
+	plugin.register(() => scrollPin.releaseAll());
+
 	for (const def of framework.registry.all()) {
 		for (const alias of def.aliases) {
 			plugin.registerMarkdownCodeBlockProcessor(
 				alias,
 				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) =>
-					framework.pipeline.run(def, source, new ReadingModeBlockHost(plugin, el, ctx, alias)),
+					framework.pipeline.run(def, source, new ReadingModeBlockHost(plugin, el, ctx, alias, scrollPin)),
 			);
 		}
 	}

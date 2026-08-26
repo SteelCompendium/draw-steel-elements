@@ -1,3 +1,22 @@
+/* ================================================================== */
+/*  SC-198: reading-mode scroll pin (src/framework/host/previewScrollPin.ts) */
+/* ================================================================== */
+/*
+   INERT unless the plugin has an active pin: nothing in the plugin's DOM matches
+   `[data-dse-scroll-pin]` except for the ~2.5s a write's pin is held, and the attribute
+   is removed again by PreviewScrollPin.release() / releaseAll() (incl. on unload).
+
+   `!important` is load-bearing, not laziness. Obsidian OWNS `.markdown-preview-sizer`'s
+   inline `min-height` and rewrites it as it tears the preview down after any file write
+   (measured 4331px -> 246px); an inline pin of our own is simply clobbered, so the only
+   way to hold the height across the rebuild is to outrank the inline declaration. The
+   attribute + custom property live on the SCROLLER rather than the sizer so the pin
+   survives Obsidian replacing the sizer node. Full rationale in previewScrollPin.ts.
+*/
+.markdown-preview-view[data-dse-scroll-pin] .markdown-preview-sizer {
+	min-height: var(--dse-scroll-pin) !important;
+}
+
 /* ==================== */
 /*     General Styles    */
 /* ==================== */
