@@ -1425,10 +1425,16 @@ export const CHROME_SHOTS: {
 	// own seating rules, which are the thing under review. `authoringControls` ON so the
 	// panel carries two items, as it does in the report crops.
 	//
-	// `chrome-seat-current` is the before-picture; the other four are the candidates.
+	// `chrome-seat-current` is the before-picture; the other five are the candidates.
 	// Disposable ids, deleted with the losing branches when Scott picks — and new names, so
 	// invisible to the freeze baseline by construction.
-	...(['current', 'hush', 'crown', 'ledge', 'drop'] as const).map((seat) => ({
+	//
+	// SC-189 round 4 adds `tuck` (the card casts a small shadow onto the panel). Note that
+	// its frame is the one where the headerless `feature` card is NOT a control: `tuck` is a
+	// depth statement about the panel/card junction, which every chrome-bearing card has, so
+	// it deliberately reaches all three stacked elements. That is the thing to look at in
+	// this frame.
+	...(['current', 'hush', 'crown', 'ledge', 'drop', 'tuck'] as const).map((seat) => ({
 		id: `chrome-seat-${seat}`,
 		stack: [
 			{ element: 'statblock', fixture: 'default' },

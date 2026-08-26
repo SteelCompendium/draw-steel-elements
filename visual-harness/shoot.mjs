@@ -231,9 +231,16 @@ async function assertChromePlacement(page) {
 //
 // The camera could never see it: `visual-harness/index.html` ships none of Obsidian's
 // `button` defaults, so every shot in this sweep renders a host that does not exist. That is
-// the structural gap this assertion closes — it INJECTS the two real declarations (copied
-// verbatim from /opt/Obsidian/resources/obsidian.asar → app.css, Obsidian 1.8.10) and then
-// measures, so the rule that neutralises them is pinned rather than assumed.
+// the structural gap this assertion closes — it INJECTS the real rules (copied verbatim from
+// /opt/Obsidian/resources/obsidian.asar → app.css, Obsidian 1.8.10) and then measures, so the
+// rules that neutralise them are pinned rather than assumed.
+//
+// SC-189 ROUND 4 — the block below now carries Obsidian's WHOLE base `button` rule, not just
+// the two shadow-bearing ones round 3 needed. Round 3 shipped with a second, unfixed instance
+// of the same omission (`height: var(--input-height)` = 30px, which a `min-height` cannot
+// beat, inflating the panel 21.39px → 31.00px in a real vault) and the narrow injection is
+// exactly why the gate could not see it. Modelling the full rule means the box-invariance
+// check below tests every declaration the host actually makes, not a hand-picked subset.
 //
 // It runs on its own navigations and captures nothing, so no shot's bytes depend on it.
 const OBSIDIAN_HOST_BUTTON_CSS = `
@@ -244,6 +251,7 @@ const OBSIDIAN_HOST_BUTTON_CSS = `
   --input-shadow-hover: inset 0 0.5px 1px 0.5px rgba(255, 255, 255, 0.16),
     0 2px 3px 0 rgba(0,0,0,.3), 0 1px 1.5px 0 rgba(0,0,0,.2),
     0 1px 2px 0 rgba(0,0,0,.4), 0 0 0 0 transparent;
+  --interactive-normal: #2a2a2a; --interactive-hover: #303030; --text-normal: #dadada;
 }
 .theme-light {
   --input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12),
@@ -252,6 +260,30 @@ const OBSIDIAN_HOST_BUTTON_CSS = `
   --input-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17),
     0 2px 3px 0 rgba(0,0,0,.1), 0 1px 1.5px 0 rgba(0,0,0,.03),
     0 1px 2px 0 rgba(0,0,0,.04), 0 0 0 0 transparent;
+  --interactive-normal: #f2f3f5; --interactive-hover: #e9e9e9; --text-normal: #222222;
+}
+/* The tokens Obsidian's base button rule reads, at their desktop values. */
+body {
+  --font-ui-small: 13px; --button-radius: 5px; --input-height: 30px;
+  --input-font-weight: 400; --size-4-1: 4px; --size-4-3: 12px; --cursor: default;
+}
+button {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  border-radius: var(--button-radius);
+  border: 0;
+  padding: var(--size-4-1) var(--size-4-3);
+  height: var(--input-height);
+  font-weight: var(--input-font-weight);
+  cursor: var(--cursor);
+  font-family: inherit;
+  outline: none;
+  user-select: none;
+  white-space: nowrap;
 }
 button:not(.clickable-icon) { background-color: var(--interactive-normal); box-shadow: var(--input-shadow); }
 button:hover { background-color: var(--interactive-hover); box-shadow: var(--input-shadow-hover); }
@@ -278,6 +310,36 @@ const CHROME_HOSTLEAK_CASES = [
  *  background behind the card, which is what "the border cuts off at the corner" looked
  *  like. 8 sits clear of both. */
 const BORDER_OCCLUSION_MAX = 8;
+/** SC-189 R4 — how far the panel's box may drift when Obsidian's `button` rule is present.
+ *  The plugin declares the panel's size in `em`, so with the host absent and present the two
+ *  measurements come from the same declarations and are bit-identical; a sub-pixel budget is
+ *  kept only so a future `calc()` rounding difference is not a false red. The defect this
+ *  catches was 9.61px. */
+const BOX_EPSILON = 0.05;
+
+/** Read the chrome panel's box + its buttons' shadows. Runs inside the page, so it must be a
+ *  standalone serialisable function (no closure over module scope). */
+function probeChrome(sel) {
+	const f = document.querySelector(sel).getBoundingClientRect();
+	const panel = document.querySelector('.dse-chrome');
+	const p = panel.getBoundingClientRect();
+	const btns = [...panel.querySelectorAll('.dse-btn')];
+	const b = btns.length ? btns[0].getBoundingClientRect() : null;
+	return {
+		shadows: [...document.querySelectorAll('.dse-chrome .dse-btn, .dse-chrome-summary .dse-btn')].map(
+			(n) => getComputedStyle(n).boxShadow,
+		),
+		panelH: p.height,
+		panelW: p.width,
+		btnH: b ? b.height : null,
+		btnW: b ? b.width : null,
+		frameTop: f.top,
+		frameLeft: f.left,
+		panelMidX: (p.left + p.right) / 2,
+		panelBottom: p.bottom,
+		gap: f.top - p.bottom,
+	};
+}
 
 /** Decode a PNG buffer and read pixels, using the page's own canvas (no new dependency). */
 async function readPixels(page, buf, points) {
@@ -313,7 +375,6 @@ async function assertChromeHostLeak(page) {
 			await page.emulateMedia({ media: 'screen' });
 			await page.goto(`${pageUrl}?${query}`);
 			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
-			await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
 			if (c.role) {
 				await page.evaluate(
 					({ sel, role }) => {
@@ -338,26 +399,37 @@ async function assertChromeHostLeak(page) {
 				continue;
 			}
 			await page.mouse.move(probe.x, probe.y);
-			const m = await page.evaluate((sel) => {
-				const f = document.querySelector(sel).getBoundingClientRect();
-				const p = document.querySelector('.dse-chrome').getBoundingClientRect();
-				const shadows = [...document.querySelectorAll('.dse-chrome .dse-btn, .dse-chrome-summary .dse-btn')].map(
-					(b) => getComputedStyle(b).boxShadow,
-				);
-				return {
-					shadows,
-					frameTop: f.top,
-					frameLeft: f.left,
-					panelMidX: (p.left + p.right) / 2,
-					panelBottom: p.bottom,
-					gap: f.top - p.bottom,
-				};
-			}, c.frame);
+			// SC-189 R4: measure the panel's box with NO host CSS first — that is the box every
+			// shot in this sweep, every review render and every DESIGN.md statement describes.
+			const bare = await page.evaluate(probeChrome, c.frame);
+			await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
+			const m = await page.evaluate(probeChrome, c.frame);
 			checked += 1;
 			// (a) The rule that does the work. `none`, on every chrome button, in both schemes.
 			const leaked = m.shadows.filter((s) => s !== 'none');
 			if (m.shadows.length === 0) problems.push(`${id}: no chrome buttons found to check`);
 			if (leaked.length) problems.push(`${id}: chrome button box-shadow is "${leaked[0]}", expected "none"`);
+			// (a2) SC-189 R4 — THE BOX IS THE PLUGIN'S. Obsidian's base `button` rule sets
+			//      `height: var(--input-height)` (30px), which no `min-height` can beat; it
+			//      inflated the panel by 9.6px in every real vault while the camera, seeing no
+			//      host, drew the short one. Rather than pin that one property, this asserts
+			//      the whole panel box is INVARIANT under the host's rules — so the next host
+			//      declaration the sheet forgets to re-ground fails the sweep by size.
+			for (const [k, label] of [
+				['panelH', 'panel height'],
+				['panelW', 'panel width'],
+				['btnH', 'button height'],
+				['btnW', 'button width'],
+			]) {
+				if (bare[k] === null || m[k] === null) continue;
+				if (Math.abs(m[k] - bare[k]) > BOX_EPSILON) {
+					problems.push(
+						`${id}: Obsidian's \`button\` rule changes the ${label} — ` +
+							`${bare[k].toFixed(2)}px without the host, ${m[k].toFixed(2)}px with it ` +
+							`(max drift ${BOX_EPSILON}px)`,
+					);
+				}
+			}
 			// (b) The consequence, in pixels: the card's top border row must read the same
 			//     UNDER the panel as it does 40px to the panel's left, i.e. the hairline is
 			//     continuous across the panel's whole horizontal span.
@@ -380,18 +452,52 @@ async function assertChromeHostLeak(page) {
 			}
 		}
 	}
+	// SC-189 R4 — the OTHER chrome button: the collapsed bar's always-visible expand control.
+	// It is in flow, so the host's `height: var(--input-height)` inflated the whole bar
+	// (33.80px → 40.00px). Checked on its own navigations because reading it means collapsing
+	// the element, which hides the floating panel the loop above is sampling.
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({ stack: 'statblock:default', theme: 'steel', bg, pad: '56' });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+		const readBar = () =>
+			page.evaluate(() => {
+				document.querySelector('[data-dse-chrome]').setAttribute('data-dse-collapsed', 'on');
+				const bar = document.querySelector('.dse-chrome-summary');
+				const b = bar.querySelector('.dse-btn');
+				return { barH: bar.getBoundingClientRect().height, btnH: b.getBoundingClientRect().height };
+			});
+		const bare = await readBar();
+		await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
+		const withHost = await readBar();
+		checked += 1;
+		for (const [k, label] of [
+			['barH', 'collapsed-bar height'],
+			['btnH', 'collapsed-bar expand-button height'],
+		]) {
+			if (Math.abs(withHost[k] - bare[k]) > BOX_EPSILON) {
+				problems.push(
+					`collapsed-bar/${bg}: Obsidian's \`button\` rule changes the ${label} — ` +
+						`${bare[k].toFixed(2)}px without the host, ${withHost[k].toFixed(2)}px with it ` +
+						`(max drift ${BOX_EPSILON}px)`,
+				);
+			}
+		}
+	}
 	if (problems.length) {
 		console.error(
 			`\nCHROME HOST-LEAK VIOLATED — with Obsidian's real \`button\` defaults present the ` +
-				`menu panel does not hold its own material:\n` +
+				`menu panel does not hold its own material or its own box:\n` +
 				problems.map((p) => `  ${p}`).join('\n') +
-				`\nSee styles-source.css → "Element chrome" → the panel-buttons block (SC-189 round 3).`,
+				`\nSee styles-source.css → "Element chrome" → the panel-buttons block (SC-189 rounds 3-4).`,
 		);
 		process.exit(1);
 	}
 	console.log(
 		`\nchrome host-leak OK (${checked} family/scheme combos: chrome buttons carry no host ` +
-			`box-shadow, card top border continuous under the panel)`,
+			`box-shadow, the panel's box is unchanged by Obsidian's \`button\` rule, and the card's ` +
+			`top border is continuous under the panel)`,
 	);
 }
 

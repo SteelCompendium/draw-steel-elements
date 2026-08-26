@@ -118,7 +118,11 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 // The PICTURES are `chrome-seat-*` in the shot sweep and the round-2 report's crops; the
 // NUMBERS are in the report.
 describe('SC-189 R2 — chrome-panel seating candidates', () => {
+	/** The four SEAM candidates. `tuck` (round 4) is deliberately not one of them — it is a
+	 *  depth treatment, not a seam fix, and it is keyed on no family at all. Its own
+	 *  contract is the R4 block below. */
 	const SEATS = ['hush', 'crown', 'ledge', 'drop'] as const;
+	const ALL_SEATS = [...SEATS, 'tuck'] as const;
 
 	test('round 1\'s rejected border-top-color fix is gone', () => {
 		// Scott, 2026-08-23: "I dont think I like adding a unique border-top-color here."
@@ -130,7 +134,7 @@ describe('SC-189 R2 — chrome-panel seating candidates', () => {
 		expect(CSS).not.toContain("[data-dse-chrome-seat='current']");
 	});
 
-	test.each(SEATS)('`%s` exists and every one of its selectors is Steel-screen-scoped', (seat) => {
+	test.each(ALL_SEATS)('`%s` exists and every one of its selectors is Steel-screen-scoped', (seat) => {
 		const needle = `[data-dse-chrome-seat='${seat}']`;
 		expect(CSS).toContain(needle);
 		for (const line of CSS.split('\n')) {
@@ -168,7 +172,7 @@ describe('SC-189 R2 — chrome-panel seating candidates', () => {
 	});
 
 	test('no candidate hardcodes a font-size (SC-185)', () => {
-		for (const seat of SEATS) {
+		for (const seat of ALL_SEATS) {
 			const needle = `[data-dse-chrome-seat='${seat}']`;
 			let from = CSS.indexOf(needle);
 			while (from !== -1) {
@@ -249,6 +253,125 @@ describe('SC-189 R3 — the chrome panel neutralises the HOST\'s button chrome',
 		const block = panelBlock();
 		expect(block).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.22)');
 		expect(block).toContain('0 -3px 7px rgb(0 0 0 / 34%)');
+	});
+});
+
+// --------------------------------------------- SC-189 R4: the host owns no part of the box
+// Round 3 fixed the panel's MATERIAL leak and, in its own hand-back, named a second instance
+// of the identical omission: Obsidian's base rule also sets `height: var(--input-height)`
+// (30px desktop), and a used `height` beats a `min-height`, so the panel's own
+// `min-height: 1.5em` never applied in a real vault. Measured on the harness page with
+// Obsidian's rule injected, dark: the panel box 21.39px -> 31.00px (+45%), the collapsed bar
+// 33.80px -> 40.00px. Every picture of the panel in this repo drew the short one, because the
+// harness ships no host.
+//
+// jsdom computes no layout, so the MEASUREMENT is `assertChromeHostLeak` in
+// visual-harness/shoot.mjs — which since this round injects Obsidian's whole base `button`
+// rule and fails if the panel's box moves at all under it. What is pinned HERE is the
+// declaration that makes that true.
+describe('SC-189 R4 — the chrome panel owns its own BOX', () => {
+	const blockFor = (selector: string): string => {
+		const start = CSS.indexOf(`${selector} {`);
+		expect(start).toBeGreaterThan(-1);
+		return CSS.slice(start, CSS.indexOf('}', start));
+	};
+	const PANEL_BTN = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome .dse-btn";
+	const SUMMARY_BTN = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome-summary .dse-btn";
+
+	test.each([
+		['the floating panel', PANEL_BTN],
+		['the collapsed bar', SUMMARY_BTN],
+	])('%s re-grounds height to `auto`', (_label, selector) => {
+		// `auto`, not a px figure: the size is already declared — `min-height: 1.5em` on the
+		// panel button, `--dse-control-min` (SC-121) on the collapsed bar's — and in `em`, so
+		// it tracks the user's text/card-size prefs where Obsidian's 30px freezes.
+		expect(blockFor(selector)).toMatch(/\n\theight: auto;/);
+	});
+
+	test('the panel button still declares its OWN size, which `height: auto` hands back to', () => {
+		const block = blockFor(PANEL_BTN);
+		expect(block).toContain('min-height: 1.5em;');
+		expect(block).toContain('min-width: 1.7em;');
+		// A px height here would defeat the point of re-grounding the host's px height.
+		expect(block).not.toMatch(/\n\theight: \d/);
+	});
+
+	test('the height fix is in the BASE panel, not in a `chromeSeat` candidate arm', () => {
+		for (const selector of [PANEL_BTN, SUMMARY_BTN]) expect(selector).not.toContain('chrome-seat');
+	});
+
+	test('the coarse-pointer twin still owns the touch box (it is not overridden by `auto`)', () => {
+		// `height: auto` sits in the fine-pointer rule; the touch answer stays the media
+		// query's min-sizes, which `auto` lets through rather than freezing at Obsidian's
+		// 40px mobile `--input-height`.
+		const at = CSS.indexOf('@media (pointer: coarse)', CSS.indexOf(PANEL_BTN));
+		const block = CSS.slice(at, CSS.indexOf('}', CSS.indexOf('{', CSS.indexOf(PANEL_BTN, at))));
+		expect(block).toContain('min-width: var(--dse-touch-min);');
+		expect(block).toContain('min-height: 2em;');
+	});
+});
+
+// --------------------------------------------------------- SC-189 R4: the `tuck` candidate
+// Scott, 2026-08-26: "I also want to see what it looks like for the card to have a small
+// shadow that overlays on top of the menu panel." `tuck` is that picture: the card's top edge
+// is lifted and casts onto the bottom of the plate, so the panel reads as a TAB TUCKED BEHIND
+// the card rather than a slab parked against it. Authored as an inset on the panel (not a
+// cast shadow on the card) so it is confined to the panel, cannot reach the card's border row
+// — the exact spill round 3 spent a round removing — and needs no stacking-order surgery.
+describe('SC-189 R4 — `tuck`, the card-casts-onto-the-panel candidate', () => {
+	const TUCK = "[data-dse-chrome-seat='tuck']";
+	const tuckBlocks = (): string[] => {
+		const out: string[] = [];
+		let from = CSS.indexOf(TUCK);
+		while (from !== -1) {
+			const open = CSS.indexOf('{', from);
+			out.push(CSS.slice(open, CSS.indexOf('}', open)));
+			from = CSS.indexOf(TUCK, open);
+		}
+		return out;
+	};
+
+	test('both schemes are declared, and each is an INSET on the panel bottom', () => {
+		const blocks = tuckBlocks();
+		expect(blocks).toHaveLength(2); // dark + the body.theme-light twin
+		for (const b of blocks) expect(b).toMatch(/inset 0 -5px 6px -3px rgb\(0 0 0 \/ \d+%\)/);
+		// Light is retuned, not reused — 55% black over the near-white plate reads as grime,
+		// the same reasoning as E3's own 34% -> 15% light retune.
+		expect(blocks[0]).toContain('inset 0 -5px 6px -3px rgb(0 0 0 / 55%)');
+		expect(blocks[1]).toContain('inset 0 -5px 6px -3px rgb(0 0 0 / 22%)');
+	});
+
+	test('it keeps E3 verbatim — the crown and the upward cast shadow are both still there', () => {
+		// The two shadows describe DIFFERENT edges: the plate still floats over whatever is
+		// above it, and only its bottom edge is newly overlapped. `tuck` adds a layer; it does
+		// not retune Scott's sanctioned material.
+		const [dark, light] = tuckBlocks();
+		expect(dark).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.22)');
+		expect(dark).toContain('0 -3px 7px rgb(0 0 0 / 34%)');
+		expect(light).toContain('inset 0 1px 0 rgb(255 255 255 / 100%)');
+		expect(light).toContain('0 -3px 7px rgb(0 0 0 / 15%)');
+	});
+
+	test('it changes NO geometry and no fill — box-shadow is the only property it sets', () => {
+		// Anything else here would put it in competition with `assertChromePlacement`, which
+		// re-measures the panel's exact seat every sweep.
+		for (const b of tuckBlocks()) {
+			const props = [...b.matchAll(/\n\t([a-z-]+):/g)].map((m) => m[1]);
+			expect(props).toEqual(['box-shadow']);
+		}
+	});
+
+	test('it reaches EVERY chrome-bearing card, unlike the four seam candidates', () => {
+		// SC-169 ruling 1 ("The placement of the menu panel should be consistent across the
+		// Elements") and DESIGN.md's "the only per-element affordance surface" both argue the
+		// panel must read the same way everywhere. `tuck` describes the panel/card junction,
+		// which every chrome-bearing card has — so it is keyed on `.dse-chrome` and on no
+		// family at all. This is the assertion that fails if someone "harmonises" it with the
+		// round-2 candidates by adding a headered-family key.
+		for (const line of CSS.split('\n').filter((l) => l.includes(TUCK))) {
+			expect(line).toContain('.dse-chrome {');
+			expect(line).not.toMatch(/\.dse-sb|\.dse-fb|data-dse-element/);
+		}
 	});
 });
 

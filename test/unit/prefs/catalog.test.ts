@@ -286,6 +286,14 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // default picture cannot drift while the four are judged. Deletion plan: Scott picks, the
 // winner becomes unconditional, and this key + the losing CSS branches + the candidate
 // shots are deleted, returning this list to empty.
+//
+// SC-189 round 4 adds a fifth value, `tuck` (Scott, 2026-08-26: "I also want to see what it
+// looks like for the card to have a small shadow that overlays on top of the menu panel"),
+// and expects the SAME deletion plan to close the whole key: rounds 3-4 removed two real
+// host-CSS leaks (the panel wore Obsidian's `--input-shadow`, and its `height` — 21.39px of
+// declared box rendering at 31.00px in every vault), which is what the four seat candidates
+// were compensating for. The round-4 recommendation is therefore `current` with no
+// treatment at all, i.e. delete the key and all five branches.
 const EXPECTED_HIDDEN_ROWS: string[] = ['chromeSeat'];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {

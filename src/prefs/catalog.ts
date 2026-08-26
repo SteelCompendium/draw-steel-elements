@@ -148,7 +148,11 @@ declare module '../framework/seams/prefs' {
 		// setting. Deletion plan: Scott picks, the winner becomes unconditional, and this
 		// key + the losing branches + the candidate shots are deleted (the SC-154
 		// `5360fe9` / SC-183 promotion shape).
-		chromeSeat: 'current' | 'hush' | 'crown' | 'ledge' | 'drop';
+		// SC-189 round 4 adds `tuck`: the CARD casts a small shadow onto the bottom of the
+		// panel, so the plate reads as a tab tucked BEHIND a lifted card edge. Unlike the
+		// four above it is not a seam fix and is therefore not keyed on a headered family —
+		// see the CSS block for why the panel's depth has to read the same on every card.
+		chromeSeat: 'current' | 'hush' | 'crown' | 'ledge' | 'drop' | 'tuck';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -652,6 +656,7 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 				{ value: 'crown', label: 'Crown (panel wears the band’s material)' },
 				{ value: 'ledge', label: 'Ledge (card grows a raised lip the panel thickens)' },
 				{ value: 'drop', label: 'Drop (panel seated inside the header band)' },
+				{ value: 'tuck', label: 'Tuck (card casts a small shadow onto the panel)' },
 			],
 			help: 'SC-189 review switch: how the element menu panel meets a card that carries a role-tinted header band.',
 		},

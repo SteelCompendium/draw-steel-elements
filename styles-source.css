@@ -7707,6 +7707,72 @@ body.theme-light
 		0 3px 7px rgb(0 0 0 / 15%);
 }
 
+/* -- tuck (SC-189 ROUND 4) --------------------------------------------------------------
+   Scott, 2026-08-26: "I also want to see what it looks like for the card to have a small
+   shadow that overlays on top of the menu panel."
+
+   THE DEPTH STORY. Today the panel and the card are coplanar: two flat plates meeting on a
+   line, which is exactly the reading "disconnected and out of place" describes — nothing in
+   the picture says which of the two is in front. `tuck` answers that by putting the CARD in
+   front: its top edge is lifted, and it casts a small shadow up onto the bottom of the plate
+   the panel presents. The panel stops being a slab parked against the card and becomes a
+   TAB TUCKED BEHIND IT — the one relationship a reader resolves instantly, because occlusion
+   is the strongest depth cue there is and it is the only one of the five candidates that
+   uses it.
+
+   MECHANISM — one declaration, on the panel, and no new DOM. The shadow is authored as an
+   INSET on the panel's own bottom edge rather than as a cast shadow on the card, for three
+   reasons that are all load-bearing:
+     1. It is confined to the panel. A real `box-shadow` on `.dse-sb` would paint a dark
+        band along the card's WHOLE top edge, visible at rest, on every card, whether or not
+        the panel is revealed — a change to the card's material to solve a problem at the
+        panel's junction.
+     2. It cannot reach the card's border row. An inset shadow is clipped to the panel's own
+        border box, so `assertChromeHostLeak`'s border-continuity measurement (round 3's
+        gate, max 8/255) is untouched by construction — which is the whole point after a
+        round spent removing a shadow that DID spill there.
+     3. It needs no stacking-order surgery. Making a card-owned shadow paint OVER a
+        `z-index: 3` panel means a pseudo-element at `z-index: 4` and a bet on which
+        ancestor happens to be a stacking context. This paints in the right order for free.
+   Read out of the picture the two are indistinguishable: a soft dark gradient rising ~5px
+   off the card's border line into the plate above it.
+
+   WHAT IT LEAVES ALONE. Geometry: nothing. The panel's bottom edge still lands exactly on
+   the frame's border-box top (`assertChromePlacement`, every sweep). The band's colour
+   recipe: untouched, unlike `hush`. The panel's fill and border: untouched, unlike `crown`
+   — the plate is still `--dse-surface-raised` on every family, so this does NOT reintroduce
+   a per-role panel material. The card: untouched, unlike `ledge`. E3's crown and upward
+   cast shadow are both kept verbatim; the two shadows describe DIFFERENT edges (the plate
+   still floats over whatever is above it — it is only its bottom edge that is now
+   overlapped), and the sequence a reader gets top-to-bottom is bright lip → plate → the
+   card's shadow → the card's own hairline.
+
+   FAMILY SCOPE — deliberately ALL chrome-bearing cards, unlike the four round-2 candidates.
+   Those four fix a contrast SEAM that only headered cards have, so they are keyed on a
+   headered family and leave a plain `feature`/`hero`/`stamina-bar`/`kit` card byte-identical.
+   `tuck` is not a seam fix: the junction it describes exists identically on every card that
+   carries chrome, and SC-169 ruling 1 (Scott: "The placement of the menu panel should be
+   consistent across the Elements") plus DESIGN.md's "the only per-element affordance
+   surface" both argue that the panel should read the same way everywhere. Keying it on
+   headered families would give one note two different panel depths.
+
+   The two schemes are separate values, not one token: 55% black under a dark card is the
+   cast weight E3 already uses there, and on the near-white light plate the same value would
+   read as grime rather than as an edge — the same reasoning, and the same ratio, as E3's own
+   34% → 15% light retune above. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='tuck'] .dse-chrome {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.22),
+		inset 0 -5px 6px -3px rgb(0 0 0 / 55%),
+		0 -3px 7px rgb(0 0 0 / 34%);
+}
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='tuck'] .dse-chrome {
+	box-shadow:
+		inset 0 1px 0 rgb(255 255 255 / 100%),
+		inset 0 -5px 6px -3px rgb(0 0 0 / 22%),
+		0 -3px 7px rgb(0 0 0 / 15%);
+}
+
 /* -- Featureblock head-band notch twin (SC-101 fix round, M-1): Task 2 gave the statblock
    this notch (~:5283-5323) and explicitly deferred the featureblock twin to "if S-4 = (a)"
    (task-2-report.md); S-4 IS (a) — the nested-card frame above is SHARED — so the twin was
@@ -12742,10 +12808,54 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    ever stop being a `--btn--ghost`, and Obsidian's `button:focus-visible` box-shadow ring,
    which the kit deliberately replaces with its own `outline` ring (~:11927).
    Gated by `assertChromeHostLeak` in visual-harness/shoot.mjs, which injects Obsidian's
-   two real declarations and re-measures the border row on and off the panel's span. */
+   real `button` rules and re-measures the border row on and off the panel's span.
+
+   SC-189 ROUND 4 — `height: auto` is the SECOND instance of the same omission, and it is
+   the one that changes the panel's SIZE rather than its colour. Obsidian's base rule is:
+     button { font-size: var(--font-ui-small); border-radius: var(--button-radius);
+              border: 0; padding: var(--size-4-1) var(--size-4-3);
+              height: var(--input-height); font-weight: var(--input-font-weight);
+              font-family: inherit; outline: none; white-space: nowrap; … }
+   `--input-height` is **30px** on desktop (40px under `.is-mobile`). A used `height`
+   beats a `min-height`, so `min-height: 1.5em` above never got a say — the declaration
+   this rule DOES make about the panel's size was inert in every real vault. Measured on
+   the harness page with Obsidian's rule injected, dark, all four chrome families:
+
+     panel box    21.39px  →  31.00px      (+9.61px, +45%)
+     panel button 20.39px  →  30.00px
+     collapsed bar 33.80px →  40.00px      (button 23.80 → 30.00)
+
+   So every picture of this panel in the repo — SC-169's review renders, round 2's five
+   seat candidates, round 3's before/after crops — is 9.6px shorter than the plate Scott
+   actually looks at. A ~31px plate is not "an OS window's control cluster"; it is a
+   toolbar button, and it is what made the panel read as a heavy slab parked on the card.
+
+   `auto`, not a px figure, because the panel's size is already declared one line above:
+   `min-height: 1.5em` + `padding: 0.1em` is the sanctioned box, it is stated in `em` so it
+   tracks the user's text/card-size prefs (SC-112 Task 7) where Obsidian's 30px freezes,
+   and the `@media (pointer: coarse)` twin below already owns the touch answer (Obsidian's
+   own mobile value would be 40px — close, but arrived at by accident rather than by the
+   density rule this sheet declares). `auto` hands the decision back to those two rules.
+
+   THE REST OF THE BOX, audited against that same rule (computed styles diffed with and
+   without the host CSS present, Chromium, dark + light):
+     padding / border-width / border-radius / box-shadow / background / color  re-grounded
+       by this rule; font-size / font-weight / font-family / line-height by the kit's
+       `font: inherit` (~:11268); display / align-items / min-width by the kit base;
+       outline by the kit's own `:focus-visible` ring (~:11936).
+     `white-space: normal → nowrap` is the ONE other property the host still changes, and
+       it is left alone deliberately: a chrome button's content is a single Lucide glyph
+       with no break opportunity, so it cannot change the measured box (verified — the
+       button's width is 25.5px either way). Re-grounding it would be a declaration that
+       pins nothing.
+   `height` is therefore the last host declaration that can move this panel's geometry.
+   `assertChromeHostLeak` now measures the whole panel box with and without Obsidian's
+   rules and fails if ANY of it moves, so the next such omission is caught by size, not by
+   someone noticing a screenshot looks wrong. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome .dse-btn {
 	min-width: 1.7em;
 	min-height: 1.5em;
+	height: auto;
 	padding: 0.1em 0.35em;
 	background: transparent;
 	border: 0;
@@ -12865,9 +12975,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    carry it (see the long note there): this is the other chrome button, it is the same kit
    `.dse-btn` on the same transparent ground, and Obsidian's `button` `--input-shadow`
    reaches it identically. The collapsed bar declares its own `--dse-bevel`; the control
-   inside it is a glyph, not a second plate. */
+   inside it is a glyph, not a second plate.
+   SC-189 round 4 — and `height: auto` for the same reason again: Obsidian's
+   `button { height: var(--input-height) }` (30px desktop) beat the Steel density rule's
+   `min-height: var(--dse-control-min)` (1.75em = 23.8px here), which took the whole
+   collapsed bar from 33.80px to 40.00px in a real vault. `auto` returns the bar to the
+   height the density rule declares. Both figures measured, dark, statblock. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome-summary .dse-btn {
 	flex: none;
+	height: auto;
 	background: transparent;
 	border: 0;
 	box-shadow: none;
