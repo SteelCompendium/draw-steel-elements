@@ -262,6 +262,31 @@ describe('Plan 08 Task 5: framework-default :focus-visible (D2 §4.5)', () => {
 		const rings = stripComments(sheet).match(/outline:\s*2px solid var\(--dse-focus-ring\)/g) ?? [];
 		expect(rings).toHaveLength(1);
 	});
+
+	// SC-203 tail. Every subject of the shared ring rule above resolves `--dse-focus-ring`
+	// from the steel ELEMENT-ROOT scope (`[data-dse-element][data-dse-theme='steel']`)
+	// — except the undo toast, which renders inside an obsidian Notice, outside every
+	// `[data-dse-element]`. It therefore falls back to the `:root` declaration, which is
+	// `--dse-focus-ring: var(--interactive-accent)` — and obsidian declares
+	// `--interactive-accent` on `body`, one level BELOW `:root`. So that `var()` is
+	// unresolvable where it is written, the token computes to the guaranteed-invalid
+	// value, `outline: 2px solid var(--dse-focus-ring)` becomes invalid at
+	// computed-value time, and the outline longhands reset to their initials: the toast
+	// had NO focus ring at all. Measured in a real vault with `:focus-visible` genuinely
+	// active — `outline-style: none`, `outline-width: 0px`.
+	//
+	// This is not something the `focusRule()` tests above can see: the RULE is perfectly
+	// well-formed, and only the token's resolution context is wrong. The invariant that
+	// actually holds it is the one asserted here — an out-of-root subject has to carry
+	// its own `--dse-focus-ring`, with a fallback that cannot itself fail to resolve.
+	test('the out-of-root ring subject (the undo toast) declares a resolvable --dse-focus-ring', () => {
+		const css = stripComments(sheet);
+		const base = /\.dse-undo-notice__action\s*\{([^{}]*)\}/.exec(css);
+		expect(base).not.toBeNull();
+		// A bare `var(--interactive-accent)` would reproduce the original bug in any theme
+		// that does not define it, so the fallback is part of the contract.
+		expect(base![1]).toMatch(/--dse-focus-ring:\s*var\(\s*--[\w-]+\s*,\s*[^;)]+\)/);
+	});
 });
 
 /* ------------------------------------------------------------------ */

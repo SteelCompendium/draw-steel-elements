@@ -1710,6 +1710,32 @@ code.dsa {
 /* The undo toast's action, inside an Obsidian Notice (workspace chrome, not an element
    root — so this rule is deliberately unscoped and theme-agnostic). */
 .dse-undo-notice__action {
+	/* SC-203 tail — the toast had NO focus ring at all, measured in a real vault
+	   (`:focus-visible` genuinely active, `outline-style: none`, `outline-width: 0px`).
+	   Not a host leak: the node is an `<a role="button">`, so Obsidian's `button` rules
+	   never reached it. The cause is a broken TOKEN CHAIN, and it is worth stating because
+	   it is invisible to reading either rule on its own. The unscoped base (~:4336) gives
+	   the focus-ring token the value `var(--interactive-accent)`, in a `:root` block —
+	   but `:root` is `<html>`, and Obsidian declares `--interactive-accent` on `body`, one
+	   level BELOW it. So there that `var()` is unresolvable, `--dse-focus-ring`
+	   computes to the guaranteed-invalid value, and every element that merely INHERITS it
+	   gets nothing. `outline: 2px solid var(--dse-focus-ring)` is then invalid at
+	   computed-value time and the outline longhands reset to their initials — i.e. the
+	   ring silently disappears rather than falling back to something visible.
+
+	   Every OTHER subject of the shared ring rule (~:11900) is inside an element root,
+	   where `[data-dse-element][data-dse-theme='steel']` re-declares the token with a real
+	   value (~:4670 / ~:11148), so they were all unaffected — the toast is the one control
+	   that lives outside those roots, which is exactly why the original SC-132 note here
+	   ("fine, `--dse-focus-ring` is declared on `:root`") read as safe and was not.
+
+	   Re-declaring the token ON the action keeps the `:root` declaration's intent (track
+	   the user's accent) while making it resolvable at a place where `--interactive-accent`
+	   actually exists, and cannot reach any in-root control. The fallback is
+	   `currentcolor`, NOT a hex: a literal here would be one theme's accent frozen into an
+	   unscoped rule (the toast renders under both schemes), and `currentcolor` is
+	   guaranteed to resolve, so the ring can never silently vanish again. */
+	--dse-focus-ring: var(--interactive-accent, currentcolor);
 	margin-left: 0.7em;
 	font-weight: 600;
 	text-decoration: underline;
@@ -11902,9 +11928,15 @@ button.dse-pr__row:hover {
    editable; a read-only strip must not advertise a ring it cannot act on. */
 .dse-stamina-rec__pips[tabindex]:focus-visible,
 /* SC-132: the undo toast's action. It lives in an obsidian Notice, OUTSIDE any element
-   root — which is fine, `--dse-focus-ring` is declared on `:root`. Found by the
-   tabindex-vs-ring guard in kit-index.test.ts on its very first run, which is the
-   argument for having written it. */
+   root. Found by the tabindex-vs-ring guard in kit-index.test.ts on its very first run,
+   which is the argument for having written it.
+   SC-203 tail CORRECTION: this note used to end "— which is fine, `--dse-focus-ring` is
+   declared on `:root`". It is declared there, but as `var(--interactive-accent)`, and
+   obsidian defines `--interactive-accent` on `body`, BELOW `:root` — so the token
+   inherited down guaranteed-invalid and this outline was invalid at computed-value time,
+   leaving the toast with no ring at all (measured in a real vault). The action now
+   re-declares the token on itself (~:1712); the other subjects above are all inside an
+   element root, where the steel scope gives the token a real value. */
 .dse-undo-notice__action:focus-visible,
 [data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):focus-visible {
 	outline: 2px solid var(--dse-focus-ring);
