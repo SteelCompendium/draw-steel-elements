@@ -104,55 +104,6 @@ declare module '../framework/seams/prefs' {
 		collapsibleDefault: boolean;
 		collapseDefault: boolean;
 		staminaRecoveryPopover: boolean;
-		// —— SC-189 round 2: HOW the element chrome panel meets a card that carries a
-		// role-tinted header band (statblock, featureblock).
-		//
-		// Scott: "For cards with headers (like statblocks), the menu panel feels off. It
-		// feels almost disconnected and out of place. I think the reason for this is
-		// because it almost looks 1 pixel too low." Round 1 measured the panel's POSITION
-		// as exact (0.00px gap on every family, three independent ways) and diagnosed a
-		// CONTRAST seam instead: the band paints its role gradient edge-to-edge starting
-		// 1px below the frame's own 12%-alpha top border, so the card loses its visible
-		// top edge exactly where the panel lands (measured ΔL ≈ 37 statblock / 34
-		// featureblock across the seam, vs ≈ 0.5 on a headerless `feature` card, which is
-		// why only headered cards read as detached). Round 1's fix — recolouring the
-		// frame's `border-top-color` with the role accent — was REJECTED (Scott,
-		// 2026-08-23: "I dont think I like adding a unique border-top-color here. it
-		// feels off. What are some alternatives?").
-		//
-		// `current` (default) is today's look VERBATIM: the value stamps an attribute but
-		// no rule keys on it, so the shipped rendering — and every frozen print pair — is
-		// untouched by construction. The other four are DESIGN CANDIDATES for Scott to
-		// choose between, each attacking the seam by a different mechanism:
-		//
-		//   hush   — MUTE THE BAND. The head band's gradient starts at the panel's own
-		//            `--dse-surface-raised` and blooms into the role tint over its first
-		//            14px, so the seam step goes to ~0 and the frame's hairline reads
-		//            again. The band keeps its colour; it just stops shouting at the edge.
-		//   crown  — TINT THE PANEL. The panel takes the band's own top-stop material and
-		//            the band's own accent border, so panel + band read as one assembly
-		//            rather than a grey chip resting on a coloured plate.
-		//   ledge  — A SHARED LIP. The card grows a raised `--dse-surface-raised` ledge
-		//            across its whole top edge (the panel's own material, carrying the
-		//            standard `--dse-bevel` light catch) and the band steps down below it,
-		//            so the panel reads as a local thickening of a lip the card already
-		//            has, and the frame's border runs uninterrupted.
-		//   drop   — SEAT IT IN THE HEADER. The panel stops being a crown above the card
-		//            and becomes a chip INSIDE the band's top-right corner (full radius,
-		//            downward shadow), so it belongs to the header rather than to the
-		//            page — and the card's top border is not crossed at all.
-		//
-		// Every value renders the SAME DOM (mountChrome is untouched) — these are pure
-		// CSS forks — and every rule is Steel-screen-scoped, so no candidate can move a
-		// frozen print byte. Deliberately `ui.hidden`: a review switch, never a shipped
-		// setting. Deletion plan: Scott picks, the winner becomes unconditional, and this
-		// key + the losing branches + the candidate shots are deleted (the SC-154
-		// `5360fe9` / SC-183 promotion shape).
-		// SC-189 round 4 adds `tuck`: the CARD casts a small shadow onto the bottom of the
-		// panel, so the plate reads as a tab tucked BEHIND a lifted card edge. Unlike the
-		// four above it is not a seam fix and is therefore not keyed on a headered family —
-		// see the CSS block for why the panel's depth has to read the same on every card.
-		chromeSeat: 'current' | 'hush' | 'crown' | 'ledge' | 'drop' | 'tuck';
 		// —— Rolling (behavioral; D5) ——
 		rollingEnabled: boolean;
 		rollerEngine: 'native' | 'dice-roller';
@@ -641,32 +592,22 @@ export const DSE_PREF_DESCRIPTORS: readonly PrefDescriptor[] = [
 		},
 	}),
 
-	// SC-189 round 2 — the chrome-panel seating candidates. Hidden (the row is never
-	// rendered): a review switch for the four options on the ticket, not a shipped
-	// setting. See the DsePrefs comment above for what each value does and why round 1's
-	// border-top-color fix was rejected.
-	d({
-		key: 'chromeSeat', default: 'current', attr: 'chrome-seat',
-		ui: {
-			group: 'Element defaults', label: 'Chrome panel seating (header cards)', control: 'select',
-			hidden: true,
-			options: [
-				{ value: 'current', label: 'Current (panel crowns the card edge)' },
-				{ value: 'hush', label: 'Hush (band gradient starts at the panel’s own material)' },
-				{ value: 'crown', label: 'Crown (panel wears the band’s material)' },
-				{ value: 'ledge', label: 'Ledge (card grows a raised lip the panel thickens)' },
-				{ value: 'drop', label: 'Drop (panel seated inside the header band)' },
-				{ value: 'tuck', label: 'Tuck (card casts a small shadow onto the panel)' },
-			],
-			help: 'SC-189 review switch: how the element menu panel meets a card that carries a role-tinted header band.',
-		},
-	}),
-
 	// SC-183 round 3's `initPortrait` (seal / shutter / sheathe / laurel) is deleted here
 	// — Scott picked `seal` (2026-08-23: "Seal option looks good. I like that."), which is
 	// now the tracker's unconditional portrait turn-mark; the key, the three losing CSS
 	// branches and their shots are deleted (the SC-154 `5360fe9` promotion shape, run four
 	// times now).
+
+	// SC-189 round 2's `chromeSeat` (current / hush / crown / ledge / drop, + round 4's
+	// `tuck`) is deleted here too, the sixth run of the same shape — but with a different
+	// verdict. Four of the five candidates were compensating for a defect that turned out
+	// not to be a design question at all: rounds 3-5 found three real bugs (Obsidian's
+	// `--input-shadow` and `height` reaching a chrome `.dse-btn`, then the head band's own
+	// corner radius painting over the card's hairline), and once those were fixed the seam
+	// the candidates were fighting was gone. Scott ruled on 2026-08-26 to delete the whole
+	// A/B, and on 2026-08-27 to keep `tuck` — which is now two unconditional declarations on
+	// the base panel (styles-source.css → "Element chrome"), not a pref. Hidden rows: back
+	// to zero, six for six.
 
 	// —— Rolling (D5, Plan 14: OD-D4-1a's hidden rows go live + the master switch) ——
 	d({

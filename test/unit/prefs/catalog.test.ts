@@ -244,10 +244,6 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 		// SC-132: behavioral (the view reads cx.prefs.get) — no attr, like the two
 		// collapse defaults above it.
 		staminaRecoveryPopover: null,
-		// SC-189 round 2: a PURE CSS fork (no view reads it), so it reflects like every
-		// other presentation pref. `current` — the default — is stamped but keyed on by
-		// nothing, so the shipped look and the frozen print pairs are untouched.
-		chromeSeat: 'chrome-seat',
 		collapsibleDefault: null,
 		collapseDefault: null,
 		rollingEnabled: null,
@@ -279,22 +275,18 @@ test('presentation attrs pin the BUILT data-dse-* vocabulary; behavioral prefs h
 // next round — winner unconditional, key + losing CSS + candidate shots gone. Five for
 // five: a hidden row has always ended in its own deletion.
 //
-// SC-189 round 2's `chromeSeat` is the sixth: four candidate answers to "the menu panel
-// feels detached on cards with headers" after round 1's border-top-color fix was rejected
-// (Scott, 2026-08-23: "I dont think I like adding a unique border-top-color here. it feels
-// off. What are some alternatives?"). Default `current` = today's look verbatim, so the
-// default picture cannot drift while the four are judged. Deletion plan: Scott picks, the
-// winner becomes unconditional, and this key + the losing CSS branches + the candidate
-// shots are deleted, returning this list to empty.
-//
-// SC-189 round 4 adds a fifth value, `tuck` (Scott, 2026-08-26: "I also want to see what it
-// looks like for the card to have a small shadow that overlays on top of the menu panel"),
-// and expects the SAME deletion plan to close the whole key: rounds 3-4 removed two real
-// host-CSS leaks (the panel wore Obsidian's `--input-shadow`, and its `height` — 21.39px of
-// declared box rendering at 31.00px in every vault), which is what the four seat candidates
-// were compensating for. The round-4 recommendation is therefore `current` with no
-// treatment at all, i.e. delete the key and all five branches.
-const EXPECTED_HIDDEN_ROWS: string[] = ['chromeSeat'];
+// SC-189 round 2's `chromeSeat` was the sixth, and it closed the same way — but with a
+// different verdict, which is the part worth keeping. Four of its five candidates were
+// answers to "the menu panel feels detached on cards with headers"; rounds 3-5 then found
+// three real bugs underneath that complaint (Obsidian's `--input-shadow` and its px `height`
+// reaching a chrome `.dse-btn`, and the head band's own corner radius painting over the
+// card's hairline), and with those fixed there was no seam left to design against. Scott
+// ruled on 2026-08-26 to delete the whole A/B rather than pick a winner, and on 2026-08-27
+// to keep `tuck` — the one candidate that was a depth treatment rather than a seam fix —
+// as two unconditional declarations on the base panel. Key, five CSS branches and twelve
+// candidate shots gone. Six for six: a hidden row has always ended in its own deletion, and
+// this list is empty again.
+const EXPECTED_HIDDEN_ROWS: string[] = [];
 
 test('every descriptor carries a PrefUi in a known group; the only hidden rows are the documented ones', () => {
 	const hidden: string[] = [];

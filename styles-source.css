@@ -5255,12 +5255,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card {
    16px root. Copying 13px absolutely would make the sb/fb plate 2× the plugin card's
    6.4px — a far bigger family-to-family jump than the site itself has (12px card vs
    13px sb) — and would stop scaling with the user's font size, unlike --dse-radius
-   (0.4em). The shadows ARE copied px-for-px, because the site authors them in px. */
+   (0.4em). The shadows ARE copied px-for-px, because the site authors them in px.
+
+   SC-189 ROUND 5 — the radius is now NAMED (`--dse-plate-radius`) because a second rule
+   has to know it: this family's head BAND sits flush in the plate's padding box, so its own
+   top corners must be this radius minus the plate's 1px border or it paints over the
+   plate's hairline at the arc. See the head-band rules (~:7345, ~:7473) for the measured
+   defect. Deliberately `rem`, not `em`: a custom property's `em` re-resolves against
+   whichever element USES it, which is precisely the trap that produced the bug (the band
+   read `--dse-radius: 0.4em` in its own, smaller font-size context and came out 6.4px
+   against the plate's 10.4px). A `rem` means the same length wherever it is consumed. */
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='featureblock']:not(
 		[data-dse-error-stage]
 	),
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
-	border-radius: 0.65rem;
+	--dse-plate-radius: 0.65rem;
+	border-radius: var(--dse-plate-radius);
 	box-shadow: var(--dse-bevel), 0 10px 26px rgba(0, 0, 0, 0.36);
 }
 body.theme-light
@@ -7363,7 +7373,32 @@ body.theme-light
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb[data-dse-role] > .dse-head {
 	margin: 0 0 0.75rem;
 	padding: 1.25rem 1.5rem 1.3125rem;
-	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	/* SC-189 ROUND 5 — THE CORNER FADE (Scott, 2026-08-27: "The border of the card is still
+	   lost in the corner. Top border looks good. Right border looks good. At the corner it
+	   fades away."). This declaration was the cause, and it was never about the menu panel:
+	   the defect is present with the panel unrevealed, on a card nobody is hovering.
+
+	   The band is the plate's first child and sits FLUSH in its padding box, so its top
+	   corners are drawn at the plate's corner. `--dse-radius` is `0.4em` and the band's
+	   font-size is the body's, so it resolved to 6.4px — while the plate's own radius is the
+	   site-parity `0.65rem` = 10.4px (rule ~:5244). A TIGHTER arc anchored at the same corner
+	   bulges OUTSIDE a looser one, and a non-positioned child's background paints AFTER its
+	   parent's border (CSS 2.1 §E, step 4 after step 1), so for the whole 90° of each top
+	   corner the band painted straight over the plate's 1px hairline — and, at 45°, 0.36px
+	   past the plate's own outline. `.dse-sb` is `overflow: visible` (it must be: the chrome
+	   panel is an absolutely positioned child that paints ABOVE the card's top edge, so a
+	   clip here would delete it), so nothing stopped it.
+
+	   Measured, dark, artillery band, dsf 12, panel NOT revealed — the pixel that should
+	   carry the hairline, at 45° on the top-right arc:
+	     straight top border   rgb(49,52,56)   ← "top border looks good"
+	     straight right border rgb(57,63,68)   ← "right border looks good"
+	     arc @45° BEFORE       rgb(82,67,104)  = the band's own fill, undimmed: no hairline
+	     arc @45° AFTER        rgb(59,63,71)   = the straight edges, within 9/255
+	   The fix is the standard inner-radius arithmetic — outer radius minus the border it
+	   sits inside — so the band exactly fills the padding-box corner and stops one pixel
+	   short of the plate's outline, which is where the hairline lives. */
+	border-radius: calc(var(--dse-plate-radius) - 1px) calc(var(--dse-plate-radius) - 1px) 0 0;
 	/* SUPPORT-FLOOR FALLBACKS (SC-121 batch 3) — see the SUPPORT FLOOR note at
 	   the tier-row rule (~:4601).
 	   Unlike the tier wash, these cannot be precomputed exactly: --dse-role is
@@ -7488,7 +7523,12 @@ body.theme-light
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-fb > .dse-head {
 	margin: 0 0 0.75rem;
 	padding: 1.25rem 1.5rem 1.3125rem;
-	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	/* SC-189 ROUND 5 — the featureblock's identical instance of the corner fade; the full
+	   diagnosis is on the statblock band above. `.dse-fb` is an unpadded, unpainted wrapper
+	   flush in the root's padding box, so this band's top corners are drawn at the ROOT's
+	   corner and the same 6.4px-inside-10.4px bulge painted over the same hairline. Same
+	   arithmetic, same token — the root is the other half of the `--dse-plate-radius` rule. */
+	border-radius: calc(var(--dse-plate-radius) - 1px) calc(var(--dse-plate-radius) - 1px) 0 0;
 	/* SUPPORT-FLOOR FALLBACKS — same reasoning, and since SC-171 the same @supports
 	   gate, as the statblock band above. */
 	background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
@@ -7505,272 +7545,6 @@ body.theme-light
 		border-bottom: 1px solid var(--dse-role, var(--dse-role-leader));
 		border-bottom: 1px solid color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
 	}
-}
-
-/* ================================================================== */
-/*   SC-189 ROUND 2 — chrome-panel SEATING candidates (hidden pref)    */
-/* ================================================================== */
-/*
-   THE DEFECT (round 1's measurement, which stands). Scott: "For cards with headers (like
-   statblocks), the menu panel feels off. It feels almost disconnected and out of place. I
-   think the reason for this is because it almost looks 1 pixel too low." The panel's
-   POSITION is exact — `frame.top - panel.bottom` = 0.00px on every chrome-bearing family,
-   verified three ways and re-asserted every sweep by `assertChromePlacement`. What is
-   wrong is a CONTRAST SEAM: the head bands above paint their role gradient edge-to-edge
-   starting 1px below the frame's own top border, and that border is only 12%-alpha
-   `--dse-border` (~:4562), so it vanishes against the band's bright top stop. The card
-   loses its own top edge exactly where the panel lands, and the panel has nothing to sit
-   on. Measured luminance step across the seam (panel fill → card fill 20px in):
-   ΔL ≈ 37 statblock, ≈ 34 featureblock — and ≈ 0.5 on a headerless `feature` card, which
-   is precisely why only headered cards read as detached.
-
-   ROUND 1's FIX WAS REJECTED. Giving the frame's own `border-top-color` the role accent
-   drew the missing line, but Scott declined it (2026-08-23: "I dont think I like adding a
-   unique border-top-color here. it feels off. What are some alternatives?"). It is
-   reverted; this block is the alternatives round.
-
-   FOUR CANDIDATES, one hidden `chromeSeat` pref (src/prefs/catalog.ts), four different
-   mechanisms:
-     hush   mute the BAND's top stop, so the gradient starts from the panel's own material
-     crown  tint the PANEL to the band's material, so the two read as one assembly
-     ledge  give the CARD a raised lip the panel is a local thickening of
-     drop    move the PANEL into the band, so it belongs to the header rather than the page
-
-   RULES THAT BIND ALL FOUR:
-     - `current` (the default) is keyed on by NOTHING here, so today's rendering — and
-       every frozen print pair — is untouched by construction.
-     - every selector carries `[data-dse-theme='steel']:not([data-dse-print="on"])`, so
-       print is unaffected (the panel is print-absent anyway; the band rules these
-       override are themselves screen-only).
-     - every rule is additionally keyed on a HEADERED family (`.dse-sb[data-dse-role]`,
-       which is exactly when the statblock draws a band at all — ~:7318 — or the
-       featureblock root, whose band is unconditional). A headerless `feature`/`hero`/
-       `stamina-bar`/`kit` card measured fine (ΔL ≈ 0.5) and is left byte-identical: a fix
-       that seats statblocks by restyling plain cards is not a fix.
-     - `color-mix()` gets the SC-171 treatment wherever it appears: a static declaration
-       first, the enhanced one inside the `@supports` gate, so the support floor keeps a
-       coherent (if untinted) result rather than losing the property outright.
-     - no `font-size` anywhere (SC-185's contract test).
-*/
-
-/* -- hush ------------------------------------------------------------------------------
-   Attacks the ΔL at its source. The band's own SUPPORT-FLOOR fallback already starts at
-   `--dse-surface-raised` — the panel's exact fill — and only the color-mix()'d enhancement
-   jumps to the role's 40% mix at pixel one. So `hush` is not a new colour: it is the
-   floor's own top stop, held for the band's first 14px before the role tint blooms in.
-   The band keeps its hue, its bottom accent and its notch; it just stops shouting at the
-   card's edge, and the frame's hairline is legible again because what sits under it is the
-   same value that sits above it. Only the @supports arm needs overriding (the static
-   declaration below it is already the hushed shape). SC-121/SC-171 support floor: the
-   static twin is restated in the base rule AND immediately before each enhanced value, so a
-   floor engine that never enters the gate still gets a `background`. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='hush'] .dse-sb[data-dse-role] > .dse-head {
-	background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='hush'] .dse-fb > .dse-head {
-	background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
-}
-@supports (background: color-mix(in srgb, red 14%, blue)) {
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='hush'] .dse-sb[data-dse-role] > .dse-head {
-		background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
-		background: linear-gradient(
-			180deg,
-			var(--dse-surface-raised) 0,
-			color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface)) 14px,
-			color-mix(in srgb, var(--dse-role) 9%, var(--dse-surface)) 100%
-		);
-	}
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='hush'] .dse-fb > .dse-head {
-		background: linear-gradient(180deg, var(--dse-surface-raised), var(--dse-surface));
-		background: linear-gradient(
-			180deg,
-			var(--dse-surface-raised) 0,
-			color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface)) 14px,
-			color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 9%, var(--dse-surface)) 100%
-		);
-	}
-}
-
-/* -- crown -----------------------------------------------------------------------------
-   Leaves the card alone and moves the PANEL instead: it takes the band's own top-stop mix
-   as its fill and the band's own 38% accent as its border, so panel and band are one
-   material and the seam between them is a material change of ~0 rather than ~37. The E3
-   "hairline crown" bevel and the upward cast shadow stay exactly as SC-169 sanctioned them
-   — this is a fill/border swap, not a new panel design. Static declarations first (the
-   support floor gets the panel it has today plus a full-strength role edge, the same
-   honest degradation the bands take), color-mix() inside the gate. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='crown'] .dse-sb[data-dse-role] > .dse-chrome {
-	background: var(--dse-surface-raised);
-	border-color: var(--dse-role);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='crown'][data-dse-element='featureblock']:not(
-		[data-dse-error-stage]
-	)
-	> .dse-chrome {
-	background: var(--dse-surface-raised);
-	border-color: var(--dse-role, var(--dse-role-leader));
-}
-@supports (background: color-mix(in srgb, red 14%, blue)) {
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='crown'] .dse-sb[data-dse-role] > .dse-chrome {
-		background: var(--dse-surface-raised);
-		background: color-mix(in srgb, var(--dse-role) 40%, var(--dse-surface));
-		border-color: var(--dse-role);
-		border-color: color-mix(in srgb, var(--dse-role) 38%, transparent);
-	}
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='crown'][data-dse-element='featureblock']:not(
-			[data-dse-error-stage]
-		)
-		> .dse-chrome {
-		background: var(--dse-surface-raised);
-		background: color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 40%, var(--dse-surface));
-		border-color: var(--dse-role, var(--dse-role-leader));
-		border-color: color-mix(in srgb, var(--dse-role, var(--dse-role-leader)) 38%, transparent);
-	}
-}
-
-/* -- ledge -----------------------------------------------------------------------------
-   The structural answer: give the card back a top edge of its own for the panel to sit on.
-   The frame grows a 5px lip of `--dse-surface-raised` — the PANEL's own material — running
-   edge-to-edge across its top, painted as an inset shadow so it follows the plate's 0.65rem
-   radius for free and needs no extra DOM; `--dse-bevel`'s light catch is listed first so it
-   still rides the very top pixel. The band steps down below the lip (and squares its top
-   corners, since it is no longer the thing that meets the card's rounded edge), giving back
-   the 5px in its own top padding so the header's height and the notch's clearance do not
-   move. The panel then reads as a local THICKENING of a lip the card already has, which is
-   the "shared bevel" answer to the detachment report, and the frame's 12%-alpha hairline is
-   legible again because the surface under it is the same value as the surface above it. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='ledge'] .dse-sb {
-	box-shadow:
-		var(--dse-bevel),
-		inset 0 5px 0 var(--dse-surface-raised),
-		0 10px 26px rgba(0, 0, 0, 0.36);
-}
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='ledge'][data-dse-element='featureblock']:not(
-		[data-dse-error-stage]
-	) {
-	box-shadow:
-		var(--dse-bevel),
-		inset 0 5px 0 var(--dse-surface-raised),
-		0 10px 26px rgba(0, 0, 0, 0.36);
-}
-body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='ledge'] .dse-sb,
-body.theme-light
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='ledge'][data-dse-element='featureblock']:not(
-		[data-dse-error-stage]
-	) {
-	box-shadow:
-		var(--dse-bevel),
-		inset 0 5px 0 var(--dse-surface-raised),
-		0 5px 14px rgba(0, 0, 0, 0.09);
-}
-/* 1.25rem - 5px keeps the band's own 20px top padding net of the lip it now sits under, so
-   total header height is unchanged from `current`. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='ledge'] .dse-sb[data-dse-role] > .dse-head,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='ledge'] .dse-fb > .dse-head {
-	margin-top: 5px;
-	padding-top: calc(1.25rem - 5px);
-	border-radius: 0;
-}
-
-/* -- drop ------------------------------------------------------------------------------
-   The most literal reading of "seat it on the header": the panel stops being a crown ABOVE
-   the card and becomes a chip INSIDE the band's top-right corner — same 10px inset from the
-   frame's visible right edge, now 10px down from its visible top edge, with the full radius
-   on all four corners, its border closed along the bottom and the cast shadow flipped
-   DOWNWARD so it rests on the band instead of floating over the page.
-   Note what this does NOT do: it never crosses the frame's top border at all, so SC-169
-   ruling 2 ("the panel should not cover the Element's border") holds by a wider margin than
-   today rather than being traded away. What it DOES trade is SC-169 ruling 1 — one placement
-   for every element — since a headerless card has no band to seat a chip in and keeps the
-   crown. That cost is the candidate's whole argument and is the thing to judge. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='drop'] .dse-sb[data-dse-role] > .dse-chrome,
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='drop'][data-dse-element='featureblock']:not(
-		[data-dse-error-stage]
-	)
-	> .dse-chrome {
-	top: calc(var(--dse-chrome-inset) - var(--dse-chrome-frame-border-top, 0px));
-	bottom: auto;
-	border-bottom: 1px solid var(--dse-border);
-	border-radius: var(--dse-radius);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.22),
-		0 3px 7px rgb(0 0 0 / 34%);
-}
-body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='drop'] .dse-sb[data-dse-role] > .dse-chrome,
-body.theme-light
-	[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='drop'][data-dse-element='featureblock']:not(
-		[data-dse-error-stage]
-	)
-	> .dse-chrome {
-	box-shadow:
-		inset 0 1px 0 rgb(255 255 255 / 100%),
-		0 3px 7px rgb(0 0 0 / 15%);
-}
-
-/* -- tuck (SC-189 ROUND 4) --------------------------------------------------------------
-   Scott, 2026-08-26: "I also want to see what it looks like for the card to have a small
-   shadow that overlays on top of the menu panel."
-
-   THE DEPTH STORY. Today the panel and the card are coplanar: two flat plates meeting on a
-   line, which is exactly the reading "disconnected and out of place" describes — nothing in
-   the picture says which of the two is in front. `tuck` answers that by putting the CARD in
-   front: its top edge is lifted, and it casts a small shadow up onto the bottom of the plate
-   the panel presents. The panel stops being a slab parked against the card and becomes a
-   TAB TUCKED BEHIND IT — the one relationship a reader resolves instantly, because occlusion
-   is the strongest depth cue there is and it is the only one of the five candidates that
-   uses it.
-
-   MECHANISM — one declaration, on the panel, and no new DOM. The shadow is authored as an
-   INSET on the panel's own bottom edge rather than as a cast shadow on the card, for three
-   reasons that are all load-bearing:
-     1. It is confined to the panel. A real `box-shadow` on `.dse-sb` would paint a dark
-        band along the card's WHOLE top edge, visible at rest, on every card, whether or not
-        the panel is revealed — a change to the card's material to solve a problem at the
-        panel's junction.
-     2. It cannot reach the card's border row. An inset shadow is clipped to the panel's own
-        border box, so `assertChromeHostLeak`'s border-continuity measurement (round 3's
-        gate, max 8/255) is untouched by construction — which is the whole point after a
-        round spent removing a shadow that DID spill there.
-     3. It needs no stacking-order surgery. Making a card-owned shadow paint OVER a
-        `z-index: 3` panel means a pseudo-element at `z-index: 4` and a bet on which
-        ancestor happens to be a stacking context. This paints in the right order for free.
-   Read out of the picture the two are indistinguishable: a soft dark gradient rising ~5px
-   off the card's border line into the plate above it.
-
-   WHAT IT LEAVES ALONE. Geometry: nothing. The panel's bottom edge still lands exactly on
-   the frame's border-box top (`assertChromePlacement`, every sweep). The band's colour
-   recipe: untouched, unlike `hush`. The panel's fill and border: untouched, unlike `crown`
-   — the plate is still `--dse-surface-raised` on every family, so this does NOT reintroduce
-   a per-role panel material. The card: untouched, unlike `ledge`. E3's crown and upward
-   cast shadow are both kept verbatim; the two shadows describe DIFFERENT edges (the plate
-   still floats over whatever is above it — it is only its bottom edge that is now
-   overlapped), and the sequence a reader gets top-to-bottom is bright lip → plate → the
-   card's shadow → the card's own hairline.
-
-   FAMILY SCOPE — deliberately ALL chrome-bearing cards, unlike the four round-2 candidates.
-   Those four fix a contrast SEAM that only headered cards have, so they are keyed on a
-   headered family and leave a plain `feature`/`hero`/`stamina-bar`/`kit` card byte-identical.
-   `tuck` is not a seam fix: the junction it describes exists identically on every card that
-   carries chrome, and SC-169 ruling 1 (Scott: "The placement of the menu panel should be
-   consistent across the Elements") plus DESIGN.md's "the only per-element affordance
-   surface" both argue that the panel should read the same way everywhere. Keying it on
-   headered families would give one note two different panel depths.
-
-   The two schemes are separate values, not one token: 55% black under a dark card is the
-   cast weight E3 already uses there, and on the near-white light plate the same value would
-   read as grime rather than as an edge — the same reasoning, and the same ratio, as E3's own
-   34% → 15% light retune above. */
-[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='tuck'] .dse-chrome {
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.22),
-		inset 0 -5px 6px -3px rgb(0 0 0 / 55%),
-		0 -3px 7px rgb(0 0 0 / 34%);
-}
-body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-chrome-seat='tuck'] .dse-chrome {
-	box-shadow:
-		inset 0 1px 0 rgb(255 255 255 / 100%),
-		inset 0 -5px 6px -3px rgb(0 0 0 / 22%),
-		0 -3px 7px rgb(0 0 0 / 15%);
 }
 
 /* -- Featureblock head-band notch twin (SC-101 fix round, M-1): Task 2 gave the statblock
@@ -12711,7 +12485,13 @@ button.dse-pr__row:hover {
 	   happened to write. "No element's content gutter may move the chrome" is the rule. */
 	margin: 0 !important;
 	z-index: 3;
-	padding: 0 1px;
+	/* SC-189 ROUND 5 — the bottom 1px is the OPTICAL-CENTRING correction for the glyphs, and
+	   it is a px because what it compensates for is a px: the plate has a 1px top border and
+	   NO bottom border (the card's own hairline is its floor), so a symmetric inner padding
+	   would seat every glyph one pixel below the plate's optical centre. The breathing room
+	   itself lives on the buttons, in `em`, so it tracks the text/card-size prefs — see the
+	   panel-button rule below. */
+	padding: 0 1px 1px;
 	background: var(--dse-surface-raised);
 	border: 1px solid var(--dse-border);
 	border-bottom: 0;
@@ -12727,9 +12507,46 @@ button.dse-pr__row:hover {
 	   Deliberately NO `clip-path` and NO `filter` (both of which E1 needed): the panel's
 	   silhouette is a plain rounded box, so it cannot clip its own shadow, cannot clip a
 	   focus ring, and stays a pure paint change over the geometry above. Light theme retunes
-	   both halves — see the `body.theme-light` arm below. */
+	   both halves — see the `body.theme-light` arm below.
+
+	   SC-189 ROUND 5 — the MIDDLE layer, `tuck`, is Scott's ruling of 2026-08-26 ("Lets go
+	   with the `tuck` design") and it is here, on the base panel, rather than behind the
+	   round-2 review pref: the whole `chromeSeat` A/B is deleted, so this applies to every
+	   chrome-bearing card in both schemes.
+
+	   THE DEPTH STORY. Without it the panel and the card are coplanar — two flat plates
+	   meeting on a line, which is exactly the reading the ticket describes ("it feels almost
+	   disconnected and out of place"): nothing in the picture says which of the two is in
+	   front. `tuck` answers that by putting the CARD in front. Its top edge is lifted and
+	   casts a small shadow up onto the bottom of the plate the panel presents, so the panel
+	   reads as a TAB TUCKED BEHIND the card. Occlusion is the strongest depth cue there is,
+	   and it is the only one that needs no new colour, no new geometry and no new DOM.
+	   DESIGN.md states the extension it makes to E3: E3 says the panel rests on the element
+	   below; `tuck` adds that the card sits slightly IN FRONT of the panel.
+
+	   MECHANISM — an INSET on the panel's own bottom edge, never a cast shadow on the card,
+	   for three reasons that are all load-bearing:
+	     1. It is confined to the panel. A real `box-shadow` on `.dse-sb` would paint a dark
+	        band along the card's WHOLE top edge, at rest, on every card, revealed panel or
+	        not — a change to the card's material to solve a problem at the panel's junction.
+	     2. It CANNOT reach the card's border row. An inset shadow is clipped to the panel's
+	        own border box, so `assertChromeHostLeak`'s border-continuity measurement (round
+	        3's gate, max 8/255) is untouched by construction — which is the whole point after
+	        a round spent removing a shadow that DID spill there.
+	     3. It needs no stacking-order surgery. Making a card-owned shadow paint OVER a
+	        `z-index: 3` panel means a pseudo-element at `z-index: 4` and a bet on which
+	        ancestor happens to be a stacking context. This paints in the right order for free.
+	   Read out of the picture the two are indistinguishable: a soft dark gradient rising ~5px
+	   off the card's border line into the plate above it. E3's crown and upward cast are kept
+	   verbatim — the three layers describe DIFFERENT edges, and the sequence a reader gets
+	   top-to-bottom is bright lip → plate → the card's shadow → the card's own hairline.
+	   The two schemes are separate values, not one token, for the same reason (and in the
+	   same ratio) as E3's own 34% → 15% light retune: 55% black under a dark card is the cast
+	   weight E3 already uses there, and on the near-white light plate it would read as grime
+	   rather than as an edge. */
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.22),
+		inset 0 -5px 6px -3px rgb(0 0 0 / 55%),
 		0 -3px 7px rgb(0 0 0 / 34%);
 	opacity: 0;
 	pointer-events: none;
@@ -12752,6 +12569,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	border-top-color: #a9b1b5;
 	box-shadow:
 		inset 0 1px 0 rgb(255 255 255 / 100%),
+		inset 0 -5px 6px -3px rgb(0 0 0 / 22%),
 		0 -3px 7px rgb(0 0 0 / 15%);
 }
 
@@ -12856,7 +12674,27 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	min-width: 1.7em;
 	min-height: 1.5em;
 	height: auto;
-	padding: 0.1em 0.35em;
+	/* SC-189 ROUND 5 — BREATHING ROOM. Scott, 2026-08-27: "the 'edit' icon is nearly touching
+	   the top of the panel. `height: auto` may be the correct solution, but then the icons
+	   themselves need a margin or padding or something." He is describing the box round 4
+	   finally made visible: with Obsidian's 30px `height` re-grounded, `min-height: 1.5em`
+	   (20.39px here) took over, and a 16px Lucide glyph in a 20.39px button leaves 2.19px on
+	   each side — and the edit PENCIL is a corner-to-corner diagonal, so its ink really does
+	   run to the box edge. Measured, dark, statblock, host CSS injected:
+	     glyph box → panel top edge    3.19px  →  5.08px
+	     glyph box → panel bottom edge 2.20px  →  5.08px   (the panel's 1px bottom pad above)
+	     panel height                 21.39px  →  26.16px
+	   `0.3em` vertical, not a px figure and not a bigger `min-height`: padding is what Scott
+	   named, it is the declaration that actually surrounds the glyph, and in `em` it tracks
+	   the user's text/card-size prefs (SC-112 Task 7) exactly as the rest of this box does.
+	   `min-height: 1.5em` stays as the FLOOR — at this padding the content box (16 + 2×4.08)
+	   is the taller of the two, so the floor only matters if a future glyph shrinks. The
+	   coarse-pointer twin below still owns the touch box: 2em = 27.2px, which is taller than
+	   this, so the padding cannot shrink a touch target. (The at-rule is deliberately not
+	   spelled out here: chromeRound2.test.ts finds that block by searching the sheet for the
+	   at-rule text after this selector, so a second copy inside this comment would send it to
+	   the wrong rule.) */
+	padding: 0.3em 0.35em;
 	background: transparent;
 	border: 0;
 	border-radius: 0;

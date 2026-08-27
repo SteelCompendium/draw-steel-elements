@@ -1412,41 +1412,7 @@ export const CHROME_SHOTS: {
 		],
 		pad: 24,
 	},
-	// (12) SC-189 ROUND 2 — the panel-SEATING candidates, one frame each.
-	//
-	// The complaint is about a seam that only exists on cards with a role-tinted header
-	// band ("the menu panel feels off... almost looks 1 pixel too low" — measured as a
-	// ΔL ≈ 34-37 contrast step, not a position error), so every frame stacks the two
-	// headered families with a headerless one: statblock (role band), featureblock
-	// (unconditional band) and feature (no band, the CONTROL that already reads seated and
-	// which no candidate may disturb). `mobile: true` is the reveal mechanism for the same
-	// reason `chrome-placement-trio` uses it — it is the only mode that shows all three
-	// panels at once, and it changes opacity and the root's top margin, never the panel's
-	// own seating rules, which are the thing under review. `authoringControls` ON so the
-	// panel carries two items, as it does in the report crops.
-	//
-	// `chrome-seat-current` is the before-picture; the other five are the candidates.
-	// Disposable ids, deleted with the losing branches when Scott picks — and new names, so
-	// invisible to the freeze baseline by construction.
-	//
-	// SC-189 round 4 adds `tuck` (the card casts a small shadow onto the panel). Note that
-	// its frame is the one where the headerless `feature` card is NOT a control: `tuck` is a
-	// depth statement about the panel/card junction, which every chrome-bearing card has, so
-	// it deliberately reaches all three stacked elements. That is the thing to look at in
-	// this frame.
-	...(['current', 'hush', 'crown', 'ledge', 'drop', 'tuck'] as const).map((seat) => ({
-		id: `chrome-seat-${seat}`,
-		stack: [
-			{ element: 'statblock', fixture: 'default' },
-			{ element: 'featureblock', fixture: 'default' },
-			{ element: 'feature', fixture: 'default' },
-		],
-		mobile: true,
-		pad: 24,
-		prefs: { chromeSeat: seat, authoringControls: 'true' },
-	})),
 ];
-
 
 /* SC-183 round 3 — REAL PORTRAIT PIXELS for the round-3 review fixtures.
    Every initiative fixture before this round rendered SHIELD/SKULL fallbacks: the mock

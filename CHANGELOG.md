@@ -25,6 +25,21 @@ for what needs action.
   position 2596px → 0 before, 2596px → 2596px (never moved) after. The brief flash while
   Obsidian re-renders is unchanged — that is Obsidian's own rebuild, not something the
   plugin drives. A tracker in the sidebar was already immune and still is.
+- [FIX] **The card's border no longer fades away at its top corners** (SC-189). On a
+  statblock or featureblock, the header band's own corners were rounded a little tighter
+  than the card's, so the band quietly painted over the card's 1px hairline for the whole
+  curve of each top corner — the top edge and the right edge read fine and the corner
+  between them dissolved. The band now takes the card's own corner radius, and the hairline
+  runs unbroken all the way round. A new check in the visual battery measures the corner on
+  every card family in both schemes, so it cannot come back.
+- [FIX] **The element menu panel sits right, and the card sits in front of it** (SC-189).
+  Three things: the panel wore Obsidian's own button shadow (a five-layer plate shadow that
+  darkened its interior and spilled onto the card's top border row) and Obsidian's fixed
+  30px button height (which overrode the panel's own, declared size in every real vault);
+  both are now the plugin's again. And the card's top edge casts a small shadow up onto the
+  panel, so the panel reads as a tab tucked *behind* the card instead of a second plate
+  parked against it. The panel's icons also got room to breathe — the edit pencil was almost
+  touching the plate's top edge.
 - [FIX] **Buttons and other controls are no longer oversized** (SC-185). A bare button
   ("Reset Encounter State" and its neighbours) rendered about 23% larger than a native
   Obsidian button beside it. Control text now defaults to 0.85em instead of 1em — 13.6px

@@ -316,11 +316,31 @@ const BORDER_OCCLUSION_MAX = 8;
  *  kept only so a future `calc()` rounding difference is not a false red. The defect this
  *  catches was 9.61px. */
 const BOX_EPSILON = 0.05;
+/** SC-189 R5 — how far the card's hairline may drift AROUND THE TOP-RIGHT ARC from what the
+ *  same hairline reads on the straight top and right edges either side of it.
+ *
+ *  Check (b) below samples the border row under the panel and 40px to its left — both on the
+ *  STRAIGHT top edge — so it said nothing at all about the corner, and the corner is what
+ *  Scott reported three rounds running ("The border of the card is still lost in the corner.
+ *  Top border looks good. Right border looks good. At the corner it fades away."). Measured
+ *  at this sweep's dsf 2, mid-ring, with the defect present:
+ *    statblock[harrier]  Δ53   statblock[artillery] Δ44   roleless statblock Δ26
+ *    featureblock        Δ27   every headerless family    Δ≤8
+ *  and with it fixed the worst of all sixteen family/scheme combos is Δ7. 12 sits clear of
+ *  both. The residual floor is the stamina bar, whose plate carries its own state colour, so
+ *  its arc legitimately does not match its straight edges to the last count. */
+const CORNER_ARC_MAX = 12;
+/** Where on the arc to sample. 30°/45°/60° is the middle of the quarter turn — far enough
+ *  from either straight edge that a defect cannot hide in the blend, and far enough from the
+ *  ends that a 6.4px-radius card (feature/hero/kit) still has real ring to land on. */
+const CORNER_ARC_ANGLES = [60, 45, 30];
 
 /** Read the chrome panel's box + its buttons' shadows. Runs inside the page, so it must be a
  *  standalone serialisable function (no closure over module scope). */
 function probeChrome(sel) {
-	const f = document.querySelector(sel).getBoundingClientRect();
+	const frameEl = document.querySelector(sel);
+	const f = frameEl.getBoundingClientRect();
+	const fcs = getComputedStyle(frameEl);
 	const panel = document.querySelector('.dse-chrome');
 	const p = panel.getBoundingClientRect();
 	const btns = [...panel.querySelectorAll('.dse-btn')];
@@ -335,6 +355,10 @@ function probeChrome(sel) {
 		btnW: b ? b.width : null,
 		frameTop: f.top,
 		frameLeft: f.left,
+		// SC-189 R5 — the card's top-RIGHT corner, so the arc check below can find the ring.
+		frameRight: f.right,
+		frameRadius: parseFloat(fcs.borderTopRightRadius),
+		frameBorderTop: parseFloat(fcs.borderTopWidth),
 		panelMidX: (p.left + p.right) / 2,
 		panelBottom: p.bottom,
 		gap: f.top - p.bottom,
@@ -450,6 +474,73 @@ async function assertChromeHostLeak(page) {
 						`(max ${BORDER_OCCLUSION_MAX})`,
 				);
 			}
+			// (c) SC-189 R5 — THE CORNER. (b) samples two points that are BOTH on the
+			//     straight top edge, which is how three rounds of this ticket could report
+			//     "the border is continuous" while Scott kept seeing it fade at the arc. This
+			//     walks the border RING at three angles across the top-right quarter turn and
+			//     asks whether what is painted there is still the same hairline the straight
+			//     edges either side of it carry.
+			//
+			//     The defect it catches is not the panel's: the sb/fb head band's own top
+			//     corners were `--dse-radius` (0.4em -> 6.4px, resolved in the BAND's font
+			//     size) inside a plate whose corners are 0.65rem (10.4px), and a tighter arc
+			//     anchored at the same corner bulges OUTSIDE a looser one. A non-positioned
+			//     child's background paints AFTER its parent's border, and `.dse-sb` cannot
+			//     clip (the chrome panel is an out-of-flow child that paints above the card's
+			//     top edge), so the band painted over the hairline for the whole 90 degrees.
+			//     The gate lives here rather than in `assertChromePlacement` because this is
+			//     the picture Scott is describing — the corner NEXT TO the revealed panel —
+			//     and this is the loop that reveals it.
+			//
+			//     A REFERENCE, not an absolute colour: the hairline's value differs per
+			//     family, per scheme and (on the stamina bar) per state, so the arc is
+			//     compared against this same card's OWN straight top and right edges, blended
+			//     by angle. And a WALK across the ring rather than one sample on it, because
+			//     at dsf 2 a 1px ring on a 6.4px radius is a sub-pixel target while the
+			//     question a reader actually asks is "is the hairline anywhere along here".
+			const R = m.frameRadius;
+			const bw = m.frameBorderTop;
+			if (R > 2 && bw > 0) {
+				const acx = m.frameRight - R;
+				const acy = m.frameTop + R;
+				const dev = (x, y) => [Math.round(x * 2), Math.round(y * 2)];
+				const walk = [];
+				for (let r = R - bw - 0.5; r <= R + 0.25; r += 0.25) walk.push(r);
+				const refPts = [
+					dev(m.frameLeft + 40, m.frameTop + bw / 2),
+					dev(m.frameRight - bw / 2, m.frameTop + R + 30),
+				];
+				const arcPts = [];
+				for (const deg of CORNER_ARC_ANGLES) {
+					const t = (deg * Math.PI) / 180;
+					for (const r of walk) arcPts.push(dev(acx + r * Math.cos(t), acy - r * Math.sin(t)));
+				}
+				const read = await readPixels(page, buf, [...refPts, ...arcPts]);
+				const [refTop, refRight] = read;
+				CORNER_ARC_ANGLES.forEach((deg, ai) => {
+					// 90 degrees is the top edge, 0 the right edge — blend the two references.
+					const w = deg / 90;
+					const ref = [0, 1, 2].map((k) => w * refTop[k] + (1 - w) * refRight[k]);
+					let best = Infinity;
+					let bestPx = null;
+					for (let wi = 0; wi < walk.length; wi++) {
+						const px = read[refPts.length + ai * walk.length + wi];
+						const d = Math.max(...[0, 1, 2].map((k) => Math.abs(px[k] - ref[k])));
+						if (d < best) {
+							best = d;
+							bestPx = px;
+						}
+					}
+					if (best > CORNER_ARC_MAX) {
+						problems.push(
+							`${id}: the card's hairline is lost on the top-right arc at ${deg} deg — ` +
+								`the closest pixel across the border ring is rgb(${bestPx}), ` +
+								`${Math.round(best)}/255 off this card's own straight edges ` +
+								`(top rgb(${refTop}), right rgb(${refRight}); max ${CORNER_ARC_MAX})`,
+						);
+					}
+				});
+			}
 		}
 	}
 	// SC-189 R4 — the OTHER chrome button: the collapsed bar's always-visible expand control.
@@ -490,14 +581,14 @@ async function assertChromeHostLeak(page) {
 			`\nCHROME HOST-LEAK VIOLATED — with Obsidian's real \`button\` defaults present the ` +
 				`menu panel does not hold its own material or its own box:\n` +
 				problems.map((p) => `  ${p}`).join('\n') +
-				`\nSee styles-source.css → "Element chrome" → the panel-buttons block (SC-189 rounds 3-4).`,
+				`\nSee styles-source.css → "Element chrome" (SC-189 rounds 3-4) and the sb/fb head-band rules (round 5).`,
 		);
 		process.exit(1);
 	}
 	console.log(
 		`\nchrome host-leak OK (${checked} family/scheme combos: chrome buttons carry no host ` +
 			`box-shadow, the panel's box is unchanged by Obsidian's \`button\` rule, and the card's ` +
-			`top border is continuous under the panel)`,
+			`top border is continuous under the panel AND around the top-right arc beside it)`,
 	);
 }
 

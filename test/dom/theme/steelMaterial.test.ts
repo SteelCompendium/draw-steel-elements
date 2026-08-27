@@ -298,7 +298,13 @@ describe('Steel material contract', () => {
 		});
 
 		it('the sb/fb plate rounds at the site’s .65rem', () => {
-			expect(plateBlocks().some((b) => /border-radius:\s*0?\.65rem/.test(b))).toBe(true);
+			// SC-189 round 5 named the value (`--dse-plate-radius`) because the head band has
+			// to derive its own top corners from it — the band used to key on the em-valued
+			// `--dse-radius`, came out 4px tighter, and painted over the plate's hairline
+			// around both top corners. The assertion is unchanged in substance: the number is
+			// still .65rem and it is still declared on this plate, one line up.
+			expect(plateBlocks().some((b) => /--dse-plate-radius:\s*0?\.65rem/.test(b))).toBe(true);
+			expect(plateBlocks().some((b) => /border-radius:\s*var\(--dse-plate-radius\)/.test(b))).toBe(true);
 		});
 
 		// The sidebar initiative mount drops the OUTER lift (plate-inside-a-plate) and keeps

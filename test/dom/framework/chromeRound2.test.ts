@@ -108,83 +108,6 @@ describe('SC-169 R2 §1 — one placement geometry for every element', () => {
 	});
 });
 
-// ------------------------------------------ SC-189 R2: the seating candidates (hidden pref)
-// Round 1's diagnosis stands (the panel's POSITION is exact, the defect is a contrast seam
-// against the header band) but its fix — recolouring the frame's `border-top-color` — was
-// rejected by Scott and is reverted. Four candidates now sit behind the hidden `chromeSeat`
-// pref. jsdom computes neither layout nor colour arithmetic, so — the same discipline §1/§2
-// state above — what is pinned here is the CSS CONTRACT: that the default is inert, that
-// every candidate is Steel-screen-scoped, and that none of them reaches a headerless card.
-// The PICTURES are `chrome-seat-*` in the shot sweep and the round-2 report's crops; the
-// NUMBERS are in the report.
-describe('SC-189 R2 — chrome-panel seating candidates', () => {
-	/** The four SEAM candidates. `tuck` (round 4) is deliberately not one of them — it is a
-	 *  depth treatment, not a seam fix, and it is keyed on no family at all. Its own
-	 *  contract is the R4 block below. */
-	const SEATS = ['hush', 'crown', 'ledge', 'drop'] as const;
-	const ALL_SEATS = [...SEATS, 'tuck'] as const;
-
-	test('round 1\'s rejected border-top-color fix is gone', () => {
-		// Scott, 2026-08-23: "I dont think I like adding a unique border-top-color here."
-		expect(CSS).not.toContain("[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb[data-dse-role] {\n\tborder-top-color:");
-	});
-
-	test('the default (`current`) is INERT — no rule keys on it', () => {
-		// This is what keeps today's rendering, and every frozen print pair, untouched.
-		expect(CSS).not.toContain("[data-dse-chrome-seat='current']");
-	});
-
-	test.each(ALL_SEATS)('`%s` exists and every one of its selectors is Steel-screen-scoped', (seat) => {
-		const needle = `[data-dse-chrome-seat='${seat}']`;
-		expect(CSS).toContain(needle);
-		for (const line of CSS.split('\n')) {
-			if (!line.includes(needle)) continue;
-			expect(line).toContain("[data-dse-theme='steel']");
-			expect(line).toContain(':not([data-dse-print="on"])');
-		}
-	});
-
-	test.each(SEATS)('`%s` never reaches a headerless card', (seat) => {
-		// The seam is header-specific — a headerless `feature`/`hero`/`stamina-bar`/`kit`
-		// card measured ΔL ≈ 0.5 and must stay byte-identical. Every candidate selector is
-		// therefore keyed on a headered family: `.dse-sb[data-dse-role]` (the statblock draws
-		// a band only when a role mapped), `.dse-fb`/`.dse-sb` reached through the statblock
-		// plate, or the featureblock root.
-		const needle = `[data-dse-chrome-seat='${seat}']`;
-		const headered = /\.dse-sb|\.dse-fb|\[data-dse-element='featureblock'\]/;
-		// Every line that names this candidate is the HEAD of one of its selectors and
-		// carries the family key on the same line (the sheet is authored that way on
-		// purpose, so this check can be a grep rather than a CSS parser).
-		const lines = CSS.split('\n').filter((l) => l.includes(needle));
-		expect(lines.length).toBeGreaterThan(0);
-		for (const line of lines) expect(line).toMatch(headered);
-	});
-
-	test('`drop` is the only candidate that moves the panel, and it moves it DOWN into the band', () => {
-		// SC-169 ruling 2 ("the panel should not cover the Element's border") survives: drop
-		// re-anchors the panel to `top`, entirely inside the card, rather than pulling the
-		// crown down across the border row the way round 1 of SC-169 did with margin-bottom.
-		const start = CSS.indexOf("[data-dse-chrome-seat='drop']");
-		const block = CSS.slice(start, CSS.indexOf('}', CSS.indexOf('{', start)));
-		expect(block).toContain('top: calc(var(--dse-chrome-inset) - var(--dse-chrome-frame-border-top, 0px))');
-		expect(block).toContain('bottom: auto');
-		expect(block).not.toContain('margin-bottom: -');
-	});
-
-	test('no candidate hardcodes a font-size (SC-185)', () => {
-		for (const seat of ALL_SEATS) {
-			const needle = `[data-dse-chrome-seat='${seat}']`;
-			let from = CSS.indexOf(needle);
-			while (from !== -1) {
-				const open = CSS.indexOf('{', from);
-				const block = CSS.slice(open, CSS.indexOf('}', open));
-				expect(block).not.toContain('font-size');
-				from = CSS.indexOf(needle, open);
-			}
-		}
-	});
-});
-
 // --------------------------------------------- SC-189 R3: the host's button chrome
 // Scott's four defects of 2026-08-25 ("some layer bleeding over the top side", "a shadow
 // below the menu panel", "the border around the card cuts off on the corner", "the panel is
@@ -311,66 +234,167 @@ describe('SC-189 R4 — the chrome panel owns its own BOX', () => {
 	});
 });
 
-// --------------------------------------------------------- SC-189 R4: the `tuck` candidate
-// Scott, 2026-08-26: "I also want to see what it looks like for the card to have a small
-// shadow that overlays on top of the menu panel." `tuck` is that picture: the card's top edge
-// is lifted and casts onto the bottom of the plate, so the panel reads as a TAB TUCKED BEHIND
-// the card rather than a slab parked against it. Authored as an inset on the panel (not a
-// cast shadow on the card) so it is confined to the panel, cannot reach the card's border row
-// — the exact spill round 3 spent a round removing — and needs no stacking-order surgery.
-describe('SC-189 R4 — `tuck`, the card-casts-onto-the-panel candidate', () => {
-	const TUCK = "[data-dse-chrome-seat='tuck']";
-	const tuckBlocks = (): string[] => {
-		const out: string[] = [];
-		let from = CSS.indexOf(TUCK);
-		while (from !== -1) {
-			const open = CSS.indexOf('{', from);
-			out.push(CSS.slice(open, CSS.indexOf('}', open)));
-			from = CSS.indexOf(TUCK, open);
-		}
-		return out;
+// ------------------------------------------- SC-189 R5: `tuck`, and the panel's own box
+// Scott ruled twice on this panel. 2026-08-26: delete the whole `chromeSeat` A/B — the four
+// seam candidates were compensating for defects rounds 3-5 turned out to be real bugs, so
+// the original panel is right once they are fixed. 2026-08-27: "Lets go with the `tuck`
+// design" — the one candidate that was never a seam fix. It is therefore two unconditional
+// declarations on the BASE panel here, not a pref: the card's lifted top edge casts a small
+// shadow onto the bottom of the plate, so the panel reads as a TAB TUCKED BEHIND the card
+// rather than a slab parked against it.
+//
+// The mechanism is the contract. `tuck` is authored as an INSET on the panel, never as a
+// cast shadow on the card, so it is clipped to the panel's own border box — it cannot reach
+// the card's border row, which is the exact spill round 3 spent a whole round removing.
+// That property is what these tests pin; the picture is the `chrome-hover-*` shots.
+describe('SC-189 R5 — `tuck` is in the base panel, as an inset that cannot leave it', () => {
+	const TUCK_DARK = 'inset 0 -5px 6px -3px rgb(0 0 0 / 55%)';
+	const TUCK_LIGHT = 'inset 0 -5px 6px -3px rgb(0 0 0 / 22%)';
+	const LIGHT_PANEL = "body.theme-light [data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome";
+	const lightPanelBlock = (): string => {
+		const start = CSS.indexOf(`${LIGHT_PANEL} {`);
+		expect(start).toBeGreaterThan(-1);
+		return CSS.slice(start, CSS.indexOf('}', start));
 	};
 
-	test('both schemes are declared, and each is an INSET on the panel bottom', () => {
-		const blocks = tuckBlocks();
-		expect(blocks).toHaveLength(2); // dark + the body.theme-light twin
-		for (const b of blocks) expect(b).toMatch(/inset 0 -5px 6px -3px rgb\(0 0 0 \/ \d+%\)/);
-		// Light is retuned, not reused — 55% black over the near-white plate reads as grime,
-		// the same reasoning as E3's own 34% -> 15% light retune.
-		expect(blocks[0]).toContain('inset 0 -5px 6px -3px rgb(0 0 0 / 55%)');
-		expect(blocks[1]).toContain('inset 0 -5px 6px -3px rgb(0 0 0 / 22%)');
+	test('both schemes carry it, retuned rather than reused', () => {
+		// 55% black under a dark card is the cast weight E3 already uses there; on the
+		// near-white light plate the same value reads as grime, not as an edge — the same
+		// reasoning, and the same ratio, as E3's own 34% -> 15% light retune.
+		expect(panelBlock()).toContain(TUCK_DARK);
+		expect(lightPanelBlock()).toContain(TUCK_LIGHT);
+	});
+
+	test('the tuck layer is an INSET, and it appears ONLY inside a chrome-panel box-shadow', () => {
+		// This is the round-4 "sets box-shadow and nothing else" contract, restated for the
+		// promoted form. It is what stops someone re-authoring the effect the obvious way —
+		// a real `box-shadow` on `.dse-sb` — which would paint a dark band along the card's
+		// WHOLE top edge, at rest, on every card, revealed panel or not, and would put the
+		// shadow back on the card's border row.
+		for (const layer of [TUCK_DARK, TUCK_LIGHT]) {
+			expect(layer.startsWith('inset ')).toBe(true);
+			let from = CSS.indexOf(layer);
+			expect(from).toBeGreaterThan(-1);
+			let seen = 0;
+			while (from !== -1) {
+				const ruleStart = CSS.lastIndexOf('{', from);
+				const selector = CSS.slice(CSS.lastIndexOf('}', ruleStart) + 1, ruleStart);
+				expect(selector).toContain('.dse-chrome');
+				expect(CSS.slice(ruleStart, from)).toContain('box-shadow:');
+				seen += 1;
+				from = CSS.indexOf(layer, from + 1);
+			}
+			expect(seen).toBe(1);
+		}
 	});
 
 	test('it keeps E3 verbatim — the crown and the upward cast shadow are both still there', () => {
-		// The two shadows describe DIFFERENT edges: the plate still floats over whatever is
+		// The three layers describe DIFFERENT edges: the plate still floats over whatever is
 		// above it, and only its bottom edge is newly overlapped. `tuck` adds a layer; it does
 		// not retune Scott's sanctioned material.
-		const [dark, light] = tuckBlocks();
-		expect(dark).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.22)');
-		expect(dark).toContain('0 -3px 7px rgb(0 0 0 / 34%)');
-		expect(light).toContain('inset 0 1px 0 rgb(255 255 255 / 100%)');
-		expect(light).toContain('0 -3px 7px rgb(0 0 0 / 15%)');
+		expect(panelBlock()).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.22)');
+		expect(panelBlock()).toContain('0 -3px 7px rgb(0 0 0 / 34%)');
+		expect(lightPanelBlock()).toContain('inset 0 1px 0 rgb(255 255 255 / 100%)');
+		expect(lightPanelBlock()).toContain('0 -3px 7px rgb(0 0 0 / 15%)');
 	});
 
-	test('it changes NO geometry and no fill — box-shadow is the only property it sets', () => {
-		// Anything else here would put it in competition with `assertChromePlacement`, which
-		// re-measures the panel's exact seat every sweep.
-		for (const b of tuckBlocks()) {
-			const props = [...b.matchAll(/\n\t([a-z-]+):/g)].map((m) => m[1]);
-			expect(props).toEqual(['box-shadow']);
+	test('the light twin still declares nothing but the panel MATERIAL', () => {
+		// No geometry here, ever: `assertChromePlacement` re-measures the panel's exact seat
+		// every sweep, and a light-only offset would make the two schemes disagree about it.
+		const props = [...lightPanelBlock().matchAll(/\n\t([a-z-]+):/g)].map((m) => m[1]);
+		expect(props).toEqual(['border-top-color', 'box-shadow']);
+	});
+
+	test('the whole `chromeSeat` A/B is gone from the sheet', () => {
+		// Scott, 2026-08-26: delete it. Five branches, one hidden pref, six shot ids.
+		expect(CSS).not.toContain('chrome-seat');
+	});
+
+	test('BREATHING ROOM: the panel button pads in `em`, and keeps no px height', () => {
+		// Scott, 2026-08-27: "the 'edit' icon is nearly touching the top of the panel …the
+		// icons themselves need a margin or padding or something". Measured with Obsidian's
+		// host CSS injected, dark, statblock: the glyph box sat 3.19px from the panel's top
+		// edge and 2.20px from its bottom; it now sits 5.08px from both, and the panel is
+		// 26.16px tall (was 21.39px). `em` so it tracks the text/card-size prefs, which is
+		// the whole reason round 4 re-grounded Obsidian's px `height` in the first place.
+		const start = CSS.indexOf(
+			"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-chrome .dse-btn {",
+		);
+		expect(start).toBeGreaterThan(-1);
+		const block = CSS.slice(start, CSS.indexOf('}', start));
+		expect(block).toMatch(/\n\tpadding: 0\.3em [\d.]+em;/);
+		expect(block).toContain('min-height: 1.5em;');
+		expect(block).toMatch(/\n\theight: auto;/);
+		expect(block).not.toMatch(/\n\theight: \d/);
+		// The 1px is the plate's own top border, given back at the bottom so the glyph sits
+		// on the optical centre — a px because what it compensates for is a px.
+		expect(panelBlock()).toContain('padding: 0 1px 1px;');
+	});
+});
+
+// ------------------------------------------------- SC-189 R5: the card's corner hairline
+// Scott, 2026-08-27: "The border of the card is still lost in the corner. Top border looks
+// good. Right border looks good. At the corner it fades away." It was never the panel: with
+// the panel unrevealed, on a card nobody is hovering, the sb/fb head band painted straight
+// over the plate's 1px hairline for the whole 90 degrees of each top corner.
+//
+// CAUSE. The band is the plate's first child and sits FLUSH in its padding box, so its top
+// corners are drawn at the plate's corner — but its radius came from `--dse-radius`, which
+// is `0.4em` and therefore resolves against whichever element USES it (6.4px in the band's
+// font-size context), while the plate's own radius is the site-parity `0.65rem` = 10.4px. A
+// tighter arc anchored at the same corner bulges OUTSIDE a looser one, and a non-positioned
+// child's background paints AFTER its parent's border, so the band won. `.dse-sb` cannot
+// clip its overflow — the chrome panel is an absolutely positioned child that paints ABOVE
+// the card's top edge — so nothing stopped it.
+//
+// Measured, dark, artillery band, dsf 12, panel NOT revealed, at 45 degrees on the arc:
+//   straight top rgb(49,52,56) / straight right rgb(57,63,68) / arc BEFORE rgb(82,67,104)
+//   (the band's own fill) / arc AFTER rgb(59,63,71). Across all 16 family/scheme combos the
+// worst arc-vs-straight-edge deviation went 53/255 -> 8/255. jsdom computes no layout and no
+// colour, so the MEASUREMENT is `assertChromeHostLeak` check (c) in visual-harness/shoot.mjs;
+// what is pinned HERE is the arithmetic that makes it true.
+describe('SC-189 R5 — the head band cannot paint over the plate it sits in', () => {
+	const PLATE = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb {";
+	const BANDS = [
+		"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb[data-dse-role] > .dse-head {",
+		"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-fb > .dse-head {",
+	];
+	const blockAt = (needle: string): string => {
+		const start = CSS.indexOf(needle);
+		expect(start).toBeGreaterThan(-1);
+		return CSS.slice(start, CSS.indexOf('}', start));
+	};
+
+	test('the plate NAMES its radius, in `rem`, and uses the name', () => {
+		// `rem`, never `em`: a custom property's `em` re-resolves against whichever element
+		// consumes it, which is precisely the trap that produced this bug.
+		const block = blockAt(PLATE);
+		expect(block).toContain('--dse-plate-radius: 0.65rem;');
+		expect(block).toContain('border-radius: var(--dse-plate-radius);');
+		expect(CSS).not.toContain('\tborder-radius: 0.65rem;');
+	});
+
+	test('both head bands DERIVE their top corners from that radius, minus the border', () => {
+		// The standard inner-radius arithmetic: a child flush inside a 1px border gets the
+		// outer radius minus that border. Derived, not restated, so the two cannot drift.
+		for (const band of BANDS) {
+			expect(blockAt(band)).toContain(
+				'border-radius: calc(var(--dse-plate-radius) - 1px) calc(var(--dse-plate-radius) - 1px) 0 0;',
+			);
 		}
 	});
 
-	test('it reaches EVERY chrome-bearing card, unlike the four seam candidates', () => {
-		// SC-169 ruling 1 ("The placement of the menu panel should be consistent across the
-		// Elements") and DESIGN.md's "the only per-element affordance surface" both argue the
-		// panel must read the same way everywhere. `tuck` describes the panel/card junction,
-		// which every chrome-bearing card has — so it is keyed on `.dse-chrome` and on no
-		// family at all. This is the assertion that fails if someone "harmonises" it with the
-		// round-2 candidates by adding a headered-family key.
-		for (const line of CSS.split('\n').filter((l) => l.includes(TUCK))) {
-			expect(line).toContain('.dse-chrome {');
-			expect(line).not.toMatch(/\.dse-sb|\.dse-fb|data-dse-element/);
+	test('no head band still keys its corners on the em-valued `--dse-radius`', () => {
+		for (const band of BANDS) expect(blockAt(band)).not.toContain('border-radius: var(--dse-radius)');
+	});
+
+	test('the fix is Steel-screen-scoped, so no frozen print byte can move', () => {
+		// The bands are screen-only rules already (print gets plain ink), and the plate rule
+		// they read the token from carries the same exclusion — which is why the print
+		// baseline is untouched by a change to the card's corner.
+		for (const sel of [PLATE, ...BANDS]) {
+			expect(sel).toContain("[data-dse-theme='steel']");
+			expect(sel).toContain(':not([data-dse-print="on"])');
 		}
 	});
 });
