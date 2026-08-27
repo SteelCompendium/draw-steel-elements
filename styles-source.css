@@ -12887,3 +12887,191 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	background: var(--dse-hover);
 	color: var(--dse-fg);
 }
+
+/* ==================================================================================== */
+/*   SC-203 — PLUGIN-WIDE HOST RE-GROUNDING for every real <button> the kit renders     */
+/* ==================================================================================== */
+/*
+   SC-189 rounds 3-4 fixed ONE surface — the element chrome panel and its collapsed bar —
+   by re-grounding the two Obsidian `button` declarations that reached it. The same leak
+   was never plugin-wide-fixed, and it is plugin-wide: every kit control that is a real
+   `<button>` (`.dse-btn` and its variants, `.dse-tabs__tab`, `.dse-collapse__header`,
+   `button.dse-pr__row`) is reached by Obsidian's own app.css, and this sheet declared
+   only some of what Obsidian declares.
+
+   THE HOST RULES, read out of the LIVE app (not a hand-copied snapshot — see
+   `visual-harness/shoot.mjs` → OBSIDIAN_HOST_BUTTON_CSS for the copy the gate injects,
+   and the note there about how it is kept honest):
+
+     button {                                                    (0,0,1)
+       --text-color: var(--text-normal); app-region: no-drag;
+       display: inline-flex; align-items: center; justify-content: center;
+       color: var(--text-color); font-size: var(--font-ui-small);
+       border-radius: var(--button-radius); border: 0;
+       padding: var(--size-4-1) var(--size-4-3);
+       height: var(--input-height);            <-- 30px desktop / 40px mobile
+       font-weight: var(--input-font-weight); cursor: var(--cursor);
+       font-family: inherit; outline: none; user-select: none; white-space: nowrap;
+     }
+     button:not(.clickable-icon) {                               (0,1,1)
+       color: var(--text-color);
+       background-color: var(--interactive-normal);
+       box-shadow: var(--input-shadow);
+     }
+
+   WHAT ACTUALLY LEAKED, measured in a REAL vault (an isolated Obsidian on the demo vault,
+   every rendered button's computed style read twice — once as shipped, once with exactly
+   Obsidian's own matching rules deleted from its stylesheets — 122 button kinds across 14
+   elements x dark/light). Every one of the 122 was affected:
+
+     height          EVERY button. Not only an inflation: a used `height` also CRUSHES
+                     anything taller than 30px. Collapse headers 40.78 -> 30, tabs
+                     35.98 -> 30, power-roll rows 43.39 -> 30, the initiative portrait
+                     toggle 76 -> 30 and its roster cell 108 -> 30 (browser figures; the
+                     vault's are the same shape). The plugin's own `min-height` — the
+                     SC-121 density rule's `--dse-control-min` (1.75em) — never got a say.
+     color           `button:not(.clickable-icon) { color: var(--text-color) }` is (0,1,1)
+                     and the kit's `.dse-btn { color: var(--dse-fg) }` is (0,1,0), so the
+                     HOST won: every button's ink was Obsidian's --text-normal, not the
+                     Steel token. This one is invisible to SC-189's gate, whose host copy
+                     predates the `color` declaration moving onto the (0,1,1) rule.
+     background-color  same arithmetic, same loser: plain buttons, GHOST buttons (which
+                     stopped being ghosts and became filled plates) and even
+                     `.dse-btn--accent` (which lost its accent fill entirely) all wore
+                     --interactive-normal.
+     box-shadow      every button the Steel control-sheen rule (~:8477, (0,8,0)) does NOT
+                     cover — i.e. --ghost / --accent / --danger / [data-pressed], plus
+                     .dse-collapse__header and button.dse-pr__row, which are not in that
+                     rule's `:is()` at all. Those wore --input-shadow, the same plate
+                     shadow SC-189 removed from the chrome panel.
+     white-space     nowrap everywhere. NOT the no-op SC-189 correctly judged it to be for
+                     a single-glyph chrome button: it measurably changed the WIDTH of the
+                     collapse header, the tabs, the power-roll row and a labelled .dse-btn.
+     justify-content .dse-collapse__header and button.dse-pr__row declare `display: flex`
+                     but never a justification, so the host's `center` won — a header whose
+                     chevron+label is centred instead of flush left, under `text-align: left`.
+     display /       .dse-tabs__tab is not a flex container in this sheet; the host made it
+     align-items     one (`inline-flex`, centred), re-laying out the tab's icon + label.
+
+   DELIBERATELY NOT RE-GROUNDED — `user-select: none` (and `app-region`). It is the SC-189
+   white-space argument applied where it IS true: neither can move a box or paint a pixel,
+   they only decide whether a label can be dragged over. Re-grounding them would be a
+   declaration that pins nothing, and `none` on a button is the conventional answer anyway.
+   `assertBtnHostLeak` in visual-harness/shoot.mjs excludes exactly these two by name.
+
+   WHY THIS SHAPE — specificity, not values. The prefix `:is([data-dse-element], .dse-modal)
+   :not([data-dse-print="on"])` is (0,2,0) and every subject below sits inside `:where()`,
+   which contributes nothing — so every rule here is exactly (0,2,0). That is the LOWEST
+   specificity that beats both host rules ((0,0,1) and (0,1,1)), which means:
+     - every plugin rule at (0,3,0)+ still wins untouched — that is every component-level
+       override in this sheet, the Steel control-sheen rule, SC-189's chrome rules and the
+       `.dse-btn:hover` rule;
+     - the values below are not new decisions. Each one RESTATES what the kit already
+       declares for that subject, in the kit's own order, so the plugin keeps deciding.
+   The prefix is the SAME anchor the Controls font-family/font-size rules use (~:5717/5738)
+   over the SAME six-member control family, deliberately: this is a base-tier correction,
+   not a Steel look, and print is excluded because buttons are `display: none` on paper.
+
+   THE ONE FRAGILE PART, stated plainly: three kit rules are ALSO (0,2,0) and sit EARLIER
+   in this file, so a bare restatement here would beat them — `.dse-collapse__header:hover`
+   (~:11299), `.dse-tabs__tab:hover` (~:11336) and `.dse-tabs__tab[aria-selected='true']`
+   (~:11339). They are excluded by hand below (`:not(:hover)`, and the selected tab gets
+   its own mirrored entry) rather than by luck. If you add a (0,2,0) state rule to any of
+   these four families, add its twin here too — `assertBtnHostLeak` sweeps the gallery at
+   rest AND on hover in both schemes, so it will tell you.
+*/
+
+/* -- A. the declarations Obsidian makes on the bare `button` type that this sheet never
+      made at all. `height: auto` (never a px figure) hands the box back to the kit's own
+      `em` sizing — the SC-121 density rule's `--dse-control-min` floor plus padding — so
+      it keeps tracking the user's text/card-size prefs (SC-112 Task 7) exactly as SC-189
+      round 4 did for the panel. -- */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-btn, .dse-tabs__tab, .dse-collapse__header, .dse-pr__row) {
+	height: auto;
+	/* `inherit`, NOT `normal`. `white-space` is an INHERITED property and no UA rule sets
+	   it on <button>, so the value a button has with no host present is whatever its row
+	   passes down — and one place in this sheet relies on that: the initiative roster's
+	   `.dse-init__right` declares `nowrap` (~:10134 region) so the health readout beside a
+	   creature's name cannot break mid-phrase, and `.dse-init__stamina` inside it is a
+	   `.dse-btn`. Writing `normal` here severed that inheritance and quietly made one
+	   button wrappable — caught by the before/after resting-style comparison, not by eye.
+	   `inherit` re-grounds the host without taking the decision away from the ancestor. */
+	white-space: inherit;
+}
+/* The two families that declare `display: flex` but no justification (.dse-btn declares
+   `center` itself and is correctly left alone), plus the tab, which declares no display
+   at all — `inline-block` is the UA value for <button>, which the tablist's flex context
+   blockifies to `block`, i.e. exactly what this sheet renders with no host present. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-collapse__header, .dse-pr__row) {
+	justify-content: normal;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-tabs__tab) {
+	display: inline-block;
+	align-items: normal;
+	justify-content: normal;
+}
+
+/* -- B. `box-shadow`. The kit never declares one for any of these, so `none` IS the
+      plugin's own answer; the Steel control-sheen rule (0,8,0) still paints the bevel
+      where it applies, and SC-189's chrome rules (0,4,0) still win. The selected tab is
+      excluded because its accent top bar IS a box-shadow — restated in D below. -- */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(
+		.dse-btn,
+		.dse-collapse__header,
+		.dse-pr__row,
+		.dse-tabs__tab:not([aria-selected='true'])
+	) {
+	box-shadow: none;
+}
+
+/* -- C. the fill + ink family for .dse-btn, mirroring the kit's own rule order (~:11149)
+      so the variant that wins here is the variant that wins there. -- */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-btn) {
+	background-color: var(--dse-surface-raised);
+	color: var(--dse-fg);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-btn--accent) {
+	background-color: var(--dse-accent);
+	color: var(--dse-accent-fg);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-btn--ghost) {
+	background-color: transparent;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-btn--danger) {
+	background-color: transparent;
+	color: var(--dse-danger);
+}
+/* Kit order: [data-pressed] is the LAST of the variants, and [disabled] is (0,2,0) there,
+   so both outrank --ghost/--danger. Restated last here for the same effect. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-btn[data-pressed]) {
+	background-color: var(--dse-accent);
+	color: var(--dse-accent-fg);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-btn[disabled]) {
+	color: var(--dse-fg-muted);
+}
+
+/* -- D. the same fill + ink for the three non-.dse-btn controls. `:not(:hover)` guards the
+      two (0,2,0) hover rules this block would otherwise beat (see the note above). -- */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-collapse__header:not(:hover)) {
+	background-color: transparent;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-collapse__header) {
+	color: var(--dse-fg);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-tabs__tab:not(:hover):not([aria-selected='true'])) {
+	background-color: var(--dse-surface);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-tabs__tab[aria-selected='true']:not(:hover)) {
+	background-color: var(--dse-surface-raised);
+	box-shadow: inset 0 2px 0 0 var(--dse-accent);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-tabs__tab) {
+	color: inherit;
+}

@@ -84,6 +84,22 @@ const one = (needle: string, media = ''): Rule => {
 	return found[0];
 };
 
+/**
+ * Like `one`, but only among rules written under the Steel scope.
+ *
+ * SC-203 added a plugin-wide host re-grounding block at the foot of the sheet which also
+ * writes `:where(.dse-btn)` / `:where(.dse-btn--icon)` — under a DIFFERENT anchor
+ * (`:is([data-dse-element], .dse-modal):not([data-dse-print="on"])`, so it cannot collide
+ * on specificity with the density knob). Without this filter `one(':where(.dse-btn)')`
+ * matches two rules and this suite fails on a change that has nothing to do with density.
+ * The density contract is about the STEEL-scoped rule, so say so.
+ */
+const oneSteel = (needle: string, media = ''): Rule => {
+	const found = rulesFor(needle, media).filter((r) => r.selector.startsWith(STEEL_PRINT_SCOPE));
+	expect(found).toHaveLength(1);
+	return found[0];
+};
+
 /** The single rule whose selector is EXACTLY `selector` (never a superstring). */
 const exact = (selector: string, media = ''): Rule => {
 	const found = rules.filter((r) => r.selector === selector && r.media === media);
@@ -167,14 +183,14 @@ describe('A-2: Steel control density — one knob, pointer-aware', () => {
 	});
 
 	test('.dse-btn reads the knob for BOTH min dimensions, Steel-scoped and print-excluded', () => {
-		const r = one(':where(.dse-btn)');
+		const r = oneSteel(':where(.dse-btn)');
 		expect(r.selector).toBe(`${STEEL_PRINT_SCOPE} :where(.dse-btn)`);
 		expect(r.body).toMatch(/min-width:\s*var\(--dse-control-min/);
 		expect(r.body).toMatch(/min-height:\s*var\(--dse-control-min/);
 	});
 
 	test('icon-only buttons drop the kit label padding', () => {
-		const r = one(':where(.dse-btn--icon)');
+		const r = oneSteel(':where(.dse-btn--icon)');
 		expect(r.selector).toBe(`${STEEL_PRINT_SCOPE} :where(.dse-btn--icon)`);
 		expect(r.body).toMatch(/padding:\s*0\.15em/);
 		expect(r.body).toMatch(/gap:\s*0/);
@@ -185,7 +201,7 @@ describe('A-2: Steel control density — one knob, pointer-aware', () => {
 		// :where(), the shared rule would ALSO be (0,3,0) and — being far later in the
 		// file — would silently re-inflate them. Both density rules must use :where().
 		for (const needle of [':where(.dse-btn)', ':where(.dse-btn--icon)']) {
-			const r = one(needle);
+			const r = oneSteel(needle);
 			expect(r.selector.startsWith(`${STEEL_PRINT_SCOPE} :where(`)).toBe(true);
 		}
 	});

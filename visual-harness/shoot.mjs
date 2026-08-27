@@ -421,25 +421,33 @@ async function assertChromePlacement(page) {
 // exactly why the gate could not see it. Modelling the full rule means the box-invariance
 // check below tests every declaration the host actually makes, not a hand-picked subset.
 //
+// SC-203 — the block below was RE-READ OUT OF A LIVE OBSIDIAN, and that mattered. Rounds 3-4
+// hand-copied it from the 1.8.10 asar; Obsidian has since self-updated, and two of the
+// differences are load-bearing:
+//   * `color: var(--text-color)` MOVED ONTO `button:not(.clickable-icon)` — (0,1,1), which
+//     beats the kit's `.dse-btn { color: var(--dse-fg) }` (0,1,0). Every button in the plugin
+//     was wearing Obsidian's --text-normal instead of the Steel token, and the old copy —
+//     which had `color` only on the (0,0,1) `button` rule, where the kit wins — could not see
+//     it. A stale model of the host is a gate that reports a leak-free plugin.
+//   * `button:hover` NO LONGER EXISTS. Modelling a rule the host does not have would make
+//     this sweep demand re-groundings that pin nothing.
+// Provenance: an isolated Obsidian spawned on demo-vault (same plumbing as
+// visual-harness/obsidian-camera.mjs), `document.styleSheets` walked for every rule matching
+// a rendered `.dse-btn`, `cssText` printed verbatim. Redo that walk when Obsidian's own
+// button chrome next changes — do not hand-edit this from memory.
+//
 // It runs on its own navigations and captures nothing, so no shot's bytes depend on it.
 const OBSIDIAN_HOST_BUTTON_CSS = `
 .theme-dark {
   --input-shadow: inset 0 0.5px 0.5px 0.5px rgba(255, 255, 255, 0.09),
     0 2px 4px 0 rgba(0,0,0,.15), 0 1px 1.5px 0 rgba(0,0,0,.1),
     0 1px 2px 0 rgba(0,0,0,.2), 0 0 0 0 transparent;
-  --input-shadow-hover: inset 0 0.5px 1px 0.5px rgba(255, 255, 255, 0.16),
-    0 2px 3px 0 rgba(0,0,0,.3), 0 1px 1.5px 0 rgba(0,0,0,.2),
-    0 1px 2px 0 rgba(0,0,0,.4), 0 0 0 0 transparent;
-  --interactive-normal: #2a2a2a; --interactive-hover: #303030; --text-normal: #dadada;
+  --interactive-normal: #333333; --interactive-hover: #363636; --text-normal: #dadada;
 }
 .theme-light {
   --input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 2px 3px 0 rgba(0,0,0,.05), 0 1px 1.5px 0 rgba(0,0,0,.03),
-    0 1px 2px 0 rgba(0,0,0,.04), 0 0 0 0 transparent;
-  --input-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17),
-    0 2px 3px 0 rgba(0,0,0,.1), 0 1px 1.5px 0 rgba(0,0,0,.03),
-    0 1px 2px 0 rgba(0,0,0,.04), 0 0 0 0 transparent;
-  --interactive-normal: #f2f3f5; --interactive-hover: #e9e9e9; --text-normal: #222222;
+    0 1px 2px 0 rgba(0,0,0,.065), 0 0 0 0 transparent;
+  --interactive-normal: #ffffff; --interactive-hover: #fafafa; --text-normal: #222222;
 }
 /* The tokens Obsidian's base button rule reads, at their desktop values. */
 body {
@@ -447,11 +455,12 @@ body {
   --input-font-weight: 400; --size-4-1: 4px; --size-4-3: 12px; --cursor: default;
 }
 button {
-  -webkit-app-region: no-drag;
+  --text-color: var(--text-normal);
+  app-region: no-drag;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-normal);
+  color: var(--text-color);
   font-size: var(--font-ui-small);
   border-radius: var(--button-radius);
   border: 0;
@@ -464,9 +473,23 @@ button {
   user-select: none;
   white-space: nowrap;
 }
-button:not(.clickable-icon) { background-color: var(--interactive-normal); box-shadow: var(--input-shadow); }
-button:hover { background-color: var(--interactive-hover); box-shadow: var(--input-shadow-hover); }
+button:not(.clickable-icon) {
+  color: var(--text-color);
+  background-color: var(--interactive-normal);
+  box-shadow: var(--input-shadow);
+}
 `;
+
+/** SC-203 — inject the host sheet the way a real vault does: app.css FIRST, the plugin's
+ *  styles.css after it. Playwright's `addStyleTag` appends, which hands every
+ *  equal-specificity tie to the host and invents leaks the plugin does not have —
+ *  `button.dse-pr__row { background: transparent }` (0,1,1) vs
+ *  `button:not(.clickable-icon)` (0,1,1) is exactly such a tie, and a real Obsidian
+ *  resolves it to the plugin (measured). Prepending models the real cascade. */
+async function injectHostCss(page) {
+	const handle = await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
+	await page.evaluate((el) => document.head.prepend(el), handle);
+}
 
 // The families the panel has to look right on, one per CARD SHAPE and — for the statblock —
 // per ROLE HUE, because Scott reported this on an Artillery band (purple) and every earlier
@@ -605,7 +628,7 @@ async function assertChromeHostLeak(page) {
 			// SC-189 R4: measure the panel's box with NO host CSS first — that is the box every
 			// shot in this sweep, every review render and every DESIGN.md statement describes.
 			const bare = await page.evaluate(probeChrome, c.frame);
-			await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
+			await injectHostCss(page);
 			const m = await page.evaluate(probeChrome, c.frame);
 			checked += 1;
 			// (a) The rule that does the work. `none`, on every chrome button, in both schemes.
@@ -739,7 +762,7 @@ async function assertChromeHostLeak(page) {
 				return { barH: bar.getBoundingClientRect().height, btnH: b.getBoundingClientRect().height };
 			});
 		const bare = await readBar();
-		await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
+		await injectHostCss(page);
 		const withHost = await readBar();
 		checked += 1;
 		for (const [k, label] of [
@@ -768,6 +791,163 @@ async function assertChromeHostLeak(page) {
 		`\nchrome host-leak OK (${checked} family/scheme combos: chrome buttons carry no host ` +
 			`box-shadow, the panel's box is unchanged by Obsidian's \`button\` rule, and the card's ` +
 			`top border is continuous under the panel AND around the top-right arc beside it)`,
+	);
+}
+
+// ---------------------------------------------------------------------------------------
+// SC-203 — the PLUGIN-WIDE host-leak gate.
+//
+// `assertChromeHostLeak` above proves one surface — the element menu panel — holds its own
+// box and material under Obsidian's real `button` rules. That surface was never the whole
+// defect: EVERY kit control that is a real `<button>` is reached by the same rules, and a
+// real-vault measurement (isolated Obsidian, 122 button kinds across 14 elements × dark and
+// light, each read twice — as shipped, and with exactly Obsidian's own matching rules
+// deleted) found ALL 122 affected. Heights forced to `--input-height`, ghost buttons filled,
+// accent buttons de-accented, every button's ink replaced with Obsidian's --text-normal,
+// collapse headers centre-justified. See the SC-203 block at the foot of styles-source.css.
+//
+// The assertion is INVARIANCE, not a value list: for every distinct kind of button the
+// gallery renders, the computed style must be IDENTICAL with and without the host sheet.
+// That is the only formulation that catches the NEXT declaration Obsidian adds — the one
+// nobody has thought of yet — which is exactly how the `color` leak survived SC-189.
+//
+// Why the gallery: it mounts every element family in one page, so the sweep covers the whole
+// plugin for two navigations instead of one per family. `authoringControls:true` puts the
+// edit affordance on, so the chrome panel's buttons are in the sample too.
+//
+// It runs on its own navigations and captures nothing, so no shot's bytes depend on it.
+
+/** Properties compared with and without the host sheet. Everything the host's two rules can
+ *  set, plus the geometry those declarations move. */
+const BTN_PROPS = [
+	'height',
+	'minHeight',
+	'minWidth',
+	'boxShadow',
+	'padding',
+	'borderWidth',
+	'borderStyle',
+	'borderColor',
+	'borderRadius',
+	'backgroundColor',
+	'backgroundImage',
+	'color',
+	'fontSize',
+	'fontWeight',
+	'fontFamily',
+	'lineHeight',
+	'display',
+	'alignItems',
+	'justifyContent',
+	'whiteSpace',
+	'cursor',
+	'boxSizing',
+	'letterSpacing',
+	'textAlign',
+	'opacity',
+	'gap',
+	'outlineStyle',
+	'outlineWidth',
+];
+/** DELIBERATELY NOT COMPARED. `user-select` and `app-region` are the only two declarations
+ *  Obsidian's `button` rules make that this sheet does not re-ground, and they are excluded
+ *  here for the same reason SC-189 left `white-space` alone on a single-glyph chrome button:
+ *  neither can move a box or paint a pixel. (`white-space` itself is NOT on this list —
+ *  plugin-wide it demonstrably moves widths, so it is re-grounded and compared.) */
+const BTN_PROPS_EXCLUDED = ['user-select', 'app-region'];
+
+/** Runs in the page. Tags each distinct button kind so the second pass reads the same node. */
+function probeButtons(props) {
+	const out = [];
+	const seen = new Set();
+	for (const n of document.querySelectorAll('button, .dse-btn')) {
+		const root = n.closest('[data-dse-element]');
+		const key =
+			(root ? root.getAttribute('data-dse-element') : '(none)') +
+			'|' +
+			([...n.classList].sort().join('.') || '(no class)') +
+			(n.hasAttribute('data-pressed') ? '|pressed' : '') +
+			(n.getAttribute('aria-selected') === 'true' ? '|selected' : '') +
+			(n.disabled ? '|disabled' : '');
+		if (seen.has(key)) continue;
+		seen.add(key);
+		n.setAttribute('data-dse-hostleak', key);
+		const cs = getComputedStyle(n);
+		const r = n.getBoundingClientRect();
+		const rec = { key, w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** Re-read the SAME nodes (by the tag the first pass left) after the host sheet is in. */
+function reprobeButtons(props) {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-hostleak]')) {
+		const cs = getComputedStyle(n);
+		const r = n.getBoundingClientRect();
+		const rec = { key: n.getAttribute('data-dse-hostleak'), w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+async function assertBtnHostLeak(page) {
+	const problems = [];
+	let kinds = 0;
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({
+			gallery: '1',
+			theme: 'steel',
+			bg,
+			prefs: 'authoringControls:true',
+		});
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		const bare = await page.evaluate(probeButtons, BTN_PROPS);
+		if (bare.length < 20) {
+			problems.push(`${bg}: only ${bare.length} buttons found in the gallery — the sweep is blind`);
+			continue;
+		}
+		await injectHostCss(page);
+		const withHost = new Map((await page.evaluate(reprobeButtons, BTN_PROPS)).map((r) => [r.key, r]));
+		for (const b of bare) {
+			const h = withHost.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			kinds += 1;
+			for (const p of ['w', 'h', ...BTN_PROPS]) {
+				const a = typeof b[p] === 'number' ? b[p].toFixed(2) : String(b[p]);
+				const c = typeof h[p] === 'number' ? h[p].toFixed(2) : String(h[p]);
+				if (a !== c) {
+					problems.push(
+						`${bg}|${b.key}: Obsidian's \`button\` rules change ${p} — ` +
+							`"${a}" without the host, "${c}" with it`,
+					);
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 40);
+		console.error(
+			`\nBUTTON HOST-LEAK VIOLATED — with Obsidian's real \`button\` defaults present the ` +
+				`plugin's own buttons do not hold their own box or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-203 — PLUGIN-WIDE HOST RE-GROUNDING" (foot of the file).`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nbutton host-leak OK (${kinds} button kinds across the whole gallery × dark/light: ` +
+			`every sampled property is identical with and without Obsidian's \`button\` rules; ` +
+			`${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)`,
 	);
 }
 
@@ -945,6 +1125,9 @@ try {
 		// SC-189 round 3 — the host-leak gate (see the block above). Same "own navigations,
 		// captures nothing" shape, so it is skipped on a narrowed run for the same reason.
 		await assertChromeHostLeak(page);
+		// SC-203 — the same question asked of EVERY button in the plugin, not just the
+		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
+		await assertBtnHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
