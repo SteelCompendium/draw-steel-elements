@@ -664,6 +664,17 @@ code.dsa {
         display: block;
         width: 100%;
         height: 100%;
+        /* SC-204 — this button IS the turnbox's padding box (width/height 100%, no
+           padding on the box), so its corners are drawn AT the box's corners and its
+           radius must be the box's 4px minus the box's 1px border. The compact-button
+           reset above zeroes `border-radius` along with the rest of the kit chrome, and
+           at 0 the button's own gradient covered the box's hairline for the whole of
+           each corner arc: in LIGHT, where that gradient starts at
+           rgba(255,255,255,0.9), the ring read rgb(237,238,238) against a rgb(84,92,97)
+           hairline — 156/255 off the straight edges either side of it (dark hides it at
+           3-8/255, which is why it survived this long). Same 3px the svg below already
+           uses for the same arithmetic. */
+        border-radius: 3px;
     }
 
     .dse-init__turn .dse-btn__icon,
@@ -4602,7 +4613,32 @@ Shared globals
 	--dse-surface-sunken: rgba(0,0,0,0.18);
 	--dse-border: rgba(220,226,230,0.12);
 	--dse-border-strong: rgba(220,226,230,0.24);
-	--dse-radius: 0.4em; /* DESIGN.md card radius (Legacy 5px) */
+	/* DESIGN.md card radius (base 5px). SC-204 AUDITED THE UNIT AND KEPT IT — read this
+	   before you "fix" it to rem.
+	   WHAT `em` BUYS: a custom property holding an `em` length re-resolves against
+	   whichever element USES it, so this one token gives every text-sized affordance a
+	   radius in proportion to its own type. Measured across the harness it lands anywhere
+	   from 4.10px (`.dse-collapse__header` at fs 10.24) to 7.49px (`.dse-hero__region-title`
+	   at fs 18.72), and the card head's three chip slots come out 4.76 / 5.60 / 6.30 / 7.00px
+	   across their four type-scale steps (`.dse-head__*--chip`, ~:11506) — a pill whose
+	   corner tracks its own text, which a single rem would flatten. That is deliberate and
+	   it is why this stays `em`.
+	   WHAT `em` COSTS — the trap, and it has bitten twice:
+	     a child that sits FLUSH in a rounded parent's padding box must be exactly
+	     `parentRadius - parentBorderWidth`, and `var(--dse-radius)` on both ends does NOT
+	     give you that — the two resolve in two different font contexts, and the parent's
+	     border width is not in the token at all. A child arc TIGHTER than the parent's inner
+	     arc paints over the parent's hairline for the whole 90 degrees (a non-positioned
+	     child's background paints after its parent's border, and these cards are
+	     `overflow: visible` on purpose); a LOOSER one leaves a wedge of the parent's own
+	     fill showing where the child's fill should be.
+	   THE RULE, then: `--dse-radius` is the CHIP/CONTROL radius. Any plate whose corner a
+	   second element has to MEET declares its own named radius in `rem` and the flush child
+	   derives from it with `calc(... - 1px)`. Two exist — `--dse-plate-radius` (statblock /
+	   featureblock, SC-189) and `--dse-region-radius` (hero region panels, SC-204). Adding a
+	   third is the right move; reaching for `var(--dse-radius)` on both halves is not.
+	   `visual-harness/shoot.mjs` → `assertNestedCornerRadius` fails the sweep if you do. */
+	--dse-radius: 0.4em;
 	--dse-hover: rgba(77,184,199,0.10);
 	/* Re-keyed to the rule tokens so the hairline tracks the theme (map fn 4). */
 	--dse-hairline-fade: linear-gradient(to right, var(--dse-rule), var(--dse-rule-fade));
@@ -8367,6 +8403,16 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 /*    featureblock header bands ~3561/~3582). */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero__region {
 	background: var(--dse-surface-sunken);
+	/* SC-204 — the region is a PLATE whose corner a second element has to meet (the
+	   header strip below bleeds to its padding box), so it names its radius in `rem`
+	   for the same reason `--dse-plate-radius` does: `var(--dse-radius)` is `0.4em` and
+	   re-resolves against whoever reads it. The base rule (~:4130) still declares the
+	   region's radius from `--dse-radius`, which is what keeps print square (the token
+	   is `0` there and this Steel rule is print-excluded); `0.4rem` is the same 6.40px
+	   that base rule already computed at the hero's 16px, so the region itself does not
+	   move a pixel — only the strip's corners, below, are repaired. */
+	--dse-region-radius: 0.4rem;
+	border-radius: var(--dse-region-radius);
 }
 [data-dse-theme='steel'] .dse-hero__region-title {
 	text-shadow: var(--dse-emboss);
@@ -8387,7 +8433,17 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-hero {
 	padding: 0.45em var(--dse-pad);
 	background: var(--dse-surface-raised);
 	border-bottom: 1px solid var(--dse-border);
-	border-radius: var(--dse-radius) var(--dse-radius) 0 0;
+	/* SC-204 — same defect SC-189 found on the sb/fb head band, sign reversed. The
+	   negative margins above put this strip's top corners exactly ON the region's
+	   padding-box corners, so its radius must be the region's MINUS the region's 1px
+	   border. It used to read `var(--dse-radius)` — but this is an <h3> at fs 18.72, so
+	   the same token that gives the region 6.40px gave the strip 7.488px: a 2.09px LOOSER
+	   arc, which cut the strip's own fill back off the corner and showed a ~0.9px wedge of
+	   the region's sunken plate where the raised strip should be (measured 9-16/255 in
+	   dark, 1-9/255 in light, all seven regions, both top corners). `--dse-region-radius`
+	   is a rem, so this calc is the same 5.40px wherever it is read. */
+	border-radius: calc(var(--dse-region-radius) - 1px) calc(var(--dse-region-radius) - 1px)
+		0 0;
 }
 
 /* -- Forged chips: skill chips + ability cost/type chips pick up the   */

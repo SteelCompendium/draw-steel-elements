@@ -53,6 +53,168 @@ const comboName = (c) =>
 /** Only the realprint combo emulates the print MEDIUM; the twin stays on screen. */
 const mediaFor = (c) => (c.realprint ? 'print' : 'screen');
 
+// SC-204 — how far a flush child's corner arc may sit from its parent's INNER arc.
+// Both arcs are anchored on the same point, so any real difference is visible from the
+// first device pixel; the budget only exists so `calc()`/layout rounding is not a false
+// red. The two defects this catches measured 2.09px (hero region strip) and 3.00px
+// (initiative turn button) — two orders of magnitude clear of it.
+const NESTED_RADIUS_EPSILON = 0.25;
+/** Sub-pixel slack for "is this child's corner ON its parent's padding-box corner". */
+const NESTED_FLUSH_EPSILON = 0.35;
+/** Deduplicated `assertNestedCornerRadius` findings: key → one report line. */
+const nestedRadiusProblems = new Map();
+
+// SC-204 — THE FLUSH-CHILD-AT-A-ROUNDED-CORNER GATE, and the reason this whole class of
+// bug is not allowed to come back a third time.
+//
+// The shape: a child whose border box sits FLUSH in a rounded parent's padding box draws
+// its corners AT that parent's corners, so its radius has exactly one correct value —
+// `parentRadius - parentBorderWidth`. Anything else is visible:
+//   - a TIGHTER child arc bulges OUTSIDE the parent's inner arc and, because a
+//     non-positioned child's background paints AFTER its parent's border and these cards
+//     are `overflow: visible` on purpose, it paints over the parent's hairline for the
+//     whole 90 degrees (SC-189: the sb/fb head band, and check (c) above);
+//   - a LOOSER one cuts the child's own fill back off the corner and shows a wedge of the
+//     parent's fill where the child's should be (SC-204: the hero region header strip).
+// `--dse-radius` is `0.4em`, and a custom property holding an `em` re-resolves against
+// whichever element USES it — so writing `var(--dse-radius)` on both halves of such a pair
+// looks right and silently is not. That is how both defects were authored.
+//
+// WHY IT LIVES HERE rather than in jsdom: the predicate is pure LAYOUT — box positions,
+// used border widths, computed radii in px — and jsdom computes none of it. Every capture
+// this sweep already navigates to gets probed, so the gate costs no extra page loads and
+// covers every fixture, width, preference variant and both schemes.
+//
+// THE GUARDS, each of which is a real thing in this tree and not defensive padding:
+//   - the child must actually PAINT (a background colour with alpha, or an image);
+//   - nothing between the child and that parent may CLIP (`overflow` other than visible) —
+//     a clipping ancestor rounds the child for you, which is how `.dse-pr__row` and
+//     `.dse-prj__bar-fill` are legitimately square inside rounded parents;
+//   - the parent's border must be VISIBLE (width > 0, colour alpha > 0). A collapsed
+//     element's root keeps its border for width but sets `border-color: transparent` and
+//     `background: none`, so its `.dse-chrome-summary` child has no hairline to damage and
+//     no fill to expose — geometry alone would report 8 phantom corners there.
+/** Runs inside the page; must be standalone/serialisable (no module-scope closure). */
+function probeNestedCorners({ flushEps, radiusEps }) {
+	const root = document.querySelector('#mount');
+	if (!root) return [];
+	const alpha = (c) => {
+		const m = String(c).match(/rgba?\(([^)]+)\)/);
+		if (!m) return 1;
+		const p = m[1].split(',').map((x) => parseFloat(x));
+		return p.length > 3 ? p[3] : 1;
+	};
+	const cache = new Map();
+	const read = (el) => {
+		if (cache.has(el)) return cache.get(el);
+		const cs = getComputedStyle(el);
+		const v = {
+			r: el.getBoundingClientRect(),
+			radii: {
+				tl: parseFloat(cs.borderTopLeftRadius) || 0,
+				tr: parseFloat(cs.borderTopRightRadius) || 0,
+				br: parseFloat(cs.borderBottomRightRadius) || 0,
+				bl: parseFloat(cs.borderBottomLeftRadius) || 0,
+			},
+			bw: {
+				top: parseFloat(cs.borderTopWidth) || 0,
+				right: parseFloat(cs.borderRightWidth) || 0,
+				bottom: parseFloat(cs.borderBottomWidth) || 0,
+				left: parseFloat(cs.borderLeftWidth) || 0,
+			},
+			bc: {
+				top: alpha(cs.borderTopColor),
+				right: alpha(cs.borderRightColor),
+				bottom: alpha(cs.borderBottomColor),
+				left: alpha(cs.borderLeftColor),
+			},
+			clips: cs.overflow !== 'visible',
+			paints: alpha(cs.backgroundColor) > 0.001 || cs.backgroundImage !== 'none',
+		};
+		cache.set(el, v);
+		return v;
+	};
+	const name = (el) => {
+		let s = el.tagName.toLowerCase();
+		const cls = (el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean);
+		if (cls.length) s += '.' + cls.slice(0, 3).join('.');
+		if (el.hasAttribute('data-dse-element')) s += `[data-dse-element=${el.getAttribute('data-dse-element')}]`;
+		return s;
+	};
+	// x/y name the rect side the corner sits on; `sgn` walks inward from it.
+	const CORNERS = [
+		{ k: 'tl', x: 'left', y: 'top', sx: 'left', sy: 'top' },
+		{ k: 'tr', x: 'right', y: 'top', sx: 'right', sy: 'top' },
+		{ k: 'br', x: 'right', y: 'bottom', sx: 'right', sy: 'bottom' },
+		{ k: 'bl', x: 'left', y: 'bottom', sx: 'left', sy: 'bottom' },
+	];
+	const sgn = { left: 1, top: 1, right: -1, bottom: -1 };
+	const found = [];
+	for (const el of [root, ...root.querySelectorAll('*')]) {
+		const v = read(el);
+		if (!v.paints || v.r.width < 2 || v.r.height < 2) continue;
+		for (const C of CORNERS) {
+			let a = el.parentElement;
+			let clipped = false;
+			let p = null;
+			while (a && a !== document.body) {
+				const av = read(a);
+				if (av.clips) clipped = true;
+				if (av.radii[C.k] > 0.5) {
+					p = av;
+					break;
+				}
+				a = a.parentElement;
+			}
+			if (!p || clipped || p.clips) continue;
+			const bwx = p.bw[C.sx];
+			const bwy = p.bw[C.sy];
+			if (bwx <= 0 || bwy <= 0) continue; // no hairline to damage, no inset to honour
+			if (p.bc[C.sx] <= 0.001 || p.bc[C.sy] <= 0.001) continue; // border is invisible
+			const dx = Math.abs(v.r[C.x] - (p.r[C.x] + sgn[C.x] * bwx));
+			const dy = Math.abs(v.r[C.y] - (p.r[C.y] + sgn[C.y] * bwy));
+			if (dx > flushEps || dy > flushEps) continue; // not flush at this corner
+			const want = p.radii[C.k] - Math.max(bwx, bwy);
+			const got = v.radii[C.k];
+			if (Math.abs(got - want) <= radiusEps) continue;
+			found.push({
+				key: `${name(el)}|${name(a)}|${C.k}|${got.toFixed(2)}|${want.toFixed(2)}`,
+				child: name(el),
+				parent: name(a),
+				corner: C.k,
+				got,
+				want,
+				parentRadius: p.radii[C.k],
+				parentBorder: Math.max(bwx, bwy),
+			});
+		}
+	}
+	return found;
+}
+
+function assertNestedCornerRadius() {
+	if (!nestedRadiusProblems.size) {
+		console.log(
+			`\nnested corner-radius OK (no child sits flush in a rounded, bordered parent with a ` +
+				`radius other than the parent's own inner radius)`,
+		);
+		return;
+	}
+	console.error(
+		`\nNESTED CORNER-RADIUS VIOLATED — ${nestedRadiusProblems.size} child/parent corner(s) ` +
+			`sit flush at a rounded parent's padding-box corner with the wrong radius, so the ` +
+			`child paints over the parent's hairline (tighter) or shows the parent's fill through ` +
+			`its own corner (looser):\n` +
+			[...nestedRadiusProblems.values()].map((p) => `  ${p}`).join('\n') +
+			`\nA flush child's radius is its parent's radius MINUS the parent's border width. ` +
+			`\`var(--dse-radius)\` cannot express that: it is \`0.4em\` and re-resolves in the ` +
+			`child's own font size. Give the parent a named \`rem\` radius (see ` +
+			`--dse-plate-radius / --dse-region-radius in styles-source.css) and derive the child ` +
+			`with calc(... - 1px).`,
+	);
+	process.exit(1);
+}
+
 const failures = [];
 /** Every capture this run actually wrote: `${captureId}${suffix}` → combo → file basename.
  *  The parity assertion reads THIS, not the shots directory, so a narrowed run can never
@@ -103,6 +265,23 @@ async function snap(page, combo, params, captureId, opts = {}) {
 		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
 		if (query.gallery) await page.screenshot({ path: file, fullPage: true });
 		else await page.locator('#mount').screenshot({ path: file });
+		// SC-204 — probe AFTER the screenshot (it only reads, but the ordering makes it
+		// impossible for the gate to influence a frozen byte) and only on a clean mount,
+		// since an error card's geometry is not the geometry under test.
+		if (!errors.length) {
+			for (const p of await page.evaluate(probeNestedCorners, {
+				flushEps: NESTED_FLUSH_EPSILON,
+				radiusEps: NESTED_RADIUS_EPSILON,
+			})) {
+				if (nestedRadiusProblems.has(p.key)) continue;
+				nestedRadiusProblems.set(
+					p.key,
+					`${p.child} [${p.corner}] is ${p.got.toFixed(2)}px inside ${p.parent} ` +
+						`(radius ${p.parentRadius.toFixed(2)}px, border ${p.parentBorder.toFixed(2)}px ` +
+						`→ inner ${p.want.toFixed(2)}px) — first seen in ${outName}`,
+				);
+			}
+		}
 		if (errors.length) failures.push({ outName, errors });
 		else {
 			const key = `${captureId}${suffix}`;
@@ -851,4 +1030,7 @@ if (failures.length) {
 	process.exit(1);
 }
 assertPrintTwinParity();
+// SC-204 — runs on EVERY invocation, narrowed or not: unlike the gallery and the two
+// chrome gates it takes no navigations of its own, so there is nothing to skip.
+assertNestedCornerRadius();
 console.log(`\nall shots written to ${shotsDir}`);
