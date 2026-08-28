@@ -9009,9 +9009,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-kw
 	--t: var(--dse-tier-crit);
 	--tw: rgba(224, 176, 80, 0.08); /* #e0b050 */
 }
-/* Light-scheme twins of the static wash. Only low/mid/high are re-listed: the
-   Steel-light token block does not override --dse-tier-crit (it is light/dark
-   stable at #e0b050), so the dark --tw above is already correct for crit.
+/* Light-scheme twins of the static wash — all FOUR tiers since SC-196, which gave
+   --dse-tier-crit a light column of its own (#a57517: the dark gold measured
+   1.75:1 as the crit row's 3px spine against a 3.0 non-text requirement). Before
+   that, crit inherited the dark value and this list ran low/mid/high only.
    Specificity: `body.theme-light` adds a class, so each of these out-specifies
    its dark counterpart, matching the convention used for the card/tile/equip
    light twins elsewhere in this file. */
@@ -9025,6 +9026,11 @@ body.theme-light
 	[data-dse-theme='steel']:not([data-dse-print="on"])
 	.dse-pr__row[data-tier='high'] {
 	--tw: rgba(30, 132, 73, 0.08); /* #1e8449 */
+}
+body.theme-light
+	[data-dse-theme='steel']:not([data-dse-print="on"])
+	.dse-pr__row[data-tier='crit'] {
+	--tw: rgba(165, 117, 23, 0.08); /* SC-196 --dse-tier-crit light #a57517 */
 }
 
 /* -- SC-10 Task 3: dashed keyword-spend box — the "SPEND 1+ INSIGHT" clause
@@ -13037,6 +13043,49 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 
 	/* -- Stamina bar track -- */
 	--dse-stamina-track: #eaeeef;
+
+	/* -- SC-196: the STATE palette's light column ----------------------------------
+	   Every token below used to be listed as "light/dark-STABLE" on the reasoning
+	   that these are FILLS with no contrast pressure. The audit measured that claim
+	   and it is false: all ten are also painted as TEXT or as a meaning-bearing MARK
+	   (the winded/dying words and numerals, the initiative state chip, the malice
+	   readout, the montage/project outcome lines, the gauge graduations, the tier
+	   spine), and on a light ground the dark-tuned hue lands far under the bar —
+	   `--dse-stamina-winded` measured 1.55:1 as the `winded` word and 1.60:1 as the
+	   28px numeral against a 4.5 / 3.0 requirement.
+
+	   These are LIGHT-ONLY overrides: the dark values above are untouched, exactly
+	   the way `--dse-tier-*` and `--dse-act-*` already carry a darkened light column
+	   (and those two families were the only state hues that PASSED the audit —
+	   which is the whole argument for this block).
+
+	   Each value keeps its hue and most of its chroma and moves only lightness,
+	   solved so the token clears its threshold against the DARKEST real ground it
+	   was measured on (down to rgb(225,226,226) for the dying ink), with the
+	   spent-row `opacity: .82` dimming composited in. Print is unaffected: the print
+	   twin re-declares every one of these at (0,4,0), which outranks this block's
+	   (0,3,0) — see the print token block near the end of the sheet.
+
+	   Measured after (worst observed ground, light scheme):
+	     stamina-healthy 4.6:1 text / 4.1:1 mark   (was 2.2 / 1.4)
+	     stamina-winded  4.9:1 text / 3.9:1 mark   (was 1.6 / 1.4)
+	     stamina-dying   4.6:1 text                (was 1.3)
+	     stamina-temp    4.7:1 text dimmed         (was 3.0)
+	     tier-crit       3.5:1 mark                (was 1.8)
+	     turn-done       3.7:1 fill, 4.9:1 its ink (was 1.8 / 1.8)
+	     malice          4.6:1 text                (was 3.5)
+	     vp / warn       4.6:1 text                (was 1.9 / 2.1)
+	   -- */
+	--dse-stamina-healthy: #147c40;
+	--dse-stamina-winded: #886106;
+	--dse-stamina-dying: #bb2d1f;
+	--dse-stamina-temp: #562ec5;
+	--dse-tier-crit: #a57517;
+	--dse-turn-done: #147c40;
+	--dse-malice: #c83426;
+	--dse-vp: #845c0d;
+	--dse-warn: #9a5211;
+	--dse-danger: #bb2d1f;
 
 	/* -- Ability action-type spines (darkened light-column hues) -- */
 	--dse-act-main: #c0392b;
