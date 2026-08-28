@@ -182,17 +182,21 @@ describe('SC-149 ds-scc end-to-end against real md-dse fixtures', () => {
 		expect(root.getAttribute('data-dse-element')).toBe('scc');
 	});
 
+	// SC-120 Batch C: ds-condition and ds-rule now ALWAYS render their Steel compositions
+	// (SC-144 branch rule) — title/eyebrow move to cardHead's slots, and the base branch's
+	// `.dse-card__badge` type pill no longer renders (renderSteel() never reads
+	// `layout.badges`).
 	test('a condition code renders the condition card (same block, different family)', async () => {
 		const root = await render(`scc.v1:${CONDITION_CODE}`, [CONDITION_REL]);
 		expect(errorText(root)).toBe('');
-		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Bleeding');
-		expect(root.querySelector('.dse-card__badge--type')!.textContent).toBe('Condition');
+		expect(root.querySelector('.dse-head__primary--left')!.textContent).toBe('Bleeding');
+		expect(root.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Condition');
 	});
 
 	test('a rule code renders the model-less generic card', async () => {
 		const root = await render(RULE_CODE, [RULE_REL]);
 		expect(errorText(root)).toBe('');
-		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Taking a Turn');
+		expect(root.querySelector('.dse-head__primary--left')!.textContent).toBe('Taking a Turn');
 	});
 
 	// C1: the feature family through ds-scc renders the REAL feature view. Pinned as its

@@ -45,9 +45,9 @@ import perkExample from '@/elements/display/perk/example.yaml';
 import complicationExample from '@/elements/display/complication/example.yaml';
 import type { ElementDefinition } from '@/framework/registry';
 import { displayFamily } from '@/elements/display/displayFamily';
-import { kitLayout } from '@/elements/display/layouts';
+import { kitLayout, conditionLayout, ancestryLayout, perkLayout } from '@/elements/display/layouts';
 import type { CardLayout } from '@/elements/shared/CardLayout';
-import type { Kit } from 'steel-compendium-sdk';
+import type { Kit, Condition, Ancestry, Perk } from 'steel-compendium-sdk';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 import { MarkdownRenderer } from '../../mocks/obsidian';
 
@@ -80,6 +80,47 @@ const baseKitElement = displayFamily<Kit>({
 	type: 'kit',
 	layout: baseKitLayout,
 	example: kitExample,
+});
+
+/**
+ * SC-120 Batch C — the same steel-less-clone convention as `baseKitLayout` above, applied
+ * to the three families this batch gives a Steel composition to (ancestry/perk/condition).
+ * Their real elements now ALWAYS render `renderSteel()` (SC-144: presence of `.steel` is
+ * the whole branch rule), so the pre-existing base-branch assertions below (rows/badges/
+ * flavor-suppression against `renderBase()`) move onto these clones — `renderBase()` is
+ * still live production code for every family that hasn't opted into a Steel composition
+ * (career/class/culture/treasure/title/complication), so it still deserves the coverage;
+ * it just can no longer be reached through the real ancestry/perk/condition elements. The
+ * real elements' Steel-branch DOM is covered by displaySteelBatchC.test.ts instead.
+ */
+const baseConditionLayout: CardLayout<Condition> = { ...conditionLayout, steel: undefined };
+const baseConditionElement = displayFamily<Condition>({
+	id: 'condition-base-branch',
+	aliases: ['ds-condition-base-branch'],
+	name: 'Condition (base branch)',
+	type: 'condition',
+	layout: baseConditionLayout,
+	example: conditionExample,
+});
+
+const baseAncestryLayout: CardLayout<Ancestry> = { ...ancestryLayout, steel: undefined };
+const baseAncestryElement = displayFamily<Ancestry>({
+	id: 'ancestry-base-branch',
+	aliases: ['ds-ancestry-base-branch'],
+	name: 'Ancestry (base branch)',
+	type: 'ancestry',
+	layout: baseAncestryLayout,
+	example: ancestryExample,
+});
+
+const basePerkLayout: CardLayout<Perk> = { ...perkLayout, steel: undefined };
+const basePerkElement = displayFamily<Perk>({
+	id: 'perk-base-branch',
+	aliases: ['ds-perk-base-branch'],
+	name: 'Perk (base branch)',
+	type: 'perk',
+	layout: basePerkLayout,
+	example: perkExample,
 });
 
 /** The card title node, whichever branch rendered it: the base branch's
@@ -183,9 +224,13 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 		expect(renderSpy.mock.calls.some((c) => c[1] === staminaMarkdown)).toBe(true);
 	});
 
-	test('ds-condition: inline example.yaml renders title/badge/body', async () => {
-		const host = inlineHost('ds-condition');
-		await new ElementPipeline(makeInlineDeps()).run(conditionElement, conditionExample, host);
+	// SC-120 Batch C: ds-condition now ALWAYS renders its Steel composition (SC-144 branch
+	// rule) — this base-branch title/badge/body assertion moves onto the steel-less clone
+	// (top of file); the real element's Steel-branch DOM is covered by
+	// displaySteelBatchC.test.ts.
+	test('base branch: ds-condition inline example.yaml renders title/badge/body', async () => {
+		const host = inlineHost('ds-condition-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseConditionElement, conditionExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -256,9 +301,12 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 // prerequisites}) — ds-culture's test asserts that omission directly (no `.dse-card__rows`
 // at all) so a future data-driven regression is caught instead of silently "still passing."
 describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
-	test('ds-ancestry: inline example.yaml renders title/signature-trait row/body, omits ungrounded rows', async () => {
-		const host = inlineHost('ds-ancestry');
-		await new ElementPipeline(makeInlineDeps()).run(ancestryElement, ancestryExample, host);
+	// SC-120 Batch C: ds-ancestry now ALWAYS renders its Steel composition (SC-144 branch
+	// rule) — this base-branch row assertion moves onto the steel-less clone (top of file);
+	// the real element's Steel-branch DOM is covered by displaySteelBatchC.test.ts.
+	test('base branch: ds-ancestry inline example.yaml renders title/signature-trait row/body, omits ungrounded rows', async () => {
+		const host = inlineHost('ds-ancestry-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseAncestryElement, ancestryExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -379,9 +427,12 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('restored to life');
 	});
 
-	test('ds-perk: inline example.yaml renders title/body, no flavor slot (D6 Task 7 review fix: flavor duplicates content) and no Prerequisites row (unpopulated)', async () => {
-		const host = inlineHost('ds-perk');
-		await new ElementPipeline(makeInlineDeps()).run(perkElement, perkExample, host);
+	// SC-120 Batch C: ds-perk now ALWAYS renders its Steel composition (SC-144 branch rule)
+	// — this base-branch assertion moves onto the steel-less clone (top of file); the real
+	// element's Steel-branch DOM is covered by displaySteelBatchC.test.ts.
+	test('base branch: ds-perk inline example.yaml renders title/body, no flavor slot (D6 Task 7 review fix: flavor duplicates content) and no Prerequisites row (unpopulated)', async () => {
+		const host = inlineHost('ds-perk-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(basePerkElement, perkExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -545,18 +596,22 @@ describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 		expect(cardTitleText(slugRoot)).toBe('Panther');
 	});
 
-	test('ds-condition: full scc.v1: code and bare slug both resolve, no error card', async () => {
+	// SC-120 Batch C: this is a base-branch DOM assertion (`.dse-card__title`), so it moves
+	// onto the steel-less clone (top of file) — the real ds-condition element's by-SCC
+	// Steel-branch DOM is covered by the ALL_TEN table below (cardTitleText()) and
+	// displaySteelBatchC.test.ts.
+	test('base branch: ds-condition full scc.v1: code and bare slug both resolve, no error card', async () => {
 		const { vault, deps } = makeCompendiumDeps();
 		loadMdDseFixture(vault, CONDITION_REL);
 
-		const codeHost = makeHost('ds-condition');
-		await new ElementPipeline(deps).run(conditionElement, `scc.v1:${CONDITION_CODE}`, codeHost);
+		const codeHost = makeHost('ds-condition-base-branch');
+		await new ElementPipeline(deps).run(baseConditionElement, `scc.v1:${CONDITION_CODE}`, codeHost);
 		const codeRoot = codeHost.containerEl.firstElementChild as HTMLElement;
 		expect(codeRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(codeRoot.querySelector('.dse-card__title')!.textContent).toBe('Bleeding');
 
-		const slugHost = makeHost('ds-condition');
-		await new ElementPipeline(deps).run(conditionElement, 'bleeding', slugHost);
+		const slugHost = makeHost('ds-condition-base-branch');
+		await new ElementPipeline(deps).run(baseConditionElement, 'bleeding', slugHost);
 		const slugRoot = slugHost.containerEl.firstElementChild as HTMLElement;
 		expect(slugRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
 		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe('Bleeding');

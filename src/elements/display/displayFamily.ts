@@ -111,7 +111,11 @@ function humanizeType(type: string): string {
 		.join(' ');
 }
 
-const genericLayout: CardLayout<GenericNote> = {
+// Exported (SC-120 Batch C) so test/unit/kit/crestIconValidity.test.ts can enumerate this
+// composition's `crestIcon` alongside layouts.ts's — same reasoning as
+// `normalizeForDuplicateCheck`'s CardLayout.ts export: a shared check must see every real
+// consumer, not a hand-copied subset that can drift.
+export const genericLayout: CardLayout<GenericNote> = {
 	title: (m) => m.name,
 	badges: (m) => (m.type ? [{ text: humanizeType(m.type), tone: 'type' }] : []),
 	// GenericNote.body already IS the source/inline body (built that way on both paths
@@ -120,6 +124,32 @@ const genericLayout: CardLayout<GenericNote> = {
 	// per CardLayout.ts) by-SCC `this.source!.body` render path.
 	body: (m) => m.body,
 	useSourceBody: false,
+
+	// SC-120 Batch C §3.10/§7 (owner ruling 7) — `ds-rule`, the sole `genericCard()`
+	// instance, gets a Steel composition too: this deliberately changes `genericLayout`'s
+	// shared shape, so any future model-less `genericCard()` adopter inherits it. Head-only
+	// (LIGHT): a GenericNote carries only {name, type, body} — nothing else to band. In
+	// INLINE mode `type` is `""` (no frontmatter to source it from), so the eyebrow falls
+	// back to the literal 'Rule' (same "degenerate RULE: Rule" case chrome.summary already
+	// guards); in by-SCC hybrid mode `type` is the resolved SCC type (e.g. "rule.combat"),
+	// and the site types its tile by the GROUP DIRECTORY (`ruleCard`, cards.go:594-599) —
+	// ported here as the type key's LAST dot-segment, humanized.
+	steel: {
+		eyebrow: (m) => {
+			if (!m.type) return 'Rule';
+			const segments = m.type.split('.');
+			return humanizeType(segments[segments.length - 1]);
+		},
+		crestIcon: () => 'book-open',
+		bands: (m) => {
+			if (!m.body || !m.body.trim()) return [];
+			return [
+				{
+					render: (container, renderMarkdown) => renderMarkdown(m.body, container.createDiv({ cls: 'dse-card__body' })),
+				},
+			];
+		},
+	},
 };
 
 export interface GenericCardDescriptor {

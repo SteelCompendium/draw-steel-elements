@@ -24,9 +24,9 @@ import { createValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin } from '../../mocks/obsidian';
-import { kitElement, conditionElement } from '@/elements/display';
+import { kitElement, cultureElement } from '@/elements/display';
 import kitExample from '@/elements/display/kit/example.yaml';
-import conditionExample from '@/elements/display/condition/example.yaml';
+import cultureExample from '@/elements/display/culture/example.yaml';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
@@ -235,18 +235,71 @@ describe('Plan 24 / SC-100 Task 3: kit Steel composition — hybrid by-SCC mode 
 	});
 });
 
+// SC-120 Batch C §8 (Scott's ledger comment 1) — the empty-band-head guard's own positive
+// test: a hybrid-mode note whose stripped body carries NO signature-ability content (no
+// ```ds-feature fence, and every line lives under a stripped "Equipment"/"Kit Bonuses"
+// heading) must render NO "Signature Ability" band-head at all — the defect this batch
+// closes. Corpus-safe today (no tooling produces such a note), so this is a synthetic
+// fixture, not a real md-dse file; homed here per the design doc's own instruction ("the
+// existing by-SCC kit DOM suite is the right home").
+describe("SC-120 Batch C §8: kit hybrid mode's empty-band-head guard", () => {
+	const EMPTY_SIG_CODE = 'mcdm.heroes.v1/kit/empty-sig';
+	const EMPTY_SIG_BODY = [
+		'##### Equipment',
+		'',
+		'You wear no armor and carry no weapon.',
+		'',
+	].join('\n');
+	const EMPTY_SIG_MD = [
+		'---',
+		'file_basename: empty-sig',
+		'file_dpath: kit',
+		'item_id: empty-sig',
+		'item_name: Empty Sig',
+		'name: Empty Sig',
+		`scc: ${EMPTY_SIG_CODE}`,
+		'source: mcdm.heroes.v1',
+		'type: kit',
+		'---',
+		'',
+		EMPTY_SIG_BODY,
+	].join('\n');
+
+	test('hybrid + empty stripped body ⇒ no .dse-card__band-head for Signature Ability (the ENTIRE body lives under the stripped "Equipment" heading, so stripKitBodySections leaves nothing)', async () => {
+		const { vault, deps } = makeCompendiumDeps();
+		(vault as any).setFile(`${DEFAULT_SETTINGS.compendiumDestinationDirectory}/kit/empty-sig.md`, EMPTY_SIG_MD);
+		const host = makeHost('ds-kit');
+		await new ElementPipeline(deps).run(kitElement, `scc.v1:${EMPTY_SIG_CODE}`, host);
+		const root = host.containerEl.firstElementChild as HTMLElement;
+		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
+		const card = root.querySelector('.dse-card') as HTMLElement;
+
+		// The card still mounts (cardHead + whatever bonus/equipment bands the frontmatter
+		// supports) — only the Signature Ability band is suppressed.
+		expect(card.querySelector('.dse-head__primary--left')!.textContent).toBe('Empty Sig');
+		const headTexts = Array.from(card.querySelectorAll('.dse-card__band-head')).map((el) => el.textContent);
+		expect(headTexts).not.toContain('Signature Ability');
+		expect(bandHead(card, 'Signature Ability')).toBeNull();
+	});
+});
+
 describe('Plan 24 / SC-100 Task 3: kit\'s composition never leaks into a sibling family', () => {
 	// Pre-SC-144 this compared ds-condition's inline DOM under 'legacy' vs 'steel'. With one
 	// theme left that comparison is vacuous, but the claim underneath it is not: a family
 	// with no `.steel` composition of its own must still get the base card frame, never any
 	// part of kit's. Asserted directly against the DOM instead of against a theme flip.
-	test('ds-condition: renders the base card frame — none of the kit composition\'s grammar', async () => {
-		const host = inlineHost('ds-condition');
-		await new ElementPipeline(makeInlineDeps()).run(conditionElement, conditionExample, host);
+	//
+	// SC-120 Batch C: ds-condition gained its OWN Steel composition (a real cardHead of its
+	// own), so it stopped being a clean "no composition at all" example — swapped for
+	// ds-culture, still base-branch-only (Batch C's scope is ancestry/perk/condition/rule
+	// only; culture is untouched, Batch B's problem).
+	test('ds-culture: renders the base card frame — none of the kit composition\'s grammar', async () => {
+		const host = inlineHost('ds-culture');
+		await new ElementPipeline(makeInlineDeps()).run(cultureElement, cultureExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		const card = root.querySelector('.dse-card') as HTMLElement;
 
-		expect(card.querySelector('.dse-card__title')!.textContent).toBe('Bleeding');
+		expect(card.querySelector('.dse-card__title')!.textContent).toBe('Urban');
 		// The composition's own grammar: cardHead, crest, bands, stat tiles. None of it here.
 		expect(card.querySelector('.dse-head')).toBeNull();
 		expect(card.querySelector('.dse-crest')).toBeNull();

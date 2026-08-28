@@ -74,6 +74,36 @@ function kitBonusValue(raw: string | undefined): string {
 
 const KIT_BODY_STRIP_HEADING_RE = /^#{1,6}\s*(equipment|kit bonuses)\s*$/i;
 
+// SC-120 Batch C — shared helpers for the ancestry/perk/condition/rule Steel compositions
+// (§3.7-§3.10 of the round-1 design doc).
+
+/**
+ * Title-cases a hyphen/underscore/space-separated key (e.g. perk's `perk_group`) — used by
+ * perk's eyebrow (`${titleCase(perk_group)} Perk`). `perk_group` is 0/55 in the corpus
+ * today (prophylactic, per the file header's "kept as spec'd" convention), so this is
+ * exercised only by unit tests until real data populates it.
+ */
+function titleCase(s: string): string {
+	return s
+		.split(/[\s_-]+/)
+		.filter(Boolean)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(' ');
+}
+
+/**
+ * Batch C's steel bands render explicitly — `renderSteel()` (CardLayout.ts) never reads
+ * `layout.body`/`useSourceBody` itself, that's a `renderBase()`-only mechanism — so each
+ * composition below re-derives "whichever markdown will actually render as body" the same
+ * way its OWN `body` field's value would under `useSourceBody: true` (every one of
+ * ancestry/perk/condition declares that default): the resolved source body in hybrid mode,
+ * else the layout's own inline content. Mirrors kit's own inline `bodyForDedup` ternary
+ * (three properties up) generalized to the (no-ternary) common case.
+ */
+function resolvedBodyMd(bodyFromModel: string | undefined, source: RefSource | undefined): string | undefined {
+	return source ? source.body : bodyFromModel;
+}
+
 /**
  * Hybrid mode's Signature Ability band renders the resolved source file's own trailing
  * body — the ONLY place a by-SCC kit's nested ```ds-feature fence lives (frontmatter has
@@ -223,14 +253,22 @@ export const kitLayout: CardLayout<Kit> = {
 			// body instead (Equipment/Kit Bonuses sections stripped, fence kept — see
 			// stripKitBodySections above) so the nested ```ds-feature fence can recurse
 			// into a real card via renderMarkdown, exactly as it always has.
-			if (hybrid || m.signature_ability) {
+			// SC-120 Batch C §8 (Scott's ledger comment 1) — the empty-band-head guard: the
+			// hybrid-mode emptiness test is hoisted OUT of render() and INTO the push
+			// condition below, so a hand-authored note whose stripped body carries no
+			// signature-ability content never gets a "SIGNATURE ABILITY" band-head painted
+			// over empty space (renderSteel(), CardLayout.ts, creates the band wrapper + head
+			// BEFORE render() runs — too late for render() to un-create them). Mirrors the
+			// flavor band's own suppress-rather-than-push-empty rule three properties up.
+			// stripKitBodySections now runs ONCE (not once per branch, as the old render()
+			// closure did) — hoisting removes a duplicate call rather than adding one.
+			const hybridSig = hybrid ? stripKitBodySections(source.body) : undefined;
+			if (hybrid ? !!hybridSig?.trim() : !!m.signature_ability) {
 				bands.push({
 					head: 'Signature Ability',
 					render: (container, renderMarkdown, owner) => {
 						if (hybrid) {
-							const stripped = stripKitBodySections(source.body);
-							if (!stripped.trim()) return undefined;
-							return renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' }));
+							return renderMarkdown(hybridSig!, container.createDiv({ cls: 'dse-card__body' }));
 						}
 						renderFeatureList(container, FeatureConfig.allFrom([m.signature_ability!]), owner, renderMarkdown);
 						return undefined;
@@ -248,6 +286,24 @@ export const conditionLayout: CardLayout<Condition> = {
 	badges: () => [{ text: 'Condition', tone: 'type' }],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch C §3.9 — LIGHT (head-only) composition: `Condition` is the thinnest
+	// model in the SDK ({name, scc, content}) — nothing to band beyond body. The legacy
+	// `badges` type-pill above is superseded by the eyebrow and simply not read on this
+	// branch (renderSteel() never calls `layout.badges`).
+	steel: {
+		eyebrow: () => 'Condition',
+		crestIcon: () => 'zap',
+		bands: (m, source) => {
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (!bodyMd || !bodyMd.trim()) return [];
+			return [
+				{
+					render: (container, renderMarkdown) => renderMarkdown(bodyMd, container.createDiv({ cls: 'dse-card__body' })),
+				},
+			];
+		},
+	},
 };
 
 export const treasureLayout: CardLayout<Treasure> = {
@@ -310,6 +366,57 @@ export const ancestryLayout: CardLayout<Ancestry> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch C §3.7 — LIGHT composition: crest + eyebrow do the heavy lifting (SC-121
+	// C-1's worst case: bare title, no chip/box at all). Bands: Signature Trait ABOVE
+	// flavor (site tile order, cards.go:369-378), body kept whole (policy A — an ancestry's
+	// content is pure lore with no labeled lines to strip).
+	steel: {
+		eyebrow: () => 'Ancestry',
+		crestIcon: () => 'users',
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Signature Trait — the SAME "**name.** description" composition the legacy row
+			// uses (signature_trait_description is 0/12 in the corpus today, so this renders
+			// the name alone until real data populates the description).
+			const sigTrait =
+				m.signature_trait_name && m.signature_trait_description
+					? `**${m.signature_trait_name}.** ${m.signature_trait_description}`
+					: m.signature_trait_name;
+			if (sigTrait) {
+				bands.push({
+					head: 'Signature Trait',
+					render: (container, renderMarkdown) =>
+						renderMarkdown(sigTrait, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Flavor — the SAME duplicate-vs-body guard kit's flavor band uses (§5's shared
+			// rationale): suppressing a knowingly-empty band keeps renderSteel()'s generic
+			// wrapper from leaving a stray empty div.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Body — policy (A) keep whole: no labeled lines to strip.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				bands.push({
+					render: (container, renderMarkdown) => renderMarkdown(bodyMd, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const cultureLayout: CardLayout<Culture> = {
@@ -413,6 +520,51 @@ export const perkLayout: CardLayout<Perk> = {
 	rows: [{ label: 'Prerequisites', value: (m) => m.prerequisites, markdown: true }],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch C §3.8 — LIGHT (head-only) composition: both structured fields
+	// (perk_group/prerequisites) are 0/55 in the corpus — head + body is the honest
+	// ceiling. The Prerequisites band is declared prophylactically (same "kept as spec'd"
+	// pattern the file header already applies to dead fields) — inert today, gated on
+	// non-empty so a future populated corpus renders it with no further code change.
+	steel: {
+		eyebrow: (m) => (m.perk_group ? `${titleCase(m.perk_group)} Perk` : 'Perk'),
+		crestIcon: () => 'gem',
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Flavor — the SAME duplicate-vs-body guard kit's flavor band uses; in practice
+			// suppressed against the body, since perk flavor is the body's lead sentence.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Prerequisites — gated on non-empty (0/55 today, so inert).
+			if (m.prerequisites) {
+				bands.push({
+					head: 'Prerequisites',
+					render: (container, renderMarkdown) =>
+						renderMarkdown(m.prerequisites!, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body — policy (C): the body is the card.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				bands.push({
+					render: (container, renderMarkdown) => renderMarkdown(bodyMd, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const complicationLayout: CardLayout<Complication> = {

@@ -91,15 +91,27 @@ function inlineHost(language: string): BlockHost & { containerEl: HTMLElement } 
 }
 
 describe('D6 Task 8: ds-rule (genericCard) inline rendering', () => {
-	test('inline raw-markdown body: no SDK model, title falls back to "Rule", body renders through renderMarkdown', async () => {
+	// SC-120 Batch C §3.10/§7 (owner ruling 7) — `ds-rule` now ALWAYS renders its Steel
+	// composition too (SC-144: the whole branch rule is `layout.steel` presence — genericCard
+	// has no way to build a "steel-less clone" the way displayFamily() families can, since
+	// `genericLayout` is a module-private constant, not a parameter). Title/eyebrow now come
+	// from cardHead's slots, not `.dse-card__title`/`.dse-card__badge`.
+	test('inline raw-markdown body: no SDK model, name falls back to "Rule" (both the head and the eyebrow — the degenerate case chrome.summary already guards), body renders through renderMarkdown', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-rule');
 		await new ElementPipeline(makeInlineDeps()).run(ruleElement, INLINE_BODY, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(root.querySelector('.dse-card__title')!.textContent).toBe('Rule');
-		// No frontmatter in inline mode -> genericLayout's type badge never renders.
+		const head = root.querySelector(':scope > .dse-card > .dse-head') as HTMLElement;
+		expect(head).not.toBeNull();
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Rule');
+		// No frontmatter in inline mode -> `m.type` is "" -> the eyebrow falls back to the
+		// same literal 'Rule' (genericLayout.steel.eyebrow).
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Rule');
+		const crestGlyph = head.querySelector<HTMLElement>('.dse-crest .dse-crest__glyph');
+		expect(crestGlyph?.getAttribute('data-icon')).toBe('book-open');
+		// renderSteel() never calls `layout.badges` — the base branch's type pill is gone.
 		expect(root.querySelector('.dse-card__badge')).toBeNull();
 
 		const body = root.querySelector('.dse-card__body')!;
@@ -121,16 +133,23 @@ describe('D6 Task 8: ds-rule by-SCC reference (spec §1, §2.3, §3)', () => {
 		await new ElementPipeline(deps).run(ruleElement, `scc.v1:${RULE_CODE}`, codeHost);
 		const codeRoot = codeHost.containerEl.firstElementChild as HTMLElement;
 		expect(codeRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(codeRoot.querySelector('.dse-card__title')!.textContent).toBe('Opportunity Attacks');
-		// By-SCC: frontmatter `type: rule` -> genericLayout's badge renders (unlike inline).
-		expect(codeRoot.querySelector('.dse-card__badge')!.textContent).toBe('Rule');
+		const head = codeRoot.querySelector(':scope > .dse-card > .dse-head') as HTMLElement;
+		expect(head).not.toBeNull();
+		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Opportunity Attacks');
+		// By-SCC: frontmatter `type: rule` (bare — the real corpus never namespaces the
+		// `type:` field, verified against every v2/docs/Browse/rule/**/*.md) -> humanizeType's
+		// last-segment split on 'rule' is just 'rule' -> the eyebrow reads 'Rule', same
+		// fallback text as inline mode (renderSteel() never calls `layout.badges` — the base
+		// branch's type pill is gone).
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Rule');
+		expect(codeRoot.querySelector('.dse-card__badge')).toBeNull();
 		expect(codeRoot.querySelector('.dse-card__body')!.textContent).toContain('opportunity attack');
 
 		const slugHost = makeHost('ds-rule');
 		await new ElementPipeline(deps).run(ruleElement, 'opportunity-attack', slugHost);
 		const slugRoot = slugHost.containerEl.firstElementChild as HTMLElement;
 		expect(slugRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe('Opportunity Attacks');
+		expect(slugRoot.querySelector('.dse-head__primary--left')!.textContent).toBe('Opportunity Attacks');
 	});
 
 	test('embedded scc.v1: links inside the resolved body are rewritten (§4.3(a))', async () => {
