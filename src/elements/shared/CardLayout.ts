@@ -176,7 +176,11 @@ export interface CardLayout<M> {
 // itself (content stays canonical; the DUPLICATE SLOT is what's suppressed). A minimum
 // length guard on row values avoids false-positive suppression of short/generic strings
 // (e.g. "One language") coincidentally appearing as a substring of a long body.
-const DUPLICATE_ROW_MIN_LENGTH = 20;
+// Exported (SC-120 Batch C round-3 review, LOW-1) so a Steel composition's own band-level
+// dedup guard (perk's Prerequisites band, layouts.ts) can reuse the SAME threshold
+// `renderBase()`'s row guard uses below, instead of a second hand-copied magic number that
+// could drift from it.
+export const DUPLICATE_ROW_MIN_LENGTH = 20;
 
 /**
  * Exported (Task 3, SC-100): kit's Steel composition (`layouts.ts`) needs the SAME
@@ -191,6 +195,24 @@ export function normalizeForDuplicateCheck(s: string): string {
 		.replace(/\s+/g, ' ')
 		.trim()
 		.toLowerCase();
+}
+
+/**
+ * SC-120 Batch C round-3 review, LOW-2: the single word-casing helper both `layouts.ts`
+ * (perk's `${titleCase(perk_group)} Perk` eyebrow) and `displayFamily.ts` (rule's humanized
+ * last `type` segment, `genericLayout.steel.eyebrow`) need. Previously duplicated as two
+ * near-identical functions with two different split charsets (`layouts.ts`'s `[\s_-]+` vs
+ * `displayFamily.ts`'s `[._-]`) — a later casing-edge fix (acronyms, `d&d`-style tokens)
+ * landing in one and not the other was the exact drift risk the review flagged. This regex
+ * is the UNION of both original charsets, so neither existing consumer's behavior changes:
+ * perk_group values never carry a literal `.`, and `type` segments never carry whitespace.
+ */
+export function titleCase(s: string): string {
+	return s
+		.split(/[\s._-]+/)
+		.filter(Boolean)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(' ');
 }
 
 /**

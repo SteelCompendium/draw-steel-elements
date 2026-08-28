@@ -27,7 +27,7 @@
 import type { Ancestry, Culture, Career, Class, Title, Perk, Complication } from 'steel-compendium-sdk';
 import type { Kit, Condition, Treasure } from 'steel-compendium-sdk';
 import type { Badge, CardLayout, SteelBand } from '@/elements/shared/CardLayout';
-import { normalizeForDuplicateCheck } from '@/elements/shared/CardLayout';
+import { normalizeForDuplicateCheck, DUPLICATE_ROW_MIN_LENGTH, titleCase } from '@/elements/shared/CardLayout';
 import type { RefSource } from '@/elements/shared/withReference';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
 import { FeatureConfig } from '@model/FeatureConfig';
@@ -75,21 +75,10 @@ function kitBonusValue(raw: string | undefined): string {
 const KIT_BODY_STRIP_HEADING_RE = /^#{1,6}\s*(equipment|kit bonuses)\s*$/i;
 
 // SC-120 Batch C — shared helpers for the ancestry/perk/condition/rule Steel compositions
-// (§3.7-§3.10 of the round-1 design doc).
-
-/**
- * Title-cases a hyphen/underscore/space-separated key (e.g. perk's `perk_group`) — used by
- * perk's eyebrow (`${titleCase(perk_group)} Perk`). `perk_group` is 0/55 in the corpus
- * today (prophylactic, per the file header's "kept as spec'd" convention), so this is
- * exercised only by unit tests until real data populates it.
- */
-function titleCase(s: string): string {
-	return s
-		.split(/[\s_-]+/)
-		.filter(Boolean)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(' ');
-}
+// (§3.7-§3.10 of the round-1 design doc). `titleCase` (used by perk's
+// `${titleCase(perk_group)} Perk` eyebrow — `perk_group` is 0/55 in the corpus today, so
+// this is exercised only by unit tests until real data populates it) is imported from
+// CardLayout.ts, shared with displayFamily.ts's rule eyebrow (round-3 review LOW-2).
 
 /**
  * Batch C's steel bands render explicitly — `renderSteel()` (CardLayout.ts) never reads
@@ -545,13 +534,23 @@ export const perkLayout: CardLayout<Perk> = {
 				});
 			}
 
-			// Prerequisites — gated on non-empty (0/55 today, so inert).
+			// Prerequisites — gated on non-empty (0/55 today, so inert) AND the same
+			// duplicate-vs-body guard renderBase()'s row uses (round-3 review LOW-1 / owner
+			// ruling 11): a future populated corpus may lead the body with the exact labeled
+			// sentence this band already renders structurally (the shape §5.2 documents for
+			// every other family's labeled band) — suppress the structural band rather than
+			// double-render it.
 			if (m.prerequisites) {
-				bands.push({
-					head: 'Prerequisites',
-					render: (container, renderMarkdown) =>
-						renderMarkdown(m.prerequisites!, container.createDiv({ cls: 'dse-card__body' })),
-				});
+				const normalizedValue = normalizeForDuplicateCheck(m.prerequisites);
+				const duplicatesBody =
+					normalizedValue.length >= DUPLICATE_ROW_MIN_LENGTH && !!normalizedBody?.includes(normalizedValue);
+				if (!duplicatesBody) {
+					bands.push({
+						head: 'Prerequisites',
+						render: (container, renderMarkdown) =>
+							renderMarkdown(m.prerequisites!, container.createDiv({ cls: 'dse-card__body' })),
+					});
+				}
 			}
 
 			// Body — policy (C): the body is the card.

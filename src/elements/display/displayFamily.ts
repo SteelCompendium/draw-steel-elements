@@ -18,7 +18,7 @@ import { parseYaml } from 'obsidian';
 import type { ElementDefinition } from '@/framework/registry';
 import { adapterForType } from '@/services/typeAdapters';
 import type { GenericNote } from '@/services/typeAdapters';
-import { DisplayCardView } from '@/elements/shared/CardLayout';
+import { DisplayCardView, titleCase } from '@/elements/shared/CardLayout';
 import type { CardLayout } from '@/elements/shared/CardLayout';
 import { withReference } from '@/elements/shared/withReference';
 import type { ReferenceElement } from '@/elements/shared/withReference';
@@ -103,13 +103,9 @@ export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ReferenceElemen
 //     uniform — `CompendiumIndex.getEntity().model()` always returns a model for a `rule.*`
 //     code, so `DisplayCardView<GenericNote>` needs no subclass at all; `mountBase` passes
 //     the already-built GenericNote straight through as `model`.
-function humanizeType(type: string): string {
-	return type
-		.split(/[._-]/)
-		.filter(Boolean)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(' ');
-}
+// `titleCase` (CardLayout.ts) does the word-split-and-capitalize work this file used to
+// duplicate as its own `humanizeType` — consolidated round-3 review LOW-2, shared with
+// perk's eyebrow (layouts.ts).
 
 // Exported (SC-120 Batch C) so test/unit/kit/crestIconValidity.test.ts can enumerate this
 // composition's `crestIcon` alongside layouts.ts's — same reasoning as
@@ -117,7 +113,7 @@ function humanizeType(type: string): string {
 // consumer, not a hand-copied subset that can drift.
 export const genericLayout: CardLayout<GenericNote> = {
 	title: (m) => m.name,
-	badges: (m) => (m.type ? [{ text: humanizeType(m.type), tone: 'type' }] : []),
+	badges: (m) => (m.type ? [{ text: titleCase(m.type), tone: 'type' }] : []),
 	// GenericNote.body already IS the source/inline body (built that way on both paths
 	// above) — `useSourceBody: false` means DisplayCardView always renders it from
 	// `layout.body(model)` regardless of hybrid mode, never through the (still-TODO,
@@ -134,11 +130,19 @@ export const genericLayout: CardLayout<GenericNote> = {
 	// guards); in by-SCC hybrid mode `type` is the resolved SCC type (e.g. "rule.combat"),
 	// and the site types its tile by the GROUP DIRECTORY (`ruleCard`, cards.go:594-599) —
 	// ported here as the type key's LAST dot-segment, humanized.
+	//
+	// Round-3 review MED-1 / owner ruling 10: on the current data path (`GenericNote.type`
+	// is always the bare frontmatter `type:` value, verified corpus-wide — SC-272 tracks
+	// deriving a real group from `scc:` instead), the humanized last segment can only ever
+	// be 'Rule', so in inline mode (name also 'Rule') cardHead would print a verbatim
+	// duplicate — "◆ RULE" over "RULE". Suppress the eyebrow whenever it would restate the
+	// title (case-insensitive): `SteelCardComposition.eyebrow` may return `undefined`
+	// (`cardHead`'s `leftEyebrow` slot is optional, cardHead.ts:25), so the crest alone
+	// carries family identity in that case — never a mislabeled/duplicated line.
 	steel: {
 		eyebrow: (m) => {
-			if (!m.type) return 'Rule';
-			const segments = m.type.split('.');
-			return humanizeType(segments[segments.length - 1]);
+			const humanized = m.type ? titleCase(m.type.split('.').pop()!) : 'Rule';
+			return humanized.toLowerCase() === m.name.toLowerCase() ? undefined : humanized;
 		},
 		crestIcon: () => 'book-open',
 		bands: (m) => {

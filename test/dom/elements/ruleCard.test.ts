@@ -40,6 +40,8 @@ import { createSessionStore } from '@/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, MarkdownRenderer } from '../../mocks/obsidian';
 import { ruleElement } from '@/elements/display';
+import { genericLayout } from '@/elements/display/displayFamily';
+import type { GenericNote } from '@/services/typeAdapters';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 
 const RULE_REL = 'rule/combat/opportunity-attack.md';
@@ -96,7 +98,7 @@ describe('D6 Task 8: ds-rule (genericCard) inline rendering', () => {
 	// has no way to build a "steel-less clone" the way displayFamily() families can, since
 	// `genericLayout` is a module-private constant, not a parameter). Title/eyebrow now come
 	// from cardHead's slots, not `.dse-card__title`/`.dse-card__badge`.
-	test('inline raw-markdown body: no SDK model, name falls back to "Rule" (both the head and the eyebrow — the degenerate case chrome.summary already guards), body renders through renderMarkdown', async () => {
+	test('inline raw-markdown body: no SDK model, name falls back to "Rule" — the eyebrow would ALSO be "Rule" (the degenerate case chrome.summary already guards), so round-3 review MED-1\'s duplicate-title guard suppresses it entirely; the crest still carries family identity, body renders through renderMarkdown', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
 		const host = inlineHost('ds-rule');
 		await new ElementPipeline(makeInlineDeps()).run(ruleElement, INLINE_BODY, host);
@@ -106,9 +108,11 @@ describe('D6 Task 8: ds-rule (genericCard) inline rendering', () => {
 		const head = root.querySelector(':scope > .dse-card > .dse-head') as HTMLElement;
 		expect(head).not.toBeNull();
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Rule');
-		// No frontmatter in inline mode -> `m.type` is "" -> the eyebrow falls back to the
-		// same literal 'Rule' (genericLayout.steel.eyebrow).
-		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Rule');
+		// No frontmatter in inline mode -> `m.type` is "" -> the eyebrow's own computation
+		// would ALSO be the literal 'Rule' -> that equals the title verbatim -> owner ruling
+		// 10's guard (genericLayout.steel.eyebrow, displayFamily.ts) returns undefined, so
+		// cardHead never mounts a left-eyebrow slot at all (no "◆ RULE / RULE" duplicate).
+		expect(head.querySelector('.dse-head__eyebrow--left')).toBeNull();
 		const crestGlyph = head.querySelector<HTMLElement>('.dse-crest .dse-crest__glyph');
 		expect(crestGlyph?.getAttribute('data-icon')).toBe('book-open');
 		// renderSteel() never calls `layout.badges` — the base branch's type pill is gone.
@@ -137,10 +141,11 @@ describe('D6 Task 8: ds-rule by-SCC reference (spec §1, §2.3, §3)', () => {
 		expect(head).not.toBeNull();
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Opportunity Attacks');
 		// By-SCC: frontmatter `type: rule` (bare — the real corpus never namespaces the
-		// `type:` field, verified against every v2/docs/Browse/rule/**/*.md) -> humanizeType's
-		// last-segment split on 'rule' is just 'rule' -> the eyebrow reads 'Rule', same
-		// fallback text as inline mode (renderSteel() never calls `layout.badges` — the base
-		// branch's type pill is gone).
+		// `type:` field, verified against every v2/docs/Browse/rule/**/*.md) -> titleCase's
+		// last-segment split on 'rule' is just 'rule' -> the eyebrow computes 'Rule' — this
+		// time it does NOT equal the title ('Opportunity Attacks'), so owner ruling 10's
+		// guard does not fire and the eyebrow renders (renderSteel() never calls
+		// `layout.badges` — the base branch's type pill is still gone regardless).
 		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Rule');
 		expect(codeRoot.querySelector('.dse-card__badge')).toBeNull();
 		expect(codeRoot.querySelector('.dse-card__body')!.textContent).toContain('opportunity attack');
@@ -215,5 +220,29 @@ describe('D6 Task 8: ds-rule by-SCC reference (spec §1, §2.3, §3)', () => {
 		const card = root.querySelector('.dse-error-card-message');
 		expect(card?.textContent).toContain('No compendium entry matches');
 		expect(card?.textContent).toContain('bleeding');
+	});
+});
+
+// SC-120 Batch C round-3 review MED-1 / owner ruling 10 — the eyebrow-duplicates-title
+// guard (genericLayout.steel.eyebrow, displayFamily.ts), exercised directly against the
+// closure rather than through the full pipeline: the two DOM-level tests above already
+// prove the suppressed (inline) and non-suppressed (by-SCC opportunity-attack) cases end
+// to end; these pin the GUARD ITSELF, including the case-insensitive compare and the
+// "type ever becomes namespaced" hypothetical the design doc's own rationale rests on
+// (unreachable through real data today — see the r2/r3 report's documented deviation).
+describe('SC-120 Batch C round-3 review MED-1 / owner ruling 10: eyebrow suppressed when it would duplicate the title', () => {
+	test('inline mode shape: name "Rule" + type "" (humanizes to "Rule") -> suppressed (undefined)', () => {
+		const model: GenericNote = { name: 'Rule', type: '', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBeUndefined();
+	});
+
+	test('case-insensitive: a resolved file literally named "rule" (lowercase) also suppresses — not just the inline fallback\'s exact-case match', () => {
+		const model: GenericNote = { name: 'rule', type: 'rule', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBeUndefined();
+	});
+
+	test('a hypothetical non-equal eyebrow still renders (synthetic namespaced type, distinct from the title) — proves the guard only suppresses the duplicate case, not the eyebrow generally', () => {
+		const model: GenericNote = { name: 'Opportunity Attacks', type: 'rule.combat', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Combat');
 	});
 });

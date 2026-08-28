@@ -114,7 +114,7 @@ describe('SC-120 Batch C: ds-ancestry Steel composition', () => {
 		expect(bodies[bodies.length - 1].textContent).toContain('On Humans');
 	});
 
-	test('direct band-order proof: Signature Trait renders ABOVE flavor when neither is suppressed (site tile order) — real corpus fixtures always dedupe flavor, so this uses a synthetic model', () => {
+	test('direct band-order proof: Signature Trait renders ABOVE flavor when neither is suppressed (site tile order) — real corpus fixtures always dedupe flavor, so this uses a synthetic model', async () => {
 		const model = new Ancestry({
 			name: 'Testkin',
 			signature_trait_name: 'Test Sense',
@@ -124,8 +124,12 @@ describe('SC-120 Batch C: ds-ancestry Steel composition', () => {
 		const container = document.createElement('div');
 		const bands = ancestryLayout.steel!.bands(model, undefined);
 		expect(bands.map((b) => b.head)).toEqual(['Signature Trait', undefined, undefined]);
-		// Mount band 2 (flavor, headless) to confirm it's the flavor text, not swapped with body.
-		bands[1].render(container, async (md, el) => {
+		// Mount band 2 (flavor, headless) to confirm it's the flavor text, not swapped with
+		// body. Round-3 review LOW-4: this render() call must be awaited — the fake
+		// renderMarkdown below is async, and an un-awaited call only happened to pass
+		// because it writes before its first suspension point; a real `await` landing in
+		// front of `setText` would otherwise fail this assertion for an unrelated reason.
+		await bands[1].render(container, async (md, el) => {
 			el.setText(md);
 		}, undefined as any);
 		expect(container.textContent).toContain('A flavor sentence that does not appear in the body at all.');
