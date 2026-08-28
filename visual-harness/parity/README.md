@@ -398,7 +398,9 @@ before comparing anything. (A pair sharing a selector with another must addition
   "excludes": [{ "rule": "ink", "why": "SC-nnn — the site node paints no glyphs" }] }
 ```
 
-Each entry names one rule and must cite a workspace `FOLLOWUPS.md` number or a Linear ticket;
+Each entry names one rule and must cite a **Linear ticket** (`SC-N`). Legacy
+`FOLLOWUPS #N` citations stay valid and resolve via the workspace
+`docs/followups-archive/`, but new entries must not add them;
 a rule may be owned or excluded, never both, and `excludes` without `owns` is an error (it
 would be inert). **Nothing in the shipped map uses `excludes` today** — the honest shapes are
 "add the sibling pair that measures the rule" or "drop `owns` and declare the rows that
@@ -434,10 +436,11 @@ Six things are enforced mechanically, so the array cannot quietly become a mute 
    SC-110 made fatal;
 3. the rule must be **declarable** — see "Which classes are declarable" below;
 4. the pair must actually **own** that rule — otherwise the declaration could never match;
-5. `why` must cite a workspace `FOLLOWUPS.md` number or a Linear ticket
-   (`/FOLLOWUPS #[1-9]\d*|SC-[1-9]\d*/` — `SC-0` and `FOLLOWUPS #0` are shape-valid noise and
-   are rejected), and should carry the site value, the plugin value, and why this is not a
-   CSS fix;
+5. `why` must cite a **Linear ticket** — or, for legacy entries only, a workspace
+   `FOLLOWUPS.md` number, which resolves via the workspace `docs/followups-archive/`
+   (the validation regex accepts both: `/FOLLOWUPS #[1-9]\d*|SC-[1-9]\d*/` — `SC-0` and
+   `FOLLOWUPS #0` are shape-valid noise and are rejected). It should also carry the site
+   value, the plugin value, and why this is not a CSS fix;
 6. **a declaration that matches nothing this run fails the run** — a stale excuse for a
    finding that has since been fixed or renamed gets deleted, not inherited.
 
