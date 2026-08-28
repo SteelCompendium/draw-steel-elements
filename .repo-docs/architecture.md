@@ -306,9 +306,9 @@ Deliberately **not** built here (scope boundary, not an oversight): villain-acti
 (the site's default `<details>` grouping of villain actions into their own collapsible
 section, `.sb__band--villain`) — the plugin has no band concept at all today, it is a named
 setting in SC-123's inventory, and shipping only the inline presentation of an attribute whose
-site-default value is "banded" would make the attribute a lie. Filed as a deferred
-follow-up linked from SC-102 and SC-123; deferrals now live as Linear Backlog tickets
-(pre-2026-08-27 handles resolve via the workspace `docs/followups-archive/`).
+site-default value is "banded" would make the attribute a lie. Tracked as **SC-265**
+(the original follow-up handle was lost in the 2026-08-27 Linear migration); related
+context in SC-102 and SC-123.
 
 ### Preferences (`src/prefs/`, D4)
 
