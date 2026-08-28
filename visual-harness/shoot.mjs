@@ -14,6 +14,15 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
+// SC-205: the drift pin for OBSIDIAN_HOST_BUTTON_CSS — reads the installed Obsidian's own
+// app.css so the host model below cannot go stale unnoticed.
+import {
+	findObsidianAsar,
+	readAsarFile,
+	extractReachingButtonRules,
+	PINNED_TOKENS,
+	normalizeTokenValue,
+} from './obsidian-host-pin.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const pageUrl = 'file://' + path.join(dir, 'index.html');
@@ -422,47 +431,79 @@ async function assertChromePlacement(page) {
 // check below tests every declaration the host actually makes, not a hand-picked subset.
 //
 // SC-203 — the block below was RE-READ OUT OF A LIVE OBSIDIAN, and that mattered. Rounds 3-4
-// hand-copied it from the 1.8.10 asar; Obsidian has since self-updated, and two of the
-// differences are load-bearing:
+// hand-copied it from the 1.8.10 asar; Obsidian has since self-updated, and one of the
+// differences is load-bearing:
 //   * `color: var(--text-color)` MOVED ONTO `button:not(.clickable-icon)` — (0,1,1), which
 //     beats the kit's `.dse-btn { color: var(--dse-fg) }` (0,1,0). Every button in the plugin
 //     was wearing Obsidian's --text-normal instead of the Steel token, and the old copy —
 //     which had `color` only on the (0,0,1) `button` rule, where the kit wins — could not see
 //     it. A stale model of the host is a gate that reports a leak-free plugin.
-//   * `button:hover` NO LONGER EXISTS. Modelling a rule the host does not have would make
-//     this sweep demand re-groundings that pin nothing.
-// Provenance: an isolated Obsidian spawned on demo-vault (same plumbing as
-// visual-harness/obsidian-camera.mjs), `document.styleSheets` walked for every rule matching
-// a rendered `.dse-btn`, `cssText` printed verbatim. Redo that walk when Obsidian's own
-// button chrome next changes — do not hand-edit this from memory.
+//
+// SC-205 — SC-203's OTHER conclusion, that "`button:hover` NO LONGER EXISTS", WAS WRONG, and
+// its method is why. That round walked a live `document.styleSheets` for rules matching a
+// rendered `.dse-btn`; the walk did not descend into `@media`, and `button:hover` lives
+// inside `@media (hover: hover)`. Three of the five rules Obsidian aims at an ordinary
+// desktop plugin button were therefore missing from this copy — `button:hover`,
+// `button:focus-visible` and the `[disabled]` group, each (0,1,1) — together with the two
+// tokens they read (`--input-shadow-hover`, `--background-modifier-border-focus`). All five
+// rules are now modelled, and the sweep below samples REST, HOVER and FOCUS-VISIBLE rather
+// than resting state alone. Two smaller drifts fell out of the same re-read: the base rule's
+// `app-region` is really `-webkit-app-region`, it has gained `corner-shape`, and dark
+// `--interactive-hover` had moved #363636 -> #3f3f3f.
+//
+// Provenance (SC-205): extracted from the app.css inside **Obsidian 1.13.7**, read straight
+// out of `~/.config/obsidian/obsidian-1.13.7.asar`. That is the SELF-UPDATED asar Obsidian
+// actually runs — `/opt/Obsidian/resources/obsidian.asar` (which the SC-189 comment named)
+// is the installer's copy and on this machine is years stale, which is one way the model
+// rotted. Copied verbatim, whitespace aside.
+//
+// DO NOT hand-edit this from memory: `assertHostCopyPinnedToObsidian` below re-extracts the
+// same rules and tokens from the installed Obsidian on every `npm run shots` and fails loudly
+// on any drift, so an edit that is not what Obsidian ships will be caught, not absorbed.
 //
 // It runs on its own navigations and captures nothing, so no shot's bytes depend on it.
 const OBSIDIAN_HOST_BUTTON_CSS = `
 .theme-dark {
   --input-shadow: inset 0 0.5px 0.5px 0.5px rgba(255, 255, 255, 0.09),
-    0 2px 4px 0 rgba(0,0,0,.15), 0 1px 1.5px 0 rgba(0,0,0,.1),
-    0 1px 2px 0 rgba(0,0,0,.2), 0 0 0 0 transparent;
-  --interactive-normal: #333333; --interactive-hover: #363636; --text-normal: #dadada;
+    0 2px 4px 0 rgba(0, 0, 0, 0.15), 0 1px 1.5px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px 0 rgba(0, 0, 0, 0.2), 0 0 0 0 transparent;
+  --input-shadow-hover: inset 0 0.5px 1px 0.5px rgba(255, 255, 255, 0.16),
+    0 2px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 1.5px 0 rgba(0, 0, 0, 0.2),
+    0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 0 0 0 transparent;
+  --interactive-normal: #333333; --interactive-hover: #3f3f3f; --text-normal: #dadada;
+  --background-modifier-border-focus: #555555;
 }
 .theme-light {
   --input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 1px 2px 0 rgba(0,0,0,.065), 0 0 0 0 transparent;
+    0 1px 2px 0 rgba(0, 0, 0, 0.065), 0 0 0 0 transparent;
+  --input-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17),
+    0 1px 2px 0 rgba(0, 0, 0, 0.1), 0 0 0 0 transparent;
   --interactive-normal: #ffffff; --interactive-hover: #fafafa; --text-normal: #222222;
+  --background-modifier-border-focus: #bdbdbd;
 }
-/* The tokens Obsidian's base button rule reads, at their desktop values. */
+/* The tokens Obsidian's button rules read, at their DESKTOP values — i.e. what app.css
+   resolves them to with only \`theme-dark\`/\`theme-light\` on <body>. Obsidian's own
+   \`.is-mobile\` and \`.mod-macos\` scopes move several of them (\`--input-shadow: none\`,
+   a superellipse corner shape) and are deliberately not modelled: the plugin is gated for
+   desktop Linux/Windows here, and modelling every platform would make the sweep demand
+   re-groundings for hosts this camera never renders. \`assertHostCopyPinnedToObsidian\`
+   re-resolves each of these against the real app.css under the same body classes, so the
+   snapshot cannot silently rot the way \`--interactive-hover\` did. */
 body {
-  --font-ui-small: 13px; --button-radius: 5px; --input-height: 30px;
-  --input-font-weight: 400; --size-4-1: 4px; --size-4-3: 12px; --cursor: default;
+  --font-ui-small: 13px; --button-radius: 5px; --button-corner-shape: round;
+  --input-height: 30px; --input-font-weight: 400; --size-4-1: 4px; --size-4-3: 12px;
+  --cursor: default;
 }
 button {
   --text-color: var(--text-normal);
-  app-region: no-drag;
+  -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-color);
   font-size: var(--font-ui-small);
   border-radius: var(--button-radius);
+  corner-shape: var(--button-corner-shape);
   border: 0;
   padding: var(--size-4-1) var(--size-4-3);
   height: var(--input-height);
@@ -478,6 +519,31 @@ button:not(.clickable-icon) {
   background-color: var(--interactive-normal);
   box-shadow: var(--input-shadow);
 }
+@media (hover: hover) {
+  button:hover {
+    background-color: var(--interactive-hover);
+    box-shadow: var(--input-shadow-hover);
+  }
+}
+button:focus-visible {
+  box-shadow: 0 0 0 3px var(--background-modifier-border-focus);
+}
+button[disabled],
+button[aria-disabled="true"],
+button[disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+/* MODELLED BUT NEVER MEASURED. Obsidian's only other rule that reaches a plain button is
+   this Windows-high-contrast one; Playwright renders with \`forced-colors: none\`, so the
+   query never matches and the sweep below can say nothing about it. It is copied anyway so
+   the drift pin compares Obsidian's WHOLE reaching set — a rule left out of the copy is
+   exactly how the three above went missing for two rounds. */
+@media (forced-colors: active) {
+  button {
+    border: 1px ButtonBorder solid;
+  }
+}
 `;
 
 /** SC-203 — inject the host sheet the way a real vault does: app.css FIRST, the plugin's
@@ -489,6 +555,102 @@ button:not(.clickable-icon) {
 async function injectHostCss(page) {
 	const handle = await page.addStyleTag({ content: OBSIDIAN_HOST_BUTTON_CSS });
 	await page.evaluate((el) => document.head.prepend(el), handle);
+}
+
+/** Read the pinned tokens off <body> under one scheme with `css` as the only stylesheet. */
+async function readHostTokens(page, css, scheme) {
+	await page.goto('about:blank');
+	await page.addStyleTag({ content: css });
+	return page.evaluate(
+		({ tokens, cls }) => {
+			document.body.className = cls;
+			const cs = getComputedStyle(document.body);
+			const out = {};
+			for (const t of tokens) out[t] = cs.getPropertyValue(t);
+			return out;
+		},
+		{ tokens: PINNED_TOKENS, cls: scheme === 'dark' ? 'theme-dark' : 'theme-light' },
+	);
+}
+
+/** SC-205 — THE DRIFT PIN for OBSIDIAN_HOST_BUTTON_CSS.
+ *
+ *  Everything `assertBtnHostLeak` concludes rests on that copy being what Obsidian ships,
+ *  and twice now it has not been (SC-189's two-of-five transcription; SC-203's
+ *  `@media`-blind styleSheets walk, which deleted `button:hover` from the model). A model
+ *  nothing checks rots into a gate that certifies a leak-free plugin, so this re-derives
+ *  both halves from the installed Obsidian on every run:
+ *
+ *    RULES — the whole set of rules in the real app.css that reach a plain plugin button,
+ *      compared as normalized text, in order. This catches a rule Obsidian ADDS just as
+ *      loudly as one whose declarations move; a hand-picked list of rules to look for could
+ *      not, which is the failure mode that produced this ticket.
+ *    TOKENS — resolved in a real browser under the same `theme-dark`/`theme-light` body
+ *      class, on BOTH sheets, and compared by value. They are pinned rather than excluded
+ *      because the token block is where the copy rotted most quietly: SC-203 left dark
+ *      `--interactive-hover` at #363636 long after Obsidian moved it to #3f3f3f, and no
+ *      amount of rule-text checking would ever have said so. Resolving them through a
+ *      browser (instead of chasing `var()` chains in the CSS text by hand) is what makes
+ *      the comparison honest — `--button-radius` is `var(--input-radius)` in app.css and a
+ *      literal `5px` in the copy, and both must resolve to the same thing.
+ *
+ *  No Obsidian on the machine (CI, a headless build box) is a printed SKIP and exit 0 —
+ *  loud, never a silent pass. The sweep itself still runs: the copy is checked in, so it
+ *  models a host whether or not this machine can prove the model current. */
+async function assertHostCopyPinnedToObsidian(page) {
+	const found = findObsidianAsar();
+	const css = found ? readAsarFile(found.path, 'app.css') : null;
+	if (!css) {
+		console.log(
+			`\nhost-copy pin SKIPPED — no installed Obsidian app.css to compare against ` +
+				`(looked in ~/.config/obsidian/obsidian-<version>.asar and ` +
+				`/opt/Obsidian/resources/obsidian.asar${found ? `; ${found.path} has no app.css entry` : ''}). ` +
+				`OBSIDIAN_HOST_BUTTON_CSS is UNVERIFIED on this machine — run \`npm run shots\` where ` +
+				`Obsidian is installed before trusting the button host-leak result below.`,
+		);
+		return;
+	}
+
+	const drift = [];
+	const real = extractReachingButtonRules(css);
+	const model = extractReachingButtonRules(OBSIDIAN_HOST_BUTTON_CSS);
+	for (let i = 0; i < Math.max(real.length, model.length); i += 1) {
+		const r = real[i];
+		const m = model[i];
+		const name = (x) => (x ? `${x.ctx ? `${x.ctx} { ` : ''}${x.sel}${x.ctx ? ' }' : ''}` : '(nothing)');
+		if (!m) drift.push(`Obsidian has a rule the copy does not model: ${name(r)} { ${r.decls} }`);
+		else if (!r) drift.push(`the copy models a rule Obsidian no longer has: ${name(m)} { ${m.decls} }`);
+		else if (r.ctx !== m.ctx || r.sel !== m.sel)
+			drift.push(`rule #${i + 1} is ${name(r)} in Obsidian but ${name(m)} in the copy`);
+		else if (r.decls !== m.decls)
+			drift.push(`${name(r)} declares\n      "${r.decls}"\n    in Obsidian but\n      "${m.decls}"\n    in the copy`);
+	}
+
+	for (const scheme of ['dark', 'light']) {
+		const realTokens = await readHostTokens(page, css, scheme);
+		const modelTokens = await readHostTokens(page, OBSIDIAN_HOST_BUTTON_CSS, scheme);
+		for (const t of PINNED_TOKENS) {
+			const a = normalizeTokenValue(realTokens[t]);
+			const b = normalizeTokenValue(modelTokens[t]);
+			if (a !== b) drift.push(`${scheme}: ${t} is "${a}" in Obsidian but "${b}" in the copy`);
+		}
+	}
+
+	if (drift.length) {
+		console.error(
+			`\nHOST COPY DRIFTED — OBSIDIAN_HOST_BUTTON_CSS in visual-harness/shoot.mjs no longer ` +
+				`matches the app.css of the Obsidian installed here (${found.path}, version ${found.version}):\n` +
+				drift.map((d) => `  ${d}`).join('\n') +
+				`\nThe button host-leak sweep below is only as true as that copy, so fix the copy ` +
+				`FIRST — re-extract from the asar, update the provenance comment's version, and ` +
+				`then re-run: the sweep may have real new leaks to close.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nhost-copy pin OK (${model.length} button-reaching rules + ${PINNED_TOKENS.length} tokens ` +
+			`× dark/light: OBSIDIAN_HOST_BUTTON_CSS is verbatim Obsidian ${found.version})`,
+	);
 }
 
 // The families the panel has to look right on, one per CARD SHAPE and — for the statblock —
@@ -856,9 +1018,16 @@ const BTN_PROPS = [
  *  plugin-wide it demonstrably moves widths, so it is re-grounded and compared.) */
 const BTN_PROPS_EXCLUDED = ['user-select', 'app-region'];
 
-/** Runs in the page. Tags each distinct button kind so the second pass reads the same node. */
-function probeButtons(props) {
-	const out = [];
+/** SC-205 — the states the sweep samples. `rest` was the whole gate until SC-205; three of
+ *  the five rules Obsidian aims at a plugin button only ever fire in the other two, so a
+ *  resting-only sweep was structurally blind to them however complete the host copy got. */
+const BTN_STATES = ['rest', 'hover', 'focus-visible'];
+
+/** Runs in the page. Tags each distinct button kind so every later pass reads the SAME node:
+ *  the key is what a problem line names, the index is what the per-node interactive passes
+ *  address (a key contains `|` and `.` and is a nuisance to put in a selector). */
+function tagButtons() {
+	const keys = [];
 	const seen = new Set();
 	for (const n of document.querySelectorAll('button, .dse-btn')) {
 		const root = n.closest('[data-dse-element]');
@@ -872,17 +1041,15 @@ function probeButtons(props) {
 		if (seen.has(key)) continue;
 		seen.add(key);
 		n.setAttribute('data-dse-hostleak', key);
-		const cs = getComputedStyle(n);
-		const r = n.getBoundingClientRect();
-		const rec = { key, w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
-		for (const p of props) rec[p] = cs[p];
-		out.push(rec);
+		n.setAttribute('data-dse-hostleak-i', String(keys.length));
+		keys.push(key);
 	}
-	return out;
+	return keys;
 }
 
-/** Re-read the SAME nodes (by the tag the first pass left) after the host sheet is in. */
-function reprobeButtons(props) {
+/** Read every tagged node at once. Only valid for `rest` — the interactive states have to
+ *  be driven one node at a time, because only one node can be under the pointer. */
+function readTaggedAtRest(props) {
 	const out = [];
 	for (const n of document.querySelectorAll('[data-dse-hostleak]')) {
 		const cs = getComputedStyle(n);
@@ -894,9 +1061,188 @@ function reprobeButtons(props) {
 	return out;
 }
 
+/** Clear both interactive states so a `rest` reading is really at rest. The host pass runs
+ *  the three states over again after injection, so the second `rest` inherits the first
+ *  pass's focus and pointer unless they are dropped here. */
+function clearBtnState() {
+	if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+	window.scrollTo(0, 0);
+}
+
+/** Bring one tagged node into view and report where its centre now sits in the VIEWPORT —
+ *  `page.mouse.move` takes viewport coordinates and the gallery is ~23,500px tall, so a
+ *  pointer move without this scroll lands on whatever happens to be on screen. */
+function centreOfTagged(i) {
+	const n = document.querySelector(`[data-dse-hostleak-i="${i}"]`);
+	if (!n) return null;
+	n.scrollIntoView({ block: 'center', inline: 'center' });
+	const r = n.getBoundingClientRect();
+	return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+}
+
+/** A viewport point that genuinely HIT-TESTS to this node — not merely one inside its
+ *  bounding rect. Two real gallery cases make the difference, and both were live flakes
+ *  before SC-205 checked:
+ *    * the initiative roster's `.dse-init__stamina` sits inside a `position: absolute;
+ *      overflow: hidden` rail, so its own centre is clipped away and `elementFromPoint`
+ *      there returns the ROW. Pointing at it would silently sample its resting style.
+ *    * a card's ghost edit button is `pointer-events: none` until the CARD is hovered, so
+ *      its hit target only exists once the pointer has already arrived. The caller moves to
+ *      the centre first for exactly that reason, then calls this to find where the now-
+ *      revealed node actually is.
+ *  Returns `{x, y}` or `{blocked}` — never a point that is not on the node. */
+function hitPointForTagged(i) {
+	const n = document.querySelector(`[data-dse-hostleak-i="${i}"]`);
+	if (!n) return null;
+	const r = n.getBoundingClientRect();
+	if (r.width === 0 || r.height === 0) return { blocked: 'renders a zero-sized box' };
+	const vw = document.documentElement.clientWidth;
+	const vh = document.documentElement.clientHeight;
+	for (const [fx, fy] of [
+		[0.5, 0.5],
+		[0.25, 0.5],
+		[0.75, 0.5],
+		[0.5, 0.25],
+		[0.5, 0.75],
+		[0.2, 0.2],
+		[0.8, 0.8],
+	]) {
+		const x = r.x + r.width * fx;
+		const y = r.y + r.height * fy;
+		if (x < 1 || y < 1 || x > vw - 1 || y > vh - 1) continue;
+		const hit = document.elementFromPoint(x, y);
+		if (hit && (hit === n || n.contains(hit))) return { x, y };
+	}
+	return {
+		blocked:
+			getComputedStyle(n).pointerEvents === 'none'
+				? 'pointer-events: none'
+				: 'no point in its box hit-tests to it (clipped by an ancestor overflow, or covered)',
+	};
+}
+
+/** Focus one tagged node, and report why it could not take focus if it did not. `disabled`
+ *  and un-rendered markup are the two provable cases; `aria-disabled` is NOT one of them (it
+ *  is an ARIA claim — such an element still takes focus, and must still reach
+ *  `:focus-visible` or fail the gate). */
+function focusTagged(i) {
+	const n = document.querySelector(`[data-dse-hostleak-i="${i}"]`);
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	if (n.hasAttribute('disabled')) return { blocked: 'disabled' };
+	if (n.getClientRects().length === 0)
+		return { blocked: 'renders no box at all (a display:none ancestor — unfocusable in a real vault too)' };
+	if (cs.visibility !== 'visible') return { blocked: `visibility: ${cs.visibility}` };
+	if (!n.matches('button, a[href], input, select, textarea, [tabindex]'))
+		return { blocked: `<${n.tagName.toLowerCase()}> with no href and no tabindex` };
+	if (n instanceof HTMLElement) n.focus();
+	return { blocked: null };
+}
+
+/** Read ONE tagged node and report whether the state we are trying to sample is genuinely
+ *  active on it. `active: false` is never absorbed by this function — the caller either
+ *  fails the gate or exempts the record against the `blocked` proof its driver returned
+ *  (SC-205: an exemption must assert the disabling markup, never skip silently). */
+function readOneTagged({ i, props, state }) {
+	const n = document.querySelector(`[data-dse-hostleak-i="${i}"]`);
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const r = n.getBoundingClientRect();
+	const rec = { key: n.getAttribute('data-dse-hostleak'), w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+	for (const p of props) rec[p] = cs[p];
+	rec.active = state === 'hover' ? n.matches(':hover') : state === 'focus-visible' ? n.matches(':focus-visible') : true;
+	return rec;
+}
+
+/** Sample every tagged node in one state, driving the state for real. Returns the records
+ *  plus any loudness problems (a state that could not be reached and could not be excused). */
+async function probeButtonsInState(page, state, count, props) {
+	if (state === 'rest') {
+		await page.mouse.move(0, 0);
+		await page.evaluate(clearBtnState);
+		const records = await page.evaluate(readTaggedAtRest, props);
+		for (const rec of records) {
+			rec.active = true; // resting IS the state; nothing has to be driven to reach it
+			rec.blocked = null;
+		}
+		return { records, problems: [] };
+	}
+	if (state === 'focus-visible') {
+		// Chromium only paints `:focus-visible` on a SCRIPTED focus when the last input was a
+		// key, so establish keyboard modality with a real key event first — and get the
+		// pointer off the page, so a stray `:hover` cannot be read as a focus difference.
+		await page.mouse.move(0, 0);
+		await page.keyboard.press('Tab');
+	}
+	const records = [];
+	const problems = [];
+	for (let i = 0; i < count; i += 1) {
+		let blocked = null;
+		if (state === 'hover') {
+			const centre = await page.evaluate(centreOfTagged, i);
+			if (!centre) {
+				problems.push(`#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			// Arrive at the centre first — that is what reveals a hover-gated control — then
+			// ask where the node can actually be pointed at now that it has.
+			if (centre.w > 0 && centre.h > 0) await page.mouse.move(centre.x, centre.y);
+			const hit = await page.evaluate(hitPointForTagged, i);
+			if (!hit) {
+				problems.push(`#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			if (hit.blocked) blocked = hit.blocked;
+			else {
+				// TWO moves, ending on the verified point. Chromium recomputes the hover chain
+				// on a pointer EVENT; a single move that lands where the pointer already is (or
+				// that arrives before a hover-reveal changes hit-testing) leaves the chain stale,
+				// and that raced — the same node read hovered in one pass and at rest in the
+				// other, which reads as a host leak.
+				await page.mouse.move(hit.x, hit.y > 1 ? hit.y - 0.5 : hit.y + 0.5);
+				await page.mouse.move(hit.x, hit.y);
+			}
+		} else {
+			await page.evaluate(centreOfTagged, i);
+			const res = await page.evaluate(focusTagged, i);
+			if (!res) {
+				problems.push(`#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			blocked = res.blocked;
+		}
+		const rec = await page.evaluate(readOneTagged, { i, props, state });
+		if (!rec) {
+			problems.push(`#${i}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		if (!rec.active && !blocked) {
+			problems.push(
+				`${rec.key}: could not be put into :${state} and is not provably unreachable — ` +
+					`the sweep would have sampled its resting style and called it a pass`,
+			);
+			continue;
+		}
+		if (rec.active && blocked) {
+			problems.push(
+				`${rec.key}: reported as unreachable for :${state} ("${blocked}") but the node ` +
+					`matches the state anyway — the exemption is wrong, not the node`,
+			);
+			continue;
+		}
+		rec.blocked = blocked;
+		records.push(rec);
+	}
+	return { records, problems };
+}
+
 async function assertBtnHostLeak(page) {
 	const problems = [];
-	let kinds = 0;
+	let kindCount = 0;
+	let comparisons = 0;
+	let exempt = 0;
+	/** reason -> count, so the sweep's coverage BOUNDARY is printed rather than implied. */
+	const exemptions = new Map();
 	for (const bg of ['dark', 'light']) {
 		const query = new URLSearchParams({
 			gallery: '1',
@@ -907,28 +1253,62 @@ async function assertBtnHostLeak(page) {
 		await page.emulateMedia({ media: 'screen' });
 		await page.goto(`${pageUrl}?${query}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
-		const bare = await page.evaluate(probeButtons, BTN_PROPS);
-		if (bare.length < 20) {
-			problems.push(`${bg}: only ${bare.length} buttons found in the gallery — the sweep is blind`);
+		// SC-205 — Obsidian's `button:hover` sits inside `@media (hover: hover)`. If this
+		// context ever stopped reporting a hover-capable pointer, that rule would be inert and
+		// the hover pass would pin nothing while still printing OK. Assert the capability
+		// rather than assume it.
+		if (!(await page.evaluate(() => window.matchMedia('(hover: hover)').matches))) {
+			problems.push(
+				`${bg}: this browser context does not report \`(hover: hover)\`, so Obsidian's ` +
+					`\`button:hover\` rule is inert and the hover pass proves nothing`,
+			);
 			continue;
 		}
-		await injectHostCss(page);
-		const withHost = new Map((await page.evaluate(reprobeButtons, BTN_PROPS)).map((r) => [r.key, r]));
-		for (const b of bare) {
-			const h = withHost.get(b.key);
-			if (!h) {
-				problems.push(`${bg}|${b.key}: vanished when the host sheet was added`);
-				continue;
+		const keys = await page.evaluate(tagButtons);
+		if (keys.length < 20) {
+			problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
+			continue;
+		}
+		kindCount = keys.length;
+
+		// PASS 1 — every state without the host. PASS 2 — the same states, same nodes, same
+		// pointer/focus order, with the host sheet in. Reading all three states before the
+		// injection (rather than injecting once per state) keeps it to one navigation per
+		// scheme; the states are re-driven for real in each pass, so nothing is read out of a
+		// state the node is not actually in.
+		const bare = {};
+		for (const state of BTN_STATES) {
+			const r = await probeButtonsInState(page, state, keys.length, BTN_PROPS);
+			bare[state] = r.records;
+			for (const p of r.problems) problems.push(`${bg}|host-absent|${state}: ${p}`);
+			for (const rec of r.records) {
+				if (rec.active) continue;
+				exempt += 1;
+				const reason = `${state}: ${rec.blocked}`;
+				exemptions.set(reason, (exemptions.get(reason) ?? 0) + 1);
 			}
-			kinds += 1;
-			for (const p of ['w', 'h', ...BTN_PROPS]) {
-				const a = typeof b[p] === 'number' ? b[p].toFixed(2) : String(b[p]);
-				const c = typeof h[p] === 'number' ? h[p].toFixed(2) : String(h[p]);
-				if (a !== c) {
-					problems.push(
-						`${bg}|${b.key}: Obsidian's \`button\` rules change ${p} — ` +
-							`"${a}" without the host, "${c}" with it`,
-					);
+		}
+		await injectHostCss(page);
+		for (const state of BTN_STATES) {
+			const r = await probeButtonsInState(page, state, keys.length, BTN_PROPS);
+			for (const p of r.problems) problems.push(`${bg}|host-present|${state}: ${p}`);
+			const withHost = new Map(r.records.map((rec) => [rec.key, rec]));
+			for (const b of bare[state]) {
+				const h = withHost.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${state}|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				comparisons += 1;
+				for (const p of ['w', 'h', ...BTN_PROPS]) {
+					const a = typeof b[p] === 'number' ? b[p].toFixed(2) : String(b[p]);
+					const c = typeof h[p] === 'number' ? h[p].toFixed(2) : String(h[p]);
+					if (a !== c) {
+						problems.push(
+							`${bg}|${state}|${b.key}: Obsidian's \`button\` rules change ${p} — ` +
+								`"${a}" without the host, "${c}" with it`,
+						);
+					}
 				}
 			}
 		}
@@ -944,10 +1324,19 @@ async function assertBtnHostLeak(page) {
 		);
 		process.exit(1);
 	}
+	const boundary = [...exemptions.entries()]
+		.sort((a, b) => b[1] - a[1])
+		.map(([reason, n]) => `      ${n}× ${reason}`)
+		.join('\n');
 	console.log(
-		`\nbutton host-leak OK (${kinds} button kinds across the whole gallery × dark/light: ` +
-			`every sampled property is identical with and without Obsidian's \`button\` rules; ` +
-			`${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)`,
+		`\nbutton host-leak OK (${kindCount} button kinds × ${BTN_STATES.length} states ` +
+			`(${BTN_STATES.join('/')}) × dark/light = ${comparisons} comparisons: every sampled ` +
+			`property is identical with and without Obsidian's \`button\` rules; ` +
+			`${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)` +
+			(exempt
+				? `\n  ${exempt} of those (kind,state) records sampled the node at rest because the ` +
+					`state is provably unreachable on it — each one proved, never assumed:\n${boundary}`
+				: ''),
 	);
 }
 
@@ -1125,6 +1514,10 @@ try {
 		// SC-189 round 3 — the host-leak gate (see the block above). Same "own navigations,
 		// captures nothing" shape, so it is skipped on a narrowed run for the same reason.
 		await assertChromeHostLeak(page);
+		// SC-205 — before asking what the host does to the plugin, prove the host model is
+		// still what Obsidian ships. It runs FIRST so a drifted copy reports as drift rather
+		// than as a mystery leak (or, worse, as a clean sweep of the wrong host).
+		await assertHostCopyPinnedToObsidian(page);
 		// SC-203 — the same question asked of EVERY button in the plugin, not just the
 		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
 		await assertBtnHostLeak(page);

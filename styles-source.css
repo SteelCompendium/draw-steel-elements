@@ -13009,8 +13009,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    (~:11299), `.dse-tabs__tab:hover` (~:11336) and `.dse-tabs__tab[aria-selected='true']`
    (~:11339). They are excluded by hand below (`:not(:hover)`, and the selected tab gets
    its own mirrored entry) rather than by luck. If you add a (0,2,0) state rule to any of
-   these four families, add its twin here too — `assertBtnHostLeak` sweeps the gallery at
-   rest AND on hover in both schemes, so it will tell you.
+   these four families, add its twin here too — `assertBtnHostLeak` will tell you.
+
+   WHAT THAT GATE ACTUALLY SWEEPS, as of SC-205 (this sentence used to promise hover cover
+   the code did not have — it sampled resting state only, which is how three of Obsidian's
+   five button rules went unmodelled for two rounds). For each of dark and light it mounts
+   the whole gallery with authoring controls on, tags every distinct button KIND, and reads
+   each one's computed style in three states — REST, HOVER (a real pointer moved onto a
+   point verified to hit-test to the node) and FOCUS-VISIBLE (keyboard modality established
+   with a real Tab, then focus, then `:focus-visible` asserted per node) — first with no
+   host sheet and then with Obsidian's real `button` rules injected ahead of this file. The
+   two readings must be identical; the check is bare-vs-host INVARIANCE, not a list of
+   expected values, because a value list is exactly what let `color` through in SC-189.
+   A node that cannot reach a state is sampled at rest only when it PROVES it cannot — it
+   is disabled, renders no box, or nothing in its box hit-tests to it — and the gate prints
+   that boundary with counts on every run.
+
+   The host model itself is pinned: `assertHostCopyPinnedToObsidian` re-extracts the rules
+   and tokens from the installed Obsidian's own app.css each run and fails on any drift, so
+   "Obsidian does not have that rule" can no longer be asserted from a stale copy.
 */
 
 /* -- A. the declarations Obsidian makes on the bare `button` type that this sheet never

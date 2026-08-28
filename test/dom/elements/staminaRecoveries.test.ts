@@ -457,6 +457,36 @@ describe('SC-132: the undo toast', () => {
 		expect(pips(root).filter((p) => p.hasClass('dse-stamina-rec__pip--filled')).length).toBe(3);
 	});
 
+	// SC-205 — the Undo affordance must stay a NON-`button` element, and that is a load-
+	// bearing constraint rather than a stylistic one.
+	//
+	// Obsidian's app.css reaches plugin controls through TYPE selectors — `button`,
+	// `button:not(.clickable-icon)`, `button:hover`, `button:focus-visible`,
+	// `button[disabled]`. Everything the plugin renders as a real `<button>` therefore wears
+	// the host's height, box-shadow, colour and cursor unless this sheet re-grounds it, which
+	// is the whole SC-203 "PLUGIN-WIDE HOST RE-GROUNDING" block at the foot of
+	// styles-source.css and the whole point of `assertBtnHostLeak`.
+	//
+	// A notice is the one place none of that protection exists: Obsidian renders it OUTSIDE
+	// any `[data-dse-element]` root, and the re-grounding block is anchored on
+	// `:is([data-dse-element], .dse-modal)`. So an `<a role="button">` here is not an
+	// accessibility flourish — it is the only reason this control escapes the host leak set
+	// entirely. Turning it into a `<button>` would silently hand it Obsidian's 30px
+	// `--input-height` and five-layer `--input-shadow`, in a spot no gate is watching.
+	test('the Undo affordance is not a <button>: a notice sits outside the host re-grounding', async () => {
+		const { root } = await mountRecoveries();
+		pips(root)[1].click();
+		const undo = Notice.last!.noticeEl!.querySelector<HTMLElement>('.dse-undo-notice__action')!;
+
+		expect(undo).not.toBeNull();
+		expect(undo.tagName).toBe('A');
+		expect(undo.tagName).not.toBe('BUTTON');
+		expect(undo.closest('button')).toBeNull();
+		// …and it still reads and behaves as a button for everyone who is not app.css.
+		expect(undo.getAttribute('role')).toBe('button');
+		expect(undo.getAttribute('tabindex')).toBe('0');
+	});
+
 	test('a no-op click posts nothing (there is nothing to undo)', async () => {
 		const { root } = await mountRecoveries();
 		// Model M has no no-op MARKER, so the no-op has to come from the keyboard's floor.
