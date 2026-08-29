@@ -75,22 +75,54 @@ function kitBonusValue(raw: string | undefined): string {
 const KIT_BODY_STRIP_HEADING_RE = /^#{1,6}\s*(equipment|kit bonuses)\s*$/i;
 
 /**
+ * FIX ROUND 3 (owner ruling 18): the leading count WORD (`One`/`Two`/…), mapped to its
+ * digit. Only the words the corpus is expected to ever carry are listed; an unrecognized
+ * leading word falls back gracefully (see `languageCount` below) rather than throwing or
+ * guessing.
+ */
+const COUNT_WORD_TO_DIGIT: Readonly<Record<string, string>> = {
+	one: '1',
+	two: '2',
+	three: '3',
+	four: '4',
+	five: '5',
+	six: '6',
+	seven: '7',
+	eight: '8',
+	nine: '9',
+	ten: '10',
+};
+
+/**
  * SC-120 Batch A (design §3.2/§5): ported from `careerLanguageCount` (steel-etl
  * cards.go) — the model's `language` field is a sentence ("One language"/"Two
- * languages"); career's tile shows just the leading count word. Strips a trailing
- * " language"/" languages" suffix (case-insensitive); falls back to the whole string
- * unchanged when there's no such suffix (site parity — `careerLanguageCount` never
- * returns empty for a non-empty input; `statTiles()` itself owns the ''->'—' dash
- * fallback for a genuinely absent field, same division of labor as `kitBonusValue`).
+ * languages"); career's tile shows just the leading count. Strips a trailing
+ * " language"/" languages" suffix (case-insensitive), the same site-ported step as
+ * before.
+ *
+ * FIX ROUND 3 (owner ruling 18): the stripped leading word is then mapped to its NUMERAL
+ * ("One" -> "1"), not left as the word — in the tile-value face, a capital "O" reads as a
+ * digit zero ("0ne"), an ambiguity no other tile value has (21, +9, +1, — are all
+ * numeric/dash already). A deliberate divergence from the site tile's count WORD (the
+ * site is a reference, not gospel — §0(c) of the design doc). Falls back to the
+ * suffix-stripped STRING unchanged when the leading word isn't a recognized count word
+ * (site parity's own "never returns empty for a non-empty input" contract, preserved for
+ * whatever unexpected text a future corpus entry might carry) — `statTiles()` itself owns
+ * the ''->'—' dash fallback for a genuinely absent field, same division of labor as
+ * `kitBonusValue`.
  */
 export function languageCount(raw: string | undefined): string {
 	const s = (raw ?? '').trim();
 	if (!s) return '';
 	const low = s.toLowerCase();
+	let stripped = s;
 	for (const suf of [' languages', ' language']) {
-		if (low.endsWith(suf)) return s.slice(0, s.length - suf.length).trim();
+		if (low.endsWith(suf)) {
+			stripped = s.slice(0, s.length - suf.length).trim();
+			break;
+		}
 	}
-	return s;
+	return COUNT_WORD_TO_DIGIT[stripped.toLowerCase()] ?? stripped;
 }
 
 // SC-120 Batch C — shared helpers for the ancestry/perk/condition/rule Steel compositions

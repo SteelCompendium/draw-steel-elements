@@ -35,19 +35,40 @@ describe('SC-120 Batch A: stripInlineMarkdown / plainText (CardLayout.ts)', () =
 });
 
 describe('SC-120 Batch A: languageCount (layouts.ts, design §3.2 — ports careerLanguageCount)', () => {
-	test('strips a trailing " language" suffix', () => {
-		expect(languageCount('One language')).toBe('One');
+	test('strips a trailing " language" suffix, then emits the NUMERAL (owner ruling 18 — the tile-value face renders a capital "O" as a digit zero)', () => {
+		expect(languageCount('One language')).toBe('1');
 	});
 
-	test('strips a trailing " languages" suffix (plural)', () => {
-		expect(languageCount('Two languages')).toBe('Two');
+	test('strips a trailing " languages" suffix (plural), then emits the numeral', () => {
+		expect(languageCount('Two languages')).toBe('2');
 	});
 
-	test('is case-insensitive on the suffix', () => {
-		expect(languageCount('Three LANGUAGES')).toBe('Three');
+	test('is case-insensitive on both the suffix and the count word', () => {
+		expect(languageCount('Three LANGUAGES')).toBe('3');
+		expect(languageCount('four languages')).toBe('4');
 	});
 
-	test('falls back to the whole string when there is no recognized suffix (site parity: never empties a non-empty input)', () => {
+	test('covers every count word one..ten', () => {
+		const cases: [string, string][] = [
+			['One language', '1'],
+			['Two languages', '2'],
+			['Three languages', '3'],
+			['Four languages', '4'],
+			['Five languages', '5'],
+			['Six languages', '6'],
+			['Seven languages', '7'],
+			['Eight languages', '8'],
+			['Nine languages', '9'],
+			['Ten languages', '10'],
+		];
+		for (const [input, expected] of cases) expect(languageCount(input)).toBe(expected);
+	});
+
+	test('falls back to the suffix-stripped STRING when the leading word is not a recognized count word (owner ruling 18\'s stated fallback)', () => {
+		expect(languageCount('A couple languages')).toBe('A couple');
+	});
+
+	test('falls back to the whole string when there is no recognized suffix AND no recognized count word (site parity: never empties a non-empty input)', () => {
 		expect(languageCount('None')).toBe('None');
 	});
 

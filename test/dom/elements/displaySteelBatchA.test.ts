@@ -217,7 +217,7 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 		expect(bandHeadTexts(card)).toEqual(['Career Benefits', 'Skills', 'Perk']);
 	});
 
-	test('Career Benefits band: 4 dash-filled tiles, --dse-tiles-n="4", languageCount() reduces "One language" -> "One", absent fields dash', async () => {
+	test('Career Benefits band: 4 dash-filled tiles, --dse-tiles-n="4", languageCount() reduces "One language" -> "1" (owner ruling 18: the NUMERAL, not the word), absent fields dash', async () => {
 		const card = await renderInline();
 		const bands = Array.from(card.querySelectorAll(':scope > .dse-card__band'));
 		const benefits = bands.find((b) => b.querySelector('.dse-card__band-head')?.textContent === 'Career Benefits')!;
@@ -225,7 +225,7 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 		expect(tilesN(row)).toBe('4');
 		expect(tileLabels(row)).toEqual(['Languages', 'Project Pts', 'Renown', 'Wealth']);
 		const values = tileValues(row);
-		expect(values[0]).toBe('One'); // languageCount("One language")
+		expect(values[0]).toBe('1'); // languageCount("One language") -- owner ruling 18
 		expect(values[1]).toBe('—'); // project_points: absent in politician.yaml
 		expect(values[2]).toBe('+1'); // renown
 		expect(values[3]).toBe('+1'); // wealth
