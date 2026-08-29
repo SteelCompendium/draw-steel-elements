@@ -1,0 +1,476 @@
+/* SC-191 ROUND 5 — equal-width tracks, the tier cheat sheet, the rename, no ghost lane.
+ *
+ * NOT SHIPPED. Loaded only by visual-harness/sc191/mock5.html, on top of round4.css on top
+ * of round3.css on top of round2.css. Not imported by main.ts, not part of
+ * styles-source.css. Nothing here can reach a user, a frozen shot or the print baseline.
+ *
+ * EVERYTHING IN THIS FILE IS SCOPED `.mt2[data-r5='on']`, and every round-5 DOM addition is
+ * gated on the same flag in mock5.js. That pairing is what makes `?r5=off` an honest
+ * "before": it is the round-4 `merged` card Scott ruled on, produced by round 4's own code
+ * path, not by a re-implementation of it. Round 4 learned why the DOM must be gated too —
+ * a bare `<button>`'s UA padding leaked a 2.7% height change into its own control.
+ *
+ * Same rules as rounds 2–4:
+ *   - every colour is a --dse-* token (DESIGN.md rule 3 — compose, never invent);
+ *   - every font-size is one of the nine --dse-fs-* ROLE tokens (SC-185 contract);
+ *   - no decorative coloured left-border (DESIGN.md rule 7 / SC-132);
+ *   - every translucent wash states its light twin (SC-117 / SC-126 bg-polarity);
+ *   - state rides SHAPE, MATERIAL, POSITION, GLYPH and WORDS before colour.
+ */
+
+[data-dse-element='montage'][data-dse-theme='steel'] {
+	.mt2[data-r5='on'] {
+		/* ================================================================= */
+		/*  1. EQUAL-WIDTH TRACKS                                            */
+		/* ================================================================= */
+		/* Scott: "I want to tweak the two tracks so they are the same horizontal width:
+		   even if there are 5 cells in 'success' and 3 in 'failure', either one reaching
+		   max results in the end of the montage so they should be the same width. That
+		   means the cells for failure are going to be wider."
+		 *
+		 * HE IS CORRECTING A CATEGORY ERROR, and it is worth naming because it inverts
+		 * round 4's stated reasoning. Round 4 gave the slots a FIXED width so a 3-slot
+		 * failure bar would be drawn half as long as a 6-slot success bar, on the argument
+		 * that a track's LENGTH should state the Director's limit. But the two limits are
+		 * not two quantities on one scale — they are two INDEPENDENT scales that share one
+		 * meaning: filling either one ends the montage. Drawing them at different lengths
+		 * says "failure is a smaller thing than success", which is exactly backwards: three
+		 * failures end the montage every bit as completely as six successes end it. Equal
+		 * width says the true thing — two gauges, both reading zero-to-over, and the eye
+		 * compares FILL FRACTION, which is the only comparison that means anything here.
+		 *
+		 * The mechanism inverts with the meaning: round 4 fixed the slot and let the track
+		 * float; round 5 fixes the TRACK and lets the slots divide it. A wider failure tile
+		 * is not a side effect to be tolerated — it is the statement that one failure costs
+		 * twice what one success buys.
+		 *
+		 * The width is round 4's success track exactly (6 x 1.55em + 5 x 0.28em gaps), so
+		 * the success reading Scott approved does not move a pixel; only the failure track
+		 * grows to meet it. */
+		.mt4-outcome {
+			--mt5-trackw: 10.7em;
+		}
+		/* The track column is now a fixed track, not `auto`. That is what puts the two tail
+		   sentences on ONE common x — under `auto` each row's tail started wherever its own
+		   track happened to end, which was the visible ragged edge in the round-4 shots. */
+		.mt4-outcome .mt2-prog {
+			grid-template-columns: 7em var(--mt5-trackw) minmax(0, 1fr);
+		}
+		.mt4-outcome .mt2-track {
+			flex: none;
+			width: 100%;
+		}
+		.mt4-outcome .mt2-track__slot {
+			flex: 1 1 0;
+			min-width: 0;
+		}
+
+		/* ================================================================= */
+		/*  2. THE TIER CHEAT-SHEET STRIP                                    */
+		/* ================================================================= */
+		/* Scott: "My leading though is to additionally have a button that will open
+		   (expand) a stylized version of the test-outcome-per-difficulty information above
+		   the table that isnt super obtuse (like a cheat sheet). Seems a little clunky, but
+		   I really think we need to do something. What do you think?"
+		 *
+		 * THE TWO DISCLOSURES NOW BRACKET THE INSTRUMENT. The foot panel opens downward off
+		 * a hairline BELOW the card's controls; the strip opens downward off a hairline
+		 * ABOVE the board. Same idiom, same twisty, same small-caps hint on the right — one
+		 * disclosure grammar, used twice, which is the answer to "seems a little clunky".
+		 * What would have been clunky is a second, different mechanism. */
+		.mt5-cheat {
+			margin: 0 0 0.55rem;
+			border-bottom: 1px solid var(--dse-border);
+		}
+		.mt5-cheat__summary {
+			display: flex;
+			align-items: center;
+			gap: 0.5em;
+			width: 100%;
+			padding: 0.1rem 0.1rem 0.45rem;
+			background: none;
+			border: none;
+			text-align: left;
+			cursor: pointer;
+			color: var(--dse-fg-muted);
+
+			&:hover,
+			&:focus-visible {
+				color: var(--dse-accent);
+			}
+		}
+		.mt5-cheat__title {
+			font-size: var(--dse-fs-control);
+			color: inherit;
+		}
+		.mt5-cheat__hint {
+			margin-left: auto;
+			font-size: var(--dse-fs-micro);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.09em;
+			color: var(--dse-fg-faint);
+		}
+		/* The twisty inherits round 4's rule (`.mt4-guide__twisty`) for its size and colour;
+		   the open-state rotation has to be restated because that one is keyed on
+		   `.mt4-guide[data-open='on']`. One glyph rotated, never two swapped. */
+		.mt5-cheat[data-open='on'] .mt5-cheat__twisty {
+			transform: rotate(90deg);
+		}
+
+		/* THE STRIP ITSELF — a sunken well, like the foot panel's body: reference material
+		   laid ON the card, not another band OF it. The well holds the grid and both
+		   footnotes so the strip is one object, not a box with loose lines under it. */
+		.mt5-cheat__body {
+			margin-bottom: 0.45rem;
+			padding: 0.5rem 0.8rem 0.5rem;
+			background: var(--dse-surface-sunken);
+			border: 1px solid var(--dse-metal-faint);
+			border-radius: var(--dse-radius);
+		}
+		.mt5-cheat__grid {
+			display: grid;
+			grid-template-columns: auto repeat(3, minmax(0, 1fr));
+			align-items: center;
+			column-gap: 0.9em;
+		}
+		/* The roll bands are the column heads, and they are the one thing on this strip set
+		   in the mono face: they are numbers you match a die result against. */
+		.mt5-cheat__corner,
+		.mt5-cheat__band {
+			padding-bottom: 0.34em;
+			margin-bottom: 0.3em;
+			border-bottom: 1px solid var(--dse-metal-faint);
+			font-size: var(--dse-fs-micro);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.09em;
+			color: var(--dse-metal);
+		}
+		.mt5-cheat__band {
+			font-family: var(--dse-font-mono);
+			font-variant-numeric: tabular-nums;
+			letter-spacing: 0.04em;
+			white-space: nowrap;
+		}
+		/* In `handle` mode the corner is empty (the summary row already names the strip), and
+		   an empty cell with a rule under it is a hairline pointing at nothing. */
+		.mt5-cheat__corner {
+			white-space: nowrap;
+		}
+		.mt5-cheat__corner:empty {
+			border-bottom-color: transparent;
+		}
+		/* The difficulty is the row's KEY — it is what the Director already decided, so it
+		   is the brightest label in the strip and the thing the eye lands on first. */
+		.mt5-cheat__diff {
+			padding-right: 0.2em;
+			font-size: var(--dse-fs-label);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.1em;
+			font-weight: 700;
+			color: var(--dse-metal-bright);
+			white-space: nowrap;
+		}
+		.mt5-cheat__cell {
+			display: flex;
+			align-items: center;
+			gap: 0.5em;
+			padding: 0.26em 0;
+			min-width: 0;
+		}
+
+		/* THE SEAL — the board's own ink language at cheat-sheet size, so a Director who
+		   has learned to read a cell has already learned to read this strip. Success is a
+		   GREEN RING with a check and no fill; failure is a RED RING with a hatched PRESS
+		   and an X. Ring style and glyph shape carry the meaning; the colour is the third
+		   channel, not the first — which is what `sc191-r5-cheat-open-grey-dark.png`
+		   exists to prove. */
+		.mt5-seal {
+			position: relative;
+			display: inline-flex;
+			flex: none;
+			align-items: center;
+			justify-content: center;
+			width: 1.5em;
+			height: 1.5em;
+			border-radius: 50%;
+			border: 1px solid var(--dse-metal-line);
+
+			svg {
+				width: 0.8em;
+				height: 0.8em;
+			}
+		}
+		.mt5-seal[data-kind='success'] {
+			background: none;
+			border: 2px solid var(--dse-turn-done);
+			color: var(--dse-turn-done);
+		}
+		.mt5-seal[data-kind='failure'] {
+			background:
+				repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.28);
+			border: 2px solid var(--dse-danger);
+			box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+			color: var(--dse-danger);
+
+			body.theme-light & {
+				background:
+					repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.11) 0 1px, transparent 1px 5px),
+					rgba(0, 0, 0, 0.05);
+				box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+			}
+		}
+		/* The rider's one-letter form. It is in the DOM at every width and shown only at
+		   sidebar width (§5), where the words below cannot fit — so the strip degrades
+		   instead of side-scrolling, which is the one complaint the foot panel's tier table
+		   still carries at 300px. */
+		.mt5-seal__rider {
+			display: none;
+			position: absolute;
+			top: -0.42em;
+			right: -0.5em;
+			font-family: var(--dse-font-mono);
+			font-size: var(--dse-fs-micro);
+			line-height: 1;
+			color: var(--dse-metal);
+		}
+
+		/* THE RIDER, IN WORDS. "with a consequence" / "with a reward" is the channel that
+		   needs no legend and no colour at all — and a cheat sheet whose cells have to be
+		   decoded is the "super obtuse" thing Scott asked us not to build. */
+		/* TWO LINES, ALWAYS THE SAME TWO. The outcome on top, its rider under it. Left to
+		   flow inline, "success with a consequence" broke as "success with a / consequence",
+		   which splits the rider across the line break and puts the least important word in
+		   the most prominent position. A fixed stack also means every cell in a row has the
+		   same silhouette, so the eye reads down a column without re-measuring. */
+		.mt5-cheat__word {
+			display: flex;
+			flex-direction: column;
+			min-width: 0;
+			line-height: 1.25;
+		}
+		.mt5-cheat__kind {
+			font-size: var(--dse-fs-caption);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.06em;
+			color: var(--dse-fg);
+		}
+		.mt5-cheat__rider {
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-fg-faint);
+		}
+
+		.mt5-cheat__foot {
+			margin: 0.5em 0 0;
+			font-size: var(--dse-fs-micro);
+			font-style: italic;
+			color: var(--dse-fg-faint);
+		}
+		/* Only meaningful when the words are gone (§5). */
+		.mt5-cheat__legend {
+			display: none;
+			margin: 0.3em 0 0;
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-fg-faint);
+		}
+
+		/* --- 2b. THE `chip` ALTERNATIVE for the toggle's home ------------- */
+		/* No row at all when closed: a control in the head's right stack, in the
+		   `primary--right` lane the count chips vacated at round 4's dedupe. It costs zero
+		   height and pays for it in distance — see the report's placement argument. */
+		.mt5-headtoggle {
+			grid-area: 2 / 3;
+			justify-self: end;
+			display: inline-flex;
+			align-items: center;
+			gap: 0.35em;
+			margin-left: 1.5em;
+			padding: 0.16em 0.5em;
+			background: var(--dse-chip-bg);
+			border: 1px solid var(--dse-metal-faint);
+			border-radius: 2px;
+			cursor: pointer;
+			color: var(--dse-fg-muted);
+
+			&:hover,
+			&:focus-visible {
+				border-color: var(--dse-accent);
+				color: var(--dse-accent);
+			}
+		}
+		.mt5-headtoggle__text {
+			font-size: var(--dse-fs-micro);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.09em;
+		}
+		.mt5-headtoggle__twisty {
+			display: inline-flex;
+			color: var(--dse-metal);
+
+			svg {
+				width: 0.7em;
+				height: 0.7em;
+			}
+		}
+		.mt5-headtoggle[data-on='on'] {
+			border-color: var(--dse-metal);
+			color: var(--dse-fg);
+
+			.mt5-headtoggle__twisty {
+				transform: rotate(90deg);
+			}
+		}
+		/* With the toggle upstairs the strip has no summary row of its own, so the grid
+		   carries the strip's name in its own corner cell instead — a panel that appears
+		   three bands from the control that opened it has to say what it is. */
+		.mt5-cheat[data-place='chip'] {
+			border-bottom: none;
+		}
+
+		/* ================================================================= */
+		/*  3. THE FOOT PANEL'S "EACH TEST" BLOCK, WHEN THE STRIP IS PINNED  */
+		/* ================================================================= */
+		/* Dedup is round 4's standing principle and it does not stop applying because the
+		   duplicate happens to be a rules table. With the strip pinned, the panel's full
+		   nine cells are the same nine cells one band lower — so the block collapses to the
+		   one fact the strip deliberately omits (the book's natural 19–20 row) and a pointer
+		   to where the rest now lives. */
+		.mt4-gblock[data-stub='on'] {
+			padding-bottom: 0.15em;
+		}
+		.mt5-gstub__line {
+			margin: 0;
+			font-size: var(--dse-fs-caption);
+			line-height: 1.4;
+			color: var(--dse-fg-muted);
+		}
+
+		/* ================================================================= */
+		/*  4. THE SHEET'S TIER HINT                                         */
+		/* ================================================================= */
+		/* Its own element and its own class — deliberately NOT `.mt2-sheet__note`, which is
+		   the warning slot (`--dse-warn`, italic). Round 4 had to un-paint a benign hint out
+		   of that slot once already; giving this one nothing in common with it is what stops
+		   the bug from having a route back. Quiet, upright, faint, and set on the sheet's own
+		   ground: it reads as a reminder printed on the form, not as something you got
+		   wrong. */
+		.mt5-sheet__tierhint {
+			display: flex;
+			align-items: baseline;
+			flex-wrap: wrap;
+			gap: 0.2em 0.7em;
+			flex: 1 1 100%;
+			margin-top: 0.35em;
+			padding-top: 0.35em;
+			border-top: 1px solid var(--dse-metal-faint);
+			font-style: normal;
+			color: var(--dse-fg-faint);
+		}
+		.mt5-sheet__tierhint-lead {
+			font-size: var(--dse-fs-micro);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.09em;
+			color: var(--dse-metal);
+		}
+		/* The three tiers are one unit: the line may wrap after the lead, never between two
+		   difficulties (which reads as two separate hints). */
+		.mt5-sheet__tiers {
+			display: inline-flex;
+			align-items: baseline;
+			gap: 0.75em;
+			white-space: nowrap;
+		}
+		.mt5-tierhint {
+			display: inline-flex;
+			align-items: baseline;
+			gap: 0.3em;
+		}
+		.mt5-tierhint__diff {
+			font-size: var(--dse-fs-micro);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.07em;
+			color: var(--dse-fg-faint);
+		}
+		.mt5-tierhint__band {
+			font-family: var(--dse-font-mono);
+			font-variant-numeric: tabular-nums;
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-fg-muted);
+		}
+
+		/* ================================================================= */
+		/*  5. NARROW — the 300px sidebar leaf                               */
+		/* ================================================================= */
+		@media (max-width: 420px) {
+			/* THE SEAM THIS CLOSES. round4.css already stacks the label over the track at
+			   this width, but §1's three-column rule is written OUTSIDE this media query and
+			   in a LATER sheet, so at equal specificity it won this cascade and the 10.7em
+			   fixed track column ran straight off the right edge of a 300px leaf. The narrow
+			   re-lay has to be restated here, in round 5's own sheet, to win it back. */
+			.mt4-outcome .mt2-prog {
+				grid-template-columns: minmax(0, 1fr);
+			}
+			/* Both tracks then fill the column, so equal width is free — but the slots must
+			   not WRAP, or a 3-slot failure track would fold into two rows and stop being
+			   one gauge. */
+			.mt4-outcome .mt2-track {
+				flex-wrap: nowrap;
+			}
+
+			/* THE STRIP DEGRADES RATHER THAN SCROLLS. The rider words cannot share a 60px
+			   cell with a seal, so they hand off to the one-letter mark on the seal itself
+			   and the legend line under the strip explains it once. Nothing here moves
+			   sideways, which is the behaviour the foot panel's four-column tier table still
+			   cannot manage at this width. */
+			.mt5-cheat__body {
+				padding: 0.45rem 0.5rem 0.5rem;
+			}
+			.mt5-cheat__grid {
+				column-gap: 0.45em;
+			}
+			.mt5-cheat__cell {
+				justify-content: center;
+				gap: 0;
+			}
+			/* With the words gone the seal centres in its column, so the band head has to
+			   centre with it — a left-set head over a centred mark reads as two columns. */
+			.mt5-cheat__band {
+				text-align: center;
+			}
+			.mt5-cheat__word {
+				display: none;
+			}
+			.mt5-seal {
+				width: 1.35em;
+				height: 1.35em;
+			}
+			.mt5-seal__rider {
+				display: block;
+				top: -0.5em;
+				right: -0.55em;
+				font-weight: 700;
+				color: var(--dse-metal-bright);
+			}
+			.mt5-cheat__legend {
+				display: block;
+			}
+			.mt5-cheat__diff {
+				font-size: var(--dse-fs-micro);
+				letter-spacing: 0.06em;
+			}
+			/* The head's right lane is a column of chips at this width; a control in it
+			   would sit on top of the round chip. */
+			.mt5-headtoggle {
+				grid-area: auto;
+				margin-left: 0;
+			}
+		}
+	}
+}

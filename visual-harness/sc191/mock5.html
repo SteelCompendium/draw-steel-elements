@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SC-191 round 5 — equal-width tracks, tier cheat sheet, the rename, no ghost lane</title>
+<!-- The REAL plugin environment: Obsidian's vendored theme vars + the compiled
+     styles-source.css (dist/harness.css, produced by `npm run harness:build`).
+     round2.css / round3.css / round4.css / round5.css are prototype sheets — none of
+     them is part of the shipped plugin, so nothing here can move a frozen shot.
+
+     round5.css layers on round4.css on round3.css on round2.css. `?r5=off` therefore
+     renders the round-4 `merged` card Scott ruled on, produced by the very code path he
+     reviewed rather than by a re-implementation of it — which is what makes the round-5
+     "before" honest. -->
+<link rel="stylesheet" href="../vars.css">
+<link rel="stylesheet" href="../dist/harness.css">
+<link rel="stylesheet" href="round2.css">
+<link rel="stylesheet" href="round3.css">
+<link rel="stylesheet" href="round4.css">
+<link rel="stylesheet" href="round5.css">
+<style>
+	/* deterministic shots — same convention as visual-harness/index.html */
+	*, *::before, *::after { transition: none !important; animation: none !important; }
+	body { margin: 0; padding: 24px; }
+	#mount { margin: 0 auto; }
+</style>
+</head>
+<body class="theme-dark">
+<div id="mount"></div>
+<script src="mock5.js"></script>
+</body>
+</html>
