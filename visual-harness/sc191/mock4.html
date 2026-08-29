@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SC-191 round 4 — dedupe, padding, rules guidance, notes</title>
+<!-- The REAL plugin environment: Obsidian's vendored theme vars + the compiled
+     styles-source.css (dist/harness.css, produced by `npm run harness:build`).
+     round2.css / round3.css / round4.css are prototype sheets — none of them is part
+     of the shipped plugin, so nothing here can move a frozen shot.
+
+     round4.css layers on round3.css layers on round2.css. The round-3 recommended
+     composite (crest=none, seal=ink, space=centre) is therefore produced by the very
+     code path Scott reviewed; round 4 only adds to it. -->
+<link rel="stylesheet" href="../vars.css">
+<link rel="stylesheet" href="../dist/harness.css">
+<link rel="stylesheet" href="round2.css">
+<link rel="stylesheet" href="round3.css">
+<link rel="stylesheet" href="round4.css">
+<style>
+	/* deterministic shots — same convention as visual-harness/index.html */
+	*, *::before, *::after { transition: none !important; animation: none !important; }
+	body { margin: 0; padding: 24px; }
+	#mount { margin: 0 auto; }
+</style>
+</head>
+<body class="theme-dark">
+<div id="mount"></div>
+<script src="mock4.js"></script>
+</body>
+</html>
