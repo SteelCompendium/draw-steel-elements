@@ -24,10 +24,35 @@ import { createValidationService } from '@/framework/validation';
 import { createSessionStore } from '@/framework/session';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin } from '../../mocks/obsidian';
-import { kitElement, cultureElement } from '@/elements/display';
+import { kitElement } from '@/elements/display';
 import kitExample from '@/elements/display/kit/example.yaml';
 import cultureExample from '@/elements/display/culture/example.yaml';
+import { displayFamily } from '@/elements/display/displayFamily';
+import { cultureLayout } from '@/elements/display/layouts';
+import type { CardLayout } from '@/elements/shared/CardLayout';
+import type { Culture } from 'steel-compendium-sdk';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
+
+/**
+ * SC-120 Batch B: ds-culture ALSO gained its own Steel composition, so it too stopped
+ * being a "no composition at all" example for the leak-check below (Batch C's own comment
+ * on this same test explains why ds-condition, the ORIGINAL example, stopped working —
+ * this is the same reason, one batch later). Every real display family now opts into a
+ * Steel composition (SC-144's branch rule leaves `renderBase()` with no live consumer
+ * among the eleven), so this test clones `cultureLayout` with `steel` stripped — the same
+ * steel-less-clone convention `displayFamily.test.ts` already uses for its own
+ * base-branch regression coverage — to keep pinning `renderBase()`'s DOM shape as a
+ * concern the codebase still owns, even though no production element reaches it anymore.
+ */
+const baseCultureLayoutForLeakCheck: CardLayout<Culture> = { ...cultureLayout, steel: undefined };
+const baseCultureElementForLeakCheck = displayFamily<Culture>({
+	id: 'culture-leak-check-base-branch',
+	aliases: ['ds-culture-leak-check-base-branch'],
+	name: 'Culture (leak-check base branch)',
+	type: 'culture',
+	layout: baseCultureLayoutForLeakCheck,
+	example: cultureExample,
+});
 
 const KIT_CODE = 'mcdm.heroes.v1/kit/panther';
 const KIT_REL = 'kit/panther.md';
@@ -291,11 +316,12 @@ describe('Plan 24 / SC-100 Task 3: kit\'s composition never leaks into a sibling
 	//
 	// SC-120 Batch C: ds-condition gained its OWN Steel composition (a real cardHead of its
 	// own), so it stopped being a clean "no composition at all" example — swapped for
-	// ds-culture, still base-branch-only (Batch C's scope is ancestry/perk/condition/rule
-	// only; culture is untouched, Batch B's problem).
-	test('ds-culture: renders the base card frame — none of the kit composition\'s grammar', async () => {
-		const host = inlineHost('ds-culture');
-		await new ElementPipeline(makeInlineDeps()).run(cultureElement, cultureExample, host);
+	// ds-culture, still base-branch-only at the time (Batch C's scope is ancestry/perk/
+	// condition/rule only). SC-120 Batch B: ds-culture then gained its own composition
+	// too — this now runs against the steel-less clone declared above instead.
+	test('ds-culture (base branch): renders the base card frame — none of the kit composition\'s grammar', async () => {
+		const host = inlineHost('ds-culture-leak-check-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseCultureElementForLeakCheck, cultureExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 		const card = root.querySelector('.dse-card') as HTMLElement;
 

@@ -46,8 +46,10 @@ import complicationExample from '@/elements/display/complication/example.yaml';
 import type { ElementDefinition } from '@/framework/registry';
 import { displayFamily } from '@/elements/display/displayFamily';
 import { kitLayout, conditionLayout, ancestryLayout, perkLayout, careerLayout, classLayout } from '@/elements/display/layouts';
+import { treasureLayout, titleLayout, complicationLayout, cultureLayout } from '@/elements/display/layouts';
 import type { CardLayout } from '@/elements/shared/CardLayout';
 import type { Kit, Condition, Ancestry, Perk, Career, Class } from 'steel-compendium-sdk';
+import type { Treasure, Title, Complication, Culture } from 'steel-compendium-sdk';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 import { MarkdownRenderer } from '../../mocks/obsidian';
 
@@ -149,6 +151,53 @@ const baseClassElement = displayFamily<Class>({
 	type: 'class',
 	layout: baseClassLayout,
 	example: classExample,
+});
+
+/**
+ * SC-120 Batch B — the same steel-less-clone convention, applied to treasure/title/
+ * complication/culture (this batch's own four families). Their real elements now ALWAYS
+ * render `renderSteel()` (SC-144), so the pre-existing rows/badges assertions against
+ * `renderBase()` below move onto these clones; the real elements' Steel-branch DOM is
+ * covered by displaySteelBatchB.test.ts instead.
+ */
+const baseTreasureLayout: CardLayout<Treasure> = { ...treasureLayout, steel: undefined };
+const baseTreasureElement = displayFamily<Treasure>({
+	id: 'treasure-base-branch',
+	aliases: ['ds-treasure-base-branch'],
+	name: 'Treasure (base branch)',
+	type: 'treasure',
+	layout: baseTreasureLayout,
+	example: treasureExample,
+});
+
+const baseTitleLayout: CardLayout<Title> = { ...titleLayout, steel: undefined };
+const baseTitleElement = displayFamily<Title>({
+	id: 'title-base-branch',
+	aliases: ['ds-title-base-branch'],
+	name: 'Title (base branch)',
+	type: 'title',
+	layout: baseTitleLayout,
+	example: titleExample,
+});
+
+const baseComplicationLayout: CardLayout<Complication> = { ...complicationLayout, steel: undefined };
+const baseComplicationElement = displayFamily<Complication>({
+	id: 'complication-base-branch',
+	aliases: ['ds-complication-base-branch'],
+	name: 'Complication (base branch)',
+	type: 'complication',
+	layout: baseComplicationLayout,
+	example: complicationExample,
+});
+
+const baseCultureLayout: CardLayout<Culture> = { ...cultureLayout, steel: undefined };
+const baseCultureElement = displayFamily<Culture>({
+	id: 'culture-base-branch',
+	aliases: ['ds-culture-base-branch'],
+	name: 'Culture (base branch)',
+	type: 'culture',
+	layout: baseCultureLayout,
+	example: cultureExample,
 });
 
 /** The card title node, whichever branch rendered it: the base branch's
@@ -267,10 +316,13 @@ describe('D6 Task 6: displayFamily inline rendering', () => {
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('lose');
 	});
 
-	test('ds-treasure: inline example.yaml renders title/badges/rows/body', async () => {
+	// SC-120 Batch B: ds-treasure now ALWAYS renders its Steel composition (SC-144 branch
+	// rule) — this base-branch assertion moves onto the steel-less clone (top of file); the
+	// real element's Steel-branch DOM is covered by displaySteelBatchB.test.ts.
+	test('base branch: ds-treasure inline example.yaml renders title/badges/rows/body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
-		const host = inlineHost('ds-treasure');
-		await new ElementPipeline(makeInlineDeps()).run(treasureElement, treasureExample, host);
+		const host = inlineHost('ds-treasure-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseTreasureElement, treasureExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -353,9 +405,12 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('On Humans');
 	});
 
-	test('ds-culture: inline example.yaml renders title/body with NO rows (every Culture row field is unpopulated corpus-wide) and NO separate flavor slot (D6 Task 7 review fix: flavor duplicates content\'s lead paragraph)', async () => {
-		const host = inlineHost('ds-culture');
-		await new ElementPipeline(makeInlineDeps()).run(cultureElement, cultureExample, host);
+	// SC-120 Batch B: ds-culture now ALWAYS renders its Steel composition (SC-144 branch
+	// rule) — this base-branch assertion moves onto the steel-less clone (top of file); the
+	// real element's Steel-branch DOM is covered by displaySteelBatchB.test.ts.
+	test('base branch: ds-culture inline example.yaml renders title/body with NO rows (every Culture row field is unpopulated corpus-wide) and NO separate flavor slot (D6 Task 7 review fix: flavor duplicates content\'s lead paragraph)', async () => {
+		const host = inlineHost('ds-culture-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseCultureElement, cultureExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -434,10 +489,13 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		);
 	});
 
-	test('ds-title: inline example.yaml renders title/echelon badge; Prerequisite, Effect, and flavor are suppressed (D6 Task 7 review fix: all three duplicate content verbatim), Prerequisite renders once, via body', async () => {
+	// SC-120 Batch B: ds-title now ALWAYS renders its Steel composition (SC-144 branch
+	// rule) — this base-branch assertion moves onto the steel-less clone (top of file); the
+	// real element's Steel-branch DOM is covered by displaySteelBatchB.test.ts.
+	test('base branch: ds-title inline example.yaml renders title/echelon badge; Prerequisite, Effect, and flavor are suppressed (D6 Task 7 review fix: all three duplicate content verbatim), Prerequisite renders once, via body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
-		const host = inlineHost('ds-title');
-		await new ElementPipeline(makeInlineDeps()).run(titleElement, titleExample, host);
+		const host = inlineHost('ds-title-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseTitleElement, titleExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -476,10 +534,13 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Familiar Statblock');
 	});
 
-	test('ds-complication: inline example.yaml renders title; Benefit and Drawback rows are suppressed (D6 Task 7 review fix: both duplicate content verbatim) and render once, via body', async () => {
+	// SC-120 Batch B: ds-complication now ALWAYS renders its Steel composition (SC-144
+	// branch rule) — this base-branch assertion moves onto the steel-less clone (top of
+	// file); the real element's Steel-branch DOM is covered by displaySteelBatchB.test.ts.
+	test('base branch: ds-complication inline example.yaml renders title; Benefit and Drawback rows are suppressed (D6 Task 7 review fix: both duplicate content verbatim) and render once, via body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
-		const host = inlineHost('ds-complication');
-		await new ElementPipeline(makeInlineDeps()).run(complicationElement, complicationExample, host);
+		const host = inlineHost('ds-complication-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseComplicationElement, complicationExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -651,6 +712,10 @@ describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe('Bleeding');
 	});
 
+	// SC-120 Batch B: ds-treasure now ALWAYS renders its Steel composition (SC-144 branch
+	// rule), so the title lives in cardHead's primary slot, not `.dse-card__title` — this
+	// test moves to `cardTitleText()` (top of file), which already handles either branch,
+	// same fix Batch C applied to ds-condition's equivalent test.
 	test('ds-treasure: full scc.v1: code and bare slug both resolve, no error card', async () => {
 		const { vault, deps } = makeCompendiumDeps();
 		loadMdDseFixture(vault, TREASURE_REL);
@@ -659,13 +724,13 @@ describe('D6 Task 6: displayFamily by-SCC reference (spec §1, §2.3)', () => {
 		await new ElementPipeline(deps).run(treasureElement, `scc.v1:${TREASURE_CODE}`, codeHost);
 		const codeRoot = codeHost.containerEl.firstElementChild as HTMLElement;
 		expect(codeRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(codeRoot.querySelector('.dse-card__title')!.textContent).toBe("Executioner's Blade");
+		expect(cardTitleText(codeRoot)).toBe("Executioner's Blade");
 
 		const slugHost = makeHost('ds-treasure');
 		await new ElementPipeline(deps).run(treasureElement, 'executioners-blade', slugHost);
 		const slugRoot = slugHost.containerEl.firstElementChild as HTMLElement;
 		expect(slugRoot.querySelectorAll('.dse-error-card')).toHaveLength(0);
-		expect(slugRoot.querySelector('.dse-card__title')!.textContent).toBe("Executioner's Blade");
+		expect(cardTitleText(slugRoot)).toBe("Executioner's Blade");
 	});
 
 	test('bare slug scoped to a DIFFERENT type family: ds-kit given "bleeding" (a condition) error-cards', async () => {

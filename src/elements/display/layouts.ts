@@ -27,7 +27,13 @@
 import type { Ancestry, Culture, Career, Class, Title, Perk, Complication } from 'steel-compendium-sdk';
 import type { Kit, Condition, Treasure } from 'steel-compendium-sdk';
 import type { Badge, CardLayout, SteelBand } from '@/elements/shared/CardLayout';
-import { normalizeForDuplicateCheck, DUPLICATE_ROW_MIN_LENGTH, titleCase, plainText } from '@/elements/shared/CardLayout';
+import {
+	normalizeForDuplicateCheck,
+	DUPLICATE_ROW_MIN_LENGTH,
+	titleCase,
+	plainText,
+	stripLabeledLines,
+} from '@/elements/shared/CardLayout';
 import type { RefSource } from '@/elements/shared/withReference';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
 import { FeatureConfig } from '@model/FeatureConfig';
@@ -142,6 +148,28 @@ export function languageCount(raw: string | undefined): string {
  */
 function resolvedBodyMd(bodyFromModel: string | undefined, source: RefSource | undefined): string | undefined {
 	return source ? source.body : bodyFromModel;
+}
+
+/**
+ * SC-120 Batch B (design §3.6): ports the site's `bodyLabeledLine` (steel-etl cards.go) —
+ * culture's real "Skill Options" sentence lives ONLY in the body (`skill_options`/
+ * `quick_build_skill` are frontmatter-empty corpus-wide, design §1.3), so the composition
+ * falls back to extracting the exact-prefix `**Skill Options:**` body line the same way
+ * the site does. Case-sensitive exact-prefix match (not the loose link-text match
+ * `stripLabeledLines` uses) — culture's label is never markdown-linked in real data, so
+ * the site's own simpler `bodyLabeledLine` (not its `…Loose` sibling) is the right port.
+ */
+export function bodyLabeledLine(md: string | undefined, label: string): string | undefined {
+	if (!md) return undefined;
+	const prefix = `**${label}:**`;
+	for (const raw of md.split('\n')) {
+		const t = raw.trim();
+		if (t.startsWith(prefix)) {
+			const rest = t.slice(prefix.length).trim();
+			return rest || undefined;
+		}
+	}
+	return undefined;
 }
 
 /**
@@ -384,6 +412,158 @@ export const treasureLayout: CardLayout<Treasure> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch B §3.3 — FULL composition: the richest of the ten site tiles
+	// (tags/flavor/stats/two line-blocks, `treasureCard`, cards.go:416-453), PLUS the
+	// plugin-only Effect/leveled-effects bands the site tile has no room for. This is
+	// also the fix for the treasure double-render defect the ticket named (design doc
+	// §1.1): the Steel composition + body policy (B) below never show the Project/
+	// Prerequisite/Source/Effect values both structurally AND as raw body prose.
+	steel: {
+		// titleCase(treasure_type) falling back to 'Treasure' (cards.go:417-420), with the
+		// pre-existing `subtitle` field's "Level N" suffix moved in -- renderSteel() never
+		// reads `subtitle`, so it would otherwise be lost (design §3.3). `level` is 0/127
+		// in the corpus today (dead, like several other spec'd-ahead fields this file
+		// already carries prophylactically) -- kept exactly as the design doc names it and
+		// as the pre-existing `subtitle` field already computed it, not silently dropped.
+		eyebrow: (m) => {
+			const type = titleCase(m.treasure_type ?? '') || 'Treasure';
+			return m.level != null ? `${type} · Level ${m.level}` : type;
+		},
+		// Owner ruling 1: 'package' (Lucide has no 'treasure-chest', the site's MDI key).
+		crestIcon: () => 'package',
+		// `rarity` is ALSO 0/127 in the corpus today (same "declared prophylactically"
+		// shape as `level` above and Perk's Prerequisites band) -- the legacy `badges`
+		// field already guards it the same way (`m.rarity ? [...] : []`).
+		rightEyebrow: (m) => m.rarity || undefined,
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Keyword chips -- headless band reusing the existing badge DOM verbatim
+			// (`.dse-card__badges`/`.dse-card__badge--keyword`, the SAME classes
+			// `renderBase()`'s badge row uses) rather than a new chip grammar
+			// (`.sc-card__tags`/`.sc-tag`, cards.go:423-425 -- no site-CSS port needed).
+			const keywords = m.keywords ?? [];
+			if (keywords.length) {
+				bands.push({
+					render: (container) => {
+						const badgeRow = container.createDiv({ cls: 'dse-card__badges' });
+						for (const k of keywords) {
+							badgeRow.createSpan({ cls: 'dse-card__badge dse-card__badge--keyword', text: k });
+						}
+					},
+				});
+			}
+
+			// Flavor -- the same duplicate-vs-body guard every other composition uses.
+			// Deliberately NOT the site's `.sc-card__flavor--clamp` (design §3.3: the
+			// clamp exists only to align a grid of tiles, which a full-width card has no
+			// need of).
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Project -- 2 dash-filled tiles (cards.go:437-443); `plainText()` strips the
+			// SCC links `project_roll_characteristic` always carries (SC-121 C-5 shape).
+			// Suppress the whole band only when BOTH slots are absent (the same
+			// knowingly-empty-band rule as every other composition's flavor band) -- the
+			// site OMITS an absent cell here, the plugin dash-fills both (SC-100 ruling 2).
+			const goal = m.project_goal != null ? String(m.project_goal) : '';
+			const rollChar = m.project_roll_characteristic ? plainText(m.project_roll_characteristic) : '';
+			if (goal || rollChar) {
+				bands.push({
+					head: 'Project',
+					render: (container) => {
+						statTiles(container, [
+							{ value: goal, label: 'Project Goal' },
+							{ value: rollChar, label: 'Roll Characteristic' },
+						]);
+					},
+				});
+			}
+
+			// Prerequisite / Source / Effect -- plugin-only bands the site's tile has no
+			// room for (`lineBlock`/plain text on the tile is Prerequisite/Source only;
+			// Effect has NO site-tile counterpart at all, design §3.3).
+			const prereq = m.item_prerequisite;
+			if (prereq) {
+				bands.push({
+					head: 'Prerequisite',
+					render: (container, renderMarkdown) => renderMarkdown(prereq, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+			const projectSource = m.project_source;
+			if (projectSource) {
+				bands.push({
+					head: 'Source',
+					render: (container, renderMarkdown) => renderMarkdown(projectSource, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+			const effect = m.effect;
+			if (effect) {
+				bands.push({
+					head: 'Effect',
+					render: (container, renderMarkdown) => renderMarkdown(effect, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Leveled effects -- one band per key (47/127 treasures in the corpus, design
+			// §1.3), sorted by leading integer (not lexically: "9th" < "1st" lexically
+			// but must render AFTER it). Head = the map key + " Level" (site has no
+			// counterpart at all -- design §3.3 [DIVERGENCE -- plugin richer]).
+			const levelEffects = m.level_effects ?? {};
+			const levelKeys = Object.keys(levelEffects).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+			for (const key of levelKeys) {
+				const value = levelEffects[key];
+				if (!value) continue;
+				bands.push({
+					head: `${key} Level`,
+					render: (container, renderMarkdown) => renderMarkdown(value, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body -- policy (B), and it is the point of the ticket for this family
+			// (design §3.3): strip the bold-labeled lines the bands above now own. The
+			// labels are themselves markdown-linked in real data
+			// (`**[Item Prerequisite](…):**`, `**[Project Roll](…) [Characteristic](…):**`
+			// -- the latter spans TWO adjacent links whose stripped plain text joins with
+			// a single space into "Project Roll Characteristic"), so `stripLabeledLines`
+			// matches on the LINK TEXT (§5.2), not the raw line. The per-tier labels
+			// ("1st Level"/"5th Level"/"9th Level") are derived from the SAME
+			// `level_effects` keys the band loop above renders, so a tier this treasure
+			// doesn't carry is never (harmlessly) added to the strip list. Everything
+			// after `**Effect:**`'s own paragraph (the "Additionally, …" rider) survives --
+			// `stripLabeledLines` only ever removes the ONE matching line plus a single
+			// following blank line, never a following paragraph.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				const labels = [
+					'Keywords',
+					'Item Prerequisite',
+					'Project Source',
+					'Project Roll Characteristic',
+					'Project Goal',
+					'Effect',
+					...levelKeys.map((k) => `${k} Level`),
+				];
+				const stripped = stripLabeledLines(bodyMd, labels);
+				if (stripped.trim()) {
+					bands.push({
+						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
+					});
+				}
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const ancestryLayout: CardLayout<Ancestry> = {
@@ -476,6 +656,63 @@ export const cultureLayout: CardLayout<Culture> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch B §3.6 — LIGHT composition, deliberately so: every one of culture's
+	// tag/row fields (Environment/Organization/Upbringing/culture_benefit_type) is dead in
+	// the corpus (0/13, design §1.3), so those rows are dropped from the Steel composition
+	// entirely (they stay in the legacy `rows` above, untouched, for the frozen base
+	// branch) rather than rendering a lie about the data. Skill Options is the one real
+	// band, sourced with the site's own three-way fallback (`cultureCard`, cards.go:
+	// 504-529) since the frontmatter fields are ALSO empty corpus-wide and the real
+	// sentence lives only in the body.
+	steel: {
+		eyebrow: () => 'Culture',
+		// Owner ruling 3: follow cards.go (`map`) over the Browse landing's self-
+		// inconsistent `:material-earth:` — filed as its own v2 Backlog ticket (SC-268).
+		crestIcon: () => 'map',
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Flavor — the same duplicate-vs-body guard every other composition uses.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Skill Options — three-way fallback (design §3.6): structured fields first
+			// (dead corpus-wide today), else the exact body line the site itself falls back
+			// to. Band omitted entirely when all three are empty (never a lie about the data).
+			const bodyMd = resolvedBodyMd(m.content, source);
+			const structuredSkills = (m.skill_options ?? []).join(', ') || undefined;
+			const skillOptionsText = structuredSkills ?? m.quick_build_skill ?? bodyLabeledLine(bodyMd, 'Skill Options');
+			if (skillOptionsText) {
+				bands.push({
+					head: 'Skill Options',
+					render: (container, renderMarkdown) =>
+						renderMarkdown(skillOptionsText, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body — policy (B): strip `**Skill Options:**`, the one label this composition
+			// now owns.
+			if (bodyMd && bodyMd.trim()) {
+				const stripped = stripLabeledLines(bodyMd, ['Skill Options']);
+				if (stripped.trim()) {
+					bands.push({
+						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
+					});
+				}
+			}
+
+			return bands;
+		},
+	},
 };
 
 /**
@@ -522,37 +759,27 @@ export const cultureLayout: CardLayout<Culture> = {
 const CAREER_BODY_LABELS = ['Skills', 'Languages', 'Renown', 'Wealth', 'Perk', 'Project Points'];
 /** FIX ROUND (round-5 review MED-1): exact normalized-text lines stripped alongside the
  *  bold labels above — not bold-led, so they need their own whole-line match rather than
- *  `CAREER_LABEL_LINE_RE`. */
+ *  the shared `stripLabeledLines`'s bold-run matcher. */
 const CAREER_LEAD_IN_LINES = new Set(['you gain the following career benefits:']);
-/**
- * FIX ROUND (round-5 review LOW-1/LOW-2): two plain capture alternatives (named groups
- * are ES2018+; this repo's tsc `target` is ES6, CLAUDE.md's "Target ES2018" describes the
- * esbuild OUTPUT, not tsc's own type-check target) — group 1 matches the colon INSIDE the
- * bold run (`**Skills:**`, every real corpus shape); group 2 matches it immediately after
- * the closing `**` (`**Skills**:`, not currently produced by any real career, accepted
- * defensively per design §5.2's own "inside or outside" mitigation wording). Anchored at
- * the start of the STRING (not `trimmed`) by the caller now passing the raw line — see
- * LOW-2 above.
- */
-const CAREER_LABEL_LINE_RE = /^\*\*(.+?):\*\*|^\*\*(.+?)\*\*:/;
 
-function stripCareerBodyLabels(md: string): string {
-	const wanted = new Set(CAREER_BODY_LABELS.map((l) => l.toLowerCase()));
+/**
+ * SC-120 Batch B: the lead-in-sentence pass is career's own concern (no other family has
+ * an orphaned non-bold-led lead-in line to strip), kept as a small private helper sharing
+ * `stripLabeledLines`'s blank-swallow idiom rather than folding an exact-line-text matcher
+ * into the shared function's contract. Composes with `stripLabeledLines` below as two
+ * sequential single passes — verified equivalent to the old single merged pass for every
+ * real career body (the lead-in sentence and the bold-labeled lines never sit adjacent
+ * without an intervening blank line in the corpus, so a blank line one pass swallows is
+ * never a blank line the other pass also needed to see).
+ */
+function stripCareerLeadIn(md: string): string {
 	const lines = md.split('\n');
 	const kept: string[] = [];
 	let skipBlankAfter = false;
 	for (const line of lines) {
 		if (skipBlankAfter) {
 			skipBlankAfter = false;
-			if (line.trim() === '') continue; // swallow ONE blank line right after a stripped line
-		}
-		// LOW-2: matched against the RAW line — an indented continuation line's `**` does
-		// not sit at column 0, so `^\*\*` correctly fails to match it.
-		const m = CAREER_LABEL_LINE_RE.exec(line);
-		const captured = m?.[1] ?? m?.[2];
-		if (captured !== undefined && wanted.has(normalizeForDuplicateCheck(captured))) {
-			skipBlankAfter = true;
-			continue;
+			if (line.trim() === '') continue;
 		}
 		if (CAREER_LEAD_IN_LINES.has(normalizeForDuplicateCheck(line))) {
 			skipBlankAfter = true;
@@ -564,6 +791,10 @@ function stripCareerBodyLabels(md: string): string {
 		.join('\n')
 		.replace(/\n{3,}/g, '\n\n')
 		.trim();
+}
+
+function stripCareerBodyLabels(md: string): string {
+	return stripLabeledLines(stripCareerLeadIn(md), CAREER_BODY_LABELS);
 }
 
 export const careerLayout: CardLayout<Career> = {
@@ -796,6 +1027,67 @@ export const titleLayout: CardLayout<Title> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch B §3.5 — MEDIUM composition. The site's `titleCard` (cards.go:472-486)
+	// types the card by its ECHELON, not the literal word "Title" — a genuinely better use
+	// of the eyebrow slot than the plugin's old "Echelon N" pill, and the whole reason
+	// title was previously the barest card of the ten (its Prerequisite/Effect rows were
+	// CORRECTLY suppressed by the base duplicate-row guard, leaving name + one pill +
+	// prose). Inverting that — structure wins, the body loses those lines — is the change.
+	steel: {
+		eyebrow: (m) => (m.echelon ? `Echelon ${m.echelon}` : 'Title'),
+		crestIcon: () => 'crown',
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Flavor — the same duplicate-vs-body guard every other composition uses.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Prerequisite / Effect — carried on essentially every real title (65/66,
+			// design §1.3); `benefits` stays dead (0/66) and gets no band, matching the
+			// existing legacy row's own omission.
+			const prereq = m.prerequisite;
+			if (prereq) {
+				bands.push({
+					head: 'Prerequisite',
+					render: (container, renderMarkdown) => renderMarkdown(prereq, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+			const effect = m.effect;
+			if (effect) {
+				bands.push({
+					head: 'Effect',
+					render: (container, renderMarkdown) => renderMarkdown(effect, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body — policy (B): strip `**Echelon:**` (injected by `title_page.go:27`, the
+			// site's leaf-page emitter — real corpus files carry it as body prose) plus
+			// `**Prerequisite:**`/`**Effect:**`, the two labels the bands above now own.
+			// Whatever follows Effect's own paragraph (a title's bullet-list benefits, e.g.
+			// Marshal) is a separate paragraph and survives untouched.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				const stripped = stripLabeledLines(bodyMd, ['Echelon', 'Prerequisite', 'Effect']);
+				if (stripped.trim()) {
+					bands.push({
+						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
+					});
+				}
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const perkLayout: CardLayout<Perk> = {
@@ -871,4 +1163,64 @@ export const complicationLayout: CardLayout<Complication> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch B §3.4 — MEDIUM composition, the clearest "plugin beats the site" case
+	// of the ten: the site's `complicationCard` (cards.go:488-502) is head + flavor and
+	// nothing else, but every complication carries structured `benefit`/`drawback`
+	// strings (92/100, design §1.3) — two labeled bands turn the emptiest-but-one card
+	// into a scannable one, at zero new CSS.
+	steel: {
+		eyebrow: () => 'Complication',
+		// Owner ruling 2 (design §7 item 2) / ruling 14's Batch B tightening: 'octagon-alert'
+		// is Lucide's CANONICAL name for this glyph (verified against the tightened
+		// crestIconValidity test below) — 'alert-octagon' is a deprecated alias of the
+		// SAME icon file that the pre-Batch-B test would have missed.
+		crestIcon: () => 'octagon-alert',
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Flavor — the same duplicate-vs-body guard every other composition uses.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Benefit / Drawback — no site-tile counterpart at all (design §3.4
+			// [DIVERGENCE — plugin richer]).
+			const benefit = m.benefit;
+			if (benefit) {
+				bands.push({
+					head: 'Benefit',
+					render: (container, renderMarkdown) => renderMarkdown(benefit, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+			const drawback = m.drawback;
+			if (drawback) {
+				bands.push({
+					head: 'Drawback',
+					render: (container, renderMarkdown) => renderMarkdown(drawback, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body — policy (B): strip `**Benefit:**`/`**Drawback:**`, the two labels the
+			// bands above now own.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				const stripped = stripLabeledLines(bodyMd, ['Benefit', 'Drawback']);
+				if (stripped.trim()) {
+					bands.push({
+						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
+					});
+				}
+			}
+
+			return bands;
+		},
+	},
 };

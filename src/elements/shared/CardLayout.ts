@@ -131,6 +131,15 @@ export interface SteelCardComposition<M> {
 	 */
 	crestSize?: (m: M, source?: RefSource) => CrestSize | undefined;
 	/**
+	 * SC-120 Batch B (design §3.3): cardHead's right-rail EYEBROW slot (top of the right
+	 * rail — e.g. treasure's `rarity`, "Rare"). Optional, same additive contract as
+	 * `rightPrimary`/`rightDeck` below: a composition that omits it renders the head
+	 * exactly as before. Renders with the `chip` style (`cardHead.ts`'s default for the
+	 * right column), which the generic base geometry already styles
+	 * (`.dse-head__eyebrow--chip`, `styles-source.css`) — no new CSS needed.
+	 */
+	rightEyebrow?: (m: M, source?: RefSource) => string | undefined;
+	/**
 	 * SC-120 Batch A (design §3.1): cardHead's right-rail primary/deck slots — e.g. class's
 	 * `primary_characteristics` (joined) over the quiet "primary characteristics" caption.
 	 * Optional; a composition that omits both (every family before class) renders the head
@@ -247,6 +256,64 @@ export function titleCase(s: string): string {
 		.filter(Boolean)
 		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 		.join(' ');
+}
+
+/**
+ * SC-120 Batch B (design §5.2): matches a whole line that begins at column 0 with `**` and
+ * whose bold run carries a MANDATORY colon, either inside it (`**Skills:**`, every real
+ * corpus shape) or immediately after it (`**Skills**:`, accepted defensively). Shared by
+ * `stripLabeledLines` below AND `layouts.ts`'s `stripCareerBodyLabels` (Batch A), which
+ * this generalizes — group 1 matches the inside-colon shape, group 2 the outside-colon
+ * shape; both are plain (unnamed) groups, since named capture groups require ES2018+ and
+ * this repo's tsc `target` is ES6 (CLAUDE.md's "Target ES2018" describes the esbuild
+ * OUTPUT target, not tsc's own type-check target — Batch A round-5 review LOW-1/LOW-2's
+ * fix round hit this the first time).
+ */
+const LABELED_LINE_RE = /^\*\*(.+?):\*\*|^\*\*(.+?)\*\*:/;
+
+/**
+ * SC-120 Batch B (design §5.2): generalizes the label-matching core of Batch A's
+ * `stripCareerBodyLabels` (`layouts.ts`) — a career-only helper — into a shared function
+ * every Steel composition using body policy (B) can call directly: career, treasure,
+ * title, complication, culture. `stripCareerBodyLabels` itself is refactored to call this
+ * (plus its own career-only lead-in-sentence pass), rather than keeping two copies of the
+ * bold-label-matching loop that could drift (Batch B brief, explicitly naming this
+ * consolidation).
+ *
+ * Matches ONLY a whole line that (i) begins at column 0 with `**` (an indented
+ * continuation line under a list item never matches — Batch A round-5 review LOW-2: the
+ * match runs against the RAW line, never the trimmed one), (ii) whose bold run's plain
+ * text (link/emphasis stripped via `normalizeForDuplicateCheck`) case-insensitively equals
+ * one of `labels` — the labels themselves are markdown LINKS in real data
+ * (`**[Item Prerequisite](…):** …`, `**[Renown](…):** +1`), so the match is on the bold
+ * run's LINK TEXT, not the raw line — with a MANDATORY colon (Batch A round-5 review
+ * LOW-1: a bold-led PROSE sentence with no colon at all, e.g. "**Wealth** is a measure
+ * of…", is never mistaken for a labeled line). Strips that ONE line plus a single
+ * immediately-following blank line — never a following paragraph, so a table or a rider
+ * paragraph (treasure's "Additionally, …" after `**Effect:**`) always survives.
+ */
+export function stripLabeledLines(md: string, labels: string[]): string {
+	const wanted = new Set(labels.map((l) => l.toLowerCase()));
+	const lines = md.split('\n');
+	const kept: string[] = [];
+	let skipBlankAfter = false;
+	for (const line of lines) {
+		if (skipBlankAfter) {
+			skipBlankAfter = false;
+			if (line.trim() === '') continue; // swallow ONE blank line right after a stripped line
+		}
+		const m = LABELED_LINE_RE.exec(line);
+		const captured = m?.[1] ?? m?.[2];
+		if (captured !== undefined && wanted.has(normalizeForDuplicateCheck(captured))) {
+			skipBlankAfter = true;
+			continue;
+		}
+		kept.push(line);
+	}
+	return kept
+		.join('\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
 }
 
 /**
@@ -427,10 +494,11 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 			{
 				name: this.layout.title(model),
 				leftEyebrow: composition.eyebrow(model, this.source),
-				// SC-120 Batch A: composition-sourced right-rail slots (default undefined,
+				// SC-120 Batch A/B: composition-sourced right-rail slots (default undefined,
 				// same "an omitted slot is a GAP" contract cardHead already has) — additive
 				// for every composition that doesn't supply them (kit/ancestry/perk/
-				// condition/rule), so their rendered head is byte-for-byte unchanged.
+				// condition/rule/career), so their rendered head is byte-for-byte unchanged.
+				rightEyebrow: composition.rightEyebrow?.(model, this.source),
 				rightPrimary: composition.rightPrimary?.(model, this.source),
 				rightDeck: composition.rightDeck?.(model, this.source),
 				crest: crestIcon ? { icon: crestIcon, size: crestSize } : undefined,
