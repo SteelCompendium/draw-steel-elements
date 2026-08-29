@@ -203,6 +203,46 @@ export function splitSubject(sel) {
 }
 
 /**
+ * Split a selector LIST on its top-level commas only (SC-205 R5 / R4-M2).
+ *
+ * `String.split(',')` shreds any functional pseudo-class carrying a comma list, and Obsidian
+ * ships those: `:is(.markdown-rendered, .markdown-preview-view) button` and
+ * `.setting-item:not(:is(.mod-toggle, .mod-navigable, …)) .setting-item-control button` both
+ * became fragments that classified as neither reaching nor excluded, so the rules vanished
+ * from BOTH halves of the partition — uncompared, uncounted, unmentioned. The first of those
+ * is the exact hypothetical this module's docstring names as its reason to exist, written the
+ * idiomatic way. `splitSubject` already carried the depth counter that does this correctly;
+ * it just was not applied to commas.
+ */
+export function splitSelectorList(sel) {
+	const out = [];
+	let depth = 0;
+	let start = 0;
+	for (let i = 0; i < sel.length; i += 1) {
+		const c = sel[i];
+		if (c === '(' || c === '[') depth += 1;
+		else if (c === ')' || c === ']') depth -= 1;
+		else if (c === ',' && depth === 0) {
+			out.push(sel.slice(start, i));
+			start = i + 1;
+		}
+	}
+	out.push(sel.slice(start));
+	return out.map((s) => s.trim()).filter(Boolean);
+}
+
+/** Strip every balanced `(...)` group, innermost first, until none is left. */
+function stripBalancedParens(s) {
+	let prev;
+	let cur = s;
+	do {
+		prev = cur;
+		cur = cur.replace(/\([^()]*\)/g, '');
+	} while (cur !== prev);
+	return cur;
+}
+
+/**
  * Is this compound a plain plugin `<button>` — an element whose only qualification is being
  * a button, possibly in some STATE? `button.mod-cta`,
  * `button:not(.clickable-icon).mobile-tap` and `button.mod-loading::after` are not (they
@@ -210,16 +250,25 @@ export function splitSubject(sel) {
  * `button:not(.clickable-icon)`, `button:hover`, `button:focus-visible` and
  * `button[disabled]` are. A `:not(.x)` is stripped rather than rejected precisely because a
  * plugin button satisfies it.
+ *
+ * SC-205 R5 / R4-M2: the parenthesis stripping is BALANCED and iterative. The old single-pass
+ * `\([^()]*\)` could not span a nested group, so `button:not(:is(.mod-cta))` — a rule reaching
+ * every plugin button — classified as not-a-button and dropped out of the comparison entirely.
  */
-export function subjectIsPlainButton(subject) {
+export function classifySubject(subject) {
 	const s = subject.trim();
-	if (!/^button\b/.test(s)) return false;
-	if (s.includes('::')) return false;
-	const bare = s
-		.replace(/:not\([^()]*\)/g, '')
+	if (!/^button\b/.test(s)) return 'not-button'; // the button is an ancestor here, or absent
+	if (s.includes('::')) return 'qualified'; // a pseudo-element box, not the button itself
+	const bare = stripBalancedParens(s)
 		.replace(/\[[^\]]*\]/g, '')
-		.replace(/:[a-z-]+(\([^()]*\))?/g, '');
-	return bare === 'button';
+		.replace(/:[a-z-]+/g, '');
+	if (bare === 'button') return 'plain';
+	if (/^button[.#]/.test(bare)) return 'qualified'; // demands a class/id the plugin never sets
+	return 'unparsed'; // a shape this parser does not understand — must never be silent
+}
+
+export function subjectIsPlainButton(subject) {
+	return classifySubject(subject) === 'plain';
 }
 
 /**
@@ -264,6 +313,16 @@ export const EXCLUDED_ANCESTOR_SCOPES = [
 		pattern: /^\.bases-toolbar-menu-form\b/,
 		why: "the core Bases toolbar's own form chrome, not note content",
 	},
+	{
+		// SC-205 R5. Until R4-M2 fixed the comma split this rule was invisible to the partition
+		// rather than excluded by it — out of scope BY ACCIDENT. Now that the parser sees it, it
+		// needs a real entry, and per ticket-owner ruling 6 the answer is an exclusion, not
+		// coverage: a settings tab is not an in-note surface, this gate sweeps the gallery, and
+		// modelling the settings/modal/prompt surfaces is SC-202's general problem. If SC-202
+		// ever takes it on, this entry is the thing to delete.
+		pattern: /\.setting-item-control$/,
+		why: "Obsidian's settings-tab row chrome — not an in-note surface; the settings/modal/prompt surfaces are SC-202's problem, deliberately not modelled by this gate",
+	},
 ];
 
 /** The excluded-scope entry that covers this scope, or null if nothing does. */
@@ -272,12 +331,11 @@ export function exclusionFor(scope) {
 	return EXCLUDED_ANCESTOR_SCOPES.find((e) => e.pattern.test(scope)) ?? null;
 }
 
-/** Whitespace/quote-normalized selector list, so formatting alone can never read as drift. */
+/** Whitespace/quote-normalized selector list, so formatting alone can never read as drift.
+ *  Splits on top-level commas only (R4-M2) so a `:is(a, b)` group survives intact. */
 export function normalizeSelector(sel) {
-	return sel
-		.split(',')
-		.map((s) => s.trim().replace(/\s+/g, ' ').replace(/'/g, '"'))
-		.filter(Boolean)
+	return splitSelectorList(sel)
+		.map((s) => s.replace(/\s+/g, ' ').replace(/'/g, '"'))
 		.join(', ');
 }
 
@@ -301,26 +359,50 @@ export function normalizeDecls(body) {
  * A rule mixing a reaching selector with an excluded one lands in `reaching` — a new shape
  * worth a human look, and it will show up as drift rather than vanish.
  *
- * @returns {{ reaching: {ctx,sel,decls}[], excluded: {ctx,sel,scope,why}[] }}
+ * EXHAUSTIVENESS (SC-205 R5 / R4-M2). Every fragment that aims at the `button` type must end
+ * up classified — reaching, excluded, or "not a plain-button subject" (a class-qualified
+ * button like `button.mod-cta`, or a button used only as an ancestor). Anything left over is
+ * returned in `unaccounted` and the caller FAILS the pin on it. This is the durable half of
+ * the fix: the comma bug was invisible precisely because a mis-parsed rule silently left both
+ * halves of the partition, and the audit that "proved" the partition complete used the same
+ * broken split, so it agreed with the bug. A parser blind spot must now shrink nothing
+ * quietly — it has to shout.
+ *
+ * @returns {{ reaching: {ctx,sel,decls}[], excluded: {ctx,sel,scope,why}[], unaccounted: {ctx,sel,fragment,why}[] }}
  */
 export function partitionButtonRules(css) {
 	const reaching = [];
 	const excluded = [];
+	const unaccounted = [];
 	for (const r of iterRules(css)) {
 		const ctx = r.ctx.replace(/\s+/g, ' ').trim();
+		const fragments = splitSelectorList(r.sel);
 		let reaches = false;
 		let excuse = null;
-		for (const one of r.sel.split(',')) {
+		const loose = [];
+		for (const one of fragments) {
 			const { scope, subject } = splitSubject(one);
-			if (!subjectIsPlainButton(subject)) continue;
+			const kind = classifySubject(subject);
+			// `qualified` (button.mod-cta, button::after) and `not-button` (the button is an
+			// ancestor, or absent) are legitimately outside the model and need no report.
+			// `unparsed` is the parser admitting it does not understand the shape.
+			if (kind === 'unparsed') loose.push(one);
+			if (kind !== 'plain') continue;
 			const ex = exclusionFor(scope);
 			if (ex) excuse = excuse ?? { scope, why: ex.why };
 			else reaches = true;
 		}
 		if (reaches) reaching.push({ ctx, sel: normalizeSelector(r.sel), decls: normalizeDecls(r.body) });
 		else if (excuse) excluded.push({ ctx, sel: normalizeSelector(r.sel), scope: excuse.scope, why: excuse.why });
+		for (const fragment of loose)
+			unaccounted.push({
+				ctx,
+				sel: normalizeSelector(r.sel),
+				fragment,
+				why: 'names the `button` type but its subject compound could not be classified — the selector parser has a blind spot',
+			});
 	}
-	return { reaching, excluded };
+	return { reaching, excluded, unaccounted };
 }
 
 /**

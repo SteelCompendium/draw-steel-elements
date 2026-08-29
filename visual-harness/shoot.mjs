@@ -21,6 +21,7 @@ import {
 	readAsarFile,
 	extractReachingButtonRules,
 	partitionButtonRules,
+	iterRules,
 	PINNED_OBSIDIAN,
 	PINNED_TOKENS,
 	normalizeTokenValue,
@@ -603,11 +604,102 @@ async function readHostTokens(page, css, scheme) {
  *  No Obsidian on the machine (CI, a headless build box) is a printed SKIP and exit 0 —
  *  loud, never a silent pass. The sweep itself still runs: the copy is checked in, so it
  *  models a host whether or not this machine can prove the model current. */
+/** SC-205 R5 / R4-M1 + R4-INFO — the sheet's [SC205-HOST-RULES] listing vs the in-code model.
+ *
+ *  BOTH OPERANDS ARE IN THE REPO, so this needs no Obsidian and runs on every machine. R3 put
+ *  it after the asar gate's early returns, which pinned the sheet's copy on exactly one class
+ *  of machine — one running Obsidian >= PINNED_OBSIDIAN. On CI, a headless box, or a fresh dev
+ *  machine (the environments the SKIP path exists FOR) the second copy of the model was
+ *  unchecked again: proven by pointing the pin at a 1.9.0-only home with a rule deleted from
+ *  the fence and watching `npm run shots` exit 0 in silence. That is the precise condition
+ *  HIGH-1 was raised about, so the check now runs first and on its own.
+ *
+ *  @returns {string[]} drift lines (empty when the listing matches) */
+function checkSheetHostRuleListing(model) {
+	const sheetPath = path.join(dir, '..', 'styles-source.css');
+	let sheet;
+	try {
+		sheet = fs.readFileSync(sheetPath, 'utf8');
+	} catch (e) {
+		return [`could not read ${sheetPath} to check its [SC205-HOST-RULES] listing: ${String(e)}`];
+	}
+	// Exactly one fence, please. A non-greedy match against a duplicated block would silently
+	// pin the first and ignore the second (R4-INFO).
+	const opens = (sheet.match(/\[SC205-HOST-RULES\]/g) ?? []).length;
+	const closes = (sheet.match(/\[\/SC205-HOST-RULES\]/g) ?? []).length;
+	if (opens !== 1 || closes !== 1)
+		return [
+			`styles-source.css must contain exactly one [SC205-HOST-RULES] fence; found ${opens} ` +
+				`opening and ${closes} closing markers — the sheet's listing of the host rules is not ` +
+				`unambiguously pinned`,
+		];
+	const fence = /\[SC205-HOST-RULES\]([\s\S]*?)\[\/SC205-HOST-RULES\]/.exec(sheet);
+	const listed = fence[1]
+		.split('\n')
+		.map((l) => l.replace(/^\s*\(\d,\d,\d\)\s*/, '').trim())
+		.filter(Boolean);
+	const modelled = model.map((x) => `${x.ctx ? `${x.ctx} { ` : ''}${x.sel}${x.ctx ? ' }' : ''}`);
+	if (listed.join(' | ') === modelled.join(' | ')) return [];
+	return [
+		`styles-source.css's [SC205-HOST-RULES] listing does not match the model:\n` +
+			`      sheet lists: ${listed.join(' ; ') || '(nothing)'}\n` +
+			`      model has:   ${modelled.join(' ; ')}`,
+	];
+}
+
+/** SC-205 R5 / R4-L3 — the assumption CHROME_REVEAL_CSS rests on, enforced.
+ *
+ *  The sweep mounts the chrome panel and the collapsed summary bar simultaneously, which the
+ *  product never does. That is sound only while no `[data-dse-collapsed]`-keyed rule reaches a
+ *  button, because then each button's cascade in the superposition equals its cascade in its
+ *  real state. This asserts exactly that, statically, off the sheet the harness already reads
+ *  — no extra navigation, no browser work.
+ *
+ *  @returns {string[]} problem lines (empty when the assumption holds) */
+function checkCollapseCascadeAssumption() {
+	let sheet;
+	try {
+		sheet = fs.readFileSync(path.join(dir, '..', 'styles-source.css'), 'utf8');
+	} catch (e) {
+		return [`could not read styles-source.css to check the collapse-cascade assumption: ${String(e)}`];
+	}
+	const offenders = iterRules(sheet)
+		.map((r) => `${r.ctx} ${r.sel}`.replace(/\s+/g, ' ').trim())
+		.filter((s) => s.includes('[data-dse-collapsed') && /\.dse-btn|\bbutton\b/.test(s));
+	return offenders.map(
+		(s) =>
+			`a [data-dse-collapsed]-keyed rule now reaches a button: \`${s}\` — CHROME_REVEAL_CSS ` +
+			`mounts the panel and the collapsed summary bar AT ONCE, so this button would be swept ` +
+			`in a cascade it never has in the product. Drive the two collapse states as separate ` +
+			`navigations, or scope the new rule off the button.`,
+	);
+}
+
 async function assertHostCopyPinnedToObsidian(page) {
+	const model = extractReachingButtonRules(OBSIDIAN_HOST_BUTTON_CSS);
+
+	// FIRST, and unconditionally: the two in-repo copies of the model must agree, and the
+	// sweep's mount-superposition assumption must still hold. Nothing below this point runs
+	// without a local Obsidian, and both of these must.
+	const sheetDrift = [...checkSheetHostRuleListing(model), ...checkCollapseCascadeAssumption()];
+	if (sheetDrift.length) {
+		console.error(
+			`\nIN-REPO HOST-MODEL CHECK FAILED — styles-source.css and visual-harness/shoot.mjs ` +
+				`disagree about Obsidian's button rules, or about what the sweep may assume:\n` +
+				sheetDrift.map((d) => `  ${d}`).join('\n') +
+				`\nObsidian is NOT involved in this one and nothing needs re-extracting: both operands ` +
+				`are in the repo, which is why this check runs on every machine, with or without a ` +
+				`local Obsidian. Fix the sheet or the model so they match, in one commit.`,
+		);
+		process.exit(1);
+	}
+
 	const found = findObsidianAsar();
 	const skip = (why) => {
 		console.log(
-			`\nhost-copy pin SKIPPED — ${why}. OBSIDIAN_HOST_BUTTON_CSS (extracted from Obsidian ` +
+			`\nhost-copy pin PARTIAL — the styles-source.css [SC205-HOST-RULES] listing agrees with ` +
+				`the model (checked; that needs no Obsidian), but the model could not be compared ` +
+				`against Obsidian itself: ${why}. OBSIDIAN_HOST_BUTTON_CSS (extracted from Obsidian ` +
 				`${PINNED_OBSIDIAN}) is UNVERIFIED on this machine; it is NOT known to be wrong. Run ` +
 				`\`npm run shots\` on a machine running Obsidian ${PINNED_OBSIDIAN} or newer before ` +
 				`trusting the button host-leak result below, and do NOT re-extract the copy from an ` +
@@ -640,8 +732,14 @@ async function assertHostCopyPinnedToObsidian(page) {
 	}
 
 	const drift = [];
-	const { reaching: real, excluded } = partitionButtonRules(css);
-	const model = extractReachingButtonRules(OBSIDIAN_HOST_BUTTON_CSS);
+	const { reaching: real, excluded, unaccounted } = partitionButtonRules(css);
+	// SC-205 R5 / R4-M2 — the partition must be EXHAUSTIVE. A selector shape the parser cannot
+	// classify used to leave both halves silently, which is how a comma inside `:is()` hid a
+	// rule that ships today; the audit that called the partition complete used the same broken
+	// split, so it agreed with the bug. A blind spot now fails the gate rather than shrinking
+	// the printed boundary.
+	for (const u of unaccounted)
+		drift.push(`unclassifiable selector in Obsidian's app.css: "${u.fragment}" (in \`${u.sel}\`) — ${u.why}`);
 	for (let i = 0; i < Math.max(real.length, model.length); i += 1) {
 		const r = real[i];
 		const m = model[i];
@@ -664,36 +762,11 @@ async function assertHostCopyPinnedToObsidian(page) {
 		}
 	}
 
-	// SC-205 R3 / HIGH-1 — the SECOND copy. styles-source.css's re-grounding preamble carries
-	// its own listing of the host rules, and it rotted exactly as this one did (two rules of
-	// six, `app-region`, no `corner-shape`) because nothing pinned it. It is now a bare index
-	// of selectors, fenced by markers, and this checks that it names precisely the rules the
-	// model carries. The mechanism lives here rather than in the sheet on purpose: the sheet
-	// stays plain CSS with a comment in it.
-	const sheetPath = path.join(dir, '..', 'styles-source.css');
-	const sheet = fs.readFileSync(sheetPath, 'utf8');
-	const fence = /\[SC205-HOST-RULES\]([\s\S]*?)\[\/SC205-HOST-RULES\]/.exec(sheet);
-	const ruleName = (x) => (x ? `${x.ctx ? `${x.ctx} { ` : ''}${x.sel}${x.ctx ? ' }' : ''}` : '(nothing)');
-	if (!fence) {
-		drift.push(
-			`styles-source.css no longer contains the [SC205-HOST-RULES] fence — the sheet's own ` +
-				`listing of the host rules is unpinned again; restore the fence or delete the listing`,
-		);
-	} else {
-		const listed = fence[1]
-			.split('\n')
-			.map((l) => l.replace(/^\s*\(\d,\d,\d\)\s*/, '').trim())
-			.filter(Boolean);
-		const modelled = model.map(ruleName);
-		if (listed.join(' | ') !== modelled.join(' | '))
-			drift.push(
-				`styles-source.css's [SC205-HOST-RULES] listing does not match the model:\n` +
-					`      sheet lists: ${listed.join(' ; ') || '(nothing)'}\n` +
-					`      model has:   ${modelled.join(' ; ')}`,
-			);
-	}
-
 	if (drift.length) {
+		// SC-205 R5 / R4-L1 — the remedy has to match the drift. Everything reaching this point
+		// IS an Obsidian-vs-model disagreement (the in-repo sheet listing is checked separately,
+		// above, and prints its own in-repo remedy), so re-extracting is the right instruction
+		// here and only here.
 		console.error(
 			`\nHOST COPY DRIFTED — the host model in visual-harness/shoot.mjs no longer matches the ` +
 				`app.css of the Obsidian installed here (${found.path}, version ${found.version}):\n` +
@@ -701,8 +774,10 @@ async function assertHostCopyPinnedToObsidian(page) {
 				`\nThe button host-leak sweep below is only as true as that copy, so fix the copy ` +
 				`FIRST — re-extract from THIS asar (it is ${found.version}, at or newer than the pinned ` +
 				`${PINNED_OBSIDIAN}), bump PINNED_OBSIDIAN and the provenance comment, keep the ` +
-				`styles-source.css listing in step, and then re-run: the sweep may have real new ` +
-				`leaks to close.`,
+				`styles-source.css [SC205-HOST-RULES] listing in step, and then re-run: the sweep may ` +
+				`have real new leaks to close. (An unclassifiable-selector line means the opposite: ` +
+				`Obsidian shipped a selector shape obsidian-host-pin.mjs cannot parse — teach the ` +
+				`parser, do not re-extract around it.)`,
 		);
 		process.exit(1);
 	}
@@ -710,7 +785,7 @@ async function assertHostCopyPinnedToObsidian(page) {
 		`\nhost-copy pin OK (${model.length} button-reaching rules + ${PINNED_TOKENS.length} tokens ` +
 			`× dark/light + the styles-source.css listing: the host model is verbatim Obsidian ` +
 			`${found.version}; ${excluded.length} further rules whose subject is a plain button were ` +
-			`excluded by documented ancestor scope — see EXCLUDED_ANCESTOR_SCOPES)`,
+			`excluded by documented ancestor scope, 0 unclassifiable — see EXCLUDED_ANCESTOR_SCOPES)`,
 	);
 }
 
@@ -1086,9 +1161,13 @@ const BTN_PROPS = [
  *  widths, so it is re-grounded and compared.) */
 const BTN_PROPS_EXCLUDED = ['user-select', '-webkit-app-region'];
 
-/** SC-205 — the states the sweep samples. `rest` was the whole gate until SC-205; three of
- *  the six rules Obsidian aims at a plugin button only ever fire in the other two, so a
- *  resting-only sweep was structurally blind to them however complete the host copy got. */
+/** SC-205 — the states the sweep samples. `rest` was the whole gate until SC-205, and TWO of
+ *  the six rules Obsidian aims at a plugin button fire in no other state than the two added
+ *  here (`button:hover`, `button:focus-visible`), so a resting-only sweep was structurally
+ *  blind to them however complete the host copy got. Of the remaining four, three fire at rest
+ *  (the base rule, `button:not(.clickable-icon)`, and the `[disabled]` group — R1's can-fail
+ *  measured that group's `cursor`/`opacity` under `rest`) and `@media (forced-colors: active)`
+ *  fires in no state this harness renders, by choice — see the host copy's comment on it. */
 const BTN_STATES = ['rest', 'hover', 'focus-visible'];
 
 /** SC-205 R3 / MEDIUM-1 — MOUNT THE CHROME, don't exempt it.
@@ -1105,7 +1184,18 @@ const BTN_STATES = ['rest', 'hover', 'focus-visible'];
  *  BEFORE the bare pass and stays for the host pass, so both passes see the identical DOM and
  *  the bare-vs-host invariance is untouched — it changes what is MOUNTED, never what is
  *  compared. None of the three declarations sets a property this sweep compares on a button;
- *  they only give container nodes a box and let the pointer through. */
+ *  they only give container nodes a box and let the pointer through.
+ *
+ *  THE DEPENDENCY THAT MAKES THIS SOUND, stated because it is invisible otherwise (R4-L3).
+ *  The reveal shows the panel AND the collapsed summary bar at once — a superposition the
+ *  product never displays, since `[data-dse-collapsed='on'] .dse-chrome { display: none }`
+ *  (styles-source.css ~:12856) makes them mutually exclusive. That is safe for exactly one
+ *  reason: NO `[data-dse-collapsed]`-keyed rule in this sheet reaches a `.dse-btn`. The
+ *  collapsed-keyed rules target the element root and the panel CONTAINER, never a button, so
+ *  each button's cascade in the superposition is the cascade it has in its real state.
+ *  The day someone writes `[data-dse-collapsed='on'] .dse-chrome-summary .dse-btn { … }`,
+ *  this sweep starts testing the summary button in the wrong cascade and will not say so.
+ *  If you add such a rule, drive the two collapse states as separate navigations instead. */
 const CHROME_REVEAL_CSS = `
 [data-dse-chrome] .dse-chrome { opacity: 1 !important; pointer-events: auto !important; }
 .dse-chrome-summary { display: flex !important; }
