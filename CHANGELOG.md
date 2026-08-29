@@ -29,6 +29,23 @@ for what needs action.
   and print readout always used the squad's original size; both now agree (the max never
   shrinks as minions die). See [`docs/initiative-tracker.md`](docs/initiative-tracker.md)
   → "Minions and Captains" for the full YAML.
+- [FIX] **The Draw Steel sidebar: pin/unpin from the element menu, panel headers, an
+  empty state, and layout that survives restart** (SC-184). The sidebar's one-panel MVP
+  shipped without the chrome it was always specced to grow: the only way to pin a block
+  was a cursor-gated command that is never in the palette in Reading mode (the only mode
+  elements render in), there was no way to remove a single panel short of closing the
+  whole leaf and losing every one, panels were an unlabeled unseparated stack, and the
+  ribbon icon opened straight into a blank div. Fixed: every chrome-bearing block's **⋯**
+  menu now offers **Pin to sidebar** in a note and **Unpin from sidebar** once it's
+  pinned; each panel gets a header naming its element and source note, clickable back to
+  it; `Workspace.requestSaveLayout()` is now called on every pin/unpin (previously only
+  the *first* pin reliably survived a restart); an empty sidebar explains what it's for
+  and how to fill it; and a broken panel (unknown element, or its note deleted/renamed)
+  gets a "Remove panel" button instead of sitting there forever. The dead `collapsed`
+  field (persisted, never read) is deleted. Docs reframed: the sidebar is sold as a GM
+  dashboard assembled from blocks that live in **different** notes, not as "your tracker,
+  but persistent" — a pinned note tab does that better when everything already lives in
+  one note, and the docs now say so.
 - [FIX] **The note no longer jumps to the top when you click a tracker control**
   (SC-198). Ticking an action, spending malice or nudging stamina writes the note, and
   Obsidian rebuilds the whole reading view whenever a note changes — which briefly

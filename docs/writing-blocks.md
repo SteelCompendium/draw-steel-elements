@@ -85,21 +85,44 @@ Snapshots are offered for statblocks, features and featureblocks only.
 
 ## Pinning a block to the sidebar
 
-Running a session across several notes? Put your cursor inside a block and run **Send block
-to sidebar** — the block moves into a persistent panel in Obsidian's right sidebar, stays
-interactive there, and stays in sync with the note. The initiative tracker has its own
-shortcut for this, **Send initiative tracker to sidebar**, which finds the tracker in the
-current note without needing your cursor inside it.
+The Draw Steel sidebar is a **GM dashboard assembled from blocks that live in different
+notes** — the initiative tracker from your session note, the party tracker from your
+campaign note, a hero sheet from someone's character note, all running at once in one
+panel. That's the one thing it does that a pinned note tab can't: if everything you track
+already lives in a single note, pin *that note's tab* in the right sidebar instead (see
+"One note instead?" below) — it's simpler and needs nothing from this page.
 
-![An initiative tracker pinned to the Draw Steel sidebar](Media/sidebar.png)
+**To pin a block:** open its note in Reading view, hover the block, open its **⋯** menu, and
+choose **Pin to sidebar**. The block moves into a persistent panel in Obsidian's right
+sidebar, stays interactive there, and stays in sync with the note. Pin blocks from as many
+different notes as you like — they stack in the same panel, each with its own header naming
+the element and the note it came from.
 
-Open the panel any time with the crossed-swords ribbon icon, or the **Open Draw Steel
-sidebar** command.
+![Two blocks pinned to the Draw Steel sidebar, each with its own header](Media/sidebar.png)
+
+To remove one, open its **⋯** menu in the sidebar and choose **Unpin from sidebar** — that
+panel closes; the others stay. Open (or re-focus) the panel any time with the crossed-swords
+ribbon icon, or the **Open Draw Steel sidebar** command; an empty panel explains itself and
+how to fill it.
+
+Two older paths still work, for a cursor-driven workflow: put your cursor inside a block and
+run **Send block to sidebar**, or — for the initiative tracker specifically, from anywhere
+in its note — **Send initiative tracker to sidebar**.
 
 Pinning a tracker adds a hidden `_dse_anchor:` line to it — that's the plugin's bookmark
 for finding the block again after you edit the note around it. Leave it alone. A `ds-scc`
 block, whose content is exactly one compendium code, is never written to: pinning one
 leaves the note unchanged and the sidebar finds it by its code.
+
+### One note instead?
+
+If everything you're tracking for a session already lives in one note, you don't need the
+sidebar at all: open that note in the right sidebar the normal Obsidian way (drag its tab
+over, or open it and use "Move to right sidebar") and pin the tab. You get the same
+persistent panel, plus things the Draw Steel sidebar doesn't have — a close button and
+drag-to-reorder for free, room for ordinary prose alongside your blocks, and no rebuild
+flash while you edit. Use the Draw Steel sidebar when your trackers live in different notes;
+use a pinned note tab when they don't.
 
 ## Per-block appearance overrides (advanced)
 

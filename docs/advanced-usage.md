@@ -79,21 +79,28 @@ developer console and the block renders normally.
 
 ## The sidebar
 
-Any block can be pinned to a persistent panel in Obsidian's right sidebar: put your cursor
-inside it and run **Send block to sidebar**. It stays interactive there while you navigate
-between notes, and edits made in either place stay in sync.
+A GM dashboard assembled from blocks that live in **different** notes: hover a block in
+Reading view, open its **⋯** menu, and choose **Pin to sidebar**. It stays interactive in a
+persistent panel in Obsidian's right sidebar while you navigate between notes, and edits made
+in either place stay in sync. Full walkthrough, including how to unpin one and the older
+cursor-driven commands: [Pinning a block to the sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).
 
-![An initiative tracker in the sidebar](Media/sidebar.png)
+![Two blocks pinned to the Draw Steel sidebar, each with its own header](Media/sidebar.png)
 
 Worth knowing:
 
 - The panel is bound to that specific block, in that specific note. The plugin adds a small
   `_dse_anchor` marker to the block so it can find it again — that's what that line is.
-- One sidebar can hold several panels at once; they stack.
+- One sidebar can hold several panels at once; they stack, each with its own header naming
+  the element and its note.
 - Trackers are what this is for — initiative, montage, project, party, a heroic resource or
-  surge counter. Pin the one you're using this session.
+  surge counter. Pin the ones you're using this session, from whichever notes they live in.
 - Open or focus the panel any time with the crossed-swords ribbon icon, or **Open Draw
   Steel sidebar**.
+- **If everything you track lives in one note already**, skip the sidebar: open that note in
+  the right sidebar and pin its tab instead — you get a close button and reordering for
+  free, and no rebuild flash while you edit. The Draw Steel sidebar earns its keep only when
+  your trackers are scattered across notes.
 
 Narrow panes are a real layout: elements reflow at sidebar width (the stamina cluster
 collapses to a two-line rail, for instance) rather than being squeezed. A statblock's

@@ -395,9 +395,12 @@ All interactions with the tracker update the underlying YAML data in the code bl
 
 ### Pinning to the Sidebar
 
-Running a session across several notes? Use the "Send initiative tracker to sidebar"
-command (or, with your cursor inside the block, the generic "Send block to sidebar"
-command) to pin the tracker to a persistent panel in Obsidian's right sidebar — it stays
-visible and interactive as you navigate to other notes, and edits made in the sidebar or
-in the note stay in sync. Open the sidebar directly at any time via the sword icon in the
-ribbon ("Open Draw Steel sidebar").
+Running a session across several notes — the party tracker in one, a hero sheet in
+another? Hover the tracker, open its **⋯** menu, and choose **Pin to sidebar** to pin it to
+a persistent panel in Obsidian's right sidebar — it stays visible and interactive as you
+navigate to other notes, and edits made in the sidebar or in the note stay in sync. Unpin it
+the same way, from the sidebar's own **⋯** menu. (The "Send initiative tracker to sidebar"
+and "Send block to sidebar" commands still work too.) Open the sidebar directly at any time
+via the sword icon in the ribbon ("Open Draw Steel sidebar"). If your whole session already
+lives in one note, skip the sidebar and pin that note's tab instead — see
+[Pinning a block to the sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).
