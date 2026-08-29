@@ -116,11 +116,11 @@ describe('SC-120 Batch B: ds-treasure Steel composition', () => {
 		return root.querySelector('.dse-card') as HTMLElement;
 	}
 
-	test('cardHead: crest "package", eyebrow titleCase(treasure_type) ("Trinket"), name from the model, no rightEyebrow (rarity absent in the fixture)', async () => {
+	test('cardHead: crest "package", eyebrow titleCase(treasure_type) + "· Echelon N" (owner ruling 19 — the fixture carries echelon: "1", not level), name from the model, no rightEyebrow (rarity absent in the fixture)', async () => {
 		const card = await renderInline();
 		const head = card.querySelector(':scope > .dse-head') as HTMLElement;
 		expect(crestIcon(head)).toBe('package');
-		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Trinket');
+		expect(head.querySelector('.dse-head__eyebrow--left')!.textContent).toBe('Trinket · Echelon 1');
 		expect(head.querySelector('.dse-head__primary--left')!.textContent).toBe('Color Cloak (Blue)');
 		expect(head.querySelector('.dse-head__eyebrow--right')).toBeNull();
 	});
@@ -167,12 +167,24 @@ describe('SC-120 Batch B: ds-treasure Steel composition', () => {
 	});
 
 	describe('direct: bands() closure', () => {
-		test('eyebrow: titleCase(treasure_type), fallback "Treasure" when absent, "· Level N" suffix when m.level is present', () => {
+		test('eyebrow (owner ruling 19): titleCase(treasure_type), fallback "Treasure" when absent, "· Echelon N" when m.echelon is present, else "· Level N" when m.level is present, else bare type', () => {
+			// Bare type: neither echelon nor level.
 			expect(treasureLayout.steel!.eyebrow(new Treasure({ name: 'X', treasure_type: 'armor' }))).toBe('Armor');
 			expect(treasureLayout.steel!.eyebrow(new Treasure({ name: 'X' }))).toBe('Treasure');
+			// Level-only: echelon absent, level present.
 			expect(treasureLayout.steel!.eyebrow(new Treasure({ name: 'X', treasure_type: 'armor', level: '5' }))).toBe(
 				'Armor · Level 5',
 			);
+			// Echelon present: PREFERRED over level, even when both are set (echelon is the
+			// live field — 77/127 in the corpus — and the base branch's only home for it).
+			expect(
+				treasureLayout.steel!.eyebrow(new Treasure({ name: 'X', treasure_type: 'armor', echelon: '3' })),
+			).toBe('Armor · Echelon 3');
+			expect(
+				treasureLayout.steel!.eyebrow(
+					new Treasure({ name: 'X', treasure_type: 'armor', echelon: '3', level: '5' }),
+				),
+			).toBe('Armor · Echelon 3');
 		});
 
 		test('rightEyebrow: reflects rarity when present, undefined otherwise', () => {

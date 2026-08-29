@@ -420,15 +420,21 @@ export const treasureLayout: CardLayout<Treasure> = {
 	// §1.1): the Steel composition + body policy (B) below never show the Project/
 	// Prerequisite/Source/Effect values both structurally AND as raw body prose.
 	steel: {
-		// titleCase(treasure_type) falling back to 'Treasure' (cards.go:417-420), with the
-		// pre-existing `subtitle` field's "Level N" suffix moved in -- renderSteel() never
-		// reads `subtitle`, so it would otherwise be lost (design §3.3). `level` is 0/127
-		// in the corpus today (dead, like several other spec'd-ahead fields this file
-		// already carries prophylactically) -- kept exactly as the design doc names it and
-		// as the pre-existing `subtitle` field already computed it, not silently dropped.
+		// titleCase(treasure_type) falling back to 'Treasure' (cards.go:417-420), with an
+		// echelon/level suffix moved in -- renderSteel() never reads the pre-existing
+		// `subtitle` field, so it would otherwise be lost (design §3.3). Owner ruling 19:
+		// the suffix PREFERS echelon over level -- `m.echelon` is live (77/127) and is the
+		// base (non-steel) branch's only home for it (an "Echelon N" badge, `m.echelon`
+		// above), while `m.level` is dead corpus-wide (0/127) per the design doc's literal
+		// string. Keying on level alone would silently drop echelon's only home and be an
+		// information regression vs. the base branch for those 77 real treasures. This
+		// matches title's echelon-eyebrow grammar (`titleLayout.steel.eyebrow` below) and
+		// the design doc's own stated intent ("Where `m.level`/`m.echelon` exist").
 		eyebrow: (m) => {
 			const type = titleCase(m.treasure_type ?? '') || 'Treasure';
-			return m.level != null ? `${type} · Level ${m.level}` : type;
+			if (m.echelon) return `${type} · Echelon ${m.echelon}`;
+			if (m.level != null) return `${type} · Level ${m.level}`;
+			return type;
 		},
 		// Owner ruling 1: 'package' (Lucide has no 'treasure-chest', the site's MDI key).
 		crestIcon: () => 'package',
