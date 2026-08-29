@@ -142,9 +142,11 @@ export class ReadingModeBlockHost implements BlockHost {
 	blockKey(): string {
 		const info = this.getBlockInfo();
 		if (info) return `${this.ctx.sourcePath}::${info.language}::${info.lineStart}`;
-		// Best-effort fallback (F1 §4.3): no addressable position (canvas / embed /
-		// hover / print). Not stable across renders in the general case — session UI
-		// state only, never document state.
+		// Best-effort fallback (F1 §4.3): no addressable position (canvas / hover /
+		// print — NOT embeds, which resolve getSectionInfo/getBlockInfo normally; see
+		// this file's canPersist getter and BlockHost.ts's own doc, SC-184 fix round).
+		// Not stable across renders in the general case — session UI state only, never
+		// document state.
 		return `${this.ctx.sourcePath || 'canvas'}::${this.alias}::${this.ctx.docId}`;
 	}
 }

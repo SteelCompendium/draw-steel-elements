@@ -106,8 +106,10 @@ export class StaminaBarView extends ElementView<StaminaBar> {
 		// YAML `style` FIELD, not a DOM style access.
 		const { style: renderStyle } = model;
 		const canPersist = this.cx.host.canPersist;
-		// F1 §4.4: canPersist === false (embeds, print/export, hover popovers, unresolvable
-		// canvas nodes) -> render read-only (visible but inert) instead of a dead-end click.
+		// F1 §4.4: canPersist === false (print/export, hover popovers, unresolvable canvas
+		// nodes — NOT embeds, which resolve canPersist === true; see BlockHost.ts's own
+		// canPersist doc, SC-184 fix round) -> render read-only (visible but inert) instead
+		// of a dead-end click.
 		// The bar mounts exactly once per onMount, so view-bound listeners are correct (the
 		// old per-expand-cycle contentOwner machinery is gone — same shift as Skills, Plan 09
 		// Task 2); chrome's collapse HIDES the mounted DOM rather than rebuilding it, so that

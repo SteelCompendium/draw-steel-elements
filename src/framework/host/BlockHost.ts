@@ -42,10 +42,15 @@ export interface BlockHost {
 	/** Container the pipeline mounts the element root into. */
 	readonly containerEl: HTMLElement;
 	/**
-	 * Whether replaceSource can possibly succeed here (false: embeds, print/export,
-	 * hover popovers, canvas, or any other non-addressable context — F1 §4.4). Views
-	 * must render read-only (visible but inert) when false, instead of attempting a
-	 * write.
+	 * Whether replaceSource can possibly succeed here (false: print/export, hover
+	 * popovers, canvas, or any other non-addressable context — F1 §4.4). Views must
+	 * render read-only (visible but inert) when false, instead of attempting a write.
+	 * NOT embeds (SC-184 fix round, embed-comment tangent) — an `![[embed]]` re-renders
+	 * through Obsidian's own MarkdownRenderer with a real, non-empty sourcePath and a
+	 * working getSectionInfo, so it resolves `canPersist === true` and writes through the
+	 * same real file every other reading-mode host does (verified live; see SC-184's
+	 * decisions ledger). Only the canvas quarantine (`sourcePath === ''`,
+	 * ReadingModeBlockHost's `canPersist` getter) is real.
 	 */
 	readonly canPersist: boolean;
 	/**

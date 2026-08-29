@@ -315,10 +315,12 @@ export class StatblockElementView extends ElementView<StatblockConfig> {
 		this.renderFeatures(card, model, renderMd);
 
 		// SC-160: the reveal. Skipped where the bar is inert by decree — a canvas card (or
-		// any host that can't persist: an embed, an export render) is `data-dse-readonly`
-		// and the CSS already hides the bar there, so an observer would only be work
-		// nobody can see. `cardHead` mounted `.dse-head` as the card's first child; that
-		// node IS the "real header" whose exit the observer waits for.
+		// any other host that can't persist, e.g. an export render — NOT an embed, which
+		// resolves canPersist === true; see BlockHost.ts's own canPersist doc, SC-184 fix
+		// round) is `data-dse-readonly` and the CSS already hides the bar there, so an
+		// observer would only be work nobody can see. `cardHead` mounted `.dse-head` as the
+		// card's first child; that node IS the "real header" whose exit the observer waits
+		// for.
 		const headEl = card.querySelector<HTMLElement>('.dse-head');
 		if (headEl && this.cx.host.canPersist) wireStickyHeader(sticky, headEl, this);
 	}
