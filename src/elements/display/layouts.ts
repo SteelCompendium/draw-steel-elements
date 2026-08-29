@@ -815,8 +815,8 @@ export const cultureLayout: CardLayout<Culture> = {
  * it (`**Skills**:`, accepted defensively; FIX ROUND, round-5 review LOW-1: the colon is
  * now MANDATORY, not optional — `**Wealth** is a measure of…`, a bold-LED PROSE sentence
  * with no colon at all, no longer matches just because its first word equals a label),
- * whose plain text (link/emphasis stripped) case-insensitively equals one of `LABELS`,
- * and (iii) only that ONE line plus a single immediately-following blank line is
+ * whose plain text (link/emphasis stripped) case-insensitively equals one of the passed-in
+ * `labels`, and (iii) only that ONE line plus a single immediately-following blank line is
  * removed, never a following paragraph (the d6 Inciting Incident table and the "think
  * about the following questions" prose start their own paragraphs and are never
  * bold-led, so they can never match this pattern).
@@ -836,8 +836,19 @@ export const cultureLayout: CardLayout<Culture> = {
  * directly above the d6 table. The composition's own `Career Benefits` band head is its
  * structural replacement, so it is stripped the same way (whole-line, normalized-text
  * match, one swallowed trailing blank).
+ *
+ * FIX ROUND 3 (owner ruling 26, r7 delta re-review "Judgment call 2" — career's latent
+ * HIGH-2 shape): the six labels above are no longer a fixed list. `stripCareerBodyLabels`
+ * now takes the caller's already-band-gated `labels` (built in `careerLayout.steel.bands`
+ * below, the SAME `...(condition ? ['Label'] : [])` pattern the Batch B families use) —
+ * `Skills`/`Perk` only when their band actually renders (`skillsText`/`perkText`), and each
+ * Career Benefits tile label (`Languages`/`Project Points`/`Renown`/`Wealth`) only when its
+ * own model field is present, so a dash-filled tile can never delete a real body value
+ * (ruling 22(iii): duplication over deletion). Byte-neutral for `career/example.yaml`
+ * (verified by the re-reviewer and re-verified in this fix round): every field the harness
+ * fixture's body labels name is present on the model, so the gated list is identical to the
+ * old fixed list for that fixture.
  */
-const CAREER_BODY_LABELS = ['Skills', 'Languages', 'Renown', 'Wealth', 'Perk', 'Project Points'];
 /** FIX ROUND (round-5 review MED-1): exact normalized-text lines stripped alongside the
  *  bold labels above — not bold-led, so they need their own whole-line match rather than
  *  the shared `stripLabeledLines`'s bold-run matcher. */
@@ -874,8 +885,13 @@ function stripCareerLeadIn(md: string): string {
 		.trim();
 }
 
-function stripCareerBodyLabels(md: string): string {
-	return stripLabeledLines(stripCareerLeadIn(md), CAREER_BODY_LABELS);
+/**
+ * FIX ROUND 3 (owner ruling 26): `labels` is the caller's band-gated list — see the doc
+ * comment above `stripCareerLeadIn`/this function's original design note for why the list
+ * itself is no longer a fixed per-family constant.
+ */
+function stripCareerBodyLabels(md: string, labels: string[]): string {
+	return stripLabeledLines(stripCareerLeadIn(md), labels);
 }
 
 export const careerLayout: CardLayout<Career> = {
@@ -971,9 +987,30 @@ export const careerLayout: CardLayout<Career> = {
 			}
 
 			// Body — policy (B): strip the bold-labeled lines the bands above now own.
+			//
+			// Fix round 3 (owner ruling 26, r7 delta re-review "Judgment call 2"): `labels`
+			// is BAND-GATED, the same `...(condition ? ['Label'] : [])` pattern the Batch B
+			// families use (treasure/title/complication/culture above) — each label is
+			// included ONLY when the surface that replaces it actually rendered:
+			// 'Skills'/'Perk' on their own band (`skillsText`/`perkText`, computed above),
+			// and each Career Benefits tile label on the SAME model-field check the tile
+			// itself uses. A hand-authored note whose body carries a label with no matching
+			// field (e.g. `**Skills:** …` with no `skills`/`skill_group`) now keeps that
+			// line in the body instead of losing it to a band/tile that never rendered it
+			// (ruling 22(iii): duplication over deletion). Byte-neutral for
+			// `career/example.yaml` — every field the fixture's body labels name is present
+			// on the model.
 			const bodyMd = resolvedBodyMd(m.content, source);
 			if (bodyMd && bodyMd.trim()) {
-				const stripped = stripCareerBodyLabels(bodyMd);
+				const labels = [
+					...(skillsText ? ['Skills'] : []),
+					...(m.language ? ['Languages'] : []),
+					...(m.renown != null ? ['Renown'] : []),
+					...(m.wealth ? ['Wealth'] : []),
+					...(perkText ? ['Perk'] : []),
+					...(m.project_points != null ? ['Project Points'] : []),
+				];
+				const stripped = stripCareerBodyLabels(bodyMd, labels);
 				if (stripped.trim()) {
 					bands.push({
 						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),

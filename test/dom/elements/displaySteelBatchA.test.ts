@@ -264,6 +264,15 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 	test('direct: stripped body also removes a real "**[Project Points](...):**" corpus line (artisan.md shape) — deviation from the design doc\'s 5-label list, documented in the Batch A report — and the "You gain the following career benefits:" lead-in (round-5 review MED-1)', async () => {
 		const model = new Career({
 			name: 'Artisan',
+			// Fix round 3 (owner ruling 26): the strip list is band-gated, so every label
+			// this body carries needs its matching model field set too (skills/language/
+			// perk/project_points) — matching how a real generated career's body labels
+			// always have a backing field. Renown/Wealth aren't in this body, so they're
+			// deliberately left unset.
+			skills: ['Two skills'],
+			language: 'One language',
+			perk: 'One perk',
+			project_points: 240,
 			content:
 				'You gain the following career benefits:\n\n**Skills:** Two skills.\n\n**Languages:** One language\n\n**[Project Points](scc.v1:mcdm.heroes.v1/rule.downtime/project-points):** 240\n\n**Perk:** One perk.\n\n| d6 | Inciting Incident |\n|----|----|\n| 1 | Something happens. |',
 		});
@@ -321,6 +330,88 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 		const container = document.createElement('div');
 		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
 		expect(container.textContent).toContain('One perk described inline under the bullet');
+	});
+
+	// Fix round 3 (owner ruling 26, r7 delta re-review "Judgment call 2 — career latent
+	// shape"): the strip list is now BAND-GATED per label, matching how the Batch B
+	// families (treasure/title/complication/culture) already gate theirs.
+	test('fix round 3 (ruling 26a): a hand-authored "**Skills:**" line with no skills/skill_group survives in the body — the Skills band never renders, so nothing structural owns the line', async () => {
+		const model = new Career({
+			name: 'X',
+			content: '**Skills:** Criminal Underworld, Sneak',
+		});
+		const bands = careerLayout.steel!.bands(model, undefined);
+		expect(bands.map((b) => b.head)).not.toContain('Skills');
+		const bodyBand = bands[bands.length - 1];
+		const container = document.createElement('div');
+		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		expect(container.textContent).toContain('Criminal Underworld, Sneak');
+	});
+
+	test('fix round 3 (ruling 26a): a hand-authored "**Perk:**" line with no perk/perk_group survives in the body — the Perk band never renders', async () => {
+		const model = new Career({
+			name: 'X',
+			content: '**Perk:** Shadowmeld',
+		});
+		const bands = careerLayout.steel!.bands(model, undefined);
+		expect(bands.map((b) => b.head)).not.toContain('Perk');
+		const bodyBand = bands[bands.length - 1];
+		const container = document.createElement('div');
+		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		expect(container.textContent).toContain('Shadowmeld');
+	});
+
+	test('fix round 3 (ruling 26b): a "**Renown:**" body line with no m.renown dash-fills the Career Benefits tile AND keeps the body line — duplication, never deletion', async () => {
+		const model = new Career({
+			name: 'X',
+			content: '**Renown:** +1',
+		});
+		const bands = careerLayout.steel!.bands(model, undefined);
+		const benefits = bands.find((b) => b.head === 'Career Benefits')!;
+		const container = document.createElement('div');
+		await benefits.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		const row = container.querySelector('.dse-tiles')!;
+		const renownIndex = tileLabels(row).indexOf('Renown');
+		expect(tileValues(row)[renownIndex]).toBe('—'); // no m.renown -> dash-filled
+		const bodyBand = bands[bands.length - 1];
+		const bodyContainer = document.createElement('div');
+		await bodyBand.render(bodyContainer, async (md, el) => { el.setText(md); }, undefined as any);
+		expect(bodyContainer.textContent).toContain('+1'); // the real value survives in the body
+	});
+
+	test('fix round 3 (ruling 26c): populated harness-fixture shape (career/example.yaml) still strips Skills/Languages/Renown/Wealth/Perk exactly as today, and a model with ALL SIX matching fields strips all six', async () => {
+		const card = await renderInline();
+		const body = lastBodyDiv(card);
+		expect(body.textContent).not.toContain('**Skills:**');
+		expect(body.textContent).not.toContain('**Languages:**');
+		expect(body.textContent).not.toContain('[Renown]');
+		expect(body.textContent).not.toContain('[Wealth]');
+		expect(body.textContent).not.toContain('**Perk:**');
+
+		// Direct unit: all six labels populated with matching fields (the harness fixture
+		// has no Project Points line, so this proves the sixth label's gate too).
+		const model = new Career({
+			name: 'Y',
+			skills: ['One skill'],
+			language: 'One language',
+			renown: 1,
+			wealth: '+1',
+			perk: 'A perk',
+			project_points: 21,
+			content:
+				'**Skills:** One skill\n\n**Languages:** One language\n\n**Renown:** +1\n\n**Wealth:** +1\n\n**Perk:** A perk\n\n**Project Points:** 21\n\nUnrelated trailing prose survives.',
+		});
+		const bands = careerLayout.steel!.bands(model, undefined);
+		const bodyBand = bands[bands.length - 1];
+		const container = document.createElement('div');
+		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		expect(container.textContent).not.toContain('**Skills:**');
+		expect(container.textContent).not.toContain('**Languages:**');
+		expect(container.textContent).not.toContain('**Renown:**');
+		expect(container.textContent).not.toContain('**Wealth:**');
+		expect(container.textContent).not.toContain('**Perk:**');
+		expect(container.textContent).not.toContain('**Project Points:**');
+		expect(container.textContent).toContain('Unrelated trailing prose survives');
 	});
 });
 
