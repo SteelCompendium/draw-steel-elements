@@ -6,7 +6,7 @@ import { Notice, TFile } from 'obsidian';
 import type { Editor, MarkdownFileInfo, MarkdownView, Plugin } from 'obsidian';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from './DseSidebarView';
 import type { DseSidebarServices } from './DseSidebarView';
-import { ensureAnchor, findFenceAtLine, listFences, matchFenceLine, isFenceClose } from './anchor';
+import { ensureAnchor, fenceAlias, findFenceAtLine, listFences, matchFenceLine, isFenceClose } from './anchor';
 
 /** Top-down scan (fences don't nest — same rationale as anchor.ts's scanner, whose exact
  *  `matchFenceLine`/`isFenceClose` primitives this reuses rather than re-testing "is this
@@ -15,14 +15,21 @@ import { ensureAnchor, findFenceAtLine, listFences, matchFenceLine, isFenceClose
  *  `iterateFences`/`findFenceAtLine`): those only recognize a fence once it has a matching
  *  CLOSE, whereas a command's `editorCheckCallback` must also recognize a fence the user is
  *  still typing (cursor inside an opened-but-not-yet-closed block) — a live Editor has no
- *  "rest of the note" to look ahead into for a close that may not exist yet. */
+ *  "rest of the note" to look ahead into for a close that may not exist yet.
+ *
+ *  SC-184 fix round (MEDIUM-2b): the alias is `fenceAlias(match.rest)` — the first
+ *  whitespace-delimited token only, same as `iterateFences` — not the full trimmed rest.
+ *  Before this, a fence carrying extra info-string content (e.g. ```` ```ds-counter extra
+ *  ````) derived a different "alias" here than the chrome pin item's
+ *  `getBlockInfo().language` did, so the two entry points disagreed about the identity of
+ *  the exact same block. */
 function aliasAtLine(editor: Editor, line: number): string | null {
 	let open: { fenceChar: string; fenceLen: number; alias: string } | null = null;
 	for (let i = 0; i < line; i++) {
 		const match = matchFenceLine(editor.getLine(i));
 		if (!match) continue;
 		if (open === null) {
-			open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: match.rest };
+			open = { fenceChar: match.marker[0], fenceLen: match.marker.length, alias: fenceAlias(match.rest) };
 		} else if (isFenceClose(open, editor.getLine(i))) {
 			open = null;
 		}
@@ -105,15 +112,22 @@ async function openSidebarView(services: DseSidebarServices): Promise<DseSidebar
  * occurrence in the note — and, only when that fallback was actually ambiguous (more than
  * one candidate existed), surfaces a `Notice` naming the chosen block so the user isn't
  * left guessing which one just got wired up silently (review finding #3).
+ *
+ * Returns whether a block was actually bound (SC-184 fix round, MEDIUM-2a). Every existing
+ * caller (the generic command, the initiative command, the encounter builder's hand-off)
+ * already just fire-and-forgets or awaits this without inspecting a return value, so this
+ * is additive; `requestPinToSidebar` below is the first caller that reads it, to turn a
+ * "found nothing" outcome into an audible `Notice` instead of the silent no-op every other
+ * entry point still gets today.
  */
 export async function sendToSidebar(
 	services: DseSidebarServices,
 	filePath: string,
 	alias: string,
 	cursorLine?: number,
-): Promise<void> {
+): Promise<boolean> {
 	const file = services.app.vault.getAbstractFileByPath(filePath);
-	if (!(file instanceof TFile)) return;
+	if (!(file instanceof TFile)) return false;
 
 	// SC-158 — does this element's body tolerate a stamped line at all? A YAML-bodied
 	// element carries `_dse_anchor` as an unknown key and never notices; `ds-scc`'s body is
@@ -149,7 +163,7 @@ export async function sendToSidebar(
 		lines.splice(info.lineStart + 1, info.lineEnd - info.lineStart - 1, ...anchoredBody.split('\n'));
 		return lines.join('\n');
 	});
-	if (!bound) return; // no matching block found
+	if (!bound) return false; // no matching block found
 
 	if (noticeLine !== null) {
 		// `noticeLine` is only ever assigned inside the `vault.process(file, (content)
@@ -171,6 +185,7 @@ export async function sendToSidebar(
 	// Exactly one of the two identities is ever set: an id (stamped in the body) or the
 	// body itself (strict-body elements, never stamped).
 	view?.addPanel({ filePath, alias, anchorId, body: boundBody ?? undefined });
+	return true;
 }
 
 /** SC-184 — plugin onunload cleanup, mirroring `setEncounterSidebarHandoff(null)`: drops
@@ -188,6 +203,14 @@ export function unregisterDseSidebar(): void {
  * `handleOpenInSidebar`), for the same reason: a harness/test pipeline build, or a
  * render that somehow races plugin onload, must never throw from inside a chrome
  * button's click handler.
+ *
+ * SC-184 fix round (MEDIUM-2a) — `sendToSidebar` resolving `false` (nothing bound: the
+ * fence the click's own `getBlockInfo()` snapshot pointed at can no longer be found when
+ * `vault.process` actually re-reads the note) used to reach here and simply do nothing —
+ * no Notice, no leaf, no panel, and no way for the user to tell the click even registered.
+ * This is the one caller that reads the return value: every other entry point
+ * (`send-block-to-sidebar`, the initiative command, the encounter builder's hand-off) keeps
+ * its existing silent-no-op-on-not-found behavior unchanged.
  */
 export async function requestPinToSidebar(filePath: string, alias: string, cursorLine?: number): Promise<void> {
 	if (!dseSidebarPinTarget) {
@@ -197,7 +220,10 @@ export async function requestPinToSidebar(filePath: string, alias: string, curso
 		return;
 	}
 	try {
-		await sendToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
+		const bound = await sendToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
+		if (!bound) {
+			new Notice(`Draw Steel Elements: couldn't find that block in ${filePath}.`);
+		}
 	} catch (error) {
 		new Notice(
 			`Draw Steel Elements: pin to sidebar failed — ${error instanceof Error ? error.message : String(error)}`,

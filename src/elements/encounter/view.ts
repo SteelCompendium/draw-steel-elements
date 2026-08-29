@@ -103,8 +103,13 @@ function groupRows(resolved: RowResolution[]): GroupedRow[] {
  *  only inside main.ts's onload closure — see framework/sidebar/registration.ts).
  *  Defaults to null so "Open in sidebar" is never a silent no-op before Task 10 lands:
  *  the button still creates the tracker block and tells the user how to finish the
- *  hand-off by hand. */
-type SidebarHandoff = (filePath: string, alias: string, cursorLine?: number) => Promise<void>;
+ *  hand-off by hand.
+ *
+ *  `Promise<boolean>` (SC-184 fix round, MEDIUM-2a) — matches `sendToSidebar`'s own return
+ *  now that it reports whether it bound; `handleOpenInSidebar` below still just awaits the
+ *  call for its `catch`, unchanged, so this is purely a type-level follow of the real
+ *  function's signature, no behavior change here. */
+type SidebarHandoff = (filePath: string, alias: string, cursorLine?: number) => Promise<boolean>;
 
 /** SC-153 — where this encounter's tracker block ended up: the note, and the 0-based line
  *  of its opening fence, which is what lets the sidebar hand-off bind THAT block rather

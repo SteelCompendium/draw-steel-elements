@@ -204,6 +204,24 @@ export function matchFenceLine(line: string): { marker: string; rest: string } |
 	return match ? { marker: match[1], rest: match[2].trim() } : null;
 }
 
+/**
+ * SC-184 fix round (MEDIUM-2b) — a fence's ALIAS is only the first whitespace-delimited
+ * token of its info string, never the whole trimmed rest. This mirrors what Obsidian's own
+ * renderer actually keys a `registerMarkdownCodeBlockProcessor` match on (the mdast-to-hast
+ * code renderer computes its `language-<x>` class from `lang.match(/^[^ \t]+(?=[ \t]|$)/)` —
+ * first token only, confirmed against the installed Obsidian app bundle), and what
+ * `ReadingModeBlockHost`'s own `OPEN_FENCE = /^([\`~]{3,})(\S*)/` already assumed. Before
+ * this helper existed, `open.alias`/`aliasAtLine`'s `alias` were the FULL trimmed rest —
+ * so a fence carrying extra info-string content past the language token (e.g.
+ * ```` ```ds-counter extra ````) had a "language" that agreed with nothing else in the
+ * codebase: `registry.get()` (keyed by the bare language token) and the chrome pin item's
+ * `getBlockInfo().language` (also first-token-only) could never match it. Exported so both
+ * `iterateFences` below and registration.ts's `aliasAtLine` derive an alias the exact same
+ * way — one identity, not two independently-evolving ones. */
+export function fenceAlias(rest: string): string {
+	return rest.split(/\s+/)[0] ?? '';
+}
+
 /** True when `line` is a valid CLOSE for a fence opened with `open` — same character,
  *  at least as long, and carrying no info string of its own (a bare close). */
 export function isFenceClose(open: { fenceChar: string; fenceLen: number }, line: string): boolean {
@@ -240,7 +258,7 @@ function* iterateFences(content: string, alias: string): Generator<{ info: Block
 			i++;
 			continue;
 		}
-		const open = { fenceChar: openMatch.marker[0], fenceLen: openMatch.marker.length, alias: openMatch.rest };
+		const open = { fenceChar: openMatch.marker[0], fenceLen: openMatch.marker.length, alias: fenceAlias(openMatch.rest) };
 		let j = i + 1;
 		while (j < lines.length && !isFenceClose(open, lines[j])) j++;
 		if (j >= lines.length) {

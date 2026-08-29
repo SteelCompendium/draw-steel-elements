@@ -9,6 +9,7 @@
 import {
 	ANCHOR_KEY,
 	ensureAnchor,
+	fenceAlias,
 	findAnchoredBlock,
 	findFenceAtLine,
 	findFirstFence,
@@ -126,5 +127,50 @@ describe('D8 Task 2 review fix — anchor.ts fence scanner (finding #4, CRITICAL
 		const first = ensureAnchor(crlfBody);
 		const second = ensureAnchor(first.body);
 		expect(second).toEqual(first);
+	});
+
+	// SC-184 fix round (MEDIUM-2b) — a fence's alias is its info string's FIRST
+	// whitespace-delimited token, matching Obsidian's own `language-<x>` class derivation
+	// (mdast-to-hast's `lang.match(/^[^ \t]+(?=[ \t]|$)/)`) and ReadingModeBlockHost's
+	// OPEN_FENCE. Before `fenceAlias` existed, `iterateFences` matched against the FULL
+	// trimmed rest of the fence-open line, so a fence carrying extra info-string content
+	// past the language token was invisible to `listFences`/`findAnchoredBlock` when queried
+	// with the bare language token — exactly what the chrome "Pin to sidebar" item passes.
+	describe('MEDIUM-2b: alias is the first info-string token, not the whole trimmed rest', () => {
+		test('fenceAlias extracts the first token; a bare language and an empty rest are unaffected', () => {
+			expect(fenceAlias('ds-counter extra')).toBe('ds-counter');
+			expect(fenceAlias('ds-counter')).toBe('ds-counter');
+			expect(fenceAlias('')).toBe('');
+			expect(fenceAlias('ds-counter   trailing   words')).toBe('ds-counter');
+		});
+
+		test('an info-string fence is found by its bare language token', () => {
+			const note = ['```ds-counter extra', 'current_value: 1', '_dse_anchor: abc123', '```'].join('\n');
+
+			expect(listFences(note, 'ds-counter')).toHaveLength(1);
+			expect(findFirstFence(note, 'ds-counter')).toEqual({ language: 'ds-counter', lineStart: 0, lineEnd: 3 });
+			expect(findAnchoredBlock(note, 'ds-counter', 'abc123')).toEqual({
+				language: 'ds-counter',
+				lineStart: 0,
+				lineEnd: 3,
+			});
+			// Querying with the FULL info string (the pre-fix identity) no longer matches
+			// anything — "ds-counter extra" is not a registered element alias either way.
+			expect(listFences(note, 'ds-counter extra')).toHaveLength(0);
+		});
+
+		test('an info-string fence and a bare-alias fence of the same language are the SAME alias, not two', () => {
+			const note = [
+				'```ds-counter extra', // 0
+				'current_value: 1', // 1
+				'```', // 2
+				'', // 3
+				'```ds-counter', // 4
+				'current_value: 2', // 5
+				'```', // 6
+			].join('\n');
+
+			expect(listFences(note, 'ds-counter')).toHaveLength(2);
+		});
 	});
 });

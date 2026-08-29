@@ -6,7 +6,12 @@
 import { App, Editor, Notice, Plugin, flushAsync } from '../../mocks/obsidian';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { initializeElementFrameworkV2, registerFrameworkElementDefinitions } from 'main';
-import { registerDseSidebar, sendToSidebar } from '@/framework/sidebar/registration';
+import {
+	registerDseSidebar,
+	requestPinToSidebar,
+	sendToSidebar,
+	unregisterDseSidebar,
+} from '@/framework/sidebar/registration';
 import { DseSidebarView, VIEW_TYPE_DSE_SIDEBAR } from '@/framework/sidebar/DseSidebarView';
 import type { DseSidebarServices } from '@/framework/sidebar/DseSidebarView';
 
@@ -111,5 +116,87 @@ describe('D8 Task 2 review fix — registration.ts (finding #3)', () => {
 		await flushAsync();
 
 		expect(Notice.notices).toHaveLength(0);
+	});
+
+	// SC-184 fix round (MEDIUM-2) — sendToSidebar reports whether it actually bound
+	// anything, so requestPinToSidebar (the chrome "Pin to sidebar" item's caller) can turn
+	// a "found nothing" outcome into a Notice instead of the pre-fix-round silent no-op.
+	describe('SC-184 fix round (MEDIUM-2): sendToSidebar return value + requestPinToSidebar audibility', () => {
+		afterEach(() => unregisterDseSidebar());
+
+		test('sendToSidebar resolves true when it binds a block, false when the note has no matching fence', async () => {
+			const { app, services } = setup();
+			app.vault.setFile('Note.md', '```ds-counter\ncurrent_value: 1\n```');
+			app.vault.setFile('Empty.md', 'just some prose, no fence at all');
+
+			await expect(sendToSidebar(services, 'Note.md', 'ds-counter')).resolves.toBe(true);
+			await expect(sendToSidebar(services, 'Empty.md', 'ds-counter')).resolves.toBe(false);
+			await expect(sendToSidebar(services, 'Nonexistent.md', 'ds-counter')).resolves.toBe(false);
+		});
+
+		test('requestPinToSidebar posts an audible Notice (and mounts nothing) when the block cannot be found', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			app.vault.setFile('Empty.md', 'just some prose, no fence at all');
+
+			await requestPinToSidebar('Empty.md', 'ds-counter');
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(1);
+			expect(Notice.notices[0]).toContain("couldn't find that block");
+			expect(Notice.notices[0]).toContain('Empty.md');
+			expect(app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view).toBeUndefined();
+		});
+
+		// The review's exact reproduction (probe B5): the chrome pin item hands
+		// requestPinToSidebar the bare LANGUAGE token (`getBlockInfo().language`, first
+		// fence-info-string token only — see ReadingModeBlockHost's OPEN_FENCE), but the
+		// actual fence in the note carries extra info-string content past it. Before the
+		// MEDIUM-2b alias reconciliation, anchor.ts's iterateFences compared against the
+		// FULL trimmed rest of the fence-open line ("ds-counter extra"), which the bare
+		// "ds-counter" alias could never match — silent no-op, no Notice, no panel.
+		test('an info-string fence (```ds-counter extra```) pins correctly — no Notice, one mounted panel', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			app.vault.setFile('Note.md', '```ds-counter extra\ncurrent_value: 5\n```');
+
+			// "ds-counter" — exactly what ReadingModeBlockHost.getBlockInfo().language derives
+			// for this fence (first token only), i.e. what pipeline.ts's "pin" item passes.
+			await requestPinToSidebar('Note.md', 'ds-counter');
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(0);
+			const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
+			expect(view).toBeInstanceOf(DseSidebarView);
+			expect(view.getState()).toMatchObject({
+				panels: [expect.objectContaining({ filePath: 'Note.md', alias: 'ds-counter' })],
+			});
+			// The note carries the stamped anchor and is otherwise unmodified — same
+			// byte-integrity guarantee every other pin path gets.
+			expect(app.vault.getContent('Note.md')).toContain('```ds-counter extra');
+		});
+
+		// The two entry points must now agree — see aliasAtLine's own doc (registration.ts)
+		// for why it derives its alias the same way (`fenceAlias`) as iterateFences.
+		test('the older "Send block to sidebar" command pins the SAME info-string fence, identically', async () => {
+			const { app, plugin, services } = setup();
+			registerDseSidebar(plugin as any, services);
+			app.vault.setFile('Note.md', '```ds-counter extra\ncurrent_value: 5\n```');
+			const command = plugin.commands.find((c) => c.id === 'send-block-to-sidebar');
+			const editor = new Editor('```ds-counter extra\ncurrent_value: 5\n```');
+			const ctx = { file: { path: 'Note.md' } } as any;
+			editor.cursor = { line: 1, ch: 0 }; // inside the block
+
+			expect(command.editorCheckCallback(true, editor, ctx)).toBe(true);
+			command.editorCheckCallback(false, editor, ctx);
+			await flushAsync();
+
+			expect(Notice.notices).toHaveLength(0);
+			const view = app.workspace.getLeavesOfType(VIEW_TYPE_DSE_SIDEBAR)[0]?.view as unknown as DseSidebarView;
+			expect(view).toBeInstanceOf(DseSidebarView);
+			expect(view.getState()).toMatchObject({
+				panels: [expect.objectContaining({ filePath: 'Note.md', alias: 'ds-counter' })],
+			});
+		});
 	});
 });
