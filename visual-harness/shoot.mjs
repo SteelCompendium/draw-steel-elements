@@ -20,6 +20,8 @@ import {
 	findObsidianAsar,
 	readAsarFile,
 	extractReachingButtonRules,
+	partitionButtonRules,
+	PINNED_OBSIDIAN,
 	PINNED_TOKENS,
 	normalizeTokenValue,
 } from './obsidian-host-pin.mjs';
@@ -442,14 +444,15 @@ async function assertChromePlacement(page) {
 // SC-205 — SC-203's OTHER conclusion, that "`button:hover` NO LONGER EXISTS", WAS WRONG, and
 // its method is why. That round walked a live `document.styleSheets` for rules matching a
 // rendered `.dse-btn`; the walk did not descend into `@media`, and `button:hover` lives
-// inside `@media (hover: hover)`. Three of the five rules Obsidian aims at an ordinary
-// desktop plugin button were therefore missing from this copy — `button:hover`,
-// `button:focus-visible` and the `[disabled]` group, each (0,1,1) — together with the two
-// tokens they read (`--input-shadow-hover`, `--background-modifier-border-focus`). All five
-// rules are now modelled, and the sweep below samples REST, HOVER and FOCUS-VISIBLE rather
-// than resting state alone. Two smaller drifts fell out of the same re-read: the base rule's
-// `app-region` is really `-webkit-app-region`, it has gained `corner-shape`, and dark
-// `--interactive-hover` had moved #363636 -> #3f3f3f.
+// inside `@media (hover: hover)`. Obsidian 1.13.7 aims SIX rules at an ordinary desktop
+// plugin button and this copy carried two. The four that were missing: `button:hover`,
+// `button:focus-visible` and the `[disabled]` group (each (0,1,1)), plus the
+// `@media (forced-colors: active)` rule — together with the two tokens they read
+// (`--input-shadow-hover`, `--background-modifier-border-focus`). All six are now modelled,
+// and the sweep below samples REST, HOVER and FOCUS-VISIBLE rather than resting state alone.
+// THREE smaller drifts fell out of the same re-read: the base rule's `app-region` is really
+// `-webkit-app-region`, it has gained `corner-shape`, and dark `--interactive-hover` had
+// moved #363636 -> #3f3f3f.
 //
 // Provenance (SC-205): extracted from the app.css inside **Obsidian 1.13.7**, read straight
 // out of `~/.config/obsidian/obsidian-1.13.7.asar`. That is the SELF-UPDATED asar Obsidian
@@ -534,11 +537,14 @@ button[disabled="true"] {
   cursor: not-allowed;
   opacity: 0.7;
 }
-/* MODELLED BUT NEVER MEASURED. Obsidian's only other rule that reaches a plain button is
-   this Windows-high-contrast one; Playwright renders with \`forced-colors: none\`, so the
-   query never matches and the sweep below can say nothing about it. It is copied anyway so
-   the drift pin compares Obsidian's WHOLE reaching set — a rule left out of the copy is
-   exactly how the three above went missing for two rounds. */
+/* MODELLED, DELIBERATELY NOT MEASURED — a scoping decision, not a capability limit.
+   Playwright CAN emulate this: \`page.emulateMedia({ forcedColors: 'active' })\` would make
+   the query match and one extra rest-only pass would measure it. SC-205 chose not to, and
+   the reasons are worth stating so a future round can re-decide rather than re-derive:
+   Windows high-contrast is a niche mode this plugin has never been reviewed in, the host
+   rule is a single border declaration, and the drift pin covers the rule's EXISTENCE either
+   way. It is copied here so the pin compares Obsidian's whole reaching set — a rule left out
+   of the copy is exactly how the four above went missing for two rounds. */
 @media (forced-colors: active) {
   button {
     border: 1px ButtonBorder solid;
@@ -599,20 +605,42 @@ async function readHostTokens(page, css, scheme) {
  *  models a host whether or not this machine can prove the model current. */
 async function assertHostCopyPinnedToObsidian(page) {
 	const found = findObsidianAsar();
-	const css = found ? readAsarFile(found.path, 'app.css') : null;
-	if (!css) {
+	const skip = (why) => {
 		console.log(
-			`\nhost-copy pin SKIPPED — no installed Obsidian app.css to compare against ` +
-				`(looked in ~/.config/obsidian/obsidian-<version>.asar and ` +
-				`/opt/Obsidian/resources/obsidian.asar${found ? `; ${found.path} has no app.css entry` : ''}). ` +
-				`OBSIDIAN_HOST_BUTTON_CSS is UNVERIFIED on this machine — run \`npm run shots\` where ` +
-				`Obsidian is installed before trusting the button host-leak result below.`,
+			`\nhost-copy pin SKIPPED — ${why}. OBSIDIAN_HOST_BUTTON_CSS (extracted from Obsidian ` +
+				`${PINNED_OBSIDIAN}) is UNVERIFIED on this machine; it is NOT known to be wrong. Run ` +
+				`\`npm run shots\` on a machine running Obsidian ${PINNED_OBSIDIAN} or newer before ` +
+				`trusting the button host-leak result below, and do NOT re-extract the copy from an ` +
+				`older asar — that would replace the pinned model with a staler one for everyone.`,
+		);
+	};
+	if (!found) {
+		skip(
+			`no installed Obsidian found (looked for ~/.config/obsidian/obsidian-<version>.asar and ` +
+				`/opt/Obsidian/resources/obsidian.asar)`,
+		);
+		return;
+	}
+	// SC-205 R3 / MEDIUM-4. Never compare against an asar older than the modelled version, and
+	// never against one whose version cannot be established. Round 1 fell back to the
+	// version-less /opt installer copy — a Mar-2023 build here — whose button rules genuinely
+	// differ, so on any box without a config-dir asar the pin reported DRIFT against the branch
+	// under test and instructed a re-extract that would have downgraded the shared model.
+	if (!found.usable) {
+		skip(found.why);
+		return;
+	}
+	const css = readAsarFile(found.path, 'app.css');
+	if (!css) {
+		skip(
+			`${found.path} could not be read as an asar containing app.css (a partial download, or a ` +
+				`format change)`,
 		);
 		return;
 	}
 
 	const drift = [];
-	const real = extractReachingButtonRules(css);
+	const { reaching: real, excluded } = partitionButtonRules(css);
 	const model = extractReachingButtonRules(OBSIDIAN_HOST_BUTTON_CSS);
 	for (let i = 0; i < Math.max(real.length, model.length); i += 1) {
 		const r = real[i];
@@ -636,20 +664,53 @@ async function assertHostCopyPinnedToObsidian(page) {
 		}
 	}
 
+	// SC-205 R3 / HIGH-1 — the SECOND copy. styles-source.css's re-grounding preamble carries
+	// its own listing of the host rules, and it rotted exactly as this one did (two rules of
+	// six, `app-region`, no `corner-shape`) because nothing pinned it. It is now a bare index
+	// of selectors, fenced by markers, and this checks that it names precisely the rules the
+	// model carries. The mechanism lives here rather than in the sheet on purpose: the sheet
+	// stays plain CSS with a comment in it.
+	const sheetPath = path.join(dir, '..', 'styles-source.css');
+	const sheet = fs.readFileSync(sheetPath, 'utf8');
+	const fence = /\[SC205-HOST-RULES\]([\s\S]*?)\[\/SC205-HOST-RULES\]/.exec(sheet);
+	const ruleName = (x) => (x ? `${x.ctx ? `${x.ctx} { ` : ''}${x.sel}${x.ctx ? ' }' : ''}` : '(nothing)');
+	if (!fence) {
+		drift.push(
+			`styles-source.css no longer contains the [SC205-HOST-RULES] fence — the sheet's own ` +
+				`listing of the host rules is unpinned again; restore the fence or delete the listing`,
+		);
+	} else {
+		const listed = fence[1]
+			.split('\n')
+			.map((l) => l.replace(/^\s*\(\d,\d,\d\)\s*/, '').trim())
+			.filter(Boolean);
+		const modelled = model.map(ruleName);
+		if (listed.join(' | ') !== modelled.join(' | '))
+			drift.push(
+				`styles-source.css's [SC205-HOST-RULES] listing does not match the model:\n` +
+					`      sheet lists: ${listed.join(' ; ') || '(nothing)'}\n` +
+					`      model has:   ${modelled.join(' ; ')}`,
+			);
+	}
+
 	if (drift.length) {
 		console.error(
-			`\nHOST COPY DRIFTED — OBSIDIAN_HOST_BUTTON_CSS in visual-harness/shoot.mjs no longer ` +
-				`matches the app.css of the Obsidian installed here (${found.path}, version ${found.version}):\n` +
+			`\nHOST COPY DRIFTED — the host model in visual-harness/shoot.mjs no longer matches the ` +
+				`app.css of the Obsidian installed here (${found.path}, version ${found.version}):\n` +
 				drift.map((d) => `  ${d}`).join('\n') +
 				`\nThe button host-leak sweep below is only as true as that copy, so fix the copy ` +
-				`FIRST — re-extract from the asar, update the provenance comment's version, and ` +
-				`then re-run: the sweep may have real new leaks to close.`,
+				`FIRST — re-extract from THIS asar (it is ${found.version}, at or newer than the pinned ` +
+				`${PINNED_OBSIDIAN}), bump PINNED_OBSIDIAN and the provenance comment, keep the ` +
+				`styles-source.css listing in step, and then re-run: the sweep may have real new ` +
+				`leaks to close.`,
 		);
 		process.exit(1);
 	}
 	console.log(
 		`\nhost-copy pin OK (${model.length} button-reaching rules + ${PINNED_TOKENS.length} tokens ` +
-			`× dark/light: OBSIDIAN_HOST_BUTTON_CSS is verbatim Obsidian ${found.version})`,
+			`× dark/light + the styles-source.css listing: the host model is verbatim Obsidian ` +
+			`${found.version}; ${excluded.length} further rules whose subject is a plain button were ` +
+			`excluded by documented ancestor scope — see EXCLUDED_ANCESTOR_SCOPES)`,
 	);
 }
 
@@ -1010,31 +1071,70 @@ const BTN_PROPS = [
 	'gap',
 	'outlineStyle',
 	'outlineWidth',
+	// SC-205 R3 / LOW-1 — the re-extraction added `corner-shape` to the modelled base rule,
+	// and round 1 left it neither compared nor declared-excluded, so the OK line's "every
+	// sampled property" quietly meant "every property except one nobody listed". Chromium 149
+	// supports it (it computes to `round`) and this sheet never declares it, so comparing it
+	// is free and it is now pinned like the rest.
+	'cornerShape',
 ];
-/** DELIBERATELY NOT COMPARED. `user-select` and `app-region` are the only two declarations
- *  Obsidian's `button` rules make that this sheet does not re-ground, and they are excluded
- *  here for the same reason SC-189 left `white-space` alone on a single-glyph chrome button:
- *  neither can move a box or paint a pixel. (`white-space` itself is NOT on this list —
- *  plugin-wide it demonstrably moves widths, so it is re-grounded and compared.) */
-const BTN_PROPS_EXCLUDED = ['user-select', 'app-region'];
+/** DELIBERATELY NOT COMPARED. `user-select` and `-webkit-app-region` are the only two
+ *  declarations Obsidian's `button` rules make that this sheet does not re-ground AND that
+ *  this sweep does not compare, and they are excluded for the same reason SC-189 left
+ *  `white-space` alone on a single-glyph chrome button: neither can move a box or paint a
+ *  pixel. (`white-space` itself is NOT on this list — plugin-wide it demonstrably moves
+ *  widths, so it is re-grounded and compared.) */
+const BTN_PROPS_EXCLUDED = ['user-select', '-webkit-app-region'];
 
 /** SC-205 — the states the sweep samples. `rest` was the whole gate until SC-205; three of
- *  the five rules Obsidian aims at a plugin button only ever fire in the other two, so a
+ *  the six rules Obsidian aims at a plugin button only ever fire in the other two, so a
  *  resting-only sweep was structurally blind to them however complete the host copy got. */
 const BTN_STATES = ['rest', 'hover', 'focus-visible'];
 
+/** SC-205 R3 / MEDIUM-1 — MOUNT THE CHROME, don't exempt it.
+ *
+ *  Round 1 exempted 104 (kind,state) records as "provably unreachable". They were provably
+ *  unreachable *in the gallery's resting DOM*, which is not the same claim: 92 of them were
+ *  authoring-chrome controls — precisely the family SC-189 and SC-203 found leaking — that
+ *  the product reveals on `[data-dse-chrome]:hover` / `:focus-within` and on
+ *  `[data-dse-collapsed='on']`. A user reaches both on purpose, so "unfocusable in a real
+ *  vault too" was false for every one of them, and the gate was printing a coverage claim
+ *  about a fifth of its own comparisons that did not hold.
+ *
+ *  Putting the gallery into those configurations is three declarations. It is injected
+ *  BEFORE the bare pass and stays for the host pass, so both passes see the identical DOM and
+ *  the bare-vs-host invariance is untouched — it changes what is MOUNTED, never what is
+ *  compared. None of the three declarations sets a property this sweep compares on a button;
+ *  they only give container nodes a box and let the pointer through. */
+const CHROME_REVEAL_CSS = `
+[data-dse-chrome] .dse-chrome { opacity: 1 !important; pointer-events: auto !important; }
+.dse-chrome-summary { display: flex !important; }
+.dse-init__turnbox { display: block !important; }
+`;
+
 /** Runs in the page. Tags each distinct button kind so every later pass reads the SAME node:
  *  the key is what a problem line names, the index is what the per-node interactive passes
- *  address (a key contains `|` and `.` and is a nuisance to put in a selector). */
+ *  address (a key contains `|` and `.` and is a nuisance to put in a selector).
+ *
+ *  SC-205 R3 / MEDIUM-2 — the key carries STRUCTURAL CONTEXT, not just element + classes.
+ *  Round 1's key was (element, classes, pressed, selected, disabled) and tagged only the
+ *  first node per key, so the gallery's 225 buttons collapsed to 80 samples and 30 keys had
+ *  instances in genuinely different surfaces — the chrome PANEL button and the collapsed
+ *  SUMMARY bar's button share a class signature but are re-grounded by different rules
+ *  (styles-source.css ~:12673 vs ~:12910). Which one got sampled was an accident of mount
+ *  order: 17 families sampled the summary and never the panel, 12 the reverse, and `hero`
+ *  neither. Adding the nearest chrome ancestor to the key gives each surface its own record. */
 function tagButtons() {
 	const keys = [];
 	const seen = new Set();
 	for (const n of document.querySelectorAll('button, .dse-btn')) {
 		const root = n.closest('[data-dse-element]');
+		const surface = n.closest('.dse-chrome, .dse-chrome-summary');
 		const key =
 			(root ? root.getAttribute('data-dse-element') : '(none)') +
 			'|' +
 			([...n.classList].sort().join('.') || '(no class)') +
+			(surface ? `|in:${surface.classList.contains('dse-chrome') ? 'chrome' : 'chrome-summary'}` : '') +
 			(n.hasAttribute('data-pressed') ? '|pressed' : '') +
 			(n.getAttribute('aria-selected') === 'true' ? '|selected' : '') +
 			(n.disabled ? '|disabled' : '');
@@ -1098,6 +1198,12 @@ function hitPointForTagged(i) {
 	if (r.width === 0 || r.height === 0) return { blocked: 'renders a zero-sized box' };
 	const vw = document.documentElement.clientWidth;
 	const vh = document.documentElement.clientHeight;
+	// SC-205 R3 / LOW-5 — count how many candidates were actually testable. A node bigger than
+	// the viewport (or one `scrollIntoView` could not centre) has every candidate off-screen,
+	// which is a different diagnosis from "on-screen and nothing hit it"; round 1 reported both
+	// as the ancestor-clip case, so a future oversized control would have been exempted under a
+	// reason that did not apply to it.
+	let onScreen = 0;
 	for (const [fx, fy] of [
 		[0.5, 0.5],
 		[0.25, 0.5],
@@ -1110,9 +1216,14 @@ function hitPointForTagged(i) {
 		const x = r.x + r.width * fx;
 		const y = r.y + r.height * fy;
 		if (x < 1 || y < 1 || x > vw - 1 || y > vh - 1) continue;
+		onScreen += 1;
 		const hit = document.elementFromPoint(x, y);
 		if (hit && (hit === n || n.contains(hit))) return { x, y };
 	}
+	if (onScreen === 0)
+		return {
+			blocked: `no candidate point is inside the ${vw}×${vh} viewport (the node is larger than the viewport, or could not be scrolled into it)`,
+		};
 	return {
 		blocked:
 			getComputedStyle(n).pointerEvents === 'none'
@@ -1131,7 +1242,7 @@ function focusTagged(i) {
 	const cs = getComputedStyle(n);
 	if (n.hasAttribute('disabled')) return { blocked: 'disabled' };
 	if (n.getClientRects().length === 0)
-		return { blocked: 'renders no box at all (a display:none ancestor — unfocusable in a real vault too)' };
+		return { blocked: 'renders no box at all (a display:none ancestor) even with the chrome mounted' };
 	if (cs.visibility !== 'visible') return { blocked: `visibility: ${cs.visibility}` };
 	if (!n.matches('button, a[href], input, select, textarea, [tabindex]'))
 		return { blocked: `<${n.tagName.toLowerCase()}> with no href and no tabindex` };
@@ -1264,6 +1375,9 @@ async function assertBtnHostLeak(page) {
 			);
 			continue;
 		}
+		// SC-205 R3 — mount the authoring chrome before anything is tagged (see
+		// CHROME_REVEAL_CSS). Both passes run against this DOM.
+		await page.addStyleTag({ content: CHROME_REVEAL_CSS });
 		const keys = await page.evaluate(tagButtons);
 		if (keys.length < 20) {
 			problems.push(`${bg}: only ${keys.length} buttons found in the gallery — the sweep is blind`);
@@ -1297,6 +1411,20 @@ async function assertBtnHostLeak(page) {
 				const h = withHost.get(b.key);
 				if (!h) {
 					problems.push(`${bg}|${state}|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				// SC-205 R3 / LOW-2 — both passes must have sampled the SAME state. Round 1
+				// compared the pair without checking: if a host declaration changed a node's box
+				// or its hit-testing, one pass would read the state and the other would read rest,
+				// the pair would still be counted among the advertised comparisons, and whether
+				// the result came out red or green would be an accident of direction.
+				if ((b.blocked ?? null) !== (h.blocked ?? null)) {
+					problems.push(
+						`${bg}|${state}|${b.key}: the two passes did not sample the same state — ` +
+							`without the host it was ${b.blocked ? `exempt ("${b.blocked}")` : 'in the state'}, ` +
+							`with it ${h.blocked ? `exempt ("${h.blocked}")` : 'in the state'}; ` +
+							`the host sheet is changing whether this node can reach :${state}`,
+					);
 					continue;
 				}
 				comparisons += 1;
@@ -1335,7 +1463,9 @@ async function assertBtnHostLeak(page) {
 			`${BTN_PROPS_EXCLUDED.join(' and ')} are excluded by design)` +
 			(exempt
 				? `\n  ${exempt} of those (kind,state) records sampled the node at rest because the ` +
-					`state is provably unreachable on it — each one proved, never assumed:\n${boundary}`
+					`mounted DOM cannot put it into that state — each one proved per record, never ` +
+					`assumed, and the authoring chrome is MOUNTED for the sweep so this is no longer ` +
+					`a claim about controls the product merely had not revealed:\n${boundary}`
 				: ''),
 	);
 }

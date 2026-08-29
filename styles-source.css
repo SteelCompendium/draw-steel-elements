@@ -12931,25 +12931,32 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    `button.dse-pr__row`) is reached by Obsidian's own app.css, and this sheet declared
    only some of what Obsidian declares.
 
-   THE HOST RULES, read out of the LIVE app (not a hand-copied snapshot — see
-   `visual-harness/shoot.mjs` → OBSIDIAN_HOST_BUTTON_CSS for the copy the gate injects,
-   and the note there about how it is kept honest):
+   THE HOST RULES — every rule Obsidian's app.css aims at a plain plugin `<button>`, by
+   selector and specificity. The DECLARATIONS are deliberately not transcribed here: the
+   single honest copy is `visual-harness/shoot.mjs` → OBSIDIAN_HOST_BUTTON_CSS, which
+   `assertHostCopyPinnedToObsidian` re-extracts from the installed Obsidian on every
+   `npm run shots`.
 
-     button {                                                    (0,0,1)
-       --text-color: var(--text-normal); app-region: no-drag;
-       display: inline-flex; align-items: center; justify-content: center;
-       color: var(--text-color); font-size: var(--font-ui-small);
-       border-radius: var(--button-radius); border: 0;
-       padding: var(--size-4-1) var(--size-4-3);
-       height: var(--input-height);            <-- 30px desktop / 40px mobile
-       font-weight: var(--input-font-weight); cursor: var(--cursor);
-       font-family: inherit; outline: none; user-select: none; white-space: nowrap;
-     }
-     button:not(.clickable-icon) {                               (0,1,1)
-       color: var(--text-color);
-       background-color: var(--interactive-normal);
-       box-shadow: var(--input-shadow);
-     }
+   SC-205: this listing used to carry the declarations, and it went stale exactly the way
+   the shoot.mjs copy did — it was the output of the same `@media`-blind `document.styleSheets`
+   walk, so it showed two rules of six, wrote `app-region` for `-webkit-app-region`, and
+   omitted `corner-shape`. Two copies of a model rot twice as fast as one, and this one
+   presented itself as read from the live app. It is now a bare index, and the harness PINS
+   it: the gate parses the fenced list below out of this file and fails if it does not name
+   exactly the rules the model carries. Update both in the same commit, or the gate says so.
+
+     [SC205-HOST-RULES]
+     (0,0,1)  button
+     (0,1,1)  button:not(.clickable-icon)
+     (0,1,1)  @media (hover: hover) { button:hover }
+     (0,1,1)  button:focus-visible
+     (0,1,1)  button[disabled], button[aria-disabled="true"], button[disabled="true"]
+     (0,0,1)  @media (forced-colors: active) { button }
+     [/SC205-HOST-RULES]
+
+   The base rule's `height: var(--input-height)` is 30px on desktop (40px on mobile, which
+   this sheet does not model) — the single most destructive declaration in the set, because a
+   used `height` CRUSHES anything taller as readily as it inflates anything shorter.
 
    WHAT ACTUALLY LEAKED, measured in a REAL vault (an isolated Obsidian on the demo vault,
    every rendered button's computed style read twice — once as shipped, once with exactly
@@ -12985,11 +12992,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      display /       .dse-tabs__tab is not a flex container in this sheet; the host made it
      align-items     one (`inline-flex`, centred), re-laying out the tab's icon + label.
 
-   DELIBERATELY NOT RE-GROUNDED — `user-select: none` (and `app-region`). It is the SC-189
-   white-space argument applied where it IS true: neither can move a box or paint a pixel,
-   they only decide whether a label can be dragged over. Re-grounding them would be a
-   declaration that pins nothing, and `none` on a button is the conventional answer anyway.
-   `assertBtnHostLeak` in visual-harness/shoot.mjs excludes exactly these two by name.
+   DELIBERATELY NOT RE-GROUNDED — `user-select: none` and `-webkit-app-region: no-drag`. It
+   is the SC-189 white-space argument applied where it IS true: neither can move a box or
+   paint a pixel, they only decide whether a label can be dragged over. Re-grounding them
+   would be a declaration that pins nothing, and `none` on a button is the conventional
+   answer anyway. `assertBtnHostLeak` in visual-harness/shoot.mjs excludes exactly these two
+   by name. (`corner-shape`, which the SC-205 re-extraction added to the base rule, IS
+   compared — Chromium supports it and the plugin never declares it, so it costs nothing to
+   pin and would otherwise be the one modelled declaration nothing watched.)
 
    WHY THIS SHAPE — specificity, not values. The prefix `:is([data-dse-element], .dse-modal)
    :not([data-dse-print="on"])` is (0,2,0) and every subject below sits inside `:where()`,
@@ -13012,22 +13022,31 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    these four families, add its twin here too — `assertBtnHostLeak` will tell you.
 
    WHAT THAT GATE ACTUALLY SWEEPS, as of SC-205 (this sentence used to promise hover cover
-   the code did not have — it sampled resting state only, which is how three of Obsidian's
-   five button rules went unmodelled for two rounds). For each of dark and light it mounts
-   the whole gallery with authoring controls on, tags every distinct button KIND, and reads
-   each one's computed style in three states — REST, HOVER (a real pointer moved onto a
-   point verified to hit-test to the node) and FOCUS-VISIBLE (keyboard modality established
-   with a real Tab, then focus, then `:focus-visible` asserted per node) — first with no
-   host sheet and then with Obsidian's real `button` rules injected ahead of this file. The
-   two readings must be identical; the check is bare-vs-host INVARIANCE, not a list of
-   expected values, because a value list is exactly what let `color` through in SC-189.
-   A node that cannot reach a state is sampled at rest only when it PROVES it cannot — it
-   is disabled, renders no box, or nothing in its box hit-tests to it — and the gate prints
-   that boundary with counts on every run.
+   the code did not have — it sampled resting state only, which is how four of Obsidian's
+   six button rules went unmodelled for two rounds). For each of dark and light it mounts
+   the whole gallery with authoring controls on, FORCES THE CHROME OPEN (the panel revealed,
+   the collapsed summary bar shown) so the authoring controls are real nodes rather than
+   absent ones, tags every distinct button KIND — keyed by element, classes, state AND the
+   chrome surface it sits in, because the panel button and the summary button share a class
+   signature but are re-grounded by different rules — and reads each one's computed style in
+   three states: REST, HOVER (a real pointer moved onto a point verified to hit-test to the
+   node) and FOCUS-VISIBLE (keyboard modality established with a real Tab, then focus, then
+   `:focus-visible` asserted per node). Each state is read first with no host sheet and then
+   with Obsidian's real `button` rules injected ahead of this file. The two readings must be
+   identical; the check is bare-vs-host INVARIANCE, not a list of expected values, because a
+   value list is exactly what let `color` through in SC-189. A node that cannot reach a state
+   is sampled at rest only when it PROVES it cannot in the mounted DOM — it is disabled,
+   renders no box, or nothing in its box hit-tests to it — and the gate prints that boundary
+   with counts on every run. The gate also requires BOTH passes to have reached the same
+   state for a record, so a host declaration that changed a node's hit-testing cannot quietly
+   turn one half of a pair into a resting sample.
 
    The host model itself is pinned: `assertHostCopyPinnedToObsidian` re-extracts the rules
    and tokens from the installed Obsidian's own app.css each run and fails on any drift, so
-   "Obsidian does not have that rule" can no longer be asserted from a stale copy.
+   "Obsidian does not have that rule" can no longer be asserted from a stale copy. It pins
+   the listing above too, and it will only compare against an Obsidian at least as new as the
+   one the model was extracted from — an older or unversioned install is a loud SKIP, never a
+   drift report that would tempt someone into re-extracting the model from a staler host.
 */
 
 /* -- A. the declarations Obsidian makes on the bare `button` type that this sheet never
