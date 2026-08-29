@@ -34,7 +34,9 @@
 //     kind: 'note'     { out, note? | body?, element, mode? }        a rendered note
 //     kind: 'settings' { out, page? }                                the settings tab
 //     kind: 'modal'    { out, note? | body?, trigger, ready, then?, pref?, clip? }
-//     kind: 'sidebar'  { out, note? | body?, element? }              a real sidebar leaf
+//     kind: 'sidebar'  { out, note? | body?, element? } | { out, panels: [{note,element}, …] }
+//                                                        a real sidebar leaf, one panel or
+//                                                        several stacked (SC-184 fix round)
 //     kind: 'canvas'   { out, canvas }                               a real canvas
 //
 //   `body` writes a docs-only note into the (git-ignored, regenerated) demo-vault Harness
@@ -343,8 +345,23 @@ export const DOCS_SHOTS = [
 		trigger: '[data-dse-element="initiative"] .dse-init__entry:last-of-type .dse-init__detail .dse-init__stamina',
 		ready: '.dse-modal .dse-modal__body',
 	},
-	// docs/writing-blocks.md → "Pinning a block to the sidebar"
-	{ out: 'sidebar.png', source: 'obsidian', kind: 'sidebar', note: 'initiative', element: 'initiative' },
+	// docs/writing-blocks.md / docs/advanced-usage.md → "Pinning a block to the sidebar"
+	// TWO panels (SC-184 fix round, MEDIUM-1): the prose pitches "pin blocks from as many
+	// different notes as you like — they stack in the same panel, each with its own
+	// header," and a single-panel screenshot was undercutting exactly that sentence.
+	// `counter` + `surges` are both small enough to fit on-screen together at sidebar-leaf
+	// width, so the shot actually shows the stack + separator the prose describes — the
+	// same pair the SC-184 ad-hoc evidence camera proved out first
+	// (visual-harness/sc184-evidence.mjs's `sc184-evidence-multi-panel.png`).
+	{
+		out: 'sidebar.png',
+		source: 'obsidian',
+		kind: 'sidebar',
+		panels: [
+			{ note: 'counter', element: 'counter' },
+			{ note: 'surges', element: 'surges' },
+		],
+	},
 	// docs/canvas-character-sheet.md
 	{ out: 'canvas-character-sheet.png', source: 'obsidian', kind: 'canvas', canvas: CHARACTER_SHEET_CANVAS },
 	// ————————————————————————————— tutorials (SC-142 phase 2b) —————————————————————————

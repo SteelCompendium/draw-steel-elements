@@ -92,8 +92,8 @@ panel. That's the one thing it does that a pinned note tab can't: if everything 
 already lives in a single note, pin *that note's tab* in the right sidebar instead (see
 "One note instead?" below) — it's simpler and needs nothing from this page.
 
-**To pin a block:** open its note in Reading view, hover the block, open its **⋯** menu, and
-choose **Pin to sidebar**. The block moves into a persistent panel in Obsidian's right
+**To pin a block:** open its note in Reading view, hover the block (any element that shows a
+**⋯** menu), open that menu, and choose **Pin to sidebar**. The block moves into a persistent panel in Obsidian's right
 sidebar, stays interactive there, and stays in sync with the note. Pin blocks from as many
 different notes as you like — they stack in the same panel, each with its own header naming
 the element and the note it came from.

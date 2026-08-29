@@ -1679,39 +1679,57 @@ async function main() {
 					}
 
 					if (entry.kind === 'sidebar') {
-						const element = entry.element ?? 'initiative';
-						const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="${element}"]')`;
-						await openNote(noteName, 'source');
-						const alias = aliases[element] ?? aliases[noteName];
-						const exec = await evaluate(
-							cdp,
-							`(() => {
-								try {
-									const editor = window.app.workspace.getMostRecentLeaf().view.editor;
-									const fence = String.fromCharCode(96, 96, 96) + '${alias}';
-									const lines = editor.getValue().split('\\n');
-									const fenceLine = lines.findIndex((l) => l.trim() === fence);
-									if (fenceLine === -1) return { ok: false, error: 'no ${alias} fence found' };
-									editor.setCursor({ line: fenceLine + 1, ch: 0 });
-									return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar') };
-								} catch (e) { return { ok: false, error: String(e) }; }
-							})()`,
-						);
-						if (!exec.ok) throw new Error(`send-block-to-sidebar did not run: ${exec.error ?? '(false)'}`);
-						await waitFor(cdp, `!!${elSel}`, { what: `sidebar panel [data-dse-element="${element}"]` });
+						// SC-184 fix round (MEDIUM-1) — `entry.panels` (an array of
+						// `{ note, element }`, one per block to stack) is the general form;
+						// the single `note`/`element` shape from before this round still works
+						// (treated as a one-panel `panels` array), so a future entry needing
+						// just one pinned block doesn't have to write an array of one. The
+						// docs pitch ("pin blocks from as many different notes as you like —
+						// they stack in the same panel, each with its own header") had exactly
+						// ONE panel in its own screenshot until this round; `sidebar.png` is
+						// now the first two-panel entry (counter + surges — both small enough
+						// to fit on-screen together at sidebar-leaf width, same pair the SC-184
+						// ad-hoc evidence camera proved out as sc184-evidence-multi-panel.png).
+						const panels = entry.panels ?? [{ note: entry.note ?? noteName, element: entry.element ?? 'initiative' }];
+						let firstElSel = null;
+						for (const panel of panels) {
+							const element = panel.element;
+							const elSel = `document.querySelector('.dse-sidebar__panel [data-dse-element="${element}"]')`;
+							firstElSel ??= elSel;
+							await openNote(panel.note, 'source');
+							const alias = aliases[element] ?? aliases[panel.note];
+							const exec = await evaluate(
+								cdp,
+								`(() => {
+									try {
+										const editor = window.app.workspace.getMostRecentLeaf().view.editor;
+										const fence = String.fromCharCode(96, 96, 96) + '${alias}';
+										const lines = editor.getValue().split('\\n');
+										const fenceLine = lines.findIndex((l) => l.trim() === fence);
+										if (fenceLine === -1) return { ok: false, error: 'no ${alias} fence found' };
+										editor.setCursor({ line: fenceLine + 1, ch: 0 });
+										return { ok: window.app.commands.executeCommandById('draw-steel-elements:send-block-to-sidebar') };
+									} catch (e) { return { ok: false, error: String(e) }; }
+								})()`,
+							);
+							if (!exec.ok) throw new Error(`send-block-to-sidebar (${panel.note}) did not run: ${exec.error ?? '(false)'}`);
+							await waitFor(cdp, `!!${elSel}`, { what: `sidebar panel [data-dse-element="${element}"]` });
+						}
 						await sleep(600);
-						await setPluginTheme(elSel, 'steel');
+						await setPluginTheme(firstElSel, 'steel');
 						await clearNotices();
 						// The whole leaf, chrome included — the point of the picture is "this
-						// lives in Obsidian's sidebar", not "this element renders".
+						// lives in Obsidian's sidebar", not "this element renders". Any one
+						// mounted panel's `.workspace-leaf` ancestor is the same leaf as every
+						// other panel's, so the first is as good a rect source as the last.
 						await docsCapture(
 							cdp,
 							outFile,
 							`(() => {
-								const r = ${elSel}.closest('.workspace-leaf').getBoundingClientRect();
+								const r = ${firstElSel}.closest('.workspace-leaf').getBoundingClientRect();
 								return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
 							})()`,
-							'sidebar leaf',
+							`sidebar leaf (${panels.length} panel${panels.length === 1 ? '' : 's'})`,
 						);
 						continue;
 					}

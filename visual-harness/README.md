@@ -80,6 +80,12 @@ One-time setup: `npx playwright install chromium`.
   shared with `authoring.example` on each element's definition; code-fence bodies
   validity-gated by `test/dom/visual-harness/fixtures.test.ts`.
 - `dist/`, `shots/` — generated, git-ignored.
+- `settings-evidence.mjs`, `sc184-evidence.mjs` — ad-hoc, hand-run evidence cameras for one
+  fix round each (SC-131, SC-184), reusing `obsidian-camera.mjs`'s spawn/attach/CDP
+  boilerplate for a handful of scenarios the regular ground-truth sweep doesn't cover.
+  Neither is wired into `package.json`, `npm run obsidian-shots`, or any gate — not dead
+  code, just not part of the standing battery; see each file's own header for its scenario
+  list and usage.
 
 `test/dom/visual-harness/fixtures.test.ts` is jest's gate on this harness — it imports
 `entry.ts` under jest, where `obsidian` maps to the TEST mock, not `shim/obsidian.ts`. Touching

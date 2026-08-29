@@ -120,7 +120,7 @@ Running the session across several notes? Put your cursor in the tracker block a
 **Send block to sidebar** from the command palette (or use the dedicated **Send initiative
 tracker to sidebar**). It moves to a panel on the right and stays there while you navigate.
 
-![The tracker pinned to the sidebar](Media/sidebar.png)
+![Blocks pinned to the Draw Steel sidebar, each with its own header](Media/sidebar.png)
 
 Everything you click is written back into the note as you go, in the sidebar as much as in
 the note, so the state survives closing Obsidian.
