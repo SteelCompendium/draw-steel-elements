@@ -218,7 +218,17 @@ export class DseSidebarView extends ItemView {
 	 *  callback), where it used to have none. */
 	removePanel(panel: SidebarPanel): void {
 		const index = this.panels.indexOf(panel);
-		if (index >= 0) this.panels.splice(index, 1);
+		if (index < 0) {
+			// SC-184 fix round (LOW-3) — a panel not (or no longer) in panels[] is not a
+			// layout change: before this guard, a caller invoking removePanel twice on the
+			// same panel (or on one already spliced out some other way) fired a second
+			// requestSaveLayout + updateEmptyState for nothing. removeChild itself is still
+			// safe to call unconditionally — Obsidian's Component.removeChild is a no-op for
+			// a child it doesn't own.
+			this.removeChild(panel);
+			return;
+		}
+		this.panels.splice(index, 1);
 		this.removeChild(panel);
 		// SC-184 (item 4) — symmetric with addPanel's own requestSaveLayout: a removal is
 		// exactly as much a layout change as an addition.

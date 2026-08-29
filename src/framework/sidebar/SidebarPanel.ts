@@ -134,6 +134,14 @@ export class SidebarPanel extends Component {
 			return;
 		}
 
+		// SC-184 fix round (LOW-1) — the success path: mount() can run more than once on
+		// the same `panelEl` (handleAnchorLost's degrade can fire, then a later external
+		// edit relocates the block and handleExternalChange remounts through the pipeline
+		// again), and `renderUnavailable` stamps this attribute on the OUTER panel, not
+		// `bodyEl` — so a plain `bodyEl.empty()` never cleared it. Clearing it here (and in
+		// handleExternalChange's own remount branch below) is what lets a recovered panel
+		// stop being treated as unavailable.
+		this.panelEl.removeAttribute('data-dse-sidebar-unavailable');
 		await this.deps.pipeline.run(def, body, host);
 	}
 
@@ -224,6 +232,11 @@ export class SidebarPanel extends Component {
 		const previous = this.host.lastMountedChild;
 		if (previous) this.removeChild(previous);
 		this.bodyEl.empty();
+		// SC-184 fix round (LOW-1) — this remount branch runs whether or not the panel was
+		// PREVIOUSLY showing a degrade card (e.g. handleAnchorLost fired earlier, then this
+		// external edit relocated the block); `bodyEl.empty()` above only clears the degrade
+		// card's DOM, never the attribute `renderUnavailable` stamped on the outer `panelEl`.
+		this.panelEl?.removeAttribute('data-dse-sidebar-unavailable');
 		await this.deps.pipeline.run(def, body, this.host);
 	}
 
@@ -260,7 +273,11 @@ export class SidebarPanel extends Component {
 		const card = this.bodyEl.createDiv({ cls: 'dse-error-card' });
 		card.createEl('div', { cls: 'dse-error-card-title', text: 'Draw Steel: panel unavailable' });
 		card.createEl('div', { cls: 'dse-error-card-message', text: message });
-		iconButton(
+		// SC-184 fix round (MEDIUM-3) — `.dse-sidebar__panel-dismiss` is a placement hook
+		// only (styles-source.css's sidebar-chrome section): before this the button had no
+		// class of its own and rendered as an unlabeled square block sitting alone on its
+		// own line, readable only by hovering for the `aria-label` tooltip.
+		const dismiss = iconButton(
 			card,
 			{
 				icon: 'x',
@@ -270,5 +287,6 @@ export class SidebarPanel extends Component {
 			},
 			this,
 		);
+		dismiss.buttonEl.addClass('dse-sidebar__panel-dismiss');
 	}
 }

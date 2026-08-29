@@ -12492,6 +12492,13 @@ button.dse-pr__row:hover {
 	align-items: baseline;
 	gap: var(--size-4-2);
 	padding: var(--size-4-1) 0;
+	/* LOW-2 (SC-184 fix round) — the hover-revealed .dse-chrome panel paints OUTSIDE its
+	   container's box (see .dse-chrome's own "painted outside the box" doc), directly over
+	   this header's right end; with a long note name the ellipsis sat under it while
+	   hovering. A fixed reserve, not a computed one: the panel's own width depends on how
+	   many chrome items the mounted element opted into (1-3 icon-only buttons), which this
+	   stylesheet has no selector-time way to know from here — 88px comfortably clears three. */
+	padding-right: 88px;
 	font-size: var(--dse-fs-label);
 	color: var(--text-muted);
 }
@@ -12518,8 +12525,29 @@ button.dse-pr__row:hover {
 
 /* A degraded panel (unknown element / note not found / backing block gone) still shows
    the header above its degrade card — see `data-dse-sidebar-unavailable`'s doc in
-   SidebarPanel.ts. No extra rule needed: `.dse-error-card` already carries its own
-   visual treatment; the header just sits above it like it does above a live element. */
+   SidebarPanel.ts. `.dse-error-card` already carries its own visual treatment; the header
+   just sits above it like it does above a live element. */
+
+/* MEDIUM-3 (SC-184 fix round) — the degrade card's "Remove panel" dismiss button used to
+   carry no class of its own and rendered as an unlabeled square block sitting alone on its
+   own line (only readable via the `aria-label` tooltip). Scoped through
+   `.dse-sidebar__panel` (never reachable by the browser harness — see this section's own
+   header note) rather than styling `.dse-error-card`/`.dse-sidebar__panel-dismiss` bare, so
+   `.dse-error-card` itself — used broadly, including in harness-reachable element error
+   renders — gains no new positioning behavior outside a sidebar panel. */
+.dse-sidebar__panel .dse-error-card {
+	position: relative;
+	/* The dismiss button is a real touch-target-sized (--dse-touch-min, 44px) button sitting
+	   `var(--size-4-2)` from the card's right edge — a smaller reserve left the title text
+	   running under it. 64px clears the button plus a small gap before the text. */
+	padding-right: 64px;
+}
+
+.dse-sidebar__panel .dse-sidebar__panel-dismiss {
+	position: absolute;
+	top: var(--size-4-2);
+	right: var(--size-4-2);
+}
 
 /* -- Empty state: shown by DseSidebarView.updateEmptyState whenever panels.length === 0,
       including the leaf's very first open — the ribbon icon used to lead here with
