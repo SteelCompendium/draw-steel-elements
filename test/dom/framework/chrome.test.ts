@@ -214,9 +214,11 @@ describe('SC-169 §1 — the `chrome` slot is the opt-in, and absence changes no
 
 // ---------------------------------------------------------------- 2. panel shape
 describe('SC-169 §2 — panel shape', () => {
-	test('default panel is collapse-only; collapse is the LAST (rightmost) child', async () => {
+	test('default panel is collapse-only[+pin]; collapse is the LAST (rightmost) child', async () => {
 		const { root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock');
-		expect(itemIds(root)).toEqual(['collapse']);
+		// SC-184: a reading-mode, persistable host (this test's default makeHost) always
+		// contributes "Pin to sidebar" now, riding immediately before collapse.
+		expect(itemIds(root)).toEqual(['pin', 'collapse']);
 		const panel = root.querySelector('.dse-chrome')!;
 		expect(panel.lastElementChild!.getAttribute('data-dse-chrome-item')).toBe('collapse');
 		expect(panel.getAttribute('role')).toBe('toolbar');
@@ -226,7 +228,7 @@ describe('SC-169 §2 — panel shape', () => {
 		const deps = makeDeps();
 		await deps.prefs.set('authoringControls', true);
 		const { root } = await render(statblockElement, STATBLOCK_BODY, 'ds-statblock', { deps });
-		expect(itemIds(root)).toEqual(['edit', 'collapse']);
+		expect(itemIds(root)).toEqual(['edit', 'pin', 'collapse']);
 	});
 
 	test('a host that cannot persist gets no edit item, but still gets the panel', async () => {
@@ -242,7 +244,9 @@ describe('SC-169 §2 — panel shape', () => {
 		await deps.prefs.set('authoringControls', true);
 		const { root } = await render(heroElement, HERO_BODY, 'ds-hero', { deps });
 		expect(heroElement.noAuthoringButton).toBe(true);
-		expect(itemIds(root)).toEqual(['collapse']);
+		// SC-184: opting out of the pencil (noAuthoringButton) says nothing about the
+		// unrelated "Pin to sidebar" item, which is still present on this persistable host.
+		expect(itemIds(root)).toEqual(['pin', 'collapse']);
 	});
 
 	test('every panel control is a REAL icon-only button with an accessible name', async () => {

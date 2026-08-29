@@ -816,12 +816,14 @@ describe('Plan 09 Task 6b: statblock re-cast onto the D2 kit card grammar (§3.8
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
 	});
 
-	test('SC-169: the only controls the FRAMEWORK adds are the chrome collapse/expand pair', async () => {
+	test('SC-169/SC-184: the only controls the FRAMEWORK adds are collapse/expand + pin', async () => {
 		const { root } = await renderStatblock(humanBanditChief, {}, { sbVillain: 'inline' });
 		const chrome = Array.from(root.querySelectorAll('[data-dse-chrome-item]')).map((el) =>
 			el.getAttribute('data-dse-chrome-item'),
 		);
-		expect(chrome.sort()).toEqual(['collapse', 'expand']);
+		// SC-184: a reading-mode, persistable host (this harness's default) also gets "Pin to
+		// sidebar" now — gated the same way the edit pencil is (canPersist).
+		expect(chrome.sort()).toEqual(['collapse', 'expand', 'pin']);
 	});
 
 	test('ties the created view to host.addChild (block lifecycle); a real StatblockElementView still renders underneath (D6 Task 4: wrapped in RefUnwrapView)', async () => {

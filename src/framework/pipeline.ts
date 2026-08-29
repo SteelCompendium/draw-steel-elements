@@ -36,6 +36,7 @@ import type { ChromeMenuItem } from './chrome/types';
 import { iconButton } from './kit/iconButton';
 import { openFormEditor } from '@/authoring/FormModal';
 import { ANCHOR_KEY } from './sidebar/anchor';
+import { requestPinToSidebar } from './sidebar/registration';
 
 /** The four failure stages renderErrorCard can report (F1 §3.8). */
 export type ErrorStage = 'parse' | 'schema' | 'reference' | 'render';
@@ -608,7 +609,7 @@ export class ElementPipeline {
 							summary: () => view.chromeSummary(),
 							// SC-182: the view's own stateful items (ElementView.chromeItems) ride
 							// after the pencil, so the visual order is pencil · view items ·
-							// collapse. Collected fresh per (re)mount — see the seam's doc.
+							// pin/unpin · collapse. Collected fresh per (re)mount — see the seam's doc.
 							pipelineItems: [
 								...(showEdit
 									? [
@@ -621,6 +622,36 @@ export class ElementPipeline {
 										]
 									: []),
 								...view.chromeItems(),
+								// SC-184 (items 1/2) — the discoverable per-block "send to sidebar"
+								// affordance D8 §1.7 specified and never built: the generic command is
+								// an editorCheckCallback gated on the cursor sitting inside the fence, so
+								// it never appears in Reading mode — the only mode elements render in.
+								// Mirrored by "Unpin from sidebar" once the block IS in the sidebar,
+								// closing the "a panel can never be removed" defect.
+								...(cx.mode === 'reading' && cx.host.canPersist
+									? [
+											{
+												id: 'pin',
+												icon: 'pin',
+												label: 'Pin to sidebar',
+												onClick: () => {
+													const info = cx.host.getBlockInfo();
+													if (!info) return; // gated on canPersist above; defensive only
+													void requestPinToSidebar(cx.host.sourcePath, info.language, info.lineStart);
+												},
+											} satisfies ChromeMenuItem,
+										]
+									: []),
+								...(cx.mode === 'sidebar' && cx.host.requestRemoval
+									? [
+											{
+												id: 'unpin',
+												icon: 'pin-off',
+												label: 'Unpin from sidebar',
+												onClick: () => cx.host.requestRemoval?.(),
+											} satisfies ChromeMenuItem,
+										]
+									: []),
 							],
 						},
 						owner,

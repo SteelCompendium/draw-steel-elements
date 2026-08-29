@@ -30,10 +30,24 @@ function aliasAtLine(editor: Editor, line: number): string | null {
 	return open?.alias ?? null;
 }
 
+/**
+ * SC-184 — the most recently registered production sidebar services bundle, so the
+ * chrome menu's "Pin to sidebar" item (pipeline.ts) can reach `sendToSidebar` without the
+ * pipeline itself importing/knowing anything about DseSidebarView. Mirrors the encounter
+ * builder's own late-bound hand-off (`setEncounterSidebarHandoff`,
+ * elements/encounter/view.ts) for the same reason: the pipeline is constructed (and
+ * exercised — every visual-harness/test build) long before `registerDseSidebar` ever runs,
+ * often without it running at all. Set by `registerDseSidebar` below, cleared by
+ * `unregisterDseSidebar` (main.ts onunload) so a stale plugin instance can never fire a
+ * pin request against a torn-down bundle.
+ */
+let dseSidebarPinTarget: DseSidebarServices | null = null;
+
 /** Registers the view type, a ribbon icon, and the "Open Draw Steel sidebar" /
  *  "Send block to sidebar" commands. Call once, after the framework bundle (registry +
  *  pipeline) is constructed (main.ts onload). */
 export function registerDseSidebar(plugin: Plugin, services: DseSidebarServices): void {
+	dseSidebarPinTarget = services;
 	plugin.registerView(VIEW_TYPE_DSE_SIDEBAR, (leaf) => new DseSidebarView(leaf, services));
 
 	plugin.addRibbonIcon('swords', 'Open Draw Steel sidebar', () => {
@@ -157,4 +171,36 @@ export async function sendToSidebar(
 	// Exactly one of the two identities is ever set: an id (stamped in the body) or the
 	// body itself (strict-body elements, never stamped).
 	view?.addPanel({ filePath, alias, anchorId, body: boundBody ?? undefined });
+}
+
+/** SC-184 — plugin onunload cleanup, mirroring `setEncounterSidebarHandoff(null)`: drops
+ *  the reference to THIS instance's services so a stale plugin instance (reload/disable/
+ *  re-enable) can never fire a pin request against a torn-down bundle. */
+export function unregisterDseSidebar(): void {
+	dseSidebarPinTarget = null;
+}
+
+/**
+ * SC-184 (item 2) — the element chrome menu's "Pin to sidebar" action (pipeline.ts).
+ * A thin wrapper over `sendToSidebar` that degrades to a `Notice` instead of a silent
+ * no-op when no plugin instance has registered a sidebar yet — the same shape as the
+ * encounter builder's own hand-off degrade (`encounter/view.ts`'s
+ * `handleOpenInSidebar`), for the same reason: a harness/test pipeline build, or a
+ * render that somehow races plugin onload, must never throw from inside a chrome
+ * button's click handler.
+ */
+export async function requestPinToSidebar(filePath: string, alias: string, cursorLine?: number): Promise<void> {
+	if (!dseSidebarPinTarget) {
+		new Notice(
+			'Draw Steel Elements: sidebar not available in this build — try "send block to sidebar" from the command palette.',
+		);
+		return;
+	}
+	try {
+		await sendToSidebar(dseSidebarPinTarget, filePath, alias, cursorLine);
+	} catch (error) {
+		new Notice(
+			`Draw Steel Elements: pin to sidebar failed — ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 }

@@ -482,7 +482,9 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 		const items = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]')).map((el) =>
 			el.getAttribute('data-dse-chrome-item'),
 		);
-		expect(items).toEqual(['skills-unowned']); // the eye survives; NO collapse item
+		// SC-184: every reading-mode, persistable host now also gets the "Pin to sidebar"
+		// chrome item — appended after the view's own items, same as the eye toggle here.
+		expect(items).toEqual(['skills-unowned', 'pin']); // the eye survives; NO collapse item
 		expect(root.querySelector('.dse-chrome-summary')).toBeNull(); // no one-line form either
 		expect(root.querySelector(':scope > .dse-collapse')).toBeNull();
 		expect(root.querySelector(':scope > .dse-skills')).not.toBeNull();
@@ -522,7 +524,12 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 	});
 
 	test('`collapsible: false` mounts NO panel when nothing else would be in it', async () => {
-		const { root } = await render(staminaBarElement, `collapsible: false\n${STAMINA_BODY}`, 'ds-stamina');
+		// SC-184: a reading-mode, persistable host always contributes the "Pin to sidebar"
+		// item now, so this scenario needs a host that CAN'T persist to still prove
+		// mountChrome's "no panel when it would be empty" rule — the pin item is exactly
+		// the kind of surviving item the rule is about, it's just no longer the only case.
+		const host = makeHost('ds-stamina', { canPersist: false });
+		const { root } = await render(staminaBarElement, `collapsible: false\n${STAMINA_BODY}`, 'ds-stamina', { host });
 		expect(root.querySelector('.dse-chrome')).toBeNull();
 		expect(root.querySelector('.dse-chrome-summary')).toBeNull();
 		expect(root.hasAttribute('data-dse-chrome')).toBe(false);
@@ -538,7 +545,9 @@ describe('SC-169 R2 §3 — `collapsed:`, `collapsible:`, `collapse_default:`', 
 		const items = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]')).map((el) =>
 			el.getAttribute('data-dse-chrome-item'),
 		);
-		expect(items).toEqual(['edit']);
+		// SC-184: "Pin to sidebar" rides after the pencil, same as every other reading-mode
+		// persistable render.
+		expect(items).toEqual(['edit', 'pin']);
 		expect(root.querySelector('.dse-chrome-summary')).toBeNull();
 	});
 });

@@ -41,7 +41,7 @@ import { createElementRegistry } from '@/framework/registry';
 import type { ElementRegistry } from '@/framework/registry';
 import { ElementPipeline } from '@/framework/pipeline';
 import { registerFrameworkElements } from '@/framework/registerFrameworkElements';
-import { registerDseSidebar, sendToSidebar } from '@/framework/sidebar/registration';
+import { registerDseSidebar, sendToSidebar, unregisterDseSidebar } from '@/framework/sidebar/registration';
 import { listFences } from '@/framework/sidebar/anchor';
 import { registerInsertCommands } from '@/authoring/insert';
 import { DsElementSuggest } from '@/authoring/suggest';
@@ -633,6 +633,11 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
         // them) degrade back to Task 4's "not wired in this build" Notice, same as before
         // Task 10 wired this at all.
         setEncounterSidebarHandoff(null);
+        // SC-184 — same reasoning: the chrome menu's "Pin to sidebar" item holds a
+        // reference to THIS instance's dseSidebarServices via registration.ts's own
+        // late-bound seam; drop it so a stale instance never fires against a torn-down
+        // bundle.
+        unregisterDseSidebar();
     }
 
     /** F2 Task 10 — the sync options derived from live settings; also Task 11's

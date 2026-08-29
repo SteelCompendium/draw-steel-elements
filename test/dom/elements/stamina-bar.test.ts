@@ -303,8 +303,13 @@ describe('D2 §3.5: stamina-bar rendered through the REAL ElementPipeline', () =
 			// `!disable_click`, never `model.collapsible`, so the element was always collapsible
 			// no matter what the block said. The key has always been in the schema, documented
 			// as "whether the component can be collapsed or not"; it means that now.
+			//
+			// SC-184: a reading-mode, persistable host now always contributes "Pin to sidebar"
+			// to the panel, so proving "no panel when it would otherwise be empty" needs a host
+			// that can't persist — canPersist gates pin exactly the same way it gates the edit
+			// pencil.
 			const pipeline = new ElementPipeline(makeDeps());
-			const host = makeHost();
+			const host = makeHost({ canPersist: false });
 
 			await pipeline.run(staminaBarElement, `${BASIC_YAML}\ncollapsible: false`, host);
 
