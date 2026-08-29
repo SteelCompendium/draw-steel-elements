@@ -84,7 +84,7 @@ import {
 	advanceRound as advanceRoundModel,
 	applyCaptainBonusTransition,
 	captainOfSquad,
-	captainStaminaBonus,
+	foldedCaptainStaminaBonus,
 	isCaptainDown,
 	minionCreatures,
 	minionPoolMaxOf,
@@ -1625,8 +1625,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 				// parenthetical shows the CURRENT effective per-minion Stamina (base + the
 				// active bonus), matching the pool's own per-minion build rule; the badge
 				// carries the "why" in words.
+				// SC-195 fix round (HIGH-1): the bonus folded into this readout must be the
+				// PERSISTED flag (`foldedCaptainStaminaBonus`), never the live gate — see
+				// that helper's doc comment for the two failure scenarios this replaces.
 				const max = minionPoolMaxOf(creature);
-				const effectivePer = creature.max_stamina + captainStaminaBonus(group, creature);
+				const effectivePer = creature.max_stamina + foldedCaptainStaminaBonus(creature);
 				staminaEl.textContent = `${currentStamina}/${max} (${effectivePer})`;
 				setState(null);
 			}

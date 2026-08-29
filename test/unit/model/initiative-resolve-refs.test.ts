@@ -31,7 +31,7 @@ import type { EncounterData } from '@drawSteelAdmonition/EncounterData';
 import { DEFAULT_SETTINGS } from '@model/Settings';
 import { createReferenceService } from '../../../src/framework/seams/refs';
 import type { ReferenceService } from '../../../src/framework/seams/refs';
-import { parse, serialize } from '../../../src/elements/initiative/model';
+import { parse, serialize, minionPoolOf } from '../../../src/elements/initiative/model';
 import { resolveInitiativeRefs } from '../../../src/elements/initiative/resolveRefs';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
 import squad from '../../fixtures/initiative/squad.yaml';
@@ -581,5 +581,38 @@ describe('T-2 / SC-195: with_captain merges only-if-unset, hero and creature ali
 		expect(group.minion_stamina_pool).toBe(78); // (9 + 4) x 6
 		expect(minion.minion_stamina_pool_max).toBe(78);
 		expect(minion.captain_bonus_active).toBe(true);
+	});
+
+	// SC-195 fix round (MEDIUM-1, owner ruling) — this async parse path (the pipeline's
+	// real reference stage) must reconcile an orphaned bonus flag too, not only the sync
+	// split in model.ts's own phase-3 pass (T-3 in encounter-data.test.ts covers the pure
+	// helper; this confirms it is actually WIRED into resolveInitiativeRefs's phase 3).
+	test('M-1: a squad with the persisted flag true but NO bound captain at all un-winds through resolveInitiativeRefs too', async () => {
+		const { refs } = makeEnv();
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    is_squad: true',
+			'    creatures:',
+			'      - name: Goblin',
+			'        max_stamina: 9',
+			'        amount: 6',
+			'        squad_role: minion',
+			'        with_captain_stamina: 999', // deliberately WRONG — proves the persisted N wins
+			'        captain_bonus_n: 4',
+			'        captain_bonus_active: true',
+			'        minion_stamina_pool: 78',
+			'        minion_stamina_pool_max: 78',
+			'malice:',
+			'  value: 0',
+		].join('\n'); // no captain creature in the group at all
+		const model = await resolveLikePipeline(src, refs);
+		const group = model.enemy_groups[0];
+		const minion = group.creatures[0];
+		expect(minionPoolOf(group, minion)).toBe(54); // 78 - (4 x 6 alive), the PERSISTED N
+		expect(minion.minion_stamina_pool_max).toBe(54);
+		expect(minion.captain_bonus_active).toBe(false);
+		expect(minion.captain_bonus_n).toBeUndefined();
 	});
 });

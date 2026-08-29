@@ -124,6 +124,17 @@ export interface Creature {
      *  neither double-apply nor drop the bonus. ABSENT means "never computed" (treated as
      *  false everywhere this is read). */
     captain_bonus_active?: boolean;
+    /** SC-195 fix round (MEDIUM-1 owner ruling) — the per-minion N actually FOLDED INTO
+     *  the pool by the transition that set `captain_bonus_active: true`. Persisted
+     *  alongside the flag (written by `initMinionPool` / `applyCaptainBonusTransition`,
+     *  cleared whenever the flag goes back to false) so the OFF-transition an orphaned
+     *  bonus needs (`reconcileOrphanedCaptainBonus`, below) can un-wind the EXACT amount
+     *  that was applied, independent of whatever `with_captain`/`with_captain_stamina`
+     *  data the minion carries by the time the reconciliation runs — the captain that
+     *  granted the bonus, and potentially the data it was computed from, may be long gone
+     *  by then. ABSENT means "never computed" (same contract as `captain_bonus_active`).
+     */
+    captain_bonus_n?: number;
     statblock?: unknown; // To allow property fallback
 }
 
@@ -279,6 +290,23 @@ export function minionPoolMaxOf(creature: Creature): number {
     return creature.minion_stamina_pool_max ?? creature.max_stamina * creature.amount;
 }
 
+/** SC-195 fix round (HIGH-1) — the per-minion Stamina bonus actually FOLDED INTO this
+ *  squad's pool right now: the PERSISTED `captain_bonus_active` flag, never the live
+ *  `captainStaminaBonus` gate. Every READOUT (row/print numbers, the pool modal's
+ *  kill-ladder divisor) must call this one — only `initMinionPool` /
+ *  `applyCaptainBonusTransition` (deciding whether to CROSS) may consult the live gate.
+ *  The two disagree exactly in the states the no-backfill ruling deliberately permits: a
+ *  pre-upgrade squad with a captain bound (flag absent, pool un-folded) and a squad whose
+ *  bound captain is currently down (flag true, live gate 0) — see review report HIGH-1,
+ *  PROBEs A/B. Prefers the persisted per-minion N (`captain_bonus_n`) over a fresh
+ *  `withCaptainStaminaN` read so the readout stays correct even if the minion's own
+ *  `with_captain`/`with_captain_stamina` data changes after the bonus was applied;
+ *  falls back to the live parse only for a hand-authored flag with no persisted N. */
+export function foldedCaptainStaminaBonus(minion: Creature): number {
+    if (!minion.captain_bonus_active) return 0;
+    return minion.captain_bonus_n ?? withCaptainStaminaN(minion) ?? 0;
+}
+
 /** SC-195 — squad-creation-time pool init, the drop-in replacement for the pre-SC-195
  *  `setMinionPool(group, creature, creature.max_stamina * creature.amount)` at every one
  *  of its call sites (guarded identically — only when `minionPoolOf(...) == null`, i.e.
@@ -297,6 +325,7 @@ export function initMinionPool(group: EnemyGroup, creature: Creature): void {
     if (bonus > 0) {
         creature.minion_stamina_pool_max = max;
         creature.captain_bonus_active = true;
+        creature.captain_bonus_n = bonus;
     }
 }
 
@@ -327,6 +356,47 @@ export function applyCaptainBonusTransition(group: EnemyGroup, minion: Creature)
     minion.minion_stamina_pool_max = maxBefore + delta;
     setMinionPool(group, minion, Math.max(0, currentBefore + delta));
     minion.captain_bonus_active = nowActive;
+    minion.captain_bonus_n = nowActive ? n : undefined;
+    return true;
+}
+
+/** SC-195 fix round (MEDIUM-1, owner ruling) — the persisted bonus flag latches: nothing
+ *  else ever fires the OFF-transition for a captain that leaves a squad by any route other
+ *  than the promote/relieve controls or the captain-Stamina modal (both of which call
+ *  `applyCaptainBonusTransition` directly) — e.g. a GM hand-edits the block to delete the
+ *  captain's creature entry, or changes its `squad_role`/`captain_of`, then reloads. Call
+ *  once per squad at parse time (both parse paths' phase-3 pool pass), for EVERY squad,
+ *  not only newly-initialized ones.
+ *
+ *  Fires ONLY when `captain_bonus_active` is true AND the squad has NO bound captain at
+ *  all (`captainOfSquad` returns undefined) — a present-but-down captain is a different,
+ *  already-handled case (the live gate reads it as inactive, and the next real transition
+ *  — promote/relieve/heal — reconciles it via `applyCaptainBonusTransition`). This does
+ *  NOT contradict the no-backfill ruling: that ruling governs the ON direction only
+ *  ("never silently ADD a bonus on load"); "no captain bound" is deterministic from the
+ *  rules text ("While a minion squad has a captain") and this only ever REMOVES a
+ *  stranded bonus, never adds one.
+ *
+ *  Uses the PERSISTED per-minion N (`captain_bonus_n`), not a fresh `withCaptainStaminaN`
+ *  read, so the un-wind is exact even if the minion's own `with_captain`/
+ *  `with_captain_stamina` data has also changed since the bonus was applied (falls back to
+ *  the live parse only for a hand-authored `captain_bonus_active: true` with no persisted
+ *  N). Returns true iff the pool actually moved. */
+export function reconcileOrphanedCaptainBonus(group: EnemyGroup, minion: Creature): boolean {
+    if (!minion.captain_bonus_active) return false;
+    if (captainOfSquad(group, minion) != null) return false;
+
+    const n = minion.captain_bonus_n ?? withCaptainStaminaN(minion) ?? 0;
+    const alive = (minion.instances ?? []).filter((inst) => !inst.isDead).length;
+    const delta = n * alive;
+
+    const maxBefore = minionPoolMaxOf(minion);
+    const currentBefore = minionPoolOf(group, minion) ?? maxBefore;
+
+    minion.minion_stamina_pool_max = maxBefore - delta;
+    setMinionPool(group, minion, Math.max(0, currentBefore - delta));
+    minion.captain_bonus_active = false;
+    minion.captain_bonus_n = undefined;
     return true;
 }
 
@@ -530,7 +600,17 @@ export function resetEncounter(data: EncounterData) {
             // so clearing only the group field would leave every squad but the first at
             // its mid-fight value after a reset.
             group.creatures.forEach((creatureType) => {
-                if (creatureType.squad_role === "minion") creatureType.minion_stamina_pool = undefined;
+                if (creatureType.squad_role === "minion") {
+                    creatureType.minion_stamina_pool = undefined;
+                    // SC-195 fix round (HIGH-2) — these two persisted fields are runtime
+                    // state in exactly the same sense as the pool itself; leaving them
+                    // behind stranded a stale max (and, if the flag happened to survive
+                    // with a bonus-free pool, permanently no-op'd the next promote) after
+                    // "Reset Encounter State".
+                    creatureType.minion_stamina_pool_max = undefined;
+                    creatureType.captain_bonus_active = undefined;
+                    creatureType.captain_bonus_n = undefined;
+                }
             });
         }
         group.creatures.forEach((creatureType) => {

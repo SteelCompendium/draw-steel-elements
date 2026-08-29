@@ -32,7 +32,7 @@
 //      divergence on the first write-back of a ref-bearing block, accepted by Plan 06.)
 import type { ReferenceService, ResolvedRef } from '@/framework/seams/refs';
 import type { EncounterData } from './model';
-import { initMinionPool, minionPoolOf } from './model';
+import { initMinionPool, minionPoolOf, reconcileOrphanedCaptainBonus } from './model';
 
 /** The fields the legacy merge reads off a resolved statblock payload. */
 interface StatblockFields {
@@ -197,6 +197,11 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
 					// that phase 1's merge has run).
 					initMinionPool(group, creature);
 				}
+				// SC-195 fix round (MEDIUM-1) — same reconciliation as the sync parse split
+				// (model.ts), for every squad: un-wind a persisted bonus flag orphaned by
+				// the captain leaving the group through a non-badge route. No-op when the
+				// flag is false or a captain is still bound (down or not).
+				reconcileOrphanedCaptainBonus(group, creature);
 				// Squad-minion instances carry no per-instance stamina (legacy :256-264).
 			} else {
 				for (const instance of creature.instances ?? []) {

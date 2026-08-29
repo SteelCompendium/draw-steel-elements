@@ -2367,4 +2367,121 @@ malice:
 		const reparsed = parse(parseYaml(s1), s1);
 		expect(serialize(reparsed)).toBe(s1); // stable — parse -> serialize is a fixed point
 	});
+
+	// ---------------------------------------------------------------- fix round (review)
+
+	// A pre-upgrade saved squad: a bound, ALIVE captain and a parseable
+	// `with_captain_stamina`, but NO persisted flag/max yet (the no-backfill ruling —
+	// the pool stays un-folded until the next real transition). Before HIGH-1's fix the
+	// row readout's parenthetical read the LIVE gate (4) instead of the persisted flag
+	// (absent -> 0), showing "(13)" where it should show "(9)".
+	const SQUAD_PRE_UPGRADE_CAPTAINED = `heroes: []
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        squad_role: minion
+        with_captain_stamina: 4
+        minion_stamina_pool: 54
+      - name: "Hobgoblin Captain"
+        max_stamina: 30
+        amount: 1
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 30
+malice:
+  value: 0
+`;
+
+	// The mirror image: the flag IS true (a bonus was folded in) but the captain is
+	// CURRENTLY down — the live gate reads 0. Per the ruling, a down-but-still-bound
+	// captain keeps the bonus folded in until an explicit relieve/death transition
+	// withdraws it, so the readout must keep showing the folded value (13), not fall
+	// back to the base (9).
+	const SQUAD_CAPTAIN_BONUS_FLAG_TRUE_CAPTAIN_DOWN = `heroes: []
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        squad_role: minion
+        with_captain_stamina: 4
+        minion_stamina_pool: 78
+        minion_stamina_pool_max: 78
+        captain_bonus_active: true
+      - name: "Hobgoblin Captain"
+        max_stamina: 30
+        amount: 1
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 0
+malice:
+  value: 0
+`;
+
+	test('HIGH-1 regression: a pre-upgrade captained squad (no persisted flag) shows the BASE per-minion value, not the live gate', async () => {
+		const { root } = await renderInit(SQUAD_PRE_UPGRADE_CAPTAINED);
+		expect(poolText(root)).toBe('54/54 (9)'); // NOT 54/54 (13) — the live-gate regression
+	});
+
+	test('HIGH-1 regression: a bound-but-DOWN captain with the flag still true keeps the FOLDED per-minion value', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN_BONUS_FLAG_TRUE_CAPTAIN_DOWN);
+		expect(poolText(root)).toBe('78/78 (13)'); // NOT 78/78 (9) — the live-gate regression
+		expect(badgeWord(root)).toBe('Captain down'); // badge word is unaffected by this fix
+	});
+
+	// M-1 (owner ruling): a captain deleted entirely from the block (not merely down) —
+	// no OFF-transition existed before this fix for a captain leaving by a non-badge
+	// route, so the bonus was stranded and a later promote was a permanent no-op.
+	const SQUAD_ORPHANED_CAPTAIN_BONUS = `heroes: []
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        squad_role: minion
+        with_captain_stamina: 999
+        captain_bonus_n: 4
+        captain_bonus_active: true
+        minion_stamina_pool: 78
+        minion_stamina_pool_max: 78
+malice:
+  value: 0
+`;
+
+	test('M-1 regression: the captain creature deleted entirely -> a single un-wind at render, using the PERSISTED N', async () => {
+		const { root } = await renderInit(SQUAD_ORPHANED_CAPTAIN_BONUS);
+		// 78 - (4 x 6 alive) = 54, using the PERSISTED captain_bonus_n (4), never the
+		// deliberately-wrong live with_captain_stamina (999).
+		expect(poolText(root)).toBe('54/54 (9)');
+		expect(groupBonusAttr(root)).toBe('off');
+	});
+
+	test('M-1 regression: a flag absent (pre-upgrade blob) with no captain is untouched by the reconciliation path', async () => {
+		const src = SQUAD_ORPHANED_CAPTAIN_BONUS
+			.replace('captain_bonus_n: 4\n        captain_bonus_active: true\n        ', '')
+			.replace('with_captain_stamina: 999', 'with_captain_stamina: 4');
+		const { root } = await renderInit(src);
+		// No flag -> reconcileOrphanedCaptainBonus is a no-op; the persisted pool (78/78,
+		// authored as-is by this fixture) passes through completely untouched — only the
+		// parenthetical (driven by the now-absent flag) reads 0 bonus.
+		expect(poolText(root)).toBe('78/78 (9)');
+	});
+
+	test('M-1 regression: captain_bonus_n round-trips through YAML (serialize -> parse is a fixed point)', async () => {
+		const model = parse(parseYaml(SQUAD_CAPTAIN_BONUS), SQUAD_CAPTAIN_BONUS);
+		const s1 = serialize(model);
+		expect(s1).toContain('captain_bonus_n: 4');
+		const reparsed = parse(parseYaml(s1), s1);
+		expect(serialize(reparsed)).toBe(s1);
+	});
 });

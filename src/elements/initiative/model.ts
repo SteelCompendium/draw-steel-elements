@@ -48,6 +48,7 @@ import {
 	appendMaliceLogEntry,
 	initMinionPool,
 	minionPoolOf,
+	reconcileOrphanedCaptainBonus,
 	validateSquad,
 } from '@drawSteelAdmonition/EncounterData';
 
@@ -55,6 +56,7 @@ export {
 	applyCaptainBonusTransition,
 	captainOfSquad,
 	captainStaminaBonus,
+	foldedCaptainStaminaBonus,
 	initMinionPool,
 	isCaptainDown,
 	minionCreatures,
@@ -62,6 +64,7 @@ export {
 	minionPoolOf,
 	parseWithCaptainStamina,
 	promoteCaptain,
+	reconcileOrphanedCaptainBonus,
 	relieveCaptain,
 	setMinionPool,
 	squadOfCaptain,
@@ -229,6 +232,14 @@ export function parse(input: unknown, _raw: string): EncounterData {
 						);
 					});
 				}
+				// SC-195 fix round (MEDIUM-1) — for EVERY squad, not only a freshly
+				// initialized one: reconcile a persisted bonus flag that has been orphaned
+				// by the captain leaving the group through a non-badge route (e.g. a hand
+				// edit deleting the captain's creature entry). No-op when the flag is
+				// false or a captain is still bound (down or not). MUST run AFTER instance
+				// materialization above — the alive-count it needs doesn't exist yet on a
+				// fresh squad until that block runs.
+				reconcileOrphanedCaptainBonus(group, creature);
 			} else {
 				// Regular creatures and captains. A statblock-sourced max_stamina is unset
 				// here, so current_stamina may be materialized as undefined — resolveRefs

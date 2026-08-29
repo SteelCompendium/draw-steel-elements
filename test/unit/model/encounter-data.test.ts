@@ -10,6 +10,12 @@ import {
 	minionPoolMaxOf,
 	initMinionPool,
 	applyCaptainBonusTransition,
+	foldedCaptainStaminaBonus,
+	reconcileOrphanedCaptainBonus,
+	resetEncounter,
+	setMinionPool,
+	promoteCaptain,
+	relieveCaptain,
 } from '@drawSteelAdmonition/EncounterData';
 import type { Creature, EnemyGroup } from '@drawSteelAdmonition/EncounterData';
 import { DEFAULT_SETTINGS } from '@model/Settings';
@@ -300,6 +306,11 @@ describe('T-3 (SC-195): the "With Captain" Stamina bonus — pure helpers', () =
 			'+2 bonus to forced movement distance',
 			'+1 bonus to strikes',
 			'Strike damage +2', // the statblock fixture's own example shape
+			// SC-195 fix round (INFO / I-4): the shipped negative corpus had no case where
+			// the Stamina shape is EMBEDDED in a longer string — an unanchored `.test()`
+			// (a future unanchoring of WITH_CAPTAIN_STAMINA_RE) would have passed the suite
+			// with this gap unfilled.
+			'gains +2 bonus to Stamina and an edge',
 		])('%s -> undefined (silent no-op)', (raw) => {
 			expect(parseWithCaptainStamina(raw)).toBeUndefined();
 		});
@@ -519,6 +530,139 @@ describe('T-3 (SC-195): the "With Captain" Stamina bonus — pure helpers', () =
 			expect(applyCaptainBonusTransition(group, minion)).toBe(false);
 			expect(minionPoolOf(group, minion)).toBe(78);
 			expect(minionPoolMaxOf(minion)).toBe(78);
+		});
+	});
+
+	describe('foldedCaptainStaminaBonus — fix round HIGH-1 (persisted flag, never the live gate)', () => {
+		test('flag absent (pre-upgrade blob): 0, even with a bound ALIVE captain and a parseable N', () => {
+			// PROBE A shape: the no-backfill ruling means a pre-upgrade save loads with the
+			// flag absent even though the live gate would return N.
+			const { group, minion } = makeSquad({ withCaptainStamina: 4, captainAlive: true });
+			expect(minion.captain_bonus_active).toBeUndefined();
+			expect(captainStaminaBonus(group, minion)).toBe(4); // the live gate DOES say 4…
+			expect(foldedCaptainStaminaBonus(minion)).toBe(0); // …but the folded readout says 0
+		});
+
+		test('flag true + captain currently DOWN: keeps N (PROBE B — the live gate would say 0)', () => {
+			const { group, minion } = makeSquad({ withCaptainStamina: 4, captainAlive: false });
+			minion.captain_bonus_active = true;
+			minion.captain_bonus_n = 4;
+			expect(captainStaminaBonus(group, minion)).toBe(0); // live gate: captain is down
+			expect(foldedCaptainStaminaBonus(minion)).toBe(4); // folded: still active
+		});
+
+		test('flag true with no persisted captain_bonus_n (defensive fallback): parses the live with_captain data', () => {
+			const { minion } = makeSquad({ withCaptainStamina: 5 });
+			minion.captain_bonus_active = true; // no captain_bonus_n stamped
+			expect(foldedCaptainStaminaBonus(minion)).toBe(5);
+		});
+
+		test('flag false: 0 regardless of a bound, alive captain', () => {
+			const { group, minion } = makeSquad({ withCaptainStamina: 4, captainAlive: true });
+			minion.captain_bonus_active = false;
+			expect(captainStaminaBonus(group, minion)).toBe(4);
+			expect(foldedCaptainStaminaBonus(minion)).toBe(0);
+		});
+	});
+
+	describe('reconcileOrphanedCaptainBonus — fix round MEDIUM-1 (owner ruling: un-wind a stranded bonus)', () => {
+		test('flag true, captainOfSquad == null (captain deleted from the group): un-winds using the PERSISTED N, clears the flag', () => {
+			const { group, minion } = makeSquad({ withCaptainStamina: 999, noCaptain: true, perMinion: 9, amount: 6 });
+			// The persisted N (4) deliberately differs from the live with_captain_stamina
+			// (999) to prove the un-wind uses the PERSISTED value, not a fresh parse.
+			minion.captain_bonus_active = true;
+			minion.captain_bonus_n = 4;
+			minion.minion_stamina_pool_max = 78;
+			minion.minion_stamina_pool = 78;
+
+			const moved = reconcileOrphanedCaptainBonus(group, minion);
+			expect(moved).toBe(true);
+			expect(minionPoolOf(group, minion)).toBe(54); // 78 - (4 x 6 alive)
+			expect(minionPoolMaxOf(minion)).toBe(54);
+			expect(minion.captain_bonus_active).toBe(false);
+			expect(minion.captain_bonus_n).toBeUndefined();
+		});
+
+		test('flag true, a captain IS bound (down or not): no-op — this case self-heals at the next real transition', () => {
+			const { group, minion } = makeSquad({ withCaptainStamina: 4, captainAlive: false, perMinion: 9, amount: 6 });
+			minion.captain_bonus_active = true;
+			minion.captain_bonus_n = 4;
+			minion.minion_stamina_pool_max = 78;
+			minion.minion_stamina_pool = 78;
+			expect(reconcileOrphanedCaptainBonus(group, minion)).toBe(false);
+			expect(minionPoolOf(group, minion)).toBe(78);
+			expect(minion.captain_bonus_active).toBe(true);
+		});
+
+		test('flag absent (pre-upgrade blob, no captain): no-op, untouched by this path', () => {
+			const { group, minion } = makeSquad({ withCaptainStamina: 4, noCaptain: true });
+			expect(reconcileOrphanedCaptainBonus(group, minion)).toBe(false);
+			expect(minion.captain_bonus_active).toBeUndefined();
+		});
+
+		test('clamps current at 0 rather than going negative; max is never clamped', () => {
+			const { group, minion } = makeSquad({ withCaptainStamina: 4, noCaptain: true, perMinion: 9, amount: 6 });
+			minion.instances!.slice(0, 5).forEach((i) => (i.isDead = true));
+			minion.captain_bonus_active = true;
+			minion.captain_bonus_n = 4;
+			minion.minion_stamina_pool_max = 78;
+			minion.minion_stamina_pool = 1;
+
+			const moved = reconcileOrphanedCaptainBonus(group, minion);
+			expect(moved).toBe(true);
+			expect(minionPoolOf(group, minion)).toBe(0); // 1 - (4 x 1 alive) = -3, clamped
+			expect(minionPoolMaxOf(minion)).toBe(74);
+		});
+	});
+
+	describe('resetEncounter — fix round HIGH-2 (clears ALL SC-195-persisted fields, not just the pool)', () => {
+		test('review repro: captained 5x5 +2, damage to 21, relieve (15/29), reset -> fresh full pool; a later promote is NOT a no-op', () => {
+			const { group, minion, captain } = makeSquad({
+				withCaptainStamina: 2,
+				captainAlive: true,
+				perMinion: 5,
+				amount: 5,
+			});
+			initMinionPool(group, minion); // born captained: 35/35
+			expect(minionPoolOf(group, minion)).toBe(35);
+			expect(minionPoolMaxOf(minion)).toBe(35);
+
+			// Damage to 21 (2 of 5 minions dead).
+			minion.instances!.slice(0, 2).forEach((i) => (i.isDead = true));
+			setMinionPool(group, minion, 21);
+
+			// Relieve: bonus turns OFF, N x 3 alive withdrawn -> 15/29.
+			relieveCaptain(captain);
+			expect(applyCaptainBonusTransition(group, minion)).toBe(true);
+			expect(minionPoolOf(group, minion)).toBe(15);
+			expect(minionPoolMaxOf(minion)).toBe(29);
+
+			// "Reset Encounter State".
+			const data = { heroes: [], enemy_groups: [group], malice: { value: 0 } };
+			resetEncounter(data);
+			expect(minion.minion_stamina_pool).toBeUndefined();
+			expect(minion.minion_stamina_pool_max).toBeUndefined();
+			expect(minion.captain_bonus_active).toBeUndefined();
+			expect(minion.captain_bonus_n).toBeUndefined();
+			expect(minion.instances).toBeUndefined(); // resetEncounter drops instances too
+
+			// A real reload re-materializes fresh, all-alive instances before anything
+			// else runs (parse()'s own job) — reproduce that here since this test calls
+			// the pure helpers directly rather than the full parse().
+			minion.instances = Array.from({ length: minion.amount }, (_, i) => ({ id: i + 1, conditions: [] }));
+
+			// Re-init as a fresh squad (parse's own guard): captain is 'attached' now (no
+			// captain bound), so the pool is the plain, un-folded formula.
+			expect(minionPoolOf(group, minion) ?? undefined).toBeUndefined();
+			initMinionPool(group, minion);
+			expect(minionPoolOf(group, minion)).toBe(25); // 5 x 5, no bonus
+			expect(minionPoolMaxOf(minion)).toBe(25);
+
+			// The H-2 bug left a stale max/flag behind that made this permanently a no-op.
+			expect(promoteCaptain(group, captain, minion)).toBe(true);
+			expect(applyCaptainBonusTransition(group, minion)).toBe(true);
+			expect(minionPoolOf(group, minion)).toBe(35); // 25 + (2 x 5 alive)
+			expect(minionPoolMaxOf(minion)).toBe(35);
 		});
 	});
 });

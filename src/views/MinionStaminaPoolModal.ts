@@ -19,9 +19,11 @@ import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdm
 // SC-183 r3 / GH #67 — the pool is addressed per SQUAD now (a group may hold several).
 // Reading `group.minion_stamina_pool` directly would show squad 2 the squad-1 pool.
 // SC-195: `minionPoolMaxOf` is the C1 fix — the persisted, ORIGINAL-count-based max
-// (never the alive count this modal used to recompute); `captainStaminaBonus` is the
-// CURRENT per-minion Stamina step while captained, for the kill-ladder divisor below.
-import { captainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
+// (never the alive count this modal used to recompute); `foldedCaptainStaminaBonus`
+// (fix round, HIGH-1) is the PERSISTED-flag-driven per-minion Stamina step while
+// captained, for the kill-ladder divisor below — never the live `captainStaminaBonus`
+// gate, which can disagree with the persisted pool max (see that helper's doc comment).
+import { foldedCaptainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 import { DseModal, iconButton } from '@/framework/kit';
@@ -260,14 +262,17 @@ export class MinionStaminaPoolModal extends DseModal {
 	 *  CURRENT effective per-minion Stamina (`per + the active captain bonus`) — a
 	 *  captained squad drops a minion every `per + N` damage, not every `per`, matching
 	 *  the pool's own build rule (each minion's Stamina, captain bonus included,
-	 *  multiplied by the squad's count). */
+	 *  multiplied by the squad's count). Fix round (HIGH-1): the bonus folded into the
+	 *  divisor must be the PERSISTED flag (`foldedCaptainStaminaBonus`), never the live
+	 *  gate — a pre-upgrade captained squad (flag absent) or a bound-but-down captain
+	 *  (flag true, live gate 0) made the two disagree, corrupting the ladder. */
 	private poolNumbers() {
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
 		const poolMaxStamina = minionPoolMaxOf(this.creature);
 		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
-		const effectivePerMinion = minionMaxStamina + captainStaminaBonus(this.group, this.creature);
+		const effectivePerMinion = minionMaxStamina + foldedCaptainStaminaBonus(this.creature);
 		// How many minions should die for this much damage (legacy verbatim, divisor
 		// updated for SC-195).
 		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / effectivePerMinion);

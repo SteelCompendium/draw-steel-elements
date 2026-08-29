@@ -368,6 +368,7 @@ describe('SC-195: byte-compat — the new fields never appear on an ordinary squ
 		const out = serialize(parseLikePipeline(squad));
 		expect(out).not.toContain('minion_stamina_pool_max');
 		expect(out).not.toContain('captain_bonus_active');
+		expect(out).not.toContain('captain_bonus_n'); // fix round: the persisted-N field
 		expect(out).not.toContain('with_captain');
 		// Still byte-equal to the legacy oracle — SC-195 added nothing observable here.
 		expect(out).toBe(await legacyWriterBytes(squad));
@@ -394,10 +395,12 @@ describe('SC-195: byte-compat — the new fields never appear on an ordinary squ
 		expect(group.minion_stamina_pool).toBe(78); // (9 + 4) x 6
 		expect(minion.minion_stamina_pool_max).toBe(78);
 		expect(minion.captain_bonus_active).toBe(true);
+		expect(minion.captain_bonus_n).toBe(4); // fix round (M-1): the persisted-N field
 
 		const s1 = serialize(m1);
 		expect(s1).toContain('minion_stamina_pool_max: 78');
 		expect(s1).toContain('captain_bonus_active: true');
+		expect(s1).toContain('captain_bonus_n: 4');
 		const m2 = parseLikePipeline(s1);
 		expect(m2).toEqual(m1); // reload does NOT re-derive/double-apply the bonus
 		expect(serialize(m2)).toBe(s1); // stable second pass

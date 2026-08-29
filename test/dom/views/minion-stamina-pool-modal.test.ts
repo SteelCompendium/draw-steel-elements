@@ -399,3 +399,34 @@ describe('SC-195 / C1: the modal now uses the ORIGINAL squad size, never the ali
 		expect(info.textContent).toContain('will kill 1 minion(s)');
 	});
 });
+
+describe('SC-195 fix round (HIGH-1) — the kill-ladder divisor must read the PERSISTED flag, never the live gate', () => {
+	// PROBE A (review report): a pre-upgrade saved squad — a bound, ALIVE captain and a
+	// parseable `with_captain_stamina`, but no `captain_bonus_active` flag yet (the
+	// no-backfill ruling: the pool stays un-folded until the next real transition).
+	// Before the fix the divisor read the LIVE gate (4), reporting 1 kill for 8 damage —
+	// this regressed base behaviour, which correctly reported 2 (base per-minion is 4).
+	test('PROBE A: pre-upgrade blob (no flag) + a parseable N -> the divisor stays the BASE per-minion value', async () => {
+		const { content, minion } = await setup(); // squad.yaml: no with_captain_stamina, no flag
+		minion.with_captain_stamina = 4; // parseable N; captain (squad.yaml default) is alive
+		expect(minion.captain_bonus_active).toBeUndefined();
+		applyDamage(content, 8, 1); // 8 total damage: 2 base-Stamina (4 each) minions' worth
+		const info = content.querySelector('.dse-sedit__info') as HTMLElement;
+		expect(info.textContent).toContain('will kill 2 minion(s)'); // NOT 1 (the live-gate bug)
+	});
+
+	// PROBE B (review report): the mirror image — the flag is true (a bonus WAS folded
+	// in) but the captain is currently down, so the LIVE gate reads 0. The pool's actual
+	// per-minion value is still base + N (the ruling: a down captain keeps the bonus
+	// folded in until an explicit relieve/death transition withdraws it) — the divisor
+	// must keep dividing by 8, not fall back to 4.
+	test('PROBE B: flag=true + captain at 0 -> the divisor keeps the FOLDED per-minion value', async () => {
+		const { content, group, minion } = await setup({ poolMax: 40, pool: 40, captainBonusActive: true });
+		minion.with_captain_stamina = 4; // per-minion step is 4 + 4 = 8 while folded
+		const captain = group.creatures.find((c) => c.squad_role === 'captain')!;
+		captain.instances![0].current_stamina = 0; // captain down: LIVE gate now reads 0
+		applyDamage(content, 4, 1); // less than one minion's worth at the folded step (8)
+		const info = content.querySelector('.dse-sedit__info') as HTMLElement;
+		expect(info.textContent).toContain('will kill 0 minion(s)'); // NOT 1 (the live-gate bug)
+	});
+});
