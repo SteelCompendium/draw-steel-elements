@@ -361,23 +361,69 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 		expect(container.textContent).toContain('Shadowmeld');
 	});
 
-	test('fix round 3 (ruling 26b): a "**Renown:**" body line with no m.renown dash-fills the Career Benefits tile AND keeps the body line — duplication, never deletion', async () => {
-		const model = new Career({
-			name: 'X',
-			content: '**Renown:** +1',
-		});
-		const bands = careerLayout.steel!.bands(model, undefined);
-		const benefits = bands.find((b) => b.head === 'Career Benefits')!;
-		const container = document.createElement('div');
-		await benefits.render(container, async (md, el) => { el.setText(md); }, undefined as any);
-		const row = container.querySelector('.dse-tiles')!;
-		const renownIndex = tileLabels(row).indexOf('Renown');
-		expect(tileValues(row)[renownIndex]).toBe('—'); // no m.renown -> dash-filled
-		const bodyBand = bands[bands.length - 1];
-		const bodyContainer = document.createElement('div');
-		await bodyBand.render(bodyContainer, async (md, el) => { el.setText(md); }, undefined as any);
-		expect(bodyContainer.textContent).toContain('+1'); // the real value survives in the body
-	});
+	// Fix round 4 (owner ruling 28, r7 delta re-review LOW-1): the fix-round-3 gap test
+	// above only pinned Renown; mutations M4 (reintroduce the Wealth strip-unconditionally
+	// bug) and M5 (mispair the Languages gate onto `m.wealth`) both stayed GREEN because
+	// only "populated all six" and "dash-filled all six" were covered, never a gap for
+	// Languages/Wealth/Project Points individually. Parameterized over all four Career
+	// Benefits tile labels; note the tile FACE label for "Project Points" is "Project Pts"
+	// (`layouts.ts` tile row) while the BODY label (and `stripCareerBodyLabels`'s match
+	// target) is "Project Points" — same distinction the delta re-reviewer's gate table
+	// drew.
+	//
+	// Each case leaves ONLY the target label's own backing field absent while every OTHER
+	// backing field is populated — not just "all six absent" (which is exactly the shape
+	// the r7 dash-fill-all-six test already used, and under which a mispaired gate like M5
+	// is invisible: two absent fields are indistinguishable). With the other five fields
+	// live, a gate that got redirected to the WRONG field (M5's `m.language` -> `m.wealth`)
+	// now fires true where it must stay false, over-strips the target's body line, and the
+	// "line survives" assertion below catches it.
+	test.each([
+		{
+			label: 'Languages',
+			tileLabel: 'Languages',
+			value: 'One language',
+			fields: { skills: ['One skill'], renown: 1, wealth: '+1', perk: 'A perk', project_points: 21 },
+		},
+		{
+			label: 'Renown',
+			tileLabel: 'Renown',
+			value: '+1',
+			fields: { skills: ['One skill'], language: 'One language', wealth: '+1', perk: 'A perk', project_points: 21 },
+		},
+		{
+			label: 'Wealth',
+			tileLabel: 'Wealth',
+			value: '+1',
+			fields: { skills: ['One skill'], language: 'One language', renown: 1, perk: 'A perk', project_points: 21 },
+		},
+		{
+			label: 'Project Points',
+			tileLabel: 'Project Pts',
+			value: '21',
+			fields: { skills: ['One skill'], language: 'One language', renown: 1, wealth: '+1', perk: 'A perk' },
+		},
+	])(
+		'fix round 4 (ruling 28): a "**$label:**" body line with no matching model field dash-fills the Career Benefits tile ($tileLabel) AND keeps the body line — every OTHER backing field is populated so a mispaired/unconditional gate (reviewer mutations M4/M5) is caught',
+		async ({ label, tileLabel, value, fields }) => {
+			const model = new Career({
+				name: 'X',
+				content: `**${label}:** ${value}`,
+				...fields,
+			});
+			const bands = careerLayout.steel!.bands(model, undefined);
+			const benefits = bands.find((b) => b.head === 'Career Benefits')!;
+			const container = document.createElement('div');
+			await benefits.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+			const row = container.querySelector('.dse-tiles')!;
+			const tileIndex = tileLabels(row).indexOf(tileLabel);
+			expect(tileValues(row)[tileIndex]).toBe('—'); // the omitted field -> dash-filled
+			const bodyBand = bands[bands.length - 1];
+			const bodyContainer = document.createElement('div');
+			await bodyBand.render(bodyContainer, async (md, el) => { el.setText(md); }, undefined as any);
+			expect(bodyContainer.textContent).toContain(value); // duplication, never deletion
+		},
+	);
 
 	test('fix round 3 (ruling 26c): populated harness-fixture shape (career/example.yaml) still strips Skills/Languages/Renown/Wealth/Perk exactly as today, and a model with ALL SIX matching fields strips all six', async () => {
 		const card = await renderInline();
