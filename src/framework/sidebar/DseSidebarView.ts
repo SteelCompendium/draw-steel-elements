@@ -30,7 +30,6 @@ export interface SidebarPanelState {
 	 *  `anchorId` is null: it IS the block's identity for a strict-body element. Persisted
 	 *  with the rest of the panel state, so a pinned `ds-scc` block survives a restart. */
 	body?: string;
-	collapsed?: boolean;
 }
 
 export interface DseSidebarState {
@@ -66,6 +65,9 @@ export interface DseSidebarServices {
 export class DseSidebarView extends ItemView {
 	private panels: SidebarPanel[] = [];
 	private panelsEl!: HTMLElement;
+	/** SC-184 (item 9) — the "no pinned blocks" explainer, shown iff `panels.length === 0`.
+	 *  Lives as a sibling of the panel divs inside panelsEl; toggled by updateEmptyState. */
+	private emptyStateEl: HTMLElement | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -89,6 +91,7 @@ export class DseSidebarView extends ItemView {
 
 	protected async onOpen(): Promise<void> {
 		this.panelsEl = this.contentEl.createDiv({ cls: 'dse-sidebar' });
+		this.updateEmptyState();
 	}
 
 	protected async onClose(): Promise<void> {
@@ -112,9 +115,16 @@ export class DseSidebarView extends ItemView {
 		for (const panel of this.panels.slice()) this.removeChild(panel);
 		this.panels = [];
 		this.ensurePanelsEl().empty();
+		// .empty() above just removed it from the DOM (it was a child of panelsEl) —
+		// drop the stale reference so updateEmptyState doesn't think it's still live.
+		this.emptyStateEl = null;
 
 		const panels = (state as Partial<DseSidebarState> | null)?.panels ?? [];
-		for (const panelState of panels) this.mountPanel(panelState);
+		for (const panelState of panels) this.mountPanel(normalizePanelState(panelState));
+		// Covers the zero-panels-restored case: mountPanel is never called, so nothing
+		// else would show the empty state for a workspace.json that legitimately has no
+		// pinned panels.
+		this.updateEmptyState();
 	}
 
 	/** Constructs + mounts a new panel (fire-and-forget on the async mount — callers that
@@ -132,8 +142,7 @@ export class DseSidebarView extends ItemView {
 	 * repeatedly, but the duplicate is the sidebar's to prevent, not the caller's.
 	 *
 	 * Identity mirrors the two addressing modes exactly (`SidebarPanelState`): an anchored
-	 * block is its `anchorId`, a `strictBody` block is its `body`. Two panels differing
-	 * only in `collapsed` are the same panel.
+	 * block is its `anchorId`, a `strictBody` block is its `body`.
 	 */
 	addPanel(state: SidebarPanelState): SidebarPanel {
 		const existing = this.panels.find((p) => samePanelTarget(p.state, state));
@@ -145,6 +154,12 @@ export class DseSidebarView extends ItemView {
 			return existing;
 		}
 		const panel = this.mountPanel(state);
+		// SC-184 (item 4) — addPanel mutates panels[] (the thing getState() serializes)
+		// without this the workspace has no reason to believe its layout changed; only
+		// the FIRST pin reliably persisted, via the setViewState call that created the
+		// leaf in the first place (registration.ts's openSidebarView). Public API
+		// (obsidian.d.ts Workspace.requestSaveLayout).
+		this.services.app.workspace.requestSaveLayout();
 		// SC-153 FIX ROUND 1 — a panel whose block no longer exists is not a second target,
 		// it is debris. Identity dedupe above only catches a RE-pin of a block that is still
 		// there; delete the block and pin its replacement and the ids legitimately differ, so
@@ -197,19 +212,54 @@ export class DseSidebarView extends ItemView {
 		}
 	}
 
-	/** Tears the panel + its host/view down (Component cascade — see onClose). */
+	/** Tears the panel + its host/view down (Component cascade — see onClose). Now the
+	 *  one real caller-facing removal path (SC-184 item 1's chrome "Unpin" and item 7's
+	 *  degrade-card dismiss button both land here via SidebarPanel's onRemoveRequested
+	 *  callback), where it used to have none. */
 	removePanel(panel: SidebarPanel): void {
 		const index = this.panels.indexOf(panel);
 		if (index >= 0) this.panels.splice(index, 1);
 		this.removeChild(panel);
+		// SC-184 (item 4) — symmetric with addPanel's own requestSaveLayout: a removal is
+		// exactly as much a layout change as an addition.
+		this.services.app.workspace.requestSaveLayout();
+		this.updateEmptyState();
 	}
 
 	private mountPanel(state: SidebarPanelState): SidebarPanel {
-		const panel = new SidebarPanel(this.services, state);
+		// SC-184 (items 1/7) — `panel` is referenced inside its own removal callback, so it
+		// has to exist (as a binding) before the callback can close over it; the callback
+		// itself is never invoked synchronously during construction, only later from a user
+		// action, so the definite-assignment below is safe.
+		let panel!: SidebarPanel;
+		panel = new SidebarPanel(this.services, state, () => this.removePanel(panel));
 		this.panels.push(panel);
 		this.addChild(panel);
 		void panel.mount(this.ensurePanelsEl());
+		this.updateEmptyState();
 		return panel;
+	}
+
+	/** SC-184 (item 9) — the ribbon icon used to open straight into a bare, unlabeled
+	 *  `<div class="dse-sidebar">`; nothing on screen said what the leaf was for or how to
+	 *  put anything in it. Idempotent either direction, so every panels[]-mutating call
+	 *  site (mountPanel, removePanel, setState) can just call it unconditionally. */
+	private updateEmptyState(): void {
+		if (this.panels.length > 0) {
+			this.emptyStateEl?.remove();
+			this.emptyStateEl = null;
+			return;
+		}
+		if (this.emptyStateEl) return;
+		const el = this.ensurePanelsEl().createDiv({ cls: 'dse-sidebar__empty' });
+		el.createEl('div', { cls: 'dse-sidebar__empty-title', text: 'No pinned blocks' });
+		el.createEl('div', {
+			cls: 'dse-sidebar__empty-message',
+			text:
+				'Open a note in Reading view, hover a Draw Steel block, open its ⋯ menu, and ' +
+				'choose "Pin to sidebar". Pinned blocks keep running here while you read other notes.',
+		});
+		this.emptyStateEl = el;
 	}
 
 	/** onOpen always runs before any caller can reach `addPanel`/`setState` through a real
@@ -224,13 +274,34 @@ export class DseSidebarView extends ItemView {
 /**
  * SC-153 — do these two panel states address the SAME block? Deliberately mirrors the
  * addressing split in `SidebarPanelState`/`SidebarBlockHost` rather than comparing whole
- * objects: `collapsed` is view state, not identity, and `body` is only meaningful for a
- * strict-body (never-anchored) block. A null-vs-null anchor with differing bodies is two
- * different blocks; a shared anchorId is one block regardless of body drift, which is the
- * whole point of stamping an anchor.
+ * objects: `body` is only meaningful for a strict-body (never-anchored) block. A
+ * null-vs-null anchor with differing bodies is two different blocks; a shared anchorId is
+ * one block regardless of body drift, which is the whole point of stamping an anchor.
  */
 function samePanelTarget(a: SidebarPanelState, b: SidebarPanelState): boolean {
 	if (a.filePath !== b.filePath || a.alias !== b.alias) return false;
 	if (a.anchorId !== null || b.anchorId !== null) return a.anchorId === b.anchorId;
 	return (a.body ?? '') === (b.body ?? '');
+}
+
+/**
+ * SC-184 (item 10) — `SidebarPanelState` used to carry a `collapsed?: boolean` field that
+ * nothing in `src/` ever read or wrote (a stub for the never-built dashboard chrome,
+ * superseded by SC-169's real per-element collapse). Deleting the TYPE stops any NEW write
+ * from re-persisting it, but a workspace.json written before this change still has the key
+ * on every restored panel's state object — `setState` reads that JSON with a type assertion,
+ * not real validation, so the stale key would otherwise ride along forever (through
+ * `getState()`'s `{ ...panel.state }` spread) even though nothing looks at it again.
+ * Rebuilding a clean object per restored panel — naming exactly the fields the current type
+ * declares — makes the field actually disappear after one save, rather than merely stop
+ * mattering. Never throws on a legacy object missing a field entirely: every read here is
+ * already optional-safe (`?? null` / a spread-free literal).
+ */
+function normalizePanelState(raw: SidebarPanelState): SidebarPanelState {
+	return {
+		filePath: raw.filePath,
+		alias: raw.alias,
+		anchorId: raw.anchorId,
+		...(raw.body !== undefined ? { body: raw.body } : {}),
+	};
 }

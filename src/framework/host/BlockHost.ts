@@ -65,4 +65,12 @@ export interface BlockHost {
 	replaceSource(newSource: string): Promise<boolean>;
 	/** Best-effort stable key for session state (F1 §4.3). Never used for document state. */
 	blockKey(): string;
+	/**
+	 * SC-184 — optional: lets the standard element chrome menu (framework/pipeline.ts)
+	 * offer an "Unpin from sidebar" item without knowing anything about
+	 * DseSidebarView/SidebarPanel. Only `SidebarBlockHost` implements it (a request to
+	 * remove THIS panel); every other host omits it, so the pipeline's gate is simply
+	 * "does this host support removal" rather than a mode check duplicated in two files.
+	 */
+	requestRemoval?(): void;
 }

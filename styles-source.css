@@ -12451,6 +12451,96 @@ button.dse-pr__row:hover {
 }
 
 /* ================================================================== */
+/*   Sidebar panel chrome: header + empty state (SC-184)               */
+/* ================================================================== */
+/*
+   `.dse-sidebar__panel` has existed since D8 Task 2 (SidebarPanel.ts) but carried ZERO
+   rules until now — panels rendered as an unlabeled, unseparated stack of raw elements,
+   so two `ds-party` panels from two different campaign notes were indistinguishable
+   (SC-184 investigation, defect #3) and the leaf opened into a bare, unexplained
+   `<div class="dse-sidebar">` (defect #9).
+
+   NEITHER of the two blocks below is reachable by the browser harness (`npm run shots`) —
+   `.dse-sidebar`/`.dse-sidebar__panel` only ever exist inside a REAL Obsidian ItemView leaf
+   (obsidian-camera.mjs), never in a browser-harness capture — so nothing here can move a
+   frozen `*--steel-print.png` byte, and neither needs the
+   `[data-dse-theme='steel']:not([data-dse-print="on"])` Steel-scoping rule the element
+   sheet uses throughout: this is plugin UI chrome, not themed element content, exactly the
+   same reasoning `.dse-error-card` (above, "Framework error card") already applies —
+   Obsidian theme vars only, no hard-coded colors, unscoped by theme or print (an ItemView
+   leaf is never printed/exported).
+*/
+
+/* -- Panel header: element label + source note name, and visual separation between
+      stacked panels. `.dse-sidebar__panel-body` (the pipeline's own mount point,
+      SidebarPanel.mount) is UNSTYLED here on purpose — the element it hosts stamps its
+      own `data-dse-theme='steel'` card, and this sheet's job stops at the frame around
+      it. */
+.dse-sidebar__panel {
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: var(--size-4-2);
+	margin-bottom: var(--size-4-2);
+}
+
+.dse-sidebar__panel:last-child {
+	border-bottom: none;
+	margin-bottom: 0;
+}
+
+.dse-sidebar__panel-header {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	font-size: var(--dse-fs-label);
+	color: var(--text-muted);
+}
+
+.dse-sidebar__panel-label {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	white-space: nowrap;
+}
+
+.dse-sidebar__panel-note {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	/* An Obsidian internal-link look (not the browser's default blue/underline) — this is
+	   plugin chrome navigating within the vault, same family as any other in-app link. */
+	color: var(--link-color, var(--interactive-accent));
+	text-decoration: none;
+}
+
+.dse-sidebar__panel-note:hover {
+	text-decoration: underline;
+}
+
+/* A degraded panel (unknown element / note not found / backing block gone) still shows
+   the header above its degrade card — see `data-dse-sidebar-unavailable`'s doc in
+   SidebarPanel.ts. No extra rule needed: `.dse-error-card` already carries its own
+   visual treatment; the header just sits above it like it does above a live element. */
+
+/* -- Empty state: shown by DseSidebarView.updateEmptyState whenever panels.length === 0,
+      including the leaf's very first open — the ribbon icon used to lead here with
+      nothing on screen at all. */
+.dse-sidebar__empty {
+	padding: var(--size-4-4) var(--size-4-3);
+	color: var(--text-muted);
+}
+
+.dse-sidebar__empty-title {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	margin-bottom: var(--size-4-2);
+}
+
+.dse-sidebar__empty-message {
+	font-size: var(--dse-fs-label);
+	line-height: 1.5;
+}
+
+/* ================================================================== */
 /* SETTINGS: the live preview panel (SC-131, rebuilt by SC-187)        */
 /* ================================================================== */
 /* Scoped entirely to `.dse-settings-page` / `.dse-settings-preview*`, classes we put on

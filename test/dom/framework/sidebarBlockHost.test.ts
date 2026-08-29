@@ -29,6 +29,9 @@ function makeHost(
 	file: TFile,
 	onExternalChange: (body: string) => void = () => {},
 	onAnchorLost: () => void = () => {},
+	// SC-184 added the removal-request slot (`onRemoveRequested`) after `onAnchorLost`;
+	// every existing caller here doesn't care about it, so it defaults to a no-op.
+	onRemoveRequested: () => void = () => {},
 ) {
 	// Structural stub: SidebarBlockHost only ever touches plugin.app.vault.{on,cachedRead,
 	// process} (registerEvent is called against `owner`, not `plugin` — see that file's
@@ -50,6 +53,7 @@ function makeHost(
 		owner,
 		onExternalChange,
 		onAnchorLost,
+		onRemoveRequested,
 	);
 	return { host, owner, containerEl };
 }
@@ -131,6 +135,18 @@ describe('D8 Task 2: SidebarBlockHost (spec §1.4)', () => {
 		const { file, app } = setup();
 		const { host } = makeHost(app, file);
 		expect(host.blockKey()).toBe(`Note.md::${ALIAS}::${ANCHOR_ID}`);
+	});
+
+	// SC-184 — BlockHost's optional removal seam: SidebarBlockHost's implementation is a
+	// bare delegate to whatever SidebarPanel wired at construction.
+	test('requestRemoval delegates to onRemoveRequested exactly once per call', async () => {
+		const { file, app } = setup();
+		const onRemoveRequested = jest.fn();
+		const { host } = makeHost(app, file, undefined, undefined, onRemoveRequested);
+		host.requestRemoval();
+		expect(onRemoveRequested).toHaveBeenCalledTimes(1);
+		host.requestRemoval();
+		expect(onRemoveRequested).toHaveBeenCalledTimes(2);
 	});
 
 	test('addChild proxies to the owner Component (not the plugin)', async () => {

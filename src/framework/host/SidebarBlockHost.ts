@@ -120,6 +120,11 @@ export class SidebarBlockHost implements BlockHost {
 		private readonly owner: Component,
 		private readonly onExternalChange: (body: string) => void,
 		private readonly onAnchorLost: () => void,
+		/** SC-184 — wired by SidebarPanel to `DseSidebarView.removePanel(this panel)`.
+		 *  Backs the optional `BlockHost.requestRemoval` seam so the chrome menu's
+		 *  "Unpin from sidebar" item (pipeline.ts) can remove exactly this panel without
+		 *  the pipeline knowing DseSidebarView exists. */
+		private readonly onRemoveRequested: () => void,
 	) {
 		// Deliberately does NOT register the vault listener here — see registerModifyListener,
 		// called from refresh() instead (review finding #5, MEDIUM: a listener live before the
@@ -280,6 +285,13 @@ export class SidebarBlockHost implements BlockHost {
 
 	blockKey(): string {
 		return `${this.backingFile.path}::${this.alias}::${this.anchorId}`;
+	}
+
+	/** SC-184 — BlockHost's optional removal seam; delegates straight to whatever
+	 *  SidebarPanel wired in (there is exactly one panel per host, so no identity to
+	 *  disambiguate here). */
+	requestRemoval(): void {
+		this.onRemoveRequested();
 	}
 
 	private async handleExternalModify(): Promise<void> {

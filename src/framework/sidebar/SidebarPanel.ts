@@ -7,6 +7,7 @@
 // views unchanged (mode-agnostic)" guardrail.
 import { Component, TFile } from 'obsidian';
 import type { App, Plugin } from 'obsidian';
+import { iconButton } from '../kit/iconButton';
 import type { ElementPipeline } from '../pipeline';
 import { prepareModel } from '../pipeline';
 import type { ElementRegistry } from '../registry';
@@ -35,10 +36,20 @@ export interface SidebarPanelDeps {
 export class SidebarPanel extends Component {
 	private host: SidebarBlockHost | null = null;
 	private panelEl: HTMLElement | null = null;
+	/** SC-184 — the mounted element's own render root, i.e. the SidebarBlockHost's
+	 *  containerEl. Separate from `panelEl` now that the panel also carries a header
+	 *  (renderHeader) outside the pipeline's own DOM. */
+	private bodyEl: HTMLElement | null = null;
 
 	constructor(
 		private readonly deps: SidebarPanelDeps,
 		readonly state: SidebarPanelState,
+		/** SC-184 — wired by DseSidebarView.mountPanel to `() =>
+		 *  this.removePanel(panel)`. Backs both the chrome menu's "Unpin from sidebar"
+		 *  item (via SidebarBlockHost.requestRemoval) and the degrade card's "Remove
+		 *  panel" dismiss button (renderUnavailable) — one removal path, two entry
+		 *  points. */
+		private readonly onRemoveRequested: () => void,
 	) {
 		super();
 	}
@@ -87,6 +98,8 @@ export class SidebarPanel extends Component {
 
 	async mount(container: HTMLElement): Promise<void> {
 		this.panelEl = container.createDiv({ cls: 'dse-sidebar__panel' });
+		this.renderHeader();
+		this.bodyEl = this.panelEl.createDiv({ cls: 'dse-sidebar__panel-body' });
 
 		const def = this.deps.registry.get(this.state.alias);
 		if (!def) {
@@ -106,10 +119,11 @@ export class SidebarPanel extends Component {
 			this.state.alias,
 			this.state.anchorId,
 			this.state.body ?? null,
-			this.panelEl,
+			this.bodyEl,
 			this,
 			(body) => void this.handleExternalChange(body),
 			() => this.handleAnchorLost(),
+			this.onRemoveRequested,
 		);
 		this.host = host;
 		await host.refresh();
@@ -121,6 +135,41 @@ export class SidebarPanel extends Component {
 		}
 
 		await this.deps.pipeline.run(def, body, host);
+	}
+
+	/**
+	 * SC-184 (item 3) — element label + source note name, always rendered regardless of
+	 * whether the block below mounts successfully or degrades: this is what lets a stack
+	 * of panels (including a "note not found" card) be told apart at all. The note name is
+	 * a real link (`workspace.openLinkText`) rather than plain text — cheap, and it turns
+	 * the header into a way BACK to the source note, not just a label.
+	 */
+	private renderHeader(): void {
+		if (!this.panelEl) return;
+		const def = this.deps.registry.get(this.state.alias);
+		const header = this.panelEl.createDiv({ cls: 'dse-sidebar__panel-header' });
+		header.createSpan({ cls: 'dse-sidebar__panel-label', text: def?.name ?? this.state.alias });
+		const noteLink = header.createEl('a', {
+			cls: 'dse-sidebar__panel-note',
+			text: this.noteBasename(),
+			href: '#',
+		});
+		noteLink.setAttribute('title', this.state.filePath);
+		noteLink.setAttribute('aria-label', `Open ${this.state.filePath}`);
+		this.registerDomEvent(noteLink, 'click', (event) => {
+			event.preventDefault();
+			void this.deps.app.workspace.openLinkText(this.state.filePath, '', false);
+		});
+	}
+
+	/** The backing note's display name: the real TFile's basename when it still exists,
+	 *  else a best-effort derivation from the persisted path (a "note not found" panel
+	 *  should still show SOMETHING recognisable in its header). */
+	private noteBasename(): string {
+		const file = this.deps.app.vault.getAbstractFileByPath(this.state.filePath);
+		if (file instanceof TFile) return file.basename;
+		const last = this.state.filePath.split('/').pop() ?? this.state.filePath;
+		return last.replace(/\.md$/i, '');
 	}
 
 	onunload(): void {
@@ -149,7 +198,7 @@ export class SidebarPanel extends Component {
 	 * correct outcome, not something to swallow silently here.
 	 */
 	private async handleExternalChange(body: string): Promise<void> {
-		if (!this.host || !this.panelEl) return;
+		if (!this.host || !this.bodyEl) return;
 		const def = this.deps.registry.get(this.state.alias);
 		if (!def) return;
 
@@ -174,7 +223,7 @@ export class SidebarPanel extends Component {
 
 		const previous = this.host.lastMountedChild;
 		if (previous) this.removeChild(previous);
-		this.panelEl.empty();
+		this.bodyEl.empty();
 		await this.deps.pipeline.run(def, body, this.host);
 	}
 
@@ -188,18 +237,38 @@ export class SidebarPanel extends Component {
 	 * permanently-broken save.
 	 */
 	private handleAnchorLost(): void {
-		if (!this.host || !this.panelEl) return;
+		if (!this.host || !this.bodyEl) return;
 		const previous = this.host.lastMountedChild;
 		if (previous) this.removeChild(previous);
 		this.renderUnavailable('Backing block not found — re-link this panel from the note.');
 	}
 
+	/**
+	 * SC-184 (item 7) — every degrade card (unknown element, note not found, backing
+	 * block not found) now offers a "Remove panel" button, reusing the exact same
+	 * removal path item 1's chrome menu "Unpin" uses (`onRemoveRequested`, threaded from
+	 * DseSidebarView.mountPanel). Before this a degraded panel was permanent debris: it
+	 * has no chrome menu of its own (nothing mounted through the pipeline to hang one
+	 * off), so the header's plain label was the only thing on it a user could act on.
+	 */
 	private renderUnavailable(message: string): void {
-		if (!this.panelEl) return;
-		this.panelEl.empty();
+		if (!this.bodyEl || !this.panelEl) return;
+		this.bodyEl.empty();
+		// On the OUTER panel (not bodyEl): the header stays visible above the degrade card,
+		// and this is the attribute existing tests/CSS hooks already key off of.
 		this.panelEl.setAttribute('data-dse-sidebar-unavailable', 'true');
-		const card = this.panelEl.createDiv({ cls: 'dse-error-card' });
+		const card = this.bodyEl.createDiv({ cls: 'dse-error-card' });
 		card.createEl('div', { cls: 'dse-error-card-title', text: 'Draw Steel: panel unavailable' });
 		card.createEl('div', { cls: 'dse-error-card-message', text: message });
+		iconButton(
+			card,
+			{
+				icon: 'x',
+				label: 'Remove panel',
+				variant: 'ghost',
+				onClick: () => this.onRemoveRequested(),
+			},
+			this,
+		);
 	}
 }

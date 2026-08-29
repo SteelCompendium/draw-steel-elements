@@ -199,16 +199,6 @@ describe('D8 Task 2: DseSidebarView (spec §1.3)', () => {
 		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
 		// The caller gets the live panel back, not a discarded duplicate.
 		expect(second).toBe(first);
-		// `collapsed` is view state, not identity — a differing value is still the same block.
-		const third = view.addPanel({
-			filePath: 'Note.md',
-			alias: 'ds-counter',
-			anchorId: ANCHOR_A,
-			collapsed: true,
-		});
-		await flushAsync();
-		expect(third).toBe(first);
-		expect(view.contentEl.querySelectorAll('.dse-sidebar__panel')).toHaveLength(1);
 	});
 
 	test('two genuinely different blocks still get their own panels', async () => {

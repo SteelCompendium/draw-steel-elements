@@ -334,6 +334,16 @@ export class FakeWorkspace {
 		}
 	}
 
+	/** SC-184 — public Obsidian API (`Workspace.requestSaveLayout`, obsidian.d.ts) that
+	 *  DseSidebarView now calls on addPanel/removePanel so every pin (not just the first)
+	 *  survives a restart. Real semantics are debounced I/O this mock never performs;
+	 *  tracked as a call count so tests can assert it fired without a real layout round
+	 *  trip. */
+	requestSaveLayoutCalls = 0;
+	requestSaveLayout(): void {
+		this.requestSaveLayoutCalls++;
+	}
+
 	/** Internal: idempotent add — also re-tracks a leaf whose view was re-opened after detach. */
 	_track(leaf: WorkspaceLeaf): void {
 		if (!this._leaves.includes(leaf)) this._leaves.push(leaf);
