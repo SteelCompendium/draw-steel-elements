@@ -272,6 +272,36 @@ export function titleCase(s: string): string {
 const LABELED_LINE_RE = /^\*\*(.+?):\*\*|^\*\*(.+?)\*\*:/;
 
 /**
+ * SC-120 Batch B fix round 2 (owner ruling 22(ii), r7 review HIGH-1): a GLOBAL sibling of
+ * `LABELED_LINE_RE` — same two alternatives, same mandatory colon — used to find EVERY
+ * bold-labeled segment within a single physical line, not just the leading one. Real
+ * corpus shape (`treasure/1st-echelon/consumable/portable-cloud.md`): a line can pack a
+ * label the composition owns together with an unrelated second bold-labeled segment on the
+ * SAME line (`**[Item Prerequisite](…):** An ounce of undead flesh. **Thunderhead
+ * Cloud:** …` — a whole treasure-variant paragraph). Whole-line stripping deleted the
+ * second segment outright; segment-aware stripping removes only the matched label's own
+ * span and preserves everything else on the line, verbatim, by construction — no value
+ * comparison needed (ruling 22(ii)'s explicit simplification).
+ */
+const LABELED_SEGMENT_RE = /\*\*(.+?):\*\*|\*\*(.+?)\*\*:/g;
+
+/**
+ * SC-120 Batch B fix round 2: exposes the single-line "does this RAW line begin with a
+ * labeled bold run, and if so which label (normalized)" test that `stripLabeledLines`
+ * itself uses, for a consumer that needs to LOCATE a labeled line without stripping the
+ * whole body (treasure's Effect-rider absorption, `layouts.ts`, owner ruling 23(a)).
+ * Normalizes via `normalizeForDuplicateCheck` (LOW-2 — link/emphasis-stripped, whitespace-
+ * collapsed, lowercased), the same normalization `stripLabeledLines`'s own `wanted` set now
+ * uses, so a caller comparing against a plain lowercased label string can no longer drift
+ * from what `stripLabeledLines` itself considers a match.
+ */
+export function matchLabeledLine(line: string): string | undefined {
+	const m = LABELED_LINE_RE.exec(line);
+	const captured = m?.[1] ?? m?.[2];
+	return captured !== undefined ? normalizeForDuplicateCheck(captured) : undefined;
+}
+
+/**
  * SC-120 Batch B (design §5.2): generalizes the label-matching core of Batch A's
  * `stripCareerBodyLabels` (`layouts.ts`) — a career-only helper — into a shared function
  * every Steel composition using body policy (B) can call directly: career, treasure,
@@ -279,6 +309,12 @@ const LABELED_LINE_RE = /^\*\*(.+?):\*\*|^\*\*(.+?)\*\*:/;
  * (plus its own career-only lead-in-sentence pass), rather than keeping two copies of the
  * bold-label-matching loop that could drift (Batch B brief, explicitly naming this
  * consolidation).
+ *
+ * **Callers are responsible for BAND-GATING `labels`** (owner ruling 22(i), r7 review
+ * HIGH-2): pass only the labels whose replacing band/value actually rendered THIS call —
+ * never an unconditional "every label this family might ever own" list. A label whose
+ * band did not render is never stripped, so its body line survives (duplication, never
+ * deletion — ruling 22(iii)) instead of vanishing with no structural replacement.
  *
  * Matches ONLY a whole line that (i) begins at column 0 with `**` (an indented
  * continuation line under a list item never matches — Batch A round-5 review LOW-2: the
@@ -288,12 +324,38 @@ const LABELED_LINE_RE = /^\*\*(.+?):\*\*|^\*\*(.+?)\*\*:/;
  * (`**[Item Prerequisite](…):** …`, `**[Renown](…):** +1`), so the match is on the bold
  * run's LINK TEXT, not the raw line — with a MANDATORY colon (Batch A round-5 review
  * LOW-1: a bold-led PROSE sentence with no colon at all, e.g. "**Wealth** is a measure
- * of…", is never mistaken for a labeled line). Strips that ONE line plus a single
- * immediately-following blank line — never a following paragraph, so a table or a rider
- * paragraph (treasure's "Additionally, …" after `**Effect:**`) always survives.
+ * of…", is never mistaken for a labeled line). `labels` itself is now run through
+ * `normalizeForDuplicateCheck` too (fix round 2, LOW-2), not a bare `toLowerCase()` — a
+ * label carrying a markdown link/extra whitespace (treasure's data-derived per-tier
+ * labels, `${key} Level`, or a multi-link label like "Project Roll Characteristic") now
+ * compares on the SAME normalization the captured text goes through, so the two sides can
+ * never silently drift apart.
+ *
+ * **Segment-aware, not whole-line (fix round 2, ruling 22(ii)):** once a line's LEADING
+ * label is wanted, the line is split into every bold-labeled segment it carries (via
+ * `LABELED_SEGMENT_RE`) and ONLY the segments whose own label is wanted are dropped —
+ * every other segment on the same physical line (a second, unrelated bold-labeled
+ * paragraph sharing the line) survives verbatim, concatenated back together. A line with
+ * exactly one segment behaves exactly as before (the whole line drops when wanted, is kept
+ * whole otherwise). Swallows a single immediately-following blank line only when the ENTIRE
+ * line was consumed (every segment dropped) — never a following paragraph, so a table or a
+ * rider paragraph (treasure's "Additionally, …" after `**Effect:**`) always survives.
+ *
+ * **First occurrence only (fix round 2, extending ruling 22(iii)'s "duplication over
+ * deletion" to a REPEATED label, not just a packed line):** each wanted label is dropped at
+ * most ONCE across the whole document — the occurrence a caller's structural band actually
+ * rendered is always the first one in reading order (real corpus data never repeats a label
+ * before its "canonical" occurrence). A repeat of the SAME label further down — real corpus
+ * shape, `portable-cloud.md` carries three `**[Item Prerequisite](…):**` lines for three
+ * distinct treasure variants — is a DIFFERENT value with nothing structural covering it, so
+ * it is left in the body untouched (whole line, or whole segment on a packed line) rather
+ * than silently deleted for merely sharing a label with the one the band already rendered.
+ * Still no value comparison (ruling 22(ii)'s stated simplification survives) — this tracks
+ * OCCURRENCE COUNT per label, never the label's text content.
  */
 export function stripLabeledLines(md: string, labels: string[]): string {
-	const wanted = new Set(labels.map((l) => l.toLowerCase()));
+	const wanted = new Set(labels.map((l) => normalizeForDuplicateCheck(l)));
+	const consumed = new Set<string>();
 	const lines = md.split('\n');
 	const kept: string[] = [];
 	let skipBlankAfter = false;
@@ -302,13 +364,35 @@ export function stripLabeledLines(md: string, labels: string[]): string {
 			skipBlankAfter = false;
 			if (line.trim() === '') continue; // swallow ONE blank line right after a stripped line
 		}
-		const m = LABELED_LINE_RE.exec(line);
-		const captured = m?.[1] ?? m?.[2];
-		if (captured !== undefined && wanted.has(normalizeForDuplicateCheck(captured))) {
-			skipBlankAfter = true;
+		const leadingCaptured = matchLabeledLine(line);
+		if (leadingCaptured === undefined || !wanted.has(leadingCaptured)) {
+			kept.push(line);
 			continue;
 		}
-		kept.push(line);
+		// The line's leading label is wanted — split into every bold-labeled segment on
+		// this physical line and keep only the ones whose OWN label is not wanted, OR
+		// already consumed by an earlier occurrence (ruling 22(ii)/(iii)). `matchAll`
+		// clones the (global, stateless-per-call) regex internally, so reusing
+		// `LABELED_SEGMENT_RE` across lines/calls is safe.
+		const segments = [...line.matchAll(LABELED_SEGMENT_RE)];
+		const survivors: string[] = [];
+		for (let i = 0; i < segments.length; i++) {
+			const captured = segments[i][1] ?? segments[i][2];
+			const start = segments[i].index;
+			const end = i + 1 < segments.length ? segments[i + 1].index : line.length;
+			const normalizedCaptured = captured !== undefined ? normalizeForDuplicateCheck(captured) : undefined;
+			if (normalizedCaptured !== undefined && wanted.has(normalizedCaptured) && !consumed.has(normalizedCaptured)) {
+				consumed.add(normalizedCaptured); // drop this segment -- its label's FIRST occurrence
+				continue;
+			}
+			survivors.push(line.slice(start, end));
+		}
+		const remainder = survivors.join('').trim();
+		if (remainder) {
+			kept.push(remainder);
+		} else {
+			skipBlankAfter = true;
+		}
 	}
 	return kept
 		.join('\n')

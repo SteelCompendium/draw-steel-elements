@@ -33,6 +33,7 @@ import {
 	titleCase,
 	plainText,
 	stripLabeledLines,
+	matchLabeledLine,
 } from '@/elements/shared/CardLayout';
 import type { RefSource } from '@/elements/shared/withReference';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
@@ -158,14 +159,22 @@ function resolvedBodyMd(bodyFromModel: string | undefined, source: RefSource | u
  * the site does. Case-sensitive exact-prefix match (not the loose link-text match
  * `stripLabeledLines` uses) — culture's label is never markdown-linked in real data, so
  * the site's own simpler `bodyLabeledLine` (not its `…Loose` sibling) is the right port.
+ *
+ * Fix round 2 (r7 review LOW-1): matches at column 0 against the RAW line, never a trimmed
+ * one — the SAME indentation contract `stripLabeledLines`/`matchLabeledLine` enforce.
+ * Trimming before the prefix test (the pre-fix-round shape) let an INDENTED culture label
+ * (e.g. `    **Skill Options:** …` nested under a list item) populate this band from the
+ * indented line while `stripLabeledLines` correctly left that same line untouched in the
+ * body (its own column-0 requirement) — a real double-render the two helpers could disagree
+ * into. Corpus-safe either way today (all 13 real cultures carry the label at column 0);
+ * this closes the class of bug rather than relying on that staying true.
  */
 export function bodyLabeledLine(md: string | undefined, label: string): string | undefined {
 	if (!md) return undefined;
 	const prefix = `**${label}:**`;
 	for (const raw of md.split('\n')) {
-		const t = raw.trim();
-		if (t.startsWith(prefix)) {
-			const rest = t.slice(prefix.length).trim();
+		if (raw.startsWith(prefix)) {
+			const rest = raw.slice(prefix.length).trim();
 			return rest || undefined;
 		}
 	}
@@ -374,6 +383,44 @@ export const conditionLayout: CardLayout<Condition> = {
 	},
 };
 
+/**
+ * SC-120 Batch B fix round 2 (owner ruling 23(a), r7 review MED-1(a)) — treasure-only.
+ * Finds the body's own labeled line for `label` (matched the same way `matchLabeledLine`
+ * matches any labeled line: column 0, mandatory colon, link-text-aware) and removes it plus
+ * a single following blank line, THEN additionally captures every immediately-following
+ * line — up to (but not including) the next labeled line, a markdown heading, or the end of
+ * the body — as the "rider": the "Additionally, ..." paragraph(s) that continue the labeled
+ * sentence in real corpus prose (`treasure/example.yaml`'s "cold immunity" effect). The
+ * rider is removed from the returned `body` too, so the caller can render it exactly once,
+ * inside the OWNING band, immediately beside the sentence it continues, instead of stranded
+ * below every other band in the trailing body (the coherence bug the sanction shot showed).
+ *
+ * Returns `rider: undefined` when the labeled line has nothing following it to absorb (the
+ * ordinary case for a short flat value) — `body` is still returned with the line (+ its one
+ * blank) removed, matching plain `stripLabeledLines`'s single-line behavior. Returns `body`
+ * UNCHANGED, `rider: undefined`, when `label`'s line isn't present in `md` at all.
+ */
+function extractLabeledLineAndRider(md: string, label: string): { rider: string | undefined; body: string } {
+	const lines = md.split('\n');
+	const wanted = normalizeForDuplicateCheck(label);
+	const labelLineIdx = lines.findIndex((line) => matchLabeledLine(line) === wanted);
+	if (labelLineIdx === -1) return { rider: undefined, body: md };
+
+	let riderStart = labelLineIdx + 1;
+	if (lines[riderStart]?.trim() === '') riderStart++;
+
+	let riderEnd = riderStart;
+	while (riderEnd < lines.length && matchLabeledLine(lines[riderEnd]) === undefined && !/^#{1,6}\s/.test(lines[riderEnd])) {
+		riderEnd++;
+	}
+	const rider = lines.slice(riderStart, riderEnd).join('\n').trim() || undefined;
+	const body = [...lines.slice(0, labelLineIdx), ...lines.slice(riderEnd)]
+		.join('\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+	return { rider, body };
+}
+
 export const treasureLayout: CardLayout<Treasure> = {
 	title: (m) => m.name,
 	subtitle: (m) =>
@@ -465,8 +512,8 @@ export const treasureLayout: CardLayout<Treasure> = {
 			// Deliberately NOT the site's `.sc-card__flavor--clamp` (design §3.3: the
 			// clamp exists only to align a grid of tiles, which a full-width card has no
 			// need of).
-			const bodyForDedup = resolvedBodyMd(m.content, source);
-			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const bodyMd = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyMd && bodyMd.trim() ? normalizeForDuplicateCheck(bodyMd) : undefined;
 			const flavor = m.flavor;
 			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
 			if (flavor && !flavorDuplicatesBody) {
@@ -495,9 +542,8 @@ export const treasureLayout: CardLayout<Treasure> = {
 				});
 			}
 
-			// Prerequisite / Source / Effect -- plugin-only bands the site's tile has no
-			// room for (`lineBlock`/plain text on the tile is Prerequisite/Source only;
-			// Effect has NO site-tile counterpart at all, design §3.3).
+			// Prerequisite / Source -- plugin-only bands the site's tile has no room for
+			// (`lineBlock`/plain text on the tile is Prerequisite/Source only).
 			const prereq = m.item_prerequisite;
 			if (prereq) {
 				bands.push({
@@ -512,11 +558,27 @@ export const treasureLayout: CardLayout<Treasure> = {
 					render: (container, renderMarkdown) => renderMarkdown(projectSource, container.createDiv({ cls: 'dse-card__body' })),
 				});
 			}
+
+			// Effect -- plugin-only band, no site-tile counterpart at all (design §3.3).
+			// Fix round 2, owner ruling 23(a) (r7 review MED-1(a)): when the Effect band
+			// renders, ABSORB the body's own immediately-following rider paragraph(s)
+			// (e.g. "Additionally, when you are targeted..." in `treasure/example.yaml`)
+			// into the band's OWN rendered content, rather than leaving them stranded in
+			// the trailing body -- separated from the sentence they continue by the
+			// flavor/other bands (the coherence bug the sanction shot showed). If the
+			// Effect band does NOT render (field absent), the "**Effect:**" line and its
+			// rider stay in the body untouched (ruling 23(a)'s explicit fallback) -- see
+			// `bodyForStrip` below, which is only ever the rider-stripped body when
+			// `effect` is present.
 			const effect = m.effect;
-			if (effect) {
+			let bodyForStrip = bodyMd;
+			if (effect && bodyMd) {
+				const { rider, body } = extractLabeledLineAndRider(bodyMd, 'Effect');
+				bodyForStrip = body;
 				bands.push({
 					head: 'Effect',
-					render: (container, renderMarkdown) => renderMarkdown(effect, container.createDiv({ cls: 'dse-card__body' })),
+					render: (container, renderMarkdown) =>
+						renderMarkdown([effect, rider].filter(Boolean).join('\n\n'), container.createDiv({ cls: 'dse-card__body' })),
 				});
 			}
 
@@ -524,11 +586,16 @@ export const treasureLayout: CardLayout<Treasure> = {
 			// §1.3), sorted by leading integer (not lexically: "9th" < "1st" lexically
 			// but must render AFTER it). Head = the map key + " Level" (site has no
 			// counterpart at all -- design §3.3 [DIVERGENCE -- plugin richer]).
+			// `presentLevelKeys` collects only the keys that actually got a band pushed
+			// (fix round 2, ruling 22(i): the body-strip label list below must mirror
+			// EXACTLY which tiers rendered, not every key the model happens to declare).
 			const levelEffects = m.level_effects ?? {};
 			const levelKeys = Object.keys(levelEffects).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+			const presentLevelKeys: string[] = [];
 			for (const key of levelKeys) {
 				const value = levelEffects[key];
 				if (!value) continue;
+				presentLevelKeys.push(key);
 				bands.push({
 					head: `${key} Level`,
 					render: (container, renderMarkdown) => renderMarkdown(value, container.createDiv({ cls: 'dse-card__body' })),
@@ -541,25 +608,29 @@ export const treasureLayout: CardLayout<Treasure> = {
 			// (`**[Item Prerequisite](…):**`, `**[Project Roll](…) [Characteristic](…):**`
 			// -- the latter spans TWO adjacent links whose stripped plain text joins with
 			// a single space into "Project Roll Characteristic"), so `stripLabeledLines`
-			// matches on the LINK TEXT (§5.2), not the raw line. The per-tier labels
-			// ("1st Level"/"5th Level"/"9th Level") are derived from the SAME
-			// `level_effects` keys the band loop above renders, so a tier this treasure
-			// doesn't carry is never (harmlessly) added to the strip list. Everything
-			// after `**Effect:**`'s own paragraph (the "Additionally, …" rider) survives --
-			// `stripLabeledLines` only ever removes the ONE matching line plus a single
-			// following blank line, never a following paragraph.
-			const bodyMd = resolvedBodyMd(m.content, source);
-			if (bodyMd && bodyMd.trim()) {
+			// matches on the LINK TEXT (§5.2), not the raw line.
+			//
+			// Fix round 2 (owner ruling 22(i), r7 review HIGH-2): `labels` is now
+			// BAND-GATED -- each label is included ONLY when the value it would strip
+			// actually rendered somewhere above (a chip, a tile, a band). A field that is
+			// present in the body's raw prose but absent from the model (the plugin's own
+			// `treasure/example.yaml`/md-dse fixtures carry exactly this gap for
+			// item_prerequisite/project_source -- ruling 21) is never stripped with no
+			// structural replacement -- the line survives in the body instead (ruling
+			// 22(iii): duplication over deletion). 'Effect' is deliberately NOT in this
+			// list -- `extractLabeledLineAndRider` above already removed it (plus its
+			// rider) from `bodyForStrip` when the Effect band rendered; when it didn't,
+			// the line was never touched, matching the same band-gating contract.
+			if (bodyForStrip && bodyForStrip.trim()) {
 				const labels = [
-					'Keywords',
-					'Item Prerequisite',
-					'Project Source',
-					'Project Roll Characteristic',
-					'Project Goal',
-					'Effect',
-					...levelKeys.map((k) => `${k} Level`),
+					...(keywords.length ? ['Keywords'] : []),
+					...(prereq ? ['Item Prerequisite'] : []),
+					...(projectSource ? ['Project Source'] : []),
+					...(rollChar ? ['Project Roll Characteristic'] : []),
+					...(goal ? ['Project Goal'] : []),
+					...presentLevelKeys.map((k) => `${k} Level`),
 				];
-				const stripped = stripLabeledLines(bodyMd, labels);
+				const stripped = stripLabeledLines(bodyForStrip, labels);
 				if (stripped.trim()) {
 					bands.push({
 						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
@@ -706,8 +777,12 @@ export const cultureLayout: CardLayout<Culture> = {
 			}
 
 			// Body — policy (B): strip `**Skill Options:**`, the one label this composition
-			// now owns.
-			if (bodyMd && bodyMd.trim()) {
+			// owns. Fix round 2 (owner ruling 22(i)): band-gated on `skillOptionsText` — in
+			// practice self-consistent already (the band is SOURCED from this same body
+			// line via `bodyLabeledLine` whenever the structured fields are absent), but
+			// gating explicitly closes the theoretical gap where a structured field wins
+			// the band while a DIFFERENT "**Skill Options:**" line sits in the body.
+			if (bodyMd && bodyMd.trim() && skillOptionsText) {
 				const stripped = stripLabeledLines(bodyMd, ['Skill Options']);
 				if (stripped.trim()) {
 					bands.push({
@@ -1078,12 +1153,25 @@ export const titleLayout: CardLayout<Title> = {
 
 			// Body — policy (B): strip `**Echelon:**` (injected by `title_page.go:27`, the
 			// site's leaf-page emitter — real corpus files carry it as body prose) plus
-			// `**Prerequisite:**`/`**Effect:**`, the two labels the bands above now own.
+			// `**Prerequisite:**`/`**Effect:**`, the labels the bands/eyebrow above now own.
 			// Whatever follows Effect's own paragraph (a title's bullet-list benefits, e.g.
-			// Marshal) is a separate paragraph and survives untouched.
+			// Marshal) is a separate paragraph and survives untouched — title does NOT get
+			// treasure's rider-absorption treatment (owner ruling 23(a) scoped that to
+			// treasure only).
+			//
+			// Fix round 2 (owner ruling 22(i), r7 review HIGH-2): band-gated -- 'Echelon' is
+			// stripped only when the eyebrow actually shows it (`m.echelon`, the surface
+			// this label's value moved to, design §3.5); 'Prerequisite'/'Effect' only when
+			// their own band rendered. A field present in body prose but absent from the
+			// model is never stripped with no structural replacement.
 			const bodyMd = resolvedBodyMd(m.content, source);
 			if (bodyMd && bodyMd.trim()) {
-				const stripped = stripLabeledLines(bodyMd, ['Echelon', 'Prerequisite', 'Effect']);
+				const labels = [
+					...(m.echelon ? ['Echelon'] : []),
+					...(prereq ? ['Prerequisite'] : []),
+					...(effect ? ['Effect'] : []),
+				];
+				const stripped = stripLabeledLines(bodyMd, labels);
 				if (stripped.trim()) {
 					bands.push({
 						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
@@ -1214,11 +1302,13 @@ export const complicationLayout: CardLayout<Complication> = {
 				});
 			}
 
-			// Body — policy (B): strip `**Benefit:**`/`**Drawback:**`, the two labels the
-			// bands above now own.
+			// Body — policy (B): strip `**Benefit:**`/`**Drawback:**`, the labels the bands
+			// above now own. Fix round 2 (owner ruling 22(i), r7 review HIGH-2): band-gated
+			// -- each label is stripped only when its OWN band rendered.
 			const bodyMd = resolvedBodyMd(m.content, source);
 			if (bodyMd && bodyMd.trim()) {
-				const stripped = stripLabeledLines(bodyMd, ['Benefit', 'Drawback']);
+				const labels = [...(benefit ? ['Benefit'] : []), ...(drawback ? ['Drawback'] : [])];
+				const stripped = stripLabeledLines(bodyMd, labels);
 				if (stripped.trim()) {
 					bands.push({
 						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),

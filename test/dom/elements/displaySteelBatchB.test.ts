@@ -148,20 +148,23 @@ describe('SC-120 Batch B: ds-treasure Steel composition', () => {
 		]);
 	});
 
-	test('Effect band renders m.effect; body (policy B) strips the labeled lines but keeps the "Additionally, ..." rider AND the flavor paragraph (which never had its own bold label)', async () => {
+	test('Effect band renders m.effect PLUS the absorbed "Additionally, ..." rider (owner ruling 23(a)); body (policy B) strips the labeled lines and no longer carries the rider, but keeps the flavor paragraph (which never had its own bold label)', async () => {
 		const card = await renderInline();
 		const bands = Array.from(card.querySelectorAll(':scope > .dse-card__band'));
 		const effect = bands.find((b) => b.querySelector('.dse-card__band-head')?.textContent === 'Effect')!;
 		expect(effect.textContent).toContain('cold immunity equal to your level');
+		// Fix round 2 (ruling 23(a)): the rider paragraph now lives INSIDE the Effect band,
+		// immediately beside the sentence it continues, not stranded in the trailing body.
+		expect(effect.textContent).toContain('Additionally, when you are targeted');
 
 		const body = lastBodyDiv(card);
 		expect(body).not.toBeNull();
 		expect(body.textContent).toContain('Anjali sigil');
-		expect(body.textContent).toContain('Additionally, when you are targeted');
-		// Gone: the raw labeled lines the bands above now own.
+		// Gone: the raw labeled lines the bands above now own, AND the rider (moved above).
 		expect(body.textContent).not.toContain('**Keywords:**');
 		expect(body.textContent).not.toContain('**Project Goal:**');
 		expect(body.textContent).not.toContain('[Project Roll]');
+		expect(body.textContent).not.toContain('Additionally, when you are targeted');
 		// The Effect sentence appears via its OWN band, not a second time via body.
 		expect(body.textContent).not.toContain('cold immunity equal to your level');
 	});
@@ -221,6 +224,90 @@ describe('SC-120 Batch B: ds-treasure Steel composition', () => {
 			expect(heads).toContain('Prerequisite');
 			expect(heads).not.toContain('Source');
 			expect(heads).not.toContain('Effect');
+		});
+
+		// r7 review HIGH-2, fix round 2 (owner ruling 22(i)): the plugin's own
+		// `treasure/example.yaml`/md-dse fixtures carry EXACTLY this gap (ruling 21) --
+		// `**Item Prerequisite:**`/`**Project Source:**` lines in the body with no matching
+		// model field. Before the fix these were stripped with NOTHING structural covering
+		// them (an information regression vs. the base branch). After: neither band
+		// renders (correctly), and the raw lines survive in the body untouched --
+		// duplication/preservation, never silent deletion.
+		test('HIGH-2 regression: a labeled body line whose model field is ABSENT is never stripped, even though no band renders it', async () => {
+			const content = [
+				'*Flavor text.*',
+				'',
+				'**[Item Prerequisite](scc.v1:...):** A pint of blue ichor, soul chalk',
+				'',
+				'**[Project Source](scc.v1:...):** Licensing agreements in Anjali',
+			].join('\n');
+			const model = new Treasure({ name: 'X', flavor: 'Flavor text.', content });
+			const bands = treasureLayout.steel!.bands(model, undefined);
+			expect(bands.map((b) => b.head)).not.toContain('Prerequisite');
+			expect(bands.map((b) => b.head)).not.toContain('Source');
+			const bodyText = await renderBand(bands[bands.length - 1]);
+			expect(bodyText).toContain('A pint of blue ichor');
+			expect(bodyText).toContain('Licensing agreements in Anjali');
+		});
+
+		// r7 review HIGH-1, fix round 2 (owner ruling 22(ii)): the real corpus body
+		// (`v2/docs/Browse/treasure/1st-echelon/consumable/portable-cloud.md`, verbatim)
+		// packs the Item Prerequisite label the composition owns onto the SAME physical
+		// line as an unrelated treasure-variant paragraph ("Thunderhead Cloud"). Proven at
+		// the FULL composition level (bands + body-strip together), not just the shared
+		// helper (`cardLayoutHelpers.test.ts` covers the helper in isolation).
+		test('portable-cloud.md real corpus shape survives end-to-end: the Thunderhead Cloud variant (its packed segment) is never deleted', async () => {
+			const content = [
+				'*This thin glass sphere holds a tiny roiling cloud.*',
+				'',
+				'**Keywords:** Magic',
+				'',
+				'**[Item Prerequisite](../../../rule/downtime/item-prerequisite.md):** A cup of rainwater from a sacred fey grove, plus an optional prerequisite (see below)',
+				'',
+				'**[Project Source](../../../rule/downtime/project-source.md):** Texts or lore in Caelian',
+				'',
+				'**[Project Roll](../../../rule/downtime/project-roll.md) [Characteristic](../../../rule/character/characteristic.md):** [Reason](../../../rule/character/reason.md) or [Intuition](../../../rule/character/intuition.md)',
+				'',
+				'**Project Goal:** 30 or 45 (see below)',
+				'',
+				'**Effect:** As a maneuver, you throw this delicate glass sphere up to 5 squares, breaking it and creating a 4 cube of fog.',
+				'',
+				"Enterprising mages within various thieves' guilds have developed variations of the Portable Cloud. Each variation has a secondary item prerequisite and a project goal of 45.",
+				'',
+				'**Noxious Cloud:** Filled with a green or putrid yellow haze, this sphere spreads a choking, foul-smelling mist when broken.',
+				'',
+				'**[Item Prerequisite](../../../rule/downtime/item-prerequisite.md):** An ounce of undead flesh. **Thunderhead Cloud:** Small lightning bolts arc around the black cloud in this sphere, which creates a 3 cube of cloud and lightning when broken.',
+				'',
+				'**[Item Prerequisite](../../../rule/downtime/item-prerequisite.md):** A spool of copper wire.',
+			].join('\n');
+			const model = new Treasure({
+				name: 'Portable Cloud',
+				flavor: 'This thin glass sphere holds a tiny roiling cloud.',
+				keywords: ['Magic'],
+				item_prerequisite: 'A cup of rainwater from a sacred fey grove, plus an optional prerequisite (see below)',
+				project_source: 'Texts or lore in Caelian',
+				project_roll_characteristic:
+					'[Reason](../../../rule/character/reason.md) or [Intuition](../../../rule/character/intuition.md)',
+				project_goal: '30 or 45 (see below)',
+				effect: 'As a maneuver, you throw this delicate glass sphere up to 5 squares, breaking it and creating a 4 cube of fog.',
+				content,
+			});
+			const bands = treasureLayout.steel!.bands(model, undefined);
+			const effect = bands.find((b) => b.head === 'Effect')!;
+			// Owner ruling 23(a): the rider paragraph is absorbed into the Effect band.
+			const effectText = await renderBand(effect);
+			expect(effectText).toContain('Enterprising mages');
+
+			const bodyText = await renderBand(bands[bands.length - 1]);
+			// The model's own (first) Item Prerequisite occurrence is gone (owned by the
+			// Prerequisite band).
+			expect(bodyText).not.toContain('A cup of rainwater');
+			expect(bodyText).not.toContain('Enterprising mages'); // moved into the Effect band
+			// Every other real variant paragraph survives, including the packed segment.
+			expect(bodyText).toContain('Noxious Cloud');
+			expect(bodyText).toContain('Thunderhead Cloud');
+			expect(bodyText).toContain('An ounce of undead flesh');
+			expect(bodyText).toContain('A spool of copper wire');
 		});
 
 		test('leveled-effects bands are sorted by LEADING INTEGER, not declaration/lexical order ("9th" declared first must still render LAST)', () => {
@@ -381,6 +468,29 @@ describe('SC-120 Batch B: ds-title Steel composition', () => {
 			expect(heads).not.toContain('Effect');
 		});
 
+		// r7 review HIGH-2, fix round 2 (owner ruling 22(i)): 'Echelon'/'Prerequisite'/
+		// 'Effect' body lines whose model field is ABSENT are never stripped -- nothing
+		// renders them, so deleting them would be a pure information loss.
+		test('HIGH-2 regression: Echelon/Prerequisite/Effect body lines survive when their own model field is absent', async () => {
+			const content = [
+				'*Flavor.*',
+				'',
+				'**Echelon:** 2nd',
+				'',
+				'**Prerequisite:** You must have done a thing.',
+				'',
+				'**Effect:** Something happens.',
+			].join('\n');
+			const model = new Title({ name: 'X', flavor: 'Flavor.', content });
+			const bands = titleLayout.steel!.bands(model, undefined);
+			expect(bands.map((b) => b.head)).not.toContain('Prerequisite');
+			expect(bands.map((b) => b.head)).not.toContain('Effect');
+			const bodyText = await renderBand(bands[bands.length - 1]);
+			expect(bodyText).toContain('2nd');
+			expect(bodyText).toContain('You must have done a thing');
+			expect(bodyText).toContain('Something happens');
+		});
+
 		// Verified against the REAL corpus body (v2/docs/Browse/title/marshal.md, verbatim):
 		// Echelon/Prerequisite/Effect strip, the bullet-list benefits (a separate paragraph
 		// after Effect) survive.
@@ -471,6 +581,21 @@ describe('SC-120 Batch B: ds-complication Steel composition', () => {
 			const heads = benefitOnly.map((b) => b.head);
 			expect(heads).toContain('Benefit');
 			expect(heads).not.toContain('Drawback');
+		});
+
+		// r7 review HIGH-2, fix round 2 (owner ruling 22(i)): 'Benefit'/'Drawback' body
+		// lines whose model field is ABSENT are never stripped -- nothing renders them.
+		test('HIGH-2 regression: Benefit/Drawback body lines survive when their own model field is absent', async () => {
+			const content = ['*Flavor.*', '', '**Benefit:** A benefit text.', '', '**Drawback:** A drawback text.'].join(
+				'\n',
+			);
+			const model = new Complication({ name: 'X', flavor: 'Flavor.', content });
+			const bands = complicationLayout.steel!.bands(model, undefined);
+			expect(bands.map((b) => b.head)).not.toContain('Benefit');
+			expect(bands.map((b) => b.head)).not.toContain('Drawback');
+			const bodyText = await renderBand(bands[bands.length - 1]);
+			expect(bodyText).toContain('A benefit text');
+			expect(bodyText).toContain('A drawback text');
 		});
 
 		// Verified against the REAL corpus body (v2/docs/Browse/complication/wodewalker.md,

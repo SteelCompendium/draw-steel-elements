@@ -127,6 +127,68 @@ describe('SC-120 Batch B: stripLabeledLines (CardLayout.ts, design §5.2)', () =
 		expect(stripLabeledLines(md, ['Effect', 'Benefit'])).toBe(md);
 	});
 
+	describe('SC-120 Batch B fix round 2 (owner rulings 22-24)', () => {
+		test('HIGH-2: a label whose band did not render (band-gating is the CALLER\'s job — an unwanted label is never stripped) survives in the body untouched, even though the label text matches a family label the composition owns elsewhere', () => {
+			const md = '**Item Prerequisite:** A pint of blue ichor, soul chalk\n\n**Project Source:** Licensing agreements in Anjali';
+			// Caller passes an EMPTY gated list (as if neither field's band rendered) --
+			// `stripLabeledLines` itself has no opinion on which labels are "the family's",
+			// it only strips what it's told to.
+			expect(stripLabeledLines(md, [])).toBe(md);
+		});
+
+		test('HIGH-1: segment-aware — a packed line carrying a wanted label AND an unrelated second bold-labeled segment strips only the wanted segment, preserving the second segment verbatim', () => {
+			const md =
+				'**[Item Prerequisite](scc.v1:...):** An ounce of undead flesh. **Thunderhead Cloud:** Small lightning bolts arc around the black cloud in this sphere.';
+			expect(stripLabeledLines(md, ['Item Prerequisite'])).toBe(
+				'**Thunderhead Cloud:** Small lightning bolts arc around the black cloud in this sphere.',
+			);
+		});
+
+		test("real corpus regression (r7 review HIGH-1): treasure/1st-echelon/consumable/portable-cloud.md's packed line — the Thunderhead Cloud variant (name + full rules paragraph) survives; the model's OWN Item Prerequisite value (the first occurrence) still strips", () => {
+			const md = [
+				'**[Item Prerequisite](../../../rule/downtime/item-prerequisite.md):** A cup of rainwater from a sacred fey grove, plus an optional prerequisite (see below)',
+				'',
+				'Enterprising mages within various thieves\' guilds have developed variations of the Portable Cloud.',
+				'',
+				'**Noxious Cloud:** Filled with a green or putrid yellow haze, this sphere spreads a choking, foul-smelling mist when broken.',
+				'',
+				'**[Item Prerequisite](../../../rule/downtime/item-prerequisite.md):** An ounce of undead flesh. **Thunderhead Cloud:** Small lightning bolts arc around the black cloud in this sphere, which creates a 3 cube of cloud and lightning when broken.',
+				'',
+				'**[Item Prerequisite](../../../rule/downtime/item-prerequisite.md):** A spool of copper wire.',
+			].join('\n');
+			const stripped = stripLabeledLines(md, ['Item Prerequisite']);
+			// The FIRST occurrence (the model's own value, duplicated by the Prerequisite
+			// band elsewhere) is gone.
+			expect(stripped).not.toContain('A cup of rainwater');
+			// Every label-shaped line NOT in the wanted set survives untouched.
+			expect(stripped).toContain('**Noxious Cloud:** Filled with a green or putrid yellow haze');
+			// The packed line's Thunderhead Cloud segment survives (segment-aware, HIGH-1).
+			expect(stripped).toContain('**Thunderhead Cloud:** Small lightning bolts arc around the black cloud');
+			// First-occurrence-only (ruling 22(iii) extended): the REPEAT "Item
+			// Prerequisite" occurrences (the packed line's own segment, and the standalone
+			// third line) are NOT deleted merely for sharing a label with the first —
+			// they are different values with nothing structural covering them.
+			expect(stripped).toContain('An ounce of undead flesh');
+			expect(stripped).toContain('A spool of copper wire');
+		});
+
+		test('LOW-2: the label set is normalized the SAME way the captured text is (extra whitespace / an emphasis marker in the label itself still matches)', () => {
+			const md = '**1st  Level:** The bonus increases.';
+			// A data-derived label with a stray double space would never match a bare
+			// `.toLowerCase()` comparison, but DOES match once both sides run through
+			// `normalizeForDuplicateCheck` (which collapses whitespace too).
+			expect(stripLabeledLines(md, ['1st  Level'])).toBe('');
+			expect(stripLabeledLines(md, ['1st Level'])).toBe('');
+		});
+
+		test('LOW-3: an orphaned label-only line (no value on the same line) strips the label line but the value paragraph below survives — duplication, never deletion, when nothing ties the two together positionally', () => {
+			const md = '**Effect:**\n\nThe effect text lives in its own paragraph below the bare label.';
+			expect(stripLabeledLines(md, ['Effect'])).toBe(
+				'The effect text lives in its own paragraph below the bare label.',
+			);
+		});
+	});
+
 	// Verified against REAL corpus body text, copied verbatim from this worktree's
 	// v2/docs/Browse/** (per the batch brief) — not paraphrased, not a hand-rolled
 	// approximation of the shape.
@@ -240,6 +302,11 @@ describe('SC-120 Batch B: bodyLabeledLine (layouts.ts, design §3.6 — ports th
 
 	test('undefined for undefined input', () => {
 		expect(bodyLabeledLine(undefined, 'Skill Options')).toBeUndefined();
+	});
+
+	test('fix round 2, LOW-1: an INDENTED label line (nested under a list item) is not matched — the same column-0 requirement stripLabeledLines/matchLabeledLine enforce, so the two helpers can never disagree into a double-render', () => {
+		const md = '- An item\n    **Skill Options:** One skill described inline under the bullet.';
+		expect(bodyLabeledLine(md, 'Skill Options')).toBeUndefined();
 	});
 
 	// Verified against culture/bureaucratic.md (v2/docs/Browse/culture/bureaucratic.md),
