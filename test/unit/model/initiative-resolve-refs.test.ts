@@ -463,3 +463,123 @@ describe('T-2 / SC-134 M5: resolveStatblockRef routing predicate — scc:/scc.vN
 		expect(bareSpy).not.toHaveBeenCalled();
 	});
 });
+
+// SC-195: the statblock merge grows a FOURTH only-if-unset field, `with_captain` — the
+// raw "With Captain" grid-cell string, copied at BOTH merge sites (hero + creature) in
+// lockstep with name/max_stamina/image. New coverage lives in its own vault (not
+// `seedStatblockNotes`) so the existing byte/deep-equal-to-legacy tests above stay
+// untouched: the legacy oracle never reads this field at all (that gap is the whole
+// point of SC-195), so any note this suite's shared fixtures use must NOT grow it.
+describe('T-2 / SC-195: with_captain merges only-if-unset, hero and creature alike', () => {
+	const dsNote = (lines: string[]): string => ['```ds-statblock', ...lines, '```'].join('\n');
+
+	test('creature: with_captain merges from the resolved statblock when unset locally', async () => {
+		const { app, refs } = makeEnv();
+		app.vault.setFile(
+			'Hobgoblin Recruit.md',
+			dsNote(['name: Hobgoblin Recruit', 'stamina: "9"', 'with_captain: "+4 bonus to Stamina"']),
+		);
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    creatures:',
+			'      - statblock: "Hobgoblin Recruit"',
+			'        amount: 1',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const model = await resolveLikePipeline(src, refs);
+		expect(model.enemy_groups[0].creatures[0].with_captain).toBe('+4 bonus to Stamina');
+	});
+
+	test('creature: an explicit local with_captain wins over the resolved one', async () => {
+		const { app, refs } = makeEnv();
+		app.vault.setFile(
+			'Hobgoblin Recruit.md',
+			dsNote(['name: Hobgoblin Recruit', 'stamina: "9"', 'with_captain: "+4 bonus to Stamina"']),
+		);
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    creatures:',
+			'      - statblock: "Hobgoblin Recruit"',
+			'        amount: 1',
+			'        with_captain: "+2 bonus to Stamina"',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const model = await resolveLikePipeline(src, refs);
+		expect(model.enemy_groups[0].creatures[0].with_captain).toBe('+2 bonus to Stamina');
+	});
+
+	test('hero: with_captain merges too (symmetric with the creature loop, even though a hero never reads it back)', async () => {
+		const { app, refs } = makeEnv();
+		app.vault.setFile(
+			'Captain Note.md',
+			dsNote(['name: Captain Note', 'stamina: "10"', 'with_captain: "+2 bonus to Stamina"']),
+		);
+		const src = 'heroes:\n  - statblock: "Captain Note"\nenemy_groups: []';
+		const model = await resolveLikePipeline(src, refs);
+		expect(model.heroes[0].with_captain).toBe('+2 bonus to Stamina');
+	});
+
+	test('a resolved with_captain the parser does not recognize merges as a string but resolves to no Stamina bonus (silent)', async () => {
+		const { app, refs } = makeEnv();
+		app.vault.setFile(
+			'Skirmisher.md',
+			dsNote(['name: Skirmisher', 'stamina: "6"', 'with_captain: "Gain an edge on strikes"']),
+		);
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    is_squad: true',
+			'    creatures:',
+			'      - statblock: "Skirmisher"',
+			'        amount: 4',
+			'        squad_role: minion',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const model = await resolveLikePipeline(src, refs);
+		const minion = model.enemy_groups[0].creatures[0];
+		expect(minion.with_captain).toBe('Gain an edge on strikes');
+		const { withCaptainStaminaN } = await import('@drawSteelAdmonition/EncounterData');
+		expect(withCaptainStaminaN(minion)).toBeUndefined();
+	});
+
+	test('a FRESH ref-bearing captained squad bakes the bonus in at pool init (phase 3, post-merge)', async () => {
+		const { app, refs } = makeEnv();
+		app.vault.setFile(
+			'Hobgoblin Recruit.md',
+			dsNote(['name: Hobgoblin Recruit', 'stamina: "9"', 'with_captain: "+4 bonus to Stamina"']),
+		);
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: G',
+			'    is_squad: true',
+			'    creatures:',
+			'      - statblock: "Hobgoblin Recruit"',
+			'        amount: 6',
+			'        squad_role: minion',
+			'      - name: Captain',
+			'        max_stamina: 30',
+			'        amount: 1',
+			'        squad_role: captain',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const model = await resolveLikePipeline(src, refs);
+		const group = model.enemy_groups[0];
+		const minion = group.creatures[0];
+		// max_stamina was ONLY known after phase 1's merge, so the pool could only be
+		// initialized in phase 3 — and initMinionPool's bonus-aware init still ran.
+		expect(minion.max_stamina).toBe(9);
+		expect(group.minion_stamina_pool).toBe(78); // (9 + 4) x 6
+		expect(minion.minion_stamina_pool_max).toBe(78);
+		expect(minion.captain_bonus_active).toBe(true);
+	});
+});

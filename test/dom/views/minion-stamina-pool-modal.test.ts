@@ -37,6 +37,14 @@ async function setup(
 		condition?: boolean | { color?: string; effect?: string };
 		persist?: boolean;
 		pool?: number;
+		/** SC-195 / C1: mark this many of the squad's 5 instances dead BEFORE the modal
+		 *  opens (deaths from an earlier session) — the regression fixture for the
+		 *  alive-vs-original-count divergence. */
+		deadCount?: number;
+		/** SC-195: a persisted pool max / bonus-active flag (post-transition state), as a
+		 *  real save file would carry them. */
+		poolMax?: number;
+		captainBonusActive?: boolean;
 	} = {},
 ): Promise<Setup> {
 	const app = new App();
@@ -47,6 +55,11 @@ async function setup(
 	const group = data.enemy_groups[0];
 	const minion = group.creatures[0];
 	if (options.pool !== undefined) group.minion_stamina_pool = options.pool;
+	if (options.poolMax !== undefined) minion.minion_stamina_pool_max = options.poolMax;
+	if (options.captainBonusActive !== undefined) minion.captain_bonus_active = options.captainBonusActive;
+	if (options.deadCount) {
+		minion.instances!.slice(0, options.deadCount).forEach((inst) => (inst.isDead = true));
+	}
 	if (options.condition) {
 		const custom = typeof options.condition === 'object' ? options.condition : {};
 		minion.instances![0].conditions = [{ key: 'grabbed', color: custom.color, effect: custom.effect }];
@@ -313,5 +326,76 @@ describe('D2 §3.5b: the pool modal on the unified template (optional minion sec
 		const declarations = sheet.replace(/\/\*[\s\S]*?\*\//g, ''); // comments aren't rules
 		expect(declarations.match(/\bcrimson\b/g)).toHaveLength(1);
 		expect(declarations).toMatch(/--dse-danger:\s*crimson/);
+	});
+});
+
+describe('SC-195 / C1: the modal now uses the ORIGINAL squad size, never the alive count', () => {
+	// squad.yaml: 5 goblins, max_stamina 4 each — full pool 20. This is the regression
+	// fixture for the pre-existing divergence: the modal used to recompute
+	// `aliveCount * minionMaxStamina` (12 with 2 dead), while the row bar and print
+	// readout always used the original `amount` (20). The modal now matches them.
+	test('the pool max stays 20 even after 2 of 5 minions have already died', async () => {
+		const { content } = await setup({ deadCount: 2, pool: 12 });
+		expect(content.querySelector('.dse-sedit__max')!.textContent).toBe('/ 20'); // NOT 3 x 4 = 12
+		expect((content.querySelector('.dse-stepper__input') as HTMLInputElement).value).toBe('12');
+	});
+
+	test('the death ticks still divide the bar into 5 (amount) segments, not 3 (alive)', async () => {
+		const { content } = await setup({ deadCount: 2, pool: 12 });
+		const bar = content.querySelector('.dse-stamina--modal') as HTMLElement;
+		const ticks = bar.querySelectorAll('.dse-stamina__tick');
+		expect(ticks).toHaveLength(4); // amount - 1, unchanged by how many are already dead
+	});
+
+	test('the minionsToKill ladder still divides by the ORIGINAL max (20), so applying damage after 2 deaths reports correctly', async () => {
+		const { content } = await setup({ deadCount: 2, pool: 12 });
+		applyDamage(content, 4, 1); // 4 more damage: 12 -> 8
+		const info = content.querySelector('.dse-sedit__info') as HTMLElement;
+		// floor((20-12)/4)=2 already dead, floor((20-8)/4)=3 total -> 1 more to kill.
+		expect(info.textContent).toContain('will kill 1 minion(s)');
+	});
+
+	test('the stepper bound (KNOWN DEVIATION clamp) uses the ORIGINAL max (20), never the alive-count recompute (12)', async () => {
+		const { modal, content } = await setup({ deadCount: 2, pool: 12 });
+		const input = content.querySelector('.dse-stepper__input') as HTMLInputElement;
+		// 15 sits strictly between the two candidate maxes: the pre-existing bug would
+		// have clamped this typed draft to 12 (3 alive x 4); the fix lets it stand at 15.
+		input.value = '15';
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect((modal as any).pendingStaminaChange).toBe(3); // 15 - 12, NOT clamped to 12 - 12 = 0
+	});
+
+	test('CB-1 (updated): the Apply clamp ceiling is the persisted/original max, never an alive-count recompute', async () => {
+		// pool 17: within the SAME top death-bracket as the max (floor((20-17)/4)=0, no
+		// kill implied), so a heal back to full stays enabled — the Apply button is
+		// otherwise permanently disabled for a heal that crosses a death-bracket
+		// boundary (a pre-existing, orthogonal modal quirk unrelated to C1).
+		const { content, group } = await setup({ pool: 17 });
+		const input = content.querySelector('.dse-stepper__input') as HTMLInputElement;
+		input.value = '25'; // way past max — clamps to the fixed 20, not some smaller figure
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		actionBtn(content).click();
+		expect(group.minion_stamina_pool).toBe(20);
+	});
+
+	test('a persisted minion_stamina_pool_max (captain-bonus state) wins over the plain formula', async () => {
+		// Simulates a squad whose captain's Stamina bonus has already been baked in
+		// (SC-195's initMinionPool/applyCaptainBonusTransition) — the modal must read
+		// the PERSISTED value, never re-derive `max_stamina x amount` (which would drop
+		// the bonus silently).
+		const { content } = await setup({ poolMax: 40, pool: 40, captainBonusActive: true });
+		expect(content.querySelector('.dse-sedit__max')!.textContent).toBe('/ 40'); // not 5 x 4 = 20
+	});
+
+	test('the kill-ladder divisor is the CURRENT effective per-minion Stamina (per + the active captain bonus)', async () => {
+		// squad.yaml's Goblin Captain has max_stamina 40 and is alive by default (its
+		// instance defaults to full current_stamina at parse time) — so with an
+		// explicit with_captain_stamina on the minion, the bonus IS active and the
+		// ladder step becomes per + N, not per.
+		const { content, minion } = await setup({ poolMax: 40, pool: 40, captainBonusActive: true });
+		minion.with_captain_stamina = 4; // per-minion step becomes 4 + 4 = 8
+		applyDamage(content, 8, 1); // exactly one minion's worth at the bonus step
+		const info = content.querySelector('.dse-sedit__info') as HTMLElement;
+		expect(info.textContent).toContain('will kill 1 minion(s)');
 	});
 });

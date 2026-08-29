@@ -362,3 +362,44 @@ describe('T-1: merge-independent error surface still fires SYNCHRONOUSLY from pa
 		);
 	});
 });
+
+describe('SC-195: byte-compat — the new fields never appear on an ordinary squad', () => {
+	test('squad.yaml (no With Captain bonus anywhere) never grows minion_stamina_pool_max / captain_bonus_active / with_captain*', async () => {
+		const out = serialize(parseLikePipeline(squad));
+		expect(out).not.toContain('minion_stamina_pool_max');
+		expect(out).not.toContain('captain_bonus_active');
+		expect(out).not.toContain('with_captain');
+		// Still byte-equal to the legacy oracle — SC-195 added nothing observable here.
+		expect(out).toBe(await legacyWriterBytes(squad));
+	});
+
+	test('a captained squad WITH a Stamina bonus round-trips: parse -> serialize -> parse is a fixed point', () => {
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: Squad',
+			'    is_squad: true',
+			'    creatures:',
+			'      - {name: Recruit, max_stamina: 9, amount: 6, squad_role: minion, with_captain_stamina: 4}',
+			'      - {name: Cap, max_stamina: 30, amount: 1, squad_role: captain}',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const m1 = parseLikePipeline(src);
+		const group = m1.enemy_groups[0];
+		const minion = group.creatures[0];
+		// A single-squad group keeps the CURRENT pool on the group (the historical
+		// back-compat home); the new max/flag fields are per-creature (no back-compat
+		// constraint — they never existed before SC-195).
+		expect(group.minion_stamina_pool).toBe(78); // (9 + 4) x 6
+		expect(minion.minion_stamina_pool_max).toBe(78);
+		expect(minion.captain_bonus_active).toBe(true);
+
+		const s1 = serialize(m1);
+		expect(s1).toContain('minion_stamina_pool_max: 78');
+		expect(s1).toContain('captain_bonus_active: true');
+		const m2 = parseLikePipeline(s1);
+		expect(m2).toEqual(m1); // reload does NOT re-derive/double-apply the bonus
+		expect(serialize(m2)).toBe(s1); // stable second pass
+	});
+});

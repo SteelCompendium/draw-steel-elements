@@ -2130,3 +2130,241 @@ describe('SC-183 round 3: the captain wears the rank', () => {
 		badges.forEach((b) => expect(b.textContent).toMatch(/^(Captain|Make captain)/));
 	});
 });
+
+describe('SC-195: the "With Captain" Stamina bonus', () => {
+	// Hobgoblin Recruit: 9 Stamina, "+4 bonus to Stamina" With Captain (the corpus
+	// shape — Draw Steel Monsters:12653). A fresh squad born with its captain ALIVE.
+	const SQUAD_CAPTAIN_BONUS = `heroes:
+  - name: "Aragorn"
+    max_stamina: 120
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        squad_role: minion
+        with_captain_stamina: 4
+      - name: "Hobgoblin Captain"
+        max_stamina: 30
+        amount: 1
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 30
+malice:
+  value: 0
+`;
+
+	// The squad already mid-fight: 5 of 6 minions dead, the pool nearly spent, its
+	// captain nearly down, the bonus already persisted as active — set up directly
+	// (rather than fought down to this state through the pool modal) so the CLAMP-AT-0
+	// case is a one-step, deterministic setup. `selectedInstanceKey: "0-6"` keeps the
+	// detail row on the one LIVING minion instead of defaulting to the dead #1.
+	const SQUAD_CAPTAIN_BONUS_NEAR_DEAD = `heroes: []
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    selectedInstanceKey: "0-6"
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        squad_role: minion
+        with_captain_stamina: 4
+        minion_stamina_pool: 1
+        minion_stamina_pool_max: 78
+        captain_bonus_active: true
+        instances:
+          - id: 1
+            isDead: true
+          - id: 2
+            isDead: true
+          - id: 3
+            isDead: true
+          - id: 4
+            isDead: true
+          - id: 5
+            isDead: true
+          - id: 6
+      - name: "Hobgoblin Captain"
+        max_stamina: 30
+        amount: 1
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 5
+malice:
+  value: 0
+`;
+
+	// No captain yet — a plain 'attached' candidate to promote (the B1 no-op case).
+	const SQUAD_CAPTAIN_BONUS_NO_CAPTAIN = `heroes: []
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        squad_role: minion
+        with_captain_stamina: 4
+      - name: "Scout"
+        max_stamina: 20
+        amount: 1
+        squad_role: attached
+malice:
+  value: 0
+`;
+
+	/** The first non-DEAD minion grid cell's numeric readout — robust to whichever
+	 *  instance the detail row currently has selected. */
+	const poolText = (root: HTMLElement): string => {
+		const cells = Array.from(
+			root.querySelectorAll<HTMLElement>('.dse-init__cell[data-squad-role="minion"] .dse-init__cell-stamina'),
+		);
+		return cells.find((c) => c.textContent !== 'DEAD')!.textContent!;
+	};
+
+	/** The ROSTER cell's static captain badge word — exists exactly once regardless of
+	 *  detail-row selection (unlike the detail row's own badge, which only exists while
+	 *  the captain/candidate happens to be selected). */
+	const badgeWord = (root: HTMLElement): string =>
+		(
+			root.querySelector(
+				'.dse-init__cell[data-squad-role="captain"] .dse-init__captain-word',
+			) as HTMLElement
+		).textContent!;
+
+	const groupBonusAttr = (root: HTMLElement): string | null =>
+		(root.querySelector('.dse-init__groupbody') as HTMLElement).getAttribute('data-captain-bonus');
+
+	test('a squad born with a live captain bakes the bonus into BOTH current and max at init', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN_BONUS);
+		expect(poolText(root)).toBe('78/78 (13)'); // (9 + 4) x 6
+		expect(badgeWord(root)).toBe('Captain +4 Sta');
+		expect(groupBonusAttr(root)).toBe('on');
+	});
+
+	test('YAML with_captain_stamina override wins over a parsed statblock string', async () => {
+		const src = SQUAD_CAPTAIN_BONUS.replace(
+			'with_captain_stamina: 4',
+			'with_captain_stamina: 2\n        with_captain: "+4 bonus to Stamina"',
+		);
+		const { root } = await renderInit(src);
+		expect(poolText(root)).toBe('66/66 (11)'); // (9 + 2) x 6 — the YAML key wins
+		expect(badgeWord(root)).toBe('Captain +2 Sta');
+	});
+
+	test('a non-Stamina With Captain string is a SILENT no-op (no bonus, no badge suffix)', async () => {
+		const src = SQUAD_CAPTAIN_BONUS.replace(
+			'with_captain_stamina: 4',
+			'with_captain: "Gain an edge on strikes"',
+		);
+		const { root } = await renderInit(src);
+		expect(poolText(root)).toBe('54/54 (9)'); // plain 9 x 6, no bonus applied
+		expect(badgeWord(root)).toBe('Captain'); // no "+N Sta" suffix
+		expect(groupBonusAttr(root)).toBe('off');
+	});
+
+	test('the captain dying removes N x the ALIVE minion count from BOTH current and max', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN_BONUS);
+		const captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		captainCell.click();
+		const detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		(detail.querySelector(':scope > .dse-init__bar') as HTMLElement).click();
+		commitStepperValue(lastModal(), 0);
+		modalApplyBtn(lastModal()).click();
+
+		expect(poolText(root)).toBe('54/54 (9)'); // 78 - (4 x 6 alive) on BOTH numbers
+		expect(badgeWord(root)).toBe('Captain down');
+		expect(groupBonusAttr(root)).toBe('off');
+	});
+
+	test('a down captain healed back above 0 (still bound) re-applies the bonus', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN_BONUS);
+		let captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		captainCell.click();
+		let detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		(detail.querySelector(':scope > .dse-init__bar') as HTMLElement).click();
+		commitStepperValue(lastModal(), 0);
+		modalApplyBtn(lastModal()).click();
+		expect(poolText(root)).toBe('54/54 (9)'); // down: bonus removed
+
+		captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		captainCell.click();
+		detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		(detail.querySelector(':scope > .dse-init__bar') as HTMLElement).click();
+		commitStepperValue(lastModal(), 5); // healed to 5: alive again, still bound
+		modalApplyBtn(lastModal()).click();
+
+		expect(poolText(root)).toBe('78/78 (13)'); // fully re-applied — no deaths occurred
+		expect(badgeWord(root)).toBe('Captain +4 Sta');
+		expect(groupBonusAttr(root)).toBe('on');
+	});
+
+	test('captain-death CLAMPS current at 0 rather than going negative; max still moves the full delta', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN_BONUS_NEAR_DEAD);
+		expect(poolText(root)).toBe('1/78 (13)'); // captain still alive: bonus still active
+		const captainCell = root.querySelector('.dse-init__cell[data-squad-role="captain"]') as HTMLElement;
+		captainCell.click();
+		const detail = root.querySelector('.dse-init__detail.dse-init__row') as HTMLElement;
+		(detail.querySelector(':scope > .dse-init__bar') as HTMLElement).click();
+		commitStepperValue(lastModal(), 0);
+		modalApplyBtn(lastModal()).click();
+
+		// 1 - (4 x 1 alive) would be -3; current CLAMPS to 0. Max is never clamped: the
+		// full delta still lands, 78 - 4 = 74.
+		expect(poolText(root)).toBe('0/74 (9)');
+	});
+
+	test('promote-then-relieve with an unchanged alive count is a NO-OP (B1)', async () => {
+		const { root } = await renderInit(SQUAD_CAPTAIN_BONUS_NO_CAPTAIN);
+		expect(poolText(root)).toBe('54/54 (9)'); // no captain yet: plain pool
+
+		const scoutCell = root.querySelector<HTMLElement>('.dse-init__cell[data-squad-role="attached"]')!;
+		scoutCell.click();
+		let detail = root.querySelector('.dse-init__detail') as HTMLElement;
+		let badge = detail.querySelector<HTMLElement>('button.dse-init__captain')!;
+		badge.click(); // promote
+
+		expect(poolText(root)).toBe('78/78 (13)'); // bonus applied: (9 + 4) x 6
+
+		detail = root.querySelector('.dse-init__detail') as HTMLElement;
+		badge = detail.querySelector<HTMLElement>('button.dse-init__captain')!;
+		badge.click(); // relieve
+
+		expect(poolText(root)).toBe('54/54 (9)'); // net zero — the B1 no-op
+	});
+
+	test('data-captain-bonus is a group-level summary across a multi-squad group', async () => {
+		const src = [
+			'heroes: []',
+			'enemy_groups:',
+			'  - name: "Mixed"',
+			'    is_squad: true',
+			'    creatures:',
+			'      - {name: Bonused, max_stamina: 9, amount: 4, squad_role: minion, with_captain_stamina: 4}',
+			'      - {name: Plain, max_stamina: 6, amount: 4, squad_role: minion}',
+			'      - {name: Boss, max_stamina: 40, amount: 1, squad_role: captain, captain_of: Bonused}',
+			'malice:',
+			'  value: 0',
+		].join('\n');
+		const { root } = await renderInit(src);
+		expect(groupBonusAttr(root)).toBe('on');
+	});
+
+	test('a captained squad round-trips through YAML without double-applying or dropping the bonus', async () => {
+		// The exact scenario `minion_stamina_pool_max`/`captain_bonus_active` exist to
+		// prevent: reload a saved mid-fight squad and confirm the numbers are read back
+		// verbatim, not re-derived (which would double the bonus on top of itself).
+		const model = parse(parseYaml(SQUAD_CAPTAIN_BONUS_NEAR_DEAD), SQUAD_CAPTAIN_BONUS_NEAR_DEAD);
+		const s1 = serialize(model);
+		expect(s1).toContain('minion_stamina_pool: 1');
+		expect(s1).toContain('minion_stamina_pool_max: 78');
+		expect(s1).toContain('captain_bonus_active: true');
+		const reparsed = parse(parseYaml(s1), s1);
+		expect(serialize(reparsed)).toBe(s1); // stable — parse -> serialize is a fixed point
+	});
+});

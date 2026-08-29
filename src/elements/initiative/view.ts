@@ -82,14 +82,19 @@ import {
 	EnemyGroup,
 	Hero,
 	advanceRound as advanceRoundModel,
+	applyCaptainBonusTransition,
 	captainOfSquad,
+	captainStaminaBonus,
+	isCaptainDown,
 	minionCreatures,
+	minionPoolMaxOf,
 	minionPoolOf,
 	promoteCaptain,
 	relieveCaptain,
 	resetEncounter,
 	resetRound as resetRoundModel,
 	squadOfCaptain,
+	withCaptainStaminaN,
 } from './model';
 import type { ActorActions, MaliceLogEntry } from './model';
 
@@ -726,12 +731,18 @@ export class InitiativeView extends ElementView<EncounterData> {
 	): { values: StaminaBarValues; gauge: StaminaGaugeOptions; pool: boolean } | null {
 		if (group?.is_squad && creature?.squad_role === 'minion') {
 			if ((character as CreatureInstance).isDead) return null;
-			const per = creature.max_stamina ?? 0;
 			const amount = creature.amount ?? 0;
-			const max = per * amount;
+			// SC-195 / C1: the persisted, ORIGINAL-count-based max (never recomputed from
+			// the alive count) — `minionPoolMaxOf` folds in the ACTIVE captain bonus once
+			// it has ever been applied.
+			const max = minionPoolMaxOf(creature);
 			const ticks: number[] = [];
-			if (per > 0 && max > 0) {
-				for (let i = 1; i < amount; i++) ticks.push((i * per) / max);
+			if (amount > 0 && max > 0) {
+				// Evenly divides the bar into `amount` segments rather than deriving a
+				// per-minion step from `max`, which may no longer be an even multiple of
+				// any single per-minion value once a captain-bonus crossing has happened
+				// mid-fight (SC-195).
+				for (let i = 1; i < amount; i++) ticks.push(i / amount);
 			}
 			return {
 				values: { current: minionPoolOf(group, creature) ?? 0, temp: 0, max },
@@ -898,13 +909,9 @@ export class InitiativeView extends ElementView<EncounterData> {
 		updateStaminaGauge(gauge, spec.values, spec.gauge);
 	}
 
-	/** Is this captain out? A non-hero creature is out at 0 ("When a nonhero creature's
-	 *  Stamina is reduced to 0, they die or are knocked unconscious", Draw Steel Heroes) —
-	 *  and "down" is precisely the state the rules' replacement clause keys on, so the
-	 *  roster announces the moment a swap becomes legal. */
-	private isCaptainDown(captain: Creature): boolean {
-		return (captain.instances ?? []).every((inst) => (inst.current_stamina ?? 0) <= 0);
-	}
+	// "Is this captain out?" now lives in the model (`isCaptainDown`, imported above) —
+	// SC-195 shares it with the Stamina-bonus gate (`captainStaminaBonus`), which needed
+	// the exact same "down" fact.
 
 	/** The group's captains and whether ANY of them is down (a group may hold several
 	 *  squads since GH #67, so this is the group-level summary the body attribute
@@ -913,7 +920,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const captains = group.is_squad
 			? group.creatures.filter((c) => c.squad_role === 'captain')
 			: [];
-		return { captains, anyDown: captains.some((c) => this.isCaptainDown(c)) };
+		return { captains, anyDown: captains.some((c) => isCaptainDown(c)) };
 	}
 
 	/** Which squad a promotion would attach to: the first squad currently WITHOUT a
@@ -924,6 +931,19 @@ export class InitiativeView extends ElementView<EncounterData> {
 	private promotionTarget(group: EnemyGroup): Creature | undefined {
 		const squads = minionCreatures(group);
 		return squads.find((minion) => !captainOfSquad(group, minion)) ?? squads[0];
+	}
+
+	/** SC-195 (D2) — the captain badge's bonus suffix: "" when no Stamina bonus is
+	 *  currently active for the squad this captain leads (no N configured, an
+	 *  unparseable/non-Stamina `with_captain` string, or the squad's own persisted bonus
+	 *  flag is simply off), else ` +N Sta` — the number is part of the WORD, never a
+	 *  colour-only signal. Reads the squad's PERSISTED `captain_bonus_active` flag (never
+	 *  re-derives it) so the badge always agrees with the pool numbers it explains. */
+	private captainBonusSuffix(group: EnemyGroup, captain: Creature): string {
+		const squad = squadOfCaptain(group, captain);
+		if (!squad?.captain_bonus_active) return '';
+		const n = withCaptainStaminaN(squad);
+		return n ? ` +${n} Sta` : '';
 	}
 
 	/* ------------------------------------------------------------------ SC-183 r3:
@@ -952,7 +972,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 		opts: { control: boolean } = { control: true },
 	): HTMLElement | null {
 		const isCaptain = creature.squad_role === 'captain';
-		const down = isCaptain && this.isCaptainDown(creature);
+		const down = isCaptain && isCaptainDown(creature);
 		// A minion is never a captain candidate ("Any non-Mount, non-minion creature …",
 		// Draw Steel Monsters), and a read-only render never gets a write affordance.
 		const promotable =
@@ -962,7 +982,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const squads = minionCreatures(group);
 		const target = isCaptain ? squadOfCaptain(group, creature) : this.promotionTarget(group);
 		if (!isCaptain && !target) return null;
-		const word = isCaptain ? (down ? 'Captain down' : 'Captain') : 'Make captain';
+		// D2 (SC-195): the bonus folds into the pool numbers silently — the badge's WORD
+		// is where the "why" lives, word first (Scott is colourblind; the crown glyph and
+		// the ink stay the second/third channels only).
+		const word = isCaptain
+			? down
+				? 'Captain down'
+				: `Captain${this.captainBonusSuffix(group, creature)}`
+			: 'Make captain';
 		// Only name the squad when there is more than one to name — a one-squad group's
 		// badge reads exactly as it did in round 2.
 		const suffix = !isCaptain && squads.length > 1 && target ? `: ${target.name}` : '';
@@ -997,6 +1024,11 @@ export class InitiativeView extends ElementView<EncounterData> {
 				onClick: () => {
 					if (isCaptain) relieveCaptain(creature);
 					else promoteCaptain(group, creature, target);
+					// SC-195 (B1 — symmetric): a promote/relieve may flip whether `target`
+					// squad's captain Stamina bonus is active. `target` was captured above,
+					// BEFORE the role change, so it is still the right squad even for the
+					// relieve branch (where `squadOfCaptain` would return undefined after).
+					applyCaptainBonusTransition(group, target);
 					// A captain change moves the roster's leading cell (the Steel `order`
 					// reflow), every badge's word and the group's own state attribute, so
 					// this is the one tracker mutation that legitimately wants the coarse
@@ -1185,6 +1217,16 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// tell a one-squad group (the historical shape) from a multi-squad one without
 		// counting cells.
 		if (group.is_squad) groupEl.setAttribute('data-squads', String(minionCreatures(group).length));
+		// SC-195 — state/testability hook: is ANY squad in this group currently running
+		// with its captain Stamina bonus folded in? (A group may hold several squads;
+		// this is the same group-level-summary-of-a-per-squad-fact convention `data-captain`
+		// already uses for "down".)
+		if (group.is_squad) {
+			groupEl.setAttribute(
+				'data-captain-bonus',
+				minionCreatures(group).some((m) => m.captain_bonus_active) ? 'on' : 'off',
+			);
+		}
 
 		// Group Header — same SC-154 round 2 move as buildCharacterRow above: the turn
 		// indicator becomes the header row's own first child (inside the group's card)
@@ -1472,17 +1514,25 @@ export class InitiativeView extends ElementView<EncounterData> {
 		const { captains, anyDown } = this.squadCaptains(group);
 		if (captains.length === 0) return;
 		groupBodyEl.setAttribute('data-captain', anyDown ? 'down' : 'up');
+		// SC-195 — the group-level bonus-active summary (see the initial stamp in
+		// buildEnemyGroupRow for why this is a group-level fact about a per-squad flag).
+		if (group.is_squad) {
+			groupBodyEl.setAttribute(
+				'data-captain-bonus',
+				minionCreatures(group).some((m) => m.captain_bonus_active) ? 'on' : 'off',
+			);
+		}
 		// SC-183 r3 — only the CAPTAIN badges carry a down state; the "Make captain"
 		// candidates keep their word whatever the captains are doing.
 		groupBodyEl
 			.querySelectorAll<HTMLElement>(".dse-init__captain[data-role='captain']")
 			.forEach((badge) => {
 				const owner = captains.find((c) => c.name === badge.getAttribute('data-captain-for'));
-				const down = owner ? this.isCaptainDown(owner) : anyDown;
+				const down = owner ? isCaptainDown(owner) : anyDown;
 				badge.setAttribute('data-down', down ? 'on' : 'off');
-				badge
-					.querySelector<HTMLElement>('.dse-init__captain-word')
-					?.setText(down ? 'Captain down' : 'Captain');
+				// D2 (SC-195): the bonus suffix rides the same word this always repainted.
+				const word = down ? 'Captain down' : `Captain${owner ? this.captainBonusSuffix(group, owner) : ''}`;
+				badge.querySelector<HTMLElement>('.dse-init__captain-word')?.setText(word);
 			});
 	}
 
@@ -1506,6 +1556,21 @@ export class InitiativeView extends ElementView<EncounterData> {
 				this.updateStaminaDisplay(staminaEl, instance, creature);
 				if (rowEl) this.refreshRowState(rowEl, instance, creature, group);
 				if (group) this.refreshCaptainState(groupBodyEl, group);
+
+				// SC-195: a captain's Stamina crossing 0 (or a down captain healing back
+				// above 0 while still bound) may flip whether ITS SQUAD's Stamina bonus is
+				// active. That squad's pool (numbers + ticks) lives on a different
+				// row/cell tree than this captain's own, so — like the promote/relieve
+				// control already does — a bonus crossing gets the coarse rebuild instead
+				// of trying to hand-patch every affected instrument in place.
+				if (group?.is_squad && creature.squad_role === 'captain') {
+					const squad = squadOfCaptain(group, creature);
+					if (squad && applyCaptainBonusTransition(group, squad)) {
+						void this.rebuildAndPersist();
+						return;
+					}
+				}
+
 				// SC-183: the detail row's bar repaints with the same numbers (only
 				// passed from the detail-row path — the grid dblclick path has no row
 				// bar in hand, exactly like its numeric refresh).
@@ -1555,7 +1620,14 @@ export class InitiativeView extends ElementView<EncounterData> {
 				setState('dead');
 			} else {
 				const currentStamina = minionPoolOf(group, creature) ?? 0;
-				staminaEl.textContent = `${currentStamina}/${creature.max_stamina * creature.amount} (${creature.max_stamina})`;
+				// SC-195 / C1: the persisted, ORIGINAL-count-based max (never the alive
+				// count). D2: the numbers fold the captain bonus in silently — the
+				// parenthetical shows the CURRENT effective per-minion Stamina (base + the
+				// active bonus), matching the pool's own per-minion build rule; the badge
+				// carries the "why" in words.
+				const max = minionPoolMaxOf(creature);
+				const effectivePer = creature.max_stamina + captainStaminaBonus(group, creature);
+				staminaEl.textContent = `${currentStamina}/${max} (${effectivePer})`;
 				setState(null);
 			}
 		} else {

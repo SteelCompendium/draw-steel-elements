@@ -205,6 +205,25 @@ To define a minion group, set the `is_squad` field to `true` in the enemy group 
 
 **Changing the captain.** Click a creature's cell to open it, then click the badge beside its name: the captain's badge reads **Captain** and relieves them; any other non-minion creature's reads **Make captain** and promotes it (naming the squad, when the group holds more than one). A relieved captain becomes `squad_role: attached` and stays in the group. Minions are never captain candidates — the rules require a non-minion creature.
 
+**The "With Captain" Stamina bonus (SC-195).** "While a minion squad has a captain, each minion in the squad gains the benefits noted at the 'With Captain' entry on their stat block" (Draw Steel Monsters). When that benefit is a Stamina bonus, the tracker applies it automatically: with a live captain bound, the pool's per-minion Stamina is `base + N`, so the shared pool is `(base + N) × squad size` instead of the plain `base × squad size`. The bonus is per-minion and conditional — a squad whose captain is down, relieved, or never had one gets the plain pool.
+
+- **Where N comes from.** If the minion creature's `statblock:` reference resolves to a stat block whose "With Captain" entry matches the shape `+N bonus to Stamina` (the shape every Stamina-flavored entry in the Monsters book uses), the tracker parses N automatically. Any other shape ("Gain an edge on strikes", a speed/damage bonus, …) is left alone — the tracker only ever acts on a Stamina bonus, silently ignoring everything else (it still displays on the statblock element's own "With Captain" cell).
+- **`with_captain_stamina` (number, optional).** An explicit override on the minion `creature` entry, for a ref-less/homebrew squad or to override a statblock's string. Wins over a parsed value when both are present:
+  ```yaml
+  creatures:
+    - name: "Hobgoblin Recruit"
+      max_stamina: 9
+      amount: 6
+      squad_role: minion
+      with_captain_stamina: 4
+    - name: "Hobgoblin Captain"
+      max_stamina: 30
+      amount: 1
+      squad_role: captain
+  ```
+- **What triggers a recompute.** The pool's current AND max both move by `N × the number of minions currently alive`, applied only at the moment the bonus turns on or off: a captain is promoted or relieved, a captain's Stamina drops to 0 (down), or a down captain is healed back above 0 while still bound. A promote immediately followed by a relieve (with no deaths in between) nets to zero. The current value is never allowed to go below 0. Minion deaths never shrink the pool's max on their own (the death ladder is a fixed, absolute count from the pool's own high-water mark) — only a bonus on/off crossing moves it.
+- **Where it shows.** The pool's numbers (`current/max (per-minion)`) already reflect the bonus — there's no separate arithmetic shown on the row. The captain's own badge carries the "why": its word extends to **"Captain +N Sta"** while the bonus is active (the crown glyph and colour stay secondary channels, never the only signal).
+
 ### Malice
 
 #### Fields

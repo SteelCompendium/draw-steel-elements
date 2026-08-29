@@ -18,7 +18,10 @@ import type { App } from 'obsidian';
 import { Creature, CreatureInstance, EnemyGroup, Condition } from '@drawSteelAdmonition/EncounterData';
 // SC-183 r3 / GH #67 — the pool is addressed per SQUAD now (a group may hold several).
 // Reading `group.minion_stamina_pool` directly would show squad 2 the squad-1 pool.
-import { minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
+// SC-195: `minionPoolMaxOf` is the C1 fix — the persisted, ORIGINAL-count-based max
+// (never the alive count this modal used to recompute); `captainStaminaBonus` is the
+// CURRENT per-minion Stamina step while captained, for the kill-ladder divisor below.
+import { captainStaminaBonus, minionPoolMaxOf, minionPoolOf, setMinionPool } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager } from '@utils/Conditions';
 import { applyConditionColor, applyConditionEffect } from '@/elements/conditionColor';
 import { DseModal, iconButton } from '@/framework/kit';
@@ -59,15 +62,20 @@ export class MinionStaminaPoolModal extends DseModal {
 	onOpen() {
 		this.setDseTitle(`${this.group.name} - Minion Stamina Pool`);
 
-		const minionMaxStamina = this.creature.max_stamina;
-		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
-		const poolMaxStamina = aliveMinions * minionMaxStamina;
+		// SC-195 / C1: the pool's max is the persisted, ORIGINAL-count-based value (never
+		// recomputed from the alive count — that was the pre-existing divergence from the
+		// row bar/print readout, which always used the original `amount`).
+		const poolMaxStamina = minionPoolMaxOf(this.creature);
 		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
 
 		// -- The preview bar (shared template) with a tick at each minion death point --
+		// Evenly divides the bar into `amount` segments (the ORIGINAL squad size, C1)
+		// rather than deriving a per-minion step from `poolMaxStamina`, which may no
+		// longer be an even multiple of any single per-minion value once a captain-bonus
+		// crossing has happened mid-fight (SC-195).
 		const ticks: number[] = [];
-		for (let i = 1; i < aliveMinions; i++) {
-			ticks.push((i * minionMaxStamina) / poolMaxStamina);
+		for (let i = 1; i < this.creature.amount; i++) {
+			ticks.push(i / this.creature.amount);
 		}
 		this.bar = staminaPreviewBar(this.body, { ticks });
 
@@ -200,9 +208,13 @@ export class MinionStaminaPoolModal extends DseModal {
 				disabled: true,
 				onClick: () => {
 					const newStamina = poolCurrentStamina + this.pendingStaminaChange;
-					// Parens matter: `len ?? 0 * max` parses as `len ?? (0 * max)` and clamps
-					// the pool to the alive-minion COUNT instead of count * max (CB-1).
-					const maxStamina = (this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0) * minionMaxStamina;
+					// CB-1's original fix (the `len ?? 0 * max` precedence bug, clamping the
+					// pool to the alive-minion COUNT instead of count * max) is superseded by
+					// SC-195's C1 fix: the clamp ceiling is now the persisted/original-count
+					// max (`minionPoolMaxOf`), never a live alive-count recompute, so the
+					// parenthesization footgun this comment used to warn about no longer has
+					// anything to bite — there is no `len ?? 0 * max`-shaped expression left.
+					const maxStamina = minionPoolMaxOf(this.creature);
 					setMinionPool(this.group, this.creature, Math.min(maxStamina, Math.max(0, newStamina)));
 
 					// Update the minion instances based on the selected checkboxes
@@ -242,16 +254,24 @@ export class MinionStaminaPoolModal extends DseModal {
 		this.updateActionButton();
 	}
 
-	/** Legacy pool math, verbatim (shared by the bar/info/checkbox/button updates). */
+	/** Legacy pool math (shared by the bar/info/checkbox/button updates), SC-195-updated:
+	 *  `poolMaxStamina` is now the persisted/original-count max (C1, `minionPoolMaxOf`)
+	 *  instead of a live alive-count recompute, and the kill-ladder divisor is the
+	 *  CURRENT effective per-minion Stamina (`per + the active captain bonus`) — a
+	 *  captained squad drops a minion every `per + N` damage, not every `per`, matching
+	 *  the pool's own build rule (each minion's Stamina, captain bonus included,
+	 *  multiplied by the squad's count). */
 	private poolNumbers() {
 		const minionMaxStamina = this.creature.max_stamina;
 		const aliveMinions = this.creature.instances?.filter((inst) => !inst.isDead).length ?? 0;
-		const poolMaxStamina = aliveMinions * minionMaxStamina;
+		const poolMaxStamina = minionPoolMaxOf(this.creature);
 		const poolCurrentStamina = minionPoolOf(this.group, this.creature) ?? poolMaxStamina;
 		const newStamina = poolCurrentStamina + this.pendingStaminaChange;
-		// How many minions should die for this much damage (legacy verbatim).
-		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / minionMaxStamina);
-		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / minionMaxStamina);
+		const effectivePerMinion = minionMaxStamina + captainStaminaBonus(this.group, this.creature);
+		// How many minions should die for this much damage (legacy verbatim, divisor
+		// updated for SC-195).
+		const initialMinionsKilled = Math.floor((poolMaxStamina - poolCurrentStamina) / effectivePerMinion);
+		const finalMinionsKilled = Math.floor((poolMaxStamina - newStamina) / effectivePerMinion);
 		const minionsToKill = finalMinionsKilled - initialMinionsKilled;
 		return { minionMaxStamina, aliveMinions, poolMaxStamina, poolCurrentStamina, newStamina, minionsToKill };
 	}

@@ -15,6 +15,20 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FEATURE] **The squad captain's Stamina bonus now applies to the minion pool**
+  (SC-195). "While a minion squad has a captain, each minion in the squad gains the
+  benefits noted at the 'With Captain' entry on their stat block" — when that benefit is
+  a Stamina bonus, the tracker now folds it into the shared pool automatically: the pool
+  is `(per-minion Stamina + N) × squad size` while a live captain is bound, and drops
+  back to the plain value the moment the captain is relieved, drops to 0, or a down
+  captain heals back up. N is read from the referenced stat block's "With Captain" entry
+  (parsed from the exact `+N bonus to Stamina` shape) or an explicit `with_captain_stamina`
+  override on the minion. The captain's badge word carries the bonus ("Captain +4 Sta")
+  — the pool numbers themselves change silently. Also fixes a pre-existing divergence
+  where the pool-edit modal computed its max from the ALIVE minion count while the row
+  and print readout always used the squad's original size; both now agree (the max never
+  shrinks as minions die). See [`docs/initiative-tracker.md`](docs/initiative-tracker.md)
+  → "Minions and Captains" for the full YAML.
 - [FIX] **The note no longer jumps to the top when you click a tracker control**
   (SC-198). Ticking an action, spending malice or nudging stamina writes the note, and
   Obsidian rebuilds the whole reading view whenever a note changes — which briefly

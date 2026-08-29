@@ -43,6 +43,11 @@ export interface Hero {
      *  default; never fabricated during parse. */
     actions?: ActorActions;
     conditions: (string | Condition)[];
+    /** SC-195 — merged only-if-unset from a referenced statblock, symmetric with
+     *  Creature's field of the same name (resolveRefs.ts copies this onto BOTH heroes and
+     *  creatures identically) — never read back out for a hero (a hero is never a squad
+     *  minion), kept purely so the two merge blocks don't diverge in shape. */
+    with_captain?: string;
     statblock?: unknown; // To allow property fallback
 }
 
@@ -88,6 +93,37 @@ export interface Creature {
      *  Only a group with 2+ minion creatures materializes per-creature pools. Always
      *  read through `minionPoolOf` / write through `setMinionPool`, never directly. */
     minion_stamina_pool?: number;
+    /** SC-195 — the raw "With Captain" benefit string merged from the referenced
+     *  statblock (resolveRefs.ts, only-if-unset — mirrors `name`/`max_stamina`/`image`).
+     *  Free-form; only the exact `+N bonus to Stamina` shape (case/whitespace-insensitive)
+     *  means anything to the tracker (`parseWithCaptainStamina`) — every other shape
+     *  ("Gain an edge on strikes", "+2 bonus to speed", …) is inert here on purpose (it
+     *  still renders on the statblock element's own "With Captain" cell). */
+    with_captain?: string;
+    /** SC-195 — explicit YAML override for the per-minion Stamina bonus this squad's
+     *  captain grants (a positive integer). Wins over a value parsed from `with_captain`
+     *  when both are present — the escape hatch for a ref-less/homebrew squad, or for a
+     *  `with_captain` string the parser doesn't recognize. */
+    with_captain_stamina?: number;
+    /** SC-195 — this minion squad's own persisted pool MAX. ABSENT means "derive from
+     *  `max_stamina * amount`" (every pre-SC-195 block, and any squad whose captain has
+     *  never carried an ACTIVE Stamina bonus — `initMinionPool` only materializes this
+     *  when the bonus is actually nonzero, so an ordinary squad's bytes never grow this
+     *  key). Once a captain bonus has been applied or withdrawn, the max stops being a
+     *  pure function of (max_stamina, amount): a captain-down withdrawal removes
+     *  `N × the ALIVE count at that moment`, not the squad's original size, so a squad
+     *  that had already lost minions before the captain fell keeps a permanent residue
+     *  (SC-195 decisions ledger, owner ruling) — history a formula cannot recover. Always
+     *  read through `minionPoolMaxOf`; written only by `initMinionPool` /
+     *  `applyCaptainBonusTransition`. */
+    minion_stamina_pool_max?: number;
+    /** SC-195 — persisted: is this squad's Stamina bonus currently folded into its pool?
+     *  Written by `initMinionPool` (squad creation, only when the bonus is nonzero) and
+     *  `applyCaptainBonusTransition` (every subsequent promote/relieve/captain-death/
+     *  captain-heal) — NEVER re-derived wholesale at render time, so a vault reload can
+     *  neither double-apply nor drop the bonus. ABSENT means "never computed" (treated as
+     *  false everywhere this is read). */
+    captain_bonus_active?: boolean;
     statblock?: unknown; // To allow property fallback
 }
 
@@ -158,6 +194,140 @@ export function captainOfSquad(group: EnemyGroup, minion: Creature): Creature | 
 /** Which squad a captain leads (the inverse of `captainOfSquad`). */
 export function squadOfCaptain(group: EnemyGroup, captain: Creature): Creature | undefined {
     return minionCreatures(group).find((minion) => captainOfSquad(group, minion) === captain);
+}
+
+/* ---------------------------------------------------------------- SC-195: the "With
+   Captain" Stamina bonus.
+
+   Rules grounding (Draw Steel Monsters, "Using Minions" § "Attached Squad Captain" §
+   "Captain Benefits"): "While a minion squad has a captain, each minion in the squad
+   gains the benefits noted at the 'With Captain' entry on their stat block." Per-minion
+   (the pool's own build rule multiplies "each individual minion's Stamina" by the
+   squad's count, so a benefit that raises each minion's Stamina raises the multiplicand)
+   and conditional on a LIVE captain ("While…").
+
+   Owner ruling (SC-195 decisions ledger, Scott's RULING 1, quoting the clarification he
+   was given): "Reduces the current and maximum stamina by the captain bonus multiplied
+   by the current number of minions" — the delta on any bonus ON/OFF crossing is
+   `N × the ALIVE minion count at that moment`, applied to BOTH current and max. Because
+   that delta depends on how many minions were already dead at the moment of the
+   crossing, the max is no longer a pure function of (max_stamina, amount) once a
+   crossing has ever happened — see `minion_stamina_pool_max`'s own doc comment. */
+
+/** Is this captain "down" — every instance at ≤0 Stamina ("When a nonhero creature's
+ *  Stamina is reduced to 0, they die or are knocked unconscious", Draw Steel Heroes)?
+ *  Shared by the roster's own "Captain down" badge state and the Stamina-bonus gate
+ *  below: a down captain grants no bonus, same as no captain at all ("While…").
+ *
+ *  An instance with `current_stamina` still `undefined` (or no instances materialized
+ *  yet at all) is treated as ALIVE, not down: both parse-time callers below (model.ts's
+ *  sync split, resolveRefs.ts's post-merge phase) may reach a captain BEFORE that
+ *  captain's own instances have been fully materialized/filled — declaration order in
+ *  the YAML doesn't guarantee captain-before-minion (e.g. squad.yaml lists the minion
+ *  row first) — and a freshly-parsed creature is never born already-dead. By the time
+ *  anything renders, every real captain instance's `current_stamina` is a number, so this
+ *  fallback is inert outside that transient parse-time window. */
+export function isCaptainDown(captain: Creature): boolean {
+    const instances = captain.instances;
+    if (!instances || instances.length === 0) return false;
+    return instances.every((inst) => (inst.current_stamina ?? Number.POSITIVE_INFINITY) <= 0);
+}
+
+/** SC-195 — the tracker's ONE recognized "With Captain" shape: an anchored,
+ *  case-insensitive, trimmed `+N bonus to Stamina` (all ten Stamina-flavored entries in
+ *  the Monsters book match this; N is observed as 2/3/4/6, but any positive integer is
+ *  accepted). Every other shape is a SILENT no-op — never an error, never a UI warning
+ *  (27 "Gain an edge on strikes" squads, and the rest of the corpus's 21 non-Stamina
+ *  shapes, must keep loading exactly as they always have). */
+const WITH_CAPTAIN_STAMINA_RE = /^\+(\d+)\s+bonus to Stamina$/i;
+
+export function parseWithCaptainStamina(raw: string | undefined): number | undefined {
+    if (raw == null) return undefined;
+    const match = WITH_CAPTAIN_STAMINA_RE.exec(raw.trim());
+    if (!match) return undefined;
+    const n = Number(match[1]);
+    return n > 0 ? n : undefined;
+}
+
+/** SC-195 — the per-minion Stamina bonus N a captain grants THIS squad's minion, from the
+ *  explicit YAML override (`with_captain_stamina`, wins when present) or else the parsed
+ *  `with_captain` statblock string. Independent of whether a captain is actually
+ *  bound/alive right now — that gate is `captainStaminaBonus` below. */
+export function withCaptainStaminaN(minion: Creature): number | undefined {
+    return minion.with_captain_stamina ?? parseWithCaptainStamina(minion.with_captain);
+}
+
+/** SC-195 — the ACTIVE per-minion Stamina bonus for one squad right now: N when the
+ *  squad has a captain bound (`captainOfSquad`) who isn't down, 0 otherwise (no captain,
+ *  or a down captain — both read as "the squad has no captain" per Monsters.md's
+ *  "While…"). */
+export function captainStaminaBonus(group: EnemyGroup, minion: Creature): number {
+    const captain = captainOfSquad(group, minion);
+    if (!captain || isCaptainDown(captain)) return 0;
+    return withCaptainStaminaN(minion) ?? 0;
+}
+
+/** SC-195 — this minion squad's pool MAX: the persisted value once anything has
+ *  initialized/transitioned it, else the plain per-minion × ORIGINAL-count formula
+ *  (every pre-SC-195 squad, and any squad whose captain has never carried an active
+ *  Stamina bonus). C1 (owner ruling): always the ORIGINAL count, never the alive count,
+ *  and the max never shrinks on a minion death — this is also the fix for the
+ *  pre-existing modal/row divergence (`MinionStaminaPoolModal` used to recompute the max
+ *  from the alive count while the row bar and print readout always used the original
+ *  `amount`). */
+export function minionPoolMaxOf(creature: Creature): number {
+    return creature.minion_stamina_pool_max ?? creature.max_stamina * creature.amount;
+}
+
+/** SC-195 — squad-creation-time pool init, the drop-in replacement for the pre-SC-195
+ *  `setMinionPool(group, creature, creature.max_stamina * creature.amount)` at every one
+ *  of its call sites (guarded identically — only when `minionPoolOf(...) == null`, i.e.
+ *  a brand-new squad; an existing pool is never recomputed from scratch here or
+ *  anywhere). Bakes the ACTIVE captain bonus into BOTH the current and max ("Pool built
+ *  WITH a captain bound: max = current = (per + N) × squad size. Built without a
+ *  captain: no bonus" — SC-195 decisions ledger) and, ONLY when that bonus is actually
+ *  nonzero, stamps `minion_stamina_pool_max` + `captain_bonus_active` so a later
+ *  transition has a persisted baseline to diff against — an ordinary squad (no captain,
+ *  or a captain with no Stamina bonus) therefore never grows these keys at all, keeping
+ *  every pre-SC-195 fixture byte-identical. */
+export function initMinionPool(group: EnemyGroup, creature: Creature): void {
+    const bonus = captainStaminaBonus(group, creature);
+    const max = (creature.max_stamina + bonus) * creature.amount;
+    setMinionPool(group, creature, max);
+    if (bonus > 0) {
+        creature.minion_stamina_pool_max = max;
+        creature.captain_bonus_active = true;
+    }
+}
+
+/** SC-195 — call after any event that might change whether a squad's captain Stamina
+ *  bonus is ACTIVE (promote, relieve, a captain's Stamina crossing 0, a down captain
+ *  healed back above 0 while still bound): diffs the freshly-computed
+ *  `captainStaminaBonus` against the squad's persisted `captain_bonus_active` flag and,
+ *  ONLY on an actual crossing, applies the owner-ruled delta to BOTH current and max —
+ *  `N × the ALIVE minion count at this moment` (RULING 1, quoted above), current clamped
+ *  at 0. A flag that already matches the live state is a no-op — this is what makes
+ *  promote-then-relieve with an unchanged alive count net to zero, and what keeps a
+ *  render-time re-read of an unchanged squad idempotent (the bonus is NEVER re-derived
+ *  wholesale here or anywhere at render — only this edge-triggered diff ever moves it).
+ *  Returns true iff the pool actually moved (so a caller can decide whether the extra
+ *  repaint/rebuild this implies is owed). */
+export function applyCaptainBonusTransition(group: EnemyGroup, minion: Creature): boolean {
+    const wasActive = minion.captain_bonus_active ?? false;
+    const nowActive = captainStaminaBonus(group, minion) > 0;
+    if (wasActive === nowActive) return false;
+
+    const n = withCaptainStaminaN(minion) ?? 0;
+    const alive = (minion.instances ?? []).filter((inst) => !inst.isDead).length;
+    const delta = n * alive * (nowActive ? 1 : -1);
+
+    const maxBefore = minionPoolMaxOf(minion);
+    const currentBefore = minionPoolOf(group, minion) ?? maxBefore;
+
+    minion.minion_stamina_pool_max = maxBefore + delta;
+    setMinionPool(group, minion, Math.max(0, currentBefore + delta));
+    minion.captain_bonus_active = nowActive;
+    return true;
 }
 
 /** SC-183 r3 — promote `creature` to captain of `minion`'s squad, one call, no other

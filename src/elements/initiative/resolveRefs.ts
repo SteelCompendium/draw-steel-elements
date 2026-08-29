@@ -11,7 +11,8 @@
 //   1. MERGE — for each hero/creature whose `statblock` is a string, resolve it as a BARE
 //      path (refs.resolveBarePath: legacy 5-step findFile with sourcePath "", first ds-*
 //      block, legacy @/[[...]] stripping) and copy name / max_stamina (legacy `+` coercion)
-//      / image ONLY-IF-UNSET. The `statblock` string STAYS on the model — legacy kept it
+//      / image / with_captain (SC-195, additive) ONLY-IF-UNSET. The `statblock` string
+//      STAYS on the model — legacy kept it
 //      after merging, so it serializes back into the block byte-identically. Resolution
 //      errors — file not found, no ds-* block, malformed block YAML — re-throw the legacy
 //      multi-line "Failed to resolve … multiple instances …" hint verbatim
@@ -31,13 +32,18 @@
 //      divergence on the first write-back of a ref-bearing block, accepted by Plan 06.)
 import type { ReferenceService, ResolvedRef } from '@/framework/seams/refs';
 import type { EncounterData } from './model';
-import { minionPoolOf, setMinionPool } from './model';
+import { initMinionPool, minionPoolOf } from './model';
 
 /** The fields the legacy merge reads off a resolved statblock payload. */
 interface StatblockFields {
 	name?: unknown;
 	stamina?: unknown;
 	image?: unknown;
+	/** SC-195 — the raw "With Captain" benefit string (only-if-unset, symmetric with the
+	 *  other three fields); parsed for a Stamina bonus by EncounterData's
+	 *  `parseWithCaptainStamina`. Copied onto heroes too, purely to keep the hero/creature
+	 *  merge blocks in the same shape — only a squad minion creature ever reads it back. */
+	with_captain?: unknown;
 }
 
 // SC-134: matches the SAME shape the built-in "scc" provider slot and SccRefProvider
@@ -104,6 +110,7 @@ export async function resolveInitiativeRefs(
 					if (!hero.name && data.name) hero.name = data.name as string;
 					if (!hero.max_stamina && data.stamina) hero.max_stamina = +(data.stamina as string | number);
 					if (!hero.image && data.image) hero.image = data.image as string;
+					if (!hero.with_captain && data.with_captain) hero.with_captain = data.with_captain as string;
 				}
 			} catch (e) {
 				// Legacy hint VERBATIM (EncounterData.ts:120-125), incl. the leading/trailing
@@ -130,6 +137,7 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
 						if (!creature.name && data.name) creature.name = data.name as string;
 						if (!creature.max_stamina && data.stamina) creature.max_stamina = +(data.stamina as string | number);
 						if (!creature.image && data.image) creature.image = data.image as string;
+						if (!creature.with_captain && data.with_captain) creature.with_captain = data.with_captain as string;
 					}
 				} catch (e) {
 					const message = `
@@ -184,7 +192,10 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
 				// init. `== null` keeps an explicit or parse-initialized pool untouched.
 				// SC-183 r3 / GH #67 — per SQUAD (see EncounterData's squad-helper note).
 				if (minionPoolOf(group, creature) == null) {
-					setMinionPool(group, creature, creature.max_stamina * creature.amount);
+					// SC-195: folds in the ACTIVE "With Captain" Stamina bonus if the squad is
+					// born captained (the ref-bearing case — `with_captain` is only known now
+					// that phase 1's merge has run).
+					initMinionPool(group, creature);
 				}
 				// Squad-minion instances carry no per-instance stamina (legacy :256-264).
 			} else {

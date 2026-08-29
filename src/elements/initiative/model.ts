@@ -46,20 +46,27 @@ import { stringifyYaml } from 'obsidian';
 import type { Condition, EncounterData } from '@drawSteelAdmonition/EncounterData';
 import {
 	appendMaliceLogEntry,
+	initMinionPool,
 	minionPoolOf,
-	setMinionPool,
 	validateSquad,
 } from '@drawSteelAdmonition/EncounterData';
 
 export {
+	applyCaptainBonusTransition,
 	captainOfSquad,
+	captainStaminaBonus,
+	initMinionPool,
+	isCaptainDown,
 	minionCreatures,
+	minionPoolMaxOf,
 	minionPoolOf,
+	parseWithCaptainStamina,
 	promoteCaptain,
 	relieveCaptain,
 	setMinionPool,
 	squadOfCaptain,
 	validateSquad,
+	withCaptainStaminaN,
 } from '@drawSteelAdmonition/EncounterData';
 
 export type {
@@ -192,8 +199,10 @@ export function parse(input: unknown, _raw: string): EncounterData {
 				// existing block's bytes are untouched) and only materializes per-creature
 				// pools for a group that really holds more than one squad.
 				if (minionPoolOf(group, creature) == null && typeof creature.max_stamina === 'number') {
-					// Initialize the pool to total stamina (max_stamina * amount).
-					setMinionPool(group, creature, creature.max_stamina * creature.amount);
+					// Initialize the pool to total stamina (max_stamina * amount), folding in
+					// the ACTIVE "With Captain" Stamina bonus if the squad is born captained
+					// (SC-195).
+					initMinionPool(group, creature);
 				}
 				// Initialize instances for minions (for conditions only).
 				if (!creature.instances || creature.instances.length !== creature.amount) {

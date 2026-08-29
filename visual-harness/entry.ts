@@ -721,6 +721,50 @@ malice:
   value: 4
 `;
 
+// SC-195 — a captained squad with an ACTIVE "With Captain" Stamina bonus (Hobgoblin
+// Recruit, the corpus's own example: 9 Stamina, "+4 bonus to Stamina" — Draw Steel
+// Monsters:12653). D2: the pool numbers already fold the bonus in silently — 65/78 (13)
+// is CORRECT, not 65/54 (9) — and the captain badge's WORD is where the "why" lives
+// ("Captain +4 Sta"). One minion's worth of damage taken (78 - 65 = 13) so the bar shows
+// a real fill, not a full-health squad.
+const initiativeCaptainBonus = `heroes:
+  - name: "Frodo Baggins"
+    max_stamina: 80
+    current_stamina: 62
+    image: "portraits/1.svg"
+enemy_groups:
+  - name: "Hobgoblin Squad"
+    is_squad: true
+    creatures:
+      - name: "Hobgoblin Recruit"
+        max_stamina: 9
+        amount: 6
+        image: "portraits/2.svg"
+        squad_role: minion
+        with_captain_stamina: 4
+        minion_stamina_pool: 65
+        minion_stamina_pool_max: 78
+        captain_bonus_active: true
+        instances:
+          - id: 1
+          - id: 2
+          - id: 3
+          - id: 4
+          - id: 5
+          - id: 6
+      - name: "Hobgoblin Captain"
+        max_stamina: 30
+        amount: 1
+        image: "portraits/6.svg"
+        squad_role: captain
+        instances:
+          - id: 1
+            current_stamina: 22
+round: 1
+malice:
+  value: 3
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -759,6 +803,7 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		fight: initiativeFight,
 		roster: initiativeRoster,
 		squads: initiativeSquads,
+		'captain-bonus': initiativeCaptainBonus,
 	},
 	kit: { default: kitDefault, collapsed: kitCollapsed },
 	montage: { default: montageDefault },
