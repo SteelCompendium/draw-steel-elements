@@ -5914,6 +5914,31 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	color: var(--dse-fg-faint);
 }
 
+/* FIX ROUND 2 (round-5 review MED-2 addendum / owner ruling 17): class's `rightPrimary`
+   ("MIGHT · REASON") ships via `cardHead()`'s default `--chip` render style
+   (`cardHead.ts` mounts every rightPrimary as `chip`) — the SAME flat-chip surface the
+   deck override above un-chipped, so `rightPrimary` is left with the identical
+   border/background/padding problem: the site's mini-title (`hMini()`, `class_page.go:68`
+   → `.sc-head__slot--mini`) is boxless large text, but the plugin drew it as a small
+   outlined pill. Un-chip it with the exact same shape as the deck rule above — this is
+   the OPTIONAL addendum the round-5 review named but the round-5 fix round deliberately
+   left out (owner ruling 16 accepted only the seven named findings); owner ruling 17
+   adopts it explicitly. Scoped identically to `.dse-card > .dse-head` — never every
+   `.dse-head__primary--right` in the plugin (statblock/featureblock's own right-primary
+   mini override, 30-ish lines below, already handles their surface independently; this
+   rule's specificity, 5 components, does not reach into `.dse-sb`/`.dse-fb` at all,
+   since it requires a `.dse-card` ancestor). Sizing NOT adjusted — ruling 17 asked only
+   for the boxless treatment, not the site's larger/uppercase/role-tinted `--mini`
+   typography; `.dse-head__primary--right`'s existing rule (font-weight 600, `--dse-role`
+   tint, ~11611) and the base geometry's inherited font-size continue to apply unchanged.
+   Screen-only (`:not([data-dse-print="on"])`), so class's print pair is untouched —
+   only the class DARK evidence shot moves again. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card > .dse-head .dse-head__primary--right {
+	background: none;
+	border: none;
+	padding: 0;
+}
+
 /* §card-head role line — the THIRD slot surface: `.sc-head__slot--mini`
    (steel-cardhead.css:111-114). On the site the statblock card head's
    right-primary is NOT the flat rail chip; live markup is

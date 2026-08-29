@@ -355,37 +355,58 @@ describe('SC-120 Batch A: by-SCC hybrid mode still resolves both families (sourc
 	});
 });
 
-// Round-5 review LOW-3: nothing previously pinned the right-deck caption rule's
-// Steel/print scope as a RULE (only DOM assertions existed, which can't see a dropped
-// `:not([data-dse-print="on"])` guard — the freeze is blind to it too this batch, since
-// class's print pair is already moving for MED-2's DOM reasons). Mirrors
-// chromeRound2.test.ts's convention: read the real sheet, find the block by its
-// selector text, and assert on both the selector and its declarations directly — a
-// sheet-scan a future edit can't silently narrow.
-describe('SC-120 Batch A round-5 review LOW-3: the right-deck caption rule keeps its full Steel/print scope', () => {
+// Round-5 review LOW-3 (+ owner ruling 17's rightPrimary addendum): nothing previously
+// pinned these right-rail un-chip rules' Steel/print scope as a RULE (only DOM
+// assertions existed, which can't see a dropped `:not([data-dse-print="on"])` guard —
+// the freeze is blind to it too this batch, since class's print pair is already moving
+// for MED-2/ruling-17's DOM reasons). Mirrors chromeRound2.test.ts's convention: read
+// the real sheet, find each block by its selector text, and assert on both the selector
+// and its declarations directly — a sheet-scan a future edit can't silently narrow.
+describe('SC-120 Batch A round-5 review LOW-3 / owner ruling 17: the right-rail un-chip rules keep their full Steel/print scope', () => {
 	const CSS = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-	const SELECTOR =
-		"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-card > .dse-head .dse-head__deck--right";
 
-	function ruleBlock(): string {
-		const start = CSS.indexOf(`${SELECTOR} {`);
+	function ruleBlock(selector: string): string {
+		const start = CSS.indexOf(`${selector} {`);
 		expect(start).toBeGreaterThan(-1); // the gate HAS TEETH: a renamed/dropped selector fails here first
 		return CSS.slice(start, CSS.indexOf('}', start));
 	}
 
-	test('the selector carries BOTH halves of the Steel scope', () => {
-		expect(SELECTOR).toContain("[data-dse-theme='steel']");
-		expect(SELECTOR).toContain(':not([data-dse-print="on"])');
-		expect(CSS).toContain(`${SELECTOR} {`);
+	describe('the right-deck caption rule (round-5 review MED-2)', () => {
+		const SELECTOR =
+			"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-card > .dse-head .dse-head__deck--right";
+
+		test('the selector carries BOTH halves of the Steel scope', () => {
+			expect(SELECTOR).toContain("[data-dse-theme='steel']");
+			expect(SELECTOR).toContain(':not([data-dse-print="on"])');
+			expect(CSS).toContain(`${SELECTOR} {`);
+		});
+
+		test('the block un-chips the deck and states its 3 typographic properties via role tokens/literals, never a bare font-size', () => {
+			const block = ruleBlock(SELECTOR);
+			expect(block).toContain('background: none;');
+			expect(block).toContain('border: none;');
+			expect(block).toContain('padding: 0;');
+			expect(block).toContain('font-size: var(--dse-fs-micro);');
+			expect(block).toContain('letter-spacing: 0.07em;');
+			expect(block).toContain('color: var(--dse-fg-faint);');
+		});
 	});
 
-	test('the block un-chips the deck (round-5 review MED-2) and states its 3 typographic properties via role tokens/literals, never a bare font-size', () => {
-		const block = ruleBlock();
-		expect(block).toContain('background: none;');
-		expect(block).toContain('border: none;');
-		expect(block).toContain('padding: 0;');
-		expect(block).toContain('font-size: var(--dse-fs-micro);');
-		expect(block).toContain('letter-spacing: 0.07em;');
-		expect(block).toContain('color: var(--dse-fg-faint);');
+	describe('the right-primary un-chip rule (owner ruling 17)', () => {
+		const SELECTOR =
+			"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-card > .dse-head .dse-head__primary--right";
+
+		test('the selector carries BOTH halves of the Steel scope', () => {
+			expect(SELECTOR).toContain("[data-dse-theme='steel']");
+			expect(SELECTOR).toContain(':not([data-dse-print="on"])');
+			expect(CSS).toContain(`${SELECTOR} {`);
+		});
+
+		test('the block un-chips the mini-title: no background, no border, no padding', () => {
+			const block = ruleBlock(SELECTOR);
+			expect(block).toContain('background: none;');
+			expect(block).toContain('border: none;');
+			expect(block).toContain('padding: 0;');
+		});
 	});
 });
