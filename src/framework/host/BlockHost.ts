@@ -49,8 +49,11 @@ export interface BlockHost {
 	 * through Obsidian's own MarkdownRenderer with a real, non-empty sourcePath and a
 	 * working getSectionInfo, so it resolves `canPersist === true` and writes through the
 	 * same real file every other reading-mode host does (verified live; see SC-184's
-	 * decisions ledger). Only the canvas quarantine (`sourcePath === ''`,
-	 * ReadingModeBlockHost's `canPersist` getter) is real.
+	 * decisions ledger). Of the cases above, only canvas has a dedicated quarantine
+	 * branch in code (`sourcePath === ''`, ReadingModeBlockHost's `canPersist` getter);
+	 * print/export and hover popovers are non-persistable because their own hosts
+	 * report `canPersist === false` (no addressable section info), not because they
+	 * hit that branch.
 	 */
 	readonly canPersist: boolean;
 	/**

@@ -116,11 +116,14 @@ At the table:
 
 ## Keep it visible while you play
 
-Running the session across several notes? Put your cursor in the tracker block and run
-**Send block to sidebar** from the command palette (or use the dedicated **Send initiative
-tracker to sidebar**). It moves to a panel on the right and stays there while you navigate.
+Running the session across several notes? Hover the tracker in Reading view, open its **⋯**
+menu, and choose **Pin to sidebar** — it moves to a persistent panel on the right and stays
+there, in sync with the note, while you navigate. The cursor-driven **Send block to
+sidebar** command (or the dedicated **Send initiative tracker to sidebar**) still works
+too. Full walkthrough: [Pinning a block to the
+sidebar](writing-blocks.md#pinning-a-block-to-the-sidebar).
 
-![Blocks pinned to the Draw Steel sidebar, each with its own header](Media/sidebar.png)
+![Two blocks pinned to the Draw Steel sidebar, each with its own header](Media/sidebar.png)
 
 Everything you click is written back into the note as you go, in the sidebar as much as in
 the note, so the state survives closing Obsidian.
