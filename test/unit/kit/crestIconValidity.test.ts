@@ -14,7 +14,7 @@
 // kebab-case vocabulary (`crestIconForRole`, statblock/view.ts; kitLayout's 'backpack') —
 // every one of those already resolves via the same toPascalCase(id) lookup this test uses,
 // so the mapping is the right one to gate future crest ids with, not a test-only guess.
-import { ancestryLayout, conditionLayout, perkLayout, kitLayout } from '@/elements/display/layouts';
+import { ancestryLayout, conditionLayout, perkLayout, kitLayout, careerLayout, classLayout } from '@/elements/display/layouts';
 import { genericLayout } from '@/elements/display/displayFamily';
 import type { CardLayout } from '@/elements/shared/CardLayout';
 
@@ -50,6 +50,9 @@ const STEEL_LAYOUTS: { name: string; layout: CardLayout<any> }[] = [
 	{ name: 'conditionLayout (zap)', layout: conditionLayout },
 	{ name: 'perkLayout (gem)', layout: perkLayout },
 	{ name: 'genericLayout / ds-rule (book-open)', layout: genericLayout },
+	// SC-120 Batch A
+	{ name: 'careerLayout (briefcase)', layout: careerLayout },
+	{ name: 'classLayout (shield)', layout: classLayout },
 ];
 
 describe('SC-120 Batch C, owner ruling 2: every layout.steel crestIcon resolves in the bundled Lucide set', () => {

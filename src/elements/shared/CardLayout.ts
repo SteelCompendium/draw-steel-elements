@@ -130,6 +130,18 @@ export interface SteelCardComposition<M> {
 	 * `CardLayout.ts` again.
 	 */
 	crestSize?: (m: M, source?: RefSource) => CrestSize | undefined;
+	/**
+	 * SC-120 Batch A (design §3.1): cardHead's right-rail primary/deck slots — e.g. class's
+	 * `primary_characteristics` (joined) over the quiet "primary characteristics" caption.
+	 * Optional; a composition that omits both (every family before class) renders the head
+	 * exactly as before — `cardHead()`'s `mountSlot` already treats an `undefined` text as a
+	 * gap, so this is additive, not a behavior change for kit/ancestry/perk/condition/rule.
+	 */
+	rightPrimary?: (m: M, source?: RefSource) => string | undefined;
+	/** See `rightPrimary` above — cardHead's right-rail DECK slot (the quiet caption line
+	 *  under `rightPrimary`). Styled as a caption, not a second chip, by the Steel-scoped
+	 *  `.dse-head__deck--right` rule (styles-source.css, design §4.1 item 2). */
+	rightDeck?: (m: M, source?: RefSource) => string | undefined;
 	/** Ordered content bands, rendered after the head (equipment / stat-tiles / features /
 	 *  body policy — semantics owned by each band's own `render()`, not this seam). */
 	bands: (m: M, source?: RefSource) => SteelBand[];
@@ -183,18 +195,40 @@ export interface CardLayout<M> {
 export const DUPLICATE_ROW_MIN_LENGTH = 20;
 
 /**
+ * SC-120 Batch A (design doc §5.1): the link/emphasis-stripping HALF of
+ * `normalizeForDuplicateCheck`, pulled out on its own so `plainText()` (below) — which
+ * needs the same markdown removal but must PRESERVE case/whitespace — shares one regex
+ * pair with the duplicate-check normalizer instead of carrying a second, driftable copy.
+ * Site parity: mirrors steel-etl's own `stripMD`/`inlineMD` split (`cards.go`).
+ */
+export function stripInlineMarkdown(s: string): string {
+	return s
+		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links -> link text
+		.replace(/[*_`]/g, ''); // emphasis/code markers
+}
+
+/**
  * Exported (Task 3, SC-100): kit's Steel composition (`layouts.ts`) needs the SAME
  * flavor/body duplicate-text check for its own headless flavor band — a card-family
  * concern, so it lives in the layout's `bands()` closure, not duplicated view logic here
  * — rather than re-deriving an equivalent normalize routine that could drift from this one.
  */
 export function normalizeForDuplicateCheck(s: string): string {
-	return s
-		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links -> link text
-		.replace(/[*_`]/g, '') // emphasis/code markers
-		.replace(/\s+/g, ' ')
-		.trim()
-		.toLowerCase();
+	return stripInlineMarkdown(s).replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * SC-120 Batch A (design doc §5.1): strips markdown links/emphasis but PRESERVES case —
+ * required by `statTiles()` values, which are `setText`-only (no markdown rendering,
+ * `statTiles.ts:54`), unlike `normalizeForDuplicateCheck` (above), which also lowercases
+ * and collapses whitespace for comparison purposes and is therefore unusable for DISPLAY.
+ * First consumer: class's three potency tiles (`layouts.ts`), whose real values are always
+ * `"[Reason](scc.v1:…) − 2"` — the site strips the link the same way (rendered value reads
+ * "Reason − 2"). Trims the result (a leading/trailing space can survive link removal at a
+ * string's edge) but otherwise leaves whitespace/casing alone.
+ */
+export function plainText(s: string): string {
+	return stripInlineMarkdown(s).trim();
 }
 
 /**
@@ -393,6 +427,12 @@ export class DisplayCardView<M> extends ElementView<M> implements SourceAware {
 			{
 				name: this.layout.title(model),
 				leftEyebrow: composition.eyebrow(model, this.source),
+				// SC-120 Batch A: composition-sourced right-rail slots (default undefined,
+				// same "an omitted slot is a GAP" contract cardHead already has) — additive
+				// for every composition that doesn't supply them (kit/ancestry/perk/
+				// condition/rule), so their rendered head is byte-for-byte unchanged.
+				rightPrimary: composition.rightPrimary?.(model, this.source),
+				rightDeck: composition.rightDeck?.(model, this.source),
 				crest: crestIcon ? { icon: crestIcon, size: crestSize } : undefined,
 			},
 			this,

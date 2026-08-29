@@ -27,7 +27,7 @@
 import type { Ancestry, Culture, Career, Class, Title, Perk, Complication } from 'steel-compendium-sdk';
 import type { Kit, Condition, Treasure } from 'steel-compendium-sdk';
 import type { Badge, CardLayout, SteelBand } from '@/elements/shared/CardLayout';
-import { normalizeForDuplicateCheck, DUPLICATE_ROW_MIN_LENGTH, titleCase } from '@/elements/shared/CardLayout';
+import { normalizeForDuplicateCheck, DUPLICATE_ROW_MIN_LENGTH, titleCase, plainText } from '@/elements/shared/CardLayout';
 import type { RefSource } from '@/elements/shared/withReference';
 import { renderFeatureList } from '@/elements/feature/renderFeature';
 import { FeatureConfig } from '@model/FeatureConfig';
@@ -73,6 +73,25 @@ function kitBonusValue(raw: string | undefined): string {
 }
 
 const KIT_BODY_STRIP_HEADING_RE = /^#{1,6}\s*(equipment|kit bonuses)\s*$/i;
+
+/**
+ * SC-120 Batch A (design §3.2/§5): ported from `careerLanguageCount` (steel-etl
+ * cards.go) — the model's `language` field is a sentence ("One language"/"Two
+ * languages"); career's tile shows just the leading count word. Strips a trailing
+ * " language"/" languages" suffix (case-insensitive); falls back to the whole string
+ * unchanged when there's no such suffix (site parity — `careerLanguageCount` never
+ * returns empty for a non-empty input; `statTiles()` itself owns the ''->'—' dash
+ * fallback for a genuinely absent field, same division of labor as `kitBonusValue`).
+ */
+export function languageCount(raw: string | undefined): string {
+	const s = (raw ?? '').trim();
+	if (!s) return '';
+	const low = s.toLowerCase();
+	for (const suf of [' languages', ' language']) {
+		if (low.endsWith(suf)) return s.slice(0, s.length - suf.length).trim();
+	}
+	return s;
+}
 
 // SC-120 Batch C — shared helpers for the ancestry/perk/condition/rule Steel compositions
 // (§3.7-§3.10 of the round-1 design doc). `titleCase` (used by perk's
@@ -427,6 +446,62 @@ export const cultureLayout: CardLayout<Culture> = {
 	useSourceBody: true,
 };
 
+/**
+ * SC-120 Batch A (design §5.2's minimal, per-family shape — the FULL
+ * `stripLabeledLines(md, labels)` generalization over every family's labels is Batch B's
+ * job, not this one's; this is deliberately the narrowest private helper that satisfies
+ * career alone, shaped so Batch B can lift it out and widen it without a rewrite).
+ *
+ * Strips a bold-labeled line the career composition's bands now render structurally
+ * (Skills / Languages / Project Points / Renown / Wealth / Perk) — real corpus labels are
+ * markdown LINKS (`**[Renown](scc.v1:...):** +1`, `**[Project Points](...):** 240`), so the
+ * match is on the bold run's LINK TEXT, not the raw line. Mitigation against
+ * over-stripping (design §5.2's stated risk): a line only matches when (i) it begins with
+ * `**`, (ii) the first `**...**` run's plain text — link/emphasis stripped, trailing `:`
+ * dropped — case-insensitively equals one of `LABELS`, and (iii) only that ONE line plus a
+ * single immediately-following blank line is removed, never a following paragraph (the d6
+ * Inciting Incident table and the "think about the following questions" prose start their
+ * own paragraphs and are never bold-led, so they can never match this pattern).
+ *
+ * `Project Points` is NOT in the design doc's own label list (§3.2 names only Skills/
+ * Languages/Renown/Wealth/Perk) — added here as a deliberate deviation: `project_points` IS
+ * one of the composition's own 4 tile slots (the "Career Benefits" band above), and the
+ * real corpus (`v2/docs/Browse/career/artisan.md`) carries a `**[Project
+ * Points](...):** 240` body line the tile now duplicates exactly like the double-render
+ * defect this effort's own ticket named for treasure — omitting it here would reintroduce
+ * that defect for careers with project points. See the Batch A report for the full
+ * rationale.
+ */
+const CAREER_BODY_LABELS = ['Skills', 'Languages', 'Renown', 'Wealth', 'Perk', 'Project Points'];
+const CAREER_LABEL_LINE_RE = /^\*\*(.+?)\*\*:?/;
+
+function stripCareerBodyLabels(md: string): string {
+	const wanted = new Set(CAREER_BODY_LABELS.map((l) => l.toLowerCase()));
+	const lines = md.split('\n');
+	const kept: string[] = [];
+	let skipBlankAfter = false;
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (skipBlankAfter) {
+			skipBlankAfter = false;
+			if (trimmed === '') continue; // swallow ONE blank line right after a stripped line
+		}
+		const m = CAREER_LABEL_LINE_RE.exec(trimmed);
+		if (m) {
+			const labelText = normalizeForDuplicateCheck(m[1]).replace(/:$/, '');
+			if (wanted.has(labelText)) {
+				skipBlankAfter = true;
+				continue;
+			}
+		}
+		kept.push(line);
+	}
+	return kept
+		.join('\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+}
+
 export const careerLayout: CardLayout<Career> = {
 	title: (m) => m.name,
 	flavor: (m) => m.flavor,
@@ -459,6 +534,80 @@ export const careerLayout: CardLayout<Career> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch A §3.2 — FULL composition: a dash-filled 4-up "Career Benefits" tile row
+	// (statTiles()'s exact fixed-slot-dash grammar) plus Skills/Perk markdown bands, ported
+	// from the site's `careerCard` (cards.go:382-414). Body policy (B): strip the
+	// bold-labeled lines the composition now renders structurally, matching on the
+	// LABEL'S LINK TEXT (every real career links Renown/Wealth/Project Points to a rule
+	// page, e.g. `**[Renown](scc.v1:...):** +1` — see `stripCareerBodyLabels` below).
+	steel: {
+		eyebrow: () => 'Career',
+		crestIcon: () => 'briefcase',
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Flavor — the same duplicate-vs-body guard every other composition's flavor
+			// band uses (kit/ancestry/perk): suppress a knowingly-empty band rather than
+			// push one that renders nothing.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Career Benefits — 4 fixed dash-filled tiles (cards.go:400-405). `languageCount`
+			// reduces `language`'s sentence shape ("One language") to its count word;
+			// `statTiles()` itself dash-fills '' -> '—' for project_points/renown/wealth,
+			// which are sparse-but-live in the corpus (§1.3 of the design doc).
+			bands.push({
+				head: 'Career Benefits',
+				render: (container) => {
+					statTiles(container, [
+						{ value: languageCount(m.language), label: 'Languages' },
+						{ value: m.project_points != null ? String(m.project_points) : '', label: 'Project Pts' },
+						{ value: m.renown != null ? String(m.renown) : '', label: 'Renown' },
+						{ value: m.wealth ?? '', label: 'Wealth' },
+					]);
+				},
+			});
+
+			// Skills / Perk — the SAME markdown expressions the legacy rows above use, now
+			// structural bands instead of a label/value grid row.
+			const skillsText = [(m.skills ?? []).join(', '), m.skill_group].filter(Boolean).join('; ') || undefined;
+			if (skillsText) {
+				bands.push({
+					head: 'Skills',
+					render: (container, renderMarkdown) => renderMarkdown(skillsText, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+			const perkText = [m.perk, m.perk_group].filter(Boolean).join(' · ') || undefined;
+			if (perkText) {
+				bands.push({
+					head: 'Perk',
+					render: (container, renderMarkdown) => renderMarkdown(perkText, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body — policy (B): strip the bold-labeled lines the bands above now own.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				const stripped = stripCareerBodyLabels(bodyMd);
+				if (stripped.trim()) {
+					bands.push({
+						render: (container, renderMarkdown) => renderMarkdown(stripped, container.createDiv({ cls: 'dse-card__body' })),
+					});
+				}
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const classLayout: CardLayout<Class> = {
@@ -486,6 +635,89 @@ export const classLayout: CardLayout<Class> = {
 	],
 	body: (m) => m.content,
 	useSourceBody: true,
+
+	// SC-120 Batch A §3.1 — FULL composition, the ticket's own headline example: ports the
+	// site's ONE bespoke page composition, `.sc-classhead` (class_page.go:48-83). No
+	// `subtitle`/`badges` here — `renderSteel()` never reads them; the right rail
+	// (rightPrimary/rightDeck) carries the primary characteristics instead, matching the
+	// site's `hMini`/`hLine` pair (class_page.go:68-70).
+	steel: {
+		eyebrow: () => 'Class',
+		crestIcon: () => 'shield',
+		// Site parity (class_page.go:67-70): rightPrimary/rightDeck are a PAIR — both
+		// present or both absent, gated on the same non-empty `primary_characteristics`
+		// check (beastheart classes carry none).
+		rightPrimary: (m) => (m.primary_characteristics ?? []).join(' · ') || undefined,
+		rightDeck: (m) => ((m.primary_characteristics ?? []).length ? 'primary characteristics' : undefined),
+		bands: (m, source) => {
+			const bands: SteelBand[] = [];
+
+			// Flavor — the same duplicate-vs-body guard every other composition uses.
+			const bodyForDedup = resolvedBodyMd(m.content, source);
+			const normalizedBody = bodyForDedup && bodyForDedup.trim() ? normalizeForDuplicateCheck(bodyForDedup) : undefined;
+			const flavor = m.flavor;
+			const flavorDuplicatesBody = !!(flavor && normalizedBody?.startsWith(normalizeForDuplicateCheck(flavor)));
+			if (flavor && !flavorDuplicatesBody) {
+				bands.push({
+					render: (container, renderMarkdown) =>
+						renderMarkdown(flavor, container.createDiv({ cls: 'dse-card__flavor' })),
+				});
+			}
+
+			// Basics — 3 fixed dash-filled tiles (class_page.go:151-166). The site OMITS an
+			// absent cell (beastheart classes carry none of these fields); the plugin
+			// dash-fills all three (SC-100 ruling 2 — a fixed grid reading uniformly is
+			// itself information), a deliberate divergence the design doc calls out (§3.1).
+			bands.push({
+				head: 'Basics',
+				render: (container) => {
+					statTiles(container, [
+						{ value: m.starting_stamina != null ? String(m.starting_stamina) : '', label: 'Starting stamina' },
+						{ value: m.stamina_per_level != null ? `+${m.stamina_per_level}` : '', label: 'Stamina per level' },
+						{ value: m.recoveries != null ? String(m.recoveries) : '', label: 'Recoveries' },
+					]);
+				},
+			});
+
+			// Potency — 3 fixed dash-filled tiles (class_page.go:170-185). `plainText()` is
+			// REQUIRED here: every real potency value is
+			// "[Characteristic](scc.v1:...) ± N" and statTiles() writes with setText (no
+			// markdown rendering) — the site strips the link the same way (rendered value
+			// reads "Reason − 2").
+			bands.push({
+				head: 'Potency',
+				render: (container) => {
+					statTiles(container, [
+						{ value: m.weak_potency ? plainText(m.weak_potency) : '', label: 'Weak potency' },
+						{ value: m.average_potency ? plainText(m.average_potency) : '', label: 'Average potency' },
+						{ value: m.strong_potency ? plainText(m.strong_potency) : '', label: 'Strong potency' },
+					]);
+				},
+			});
+
+			// Skills — the same markdown expression the legacy row above uses.
+			const skillsText = [(m.skills ?? []).join(', '), m.skill_group].filter(Boolean).join('; ') || undefined;
+			if (skillsText) {
+				bands.push({
+					head: 'Skills',
+					render: (container, renderMarkdown) => renderMarkdown(skillsText, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			// Body — policy (A) keep whole (design §3.1): the site's own class page repeats
+			// every Basics value below the head too (site parity), and the
+			// `### Tactician Advancement Table` further down is a real asset the
+			// composition must not eat. No labeled-line stripping here.
+			const bodyMd = resolvedBodyMd(m.content, source);
+			if (bodyMd && bodyMd.trim()) {
+				bands.push({
+					render: (container, renderMarkdown) => renderMarkdown(bodyMd, container.createDiv({ cls: 'dse-card__body' })),
+				});
+			}
+
+			return bands;
+		},
+	},
 };
 
 export const titleLayout: CardLayout<Title> = {

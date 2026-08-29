@@ -46,6 +46,13 @@ const DASH = '—';
  */
 export function statTiles(parent: HTMLElement, tiles: StatTile[]): HTMLElement {
 	const row = parent.createDiv({ cls: 'dse-tiles' });
+	// SC-120 Batch A (design §4.1 item 1): the base geometry's column count now reads
+	// `var(--dse-tiles-n, 4)` (styles-source.css) instead of a hardcoded `repeat(4, 1fr)` —
+	// class needs 3-up, treasure (Batch B) needs 2-up. Always written (not only when it
+	// differs from the CSS default) so a row's column count is never implicit: kit's two
+	// 4-tile rows write `4`, which computes identically to the old hardcoded value — the
+	// kit--steel-{print,realprint} byte-identity check is this generalization's own proof.
+	row.style.setProperty('--dse-tiles-n', String(tiles.length));
 	for (const tile of tiles) {
 		const cell = row.createDiv({
 			cls: tile.accent ? `dse-tiles__cell dse-tiles__cell--${tile.accent}` : 'dse-tiles__cell',

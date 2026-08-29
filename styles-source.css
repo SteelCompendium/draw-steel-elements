@@ -5882,6 +5882,25 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 	line-height: 1;
 }
 
+/* SC-120 Batch A (design §4.1 item 2): class's `primary characteristics` right-deck
+   caption — ports `.sc-classhead .sc-head__right-deck.sc-head__slot--line`
+   (steel-class.css:21-24: `font-size:.72rem; letter-spacing:.07em;
+   color:var(--md-default-fg-color--lighter)`), so the deck reads as a quiet caption
+   under the rightPrimary mini-title rather than a second rail chip. Scoped to
+   `.dse-card > .dse-head` (not every `.dse-head__deck--right` in the plugin — e.g. the
+   statblock card head's right-deck keeps its own established chip treatment); higher
+   specificity than the `--chip` rule above (5 vs 3 selector components) so these three
+   properties win without touching the chip's padding/background/border. `--dse-fs-micro`
+   (0.7em) is the role token closest to the site's .72rem literal — never a bare literal
+   here (font-size contract, test/unit/build/fontSizeContract.test.ts). `--dse-fg-faint`
+   is this plugin's twin of the site's `--md-default-fg-color--lighter` (SC-100 precedent,
+   e.g. .dse-tiles__label two rules up). */
+[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card > .dse-head .dse-head__deck--right {
+	font-size: var(--dse-fs-micro);
+	letter-spacing: 0.07em;
+	color: var(--dse-fg-faint);
+}
+
 /* §card-head role line — the THIRD slot surface: `.sc-head__slot--mini`
    (steel-cardhead.css:111-114). On the site the statblock card head's
    right-primary is NOT the flat rail chip; live markup is
@@ -11877,7 +11896,17 @@ button.dse-pr__row:hover {
    the standing Steel+not-print guard live with the rest of Task 3's material. */
 .dse-tiles {
 	display: grid;
-	grid-template-columns: repeat(4, 1fr);
+	/* SC-120 Batch A (design §4.1 item 1): variable column count — `statTiles()`
+	   (statTiles.ts) writes `--dse-tiles-n` to the row's OWN inline style as
+	   `tiles.length`, always (never conditionally), so a row with no composition
+	   opinion falls back to this rule's own default only in a defensive/test
+	   context. Kit's two rows are 4-up (writes `4`), which computes byte-identical
+	   to the old hardcoded `repeat(4, 1fr)` — the kit--steel-{print,realprint}
+	   shots staying byte-identical after this change is the generalization's own
+	   regression proof. class needs 3-up (Basics/Potency), treasure (Batch B)
+	   needs 2-up (Project). Site parity: the site emits the same per-grid inline
+	   `style="grid-template-columns:repeat(N,1fr)"` (cards.go:700). */
+	grid-template-columns: repeat(var(--dse-tiles-n, 4), 1fr);
 	gap: 0.35em;
 }
 .dse-tiles + .dse-tiles {

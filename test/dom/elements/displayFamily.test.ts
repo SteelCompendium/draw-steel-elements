@@ -45,9 +45,9 @@ import perkExample from '@/elements/display/perk/example.yaml';
 import complicationExample from '@/elements/display/complication/example.yaml';
 import type { ElementDefinition } from '@/framework/registry';
 import { displayFamily } from '@/elements/display/displayFamily';
-import { kitLayout, conditionLayout, ancestryLayout, perkLayout } from '@/elements/display/layouts';
+import { kitLayout, conditionLayout, ancestryLayout, perkLayout, careerLayout, classLayout } from '@/elements/display/layouts';
 import type { CardLayout } from '@/elements/shared/CardLayout';
-import type { Kit, Condition, Ancestry, Perk } from 'steel-compendium-sdk';
+import type { Kit, Condition, Ancestry, Perk, Career, Class } from 'steel-compendium-sdk';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
 import { MarkdownRenderer } from '../../mocks/obsidian';
 
@@ -89,9 +89,10 @@ const baseKitElement = displayFamily<Kit>({
  * the whole branch rule), so the pre-existing base-branch assertions below (rows/badges/
  * flavor-suppression against `renderBase()`) move onto these clones — `renderBase()` is
  * still live production code for every family that hasn't opted into a Steel composition
- * (career/class/culture/treasure/title/complication), so it still deserves the coverage;
- * it just can no longer be reached through the real ancestry/perk/condition elements. The
- * real elements' Steel-branch DOM is covered by displaySteelBatchC.test.ts instead.
+ * (culture/treasure/title/complication — SC-120 Batch A moves career/class off this list,
+ * see their own clones below), so it still deserves the coverage; it just can no longer be
+ * reached through the real ancestry/perk/condition elements. The real elements' Steel-branch
+ * DOM is covered by displaySteelBatchC.test.ts instead.
  */
 const baseConditionLayout: CardLayout<Condition> = { ...conditionLayout, steel: undefined };
 const baseConditionElement = displayFamily<Condition>({
@@ -121,6 +122,33 @@ const basePerkElement = displayFamily<Perk>({
 	type: 'perk',
 	layout: basePerkLayout,
 	example: perkExample,
+});
+
+/**
+ * SC-120 Batch A — the same steel-less-clone convention, applied to career/class (this
+ * batch's own two families). Their real elements now ALWAYS render `renderSteel()`
+ * (SC-144), so the pre-existing rows/badges assertions against `renderBase()` below move
+ * onto these clones; the real elements' Steel-branch DOM is covered by
+ * displaySteelBatchA.test.ts instead.
+ */
+const baseCareerLayout: CardLayout<Career> = { ...careerLayout, steel: undefined };
+const baseCareerElement = displayFamily<Career>({
+	id: 'career-base-branch',
+	aliases: ['ds-career-base-branch'],
+	name: 'Career (base branch)',
+	type: 'career',
+	layout: baseCareerLayout,
+	example: careerExample,
+});
+
+const baseClassLayout: CardLayout<Class> = { ...classLayout, steel: undefined };
+const baseClassElement = displayFamily<Class>({
+	id: 'class-base-branch',
+	aliases: ['ds-class-base-branch'],
+	name: 'Class (base branch)',
+	type: 'class',
+	layout: baseClassLayout,
+	example: classExample,
 });
 
 /** The card title node, whichever branch rendered it: the base branch's
@@ -342,10 +370,13 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(root.querySelector('.dse-card__body')!.textContent).toContain('Skill Options');
 	});
 
-	test('ds-career: inline example.yaml renders title/badges; Skills and Perk rows are suppressed (D6 Task 7 review fix: both duplicate content verbatim) and their markdown renders once, via body', async () => {
+	// SC-120 Batch A: ds-career now ALWAYS renders its Steel composition (SC-144 branch
+	// rule) — this base-branch assertion moves onto the steel-less clone; the real
+	// element's Steel-branch DOM is covered by displaySteelBatchA.test.ts.
+	test('base branch: ds-career inline example.yaml renders title/badges; Skills and Perk rows are suppressed (D6 Task 7 review fix: both duplicate content verbatim) and their markdown renders once, via body', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
-		const host = inlineHost('ds-career');
-		await new ElementPipeline(makeInlineDeps()).run(careerElement, careerExample, host);
+		const host = inlineHost('ds-career-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseCareerElement, careerExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
@@ -373,10 +404,13 @@ describe('D6 Task 7: displayFamily inline rendering (remaining seven)', () => {
 		expect(rowLabels).not.toContain('Inciting incidents');
 	});
 
-	test('ds-class: inline example.yaml renders title/badges/rows; Potencies and Skills rows render their inline SCC links through renderMarkdown', async () => {
+	// SC-120 Batch A: ds-class now ALWAYS renders its Steel composition (SC-144 branch rule)
+	// — this base-branch assertion moves onto the steel-less clone; the real element's
+	// Steel-branch DOM is covered by displaySteelBatchA.test.ts.
+	test('base branch: ds-class inline example.yaml renders title/badges/rows; Potencies and Skills rows render their inline SCC links through renderMarkdown', async () => {
 		const renderSpy = jest.spyOn(MarkdownRenderer, 'render');
-		const host = inlineHost('ds-class');
-		await new ElementPipeline(makeInlineDeps()).run(classElement, classExample, host);
+		const host = inlineHost('ds-class-base-branch');
+		await new ElementPipeline(makeInlineDeps()).run(baseClassElement, classExample, host);
 		const root = host.containerEl.firstElementChild as HTMLElement;
 
 		expect(root.querySelectorAll('.dse-error-card')).toHaveLength(0);
