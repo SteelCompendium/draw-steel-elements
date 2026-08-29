@@ -10652,8 +10652,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	margin-bottom: 3px;
 	max-width: 100%;
 }
+/* SC-195 — the badge's WORD now grows past "Captain"/"Captain down"/"Make captain" when
+   a Stamina bonus is active ("Captain +4 Sta"). `max-width: 100%` above already caps the
+   badge's own BOX at the grid cell's width, but a flex child's `nowrap` text paints past
+   that box with `overflow: visible` (the default) — the box stops, the text doesn't.
+   `min-width: 0` lets the word span shrink below its own content size (flex items default
+   to `min-width: auto`, which refuses to), so `overflow`/`text-overflow` below can
+   actually take effect: an ellipsis instead of the word spilling into the next cell.
+   Harmless in the roomier detail-row context (.dse-init__name > .dse-init__captain) —
+   the ellipsis never engages when the word already fits. */
+[data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain-word {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain-glyph {
 	display: inline-flex;
+	flex-shrink: 0;
 }
 [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-element='initiative'] .dse-init__captain-glyph svg {
 	width: 1em;

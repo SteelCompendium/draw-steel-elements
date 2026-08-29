@@ -726,7 +726,10 @@ malice:
 // Monsters:12653). D2: the pool numbers already fold the bonus in silently — 65/78 (13)
 // is CORRECT, not 65/54 (9) — and the captain badge's WORD is where the "why" lives
 // ("Captain +4 Sta"). One minion's worth of damage taken (78 - 65 = 13) so the bar shows
-// a real fill, not a full-health squad.
+// a real fill, not a full-health squad. `selectedInstanceKey` opens the detail row on the
+// CAPTAIN by default (rather than the group's usual first-instance default, the minion),
+// so this one fixture also documents the full un-truncated badge word — the roster
+// cell's own copy of that word is narrower than "Captain +4 Sta" and ellipsizes.
 const initiativeCaptainBonus = `heroes:
   - name: "Frodo Baggins"
     max_stamina: 80
@@ -735,6 +738,7 @@ const initiativeCaptainBonus = `heroes:
 enemy_groups:
   - name: "Hobgoblin Squad"
     is_squad: true
+    selectedInstanceKey: "1-1"
     creatures:
       - name: "Hobgoblin Recruit"
         max_stamina: 9
