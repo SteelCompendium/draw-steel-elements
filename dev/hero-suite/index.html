@@ -41,7 +41,7 @@
     
     
       
-        <title>Hero Sheets and Trackers - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
+        <title>Hero Trackers - Steel Compendium: Draw Steel Elements Obsidian Plugin</title>
       
     
     
@@ -92,7 +92,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#hero-sheets-and-trackers" class="md-skip">
+        <a href="#hero-trackers" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Hero Sheets and Trackers
+              Hero Trackers
             
           </span>
         </div>
@@ -631,7 +631,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Sheets and Trackers
+    Hero Trackers
   
 
     
@@ -649,7 +649,7 @@
   <span class="md-ellipsis">
     
   
-    Hero Sheets and Trackers
+    Hero Trackers
   
 
     
@@ -673,56 +673,6 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#hero-sheet-ds-hero" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hero sheet (ds-hero)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Hero sheet (ds-hero)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#fields" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fields
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-compendium-does-the-maths" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The compendium does the maths
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#at-the-table" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        At the table
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
       
         <li class="md-nav__item">
   <a href="#conditions-ds-conditions" class="md-nav__link">
@@ -1064,33 +1014,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../tracking-your-hero/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Track Your Hero
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../values-row-element/" class="md-nav__link">
         
   
@@ -1165,56 +1088,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#hero-sheet-ds-hero" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hero sheet (ds-hero)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Hero sheet (ds-hero)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#fields" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fields
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-compendium-does-the-maths" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The compendium does the maths
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#at-the-table" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        At the table
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#conditions-ds-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1286,111 +1159,13 @@
 
 
 
-<h1 id="hero-sheets-and-trackers">Hero Sheets and Trackers<a class="headerlink" href="#hero-sheets-and-trackers" title="Permanent link">&para;</a></h1>
-<p>The hero sheet puts a whole character in one block. The four smaller blocks below it track
-one thing each — useful on a <a href="../canvas-character-sheet/">Canvas character sheet</a>, in a
-session note, or pinned to the
+<h1 id="hero-trackers">Hero Trackers<a class="headerlink" href="#hero-trackers" title="Permanent link">&para;</a></h1>
+<p>Four small blocks, each tracking one thing about a hero — useful on a
+<a href="../canvas-character-sheet/">Canvas character sheet</a>, in a session note, or pinned to the
 <a href="../writing-blocks/#pinning-a-block-to-the-sidebar">sidebar</a>.</p>
 <p>All of these blocks <strong>write their state back into the note</strong> as you play: spend a Recovery
 or a surge and the YAML in the block updates itself. You never have to edit those numbers
 by hand.</p>
-<p>Step-by-step version: <a href="../tracking-your-hero/">Track your hero</a>.</p>
-<h2 id="hero-sheet-ds-hero">Hero sheet (<code>ds-hero</code>)<a class="headerlink" href="#hero-sheet-ds-hero" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>~~~ds-hero
-name: Torin Stonefist
-level: 3
-ancestry: scc.v1:mcdm.heroes.v1/ancestry/dwarf
-class: scc.v1:mcdm.heroes.v1/class/fury
-subclass: berserker
-kits: [scc.v1:mcdm.heroes.v1/kit/mountain]
-characteristics: { might: 2, agility: 2, reason: -1, intuition: 0, presence: 1 }
-skills: [Endurance, Intimidate, Nature]
-abilities:
-<span class="w">  </span><span class="k">-</span><span class="w"> </span>scc.v1:mcdm.heroes.v1/feature.ability.fury.level-1/brutal-slam
-~~~
-</code></pre></div>
-<p><img alt="A hero sheet" src="../Media/hero.png" /></p>
-<p>The sheet renders characteristics, a Stamina bar with Recoveries, the heroic resource,
-surges, conditions, and the hero's abilities as compact rows that expand into full ability
-cards (rollable, if you have turned rolling on in <a href="../settings/#rolling">Settings</a>).</p>
-<h3 id="fields">Fields<a class="headerlink" href="#fields" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Required</th>
-<th>What it is</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>name</code></td>
-<td>Yes</td>
-<td>The hero's name.</td>
-</tr>
-<tr>
-<td><code>level</code></td>
-<td>Yes</td>
-<td>1–10.</td>
-</tr>
-<tr>
-<td><code>characteristics</code></td>
-<td>Yes</td>
-<td><code>might</code>, <code>agility</code>, <code>reason</code>, <code>intuition</code>, <code>presence</code>.</td>
-</tr>
-<tr>
-<td><code>ancestry</code>, <code>class</code>, <code>kits</code></td>
-<td>No</td>
-<td>Compendium codes (<code>scc.v1:…</code>), <code>[[wikilinks]]</code>, or inline data.</td>
-</tr>
-<tr>
-<td><code>subclass</code>, <code>skills</code></td>
-<td>No</td>
-<td>Plain text and a list of skill names.</td>
-</tr>
-<tr>
-<td><code>abilities</code></td>
-<td>No</td>
-<td>Compendium codes, or ability YAML written inline (same shape as a <a href="../Features/">feature block</a>).</td>
-</tr>
-<tr>
-<td><code>max_stamina</code>, <code>recoveries_max</code>, <code>resource</code></td>
-<td>No</td>
-<td>Overrides, for when you aren't resolving a class from the compendium.</td>
-</tr>
-<tr>
-<td><code>titles</code>, <code>perks</code>, <code>treasures</code>, <code>complication</code></td>
-<td>No</td>
-<td>Shown as-is.</td>
-</tr>
-<tr>
-<td><code>state</code></td>
-<td>No</td>
-<td>Written by the plugin — see below. Leave it out when you write a new sheet.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="the-compendium-does-the-maths">The compendium does the maths<a class="headerlink" href="#the-compendium-does-the-maths" title="Permanent link">&para;</a></h3>
-<p>If <code>class</code>, <code>ancestry</code> and <code>kits</code> are compendium codes and you have
-<a href="../compendium-sync/">synced the compendium</a>, the sheet derives maximum Stamina, Recoveries
-and the heroic resource's name for you. If a code can't be resolved — usually because the
-compendium isn't synced yet — the sheet says so next to that slot and keeps rendering;
-fill in <code>max_stamina</code> / <code>recoveries_max</code> / <code>resource</code> yourself if you'd rather not sync.</p>
-<h3 id="at-the-table">At the table<a class="headerlink" href="#at-the-table" title="Permanent link">&para;</a></h3>
-<ul>
-<li>Click the Stamina bar to apply damage or healing; click a Recovery marker to spend or
-  restore Recoveries.</li>
-<li>Steppers change the heroic resource and surges. Nothing is spent automatically —
-  rolling never takes your surges.</li>
-<li>Add or remove conditions from the conditions strip.</li>
-<li><strong><code>[respite]</code></strong> in the header takes a respite: Stamina and Recoveries back to full,
-  temporary Stamina and surges cleared, and any <em>end of encounter</em> conditions removed
-  (save-ends and end-of-turn conditions stay).</li>
-<li><strong>Edit definition</strong> opens a form for the authored half of the sheet (name, level, class,
-  abilities, …) without exposing the play state.</li>
-</ul>
-<p>Everything you change during play is stored in the block's <code>state:</code> key. The part you
-wrote by hand is left alone.</p>
 <h2 id="conditions-ds-conditions">Conditions (<code>ds-conditions</code>)<a class="headerlink" href="#conditions-ds-conditions" title="Permanent link">&para;</a></h2>
 <p>A conditions strip for one hero or creature, using the same Conditions manager as the
 <a href="../initiative-tracker/#conditions">initiative tracker</a>.</p>
