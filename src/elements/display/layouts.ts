@@ -456,12 +456,20 @@ export const cultureLayout: CardLayout<Culture> = {
  * (Skills / Languages / Project Points / Renown / Wealth / Perk) — real corpus labels are
  * markdown LINKS (`**[Renown](scc.v1:...):** +1`, `**[Project Points](...):** 240`), so the
  * match is on the bold run's LINK TEXT, not the raw line. Mitigation against
- * over-stripping (design §5.2's stated risk): a line only matches when (i) it begins with
- * `**`, (ii) the first `**...**` run's plain text — link/emphasis stripped, trailing `:`
- * dropped — case-insensitively equals one of `LABELS`, and (iii) only that ONE line plus a
- * single immediately-following blank line is removed, never a following paragraph (the d6
- * Inciting Incident table and the "think about the following questions" prose start their
- * own paragraphs and are never bold-led, so they can never match this pattern).
+ * over-stripping (design §5.2's stated risk): a line only matches when (i) it begins at
+ * column 0 with `**` (FIX ROUND, round-5 review LOW-2: the label test now runs against
+ * the RAW line, not the trimmed one — an indented continuation line, e.g.
+ * `    **Perk:** …` under a list item, no longer matches, since a real labeled line in
+ * this corpus always starts a paragraph at the left margin), (ii) the bold run carries a
+ * colon — either inside it (`**Skills:**`, every real corpus shape) or immediately after
+ * it (`**Skills**:`, accepted defensively; FIX ROUND, round-5 review LOW-1: the colon is
+ * now MANDATORY, not optional — `**Wealth** is a measure of…`, a bold-LED PROSE sentence
+ * with no colon at all, no longer matches just because its first word equals a label),
+ * whose plain text (link/emphasis stripped) case-insensitively equals one of `LABELS`,
+ * and (iii) only that ONE line plus a single immediately-following blank line is
+ * removed, never a following paragraph (the d6 Inciting Incident table and the "think
+ * about the following questions" prose start their own paragraphs and are never
+ * bold-led, so they can never match this pattern).
  *
  * `Project Points` is NOT in the design doc's own label list (§3.2 names only Skills/
  * Languages/Renown/Wealth/Perk) — added here as a deliberate deviation: `project_points` IS
@@ -469,11 +477,32 @@ export const cultureLayout: CardLayout<Culture> = {
  * real corpus (`v2/docs/Browse/career/artisan.md`) carries a `**[Project
  * Points](...):** 240` body line the tile now duplicates exactly like the double-render
  * defect this effort's own ticket named for treasure — omitting it here would reintroduce
- * that defect for careers with project points. See the Batch A report for the full
- * rationale.
+ * that defect for careers with project points. Owner ruling 15 accepted this deviation.
+ *
+ * FIX ROUND (round-5 review MED-1 / owner ruling 16): every real career's body also
+ * carries a fixed lead-in sentence right above the labeled lines —
+ * "You gain the following career benefits:" (verified: all 18 Browse careers carry this
+ * exact string) — which policy (B) left orphaned once its labeled lines were gone,
+ * directly above the d6 table. The composition's own `Career Benefits` band head is its
+ * structural replacement, so it is stripped the same way (whole-line, normalized-text
+ * match, one swallowed trailing blank).
  */
 const CAREER_BODY_LABELS = ['Skills', 'Languages', 'Renown', 'Wealth', 'Perk', 'Project Points'];
-const CAREER_LABEL_LINE_RE = /^\*\*(.+?)\*\*:?/;
+/** FIX ROUND (round-5 review MED-1): exact normalized-text lines stripped alongside the
+ *  bold labels above — not bold-led, so they need their own whole-line match rather than
+ *  `CAREER_LABEL_LINE_RE`. */
+const CAREER_LEAD_IN_LINES = new Set(['you gain the following career benefits:']);
+/**
+ * FIX ROUND (round-5 review LOW-1/LOW-2): two plain capture alternatives (named groups
+ * are ES2018+; this repo's tsc `target` is ES6, CLAUDE.md's "Target ES2018" describes the
+ * esbuild OUTPUT, not tsc's own type-check target) — group 1 matches the colon INSIDE the
+ * bold run (`**Skills:**`, every real corpus shape); group 2 matches it immediately after
+ * the closing `**` (`**Skills**:`, not currently produced by any real career, accepted
+ * defensively per design §5.2's own "inside or outside" mitigation wording). Anchored at
+ * the start of the STRING (not `trimmed`) by the caller now passing the raw line — see
+ * LOW-2 above.
+ */
+const CAREER_LABEL_LINE_RE = /^\*\*(.+?):\*\*|^\*\*(.+?)\*\*:/;
 
 function stripCareerBodyLabels(md: string): string {
 	const wanted = new Set(CAREER_BODY_LABELS.map((l) => l.toLowerCase()));
@@ -481,18 +510,21 @@ function stripCareerBodyLabels(md: string): string {
 	const kept: string[] = [];
 	let skipBlankAfter = false;
 	for (const line of lines) {
-		const trimmed = line.trim();
 		if (skipBlankAfter) {
 			skipBlankAfter = false;
-			if (trimmed === '') continue; // swallow ONE blank line right after a stripped line
+			if (line.trim() === '') continue; // swallow ONE blank line right after a stripped line
 		}
-		const m = CAREER_LABEL_LINE_RE.exec(trimmed);
-		if (m) {
-			const labelText = normalizeForDuplicateCheck(m[1]).replace(/:$/, '');
-			if (wanted.has(labelText)) {
-				skipBlankAfter = true;
-				continue;
-			}
+		// LOW-2: matched against the RAW line — an indented continuation line's `**` does
+		// not sit at column 0, so `^\*\*` correctly fails to match it.
+		const m = CAREER_LABEL_LINE_RE.exec(line);
+		const captured = m?.[1] ?? m?.[2];
+		if (captured !== undefined && wanted.has(normalizeForDuplicateCheck(captured))) {
+			skipBlankAfter = true;
+			continue;
+		}
+		if (CAREER_LEAD_IN_LINES.has(normalizeForDuplicateCheck(line))) {
+			skipBlankAfter = true;
+			continue;
 		}
 		kept.push(line);
 	}

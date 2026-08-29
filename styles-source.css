@@ -5889,13 +5889,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    under the rightPrimary mini-title rather than a second rail chip. Scoped to
    `.dse-card > .dse-head` (not every `.dse-head__deck--right` in the plugin — e.g. the
    statblock card head's right-deck keeps its own established chip treatment); higher
-   specificity than the `--chip` rule above (5 vs 3 selector components) so these three
-   properties win without touching the chip's padding/background/border. `--dse-fs-micro`
-   (0.7em) is the role token closest to the site's .72rem literal — never a bare literal
-   here (font-size contract, test/unit/build/fontSizeContract.test.ts). `--dse-fg-faint`
-   is this plugin's twin of the site's `--md-default-fg-color--lighter` (SC-100 precedent,
-   e.g. .dse-tiles__label two rules up). */
+   specificity than the `--chip` rule above (5 vs 3 selector components) so these
+   properties win without a second selector. `--dse-fs-micro` (0.7em) is the role token
+   closest to the site's .72rem literal — never a bare literal here (font-size contract,
+   test/unit/build/fontSizeContract.test.ts). `--dse-fg-faint` is this plugin's twin of
+   the site's `--md-default-fg-color--lighter` (SC-100 precedent, e.g. .dse-tiles__label
+   two rules up).
+   FIX ROUND (round-5 review MED-2 / owner ruling 16): the site's deck line
+   (`.sc-head__slot--line`) is boxless — no border, no background, no padding — but the
+   rule above only touched font-size/letter-spacing/color, leaving the `--chip` surface's
+   `border`/`background`/`padding` (styles-source.css ~5599-5610 Steel, ~11605-11616
+   base) still painted underneath, so the deck rendered as a smaller outlined pill
+   instead of a plain caption. Un-chip it with the same precedent the statblock/
+   featureblock right-primary override 40 lines below already establishes
+   (`:is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip { background: none;
+   border: none; … }`). Screen-only (both rules carry `:not([data-dse-print="on"])`), so
+   this costs no frozen print bytes — only the class DARK evidence shot moves. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card > .dse-head .dse-head__deck--right {
+	background: none;
+	border: none;
+	padding: 0;
 	font-size: var(--dse-fs-micro);
 	letter-spacing: 0.07em;
 	color: var(--dse-fg-faint);

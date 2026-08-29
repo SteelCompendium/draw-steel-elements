@@ -24,6 +24,8 @@ import careerExample from '@/elements/display/career/example.yaml';
 import classExample from '@/elements/display/class/example.yaml';
 import { Career, Class } from 'steel-compendium-sdk';
 import { makeHost, makeCompendiumDeps, loadMdDseFixture } from './_refHarness';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const CAREER_REL = 'career/politician.md';
 const CLASS_REL = 'class/tactician.md';
@@ -251,23 +253,35 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 		expect(body.textContent).not.toContain('**Perk:**');
 		expect(body.textContent).not.toContain('[Renown]');
 		expect(body.textContent).not.toContain('[Wealth]');
+		// Round-5 review MED-1: the orphaned lead-in sentence is gone too -- the
+		// "Career Benefits" band head is its structural replacement.
+		expect(body.textContent).not.toContain('You gain the following career benefits');
 		// The Skills/Perk sentences appear via their OWN bands, not a second time via body.
 		expect(body.textContent).not.toContain('interpersonal skill group');
 		expect(body.textContent).not.toContain('Engrossing Monologue');
 	});
 
-	test('direct: stripped body also removes a real "**[Project Points](...):**" corpus line (artisan.md shape) — deviation from the design doc\'s 5-label list, documented in the Batch A report', () => {
+	test('direct: stripped body also removes a real "**[Project Points](...):**" corpus line (artisan.md shape) — deviation from the design doc\'s 5-label list, documented in the Batch A report — and the "You gain the following career benefits:" lead-in (round-5 review MED-1)', async () => {
 		const model = new Career({
 			name: 'Artisan',
 			content:
 				'You gain the following career benefits:\n\n**Skills:** Two skills.\n\n**Languages:** One language\n\n**[Project Points](scc.v1:mcdm.heroes.v1/rule.downtime/project-points):** 240\n\n**Perk:** One perk.\n\n| d6 | Inciting Incident |\n|----|----|\n| 1 | Something happens. |',
 		});
 		const bands = careerLayout.steel!.bands(model, undefined);
-		const bodyBand = bands.find((b) => b.head === undefined)!;
+		// LOW-4 (round-5 review): the body band is always LAST by declaration order — a
+		// `find(b => b.head === undefined)` lookup would ambiguously match career's
+		// headless FLAVOR band too, for any model whose flavor doesn't dedupe against the
+		// body (this model has none, so `find` happened to pass, but proved nothing about
+		// the strip). `bands[bands.length - 1]` mirrors `lastBodyDiv()`'s convention.
+		const bodyBand = bands[bands.length - 1];
 		const container = document.createElement('div');
-		void bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		// LOW-5 (round-5 review): awaited, per owner ruling 13's precedent — the fake
+		// renderMarkdown below is async, so an un-awaited call is a floating-promise
+		// hazard even though it happens to pass today.
+		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
 		expect(container.textContent).not.toContain('Project Points');
 		expect(container.textContent).not.toContain('240');
+		expect(container.textContent).not.toContain('You gain the following career benefits');
 		expect(container.textContent).toContain('Inciting Incident');
 		expect(container.textContent).toContain('Something happens');
 	});
@@ -283,6 +297,30 @@ describe('SC-120 Batch A: ds-career Steel composition', () => {
 		const bands = careerLayout.steel!.bands(model, undefined);
 		expect(bands.map((b) => b.head)).not.toContain('Skills');
 		expect(bands.map((b) => b.head)).not.toContain('Perk');
+	});
+
+	test('direct (round-5 review LOW-1): a bold-LED PROSE paragraph with no colon survives — "**Wealth** is a measure of…" is not a labeled line', async () => {
+		const model = new Career({
+			name: 'X',
+			content: '**Wealth** is a measure of your character\'s buying power and financial standing.',
+		});
+		const bands = careerLayout.steel!.bands(model, undefined);
+		const bodyBand = bands[bands.length - 1];
+		const container = document.createElement('div');
+		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		expect(container.textContent).toContain('is a measure of your character');
+	});
+
+	test('direct (round-5 review LOW-2): an indented continuation line survives — a labeled line under a list item is not stripped', async () => {
+		const model = new Career({
+			name: 'X',
+			content: '- An item\n    **Perk:** One perk described inline under the bullet.',
+		});
+		const bands = careerLayout.steel!.bands(model, undefined);
+		const bodyBand = bands[bands.length - 1];
+		const container = document.createElement('div');
+		await bodyBand.render(container, async (md, el) => { el.setText(md); }, undefined as any);
+		expect(container.textContent).toContain('One perk described inline under the bullet');
 	});
 });
 
@@ -314,5 +352,40 @@ describe('SC-120 Batch A: by-SCC hybrid mode still resolves both families (sourc
 		const body = lastBodyDiv(card);
 		expect(body.textContent).toContain('Diplomatic Immunity');
 		expect(body.textContent).not.toContain('**Skills:**');
+	});
+});
+
+// Round-5 review LOW-3: nothing previously pinned the right-deck caption rule's
+// Steel/print scope as a RULE (only DOM assertions existed, which can't see a dropped
+// `:not([data-dse-print="on"])` guard — the freeze is blind to it too this batch, since
+// class's print pair is already moving for MED-2's DOM reasons). Mirrors
+// chromeRound2.test.ts's convention: read the real sheet, find the block by its
+// selector text, and assert on both the selector and its declarations directly — a
+// sheet-scan a future edit can't silently narrow.
+describe('SC-120 Batch A round-5 review LOW-3: the right-deck caption rule keeps its full Steel/print scope', () => {
+	const CSS = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+	const SELECTOR =
+		"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-card > .dse-head .dse-head__deck--right";
+
+	function ruleBlock(): string {
+		const start = CSS.indexOf(`${SELECTOR} {`);
+		expect(start).toBeGreaterThan(-1); // the gate HAS TEETH: a renamed/dropped selector fails here first
+		return CSS.slice(start, CSS.indexOf('}', start));
+	}
+
+	test('the selector carries BOTH halves of the Steel scope', () => {
+		expect(SELECTOR).toContain("[data-dse-theme='steel']");
+		expect(SELECTOR).toContain(':not([data-dse-print="on"])');
+		expect(CSS).toContain(`${SELECTOR} {`);
+	});
+
+	test('the block un-chips the deck (round-5 review MED-2) and states its 3 typographic properties via role tokens/literals, never a bare font-size', () => {
+		const block = ruleBlock();
+		expect(block).toContain('background: none;');
+		expect(block).toContain('border: none;');
+		expect(block).toContain('padding: 0;');
+		expect(block).toContain('font-size: var(--dse-fs-micro);');
+		expect(block).toContain('letter-spacing: 0.07em;');
+		expect(block).toContain('color: var(--dse-fg-faint);');
 	});
 });
