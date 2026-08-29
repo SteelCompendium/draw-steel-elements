@@ -159,7 +159,7 @@ const PINS: Pin[] = [
 		ground: '#edf0f0',
 		opacity: 1,
 		threshold: 3.0,
-		measured: 3.55,
+		measured: 7.57,
 		surface: ".dse-pr__row[data-tier='crit'] spine — negotiation",
 		wasDark: '#e0b050',
 	},
@@ -186,7 +186,7 @@ const PINS: Pin[] = [
 		ground: '#eaeeef',
 		opacity: 1,
 		threshold: 4.5,
-		measured: 5.11,
+		measured: 7.43,
 		surface: '.dse-prj__log-badge on a breakthrough row — project',
 		wasDark: '#e0b050',
 	},
@@ -195,9 +195,20 @@ const PINS: Pin[] = [
 		ground: '#edf0f0',
 		opacity: 1,
 		threshold: 4.5,
-		measured: 5.11,
+		measured: 5.25,
 		surface: '.dse-mt__outcome[data-outcome="failure"] — montage',
 		wasDark: '#e8954a',
+	},
+	{
+		// SC-196 round 2. Ground is the initiative cell's own interior, which is the
+		// adjacency the ring has to be discernible against (WCAG 1.4.11).
+		token: 'select',
+		ground: '#dddddd',
+		opacity: 1,
+		threshold: 3.0,
+		measured: 4.08,
+		surface: '.dse-init__cell[data-selected] ring — initiative-cell-selected',
+		wasDark: '#e0584b',
 	},
 	{
 		token: 'danger',
@@ -215,12 +226,53 @@ const PINS: Pin[] = [
  * `--dse-surface` painted on top of it (`.dse-init__turn[data-taken] svg`). Darkening a
  * fill can break the ink riding it, so the mirror case is pinned beside the fill's own.
  */
-const FILL_INK = {
-	fill: 'turn-done',
-	ink: 'surface',
-	threshold: 4.5,
-	surface: '.dse-init__turn[data-taken] svg — glyph ink over the turn-taken fill',
-};
+const FILL_INK = [
+	{
+		fill: 'turn-done',
+		ink: 'surface',
+		threshold: 4.5,
+		measured: 4.94,
+		surface: '.dse-init__turn[data-taken] svg — glyph ink over the turn-taken fill',
+	},
+	{
+		// SC-196 round 2, the other half of the joint `--dse-select` solve. This row is
+		// behind the default-OFF `rollingEnabled` pref, so it renders in NO harness
+		// capture and this number is arithmetic rather than a measured shot — which is
+		// exactly why it is pinned here.
+		fill: 'select',
+		ink: 'accent-fg',
+		threshold: 4.5,
+		measured: 5.55,
+		surface: ".dse-pr__row[data-dse-roll-result='active'] — row ink over the select fill",
+	},
+];
+
+/**
+ * INTER-TOKEN separation. Round 1 solved every token against its own ground in isolation
+ * and three families of CO-LOCATED tokens collapsed into each other as a result — the
+ * four tier spines came within 1.5:1, and `vp`/`warn` (which paint the same element
+ * class) within 1.02:1. Meaning survived, because each of those surfaces also carries a
+ * word, but the colour channel that told them apart did not, and lightness is the channel
+ * that survives for a colourblind reader. These pins are the constraint round 1 lacked.
+ */
+const SEPARATION: { a: string; b: string; min: number; measured: number; why: string }[] = [
+	{
+		a: 'tier-crit',
+		b: 'tier-mid',
+		min: 1.6,
+		measured: 2.36,
+		why: 'four tier spines stack in one power-roll panel; crit must read as the exceptional row',
+	},
+	{ a: 'tier-crit', b: 'tier-low', min: 1.5, measured: 1.6, why: 'same stack' },
+	{ a: 'tier-crit', b: 'tier-high', min: 1.5, measured: 1.84, why: 'same stack' },
+	{
+		a: 'vp',
+		b: 'warn',
+		min: 1.3,
+		measured: 1.44,
+		why: '.dse-mt__outcome paints both on the SAME class; .dse-enc__summary shows both in one row',
+	},
+];
 
 describe('SC-196: the Steel LIGHT state palette clears WCAG on its measured grounds', () => {
 	test.each(PINS)(
@@ -247,15 +299,66 @@ describe('SC-196: the Steel LIGHT state palette clears WCAG on its measured grou
 		expect(survivors).toEqual([]);
 	});
 
-	test('the turn-taken FILL keeps its own ink legible (darkening a fill can break what rides it)', () => {
-		const fill = hexToRgb(lightValue(FILL_INK.fill));
-		const ink = hexToRgb(lightValue(FILL_INK.ink));
-		expect(contrast(ink, fill)).toBeGreaterThanOrEqual(FILL_INK.threshold);
+	test.each(FILL_INK)(
+		'--dse-$ink stays legible ON the --dse-$fill fill — $surface',
+		({ fill, ink, threshold, measured }) => {
+			const ratio = contrast(hexToRgb(lightValue(ink)), hexToRgb(lightValue(fill)));
+			expect(ratio).toBeGreaterThanOrEqual(threshold);
+			expect(ratio).toBeCloseTo(measured, 1);
+		},
+	);
+
+	test.each(SEPARATION)(
+		'--dse-$a and --dse-$b stay $min:1 apart in light — $why',
+		({ a, b, min, measured }) => {
+			const ratio = contrast(hexToRgb(lightValue(a)), hexToRgb(lightValue(b)));
+			expect(ratio).toBeGreaterThanOrEqual(min);
+			expect(ratio).toBeCloseTo(measured, 1);
+		},
+	);
+
+	test('vp and tier-crit are the SAME gold in light, as they are in dark (SC-106 identity)', () => {
+		// Round 1 split them silently. If a future change has to move one, this test is
+		// the place that says the other must move with it — or that the split is now
+		// deliberate and this expectation should be replaced by a recorded reason.
+		expect(lightValue('vp')).toBe(lightValue('tier-crit'));
 	});
 
-	test('every pinned token is declared in the light block as a 6-digit hex (not a var chain)', () => {
-		for (const token of new Set([...PINS.map((p) => p.token), FILL_INK.fill])) {
-			expect(lightValue(token)).toMatch(/^#[0-9a-f]{6}$/i);
+	test('every pinned token is declared in the light block as a 6-digit hex or #fff', () => {
+		const names = new Set([
+			...PINS.map((p) => p.token),
+			...FILL_INK.flatMap((f) => [f.fill, f.ink]),
+			...SEPARATION.flatMap((s) => [s.a, s.b]),
+		]);
+		for (const token of names) {
+			expect(lightValue(token)).toMatch(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+		}
+	});
+
+	test('the active roll row takes its own light ink, Steel-scoped and print-excluded', () => {
+		// The joint half of the select solve. It must exist, must be scoped so it cannot
+		// reach the frozen print class, and must paint the accent-fg role — a bare
+		// `--dse-fg` there measures 2.46:1 on the new fill.
+		const m = sheet.match(
+			/body\.theme-light[\s\S]{0,200}?\.dse-pr__row\[data-dse-roll-result='active'\]\s*\{([^}]*)\}/,
+		);
+		expect(m).not.toBeNull();
+		expect(m?.[0]).toContain(":not([data-dse-print=\"on\"])");
+		expect(m?.[0]).toContain("[data-dse-theme='steel']");
+		expect(m?.[1]).toContain('color: var(--dse-accent-fg)');
+	});
+
+	test('the gauge zero-bulkhead keeps a lit catch-light face against every pour (review L-2)', () => {
+		// `--dse-metal-bright` is an INK grade in the light block (#2c3338); this face is
+		// not text, it is the lit side of a machined edge sitting ON the pour, so the
+		// light scheme re-declares it to the BRIGHT metal grade for this element only.
+		const m = sheet.match(
+			/body\.theme-light[\s\S]{0,120}?\.dse-stamina__gidx--zero\s*\{([^}]*)\}/,
+		);
+		expect(m).not.toBeNull();
+		const face = hexToRgb((m?.[1].match(/color:\s*(#[0-9a-f]{6})/i) ?? [])[1] ?? '#000000');
+		for (const pour of ['stamina-healthy', 'stamina-winded', 'stamina-dying']) {
+			expect(contrast(face, hexToRgb(lightValue(pour)))).toBeGreaterThanOrEqual(3.0);
 		}
 	});
 

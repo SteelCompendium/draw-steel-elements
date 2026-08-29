@@ -399,12 +399,25 @@ const STEEL_LIGHT: Record<string, string> = {
 	'stamina-winded': '#886106',
 	'stamina-dying': '#bb2d1f',
 	'stamina-temp': '#562ec5',
-	'tier-crit': '#a57517',
+	// SC-196 round 2: tier-crit and vp are ONE gold again. Round 1 solved them
+	// independently (vp is text-rated at 4.5, crit is mark-rated at 3.0) and split the
+	// SC-106 "single gold" identity without recording it; the unified value satisfies
+	// the stricter of the two bars, so the identity holds in light as it does in dark.
+	'tier-crit': '#66450a',
 	'turn-done': '#147c40',
 	malice: '#c83426',
-	vp: '#845c0d',
-	warn: '#9a5211',
+	vp: '#66450a',
+	// SC-196 round 2: pulled toward orange-red (hue 23° vs the gold's 38°) and
+	// separated from vp by lightness — the two paint the SAME element class
+	// `.dse-mt__outcome` and share `.dse-enc__summary`, and round 1 left them 1.02:1
+	// apart, i.e. the same brown for two opposite outcomes.
+	warn: '#a34810',
 	danger: '#bb2d1f',
+	// SC-196 round 2: the selection ring, solved jointly with the ink that rides its
+	// fill (`.dse-pr__row[data-dse-roll-result='active']` takes `--dse-accent-fg` in
+	// light). Round 1 left this token on the dark value because moving it alone traded
+	// one failing surface for another; both are pinned in lightContrast.test.ts.
+	select: '#bd392c',
 };
 
 /**
@@ -422,15 +435,11 @@ const STEEL_LIGHT_STABLE = [
 	// villain red is the scheme-invariant literal #e0584b, the same hue (and the
 	// same treatment) as role-controller two lines up. Print still darkens it.
 	'act-villain',
-	// SC-196: the ten stamina/encounter/crit hues that USED to sit on this list are
-	// now light-overridden — see STEEL_LIGHT above. `select` is the one survivor of
-	// that group, and deliberately so: its only measured miss is the initiative
-	// cell's selection ring at 2.73:1 against a 3.0 non-text bar, and darkening it
-	// makes `.dse-pr__row[data-dse-roll-result='active']` (whose --dse-fg text sits
-	// ON the select fill, already 3.53:1) measurably worse. Two surfaces pull in
-	// opposite directions, so the token stays put and the finding is flagged on the
-	// ticket rather than traded.
-	'select',
+	// SC-196: the eleven stamina/encounter/crit/select hues that USED to sit on this
+	// list are ALL light-overridden now — see STEEL_LIGHT above. Nothing from the old
+	// "fills, no contrast pressure" group survives here; the role hues and act-villain
+	// remain because the site locks them scheme-invariant and they are spine/crest
+	// ornament that never states a fact by colour alone.
 	// geometry / typography carried from dark (radius, crest-shape, the SC-105
 	// font slots …)
 	'radius', 'crest-shape', 'hairline-fade',
@@ -459,15 +468,16 @@ describe('D3 Task 4: Steel LIGHT variant (.theme-light [data-dse-theme="steel"])
 		}
 	});
 
-	test('the light block overrides EXACTLY the shifting tokens (44) — none extra, none twice', () => {
+	test('the light block overrides EXACTLY the shifting tokens (45) — none extra, none twice', () => {
 		const defs = steelLightDefinitions();
 		expect(new Set(defs)).toEqual(new Set(Object.keys(STEEL_LIGHT)));
 		// SC-10: badge-fg no longer light-overridden; Plan 20: +metal/-bright/sheen.
 		// SC-102 fix round (review M-2): act-villain is light-STABLE, so it never
 		// entered this block — the count was unchanged at 34.
-		// SC-196: +10 (the state palette's light column) → 44.
-		expect(defs.length).toBe(44);
-		expect(Object.keys(STEEL_LIGHT).length).toBe(44);
+		// SC-196 round 1: +10 (the state palette's light column) → 44.
+		// SC-196 round 2: +1 (`select`, once the roll row got its own ink) → 45.
+		expect(defs.length).toBe(45);
+		expect(Object.keys(STEEL_LIGHT).length).toBe(45);
 		const seen = new Set<string>();
 		expect(defs.filter((n) => (seen.has(n) ? true : (seen.add(n), false)))).toEqual([]);
 	});

@@ -6406,7 +6406,7 @@ Shared globals
 	--dse-tier-low: var(--sc-tier-low, #e74c3c);
 	--dse-tier-mid: var(--sc-tier-mid, #f0b429);
 	--dse-tier-high: var(--sc-tier-high, #4caf6a);
-	--dse-tier-crit: #e0b050; /* RESOLVED (SC-106, 2026-08-03): adopted verbatim from the site's own crit-highlight gold (v2/docs/stylesheets/steel-dice.css:11, `.sc-dice-pop .crit`) — the site DOES style crits with a specific gold, so no invented hue was needed. Single value for both Steel dark/light (a fill, not text — no contrast pressure; same pattern as stamina-temp/vp). */
+	--dse-tier-crit: #e0b050; /* RESOLVED (SC-106, 2026-08-03): adopted verbatim from the site's own crit-highlight gold (v2/docs/stylesheets/steel-dice.css:11, `.sc-dice-pop .crit`) — the site DOES style crits with a specific gold, so no invented hue was needed. SC-196 CORRECTION (2026-08-28): this line used to claim a single value served both Steel dark and light because crit is "a fill, not text — no contrast pressure". It is not a fill: it is the crit row's 3px spine and its badge FRAME, i.e. a non-text mark, and it measured 1.75:1 on the light plate against the 3.0 bar. Light now carries its own value in the Steel-light block, and it is still the same gold `--dse-vp` carries (see that token). Dark is unchanged. */
 
 	/* -- Semantic: stamina / HP -- */
 	--dse-stamina-healthy: var(--sc-role-hexer, #5cc98a);
@@ -6418,7 +6418,7 @@ Shared globals
 	/* -- Semantic: encounter -- */
 	--dse-turn-done: var(--sc-role-hexer, #5cc98a);
 	--dse-malice: #e0584b;
-	--dse-vp: #e0b050; /* RESOLVED (SC-106): shares tier-crit's site-sourced gold — both are "triumph" semantics, never co-located in one widget */
+	--dse-vp: #e0b050; /* RESOLVED (SC-106): shares tier-crit's site-sourced gold — both are "triumph" semantics, never co-located in one widget. SC-196 (2026-08-28) KEPT THAT IDENTITY IN LIGHT: round 1 solved the two independently (vp needs 4.5 as text, crit only 3.0 as a mark) and silently split them into two different golds; round 2 re-unified them on `#66450a`, which satisfies the stricter of the two bars, so "one gold" now holds in dark AND light. If either ever needs to move again, move both or record the split here — an unrecorded split is what the SC-196 review caught. */
 	--dse-warn: #e8954a;
 	--dse-danger: #e74c3c;
 
@@ -9030,7 +9030,7 @@ body.theme-light
 body.theme-light
 	[data-dse-theme='steel']:not([data-dse-print="on"])
 	.dse-pr__row[data-tier='crit'] {
-	--tw: rgba(165, 117, 23, 0.08); /* SC-196 --dse-tier-crit light #a57517 */
+	--tw: rgba(102, 69, 10, 0.08); /* SC-196 --dse-tier-crit light #66450a */
 }
 
 /* -- SC-10 Task 3: dashed keyword-spend box — the "SPEND 1+ INSIGHT" clause
@@ -11236,6 +11236,30 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamin
 	color: var(--dse-metal-bright);
 	background: linear-gradient(90deg, rgba(0, 0, 0, 0.72) 0 1px, currentColor 1px);
 }
+/* SC-196 round 2 (review L-2) — the catch-light face, in the light scheme.
+   `--dse-metal-bright` is TWO different jobs wearing one name: in dark it is the bright
+   metal grade (#d9dee1), and the light block flips it to #2c3338 — an INK grade, chosen
+   so metal-coloured TEXT reads on a pale plate. Here it is not text: it is the lit face
+   of a machined edge, and its neighbour is the POUR. Once SC-196 darkened the pours, a
+   dark catch-light on a dark pour collapsed to 2.43 / 2.30 / 2.14:1 (healthy / winded /
+   dying) against the 3.0 non-text bar — the seam still read, but only by its shadow
+   face, so the two-tone edge the rule exists for was gone.
+   The fix is to give the face back the BRIGHT metal grade the rule was authored against
+   — the dark block's own `--dse-metal-bright` literal — for this one element only:
+   3.88 / 4.12 / 4.41:1 on the three pours. The shadow face keeps working on the other
+   side, where its neighbour is the pale engraved reserve. The token itself is untouched;
+   every other consumer of the light `--dse-metal-bright` still wants the ink grade. */
+body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--zero {
+	color: #d9dee1;
+}
+/* The winded graduation gets NO such twin, and that is a decision, not an omission
+   (SC-196 round 2, review L-2's second half). This tick is a single-colour 1px rule that
+   stands on TWO opposite grounds depending on where the pour has reached: the pale
+   engraved reserve (where it measures 4.14:1 and is fine) and the pour itself (1.06:1,
+   pre-existing — it was 1.11:1 before SC-196). No single colour satisfies both, which is
+   precisely why `--zero` above is authored as a two-tone seam and this one is not.
+   Fixing it means giving it the same shadow/catch-light treatment — a shape change to a
+   graduation, in both schemes — which is out of this ticket's scope. Left as found. */
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-stamina__gidx--winded {
 	left: var(--dse-winded-x, 66%);
 	color: var(--dse-stamina-winded);
@@ -12986,9 +13010,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
    .theme-light / .theme-dark on <body>, so this layer borrows ONLY that
    light/dark bit and re-tints Steel for a light scheme. It overrides EXACTLY
    the tokens whose value shifts (the token map's "Steel light" column) — nothing
-   else: role hues, stamina fills, tier-crit, encounter markers and select are
-   light/dark-STABLE (palette.css locks them) and therefore inherit the dark
-   Steel value. Values transcribed VERBATIM from the map (OD-6 manual sync).
+   else: the 12 role hues and `act-villain` are light/dark-STABLE (palette.css
+   locks them) and therefore inherit the dark Steel value. Values transcribed
+   VERBATIM from the map (OD-6 manual sync).
+
+   SC-196 CORRECTED THIS PARAGRAPH. It used to name "stamina fills, tier-crit,
+   encounter markers and select" as light/dark-stable too, on the reasoning that a
+   fill carries no contrast pressure. Measured, that was false — every one of them
+   is also painted as text or as a meaning-bearing mark — so all eleven now carry a
+   light column (see the SC-196 block below). The role hues and act-villain are the
+   only survivors of that list, and they survive on a different argument: the site
+   locks them scheme-invariant, and they are spine/crest ornament that never states
+   a fact by colour alone.
 */
 .theme-light :is([data-dse-element], .dse-modal)[data-dse-theme="steel"] {
 	/* -- Structure / surface (light steel-white) -- */
@@ -13066,26 +13099,66 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"])[data-dse-el
 	   twin re-declares every one of these at (0,4,0), which outranks this block's
 	   (0,3,0) — see the print token block near the end of the sheet.
 
-	   Measured after (worst observed ground, light scheme):
-	     stamina-healthy 4.6:1 text / 4.1:1 mark   (was 2.2 / 1.4)
-	     stamina-winded  4.9:1 text / 3.9:1 mark   (was 1.6 / 1.4)
-	     stamina-dying   4.6:1 text                (was 1.3)
-	     stamina-temp    4.7:1 text dimmed         (was 3.0)
-	     tier-crit       3.5:1 mark                (was 1.8)
-	     turn-done       3.7:1 fill, 4.9:1 its ink (was 1.8 / 1.8)
-	     malice          4.6:1 text                (was 3.5)
-	     vp / warn       4.6:1 text                (was 1.9 / 2.1)
+	   THE NUMBERS, verbatim from the PINS table in
+	   test/dom/framework/lightContrast.test.ts — that test derives each ratio from the
+	   value declared right below and fails if either the threshold or the margin moves,
+	   so this list and the guard cannot drift apart. Each is measured against the ground
+	   NAMED beside it, which is the darkest one that token was measured on:
+
+	     token             ground        a     ratio  bar   surface
+	     stamina-healthy   rgb 242       1     4.71   4.5   .dse-init__stamina[healthy]
+	     stamina-healthy   rgb 215       1     3.66   3.0   .dse-init__turn[data-taken] svg fill
+	     stamina-winded    rgb 238,239   1     4.85   4.5   .dse-init__state[winded] chip
+	     stamina-winded    rgb 221,222   1     4.14   3.0   .dse-stamina__gpour
+	     stamina-dying     rgb 225,226   1     4.61   4.5   .dse-init__cell-stamina[dead]
+	     stamina-temp      rgb 230,232   .82   4.65   4.5   .dse-stamina__ctemp, spent row
+	     tier-crit         rgb 237,240   1     7.57   3.0   .dse-pr__row[data-tier=crit] spine
+	     turn-done         rgb 215       1     3.66   3.0   the same turn-taken fill
+	     turn-done ink     on the fill   1     4.94   4.5   --dse-surface glyph over it
+	     malice            rgb 245,247   1     4.91   4.5   .dse-init__malice-value
+	     vp                rgb 234,238   1     7.43   4.5   .dse-prj__log-badge, breakthrough
+	     warn              rgb 237,240   1     5.25   4.5   .dse-mt__outcome[failure]
+	     danger            rgb 225,226   1     4.61   4.5   shares stamina-dying's surfaces
+	     select ring       rgb 221       1     4.08   3.0   .dse-init__cell[data-selected]
+	     select row ink    on the fill   1     5.55   4.5   --dse-accent-fg over the fill
+
+	   Before, on those same grounds: 2.23 / 1.43 / 1.62 / 1.38 / 2.94 / 2.99 / 1.75 /
+	   1.43 / 1.77 / 3.45 / 1.71 / 2.08 / 2.94 / 2.73 / 3.68.
+
+	   INTER-TOKEN separation is part of the solve since round 2, because solving each
+	   token against its own ground in isolation collapsed three co-located families
+	   into each other. Held now: tier-crit is 2.36:1 from tier-mid (and 1.60 / 1.84
+	   from tier-low / -high), so the crit spine is again the one that stands apart by
+	   LIGHTNESS — the channel that survives for a colourblind reader; warn is 1.44:1
+	   from vp, which share `.dse-mt__outcome` and `.dse-enc__summary`.
 	   -- */
 	--dse-stamina-healthy: #147c40;
 	--dse-stamina-winded: #886106;
 	--dse-stamina-dying: #bb2d1f;
 	--dse-stamina-temp: #562ec5;
-	--dse-tier-crit: #a57517;
+	--dse-tier-crit: #66450a;
 	--dse-turn-done: #147c40;
 	--dse-malice: #c83426;
-	--dse-vp: #845c0d;
-	--dse-warn: #9a5211;
+	--dse-vp: #66450a;
+	--dse-warn: #a34810;
 	--dse-danger: #bb2d1f;
+	/* SC-196 round 2 — the SELECTION ring, and the ink that has to ride its fill.
+	   Round 1 left `--dse-select` on the dark value because darkening it looked like a
+	   straight trade: the initiative cell's ring measured 2.73:1 against a 3.0 bar, but
+	   `.dse-pr__row[data-dse-roll-result='active']` paints the SAME token as a FILL with
+	   `--dse-fg` over it, and that ink was already failing at 3.68:1 — so darkening the
+	   token alone made a second, already-failing surface worse.
+
+	   Solved jointly instead, which dissolves the trade: the fill goes dark enough for
+	   the ring AND the row's ink flips to the light block's own `--dse-accent-fg`
+	   (`#fff`, the sheet's established "ink over a saturated fill" role), in the
+	   Steel-scoped rule beside the roll-result block. Ring 2.73 -> 4.08:1 on the cell's
+	   rgb(221,221,221) interior; row ink 3.68 -> 5.55:1 on the new fill.
+
+	   The active row's `outline: 1px solid var(--dse-accent)` is deliberately NOT touched
+	   — CB-2 (that row signals its state by fill + outline colour with no word or shape)
+	   is a flagged colourblind finding awaiting a ruling, not this round's business. */
+	--dse-select: #bd392c;
 
 	/* -- Ability action-type spines (darkened light-column hues) -- */
 	--dse-act-main: #c0392b;
@@ -13528,6 +13601,24 @@ button.dse-pr__row:hover {
 	border-radius: var(--dse-radius);
 	outline: 1px solid var(--dse-accent);
 	outline-offset: -1px;
+}
+/* SC-196 round 2 — the ink that rides that fill, in the light scheme.
+   This is the second half of the joint `--dse-select` solve (see the token's own note
+   in the Steel-light block): the row keeps the body ink everywhere else, but on a
+   SATURATED fill the light scheme's `--dse-fg` (#2c2e30) measured 3.68:1 against a 4.5
+   body-text bar — already failing before SC-196 touched anything, and the reason round 1
+   could not simply darken the token. `--dse-accent-fg` is the sheet's existing role for
+   "ink over a saturated fill" and is `#fff` in the light block, which lands at 5.55:1 on
+   the new `#bd392c`.
+   Steel-scoped and print-excluded per the standing rule; the frozen print class captures
+   under theme-DARK, so this cannot reach it either way. Nothing here touches the row's
+   `outline: 1px solid var(--dse-accent)` — see CB-2. This row renders in no harness
+   capture (`rollingEnabled` is default-OFF), so both numbers are arithmetic, pinned in
+   test/dom/framework/lightContrast.test.ts rather than measured from a shot. */
+body.theme-light
+	[data-dse-theme='steel']:not([data-dse-print="on"])
+	.dse-pr__row[data-dse-roll-result='active'] {
+	color: var(--dse-accent-fg);
 }
 
 /* -- D5 roll bar + result card (kit widgets; token-composed) -- */
