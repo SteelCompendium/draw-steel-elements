@@ -1,0 +1,491 @@
+/* SC-191 ROUND 6 — the tier strip flipped to Power Roll orientation; the rider marks.
+ *
+ * NOT SHIPPED. Loaded only by visual-harness/sc191/mock6.html, on top of round5.css on top
+ * of round4.css on top of round3.css on top of round2.css. Not imported by main.ts, not part
+ * of styles-source.css. Nothing here can reach a user, a frozen shot or the print baseline.
+ *
+ * EVERYTHING IN THIS FILE IS SCOPED `.mt2[data-r6='on']`, and every round-6 DOM addition is
+ * gated on the same flag in mock6.js. That pairing is what makes `?r6=off` an honest
+ * "before": it is the round-5 `handle` strip Scott ruled on, produced by round 5's own code
+ * path, not by a re-implementation of it.
+ *
+ * Same rules as rounds 2–5:
+ *   - every colour is a --dse-* token (DESIGN.md rule 3 — compose, never invent);
+ *   - every font-size is one of the nine --dse-fs-* ROLE tokens (SC-185 contract);
+ *   - no decorative coloured left-border (DESIGN.md rule 7 / SC-132) — see the note on §2's
+ *     tier edge, which is the SHIPPED Power Roll row's own border and is quoted, not coined;
+ *   - every translucent wash states its light twin (SC-117 / SC-126 bg-polarity);
+ *   - state rides SHAPE, MATERIAL, POSITION, GLYPH and WORDS before colour.
+ *
+ * THE `chip` TOGGLE IS RETIRED. Scott: "The `handle` design is great, lets go with that."
+ * There is no `.mt6-headtoggle`, no `[data-place='chip']` branch and no `?cheat=` axis. The
+ * round-5 sheet still carries `.mt5-headtoggle` because rounds 1–5 have never been edited in
+ * place (the "before" shots depend on that), but mock6.js never emits it, so the round-6
+ * mock set shows exactly one design.
+ */
+
+[data-dse-element='montage'][data-dse-theme='steel'] {
+	.mt2[data-r6='on'] {
+		/* ================================================================= */
+		/*  1. THE WELL — `.dse-pr`'s own treatment                          */
+		/* ================================================================= */
+		/* Scott: "That way it matches the Power Roll UI elements."
+		 *
+		 * The match starts one level above the rows. A Power Roll panel is a sunken well with
+		 * a hairline, a radius and `overflow: hidden` (styles-source.css:7116), and the
+		 * `overflow: hidden` is load-bearing rather than tidy: it is what lets the tier
+		 * washes and the 3px tier edges run to the row's full bleed and be cut off square at
+		 * the well's corners. Round 5's strip body already WAS a sunken well with a hairline
+		 * and a radius — the same three declarations — so the strip inherits the container
+		 * for free and only has to stop padding the rows away from its own edges. */
+		.mt6-strip__body {
+			padding: 0;
+			background: none;
+			border: none;
+		}
+		.mt6-rows {
+			border: 1px solid var(--dse-metal-faint);
+			border-radius: var(--dse-radius);
+			background: var(--dse-surface-sunken);
+			overflow: hidden;
+		}
+
+		/* ================================================================= */
+		/*  2. THE ROWS — the shipped tier wash, quoted                      */
+		/* ================================================================= */
+		/* Scott: "Maybe we can even bring in the colored gradient background of the Power
+		   Roll tier element into the table?"
+		 *
+		 * Yes — and quoted rather than approximated. The three declarations below are
+		 * styles-source.css:7206's `.dse-pr__row` verbatim: `--t` per tier, a 3px `--t` left
+		 * edge, a hairline top rule, and `background-image: linear-gradient(90deg, var(--tw),
+		 * transparent 60%)` where `--tw` is the precomputed 8% twin. The static `--tw` form
+		 * is used rather than `color-mix()` for the same reason the shipped sheet declares it
+		 * that way — the plugin's support floor is Chromium 106 and a `var()`-bearing
+		 * `color-mix()` computes to nothing there (SC-160/SC-171). A prototype that reaches
+		 * for the modern form would be a prototype of a rule that cannot ship.
+		 *
+		 * WHAT THE COLOUR IS ALLOWED TO SAY, precisely. The tier hue identifies the ROW — the
+		 * roll band — and the row already spells that band in its badge's own text. So the
+		 * hue reinforces a label; it never carries one. It emphatically does NOT encode
+		 * outcome: the ≤11 row is RED and its Easy cell is a SUCCESS, the 17+ row is GREEN and
+		 * its Hard cell is a success only because the difficulty is set that way. That
+		 * mismatch is the strongest argument on this card for keeping outcome in glyphs and
+		 * the rider in shape, and it is why `sc191-r6-pip-grey-dark.png` exists. */
+		.mt6-row {
+			display: grid;
+			grid-template-columns: var(--mt6-key, 5.4em) repeat(3, minmax(0, 1fr));
+			align-items: center;
+			column-gap: 0.7em;
+			padding: 0.3em 0.7em;
+			/* The shipped row's own tier edge (styles-source.css:7213). DESIGN.md rule 7
+			   forbids INVENTING a decorative coloured left border; this one is the Power Roll
+			   element's existing structural signature, which is the entire point of the
+			   flip — the strip is adopting a component, not decorating itself. */
+			border-left: 3px solid var(--t, var(--dse-tier-low));
+			border-top: 1px solid var(--dse-metal-faint);
+			background-image: linear-gradient(90deg, var(--tw), transparent 60%);
+		}
+		/* Tier tokens and their static washes, copied from styles-source.css:7247-7258 so the
+		   two components cannot drift. */
+		.mt6-row[data-tier='low'] {
+			--t: var(--dse-tier-low);
+			--tw: rgba(231, 76, 60, 0.08); /* #e74c3c */
+		}
+		.mt6-row[data-tier='mid'] {
+			--t: var(--dse-tier-mid);
+			--tw: rgba(240, 180, 41, 0.08); /* #f0b429 */
+		}
+		.mt6-row[data-tier='high'] {
+			--t: var(--dse-tier-high);
+			--tw: rgba(76, 175, 106, 0.08); /* #4caf6a */
+		}
+		.mt6-row[data-tier='crit'] {
+			--t: var(--dse-tier-crit);
+			--tw: rgba(224, 176, 80, 0.08); /* #e0b050 */
+		}
+		/* SC-117 / SC-126 bg-polarity: every translucent wash states its light twin. The
+		   shipped sheet re-lists only low/mid/high because --dse-tier-crit is light/dark
+		   stable at #e0b050 (styles-source.css:7260); this file follows it exactly. */
+		body.theme-light & {
+			.mt6-row[data-tier='low'] {
+				--tw: rgba(192, 57, 43, 0.08); /* #c0392b */
+			}
+			.mt6-row[data-tier='mid'] {
+				--tw: rgba(185, 119, 14, 0.08); /* #b9770e */
+			}
+			.mt6-row[data-tier='high'] {
+				--tw: rgba(30, 132, 73, 0.08); /* #1e8449 */
+			}
+		}
+
+		/* --- 2b. THE RESTRAINED TWIN ------------------------------------- */
+		/* THE ONE PLACE THE POWER ROLL'S RECIPE DOES NOT TRANSFER CLEANLY, and it is worth
+		 * naming rather than quietly softening. The shipped gradient fades to transparent at
+		 * 60% of the row because a Power Roll row is ONE CONTINUOUS TEXT BLOCK — the wash
+		 * runs under the badge and the first half of a sentence, and nothing in the row is
+		 * being compared to anything else in it. This strip's row is a LATTICE of three
+		 * cells that exist to be compared to each other, and a 60% fade lands the wash on
+		 * Easy, half of Medium, and none of Hard. The eye reads that as a difference between
+		 * the columns, and there is no difference between the columns.
+		 *
+		 * `edge` keeps every channel of the rhyme — same hue, same 3px edge, same direction,
+		 * same token — and moves the fade's end inside the badge gutter, so the wash tints
+		 * the row's KEY (which is what the hue names) and every cell sits on one common
+		 * ground. Recommended; `pr` is shot beside it so the call is a look, not a claim. */
+		&[data-tierstyle='edge'] .mt6-row {
+			background-image: linear-gradient(90deg, var(--tw), transparent 12%);
+		}
+
+		/* --- 2c. the head row -------------------------------------------- */
+		/* No tier, no wash, and a TRANSPARENT 3px left border rather than none: the difficulty
+		   heads have to sit on the same x as the badges under them, and a head row that is
+		   3px narrower than every row below it is the kind of seam that reads as a rendering
+		   fault. */
+		.mt6-row--head {
+			border-left-color: transparent;
+			border-top: none;
+			padding-top: 0.42em;
+			padding-bottom: 0.36em;
+			background-image: none;
+			border-bottom: 1px solid var(--dse-metal-faint);
+		}
+		.mt6-row--head + .mt6-row {
+			border-top: none;
+		}
+		/* The difficulty is now the COLUMN key — it is what the Director already decided, so
+		   it stays the brightest label in the strip, exactly as it was as a row key in round
+		   5. Only its axis changed; its rank did not. */
+		.mt6-col {
+			font-size: var(--dse-fs-label);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.1em;
+			font-weight: 700;
+			color: var(--dse-metal-bright);
+			white-space: nowrap;
+		}
+
+		/* ================================================================= */
+		/*  3. THE ROW KEY — the SHIPPED tier badge                          */
+		/* ================================================================= */
+		/* The strongest form of "it matches the Power Roll UI elements" available: the row key
+		 * is not a mono string styled to look like a badge, it is `.dse-pr__badge
+		 * .dse-pr__badge--tN` from the compiled plugin sheet, carrying the real clip-path
+		 * polygon and the real `--dse-tier-*` fill. mock6.js emits the kit's exact DOM
+		 * (badge > `.dse-pr__badge-text`) and the strings powerRollPanel.ts writes
+		 * ('≤11', '12-16', '17+', 'crit'), so the two components spell the bands identically.
+		 *
+		 * THE ONE LOCAL OVERRIDE, declared rather than smuggled: `width`. The shipped badge is
+		 * 3em, sized for an ability card's full-width tier row; this strip's key column is
+		 * narrower than that row and its four labels have to bottom-align in one column, so
+		 * the width is re-set here. It is safe to change: every clip-path term in those four
+		 * polygons is either a `0.2em`/`0.4em` corner inset, a `1px`/`0.41px` hairline, or a
+		 * `100%`/`50%` edge — so widening stretches only the straight runs and leaves every
+		 * notch, bevel and chevron point at its authored size. Nothing else about the badge is
+		 * touched: not the fill, not the padding, not the `line-height: 1` strikethrough fix
+		 * (SC-10), not the t1 `::first-letter` mono re-home (SC-121 B-3). */
+		.mt6-row__key {
+			display: flex;
+			align-items: center;
+			min-width: 0;
+		}
+		.mt6-row__key .dse-pr__badge {
+			width: 100%;
+			max-width: 4.6em;
+		}
+
+		/* ================================================================= */
+		/*  4. THE CELL — outcome in the seal, rider in the mark             */
+		/* ================================================================= */
+		.mt6-cell {
+			display: flex;
+			align-items: center;
+			gap: 0.5em;
+			padding: 0.24em 0;
+			min-width: 0;
+		}
+		/* The seal and any suffix mark are ONE object, so a cell never wraps between an
+		   outcome and its rider. */
+		.mt6-mark {
+			display: inline-flex;
+			flex: none;
+			align-items: center;
+			gap: 0.28em;
+		}
+
+		/* THE SEAL — round 5's, unchanged, and unchanged on purpose. The strip's premise since
+		   round 5 is that it is drawn in the BOARD's language, so a Director who has learned
+		   to read a cell has already learned to read the strip. A treatment that redraws the
+		   seal spends that. (`ring` does redraw it; §5 is the argument that it should not.) */
+		.mt6-seal {
+			position: relative;
+			display: inline-flex;
+			flex: none;
+			align-items: center;
+			justify-content: center;
+			width: 1.5em;
+			height: 1.5em;
+			border-radius: 50%;
+			border: 1px solid var(--dse-metal-line);
+
+			svg {
+				width: 0.8em;
+				height: 0.8em;
+			}
+		}
+		.mt6-seal[data-kind='success'] {
+			background: none;
+			border: 2px solid var(--dse-turn-done);
+			color: var(--dse-turn-done);
+		}
+		.mt6-seal[data-kind='failure'] {
+			background:
+				repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.28);
+			border: 2px solid var(--dse-danger);
+			box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+			color: var(--dse-danger);
+
+			body.theme-light & {
+				background:
+					repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.11) 0 1px, transparent 1px 5px),
+					rgba(0, 0, 0, 0.05);
+				box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+			}
+		}
+
+		/* THE WORDS. Round 5's two-line stack, kept: Scott asked for the cells to
+		   "additionally reflect" the riders, and the mark is the addition, not the
+		   replacement. Two lines, always the same two, so every cell in a column has one
+		   silhouette and the eye reads down without re-measuring. */
+		.mt6-word {
+			display: flex;
+			flex-direction: column;
+			min-width: 0;
+			line-height: 1.25;
+		}
+		.mt6-word__kind {
+			font-size: var(--dse-fs-caption);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.06em;
+			color: var(--dse-fg);
+		}
+		.mt6-word__rider {
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-fg-faint);
+		}
+
+		/* ================================================================= */
+		/*  5. THE THREE RIDER TREATMENTS                                    */
+		/* ================================================================= */
+		/* Scott: "Each cell in the 'test tiers' table should additionally reflect 'with
+		   consequence' and 'with reward'. Not sure the best way to handle this. Immediate
+		   thought for 'success with reward' was to use the double-check icon. Not sure if
+		   there is an equivalent for 'success with consequence' and 'failure with
+		   consequence'. Maybe going with an approach of having a picture-in-picture (pip)
+		   approach by adding a small icon in the bottom corner could work. What ideas do you
+		   have?"
+		 *
+		 * THE STRUCTURAL ANSWER FIRST, because it decides the rest: in the book the rider is
+		 * ORTHOGONAL to the outcome. "Success with a consequence" and "failure with a
+		 * consequence" carry the SAME rider on two different outcomes (Draw Steel
+		 * Heroes:20471). So the vocabulary must be two independent channels — outcome, rider
+		 * — and not five bespoke glyphs. That is exactly why Scott could not find an
+		 * equivalent for the double-check: the double-check is a SUBSTITUTION, and a
+		 * substitution cannot express "the same thing, plus a rider" twice over. There is no
+		 * "double X" that means "a failure with a consequence"; a double X means a worse
+		 * failure, which is a different and false claim.
+		 *
+		 * The full vocabulary, defined once and identical in all three treatments:
+		 *   success                      seal: green ring, check          rider: —
+		 *   success with a reward        seal: green ring, check          rider: reward mark
+		 *   success with a consequence   seal: green ring, check          rider: consequence mark
+		 *   failure                      seal: red pressed disc, X        rider: —
+		 *   failure with a consequence   seal: red pressed disc, X        rider: consequence mark
+		 *   nat 19–20 (the crit row)     seal: green ring, check          rider: reward mark
+		 * — six cells of meaning, four of which are just two axes multiplied. */
+
+		/* --- 5a. `pip` — RECOMMENDED ------------------------------------- */
+		/* Scott's own proposal: "a picture-in-picture (pip) approach by adding a small icon in
+		 * the bottom corner". A solid triangle rides the seal's bottom-right: ▲ a reward
+		 * (something added), ▼ a consequence (something it costs). One position, two
+		 * directions, no legend needed after the first read.
+		 *
+		 * IT RIDES THE SEAL, NOT THE CELL'S CORNER. At 300px the words are gone and the cells
+		 * are ~60px; a mark in the cell's corner would sit closer to its neighbour's seal
+		 * than to its own. Welded to the seal it cannot be misattributed at any width.
+		 *
+		 * SOLID, AND A TRIANGLE, for two separate reasons. Solid because a 2px-stroke outline
+		 * at ~6px is mush and this mark has to survive the sidebar. A triangle rather than a
+		 * chevron because the strip's own disclosure twisty IS an outlined chevron — one
+		 * glyph doing two jobs inside one component is how a vocabulary starts lying.
+		 *
+		 * IN METAL, NOT IN HUE. The pip is deliberately `--dse-metal-bright`, not green or
+		 * orange: the seal owns the card's two semantic colours, and a coloured pip would
+		 * imply the rider has a polarity of its own. (It does not — a reward on a success and
+		 * a consequence on a success are both still successes; Draw Steel Heroes:20480.) It is
+		 * also not white — Scott's round-2 standing objection was to bright white elements
+		 * pulling the eye to low-value content, and this is the smallest mark on the card. */
+		&[data-r6treat='pip'] .mt6-pip {
+			position: absolute;
+			right: -0.36em;
+			bottom: -0.3em;
+			display: inline-flex;
+			color: var(--dse-metal-bright);
+
+			svg {
+				width: 0.72em;
+				height: 0.72em;
+			}
+		}
+
+		/* --- 5b. `ring` — the seal speaks -------------------------------- */
+		/* No added object at all: a reward DOUBLE-STRIKES the seal (a second ring struck
+		 * outside the first), a consequence NOTCHES it (a bite taken out of the ring at the
+		 * same corner the pip would occupy). Two values of one feature, which is the tidiest
+		 * factoring of the three.
+		 *
+		 * Its cost is the one thing the strip cannot afford to spend: the seal stops being the
+		 * board's seal. A notched success ring in the strip and a plain success ring in a
+		 * board cell are two marks a Director now has to learn are the same mark. And at 300px
+		 * a 1px notch in a 1.35em ring is a ring. Drawn so the comparison is a look. */
+		&[data-r6treat='ring'] .mt6-seal[data-rider='reward']::after {
+			content: '';
+			position: absolute;
+			inset: -0.26em;
+			border: 1px solid currentcolor;
+			border-radius: 50%;
+			opacity: 0.75;
+		}
+		&[data-r6treat='ring'] .mt6-seal[data-rider='consequence']::after {
+			content: '';
+			position: absolute;
+			right: -0.2em;
+			bottom: -0.2em;
+			width: 0.8em;
+			height: 0.8em;
+			transform: rotate(45deg);
+			/* The notch is cut with the well's own ground, so the ring reads as broken rather
+			   than as overlaid. Under the `pr` wash the erased patch is up to 8% off the row
+			   behind it — visible on close inspection, and one more small mark against the
+			   treatment rather than a bug to paper over. */
+			background: var(--dse-surface-sunken);
+		}
+
+		/* --- 5c. `double` — Scott's instinct, taken as far as it goes ---- */
+		/* ✓✓ for a success with a reward is a genuinely good mark and it is the first thing
+		 * anyone reaches for, Scott included. The treatment is drawn so it can be seen
+		 * winning that one cell — and then failing to generalise: with substitution spent on
+		 * the reward, the consequence has nowhere to go but a footnote dagger standing beside
+		 * the seal. The vocabulary is then half glyph and half footnote, the two consequence
+		 * cells are marked by something with no relationship to the reward cell's mark, and
+		 * the double-check has to survive being drawn at 0.8em (it is the only glyph in the
+		 * strip with four strokes in a 24-grid). */
+		&[data-r6treat='double'] .mt6-suffix {
+			display: inline-flex;
+			color: var(--dse-metal-bright);
+
+			svg {
+				width: 0.7em;
+				height: 0.7em;
+			}
+		}
+
+		/* ================================================================= */
+		/*  6. THE FOOT — the counting rule, and the rider legend            */
+		/* ================================================================= */
+		/* Round 5 showed the legend ONLY at sidebar width, because there the one-letter marks
+		   replaced the words. From round 6 the mark is the primary carrier at EVERY width, so
+		   the legend is on at every width too — a mark whose key is only visible in a sidebar
+		   is a mark nobody ever learns. */
+		.mt6-strip__foot {
+			margin: 0.5em 0 0;
+		}
+		.mt6-strip__legend {
+			margin: 0.28em 0 0;
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-fg-faint);
+		}
+
+		/* ================================================================= */
+		/*  7. NARROW — the 300px sidebar leaf                               */
+		/* ================================================================= */
+		@media (max-width: 420px) {
+			/* The words go; the marks stay, and they stay legible, which is the whole test
+			   the `pip` treatment was chosen to pass. Nothing side-scrolls — the strip
+			   degrades in place, the behaviour round 5 established and the foot panel's
+			   four-column table still does not manage. */
+			.mt6-row {
+				--mt6-key: 3.5em;
+				column-gap: 0.3em;
+				padding: 0.28em 0.4em;
+			}
+			.mt6-row__key .dse-pr__badge {
+				max-width: 3.5em;
+				font-size: var(--dse-fs-caption);
+			}
+			.mt6-cell {
+				justify-content: center;
+			}
+			.mt6-col {
+				font-size: var(--dse-fs-micro);
+				letter-spacing: 0.06em;
+				text-align: center;
+			}
+			.mt6-word {
+				display: none;
+			}
+			.mt6-seal {
+				width: 1.35em;
+				height: 1.35em;
+			}
+			/* The pip does NOT shrink with the seal. It is already the smallest mark on the
+			   card and it is now the only thing carrying the rider, so it holds its size
+			   while the thing it rides gets smaller — which also pushes it further clear of
+			   the ring's stroke. */
+			&[data-r6treat='pip'] .mt6-pip svg {
+				width: 0.68em;
+				height: 0.68em;
+			}
+		}
+
+		/* ================================================================= */
+		/*  8. THE VOCABULARY SHEET (?only=vocab) — not part of the card     */
+		/* ================================================================= */
+		/* A key, drawn at reading size, so "the vocabulary is consistent" is checkable at a
+		   glance instead of counted out of a twelve-cell strip. */
+	}
+
+	/* The vocabulary page is not inside a card, so it carries its own scope. */
+	.mt6-vocab {
+		max-width: 30em;
+		padding: 0.9rem 1.1rem 1rem;
+		background: var(--dse-surface-sunken);
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: var(--dse-radius);
+	}
+	.mt6-vocab__head {
+		margin: 0 0 0.7em;
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		font-weight: 700;
+		color: var(--dse-metal-bright);
+	}
+	.mt6-vocab__list {
+		display: grid;
+		gap: 0.55em;
+	}
+	.mt6-vocab__row {
+		display: flex;
+		align-items: center;
+		gap: 0.8em;
+	}
+	.mt6-vocab__name {
+		font-size: var(--dse-fs-caption);
+		color: var(--dse-fg-muted);
+	}
+}

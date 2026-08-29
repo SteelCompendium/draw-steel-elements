@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SC-191 round 6 — the tier strip flipped to Power Roll orientation; consequence/reward marks</title>
+<!-- The REAL plugin environment: Obsidian's vendored theme vars + the compiled
+     styles-source.css (dist/harness.css, produced by `npm run harness:build`).
+     round2.css / round3.css / round4.css / round5.css / round6.css are prototype
+     sheets — none of them is part of the shipped plugin, so nothing here can move a
+     frozen shot.
+
+     round6.css layers on round5.css on round4.css on round3.css on round2.css.
+     `?r6=off` therefore renders the round-5 `handle` strip Scott ruled on ("the
+     `handle` design is great, lets go with that"), produced by the very code path he
+     reviewed rather than by a re-implementation of it — which is what makes the
+     round-6 "before" honest.
+
+     The compiled plugin sheet is loaded for a SECOND reason this round: the flipped
+     strip reuses the SHIPPED `.dse-pr__badge` clip-path key boxes and the SHIPPED
+     `.dse-pr__row` tier wash recipe, so the rhyme with the Power Roll element Scott
+     asked for is the real component, not a lookalike. -->
+<link rel="stylesheet" href="../vars.css">
+<link rel="stylesheet" href="../dist/harness.css">
+<link rel="stylesheet" href="round2.css">
+<link rel="stylesheet" href="round3.css">
+<link rel="stylesheet" href="round4.css">
+<link rel="stylesheet" href="round5.css">
+<link rel="stylesheet" href="round6.css">
+<style>
+	/* deterministic shots — same convention as visual-harness/index.html */
+	*, *::before, *::after { transition: none !important; animation: none !important; }
+	body { margin: 0; padding: 24px; }
+	#mount { margin: 0 auto; }
+</style>
+</head>
+<body class="theme-dark">
+<div id="mount"></div>
+<script src="mock6.js"></script>
+</body>
+</html>
