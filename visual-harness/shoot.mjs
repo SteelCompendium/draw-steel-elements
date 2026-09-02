@@ -1560,6 +1560,273 @@ async function assertBtnHostLeak(page) {
 	);
 }
 
+// ======================================================================================
+// SC-202 r1 — input/stepper host-leak sweep.
+//
+// Phase 1 (sc202-phase1-report.md) found the plugin's numeric/text `<input>`s (the
+// stepper widget and its cousins — party award, project roll/points/characteristic,
+// montage skill/characteristic, the initiative malice quick-add pair) never re-ground
+// Obsidian's `input[type='number']`/`input[type='text']` material: ~30px tall instead of
+// ~20px, Obsidian's grey fill/border instead of the Steel tokens — confirmed in a real
+// 1.13.7 vault (sc202-realvault-inputs.log). This is that family's own drift-proof gate.
+//
+// UNLIKE `assertBtnHostLeak`, this does NOT compare against a hand-copied model. app.css
+// itself can never be committed (the phase-2 ruling, decisions.md 2026-09-02) — not even
+// as a transcribed excerpt — so there is no in-repo copy for a drift pin to protect. This
+// sweep instead injects the REAL, locally-extracted sheet directly and self-gates on its
+// presence: no local Obsidian asar, no sweep, loud SKIP, never a silent pass and never a
+// failure for lacking one. `visual-harness/dist/` is gitignored (see .gitignore) and nothing
+// under it is ever committed.
+const R1_APP_CSS_SHA256 = 'f612f1e8f36486fa57f3b8bd45f0c848409d5b168002e757a13c6d286a7b4c41';
+
+/** Extracts (and caches under visual-harness/dist/, gitignored) the real installed
+ *  Obsidian app.css. Reuses `findObsidianAsar`'s existing "usable" gate (SC-205) — the
+ *  same newest-self-updated-asar lookup and >= PINNED_OBSIDIAN version check the button
+ *  drift pin already applies, so the two pins agree on what counts as new enough. Returns
+ *  `null` when nothing usable is installed; the caller turns that into a SKIP line, never
+ *  a failure. */
+function loadLocalObsidianAppCss() {
+	const found = findObsidianAsar();
+	if (!found || !found.usable) return null;
+	const css = readAsarFile(found.path, 'app.css');
+	if (!css) return null;
+	const outDir = path.join(dir, 'dist');
+	fs.mkdirSync(outDir, { recursive: true });
+	fs.writeFileSync(path.join(outDir, 'obsidian-app.css'), css);
+	const sha256 = crypto.createHash('sha256').update(css, 'utf8').digest('hex');
+	return { css, version: found.version, sha256 };
+}
+
+/** Injects a full stylesheet ahead of the plugin's own — same cascade shape as
+ *  `injectHostCss` (SC-203), parameterized on the CSS text since this one is not a
+ *  constant baked into the file. */
+async function injectRealHostCss(page, css) {
+	const handle = await page.addStyleTag({ content: css });
+	await page.evaluate((el) => document.head.prepend(el), handle);
+}
+
+/** Every property the real app.css's `input[type='number']`/`input[type='text']` rules
+ *  (rest, hover, disabled, active/focus, focus-visible) set on the element itself —
+ *  enumerated from the extracted sheet (visual-harness/dist/obsidian-app.css), not from
+ *  memory. `height` is declared by a SEPARATE rule scoped to exactly the text-ish input
+ *  types (not date/datetime/textarea) — the single most destructive one, per the SC-203
+ *  block's own lesson about `button`'s `height`. `boxShadow` only ever moves at
+ *  `:focus-visible` (the base rule sets none), and `borderColor` additionally moves at
+ *  `:active`/`:focus` (which `:focus-visible` implies) — both states this sweep samples. */
+const INPUT_PROPS = [
+	'height',
+	'padding',
+	'borderWidth',
+	'borderStyle',
+	'borderColor',
+	'borderRadius',
+	'cornerShape',
+	'backgroundColor',
+	'backgroundImage',
+	'color',
+	'fontFamily',
+	'fontSize',
+	'lineHeight',
+	'outlineStyle',
+	'outlineWidth',
+	'boxShadow',
+];
+/** DELIBERATELY NOT COMPARED, same reasoning as `BTN_PROPS_EXCLUDED`: neither can move a
+ *  box or paint a pixel. `-webkit-app-region` only decides window-drag behavior;
+ *  `unicode-bidi: plaintext` (app.css's one bare, ancestor-less `input` rule) only affects
+ *  bidi text-run resolution, inert for this plugin's LTR numeric/label content. */
+const INPUT_PROPS_EXCLUDED = ['-webkit-app-region', 'unicode-bidi'];
+/** Brief scope (SC-202 r1): rest + focus-visible only. Obsidian's `input` rules also move
+ *  `background-color`/`border-color` on `:hover` and `opacity`/`cursor` on `:disabled` —
+ *  real leaks, structurally the same shape as this round's, but neither is proven here and
+ *  fixing them is not this round's ask (see the report's Follow-ups). */
+const INPUT_STATES = ['rest', 'focus-visible'];
+
+/** Tags every distinct kind of numeric/text `<input>` the gallery renders — same
+ *  (element, classes) keying convention as `tagButtons`, without the chrome-surface
+ *  qualifier (no input in this family sits inside the collapsible chrome panel). */
+function tagInputs() {
+	const keys = [];
+	const seen = new Set();
+	for (const n of document.querySelectorAll("input[type='number'], input[type='text']")) {
+		const root = n.closest('[data-dse-element]');
+		const key =
+			(root ? root.getAttribute('data-dse-element') : '(none)') +
+			'|' +
+			([...n.classList].sort().join('.') || '(no class)');
+		if (seen.has(key)) continue;
+		seen.add(key);
+		n.setAttribute('data-dse-inputleak', key);
+		n.setAttribute('data-dse-inputleak-i', String(keys.length));
+		keys.push(key);
+	}
+	return keys;
+}
+
+/** Scroll one tagged input into view and try to focus it, reporting why it could not if it
+ *  did not — same provable-exemption shape as `focusTagged`. */
+function focusInputTagged(i) {
+	const n = document.querySelector(`[data-dse-inputleak-i="${i}"]`);
+	if (!n) return null;
+	n.scrollIntoView({ block: 'center', inline: 'center' });
+	if (n.disabled) return { blocked: 'disabled' };
+	if (n.getClientRects().length === 0) return { blocked: 'renders no box at all (a display:none ancestor)' };
+	if (getComputedStyle(n).visibility !== 'visible') return { blocked: `visibility: ${getComputedStyle(n).visibility}` };
+	n.focus();
+	return { blocked: null };
+}
+
+/** Read every tagged input at once — valid for `rest` only, mirroring `readTaggedAtRest`. */
+function readTaggedInputsAtRest(props) {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-inputleak]')) {
+		const cs = getComputedStyle(n);
+		const r = n.getBoundingClientRect();
+		const rec = { key: n.getAttribute('data-dse-inputleak'), w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** Read ONE tagged input and report whether `:focus-visible` is genuinely active on it —
+ *  same "never absorbed" contract as `readOneTagged`. */
+function readOneInputTagged({ i, props }) {
+	const n = document.querySelector(`[data-dse-inputleak-i="${i}"]`);
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const r = n.getBoundingClientRect();
+	const rec = { key: n.getAttribute('data-dse-inputleak'), w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+	for (const p of props) rec[p] = cs[p];
+	rec.active = n.matches(':focus-visible');
+	return rec;
+}
+
+/** Sample every tagged input in one state, driving the state for real — same shape as
+ *  `probeButtonsInState`, narrowed to the two states this round samples. */
+async function probeInputsInState(page, state, count, props) {
+	if (state === 'rest') {
+		await page.mouse.move(0, 0);
+		await page.evaluate(clearBtnState);
+		const records = await page.evaluate(readTaggedInputsAtRest, props);
+		for (const rec of records) {
+			rec.active = true;
+			rec.blocked = null;
+		}
+		return { records, problems: [] };
+	}
+	// focus-visible — establish keyboard modality once per pass, same as the button sweep.
+	await page.mouse.move(0, 0);
+	await page.keyboard.press('Tab');
+	const records = [];
+	const problems = [];
+	for (let i = 0; i < count; i += 1) {
+		const res = await page.evaluate(focusInputTagged, i);
+		if (!res) {
+			problems.push(`#${i}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		const rec = await page.evaluate(readOneInputTagged, { i, props });
+		if (!rec) {
+			problems.push(`#${i}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		rec.blocked = res.blocked;
+		if (!rec.active && !rec.blocked) {
+			problems.push(
+				`${rec.key}: could not be put into :focus-visible and is not provably unreachable — ` +
+					`the sweep would have sampled its resting style and called it a pass`,
+			);
+			continue;
+		}
+		if (rec.active && rec.blocked) {
+			problems.push(
+				`${rec.key}: reported as unreachable for :focus-visible ("${rec.blocked}") but the node ` +
+					`genuinely matches it — the exemption is lying`,
+			);
+			continue;
+		}
+		records.push(rec);
+	}
+	return { records, problems };
+}
+
+async function assertInputHostLeak(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\ninput host-leak SKIPPED (no local asar)');
+		return;
+	}
+	const pinNote =
+		host.sha256 === R1_APP_CSS_SHA256
+			? `matches the round's pin (Obsidian ${host.version})`
+			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
+				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
+	const problems = [];
+	let kindCount = 0;
+	let comparisons = 0;
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		const keys = await page.evaluate(tagInputs);
+		if (keys.length < 5) {
+			problems.push(`${bg}: only ${keys.length} inputs found in the gallery — the sweep is blind`);
+			continue;
+		}
+		kindCount = Math.max(kindCount, keys.length);
+
+		const bare = {};
+		for (const state of INPUT_STATES) {
+			const r = await probeInputsInState(page, state, keys.length, INPUT_PROPS);
+			bare[state] = r.records;
+			for (const p of r.problems) problems.push(`${bg}|host-absent|${state}: ${p}`);
+		}
+		await injectRealHostCss(page, host.css);
+		for (const state of INPUT_STATES) {
+			const r = await probeInputsInState(page, state, keys.length, INPUT_PROPS);
+			for (const p of r.problems) problems.push(`${bg}|host-present|${state}: ${p}`);
+			const withHost = new Map(r.records.map((rec) => [rec.key, rec]));
+			for (const b of bare[state]) {
+				const h = withHost.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${state}|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				comparisons += 1;
+				for (const p of ['w', 'h', ...INPUT_PROPS]) {
+					const a = typeof b[p] === 'number' ? b[p].toFixed(2) : String(b[p]);
+					const c = typeof h[p] === 'number' ? h[p].toFixed(2) : String(h[p]);
+					if (a !== c) {
+						problems.push(
+							`${bg}|${state}|${b.key}: Obsidian's real app.css changes ${p} — ` +
+								`"${a}" without the host, "${c}" with it`,
+						);
+					}
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
+		console.error(
+			`\nINPUT HOST-LEAK VIOLATED — with the real Obsidian app.css present the plugin's own ` +
+				`numeric/text inputs do not hold their own box or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-202 r1 — INPUT/STEPPER HOST RE-GROUNDING".`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\ninput host-leak OK (${kindCount} input kinds × ${INPUT_STATES.length} states ` +
+			`(${INPUT_STATES.join('/')}) × dark/light = ${comparisons} comparisons against the real ` +
+			`Obsidian app.css: every sampled property is identical with and without it; ` +
+			`${INPUT_PROPS_EXCLUDED.join(' and ')} are excluded by design; ${pinNote})`,
+	);
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 900, height: 1200 },
@@ -1741,6 +2008,10 @@ try {
 		// SC-203 — the same question asked of EVERY button in the plugin, not just the
 		// chrome panel's. Same shape again; same reason for the narrowed-run skip.
 		await assertBtnHostLeak(page);
+		// SC-202 r1 — the same question asked of every numeric/text INPUT the plugin
+		// renders. Unlike the gate above it self-gates on a local Obsidian asar (see the
+		// block's own comment) rather than failing when one is absent.
+		await assertInputHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself

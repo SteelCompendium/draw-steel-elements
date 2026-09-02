@@ -3222,13 +3222,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-condal
 	/* The editable stepper input reads as today's plain big number (the legacy
 	   transparent, borderless counter-input look), not a form field: strip the
 	   kit's field chrome. height: 1em is the evicted legacy inline style
-	   (CounterView's inputField.style.height), now a class rule. */
+	   (CounterView's inputField.style.height), now a class rule.
+	   SC-202 r1 — `border-radius`/`box-shadow` added: this compound selector
+	   (element-scoped + two classes + the input type, (0,0,3,1)) already outranks
+	   every Obsidian `input[type='number']` rule including its :focus-visible one
+	   ((0,0,2,1)), so it needed no NEW specificity — the sweep found it was simply
+	   missing these two declarations, the same class of gap the malice quick-add
+	   pair had for its whole material. `0`/`none` are the values this "no field
+	   chrome" look already implies for a border that is `none` anyway. */
 	input.dse-counter__value {
 		width: 4ch;
 		height: 1em;
 		padding: 0;
 		border: none;
+		border-radius: 0;
 		background: transparent;
+		box-shadow: none;
 	}
 
 	.dse-counter__name {
@@ -5779,11 +5788,33 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-btn,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-collapse__header,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-tabs__tab,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row {
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row,
+/* SC-202 r1 — the other seven numeric/text inputs the plugin renders were never in
+   this list at all: unlike .dse-stepper__input they carry NO font declaration of
+   their own anywhere in this sheet, so with no host present they fell all the way
+   through to the browser's bare <input> font ("Arial"), and — because Obsidian's
+   own input[type='number']/[type='text'] rule declares `font-family: inherit` — a
+   real vault's host CSS was the ONLY thing making them inherit the Steel font at
+   all. Joining this rule (rather than declaring font-family a second way) makes
+   the harness self-sufficient: it now reads the ambient Steel font with NO host
+   present, matching what a real vault already rendered. The em-relative padding/
+   border-radius the census also measured moving under app.css (sc202-hostleak-
+   survey.log) is a downstream CONSEQUENCE of this fontSize correction on these
+   seven — not evidence of an independent leak — proven by the can-fail sweep
+   (visual-harness/shoot.mjs assertInputHostLeak): once fontSize stopped leaking,
+   padding/borderRadius stopped too, with no change to those properties' own rules. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-amount,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-label,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__skill-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__char-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-party__award-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__roll-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__points-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__char-input {
 	font-family: var(--dse-font-controls);
 }
 /* SC-185 — the SIZE twin of the Controls font-family rule above, over the exact
-   same six selectors, so "Control text size" governs the same set the Controls
+   same selectors, so "Control text size" governs the same set the Controls
    font picker does. Round 1 landed this at 1em (provably inert: all six carry
    the kit-base `font: inherit`, so the round-1 default matched the parent's
    computed size exactly). Round 2's C-1 retuned the token itself to 0.85em —
@@ -5794,13 +5825,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    descendant selector at higher specificity than this (0,3,0). Print-excluded
    by the shared anchor, like its font-family twin — a control's size is
    screen chrome, and this keeps the slider structurally unable to move a
-   frozen print byte. */
+   frozen print byte. SC-202 r1 widened this to the same seven inputs as the
+   font-family twin above, same reason. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__input,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__value,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-btn,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-collapse__header,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-tabs__tab,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row {
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-amount,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-label,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__skill-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__char-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-party__award-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__roll-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__points-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__char-input {
 	font-size: var(--dse-fs-control);
 }
 /* Mono (--dse-font-mono) is DELIBERATELY NOT widened here. Its consumer
@@ -12004,6 +12044,20 @@ button.dse-pr__row:hover {
 .dse-collapse__header:focus-visible,
 .dse-tabs__tab:focus-visible,
 .dse-pr__row[aria-checked]:focus-visible,
+/* SC-202 r1 — the eight cousin inputs (initiative malice quick-add, montage skill/
+   characteristic, party award, project roll/points/characteristic) never carried a
+   focus ring at all — a gap the input-family sweep's :focus-visible pass caught
+   alongside the host leak, not a host leak itself (proven bare-harness, no host
+   sheet needed to see the browser's default blue outline). Joining this rule
+   rather than declaring a second one, per the comment above. */
+.dse-init__malice-quickadd-amount:focus-visible,
+.dse-init__malice-quickadd-label:focus-visible,
+.dse-mt__skill-input:focus-visible,
+.dse-mt__char-input:focus-visible,
+.dse-party__award-input:focus-visible,
+.dse-prj__roll-input:focus-visible,
+.dse-prj__points-input:focus-visible,
+.dse-prj__char-input:focus-visible,
 /* SC-132: the recovery-marker row is a single `role="slider"` value control (one tab
    stop for the whole row, not one per marker — see kit/RecoveriesStrip.ts), so the row
    is what takes focus. `[tabindex]` because the row is only focusable when it is
@@ -13342,4 +13396,159 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-tabs__tab) {
 	color: inherit;
+}
+
+/* ==================================================================================== */
+/*   SC-202 r1 — INPUT/STEPPER HOST RE-GROUNDING (the input family's own leak)          */
+/* ==================================================================================== */
+/*
+   Phase 1 (sc202-phase1-report.md, sc202-hostleak-survey.log) found every numeric/text
+   stepper input the plugin renders wears Obsidian's `input` material in a real vault:
+   ~30px tall instead of ~20px, Obsidian's grey fill/border instead of the Steel tokens —
+   confirmed against a live 1.13.7 vault (sc202-realvault-inputs.log). Same shape of defect
+   as SC-203's button leak, one element type over, and the SAME lesson applies: re-ground
+   every property Obsidian's rule sets, not just the visible ones, or the next one ships
+   missing box-shadow/height exactly like SC-189 did.
+
+   THE NINE SELECTORS. `.dse-stepper__input` (the kit stepper's editable field — hero,
+   hero-tokens, heroic-resource, initiative, montage, party, project, roll, surges, and
+   counter's own numeral, which also carries this class) plus eight cousins that share the
+   same `input[type='number']`/`input[type='text']` reaching surface: the initiative
+   malice quick-add pair (`-amount` type=number, `-label` type=text), the montage skill/
+   characteristic pair, the party award-victories field, and the project roll/points/
+   characteristic trio.
+
+   UNLIKE THE BUTTON BLOCK, this is not one flat re-grounding: the nine selectors split
+   into three groups by what was ACTUALLY proven leaking (visual-harness/shoot.mjs
+   `assertInputHostLeak`, run against the real Obsidian 1.13.7 app.css — see the round's
+   report for the can-fail proof, 552 problems before this block, 0 after):
+
+     GROUP 1 — HEIGHT, universal. None of the nine ever declared `height` at all, so
+     Obsidian's dedicated height rule (scoped to exactly text/search/email/password/number
+     — not date/datetime/textarea) is the ONLY declaration and wins outright regardless of
+     source order or anyone else's specificity. `auto` hands sizing back to each selector's
+     own padding + border + line-height, exactly like the button block's `height: auto`.
+
+     GROUP 2 — the full material (padding/border/background/color/border-radius), for
+     `.dse-stepper__input` and the malice quick-add pair ONLY. Both are bare, unscoped
+     class rules ((0,0,1,0) — one class, no anchor) and Obsidian's own base input rule is
+     (0,0,1,1) — a real tie in class-count that the type-selector component then decides in
+     THE HOST'S favour, so every material property loses even though the plugin declares
+     all of them. `.dse-mt__skill-input`/`-char-input`, `.dse-party__award-input` and the
+     `.dse-prj__*-input` trio do NOT need this: each already sits behind an ancestor scope
+     (`[data-dse-element="…"] .dse-XXX .dse-YYY-input`, three classes deep) that safely
+     outranks the host on every one of these properties — proven by the sweep finding zero
+     material failures on them, only height and the font pair below. The malice quick-add
+     pair had NO material declared anywhere before this — a real gap the sweep surfaced,
+     not merely a specificity loss — so its values here give it the same Steel field look
+     every sibling input already has (`--dse-surface` + `--dse-border` + `--dse-radius` +
+     `--dse-fg`), not a new design decision.
+
+     GROUP 3 — `:focus-visible` border-color + box-shadow, for all nine. Obsidian's
+     `:active`/`:focus`/`:focus-visible` rules for border-color and box-shadow are
+     (0,0,2,1) — TWO classes AND a type selector. A (0,0,2,0) challenger (the shared kit
+     focus-ring rule already gives `.dse-stepper__input` its outline at exactly this
+     specificity, ~:12001) ties on class-count and then loses on the type-selector
+     tiebreak — which is exactly why `.dse-stepper__input`'s existing outline ring survives
+     (its OWN property, outline, has no competing focus-scoped host rule) while its
+     box-shadow did not (proven leaking even on the class that already had a focus rule).
+     A THIRD class — `:focus-visible` appended to the compound, not hidden inside
+     `:where()` — reaches (0,0,3,0), which beats (0,0,2,1) on class-count alone, host's
+     type selector notwithstanding. Restated to each selector's own REST border color, so
+     the kit's outline ring stays the ONE focus affordance, exactly as the button block's
+     section B keeps box-shadow inert so SC-189's chrome rules and the control-sheen rule
+     stay the only sources of a button's ring.
+
+   The eight cousins (everything but `.dse-stepper__input`) ALSO join the shared kit
+   focus-ring rule (~:12001) so tabbing into any of them shows the Steel ring instead of
+   the browser's bare blue outline — that gap pre-dated any host leak (proven bare-harness,
+   no host needed to see it) but the sweep's :focus-visible pass caught it as part of the
+   same comparison, so it ships in the same commit rather than as a separate finding.
+
+   DELIBERATELY NOT RE-GROUNDED, same reasoning as the button block's `user-select`/
+   `-webkit-app-region`: `-webkit-app-region: no-drag` (window-drag only) and
+   `unicode-bidi: plaintext` (app.css's one bare, ancestor-less `input` rule — bidi text-run
+   resolution, inert for this plugin's LTR numeric/label content). `assertInputHostLeak`
+   excludes exactly these two by name.
+
+   NOT THIS ROUND — Obsidian's `input` rules also move `background-color`/`border-color`
+   on `:hover` and `opacity`/`cursor` on `:disabled`. Both are real, structurally the same
+   shape as this round's leak, and neither is proven or fixed here — the round's brief
+   scoped verification to rest + focus-visible only. See the round's report, Follow-ups.
+*/
+
+/* GROUP 1 — height, all nine (counter's own `height: 1em`, declared on its own compound
+   selector below at higher specificity, wins over this unconditionally — see that rule's
+   own comment).
+   `box-sizing: content-box` joins it — a SECOND universal leak the census never named
+   because it does not reach through `input[type=…]` at all: app.css has its own
+   `* { box-sizing: border-box }` reset (a universal selector, ZERO specificity, but an
+   AUTHOR rule beats a UA default at any specificity). `content-box` is the browser's own
+   UA-default value — the one every one of these boxes already renders at today with no
+   host present — so restating it here changes nothing about the harness's current pixels;
+   it only stops host's reset from silently shrinking the padding+border into the box once
+   `height: auto` hands sizing back to intrinsic layout (proven necessary by the can-fail
+   sweep: `height`/`w` kept moving on the six selectors below that do not already declare
+   their own box-sizing, until this line was added — the malice quick-add pair already
+   declares `box-sizing: border-box` itself and never needed it). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(
+		.dse-stepper__input,
+		.dse-init__malice-quickadd-amount,
+		.dse-init__malice-quickadd-label,
+		.dse-mt__skill-input,
+		.dse-mt__char-input,
+		.dse-party__award-input,
+		.dse-prj__roll-input,
+		.dse-prj__points-input,
+		.dse-prj__char-input
+	) {
+	height: auto;
+	box-sizing: content-box;
+}
+
+/* GROUP 2 — the stepper's own material, restated verbatim (kit-index.css ~:11377). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-stepper__input) {
+	padding: 0.25em;
+	color: var(--dse-fg);
+	background: var(--dse-surface-sunken);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+/* GROUP 2 — the malice quick-add pair. `padding` restates each selector's own existing
+   declaration (~:880/896); background/border/color/border-radius give both the same
+   plain-field look every sibling input in this list already has (`.dse-mt__skill-input`
+   et al, below this file's Group-1 selector list) — there was no Steel declaration for
+   either to restate, only the browser's bare `<input>` default. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-init__malice-quickadd-amount, .dse-init__malice-quickadd-label) {
+	padding: 0.25em 0.4em;
+	color: var(--dse-fg);
+	background: var(--dse-surface);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+}
+
+/* GROUP 3 — focus-visible border-color + box-shadow, all nine. `:focus-visible` sits
+   OUTSIDE `:where()` deliberately — `:where()` contributes zero specificity, which is
+   exactly why the button block uses it for its subject list, and exactly why it cannot
+   ALSO carry the state that needs the third class. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-stepper__input):focus-visible {
+	border-color: var(--dse-border);
+	box-shadow: none;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(
+		.dse-init__malice-quickadd-amount,
+		.dse-init__malice-quickadd-label,
+		.dse-mt__skill-input,
+		.dse-mt__char-input,
+		.dse-party__award-input,
+		.dse-prj__roll-input,
+		.dse-prj__points-input,
+		.dse-prj__char-input
+	):focus-visible {
+	border-color: var(--dse-border);
+	box-shadow: none;
 }
