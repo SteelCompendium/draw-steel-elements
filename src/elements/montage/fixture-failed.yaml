@@ -1,0 +1,43 @@
+title: Hold the Ferry Landing
+description: |
+  The tide turns in three rounds whether the crossing is secured or not. Every failure
+  here is a boat the enemy keeps.
+rounds: 3
+success_limit: 6
+failure_limit: 3
+successes: 3
+failures: 3
+participants:
+  - name: Kira
+    skills_used: [Nature]
+  - name: Bram
+    skills_used: [Endurance, Lift]
+  - name: Osric
+    skills_used: [Climb]
+entries:
+  - hero: Kira
+    round: 1
+    result: success
+    skill: Nature
+  - hero: Bram
+    round: 1
+    result: failure
+    skill: Endurance
+    note: Lost his footing on the wet planking — bane on his next Agility test.
+  - hero: Osric
+    round: 1
+    result: failure
+    skill: Climb
+  - hero: Kira
+    round: 2
+    result: success
+    skill: Nature
+  - hero: Bram
+    round: 2
+    result: failure
+    skill: Lift
+  - hero: Osric
+    round: 2
+    result: success
+    skill: Climb
+current_round: 3

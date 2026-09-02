@@ -99,7 +99,7 @@ describe('T-6: serialize is byte-stable', () => {
 	});
 });
 
-describe('T-6: montageOutcome — the three derived bands (AGENT line 96)', () => {
+describe('T-6: montageOutcome — the four derived bands (AGENT line 96 + SC-191 impl spec §I `pending`)', () => {
 	const base: MontageModel = {
 		rounds: 2,
 		success_limit: 5,
@@ -138,8 +138,12 @@ describe('T-6: montageOutcome — the three derived bands (AGENT line 96)', () =
 		expect(montageOutcome({ ...base, rounds: 3, successes: 3, failures: 1, current_round: 1 })).toBe('failure');
 	});
 
-	test('an unset (0-default) limit never reads as instantly reached', () => {
-		expect(montageOutcome({ ...base, success_limit: 0, successes: 0 })).toBe('failure');
+	test('an unset (0-default) limit never reads as instantly reached — nothing recorded either, so this is the `pending` band (SC-191 slice 2), not `failure`', () => {
+		expect(montageOutcome({ ...base, success_limit: 0, successes: 0 })).toBe('pending');
+	});
+
+	test('SC-191 slice 2: `pending` at 0/0 regardless of whether limits are set — nothing recorded yet is not a verdict', () => {
+		expect(montageOutcome({ ...base })).toBe('pending');
 	});
 });
 

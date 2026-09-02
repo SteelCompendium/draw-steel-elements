@@ -43,6 +43,14 @@ import statblockDefault from '../src/elements/statblock/example.yaml';
 import valuesRowDefault from '../src/elements/values-row/example.yaml';
 import encounterDefault from '../src/elements/encounter/example.yaml';
 import montageDefault from '../src/elements/montage/example.yaml';
+// SC-191 impl spec §F — the four post-slice-1 fixtures, each proving one board/outcome-band
+// state the `default` (empty, no entries) fixture can't: `mid` (live, brink), `done` (Total
+// Success, tensed tails), `failed` (Total Failure, margin under 2), `old-shape` (the
+// pre-SC-191 shape verbatim — the migration's shot, §B.4).
+import montageMid from '../src/elements/montage/fixture-mid.yaml';
+import montageDone from '../src/elements/montage/fixture-done.yaml';
+import montageFailed from '../src/elements/montage/fixture-failed.yaml';
+import montageOldShape from '../src/elements/montage/fixture-old-shape.yaml';
 import projectDefault from '../src/elements/project/example.yaml';
 import partyDefault from '../src/elements/party/example.yaml';
 import conditionsDefault from '../src/elements/conditions/example.yaml';
@@ -810,7 +818,13 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		'captain-bonus': initiativeCaptainBonus,
 	},
 	kit: { default: kitDefault, collapsed: kitCollapsed },
-	montage: { default: montageDefault },
+	montage: {
+		default: montageDefault,
+		mid: montageMid,
+		done: montageDone,
+		failed: montageFailed,
+		'old-shape': montageOldShape,
+	},
 	negotiation: { default: negotiationDefault, checked: negotiationChecked },
 	party: { default: partyDefault },
 	perk: { default: perkDefault },
@@ -1081,6 +1095,11 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
 	// that now holds four creature entries (two squads + a captain + an attached
 	// candidate) is most likely to crowd its roster grid.
 	{ id: 'initiative-squads-500', element: 'initiative', fixture: 'squads', width: 500 },
+	// SC-191 slice 2 — the montage board's re-lay to one band per hero (`.dse-mt`'s own
+	// `@container dse-mt (max-width: 420px)`, impl spec §A/§F), on the `mid` fixture so a
+	// live board (past/current cells, a note mark, the outcome band's brink alert) is what
+	// narrows rather than the empty `default` grid.
+	{ id: 'montage-narrow', element: 'montage', fixture: 'mid', width: 300 },
 ];
 
 /**

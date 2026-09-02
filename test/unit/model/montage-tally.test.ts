@@ -1,12 +1,11 @@
-// SC-191 impl spec §G (row 2) — montage-tally.test.ts (NEW): the tally invariant (§B.3
-// "Tallies: stored, never recomputed") and the outcome band's at-a-glance phrasing (§D),
-// both exercised through the two pure helpers slice 1 ships: montageTallies(m) and
-// montageBandCopy(m). Neither is rendered anywhere yet — the board/outcome-band views
-// that consume them land in slice 2 (impl spec §I). montageOutcome's known `pending`-band
-// bug at 0/0 (a fourth band, not yet returned) is explicitly deferred to slice 2 by the
-// spec and is NOT fixed by this file — the last test below documents today's behavior so
-// slice 2 has a red-to-green marker when it lands the fix.
-import { parse, serialize, montageTallies, montageBandCopy } from '../../../src/elements/montage/model';
+// SC-191 impl spec §G (row 2) — montage-tally.test.ts: the tally invariant (§B.3 "Tallies:
+// stored, never recomputed") and the outcome band's at-a-glance phrasing (§D), exercised
+// through the pure helpers montageTallies(m)/montageBandCopy(m) (slice 1) and
+// montageOutcome's fourth `pending` band (slice 2 fix — see the two tests near the bottom
+// of the second describe block, updated red-to-green from slice 1's documented-bug marker).
+// The board/outcome-band VIEWS that consume these land in slice 2 (impl spec §I) and are
+// covered by test/dom/elements/montage.test.ts instead.
+import { parse, serialize, montageTallies, montageBandCopy, montageOutcome } from '../../../src/elements/montage/model';
 import type { MontageModel } from '../../../src/elements/montage/model';
 import { parseYaml } from '../../mocks/obsidian';
 
@@ -118,7 +117,16 @@ describe('SC-191 §D: montageBandCopy — at-a-glance phrasing (quoted from mock
 		expect(montageBandCopy({ ...base, successes: 6, failures: 2 }).failureTail).toBe('1 under the failure limit');
 	});
 
-	test("today's behavior at 0/0 (nothing recorded, no limits set): band reads 'failure', not a fourth 'pending' band — the known bug, fixed in slice 2 (impl spec §I)", () => {
-		expect(montageBandCopy({ ...base, success_limit: 0, failure_limit: 0, successes: 0, failures: 0 }).band).toBe('failure');
+	test('SC-191 slice 2 fix: at 0/0 (nothing recorded) band reads the fourth `pending` band, not `failure` — the bug round 1 flagged (mock6.js `derive()`)', () => {
+		expect(montageBandCopy({ ...base, success_limit: 0, failure_limit: 0, successes: 0, failures: 0 }).band).toBe('pending');
+		expect(montageBandCopy({ ...base, success_limit: 0, failure_limit: 0, successes: 0, failures: 0 }).word).toBe('Not started');
+	});
+
+	test('pending is keyed off "nothing recorded" (successes === 0 && failures === 0), not off the limits or the round — a montage with limits set but no results yet is still pending', () => {
+		expect(montageOutcome({ ...base, successes: 0, failures: 0 })).toBe('pending');
+	});
+
+	test('one recorded result is enough to leave pending — a single failure with nothing else reads the live `failure` band, never `pending`', () => {
+		expect(montageOutcome({ ...base, successes: 0, failures: 1 })).toBe('failure');
 	});
 });

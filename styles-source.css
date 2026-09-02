@@ -3552,15 +3552,35 @@ Shared globals
 }
 
 /* ==================== */
-/* Montage Test tracker (D8 Task 6, spec §4): .dse-mt */
+/* Montage Test tracker (D8 Task 6, spec §4; SC-191 impl spec §D/§E slice 2): .dse-mt */
 /* ==================== */
-/* Negotiation-sibling head (cardHead + a canPersist-gated Reset iconButton/Menu, same
-   grammar as .dse-nt__head) over a round-track (successes/failures/round kit steppers +
-   a live outcome-band chip, [data-outcome] keying total/partial/failure to the shared
-   accent/vp/warn semantic tokens — same reuse-intent as encounter's difficulty band) and
-   a participants list (skill-used chips + a record-test row). Tokens only (D2 §5) — no
-   color literals. */
+/* SC-191 replaces the pre-existing steppers-and-chip-list card with the settled `roster`
+   composition + `merged` outcome band (impl spec §A design freeze —
+   visual-harness/sc191/mock6.html at its default ?state=mid query). HeadView (kit cardHead +
+   crest + the unchanged canPersist-gated Reset menu) sits over an optional description
+   brief, the BoardView grid (Heroes × rounds × Tally, read from `model.entries`) and the
+   OutcomeBandView (verdict / equal-width tracks / rule / notes / brink, incl. the `pending`
+   band). Slice 2 ships ONLY these three regions (impl spec §I) — the cheat-sheet strip, the
+   foot rules guide, the Power-Roll badge/pip riders and the sheet/chrome-menu skins are NOT
+   in this block; they land in slices 3-4. Every losing design-round axis (crest, seal,
+   spacing, dedupe alternatives) is gone too — the winners in the table below are the only
+   code path (impl spec §A/§E: "no variant attributes at all").
+
+   TWO TIERS (§E): a STRUCTURAL tier immediately below — grid/flex geometry only, no colour —
+   that also reaches print (this is why the montage print captures move, impl spec §F); and a
+   Steel-only decoration tier further down, scoped
+   `[data-dse-theme='steel'][data-dse-element="montage"]:not([data-dse-print="on"])`, which
+   owns every colour/border/background/shadow/typography declaration (mirrors negotiation's
+   own `[data-dse-theme='steel'][data-dse-element='negotiation']:not([data-dse-print="on"])
+   .dse-nt__bubble` pattern, ~:8918). Tokens only (DESIGN.md rule 3) — no colour literals;
+   every font-size is one of the nine --dse-fs-* role tokens (SC-185 contract) — no new
+   fontSizeContract ALLOWLIST entry, none needed. Narrow width (impl spec §A): `@container`
+   on `.dse-mt` itself (the node whose width actually changes, SC-121 D-7's lesson) — never
+   a viewport `@media` query, which the mock used only because its harness page pins #mount
+   to a fixed width. */
 [data-dse-element="montage"] .dse-mt {
+	container-type: inline-size;
+	container-name: dse-mt;
 	padding: var(--dse-pad);
 
 	.dse-mt__head {
@@ -3580,115 +3600,851 @@ Shared globals
 		}
 	}
 
-	.dse-mt__round-track {
+	/* -- the Director's brief -- */
+	.dse-mt__brief {
+		position: relative;
+		margin: 0 0 0.85rem;
+		padding: 0.5rem 0.7rem 0.5rem 1.35rem;
+	}
+	.dse-mt__brief-text {
+		margin: 0;
+	}
+
+	/* -- the board -- */
+	.dse-mt__board-wrap {
+		position: relative;
+	}
+	.dse-mt__board {
+		display: grid;
+		/* `repeat(var(--n), …)` is not legal CSS, so the expanded round-track list arrives
+		   as ONE custom property from BoardView (the sanctioned geometry seam, spec §D). */
+		grid-template-columns: var(--dse-mt-cols, auto 1fr auto);
+		align-items: stretch;
+	}
+	.dse-mt__board > * {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 1.25em;
-		margin-top: 0.75em;
-		margin-bottom: 0.75em;
+		gap: 0.3em;
+		min-width: 0;
+		padding: 0.62em 0.72em;
+		position: relative;
 	}
-
-	.dse-mt__tallies {
-		display: flex;
-		gap: 1.5em;
+	.dse-mt__board-corner {
+		gap: 0.5em;
+		align-items: flex-end;
+		padding-left: 0.85em;
+		padding-bottom: 0.45rem;
+		line-height: 1;
 	}
+	.dse-mt__board-cornerword {
+		white-space: nowrap;
+	}
+	.dse-mt__board-addhero {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: 1.45em;
+		height: 1.45em;
+		padding: 0;
 
-	.dse-mt__tally,
-	.dse-mt__round {
+		svg {
+			width: 0.8em;
+			height: 0.8em;
+		}
+	}
+	.dse-mt__board-rhead {
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.05em;
+		text-align: center;
+		padding-bottom: 0.45rem;
+		line-height: 1;
+	}
+	.dse-mt__rhead-title {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.3em;
+		margin-bottom: 0.12em;
+	}
+	.dse-mt__board-thead {
+		justify-content: center;
+		align-items: flex-end;
+		padding-right: 0.72em;
+		padding-bottom: 0.45rem;
+		line-height: 1;
+	}
+	.dse-mt__board-name {
+		gap: 0.5em;
+		padding-block: 0.5em;
+		padding-left: 0.85em;
+	}
+	.dse-mt__board-who {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.dse-mt__board-rowact {
+		margin-left: auto;
+		flex: none;
+		padding: 0;
+
+		svg {
+			width: 0.85em;
+			height: 0.85em;
+		}
+	}
+	.dse-mt__cell {
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.24em;
+		text-align: center;
+	}
+	.dse-mt__cell-face {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.25em;
+		justify-content: center;
+		gap: 0.24em;
+		width: 100%;
+		min-width: 0;
+	}
+	.dse-mt__cell-glyph svg {
+		width: 1.05em;
+		height: 1.05em;
+	}
+	.dse-mt__cell-glyph--none svg {
+		width: 0.8em;
+		height: 0.8em;
+	}
+	.dse-mt__cell-skill {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100%;
+	}
+	.dse-mt__cell-notemark {
+		position: absolute;
+		top: 0.34em;
+		right: 0.34em;
+		display: inline-flex;
+
+		svg {
+			width: 0.72em;
+			height: 0.72em;
+		}
+	}
+	.dse-mt__board-total {
+		justify-content: center;
+		gap: 0.7em;
+		padding-right: 0.72em;
+	}
+	.dse-mt__tally {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.15em;
+		font-variant-numeric: tabular-nums;
+	}
+	.dse-mt__tally-glyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.72em;
+			height: 0.72em;
+		}
+	}
+	.dse-mt__board-empty {
+		grid-column: 1 / -1;
+		justify-content: center;
+		padding: 1em;
 	}
 
-	.dse-mt__tally-label {
-		font-size: var(--dse-fs-label);
-		color: var(--dse-fg-muted);
-	}
-
-	.dse-mt__tally-limit {
-		font-size: var(--dse-fs-label);
-		color: var(--dse-fg-muted);
-	}
-
+	/* -- the outcome band -- */
 	.dse-mt__outcome {
-		margin-left: auto;
-		padding: 0.25em 0.75em;
+		margin-top: 0.62rem;
+		padding: 0.62rem 0.85rem;
+	}
+	.dse-mt__outcome-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.4rem 1rem;
+	}
+	.dse-mt__verdict-now {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		min-width: 0;
+	}
+	.dse-mt__verdict-crest {
+		display: inline-flex;
+
+		svg {
+			width: 1.35em;
+			height: 1.35em;
+		}
+	}
+	.dse-mt__verdict-words {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.dse-mt__verdict-stats {
+		display: flex;
+		align-items: stretch;
+		gap: 0.9rem;
+	}
+	.dse-mt__stat {
+		display: flex;
+		align-items: baseline;
+		gap: 0.35em;
+		white-space: nowrap;
+	}
+
+	/* Ledger 2026-08-29: the two tracks read at the SAME horizontal width — either limit
+	   reaching zero ends the montage identically, so a lower failure_limit means WIDER
+	   failure slots, never a shorter track (impl spec §A "track widths"). The mock pins
+	   this to a literal em width measured off ONE fixture's 6-slot success track (round
+	   4's fixed-slot approach, corrected by round 5) — not generalizable, since a shipped
+	   block's success_limit/failure_limit are Director-authored and unbounded. Here the
+	   GRID owns the equality instead of a literal: `.dse-mt__outcome-tracks` is the one
+	   3-column grid (label | track | tail) and each `.dse-mt__prog` row DISSOLVES into it
+	   (`display: contents`, the same "one shared grid, two rows of children" gesture
+	   negotiation's `.dse-init__bar-grid .dse-init__malice-log` uses, ~:950) — CSS computes
+	   ONE middle-column width across both rows, so the two tracks are equal-width BY
+	   CONSTRUCTION at any pair of limits, not by a magic number tied to one fixture. */
+	.dse-mt__outcome-tracks {
+		display: grid;
+		grid-template-columns: 7em minmax(0, 1fr) auto;
+		align-items: center;
+		row-gap: 0.36em;
+		column-gap: 0.75em;
+		margin-top: 0.55rem;
+		padding-top: 0.5rem;
+	}
+	.dse-mt__prog {
+		display: contents;
+	}
+	.dse-mt__prog-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3em;
+		white-space: nowrap;
+	}
+	.dse-mt__prog-glyph {
+		display: inline-flex;
+
+		svg {
+			width: 0.85em;
+			height: 0.85em;
+		}
+	}
+	.dse-mt__prog-tail {
+		justify-self: start;
+		align-self: center;
+	}
+	.dse-mt__track {
+		display: flex;
+		align-items: center;
+		gap: 0.28em;
+		min-width: 0;
+		width: 100%;
+		flex: none;
+	}
+	.dse-mt__track-slot {
+		display: block;
+		flex: 1 1 0;
+		min-width: 0;
+		height: 0.95em;
+		border-radius: 1px;
+		transform: skewX(-12deg);
+	}
+
+	.dse-mt__verdict-rules {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.15rem 0.8rem;
+		margin-top: 0.5rem;
+		padding-top: 0.45rem;
+	}
+
+	.dse-mt__notes {
+		margin-top: 0.5rem;
+		padding-top: 0.45rem;
+	}
+	.dse-mt__notes-head {
+		display: block;
+		margin-bottom: 0.32rem;
+	}
+	.dse-mt__notes-list {
+		display: grid;
+		gap: 0.3rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.dse-mt__note {
+		display: grid;
+		grid-template-columns: auto minmax(7em, 10.5em) minmax(0, 1fr);
+		align-items: baseline;
+		gap: 0.55em;
+	}
+	.dse-mt__note-glyph {
+		display: inline-flex;
+		align-self: center;
+
+		svg {
+			width: 0.78em;
+			height: 0.78em;
+		}
+	}
+	.dse-mt__note-who {
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.dse-mt__note-where {
+		margin-left: 0.4em;
+	}
+	.dse-mt__note-text {
+		line-height: 1.45;
+	}
+
+	.dse-mt__verdict-alert {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.15rem -0.85rem -0.62rem;
+		padding: 0.32rem 0.85rem;
+	}
+
+	/* -- 300px sidebar leaf: the board re-lays to one band per hero -- */
+	@container dse-mt (max-width: 420px) {
+		.dse-mt__board {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0;
+			padding: 0;
+		}
+		.dse-mt__board-corner,
+		.dse-mt__board-rhead,
+		.dse-mt__board-thead {
+			display: none;
+		}
+		.dse-mt__board-name {
+			padding: 0.4em 0.5em;
+		}
+		.dse-mt__board-rowact {
+			opacity: 1;
+		}
+		.dse-mt__cell {
+			flex-direction: row;
+			justify-content: flex-start;
+			gap: 0.5em;
+			padding: 0.35em 0.5em 0.35em 0.6em;
+			text-align: left;
+		}
+		.dse-mt__cell-face {
+			flex-direction: row;
+			justify-content: flex-start;
+			gap: 0.45em;
+			width: auto;
+		}
+		.dse-mt__board-total {
+			justify-content: flex-start;
+			gap: 0.7em;
+			padding: 0.25em 0.5em 0.5em 0.6em;
+		}
+		.dse-mt__outcome-tracks {
+			grid-template-columns: minmax(0, 1fr);
+			row-gap: 0.18em;
+		}
+		.dse-mt__track {
+			flex-wrap: nowrap;
+		}
+		.dse-mt__outcome-top {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+		.dse-mt__note {
+			grid-template-columns: auto minmax(0, 1fr);
+			gap: 0.15em 0.5em;
+		}
+		.dse-mt__note-text {
+			grid-column: 2;
+		}
+	}
+}
+
+/* -- Steel decoration tier: colour, border, background, shadow, typography -- */
+[data-dse-theme='steel'][data-dse-element="montage"]:not([data-dse-print="on"]) .dse-mt {
+	background: var(--dse-card-bg);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	box-shadow: var(--dse-bevel), 0 8px 22px rgba(0, 0, 0, 0.34);
+	color: var(--dse-fg);
+
+	body.theme-light & {
+		box-shadow: var(--dse-bevel), 0 4px 12px rgba(0, 0, 0, 0.08);
+	}
+
+	.dse-mt__brief {
+		background: var(--dse-surface-sunken);
+		border: 1px solid var(--dse-metal-faint);
 		border-radius: var(--dse-radius);
-		background: var(--dse-surface-raised);
-		font-weight: bold;
+
+		&::before {
+			content: '◆';
+			position: absolute;
+			left: 0.55rem;
+			top: 0.46rem;
+			font-size: var(--dse-fs-micro);
+			color: var(--dse-metal);
+		}
+	}
+	.dse-mt__brief-text {
+		font-size: var(--dse-fs-secondary);
+		line-height: 1.5;
+		color: var(--dse-fg-muted);
+		font-style: italic;
 	}
 
-	.dse-mt__outcome[data-outcome="total"] {
-		color: var(--dse-accent);
+	/* -- board frame + banding -- */
+	.dse-mt__board {
+		border: 1px solid var(--dse-metal-line);
+		border-radius: var(--dse-radius);
+		overflow: hidden;
+	}
+	.dse-mt__board-corner,
+	.dse-mt__board-rhead,
+	.dse-mt__board-thead {
+		background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
+		border-bottom: 1px solid var(--dse-metal-line);
+		color: var(--dse-metal-bright);
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.11em;
+
+		body.theme-light & {
+			background: linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.05));
+		}
+	}
+	.dse-mt__rhead-w {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.11em;
+		color: var(--dse-metal);
+	}
+	.dse-mt__rhead-n {
+		font-size: var(--dse-fs-subheading);
+		font-family: var(--dse-font-mono);
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		line-height: 1;
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	.dse-mt__rhead-sub {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__board-rhead[data-state='current'] {
+		box-shadow: inset 0 -2px 0 var(--dse-accent);
+
+		.dse-mt__rhead-n,
+		.dse-mt__rhead-sub {
+			color: var(--dse-accent);
+		}
+		.dse-mt__rhead-sub {
+			font-weight: 700;
+		}
+	}
+	.dse-mt__board-rhead[data-state='future'] .dse-mt__rhead-n {
+		color: var(--dse-fg-faint);
+		text-shadow: none;
+	}
+	.dse-mt__board-addhero {
+		background: var(--dse-chip-bg);
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: 2px;
+		color: var(--dse-metal);
+
+		&:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
+		}
 	}
 
-	.dse-mt__outcome[data-outcome="partial"] {
+	.dse-mt__board-name,
+	.dse-mt__cell,
+	.dse-mt__board-total {
+		background: var(--dse-sheen-soft), rgba(255, 255, 255, 0.015);
+		border-bottom: 1px solid var(--dse-metal-faint);
+
+		body.theme-light & {
+			background: rgba(0, 0, 0, 0.012);
+		}
+	}
+	[data-lastrow='on'] {
+		border-bottom: none;
+	}
+	.dse-mt__board-who {
+		/* `, inherit` fallback (never resolved — the theme-agnostic routing block, ~:6489,
+		   already owns this element's real title-font consumer): the "widened slot" gate
+		   (test/dom/theme/steelTypography.test.ts) parses styles-source.css with a
+		   non-nesting-aware regex, so a NESTED `var(--dse-font-title)` here reads as its own
+		   un-scoped, non-print-excluded "consumer" with no ancestor context — the same
+		   belt-and-braces escape `.dse-sb__band .dse-collapse__title` uses, ~:8825. */
+		font-family: var(--dse-font-title, inherit);
+		font-size: var(--dse-fs-subheading);
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	.dse-mt__board-rowact {
+		color: var(--dse-metal);
+		opacity: 0;
+
+		&:hover,
+		&:focus-visible {
+			border-color: var(--dse-accent);
+			color: var(--dse-accent);
+		}
+		&:disabled {
+			cursor: not-allowed;
+		}
+	}
+	.dse-mt__board-name:hover .dse-mt__board-rowact,
+	.dse-mt__board-rowact:focus-visible {
+		opacity: 1;
+	}
+	@media (pointer: coarse) {
+		.dse-mt__board-rowact {
+			opacity: 1;
+		}
+	}
+
+	/* -- the seal (data-seal='ink', the settled treatment, impl spec §A) --
+	   Four unambiguous ring states: no ring (nothing recorded), solid green ring
+	   (success), a red pressed ring (failure), a dashed grey ring (assist). Colour is the
+	   LAST channel — ring style (solid / pressed / dashed / absent) plus the glyph plus the
+	   skill word all carry the meaning first (colourblind rule, impl spec §E). */
+	.dse-mt__cell-glyph {
+		display: inline-flex;
+		width: 1.65em;
+		height: 1.65em;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--dse-metal-line);
+		border-radius: 50%;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__cell-glyph--none {
+		width: auto;
+		height: auto;
+		border: none;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__cell[data-kind='success'] .dse-mt__cell-glyph {
+		background: none;
+		border: 2px solid var(--dse-turn-done);
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__cell[data-kind='failure'] .dse-mt__cell-glyph {
+		background:
+			repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 5px),
+			rgba(0, 0, 0, 0.28);
+		border: 2px solid var(--dse-danger);
+		box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+		color: var(--dse-danger);
+
+		body.theme-light & {
+			background:
+				repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.11) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.05);
+			box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+		}
+	}
+	.dse-mt__cell[data-kind='assist'] .dse-mt__cell-glyph {
+		background: none;
+		border: 1px dashed var(--dse-metal-line);
+		color: var(--dse-metal);
+	}
+	.dse-mt__cell-skill {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.05em;
+		color: var(--dse-fg-muted);
+	}
+	.dse-mt__cell-hint {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.08em;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__cell-notemark {
+		color: var(--dse-metal);
+	}
+	.dse-mt__cell[data-state='current'] {
+		background: rgba(77, 184, 199, 0.07);
+	}
+	.dse-mt__cell:disabled {
+		cursor: not-allowed;
+	}
+	.dse-mt__cell:not(:disabled) {
+		cursor: pointer;
+	}
+
+	.dse-mt__tally {
+		font-size: var(--dse-fs-label);
+		color: var(--dse-fg-muted);
+		padding: 0.1em 0.35em;
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: 2px;
+		background: var(--dse-chip-bg);
+	}
+	.dse-mt__tally[data-kind='success'] {
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__tally[data-kind='failure'] {
+		color: var(--dse-danger);
+	}
+	.dse-mt__board-empty {
+		color: var(--dse-fg-muted);
+		font-style: italic;
+		font-size: var(--dse-fs-secondary);
+	}
+
+	/* -- the outcome band, incl. the `pending` band (SC-191 slice 2 fix, model.ts) -- */
+	.dse-mt__outcome {
+		background: linear-gradient(104deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+		border: 1px solid var(--dse-metal-faint);
+		/* Named in `rem`, not `var(--dse-radius)` (which is `0.4em` and re-resolves against
+		   whoever reads it) — the brink alert's bottom corners sit flush at THIS box's
+		   padding-box corner and must derive `calc(this - border-width)`, the same
+		   `--dse-plate-radius`/`--dse-region-radius` recipe (~:6069/~:9232). */
+		--dse-mt-outcome-radius: 0.4rem;
+		border-radius: var(--dse-mt-outcome-radius);
+		box-shadow: var(--dse-bevel);
+		--dse-mt-band: var(--dse-metal);
+
+		body.theme-light & {
+			background: linear-gradient(104deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.02));
+		}
+
+		&[data-band='total'] {
+			--dse-mt-band: var(--dse-vp);
+		}
+		&[data-band='partial'] {
+			--dse-mt-band: var(--dse-accent);
+		}
+		&[data-band='failure'] {
+			--dse-mt-band: var(--dse-danger);
+		}
+		/* A montage at 0/0 is not a Total Failure — it has not started (model.ts's fourth
+		   `pending` band, fixed this slice). Neutral crest, same as an unset limit. */
+		&[data-band='pending'] {
+			--dse-mt-band: var(--dse-metal);
+		}
+	}
+	.dse-mt__verdict-crest {
+		color: var(--dse-mt-band);
+	}
+	.dse-mt__verdict-eyebrow {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		color: var(--dse-metal);
+	}
+	.dse-mt__verdict-word {
+		font-size: var(--dse-fs-subheading);
+		font-weight: 700;
+		line-height: 1.15;
+		color: var(--dse-mt-band);
+		text-shadow: var(--dse-emboss);
+	}
+	.dse-mt__stat-value {
+		font-size: var(--dse-fs-heading);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--dse-heading);
+		text-shadow: var(--dse-emboss);
+	}
+	.dse-mt__stat[data-kind='success'] .dse-mt__stat-value {
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__stat[data-kind='failure'] .dse-mt__stat-value {
+		color: var(--dse-danger);
+	}
+	.dse-mt__stat-label {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.07em;
+		color: var(--dse-fg-muted);
+	}
+
+	.dse-mt__prog-word {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		color: var(--dse-metal);
+	}
+	.dse-mt__prog[data-kind='success'] .dse-mt__prog-glyph {
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__prog[data-kind='failure'] .dse-mt__prog-glyph {
+		color: var(--dse-danger);
+	}
+	.dse-mt__prog-tail {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.07em;
+		color: var(--dse-fg-muted);
+	}
+	/* The countable track: the recoveries strip's own gesture (styles-source.css ~9273) —
+	   the OUTLINE states the Director's limit, only the FILL states progress. */
+	.dse-mt__track-slot {
+		border: 1px solid var(--dse-metal-line);
+		background: none;
+	}
+	.dse-mt__track-slot[data-filled='on'] {
+		background: var(--dse-metal-grad);
+		border-color: var(--dse-metal-bright);
+		box-shadow: var(--dse-chip-bevel);
+	}
+	.dse-mt__track[data-kind='success'] .dse-mt__track-slot[data-filled='on'] {
+		border-color: var(--dse-turn-done);
+	}
+	.dse-mt__track[data-kind='failure'] .dse-mt__track-slot[data-filled='on'] {
+		background:
+			repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 5px),
+			rgba(0, 0, 0, 0.4);
+		border-color: var(--dse-danger);
+		box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+
+		body.theme-light & {
+			background:
+				repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.07);
+			box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+		}
+	}
+	.dse-mt__track-slot[data-goal='on'] {
+		border-color: var(--dse-metal-bright);
+		box-shadow: inset -2px 0 0 var(--dse-metal-bright), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+
+		body.theme-light & {
+			border-color: var(--dse-metal);
+		}
+	}
+
+	.dse-mt__verdict-rules {
+		border-top: 1px solid var(--dse-metal-faint);
+	}
+	.dse-mt__verdict-rule {
+		font-size: var(--dse-fs-caption);
+		color: var(--dse-fg-faint);
+	}
+
+	.dse-mt__notes {
+		border-top: 1px solid var(--dse-metal-faint);
+	}
+	.dse-mt__notes-head {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		color: var(--dse-metal);
+	}
+	.dse-mt__note-glyph {
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__note[data-kind='success'] .dse-mt__note-glyph {
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__note[data-kind='failure'] .dse-mt__note-glyph {
+		color: var(--dse-danger);
+	}
+	.dse-mt__note[data-kind='assist'] .dse-mt__note-glyph {
+		color: var(--dse-metal);
+	}
+	.dse-mt__note-hero {
+		font-size: var(--dse-fs-label);
+		color: var(--dse-fg);
+	}
+	.dse-mt__note-where {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.06em;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__note-text {
+		font-size: var(--dse-fs-secondary);
+		color: var(--dse-fg-muted);
+	}
+
+	/* THE BRINK. Announced three ways at once: a literal sentence, a ◆ mark, and a band
+	   that only exists in this state (colour is last: the gold tint). */
+	.dse-mt__verdict-alert {
+		background: linear-gradient(90deg, rgba(224, 176, 80, 0.16), rgba(224, 176, 80, 0));
+		border-top: 1px solid var(--dse-vp);
+		/* Flush at .dse-mt__outcome's bottom padding-box corner (the negative margin above
+		   pins it there) — its radius must be the parent's MINUS the parent's 1px border
+		   (SC-189/SC-204's nested-corner-radius rule; caught live by shoot.mjs's own
+		   assertion on the montage-mid shot). */
+		border-radius: 0 0 calc(var(--dse-mt-outcome-radius) - 1px) calc(var(--dse-mt-outcome-radius) - 1px);
+	}
+	.dse-mt__verdict-alert-mark {
+		font-size: var(--dse-fs-caption);
+		color: var(--dse-vp);
+	}
+	.dse-mt__verdict-alert-text {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		font-weight: 700;
 		color: var(--dse-vp);
 	}
 
-	.dse-mt__outcome[data-outcome="failure"] {
-		color: var(--dse-warn);
-	}
+	@container dse-mt (max-width: 420px) {
+		/* The crest costs ~2.8em of head width; at 300px the deck line wraps one word per
+		   line without this (impl spec §A, round2.css's own narrow note). Same stand-down
+		   the recoveries eyebrow makes at 250px. */
+		.dse-mt__head .dse-crest {
+			display: none;
+		}
+		.dse-mt__board-name {
+			border-top: 1px solid var(--dse-metal-line);
+			background: rgba(0, 0, 0, 0.3);
 
-	.dse-mt__participants {
-		margin-top: 1em;
-	}
-
-	.dse-mt__participants-header {
-		font-weight: bold;
-		margin-bottom: 0.5em;
-		color: var(--dse-heading);
-	}
-
-	.dse-mt__participant {
-		padding: 0.5em 0;
-		border-top: 1px solid var(--dse-border);
-	}
-
-	.dse-mt__participant-name {
-		font-weight: bold;
-		color: var(--dse-fg);
-	}
-
-	.dse-mt__skills {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35em;
-		margin: 0.35em 0;
-	}
-
-	.dse-mt__skill-chip {
-		padding: 0.1em 0.5em;
-		border-radius: var(--dse-radius);
-		background: var(--dse-chip-bg);
-		color: var(--dse-fg-muted);
-		font-size: var(--dse-fs-label);
-	}
-
-	.dse-mt__record {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5em;
-	}
-
-	.dse-mt__skill-input,
-	.dse-mt__char-input {
-		background: var(--dse-surface);
-		border: 1px solid var(--dse-border);
-		border-radius: var(--dse-radius);
-		color: var(--dse-fg);
-		padding: 0.25em 0.5em;
-	}
-
-	.dse-mt__skill-input {
-		flex: 1 1 8em;
-	}
-
-	.dse-mt__char-input {
-		width: 4em;
+			body.theme-light & {
+				background: rgba(0, 0, 0, 0.07);
+			}
+		}
+		.dse-mt__cell::before {
+			content: 'rd ' attr(data-round);
+			flex: none;
+			font-family: var(--dse-font-mono);
+			font-size: var(--dse-fs-micro);
+			font-variant: small-caps;
+			text-transform: lowercase;
+			letter-spacing: 0.07em;
+			color: var(--dse-fg-faint);
+		}
 	}
 }
 

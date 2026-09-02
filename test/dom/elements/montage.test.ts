@@ -1,14 +1,22 @@
-// D8 Task 6 (spec §4) — Montage Test tracker through the REAL ElementPipeline: cardHead +
-// canPersist-gated Reset menu (negotiation-sibling), the round-track's steppers + live
-// outcome-band readout (montageOutcome, model.ts), and the participants "record test"
-// row (skill-reuse warning, never a block — AGENT 94) with an optional deterministic
-// roll-driven test row. Same harness shape as counter.test.ts (no schema, no compendium
-// dep — real service instances, local makeDeps/makeHost).
+// SC-191 impl spec §I slice 2 — Montage Test tracker through the REAL ElementPipeline, on
+// the settled `roster`/`merged` design (spec §A). HeadView (cardHead + crest/deck/round-chip
+// + the UNCHANGED canPersist-gated Reset menu), the BoardView grid (Heroes × rounds × Tally,
+// read from `model.entries`), and the OutcomeBandView (verdict/tracks/rule/notes/brink,
+// including the `pending` band model.ts's montageOutcome now returns at 0/0). Replaces the
+// pre-SC-191 steppers-and-record-form suite (RoundTrackView/ParticipantsView, both deleted
+// this slice).
+//
+// SLICE 2 SCOPE: every board write affordance the settled design puts on a cell (the
+// open-socket quick-record trio, the per-row "Log an action" button, the correction/
+// note-edit chip) is rendered real-disabled — the sheet that wires them is slice 4's job
+// (brief §2). Tests below assert the STUB shape (a real, aria-labelled, disabled control)
+// rather than a working record path; `montage-strip*`/`montage-sheet-log`-shaped behavior
+// (the cheat-sheet strip, the guide panel, the chrome menu's five items, cx.roll) is NOT
+// covered here — those land with the slices that build them (spec §I).
 import * as fs from 'fs';
 import * as path from 'path';
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
-import { createRenderContext } from '../../../src/framework/context';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
@@ -19,16 +27,18 @@ import { createReferenceService } from '../../../src/framework/seams/refs';
 import { createValidationService } from '../../../src/framework/validation';
 import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
-import { resolveRoll } from '../../../src/framework/roll/engine';
 import type { RollService } from '../../../src/framework/roll/service';
-import type { DiceSource, RollInput } from '../../../src/framework/roll/types';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin, Menu, Notice, parseYaml, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, Menu, Notice, makeFakeContext } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import { styleGuardFindings } from '../kit/styleGuard';
 import montageYaml from '../../../src/elements/montage/example.yaml';
+import montageMidYaml from '../../../src/elements/montage/fixture-mid.yaml';
+import montageDoneYaml from '../../../src/elements/montage/fixture-done.yaml';
+import montageFailedYaml from '../../../src/elements/montage/fixture-failed.yaml';
+import montageOldShapeYaml from '../../../src/elements/montage/fixture-old-shape.yaml';
 
 const MT_ALIASES = ['ds-montage'] as const;
 
@@ -49,29 +59,10 @@ function makeHost(overrides: Partial<BlockHost> = {}) {
 	return host as BlockHost & { containerEl: HTMLElement; replaceSource: typeof replaceSource };
 }
 
-/** A seeded RollService stub (recon §10: resolve(input, dice?) sync, injected DiceSource
- *  — recon: service.ts:37/54) — replays `faces` on every resolve() call that doesn't
- *  bring its own dice, mirroring rollTestHelpers.ts's stubService but exercising the
- *  SYNC path montage actually drives (never NATIVE_DICE in tests). */
-function stubRollService(faces: number[]): RollService {
-	const seeded = (): DiceSource => {
-		let i = 0;
-		return { rollDie: () => faces[i++] ?? 1 };
-	};
-	return {
-		resolve: (input: RollInput, dice?: DiceSource) => resolveRoll(input, dice ?? seeded()),
-		roll: async (input: RollInput) => resolveRoll(input, seeded()),
-		dice: seeded(),
-		delegate: 'native',
-	};
-}
-
-/** Real service instances, same convention as counter.test.ts — montage declares no
- *  schema and has no compendium dep, so neither ValidationService nor CompendiumIndex is
- *  ever consulted. ElementPipelineDeps.roll is REQUIRED (the real plugin always wires a
- *  RollService) — the "no cx.roll" degrade is exercised at the bare-RenderContext level
- *  instead (below), never by handing this a falsy roll. */
-function makeDeps(roll: RollService = stubRollService([5, 6])): ElementPipelineDeps {
+/** Real service instances, same convention as counter.test.ts — montage declares no schema
+ *  and has no compendium dep. `roll` is REQUIRED by ElementPipelineDeps but unused this
+ *  slice (the roll-driven row lives in the slice-4 sheet, not the board). */
+function makeDeps(): ElementPipelineDeps {
 	const app = new App();
 	const plugin = new Plugin(app);
 	const storage: PrefsStorage = { get: async () => undefined, set: async () => {} };
@@ -80,6 +71,7 @@ function makeDeps(roll: RollService = stubRollService([5, 6])): ElementPipelineD
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
 	const session = createSessionStore();
+	const roll: RollService = { resolve: () => ({ total: 0, tier: 1 }) } as unknown as RollService;
 	return {
 		app: app as any,
 		plugin: plugin as any,
@@ -93,12 +85,8 @@ function makeDeps(roll: RollService = stubRollService([5, 6])): ElementPipelineD
 	};
 }
 
-async function renderMontage(
-	source: string = montageYaml,
-	hostOverrides: Partial<BlockHost> = {},
-	roll: RollService = stubRollService([5, 6]),
-) {
-	const pipeline = new ElementPipeline(makeDeps(roll));
+async function renderMontage(source: string = montageYaml, hostOverrides: Partial<BlockHost> = {}) {
+	const pipeline = new ElementPipeline(makeDeps());
 	const host = makeHost(hostOverrides);
 	await pipeline.run(montageElement, source, host);
 	const root = host.containerEl.firstElementChild as HTMLElement;
@@ -106,42 +94,24 @@ async function renderMontage(
 }
 
 // -- kit-DOM accessors --
-const outcomeEl = (root: HTMLElement) => root.querySelector('.dse-mt__outcome') as HTMLElement;
-const tallyStepper = (root: HTMLElement, label: string) =>
-	root.querySelector(`.dse-stepper[aria-label="${label}"]`) as HTMLElement;
-const tallyPlus = (root: HTMLElement, label: string) =>
-	tallyStepper(root, label).querySelector('[aria-label^="Increase"]') as HTMLButtonElement;
-const tallyMinus = (root: HTMLElement, label: string) =>
-	tallyStepper(root, label).querySelector('[aria-label^="Decrease"]') as HTMLButtonElement;
-/** The stepper's own numeric display: an editable stepper's value lives in the
- *  `<input>`'s `.value` PROPERTY (never `.textContent` — inputs don't have any), while a
- *  read-only stepper renders a plain `.dse-stepper__value` span instead. */
-const tallyNumber = (root: HTMLElement, label: string): string => {
-	const s = tallyStepper(root, label);
-	const input = s.querySelector('.dse-stepper__input') as HTMLInputElement | null;
-	return input ? input.value : ((s.querySelector('.dse-stepper__value') as HTMLElement).textContent ?? '');
-};
-/** The static "/ limit" (or "/ rounds") caption alongside a tally/round stepper. */
-const tallyLimit = (root: HTMLElement, label: string): string =>
-	(tallyStepper(root, label).parentElement?.querySelector('.dse-mt__tally-limit') as HTMLElement)
-		.textContent ?? '';
+const heroRows = (root: HTMLElement) => Array.from(root.querySelectorAll('.dse-mt__board-name'));
+const heroRow = (root: HTMLElement, name: string) =>
+	heroRows(root).find((el) => el.querySelector('.dse-mt__board-who')?.textContent === name) as HTMLElement;
+const cellFor = (root: HTMLElement, hero: string, round: number) =>
+	root.querySelector(`.dse-mt__cell[data-hero="${hero}"][data-round="${round}"]`) as HTMLElement;
+const tallyFor = (root: HTMLElement, hero: string) =>
+	root.querySelector(`.dse-mt__board-total[data-hero="${hero}"]`) as HTMLElement;
+const tallyN = (tally: HTMLElement, kind: 'success' | 'failure') =>
+	tally.querySelector(`.dse-mt__tally[data-kind="${kind}"] .dse-mt__tally-n`)?.textContent;
+const outcomeBand = (root: HTMLElement) => root.querySelector('.dse-mt__outcome') as HTMLElement;
+const verdictWord = (root: HTMLElement) => outcomeBand(root).querySelector('.dse-mt__verdict-word') as HTMLElement;
+const verdictEyebrow = (root: HTMLElement) =>
+	outcomeBand(root).querySelector('.dse-mt__verdict-eyebrow') as HTMLElement;
+const trackSlots = (root: HTMLElement, kind: 'success' | 'failure') =>
+	Array.from(outcomeBand(root).querySelectorAll(`.dse-mt__track[data-kind="${kind}"] .dse-mt__track-slot`));
+const progTail = (root: HTMLElement, kind: 'success' | 'failure') =>
+	outcomeBand(root).querySelector(`.dse-mt__prog[data-kind="${kind}"] .dse-mt__prog-tail`)?.textContent;
 const menuBtn = (root: HTMLElement) => root.querySelector('.dse-mt__menu') as HTMLButtonElement | null;
-const participantEl = (root: HTMLElement, name: string) =>
-	Array.from(root.querySelectorAll('.dse-mt__participant')).find(
-		(el) => el.querySelector('.dse-mt__participant-name')?.textContent === name,
-	) as HTMLElement;
-const skillChips = (participant: HTMLElement) =>
-	Array.from(participant.querySelectorAll('.dse-mt__skill-chip')).map((el) => el.textContent);
-const skillInput = (participant: HTMLElement) =>
-	participant.querySelector('.dse-mt__skill-input') as HTMLInputElement;
-const successBtn = (participant: HTMLElement) =>
-	participant.querySelector('[aria-label^="Record success"]') as HTMLButtonElement;
-const failureBtn = (participant: HTMLElement) =>
-	participant.querySelector('[aria-label^="Record failure"]') as HTMLButtonElement;
-const rollBtn = (participant: HTMLElement) =>
-	participant.querySelector('[aria-label^="Roll a test"]') as HTMLButtonElement | null;
-const charInput = (participant: HTMLElement) =>
-	participant.querySelector('.dse-mt__char-input') as HTMLInputElement | null;
 
 describe('T-6: montage ElementDefinition (spec §4)', () => {
 	test('id/name/aliases/shape match the brief; persisted with serialize, NO schema, no auto ref-resolution', () => {
@@ -172,11 +142,7 @@ describe('T-6: montage ElementDefinition (spec §4)', () => {
 	});
 });
 
-describe('T-6: montage rendered through the REAL ElementPipeline (spec §4.2)', () => {
-	afterEach(() => {
-		jest.useRealTimers();
-	});
-
+describe('SC-191 slice 2: HeadView (cardHead + crest/deck/round-chip; the unchanged Reset menu)', () => {
 	test('root carries data-dse-element="montage" + theme; ONE .dse-mt', async () => {
 		const { root } = await renderMontage();
 		expect(root.getAttribute('data-dse-element')).toBe('montage');
@@ -184,23 +150,20 @@ describe('T-6: montage rendered through the REAL ElementPipeline (spec §4.2)', 
 		expect(root.querySelectorAll('.dse-mt')).toHaveLength(1);
 	});
 
-	test('cardHead: title, success/failure/round steppers, and the live outcome readout render from example.yaml', async () => {
+	test('title, deck (party size + "one action each per round"), and the round chip render from the fixture', async () => {
 		const { root } = await renderMontage();
-
 		const name = root.querySelector('.dse-head__primary--left') as HTMLElement;
 		expect(name.textContent).toBe('Cross the Ashfall Wastes');
 		expect(root.querySelector('.dse-head__eyebrow--left')?.textContent).toBe('Montage Test');
+		expect(root.querySelector('.dse-head__deck--left')?.textContent).toBe('1 hero · one action each per round');
+		expect(root.querySelector('.dse-head__eyebrow--right')?.textContent).toBe('Round 1 / 2');
+		expect(root.querySelector('.dse-crest__glyph')?.getAttribute('data-icon')).toBe('hourglass');
+	});
 
-		expect(tallyNumber(root, 'Successes')).toBe('0');
-		expect(tallyLimit(root, 'Successes')).toBe('/ 5');
-		expect(tallyNumber(root, 'Failures')).toBe('0');
-		expect(tallyLimit(root, 'Failures')).toBe('/ 3');
-		expect(tallyNumber(root, 'Current round')).toBe('1');
-		expect(tallyLimit(root, 'Current round')).toBe('/ 2');
-
-		// successes 0, failures 0, current_round 1 of 2 -> not exhausted -> live "failure" band.
-		expect(outcomeEl(root).getAttribute('data-outcome')).toBe('failure');
-		expect(outcomeEl(root).textContent).toBe('Total Failure');
+	test('the round chip reads "Complete" once the montage is total-success, and the head crest switches to trophy', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		expect(root.querySelector('.dse-head__eyebrow--right')?.textContent).toBe('Complete');
+		expect(root.querySelector('.dse-crest__glyph')?.getAttribute('data-icon')).toBe('trophy');
 	});
 
 	test('an unnamed montage heads as plain "Montage Test" — no dangling colon, no duplicated eyebrow', async () => {
@@ -210,200 +173,200 @@ describe('T-6: montage rendered through the REAL ElementPipeline (spec §4.2)', 
 		expect(root.querySelector('.dse-head__eyebrow--left')).toBeNull();
 	});
 
-	test('participants: Kira renders with her existing skill chips (Nature, Endurance) from the fixture', async () => {
+	test('the description brief renders through ElementView.renderMarkdown into .dse-mt__brief; absent when unauthored', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const brief = root.querySelector('.dse-mt__brief-text') as HTMLElement;
+		expect(brief.textContent).toContain('Forty miles of volcanic waste');
+
+		const { root: bare } = await renderMontage(montageYaml);
+		expect(bare.querySelector('.dse-mt__brief')).toBeNull();
+	});
+});
+
+describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.entries)', () => {
+	test('one row per participant, one column per round — Kira × 2 rounds from the default fixture', async () => {
 		const { root } = await renderMontage();
-		const kira = participantEl(root, 'Kira');
-		expect(kira).toBeDefined();
-		expect(skillChips(kira)).toEqual(['Nature', 'Endurance']);
+		expect(heroRows(root)).toHaveLength(1);
+		expect(heroRow(root, 'Kira')).toBeDefined();
+		expect(cellFor(root, 'Kira', 1)).toBeDefined();
+		expect(cellFor(root, 'Kira', 2)).toBeDefined();
 	});
 
-	test('stepping successes to success_limit flips the outcome readout to "Total Success"', async () => {
-		jest.useFakeTimers();
-		const { root, host } = await renderMontage();
-
-		for (let i = 0; i < 5; i++) tallyPlus(root, 'Successes').click();
-
-		expect(tallyNumber(root, 'Successes')).toBe('5');
-		expect(tallyLimit(root, 'Successes')).toBe('/ 5');
-		expect(outcomeEl(root).getAttribute('data-outcome')).toBe('total');
-		expect(outcomeEl(root).textContent).toBe('Total Success');
-
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+	test('a past round WITH an entry renders the seal glyph + skill, no note mark', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Kira', 1);
+		expect(cell.getAttribute('data-kind')).toBe('success');
+		expect(cell.querySelector('.dse-mt__cell-glyph')?.getAttribute('data-icon')).toBe('check');
+		expect(cell.querySelector('.dse-mt__cell-skill')?.textContent).toBe('Nature');
+		expect(cell.querySelector('.dse-mt__cell-notemark')).toBeNull();
 	});
 
-	test('source hygiene: the view + montage sub-views pass the shared kit style guard (no inline color, no color literals)', () => {
-		const files = [
-			'../../../src/elements/montage/view.ts',
-			'../../../src/elements/montage/RoundTrackView.ts',
-			'../../../src/elements/montage/ParticipantsView.ts',
-		];
-		for (const file of files) {
-			const src = fs.readFileSync(path.join(__dirname, file), 'utf8');
-			expect(styleGuardFindings(src)).toEqual([]);
-		}
+	test('a NOTED entry carries the permanent dog-eared-page mark, titled with the note text', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Osric', 1);
+		expect(cell.getAttribute('data-kind')).toBe('failure');
+		expect(cell.getAttribute('data-noted')).toBe('on');
+		const mark = cell.querySelector('.dse-mt__cell-notemark') as HTMLElement;
+		expect(mark.getAttribute('data-icon')).toBe('sticky-note');
+		expect(mark.getAttribute('title')).toContain('Turned an ankle');
 	});
 
-	test('CSS contract: .dse-mt scoped under [data-dse-element="montage"], tokens only', () => {
-		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
-		const block = sheet.match(/\[data-dse-element="montage"\]\s+\.dse-mt\s*\{[\s\S]*?\n\}/);
-		expect(block).not.toBeNull();
-		expect(block![0]).toMatch(/var\(--dse-accent\)/);
-		expect(block![0]).toMatch(/var\(--dse-warn\)/);
-	});
-});
-
-describe('T-6: record test — skill-reuse warning (AGENT 94), never a block', () => {
-	afterEach(() => {
-		jest.useRealTimers();
-		Notice.notices.length = 0;
+	test('an assist entry renders the ringed-plus glyph', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Osric', 2);
+		expect(cell.getAttribute('data-kind')).toBe('assist');
+		expect(cell.querySelector('.dse-mt__cell-glyph')?.getAttribute('data-icon')).toBe('circle-plus');
 	});
 
-	test('recording Nature again for Kira surfaces a reuse warning Notice but STILL records the skill + the tally', async () => {
-		jest.useFakeTimers();
-		const { root, host } = await renderMontage();
-		const kira = participantEl(root, 'Kira');
-
-		skillInput(kira).value = 'Nature';
-		successBtn(kira).click();
-
-		expect(Notice.notices.some((n) => n.includes('already used Nature'))).toBe(true);
-
-		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
-		const kiraAfter = participantEl(rebuilt, 'Kira');
-		expect(skillChips(kiraAfter)).toEqual(['Nature', 'Endurance', 'Nature']);
-		expect(tallyNumber(rebuilt, 'Successes')).toBe('1');
-		expect(tallyLimit(rebuilt, 'Successes')).toBe('/ 5');
-
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+	test('the open socket in the round currently in play is a real, disabled, aria-labelled <button> — a stub, never a dead-end live control', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Kira', 3) as HTMLButtonElement;
+		expect(cell.tagName).toBe('BUTTON');
+		expect(cell.disabled).toBe(true);
+		expect(cell.getAttribute('aria-label')).toBe('Kira, round 3: nothing logged — log an action');
+		expect(cell.querySelector('.dse-mt__cell-hint')?.textContent).toBe('to act');
 	});
 
-	test('recording a NEW skill for Kira appends it with no warning; a failure tallies failures', async () => {
-		jest.useFakeTimers();
-		const { root, host } = await renderMontage();
-		const kira = participantEl(root, 'Kira');
-
-		skillInput(kira).value = 'Intimidate';
-		failureBtn(kira).click();
-
-		expect(Notice.notices.some((n) => n.includes('already used'))).toBe(false);
-		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
-		expect(skillChips(participantEl(rebuilt, 'Kira'))).toEqual(['Nature', 'Endurance', 'Intimidate']);
-		expect(tallyNumber(rebuilt, 'Failures')).toBe('1');
-		expect(tallyLimit(rebuilt, 'Failures')).toBe('/ 3');
+	test('a FUTURE round with no entry renders a plain dash, never a button', async () => {
+		const { root } = await renderMontage();
+		const cell = cellFor(root, 'Kira', 2);
+		expect(cell.tagName).toBe('DIV');
+		expect(cell.querySelector('.dse-mt__cell-glyph--none')).not.toBeNull();
 	});
 
-	test('recording with NO skill entered tallies the result without touching skills_used', async () => {
-		jest.useFakeTimers();
-		const { root, host } = await renderMontage();
-		const kira = participantEl(root, 'Kira');
+	test('the tally column sums this hero\'s own entries — Kira 2✓/0✕, Osric 0✓/1✕ on the mid fixture', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const kira = tallyFor(root, 'Kira');
+		expect(tallyN(kira, 'success')).toBe('2');
+		expect(tallyN(kira, 'failure')).toBe('0');
+		const osric = tallyFor(root, 'Osric');
+		expect(tallyN(osric, 'success')).toBe('0');
+		expect(tallyN(osric, 'failure')).toBe('1');
+	});
 
-		successBtn(kira).click();
+	test('a complete montage (done fixture) shows every past-round cell as "past" even in the last round, and stands the row-log control down', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		expect(cellFor(root, 'Kira', 3).getAttribute('data-state')).toBe('past');
+		// Yenna took no action in round 3 (montage ended at round 3's total success) — a
+		// plain dash, never an open socket, once the montage is complete.
+		const yennaR3 = cellFor(root, 'Yenna', 3);
+		expect(yennaR3.tagName).toBe('DIV');
+		expect(yennaR3.querySelector('.dse-mt__cell-skill--none')?.textContent).toBe('no action');
+	});
 
-		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
-		expect(skillChips(participantEl(rebuilt, 'Kira'))).toEqual(['Nature', 'Endurance']);
-		expect(tallyNumber(rebuilt, 'Successes')).toBe('1');
-		expect(tallyLimit(rebuilt, 'Successes')).toBe('/ 5');
+	test('STUBBED (slice 4 wires these): "add a hero" and every per-row "Log an action" control are real, aria-labelled, and real-disabled', async () => {
+		const { root } = await renderMontage();
+		const addHero = root.querySelector('.dse-mt__board-addhero') as HTMLButtonElement;
+		expect(addHero.tagName).toBe('BUTTON');
+		expect(addHero.disabled).toBe(true);
+		expect(addHero.getAttribute('aria-label')).toBe('Add a hero');
+
+		const rowAct = heroRow(root, 'Kira').querySelector('.dse-mt__board-rowact') as HTMLButtonElement;
+		expect(rowAct.disabled).toBe(true);
+		expect(rowAct.getAttribute('aria-label')).toBe('Log an action for Kira');
+	});
+
+	test('with no participants authored, the board renders an explanatory empty row instead of throwing', async () => {
+		const { root } = await renderMontage('title: Empty Run\nsuccess_limit: 5\nfailure_limit: 3');
+		expect(heroRows(root)).toHaveLength(0);
+		expect(root.querySelector('.dse-mt__board-empty')?.textContent).toContain('No heroes yet');
 	});
 });
 
-describe('T-6: the deterministic roll-driven test row (D5 RollService.resolve, injected DiceSource)', () => {
-	afterEach(() => {
-		jest.useRealTimers();
-		Notice.notices.length = 0;
+describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule / notes / brink)', () => {
+	test('the `pending` band (model.ts\'s fourth band, fixed this slice): 0/0 reads "This montage" / "Not started", never Total Failure', async () => {
+		const { root } = await renderMontage();
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('pending');
+		expect(verdictEyebrow(root).textContent).toBe('This montage');
+		expect(verdictWord(root).textContent).toBe('Not started');
 	});
 
-	test('a seeded tier-3 roll (natural 19, hits characteristic) records a SUCCESS and appends the skill', async () => {
-		jest.useFakeTimers();
-		// 9 + 10 = natural 19 -> tier 3 with characteristic +3 -> success (tier >= 2).
-		const roll = stubRollService([9, 10]);
-		const { root, host } = await renderMontage(montageYaml, {}, roll);
-		const kira = participantEl(root, 'Kira');
-		expect(rollBtn(kira)).not.toBeNull();
-
-		skillInput(kira).value = 'Nature';
-		charInput(kira)!.value = '3';
-		rollBtn(kira)!.click();
-
-		expect(Notice.notices.some((n) => n.includes('already used Nature'))).toBe(true);
-		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
-		expect(tallyNumber(rebuilt, 'Successes')).toBe('1');
-		expect(tallyLimit(rebuilt, 'Successes')).toBe('/ 5');
-		expect(tallyNumber(rebuilt, 'Failures')).toBe('0');
-		expect(tallyLimit(rebuilt, 'Failures')).toBe('/ 3');
-
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+	test('the live band on the mid fixture: "If it ended now" / "Total Failure" (margin +3, not yet exhausted)', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('failure');
+		expect(verdictEyebrow(root).textContent).toBe('If it ended now');
+		expect(verdictWord(root).textContent).toBe('Total Failure');
 	});
 
-	test('a seeded tier-1 roll (low faces, no characteristic bonus) records a FAILURE', async () => {
-		jest.useFakeTimers();
-		// 2 + 3 = natural 5, no characteristic/skill -> low total -> tier 1 -> failure.
-		const roll = stubRollService([2, 3]);
-		const { root, host } = await renderMontage(montageYaml, {}, roll);
-		const kira = participantEl(root, 'Kira');
-
-		rollBtn(kira)!.click();
-
-		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
-		expect(tallyNumber(rebuilt, 'Successes')).toBe('0');
-		expect(tallyLimit(rebuilt, 'Successes')).toBe('/ 5');
-		expect(tallyNumber(rebuilt, 'Failures')).toBe('1');
-		expect(tallyLimit(rebuilt, 'Failures')).toBe('/ 3');
-
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+	test('the complete `total` band on the done fixture: "Final result" / "Total Success", tensed tails', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('total');
+		expect(verdictEyebrow(root).textContent).toBe('Final result');
+		expect(verdictWord(root).textContent).toBe('Total Success');
+		// THE TAILS ARE TENSED (mock6.js:944-948, round 3's bug): a finished montage is not
+		// "1 more ends it" away from anything.
+		expect(progTail(root, 'success')).toBe('the success limit, reached');
+		expect(progTail(root, 'failure')).toBe('1 under the failure limit');
 	});
 
-	test('no RollService (cx.roll undefined) degrades to manual-only rows — no Roll button, no throw', async () => {
-		// ElementPipelineDeps.roll is REQUIRED (the real plugin always supplies one via
-		// createRollService) — the only way a view ever sees a genuinely-absent cx.roll
-		// is a bare RenderContext built outside the pipeline (main.ts's defensive
-		// fallback comment on RollView applies here too). Built directly via
-		// createRenderContext + createView + mount, mirroring pipeline.ts's own
-		// construction (context.ts's factory omits `roll` when not passed).
-		const deps = makeDeps(stubRollService([5, 6]));
-		const host = makeHost();
-		const cx = createRenderContext({
-			app: deps.app,
-			plugin: deps.plugin,
-			settings: deps.settings,
-			host,
-			theme: deps.theme,
-			prefs: deps.prefs,
-			refs: deps.refs,
-			session: deps.session,
-			// roll intentionally omitted
-		});
-		const model = montageElement.parse(parseYaml(montageYaml), montageYaml);
-		const view = montageElement.createView(cx);
-		view.setSerializer(montageElement.serialize!);
-		host.addChild(view);
-		await view.mount(host.containerEl, model);
+	test('the complete `failure` band on the failed fixture: failures at the limit, margin under 2', async () => {
+		const { root } = await renderMontage(montageFailedYaml);
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('failure');
+		expect(verdictEyebrow(root).textContent).toBe('Final result');
+	});
 
-		const kira = participantEl(host.containerEl, 'Kira');
-		expect(rollBtn(kira)).toBeNull();
-		expect(charInput(kira)).toBeNull();
-		expect(successBtn(kira)).not.toBeNull();
+	test('equal-width tracks: the success and failure tracks render exactly `success_limit`/`failure_limit` slots — the shared-grid mechanism (impl spec §A) that makes the two tracks the same rendered width at ANY pair of limits, not just the mock\'s fixed 6/3', async () => {
+		const { root } = await renderMontage(montageMidYaml); // success_limit 6, failure_limit 3
+		expect(trackSlots(root, 'success')).toHaveLength(6);
+		expect(trackSlots(root, 'failure')).toHaveLength(3);
+		// The goal slot (the limit itself) is marked on the LAST slot of each track.
+		const successSlots = trackSlots(root, 'success');
+		const failureSlots = trackSlots(root, 'failure');
+		expect(successSlots[successSlots.length - 1].getAttribute('data-goal')).toBe('on');
+		expect(failureSlots[failureSlots.length - 1].getAttribute('data-goal')).toBe('on');
+	});
+
+	test('the at-a-glance tail phrasing matches montageBandCopy exactly on the mid fixture', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		expect(progTail(root, 'success')).toBe('1 from Total Success');
+		expect(progTail(root, 'failure')).toBe('1 more ends it');
+	});
+
+	test('the brink alert fires exactly one success from Total Success while still reachable, and only then', async () => {
+		const { root: mid } = await renderMontage(montageMidYaml); // toTotal 1, brink
+		expect(outcomeBand(mid).getAttribute('data-brink')).toBe('on');
+		expect(mid.querySelector('.dse-mt__verdict-alert-text')?.textContent).toBe('One success from Total Success');
+
+		const { root: done } = await renderMontage(montageDoneYaml); // complete — never a brink
+		expect(outcomeBand(done).getAttribute('data-brink')).toBe('off');
+		expect(done.querySelector('.dse-mt__verdict-alert')).toBeNull();
+	});
+
+	test("the Director's notes list every noted entry, in round/roster order, with the result glyph and the address back to the board", async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const items = Array.from(root.querySelectorAll('.dse-mt__note'));
+		expect(items).toHaveLength(2);
+		expect(items[0].querySelector('.dse-mt__note-hero')?.textContent).toBe('Osric');
+		expect(items[0].querySelector('.dse-mt__note-where')?.textContent).toBe('round 1 · climb');
+		expect(items[0].querySelector('.dse-mt__note-text')?.textContent).toContain('Turned an ankle');
+		expect(items[0].querySelector('.dse-mt__note-glyph')?.getAttribute('data-icon')).toBe('x');
+		expect(items[1].querySelector('.dse-mt__note-hero')?.textContent).toBe('Bram');
+	});
+
+	test('no notes on the default fixture: the notes block does not render at all', async () => {
+		const { root } = await renderMontage();
+		expect(root.querySelector('.dse-mt__notes')).toBeNull();
+	});
+
+	test("§B.4 migration proof: an old-shape block (successes: 4, no entries) renders an EMPTY board but the outcome band states the stored scalars truthfully — the honest 'provenance unknown' reading (§B.3)", async () => {
+		const { root } = await renderMontage(montageOldShapeYaml);
+		expect(heroRow(root, 'Kira').parentElement).toBe(root.querySelector('.dse-mt__board'));
+		expect(cellFor(root, 'Kira', 1).querySelector('.dse-mt__cell-skill--none')).not.toBeNull();
+		expect(trackSlots(root, 'success').filter((s) => s.getAttribute('data-filled') === 'on')).toHaveLength(4);
+		expect(trackSlots(root, 'failure').filter((s) => s.getAttribute('data-filled') === 'on')).toHaveLength(2);
 	});
 });
 
-describe('T-6: reset menu — Reset progress clears successes/failures/round/skills_used, keeps config', () => {
+describe('T-6: reset menu — Reset progress clears successes/failures/round/skills_used/entries, keeps config', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 		Notice.notices.length = 0;
 		Menu.lastMenu = null;
 	});
 
-	test('the options button opens exactly Reset progress; clicking it zeroes progress, clears skill history, rebuilds, and persists', async () => {
+	test('the options button opens exactly Reset progress; clicking it zeroes progress AND entries, rebuilds to the `pending` band, and persists', async () => {
 		jest.useFakeTimers();
-		let { root, host } = await renderMontage();
-
-		tallyPlus(root, 'Successes').click();
-		tallyPlus(root, 'Successes').click();
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const { root, host } = await renderMontage(montageMidYaml);
 
 		const button = menuBtn(root)!;
 		expect(button.getAttribute('aria-label')).toBe('Montage options');
@@ -416,53 +379,43 @@ describe('T-6: reset menu — Reset progress clears successes/failures/round/ski
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(Notice.notices).toContain('Montage progress reset');
-		root = host.containerEl.firstElementChild as HTMLElement;
-		expect(tallyNumber(root, 'Successes')).toBe('0');
-		expect(tallyLimit(root, 'Successes')).toBe('/ 5');
-		expect(tallyNumber(root, 'Current round')).toBe('1');
-		expect(tallyLimit(root, 'Current round')).toBe('/ 2');
-		expect(skillChips(participantEl(root, 'Kira'))).toEqual([]);
-		// title/rounds/limits/participant roster survive the reset (config, not progress).
-		expect((root.querySelector('.dse-head__primary--left') as HTMLElement).textContent).toBe(
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(heroRows(rebuilt)).toHaveLength(5);
+		// current_round reset to 1 -> round 1 is CURRENT again (an open, disabled socket),
+		// not a past dash — entries are gone, so nothing is recorded there any more.
+		expect(cellFor(rebuilt, 'Kira', 1).getAttribute('data-state')).toBe('current');
+		expect(cellFor(rebuilt, 'Kira', 1).querySelector('.dse-mt__cell-hint')?.textContent).toBe('to act');
+		expect(outcomeBand(rebuilt).getAttribute('data-band')).toBe('pending');
+		// title/description/rounds/limits/participant roster survive the reset (config, not progress).
+		expect((rebuilt.querySelector('.dse-head__primary--left') as HTMLElement).textContent).toBe(
 			'Cross the Ashfall Wastes',
 		);
-		expect(host.replaceSource).toHaveBeenCalledTimes(2);
+		expect(rebuilt.querySelector('.dse-mt__brief-text')).not.toBeNull();
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).not.toContain('entries:');
 	});
 });
 
-describe('T-6: canPersist=false — read-only renders WITHOUT write affordances, zero writes (F1 §4.4)', () => {
-	afterEach(() => {
-		jest.useRealTimers();
-	});
-
-	test('readonly badge attr; no menu, no record form; steppers REAL-disabled; interacting never writes', async () => {
-		jest.useFakeTimers();
-		const { root, host } = await renderMontage(montageYaml, { canPersist: false });
+describe('T-6: canPersist=false — read-only renders WITHOUT the Reset menu, zero writes (F1 §4.4)', () => {
+	test('readonly badge attr; no menu; every board control was already stubbed-disabled', async () => {
+		const { root, host } = await renderMontage(montageMidYaml, { canPersist: false });
 
 		expect(root.hasAttribute('data-dse-readonly')).toBe(true);
 		expect(menuBtn(root)).toBeNull();
-		expect(tallyPlus(root, 'Successes').disabled).toBe(true);
-		expect(tallyMinus(root, 'Successes').disabled).toBe(true);
-		// No record form on a read-only host — the chips still show.
-		const kira = participantEl(root, 'Kira');
-		expect(skillChips(kira)).toEqual(['Nature', 'Endurance']);
-		expect(kira.querySelector('.dse-mt__record')).toBeNull();
-
-		tallyPlus(root, 'Successes').click();
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS * 2);
+		// The board renders identically read-only vs. read-write this slice (every control
+		// is already a real-disabled stub) — the assertion is that nothing throws and
+		// nothing writes.
+		expect(heroRows(root)).toHaveLength(5);
 		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 });
 
 describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVault (F1 §3.4/§4.2)', () => {
-	afterEach(() => {
-		jest.useRealTimers();
-	});
-
-	test('a failure stepper click inside a ```ds-montage block -> exactly one Vault write; surrounding note bytes intact', async () => {
+	test('Reset progress inside a ```ds-montage block -> exactly one Vault write; surrounding note bytes intact', async () => {
 		jest.useFakeTimers();
 		const app = new App();
-		const note = ['# Session notes', '', 'Before text.', '', '```ds-montage', montageYaml.trimEnd(), '```', '', 'After text.'].join(
+		const note = ['# Session notes', '', 'Before text.', '', '```ds-montage', montageMidYaml.trimEnd(), '```', '', 'After text.'].join(
 			'\n',
 		);
 		app.vault.setFile('Note.md', note);
@@ -471,10 +424,11 @@ describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		const host = new ReadingModeBlockHost(plugin as any, ctx.el, ctx as any, 'ds-montage');
 		const pipeline = new ElementPipeline(makeDeps());
 
-		await pipeline.run(montageElement, montageYaml, host);
+		await pipeline.run(montageElement, montageMidYaml, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		tallyPlus(root, 'Failures').click();
+		menuBtn(root)!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(app.vault.modifyCalls).toHaveLength(1);
@@ -482,7 +436,56 @@ describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		expect(updated.startsWith('# Session notes\n\nBefore text.\n\n```ds-montage\n')).toBe(true);
 		expect(updated.endsWith('\n```\n\nAfter text.')).toBe(true);
 		const body = updated.match(/```ds-montage\n([\s\S]*?)\n```/)?.[1];
-		expect(body).toContain('failures: 1');
+		expect(body).toContain('successes: 0');
+		expect(body).toContain('failures: 0');
+
+		jest.useRealTimers();
+		Notice.notices.length = 0;
+		Menu.lastMenu = null;
+	});
+
+	test('spec §C integrity probe 2: TWO ds-montage blocks in one note do not cross-talk — resetting block A leaves block B\'s YAML byte-for-byte untouched', async () => {
+		jest.useFakeTimers();
+		const app = new App();
+		const note = [
+			'# Session notes',
+			'',
+			'```ds-montage',
+			montageMidYaml.trimEnd(),
+			'```',
+			'',
+			'```ds-montage',
+			montageDoneYaml.trimEnd(),
+			'```',
+		].join('\n');
+		app.vault.setFile('Note.md', note);
+		const plugin = new Plugin(app);
+		const ctxA = makeFakeContext(app, 'Note.md', 0);
+		const ctxB = makeFakeContext(app, 'Note.md', 1);
+		const hostA = new ReadingModeBlockHost(plugin as any, ctxA.el, ctxA as any, 'ds-montage');
+		const hostB = new ReadingModeBlockHost(plugin as any, ctxB.el, ctxB as any, 'ds-montage');
+		const pipeline = new ElementPipeline(makeDeps());
+
+		await pipeline.run(montageElement, montageMidYaml, hostA);
+		await pipeline.run(montageElement, montageDoneYaml, hostB);
+
+		const rootA = hostA.containerEl.firstElementChild as HTMLElement;
+		menuBtn(rootA)!.click();
+		Menu.lastMenu!.items[0].onClickCallback!();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(app.vault.modifyCalls).toHaveLength(1);
+		const updated = app.vault.getContent('Note.md')!;
+		// Block A (mid, reset) now reads 0/0; block B (done — total success) is untouched.
+		const blocks = Array.from(updated.matchAll(/```ds-montage\n([\s\S]*?)\n```/g)).map((m) => m[1]);
+		expect(blocks).toHaveLength(2);
+		expect(blocks[0]).toContain('successes: 0');
+		expect(blocks[0]).toContain('failures: 0');
+		expect(blocks[1]).toBe(montageDoneYaml.trimEnd());
+
+		jest.useRealTimers();
+		Notice.notices.length = 0;
+		Menu.lastMenu = null;
 	});
 });
 
@@ -525,5 +528,40 @@ describe('T-6: registered EXACTLY ONCE — framework registry owns ds-montage, R
 		const root = ctx.el.firstElementChild as HTMLElement;
 		expect(root.getAttribute('data-dse-element')).toBe('montage');
 		expect(root.querySelector('.dse-mt')).not.toBeNull();
+	});
+});
+
+describe('SC-191 slice 2: source hygiene + CSS contract', () => {
+	test('the view + montage sub-views pass the shared kit style guard (no inline color, no color literals)', () => {
+		const files = [
+			'../../../src/elements/montage/view.ts',
+			'../../../src/elements/montage/HeadView.ts',
+			'../../../src/elements/montage/BoardView.ts',
+			'../../../src/elements/montage/OutcomeBandView.ts',
+		];
+		for (const file of files) {
+			const src = fs.readFileSync(path.join(__dirname, file), 'utf8');
+			expect(styleGuardFindings(src)).toEqual([]);
+		}
+	});
+
+	test('CSS contract: a structural base tier + a Steel-only decoration tier, both scoped to .dse-mt, tokens only (spec §E)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const structural = sheet.match(/\[data-dse-element="montage"\]\s+\.dse-mt\s*\{[\s\S]*?\n\}\n\n\/\* -- Steel decoration tier/);
+		expect(structural).not.toBeNull();
+		expect(structural![0]).toMatch(/container-name:\s*dse-mt/);
+
+		const steel = sheet.match(
+			/\[data-dse-theme='steel'\]\[data-dse-element="montage"\]:not\(\[data-dse-print="on"\]\)\s+\.dse-mt\s*\{[\s\S]*?\n\}\n/,
+		);
+		expect(steel).not.toBeNull();
+		expect(steel![0]).toMatch(/var\(--dse-turn-done\)/);
+		expect(steel![0]).toMatch(/var\(--dse-danger\)/);
+		expect(steel![0]).toMatch(/var\(--dse-vp\)/);
+		// The four losing round-3 axes never ship: no variant attribute for crest, seal,
+		// spacing or dedupe (spec §A: "no variant attributes at all").
+		expect(sheet).not.toMatch(/\.dse-mt\[data-crest=/);
+		expect(sheet).not.toMatch(/\.dse-mt\[data-seal=/);
+		expect(sheet).not.toMatch(/\.dse-mt\[data-dedupe=/);
 	});
 });

@@ -1,0 +1,73 @@
+title: Cross the Ashfall Wastes
+description: |
+  Forty miles of volcanic waste, and the ashfall is three days behind them. The heroes
+  have to find the pass, keep the mules alive, and reach the Cinder Gate before the sky
+  closes over it.
+rounds: 3
+success_limit: 6
+failure_limit: 3
+successes: 6
+failures: 2
+participants:
+  - name: Kira
+    skills_used: [Nature, Alertness, Insight]
+  - name: Bram
+    skills_used: [Endurance, Lift, Might]
+  - name: Osric
+    skills_used: [Climb]
+  - name: Yenna
+    skills_used: [Lead, Persuade]
+  - name: Talin
+    skills_used: [Navigate, Track]
+entries:
+  - hero: Kira
+    round: 1
+    result: success
+    skill: Nature
+  - hero: Bram
+    round: 1
+    result: success
+    skill: Endurance
+  - hero: Osric
+    round: 1
+    result: failure
+    skill: Climb
+    note: Turned an ankle on the scree — bane on his next Might test.
+  - hero: Yenna
+    round: 1
+    result: success
+    skill: Lead
+  - hero: Talin
+    round: 1
+    result: success
+    skill: Navigate
+  - hero: Kira
+    round: 2
+    result: success
+    skill: Alertness
+  - hero: Bram
+    round: 2
+    result: failure
+    skill: Lift
+    note: Dropped the water cask. Mules are thirsty; +1 Malice next encounter.
+  - hero: Osric
+    round: 2
+    result: assist
+    skill: Search
+  - hero: Yenna
+    round: 2
+    result: assist
+    skill: Persuade
+  - hero: Talin
+    round: 2
+    result: assist
+    skill: Track
+  - hero: Kira
+    round: 3
+    result: success
+    skill: Insight
+  - hero: Bram
+    round: 3
+    result: assist
+    skill: Might
+current_round: 3

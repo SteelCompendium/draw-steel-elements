@@ -252,7 +252,9 @@ export const DOCS_SHOTS = [
 	{ out: 'hero-tokens.png', source: 'browser', element: 'hero-tokens' },
 	// docs/gm-trackers.md
 	{ out: 'encounter.png', source: 'browser', element: 'encounter' },
-	{ out: 'montage.png', source: 'browser', element: 'montage' },
+	// SC-191 impl spec §F: the `mid` fixture (live board, brink alert) instead of the
+	// empty default grid — the docs image now shows a board with play on it.
+	{ out: 'montage.png', source: 'browser', element: 'montage', fixture: 'mid' },
 	{ out: 'project.png', source: 'browser', element: 'project' },
 	{ out: 'party.png', source: 'browser', element: 'party' },
 	// The README/docs sample image: a CURATED gallery (entry.ts's `gallery=<ids>` subset —

@@ -111,10 +111,16 @@ export function serialize(model: MontageModel): string {
 	return stringifyYaml(model).trim();
 }
 
-export type MontageOutcome = 'total' | 'partial' | 'failure';
+export type MontageOutcome = 'pending' | 'total' | 'partial' | 'failure';
 
 /**
- * The three outcome bands (AGENT line 96), DERIVED live — never stored (spec §4.2):
+ * The four outcome bands (AGENT line 96 + SC-191 impl spec §I), DERIVED live — never
+ * stored (spec §4.2):
+ *   - pending: nothing recorded yet (successes === 0 && failures === 0). A montage that
+ *              has not started is not a Total Failure — round 1's report flagged the old
+ *              3-band read as a bug every reader hit, and mock6.js's `derive()` keys the
+ *              same band off "nothing recorded" unconditionally (checked FIRST, ahead of
+ *              the exhausted/margin math below) — mirrored here.
  *   - total:   successes reach success_limit.
  *   - partial: time/failures run out (failures at/over failure_limit, OR the montage has
  *              run past its last round) but successes exceed failures by 2 or more.
@@ -123,13 +129,9 @@ export type MontageOutcome = 'total' | 'partial' | 'failure';
  *              live-readout framing in the Task 6 brief.
  * The `> 0` guards on success_limit/failure_limit stop an unset (0-default) limit from
  * reading as instantly/perpetually reached.
- *
- * SC-191 note (impl spec §I, slice 2): at 0/0 (nothing recorded, no limits set) this
- * still returns 'failure' — a known bug carried since design round 2. A fourth band,
- * `pending`, is the fix; it ships in slice 2 alongside the UI that reads it. Slice 1 is
- * model + tests only and must stay behavior-neutral, so it is not fixed here.
  */
 export function montageOutcome(m: MontageModel): MontageOutcome {
+	if (m.successes === 0 && m.failures === 0) return 'pending';
 	if (m.success_limit > 0 && m.successes >= m.success_limit) return 'total';
 	const exhausted = (m.failure_limit > 0 && m.failures >= m.failure_limit) || m.current_round > m.rounds;
 	if (exhausted && m.successes - m.failures >= 2) return 'partial';
@@ -177,6 +179,7 @@ export function montageTallies(m: MontageModel): MontageTallies {
 }
 
 const BAND_WORD: Record<MontageOutcome, string> = {
+	pending: 'Not started',
 	total: 'Total Success',
 	partial: 'Partial Success',
 	failure: 'Total Failure',
