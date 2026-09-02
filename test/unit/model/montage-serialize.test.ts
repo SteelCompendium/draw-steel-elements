@@ -142,3 +142,162 @@ describe('T-6: montageOutcome — the three derived bands (AGENT line 96)', () =
 		expect(montageOutcome({ ...base, success_limit: 0, successes: 0 })).toBe('failure');
 	});
 });
+
+// SC-191 impl spec §B — the schema grows two optional keys, `description` and `entries`
+// (+ `MontageEntry`), purely additively (§B.2: "Nothing is renamed, retyped, removed or
+// reordered"). §B.4 is the hard requirement under test in the first describe block below:
+// an existing (pre-SC-191) block must parse, keep its tallies, and serialize back without
+// losing or reordering anything the user wrote.
+describe('SC-191 §B.4: backward compatibility — an old-shape block loses nothing', () => {
+	const oldShapeYaml = [
+		'title: Cross the Ashfall Wastes',
+		'rounds: 2',
+		'success_limit: 5',
+		'failure_limit: 3',
+		'successes: 3',
+		'failures: 1',
+		'participants:',
+		'  - name: Kira',
+		'    skills_used:',
+		'      - Nature',
+		'      - Endurance',
+		'current_round: 2',
+		'_dse_anchor: 4c19ff',
+	].join('\n');
+
+	test('parses into the same pre-SC-191 model, description/entries left undefined, tallies kept', () => {
+		const model = parseLikePipeline(oldShapeYaml);
+		expect(model.description).toBeUndefined();
+		expect(model.entries).toBeUndefined();
+		expect(model.successes).toBe(3);
+		expect(model.failures).toBe(1);
+		expect(model.participants).toEqual([{ name: 'Kira', skills_used: ['Nature', 'Endurance'] }]);
+	});
+
+	test('serializes back byte-identical — the compatibility proof (old-shape YAML in, same semantic YAML out)', () => {
+		const model = parseLikePipeline(oldShapeYaml);
+		expect(serialize(model)).toBe(stringifyYaml(parseYaml(oldShapeYaml)).trim());
+		expect(serialize(model)).not.toContain('description:');
+		expect(serialize(model)).not.toContain('entries:');
+	});
+});
+
+describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omit-when-default', () => {
+	const newShapeYaml = [
+		'title: Cross the Ashfall Wastes',
+		'description: Forty miles of volcanic waste, no water anywhere.',
+		'rounds: 3',
+		'success_limit: 6',
+		'failure_limit: 3',
+		'successes: 4',
+		'failures: 2',
+		'participants:',
+		'  - name: Kira',
+		'    skills_used:',
+		'      - Nature',
+		'      - Alertness',
+		'entries:',
+		'  - hero: Kira',
+		'    round: 1',
+		'    result: success',
+		'    skill: Nature',
+		'    note: Turned an ankle',
+		'current_round: 3',
+		'_dse_anchor: 4c19ff',
+	].join('\n');
+
+	test('round-trip identity: serialize(parse(x)) matches a fresh stringifyYaml of the same parsed data', () => {
+		const model = parseLikePipeline(newShapeYaml);
+		expect(serialize(model)).toBe(stringifyYaml(parseYaml(newShapeYaml)).trim());
+	});
+
+	test('parse(serialize(parse(x))) deep-equals parse(x); serialize is stable on pass 2', () => {
+		const m1 = parseLikePipeline(newShapeYaml);
+		const s1 = serialize(m1);
+		const m2 = parseLikePipeline(s1);
+		expect(m2).toEqual(m1);
+		expect(serialize(m2)).toBe(s1);
+	});
+
+	test('top-level key order incl. entries: title, description, rounds, success_limit, failure_limit, successes, failures, participants, entries, current_round, _dse_anchor', () => {
+		const out = serialize(parseLikePipeline(newShapeYaml));
+		const topLevelKeys = out
+			.split('\n')
+			.filter((line) => /^\S/.test(line))
+			.map((line) => line.split(':')[0]);
+		expect(topLevelKeys).toEqual([
+			'title',
+			'description',
+			'rounds',
+			'success_limit',
+			'failure_limit',
+			'successes',
+			'failures',
+			'participants',
+			'entries',
+			'current_round',
+			'_dse_anchor',
+		]);
+	});
+
+	test('entry key order: hero, round, result, skill, note', () => {
+		const out = serialize(parseLikePipeline(newShapeYaml));
+		const entriesSection = out.split(/^entries:$/m)[1].split(/^current_round:/m)[0];
+		const entryKeys = entriesSection
+			.split('\n')
+			.filter((line) => /^\s*-?\s*\w+:/.test(line))
+			.map((line) => line.replace(/^\s*-\s*/, '').split(':')[0].trim());
+		expect(entryKeys).toEqual(['hero', 'round', 'result', 'skill', 'note']);
+	});
+
+	test('description is omitted when absent, and when authored as an empty string', () => {
+		const withoutDesc = parseLikePipeline('rounds: 2');
+		expect(withoutDesc.description).toBeUndefined();
+		expect(serialize(withoutDesc)).not.toContain('description:');
+
+		const emptyDesc = parseLikePipeline('description: ""\nrounds: 2');
+		expect(emptyDesc.description).toBeUndefined();
+		expect(serialize(emptyDesc)).not.toContain('description:');
+	});
+
+	test('entries is omitted when absent, and when authored as an empty array', () => {
+		const withoutEntries = parseLikePipeline('rounds: 2');
+		expect(withoutEntries.entries).toBeUndefined();
+		expect(serialize(withoutEntries)).not.toContain('entries:');
+
+		const emptyEntries = parseLikePipeline('entries: []\nrounds: 2');
+		expect(emptyEntries.entries).toBeUndefined();
+		expect(serialize(emptyEntries)).not.toContain('entries:');
+	});
+
+	test('skill/note are omitted per entry when empty — never serialized as null or an empty string', () => {
+		const model = parseLikePipeline(
+			['entries:', '  - hero: Kira', '    round: 1', '    result: success', '    skill: ""', '    note: ""', 'rounds: 2'].join('\n'),
+		);
+		expect(model.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+		const out = serialize(model);
+		expect(out).not.toContain('skill:');
+		expect(out).not.toContain('note:');
+	});
+
+	test('a null/wrong-type entry field is dropped, never crashes', () => {
+		const model = parseLikePipeline(
+			[
+				'entries:',
+				'  - hero: Kira', // valid entry, but with a null skill and a wrong-type note
+				'    round: 1',
+				'    result: success',
+				'    skill: null',
+				'    note: 42',
+				'  - hero: 7', // wrong-type hero -> whole entry dropped
+				'    round: 1',
+				'    result: success',
+				'  - hero: Bo', // invalid result value -> whole entry dropped
+				'    round: 1',
+				'    result: heroics',
+				'rounds: 2',
+			].join('\n'),
+		);
+		expect(model.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+	});
+});
