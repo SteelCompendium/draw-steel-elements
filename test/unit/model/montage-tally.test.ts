@@ -101,12 +101,26 @@ describe('SC-191 §D: montageBandCopy — at-a-glance phrasing (quoted from mock
 		expect(montageBandCopy({ ...base, failures: 2 }).failureTail).toBe('1 more ends it');
 	});
 
-	test('no success limit authored: toTotal is trivially 0 (Math.max(0, 0 - successes)), the live (non-tensed) branch reads "Total Success reached"', () => {
-		expect(montageBandCopy({ ...base, success_limit: 0, successes: 0 }).successTail).toBe('Total Success reached');
+	// Fix-round-1 L-1: an unset (0-default) limit used to fall into the trivial
+	// `toTotal === 0` / `failuresSpare === 0` branch and print the LIVE "reached" copy
+	// under a band that cannot possibly mean that (e.g. "Not started", since a vacuous
+	// limit and 0/0 nothing-recorded always coincide) — review-1's probe: `sl 0 / fl 0 / 0
+	// successes / 0 failures` rendered zero track slots beside "Total Success reached" /
+	// "the limit is reached" under the word "Not started". Both tails now name the vacuous
+	// case explicitly instead.
+	test('no success limit authored: the tail reads "no success limit set", never the live "Total Success reached" (fix-round-1 L-1)', () => {
+		expect(montageBandCopy({ ...base, success_limit: 0, successes: 0 }).successTail).toBe('no success limit set');
 	});
 
-	test('no failure limit authored: failuresSpare is trivially 0, the live (non-tensed) branch reads "the limit is reached"', () => {
-		expect(montageBandCopy({ ...base, failure_limit: 0, failures: 0 }).failureTail).toBe('the limit is reached');
+	test('no failure limit authored: the tail reads "no failure limit set", never the live "the limit is reached" (fix-round-1 L-1)', () => {
+		expect(montageBandCopy({ ...base, failure_limit: 0, failures: 0 }).failureTail).toBe('no failure limit set');
+	});
+
+	test('an unset limit reads "no limit set" even on an otherwise COMPLETE montage (the other limit reached) — vacuous is checked before complete', () => {
+		// success_limit 6 reached (complete=true via montageTallies), failure_limit left at 0.
+		expect(montageBandCopy({ ...base, failure_limit: 0, successes: 6, failures: 0 }).failureTail).toBe(
+			'no failure limit set',
+		);
 	});
 
 	test('tensed complete form once the success limit is reached: "the success limit, reached" — not "1 more ends it", round 3\'s bug (mock6.js:944-948)', () => {

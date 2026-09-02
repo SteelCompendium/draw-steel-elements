@@ -413,6 +413,51 @@ async function assertChromePlacement(page) {
 	);
 }
 
+// SC-191 fix-round-1 M-5 — the equal-width-TRACK regression gate (ledger 2026-08-29's
+// ruling: the success/failure tracks render the SAME width at any pair of limits, not
+// two independently-sized bars). jsdom has no layout engine, so the jest DOM suite can
+// only assert SLOT COUNTS — this is the one place `getBoundingClientRect().width` means
+// anything. It exists to catch exactly the regression a "narrow-width fix" to
+// `.dse-mt__outcome-tracks`'s shared grid or to `.dse-mt__prog { display: contents }`
+// (the mechanism that makes both tracks share ONE grid column) would otherwise slip past
+// the rest of the battery unnoticed.
+async function assertMontageTrackWidths(page) {
+	await page.emulateMedia({ media: 'screen' });
+	const query = new URLSearchParams({ element: 'montage', fixture: 'mid', theme: 'steel', bg: 'dark' });
+	await page.goto(`${pageUrl}?${query}`);
+	await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+	const widths = await page.evaluate(() => {
+		const success = document.querySelector(".dse-mt__track[data-kind='success']");
+		const failure = document.querySelector(".dse-mt__track[data-kind='failure']");
+		if (!success || !failure) return null;
+		return {
+			success: success.getBoundingClientRect().width,
+			failure: failure.getBoundingClientRect().width,
+		};
+	});
+	if (!widths) {
+		console.error(
+			`\nMONTAGE TRACK WIDTH: could not measure .dse-mt__track[data-kind] on montage:mid — ` +
+				`did the outcome band stop rendering?`,
+		);
+		process.exit(1);
+	}
+	const diff = Math.abs(widths.success - widths.failure);
+	if (diff > PLACEMENT_EPSILON) {
+		console.error(
+			`\nMONTAGE EQUAL-WIDTH TRACKS VIOLATED — success ${widths.success.toFixed(2)}px vs ` +
+				`failure ${widths.failure.toFixed(2)}px (diff ${diff.toFixed(2)}px) on montage:mid ` +
+				`(6/3 limits) — ledger 2026-08-29's ruling requires the same width at ANY pair of ` +
+				`limits. See styles-source.css → .dse-mt__outcome-tracks / .dse-mt__prog { display: contents }.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nmontage track widths OK (success ${widths.success.toFixed(2)}px === failure ` +
+			`${widths.failure.toFixed(2)}px, montage:mid, 6/3 limits)`,
+	);
+}
+
 // SC-189 ROUND 3 — the HOST-LEAK gate. Scott's four defects of 2026-08-25 all traced to one
 // cause: a kit `.dse-btn` is a real `<button>`, so Obsidian's own app.css reaches it, and
 // nothing in styles-source.css ever declared `box-shadow` for a chrome button. The panel
@@ -2211,6 +2256,10 @@ try {
 		// `chrome-border-winded`. Skipped on a narrowed run for the same reason the gallery
 		// is: it needs its own navigations and proves a cross-element invariant.
 		await assertChromePlacement(page);
+		// SC-191 fix-round-1 M-5 — the equal-width-track gate (see the block above). Same
+		// "own navigation, captures nothing" shape, skipped on a narrowed run for the same
+		// reason.
+		await assertMontageTrackWidths(page);
 		// SC-189 round 3 — the host-leak gate (see the block above). Same "own navigations,
 		// captures nothing" shape, so it is skipped on a narrowed run for the same reason.
 		await assertChromeHostLeak(page);

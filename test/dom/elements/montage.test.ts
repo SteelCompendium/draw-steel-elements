@@ -218,13 +218,32 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(cell.querySelector('.dse-mt__cell-glyph')?.getAttribute('data-icon')).toBe('circle-plus');
 	});
 
-	test('the open socket in the round currently in play is a real, disabled, aria-labelled <button> — a stub, never a dead-end live control', async () => {
+	// Fix-round-1 M-1: the cell is `role="button" tabindex="0"` per spec §D — a plain `div`,
+	// NOT a real `<button>` (which was a full `.dse-btn`: bordered, radiused, shadowed, and
+	// `opacity:.5`-dimmed the cell's own recorded data). `aria-disabled`, not native
+	// `disabled` — only a real form control has that property.
+	test('the open socket in the round currently in play is `div[role=button][tabindex=0][aria-disabled=true]` — a stub, never a dead-end live control, never a real <button>', async () => {
 		const { root } = await renderMontage(montageMidYaml);
-		const cell = cellFor(root, 'Kira', 3) as HTMLButtonElement;
-		expect(cell.tagName).toBe('BUTTON');
-		expect(cell.disabled).toBe(true);
+		const cell = cellFor(root, 'Kira', 3);
+		expect(cell.tagName).toBe('DIV');
+		expect(cell.classList.contains('dse-btn')).toBe(false);
+		expect(cell.getAttribute('role')).toBe('button');
+		expect(cell.getAttribute('tabindex')).toBe('0');
+		expect(cell.getAttribute('aria-disabled')).toBe('true');
 		expect(cell.getAttribute('aria-label')).toBe('Kira, round 3: nothing logged — log an action');
 		expect(cell.querySelector('.dse-mt__cell-hint')?.textContent).toBe('to act');
+	});
+
+	// Fix-round-1 M-1: a RECORDED cell is the same `div[role=button]` shape — never `.dse-btn`
+	// chrome or `opacity:.5` dimming the seal/skill/note-mark it is displaying.
+	test('a recorded cell is also `div[role=button][tabindex=0][aria-disabled=true]`, never a real <button>', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Kira', 1);
+		expect(cell.tagName).toBe('DIV');
+		expect(cell.classList.contains('dse-btn')).toBe(false);
+		expect(cell.getAttribute('role')).toBe('button');
+		expect(cell.getAttribute('tabindex')).toBe('0');
+		expect(cell.getAttribute('aria-disabled')).toBe('true');
 	});
 
 	test('a FUTURE round with no entry renders a plain dash, never a button', async () => {
@@ -271,6 +290,80 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(heroRows(root)).toHaveLength(0);
 		expect(root.querySelector('.dse-mt__board-empty')?.textContent).toContain('No heroes yet');
 	});
+
+	// Fix-round-1 M-4: `role="table"` had no owned `role="row"`/`role="cell"` children — an
+	// invalid ARIA mapping, worse than no role at all. Dropped entirely; the per-cell
+	// aria-labels already carry hero/round/result. The tally's two bare numeral spans are
+	// aria-hidden now — `.dse-mt__board-total`'s own aria-label is the one readable name.
+	test('a11y (M-4): the board carries no role="table"; the per-hero tally has one readable aria-label and its numeral spans are aria-hidden', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		expect(root.querySelector('.dse-mt__board')?.getAttribute('role')).toBeNull();
+		const kira = tallyFor(root, 'Kira');
+		expect(kira.getAttribute('aria-label')).toBe('Kira: 2 successes, 0 failures');
+		expect(kira.querySelectorAll('.dse-mt__tally[aria-hidden="true"]')).toHaveLength(2);
+
+		const osric = tallyFor(root, 'Osric');
+		expect(osric.getAttribute('aria-label')).toBe('Osric: 0 successes, 1 failure');
+	});
+
+	// Fix-round-1 L-6: a duplicate hero+round entry used to render ONE cell (`.find`, first
+	// match) but tally BOTH (`.filter`, every match) — the two layers disagreed about how
+	// many tests happened. `entriesForHero` now dedupes once, shared by both.
+	test('L-6: a duplicate hero+round entry renders exactly one cell (first wins) AND is counted only once in the tally — board and tally agree', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 1',
+				'success_limit: 5',
+				'failure_limit: 3',
+				'participants:',
+				'  - name: Kira',
+				'    skills_used: []',
+				'entries:',
+				'  - hero: Kira',
+				'    round: 1',
+				'    result: success',
+				'    skill: Nature',
+				'  - hero: Kira', // duplicate hero+round — first (success) wins
+				'    round: 1',
+				'    result: failure',
+				'current_round: 1',
+			].join('\n'),
+		);
+		const cell = cellFor(root, 'Kira', 1);
+		expect(cell.getAttribute('data-kind')).toBe('success');
+		expect(cell.querySelector('.dse-mt__cell-skill')?.textContent).toBe('Nature');
+		const kira = tallyFor(root, 'Kira');
+		expect(tallyN(kira, 'success')).toBe('1');
+		expect(tallyN(kira, 'failure')).toBe('0');
+	});
+
+	// Fix-round-1 L-2: an entry whose `result` is a Director typo — preserved through
+	// parse→serialize (model.ts), never dropped — renders on the board exactly like
+	// "nothing recorded" (`data-kind="none"`, the dash face), but its note is NOT lost: the
+	// note mark still shows on the cell itself.
+	test('L-2: an entry with an unrecognised result renders as `data-kind="none"` (the dash face), and its note mark still shows', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 1',
+				'success_limit: 5',
+				'failure_limit: 3',
+				'participants:',
+				'  - name: Osric',
+				'    skills_used: []',
+				'entries:',
+				'  - hero: Osric',
+				'    round: 1',
+				'    result: sucess', // typo — preserved, rendered as none
+				'    note: Turned an ankle.',
+				'current_round: 1',
+			].join('\n'),
+		);
+		const cell = cellFor(root, 'Osric', 1);
+		expect(cell.getAttribute('data-kind')).toBe('none');
+		expect(cell.getAttribute('data-noted')).toBe('on');
+		expect(cell.querySelector('.dse-mt__cell-notemark')?.getAttribute('title')).toBe('Turned an ankle.');
+		expect(cell.querySelector('.dse-mt__cell-glyph--none')).not.toBeNull();
+	});
 });
 
 describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule / notes / brink)', () => {
@@ -281,11 +374,42 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 		expect(verdictWord(root).textContent).toBe('Not started');
 	});
 
-	test('the live band on the mid fixture: "If it ended now" / "Total Failure" (margin +3, not yet exhausted)', async () => {
+	// Fix-round-1 H-1: `montageOutcome` used to gate `partial` behind `exhausted`, which made
+	// it unreachable while the montage is still live — the mid fixture (5/2, margin +3, not
+	// yet exhausted) rendered "If it ended now / Total Failure" directly above its own rule
+	// line "…lead failures by 2 — currently +3", contradicting itself. The approved mock
+	// (`sc191-r5-tracks-mid-dark.png`) renders Partial Success for the same numbers.
+	test('the live band on the mid fixture: "If it ended now" / "Partial Success" (margin +3, not yet exhausted) — the band word never contradicts its own rule line', async () => {
 		const { root } = await renderMontage(montageMidYaml);
-		expect(outcomeBand(root).getAttribute('data-band')).toBe('failure');
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('partial');
 		expect(verdictEyebrow(root).textContent).toBe('If it ended now');
-		expect(verdictWord(root).textContent).toBe('Total Failure');
+		expect(verdictWord(root).textContent).toBe('Partial Success');
+		expect(root.querySelector('.dse-mt__verdict-rule')?.textContent).toBe(
+			'Partial Success needs successes to lead failures by 2 — currently +3.',
+		);
+	});
+
+	// Fix-round-1 I-8: a complete `partial` band states ITS OWN Victory rule, not the Total
+	// Success sentence a complete band always printed before this fix.
+	test('a complete `partial` band (rounds exhausted, margin +2) states the Partial Success Victory rule, not the Total Success one', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 2',
+				'success_limit: 6',
+				'failure_limit: 9',
+				'participants:',
+				'  - name: Kira',
+				'    skills_used: []',
+				'successes: 5',
+				'failures: 3',
+				'current_round: 3', // past the last round -> exhausted
+			].join('\n'),
+		);
+		expect(outcomeBand(root).getAttribute('data-band')).toBe('partial');
+		expect(verdictEyebrow(root).textContent).toBe('Final result');
+		const rule = root.querySelector('.dse-mt__verdict-rule')?.textContent;
+		expect(rule).toBe('Partial Success awards 1 Victory on a moderate or hard montage.');
+		expect(rule).not.toContain('Total Success');
 	});
 
 	test('the complete `total` band on the done fixture: "Final result" / "Total Success", tensed tails', async () => {
@@ -297,15 +421,32 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 		// "1 more ends it" away from anything.
 		expect(progTail(root, 'success')).toBe('the success limit, reached');
 		expect(progTail(root, 'failure')).toBe('1 under the failure limit');
+		// Fix-round-1 I-8: the complete band's rule line states the outcome that actually
+		// happened.
+		expect(root.querySelector('.dse-mt__verdict-rule')?.textContent).toBe(
+			'Total Success awards 1 Victory on an easy or moderate montage, 2 on a hard one.',
+		);
 	});
 
-	test('the complete `failure` band on the failed fixture: failures at the limit, margin under 2', async () => {
+	// Fix-round-1 I-8: a complete `failure` band used to ALSO print the Total Success
+	// Victory sentence (faithful to the mock's own bug, mock6.js:1011) — the reader saw a
+	// reward rule for an outcome that didn't happen.
+	test('the complete `failure` band on the failed fixture: failures at the limit, margin under 2, and its rule line states NO Victories — never the Total Success sentence', async () => {
 		const { root } = await renderMontage(montageFailedYaml);
 		expect(outcomeBand(root).getAttribute('data-band')).toBe('failure');
 		expect(verdictEyebrow(root).textContent).toBe('Final result');
+		const rule = root.querySelector('.dse-mt__verdict-rule')?.textContent;
+		expect(rule).toBe('Total Failure — no Victories awarded.');
+		expect(rule).not.toContain('Total Success');
 	});
 
-	test('equal-width tracks: the success and failure tracks render exactly `success_limit`/`failure_limit` slots — the shared-grid mechanism (impl spec §A) that makes the two tracks the same rendered width at ANY pair of limits, not just the mock\'s fixed 6/3', async () => {
+	// Fix-round-1 M-5: this jest/jsdom test can only assert SLOT COUNTS — jsdom has no
+	// layout engine, so `getBoundingClientRect().width` is always 0 here and cannot gate
+	// the actual equal-WIDTH ruling. The real width regression gate is
+	// `assertMontageTrackWidths` in visual-harness/shoot.mjs (`npm run shots`'s
+	// "montage track widths OK" line), a Playwright measurement on the `montage-mid`
+	// capture — this test's name says what IT proves, not the ruling as a whole.
+	test('track slot counts match `success_limit`/`failure_limit` exactly, and the goal slot marks the last one — the DOM-shape precondition the real width gate (shoot.mjs) depends on', async () => {
 		const { root } = await renderMontage(montageMidYaml); // success_limit 6, failure_limit 3
 		expect(trackSlots(root, 'success')).toHaveLength(6);
 		expect(trackSlots(root, 'failure')).toHaveLength(3);
@@ -346,6 +487,49 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 	test('no notes on the default fixture: the notes block does not render at all', async () => {
 		const { root } = await renderMontage();
 		expect(root.querySelector('.dse-mt__notes')).toBeNull();
+	});
+
+	// Fix-round-1 L-2: a note attached to an entry with an unrecognised `result` still lists
+	// in the band — OutcomeBandView reads `entries` directly and never filters by result
+	// validity — with a neutral `data-kind="none"` glyph rather than the old fallback that
+	// matched EVERY non-success/non-failure value (assist included, but also this).
+	test('L-2: a note on an entry with an unrecognised result still lists in the band, with a neutral (none) glyph — never lost, never misread as assist', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 1',
+				'success_limit: 5',
+				'failure_limit: 3',
+				'participants:',
+				'  - name: Osric',
+				'    skills_used: []',
+				'entries:',
+				'  - hero: Osric',
+				'    round: 1',
+				'    result: sucess',
+				'    note: Turned an ankle.',
+				'current_round: 1',
+			].join('\n'),
+		);
+		const items = Array.from(root.querySelectorAll('.dse-mt__note'));
+		expect(items).toHaveLength(1);
+		expect(items[0].getAttribute('data-kind')).toBe('none');
+		expect(items[0].querySelector('.dse-mt__note-glyph')?.getAttribute('data-icon')).toBe('minus');
+		expect(items[0].querySelector('.dse-mt__note-text')?.textContent).toBe('Turned an ankle.');
+	});
+
+	// Fix-round-1 L-1: a vacuous (0-default) limit renders a "no limit set" caption in the
+	// track's own grid column instead of a `.dse-mt__track` with zero slot children (an
+	// empty flex row — visually a blank gap beside a tail that already says the same thing).
+	test('L-1: a vacuous limit (0, never authored) renders a "no limit set" caption instead of an empty track', async () => {
+		const { root } = await renderMontage(
+			['rounds: 2', 'success_limit: 0', 'failure_limit: 3', 'successes: 0', 'failures: 1', 'current_round: 1'].join('\n'),
+		);
+		expect(outcomeBand(root).querySelectorAll('.dse-mt__track-empty')).toHaveLength(1);
+		expect(outcomeBand(root).querySelector('.dse-mt__track-empty')?.textContent).toBe('no limit set');
+		expect(trackSlots(root, 'success')).toHaveLength(0);
+		expect(progTail(root, 'success')).toBe('no success limit set');
+		// The OTHER track (a real limit) is unaffected.
+		expect(trackSlots(root, 'failure')).toHaveLength(3);
 	});
 
 	test("§B.4 migration proof: an old-shape block (successes: 4, no entries) renders an EMPTY board but the outcome band states the stored scalars truthfully — the honest 'provenance unknown' reading (§B.3)", async () => {

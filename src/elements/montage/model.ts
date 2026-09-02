@@ -38,12 +38,32 @@ export interface MontageParticipant {
  *  recorded on the board; a Director who wants to remember a consequence uses `note`. */
 export type MontageResult = 'success' | 'failure' | 'assist';
 
+/**
+ * `result` is a bare `string`, NOT narrowed to `MontageResult` — a deliberate widening,
+ * fix-round-1 L-2 (owner ruling, not the reviewer's own first-draft fix). A Director typo
+ * (`result: sucess`) used to drop the WHOLE entry, note included, silently — the next
+ * debounced write would then erase it from the note on disk with no trace. `sanitizeEntry`
+ * now only requires `result` to be a non-empty STRING (a genuinely wrong-TYPE `result` — a
+ * number, `null` — still can't be preserved and still drops the entry, §G's own "dropped,
+ * never crashes" sanction). An entry whose `result` isn't one of the three known values
+ * round-trips through parse→serialize byte-for-byte untouched (§B.5), and the view renders
+ * it exactly like "nothing recorded" (`data-kind` `none`) — but its `note`, if any, is NOT
+ * lost: the cell's note mark still shows and the text still lists in the outcome band,
+ * because neither reads `result` to decide whether a note exists. Use
+ * `isKnownMontageResult` to narrow to `MontageResult` before indexing anything keyed by it
+ * (e.g. `Record<MontageResult, …>`).
+ */
 export interface MontageEntry {
 	hero: string;
 	round: number;
-	result: MontageResult;
+	result: string;
 	skill?: string;
 	note?: string;
+}
+
+/** True for one of the three values the board actually knows how to draw a seal for. */
+export function isKnownMontageResult(result: string): result is MontageResult {
+	return result === 'success' || result === 'failure' || result === 'assist';
 }
 
 export interface MontageModel {
@@ -62,19 +82,23 @@ export interface MontageModel {
 
 /**
  * Sanitizes one raw `entries[]` item (§G "a null/wrong-type entry field is dropped,
- * never crashes"). `hero`/`round`/`result` are required by the schema; a raw entry
+ * never crashes"). `hero`/`round` are required and must be the right TYPE — a raw entry
  * missing one, or holding the wrong type for one, is unusable and DROPPED WHOLESALE
- * (`undefined` — the caller filters it out) rather than fabricating a hero name or round
- * number nobody authored. `skill`/`note` are optional: a `null` or non-string value for
- * either is simply left off the sanitized entry — the field-level counterpart of the
- * same rule, and how the entry stays omit-when-empty on the next serialize (§B.5).
+ * (`undefined` — the caller filters it out and warns) rather than fabricating a hero name
+ * or round number nobody authored. `result` only has to be a non-empty STRING (fix-round-1
+ * L-2 — see `MontageEntry`'s own doc comment): an unrecognised value is PRESERVED, not
+ * dropped, because it is exactly the shape a Director's typo takes and the entry (and its
+ * `note`) must survive a write-back untouched. `skill`/`note` are optional: a `null` or
+ * non-string value for either is simply left off the sanitized entry — the field-level
+ * counterpart of the same rule, and how the entry stays omit-when-empty on the next
+ * serialize (§B.5).
  */
 function sanitizeEntry(raw: unknown): MontageEntry | undefined {
 	if (raw === null || typeof raw !== 'object') return undefined;
 	const r = raw as Record<string, unknown>;
 	if (typeof r.hero !== 'string' || r.hero.length === 0) return undefined;
 	if (typeof r.round !== 'number' || !Number.isFinite(r.round)) return undefined;
-	if (r.result !== 'success' && r.result !== 'failure' && r.result !== 'assist') return undefined;
+	if (typeof r.result !== 'string' || r.result.length === 0) return undefined;
 	const entry: MontageEntry = { hero: r.hero, round: r.round, result: r.result };
 	if (typeof r.skill === 'string' && r.skill.length > 0) entry.skill = r.skill;
 	if (typeof r.note === 'string' && r.note.length > 0) entry.note = r.note;
@@ -82,10 +106,35 @@ function sanitizeEntry(raw: unknown): MontageEntry | undefined {
 }
 
 /** Sanitizes the whole raw `entries` value. A non-array input and an all-dropped array
- *  both come back `undefined` so the caller never materializes an empty `[]` (§B.5). */
+ *  both come back `undefined` so the caller never materializes an empty `[]` (§B.5).
+ *
+ *  Fix-round-1 L-2: a whole-entry DROP (missing/wrong-type `hero`, `round` or `result`) is
+ *  now `console.warn`ed with the raw offending item — §G sanctions the drop itself
+ *  ("dropped, never crashes"), what was wrong was the SILENCE. An unrecognised but
+ *  otherwise well-shaped `result` (a Director typo) is no longer a drop at all — see
+ *  `sanitizeEntry` — and is warned about separately so its presence is still visible
+ *  somewhere. A first-write `Notice` is slice 4's job (once there is a write path that
+ *  could actually discard something). */
 function sanitizeEntries(raw: unknown): MontageEntry[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
-	const entries = raw.map(sanitizeEntry).filter((e): e is MontageEntry => e !== undefined);
+	const entries: MontageEntry[] = [];
+	for (const item of raw) {
+		const entry = sanitizeEntry(item);
+		if (!entry) {
+			console.warn(
+				'Draw Steel Elements: montage dropped a malformed entries[] item (missing/invalid hero or round) — it will not be written back on the next save',
+				item,
+			);
+			continue;
+		}
+		if (!isKnownMontageResult(entry.result)) {
+			console.warn(
+				`Draw Steel Elements: montage entry for "${entry.hero}" round ${entry.round} has an unrecognised result "${entry.result}" — preserved as-is, rendered as unrecorded`,
+				item,
+			);
+		}
+		entries.push(entry);
+	}
 	return entries.length > 0 ? entries : undefined;
 }
 
@@ -99,7 +148,11 @@ export function parse(data: unknown, _raw: string): MontageModel {
 	model.failure_limit = d.failure_limit ?? 0;
 	model.successes = d.successes ?? 0;
 	model.failures = d.failures ?? 0;
-	if (d.participants !== undefined) model.participants = d.participants;
+	// Fix-round-1 L-3: an empty `participants: []` used to round-trip verbatim — §B.5 lists
+	// `participants` among the omit-when-absent keys ("never emit `null`, `''` or `[]`"),
+	// and the board already has its own `No heroes yet` fallback (BoardView.ts), so a bare
+	// `[]` on disk carries no information an omitted key doesn't already carry.
+	if (d.participants !== undefined && d.participants.length > 0) model.participants = d.participants;
 	const entries = sanitizeEntries(d.entries);
 	if (entries !== undefined) model.entries = entries;
 	model.current_round = d.current_round ?? 1;
@@ -120,21 +173,29 @@ export type MontageOutcome = 'pending' | 'total' | 'partial' | 'failure';
  *              has not started is not a Total Failure — round 1's report flagged the old
  *              3-band read as a bug every reader hit, and mock6.js's `derive()` keys the
  *              same band off "nothing recorded" unconditionally (checked FIRST, ahead of
- *              the exhausted/margin math below) — mirrored here.
+ *              the margin math below) — mirrored here.
  *   - total:   successes reach success_limit.
- *   - partial: time/failures run out (failures at/over failure_limit, OR the montage has
- *              run past its last round) but successes exceed failures by 2 or more.
- *   - failure: otherwise — including mid-montage (not yet exhausted), which reads as the
- *              "if it ended right now" band rather than a final verdict, matching the
- *              live-readout framing in the Task 6 brief.
- * The `> 0` guards on success_limit/failure_limit stop an unset (0-default) limit from
- * reading as instantly/perpetually reached.
+ *   - partial: successes exceed failures by 2 or more (the book's own margin rule — the
+ *              same "Partial Success needs successes to lead failures by 2" the outcome
+ *              band's own rule line states). Fix-round-1 H-1: this used to additionally
+ *              require `exhausted` (failures at/over failure_limit, OR past the last
+ *              round), which made `partial` UNREACHABLE while the montage is still live —
+ *              the "if it ended now" framing IS the hypothetical in which the montage has
+ *              already ended, so gating it on a SEPARATE exhaustion check made the band
+ *              word contradict the rule line printed directly under it (e.g. 5/2 at round
+ *              3 of 3, not yet exhausted, printed "Total Failure" over "currently +3" —
+ *              the approved mock, mock6.js:632-635, has no `exhausted` gate here and
+ *              renders Partial Success for the same numbers, `sc191-r5-tracks-mid-dark.png`).
+ *              The guard was pre-existing (`69eb5f7`); SC-191 slice 2 only made the
+ *              contradiction visible by printing the rule line beside the band word.
+ *   - failure: otherwise — a margin under 2, live or complete.
+ * The `> 0` guard on success_limit stops an unset (0-default) limit from reading as
+ * instantly reached.
  */
 export function montageOutcome(m: MontageModel): MontageOutcome {
 	if (m.successes === 0 && m.failures === 0) return 'pending';
 	if (m.success_limit > 0 && m.successes >= m.success_limit) return 'total';
-	const exhausted = (m.failure_limit > 0 && m.failures >= m.failure_limit) || m.current_round > m.rounds;
-	if (exhausted && m.successes - m.failures >= 2) return 'partial';
+	if (m.successes - m.failures >= 2) return 'partial';
 	return 'failure';
 }
 
@@ -205,25 +266,38 @@ export interface MontageBandCopy {
 export function montageBandCopy(m: MontageModel): MontageBandCopy {
 	const band = montageOutcome(m);
 	const { toTotal, failuresSpare, complete } = montageTallies(m);
-	const successTail = complete
-		? toTotal === 0
-			? 'the success limit, reached'
-			: `${toTotal} short of the success limit`
-		: toTotal === 0
-			? 'Total Success reached'
-			: toTotal === 1
-				? '1 from Total Success'
-				: `${toTotal} from Total Success`;
-	const failureTail = complete
-		? failuresSpare === 0
-			? 'the failure limit, reached'
-			: failuresSpare === 1
-				? '1 under the failure limit'
-				: `${failuresSpare} under the failure limit`
-		: failuresSpare === 0
-			? 'the limit is reached'
-			: failuresSpare === 1
-				? '1 more ends it'
-				: `${failuresSpare} more end it`;
+	// Fix-round-1 L-1: an unset limit (0, the schema default — never a real Director-set
+	// limit, model.ts's own `> 0` guard convention) used to fall into the `toTotal === 0` /
+	// `failuresSpare === 0` branch below and print the LIVE "reached" copy ("Total Success
+	// reached" / "the limit is reached") under a band that could not possibly mean that —
+	// e.g. "Not started" is exactly the `pending` state a vacuous limit always coincides
+	// with at 0/0. `success_limit > 0` (m.successes >= m.success_limit) is the only way
+	// `toTotal` reaches 0 while NOT complete — proof: if it were 0 while success_limit > 0,
+	// montageTallies.complete's own first clause would already be true — so once the
+	// vacuous case is named explicitly up front, the untensed "…reached" branches below are
+	// unreachable and are removed rather than kept as dead code. Same proof, mirrored, for
+	// failuresSpare/failure_limit.
+	const successTail =
+		m.success_limit === 0
+			? 'no success limit set'
+			: complete
+				? toTotal === 0
+					? 'the success limit, reached'
+					: `${toTotal} short of the success limit`
+				: toTotal === 1
+					? '1 from Total Success'
+					: `${toTotal} from Total Success`;
+	const failureTail =
+		m.failure_limit === 0
+			? 'no failure limit set'
+			: complete
+				? failuresSpare === 0
+					? 'the failure limit, reached'
+					: failuresSpare === 1
+						? '1 under the failure limit'
+						: `${failuresSpare} under the failure limit`
+				: failuresSpare === 1
+					? '1 more ends it'
+					: `${failuresSpare} more end it`;
 	return { band, word: BAND_WORD[band], successTail, failureTail };
 }

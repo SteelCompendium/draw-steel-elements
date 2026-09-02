@@ -12,7 +12,7 @@
 // "Not started" rather than reading as a Total Failure.
 import { setIcon } from 'obsidian';
 import type { MontageModel, MontageOutcome } from './model';
-import { montageOutcome, montageTallies, montageBandCopy } from './model';
+import { montageOutcome, montageTallies, montageBandCopy, isKnownMontageResult } from './model';
 
 const BAND_ICON: Record<MontageOutcome, string> = {
 	pending: 'hourglass',
@@ -46,7 +46,7 @@ export class OutcomeBandView {
 
 		this.buildTop(bandEl, band, copy.word, tallies.complete, actionsLeft);
 		this.buildTracks(bandEl, tallies.successes, m.success_limit, copy.successTail, tallies.failures, m.failure_limit, copy.failureTail);
-		this.buildRule(bandEl, tallies.complete, margin);
+		this.buildRule(bandEl, band, tallies.complete, margin);
 		this.buildNotes(bandEl, entries);
 		if (brink) this.buildBrinkAlert(bandEl);
 	}
@@ -100,33 +100,65 @@ export class OutcomeBandView {
 		setIcon(label.createSpan({ cls: 'dse-mt__prog-glyph' }), glyph);
 		label.createSpan({ cls: 'dse-mt__prog-word', text: word });
 
-		// The countable track: length always states the Director's limit (ledger
-		// 2026-08-29's equal-width ruling), only fill states progress.
-		const track = row.createDiv({ cls: 'dse-mt__track' });
-		track.setAttribute('data-kind', kind);
-		for (let i = 0; i < limit; i++) {
-			const slot = track.createSpan({ cls: 'dse-mt__track-slot' });
-			slot.setAttribute('data-filled', i < filled ? 'on' : 'off');
-			if (i === limit - 1) slot.setAttribute('data-goal', 'on');
+		// Fix-round-1 L-1: a limit of 0 is "never set" (model.ts's own convention — see
+		// montageBandCopy), not "reached at zero". Rendering the countable track for it
+		// produces a `.dse-mt__track` with ZERO slot children — an empty flex row, visually
+		// a blank gap beside the tail that already says "no success/failure limit set". A
+		// caption in the track's own grid column says the same thing where a reader's eye
+		// actually is, instead of leaving it to look like missing content.
+		if (limit === 0) {
+			row.createSpan({ cls: 'dse-mt__track-empty', text: 'no limit set' });
+		} else {
+			// The countable track: length always states the Director's limit (ledger
+			// 2026-08-29's equal-width ruling), only fill states progress.
+			const track = row.createDiv({ cls: 'dse-mt__track' });
+			track.setAttribute('data-kind', kind);
+			for (let i = 0; i < limit; i++) {
+				const slot = track.createSpan({ cls: 'dse-mt__track-slot' });
+				slot.setAttribute('data-filled', i < filled ? 'on' : 'off');
+				if (i === limit - 1) slot.setAttribute('data-goal', 'on');
+			}
 		}
 		row.createSpan({ cls: 'dse-mt__prog-tail', text: tail });
 	}
 
-	private buildRule(bandEl: HTMLElement, complete: boolean, margin: number): void {
+	/** Fix-round-1 I-8: on a COMPLETE montage this used to always print the Total Success
+	 *  Victory sentence — faithful to the mock (mock6.js:1011) but wrong on its own terms
+	 *  once the band can be `partial` or `failure` too (H-1's fix makes `partial` reachable
+	 *  live, and a complete `failure` already existed): a Total Failure card explained the
+	 *  wrong outcome's reward rule. Each complete band now states the rule THAT band's own
+	 *  word depends on (book: total success 1/2 Victories; partial success 1 Victory on a
+	 *  moderate/hard montage; total failure earns none) — the live (not yet complete) branch
+	 *  is unchanged, still the margin-to-partial rule quoted from the mock. */
+	private buildRule(bandEl: HTMLElement, band: MontageOutcome, complete: boolean, margin: number): void {
 		const rules = bandEl.createDiv({ cls: 'dse-mt__verdict-rules' });
-		rules.createSpan({
-			cls: 'dse-mt__verdict-rule',
-			text: complete
+		const text = complete
+			? band === 'total'
 				? 'Total Success awards 1 Victory on an easy or moderate montage, 2 on a hard one.'
-				: `Partial Success needs successes to lead failures by 2 — currently ${margin >= 0 ? '+' : ''}${margin}.`,
-		});
+				: band === 'partial'
+					? 'Partial Success awards 1 Victory on a moderate or hard montage.'
+					: 'Total Failure — no Victories awarded.'
+			: `Partial Success needs successes to lead failures by 2 — currently ${margin >= 0 ? '+' : ''}${margin}.`;
+		rules.createSpan({ cls: 'dse-mt__verdict-rule', text });
 	}
 
 	private buildNotes(bandEl: HTMLElement, entries: NonNullable<MontageModel['entries']>): void {
+		// Fix-round-1 L-4: the second sort key is ROSTER order (the board's own reading
+		// order — mock6.js:639-643's own comment: "the ordering has to be the reading order
+		// of the board"), not alphabetical — two same-round notes must list in the order
+		// their heroes' ROWS appear on the board above, not in dictionary order. A hero not
+		// found in `participants` (a hand-authored orphan, spec's own edge case) sorts after
+		// the whole roster; ties among orphans fall back to their original `entries[]`
+		// array order via `Array.prototype.sort`'s guaranteed stability.
+		const participants = this.model.participants ?? [];
+		const rosterIndex = (hero: string): number => {
+			const i = participants.findIndex((p) => p.name === hero);
+			return i === -1 ? participants.length : i;
+		};
 		const noted = entries
 			.filter((e) => e.note)
 			.slice()
-			.sort((a, b) => a.round - b.round || a.hero.localeCompare(b.hero));
+			.sort((a, b) => a.round - b.round || rosterIndex(a.hero) - rosterIndex(b.hero));
 		if (noted.length === 0) return;
 
 		const box = bandEl.createDiv({ cls: 'dse-mt__notes' });
@@ -134,8 +166,18 @@ export class OutcomeBandView {
 		const list = box.createEl('ul', { cls: 'dse-mt__notes-list' });
 		for (const e of noted) {
 			const li = list.createEl('li', { cls: 'dse-mt__note' });
-			li.setAttribute('data-kind', e.result);
-			setIcon(li.createSpan({ cls: 'dse-mt__note-glyph' }), e.result === 'success' ? 'check' : e.result === 'failure' ? 'x' : 'circle-plus');
+			// Fix-round-1 L-2: a note attached to an entry with an unrecognised `result`
+			// (preserved, not dropped — model.ts's `isKnownMontageResult`) still lists here;
+			// its `data-kind`/glyph read `none`, matching the board cell's own "unrecorded"
+			// treatment, rather than leaking the raw malformed string into the DOM or
+			// defaulting to the assist glyph (the old `: 'circle-plus'` fallback matched
+			// EVERY non-success/non-failure value, `assist` included but also anything else).
+			const known = isKnownMontageResult(e.result);
+			li.setAttribute('data-kind', known ? e.result : 'none');
+			setIcon(
+				li.createSpan({ cls: 'dse-mt__note-glyph' }),
+				e.result === 'success' ? 'check' : e.result === 'failure' ? 'x' : e.result === 'assist' ? 'circle-plus' : 'minus',
+			);
 			const who = li.createSpan({ cls: 'dse-mt__note-who' });
 			who.createSpan({ cls: 'dse-mt__note-hero', text: e.hero });
 			who.createSpan({ cls: 'dse-mt__note-where', text: `round ${e.round}${e.skill ? ' · ' + e.skill.toLowerCase() : ''}` });

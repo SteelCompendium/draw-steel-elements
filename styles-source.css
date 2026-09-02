@@ -4193,14 +4193,24 @@ Shared globals
 	.dse-mt__cell-notemark {
 		color: var(--dse-metal);
 	}
+	/* Fix-round-1 M-2/M-3: `var(--dse-hover)` is already an accent-derived wash with a real
+	   light twin (Steel dark rgba(77,184,199,.10) ~:5431, Steel light rgba(42,123,136,.10)
+	   ~:11997) — replacing the old bare `rgba(77,184,199,0.07)` literal, which was
+	   `--dse-accent` DARK-only with no token and no light twin (M-3: Steel light's
+	   `--dse-accent` is `#2a7b88`, an entirely different hue). Restated inside its own
+	   `body.theme-light &` at the SAME nesting depth as the generic row-banding rule's own
+	   light twin above (~:4082) — that rule's `body.theme-light &` outranks a bare
+	   `[data-state='current']` regardless of this rule's value, so in light mode the current
+	   round used to read identically to every past round (M-2). */
 	.dse-mt__cell[data-state='current'] {
-		background: rgba(77, 184, 199, 0.07);
+		background: var(--dse-hover);
+
+		body.theme-light & {
+			background: var(--dse-hover);
+		}
 	}
-	.dse-mt__cell:disabled {
+	.dse-mt__cell[role='button'][aria-disabled='true'] {
 		cursor: not-allowed;
-	}
-	.dse-mt__cell:not(:disabled) {
-		cursor: pointer;
 	}
 
 	.dse-mt__tally {
@@ -4312,6 +4322,13 @@ Shared globals
 		text-transform: lowercase;
 		letter-spacing: 0.07em;
 		color: var(--dse-fg-muted);
+	}
+	/* Fix-round-1 L-1: the "no limit set" caption that fills the track's own grid column
+	   when a limit is 0, so the middle column never reads as a blank gap. */
+	.dse-mt__track-empty {
+		font-size: var(--dse-fs-micro);
+		font-style: italic;
+		color: var(--dse-fg-faint);
 	}
 	/* The countable track: the recoveries strip's own gesture (styles-source.css ~9273) —
 	   the OUTLINE states the Director's limit, only the FILL states progress. */
@@ -4446,6 +4463,35 @@ Shared globals
 			color: var(--dse-fg-faint);
 		}
 	}
+}
+
+/* Fix-round-1 H-2 — the montage's own PRINT tier. `[data-dse-print="on"] .dse-btn {
+   display: none }` (~:13105, specificity (0,2,0)) is the plugin-wide "buttons never
+   print" rule; the montage structural tier's own `.dse-mt__board-addhero { display:
+   inline-flex; … }` (~:3633, (0,3,0) once the montage element/theme prefix is counted)
+   OUT-SPECIFIES it, so `+ Add a hero` — an AUTHORING control, exactly what :13105 exists
+   to keep off paper — printed as a bordered 44×44 px box at 50% opacity. (`.dse-mt__cell`
+   needed no equivalent fix once fix-round-1 M-1 made it a plain `div` — it was never a
+   `.dse-btn` kind to begin with after that change, so :13105 never applied to it and
+   nothing here overrides it.) Separately, `.dse-mt__track-slot` (~:3847) gets GEOMETRY
+   only in the structural tier — every visible property (border, fill, the failure hatch)
+   lives in the Steel skin tier, which is print-excluded by design — so the outcome band's
+   two limit tracks, its primary instrument, printed as blank gaps. `--dse-metal-line`
+   resolves to nothing under print (measured), so this tier names its own ink rather than
+   reaching for a Steel-only token. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__board-addhero {
+	display: none;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__track-slot {
+	border: 1px solid #333;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__track-slot[data-filled='on'] {
+	background: #333;
+}
+/* The colourblind channel (shape, not colour) survives print too: a filled FAILURE slot
+   is hatched, never just a second solid fill the success track also uses. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__track[data-kind='failure'] .dse-mt__track-slot[data-filled='on'] {
+	background: repeating-linear-gradient(135deg, #333 0 1px, transparent 1px 5px);
 }
 
 /* ==================== */

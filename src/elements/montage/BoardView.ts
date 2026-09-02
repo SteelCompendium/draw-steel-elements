@@ -29,7 +29,7 @@ import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { iconButton } from '@/framework/kit';
 import type { MontageModel, MontageEntry, MontageResult } from './model';
-import { montageTallies } from './model';
+import { montageTallies, isKnownMontageResult } from './model';
 
 const RESULT_ICON: Record<MontageResult, string> = {
 	success: 'check',
@@ -46,6 +46,9 @@ type RoundState = 'past' | 'current' | 'future';
  *  header) — but iconButton's `onClick` is mandatory, so every stub site shares this no-op. */
 const STUB_NOOP = (): void => {};
 
+/** `"1 success"` / `"2 successes"` / `"0 failures"` — the accessible tally reading. */
+const plural = (n: number, singular: string, pluralForm: string): string => `${n} ${n === 1 ? singular : pluralForm}`;
+
 export class BoardView {
 	constructor(
 		private readonly model: MontageModel,
@@ -57,7 +60,11 @@ export class BoardView {
 		const wrap = parent.createDiv({ cls: 'dse-mt__board-wrap' });
 		const board = wrap.createDiv({ cls: 'dse-mt__board' });
 		const complete = montageTallies(this.model).complete;
-		board.setAttribute('role', 'table');
+		// Fix-round-1 M-4: `role="table"` on a node with no owned `role="row"`/`role="cell"`
+		// children is an invalid mapping — AT announces "a table with no rows", worse than no
+		// role at all. The grid is purely visual; every cell already carries its own full
+		// `aria-label` (hero, round, result), so the flat DOM reads correctly in visual/DOM
+		// order without a table role at all.
 		board.setAttribute('data-complete', complete ? 'on' : 'off');
 
 		// The sanctioned geometry seam (spec §D2 §5 precedent): `repeat(var(--n), …)` is not
@@ -134,11 +141,16 @@ export class BoardView {
 			this.buildCell(board, name, r, this.entryFor(entries, r), isLast, complete);
 		}
 
+		const successCount = entries.filter((e) => e.result === 'success').length;
+		const failureCount = entries.filter((e) => e.result === 'failure').length;
 		const total = board.createDiv({ cls: 'dse-mt__board-total' });
 		total.setAttribute('data-hero', name);
 		if (isLast) total.setAttribute('data-lastrow', 'on');
-		this.tallyPart(total, 'success', entries.filter((e) => e.result === 'success').length);
-		this.tallyPart(total, 'failure', entries.filter((e) => e.result === 'failure').length);
+		// Fix-round-1 M-4: the two bare numeral spans (`tallyPart`, aria-hidden below) read
+		// as "2 0" to a screen reader — this is the one readable name for the cell.
+		total.setAttribute('aria-label', `${name}: ${plural(successCount, 'success', 'successes')}, ${plural(failureCount, 'failure', 'failures')}`);
+		this.tallyPart(total, 'success', successCount);
+		this.tallyPart(total, 'failure', failureCount);
 	}
 
 	private buildCell(
@@ -150,34 +162,48 @@ export class BoardView {
 		complete: boolean,
 	): void {
 		const state = complete ? 'past' : this.roundState(round);
-		// A recorded cell (any round) and an open socket in the round currently in play are
-		// both real `<button>`s per spec §D; a past-empty or future cell is inert content.
-		const isButton = entry !== undefined || state === 'current';
-		const ariaLabel = entry
+		// Fix-round-1 L-2: an entry whose `result` isn't one of the three known values (a
+		// preserved Director typo, model.ts's own `isKnownMontageResult`) renders with the
+		// SAME face as "nothing recorded" — but its note, if any, is never lost: the note
+		// mark still shows here (`data-noted`) and the text still lists in the outcome band
+		// (which reads `entries` directly, unfiltered by result validity).
+		const known = entry !== undefined && isKnownMontageResult(entry.result);
+		// Fix-round-1 M-1: the cell is `role="button" tabindex="0"` per spec §D ("the cell
+		// itself role='button' tabindex='0'") — NOT a real `<button>`. Slice 2 originally
+		// rode `kit/iconButton` here to dodge the button host-leak gate, but that made the
+		// cell a real `.dse-btn`: full kit chrome (1px border, 5.44px radius, sheen
+		// gradient, drop shadow) the mock's board never has, PLUS `.dse-btn[disabled] {
+		// opacity: .5 }` (base tier) dimming the cell's own recorded data — the ✓/✗ ring,
+		// the skill caption, the note mark — by half, which is the worst case for a
+		// colourblind reader relying on shape. A `div` isn't a button KIND at all, so it
+		// never reaches the host-leak gate in the first place — no override CSS needed to
+		// neutralise chrome that was never there.
+		const isInteractive = known || (entry === undefined && state === 'current');
+		const ariaLabel = known
 			? `${hero}, round ${round}: ${entry.result} with ${entry.skill ?? 'no skill'}${entry.note ? '. Note: ' + entry.note : ''} — edit`
-			: `${hero}, round ${round}: nothing logged — log an action`;
+			: entry !== undefined
+				? `${hero}, round ${round}: unrecognised result "${entry.result}"${entry.note ? '. Note: ' + entry.note : ''} — edit`
+				: `${hero}, round ${round}: nothing logged — log an action`;
 
-		let cell: HTMLElement;
-		if (isButton) {
+		const cell = board.createDiv({ cls: 'dse-mt__cell' });
+		cell.setAttribute('aria-label', ariaLabel);
+		if (isInteractive) {
 			// STUBBED (see file header): a recorded cell's own affordance is the
-			// correction/note-edit chip (slice 4); an open socket's is the sheet. Both are
-			// real-disabled here — the aria-label already states the settled wording so a
-			// screen-reader user hears the same name slice 4 will make live.
-			const handle = iconButton(board, { label: ariaLabel, disabled: true, onClick: STUB_NOOP }, this.owner);
-			handle.buttonEl.addClass('dse-mt__cell');
-			cell = handle.buttonEl;
-		} else {
-			cell = board.createDiv({ cls: 'dse-mt__cell' });
-			cell.setAttribute('aria-label', ariaLabel);
+			// correction/note-edit chip (slice 4); an open socket's is the sheet.
+			// `aria-disabled` (not native `disabled`, which only real form controls have) —
+			// the settled aria-label already states the wording slice 4 makes live.
+			cell.setAttribute('role', 'button');
+			cell.setAttribute('tabindex', '0');
+			cell.setAttribute('aria-disabled', 'true');
 		}
-		cell.setAttribute('data-kind', entry ? entry.result : 'none');
+		cell.setAttribute('data-kind', known ? entry.result : 'none');
 		cell.setAttribute('data-state', state);
 		cell.setAttribute('data-round', String(round));
 		cell.setAttribute('data-hero', hero);
 		if (isLast) cell.setAttribute('data-lastrow', 'on');
 		if (entry?.note) cell.setAttribute('data-noted', 'on');
 
-		if (entry) {
+		if (known && isKnownMontageResult(entry.result)) {
 			const face = cell.createDiv({ cls: 'dse-mt__cell-face' });
 			setIcon(face.createSpan({ cls: 'dse-mt__cell-glyph' }), RESULT_ICON[entry.result]);
 			if (entry.skill) face.createSpan({ cls: 'dse-mt__cell-skill', text: entry.skill });
@@ -189,18 +215,30 @@ export class BoardView {
 				mark.setAttribute('title', entry.note);
 				setIcon(mark, 'sticky-note');
 			}
-		} else if (state === 'current') {
+		} else if (state === 'current' && entry === undefined) {
 			cell.createSpan({ cls: 'dse-mt__cell-hint', text: 'to act' });
 		} else {
 			const face = cell.createDiv({ cls: 'dse-mt__cell-face' });
 			setIcon(face.createSpan({ cls: 'dse-mt__cell-glyph dse-mt__cell-glyph--none' }), 'minus');
-			face.createSpan({ cls: 'dse-mt__cell-skill dse-mt__cell-skill--none', text: state === 'past' ? 'no action' : '' });
+			face.createSpan({
+				cls: 'dse-mt__cell-skill dse-mt__cell-skill--none',
+				text: state === 'past' || entry !== undefined ? 'no action' : '',
+			});
+			if (entry?.note) {
+				const mark = cell.createSpan({ cls: 'dse-mt__cell-notemark' });
+				mark.setAttribute('aria-hidden', 'true');
+				mark.setAttribute('title', entry.note);
+				setIcon(mark, 'sticky-note');
+			}
 		}
 	}
 
 	private tallyPart(parent: HTMLElement, kind: 'success' | 'failure', n: number): void {
 		const s = parent.createSpan({ cls: 'dse-mt__tally' });
 		s.setAttribute('data-kind', kind);
+		// Fix-round-1 M-4: the parent `.dse-mt__board-total`'s own aria-label is the readable
+		// name now — these glyph+numeral spans are a visual duplicate of it.
+		s.setAttribute('aria-hidden', 'true');
 		setIcon(s.createSpan({ cls: 'dse-mt__tally-glyph' }), RESULT_ICON[kind]);
 		s.createSpan({ cls: 'dse-mt__tally-n', text: String(n) });
 	}
@@ -211,8 +249,22 @@ export class BoardView {
 		return 'future';
 	}
 
+	/** Fix-round-1 L-6: ONE shared dedup for "this hero's entries" — first entry for a given
+	 *  round wins, discarding any later duplicate for the SAME (hero, round) pair — used by
+	 *  both the per-round cell lookup below (`entryFor`) and the tally count in
+	 *  `buildHeroRow`. Previously the cell used `.find` (first match, so a duplicate never
+	 *  rendered a second cell) while the tally counted every raw entry (so it silently
+	 *  tallied the duplicate anyway) — the two layers disagreed about how many tests
+	 *  happened. Deduping once, here, makes them agree by construction. */
 	private entriesForHero(hero: string): MontageEntry[] {
-		return (this.model.entries ?? []).filter((e) => e.hero === hero);
+		const seenRounds = new Set<number>();
+		const deduped: MontageEntry[] = [];
+		for (const e of this.model.entries ?? []) {
+			if (e.hero !== hero || seenRounds.has(e.round)) continue;
+			seenRounds.add(e.round);
+			deduped.push(e);
+		}
+		return deduped;
 	}
 
 	private entryFor(entries: MontageEntry[], round: number): MontageEntry | undefined {

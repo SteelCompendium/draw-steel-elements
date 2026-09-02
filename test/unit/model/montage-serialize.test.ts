@@ -130,12 +130,50 @@ describe('T-6: montageOutcome — the four derived bands (AGENT line 96 + SC-191
 		).toBe('partial');
 	});
 
+	// Fix-round-1 H-1: `montageOutcome` used to additionally require `exhausted` (failures at
+	// the limit, or past the last round) for `partial`, which made the band UNREACHABLE
+	// while the montage was still live — review-1's finding, reproduced live on
+	// fixture-mid.yaml (5/2, margin +3, round 3 of 3, not yet exhausted): the band printed
+	// "Total Failure" directly over its own rule line "…lead failures by 2 — currently +3",
+	// contradicting itself. The rule is the book's own margin rule (also the outcome band's
+	// rule-line text) and does not care whether the montage has actually ended — `exhausted`
+	// is now dropped entirely from this branch (impl spec's own `isExhausted` helper is
+	// unaffected — `montageTallies.complete` still uses it for the SEPARATE "has the montage
+	// ended" question). Boundary probe (review-1's own table, `sl 6 / fl 9 / rounds 3`):
+	test.each([
+		// [successes, failures, current_round, rounds, expected, description]
+		[3, 3, 2, 3, 'failure', 'margin 0 (successes == failures), live'],
+		[4, 3, 2, 3, 'failure', 'margin +1 (not enough), live'],
+		[5, 3, 2, 3, 'partial', 'margin +2, live, mid-montage (round 2 of 3) — the exact H-1 regression case'],
+		[5, 3, 3, 3, 'partial', 'margin +2, live, FINAL round with actions left (current_round === rounds)'],
+		[5, 3, 4, 3, 'partial', 'margin +2, rounds exhausted (current_round > rounds)'],
+		[4, 3, 4, 3, 'failure', 'margin +1, rounds exhausted — still short of the +2 threshold'],
+		[3, 3, 4, 3, 'failure', 'margin 0, rounds exhausted'],
+	])('successes=%i failures=%i current_round=%i rounds=%i -> %s (%s)', (successes, failures, current_round, rounds, expected) => {
+		expect(
+			montageOutcome({ ...base, success_limit: 6, failure_limit: 9, successes, failures, current_round, rounds }),
+		).toBe(expected);
+	});
+
 	test('total failure: exhausted but the margin is under 2', () => {
 		expect(montageOutcome({ ...base, successes: 3, failures: 3 })).toBe('failure');
 	});
 
-	test('total failure: not yet exhausted (mid-montage) never reads as partial even with a 2+ margin — the live "if it ended now" band', () => {
-		expect(montageOutcome({ ...base, rounds: 3, successes: 3, failures: 1, current_round: 1 })).toBe('failure');
+	test('can-fail invariant: the band word and the outcome band\'s own rule line never disagree — a `partial` band always has a margin >= 2, a `failure` band never does', () => {
+		// This is the exact contradiction H-1 fixed: a band claiming Total Failure while its
+		// own rule line ("Partial Success needs successes to lead failures by 2 — currently
+		// +N") states a satisfied margin. Swept across every (successes, failures) pair
+		// 0..6 (skipping 0/0, which is `pending` and prints no margin rule).
+		for (let s = 0; s <= 6; s++) {
+			for (let f = 0; f <= 6; f++) {
+				if (s === 0 && f === 0) continue;
+				const band = montageOutcome({ ...base, success_limit: 100, successes: s, failures: f });
+				if (band === 'total' || band === 'pending') continue; // no margin rule printed
+				const margin = s - f;
+				if (band === 'partial') expect(margin).toBeGreaterThanOrEqual(2);
+				else expect(margin).toBeLessThan(2);
+			}
+		}
 	});
 
 	test('an unset (0-default) limit never reads as instantly reached — nothing recorded either, so this is the `pending` band (SC-191 slice 2), not `failure`', () => {
@@ -284,7 +322,7 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 		expect(out).not.toContain('note:');
 	});
 
-	test('a null/wrong-type entry field is dropped, never crashes', () => {
+	test('a null/wrong-type entry field is dropped, never crashes; an unrecognised (but well-typed) result is PRESERVED, not dropped (fix-round-1 L-2)', () => {
 		const model = parseLikePipeline(
 			[
 				'entries:',
@@ -296,12 +334,63 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 				'  - hero: 7', // wrong-type hero -> whole entry dropped
 				'    round: 1',
 				'    result: success',
-				'  - hero: Bo', // invalid result value -> whole entry dropped
+				'  - hero: Bo', // unrecognised (but STRING) result -> a Director typo, preserved verbatim
 				'    round: 1',
 				'    result: heroics',
 				'rounds: 2',
 			].join('\n'),
 		);
-		expect(model.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+		expect(model.entries).toEqual([
+			{ hero: 'Kira', round: 1, result: 'success' },
+			{ hero: 'Bo', round: 1, result: 'heroics' },
+		]);
+	});
+
+	test('an entry with a wrong-TYPE result (not a string at all) still drops the whole entry — only a STRING typo is preservable (fix-round-1 L-2)', () => {
+		const model = parseLikePipeline(
+			['entries:', '  - hero: Kira', '    round: 1', '    result: 42', 'rounds: 2'].join('\n'),
+		);
+		expect(model.entries).toBeUndefined();
+	});
+
+	test("fix-round-1 L-2: an entry's note round-trips byte-for-byte even when its result is a typo — parse(serialize(parse(x))) === parse(x)", () => {
+		const x = ['entries:', '  - hero: Osric', '    round: 1', '    result: sucess', '    note: Turned an ankle.', 'rounds: 2'].join('\n');
+		const once = parseLikePipeline(x);
+		expect(once.entries).toEqual([{ hero: 'Osric', round: 1, result: 'sucess', note: 'Turned an ankle.' }]);
+		const twice = parseLikePipeline(serialize(once));
+		expect(twice).toEqual(once);
+	});
+
+	describe('fix-round-1 L-2: a dropped or unrecognised entry is never SILENT — console.warn fires', () => {
+		let warn: jest.SpyInstance;
+		beforeEach(() => {
+			warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+		});
+		afterEach(() => {
+			warn.mockRestore();
+		});
+
+		test('a whole-entry drop (wrong-type hero) warns once, naming the raw item', () => {
+			parseLikePipeline(['entries:', '  - hero: 7', '    round: 1', '    result: success', 'rounds: 2'].join('\n'));
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(String(warn.mock.calls[0][0])).toContain('dropped a malformed entries[] item');
+		});
+
+		test('a preserved-but-unrecognised result warns once, naming the hero/round/value — distinct wording from a drop', () => {
+			parseLikePipeline(
+				['entries:', '  - hero: Osric', '    round: 3', '    result: sucess', 'rounds: 3'].join('\n'),
+			);
+			expect(warn).toHaveBeenCalledTimes(1);
+			const message = String(warn.mock.calls[0][0]);
+			expect(message).toContain('Osric');
+			expect(message).toContain('round 3');
+			expect(message).toContain('sucess');
+			expect(message).not.toContain('dropped a malformed entries[] item');
+		});
+
+		test('a well-formed entry warns zero times', () => {
+			parseLikePipeline(['entries:', '  - hero: Kira', '    round: 1', '    result: success', 'rounds: 2'].join('\n'));
+			expect(warn).not.toHaveBeenCalled();
+		});
 	});
 });
