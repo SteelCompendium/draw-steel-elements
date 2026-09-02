@@ -98,7 +98,7 @@ describe('SC-202 r1 — GROUP 2: the material Obsidian was winning on', () => {
 	});
 });
 
-describe('SC-202 r1 — GROUP 3: focus-visible border-color + box-shadow, all nine', () => {
+describe('SC-202 r1 — GROUP 3: focus-visible border-color + box-shadow', () => {
 	test('`:focus-visible` sits OUTSIDE `:where()` — the third class the state needs', () => {
 		// :where() contributes zero specificity; Obsidian's border-color/box-shadow rules at
 		// :active/:focus/:focus-visible are (0,0,2,1) and a (0,0,2,0) challenger loses the
@@ -106,15 +106,94 @@ describe('SC-202 r1 — GROUP 3: focus-visible border-color + box-shadow, all ni
 		// focus-ring rule (outline only) survives while a bare :where()-wrapped box-shadow
 		// would not. Appending `:focus-visible` to the compound, not inside :where(), reaches
 		// (0,0,3,0), which wins outright.
+		// Fix round (HIGH-3): three rules now, not two — `.dse-condal__input` gets its own
+		// (box-shadow only; its border stays `none`, so a border-color restatement would be
+		// cosmetically inert there).
 		const rules = [...flat.matchAll(new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\):focus-visible \\{([^}]*)\\}', 'g'))];
-		expect(rules.length).toBe(2);
+		expect(rules.length).toBe(3);
 		const allSubjects = rules.map((r) => r[1]).join(', ');
 		expect(allSubjects).toContain('.dse-stepper__input');
 		for (const sel of COUSIN_INPUTS) expect(allSubjects).toContain(sel);
-		for (const r of rules) {
-			expect(r[2]).toContain('box-shadow: none;');
-			expect(r[2]).toContain('border-color: var(--dse-border);');
+		expect(allSubjects).toContain('.dse-condal__input');
+		for (const r of rules) expect(r[2]).toContain('box-shadow: none;');
+		const nonCondal = rules.filter((r) => !r[1].includes('.dse-condal__input'));
+		expect(nonCondal.length).toBe(2);
+		for (const r of nonCondal) expect(r[2]).toContain('border-color: var(--dse-border);');
+	});
+});
+
+describe('SC-202 r1 fix round (HIGH-1) — GROUP 4: :hover:not(:disabled)', () => {
+	test('the stepper entry excludes counter, the cousins restate their own rest fill', () => {
+		// Counter's own compound (input.dse-counter__value) is (0,0,3,1) — lower than GROUP
+		// 4's (0,0,4,0) for the first time in this block — so without the exclusion GROUP 4
+		// would repaint counter's deliberately chrome-stripped look with a hover fill.
+		const stepperRule = flat.match(
+			new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-stepper__input:not\\(\\.dse-counter__value\\)\\):hover:not\\(:disabled\\) \\{([^}]*)\\}'),
+		);
+		expect(stepperRule).not.toBeNull();
+		expect(stepperRule![1]).toContain('background: var(--dse-surface-sunken);');
+		expect(stepperRule![1]).toContain('border-color: var(--dse-border);');
+
+		const cousinsRule = flat.match(
+			new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\):hover:not\\(:disabled\\) \\{([^}]*)\\}', 'g'),
+		);
+		expect(cousinsRule).not.toBeNull();
+	});
+
+	test('`.dse-condal__input` restates `background: none` on hover, not the Steel surface', () => {
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-condal__input\\):hover:not\\(:disabled\\) \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		expect(g![1]).toContain('background: none;');
+	});
+});
+
+describe('SC-202 r1 fix round (HIGH-2, MED-1) — :disabled and ::placeholder, all twelve', () => {
+	test(':disabled restates opacity:1 and cursor:default at (0,0,3,0)', () => {
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\):disabled \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		expect(g![1]).toContain('.dse-stepper__input');
+		expect(g![1]).toContain('.dse-sedit__apply-input');
+		expect(g![1]).toContain('.dse-condal__input');
+		expect(g![1]).toContain('.dse-form__raw');
+		expect(g![2]).toContain('opacity: 1;');
+		expect(g![2]).toContain('cursor: default;');
+	});
+
+	test('::placeholder restates color to a Steel muted-ink token, all twelve selectors', () => {
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\)::placeholder \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		expect(g![1]).toContain('.dse-stepper__input');
+		expect(g![1]).toContain('.dse-form__raw');
+		expect(g![2]).toContain('color: var(--dse-fg-muted);');
+	});
+});
+
+describe('SC-202 r1 fix round (HIGH-3) — the three modal-only controls get GROUP 2 material', () => {
+	test('`.dse-sedit__apply-input` gets the plain-field look', () => {
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-sedit__apply-input\\) \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		for (const decl of ['background: var(--dse-surface);', 'border: 1px solid var(--dse-border);', 'caret-color: var(--dse-fg);']) {
+			expect(g![1]).toContain(decl);
 		}
+	});
+
+	test('`.dse-condal__input` restates its own chromeless design, not the Steel field look', () => {
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-condal__input\\) \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		for (const decl of ['border: none;', 'background: none;', 'outline: none;', 'font: inherit;', 'border-radius: 0;']) {
+			expect(g![1]).toContain(decl);
+		}
+	});
+
+	test('`.dse-form__raw` gets the modal-section field material, and stays OUT of GROUP 1', () => {
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-form__raw\\) \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		expect(g![1]).toContain('background: var(--dse-surface);');
+		// GROUP 1's :where() list must NOT name it — its own box-sizing:border-box would
+		// fight, not restate, a GROUP-1 `content-box`.
+		const group1 = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\) \\{ height: auto;'));
+		expect(group1).not.toBeNull();
+		expect(group1![1]).not.toContain('.dse-form__raw');
 	});
 });
 

@@ -1584,16 +1584,31 @@ const R1_APP_CSS_SHA256 = 'f612f1e8f36486fa57f3b8bd45f0c848409d5b168002e757a13c6
  *  same newest-self-updated-asar lookup and >= PINNED_OBSIDIAN version check the button
  *  drift pin already applies, so the two pins agree on what counts as new enough. Returns
  *  `null` when nothing usable is installed; the caller turns that into a SKIP line, never
- *  a failure. */
+ *  a failure.
+ *  LOW-3 (fix round) — writes `dist/obsidian-app.css` only when it is missing or its sha256
+ *  differs from what is already on disk. Nothing ever reads that file back (the sweep uses
+ *  the in-memory `css` string directly), so re-writing 637 KB on every `npm run shots` was
+ *  pure avoidable churn — a stray `git add -f`/packaging-step/`dist/` upload away from
+ *  becoming a real leak of a proprietary sheet that must never be redistributed. */
 function loadLocalObsidianAppCss() {
 	const found = findObsidianAsar();
 	if (!found || !found.usable) return null;
 	const css = readAsarFile(found.path, 'app.css');
 	if (!css) return null;
-	const outDir = path.join(dir, 'dist');
-	fs.mkdirSync(outDir, { recursive: true });
-	fs.writeFileSync(path.join(outDir, 'obsidian-app.css'), css);
 	const sha256 = crypto.createHash('sha256').update(css, 'utf8').digest('hex');
+	const outDir = path.join(dir, 'dist');
+	const outFile = path.join(outDir, 'obsidian-app.css');
+	let upToDate = false;
+	try {
+		const onDisk = crypto.createHash('sha256').update(fs.readFileSync(outFile, 'utf8'), 'utf8').digest('hex');
+		upToDate = onDisk === sha256;
+	} catch {
+		upToDate = false; // missing or unreadable — write it
+	}
+	if (!upToDate) {
+		fs.mkdirSync(outDir, { recursive: true });
+		fs.writeFileSync(outFile, css);
+	}
 	return { css, version: found.version, sha256 };
 }
 
@@ -1630,17 +1645,27 @@ const INPUT_PROPS = [
 	'outlineStyle',
 	'outlineWidth',
 	'boxShadow',
+	// SC-202 r1 fix round (HIGH-2, LOW-1) — `opacity`/`cursor` only ever move at
+	// `:disabled`; `caretColor` is the one property in this list that is not a rule whose
+	// subject is `input`/`textarea` at all (Obsidian sets it on `body`, inherited) —
+	// sampled here anyway since it is real and this is where every OTHER input property
+	// already gets compared per state.
+	'opacity',
+	'cursor',
+	'caretColor',
 ];
 /** DELIBERATELY NOT COMPARED, same reasoning as `BTN_PROPS_EXCLUDED`: neither can move a
  *  box or paint a pixel. `-webkit-app-region` only decides window-drag behavior;
  *  `unicode-bidi: plaintext` (app.css's one bare, ancestor-less `input` rule) only affects
  *  bidi text-run resolution, inert for this plugin's LTR numeric/label content. */
 const INPUT_PROPS_EXCLUDED = ['-webkit-app-region', 'unicode-bidi'];
-/** Brief scope (SC-202 r1): rest + focus-visible only. Obsidian's `input` rules also move
- *  `background-color`/`border-color` on `:hover` and `opacity`/`cursor` on `:disabled` —
- *  real leaks, structurally the same shape as this round's, but neither is proven here and
- *  fixing them is not this round's ask (see the report's Follow-ups). */
-const INPUT_STATES = ['rest', 'focus-visible'];
+/** SC-202 r1 fix round (HIGH-1, HIGH-2) — widened from `['rest', 'focus-visible']` to all
+ *  four states Obsidian's `input`/`textarea` rules actually move a property in. `::placeholder`
+ *  (MED-1) is a FIFTH comparison this sweep makes but is not a DOM state (it reads a
+ *  pseudo-element on the rest-state DOM), so it is driven separately in
+ *  `assertInputHostLeak` rather than living in this list — see that function and its
+ *  printed line, which reports it as a state anyway for a human reading the count. */
+const INPUT_STATES = ['rest', 'hover', 'disabled', 'focus-visible'];
 
 /** Tags every distinct kind of numeric/text `<input>` the gallery renders — same
  *  (element, classes) keying convention as `tagButtons`, without the chrome-surface
@@ -1689,22 +1714,58 @@ function readTaggedInputsAtRest(props) {
 	return out;
 }
 
-/** Read ONE tagged input and report whether `:focus-visible` is genuinely active on it —
- *  same "never absorbed" contract as `readOneTagged`. */
-function readOneInputTagged({ i, props }) {
+/** Read ONE tagged input and report whether the given pseudo-class is genuinely active on
+ *  it — same "never absorbed" contract as `readOneTagged`. Shared by the focus-visible and
+ *  (fix round) hover branches of `probeInputsInState`; `pseudo` is a real CSS pseudo-class
+ *  string (`:focus-visible` / `:hover`) checked via `Element.matches`. */
+function readOneInputTaggedMatching({ i, props, pseudo }) {
 	const n = document.querySelector(`[data-dse-inputleak-i="${i}"]`);
 	if (!n) return null;
 	const cs = getComputedStyle(n);
 	const r = n.getBoundingClientRect();
 	const rec = { key: n.getAttribute('data-dse-inputleak'), w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
 	for (const p of props) rec[p] = cs[p];
-	rec.active = n.matches(':focus-visible');
+	rec.active = n.matches(pseudo);
 	return rec;
 }
 
+/** `:disabled` (HIGH-2, fix round) — a real DOM attribute, not a pseudo-class, so this
+ *  drives it directly rather than through CDP: set `disabled = true`, read, restore. No
+ *  input in this family is ever given `disabled` by current product code (see the CSS
+ *  block's own comment), so there is no "cannot reach this state" case to prove — unlike
+ *  hover/focus-visible, setting `.disabled` on a real `<input>`/`<textarea>` always
+ *  succeeds. */
+function readOneInputTaggedDisabled({ i, props }) {
+	const n = document.querySelector(`[data-dse-inputleak-i="${i}"]`);
+	if (!n) return null;
+	const was = n.disabled;
+	n.disabled = true;
+	const cs = getComputedStyle(n);
+	const r = n.getBoundingClientRect();
+	const rec = { key: n.getAttribute('data-dse-inputleak'), w: +r.width.toFixed(2), h: +r.height.toFixed(2) };
+	for (const p of props) rec[p] = cs[p];
+	n.disabled = was;
+	rec.active = true;
+	return rec;
+}
+
+/** `::placeholder` color (MED-1, fix round) — not a DOM state, so read at rest for every
+ *  tagged node at once, mirroring `readTaggedInputsAtRest`'s shape. Only `color` is sampled:
+ *  it is the only property Obsidian's `::placeholder` rule sets. **Cannot be verified
+ *  against a real vault** — Obsidian's own Chromium returns the ELEMENT's computed style
+ *  for `getComputedStyle(el, '::placeholder')`, not the pseudo-element's (measured live);
+ *  this pass only ever runs in the browser harness. */
+function readPlaceholderColors() {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-inputleak]')) {
+		out.push({ key: n.getAttribute('data-dse-inputleak'), color: getComputedStyle(n, '::placeholder').color });
+	}
+	return out;
+}
+
 /** Sample every tagged input in one state, driving the state for real — same shape as
- *  `probeButtonsInState`, narrowed to the two states this round samples. */
-async function probeInputsInState(page, state, count, props) {
+ *  `probeButtonsInState`. `cdp`/`docRootNodeId` are only used by the `hover` branch. */
+async function probeInputsInState(page, cdp, docRootNodeId, state, count, props) {
 	if (state === 'rest') {
 		await page.mouse.move(0, 0);
 		await page.evaluate(clearBtnState);
@@ -1714,6 +1775,55 @@ async function probeInputsInState(page, state, count, props) {
 			rec.blocked = null;
 		}
 		return { records, problems: [] };
+	}
+	if (state === 'disabled') {
+		const records = [];
+		const problems = [];
+		for (let i = 0; i < count; i += 1) {
+			const rec = await page.evaluate(readOneInputTaggedDisabled, { i, props });
+			if (!rec) {
+				problems.push(`#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			records.push(rec);
+		}
+		return { records, problems };
+	}
+	if (state === 'hover') {
+		// INFO-3 (review) — once app.css is injected, Playwright's `locator.hover()` /
+		// `page.mouse.move()` stop engaging `:hover` entirely (measured 16/16 kinds:
+		// hovBare=true, hovHost=false): the injected sheet changes the page's own
+		// scroll/layout, so the computed centre used to compute a pointer target is no
+		// longer under the pointer. CDP `CSS.forcePseudoState` does not simulate a pointer
+		// at all — it forces the browser's own pseudo-class match directly on the node — so
+		// it is immune. Forcing HOVER ALONE (never combined with `:active`/`:focus`, which
+		// the review found produces phantom border-color/box-shadow leaks unless
+		// `:focus-visible` is forced alongside them) is the shape proven clean.
+		const records = [];
+		const problems = [];
+		for (let i = 0; i < count; i += 1) {
+			const found = await cdp.send('DOM.querySelector', {
+				nodeId: docRootNodeId,
+				selector: `[data-dse-inputleak-i="${i}"]`,
+			});
+			if (!found?.nodeId) {
+				problems.push(`#${i}: CDP could not resolve the tagged node`);
+				continue;
+			}
+			await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: ['hover'] });
+			const rec = await page.evaluate(readOneInputTaggedMatching, { i, props, pseudo: ':hover' });
+			await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: [] });
+			if (!rec) {
+				problems.push(`#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			if (!rec.active) {
+				problems.push(`${rec.key}: CSS.forcePseudoState(['hover']) did not make the node match :hover`);
+				continue;
+			}
+			records.push(rec);
+		}
+		return { records, problems };
 	}
 	// focus-visible — establish keyboard modality once per pass, same as the button sweep.
 	await page.mouse.move(0, 0);
@@ -1726,7 +1836,7 @@ async function probeInputsInState(page, state, count, props) {
 			problems.push(`#${i}: the tagged node vanished mid-sweep`);
 			continue;
 		}
-		const rec = await page.evaluate(readOneInputTagged, { i, props });
+		const rec = await page.evaluate(readOneInputTaggedMatching, { i, props, pseudo: ':focus-visible' });
 		if (!rec) {
 			problems.push(`#${i}: the tagged node vanished mid-sweep`);
 			continue;
@@ -1762,6 +1872,14 @@ async function assertInputHostLeak(page) {
 			? `matches the round's pin (Obsidian ${host.version})`
 			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
 				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
+	// INFO-3 — the hover pass needs CDP CSS.forcePseudoState (Playwright's own hover/mouse
+	// APIs stop engaging :hover once app.css is injected). One session for the whole sweep;
+	// the DOM domain's node tree is re-fetched per navigation AND per bare/host pass below
+	// (a style-tag injection is not a navigation, but re-fetching is cheap and removes any
+	// doubt about node-id staleness across the injection).
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('DOM.enable');
+	await cdp.send('CSS.enable');
 	const problems = [];
 	let kindCount = 0;
 	let comparisons = 0;
@@ -1777,15 +1895,19 @@ async function assertInputHostLeak(page) {
 		}
 		kindCount = Math.max(kindCount, keys.length);
 
+		const { root: bareRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
 		const bare = {};
 		for (const state of INPUT_STATES) {
-			const r = await probeInputsInState(page, state, keys.length, INPUT_PROPS);
+			const r = await probeInputsInState(page, cdp, bareRoot.nodeId, state, keys.length, INPUT_PROPS);
 			bare[state] = r.records;
 			for (const p of r.problems) problems.push(`${bg}|host-absent|${state}: ${p}`);
 		}
+		const barePlaceholder = await page.evaluate(readPlaceholderColors);
+
 		await injectRealHostCss(page, host.css);
+		const { root: hostRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
 		for (const state of INPUT_STATES) {
-			const r = await probeInputsInState(page, state, keys.length, INPUT_PROPS);
+			const r = await probeInputsInState(page, cdp, hostRoot.nodeId, state, keys.length, INPUT_PROPS);
 			for (const p of r.problems) problems.push(`${bg}|host-present|${state}: ${p}`);
 			const withHost = new Map(r.records.map((rec) => [rec.key, rec]));
 			for (const b of bare[state]) {
@@ -1807,6 +1929,26 @@ async function assertInputHostLeak(page) {
 				}
 			}
 		}
+
+		// ::placeholder (MED-1) — not a DOM state, compared separately; see
+		// `readPlaceholderColors`'s own comment for why this can only run here, never
+		// against a real vault.
+		const hostPlaceholder = await page.evaluate(readPlaceholderColors);
+		const hostPhByKey = new Map(hostPlaceholder.map((r) => [r.key, r]));
+		for (const b of barePlaceholder) {
+			const h = hostPhByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|placeholder|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			if (b.color !== h.color) {
+				problems.push(
+					`${bg}|placeholder|${b.key}: Obsidian's real app.css changes ::placeholder color — ` +
+						`"${b.color}" without the host, "${h.color}" with it`,
+				);
+			}
+		}
 	}
 	if (problems.length) {
 		const shown = problems.slice(0, 60);
@@ -1819,9 +1961,10 @@ async function assertInputHostLeak(page) {
 		);
 		process.exit(1);
 	}
+	const stateLabels = [...INPUT_STATES, 'placeholder'];
 	console.log(
-		`\ninput host-leak OK (${kindCount} input kinds × ${INPUT_STATES.length} states ` +
-			`(${INPUT_STATES.join('/')}) × dark/light = ${comparisons} comparisons against the real ` +
+		`\ninput host-leak OK (${kindCount} input kinds × ${stateLabels.length} states ` +
+			`(${stateLabels.join('/')}) × dark/light = ${comparisons} comparisons against the real ` +
 			`Obsidian app.css: every sampled property is identical with and without it; ` +
 			`${INPUT_PROPS_EXCLUDED.join(' and ')} are excluded by design; ${pinNote})`,
 	);
