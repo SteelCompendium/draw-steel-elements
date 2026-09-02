@@ -1336,19 +1336,26 @@ structure with another's styling and render something corrupt. The typography se
 styling, not per-card. Naming any of them in a block's <code>prefs:</code> logs a warning to Obsidian's
 developer console and the block renders normally.</p>
 <h2 id="the-sidebar">The sidebar<a class="headerlink" href="#the-sidebar" title="Permanent link">&para;</a></h2>
-<p>Any block can be pinned to a persistent panel in Obsidian's right sidebar: put your cursor
-inside it and run <strong>Send block to sidebar</strong>. It stays interactive there while you navigate
-between notes, and edits made in either place stay in sync.</p>
-<p><img alt="An initiative tracker in the sidebar" src="../Media/sidebar.png" /></p>
+<p>A GM dashboard assembled from blocks that live in <strong>different</strong> notes: hover a block in
+Reading view, open its <strong>⋯</strong> menu, and choose <strong>Pin to sidebar</strong>. It stays interactive in a
+persistent panel in Obsidian's right sidebar while you navigate between notes, and edits made
+in either place stay in sync. Full walkthrough, including how to unpin one and the older
+cursor-driven commands: <a href="../writing-blocks/#pinning-a-block-to-the-sidebar">Pinning a block to the sidebar</a>.</p>
+<p><img alt="Two blocks pinned to the Draw Steel sidebar, each with its own header" src="../Media/sidebar.png" /></p>
 <p>Worth knowing:</p>
 <ul>
 <li>The panel is bound to that specific block, in that specific note. The plugin adds a small
   <code>_dse_anchor</code> marker to the block so it can find it again — that's what that line is.</li>
-<li>One sidebar can hold several panels at once; they stack.</li>
+<li>One sidebar can hold several panels at once; they stack, each with its own header naming
+  the element and its note.</li>
 <li>Trackers are what this is for — initiative, montage, project, party, a heroic resource or
-  surge counter. Pin the one you're using this session.</li>
+  surge counter. Pin the ones you're using this session, from whichever notes they live in.</li>
 <li>Open or focus the panel any time with the crossed-swords ribbon icon, or <strong>Open Draw
   Steel sidebar</strong>.</li>
+<li><strong>If everything you track lives in one note already</strong>, skip the sidebar: open that note in
+  the right sidebar and pin its tab instead — you get a close button and reordering for
+  free, and no rebuild flash while you edit. The Draw Steel sidebar earns its keep only when
+  your trackers are scattered across notes.</li>
 </ul>
 <p>Narrow panes are a real layout: elements reflow at sidebar width (the stamina cluster
 collapses to a two-line rail, for instance) rather than being squeezed. A statblock's

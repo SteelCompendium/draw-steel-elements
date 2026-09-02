@@ -1105,6 +1105,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Pinning a block to the sidebar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-note-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One note instead?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1261,6 +1278,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Pinning a block to the sidebar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-note-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One note instead?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1351,18 +1385,37 @@ overwrote them would defeat it. If you want content that keeps updating, use <st
 compendium reference</strong> instead.</p>
 <p>Snapshots are offered for statblocks, features and featureblocks only.</p>
 <h2 id="pinning-a-block-to-the-sidebar">Pinning a block to the sidebar<a class="headerlink" href="#pinning-a-block-to-the-sidebar" title="Permanent link">&para;</a></h2>
-<p>Running a session across several notes? Put your cursor inside a block and run <strong>Send block
-to sidebar</strong> — the block moves into a persistent panel in Obsidian's right sidebar, stays
-interactive there, and stays in sync with the note. The initiative tracker has its own
-shortcut for this, <strong>Send initiative tracker to sidebar</strong>, which finds the tracker in the
-current note without needing your cursor inside it.</p>
-<p><img alt="An initiative tracker pinned to the Draw Steel sidebar" src="../Media/sidebar.png" /></p>
-<p>Open the panel any time with the crossed-swords ribbon icon, or the <strong>Open Draw Steel
-sidebar</strong> command.</p>
+<p>The Draw Steel sidebar is a <strong>GM dashboard assembled from blocks that live in different
+notes</strong> — the initiative tracker from your session note, the party tracker from your
+campaign note, a hero sheet from someone's character note, all running at once in one
+panel. That's the one thing it does that a pinned note tab can't: if everything you track
+already lives in a single note, pin <em>that note's tab</em> in the right sidebar instead (see
+"One note instead?" below) — it's simpler and needs nothing from this page.</p>
+<p><strong>To pin a block:</strong> open its note in Reading view, hover the block (any element that shows a
+<strong>⋯</strong> menu), open that menu, and choose <strong>Pin to sidebar</strong>. The block moves into a
+persistent panel in Obsidian's right sidebar, stays interactive there, and stays in sync
+with the note. Pin blocks from as many different notes as you like — they stack in the same
+panel, each with its own header naming the element and the note it came from.</p>
+<p><img alt="Two blocks pinned to the Draw Steel sidebar, each with its own header" src="../Media/sidebar.png" /></p>
+<p>To remove one, open its <strong>⋯</strong> menu in the sidebar and choose <strong>Unpin from sidebar</strong> — that
+panel closes; the others stay. Open (or re-focus) the panel any time with the crossed-swords
+ribbon icon, or the <strong>Open Draw Steel sidebar</strong> command; an empty panel explains itself and
+how to fill it.</p>
+<p>Two older paths still work, for a cursor-driven workflow: put your cursor inside a block and
+run <strong>Send block to sidebar</strong>, or — for the initiative tracker specifically, from anywhere
+in its note — <strong>Send initiative tracker to sidebar</strong>.</p>
 <p>Pinning a tracker adds a hidden <code>_dse_anchor:</code> line to it — that's the plugin's bookmark
 for finding the block again after you edit the note around it. Leave it alone. A <code>ds-scc</code>
 block, whose content is exactly one compendium code, is never written to: pinning one
 leaves the note unchanged and the sidebar finds it by its code.</p>
+<h3 id="one-note-instead">One note instead?<a class="headerlink" href="#one-note-instead" title="Permanent link">&para;</a></h3>
+<p>If everything you're tracking for a session already lives in one note, you don't need the
+sidebar at all: open that note in the right sidebar the normal Obsidian way (drag its tab
+over, or open it and use "Move to right sidebar") and pin the tab. You get the same
+persistent panel, plus things the Draw Steel sidebar doesn't have — a close button and
+drag-to-reorder for free, room for ordinary prose alongside your blocks, and no rebuild
+flash while you edit. Use the Draw Steel sidebar when your trackers live in different notes;
+use a pinned note tab when they don't.</p>
 <h2 id="per-block-appearance-overrides-advanced">Per-block appearance overrides (advanced)<a class="headerlink" href="#per-block-appearance-overrides-advanced" title="Permanent link">&para;</a></h2>
 <p>Most appearance settings are global (see <a href="../settings/">Settings</a>), but a single block can
 pin its own look with a reserved <code>prefs:</code> key:</p>
