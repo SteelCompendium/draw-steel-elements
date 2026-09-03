@@ -461,6 +461,17 @@ async function assertChromePlacement(page) {
 // is the installer's copy and on this machine is years stale, which is one way the model
 // rotted. Copied verbatim, whitespace aside.
 //
+// SC-202 pin-bump round (2026-09-02): re-extracted from **Obsidian 1.14.0**
+// (`~/.config/obsidian/obsidian-1.14.0.asar`, 664,473 bytes, sha256
+// 013ed841d76674cf1e30f555586774eb2450b5cd02662c8f0cd46b267f973dd1) — the machine
+// self-updated mid-session and `npm run shots` reported the exact drift this comment
+// warns about. The ONLY difference in the six button-reaching rules: the base `button`
+// rule gained `transition: var(--button-transition)`, last in source order. Nothing else
+// in this model changed — same rules, same selectors, same token values. This bump is
+// UNRELATED to SC-202's own round-1 starting pin for the real app.css sweep
+// (`R1_APP_CSS_SHA256` below, still Obsidian 1.13.7 — that pin is a later round's own
+// decision to revisit, not this commit's).
+//
 // DO NOT hand-edit this from memory: `assertHostCopyPinnedToObsidian` below re-extracts the
 // same rules and tokens from the installed Obsidian on every `npm run shots` and fails loudly
 // on any drift, so an edit that is not what Obsidian ships will be caught, not absorbed.
@@ -517,6 +528,7 @@ button {
   outline: none;
   user-select: none;
   white-space: nowrap;
+  transition: var(--button-transition);
 }
 button:not(.clickable-icon) {
   color: var(--text-color);
@@ -1153,12 +1165,18 @@ const BTN_PROPS = [
 	// is free and it is now pinned like the rest.
 	'cornerShape',
 ];
-/** DELIBERATELY NOT COMPARED. `user-select` and `-webkit-app-region` are the only two
- *  declarations Obsidian's `button` rules make that this sheet does not re-ground AND that
- *  this sweep does not compare, and they are excluded for the same reason SC-189 left
- *  `white-space` alone on a single-glyph chrome button: neither can move a box or paint a
- *  pixel. (`white-space` itself is NOT on this list — plugin-wide it demonstrably moves
- *  widths, so it is re-grounded and compared.) */
+/** DELIBERATELY NOT COMPARED (printed in the OK line below). `user-select` and
+ *  `-webkit-app-region` are declarations Obsidian's `button` rules make that this sheet
+ *  does not re-ground AND that this sweep does not compare, excluded for the same reason
+ *  SC-189 left `white-space` alone on a single-glyph chrome button: neither can move a box
+ *  or paint a pixel. (`white-space` itself is NOT on this list — plugin-wide it
+ *  demonstrably moves widths, so it is re-grounded and compared.) `transition` (added to
+ *  the base `button` rule at the Obsidian 1.14.0 pin bump) belongs in the same bucket for
+ *  the same reason — a transition-timing declaration changes how a value ANIMATES, never
+ *  its resting or final computed value, which is all this sweep ever samples — but is
+ *  deliberately NOT added to the list below: `BTN_PROPS` never sampled it in the first
+ *  place, so it was never "compared and then excluded" the way the other two were, and
+ *  adding it here would misstate that history. This paragraph is the record instead. */
 const BTN_PROPS_EXCLUDED = ['user-select', '-webkit-app-region'];
 
 /** SC-205 — the states the sweep samples. `rest` was the whole gate until SC-205, and TWO of

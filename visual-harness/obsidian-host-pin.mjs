@@ -33,8 +33,16 @@ import path from 'path';
  * the copy, re-extract" — would replace the pinned model with an older one for everyone.
  * That is the exact rot this module exists to prevent, arrived at from the other direction.
  * Bump it in the same commit that re-extracts the copy.
+ *
+ * SC-202 pin-bump round (2026-09-02): 1.13.7 -> 1.14.0. The machine this pin is maintained
+ * on self-updated mid-session; 1.14.0's base `button` rule gained exactly one new
+ * declaration (`transition: var(--button-transition)`, last in source order) versus 1.13.7
+ * — everything else in the six button-reaching rules is byte-identical. This bump is
+ * UNRELATED to SC-202's own round-1 starting pin for the real app.css (still 1.13.7, sha256
+ * f612f1e8f36486fa57f3b8bd45f0c848409d5b168002e757a13c6d286a7b4c41 — that pin is this
+ * ticket's own later fetch/pin round's decision to revisit, not this commit's).
  */
-export const PINNED_OBSIDIAN = '1.13.7';
+export const PINNED_OBSIDIAN = '1.14.0';
 
 const parseVersion = (v) => {
 	const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim());
