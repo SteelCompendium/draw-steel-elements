@@ -662,34 +662,27 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 const chromeItem = (root: HTMLElement, id: string) =>
 	root.querySelector(`[data-dse-chrome-item="${id}"]`) as HTMLButtonElement | null;
 
-describe('SC-191 slice 4: the ⋯ chrome menu carries all five items (spec §D)', () => {
-	test('add a round / add a hero / set limits… / Clear all / Reset progress all render as real, aria-labelled chrome items', async () => {
+describe('SC-191 fix round 2: the ⋯ chrome menu carries exactly FOUR items — no Clear all (ledger 2026-09-03)', () => {
+	test('add a round / add a hero / set limits… / Reset progress render as real, aria-labelled chrome items; Clear all is NOT one of them', async () => {
 		const { root } = await renderMontage(montageMidYaml);
-		const ids = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]')).map((el) =>
-			el.getAttribute('data-dse-chrome-item'),
-		);
-		expect(ids).toEqual(
-			expect.arrayContaining([
-				'montage-add-round',
-				'montage-add-hero',
-				'montage-set-limits',
-				'montage-clear-all',
-				'montage-reset-progress',
-			]),
+		const ids = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]'))
+			.map((el) => el.getAttribute('data-dse-chrome-item'))
+			.filter((id): id is string => !!id && id.startsWith('montage-'));
+		expect(ids.sort()).toEqual(
+			['montage-add-hero', 'montage-add-round', 'montage-reset-progress', 'montage-set-limits'].sort(),
 		);
 		expect(chromeItem(root, 'montage-add-round')?.getAttribute('aria-label')).toBe('Add a round');
 		expect(chromeItem(root, 'montage-add-hero')?.getAttribute('aria-label')).toBe('Add a hero');
 		expect(chromeItem(root, 'montage-set-limits')?.getAttribute('aria-label')).toBe('Set limits…');
-		expect(chromeItem(root, 'montage-clear-all')?.getAttribute('aria-label')).toBe('Clear all');
 		expect(chromeItem(root, 'montage-reset-progress')?.getAttribute('aria-label')).toBe('Reset progress');
+		expect(chromeItem(root, 'montage-clear-all')).toBeNull();
 	});
 
-	test('read-only host: none of the five montage ⋯ items render (F1 §4.4 — no dead-end panel item)', async () => {
+	test('read-only host: none of the four montage ⋯ items render (F1 §4.4 — no dead-end panel item)', async () => {
 		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
 		expect(chromeItem(root, 'montage-add-round')).toBeNull();
 		expect(chromeItem(root, 'montage-add-hero')).toBeNull();
 		expect(chromeItem(root, 'montage-set-limits')).toBeNull();
-		expect(chromeItem(root, 'montage-clear-all')).toBeNull();
 		expect(chromeItem(root, 'montage-reset-progress')).toBeNull();
 	});
 
@@ -727,24 +720,13 @@ describe('SC-191 slice 4: the ⋯ chrome menu carries all five items (spec §D)'
 	});
 });
 
-describe('T-6: Reset progress / Clear all — clear successes/failures/round/skills_used/entries, keep config', () => {
+describe('T-6: Reset progress (⋯ item) / Clear all (done-state bar) — clear successes/failures/round/skills_used/entries, keep config', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 		Notice.notices.length = 0;
 	});
 
-	test.each([
-		['montage-reset-progress', 'Montage progress reset'],
-		['montage-clear-all', 'Montage progress cleared'],
-	])('"%s" zeroes progress AND entries, rebuilds to the `pending` band, and persists', async (itemId, noticeText) => {
-		jest.useFakeTimers();
-		const { root, host } = await renderMontage(montageMidYaml);
-
-		chromeItem(root, itemId)!.click();
-		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
-
-		expect(Notice.notices).toContain(noticeText);
-		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+	function assertProgressCleared(rebuilt: HTMLElement, host: ReturnType<typeof makeHost>): void {
 		expect(heroRows(rebuilt)).toHaveLength(5);
 		// current_round reset to 1 -> round 1 is CURRENT again (an open socket), not a past
 		// dash — entries are gone, so nothing is recorded there any more.
@@ -759,6 +741,157 @@ describe('T-6: Reset progress / Clear all — clear successes/failures/round/ski
 		expect(host.replaceSource).toHaveBeenCalledTimes(1);
 		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
 		expect(written).not.toContain('entries:');
+	}
+
+	test('"Reset progress" (⋯ item, reachable on a LIVE montage) zeroes progress AND entries, rebuilds to the `pending` band, and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // not complete
+
+		chromeItem(root, 'montage-reset-progress')!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(Notice.notices).toContain('Montage progress reset');
+		assertProgressCleared(host.containerEl.firstElementChild as HTMLElement, host);
+	});
+
+	test('"Clear all" (the done-state bar\'s danger button, fix round 2) zeroes progress AND entries the same way, and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageDoneYaml); // complete
+		const clearAllBtn = root.querySelector('.dse-mt__actionrow button[aria-label="Clear all"]') as HTMLButtonElement;
+		expect(clearAllBtn).not.toBeNull();
+		clearAllBtn.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(Notice.notices).toContain('Montage progress cleared');
+		assertProgressCleared(host.containerEl.firstElementChild as HTMLElement, host);
+	});
+});
+
+describe('SC-191 fix round 2: the bottom action bar (mock6.js `actionBar()`)', () => {
+	test('LIVE state (not complete): `Log an action…` (accent) · `Undo` · `End round N`, in that DOM order, no Reopen/Clear all', async () => {
+		const { root } = await renderMontage(montageMidYaml); // current_round 3, not complete
+		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
+		expect(bar.getAttribute('data-complete')).toBe('off');
+		const buttons = Array.from(bar.querySelectorAll('button'));
+		expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Log an action…', 'Undo', 'End round 3']);
+		expect(buttons[0].classList.contains('dse-btn--accent')).toBe(true);
+		expect(bar.querySelector('button[aria-label="Reopen"]')).toBeNull();
+		expect(bar.querySelector('button[aria-label="Clear all"]')).toBeNull();
+	});
+
+	test('"Undo" is disabled with no entries logged yet, and enabled once one exists', async () => {
+		const { root: bare } = await renderMontage(); // default fixture, no entries
+		expect((bare.querySelector('.dse-mt__actionrow button[aria-label="Undo"]') as HTMLButtonElement).disabled).toBe(
+			true,
+		);
+		const { root: mid } = await renderMontage(montageMidYaml); // has entries
+		expect((mid.querySelector('.dse-mt__actionrow button[aria-label="Undo"]') as HTMLButtonElement).disabled).toBe(
+			false,
+		);
+	});
+
+	test('"Undo" removes the MOST RECENTLY LOGGED entry (last in entries[] order) and restores its tally/skill contribution, persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml);
+		// fixture-mid.yaml's LAST entry: Talin, round 2, assist, skill Track — an assist,
+		// so undoing it must NOT move successes/failures (only the skill/entry list).
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Undo"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('successes: 5'); // unchanged (assist never tallies)
+		expect(written).toContain('failures: 2'); // unchanged
+		// Talin's round-2 assist is gone; Talin's round-1 success (an earlier log) survives.
+		expect(written).not.toMatch(/hero: Talin\n\s*round: 2/);
+		expect(written).toMatch(/hero: Talin\n\s*round: 1/);
+		jest.useRealTimers();
+	});
+
+	test('"End round N" shows the round being ended, advances `current_round` by one, and persists — the sheet keeps logging into the new current round', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // current_round: 3, rounds: 3
+		const endBtn = root.querySelector('.dse-mt__actionrow button[aria-label="End round 3"]') as HTMLButtonElement;
+		expect(endBtn).not.toBeNull();
+		endBtn.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('current_round: 4');
+		// Ending the last round with no limit reached exhausts the montage (model.ts's own
+		// isExhausted: current_round > rounds) — the outcome band re-derives `complete`
+		// live, no separate "mark complete" write.
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(outcomeBand(rebuilt).getAttribute('data-band')).not.toBe('pending');
+		expect((rebuilt.querySelector('.dse-mt__actionrow') as HTMLElement).getAttribute('data-complete')).toBe('on');
+		jest.useRealTimers();
+	});
+
+	test('COMPLETE state (success-limit reached, montage-done fixture): stands down to `Reopen` + danger `Clear all`, no Log/Undo/End round', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
+		expect(bar.getAttribute('data-complete')).toBe('on');
+		expect(bar.querySelector('button[aria-label="Log an action…"]')).toBeNull();
+		expect(bar.querySelector('button[aria-label="Undo"]')).toBeNull();
+		expect(bar.querySelector(('button[aria-label^="End round"]'))).toBeNull();
+		const clearAll = bar.querySelector('button[aria-label="Clear all"]') as HTMLButtonElement;
+		expect(clearAll).not.toBeNull();
+		expect(clearAll.classList.contains('dse-btn--danger')).toBe(true);
+	});
+
+	test('COMPLETE by a LIMIT (montage-done: success_limit reached): `Reopen` is NOT offered — a limit is final', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		expect(root.querySelector('.dse-mt__actionrow button[aria-label="Reopen"]')).toBeNull();
+	});
+
+	test('COMPLETE by ROUNDS ONLY (no limit reached): `Reopen` IS offered, and extends `rounds` to make the montage live again', async () => {
+		jest.useFakeTimers();
+		// success_limit 6/failures under 3, current_round 4 > rounds 3 — exhausted by
+		// rounds alone, matching the "End round N" test above's own end state.
+		const { root, host } = await renderMontage(
+			[
+				'title: Reopen Case',
+				'rounds: 3',
+				'success_limit: 6',
+				'failure_limit: 3',
+				'successes: 4',
+				'failures: 1',
+				'participants:',
+				'  - name: Kira',
+				'    skills_used: []',
+				'current_round: 4',
+			].join('\n'),
+		);
+		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
+		expect(bar.getAttribute('data-complete')).toBe('on');
+		const reopenBtn = bar.querySelector('button[aria-label="Reopen"]') as HTMLButtonElement;
+		expect(reopenBtn).not.toBeNull();
+		reopenBtn.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('rounds: 4'); // extended — 4 == current_round again, live
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect((rebuilt.querySelector('.dse-mt__actionrow') as HTMLElement).getAttribute('data-complete')).toBe('off');
+		jest.useRealTimers();
+	});
+
+	test('read-only host: every bar button renders real-disabled, never omitted (owner ruling I-6)', async () => {
+		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
+		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
+		const buttons = Array.from(bar.querySelectorAll('button')) as HTMLButtonElement[];
+		expect(buttons.length).toBeGreaterThan(0);
+		for (const b of buttons) expect(b.disabled).toBe(true);
+	});
+
+	test('read-only + complete: the done-state bar buttons also render real-disabled', async () => {
+		const { root } = await renderMontage(montageDoneYaml, { canPersist: false });
+		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
+		expect(bar.getAttribute('data-complete')).toBe('on');
+		const clearAll = bar.querySelector('button[aria-label="Clear all"]') as HTMLButtonElement;
+		expect(clearAll.disabled).toBe(true);
 	});
 });
 

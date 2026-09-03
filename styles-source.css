@@ -4541,16 +4541,19 @@ Shared globals
 		color: var(--dse-vp);
 	}
 
-	/* -- SLICE 4: "Log an action…" (ledger 2026-08-29: renamed off "Record…"; placement
-	   "at the bottom" accepted for lack of a better home) — one centred accent button
-	   between the outcome band and the foot guide. A write affordance, so (like the
-	   board's own controls) it never needs print reach: `.dse-btn` is already print-hidden
-	   plugin-wide (print rule 4), so this whole row lives in ONE Steel-only tier, the same
-	   choice the strip made in slice 3 (spec §E names only the board grid/outcome band/
-	   guide panel as needing print reach — this row is none of those). -- */
+	/* -- SLICE 4 + FIX ROUND 2: the bottom action bar (mock6.js `actionBar()`) — LIVE:
+	   `Log an action…` (accent) · `Undo` · `End round N`; COMPLETE: `Reopen` (when
+	   reopenable) · `Clear all` (danger) — between the outcome band and the foot guide.
+	   Every child is a write affordance, so (like the board's own controls) the row never
+	   needs print reach: `.dse-btn` is already print-hidden plugin-wide (print rule 4), so
+	   this whole row lives in ONE Steel-only tier, the same choice the strip made in
+	   slice 3 (spec §E names only the board grid/outcome band/guide panel as needing print
+	   reach — this row is none of those). -- */
 	.dse-mt__actionrow {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: center;
+		gap: 0.5em;
 		margin-top: 0.62rem;
 	}
 

@@ -1,22 +1,32 @@
-// SC-191 impl spec §I slices 2-4 — MontageView on the settled `roster`/`merged` design
-// (spec §A design freeze): HeadView (cardHead + crest/deck/round-chip) over an optional
-// description brief, the StripView cheat-sheet (slice 3), the BoardView grid (Heroes ×
-// rounds × Tally, read from `model.entries`), the OutcomeBandView (the merged
-// verdict/tracks/notes band, including the `pending` band model.ts returns at 0/0), the
-// bottom "Log an action…" row (slice 4), and the GuideView foot rules panel (slice 3).
-// Replaces the pre-SC-191 RoundTrackView (steppers + a bare outcome chip) and
-// ParticipantsView (skill-chip/record-form list) — both deleted in slice 2.
+// SC-191 impl spec §I slices 2-4 + fix round 2 — MontageView on the settled
+// `roster`/`merged` design (spec §A design freeze): HeadView (cardHead +
+// crest/deck/round-chip) over an optional description brief, the StripView cheat-sheet
+// (slice 3), the BoardView grid (Heroes × rounds × Tally, read from `model.entries`), the
+// OutcomeBandView (the merged verdict/tracks/notes band, including the `pending` band
+// model.ts returns at 0/0), the bottom action bar (slice 4 + fix round 2), and the
+// GuideView foot rules panel (slice 3). Replaces the pre-SC-191 RoundTrackView (steppers +
+// a bare outcome chip) and ParticipantsView (skill-chip/record-form list) — both deleted
+// in slice 2.
 //
-// SLICE 4: the hand-rolled ⋯ `Menu` is gone (HeadView.ts) — every ⋯ item (add a round /
-// add a hero / set limits… / Clear all / Reset progress) now rides the SC-169 chrome
-// panel through `chromeItems()` (the SC-182 seam SkillsView already established: a
-// definition-level `chrome.items()` sees only `{model, def}` and cannot reach
-// `this.update`/`this.persist`). The board's cells/row-act/add-hero controls and this
-// file's own bottom "Log an action…" button all open `LogActionModal` (kit
-// managedModal, the SC-186 `ConditionsModal` precedent); every mutation a modal or a
-// chrome item triggers runs through model.ts's delta-write helpers (spec §B.3) and then
-// the SAME commit() shape Reset always used — rebuild, then debounce-persist, never
-// from render.
+// SLICE 4: the hand-rolled ⋯ `Menu` is gone (HeadView.ts) — every ⋯ item now rides the
+// SC-169 chrome panel through `chromeItems()` (the SC-182 seam SkillsView already
+// established: a definition-level `chrome.items()` sees only `{model, def}` and cannot
+// reach `this.update`/`this.persist`). The board's cells/row-act/add-hero controls, the
+// bar's `Log an action…`, and a recorded cell's edit affordance all open `LogActionModal`
+// (kit managedModal, the SC-186 `ConditionsModal` precedent); every mutation a modal, a
+// bar button or a chrome item triggers runs through model.ts's delta-write helpers (spec
+// §B.3) and then the SAME commit() shape Reset always used — rebuild, then
+// debounce-persist, never from render.
+//
+// FIX ROUND 2 (ledger 2026-09-03): the settled mock's bottom action bar (mock6.js
+// `actionBar()`) was dropped by a spec omission, not a Scott ruling — restored here:
+// `End round N` (the ONLY control that advances `current_round` — model.ts confirms it
+// was previously touched only by parse/reset) and `Undo` (removes the most recently
+// logged entry) join `Log an action…` in the LIVE bar; the bar stands down to `Reopen` +
+// danger `Clear all` once the montage is COMPLETE, mirroring the mock's own done-state
+// bar. `Clear all` moved OUT of the ⋯ menu (now four items, not five) — it lives only in
+// the done-state bar, sharing `resetMontageProgress` with Reset progress rather than
+// being a second ⋯ label for the identical action.
 //
 // Reset here clears PROGRESS only (successes/failures/current_round/each participant's
 // skills_used) — the Director-set config (title, description, rounds, limits, participant
@@ -24,11 +34,7 @@
 // the board after their tallies were just zeroed would render a board that visibly
 // contradicts the outcome band it sits above (five filled cells over a "Not started" band) —
 // the same whole-model-mutation shape as before, just now covering the field the board
-// reads. "Clear all" (the danger-drawn ⋯ item the mock shows) shares this exact
-// implementation with "Reset progress" — neither the ledger nor the mock ever gives the
-// two labels distinct semantics beyond the icon/wording the mock draws, so this slice does
-// not invent a second, undocumented destructive scope (a full roster/config wipe) for
-// "Clear all" — see the slice-4 report's "Scope notes".
+// reads.
 import { Component, Notice } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { ChromeMenuItem } from '@/framework/chrome/types';
@@ -38,12 +44,15 @@ import {
 	addMontageHero,
 	addMontageRound,
 	correctMontageEntry,
+	endMontageRound,
 	logMontageEntry,
+	montageReopenable,
 	montageTallies,
 	nextHeroToAct,
 	removeMontageEntry,
 	resetMontageProgress,
 	setMontageLimits,
+	undoLastMontageEntry,
 } from './model';
 import { HeadView } from './HeadView';
 import { BoardView } from './BoardView';
@@ -56,6 +65,11 @@ import { MontageAddHeroModal, MontageSetLimitsModal } from './ConfigModals';
 
 const STRIP_SLOT = 'montage.strip';
 const GUIDE_SLOT = 'montage.guide';
+
+/** A read-only/no-op bar button never fires — `disabled` suppresses it — but
+ *  iconButton's `onClick` is mandatory; the same convention BoardView.ts's own
+ *  `STUB_NOOP` establishes. */
+const STUB_NOOP = (): void => {};
 
 export class MontageView extends ElementView<MontageModel> {
 	protected async onMount(root: HTMLElement, model: MontageModel): Promise<void> {
@@ -93,7 +107,7 @@ export class MontageView extends ElementView<MontageModel> {
 			() => this.openAddHero(),
 		).build(container);
 		new OutcomeBandView(model).build(container);
-		this.buildLogActionRow(container, model, canPersist, cycleOwner);
+		this.buildActionBar(container, model, canPersist, cycleOwner);
 		// The foot rules guide (spec §A: "collapsed by default"). Its "Each test" block
 		// dedups against the strip's own pinned state (spec §A round-5/6 ruling) — read
 		// ONCE at build time from the strip's just-mounted `isOpen()`, and kept correct on
@@ -112,20 +126,65 @@ export class MontageView extends ElementView<MontageModel> {
 	}
 
 	/**
-	 * "Log an action…" (ledger 2026-08-29: renamed off "Record…" for being "really
-	 * confusing"; placement "at the bottom" accepted for lack of a better home) — the
-	 * bar-level path to the same sheet a cell socket or the row-act chip opens,
-	 * pre-filled with the current round and the next hero yet to act in it (round-4
-	 * report: "the current round, and the next hero who has not yet acted in it").
-	 * Omitted (F1 §4.4: no dead-end write affordance) when read-only, when the roster is
-	 * empty (nobody to pre-fill), or once the montage is COMPLETE — a finished montage
-	 * offers nothing new to log; per-cell corrections still work through the board.
+	 * FIX ROUND 2 — the bottom action bar, mirroring mock6.js's `actionBar()` exactly
+	 * (DOM order, labels, icons, danger styling): LIVE state is `Log an action…`
+	 * (accent) · `Undo` · `End round N` (mock6.js:1458-1460); COMPLETE state stands down
+	 * to `Reopen` (only when reopenable — model.ts's own doc) · `Clear all` (danger,
+	 * mock6.js:1420-1425). The mock's own fourth live-state control, `more` (⋯), is the
+	 * SC-169 chrome panel here, not a bar button — never duplicated.
+	 *
+	 * Read-only: every button in the bar renders real-disabled rather than the row being
+	 * omitted (owner ruling I-6, "explicit read-only states" — the board's own
+	 * convention, matched here for consistency within one bar rather than mixing
+	 * disabled-but-visible new controls with an omitted old one).
 	 */
-	private buildLogActionRow(container: HTMLElement, model: MontageModel, canPersist: boolean, owner: Component): void {
-		if (!canPersist || montageTallies(model).complete) return;
-		const hero = nextHeroToAct(model) ?? model.participants?.[0]?.name;
-		if (!hero) return;
+	private buildActionBar(container: HTMLElement, model: MontageModel, canPersist: boolean, owner: Component): void {
+		const complete = montageTallies(model).complete;
 		const row = container.createDiv({ cls: 'dse-mt__actionrow' });
+		row.setAttribute('data-complete', complete ? 'on' : 'off');
+		const disabled = !canPersist;
+
+		if (complete) {
+			if (montageReopenable(model)) {
+				iconButton(
+					row,
+					{
+						icon: 'undo',
+						label: 'Reopen',
+						text: 'Reopen',
+						disabled,
+						onClick: disabled
+							? STUB_NOOP
+							: () => {
+									addMontageRound(model);
+									void this.commit();
+								},
+					},
+					owner,
+				);
+			}
+			iconButton(
+				row,
+				{
+					icon: 'trash',
+					label: 'Clear all',
+					text: 'Clear all',
+					variant: 'danger',
+					disabled,
+					onClick: disabled
+						? STUB_NOOP
+						: () => {
+								new Notice('Montage progress cleared');
+								resetMontageProgress(model);
+								void this.commit();
+							},
+				},
+				owner,
+			);
+			return;
+		}
+
+		const hero = nextHeroToAct(model) ?? model.participants?.[0]?.name;
 		iconButton(
 			row,
 			{
@@ -133,7 +192,47 @@ export class MontageView extends ElementView<MontageModel> {
 				label: 'Log an action…',
 				text: 'Log an action…',
 				variant: 'accent',
-				onClick: () => this.openSheet({ kind: 'new', hero, round: model.current_round }),
+				// No dead end (F1 §4.4): a real host with an empty roster has nobody to
+				// pre-fill, so this stays disabled rather than opening a sheet with no Hero.
+				disabled: disabled || !hero,
+				onClick:
+					disabled || !hero
+						? STUB_NOOP
+						: () => this.openSheet({ kind: 'new', hero, round: model.current_round }),
+			},
+			owner,
+		);
+		const hasEntries = (model.entries?.length ?? 0) > 0;
+		iconButton(
+			row,
+			{
+				icon: 'undo',
+				label: 'Undo',
+				text: 'Undo',
+				disabled: disabled || !hasEntries,
+				onClick:
+					disabled || !hasEntries
+						? STUB_NOOP
+						: () => {
+								undoLastMontageEntry(model);
+								void this.commit();
+							},
+			},
+			owner,
+		);
+		iconButton(
+			row,
+			{
+				icon: 'chevron-right',
+				label: `End round ${model.current_round}`,
+				text: `End round ${model.current_round}`,
+				disabled,
+				onClick: disabled
+					? STUB_NOOP
+					: () => {
+							endMontageRound(model);
+							void this.commit();
+						},
 			},
 			owner,
 		);
@@ -173,12 +272,15 @@ export class MontageView extends ElementView<MontageModel> {
 
 	// -------------------------------------------------------------- the ⋯ chrome items
 
-	/** SC-182 — the five ⋯ items spec §D names (add a round / add a hero / set limits… /
-	 *  Clear all / Reset progress), the VIEW-contributed twin of `chromeItems()`
-	 *  SkillsView already established: a definition-level `chrome.items()` sees only
-	 *  `{model, def}` and cannot reach `this.update`/`this.persist`, which every item
-	 *  here needs. Omitted entirely on a read-only host (F1 §4.4): no dead-end panel
-	 *  item, matching the board's own read-only rule. */
+	/** SC-182 — the FOUR ⋯ items spec §D names, corrected by fix round 2's ruling (ledger
+	 *  2026-09-03): add a round / add a hero / set limits… / Reset progress. `Clear all`
+	 *  is REMOVED from here — it lives only in the done-state action bar now (sharing
+	 *  `resetMontageProgress` with Reset progress), closing the "two ⋯ labels for one
+	 *  action" confusion the original five-item list caused. The VIEW-contributed twin of
+	 *  `chromeItems()` SkillsView already established: a definition-level
+	 *  `chrome.items()` sees only `{model, def}` and cannot reach `this.update`/
+	 *  `this.persist`, which every item here needs. Omitted entirely on a read-only host
+	 *  (F1 §4.4): no dead-end panel item, matching the board's own read-only rule. */
 	chromeItems(): ChromeMenuItem[] {
 		if (!this.model || !this.cx.host.canPersist) return [];
 		const model = this.model;
@@ -203,16 +305,6 @@ export class MontageView extends ElementView<MontageModel> {
 				icon: 'hourglass',
 				label: 'Set limits…',
 				onClick: () => this.openSetLimits(),
-			},
-			{
-				id: 'montage-clear-all',
-				icon: 'trash',
-				label: 'Clear all',
-				onClick: () => {
-					new Notice('Montage progress cleared');
-					resetMontageProgress(model);
-					void this.commit();
-				},
 			},
 			{
 				id: 'montage-reset-progress',

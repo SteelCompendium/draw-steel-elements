@@ -30,12 +30,15 @@ for what needs action.
   resolves the test and picks the result for you. An already-logged cell opens the same
   form pre-filled for correcting a mistake or removing it outright, and the skill-reuse
   rule (a hero can't use the same skill twice in one montage) warns live in the form,
-  never blocking. Two collapsible reference panels — a **Test tiers** cheat-sheet above the
-  board (the shipped Power Roll badges, flipped to tiers-as-rows) and a **Running a montage
-  test** guide at the foot — stay closed by default and print expanded. The hand-rolled ⋯
-  menu is gone: the card's standard element menu now carries **Add a round**, **Add a
-  hero**, **Set limits…**, **Clear all** and **Reset progress**. Notes typed on any logged
-  test list under the outcome band, tagged with the hero and round. See
+  never blocking. The bar under the board carries **End round N** (the only way to advance
+  the round) and **Undo** (removes whatever was logged most recently); once the montage is
+  finished it stands down to **Reopen** (only when it simply ran out of rounds — a limit is
+  final) and a danger **Clear all**. Two collapsible reference panels — a **Test tiers**
+  cheat-sheet above the board (the shipped Power Roll badges, flipped to tiers-as-rows) and
+  a **Running a montage test** guide at the foot — stay closed by default and print
+  expanded. The hand-rolled ⋯ menu is gone: the card's standard element menu now carries
+  **Add a round**, **Add a hero**, **Set limits…** and **Reset progress**. Notes typed on
+  any logged test list under the outcome band, tagged with the hero and round. See
   [GM Trackers](docs/gm-trackers.md) → "Montage Test tracker".
 - [FEATURE] **The squad captain's Stamina bonus now applies to the minion pool**
   (SC-195). "While a minion squad has a captain, each minion in the squad gains the

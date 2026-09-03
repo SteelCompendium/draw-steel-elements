@@ -20,6 +20,9 @@ import {
 	addMontageHero,
 	setMontageLimits,
 	resetMontageProgress,
+	endMontageRound,
+	undoLastMontageEntry,
+	montageReopenable,
 } from '../../../src/elements/montage/model';
 import type { MontageModel, MontageEntry } from '../../../src/elements/montage/model';
 import { parseYaml } from '../../mocks/obsidian';
@@ -332,5 +335,71 @@ describe('SC-191 slice 4: the ⋯ chrome item config helpers', () => {
 		// Config survives.
 		expect(m.title).toBe('Cross the Gap');
 		expect(m.success_limit).toBe(base.success_limit);
+	});
+});
+
+// SC-191 FIX ROUND 2 (ledger 2026-09-03) — the bottom action bar's three model helpers.
+describe('SC-191 fix round 2: endMontageRound / undoLastMontageEntry / montageReopenable', () => {
+	test('endMontageRound advances `current_round` by one — confirmed the ONLY other writers are parse() and resetMontageProgress()', () => {
+		const m = { ...base, current_round: 2 };
+		endMontageRound(m);
+		expect(m.current_round).toBe(3);
+	});
+
+	test('ending the last round exhausts the montage (isExhausted via current_round > rounds) — montageTallies.complete flips live, no separate write', () => {
+		const m = { ...base, rounds: 3, current_round: 3, success_limit: 0, failure_limit: 0 };
+		expect(montageTallies(m).complete).toBe(false);
+		endMontageRound(m);
+		expect(m.current_round).toBe(4);
+		expect(montageTallies(m).complete).toBe(true);
+	});
+
+	test('undoLastMontageEntry removes the LAST entry (log order, never a round/hero sort) and restores its tally/skill contribution', () => {
+		const m: MontageModel = {
+			...base,
+			participants: [{ name: 'Kira', skills_used: ['Nature'] }],
+			entries: [
+				{ hero: 'Kira', round: 2, result: 'success', skill: 'Nature' }, // logged first despite round 2
+				{ hero: 'Kira', round: 1, result: 'failure' }, // logged SECOND, despite round 1 — out-of-order log
+			],
+			successes: 1,
+			failures: 1,
+		};
+		undoLastMontageEntry(m);
+		// The round-1 failure (last PUSHED) is undone, not the round-2 success — proves the
+		// tie-break is array/log order, not a round-number sort.
+		expect(m.entries).toEqual([{ hero: 'Kira', round: 2, result: 'success', skill: 'Nature' }]);
+		expect(m.failures).toBe(0);
+		expect(m.successes).toBe(1); // unaffected
+	});
+
+	test('undoLastMontageEntry is a no-op with no entries (nothing to undo)', () => {
+		const m: MontageModel = { ...base };
+		expect(() => undoLastMontageEntry(m)).not.toThrow();
+		expect(m.entries).toBeUndefined();
+	});
+
+	test('montageReopenable: true when complete by ROUNDS ALONE (no limit reached)', () => {
+		const m = { ...base, rounds: 2, current_round: 3, success_limit: 6, failure_limit: 3, successes: 4, failures: 1 };
+		expect(montageTallies(m).complete).toBe(true);
+		expect(montageReopenable(m)).toBe(true);
+	});
+
+	test('montageReopenable: false once the SUCCESS limit is reached — a limit is final', () => {
+		const m = { ...base, success_limit: 6, successes: 6, failures: 1 };
+		expect(montageTallies(m).complete).toBe(true);
+		expect(montageReopenable(m)).toBe(false);
+	});
+
+	test('montageReopenable: false once the FAILURE limit is reached — a limit is final', () => {
+		const m = { ...base, failure_limit: 3, failures: 3, successes: 1 };
+		expect(montageTallies(m).complete).toBe(true);
+		expect(montageReopenable(m)).toBe(false);
+	});
+
+	test('montageReopenable: false on a live (not complete) montage', () => {
+		const m = { ...base, successes: 1, failures: 0 };
+		expect(montageTallies(m).complete).toBe(false);
+		expect(montageReopenable(m)).toBe(false);
 	});
 });

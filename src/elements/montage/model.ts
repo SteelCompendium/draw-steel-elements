@@ -405,14 +405,15 @@ export function setMontageLimits(m: MontageModel, successLimit: number, failureL
 	m.failure_limit = Math.max(0, Math.trunc(failureLimit));
 }
 
-/** "Reset progress" — zeroes PLAY STATE only (successes/failures/current_round/entries/
- *  each participant's skills_used); the Director-set config (title, description,
- *  rounds, limits, participant roster) survives. Extracted from the pre-slice-4
- *  MontageView.resetProgress() so both ⋯ items that clear progress ("Reset progress"
- *  and "Clear all" — spec §D's five-item menu names both, and neither the ledger nor
- *  the mock ever gives them distinct semantics beyond the label/icon the mock draws —
- *  see slice-4 report "Scope notes") share one implementation rather than two
- *  hand-copies that could drift. */
+/** "Reset progress" (⋯ menu) / "Clear all" (the done-state bar, fix round 2) — zeroes
+ *  PLAY STATE only (successes/failures/current_round/entries/each participant's
+ *  skills_used); the Director-set config (title, description, rounds, limits,
+ *  participant roster) survives. Extracted from the pre-slice-4
+ *  MontageView.resetProgress() so both callers share one implementation rather than two
+ *  hand-copies that could drift — fix round 2 (ledger 2026-09-03) removed "Clear all"
+ *  from the ⋯ menu (it now lives only in the done-state bar, mirroring the mock), which
+ *  is what makes "one action, two former menu labels" moot; the two callers now read as
+ *  two different SURFACES for the same reset, not two menu items for it. */
 export function resetMontageProgress(m: MontageModel): void {
 	m.successes = 0;
 	m.failures = 0;
@@ -421,6 +422,52 @@ export function resetMontageProgress(m: MontageModel): void {
 	for (const participant of m.participants ?? []) {
 		participant.skills_used = [];
 	}
+}
+
+/** FIX ROUND 2 — "End round N" (the bottom action bar, mock6.js:1460): the ONLY control
+ *  that advances `current_round`. Confirmed before writing this: `model.ts` touches
+ *  `current_round` in exactly two places pre-fix-2 — `parse()` (`d.current_round ?? 1`)
+ *  and `resetMontageProgress()` (`= 1`) — neither of which moves it forward, so a
+ *  Director had no way to leave round 1 without hand-editing the YAML. A delta write
+ *  (`+= 1`), same shape as `addMontageRound`: ending the last round (`current_round`
+ *  reaches `rounds + 1`) is what makes `isExhausted`/`montageTallies(m).complete` true —
+ *  no separate "mark complete" step, the outcome band re-derives it live as it always
+ *  has (model.ts's own `isExhausted`). The sheet keeps logging into whatever
+ *  `current_round` now is. */
+export function endMontageRound(m: MontageModel): void {
+	m.current_round += 1;
+}
+
+/** FIX ROUND 2 — "Undo" (the bottom action bar, mock6.js:1459): removes the MOST
+ *  RECENTLY LOGGED entry. Tie-break: `entries[]` preserves LOG ORDER (§B.5 "entries
+ *  preserve their authored array order"; `logMontageEntry` always `.push()`es), so "most
+ *  recent" is unambiguously the last array element — never a sort by `round`/`hero`,
+ *  which would disagree with log order whenever a Director logs out of board order (the
+ *  sheet's Round field allows any round, spec §D). Delegates to the same
+ *  `removeMontageEntry` the sheet's own Remove button uses — one undo path, not a
+ *  second hand-rolled delta. No-op on an empty/absent `entries[]` (nothing to undo —
+ *  the caller disables the button on that same condition). */
+export function undoLastMontageEntry(m: MontageModel): void {
+	const entries = m.entries;
+	if (!entries || entries.length === 0) return;
+	removeMontageEntry(m, entries[entries.length - 1]);
+}
+
+/** FIX ROUND 2 — is "Reopen" offered on a COMPLETE montage? The mock only draws the
+ *  button (mock6.js:1424, a static screenshot); this is the behaviour the ledger's
+ *  ruling specifies: reopenable ONLY when the montage ran out of ROUNDS with neither
+ *  limit reached — extending `rounds` (`addMontageRound`) makes it live again. A limit
+ *  reached (success OR failure) is a FINAL verdict — "Clear all"/"Reset progress" is the
+ *  only way back, matching the book's own "hit the success limit → total success;
+ *  otherwise, at the failure limit or out of rounds: partial/total failure" framing
+ *  (docs/gm-trackers.md's own guide text) where a limit is a verdict and running out of
+ *  rounds is just running out of clock. */
+export function montageReopenable(m: MontageModel): boolean {
+	const tallies = montageTallies(m);
+	if (!tallies.complete) return false;
+	const successLimitHit = m.success_limit > 0 && m.successes >= m.success_limit;
+	const failureLimitHit = m.failure_limit > 0 && m.failures >= m.failure_limit;
+	return !successLimitHit && !failureLimitHit;
 }
 
 export function montageBandCopy(m: MontageModel): MontageBandCopy {

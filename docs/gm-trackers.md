@@ -121,12 +121,30 @@ montage test** is a collapsed panel covering the same tiers plus how to set limi
 a montage ends — leave both closed for a quick glance, or open either when you need the
 detail.
 
+**Ending a round.** Below the board, next to **Log an action…**, the **End round N**
+button moves everyone on to the next round — it's the only way to advance the round short
+of hand-editing the block. If ending a round uses up the last one and no limit has been
+hit, the montage finishes there (the outcome banner updates on its own).
+
+**Undoing the last thing you logged.** The **Undo** button beside it removes whatever was
+logged most recently — handy right after a slip of the finger. It only undoes the single
+most recent entry; for anything further back, click that cell directly to correct or
+remove it.
+
+**When a montage finishes.** The board stands down to two buttons: **Reopen**, if the
+montage simply ran out of rounds with no limit reached (it adds one more round and picks
+up where you left off), and **Clear all**, which wipes the running successes, failures,
+the round, and everyone's logged actions and used skills so the same block can run the
+montage again from the top. Once a success or failure *limit* has actually been hit, that
+result is final — **Reopen** isn't offered, and **Clear all** is the only way back.
+
 **The card's menu (⋯).** Hover the card for its menu panel: **Add a round** extends the
 montage by one round; **Add a hero** adds a new participant by name; **Set limits…** opens
-a small form to change the success/failure limits; **Clear all** and **Reset progress**
-both clear the running successes, failures, the round, everyone's logged actions and used
-skills — your setup (title, description, limits, roster) survives either one, so the same
-block can run the montage again.
+a small form to change the success/failure limits; **Reset progress** clears the running
+successes, failures, the round, everyone's logged actions and used skills — your setup
+(title, description, limits, roster) survives it, so the same block can run the montage
+again. (This is the same reset **Clear all** performs once the montage is finished — just
+reachable at any time, not only once the board is done.)
 
 ## Project tracker (`ds-project`)
 
