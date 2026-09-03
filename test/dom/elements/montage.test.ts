@@ -484,6 +484,46 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 		expect(items[1].querySelector('.dse-mt__note-hero')?.textContent).toBe('Bram');
 	});
 
+	// Fix-round-1 L-4 follow-up (folded into slice 3 per the owner ruling, sc191-decisions.md
+	// 2026-09-02): the sort-key fix (rosterIndex, not localeCompare — OutcomeBandView.ts's
+	// buildNotes) landed in fix round 1, but `montageMidYaml`'s two notes are one-per-round,
+	// so the old (alphabetical) and new (roster-order) keys coincidentally agreed there and
+	// the test above passes either way. This fixture puts two notes on the SAME round with
+	// heroes that sort oppositely by name vs. by roster position (Yenna is listed FIRST in
+	// `participants`, but "Bram" < "Yenna" alphabetically) — a real regression gate for the
+	// fix, not an implicit one.
+	test('L-4: two same-round notes list in ROSTER order, not alphabetical order', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 1',
+				'success_limit: 5',
+				'failure_limit: 3',
+				'participants:',
+				'  - name: Yenna',
+				'    skills_used: []',
+				'  - name: Bram',
+				'    skills_used: []',
+				'entries:',
+				'  - hero: Bram',
+				'    round: 1',
+				'    result: failure',
+				'    note: Bram note.',
+				'  - hero: Yenna',
+				'    round: 1',
+				'    result: success',
+				'    note: Yenna note.',
+				'current_round: 1',
+			].join('\n'),
+		);
+		const items = Array.from(root.querySelectorAll('.dse-mt__note'));
+		expect(items).toHaveLength(2);
+		// Roster order (Yenna, then Bram) — NOT alphabetical (Bram, then Yenna), which is
+		// what `entries[]`'s own authored order (Bram first) also disagrees with, so this
+		// fixture rules out both wrong sort keys at once.
+		expect(items[0].querySelector('.dse-mt__note-hero')?.textContent).toBe('Yenna');
+		expect(items[1].querySelector('.dse-mt__note-hero')?.textContent).toBe('Bram');
+	});
+
 	test('no notes on the default fixture: the notes block does not render at all', async () => {
 		const { root } = await renderMontage();
 		expect(root.querySelector('.dse-mt__notes')).toBeNull();

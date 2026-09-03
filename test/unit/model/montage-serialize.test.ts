@@ -312,6 +312,21 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 		expect(serialize(emptyEntries)).not.toContain('entries:');
 	});
 
+	// Fix-round-1 L-3 (folded into slice 3 per the owner ruling, sc191-decisions.md
+	// 2026-09-02): the fix itself (`parse`'s `d.participants.length > 0` guard, ~model.ts:155)
+	// landed in fix round 1; this test is the dedicated pin the follow-up flagged as missing —
+	// same pattern as `entries`' own omit-when-empty test just above, mirrored for
+	// `participants` specifically rather than left to coincide with an `entries` assertion.
+	test('participants is omitted when absent, and when authored as an empty array (fix-round-1 L-3)', () => {
+		const withoutParticipants = parseLikePipeline('rounds: 2');
+		expect(withoutParticipants.participants).toBeUndefined();
+		expect(serialize(withoutParticipants)).not.toContain('participants:');
+
+		const emptyParticipants = parseLikePipeline('participants: []\nrounds: 2');
+		expect(emptyParticipants.participants).toBeUndefined();
+		expect(serialize(emptyParticipants)).not.toContain('participants:');
+	});
+
 	test('skill/note are omitted per entry when empty — never serialized as null or an empty string', () => {
 		const model = parseLikePipeline(
 			['entries:', '  - hero: Kira', '    round: 1', '    result: success', '    skill: ""', '    note: ""', 'rounds: 2'].join('\n'),

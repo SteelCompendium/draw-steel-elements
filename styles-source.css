@@ -3921,8 +3921,90 @@ Shared globals
 		padding: 0.32rem 0.85rem;
 	}
 
+	/* -- the foot rules guide (slice 3, spec §D "foot rules panel") — LAYOUT ONLY here.
+	   This is one of the three named exceptions to "everything Steel-only" (spec §E): a
+	   rules panel force-opens under print (the plugin-wide `.dse-collapse__region[hidden]`
+	   print rule every kit/collapsible carries), so its geometry has to be correct there
+	   too. Colour lives in the Steel skin tier below, same split as the board/outcome band
+	   above it. The cheat-sheet strip is NOT here — spec §E names only the board grid, the
+	   outcome band and this panel as needing to reach print; the strip's whole block
+	   (layout + colour) lives in the Steel-only tier instead (§J1/§J2 below). */
+	.dse-mt__guide {
+		margin-top: 0.55rem;
+		border-top: 1px solid var(--dse-border);
+	}
+	.dse-mt__guide-hint {
+		margin-left: auto;
+	}
+	.dse-mt__guide-body {
+		display: grid;
+		grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+		gap: 0.7rem 1.1rem;
+		margin-top: 0.4rem;
+		padding: 0.65rem 0.8rem 0.7rem;
+	}
+	.dse-mt__guide-block--wide {
+		grid-column: 1 / -1;
+	}
+	.dse-mt__guide-title {
+		margin: 0 0 0.15em;
+	}
+	.dse-mt__guide-lede {
+		margin: 0 0 0.4em;
+	}
+	.dse-mt__guide-foot {
+		margin: 0.4em 0 0;
+	}
+	.dse-mt__guide-table {
+		display: grid;
+		/* `repeat(var(--n), …)` is not legal CSS — the same sanctioned geometry seam the
+		   board's own `--dse-mt-cols` uses (spec §D2 §5), mirrored here for the guide's two
+		   differently-shaped tables (4 columns / 3 columns). */
+		grid-template-columns: var(--dse-mt-guide-cols, auto 1fr);
+		align-items: baseline;
+		column-gap: 0.8em;
+	}
+	.dse-mt__guide-th {
+		padding-bottom: 0.3em;
+	}
+	.dse-mt__guide-td {
+		padding: 0.26em 0;
+	}
+	.dse-mt__guide-td[data-col='key'] {
+		white-space: nowrap;
+	}
+	.dse-mt__guide-list {
+		display: grid;
+		gap: 0.32em;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.dse-mt__guide-item {
+		position: relative;
+		padding-left: 0.95em;
+	}
+	.dse-mt__guide-block[data-stub='on'] {
+		padding-bottom: 0.15em;
+	}
+
 	/* -- 300px sidebar leaf: the board re-lays to one band per hero -- */
 	@container dse-mt (max-width: 420px) {
+		/* The guide's tier/limits tables are the one thing here that genuinely cannot
+		   narrow further — "success, consequence" crushed to one word per line is worse
+		   than a scroll box (ledger 2026-08-29 round-4 judgment call, drew no objection
+		   through round 6: "the tier table side-scrolling at 300px … stand as-is unless
+		   reopened"). The strip (spec §J1) is the surface that had to stop side-scrolling;
+		   this panel never promised to. */
+		.dse-mt__guide-body {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.dse-mt__guide-block--wide {
+			overflow-x: auto;
+		}
+		.dse-mt__guide-block--wide .dse-mt__guide-table {
+			min-width: 22em;
+		}
 		.dse-mt__board {
 			grid-template-columns: minmax(0, 1fr);
 			gap: 0;
@@ -4437,6 +4519,325 @@ Shared globals
 		color: var(--dse-vp);
 	}
 
+	/* -- the foot rules guide: colour only (layout is the structural tier above) -- */
+	.dse-mt__guide-hint {
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__guide-body {
+		background: var(--dse-surface-sunken);
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: var(--dse-radius);
+	}
+	.dse-mt__guide-title {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		font-weight: 700;
+		color: var(--dse-metal-bright);
+	}
+	.dse-mt__guide-lede,
+	.dse-mt__guide-foot {
+		font-size: var(--dse-fs-micro);
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__guide-foot {
+		font-style: italic;
+	}
+	.dse-mt__guide-th {
+		border-bottom: 1px solid var(--dse-metal-faint);
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		color: var(--dse-metal);
+	}
+	.dse-mt__guide-td {
+		font-size: var(--dse-fs-caption);
+		line-height: 1.35;
+		color: var(--dse-fg-muted);
+	}
+	.dse-mt__guide-td[data-col='key'] {
+		font-family: var(--dse-font-mono);
+		font-variant-numeric: tabular-nums;
+		color: var(--dse-fg);
+	}
+	/* ◆ — the brief block's own bullet (`.dse-mt__brief::before` above), reused so the
+	   card's "here is a fact, not a control" vocabulary stays ONE glyph. */
+	.dse-mt__guide-item {
+		font-size: var(--dse-fs-caption);
+		line-height: 1.4;
+		color: var(--dse-fg-muted);
+	}
+	.dse-mt__guide-item::before {
+		content: '◆';
+		position: absolute;
+		left: 0;
+		top: 0.02em;
+		font-size: var(--dse-fs-micro);
+		color: var(--dse-metal);
+	}
+	.dse-mt__guide-stub-line {
+		margin: 0;
+		font-size: var(--dse-fs-caption);
+		line-height: 1.4;
+		color: var(--dse-fg-muted);
+	}
+
+	/* ==================================================================== */
+	/*  the cheat-sheet strip (slice 3, spec §D "cheat-sheet handle + strip")  */
+	/* ==================================================================== */
+	/* Screen-only by construction (this whole block sits inside the Steel skin
+	   tier, which is `:not([data-dse-print="on"])`) — spec §E names only the board grid,
+	   the outcome band and the guide panel as needing to reach print; the strip is not
+	   among them, so unlike those three it carries BOTH its layout and its colour here,
+	   in one tier, rather than splitting across structural+Steel. */
+	.dse-mt__strip {
+		margin: 0 0 0.85rem;
+	}
+	.dse-mt__strip-hint {
+		margin-left: auto;
+		font-size: var(--dse-fs-micro);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.09em;
+		color: var(--dse-fg-faint);
+	}
+	/* §1 of round 6's own note: `.dse-pr`'s own treatment — a sunken well with a hairline,
+	   a radius and `overflow: hidden` (styles-source.css ~:7116) — is what lets the tier
+	   washes and the 3px tier edges below run to the row's full bleed and be cut off
+	   square at the well's corners, exactly as they are in a real Power Roll panel. */
+	.dse-mt__strip-well {
+		margin-bottom: 0.45rem;
+		padding: 0.5rem 0.8rem 0.5rem;
+	}
+	.dse-mt__tier-rows {
+		border: 1px solid var(--dse-metal-faint);
+		border-radius: var(--dse-radius);
+		background: var(--dse-surface-sunken);
+		overflow: hidden;
+	}
+	/* THE ROW — the shipped `.dse-pr__row` tier wash, quoted (spec §D), not approximated:
+	   `--t` per tier, a 3px `--t` left edge, a hairline top rule, and a `--tw` gradient.
+	   `data-tierstyle='edge'` (ledger 2026-08-30, spec §A) fades the wash at 12% of the
+	   row instead of the Power Roll's own 60% — this strip's row is a LATTICE of three
+	   cells being compared to each other, and a 60% fade would tint Easy, half of Medium
+	   and none of Hard, which reads as a difference between the columns that does not
+	   exist. `edge` keeps every channel of the rhyme (same hue, same 3px edge, same
+	   direction, same token) and moves the fade's end inside the badge gutter instead, so
+	   the wash tints the row's KEY — which is what the hue names — and every cell sits on
+	   one common ground. `color-mix()` is forbidden here (Chromium 106 floor, SC-160/
+	   SC-171): the static `--tw` twins, copied verbatim from styles-source.css's
+	   `.dse-pr__row` tier rules, ARE the whole implementation — there is no enhancement
+	   gate to write. */
+	.dse-mt__tier-row {
+		display: grid;
+		/* §J1 — the shipped Power Roll badge's own border box (51.25 × 22.14px), not a
+		   local width/padding override. `3.21em` = the badge's `3em` content box plus its
+		   Steel padding (`2 × 0.28em`) at the row's `--dse-fs-secondary` size; narrow drops
+		   to `2.85em` at the badge's own narrow `--dse-fs-caption` size (below). NO
+		   width/max-width rule on `.dse-pr__badge` anywhere in this file — the mock's
+		   `.mt6-row__key .dse-pr__badge { width: 100%; max-width: 4.6em }` inflated the
+		   badge 45% past the component it was quoting; deleting that override (not
+		   patching it) is the entire fix. */
+		grid-template-columns: var(--dse-mt-key, 3.21em) repeat(3, minmax(0, 1fr));
+		align-items: center;
+		column-gap: 0.7em;
+		padding: 0.3em 0.7em;
+		border-left: 3px solid var(--t, var(--dse-tier-low));
+		border-top: 1px solid var(--dse-metal-faint);
+		background-image: linear-gradient(90deg, var(--tw), transparent 12%);
+	}
+	.dse-mt__tier-row[data-tier='low'] {
+		--t: var(--dse-tier-low);
+		--tw: rgba(231, 76, 60, 0.08); /* #e74c3c */
+	}
+	.dse-mt__tier-row[data-tier='mid'] {
+		--t: var(--dse-tier-mid);
+		--tw: rgba(240, 180, 41, 0.08); /* #f0b429 */
+	}
+	.dse-mt__tier-row[data-tier='high'] {
+		--t: var(--dse-tier-high);
+		--tw: rgba(76, 175, 106, 0.08); /* #4caf6a */
+	}
+	.dse-mt__tier-row[data-tier='crit'] {
+		--t: var(--dse-tier-crit);
+		--tw: rgba(224, 176, 80, 0.08); /* #e0b050 */
+	}
+	/* SC-117/SC-126 bg-polarity: every translucent wash states its light twin. Only
+	   low/mid/high are re-listed — --dse-tier-crit is light/dark stable at #e0b050
+	   (styles-source.css ~:5580), so the dark --tw above is already correct for crit —
+	   the same exemption the shipped `.dse-pr__row` rules take. */
+	body.theme-light & {
+		.dse-mt__tier-row[data-tier='low'] {
+			--tw: rgba(192, 57, 43, 0.08); /* #c0392b */
+		}
+		.dse-mt__tier-row[data-tier='mid'] {
+			--tw: rgba(185, 119, 14, 0.08); /* #b9770e */
+		}
+		.dse-mt__tier-row[data-tier='high'] {
+			--tw: rgba(30, 132, 73, 0.08); /* #1e8449 */
+		}
+	}
+	.dse-mt__tier-row--head {
+		border-left-color: transparent;
+		border-top: none;
+		padding-top: 0.42em;
+		padding-bottom: 0.36em;
+		background-image: none;
+		border-bottom: 1px solid var(--dse-metal-faint);
+	}
+	.dse-mt__tier-row--head + .dse-mt__tier-row {
+		border-top: none;
+	}
+	.dse-mt__tier-col {
+		font-size: var(--dse-fs-label);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.1em;
+		font-weight: 700;
+		color: var(--dse-metal-bright);
+		white-space: nowrap;
+	}
+	.dse-mt__tier-key {
+		display: flex;
+		align-items: center;
+		min-width: 0;
+		/* No width/max-width on .dse-pr__badge (§J1) — the shipped 3em box is the point. */
+	}
+	.dse-mt__tier-cell {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+		padding: 0.24em 0;
+		min-width: 0;
+	}
+	.dse-mt__tier-mark {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 0.28em;
+	}
+	/* THE SEAL — the board's own ink language at cheat-sheet size (round 5's note, still
+	   true): a Director who has learned to read a board cell has already learned to read
+	   this strip. Ring style (solid / hatched-pressed) + glyph (check / X) + the word
+	   beside it carry the outcome; colour is the last, reinforcing channel only
+	   (colourblind rule, spec §E). A local `.dse-mt__tier-*` recipe rather than literally
+	   sharing `.dse-mt__cell-glyph` — the same "don't couple two unrelated surfaces"
+	   reasoning spec §D gives for not putting `.dse-pr__row` on this node. */
+	.dse-mt__tier-seal {
+		position: relative;
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		width: 1.5em;
+		height: 1.5em;
+		border-radius: 50%;
+		border: 1px solid var(--dse-metal-line);
+		color: var(--dse-fg-faint);
+
+		svg {
+			width: 0.8em;
+			height: 0.8em;
+		}
+	}
+	.dse-mt__tier-seal[data-kind='success'] {
+		background: none;
+		border: 2px solid var(--dse-turn-done);
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__tier-seal[data-kind='failure'] {
+		background:
+			repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 5px),
+			rgba(0, 0, 0, 0.28);
+		border: 2px solid var(--dse-danger);
+		box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+		color: var(--dse-danger);
+
+		body.theme-light & {
+			background:
+				repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.11) 0 1px, transparent 1px 5px),
+				rgba(0, 0, 0, 0.05);
+			box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+		}
+	}
+	/* THE PIP (§J2) — a small forged gold tab riding the seal's bottom-right corner. CSS
+	   only, no `<svg>`: an outer clipped box (the 1px steel-grey rim, --dse-metal-line)
+	   with a fill box inset 1px inside it (gold --dse-vp + a faint top-down sheen,
+	   --dse-sheen-soft) — the same outline-plus-fill idea the shipped badge's own
+	   clip-path polygons use (.dse-pr__badge::before). ▲ reward / ▼ consequence, keyed off
+	   the CELL's `data-rider` (not the seal's — the pip is the seal's child, so scoping the
+	   selector from the cell keeps the rider vocabulary in ONE place with the word beside
+	   it). Colour is decoration only: the triangle SHAPE plus the "with a reward"/"with a
+	   consequence" WORD in `.dse-mt__tier-word-rider` carry the meaning (colourblind
+	   rule) — gold is chosen because it is neither semantic colour on this card (never
+	   green/success or red/failure), so a gold ▼ riding a green success seal can never be
+	   misread as marking a failure the way a red mark could. */
+	.dse-mt__tier-pip {
+		position: absolute;
+		right: -0.34em;
+		bottom: -0.26em;
+		width: 0.82em;
+		height: 0.68em;
+	}
+	.dse-mt__tier-pip::before,
+	.dse-mt__tier-pip::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+	}
+	.dse-mt__tier-pip::before {
+		background: var(--dse-metal-line);
+	}
+	.dse-mt__tier-pip::after {
+		inset: 1px;
+		background: var(--dse-vp);
+		background-image: var(--dse-sheen-soft);
+	}
+	.dse-mt__tier-cell[data-rider='reward'] .dse-mt__tier-pip::before,
+	.dse-mt__tier-cell[data-rider='reward'] .dse-mt__tier-pip::after {
+		clip-path: polygon(50% 0, 100% 100%, 0 100%);
+	}
+	.dse-mt__tier-cell[data-rider='consequence'] .dse-mt__tier-pip::before,
+	.dse-mt__tier-cell[data-rider='consequence'] .dse-mt__tier-pip::after {
+		clip-path: polygon(0 0, 100% 0, 50% 100%);
+	}
+	/* THE WORDS. Two lines, always the same two, so every cell in a column has one
+	   silhouette and the eye reads down without re-measuring (round 5's argument, kept). */
+	.dse-mt__tier-word {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		line-height: 1.25;
+	}
+	.dse-mt__tier-word-kind {
+		font-size: var(--dse-fs-caption);
+		font-variant: small-caps;
+		text-transform: lowercase;
+		letter-spacing: 0.06em;
+		color: var(--dse-fg);
+	}
+	.dse-mt__tier-word-rider {
+		font-size: var(--dse-fs-micro);
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__strip-foot {
+		margin: 0.5em 0 0;
+		font-size: var(--dse-fs-micro);
+		font-style: italic;
+		color: var(--dse-fg-faint);
+	}
+	.dse-mt__strip-legend {
+		margin: 0.28em 0 0;
+		font-size: var(--dse-fs-micro);
+		color: var(--dse-fg-faint);
+	}
+
 	@container dse-mt (max-width: 420px) {
 		/* The crest costs ~2.8em of head width; at 300px the deck line wraps one word per
 		   line without this (impl spec §A, round2.css's own narrow note). Same stand-down
@@ -4461,6 +4862,41 @@ Shared globals
 			text-transform: lowercase;
 			letter-spacing: 0.07em;
 			color: var(--dse-fg-faint);
+		}
+
+		/* -- the strip degrades in place; it never side-scrolls (spec §I acceptance) --
+		   The words go; the pip + seal stay, and the pip HOLDS its size while the seal
+		   shrinks around it (round 6's own argument, carried into §J2 verbatim) — it is
+		   already the smallest mark on the card and it is now the ONLY thing carrying the
+		   rider at this width, so it must not shrink into illegibility along with
+		   everything else. */
+		.dse-mt__tier-row {
+			--dse-mt-key: 2.85em; /* §J1 — the shipped badge's narrow border box */
+			column-gap: 0.3em;
+			padding: 0.28em 0.4em;
+		}
+		/* §J1's own math: 2.85em is the badge's border box at `--dse-fs-caption` (0.8em),
+		   not at the row's default `--dse-fs-secondary` (0.9em) — a font-size scoped to
+		   THIS key column, never a width/max-width (the shipped 3em content box is
+		   untouched; only the em base it multiplies against shrinks, exactly as the
+		   badge already does everywhere else the row narrows). */
+		.dse-mt__tier-key .dse-pr__badge {
+			font-size: var(--dse-fs-caption);
+		}
+		.dse-mt__tier-cell {
+			justify-content: center;
+		}
+		.dse-mt__tier-col {
+			font-size: var(--dse-fs-micro);
+			letter-spacing: 0.06em;
+			text-align: center;
+		}
+		.dse-mt__tier-word {
+			display: none;
+		}
+		.dse-mt__tier-seal {
+			width: 1.35em;
+			height: 1.35em;
 		}
 	}
 }

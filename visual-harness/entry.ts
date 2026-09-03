@@ -1150,6 +1150,27 @@ export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; 
 			fixture: 'fight',
 			click: '.dse-init__group--enemies .dse-init__entry:first-of-type .dse-init__cell[data-instance-key="0-3"]',
 		},
+		// SC-191 slice 3 — the cheat-sheet strip PINNED open: both collapsibles default
+		// closed, so the resting `montage-mid` shot never shows the flipped tier table, the
+		// shipped badges, or the gold pip. `.dse-mt__strip` scopes the click to the strip's
+		// OWN header (the guide panel mounts a second `.dse-collapse__header` on the same
+		// page), same convention as negotiation-pr-checked's `button.` scoping prefix.
+		{
+			id: 'montage-strip-pinned',
+			element: 'montage',
+			fixture: 'mid',
+			click: '.dse-mt__strip .dse-collapse__header',
+		},
+		// SC-191 slice 3 — the foot rules guide OPEN: the collapsed-by-default state (ledger
+		// 2026-08-28) is the resting shot; this is the "check it once at the beginning"
+		// state Scott asked for, with the strip left closed so the guide's un-deduped
+		// "Each test" table (the full four-tier book table) is what the shot proves.
+		{
+			id: 'montage-guide-open',
+			element: 'montage',
+			fixture: 'mid',
+			click: '.dse-mt__guide .dse-collapse__header',
+		},
 	];
 
 /**
