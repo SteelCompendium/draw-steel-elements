@@ -21,7 +21,15 @@ import path from 'path';
 const SRC_DIR = path.join(__dirname, '..', '..', '..', 'src');
 const rawCss = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'styles-source.css'), 'utf8');
 const blockStart = rawCss.indexOf('SC-202 r1 — INPUT/STEPPER HOST RE-GROUNDING');
-const block = rawCss.slice(blockStart);
+/** MED-C (fix round 2, re-review) — comments stripped BEFORE matching, same as
+ *  `inputHostRegrounding.test.ts`'s own `flat` derivation. Round 1's `block` kept the
+ *  block's prose comments in the searched text, and the block's own comment names every
+ *  covered class several times over — so a bare `toContain` on `block` kept passing even
+ *  after the reviewer renamed all SIX rule occurrences of `.dse-condal__input` and left
+ *  the NINE comment occurrences untouched: exactly the HIGH-3 defect this test exists to
+ *  catch, reintroduced with the suite green. `codeOnly` is what every assertion below
+ *  actually searches. */
+const codeOnly = rawCss.slice(blockStart).replace(/\/\*[\s\S]*?\*\//g, '');
 
 function walk(dir: string, out: string[] = []): string[] {
 	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -87,7 +95,16 @@ describe('every plugin input/textarea class is re-grounded against the host', ()
 		// oversight.
 		if (site.type === 'checkbox' || site.type === 'color') continue;
 		test(`${site.file}: .${site.cls} (${site.tag}${site.type ? `, type=${site.type}` : ''})`, () => {
-			expect(block).toContain(`.${site.cls}`);
+			// A SELECTOR POSITION, not a bare substring: `.` + the class name, not
+			// immediately followed by another word/hyphen character (so `.dse-mt__char-input`
+			// cannot be satisfied by a comment mentioning `.dse-mt__char-input-extra`, and a
+			// comment sentence that happens to contain the class as plain prose no longer
+			// counts at all — comments were already stripped out of `codeOnly` above).
+			expect(codeOnly).toMatch(new RegExp('\\.' + escapeRegex(site.cls!) + '(?![\\w-])'));
 		});
 	}
 });
+
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

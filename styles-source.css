@@ -13638,11 +13638,18 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 }
 /* GROUP 2 — `.dse-condal__input` (HIGH-3): its OWN pre-existing declarations (~:2109),
    restated verbatim at a specificity that survives the host, plus `border-radius: 0` and
-   `caret-color`, which it never declared because there was no host to lose them to. */
+   `caret-color`, which it never declared because there was no host to lose them to.
+   MED-A (fix round 2) — deliberately does NOT restate `outline: none`. That declaration
+   used to be here, at the same (0,2,0) as the shared kit focus-ring rule
+   (`.dse-condal__input:focus-visible`, ~:12072/12091) — a genuine tie, broken by SOURCE
+   ORDER, and this rule is declared ~1,550 lines LATER, so it silently killed the ring the
+   fix round's own report claimed this control had gained. Nothing needs it: Obsidian's
+   own `outline` declaration on the base input rule is (0,1,1), which already loses to the
+   ring's (0,2,0) — there was never a leak here to re-ground, only a dead restatement that
+   happened to also kill a DIFFERENT rule's declaration on the same property. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-condal__input) {
 	border: none;
 	background: none;
-	outline: none;
 	padding: 0;
 	font: inherit;
 	color: var(--dse-fg);
@@ -13688,11 +13695,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	border-color: var(--dse-border);
 	box-shadow: none;
 }
-/* `.dse-condal__input` (HIGH-3): border stays `none` (GROUP 2), so a border-color
-   restatement here would be cosmetically inert — only the phantom box-shadow ring needs
-   closing. */
+/* `.dse-condal__input` (HIGH-3, INFO-A fix round 2): border-color restated even though
+   border-style stays `none` (GROUP 2) makes it cosmetically inert TODAY — measured
+   diverging anyway (`rgba(220,226,230,.88)` bare vs `rgb(85,85,85)` host at
+   focus-visible), and an inert divergence left alone is exactly the kind of thing a
+   future rule change quietly turns into a real leak. One line closes it for good. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(.dse-condal__input):focus-visible {
+	border-color: var(--dse-border);
 	box-shadow: none;
 }
 
@@ -13719,9 +13729,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	background: var(--dse-surface);
 	border-color: var(--dse-border);
 }
+/* INFO-A fix round 2: border-color restated here too, same reasoning as the
+   focus-visible entry above — inert while border-style stays `none`, but real and
+   worth closing rather than leaving for a later round to rediscover. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(.dse-condal__input):hover:not(:disabled) {
 	background: none;
+	border-color: var(--dse-border);
 }
 
 /* `:disabled` — opacity + cursor, all twelve, one rule (HIGH-2, fix round). None of the
@@ -13764,4 +13778,43 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-form__raw
 	)::placeholder {
 	color: var(--dse-fg-muted);
+}
+
+/* `::-webkit-inner-spin-button`/`::-webkit-outer-spin-button` — hide the native number
+   spinner (MED-B, fix round 2). Obsidian's `input[type=number]::-webkit-inner-spin-button
+   { -webkit-appearance: none }` (app.css:8353) removes it in every real vault; the plugin
+   never re-grounded it, so the HARNESS alone reserves ~15px of the field's inner content
+   width for a spinner arrow-pair that a real vault never shows. Every number field in this
+   family already draws its own kit −/+ steppers, so the browser's native spinner is
+   redundant chrome, not a missing affordance — hiding it here MATCHES the vault's own
+   look, it doesn't invent one. Type=text/textarea members (`.dse-init__malice-quickadd-
+   label`, `.dse-mt__skill-input`, `.dse-condal__input`, `.dse-form__raw`) are deliberately
+   excluded: the pseudo-element only ever exists on a number input, so including them would
+   be a no-op, and naming only the type=number subset keeps this rule an honest list of
+   what it actually reaches. `margin: 0` matches Obsidian's own declaration verbatim —
+   nothing here sets a non-zero margin today, so it is a restatement, not a new decision. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(
+		.dse-stepper__input,
+		.dse-init__malice-quickadd-amount,
+		.dse-mt__char-input,
+		.dse-party__award-input,
+		.dse-prj__roll-input,
+		.dse-prj__points-input,
+		.dse-prj__char-input,
+		.dse-sedit__apply-input
+	)::-webkit-inner-spin-button,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(
+		.dse-stepper__input,
+		.dse-init__malice-quickadd-amount,
+		.dse-mt__char-input,
+		.dse-party__award-input,
+		.dse-prj__roll-input,
+		.dse-prj__points-input,
+		.dse-prj__char-input,
+		.dse-sedit__apply-input
+	)::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
 }

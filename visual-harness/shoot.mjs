@@ -1763,6 +1763,35 @@ function readPlaceholderColors() {
 	return out;
 }
 
+/** `::-webkit-inner-spin-button`'s reserved width (MED-B, fix round 2) — not a DOM state
+ *  either, sampled once at rest for every tagged `type='number'` node. The element-level
+ *  box (`width`/`padding`/`border`/the border-box rect) is IDENTICAL bare vs. host — that
+ *  is exactly why the rest-state comparison above never caught this: the spinner is an
+ *  extra pseudo-element Chromium reserves INSIDE the content box, invisible to any
+ *  property read on the element itself. The one thing that visibly shrinks when the
+ *  spinner is present is the space left for TEXT — so this measures that indirectly, the
+ *  way the review proved the leak: clear the value, force a one-character placeholder if
+ *  none exists, and read `getComputedStyle(el, '::placeholder').width` (the placeholder
+ *  text box fills exactly the inner content width, spinner included or not), then restore
+ *  both `value` and `placeholder` to what they were. */
+function readSpinnerWidths() {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-inputleak]')) {
+		if (n.type !== 'number') continue;
+		const hadPlaceholder = n.hasAttribute('placeholder');
+		const oldPlaceholder = n.getAttribute('placeholder');
+		const oldValue = n.value;
+		n.value = '';
+		if (!hadPlaceholder) n.setAttribute('placeholder', 'x');
+		const width = getComputedStyle(n, '::placeholder').width;
+		if (!hadPlaceholder) n.removeAttribute('placeholder');
+		else n.setAttribute('placeholder', oldPlaceholder);
+		n.value = oldValue;
+		out.push({ key: n.getAttribute('data-dse-inputleak'), width });
+	}
+	return out;
+}
+
 /** Sample every tagged input in one state, driving the state for real — same shape as
  *  `probeButtonsInState`. `cdp`/`docRootNodeId` are only used by the `hover` branch. */
 async function probeInputsInState(page, cdp, docRootNodeId, state, count, props) {
@@ -1903,6 +1932,7 @@ async function assertInputHostLeak(page) {
 			for (const p of r.problems) problems.push(`${bg}|host-absent|${state}: ${p}`);
 		}
 		const barePlaceholder = await page.evaluate(readPlaceholderColors);
+		const bareSpinner = await page.evaluate(readSpinnerWidths);
 
 		await injectRealHostCss(page, host.css);
 		const { root: hostRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
@@ -1949,6 +1979,28 @@ async function assertInputHostLeak(page) {
 				);
 			}
 		}
+
+		// ::-webkit-inner-spin-button (MED-B) — same "not a DOM state" shape as placeholder.
+		// Unlike placeholder, this one CAN differ across the same navigation for a reason
+		// that is not a leak: comparing the bare pass (before injection) against the host
+		// pass (after) is exactly the point, since the pseudo-element itself only exists at
+		// all while `-webkit-appearance` has not been set to `none`.
+		const hostSpinner = await page.evaluate(readSpinnerWidths);
+		const hostSpinByKey = new Map(hostSpinner.map((r) => [r.key, r]));
+		for (const b of bareSpinner) {
+			const h = hostSpinByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|spinner|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			if (b.width !== h.width) {
+				problems.push(
+					`${bg}|spinner|${b.key}: Obsidian's real app.css changes the inner-spin-button's ` +
+						`reserved width — placeholder width "${b.width}" without the host, "${h.width}" with it`,
+				);
+			}
+		}
 	}
 	if (problems.length) {
 		const shown = problems.slice(0, 60);
@@ -1961,7 +2013,7 @@ async function assertInputHostLeak(page) {
 		);
 		process.exit(1);
 	}
-	const stateLabels = [...INPUT_STATES, 'placeholder'];
+	const stateLabels = [...INPUT_STATES, 'placeholder', 'spinner'];
 	console.log(
 		`\ninput host-leak OK (${kindCount} input kinds × ${stateLabels.length} states ` +
 			`(${stateLabels.join('/')}) × dark/light = ${comparisons} comparisons against the real ` +

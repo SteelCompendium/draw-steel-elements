@@ -180,9 +180,15 @@ describe('SC-202 r1 fix round (HIGH-3) — the three modal-only controls get GRO
 	test('`.dse-condal__input` restates its own chromeless design, not the Steel field look', () => {
 		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-condal__input\\) \\{([^}]*)\\}'));
 		expect(g).not.toBeNull();
-		for (const decl of ['border: none;', 'background: none;', 'outline: none;', 'font: inherit;', 'border-radius: 0;']) {
+		for (const decl of ['border: none;', 'background: none;', 'font: inherit;', 'border-radius: 0;']) {
 			expect(g![1]).toContain(decl);
 		}
+		// MED-A (fix round 2, re-review): this rule must NOT restate `outline: none` — it
+		// used to, at the same (0,0,2,0) as the shared kit focus-ring rule's
+		// `.dse-condal__input:focus-visible`, and being declared ~1,550 lines later, silently
+		// killed the ring on a source-order tie. See the dedicated guard test below, which
+		// checks this for every selector the ring names, not just condal.
+		expect(g![1]).not.toContain('outline: none;');
 	});
 
 	test('`.dse-form__raw` gets the modal-section field material, and stays OUT of GROUP 1', () => {
@@ -230,6 +236,31 @@ describe('SC-202 r1 — the eight cousins join the Controls font slot and the sh
 		const ringBlock = rawCss.slice(ringStart, rawCss.indexOf('outline: 2px solid var(--dse-focus-ring);', ringStart));
 		for (const sel of COUSIN_INPUTS) {
 			expect(ringBlock).toContain(`${sel}:focus-visible,`);
+		}
+	});
+});
+
+describe('SC-202 r1 fix round 2 (MED-A) — no re-grounding rule kills the shared focus ring', () => {
+	test('no `:where(...)` rule in this block declares `outline: none` for a selector the shared kit ring also names', () => {
+		// MED-A, re-review: `.dse-condal__input`'s own GROUP-2 rule used to restate
+		// `outline: none` at the same (0,0,2,0) as the shared kit ring's own
+		// `.dse-condal__input:focus-visible` rule (~:12072/12091) — a genuine specificity
+		// tie, broken by SOURCE ORDER in the LATER rule's favour, silently killing a focus
+		// indicator the round's own report claimed the control had gained. This is the
+		// general guard the prescribed fix asked for: it would have failed on that
+		// regression, and fails on any future selector that repeats it.
+		const ringStart = rawCss.indexOf('.dse-btn:focus-visible,');
+		const ringBlock = rawCss.slice(ringStart, rawCss.indexOf('outline: 2px solid var(--dse-focus-ring);', ringStart));
+		const ringedSelectors = [...ringBlock.matchAll(/(\.dse-[\w-]+):focus-visible,/g)].map((m) => m[1]);
+		// The whole input family (stepper + 8 cousins + 3 modal controls) plus the
+		// non-input controls (buttons, tabs, etc.) the same rule already covered.
+		expect(ringedSelectors.length).toBeGreaterThanOrEqual(12);
+
+		const rules = [...flat.matchAll(/:where\(([^)]*)\)[^{]*\{([^}]*)\}/g)];
+		expect(rules.length).toBeGreaterThan(0);
+		for (const [, subjects, decls] of rules) {
+			if (!decls.includes('outline: none')) continue;
+			for (const sel of ringedSelectors) expect(subjects).not.toContain(sel);
 		}
 	});
 });
