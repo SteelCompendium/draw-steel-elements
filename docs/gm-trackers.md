@@ -66,30 +66,67 @@ builder recalculates every time it renders, so don't bother editing it.
 ```markdown
 ~~~ds-montage
 title: Cross the Ashfall Wastes
-rounds: 2
-success_limit: 5
+description: |
+  Forty miles of volcanic waste, and the ashfall is three days behind them. The heroes
+  have to find the pass, keep the mules alive, and reach the Cinder Gate before the sky
+  closes over it.
+rounds: 3
+success_limit: 6
 failure_limit: 3
 successes: 0
 failures: 0
-current_round: 1
 participants:
   - name: Kira
-    skills_used:
-      - Nature
-      - Endurance
+    skills_used: []
+  - name: Bram
+    skills_used: []
+entries: []
+current_round: 1
 ~~~
 ```
 
 ![A montage test tracker](Media/montage.png)
 
-Tracks the round, the running successes and failures against their limits, and which
-skills each participant has already used (the tracker warns you when someone reuses one).
-Record a test's outcome from the participant's row; the tally and round track update
-together.
+A working board for a Draw Steel montage test: one row per hero, one column per round, and
+a running tally beside each row. `description` is an optional brief — a few lines of prose
+about the montage — shown above the board.
 
-The menu (**⋮**) has a **Reset** that clears progress only — successes, failures, the
-round, and everyone's used skills. Your setup (title, limits, roster) survives it, so the
-same block can run the montage again.
+**Logging an action.** Click the **Log an action…** button at the bottom of the card, or
+click directly on a hero's cell for the round in play, and a small form opens: pick the
+hero and the round (both are pre-filled for you), pick success, failure or assist, and
+optionally name the skill used and add a note. Nothing is written until you press **Log**.
+The form also shows, as a reminder, which power roll result starts a success at each
+difficulty — and if you have [rolling turned on](settings.md#rolling), a **Roll** button
+right there resolves the test and picks the result for you.
+
+![The Log an action sheet](Media/montage-sheet-modal.png)
+
+**Correcting a mistake.** Click an already-logged cell (it shows a small pencil mark) to
+open the same form pre-filled with what's recorded, so you can change the result, the
+skill, or the note — or remove it outright with the **Remove** button. This is also how you
+fix a hero's typo'd result if you ever hand-edit the note directly.
+
+**Notes.** Anything you type in a test's Note field — a consequence, a complication, a
+reward — shows up listed under the outcome banner below the board, tagged with the hero and
+round it happened in.
+
+**The skill-reuse rule.** A hero can't use the same skill twice in one montage (the book's
+own rule). The tracker warns you right in the form when you try — it never blocks you,
+since the Director always has the final call.
+
+**Test tiers and running the montage.** Above the board, **Test tiers** is a collapsed
+strip you can open for a quick-reference table of what each power roll result means at
+each difficulty (with any reward or consequence noted). Below the board, **Running a
+montage test** is a collapsed panel covering the same tiers plus how to set limits and how
+a montage ends — leave both closed for a quick glance, or open either when you need the
+detail.
+
+**The card's menu (⋯).** Hover the card for its menu panel: **Add a round** extends the
+montage by one round; **Add a hero** adds a new participant by name; **Set limits…** opens
+a small form to change the success/failure limits; **Clear all** and **Reset progress**
+both clear the running successes, failures, the round, everyone's logged actions and used
+skills — your setup (title, description, limits, roster) survives either one, so the same
+block can run the montage again.
 
 ## Project tracker (`ds-project`)
 

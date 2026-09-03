@@ -93,6 +93,46 @@ malice:
 `,
 );
 
+// SC-191 slice 4 — the montage's own "Log an action…" sheet: the browser harness's
+// Modal shim has no positioning/backdrop CSS (obsidian-core.ts's mock just appends a bare
+// div), so `montage-sheet-log`'s browser-harness capture (visual-harness/entry.ts) proves
+// the sheet's own DOM/behaviour but not its real on-screen presentation. This REAL
+// Obsidian capture is the one that shows the actual centred, dimmed-backdrop modal a
+// Director sees. Round 3 of play (some tests logged, one open round) — the same shape as
+// the browser harness's own `mid` fixture, transcribed here since `body:` writes a real
+// note rather than reading the element's fixture file.
+const MONTAGE_MID = fence(
+	'ds-montage',
+	`
+title: Cross the Ashfall Wastes
+description: |
+  Forty miles of volcanic waste, and the ashfall is three days behind them. The heroes
+  have to find the pass, keep the mules alive, and reach the Cinder Gate before the sky
+  closes over it.
+rounds: 3
+success_limit: 6
+failure_limit: 3
+successes: 5
+failures: 2
+participants:
+  - name: Kira
+    skills_used: [Nature, Alertness]
+  - name: Bram
+    skills_used: [Endurance, Lift]
+entries:
+  - hero: Kira
+    round: 1
+    result: success
+    skill: Nature
+  - hero: Bram
+    round: 2
+    result: failure
+    skill: Lift
+    note: Dropped the water cask. Mules are thirsty; +1 Malice next encounter.
+current_round: 3
+`,
+);
+
 // docs/canvas-character-sheet.md's subject: several small elements laid out as a sheet.
 // Canvas text nodes render read-only by design (sourcePath '' -> canPersist false), which
 // is exactly what a reader should see before building one.
@@ -345,6 +385,18 @@ export const DOCS_SHOTS = [
 		// group in the body above.
 		pre: ['[data-dse-element="initiative"] .dse-init__entry:last-of-type .dse-init__cell'],
 		trigger: '[data-dse-element="initiative"] .dse-init__entry:last-of-type .dse-init__detail .dse-init__stamina',
+		ready: '.dse-modal .dse-modal__body',
+	},
+	// docs/gm-trackers.md → "Montage Test tracker": the real, centred, dimmed-backdrop
+	// "Log an action…" sheet (SC-191 slice 4) — see MONTAGE_MID's own doc for why this
+	// needs a real Obsidian capture rather than the browser harness's `montage-sheet-log`.
+	{
+		out: 'montage-sheet-modal.png',
+		source: 'obsidian',
+		kind: 'modal',
+		body: MONTAGE_MID,
+		element: 'montage',
+		trigger: '[data-dse-element="montage"] .dse-mt__actionrow button[aria-label="Log an action…"]',
 		ready: '.dse-modal .dse-modal__body',
 	},
 	// docs/writing-blocks.md / docs/advanced-usage.md → "Pinning a block to the sidebar"

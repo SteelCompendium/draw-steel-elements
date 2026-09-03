@@ -12,9 +12,9 @@ import type { ElementPipelineDeps } from '../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../src/framework/host/BlockHost';
 import { createElementRegistry } from '../src/framework/registry';
 import type { ElementRegistry } from '../src/framework/registry';
-import { createThemeService, DEFAULT_THEME_ID } from '../src/framework/seams/theme';
+import { createThemeService, DEFAULT_THEME_ID, registerThemeServiceForApp } from '../src/framework/seams/theme';
 import type { ThemeServiceInternal, DseThemeId } from '../src/framework/seams/theme';
-import { createPreferenceStore } from '../src/framework/seams/prefs';
+import { createPreferenceStore, registerPrefsForApp } from '../src/framework/seams/prefs';
 import { createRollService } from '../src/framework/roll/service';
 import type { PrefsStorage } from '../src/framework/seams/prefs';
 import { DSE_PREF_DESCRIPTORS } from '../src/prefs/catalog';
@@ -1113,8 +1113,19 @@ export const NARROW_SHOTS: { id: string; element: string; fixture: string; width
  * the resting golden. Declared on the page (not shoot.mjs), same convention as
  * NARROW_SHOTS.
  */
-export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; click: string }[] =
-	[
+export const INTERACTION_SHOTS: {
+	id: string;
+	element: string;
+	fixture: string;
+	click: string;
+	/** SC-191 slice 4 — a click that opens a `kit/managedModal` (`DseModal`) appends its
+	 *  DOM to `document.body`, a SIBLING of `#mount`, not a descendant — the ordinary
+	 *  `#mount`-only element screenshot every other interaction shot uses cannot capture
+	 *  it. `fullPage: true` routes this one entry through `page.screenshot({fullPage:
+	 *  true})` instead (shoot.mjs), the same branch `gallery` shots already use, so the
+	 *  modal's own DOM is included. */
+	fullPage?: boolean;
+}[] = [
 		// Selects the mid tier (12-16, data-tier="mid") — feature/statblock/featureblock/
 		// kit's power-roll panels are all static (`selectable` defaults false), so
 		// negotiation is the only element anywhere this state can be reached from. The
@@ -1170,6 +1181,18 @@ export const INTERACTION_SHOTS: { id: string; element: string; fixture: string; 
 			element: 'montage',
 			fixture: 'mid',
 			click: '.dse-mt__guide .dse-collapse__header',
+		},
+		// SC-191 slice 4 — the "Log an action…" sheet OPEN: the resting `montage-mid`
+		// shot never shows the modal (spec §F). The bottom action row's own accent
+		// button is the target — `mid` isn't complete (successes 5 < success_limit 6),
+		// so the row renders. `fullPage` (see the type doc above): the sheet is a
+		// `kit/managedModal`, appended to `document.body`, outside `#mount`.
+		{
+			id: 'montage-sheet-log',
+			element: 'montage',
+			fixture: 'mid',
+			click: '.dse-mt__actionrow button[aria-label="Log an action…"]',
+			fullPage: true,
 		},
 	];
 
@@ -1560,6 +1583,17 @@ export function makeHarnessDeps(): { deps: ElementPipelineDeps; theme: ThemeServ
 	const prefs = createPreferenceStore(storage);
 	prefs.describe(DSE_PREF_DESCRIPTORS);
 	const theme = createThemeService(prefs, plugin as any);
+	// SC-191 slice 4 — the FIRST harness capture to open a `kit/managedModal`
+	// (`montage-sheet-log`, entry.ts INTERACTION_SHOTS). `DseModal.open()` looks the live
+	// ThemeService/PreferenceStore up by `this.app` via these exact seams (managedModat.ts's
+	// own doc: "graceful no-op when nothing is registered — bare test/harness Apps") — real
+	// Obsidian gets this for free from main.ts's onload, which the harness never runs, so
+	// without these two calls every modal the harness ever opens renders unthemed (no
+	// data-dse-theme, so every Steel-scoped rule — which is nearly all of styles-source.css
+	// — never matches). Registering here is a pure ADDITION with no consumer before this
+	// slice: no prior harness capture opened a modal.
+	registerThemeServiceForApp(app as any, theme);
+	registerPrefsForApp(app as any, prefs);
 	const refs = createReferenceService(app as any, DEFAULT_SETTINGS);
 	const validation = createValidationService();
 	// Mirrors main.ts's initializeElementFrameworkV2: element schemas (e.g. Skills,

@@ -5,8 +5,23 @@
 // of the second describe block, updated red-to-green from slice 1's documented-bug marker).
 // The board/outcome-band VIEWS that consume these land in slice 2 (impl spec §I) and are
 // covered by test/dom/elements/montage.test.ts instead.
-import { parse, serialize, montageTallies, montageBandCopy, montageOutcome } from '../../../src/elements/montage/model';
-import type { MontageModel } from '../../../src/elements/montage/model';
+import {
+	parse,
+	serialize,
+	montageTallies,
+	montageBandCopy,
+	montageOutcome,
+	logMontageEntry,
+	correctMontageEntry,
+	removeMontageEntry,
+	wouldReuseSkill,
+	nextHeroToAct,
+	addMontageRound,
+	addMontageHero,
+	setMontageLimits,
+	resetMontageProgress,
+} from '../../../src/elements/montage/model';
+import type { MontageModel, MontageEntry } from '../../../src/elements/montage/model';
 import { parseYaml } from '../../mocks/obsidian';
 
 const parseLikePipeline = (source: string): MontageModel => parse(parseYaml(source), source);
@@ -142,5 +157,180 @@ describe('SC-191 §D: montageBandCopy — at-a-glance phrasing (quoted from mock
 
 	test('one recorded result is enough to leave pending — a single failure with nothing else reads the live `failure` band, never `pending`', () => {
 		expect(montageOutcome({ ...base, successes: 0, failures: 1 })).toBe('failure');
+	});
+});
+
+// SC-191 SLICE 4 — the write path (spec §C/§D): the actual delta-write helpers the sheet
+// and the ⋯ chrome items call, exercised directly (unit-level) rather than only through
+// hand-built before/after model literals (the tests above, slice 1/2's own coverage).
+describe('SC-191 slice 4: logMontageEntry/correctMontageEntry/removeMontageEntry — delta writes, never a recount', () => {
+	function withRoster(): MontageModel {
+		return {
+			...base,
+			participants: [
+				{ name: 'Kira', skills_used: ['Nature'] },
+				{ name: 'Bram', skills_used: [] },
+			],
+		};
+	}
+
+	test('logMontageEntry appends the entry, deltas the matching tally, and appends the skill occurrence', () => {
+		const m = withRoster();
+		logMontageEntry(m, { hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' });
+		expect(m.entries).toEqual([{ hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' }]);
+		expect(m.successes).toBe(1);
+		expect(m.failures).toBe(0);
+		expect(m.participants![1].skills_used).toEqual(['Endurance']);
+	});
+
+	test('logMontageEntry on an OLD-SHAPE model (successes: 4, no entries) — §C integrity probe 5: reads successes: 5 with a one-item entries list, never successes: 1', () => {
+		const before = parse(parseYaml('rounds: 2\nsuccess_limit: 6\nfailure_limit: 3\nsuccesses: 4\nfailures: 2\ncurrent_round: 2'), '');
+		expect(before.entries).toBeUndefined();
+		logMontageEntry(before, { hero: 'Kira', round: 2, result: 'success' });
+		expect(before.successes).toBe(5);
+		expect(before.entries).toHaveLength(1);
+	});
+
+	test('logMontageEntry never touches the tally for an `assist` result', () => {
+		const m = withRoster();
+		logMontageEntry(m, { hero: 'Bram', round: 1, result: 'assist' });
+		expect(m.successes).toBe(0);
+		expect(m.failures).toBe(0);
+	});
+
+	test('correctMontageEntry (success -> failure): undoes the old tally/skill, applies the new — Scott\'s ticket case ("that 13 was really a 17")', () => {
+		const m = withRoster();
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'failure', skill: 'Climb' };
+		m.entries = [entry];
+		m.successes = 0;
+		m.failures = 1;
+		m.participants![0].skills_used = ['Nature', 'Climb'];
+		correctMontageEntry(m, entry, { hero: 'Kira', round: 1, result: 'success', skill: 'Climb' });
+		expect(m.successes).toBe(1);
+		expect(m.failures).toBe(0);
+		// The skill is UNCHANGED across the correction — removed once, re-added once, net
+		// one occurrence, not two and not zero.
+		expect(m.participants![0].skills_used).toEqual(['Nature', 'Climb']);
+		expect(m.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success', skill: 'Climb' }]);
+	});
+
+	test('correctMontageEntry can move an entry to a different hero/round, deltaing both heroes\' skill lists', () => {
+		const m = withRoster();
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'success', skill: 'Nature' };
+		m.entries = [entry];
+		m.successes = 1;
+		correctMontageEntry(m, entry, { hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' });
+		expect(m.successes).toBe(1); // success -> success, no tally change
+		expect(m.participants![0].skills_used).toEqual([]); // Nature removed from Kira
+		expect(m.participants![1].skills_used).toEqual(['Endurance']); // added to Bram
+		expect(m.entries).toEqual([{ hero: 'Bram', round: 1, result: 'success', skill: 'Endurance' }]);
+	});
+
+	test('removeMontageEntry undoes the tally/skill contribution and splices the entry out, restoring `undefined` once empty', () => {
+		const m = withRoster();
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'failure', skill: 'Nature' };
+		m.entries = [entry];
+		m.failures = 1;
+		removeMontageEntry(m, entry);
+		expect(m.failures).toBe(0);
+		expect(m.entries).toBeUndefined();
+		expect(m.participants![0].skills_used).toEqual([]);
+	});
+
+	test('a tally never goes negative when undoing a stale/hand-edited scalar', () => {
+		const m = withRoster();
+		m.successes = 0;
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'success' };
+		removeMontageEntry(m, entry);
+		expect(m.successes).toBe(0);
+	});
+});
+
+describe('SC-191 slice 4: wouldReuseSkill / nextHeroToAct — the sheet\'s live-read helpers', () => {
+	test('wouldReuseSkill: true once the hero has already used the skill', () => {
+		const m = withRosterFixture();
+		expect(wouldReuseSkill(m, 'Kira', 'Nature')).toBe(true);
+		expect(wouldReuseSkill(m, 'Kira', 'Endurance')).toBe(false);
+	});
+
+	test('wouldReuseSkill excludes the entry being edited — correcting an entry back onto its OWN unchanged skill never warns against itself', () => {
+		const m = withRosterFixture();
+		const entry: MontageEntry = { hero: 'Kira', round: 1, result: 'success', skill: 'Nature' };
+		m.entries = [entry];
+		expect(wouldReuseSkill(m, 'Kira', 'Nature', entry)).toBe(false);
+		// A DIFFERENT hero picking the same skill text still warns normally — exclusion is
+		// keyed to entry.hero, not to the skill string alone.
+		expect(wouldReuseSkill(m, 'Bram', 'Nature', entry)).toBe(false); // Bram never used it
+	});
+
+	test('nextHeroToAct: the first roster-order hero with no entry in the CURRENT round', () => {
+		const m = withRosterFixture();
+		m.current_round = 1;
+		m.entries = [{ hero: 'Kira', round: 1, result: 'success' }];
+		expect(nextHeroToAct(m)).toBe('Bram');
+	});
+
+	test('nextHeroToAct: undefined once every roster hero has acted this round', () => {
+		const m = withRosterFixture();
+		m.current_round = 1;
+		m.entries = [
+			{ hero: 'Kira', round: 1, result: 'success' },
+			{ hero: 'Bram', round: 1, result: 'failure' },
+		];
+		expect(nextHeroToAct(m)).toBeUndefined();
+	});
+
+	function withRosterFixture(): MontageModel {
+		return {
+			...base,
+			participants: [
+				{ name: 'Kira', skills_used: ['Nature'] },
+				{ name: 'Bram', skills_used: [] },
+			],
+		};
+	}
+});
+
+describe('SC-191 slice 4: the ⋯ chrome item config helpers', () => {
+	test('addMontageRound extends `rounds` by one', () => {
+		const m = { ...base, rounds: 3 };
+		addMontageRound(m);
+		expect(m.rounds).toBe(4);
+	});
+
+	test('addMontageHero appends a new roster entry with no skill history', () => {
+		const m: MontageModel = { ...base };
+		addMontageHero(m, 'Osric');
+		expect(m.participants).toEqual([{ name: 'Osric', skills_used: [] }]);
+		addMontageHero(m, 'Yenna');
+		expect(m.participants!.map((p) => p.name)).toEqual(['Osric', 'Yenna']);
+	});
+
+	test('setMontageLimits sets both limits, clamping a negative input to 0', () => {
+		const m = { ...base };
+		setMontageLimits(m, 8, -3);
+		expect(m.success_limit).toBe(8);
+		expect(m.failure_limit).toBe(0);
+	});
+
+	test('resetMontageProgress zeroes successes/failures/current_round/entries and every participant\'s skills_used, keeping the roster/config', () => {
+		const m: MontageModel = {
+			...base,
+			title: 'Cross the Gap',
+			successes: 4,
+			failures: 2,
+			current_round: 3,
+			participants: [{ name: 'Kira', skills_used: ['Nature', 'Climb'] }],
+			entries: [{ hero: 'Kira', round: 1, result: 'success', skill: 'Nature' }],
+		};
+		resetMontageProgress(m);
+		expect(m.successes).toBe(0);
+		expect(m.failures).toBe(0);
+		expect(m.current_round).toBe(1);
+		expect(m.entries).toBeUndefined();
+		expect(m.participants).toEqual([{ name: 'Kira', skills_used: [] }]);
+		// Config survives.
+		expect(m.title).toBe('Cross the Gap');
+		expect(m.success_limit).toBe(base.success_limit);
 	});
 });

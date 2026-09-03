@@ -6,13 +6,12 @@
 // (crest.ts, cardHead.ts) but the pre-SC-191 head never used: a leftDeck line ("N heroes · one
 // action each per round") and a rightEyebrow round chip ("Round 3 / 3" / "Complete").
 //
-// THE ⋯ MENU IS UNCHANGED — still the hand-rolled `Menu` with its one "Reset progress" item.
-// Replacing it with the SC-169 chrome panel (`ElementChrome.items`, spec §D) is explicitly
-// slice 4's job (brief §2 "out of scope … the ⋯ chrome menu … (slice 4)"); slice 2 only moves
-// the existing, working control into its own file and enriches the head it sits in.
-import { Component, Menu } from 'obsidian';
+// SLICE 4: the hand-rolled ⋯ `Menu` (a single "Reset progress" item) is DELETED — the SC-169
+// chrome panel (`ElementView.chromeItems()`, view.ts) now carries all five ⋯ items, including
+// Reset progress. The mock's `.mt2-menu` was always a drawing of the panel, never a second
+// menu (spec §D). HeadView is now purely presentational: no canPersist gate, no Reset wiring.
+import type { Component } from 'obsidian';
 import { cardHead } from '@/framework/kit';
-import { iconButton } from '@/framework/kit';
 import type { MontageModel } from './model';
 import { montageOutcome, montageTallies } from './model';
 
@@ -20,11 +19,6 @@ export class HeadView {
 	constructor(
 		private readonly model: MontageModel,
 		private readonly owner: Component,
-		private readonly canPersist: boolean,
-		/** Reset progress — bound to THIS view instance's model (CB-4: one view per block,
-		 *  never a shared processor field). Runs the whole-model mutation, then the
-		 *  framework's default update()+persist(), the same shape as negotiation's reset. */
-		private readonly onReset: () => void,
 	) {}
 
 	public build(container: HTMLElement): void {
@@ -52,29 +46,6 @@ export class HeadView {
 			},
 			this.owner,
 		);
-
-		if (!this.canPersist) return;
-
-		const menu = iconButton(
-			head,
-			{
-				icon: 'more-vertical',
-				label: 'Montage options',
-				variant: 'ghost',
-				onClick: (event: MouseEvent) => {
-					const m = new Menu();
-					m.addItem((item) =>
-						item
-							.setTitle('Reset progress')
-							.setIcon('rotate-ccw')
-							.onClick(() => this.onReset()),
-					);
-					m.showAtMouseEvent(event);
-				},
-			},
-			this.owner,
-		);
-		menu.buttonEl.addClass('dse-mt__menu');
 	}
 }
 

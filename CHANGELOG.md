@@ -15,6 +15,28 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FEATURE] **The Montage Test tracker is now a working board, not just a scoreboard**
+  (SC-191). A full visual overhaul on top of a purely additive schema: two new optional
+  keys, `description` (a Director's brief rendered above the board) and `entries[]` (the
+  board's per-cell records — `hero`, `round`, `result`, and optional `skill`/`note`); an
+  existing block parses, renders and keeps its tallies unchanged, no migration needed. The
+  board is a CSS grid — one row per hero, one column per round, a running tally beside
+  each row — read from `entries[]`; `successes`/`failures` stay the stored, authoritative
+  totals (never recomputed from the board, so a hand-kept total is never silently
+  overwritten). A **Log an action…** button, a per-row shortcut, and a click on any cell
+  all open the same small form: hero, round, success/failure/assist, an optional skill and
+  note, with a live reminder of which power roll result starts a success at each
+  difficulty and — when [rolling is on](docs/settings.md#rolling) — a **Roll** button that
+  resolves the test and picks the result for you. An already-logged cell opens the same
+  form pre-filled for correcting a mistake or removing it outright, and the skill-reuse
+  rule (a hero can't use the same skill twice in one montage) warns live in the form,
+  never blocking. Two collapsible reference panels — a **Test tiers** cheat-sheet above the
+  board (the shipped Power Roll badges, flipped to tiers-as-rows) and a **Running a montage
+  test** guide at the foot — stay closed by default and print expanded. The hand-rolled ⋯
+  menu is gone: the card's standard element menu now carries **Add a round**, **Add a
+  hero**, **Set limits…**, **Clear all** and **Reset progress**. Notes typed on any logged
+  test list under the outcome band, tagged with the hero and round. See
+  [GM Trackers](docs/gm-trackers.md) → "Montage Test tracker".
 - [FEATURE] **The squad captain's Stamina bonus now applies to the minion pool**
   (SC-195). "While a minion squad has a captain, each minion in the squad gains the
   benefits noted at the 'With Captain' entry on their stat block" — when that benefit is

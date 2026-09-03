@@ -275,7 +275,10 @@ async function snap(page, combo, params, captureId, opts = {}) {
 		const done = await page.evaluate(() => window.__dseHarnessDone);
 		const errors = [...done.errors, ...pageErrors];
 		const file = path.join(shotsDir, `${outName}${errors.length ? '--ERROR' : ''}.png`);
-		if (query.gallery) await page.screenshot({ path: file, fullPage: true });
+		// SC-191 slice 4 (opts.fullPage): a `kit/managedModal` appends to `document.body`,
+		// a SIBLING of `#mount` — the ordinary `#mount`-only screenshot below cannot
+		// capture it, so this shares gallery's full-page branch instead.
+		if (query.gallery || opts.fullPage) await page.screenshot({ path: file, fullPage: true });
 		else await page.locator('#mount').screenshot({ path: file });
 		// SC-204 — probe AFTER the screenshot (it only reads, but the ordering makes it
 		// impossible for the gate to influence a frozen byte) and only on a clean mount,
@@ -2178,8 +2181,14 @@ try {
 	// mount-done and the screenshot.
 	for (const n of interactionShots) {
 		if (args.element && args.element !== n.element && args.element !== n.id) continue;
-		for (const c of combos) {
-			await snap(page, c, { element: n.element, fixture: n.fixture }, n.id, { click: n.click });
+		// SC-191 slice 4: a `fullPage` entry opens a `kit/managedModal` — real `.dse-btn`
+		// buttons are print-hidden plugin-wide (print rule 4), so the click target itself
+		// does not exist under print media. dark/light only, the same combo restriction
+		// the gallery shot above already uses for the identical reason (its own click-free
+		// full-page capture never needed print either).
+		const shotCombos = n.fullPage ? combos.filter((c) => !c.print && !c.realprint) : combos;
+		for (const c of shotCombos) {
+			await snap(page, c, { element: n.element, fixture: n.fixture }, n.id, { click: n.click, fullPage: n.fullPage });
 		}
 	}
 	// SC-123: preference-variant shots, declared by the page (manifest.prefShots —

@@ -15,21 +15,21 @@
 // "iconButton, plus a second class" gesture `initiative`'s `.dse-init__cell` already uses
 // (view.ts's `handle.buttonEl.addClass('dse-init__cell')`).
 //
-// SLICE 2 SCOPE (brief §2): the board is built and reads `entries` faithfully, but every
-// WRITE affordance the settled design puts on a cell (the open-socket quick-record trio, the
-// per-row "Log an action" button, the correction/note-edit chip) belongs to `kit/managedModal`
-// — spec §D's "Log an action… sheet" — which is explicitly slice 4's ("the sheet, per-cell
-// edit/note … (slice 4)"). Per the brief's read-only rule, those controls are RENDERED (real
-// `<button>`s, the settled aria-labels) but real-disabled (`iconButton`'s own `disabled`
-// option, F1 §4.4's "disabled affordance, never a dead-end click" idiom) rather than wired to
-// nothing — a keyboard/AT user sees a control that plainly isn't live yet, never one that
-// silently drops the click. Slice 4 lifts `disabled` and wires `onClick` to the sheet;
-// nothing here changes shape when it does.
+// SLICE 4 (brief §2): every write affordance the settled design puts on a cell (the
+// open-socket quick-record trio, the per-row "Log an action" button, the correction/
+// note-edit chip) is now wired to `kit/managedModal` — spec §D's "Log an action… sheet"
+// (`LogActionModal.ts`) — through the `onOpenSheet`/`onAddHero` callbacks the owning
+// `MontageView` supplies. Per the read-only rule (spec §C-7, owner ruling I-6: EXPLICIT
+// read-only states, never a dead end): on a read-only host every control here stays a
+// real, aria-labelled, DISABLED stub (`iconButton`'s own `disabled` option / the cell's
+// own `aria-disabled`) — the same shape slices 2-3 shipped, just now gated on
+// `canPersist` instead of unconditionally true.
 import type { Component } from 'obsidian';
 import { setIcon } from 'obsidian';
 import { iconButton } from '@/framework/kit';
 import type { MontageModel, MontageEntry, MontageResult } from './model';
 import { montageTallies, isKnownMontageResult } from './model';
+import type { SheetMode } from './LogActionModal';
 
 const RESULT_ICON: Record<MontageResult, string> = {
 	success: 'check',
@@ -42,8 +42,9 @@ const RESULT_ICON: Record<MontageResult, string> = {
 
 type RoundState = 'past' | 'current' | 'future';
 
-/** A stub control never fires — the whole point is `disabled` suppresses it (see file
- *  header) — but iconButton's `onClick` is mandatory, so every stub site shares this no-op. */
+/** A read-only-host control never fires — the whole point is `disabled` suppresses it
+ *  (see file header) — but iconButton's `onClick` is mandatory, so every stub site
+ *  shares this no-op. */
 const STUB_NOOP = (): void => {};
 
 /** `"1 success"` / `"2 successes"` / `"0 failures"` — the accessible tally reading. */
@@ -53,6 +54,13 @@ export class BoardView {
 	constructor(
 		private readonly model: MontageModel,
 		private readonly owner: Component,
+		private readonly canPersist: boolean,
+		/** Opens the Log an action… sheet, pre-filled per `mode` (view.ts owns turning a
+		 *  click into one — a cell/row-act click here never touches the model directly). */
+		private readonly onOpenSheet: (mode: SheetMode) => void,
+		/** The Heroes header's "+" — the board-corner shortcut to the same "Add a hero"
+		 *  action the ⋯ chrome item fires. */
+		private readonly onAddHero: () => void,
 	) {}
 
 	public build(parent: HTMLElement): void {
@@ -88,12 +96,17 @@ export class BoardView {
 	private buildHeaderRow(board: HTMLElement): void {
 		const corner = board.createDiv({ cls: 'dse-mt__board-corner' });
 		corner.createSpan({ cls: 'dse-mt__board-cornerword', text: 'Hero' });
-		// STUBBED (see file header): "add a hero" is one of the SC-169 chrome items (spec
-		// §D), wired in slice 4. Rendered disabled so the affordance is visible now and
-		// nothing here has to change shape when it lifts.
+		// "Add a hero" is the board-corner shortcut to the same action the ⋯ chrome item
+		// fires (spec §D) — real-disabled on a read-only host (see file header), never a
+		// dead end.
 		const addHero = iconButton(
 			corner,
-			{ icon: 'plus', label: 'Add a hero', disabled: true, onClick: STUB_NOOP },
+			{
+				icon: 'plus',
+				label: 'Add a hero',
+				disabled: !this.canPersist,
+				onClick: this.canPersist ? () => this.onAddHero() : STUB_NOOP,
+			},
 			this.owner,
 		);
 		addHero.buttonEl.addClass('dse-mt__board-addhero');
@@ -128,11 +141,26 @@ export class BoardView {
 		if (isLast) nameCell.setAttribute('data-lastrow', 'on');
 		nameCell.createSpan({ cls: 'dse-mt__board-who', text: name });
 
-		// STUBBED (see file header): the per-row "Log an action" control — the touch/narrow
-		// path to the same sheet a cell socket opens. Slice 4 wires it.
+		// The per-row "Log an action" control — the touch/narrow path to the same sheet a
+		// cell socket opens (spec §D). Targets the CURRENT round: edit mode if this hero
+		// already has an entry there, else new mode pre-filled hero=name round=current —
+		// exactly what an open current-round socket for this row would open.
+		const currentRoundEntry = this.entryFor(entries, this.model.current_round);
 		const rowAct = iconButton(
 			nameCell,
-			{ icon: 'plus', label: `Log an action for ${name}`, disabled: true, onClick: STUB_NOOP },
+			{
+				icon: 'plus',
+				label: `Log an action for ${name}`,
+				disabled: !this.canPersist,
+				onClick: this.canPersist
+					? () =>
+							this.onOpenSheet(
+								currentRoundEntry
+									? { kind: 'edit', entry: currentRoundEntry }
+									: { kind: 'new', hero: name, round: this.model.current_round },
+							)
+					: STUB_NOOP,
+			},
 			this.owner,
 		);
 		rowAct.buttonEl.addClass('dse-mt__board-rowact');
@@ -178,7 +206,13 @@ export class BoardView {
 		// colourblind reader relying on shape. A `div` isn't a button KIND at all, so it
 		// never reaches the host-leak gate in the first place — no override CSS needed to
 		// neutralise chrome that was never there.
-		const isInteractive = known || (entry === undefined && state === 'current');
+		// SLICE 4: ANY existing entry opens the edit sheet — including one with an
+		// unrecognised `result` (a preserved Director typo, `known` false). Fixing that
+		// typo through the UI is exactly what the sheet is for; LogActionModal pre-selects
+		// no Result chip for it (see its own doc), forcing an explicit valid choice rather
+		// than guessing one. An EMPTY socket is interactive only in the round currently in
+		// play, unchanged from slices 2-3.
+		const isInteractive = entry !== undefined || state === 'current';
 		const ariaLabel = known
 			? `${hero}, round ${round}: ${entry.result} with ${entry.skill ?? 'no skill'}${entry.note ? '. Note: ' + entry.note : ''} — edit`
 			: entry !== undefined
@@ -188,13 +222,28 @@ export class BoardView {
 		const cell = board.createDiv({ cls: 'dse-mt__cell' });
 		cell.setAttribute('aria-label', ariaLabel);
 		if (isInteractive) {
-			// STUBBED (see file header): a recorded cell's own affordance is the
-			// correction/note-edit chip (slice 4); an open socket's is the sheet.
-			// `aria-disabled` (not native `disabled`, which only real form controls have) —
-			// the settled aria-label already states the wording slice 4 makes live.
+			// A recorded cell opens the sheet in EDIT mode (fix-round-1 M-1: `aria-disabled`,
+			// not native `disabled` — a `div` isn't a button KIND, see file header); an open
+			// socket opens it in NEW mode pre-filled hero+round. Real-disabled (never wired)
+			// on a read-only host — the settled aria-label already states the wording either
+			// way.
 			cell.setAttribute('role', 'button');
 			cell.setAttribute('tabindex', '0');
-			cell.setAttribute('aria-disabled', 'true');
+			if (!this.canPersist) {
+				cell.setAttribute('aria-disabled', 'true');
+			} else {
+				// Branches on `entry !== undefined`, NOT `known` — an existing entry with an
+				// unrecognised result (a preserved Director typo) still opens EDIT mode, so
+				// the sheet is exactly how it gets fixed (isInteractive's own doc, above).
+				const openThisCell = (): void =>
+					this.onOpenSheet(entry !== undefined ? { kind: 'edit', entry } : { kind: 'new', hero, round });
+				this.owner.registerDomEvent(cell, 'click', openThisCell);
+				this.owner.registerDomEvent(cell, 'keydown', (evt: KeyboardEvent) => {
+					if (evt.key !== 'Enter' && evt.key !== ' ') return;
+					evt.preventDefault();
+					openThisCell();
+				});
+			}
 		}
 		cell.setAttribute('data-kind', known ? entry.result : 'none');
 		cell.setAttribute('data-state', state);
@@ -204,6 +253,19 @@ export class BoardView {
 		if (entry?.note) cell.setAttribute('data-noted', 'on');
 
 		if (known && isKnownMontageResult(entry.result)) {
+			// The cell edit chip (spec §D: "kit/iconButton (variant: ghost) inset from the
+			// top-right") — decorative here, not a second interactive control: the whole cell
+			// is ALREADY the edit trigger (fix-round-1 M-1, above), so nesting a real
+			// `<button>` inside a `div[role=button]` would be an invalid, double-firing
+			// interactive-in-interactive mapping. A small `aria-hidden` pencil glyph borrows
+			// the ghost-button VISUAL vocabulary (subtle, no chrome at rest) without the
+			// nested-control semantics; placed top-LEFT since the note mark already owns
+			// top-right. Only on a writable host — a read-only cell has nothing to edit.
+			if (this.canPersist) {
+				const editMark = cell.createSpan({ cls: 'dse-mt__cell-editmark' });
+				editMark.setAttribute('aria-hidden', 'true');
+				setIcon(editMark, 'pencil');
+			}
 			const face = cell.createDiv({ cls: 'dse-mt__cell-face' });
 			setIcon(face.createSpan({ cls: 'dse-mt__cell-glyph' }), RESULT_ICON[entry.result]);
 			if (entry.skill) face.createSpan({ cls: 'dse-mt__cell-skill', text: entry.skill });

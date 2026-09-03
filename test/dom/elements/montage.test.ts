@@ -29,7 +29,7 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import type { RollService } from '../../../src/framework/roll/service';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin, Menu, Notice, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, Notice, makeFakeContext } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
@@ -85,8 +85,12 @@ function makeDeps(): ElementPipelineDeps {
 	};
 }
 
-async function renderMontage(source: string = montageYaml, hostOverrides: Partial<BlockHost> = {}) {
-	const pipeline = new ElementPipeline(makeDeps());
+async function renderMontage(
+	source: string = montageYaml,
+	hostOverrides: Partial<BlockHost> = {},
+	depsOverrides: Partial<ElementPipelineDeps> = {},
+) {
+	const pipeline = new ElementPipeline({ ...makeDeps(), ...depsOverrides });
 	const host = makeHost(hostOverrides);
 	await pipeline.run(montageElement, source, host);
 	const root = host.containerEl.firstElementChild as HTMLElement;
@@ -111,7 +115,6 @@ const trackSlots = (root: HTMLElement, kind: 'success' | 'failure') =>
 	Array.from(outcomeBand(root).querySelectorAll(`.dse-mt__track[data-kind="${kind}"] .dse-mt__track-slot`));
 const progTail = (root: HTMLElement, kind: 'success' | 'failure') =>
 	outcomeBand(root).querySelector(`.dse-mt__prog[data-kind="${kind}"] .dse-mt__prog-tail`)?.textContent;
-const menuBtn = (root: HTMLElement) => root.querySelector('.dse-mt__menu') as HTMLButtonElement | null;
 
 describe('T-6: montage ElementDefinition (spec §4)', () => {
 	test('id/name/aliases/shape match the brief; persisted with serialize, NO schema, no auto ref-resolution', () => {
@@ -142,7 +145,7 @@ describe('T-6: montage ElementDefinition (spec §4)', () => {
 	});
 });
 
-describe('SC-191 slice 2: HeadView (cardHead + crest/deck/round-chip; the unchanged Reset menu)', () => {
+describe('SC-191 slice 2: HeadView (cardHead + crest/deck/round-chip)', () => {
 	test('root carries data-dse-element="montage" + theme; ONE .dse-mt', async () => {
 		const { root } = await renderMontage();
 		expect(root.getAttribute('data-dse-element')).toBe('montage');
@@ -220,10 +223,12 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 
 	// Fix-round-1 M-1: the cell is `role="button" tabindex="0"` per spec §D — a plain `div`,
 	// NOT a real `<button>` (which was a full `.dse-btn`: bordered, radiused, shadowed, and
-	// `opacity:.5`-dimmed the cell's own recorded data). `aria-disabled`, not native
-	// `disabled` — only a real form control has that property.
-	test('the open socket in the round currently in play is `div[role=button][tabindex=0][aria-disabled=true]` — a stub, never a dead-end live control, never a real <button>', async () => {
-		const { root } = await renderMontage(montageMidYaml);
+	// `opacity:.5`-dimmed the cell's own recorded data). SLICE 4: on a READ-ONLY host the
+	// cell stays `aria-disabled` (owner ruling I-6: explicit read-only states, never a
+	// dead-end live control) — on a WRITABLE host `aria-disabled` is gone and a real click
+	// opens the sheet.
+	test('read-only host: the open socket stays `div[role=button][tabindex=0][aria-disabled=true]` — never a dead-end live control, never a real <button>', async () => {
+		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
 		const cell = cellFor(root, 'Kira', 3);
 		expect(cell.tagName).toBe('DIV');
 		expect(cell.classList.contains('dse-btn')).toBe(false);
@@ -235,15 +240,45 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 	});
 
 	// Fix-round-1 M-1: a RECORDED cell is the same `div[role=button]` shape — never `.dse-btn`
-	// chrome or `opacity:.5` dimming the seal/skill/note-mark it is displaying.
-	test('a recorded cell is also `div[role=button][tabindex=0][aria-disabled=true]`, never a real <button>', async () => {
-		const { root } = await renderMontage(montageMidYaml);
+	// chrome or `opacity:.5` dimming the seal/skill/note-mark it is displaying. SLICE 4:
+	// read-only stays `aria-disabled`.
+	test('read-only host: a recorded cell is also `div[role=button][tabindex=0][aria-disabled=true]`, never a real <button>', async () => {
+		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
 		const cell = cellFor(root, 'Kira', 1);
 		expect(cell.tagName).toBe('DIV');
 		expect(cell.classList.contains('dse-btn')).toBe(false);
 		expect(cell.getAttribute('role')).toBe('button');
 		expect(cell.getAttribute('tabindex')).toBe('0');
 		expect(cell.getAttribute('aria-disabled')).toBe('true');
+	});
+
+	// SLICE 4: on a writable host the open socket is a LIVE control — a click opens the
+	// sheet pre-filled hero=Kira round=3 (spec §D "the cell itself… log an action"), and
+	// `aria-disabled` is gone entirely (never present-but-false — absent, matching the
+	// board's own read-only convention elsewhere).
+	test('writable host: clicking the open socket opens the Log an action… sheet pre-filled for this hero/round, no aria-disabled', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Kira', 3);
+		expect(cell.hasAttribute('aria-disabled')).toBe(false);
+		cell.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
+		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
+		const kiraChip = heroChips.find((c) => c.textContent === 'Kira') as HTMLButtonElement;
+		expect(kiraChip.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	// SLICE 4: clicking a RECORDED cell opens the sheet in EDIT mode, pre-filled from the
+	// existing entry — Scott's original ticket case ("that 13 was really a 17").
+	test('writable host: clicking a recorded cell opens the sheet in edit mode, pre-filled from the entry, with Remove offered', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const cell = cellFor(root, 'Kira', 1); // success · Nature (fixture-mid.yaml)
+		cell.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Correct a logged action');
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		expect(skillInput.value).toBe('Nature');
+		expect(modalEl.querySelector('button[aria-label="Remove this action"]')).not.toBeNull();
 	});
 
 	test('a FUTURE round with no entry renders a plain dash, never a button', async () => {
@@ -273,8 +308,8 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(yennaR3.querySelector('.dse-mt__cell-skill--none')?.textContent).toBe('no action');
 	});
 
-	test('STUBBED (slice 4 wires these): "add a hero" and every per-row "Log an action" control are real, aria-labelled, and real-disabled', async () => {
-		const { root } = await renderMontage();
+	test('read-only host: "add a hero" and every per-row "Log an action" control are real, aria-labelled, and real-disabled', async () => {
+		const { root } = await renderMontage(montageYaml, { canPersist: false });
 		const addHero = root.querySelector('.dse-mt__board-addhero') as HTMLButtonElement;
 		expect(addHero.tagName).toBe('BUTTON');
 		expect(addHero.disabled).toBe(true);
@@ -283,6 +318,45 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		const rowAct = heroRow(root, 'Kira').querySelector('.dse-mt__board-rowact') as HTMLButtonElement;
 		expect(rowAct.disabled).toBe(true);
 		expect(rowAct.getAttribute('aria-label')).toBe('Log an action for Kira');
+	});
+
+	// SLICE 4: on a writable host, "add a hero" opens the small add-hero modal — the SAME
+	// action the ⋯ chrome item's "Add a hero" fires (spec §D: the board-corner "+" IS one
+	// of the SC-169 chrome items).
+	test('writable host: "add a hero" opens the add-hero modal; typing a name and confirming appends a roster entry and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage();
+		const addHero = root.querySelector('.dse-mt__board-addhero') as HTMLButtonElement;
+		expect(addHero.disabled).toBe(false);
+		addHero.click();
+
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const input = modalEl.querySelector('input[aria-label="Hero\'s name"]') as HTMLInputElement;
+		input.value = 'Osric';
+		input.dispatchEvent(new Event('input'));
+		(modalEl.querySelector('button[aria-label="Add"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(heroRows(rebuilt).map((el) => el.querySelector('.dse-mt__board-who')?.textContent)).toContain('Osric');
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		jest.useRealTimers();
+	});
+
+	// SLICE 4: the per-row control opens the sheet for THIS hero. With no entry yet for the
+	// current round it is a NEW record (pre-filled hero+round); with one already logged it
+	// is an EDIT of that entry — never a duplicate (spec §D: "the touch/narrow path to the
+	// same sheet a cell socket opens").
+	test('writable host: the per-row "Log an action" control opens the sheet for that hero — new mode when nothing is logged yet this round', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const rowAct = heroRow(root, 'Bram').querySelector('.dse-mt__board-rowact') as HTMLButtonElement;
+		expect(rowAct.disabled).toBe(false);
+		rowAct.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Log an action');
+		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
+		const bramChip = heroChips.find((c) => c.textContent === 'Bram') as HTMLButtonElement;
+		expect(bramChip.getAttribute('aria-pressed')).toBe('true');
 	});
 
 	test('with no participants authored, the board renders an explanatory empty row instead of throwing', async () => {
@@ -581,32 +655,99 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 	});
 });
 
-describe('T-6: reset menu — Reset progress clears successes/failures/round/skills_used/entries, keeps config', () => {
+// SLICE 4: the hand-rolled ⋯ Menu is gone — every ⋯ item now rides the SC-169 chrome
+// panel (`ElementView.chromeItems()`). `chromeItem` below queries it the same way the
+// framework's own chrome tests do (`[data-dse-chrome-item="<id>"]`) — real DOM in jsdom
+// regardless of the panel's hover-reveal CSS.
+const chromeItem = (root: HTMLElement, id: string) =>
+	root.querySelector(`[data-dse-chrome-item="${id}"]`) as HTMLButtonElement | null;
+
+describe('SC-191 slice 4: the ⋯ chrome menu carries all five items (spec §D)', () => {
+	test('add a round / add a hero / set limits… / Clear all / Reset progress all render as real, aria-labelled chrome items', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const ids = Array.from(root.querySelectorAll('.dse-chrome [data-dse-chrome-item]')).map((el) =>
+			el.getAttribute('data-dse-chrome-item'),
+		);
+		expect(ids).toEqual(
+			expect.arrayContaining([
+				'montage-add-round',
+				'montage-add-hero',
+				'montage-set-limits',
+				'montage-clear-all',
+				'montage-reset-progress',
+			]),
+		);
+		expect(chromeItem(root, 'montage-add-round')?.getAttribute('aria-label')).toBe('Add a round');
+		expect(chromeItem(root, 'montage-add-hero')?.getAttribute('aria-label')).toBe('Add a hero');
+		expect(chromeItem(root, 'montage-set-limits')?.getAttribute('aria-label')).toBe('Set limits…');
+		expect(chromeItem(root, 'montage-clear-all')?.getAttribute('aria-label')).toBe('Clear all');
+		expect(chromeItem(root, 'montage-reset-progress')?.getAttribute('aria-label')).toBe('Reset progress');
+	});
+
+	test('read-only host: none of the five montage ⋯ items render (F1 §4.4 — no dead-end panel item)', async () => {
+		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
+		expect(chromeItem(root, 'montage-add-round')).toBeNull();
+		expect(chromeItem(root, 'montage-add-hero')).toBeNull();
+		expect(chromeItem(root, 'montage-set-limits')).toBeNull();
+		expect(chromeItem(root, 'montage-clear-all')).toBeNull();
+		expect(chromeItem(root, 'montage-reset-progress')).toBeNull();
+	});
+
+	test('"Add a round" extends `rounds` by one, rebuilds an extra round column, and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // rounds: 3
+		chromeItem(root, 'montage-add-round')!.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(cellFor(rebuilt, 'Kira', 4)).toBeDefined();
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		expect((host.replaceSource as jest.Mock).mock.calls[0][0] as string).toContain('rounds: 4');
+		jest.useRealTimers();
+	});
+
+	test('"Set limits…" opens a modal pre-filled with the current limits; saving new values persists them', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // success_limit 6, failure_limit 3
+		chromeItem(root, 'montage-set-limits')!.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const successInput = modalEl.querySelector('input[aria-label="Success limit"]') as HTMLInputElement;
+		const failureInput = modalEl.querySelector('input[aria-label="Failure limit"]') as HTMLInputElement;
+		expect(successInput.value).toBe('6');
+		expect(failureInput.value).toBe('3');
+		successInput.value = '8';
+		failureInput.value = '4';
+		(modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('success_limit: 8');
+		expect(written).toContain('failure_limit: 4');
+		jest.useRealTimers();
+	});
+});
+
+describe('T-6: Reset progress / Clear all — clear successes/failures/round/skills_used/entries, keep config', () => {
 	afterEach(() => {
 		jest.useRealTimers();
 		Notice.notices.length = 0;
-		Menu.lastMenu = null;
 	});
 
-	test('the options button opens exactly Reset progress; clicking it zeroes progress AND entries, rebuilds to the `pending` band, and persists', async () => {
+	test.each([
+		['montage-reset-progress', 'Montage progress reset'],
+		['montage-clear-all', 'Montage progress cleared'],
+	])('"%s" zeroes progress AND entries, rebuilds to the `pending` band, and persists', async (itemId, noticeText) => {
 		jest.useFakeTimers();
 		const { root, host } = await renderMontage(montageMidYaml);
 
-		const button = menuBtn(root)!;
-		expect(button.getAttribute('aria-label')).toBe('Montage options');
-		button.click();
-		const menu = Menu.lastMenu!;
-		expect(menu.items).toHaveLength(1);
-		expect(menu.items[0].title).toBe('Reset progress');
-
-		menu.items[0].onClickCallback!();
+		chromeItem(root, itemId)!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
-		expect(Notice.notices).toContain('Montage progress reset');
+		expect(Notice.notices).toContain(noticeText);
 		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
 		expect(heroRows(rebuilt)).toHaveLength(5);
-		// current_round reset to 1 -> round 1 is CURRENT again (an open, disabled socket),
-		// not a past dash — entries are gone, so nothing is recorded there any more.
+		// current_round reset to 1 -> round 1 is CURRENT again (an open socket), not a past
+		// dash — entries are gone, so nothing is recorded there any more.
 		expect(cellFor(rebuilt, 'Kira', 1).getAttribute('data-state')).toBe('current');
 		expect(cellFor(rebuilt, 'Kira', 1).querySelector('.dse-mt__cell-hint')?.textContent).toBe('to act');
 		expect(outcomeBand(rebuilt).getAttribute('data-band')).toBe('pending');
@@ -621,14 +762,14 @@ describe('T-6: reset menu — Reset progress clears successes/failures/round/ski
 	});
 });
 
-describe('T-6: canPersist=false — read-only renders WITHOUT the Reset menu, zero writes (F1 §4.4)', () => {
-	test('readonly badge attr; no menu; every board control was already stubbed-disabled', async () => {
+describe('T-6: canPersist=false — read-only renders WITHOUT any live board/menu write affordance, zero writes (F1 §4.4)', () => {
+	test('readonly badge attr; no montage ⋯ items; every board control stays real-disabled', async () => {
 		const { root, host } = await renderMontage(montageMidYaml, { canPersist: false });
 
 		expect(root.hasAttribute('data-dse-readonly')).toBe(true);
-		expect(menuBtn(root)).toBeNull();
-		// The board renders identically read-only vs. read-write this slice (every control
-		// is already a real-disabled stub) — the assertion is that nothing throws and
+		expect(chromeItem(root, 'montage-reset-progress')).toBeNull();
+		// The board renders identically read-only vs. read-write in SHAPE (every control is
+		// a real-disabled stub, never omitted) — the assertion is that nothing throws and
 		// nothing writes.
 		expect(heroRows(root)).toHaveLength(5);
 		expect(host.replaceSource).not.toHaveBeenCalled();
@@ -651,8 +792,7 @@ describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		await pipeline.run(montageElement, montageMidYaml, host);
 
 		const root = host.containerEl.firstElementChild as HTMLElement;
-		menuBtn(root)!.click();
-		Menu.lastMenu!.items[0].onClickCallback!();
+		chromeItem(root, 'montage-reset-progress')!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(app.vault.modifyCalls).toHaveLength(1);
@@ -665,7 +805,6 @@ describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 
 		jest.useRealTimers();
 		Notice.notices.length = 0;
-		Menu.lastMenu = null;
 	});
 
 	test('spec §C integrity probe 2: TWO ds-montage blocks in one note do not cross-talk — resetting block A leaves block B\'s YAML byte-for-byte untouched', async () => {
@@ -694,8 +833,7 @@ describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 		await pipeline.run(montageElement, montageDoneYaml, hostB);
 
 		const rootA = hostA.containerEl.firstElementChild as HTMLElement;
-		menuBtn(rootA)!.click();
-		Menu.lastMenu!.items[0].onClickCallback!();
+		chromeItem(rootA, 'montage-reset-progress')!.click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		expect(app.vault.modifyCalls).toHaveLength(1);
@@ -709,7 +847,6 @@ describe('T-6: persisted write path through a REAL ReadingModeBlockHost + FakeVa
 
 		jest.useRealTimers();
 		Notice.notices.length = 0;
-		Menu.lastMenu = null;
 	});
 });
 
@@ -755,6 +892,173 @@ describe('T-6: registered EXACTLY ONCE — framework registry owns ds-montage, R
 	});
 });
 
+describe('SC-191 slice 4: the Log an action… sheet — full write path (spec §C/§D)', () => {
+	test('logging a NEW action: pick Failure, type an unused skill + a note, Log persists a delta write and the board/band reflect it', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // successes 5, failures 2
+
+		cellFor(root, 'Kira', 3).click(); // the open socket — new mode, hero=Kira round=3
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('.dse-optchip[data-kind="failure"]') as HTMLButtonElement).click();
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		skillInput.value = 'Insight';
+		skillInput.dispatchEvent(new Event('input'));
+		const noteInput = modalEl.querySelector('textarea[aria-label="Note"]') as HTMLTextAreaElement;
+		noteInput.value = 'Spotted a trap too late.';
+		noteInput.dispatchEvent(new Event('input'));
+		(modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		const cell = cellFor(rebuilt, 'Kira', 3);
+		expect(cell.getAttribute('data-kind')).toBe('failure');
+		expect(cell.querySelector('.dse-mt__cell-skill')?.textContent).toBe('Insight');
+		const kira = tallyFor(rebuilt, 'Kira');
+		expect(tallyN(kira, 'failure')).toBe('1'); // was 0
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('failures: 3'); // 2 -> 3, a delta, not a recount
+		expect(written).toContain('note: Spotted a trap too late.');
+		jest.useRealTimers();
+	});
+
+	test('correcting an entry (success -> failure): Scott\'s ticket case — Save deltas BOTH tallies and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // Kira round 1: success/Nature
+
+		cellFor(root, 'Kira', 1).click(); // recorded cell — edit mode
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('.dse-optchip[data-kind="failure"]') as HTMLButtonElement).click();
+		(modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(cellFor(rebuilt, 'Kira', 1).getAttribute('data-kind')).toBe('failure');
+		const kira = tallyFor(rebuilt, 'Kira');
+		expect(tallyN(kira, 'success')).toBe('1'); // was 2
+		expect(tallyN(kira, 'failure')).toBe('1'); // was 0
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('successes: 4'); // 5 -> 4
+		expect(written).toContain('failures: 3'); // 2 -> 3
+		jest.useRealTimers();
+	});
+
+	test('Remove: undoes the tally/skill contribution, splices the entry out, and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // Osric round 1: failure/Climb, noted
+
+		cellFor(root, 'Osric', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('button[aria-label="Remove this action"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(cellFor(rebuilt, 'Osric', 1).getAttribute('data-kind')).toBe('none');
+		const osric = tallyFor(rebuilt, 'Osric');
+		expect(tallyN(osric, 'failure')).toBe('0'); // was 1
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('failures: 1'); // 2 -> 1
+		jest.useRealTimers();
+	});
+
+	test('§C integrity probe 5 through the REAL write path: an old-shape block (successes: 4, no entries) logs one action via the sheet and reads successes: 5 with a one-item entries list — not successes: 1', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageOldShapeYaml); // Kira round 2 open, successes: 4
+
+		cellFor(root, 'Kira', 2).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		(modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).click(); // Success is the sheet's own default
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('successes: 5');
+		expect(written).toMatch(/entries:\n\s*- hero: Kira/);
+		jest.useRealTimers();
+	});
+
+	test('the skill-reuse warning fires live while typing an already-used skill, and clears once the field no longer matches', async () => {
+		const { root } = await renderMontage(montageMidYaml); // Kira has used Nature, Alertness
+		cellFor(root, 'Kira', 3).click(); // new mode, hero pre-selected Kira
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		const warnEl = modalEl.querySelector('.dse-mt__sheet-warn') as HTMLElement;
+		expect(warnEl.hidden).toBe(true);
+
+		skillInput.value = 'Nature';
+		skillInput.dispatchEvent(new Event('input'));
+		expect(warnEl.hidden).toBe(false);
+		expect(warnEl.textContent).toContain('Kira already used Nature');
+
+		skillInput.value = 'Insight';
+		skillInput.dispatchEvent(new Event('input'));
+		expect(warnEl.hidden).toBe(true);
+	});
+
+	test('the skill-reuse warning does NOT fire when correcting an entry back onto its own unchanged skill', async () => {
+		const { root } = await renderMontage(montageMidYaml); // Kira round 1: success/Nature
+		cellFor(root, 'Kira', 1).click(); // edit mode, pre-filled skill=Nature
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const warnEl = modalEl.querySelector('.dse-mt__sheet-warn') as HTMLElement;
+		expect(warnEl.hidden).toBe(true); // the sheet pre-fills the skill input but never fires input — no warning on open
+		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
+		expect(skillInput.value).toBe('Nature');
+		// Re-typing the SAME text (the entry's own skill) must still not warn.
+		skillInput.dispatchEvent(new Event('input'));
+		expect(warnEl.hidden).toBe(true);
+	});
+
+	test('the roll affordance: with cx.roll present, Roll resolves a test and preselects the resulting chip', async () => {
+		const roll = { resolve: () => ({ total: 14, tier: 2 }) } as unknown as RollService;
+		const { root } = await renderMontage(montageMidYaml, {}, { roll });
+		cellFor(root, 'Kira', 3).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const rollBtn = modalEl.querySelector('.dse-mt__sheet-rollbtn') as HTMLButtonElement;
+		expect(rollBtn).not.toBeNull();
+		rollBtn.click();
+		const successChip = modalEl.querySelector('.dse-optchip[data-kind="success"]') as HTMLButtonElement;
+		expect(successChip.getAttribute('aria-pressed')).toBe('true');
+		expect(modalEl.querySelector('.dse-mt__sheet-rollresult')?.textContent).toContain('tier 2');
+	});
+
+	test('the roll affordance is absent when cx.roll is undefined — cx.roll stays reachable but optional', async () => {
+		const { root } = await renderMontage(montageMidYaml, {}, { roll: undefined });
+		cellFor(root, 'Kira', 3).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.querySelector('.dse-mt__sheet-rollbtn')).toBeNull();
+		// Manual entry still works with no roll service.
+		expect(modalEl.querySelector('button[aria-label="Log"]')).not.toBeNull();
+	});
+
+	test('a11y: the dialog is labelled by its own visible title, and Log starts disabled when editing an entry with an unrecognised result', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 1',
+				'success_limit: 5',
+				'failure_limit: 3',
+				'participants:',
+				'  - name: Osric',
+				'    skills_used: []',
+				'entries:',
+				'  - hero: Osric',
+				'    round: 1',
+				'    result: sucess', // Director typo — preserved, unrecognised
+				'current_round: 1',
+			].join('\n'),
+		);
+		cellFor(root, 'Osric', 1).click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		const titleEl = modalEl.querySelector('.dse-modal__title') as HTMLElement;
+		expect(modalEl.getAttribute('aria-labelledby')).toBe(titleEl.id);
+		expect(titleEl.textContent).toBe('Correct a logged action');
+		// No result chip is pre-selected for an unrecognised value — Log stays disabled
+		// until the Director makes an explicit choice.
+		expect(modalEl.querySelectorAll('.dse-optchip[data-kind][aria-pressed="true"]')).toHaveLength(0);
+		expect((modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).disabled).toBe(true);
+		(modalEl.querySelector('.dse-optchip[data-kind="failure"]') as HTMLButtonElement).click();
+		expect((modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).disabled).toBe(false);
+	});
+});
+
 describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 	test('the view + montage sub-views pass the shared kit style guard (no inline color, no color literals)', () => {
 		const files = [
@@ -762,6 +1066,8 @@ describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 			'../../../src/elements/montage/HeadView.ts',
 			'../../../src/elements/montage/BoardView.ts',
 			'../../../src/elements/montage/OutcomeBandView.ts',
+			'../../../src/elements/montage/LogActionModal.ts',
+			'../../../src/elements/montage/ConfigModals.ts',
 		];
 		for (const file of files) {
 			const src = fs.readFileSync(path.join(__dirname, file), 'utf8');

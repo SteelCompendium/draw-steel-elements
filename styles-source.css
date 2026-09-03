@@ -4275,6 +4275,28 @@ Shared globals
 	.dse-mt__cell-notemark {
 		color: var(--dse-metal);
 	}
+	/* SLICE 4 — the cell edit mark (spec §D: "kit/iconButton (variant: ghost) inset from
+	   the top-right"). Decorative only (`aria-hidden`), never a second interactive
+	   control — the whole cell is ALREADY the edit trigger (fix-round-1 M-1, above), so a
+	   nested real `<button>` here would be an invalid interactive-in-interactive mapping.
+	   Placed top-LEFT since the note mark already owns top-right; fainter than the note
+	   mark (--dse-metal-faint at rest) since it is a UI hint, not recorded data. */
+	.dse-mt__cell-editmark {
+		position: absolute;
+		top: 0.34em;
+		left: 0.34em;
+		display: inline-flex;
+		color: var(--dse-metal-faint);
+
+		svg {
+			width: 0.62em;
+			height: 0.62em;
+		}
+	}
+	.dse-mt__cell:hover .dse-mt__cell-editmark,
+	.dse-mt__cell:focus-visible .dse-mt__cell-editmark {
+		color: var(--dse-metal);
+	}
 	/* Fix-round-1 M-2/M-3: `var(--dse-hover)` is already an accent-derived wash with a real
 	   light twin (Steel dark rgba(77,184,199,.10) ~:5431, Steel light rgba(42,123,136,.10)
 	   ~:11997) — replacing the old bare `rgba(77,184,199,0.07)` literal, which was
@@ -4517,6 +4539,19 @@ Shared globals
 		letter-spacing: 0.09em;
 		font-weight: 700;
 		color: var(--dse-vp);
+	}
+
+	/* -- SLICE 4: "Log an action…" (ledger 2026-08-29: renamed off "Record…"; placement
+	   "at the bottom" accepted for lack of a better home) — one centred accent button
+	   between the outcome band and the foot guide. A write affordance, so (like the
+	   board's own controls) it never needs print reach: `.dse-btn` is already print-hidden
+	   plugin-wide (print rule 4), so this whole row lives in ONE Steel-only tier, the same
+	   choice the strip made in slice 3 (spec §E names only the board grid/outcome band/
+	   guide panel as needing print reach — this row is none of those). -- */
+	.dse-mt__actionrow {
+		display: flex;
+		justify-content: center;
+		margin-top: 0.62rem;
 	}
 
 	/* -- the foot rules guide: colour only (layout is the structural tier above) -- */
@@ -4918,6 +4953,15 @@ Shared globals
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__board-addhero {
 	display: none;
 }
+/* SLICE 4: `.dse-mt__cell-editmark` is a plain `<span>` (never a `.dse-btn` — it is
+   decorative, not a button, see BoardView.ts), so print rule 4 does not reach it either;
+   its own `position: absolute` lives in the Steel decoration tier only (print-excluded),
+   so without this rule the icon renders IN FLOW under print — a small but real leak of a
+   write-affordance cue onto paper, the same class of bug `.dse-mt__board-addhero` above
+   already names. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__cell-editmark {
+	display: none;
+}
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__track-slot {
 	border: 1px solid #333;
 }
@@ -4928,6 +4972,141 @@ Shared globals
    is hatched, never just a second solid fill the success track also uses. */
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__track[data-kind='failure'] .dse-mt__track-slot[data-filled='on'] {
 	background: repeating-linear-gradient(135deg, #333 0 1px, transparent 1px 5px);
+}
+
+/* -- SLICE 4: the "Log an action…" sheet + the two small config modals (kit
+   managedModal, the SC-186 ConditionsModal precedent) — appended to document.body, NOT
+   nested under [data-dse-element="montage"], so (like .dse-condal-modal) it lives
+   OUTSIDE the montage's own two-tier print scope: a modal never prints or freezes
+   (managedModal.ts's `.dse-modal`/DseModal chrome already owns that), but every rule
+   below still carries the Steel scoping gate for consistency with the rest of the
+   sheet, the same choice .dse-condal-modal made. -- */
+.dse-mt__sheet {
+	width: 480px;
+	max-width: calc(100vw - 4em);
+}
+.dse-mt__sheet-head {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15em;
+	margin-bottom: 0.7em;
+}
+.dse-mt__sheet-eyebrow {
+	font-size: var(--dse-fs-micro);
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.09em;
+	color: var(--dse-fg-muted);
+}
+.dse-mt__sheet-sub {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-faint);
+}
+.dse-mt__sheet-field {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.7em;
+	margin-bottom: 0.6em;
+}
+.dse-mt__sheet-label {
+	flex: 0 0 4.6em;
+	padding-top: 0.3em;
+	font-size: var(--dse-fs-micro);
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--dse-fg-muted);
+}
+.dse-mt__sheet-control {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.4em;
+}
+/* The Result chips carry a glyph beside the word (colourblind rule) — reuses the
+   board's own seal vocabulary via inherited colour on data-kind, never a bespoke hue. */
+.dse-mt__sheet-resultchip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+}
+.dse-mt__sheet-chipglyph {
+	display: inline-flex;
+
+	svg {
+		width: 0.9em;
+		height: 0.9em;
+	}
+}
+.dse-mt__sheet-resultchip[data-kind='success'] .dse-mt__sheet-chipglyph {
+	color: var(--dse-turn-done);
+}
+.dse-mt__sheet-resultchip[data-kind='failure'] .dse-mt__sheet-chipglyph {
+	color: var(--dse-danger);
+}
+.dse-mt__sheet-input {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	color: var(--dse-fg);
+}
+.dse-mt__sheet-note {
+	resize: vertical;
+	min-height: 4.4em;
+}
+.dse-mt__sheet-hint {
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-fg-faint);
+}
+/* The skill-reuse warning (Draw Steel Heroes:21286) — shown/hidden via the `hidden`
+   ATTRIBUTE, never inline display (D2 §5, `.dse-sedit__warn`'s own convention). */
+.dse-mt__sheet-warn {
+	font-size: var(--dse-fs-caption);
+	font-style: italic;
+	color: var(--dse-warn);
+}
+.dse-mt__sheet-warn[hidden] {
+	display: none;
+}
+/* The round-5 tier hint (spec §D: "the sheet is the adjudication moment") — the shipped
+   .dse-pr__badge DOM via kit tierBadge(), never a lookalike; this wraps it with its own
+   "success starts at" lead. */
+.dse-mt__sheet-tierhint {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	margin-top: 0.3em;
+}
+.dse-mt__sheet-tierhint-lead {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-muted);
+	white-space: nowrap;
+}
+.dse-mt__sheet-tiers {
+	display: flex;
+	align-items: center;
+	gap: 0.35em;
+}
+/* The roll affordance (spec §D: "keep the capability by wiring the sheet's Result field
+   to it… when cx.roll exists") — a small characteristic input + Roll, never blocking
+   the manual chips above it. */
+.dse-mt__sheet-roll {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	margin-top: 0.4em;
+}
+.dse-mt__sheet-rollchar {
+	width: 3.2em;
+	box-sizing: border-box;
+	font: inherit;
+	color: var(--dse-fg);
+}
+.dse-mt__sheet-rollresult {
+	font-size: var(--dse-fs-caption);
+	color: var(--dse-fg-muted);
+	font-variant-numeric: tabular-nums;
 }
 
 /* ==================== */

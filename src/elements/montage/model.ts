@@ -263,6 +263,166 @@ export interface MontageBandCopy {
 	failureTail: string;
 }
 
+// ------------------------------------------------------------------------------------
+// SC-191 SLICE 4 — the write path (spec §C/§D): every mutation below runs from a click
+// handler (view/modal code), never from render. All of them are DELTA writes onto the
+// model's own scalars (§B.3's testable invariant) — nothing here ever assigns
+// `successes = entries.length` or otherwise recomputes a stored total from the board.
+
+/** True for a result that moves a tally at all (`assist` and any unrecognised typo do
+ *  not — §B.3, model.ts's own `isKnownMontageResult` convention). */
+function tallyKeyFor(result: string): 'successes' | 'failures' | undefined {
+	if (result === 'success') return 'successes';
+	if (result === 'failure') return 'failures';
+	return undefined;
+}
+
+/** `sign` +1 applies an entry's contribution, -1 undoes it — the one function both
+ *  "log" and "correct"/"remove" (undo-then-reapply) share, so the delta math can only
+ *  ever be written once. Clamped at 0: undoing a stale/hand-edited scalar must never
+ *  drive it negative. */
+function applyTallyDelta(m: MontageModel, result: string, sign: 1 | -1): void {
+	const key = tallyKeyFor(result);
+	if (!key) return;
+	m[key] = Math.max(0, m[key] + sign);
+}
+
+function findParticipant(m: MontageModel, hero: string): MontageParticipant | undefined {
+	return (m.participants ?? []).find((p) => p.name === hero);
+}
+
+/** Removes ONE occurrence of `skill` from `hero`'s `skills_used` (§B.3: "removing an
+ *  entry removes one occurrence") — a no-op when the hero or the skill isn't found. */
+function removeSkillOccurrence(m: MontageModel, hero: string, skill: string | undefined): void {
+	if (!skill) return;
+	const p = findParticipant(m, hero);
+	if (!p) return;
+	const idx = p.skills_used.indexOf(skill);
+	if (idx !== -1) p.skills_used.splice(idx, 1);
+}
+
+function addSkillOccurrence(m: MontageModel, hero: string, skill: string | undefined): void {
+	if (!skill) return;
+	const p = findParticipant(m, hero);
+	if (p) p.skills_used.push(skill);
+}
+
+/**
+ * The skill-reuse rule (Draw Steel Heroes:21286 — "An individual character can't use
+ * the same skill more than once in a montage test"), computed LIVE for the sheet's own
+ * warning. `excluding` is the entry currently being edited (if any) — its OWN
+ * contribution is subtracted first, so correcting an entry back onto its own unchanged
+ * skill never warns against itself (the same undo-then-check shape
+ * `correctMontageEntry` performs for real, mirrored here as a pure read).
+ */
+export function wouldReuseSkill(
+	m: MontageModel,
+	hero: string,
+	skill: string,
+	excluding?: MontageEntry,
+): boolean {
+	const p = findParticipant(m, hero);
+	if (!p) return false;
+	const used = p.skills_used.slice();
+	if (excluding && excluding.hero === hero && excluding.skill) {
+		const idx = used.indexOf(excluding.skill);
+		if (idx !== -1) used.splice(idx, 1);
+	}
+	return used.includes(skill);
+}
+
+/** The next participant (roster order) who has not yet logged an action in the CURRENT
+ *  round — what the sheet pre-fills when opened from the bottom "Log an action…" row
+ *  (spec §D / round-4 report: "the current round, and the next hero who has not yet
+ *  acted in it"). `undefined` when every roster hero has already acted (or the roster
+ *  is empty). */
+export function nextHeroToAct(m: MontageModel): string | undefined {
+	const participants = m.participants ?? [];
+	const actedThisRound = new Set((m.entries ?? []).filter((e) => e.round === m.current_round).map((e) => e.hero));
+	return participants.find((p) => !actedThisRound.has(p.name))?.name;
+}
+
+/** Logs a brand-new entry: appends to `entries[]` (materialising the array on its
+ *  first write, §B.4), deltas the tally, and appends the skill occurrence. Never
+ *  touches an existing entry — callers dedupe display, not the model (§B.5: "entries
+ *  preserve their authored array order"). */
+export function logMontageEntry(m: MontageModel, entry: MontageEntry): void {
+	const entries = m.entries ?? [];
+	entries.push(entry);
+	m.entries = entries;
+	applyTallyDelta(m, entry.result, 1);
+	addSkillOccurrence(m, entry.hero, entry.skill);
+}
+
+/** Corrects an EXISTING entry (identity = object reference, as handed back by
+ *  BoardView's own lookup) to a new shape in place — Scott's original ticket case
+ *  ("that 13 was really a 17"). Undoes the old entry's tally/skill contribution, then
+ *  applies the new one: the same "remove + log" shape §B.3 prescribes, never a
+ *  recount. */
+export function correctMontageEntry(m: MontageModel, existing: MontageEntry, next: MontageEntry): void {
+	applyTallyDelta(m, existing.result, -1);
+	removeSkillOccurrence(m, existing.hero, existing.skill);
+	existing.hero = next.hero;
+	existing.round = next.round;
+	existing.result = next.result;
+	if (next.skill) existing.skill = next.skill;
+	else delete existing.skill;
+	if (next.note) existing.note = next.note;
+	else delete existing.note;
+	applyTallyDelta(m, next.result, 1);
+	addSkillOccurrence(m, next.hero, next.skill);
+}
+
+/** Removes an entry entirely: undoes its tally/skill contribution and splices it out
+ *  of `entries[]`, restoring `undefined` (never a bare `[]`, §B.5) once the list is
+ *  empty again. */
+export function removeMontageEntry(m: MontageModel, existing: MontageEntry): void {
+	applyTallyDelta(m, existing.result, -1);
+	removeSkillOccurrence(m, existing.hero, existing.skill);
+	const entries = m.entries ?? [];
+	const idx = entries.indexOf(existing);
+	if (idx !== -1) entries.splice(idx, 1);
+	m.entries = entries.length > 0 ? entries : undefined;
+}
+
+/** ⋯ "Add a round" — extends the montage's total round count by one. A Director-set
+ *  config change (like `rounds:` itself), not a progress write. */
+export function addMontageRound(m: MontageModel): void {
+	m.rounds += 1;
+}
+
+/** ⋯ "Add a hero" — appends a new roster entry with no skill history yet. */
+export function addMontageHero(m: MontageModel, name: string): void {
+	const participants = m.participants ?? [];
+	participants.push({ name, skills_used: [] });
+	m.participants = participants;
+}
+
+/** ⋯ "Set limits…" — the Director-set success/failure limits. Negative input is
+ *  clamped to 0 (the schema's own "unset" convention, montageOutcome's `> 0` guard). */
+export function setMontageLimits(m: MontageModel, successLimit: number, failureLimit: number): void {
+	m.success_limit = Math.max(0, Math.trunc(successLimit));
+	m.failure_limit = Math.max(0, Math.trunc(failureLimit));
+}
+
+/** "Reset progress" — zeroes PLAY STATE only (successes/failures/current_round/entries/
+ *  each participant's skills_used); the Director-set config (title, description,
+ *  rounds, limits, participant roster) survives. Extracted from the pre-slice-4
+ *  MontageView.resetProgress() so both ⋯ items that clear progress ("Reset progress"
+ *  and "Clear all" — spec §D's five-item menu names both, and neither the ledger nor
+ *  the mock ever gives them distinct semantics beyond the label/icon the mock draws —
+ *  see slice-4 report "Scope notes") share one implementation rather than two
+ *  hand-copies that could drift. */
+export function resetMontageProgress(m: MontageModel): void {
+	m.successes = 0;
+	m.failures = 0;
+	m.current_round = 1;
+	m.entries = undefined;
+	for (const participant of m.participants ?? []) {
+		participant.skills_used = [];
+	}
+}
+
 export function montageBandCopy(m: MontageModel): MontageBandCopy {
 	const band = montageOutcome(m);
 	const { toTotal, failuresSpare, complete } = montageTallies(m);

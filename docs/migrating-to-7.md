@@ -221,6 +221,12 @@ keywords:
 - **[Director's trackers](gm-trackers.md)** — an Encounter Builder that computes
   live EV/budget from your synced compendium, plus trackers for montages,
   downtime projects, and party-level victories/renown/wealth.
+- **The Montage Test tracker is a working board, not just a scoreboard** — a grid of one
+  row per hero and one column per round, a **Log an action…** button that opens a small
+  form (hero, round, success/failure/assist, an optional skill and note), and a click on
+  any cell to log or correct that hero's round. A collapsible cheat-sheet shows the test
+  tiers by difficulty; a collapsible guide at the foot covers running the montage end to
+  end. See [GM Trackers](gm-trackers.md) → "Montage Test tracker".
 - **Malice panel and per-turn action checklist** in the initiative tracker —
   see [Initiative Tracker](initiative-tracker.md).
 - **Draw Steel sidebar** — pin any tracker to a persistent panel in
