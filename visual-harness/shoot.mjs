@@ -2088,6 +2088,297 @@ async function assertInputHostLeak(page) {
 	);
 }
 
+// ======================================================================================
+// SC-202 r2 — markdown TABLE host-leak sweep (leak family 2).
+//
+// Same shape as `assertInputHostLeak` — same asar/pin plumbing (`loadLocalObsidianAppCss`,
+// `R1_APP_CSS_SHA256`, `injectRealHostCss`), same SKIP-when-no-asar self-gate, same
+// bare-vs-host computed-style invariance contract. The one thing this family needs that
+// buttons/inputs did not: every `.markdown-rendered table/td/th/…` rule in app.css is
+// scoped to a `.markdown-rendered` ancestor (Obsidian's reading-view wrapper), and the
+// harness's `#mount` has none — 0 anywhere in the gallery DOM (verified). So the host pass
+// below also wraps `#mount` in `.markdown-preview-view.markdown-rendered`, mirroring the
+// phase-1 spike's permanently-wrapped `index.html`
+// (`git show sc202-spike-archive:visual-harness/index.html`) but applied dynamically, only
+// for this sweep — the harness page itself still carries no host CSS or wrapper, per this
+// round's own fence.
+
+/** Every property Obsidian's `.markdown-rendered table` rules set on the `<table>` element
+ *  itself, enumerated from the extracted sheet (see the styles-source.css block's own
+ *  comment for the full census). */
+const TABLE_LEVEL_PROPS = ['marginBlockStart', 'marginBlockEnd', 'wordBreak', 'borderCollapse', 'lineHeight'];
+/** Every property Obsidian's `.markdown-rendered td/th` rules (incl. the `thead > tr > th`/
+ *  `tbody > tr > td` and `:first-child`/`:last-child`/`:nth-child(2n+2)` variants) set on a
+ *  cell — sampled on EVERY th/td in every tagged table, which is why this sweep needs no
+ *  separate first/last/nth-child pass: reading every real cell IS that coverage. */
+const TABLE_CELL_PROPS = [
+	'padding',
+	'borderTopWidth',
+	'borderTopStyle',
+	'borderTopColor',
+	'borderRightWidth',
+	'borderBottomWidth',
+	'borderLeftWidth',
+	'maxWidth',
+	'minWidth',
+	'verticalAlign',
+	'textAlign',
+	'whiteSpace',
+	'textOverflow',
+	'overflow',
+	'backgroundColor',
+	'fontSize',
+	'color',
+	'fontWeight',
+	'fontFamily',
+	'lineHeight',
+];
+/** `tbody`/`thead` row backgrounds — rest and `:hover` (Obsidian's `tr:nth-child(odd)` /
+ *  `:hover` variants all resolve through the SAME `background-color` property; sampling
+ *  every real row at rest already covers the odd/even split, so only the state axis needs
+ *  its own pass, mirroring `assertInputHostLeak`'s hover branch (INFO-3: CDP
+ *  `CSS.forcePseudoState`, not Playwright's own hover, which does not engage once app.css
+ *  is injected). */
+const TABLE_ROW_STATES = ['rest', 'hover'];
+
+/** Tag every `<table>` (and its rows/cells) the gallery renders under a `[data-dse-element]`
+ *  or `.dse-modal` root — same (element, classes) keying convention as `tagInputs`/
+ *  `tagButtons`. Returns the list of distinct table keys found. */
+function tagTables() {
+	const keys = [];
+	const seen = new Set();
+	for (const table of document.querySelectorAll('[data-dse-element] table, .dse-modal table')) {
+		const root = table.closest('[data-dse-element]');
+		const key = (root ? root.getAttribute('data-dse-element') : '(none)') + '|' + (table.className || '(none)');
+		if (seen.has(key)) continue;
+		seen.add(key);
+		const ti = keys.length;
+		keys.push(key);
+		table.setAttribute('data-dse-tableleak', key);
+		table.setAttribute('data-dse-tableleak-i', String(ti));
+		let ri = 0;
+		for (const tr of table.querySelectorAll('tr')) {
+			tr.setAttribute('data-dse-tableleak-tr', `${ti}.${ri}`);
+			let ci = 0;
+			for (const cell of tr.children) {
+				if (cell.tagName !== 'TH' && cell.tagName !== 'TD') continue;
+				cell.setAttribute('data-dse-tableleak-cell', `${ti}.${ri}.${ci}`);
+				ci += 1;
+			}
+			ri += 1;
+		}
+	}
+	return keys;
+}
+
+/** Read every tagged table's own level-props. `props` is a PARAMETER, not a closure over the
+ *  outer `TABLE_LEVEL_PROPS` const — `page.evaluate` serializes only this function's source
+ *  text, so a free reference to a module-level `const` throws `ReferenceError` inside the
+ *  page (the shape every other reader in this file already avoids by taking `props`). */
+function readTaggedTables(props) {
+	const out = [];
+	for (const t of document.querySelectorAll('[data-dse-tableleak]')) {
+		const cs = getComputedStyle(t);
+		const rec = { key: t.getAttribute('data-dse-tableleak') };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** Read every tagged cell's cell-props — every real th/td in every tagged table, which is
+ *  what gives this sweep first/last/nth-child coverage without a dedicated pass. */
+function readTaggedCells(props) {
+	const out = [];
+	for (const c of document.querySelectorAll('[data-dse-tableleak-cell]')) {
+		const cs = getComputedStyle(c);
+		const rec = { key: c.getAttribute('data-dse-tableleak-cell'), tag: c.tagName };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** Read every tagged row's background-color at REST. */
+function readTaggedRowsAtRest() {
+	const out = [];
+	for (const tr of document.querySelectorAll('[data-dse-tableleak-tr]')) {
+		out.push({
+			key: tr.getAttribute('data-dse-tableleak-tr'),
+			inThead: !!tr.closest('thead'),
+			backgroundColor: getComputedStyle(tr).backgroundColor,
+		});
+	}
+	return out;
+}
+
+/** Read ONE tagged row's background-color, reporting whether `:hover` genuinely matches —
+ *  same "never absorbed" contract as `readOneInputTaggedMatching`. */
+function readOneRowTaggedHover(key) {
+	const tr = document.querySelector(`[data-dse-tableleak-tr="${key}"]`);
+	if (!tr) return null;
+	return {
+		key,
+		inThead: !!tr.closest('thead'),
+		backgroundColor: getComputedStyle(tr).backgroundColor,
+		active: tr.matches(':hover'),
+	};
+}
+
+/** Sample every tagged row's background in one state — CDP `forcePseudoState` for hover
+ *  (INFO-3's lesson: Playwright's own hover stops engaging once app.css is injected).
+ *  `rest` just re-reads every row directly (mirrors `probeInputsInState`'s own shape). */
+async function probeTableRowsInState(page, cdp, docRootNodeId, state, rowKeys) {
+	if (state === 'rest') return { records: await page.evaluate(readTaggedRowsAtRest), problems: [] };
+	const records = [];
+	const problems = [];
+	for (const key of rowKeys) {
+		const found = await cdp.send('DOM.querySelector', {
+			nodeId: docRootNodeId,
+			selector: `[data-dse-tableleak-tr="${key}"]`,
+		});
+		if (!found?.nodeId) {
+			problems.push(`row ${key}: CDP could not resolve the tagged node`);
+			continue;
+		}
+		await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: ['hover'] });
+		const rec = await page.evaluate(readOneRowTaggedHover, key);
+		await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: [] });
+		if (!rec) {
+			problems.push(`row ${key}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		if (!rec.active) {
+			problems.push(`row ${key}: CSS.forcePseudoState(['hover']) did not make the row match :hover`);
+			continue;
+		}
+		records.push(rec);
+	}
+	return { records, problems };
+}
+
+async function assertTableHostLeak(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\ntable host-leak SKIPPED (no local asar)');
+		return;
+	}
+	const pinNote =
+		host.sha256 === R1_APP_CSS_SHA256
+			? `matches the round's pin (Obsidian ${host.version})`
+			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
+				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('DOM.enable');
+	await cdp.send('CSS.enable');
+	const problems = [];
+	let kindCount = 0;
+	let comparisons = 0;
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		const keys = await page.evaluate(tagTables);
+		if (keys.length < 3) {
+			problems.push(`${bg}: only ${keys.length} tables found in the gallery — the sweep is blind`);
+			continue;
+		}
+		kindCount = Math.max(kindCount, keys.length);
+
+		const bareTables = await page.evaluate(readTaggedTables, TABLE_LEVEL_PROPS);
+		const bareCells = await page.evaluate(readTaggedCells, TABLE_CELL_PROPS);
+		const bareRowsRest = await page.evaluate(readTaggedRowsAtRest);
+		const rowKeys = bareRowsRest.map((r) => r.key);
+		const { root: bareRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+		const bareRowsByState = {};
+		for (const state of TABLE_ROW_STATES) {
+			const r = await probeTableRowsInState(page, cdp, bareRoot.nodeId, state, rowKeys);
+			bareRowsByState[state] = r.records;
+			for (const p of r.problems) problems.push(`${bg}|host-absent|row|${state}: ${p}`);
+		}
+
+		await injectRealHostCss(page, host.css);
+		// The ancestor every `.markdown-rendered …` rule requires — see the block comment.
+		await page.evaluate(() => {
+			const mount = document.getElementById('mount');
+			const wrap = document.createElement('div');
+			wrap.className = 'markdown-preview-view markdown-rendered';
+			mount.parentElement.insertBefore(wrap, mount);
+			wrap.appendChild(mount);
+		});
+		const { root: hostRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+
+		const hostTables = await page.evaluate(readTaggedTables, TABLE_LEVEL_PROPS);
+		const hostTablesByKey = new Map(hostTables.map((r) => [r.key, r]));
+		for (const b of bareTables) {
+			const h = hostTablesByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|table|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			for (const p of TABLE_LEVEL_PROPS) {
+				if (b[p] !== h[p]) problems.push(`${bg}|table|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+			}
+		}
+
+		const hostCells = await page.evaluate(readTaggedCells, TABLE_CELL_PROPS);
+		const hostCellsByKey = new Map(hostCells.map((r) => [r.key, r]));
+		for (const b of bareCells) {
+			const h = hostCellsByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|cell|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			for (const p of TABLE_CELL_PROPS) {
+				if (b[p] !== h[p])
+					problems.push(
+						`${bg}|cell|${b.key}(${b.tag}): Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`,
+					);
+			}
+		}
+
+		for (const state of TABLE_ROW_STATES) {
+			const r = await probeTableRowsInState(page, cdp, hostRoot.nodeId, state, rowKeys);
+			for (const p of r.problems) problems.push(`${bg}|host-present|row|${state}: ${p}`);
+			const withHost = new Map(r.records.map((rec) => [rec.key, rec]));
+			for (const b of bareRowsByState[state] ?? []) {
+				const h = withHost.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|row|${state}|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				comparisons += 1;
+				if (b.backgroundColor !== h.backgroundColor) {
+					problems.push(
+						`${bg}|row|${state}|${b.key}(${b.inThead ? 'thead' : 'tbody'}): Obsidian's real app.css ` +
+							`changes background-color — "${b.backgroundColor}" without the host, "${h.backgroundColor}" with it`,
+					);
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
+		console.error(
+			`\nTABLE HOST-LEAK VIOLATED — with the real Obsidian app.css present (and the ` +
+				`.markdown-preview-view.markdown-rendered ancestor a real vault always supplies) the ` +
+				`plugin's own tables do not hold their own box or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-202 r2 — MARKDOWN TABLE HOST RE-GROUNDING".`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\ntable host-leak OK (${kindCount} table kinds × dark/light = ${comparisons} comparisons ` +
+			`against the real Obsidian app.css under a real .markdown-preview-view.markdown-rendered ` +
+			`ancestor: every sampled table/row/cell property is identical with and without it; ${pinNote})`,
+	);
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 900, height: 1200 },
@@ -2283,6 +2574,9 @@ try {
 		// renders. Unlike the gate above it self-gates on a local Obsidian asar (see the
 		// block's own comment) rather than failing when one is absent.
 		await assertInputHostLeak(page);
+		// SC-202 r2 — the same question asked of every markdown TABLE the plugin renders
+		// (leak family 2). Also self-gates on a local Obsidian asar.
+		await assertTableHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself

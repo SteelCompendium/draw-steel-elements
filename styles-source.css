@@ -15402,8 +15402,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    label`, `.dse-mt__sheet-input`, `.dse-condal__input`, `.dse-form__raw`) are deliberately
    excluded: the pseudo-element only ever exists on a number input, so including them would
    be a no-op, and naming only the type=number subset keeps this rule an honest list of
-   what it actually reaches. `margin: 0` matches Obsidian's own declaration verbatim —
-   nothing here sets a non-zero margin today, so it is a restatement, not a new decision. */
+   what it actually reaches. INFO-E (re-review 2) — this comment used to claim `margin: 0`
+   "matches Obsidian's own declaration verbatim"; it does not. Obsidian's 1.13.7/1.14.0
+   app.css declares only `-webkit-appearance: none` on the inner spin button and ships NO
+   `::-webkit-outer-spin-button` rule at all. `margin: 0` restates the UA default alongside
+   Obsidian's own `-webkit-appearance: none` (harmless either way — the measured bare-vs-
+   host delta is 0.00 and the pseudo has no box once `appearance` is `none`), and the outer-
+   spin arm is belt-and-braces: nothing here sets a non-zero margin today, so both are
+   restatements, not new decisions. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(
 		.dse-stepper__input,
@@ -15428,4 +15434,143 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	)::-webkit-outer-spin-button {
 	-webkit-appearance: none;
 	margin: 0;
+}
+
+/* ==================================================================================== */
+/*   SC-202 r2 — MARKDOWN TABLE HOST RE-GROUNDING (leak family 2 of ~6)                 */
+/* ==================================================================================== */
+/*
+   Phase 1 (sc202-proposal.md §4.2) found tables the plugin renders inside a real Obsidian
+   reading view — both the JS-built encounter roster (`.dse-enc__table`) and any classless
+   markdown pipe-table arriving through `renderMarkdown` (career/class/kit/perk's inline
+   mini-statblocks, wrapped `.dse-md-table` by SC-121 C-6/L-5) — inherit Obsidian's
+   `.markdown-rendered table/thead/tbody/tr/th/td` rules: a ruled box around every cell,
+   ~48px reserved per column, taller rows, browser-default overflow/white-space, and (for
+   markdown tables specifically) Obsidian's own reading-view font-size/weight. Same shape
+   of defect as SC-203's button leak and SC-202 r1's input leak, one element family over.
+
+   THE ANCESTOR THIS FAMILY NEEDS THAT THE OTHER TWO DID NOT. Every `.markdown-rendered
+   table/td/th/…` rule in app.css is scoped to a `.markdown-rendered` ancestor — Obsidian's
+   reading-view wrapper (`.markdown-preview-view.markdown-rendered`), which the codeblock
+   processor's `el` always sits inside in a real vault, but which the browser harness's
+   `#mount` never has (0 `.markdown-rendered` nodes anywhere in the gallery DOM — verified).
+   So injecting the real app.css ALONE proves nothing for this family, unlike buttons/inputs
+   (whose host rules are unscoped `button`/`input[type=…]` type selectors that match
+   anywhere): the can-fail sweep below also wraps `#mount` in
+   `.markdown-preview-view.markdown-rendered` for its host-present pass — the same two
+   classes the phase-1 spike's `index.html` wrapped permanently
+   (`git show sc202-spike-archive:visual-harness/index.html`), applied dynamically instead
+   of baked into the harness page, matching this round's own fence ("still with no host CSS
+   in the harness").
+
+   ENUMERATED from the real sheet (`visual-harness/dist/obsidian-app.css`, the same
+   locally-extracted, gitignored, never-committed file r1's sweep already reads) via
+   `visual-harness/obsidian-host-pin.mjs`'s own `iterRules`/`splitSelectorList` (the r1
+   review's enumeration method — a hand-rolled brace-matching parser; the `css` npm package
+   silently truncates this file's parse at 137 of ~3,924 top-level rules and must never be
+   used for this census again). Filtering every rule whose selector list names `table`,
+   `thead`, `tbody`, `tr`, `th`, `td` or `caption` as its SUBJECT finds exactly 19 rules
+   whose scope is `.markdown-rendered`/`.cm-html-embed` (the CodeMirror source-view table
+   widget and Bases' own table view carry the other 25 hits — this plugin has no Live
+   Preview support (CLAUDE.md) and no Bases integration, so neither reaches plugin DOM).
+   Obsidian ships **no `caption` rule at all** (0 occurrences in the extracted sheet) — the
+   brief's "if Obsidian styles it" is answered: it does not, so this block declares nothing
+   for `caption`.
+
+   WHAT EMPIRICALLY LEAKS, measured bare vs. host+wrapper on the four gallery tables
+   (encounter's `.dse-enc__table`, career/class/perk's classless markdown tables — kit's own
+   markdown table takes the same classless path, not separately measured):
+
+     `min-width` (0 → 48px), `white-space` (normal → break-spaces), `text-overflow` (clip →
+     ellipsis), `overflow` (visible → hidden) — identical on EVERY cell of EVERY table in
+     both families; this sheet never declares any of the four for a table cell, so Obsidian's
+     `thead > tr > th`/`tbody > tr > td` rule wins outright. GROUP 1 below.
+
+     `.dse-enc__table` only — `margin`/`line-height` (table itself, never declared),
+     `border-top`/`border-left`/`border-right` (never declared; only `border-bottom` is,
+     ~:3499, which is why it alone does NOT leak), `vertical-align` (never declared; the
+     bare "middle" is table-layout's own default, not an authored decision until now).
+     GROUP 2.
+
+     The classless markdown table's `font-size`/`font-weight` (TH) — `[SC205... no,
+     SC-121-C-6]`'s own rule (~:8820) covers padding/border/text-align/vertical-align but
+     never font-size for either cell type nor font-weight for TH, so Obsidian's own
+     `.markdown-rendered th { font-size: …; font-weight: …; }`/`td { font-size: … }` rules
+     win. GROUP 3.
+
+     ONE DOWNSTREAM CONSEQUENCE, found and proven the way r1 found its em-relative padding
+     chain: the classless table's `padding` (6.48/10.08px → 7.2/11.2px) and BOTH families'
+     TD `line-height` looked like independent leaks until traced — they are not. Padding is
+     declared in `em` (SC-121 C-6, ~:8821: `0.45em 0.7em`), so once GROUP 3 stops the
+     cell's own `font-size` from leaking, padding's em-relative math recomputes against the
+     RIGHT base and the "leak" disappears with zero code of its own — verified directly: a
+     scratch rule restating ONLY `font-size: inherit` on the classless cells reverted padding
+     to its bare value with no padding declaration touched at all. TD `line-height` is the
+     same shape one level up: Obsidian sets it only on the TABLE
+     (`.markdown-rendered table { line-height: var(--table-line-height) }`), TD never has
+     its own line-height rule from either side, so it purely INHERITS from the table — fixed
+     by GROUP 2's/GROUP 3's table-level `line-height: 1.5` restatement, not by touching TD.
+     TH's OWN line-height is a SEPARATE, direct leak (`.markdown-rendered th` sets it too) —
+     GROUP 2/3 restate it directly on TH for exactly that reason.
+
+     VERIFIED SAFE, NOT RESTATED: `color`, `background-color` (row/column striping AND
+     hover — `--table-background`/`--table-row-alt-background`/`--table-row-background-hover`
+     all resolve to `transparent` in the running theme, matching this sheet's own un-painted
+     rows), `font-family` (`--table-header-font: inherit`, a no-op against our own already-
+     inherited stack), `border-collapse`/`word-break` (both already match the bare/UA value
+     the harness renders — nothing here declares either, and Obsidian's own values coincide),
+     `text-align` incl. the `[align="center"/"right"]` variants a centered book table (perk's
+     "Familiar Statblock") genuinely emits — the existing `text-align: left`/`:8823`-style
+     declarations already outrank every `[align=…]` rule on class-count alone. Every one of
+     these was checked against the real sheet with the wrapper present, not assumed; a
+     property with a real fix below was never assumed either — see the can-fail sweep.
+*/
+
+/* GROUP 1 — min-width/white-space/text-overflow/overflow, identical value for both table
+   families, nothing here or in SC-121 C-6 ever declared any of the four for a table cell. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table :is(th, td), table:not([class]) :is(th, td)) {
+	min-width: 0;
+	white-space: normal;
+	text-overflow: clip;
+	overflow: visible;
+}
+
+/* GROUP 2 — `.dse-enc__table`'s own box. Table-level margin/line-height were never
+   declared at all; the cells never declared anything but their bottom hairline (~:3499),
+   so the left/top/right sides and vertical-align were Obsidian's to set. `font-size:
+   var(--dse-fs-body)` (the role scale's own "1em", SC-185 — the font-size contract bans a
+   bare `inherit`/`1em` exactly as it bans a literal px/em size, so the role token that
+   already MEANS "the ambient size, unscaled" is the correct spelling of the same fix) is a
+   no-op on `th` (its own rule at ~:3502 already outranks this at (0,3,1) vs this block's
+   (0,2,0) and keeps deciding) and closes `td`'s real gap. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-enc__table) {
+	margin: 0;
+	line-height: 1.5;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table :is(th, td)) {
+	border-top: none;
+	border-left: none;
+	border-right: none;
+	vertical-align: middle;
+	font-size: var(--dse-fs-body);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-enc__table th) {
+	line-height: 1.5;
+}
+
+/* GROUP 3 — the classless markdown table's `font-size` (both cell types — the downstream
+   padding chain above is why this is the whole fix, not a padding rule of its own) and
+   `th`'s `font-weight`/own `line-height` (Obsidian sets both directly on `th`, so table-
+   level `line-height` alone — SC-121 C-6's existing `1.5`, ~:8818 — does not reach it).
+   `var(--dse-fs-body)`, not a bare `inherit` — same SC-185 role-scale reasoning as GROUP 2. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(table:not([class]) :is(th, td)) {
+	font-size: var(--dse-fs-body);
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(table:not([class]) thead th) {
+	font-weight: bold;
+	line-height: 1.5;
 }
