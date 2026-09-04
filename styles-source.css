@@ -15492,8 +15492,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      bare "middle" is table-layout's own default, not an authored decision until now).
      GROUP 2.
 
-     The classless markdown table's `font-size`/`font-weight` (TH) — `[SC205... no,
-     SC-121-C-6]`'s own rule (~:8820) covers padding/border/text-align/vertical-align but
+     The classless markdown table's `font-size`/`font-weight` (TH) — SC-121 C-6's own rule
+     (~:8820) covers padding/border/text-align/vertical-align but
      never font-size for either cell type nor font-weight for TH, so Obsidian's own
      `.markdown-rendered th { font-size: …; font-weight: …; }`/`td { font-size: … }` rules
      win. GROUP 3.
@@ -15573,4 +15573,95 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	:where(table:not([class]) thead th) {
 	font-weight: bold;
 	line-height: 1.5;
+}
+
+/* GROUP 4 — SC-202 r2 FIX ROUND (review MED-1): eight host cell/row rules structurally
+   OUTRANK GROUP 1-3's plain (0,2,0) — Obsidian's own `:first-child`/`:last-child`/
+   `:nth-child(2n+2)`/`tr:nth-child(odd)`/`:hover` forms carry a pseudo-class or an element
+   `.markdown-rendered` alone does not, which is enough extra specificity to beat (0,2,0)
+   even though `.markdown-rendered` itself (one class) never could:
+
+     .markdown-rendered tbody tr > td:first-child / thead tr > th:first-child   (0,2,3)
+     .markdown-rendered tbody tr > td:last-child  / thead tr > th:last-child    (0,2,3)
+     .markdown-rendered tbody tr:last-child > td                                (0,2,3)
+     .markdown-rendered tbody tr > td:nth-child(2n+2) / thead …th:nth-child(2n+2) (0,2,3)
+     .markdown-rendered tbody tr:nth-child(odd)                                 (0,2,2)
+     .markdown-rendered tbody tr:nth-child(odd):hover                          (0,3,2)
+     .markdown-rendered tbody tr / tr:hover, thead tr / tr:hover        (0,1,2) / (0,2,2)
+
+   TODAY'S OUTCOME IS ACCIDENTAL, NOT DESIGNED (review MED-1a — this file's own §2.3 claim
+   that GROUP 1-3 "comfortably outranks" every host rule was backwards; corrected in the
+   round's report). The border widths these rules would otherwise win are neutralised only
+   because GROUP 2's `border-*: none` wins the STYLE longhand at (0,2,0), and CSS forces a
+   border's COMPUTED width to 0 whenever its style is `none`/`hidden` — regardless of which
+   rule's WIDTH value the cascade would otherwise have picked. That stops protecting the
+   moment a future edit rewrites `border-left: none` into `border-left-width: 0` (drops the
+   style longhand; the host's base `.markdown-rendered td, th { border: … solid … }` then
+   wins the style longhand uncontested, and Obsidian's higher-specificity first/last-child
+   WIDTH rule repaints the grid line). The backgrounds these rules would otherwise win are
+   neutralised only because `--table-column-alt-background`, `--table-row-alt-background`,
+   `--table-row-background-hover` and `--table-header-background` all resolve `transparent`
+   in the stock sheet — GROUP 1-3 declares no `background-color` at all, so a theme (or a
+   future Obsidian release) that gives any of those four tokens a real colour paints striped
+   rows/columns inside every plugin table, with the gate still green (it injects stock
+   app.css only, never a themed one).
+
+   FIX: restate the SAME properties at EQUAL-OR-GREATER specificity, mirroring Obsidian's
+   own structural suffix verbatim (outside `:where()`, where it counts) so the specificity
+   math holds generally instead of by luck. This block's own guard clause
+   (`:is([data-dse-element], .dse-modal):not([data-dse-print="on"])`) is already TWO
+   class-equivalents where Obsidian's own `.markdown-rendered` is only ONE — so mirroring
+   any of Obsidian's suffixes always lands this rule (0,1,0) ahead of Obsidian's own version
+   of the same selector, whatever structural pseudo-classes it carries. Deliberately NOT
+   scoped to `[data-dse-theme='steel']` (the shortcut the neighbouring SC-121 C-6 rule takes
+   for the classless family alone, ~:8810 — that only protects one theme); every rule below
+   covers BOTH `.dse-enc__table` and the classless family the same way. Values restate what
+   this file already intends elsewhere, never a new decision: 0 for left/right (GROUP 2's
+   own `none`), 1px for the bottom hairline (the `.dse-enc__table`/SC-121-C-6 rules that
+   already paint it, ~:3499 / ~:8822 — this does not change that hairline, it stops it
+   depending on `--table-row-last-border-width` defaulting to the same 1px by coincidence),
+   `transparent` for every background-color arm (never painted, by design, in either
+   family). Proof: a one-off probe injecting app.css AND overriding all four tokens to a
+   visible colour reads non-zero background diffs on the pre-fix tree, 0 after (round
+   report, MED-1b). The harness's OWN rendering does not move — every value here already
+   equals what the bare harness already computed. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	:is(tbody tr > td:first-child, thead tr > th:first-child) {
+	border-left-width: 0;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	:is(tbody tr > td:last-child, thead tr > th:last-child) {
+	border-right-width: 0;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	tbody tr:last-child > td {
+	border-bottom-width: 1px;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	:is(tbody tr > td:nth-child(2n+2), thead tr > th:nth-child(2n+2)) {
+	background-color: transparent;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	:is(tbody, thead) tr {
+	background-color: transparent;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	:is(tbody, thead) tr:hover {
+	background-color: transparent;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	tbody tr:nth-child(odd) {
+	background-color: transparent;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"])
+	:where(.dse-enc__table, table:not([class]))
+	tbody tr:nth-child(odd):hover {
+	background-color: transparent;
 }

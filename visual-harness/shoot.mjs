@@ -2110,15 +2110,37 @@ const TABLE_LEVEL_PROPS = ['marginBlockStart', 'marginBlockEnd', 'wordBreak', 'b
 /** Every property Obsidian's `.markdown-rendered td/th` rules (incl. the `thead > tr > th`/
  *  `tbody > tr > td` and `:first-child`/`:last-child`/`:nth-child(2n+2)` variants) set on a
  *  cell — sampled on EVERY th/td in every tagged table, which is why this sweep needs no
- *  separate first/last/nth-child pass: reading every real cell IS that coverage. */
+ *  separate first/last/nth-child pass: reading every real cell IS that coverage.
+ *
+ *  SC-202 r2 fix round (LOW-1) — the right/bottom/left sides only had their WIDTH sampled;
+ *  Obsidian's own `border: … solid …` shorthand sets style+colour on all four sides, and
+ *  `thead tr > th { border-color: … }` sets colour on all four independently of width. Add
+ *  the six missing longhands so a future specificity change on any side is caught the way
+ *  the top side already is (0 diffs today, proven side-effect-free — see the round report).
+ *
+ *  SC-202 r2 fix round (MED-2) — `boxSizing`/`overflowWrap` are two ambient/universal host
+ *  declarations (`* { box-sizing: border-box }`, `.markdown-preview-view { overflow-wrap:
+ *  break-word }`) that reach table cells independent of the table-rule family this block
+ *  fences — real leaks this round explicitly DEFERS (ledger: fold into the "turn the sheet
+ *  on" round's census alongside r1's `caret-color` and INFO-C's `box-sizing`). Sampled
+ *  anyway, with a printed declared-exemption record (`TABLE_CELL_PROPS_DECLARED_EXEMPT`
+ *  below), so the sweep's silence here is a visible, checked boundary rather than an
+ *  accidental blind spot: the known `bare -> host` pair is tolerated, anything else at
+ *  either property is a NEW problem, not a deferred one. */
 const TABLE_CELL_PROPS = [
 	'padding',
 	'borderTopWidth',
 	'borderTopStyle',
 	'borderTopColor',
 	'borderRightWidth',
+	'borderRightStyle',
+	'borderRightColor',
 	'borderBottomWidth',
+	'borderBottomStyle',
+	'borderBottomColor',
 	'borderLeftWidth',
+	'borderLeftStyle',
+	'borderLeftColor',
 	'maxWidth',
 	'minWidth',
 	'verticalAlign',
@@ -2132,7 +2154,17 @@ const TABLE_CELL_PROPS = [
 	'fontWeight',
 	'fontFamily',
 	'lineHeight',
+	'boxSizing',
+	'overflowWrap',
 ];
+/** SC-202 r2 fix round (MED-2) — the two declared, deferred exceptions above. A cell whose
+ *  bare-vs-host pair at one of these properties matches EXACTLY is a known, already-disclosed
+ *  leak (not re-grounded this round); anything else is a real problem. Same printed-boundary
+ *  shape `assertBtnHostLeak` uses for its own (kind,state) exemptions. */
+const TABLE_CELL_PROPS_DECLARED_EXEMPT = {
+	boxSizing: { bare: 'content-box', host: 'border-box' },
+	overflowWrap: { bare: 'normal', host: 'break-word' },
+};
 /** `tbody`/`thead` row backgrounds — rest and `:hover` (Obsidian's `tr:nth-child(odd)` /
  *  `:hover` variants all resolve through the SAME `background-color` property; sampling
  *  every real row at rest already covers the odd/even split, so only the state axis needs
@@ -2274,6 +2306,10 @@ async function assertTableHostLeak(page) {
 	const problems = [];
 	let kindCount = 0;
 	let comparisons = 0;
+	/** SC-202 r2 fix round (MED-2) — cell records that matched a declared, deferred host
+	 *  leak exactly. Counted and printed, never silently dropped. */
+	let exempt = 0;
+	const exemptions = new Map();
 	for (const bg of ['dark', 'light']) {
 		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg });
 		await page.emulateMedia({ media: 'screen' });
@@ -2333,10 +2369,17 @@ async function assertTableHostLeak(page) {
 			}
 			comparisons += 1;
 			for (const p of TABLE_CELL_PROPS) {
-				if (b[p] !== h[p])
-					problems.push(
-						`${bg}|cell|${b.key}(${b.tag}): Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`,
-					);
+				if (b[p] === h[p]) continue;
+				const declared = TABLE_CELL_PROPS_DECLARED_EXEMPT[p];
+				if (declared && b[p] === declared.bare && h[p] === declared.host) {
+					exempt += 1;
+					const reason = `${p}: "${declared.bare}" -> "${declared.host}" (declared, deferred — see MED-2)`;
+					exemptions.set(reason, (exemptions.get(reason) ?? 0) + 1);
+					continue;
+				}
+				problems.push(
+					`${bg}|cell|${b.key}(${b.tag}): Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`,
+				);
 			}
 		}
 
@@ -2372,10 +2415,21 @@ async function assertTableHostLeak(page) {
 		);
 		process.exit(1);
 	}
+	const exemptBoundary = [...exemptions.entries()]
+		.sort((a, b) => b[1] - a[1])
+		.map(([reason, n]) => `      ${n}× ${reason}`)
+		.join('\n');
 	console.log(
 		`\ntable host-leak OK (${kindCount} table kinds × dark/light = ${comparisons} comparisons ` +
 			`against the real Obsidian app.css under a real .markdown-preview-view.markdown-rendered ` +
-			`ancestor: every sampled table/row/cell property is identical with and without it; ${pinNote})`,
+			`ancestor: every sampled table/row/cell property is identical with and without it, except ` +
+			`${Object.keys(TABLE_CELL_PROPS_DECLARED_EXEMPT).length} declared, deferred exceptions ` +
+			`(box-sizing/overflow-wrap — ambient host declarations outside this round's table-rule ` +
+			`family, fold into the "turn the sheet on" round's census); ${pinNote})` +
+			(exempt
+				? `\n  ${exempt} cell records matched a declared, deferred exception — each one proved ` +
+					`against its known value pair, never assumed:\n${exemptBoundary}`
+				: ''),
 	);
 }
 

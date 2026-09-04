@@ -96,6 +96,177 @@ describe('SC-202 r2 — GROUP 3: the classless markdown table', () => {
 	});
 });
 
+describe('SC-202 r2 fix round — GROUP 4: specificity-equal-or-greater structural companions (MED-1b)', () => {
+	/**
+	 * A minimal CSS specificity calculator (a,b,c) — ids / classes+attributes+pseudo-classes
+	 * / elements+pseudo-elements — good enough for the selector shapes this file and
+	 * Obsidian's `app.css` actually use here (no ids anywhere in either sheet's table
+	 * rules). `:where()` contributes nothing; `:is()`/`:not()`/`:has()` contribute the
+	 * MAX specificity of their comma-separated arguments (recursively) — exactly the CSS
+	 * Selectors Level 4 rule. jsdom cascades no var() and lays out nothing, so this is a
+	 * text-level derivation, not a rendered one — which is the point: it is assertable
+	 * everywhere, including where the `assertTableHostLeak` sweep self-skips (no local
+	 * asar).
+	 */
+	function specificity(selector: string): [number, number, number] {
+		let a = 0;
+		let b = 0;
+		let c = 0;
+		let i = 0;
+		const s = selector.trim();
+		while (i < s.length) {
+			const ch = s[i];
+			if (ch === ' ' || ch === '>' || ch === '+' || ch === '~') {
+				i += 1;
+				continue;
+			}
+			if (ch === '#') {
+				const m = /^#[-\w]+/.exec(s.slice(i));
+				a += 1;
+				i += m ? m[0].length : 1;
+				continue;
+			}
+			if (ch === '.') {
+				const m = /^\.[-\w]+/.exec(s.slice(i));
+				b += 1;
+				i += m ? m[0].length : 1;
+				continue;
+			}
+			if (ch === '[') {
+				const end = s.indexOf(']', i);
+				b += 1;
+				i = end === -1 ? s.length : end + 1;
+				continue;
+			}
+			if (ch === ':') {
+				if (s[i + 1] === ':') {
+					const m = /^::[-\w]+/.exec(s.slice(i));
+					c += 1;
+					i += m ? m[0].length : 2;
+					continue;
+				}
+				const m = /^:([-\w]+)/.exec(s.slice(i));
+				const name = m ? m[1] : '';
+				i += m ? m[0].length : 1;
+				if (s[i] === '(') {
+					let depth = 1;
+					let j = i + 1;
+					while (depth > 0 && j < s.length) {
+						if (s[j] === '(') depth += 1;
+						else if (s[j] === ')') depth -= 1;
+						j += 1;
+					}
+					const inner = s.slice(i + 1, j - 1);
+					i = j;
+					if (name === 'where') continue;
+					if (name === 'is' || name === 'not' || name === 'has') {
+						const args = splitTopLevelCommas(inner);
+						let best: [number, number, number] = [0, 0, 0];
+						for (const arg of args) {
+							const sp = specificity(arg);
+							if (cmp(sp, best) > 0) best = sp;
+						}
+						a += best[0];
+						b += best[1];
+						c += best[2];
+						continue;
+					}
+					// :nth-child(...)/:nth-of-type(...)/etc. — one pseudo-class regardless of arg.
+					b += 1;
+					continue;
+				}
+				b += 1;
+				continue;
+			}
+			const m = /^[-\w]+/.exec(s.slice(i));
+			if (m) {
+				c += 1;
+				i += m[0].length;
+				continue;
+			}
+			i += 1;
+		}
+		return [a, b, c];
+	}
+
+	function splitTopLevelCommas(s: string): string[] {
+		const out: string[] = [];
+		let depth = 0;
+		let start = 0;
+		for (let i = 0; i < s.length; i += 1) {
+			if (s[i] === '(') depth += 1;
+			else if (s[i] === ')') depth -= 1;
+			else if (s[i] === ',' && depth === 0) {
+				out.push(s.slice(start, i));
+				start = i + 1;
+			}
+		}
+		out.push(s.slice(start));
+		return out;
+	}
+
+	function cmp(x: [number, number, number], y: [number, number, number]): number {
+		for (let i = 0; i < 3; i += 1) if (x[i] !== y[i]) return x[i] - y[i];
+		return 0;
+	}
+
+	// Sanity-check the calculator itself against the review's own derived numbers before
+	// trusting it to gate anything (review of `eb54b8d`, MED-1 table).
+	test('the calculator reproduces the review\'s own derived specificities', () => {
+		expect(specificity(ANCHOR)).toEqual([0, 2, 0]);
+		expect(specificity('.markdown-rendered tbody tr > td:first-child')).toEqual([0, 2, 3]);
+		expect(specificity('.markdown-rendered tbody tr:nth-child(odd)')).toEqual([0, 2, 2]);
+		expect(specificity('.markdown-rendered tbody tr:nth-child(odd):hover')).toEqual([0, 3, 2]);
+		expect(specificity('.markdown-rendered thead tr')).toEqual([0, 1, 2]);
+		expect(specificity('.markdown-rendered thead tr:hover')).toEqual([0, 2, 2]);
+	});
+
+	const FAMILY = ':where(.dse-enc__table, table:not([class]))';
+
+	/** [companion suffix (verbatim, as written after the FAMILY clause), the worst-case real
+	 *  Obsidian selector this companion must outrank, the property it restates]. */
+	const COMPANIONS: Array<[string, string, string]> = [
+		[
+			':is(tbody tr > td:first-child, thead tr > th:first-child)',
+			'.markdown-rendered tbody tr > td:first-child',
+			'border-left-width: 0;',
+		],
+		[
+			':is(tbody tr > td:last-child, thead tr > th:last-child)',
+			'.markdown-rendered tbody tr > td:last-child',
+			'border-right-width: 0;',
+		],
+		['tbody tr:last-child > td', '.markdown-rendered tbody tr:last-child > td', 'border-bottom-width: 1px;'],
+		[
+			':is(tbody tr > td:nth-child(2n+2), thead tr > th:nth-child(2n+2))',
+			'.markdown-rendered tbody tr > td:nth-child(2n+2)',
+			'background-color: transparent;',
+		],
+		[':is(tbody, thead) tr', '.markdown-rendered thead tr', 'background-color: transparent;'],
+		[':is(tbody, thead) tr:hover', '.markdown-rendered tbody tr:hover', 'background-color: transparent;'],
+		['tbody tr:nth-child(odd)', '.markdown-rendered tbody tr:nth-child(odd)', 'background-color: transparent;'],
+		[
+			'tbody tr:nth-child(odd):hover',
+			'.markdown-rendered tbody tr:nth-child(odd):hover',
+			'background-color: transparent;',
+		],
+	];
+
+	test.each(COMPANIONS)('companion %s exists and restates %s at >= Obsidian\'s own specificity', (suffix, obsidianSelector, decl) => {
+		const pattern = new RegExp(escape(`${ANCHOR} ${FAMILY} ${suffix}`) + ' \\{([^}]*)\\}');
+		const m = flat.match(pattern);
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain(decl);
+		const ours = specificity(`${ANCHOR} ${FAMILY} ${suffix}`);
+		const theirs = specificity(obsidianSelector);
+		expect(cmp(ours, theirs)).toBeGreaterThanOrEqual(0);
+	});
+
+	test('none of GROUP 1-4 is scoped to [data-dse-theme=\'steel\'] — that would protect only one theme', () => {
+		expect(flat).not.toContain("[data-dse-theme='steel']");
+	});
+});
+
 describe('SC-202 r2 — scope fence: no other leak family creeps in', () => {
 	test('the block never touches list/blockquote/heading/emphasis/link/checkbox selectors', () => {
 		for (const forbidden of ['<li', ' li ', 'blockquote', /\bh[1-6]\b/, 'strong', "input[type='checkbox']", "input[type=\"checkbox\"]"]) {
