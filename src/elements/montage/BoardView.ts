@@ -145,21 +145,29 @@ export class BoardView {
 		// cell socket opens (spec §D). Targets the CURRENT round: edit mode if this hero
 		// already has an entry there, else new mode pre-filled hero=name round=current —
 		// exactly what an open current-round socket for this row would open.
+		// FIX ROUND 3 (review-2 M-1, guard 1 of 2): `complete` stands this control down
+		// exactly like the bar it mirrors (view.ts's buildActionBar, which never renders
+		// Log an action… once the montage is complete). Before this fix the row chip
+		// stayed live on a complete montage and its target round was
+		// `this.model.current_round` — which after `endMontageRound()` can be
+		// `rounds + 1`, a round the board has no column for at all, so a logged entry
+		// there was invisible and unreachable by the only editor the element has.
 		const currentRoundEntry = this.entryFor(entries, this.model.current_round);
+		const rowActDisabled = !this.canPersist || complete;
 		const rowAct = iconButton(
 			nameCell,
 			{
 				icon: 'plus',
 				label: `Log an action for ${name}`,
-				disabled: !this.canPersist,
-				onClick: this.canPersist
-					? () =>
+				disabled: rowActDisabled,
+				onClick: rowActDisabled
+					? STUB_NOOP
+					: () =>
 							this.onOpenSheet(
 								currentRoundEntry
 									? { kind: 'edit', entry: currentRoundEntry }
 									: { kind: 'new', hero: name, round: this.model.current_round },
-							)
-					: STUB_NOOP,
+							),
 			},
 			this.owner,
 		);

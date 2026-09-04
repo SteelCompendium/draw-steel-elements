@@ -3987,6 +3987,20 @@ Shared globals
 	.dse-mt__guide-block[data-stub='on'] {
 		padding-bottom: 0.15em;
 	}
+	/* FIX ROUND 3 (H-1's dedup half) — GuideView.ts now builds BOTH the full "Each
+	   test" table and the pinned stub always (previously only whichever one
+	   `stripOpen` picked existed in the DOM at all, which meant print — a pure CSS
+	   presentation layer over the SAME already-built DOM — could never show the
+	   stub in the case the screen had built the full table, or vice versa). The
+	   SCREEN half of this toggle is written FLAT, print-excluded, down by its
+	   print counterpart (search "H-1's dedup half" below) rather than nested here
+	   — nested under `.dse-mt` it would compile in with MORE compound-selector
+	   weight than that flat print rule, silently out-specificitying and defeating
+	   print's own answer regardless of source order (caught by eyeballing the
+	   after-print crop per the review-2 H-1 instruction: the stub line was
+	   flat-out missing on the non-pinned fixture). `data-dse-print` lives on the
+	   `[data-dse-element="montage"]` root, not on `.dse-mt__guide` itself, so the
+	   exclusion has to anchor there too — it can't be attached locally here. */
 
 	/* -- 300px sidebar leaf: the board re-lays to one band per hero -- */
 	@container dse-mt (max-width: 420px) {
@@ -4977,13 +4991,161 @@ Shared globals
 	background: repeating-linear-gradient(135deg, #333 0 1px, transparent 1px 5px);
 }
 
+/* FIX ROUND 3 (review-2 H-1) — the cheat-sheet strip prints as a laid-out tier table.
+   Every `.dse-mt__strip`/`.dse-mt__tier-*` rule lives in the Steel skin tier
+   (`:4637`+), so it had NO print layout at all — but the plugin-wide
+   `.dse-collapse__region[hidden] { display: block !important }` print rule
+   force-opens EVERY `kit/collapsible`, strip included, whether the Director pinned it
+   or not. Measured before this fix: the row computed `display: block` with
+   `grid-template-columns: none` — three difficulty columns collapsed into one run-on
+   sentence, the badge shrank to 18.5px with a transparent ground, the pip computed
+   `position: static` with a transparent fill. This block gives the row/cell/seal/pip
+   GEOMETRY only (never the Steel tier's decorative wash — its `--tw` values are
+   literal rgba tuned for a dark screen ground, no print token, and the owner's own
+   note asks for "no half-opacity" on paper) — a plain bordered table, "light-on-white
+   ground" per that note. Ink for the seal/pip comes from the SAME tokens the Steel
+   rule already uses (`--dse-turn-done`/`--dse-danger`/`--dse-vp`) — unlike
+   `--dse-metal-line` (resolves to nothing under print, see the comment above), these
+   three are the print scheme's own "meaning-bearing, darkened legible" tier (D3 map),
+   so simply letting the rule REACH print (rather than hand-picking a literal) gets the
+   correct #1a7a3a/#a11/#8a6a00 ink for free. The shipped `.dse-pr__badge` DOM
+   (`kit/tierBadge`) already prints correctly elsewhere in the plugin — its own
+   `print-color-adjust: exact` rule (~:13849) is unscoped — so the badge itself needs
+   no montage-local print rule, only a track that doesn't collapse it. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__strip-well {
+	padding: 0.5rem 0.8rem;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-rows {
+	border: 1px solid var(--dse-border);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-row {
+	display: grid;
+	grid-template-columns: 3.21em repeat(3, minmax(0, 1fr));
+	align-items: center;
+	column-gap: 0.7em;
+	padding: 0.3em 0.7em;
+	border-top: 1px solid var(--dse-border);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-row--head {
+	border-top: none;
+	border-bottom: 1px solid var(--dse-border);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-key {
+	display: flex;
+	align-items: center;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-col {
+	font-weight: 700;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-mark {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.28em;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-seal {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5em;
+	height: 1.5em;
+	border-radius: 50%;
+	border: 1px solid var(--dse-border);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-seal[data-kind='success'] {
+	border: 2px solid var(--dse-turn-done);
+	color: var(--dse-turn-done);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-seal[data-kind='failure'] {
+	border: 2px solid var(--dse-danger);
+	color: var(--dse-danger);
+}
+/* The pip: geometry only — its fill (`::after`, `var(--dse-vp)`) and its rim
+   (`::before`, `var(--dse-metal-line)`, which resolves to nothing under print — the
+   rim simply doesn't paint on paper, same as every other metal ornament) already
+   exist in the Steel rule; only `position: absolute` (needed to seat it on the seal's
+   corner at all) and the two clip-path shapes are montage-local geometry that must
+   reach print for the triangle to render as anything but a stray 0×0 box. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-pip {
+	position: absolute;
+	right: -0.34em;
+	bottom: -0.26em;
+	width: 0.82em;
+	height: 0.68em;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-pip::before,
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-pip::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell[data-rider='reward'] .dse-mt__tier-pip::before,
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell[data-rider='reward'] .dse-mt__tier-pip::after {
+	clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell[data-rider='consequence'] .dse-mt__tier-pip::before,
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell[data-rider='consequence'] .dse-mt__tier-pip::after {
+	clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-word {
+	display: flex;
+	flex-direction: column;
+}
+/* L-2 — the strip's screen-state hint ("pinned" / "easy · medium · hard") means
+   nothing on paper; print-hide it the same way the board's own screen-only controls
+   are print-hidden above. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__strip-hint {
+	display: none;
+}
+/* H-1's dedup half, screen side: reproduces the exact one-or-the-other choice
+   GuideView.ts's build-time branch used to make, now that both forms always exist
+   in the DOM. Written FLAT and print-excluded (`:not([data-dse-print="on"])`)
+   rather than nested under `.dse-mt` (where the equivalent rule used to live,
+   right after `.dse-mt__guide-block[data-stub='on']`) — nested, it compiled in
+   with MORE compound-selector weight than the print rule two rules below and
+   silently won regardless of source order, leaving the stub genuinely absent
+   (not just un-styled) on the non-pinned fixture's printed guide panel — caught
+   by eyeballing the after-print crop per the review-2 H-1 instruction, not by any
+   test (jsdom has no real cascade to catch a specificity fight; see the
+   source-text CSS-contract convention noted elsewhere in this file). */
+[data-dse-element="montage"]:not([data-dse-print="on"]) .dse-mt .dse-mt__guide[data-strip-open='off'] .dse-mt__guide-tiers-stub {
+	display: none;
+}
+[data-dse-element="montage"]:not([data-dse-print="on"]) .dse-mt .dse-mt__guide[data-strip-open='on'] .dse-mt__guide-tiers-full {
+	display: none;
+}
+/* H-1's dedup half, print side: the foot guide's "Each test" full table would now
+   DUPLICATE the strip's own newly-correct print table regardless of the strip's
+   screen pin state (print force-opens every collapsible) — this rule always picks
+   the stub, overriding whichever one `data-strip-open` picked for screen. Flat and
+   unguarded is correct here: nothing above it can out-specificity it now that the
+   screen half (above) excludes itself from print instead of relying on source
+   order to lose a fight it can't structurally win. */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__guide-tiers-full {
+	display: none;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__guide-tiers-stub {
+	display: block;
+}
+
 /* -- SLICE 4: the "Log an action…" sheet + the two small config modals (kit
    managedModal, the SC-186 ConditionsModal precedent) — appended to document.body, NOT
-   nested under [data-dse-element="montage"], so (like .dse-condal-modal) it lives
-   OUTSIDE the montage's own two-tier print scope: a modal never prints or freezes
-   (managedModal.ts's `.dse-modal`/DseModal chrome already owns that), but every rule
-   below still carries the Steel scoping gate for consistency with the rest of the
-   sheet, the same choice .dse-condal-modal made. -- */
+   nested under [data-dse-element="montage"], so it lives OUTSIDE the montage's own
+   two-tier print scope: a modal never prints or freezes (managedModal.ts's
+   `.dse-modal`/DseModal chrome already owns that). FIX ROUND 3 (review-2 L-1): this
+   block carries NO Steel-theme attribute gate on any rule below — corrected from an
+   earlier draft of this comment, which claimed one for consistency with the
+   conditions-manager modal's own CSS block (that one really does gate four of its
+   rules). The honest reason this block is ungated: Steel is the only theme (SC-144),
+   so the gate can never mismatch here either way — this block simply never picked up
+   the convention its precedent did. Harmless (a modal is out of print/freeze scope, so
+   there is no byte-movement or polarity-audit risk either gate choice creates), but
+   the comment must not claim a gate that is not in the rules below it. -- */
 .dse-mt__sheet {
 	width: 480px;
 	max-width: calc(100vw - 4em);
@@ -7225,8 +7387,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    padding/borderRadius stopped too, with no change to those properties' own rules. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-amount,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-label,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__skill-input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__char-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__sheet-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__sheet-rollchar,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-party__award-input,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__roll-input,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__points-input,
@@ -7260,8 +7422,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-amount,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-label,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__skill-input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__char-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__sheet-input,
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__sheet-rollchar,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-party__award-input,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__roll-input,
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__points-input,
@@ -13478,8 +13640,8 @@ button.dse-pr__row:hover {
    rather than declaring a second one, per the comment above. */
 .dse-init__malice-quickadd-amount:focus-visible,
 .dse-init__malice-quickadd-label:focus-visible,
-.dse-mt__skill-input:focus-visible,
-.dse-mt__char-input:focus-visible,
+.dse-mt__sheet-input:focus-visible,
+.dse-mt__sheet-rollchar:focus-visible,
 .dse-party__award-input:focus-visible,
 .dse-prj__roll-input:focus-visible,
 .dse-prj__points-input:focus-visible,
@@ -14884,12 +15046,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 
      GROUP 2 — the full material (padding/border/background/color/border-radius/
      caret-color), where each selector needed it. `.dse-stepper__input`, the malice
-     quick-add pair, and the three modal controls are bare or lightly-scoped rules whose
-     class-count TIES Obsidian's own base input rule ((0,0,1,1)) or loses to it outright,
-     so the type-selector component decides in THE HOST'S favour — every material property
-     loses even where the plugin already declares it. `.dse-mt__skill-input`/`-char-input`,
-     `.dse-party__award-input` and the `.dse-prj__*-input` trio do NOT need this: each
-     already sits behind an ancestor scope three classes deep that safely outranks the
+     quick-add pair, and the four modal controls (the three original plus SC-191 fix
+     round 3's `.dse-mt__sheet-input`/`.dse-mt__sheet-rollchar` — see that rule's own
+     comment below) are bare or lightly-scoped rules whose class-count TIES Obsidian's
+     own base input rule ((0,0,1,1)) or loses to it outright, so the type-selector
+     component decides in THE HOST'S favour — every material property loses even where
+     the plugin already declares it. `.dse-party__award-input` and the
+     `.dse-prj__*-input` trio do NOT need this: each already sits behind an ancestor
+     scope three classes deep that safely outranks the
      host's REST-scoped material rules. `.dse-condal__input` restates its OWN pre-existing
      "no UA chrome, inherit the modal's font" design (border/background/outline/padding/
      font all verbatim) rather than adopting the Steel field look the others get — that
@@ -15009,8 +15173,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-stepper__input,
 		.dse-init__malice-quickadd-amount,
 		.dse-init__malice-quickadd-label,
-		.dse-mt__skill-input,
-		.dse-mt__char-input,
+		.dse-mt__sheet-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,
@@ -15049,6 +15213,26 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    ancestor-scoped siblings — it had NO material declared anywhere before this (only
    `width: 60px`), the same real gap the malice quick-add pair had in r1. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-sedit__apply-input) {
+	padding: 0.25em 0.5em;
+	color: var(--dse-fg);
+	background: var(--dse-surface);
+	border: 1px solid var(--dse-border);
+	border-radius: var(--dse-radius);
+	caret-color: var(--dse-fg);
+}
+/* GROUP 2 — SC-191 fix round 3's own rename target: `.dse-mt__sheet-input`/
+   `.dse-mt__sheet-rollchar` REPLACE this block's original `.dse-mt__skill-input`/
+   `.dse-mt__char-input` (the pre-SC-191 montage board's own record form, redesigned
+   away in SC-191 slice 2 — the rebase onto SC-202's tip left the OLD names' rules in
+   this shared block with nothing left in `src/` to match them, and no coverage at all
+   for the NEW ones, exactly the "SC-202 integration delta" the fix-3 brief asked to be
+   reported, not hidden). Unlike the old montage board inputs (deeply ancestor-scoped,
+   this block's own GROUP-2 exemption note above), these two live inside the SHEET
+   MODAL — the same shallow nesting `.dse-sedit__apply-input` sits at — and had NO
+   material of their own beyond `.dse-mt__sheet-input`'s own `width`/`box-sizing`
+   (styles-source.css ~:5195), so they get the identical plain-field look rather than
+   the exemption. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(.dse-mt__sheet-input, .dse-mt__sheet-rollchar) {
 	padding: 0.25em 0.5em;
 	color: var(--dse-fg);
 	background: var(--dse-surface);
@@ -15103,8 +15287,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	:where(
 		.dse-init__malice-quickadd-amount,
 		.dse-init__malice-quickadd-label,
-		.dse-mt__skill-input,
-		.dse-mt__char-input,
+		.dse-mt__sheet-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,
@@ -15137,8 +15321,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	:where(
 		.dse-init__malice-quickadd-amount,
 		.dse-init__malice-quickadd-label,
-		.dse-mt__skill-input,
-		.dse-mt__char-input,
+		.dse-mt__sheet-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,
@@ -15166,8 +15350,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-stepper__input,
 		.dse-init__malice-quickadd-amount,
 		.dse-init__malice-quickadd-label,
-		.dse-mt__skill-input,
-		.dse-mt__char-input,
+		.dse-mt__sheet-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,
@@ -15187,8 +15371,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 		.dse-stepper__input,
 		.dse-init__malice-quickadd-amount,
 		.dse-init__malice-quickadd-label,
-		.dse-mt__skill-input,
-		.dse-mt__char-input,
+		.dse-mt__sheet-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,
@@ -15208,7 +15392,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    family already draws its own kit −/+ steppers, so the browser's native spinner is
    redundant chrome, not a missing affordance — hiding it here MATCHES the vault's own
    look, it doesn't invent one. Type=text/textarea members (`.dse-init__malice-quickadd-
-   label`, `.dse-mt__skill-input`, `.dse-condal__input`, `.dse-form__raw`) are deliberately
+   label`, `.dse-mt__sheet-input`, `.dse-condal__input`, `.dse-form__raw`) are deliberately
    excluded: the pseudo-element only ever exists on a number input, so including them would
    be a no-op, and naming only the type=number subset keeps this rule an honest list of
    what it actually reaches. `margin: 0` matches Obsidian's own declaration verbatim —
@@ -15217,7 +15401,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	:where(
 		.dse-stepper__input,
 		.dse-init__malice-quickadd-amount,
-		.dse-mt__char-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,
@@ -15228,7 +15412,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	:where(
 		.dse-stepper__input,
 		.dse-init__malice-quickadd-amount,
-		.dse-mt__char-input,
+		.dse-mt__sheet-rollchar,
 		.dse-party__award-input,
 		.dse-prj__roll-input,
 		.dse-prj__points-input,

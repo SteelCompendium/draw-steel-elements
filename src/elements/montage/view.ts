@@ -39,6 +39,7 @@ import { Component, Notice } from 'obsidian';
 import { ElementView } from '@/framework/view';
 import type { ChromeMenuItem } from '@/framework/chrome/types';
 import { iconButton, openManagedModal } from '@/framework/kit';
+import type { DseModal } from '@/framework/kit';
 import type { MontageModel, MontageEntry } from './model';
 import {
 	addMontageHero,
@@ -126,12 +127,17 @@ export class MontageView extends ElementView<MontageModel> {
 	}
 
 	/**
-	 * FIX ROUND 2 — the bottom action bar, mirroring mock6.js's `actionBar()` exactly
-	 * (DOM order, labels, icons, danger styling): LIVE state is `Log an action…`
-	 * (accent) · `Undo` · `End round N` (mock6.js:1458-1460); COMPLETE state stands down
-	 * to `Reopen` (only when reopenable — model.ts's own doc) · `Clear all` (danger,
-	 * mock6.js:1420-1425). The mock's own fourth live-state control, `more` (⋯), is the
-	 * SC-169 chrome panel here, not a bar button — never duplicated.
+	 * FIX ROUND 2 + FIX ROUND 3 (review-2 L-3) — the bottom action bar. LIVE state:
+	 * `Log an action…` (accent) · `Undo` · `End round N` (mock6.js:1458-1460).
+	 * COMPLETE state: `Undo` · `Reopen` (only when reopenable — model.ts's own doc) ·
+	 * danger `Clear all` — fix round 3 ADDS `Undo` to the complete-state bar, per the
+	 * owner's own correction of mock6.js:1420-1425's drawn (Reopen + Clear all only)
+	 * shape: logging the winning success is what flips the montage complete, so the
+	 * bar standing fully down in the SAME breath removed the one-click undo for the
+	 * entry the Director is most likely to want to undo. Recovery still exists either
+	 * way (click the cell, press Remove) — this keeps the fast path too. The mock's own
+	 * fourth live-state control, `more` (⋯), is the SC-169 chrome panel here, not a bar
+	 * button — never duplicated.
 	 *
 	 * Read-only: every button in the bar renders real-disabled rather than the row being
 	 * omitted (owner ruling I-6, "explicit read-only states" — the board's own
@@ -145,6 +151,7 @@ export class MontageView extends ElementView<MontageModel> {
 		const disabled = !canPersist;
 
 		if (complete) {
+			this.buildUndoButton(row, model, disabled, owner);
 			if (montageReopenable(model)) {
 				iconButton(
 					row,
@@ -202,24 +209,7 @@ export class MontageView extends ElementView<MontageModel> {
 			},
 			owner,
 		);
-		const hasEntries = (model.entries?.length ?? 0) > 0;
-		iconButton(
-			row,
-			{
-				icon: 'undo',
-				label: 'Undo',
-				text: 'Undo',
-				disabled: disabled || !hasEntries,
-				onClick:
-					disabled || !hasEntries
-						? STUB_NOOP
-						: () => {
-								undoLastMontageEntry(model);
-								void this.commit();
-							},
-			},
-			owner,
-		);
+		this.buildUndoButton(row, model, disabled, owner);
 		iconButton(
 			row,
 			{
@@ -238,6 +228,30 @@ export class MontageView extends ElementView<MontageModel> {
 		);
 	}
 
+	/** `Undo` — shared between the LIVE and COMPLETE bars (fix round 3, L-3): removes
+	 *  the most recently logged entry either way, disabled whenever there is nothing to
+	 *  undo. */
+	private buildUndoButton(row: HTMLElement, model: MontageModel, disabled: boolean, owner: Component): void {
+		const hasEntries = (model.entries?.length ?? 0) > 0;
+		iconButton(
+			row,
+			{
+				icon: 'undo',
+				label: 'Undo',
+				text: 'Undo',
+				disabled: disabled || !hasEntries,
+				onClick:
+					disabled || !hasEntries
+						? STUB_NOOP
+						: () => {
+								undoLastMontageEntry(model);
+								void this.commit();
+							},
+			},
+			owner,
+		);
+	}
+
 	// -------------------------------------------------------------------- the sheet
 
 	/** Opens the "Log an action…" sheet — the SAME modal for a fresh record and a
@@ -246,17 +260,41 @@ export class MontageView extends ElementView<MontageModel> {
 	 *  ever hands back a plain entry object; the mutation happens in the commit*
 	 *  callbacks below, through model.ts's delta-write helpers. */
 	private openSheet(mode: SheetMode): void {
-		openManagedModal(
-			this,
-			() =>
-				new LogActionModal(this.cx.app, {
-					model: this.model,
-					mode,
-					roll: this.cx.roll,
-					onSubmit: (entry) => this.commitSheetSubmit(mode, entry),
-					onRemove: mode.kind === 'edit' ? () => this.commitSheetRemove(mode.entry) : undefined,
-				}),
+		this.openTrackedModal(() =>
+			new LogActionModal(this.cx.app, {
+				model: this.model,
+				mode,
+				roll: this.cx.roll,
+				onSubmit: (entry) => this.commitSheetSubmit(mode, entry),
+				onRemove: mode.kind === 'edit' ? () => this.commitSheetRemove(mode.entry) : undefined,
+			}),
 		);
+	}
+
+	/**
+	 * FIX ROUND 3 (review-2 I-3) — `openManagedModal(this, …)` registers
+	 * `this.register(() => modal.close())` on the long-lived `MontageView` itself, and
+	 * `commit()`'s `update()` never clears the view's own registrations (only CHILD
+	 * components get torn down on a rebuild) — so every sheet/config-modal open across
+	 * the life of the rendered block added one more permanent closure, never freed until
+	 * the whole element unmounts. Harmless per-open (`close()` is idempotent, matching
+	 * the SC-186 precedent) but unbounded over a long editing session. Fixed by giving
+	 * EACH open its own throwaway child `Component` — `openManagedModal`'s
+	 * view-unload-closes-modal contract (F1 §4.5) still holds via the child (unloading
+	 * `this` cascades to unload it, which closes the modal), and once the modal actually
+	 * closes (Done/Cancel/Escape/programmatic), the child is removed from `this` too, so
+	 * nothing accumulates. `DseModal.onClose` is user-overridable (the SC-186
+	 * `ConditionsPanel.openAddModal` precedent already wraps it the same way for a
+	 * different reason — deferring a persist to modal close). */
+	private openTrackedModal<T extends DseModal>(factory: () => T): T {
+		const modalOwner = this.addChild(new Component());
+		const modal = openManagedModal(modalOwner, factory);
+		const inheritedOnClose = modal.onClose.bind(modal) as () => void;
+		modal.onClose = () => {
+			inheritedOnClose();
+			this.removeChild(modalOwner);
+		};
+		return modal;
 	}
 
 	private commitSheetSubmit(mode: SheetMode, entry: MontageEntry): void {
@@ -320,29 +358,25 @@ export class MontageView extends ElementView<MontageModel> {
 	}
 
 	private openAddHero(): void {
-		openManagedModal(
-			this,
-			() =>
-				new MontageAddHeroModal(this.cx.app, (name) => {
-					addMontageHero(this.model, name);
-					void this.commit();
-				}),
+		this.openTrackedModal(() =>
+			new MontageAddHeroModal(this.cx.app, (name) => {
+				addMontageHero(this.model, name);
+				void this.commit();
+			}),
 		);
 	}
 
 	private openSetLimits(): void {
-		openManagedModal(
-			this,
-			() =>
-				new MontageSetLimitsModal(
-					this.cx.app,
-					this.model.success_limit,
-					this.model.failure_limit,
-					(successLimit, failureLimit) => {
-						setMontageLimits(this.model, successLimit, failureLimit);
-						void this.commit();
-					},
-				),
+		this.openTrackedModal(() =>
+			new MontageSetLimitsModal(
+				this.cx.app,
+				this.model.success_limit,
+				this.model.failure_limit,
+				(successLimit, failureLimit) => {
+					setMontageLimits(this.model, successLimit, failureLimit);
+					void this.commit();
+				},
+			),
 		);
 	}
 

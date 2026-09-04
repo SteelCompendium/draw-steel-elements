@@ -34,6 +34,14 @@ const RESULT_CHIPS: { value: MontageResult; label: string; icon: string }[] = [
 	{ value: 'assist', label: 'Assist', icon: 'circle-plus' },
 ];
 
+/** The tier hint's three difficulty/badge pairs, in the mock's own order
+ *  (mock6.js:1577-1585) — fix round 3 (review-2 M-3). */
+const TIER_HINT_DIFFICULTIES: { tier: 'low' | 'mid' | 'high'; word: string }[] = [
+	{ tier: 'low', word: 'easy' },
+	{ tier: 'mid', word: 'medium' },
+	{ tier: 'high', word: 'hard' },
+];
+
 export interface LogActionModalOptions {
 	model: MontageModel;
 	mode: SheetMode;
@@ -42,6 +50,15 @@ export interface LogActionModalOptions {
 	onSubmit: (entry: MontageEntry) => void;
 	/** Remove — present (and the footer button rendered) only in edit mode. */
 	onRemove?: () => void;
+}
+
+/** "a failure" / "an assist" — the edit sub-line's indefinite article (fix round 3,
+ *  review-2 M-4, mirroring mock6.js's own "recorded as a failure with Lift"). Only
+ *  ever called on the three known result words; an unrecognised typo never reaches
+ *  edit's sub-line text at all (`selectedResult` stays `undefined` for it, so the
+ *  commit button — and this string — never gets exercised for that case). */
+function article(result: string): string {
+	return /^[aeiou]/i.test(result) ? 'an' : 'a';
 }
 
 /** A labeled sheet field row — mirrors `.dse-cond-field`'s label+control shape under
@@ -100,16 +117,23 @@ export class LogActionModal extends DseModal {
 
 	onOpen(): void {
 		const editing = this.mode.kind === 'edit';
-		this.setDseTitle(editing ? 'Correct a logged action' : 'Log an action');
+		// FIX ROUND 3 (review-2 M-4): the TITLE names the row the sheet will WRITE — the
+		// mock's own subject line (mock6.js:1508-1524, "Kira · round 3" / "Bram · round
+		// 2") — not a repeat of the eyebrow. "Naming it in the title is what makes a
+		// pre-filled dialog safe: you can see what it will change before you change
+		// anything" (the mock's own comment) — a Hero/Round chip row is still an EDITABLE
+		// control, so it cannot carry that safety property on its own.
+		this.setDseTitle(`${this.selectedHero} · round ${this.selectedRound}`);
 		this.dseModalRoot().addClass('dse-mt__sheet');
 
 		const head = this.body.createDiv({ cls: 'dse-mt__sheet-head' });
 		head.createSpan({ cls: 'dse-mt__sheet-eyebrow', text: editing ? 'Correct' : 'Log an action' });
 		head.createSpan({
 			cls: 'dse-mt__sheet-sub',
-			text: editing
-				? 'change who / round / result / skill together — nothing writes until Save'
-				: 'nothing writes until Log',
+			text:
+				this.mode.kind === 'edit'
+					? `recorded as ${article(this.mode.entry.result)} ${this.mode.entry.result}${this.mode.entry.skill ? ' with ' + this.mode.entry.skill : ''}`
+					: 'next hero yet to act in the round in play',
 		});
 
 		this.renderHeroField();
@@ -239,12 +263,22 @@ export class LogActionModal extends DseModal {
 		// the one line the decision actually needs — where each difficulty's SUCCESS starts
 		// — lives here, read-only rules text, never touching the model (spec §D "strip and
 		// foot guide read nothing from the model" — this hint is cut from the same cloth).
+		// FIX ROUND 3 (review-2 M-3): each badge carries its DIFFICULTY WORD beside it
+		// (mock6.js:1577-1585's two-span `mt5-tierhint__diff`/`mt5-tierhint__band` shape,
+		// approved on `sc191-r5-sheet-log-dark.png`: "SUCCESS STARTS AT  EASY ≤11  MEDIUM
+		// 12–16  HARD 17+") — three bare ranges with no difficulty attached made the badges'
+		// own left-to-right order the only thing telling a reader which is which, which is
+		// exactly the fact this hint exists to supply.
 		const hint = control.createDiv({ cls: 'dse-mt__sheet-tierhint' });
 		hint.createSpan({ cls: 'dse-mt__sheet-tierhint-lead', text: 'success starts at' });
 		const badges = hint.createDiv({ cls: 'dse-mt__sheet-tiers' });
-		tierBadge(badges, 'low');
-		tierBadge(badges, 'mid');
-		tierBadge(badges, 'high');
+		for (const { tier, word } of TIER_HINT_DIFFICULTIES) {
+			// `nowrap` on the pair (CSS): the mock's own rule is that the line wraps
+			// between the lead and the group, or between two tiers — never inside one.
+			const pair = badges.createSpan({ cls: 'dse-mt__sheet-tierhint-pair' });
+			pair.createSpan({ cls: 'dse-mt__sheet-tierhint-diff', text: word });
+			tierBadge(pair, tier);
+		}
 
 		// The roll affordance (spec §D: "keep the capability by wiring the sheet's Result
 		// field to it… when cx.roll exists"). A plain characteristic input + Roll button,
@@ -304,6 +338,12 @@ export class LogActionModal extends DseModal {
 			this.skillValue = input.value;
 			this.refreshSkillWarning();
 		});
+		// FIX ROUND 3 (review-2 L-4): the mock's own skill hint (mock6.js:1607,
+		// "optional · +2 when applicable") — the rule a Director needs at the same
+		// moment as the tier hint above. `.dse-mt__sheet-hint`, NOT `.dse-mt__sheet-warn`
+		// (round 4/5's own distinction, re-affirmed by L-4's fix: this is guidance, not a
+		// violation — the warn slot is reserved for the skill-reuse rule actually firing).
+		control.createSpan({ cls: 'dse-mt__sheet-hint', text: 'optional · +2 when applicable' });
 		this.skillWarnEl = control.createDiv({ cls: 'dse-mt__sheet-warn' });
 		this.skillWarnEl.setAttribute('role', 'alert');
 		this.refreshSkillWarning();
@@ -327,7 +367,13 @@ export class LogActionModal extends DseModal {
 
 	private renderNoteField(): void {
 		const control = field(this.body, 'Note');
-		const textarea = control.createEl('textarea', { cls: 'dse-mt__sheet-input dse-mt__sheet-note' });
+		// FIX ROUND 3: a single class in `cls` — `test/unit/build/inputHostCoverage.test.ts`
+		// (SC-202) extracts `cls:` as one class-name token, and a space-separated compound
+		// string here made it search for the literal (invalid) selector text
+		// ".dse-mt__sheet-input dse-mt__sheet-note" instead of two classes. Functionally
+		// identical either way — `.addClass` after creation.
+		const textarea = control.createEl('textarea', { cls: 'dse-mt__sheet-input' });
+		textarea.addClass('dse-mt__sheet-note');
 		textarea.value = this.noteValue;
 		textarea.setAttribute('placeholder', 'A consequence to remember later…');
 		textarea.setAttribute('aria-label', 'Note');
@@ -343,9 +389,21 @@ export class LogActionModal extends DseModal {
 	/** Log/Save is disabled until a Hero, a Round and a Result are all chosen — the one
 	 *  case that starts unresolved is an EDIT of an entry whose `result` is an
 	 *  unrecognised Director typo (model.ts's `isKnownMontageResult`), which pre-fills no
-	 *  chip on purpose rather than silently guessing one. */
+	 *  chip on purpose rather than silently guessing one. FIX ROUND 3 (review-2 M-1,
+	 *  guard 2 of 2 — guard 1 is BoardView.ts's own row-chip `complete` gate): the round
+	 *  bound is `1..this.model.rounds`, not merely `> 0` — the sheet can be opened for a
+	 *  round that no longer has a board column at all (BoardView's per-row chip used to
+	 *  stay live after `End round N` on a complete montage, targeting
+	 *  `current_round === rounds + 1`; even with that fixed, `rounds` itself can still
+	 *  change WHILE the sheet is open in ways the sheet's own Round chips cannot exceed
+	 *  by construction — this is the second, independent guard so the commit can never
+	 *  write a round the board has no column for, whatever opened it). */
 	private refreshValidity(): void {
-		const valid = this.selectedHero !== '' && this.selectedRound > 0 && this.selectedResult !== undefined;
+		const valid =
+			this.selectedHero !== '' &&
+			this.selectedRound >= 1 &&
+			this.selectedRound <= this.model.rounds &&
+			this.selectedResult !== undefined;
 		this.commitBtn?.setDisabled(!valid);
 	}
 

@@ -6,7 +6,7 @@
 // present key, so serialize(parse(x)) reproduces x's own bytes whenever x already
 // carries the full field set in schema order.
 import { parseYaml, stringifyYaml } from '../../mocks/obsidian';
-import { parse, serialize, montageOutcome } from '../../../src/elements/montage/model';
+import { parse, serialize, montageOutcome, logMontageEntry, addMontageHero } from '../../../src/elements/montage/model';
 import type { MontageModel } from '../../../src/elements/montage/model';
 import montageExample from '../../../src/elements/montage/example.yaml';
 
@@ -325,6 +325,51 @@ describe('SC-191 §B.5: new-shape schema — key order, round-trip identity, omi
 		const emptyParticipants = parseLikePipeline('participants: []\nrounds: 2');
 		expect(emptyParticipants.participants).toBeUndefined();
 		expect(serialize(emptyParticipants)).not.toContain('participants:');
+	});
+
+	// FIX ROUND 3 (review-2 M-2): the key-order test above (line ~264) derives from a
+	// model whose `entries`/`participants` were already present in the ORIGINAL YAML —
+	// `parse()` assigns them in schema position when the input already carries them, so
+	// even the pre-fix `serialize` (a bare `stringifyYaml(model)`) passed that test. The
+	// bug only showed on the model-MUTATION path: `logMontageEntry`/`addMontageHero`
+	// assign `model.entries`/`model.participants` for the FIRST TIME on a model that
+	// never had them — landing LAST in JS object insertion order (after
+	// `current_round`/`_dse_anchor`), which a bare `stringifyYaml` reproduces verbatim.
+	// This is the write path a real Log/Save on a fresh block or `addMontageHero` on a
+	// missing roster actually takes — reproduced here directly against model.ts's own
+	// mutation functions, not simulated by authoring the fields in schema order by hand.
+	test('fix round 3 (M-2): logMontageEntry on a fresh (entries-less) model still serialises entries in SCHEMA position, not appended after current_round/_dse_anchor', () => {
+		const model = parseLikePipeline('rounds: 2\ncurrent_round: 1\n_dse_anchor: abc123');
+		expect(model.entries).toBeUndefined();
+		logMontageEntry(model, { hero: 'Kira', round: 1, result: 'success' });
+
+		const out = serialize(model);
+		const topLevelKeys = out
+			.split('\n')
+			.filter((line) => /^\S/.test(line))
+			.map((line) => line.split(':')[0]);
+		expect(topLevelKeys).toEqual(['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'entries', 'current_round', '_dse_anchor']);
+
+		// The round-trip stays byte-stable on pass 2 (§B.5's own oracle), which the
+		// insertion-order bug could not have satisfied either, since re-parsing puts
+		// entries back in schema position on the SECOND pass even with the bug present —
+		// the bug is specifically a ONE-TIME churn on the write that first materialises
+		// the key, invisible to a test that only round-trips an already-correct shape.
+		const reparsed = parseLikePipeline(out);
+		expect(serialize(reparsed)).toBe(out);
+	});
+
+	test('fix round 3 (M-2): addMontageHero on a fresh (participants-less) model still serialises participants in SCHEMA position, before entries/current_round', () => {
+		const model = parseLikePipeline('rounds: 2\ncurrent_round: 1');
+		expect(model.participants).toBeUndefined();
+		addMontageHero(model, 'Osric');
+
+		const out = serialize(model);
+		const topLevelKeys = out
+			.split('\n')
+			.filter((line) => /^\S/.test(line))
+			.map((line) => line.split(':')[0]);
+		expect(topLevelKeys).toEqual(['rounds', 'success_limit', 'failure_limit', 'successes', 'failures', 'participants', 'current_round']);
 	});
 
 	test('skill/note are omitted per entry when empty — never serialized as null or an empty string', () => {

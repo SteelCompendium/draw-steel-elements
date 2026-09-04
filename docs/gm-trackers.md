@@ -80,7 +80,6 @@ participants:
     skills_used: []
   - name: Bram
     skills_used: []
-entries: []
 current_round: 1
 ~~~
 ```
@@ -90,6 +89,13 @@ current_round: 1
 A working board for a Draw Steel montage test: one row per hero, one column per round, and
 a running tally beside each row. `description` is an optional brief — a few lines of prose
 about the montage — shown above the board.
+
+The running successes/failures under the outcome banner are the block's own kept totals,
+not something recomputed from the board — the board shows the individual tests, the banner
+shows the running score, and the tracker never re-derives one from the other. That's why a
+hand-edited total (or a block from before this board existed) can disagree with what the
+board shows and still be trusted: your kept total is never silently overwritten by a
+recount.
 
 **Logging an action.** Click the **Log an action…** button at the bottom of the card, or
 click directly on a hero's cell for the round in play, and a small form opens: pick the

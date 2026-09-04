@@ -29,9 +29,11 @@ import { createSessionStore } from '../../../src/framework/session';
 import { createElementRegistry } from '../../../src/framework/registry';
 import type { RollService } from '../../../src/framework/roll/service';
 import { DEFAULT_SETTINGS } from '@model/Settings';
-import { App, Plugin, Notice, makeFakeContext } from '../../mocks/obsidian';
+import { App, Plugin, Notice, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
+import { parse } from '../../../src/elements/montage/model';
+import { LogActionModal } from '../../../src/elements/montage/LogActionModal';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import { styleGuardFindings } from '../kit/styleGuard';
 import montageYaml from '../../../src/elements/montage/example.yaml';
@@ -275,7 +277,11 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		const cell = cellFor(root, 'Kira', 1); // success · Nature (fixture-mid.yaml)
 		cell.click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
-		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Correct a logged action');
+		// FIX ROUND 3 (M-4): the TITLE names the row being written ("Kira · round 1"),
+		// not a repeat of the eyebrow — the eyebrow carries "Correct" instead.
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Kira · round 1');
+		expect(modalEl.querySelector('.dse-mt__sheet-eyebrow')?.textContent).toBe('Correct');
+		expect(modalEl.querySelector('.dse-mt__sheet-sub')?.textContent).toBe('recorded as a success with Nature');
 		const skillInput = modalEl.querySelector('input[aria-label="Skill used"]') as HTMLInputElement;
 		expect(skillInput.value).toBe('Nature');
 		expect(modalEl.querySelector('button[aria-label="Remove this action"]')).not.toBeNull();
@@ -353,7 +359,10 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(rowAct.disabled).toBe(false);
 		rowAct.click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
-		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Log an action');
+		// FIX ROUND 3 (M-4): the TITLE names the row it will write ("Bram · round 3" —
+		// the fixture's current round); the eyebrow carries "Log an action" instead.
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Bram · round 3');
+		expect(modalEl.querySelector('.dse-mt__sheet-eyebrow')?.textContent).toBe('Log an action');
 		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
 		const bramChip = heroChips.find((c) => c.textContent === 'Bram') as HTMLButtonElement;
 		expect(bramChip.getAttribute('aria-pressed')).toBe('true');
@@ -828,16 +837,33 @@ describe('SC-191 fix round 2: the bottom action bar (mock6.js `actionBar()`)', (
 		jest.useRealTimers();
 	});
 
-	test('COMPLETE state (success-limit reached, montage-done fixture): stands down to `Reopen` + danger `Clear all`, no Log/Undo/End round', async () => {
+	// FIX ROUND 3 (review-2 L-3): the complete-state bar keeps `Undo` — logging the
+	// winning success is what flips the montage complete, so the bar standing FULLY
+	// down in that same breath removed the one-click undo for the entry the Director
+	// just logged, exactly the case they are most likely to want to undo.
+	test('COMPLETE state (success-limit reached, montage-done fixture): stands down to `Undo` + `Reopen`(absent, limit hit) + danger `Clear all`, no Log/End round', async () => {
 		const { root } = await renderMontage(montageDoneYaml);
 		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
 		expect(bar.getAttribute('data-complete')).toBe('on');
 		expect(bar.querySelector('button[aria-label="Log an action…"]')).toBeNull();
-		expect(bar.querySelector('button[aria-label="Undo"]')).toBeNull();
 		expect(bar.querySelector(('button[aria-label^="End round"]'))).toBeNull();
+		const undo = bar.querySelector('button[aria-label="Undo"]') as HTMLButtonElement;
+		expect(undo).not.toBeNull();
+		expect(undo.disabled).toBe(false); // montage-done has entries
 		const clearAll = bar.querySelector('button[aria-label="Clear all"]') as HTMLButtonElement;
 		expect(clearAll).not.toBeNull();
 		expect(clearAll.classList.contains('dse-btn--danger')).toBe(true);
+	});
+
+	test('Undo works from the complete-state bar too: removes the most recently logged entry and persists', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageDoneYaml); // last entry: Bram round 3 assist Might
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Undo"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).not.toMatch(/hero: Bram\n\s*round: 3/);
+		jest.useRealTimers();
 	});
 
 	test('COMPLETE by a LIMIT (montage-done: success_limit reached): `Reopen` is NOT offered — a limit is final', async () => {
@@ -1182,13 +1208,85 @@ describe('SC-191 slice 4: the Log an action… sheet — full write path (spec �
 		const modalEl = document.body.lastElementChild as HTMLElement;
 		const titleEl = modalEl.querySelector('.dse-modal__title') as HTMLElement;
 		expect(modalEl.getAttribute('aria-labelledby')).toBe(titleEl.id);
-		expect(titleEl.textContent).toBe('Correct a logged action');
+		// FIX ROUND 3 (M-4): the title still names the subject row (hero/round are known
+		// even though the RESULT is not) — "Correct" moved to the eyebrow.
+		expect(titleEl.textContent).toBe('Osric · round 1');
+		expect(modalEl.querySelector('.dse-mt__sheet-eyebrow')?.textContent).toBe('Correct');
 		// No result chip is pre-selected for an unrecognised value — Log stays disabled
 		// until the Director makes an explicit choice.
 		expect(modalEl.querySelectorAll('.dse-optchip[data-kind][aria-pressed="true"]')).toHaveLength(0);
 		expect((modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).disabled).toBe(true);
 		(modalEl.querySelector('.dse-optchip[data-kind="failure"]') as HTMLButtonElement).click();
 		expect((modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).disabled).toBe(false);
+	});
+});
+
+describe('SC-191 fix round 3: review-2 findings (M-1, I-3)', () => {
+	// M-1 guard 1: the per-row chip stands down exactly like the bar it mirrors, on a
+	// COMPLETE montage — before this fix it stayed live and, targeting
+	// `this.model.current_round`, could write an entry at `round = rounds + 1` (invisible
+	// and un-editable on the board).
+	test('M-1 guard 1: the per-row "Log an action" chip is disabled on a complete montage (montage-done fixture)', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		const rowAct = heroRow(root, 'Kira').querySelector('.dse-mt__board-rowact') as HTMLButtonElement;
+		expect(rowAct.disabled).toBe(true);
+	});
+
+	// M-1 guard 2 (defense in depth, independent of guard 1): the sheet itself refuses a
+	// round outside `1..model.rounds`, whatever opened it — the review's own prescribed
+	// test ("opening the sheet with an out-of-range round leaves Log disabled").
+	test('M-1 guard 2: opening the sheet directly with an out-of-range round leaves Log/Save disabled', () => {
+		const model = parse(parseYaml(montageMidYaml), montageMidYaml); // rounds: 3
+		const modal = new LogActionModal(new App() as any, {
+			model,
+			mode: { kind: 'new', hero: 'Kira', round: model.rounds + 1 }, // one past the last column
+			roll: undefined,
+			onSubmit: () => {},
+		});
+		modal.open();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		// The Round field only builds chips 1..model.rounds — no chip exists for the
+		// out-of-range value at all, so none of them is pre-pressed.
+		const roundField = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field')).find(
+			(f) => f.querySelector('.dse-mt__sheet-label')?.textContent === 'Round',
+		) as HTMLElement;
+		expect(roundField.querySelectorAll('.dse-optchip')).toHaveLength(model.rounds);
+		expect(roundField.querySelectorAll('.dse-optchip[aria-pressed="true"]')).toHaveLength(0);
+		expect((modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	// I-3: `openManagedModal(this, …)` used to register a permanent closer on the
+	// long-lived MontageView for every sheet/config-modal open, never freed until the
+	// whole element unmounts. Fixed via a throwaway child Component per open, removed
+	// from the view once the modal actually closes — proven here by inspecting the
+	// VIEW's own `_children` count directly (captured off the real `onMount` call) across
+	// several open/close cycles: it must return to its starting size every time, not grow.
+	test('I-3: repeated sheet opens/closes do not accumulate permanent closers on the view', async () => {
+		const onMountSpy = jest.spyOn(MontageView.prototype as any, 'onMount');
+		const { root } = await renderMontage(montageMidYaml);
+		// `openManagedModal(owner, …)` registers its view-unload-closes-modal callback via
+		// `owner.register(cb)` — the mock Component stores that in `_registeredCallbacks`,
+		// NOT `_children` (`addChild` is a separate mechanism `openManagedModal` never
+		// calls on its `owner` argument directly). The pre-fix bug called
+		// `openManagedModal(this, …)` — `this` being the long-lived MontageView itself —
+		// so it was `this._registeredCallbacks` that grew by one per open, forever;
+		// `this._children` was never touched by the OLD code either, so asserting on it
+		// alone would pass against the bug for the wrong reason. The FIX gives each open
+		// its own throwaway child Component (`this.addChild`/`this.removeChild` — which
+		// DOES touch `_children`), so both fields now stay flat; both are asserted.
+		const view = onMountSpy.mock.instances[0] as unknown as { _children: unknown[]; _registeredCallbacks: unknown[] };
+		onMountSpy.mockRestore();
+		expect(view._children.length).toBeGreaterThan(0); // sanity: the spy really captured it
+
+		const childrenBefore = view._children.length;
+		const registeredBefore = view._registeredCallbacks.length;
+		for (let i = 0; i < 4; i++) {
+			cellFor(root, 'Kira', 3).click();
+			const modalEl = document.body.lastElementChild as HTMLElement;
+			(modalEl.querySelector('button[aria-label="Cancel"]') as HTMLButtonElement).click();
+		}
+		expect(view._children.length).toBe(childrenBefore);
+		expect(view._registeredCallbacks.length).toBe(registeredBefore);
 	});
 });
 

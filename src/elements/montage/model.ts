@@ -160,8 +160,33 @@ export function parse(data: unknown, _raw: string): MontageModel {
 	return model;
 }
 
+/**
+ * FIX ROUND 3 (review-2 M-2) — reassembles into §B.5's FIXED key order before
+ * stringifying, rather than relying on `model`'s own insertion order. JS object key
+ * order is insertion order, and `parse()` only ever assigns `entries`/`participants`
+ * when the INPUT already carried them (§B.4's backward-compat story) — so
+ * `logMontageEntry`/`addMontageHero` assigning them for the FIRST time on a
+ * fresh/old-shape model inserted the key LAST (after `current_round`/`_dse_anchor`),
+ * not in schema position, churning the user's file a second gratuitous time on the very
+ * next parse→serialize round-trip. Reassembling here — the ONE place every write funnels
+ * through — fixes every writer at once rather than auditing each mutation function for
+ * "did you assign this key in the right position". Also closes the `entries: undefined`
+ * key `resetMontageProgress()` used to leave enumerable-but-unset (an explicit `.length`
+ * guard here, matching `parse()`'s own omit-when-empty convention, §B.5). */
 export function serialize(model: MontageModel): string {
-	return stringifyYaml(model).trim();
+	const ordered = {} as MontageModel;
+	if (model.title !== undefined) ordered.title = model.title;
+	if (model.description !== undefined) ordered.description = model.description;
+	ordered.rounds = model.rounds;
+	ordered.success_limit = model.success_limit;
+	ordered.failure_limit = model.failure_limit;
+	ordered.successes = model.successes;
+	ordered.failures = model.failures;
+	if (model.participants && model.participants.length > 0) ordered.participants = model.participants;
+	if (model.entries && model.entries.length > 0) ordered.entries = model.entries;
+	ordered.current_round = model.current_round;
+	if (model._dse_anchor !== undefined) ordered._dse_anchor = model._dse_anchor;
+	return stringifyYaml(ordered).trim();
 }
 
 export type MontageOutcome = 'pending' | 'total' | 'partial' | 'failure';

@@ -23,11 +23,18 @@ const css = rawCss.slice(blockStart).replace(/\/\*[\s\S]*?\*\//g, '');
 const flat = css.replace(/\s+/g, ' ');
 const ANCHOR = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';
 
+// SC-191 fix round 3: the montage pair renamed from `.dse-mt__skill-input`/
+// `.dse-mt__char-input` (the pre-SC-191 board's own record form, redesigned away in
+// slice 2) to `.dse-mt__sheet-input`/`.dse-mt__sheet-rollchar` (the Log an action…
+// sheet's Skill field / roll-characteristic field) — the rebase onto SC-202's tip
+// left this list naming classes no `src/` call site emits any more; renamed rather
+// than dropped, since the sheet's own two fields need exactly the same coverage the
+// old board fields had (an "SC-202 integration delta", not a montage design change).
 const COUSIN_INPUTS = [
 	'.dse-init__malice-quickadd-amount',
 	'.dse-init__malice-quickadd-label',
-	'.dse-mt__skill-input',
-	'.dse-mt__char-input',
+	'.dse-mt__sheet-input',
+	'.dse-mt__sheet-rollchar',
 	'.dse-party__award-input',
 	'.dse-prj__roll-input',
 	'.dse-prj__points-input',

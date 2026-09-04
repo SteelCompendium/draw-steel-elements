@@ -20,6 +20,19 @@
 // "Each test" block collapses to a one-line pointer; the strip (round 6) now carries the
 // WHOLE book table including the crit row, so there is no orphan fact left for the stub to
 // carry (unlike round 5's strip, which dropped the crit row and needed a leftover line).
+//
+// FIX ROUND 3 (review-2 H-1's dedup half) — BOTH forms are now always built into the DOM,
+// tagged `.dse-mt__guide-tiers-{full,stub}`, and CSS (not this build-time branch) decides
+// which one shows. Print is WHY: `stripOpen` is a screen-only pin state fixed at BUILD
+// time, but print is a pure CSS presentation layer replayed over that same already-built
+// DOM — before this fix, if `stripOpen` was true the FULL table simply never existed in the
+// DOM at all, so no print rule could ever surface it (moot before H-1's own fix, since the
+// strip itself printed as an unreadable blob either way — but once the strip prints a real
+// table, the two need independent screen/print answers: screen still respects `stripOpen`
+// via `[data-strip-open]` on the root; print ALWAYS shows the stub, because the strip now
+// always prints its own full table regardless of its screen pin state (print force-opens
+// every collapsible), so showing the full table here too would be a genuine on-paper
+// duplicate no Director asked for.
 import type { Component } from 'obsidian';
 import { collapsible } from '@/framework/kit';
 import type { SessionPersist } from '@/framework/session';
@@ -89,6 +102,9 @@ export class GuideView {
 			this.owner,
 		);
 		handle.rootEl.addClass('dse-mt__guide');
+		// FIX ROUND 3: screen-only dedup switch — see the file-header note. Print never
+		// reads this attribute; it always resolves to the stub via its own, later rule.
+		handle.rootEl.setAttribute('data-strip-open', stripOpen ? 'on' : 'off');
 		handle.headerEl.createSpan({
 			cls: 'dse-mt__guide-hint',
 			text: stripOpen ? 'limits · outcomes · at the table' : 'test tiers · limits · outcomes',
@@ -96,13 +112,14 @@ export class GuideView {
 
 		const body = handle.contentEl.createDiv({ cls: 'dse-mt__guide-body' });
 
-		if (stripOpen) {
-			const stub = this.buildBlock(body, PINNED_TITLE, PINNED_LEDE, true);
-			stub.setAttribute('data-stub', 'on');
-		} else {
-			const tiers = this.buildBlock(body, TIERS.title, TIERS.lede, true);
-			this.buildTable(tiers, TIERS);
-		}
+		// FIX ROUND 3: both forms always built now (see the file-header note) — CSS, not
+		// this branch, decides which one is visible, so print can differ from screen.
+		const stub = this.buildBlock(body, PINNED_TITLE, PINNED_LEDE, true);
+		stub.setAttribute('data-stub', 'on');
+		stub.addClass('dse-mt__guide-tiers-stub');
+		const tiers = this.buildBlock(body, TIERS.title, TIERS.lede, true);
+		tiers.addClass('dse-mt__guide-tiers-full');
+		this.buildTable(tiers, TIERS);
 
 		const limits = this.buildBlock(body, LIMITS.title, LIMITS.lede, false);
 		this.buildTable(limits, LIMITS);
