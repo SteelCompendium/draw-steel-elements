@@ -5065,12 +5065,16 @@ Shared globals
 	border: 2px solid var(--dse-danger);
 	color: var(--dse-danger);
 }
-/* The pip: geometry only — its fill (`::after`, `var(--dse-vp)`) and its rim
-   (`::before`, `var(--dse-metal-line)`, which resolves to nothing under print — the
-   rim simply doesn't paint on paper, same as every other metal ornament) already
-   exist in the Steel rule; only `position: absolute` (needed to seat it on the seal's
-   corner at all) and the two clip-path shapes are montage-local geometry that must
-   reach print for the triangle to render as anything but a stray 0×0 box. */
+/* The pip: geometry plus the ::after fill. Its rim (`::before`,
+   `var(--dse-metal-line)`, which resolves to nothing under print — the rim simply
+   doesn't paint on paper, same as every other metal ornament) needs no restatement
+   here. Its fill does: the Steel rule that paints `::after` (`var(--dse-vp)`) lives
+   inside the Steel tier opened with `:not([data-dse-print="on"])`, so it is
+   print-EXCLUDED, not shared — the print block must restate the fill itself or the
+   pip is a correctly-shaped, correctly-clipped, fully transparent box. `position:
+   absolute` (needed to seat it on the seal's corner at all) and the two clip-path
+   shapes are montage-local geometry that must reach print for the triangle to render
+   as anything but a stray 0×0 box. */
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-pip {
 	position: absolute;
 	right: -0.34em;
@@ -5083,6 +5087,9 @@ Shared globals
 	content: '';
 	position: absolute;
 	inset: 0;
+}
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-pip::after {
+	background: var(--dse-vp);
 }
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell[data-rider='reward'] .dse-mt__tier-pip::before,
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__tier-cell[data-rider='reward'] .dse-mt__tier-pip::after {

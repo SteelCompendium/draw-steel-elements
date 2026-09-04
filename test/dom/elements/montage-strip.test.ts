@@ -330,6 +330,22 @@ describe('SC-191 slice 3: StripView + GuideView — closed by default, real disc
 			expect(pipFillRule).not.toContain('--dse-metal-line');
 		});
 
+		// FIX ROUND 4 (re-review-2 M-A) — the print `::after` pip rule above supplies
+		// clip-path geometry only; its fill (`var(--dse-vp)`) lives in the Steel skin tier
+		// opened `:not([data-dse-print="on"])`, so it is print-EXCLUDED, not shared, and the
+		// pip painted 0 gold pixels under print despite being correctly shaped and clipped.
+		// The prior test above only asserted the ABSENCE of a Steel-only token — it passed
+		// vacuously on a pip with no fill at all. This asserts the PRESENCE of one.
+		test('M-A: the print ::after pip rule carries its own fill (var(--dse-vp)) — not just the absence of --dse-metal-line', () => {
+			// `::after` appears twice in the print tier: once as the second selector of the
+			// shared geometry rule (`::before, ::after { content/position/inset }`), and once
+			// (post-fix) as its own dedicated rule carrying the fill. Match every `::after {…}`
+			// block and require at least one to declare the fill — the shared geometry block
+			// alone must NOT satisfy this.
+			const afterRules = [...printTier.matchAll(/\.dse-mt__tier-pip::after \{([^}]*)\}/g)].map((m) => m[1]);
+			expect(afterRules.some((body) => body.includes('background: var(--dse-vp);'))).toBe(true);
+		});
+
 		test('L-2: the strip\'s screen-only pin-state hint ("pinned" / "easy · medium · hard") is print-hidden — it means nothing on paper', () => {
 			expect(printTier).toMatch(/\[data-dse-print="on"\]\[data-dse-element="montage"\] \.dse-mt__strip-hint \{\s*display:\s*none;/);
 		});

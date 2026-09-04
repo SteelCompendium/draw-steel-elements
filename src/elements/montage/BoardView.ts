@@ -314,6 +314,12 @@ export class BoardView {
 	}
 
 	private roundState(round: number): RoundState {
+		// 2c: a limit-ended montage can go complete mid-round (e.g. the success limit is
+		// hit before every hero has acted), leaving `current_round` still pointing at that
+		// unfinished round. Gate on `complete` first so the round HEADER agrees with what
+		// the cell path (`buildCell`, above) and the settled mock already show: every round
+		// of a finished montage reads 'past', never 'current'.
+		if (montageTallies(this.model).complete) return 'past';
 		if (round < this.model.current_round) return 'past';
 		if (round === this.model.current_round) return 'current';
 		return 'future';

@@ -1326,3 +1326,38 @@ describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 		expect(sheet).not.toMatch(/\.dse-mt\[data-dedupe=/);
 	});
 });
+
+describe('SC-191 fix round 4: re-review-2 finding 2c — round headers agree with a complete montage', () => {
+	// montage-done is limit-ended MID-ROUND (successes 6/6 hits success_limit before round 3
+	// finished — Yenna/Osric/Talin never got a round-3 entry). Pre-fix, `roundState()` keyed
+	// off `current_round` alone, so round 3's HEADER read 'current'/"in play" while every
+	// round-3 CELL underneath it (gated on `complete` since fix round 1) already read 'past'.
+	test('on a complete montage (montage-done, limit-ended mid-round), every round header reads past/"done" — none reads "in play"', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		const heads = Array.from(root.querySelectorAll('.dse-mt__board-rhead'));
+		expect(heads).toHaveLength(3);
+		for (const head of heads) {
+			expect(head.getAttribute('data-state')).toBe('past');
+			expect(head.querySelector('.dse-mt__rhead-sub')?.textContent).toBe('done');
+		}
+		// Sanity: the cells this round already agreed with are still 'past' too — the fix
+		// brings the header in line with them, not the other way around.
+		const round3Cells = Array.from(root.querySelectorAll('.dse-mt__cell[data-round="3"]'));
+		expect(round3Cells.length).toBeGreaterThan(0);
+		for (const cell of round3Cells) {
+			expect(cell.getAttribute('data-state')).toBe('past');
+		}
+	});
+
+	// No regression: fixture-mid is NOT complete (successes 5/6, current_round 3) — its
+	// current round must still read 'current'/"in play".
+	test('no regression: on an in-progress montage (fixture-mid), the current round header still reads "in play"', async () => {
+		const { root } = await renderMontage(montageMidYaml);
+		const current = root.querySelector('.dse-mt__board-rhead[data-round="3"]') as HTMLElement;
+		expect(current.getAttribute('data-state')).toBe('current');
+		expect(current.querySelector('.dse-mt__rhead-sub')?.textContent).toBe('in play');
+		const past = root.querySelector('.dse-mt__board-rhead[data-round="1"]') as HTMLElement;
+		expect(past.getAttribute('data-state')).toBe('past');
+		expect(past.querySelector('.dse-mt__rhead-sub')?.textContent).toBe('done');
+	});
+});
