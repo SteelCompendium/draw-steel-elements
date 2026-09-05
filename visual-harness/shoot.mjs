@@ -2477,15 +2477,28 @@ async function assertTableHostLeak(page) {
 // task-list rules (`ul > li.task-list-item { list-style: none }` and the two
 // `[data-task="x"/"X"]` decoration rules) are DELIBERATELY not sampled or fixed here — see
 // the styles-source.css block's own comment for the three declarations left for that round.
+//
+// FIX ROUND (2026-09-05, review of `a7820c1`): `listStyleType`/`textAlign` join the sampled
+// sets (LOW-2); a blockquote's first/last ELEMENT CHILD margin joins it too (MED-1, a
+// property no earlier pass read at all); `hr` is now tagged and sampled (MED-4, genuinely
+// reachable — see Item 11 in the review); a synthetic `<li><p>a</p><p>b</p></li>` proves
+// the `li p:first-of-type`/`:last-of-type` fix (MED-2) despite 0 live fixture wrapping list
+// content in a loose `<p>`, measuring rather than grepping (the review's own prescribed
+// fix for a rule the original round's text-only guard could not tell was inert).
 
-/** `ul`/`ol` top-level box — GROUP 1. */
-const LIST_PROPS = ['paddingInlineStart', 'marginBlockStart', 'marginBlockEnd'];
-/** `li` (any `ul > li`/`ol > li`) — GROUP 2. `listStyleType`/nested-indent variants are
- *  deliberately NOT sampled here — see the styles-source.css block's own "not fixed this
- *  round" note (0 fixture nests a list). */
-const LIST_ITEM_PROPS = ['paddingTop', 'paddingBottom', 'position', 'marginInlineStart'];
-/** `blockquote` — GROUP 5. `marginTop`/`marginBottom` are deliberately NOT sampled:
- *  Obsidian's own rule never touches them (verified safe, not this block's job). */
+/** `ul`/`ol` top-level box — GROUP 1 (+ FIX ROUND LOW-2's `listStyleType`, restated per
+ *  tag in the CSS — `ul`→disc/`ol`→decimal — so a single "expected" value cannot exist
+ *  here; the sweep compares bare vs host per node regardless of which value each computes
+ *  to, so this is still a correct same-node comparison). */
+const LIST_PROPS = ['paddingInlineStart', 'marginBlockStart', 'marginBlockEnd', 'listStyleType'];
+/** `li` (any `ul > li`/`ol > li`) — GROUP 2. FIX ROUND LOW-2 adds `textAlign`. The DEEPER
+ *  nested-indent override (`margin-inline-start` at a nested level) stays unsampled — see
+ *  the styles-source.css block's own "not fixed this round" note. */
+const LIST_ITEM_PROPS = ['paddingTop', 'paddingBottom', 'position', 'marginInlineStart', 'textAlign'];
+/** `blockquote` (the element itself) — GROUP 5. `marginTop`/`marginBottom` ON THE ELEMENT
+ *  are deliberately NOT sampled: Obsidian's own rule never touches them (verified safe).
+ *  Its first/last ELEMENT CHILD's own margin IS a real, different leak — see
+ *  `BLOCKQUOTE_CHILD_PROPS`/`readBlockquoteChildMargins` below (FIX ROUND MED-1). */
 const BLOCKQUOTE_PROPS = [
 	'color',
 	'fontStyle',
@@ -2499,8 +2512,24 @@ const BLOCKQUOTE_PROPS = [
 	'marginInlineStart',
 	'marginInlineEnd',
 ];
+/** `hr` — GROUP 7 (FIX ROUND MED-4). Obsidian's own rule is a `border` shorthand plus a
+ *  separate `border-color`, so longhands are sampled rather than the shorthand itself
+ *  (matching the table sweep's own border-longhand convention). */
+const HR_PROPS = [
+	'borderTopWidth',
+	'borderTopStyle',
+	'borderTopColor',
+	'borderRightWidth',
+	'borderRightStyle',
+	'borderBottomWidth',
+	'borderBottomStyle',
+	'borderLeftWidth',
+	'borderLeftStyle',
+	'marginBlockStart',
+	'marginBlockEnd',
+];
 
-/** Tag EVERY `<ul>`/`<ol>`, `<li>` and `<blockquote>` the gallery renders under a
+/** Tag EVERY `<ul>`/`<ol>`, `<li>`, `<blockquote>` and `<hr>` the gallery renders under a
  *  `[data-dse-element]`/`.dse-modal` root — not a representative-per-kind sample (unlike
  *  `tagTables`'s own de-duped "kinds" convention): each node's key is uniquely suffixed by a
  *  running index, so two structurally-identical siblings (e.g. skills's five per-group
@@ -2508,7 +2537,7 @@ const BLOCKQUOTE_PROPS = [
  *  the per-kind counts so the sweep can hard-fail if a family the round's own report claims
  *  to cover renders 0 nodes. */
 function tagLists() {
-	const counts = { ul: 0, ol: 0, li: 0, blockquote: 0 };
+	const counts = { ul: 0, ol: 0, li: 0, blockquote: 0, hr: 0 };
 	let i = 0;
 	for (const n of document.querySelectorAll('[data-dse-element] ul, [data-dse-element] ol, .dse-modal ul, .dse-modal ol')) {
 		const root = n.closest('[data-dse-element]');
@@ -2532,6 +2561,14 @@ function tagLists() {
 		n.setAttribute('data-dse-listleak-bq', key);
 		k += 1;
 		counts.blockquote += 1;
+	}
+	let m = 0;
+	for (const n of document.querySelectorAll('[data-dse-element] hr, .dse-modal hr')) {
+		const root = n.closest('[data-dse-element]');
+		const key = (root ? root.getAttribute('data-dse-element') : '(modal)') + '|hr#' + m;
+		n.setAttribute('data-dse-listleak-hr', key);
+		m += 1;
+		counts.hr += 1;
 	}
 	return counts;
 }
@@ -2561,6 +2598,84 @@ function readMarkerColors() {
 	return out;
 }
 
+/** FIX ROUND (MED-1) — a blockquote's own first/last ELEMENT CHILD margin-top/-bottom.
+ *  Obsidian's `.markdown-rendered blockquote > :first-child`/`> :last-child` zero these
+ *  independently of anything sampled on the `<blockquote>` element itself, and the
+ *  original round's `BLOCKQUOTE_PROPS` never read a child at all. A single-child
+ *  blockquote (first === last) reports the SAME node twice, under two different keys
+ *  (`…|first`, `…|last`) — both margins genuinely apply to it. */
+function readBlockquoteChildMargins() {
+	const out = [];
+	for (const bq of document.querySelectorAll('[data-dse-listleak-bq]')) {
+		const key = bq.getAttribute('data-dse-listleak-bq');
+		const first = bq.firstElementChild;
+		const last = bq.lastElementChild;
+		if (first) out.push({ key: `${key}|first`, marginTop: getComputedStyle(first).marginTop });
+		if (last) out.push({ key: `${key}|last`, marginBottom: getComputedStyle(last).marginBottom });
+	}
+	return out;
+}
+
+/** FIX ROUND (MED-2) — proves the `li p:first-of-type`/`:last-of-type` fix despite 0 live
+ *  fixture wrapping list content in a loose `<p>`: builds a real, temporary
+ *  `<li><p>a</p><p>b</p></li>` under the first tagged `<ul>`'s own DOM (so it inherits the
+ *  same ancestor chain, incl. the synthesized `.markdown-rendered` wrapper once that is
+ *  applied), reads the two paragraphs' own `marginBlockStart`/`marginBlockEnd`, then
+ *  removes the synthetic node again — never left in the DOM, never screenshotted. Returns
+ *  `null` if no tagged `<ul>` exists to attach to (the caller treats that as a problem, not
+ *  a silent skip). */
+function withSyntheticLiP() {
+	const host = [...document.querySelectorAll('[data-dse-listleak]')].find((n) => n.tagName === 'UL');
+	if (!host) return null;
+	const li = document.createElement('li');
+	const p1 = document.createElement('p');
+	p1.textContent = 'a';
+	const p2 = document.createElement('p');
+	p2.textContent = 'b';
+	li.appendChild(p1);
+	li.appendChild(p2);
+	host.appendChild(li);
+	const rec = {
+		firstMarginBlockStart: getComputedStyle(p1).marginBlockStart,
+		lastMarginBlockEnd: getComputedStyle(p2).marginBlockEnd,
+	};
+	li.remove();
+	return rec;
+}
+
+/** FIX ROUND (HIGH-1a) — a targeted, non-leak-shaped check: on `a7820c1` a NESTED `<ul>`'s
+ *  own `margin-block` read 16px in the BARE harness, with NO host CSS involved at all —
+ *  the original round's own `:where(ul, ol)` (GROUP 1) is not level-specific, so it beat
+ *  even Obsidian's genuine nested-list rule when a real vault DOES inject app.css, which
+ *  means a bare-vs-host DIFF can never see this bug (both sides read the SAME wrong value,
+ *  since the plugin's own rule wins either way). This reads the nested `<ul>`'s own margin
+ *  directly (not via the generic tag-and-diff machinery) and is asserted against a literal
+ *  "0px", not compared against a host pass — the review's own "Measured, not argued
+ *  (synthetic probe, harness sheet only, NO host CSS)" method. */
+function readNestedListMargin() {
+	const ul = document.querySelector('[data-dse-element] li > ul, [data-dse-element] li > ol');
+	if (!ul) return null;
+	const cs = getComputedStyle(ul);
+	return { marginBlockStart: cs.marginBlockStart, marginBlockEnd: cs.marginBlockEnd };
+}
+
+// FIX ROUND — the gallery view (`gallery=1`) mounts each element's DEFAULT fixture ONLY
+// (`renderElement` in entry.ts falls back to `fixtureName='default'` for a gallery sweep);
+// it never shows a non-default fixture. HIGH-1/MED-3/MED-4's new fixtures (`feature/list`,
+// `title/nested`, `treasure/hr`) are all deliberately non-default (so no EXISTING shot can
+// move — see the round report's own "must not move any existing shot" constraint), so the
+// sweep must ALSO visit each one by its own `?element=<id>&fixture=<name>` URL, the same
+// query shape `shoot.mjs`'s own `snap()` uses for a non-gallery capture. Each visit is
+// independently tagged/compared with the SAME helpers the gallery pass uses (they key off
+// `[data-dse-element]`/attribute tags, not the page shape), so nothing here forks a second
+// comparison path — only the navigation target and its own blind-check threshold differ.
+const LIST_SWEEP_VISITS = [
+	{ label: 'gallery', query: { gallery: '1' }, min: { ul: 1, li: 3, blockquote: 1, hr: 0 }, synth: true },
+	{ label: 'feature/list', query: { element: 'feature', fixture: 'list' }, min: { ul: 1, li: 0, blockquote: 0, hr: 0 }, synth: false },
+	{ label: 'title/nested', query: { element: 'title', fixture: 'nested' }, min: { ul: 2, li: 0, blockquote: 0, hr: 0 }, synth: false },
+	{ label: 'treasure/hr', query: { element: 'treasure', fixture: 'hr' }, min: { ul: 0, li: 0, blockquote: 0, hr: 1 }, synth: false },
+];
+
 async function assertListHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
@@ -2573,85 +2688,178 @@ async function assertListHostLeak(page) {
 			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
 				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
 	const problems = [];
-	let comparisons = 0;
+	// FIX ROUND (LOW-1) — named per-kind counters, summed at the end, so the printed line's
+	// arithmetic can never drift from what was actually compared (the original round's own
+	// line named 3 categories but the code counted a 4th, `li::marker`, uncredited — this
+	// shape cannot repeat that: every counter below is both incremented AND printed).
+	let ulComparisons = 0;
+	let liBoxComparisons = 0;
+	let liMarkerComparisons = 0;
+	let bqBoxComparisons = 0;
+	let bqChildComparisons = 0;
+	let hrComparisons = 0;
+	let synthComparisons = 0;
 	let ulCount = 0;
 	let liCount = 0;
 	let bqCount = 0;
+	let hrCount = 0;
 	for (const bg of ['dark', 'light']) {
-		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg });
-		await page.emulateMedia({ media: 'screen' });
-		await page.goto(`${pageUrl}?${query}`);
-		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
-		const counts = await page.evaluate(tagLists);
-		if (counts.ul < 1 || counts.li < 3 || counts.blockquote < 1) {
-			problems.push(
-				`${bg}: only ${counts.ul} ul/ol, ${counts.li} li, ${counts.blockquote} blockquote found — the sweep is blind`,
-			);
-			continue;
-		}
-		ulCount = Math.max(ulCount, counts.ul + counts.ol);
-		liCount = Math.max(liCount, counts.li);
-		bqCount = Math.max(bqCount, counts.blockquote);
-
-		const bareLists = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak', props: LIST_PROPS });
-		const bareItems = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-li', props: LIST_ITEM_PROPS });
-		const bareMarkers = await page.evaluate(readMarkerColors);
-		const bareBqs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-bq', props: BLOCKQUOTE_PROPS });
-
-		await injectRealHostCss(page, host.css);
-		await wrapMountInMarkdownRendered(page);
-
-		const hostLists = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak', props: LIST_PROPS });
-		const hostListsByKey = new Map(hostLists.map((r) => [r.key, r]));
-		for (const b of bareLists) {
-			const h = hostListsByKey.get(b.key);
-			if (!h) {
-				problems.push(`${bg}|ul-ol|${b.key}: vanished when the host sheet was added`);
+		for (const visit of LIST_SWEEP_VISITS) {
+			const query = new URLSearchParams({ ...visit.query, theme: 'steel', bg });
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${query}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+			const counts = await page.evaluate(tagLists);
+			if (counts.ul < visit.min.ul || counts.li < visit.min.li || counts.blockquote < visit.min.blockquote || counts.hr < visit.min.hr) {
+				problems.push(
+					`${bg}|${visit.label}: only ${counts.ul} ul/ol, ${counts.li} li, ${counts.blockquote} blockquote, ${counts.hr} hr found — the sweep is blind`,
+				);
 				continue;
 			}
-			comparisons += 1;
-			for (const p of LIST_PROPS) {
-				if (b[p] !== h[p]) problems.push(`${bg}|ul-ol|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
-			}
-		}
+			ulCount = Math.max(ulCount, counts.ul + counts.ol);
+			liCount = Math.max(liCount, counts.li);
+			bqCount = Math.max(bqCount, counts.blockquote);
+			hrCount = Math.max(hrCount, counts.hr);
 
-		const hostItems = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-li', props: LIST_ITEM_PROPS });
-		const hostItemsByKey = new Map(hostItems.map((r) => [r.key, r]));
-		for (const b of bareItems) {
-			const h = hostItemsByKey.get(b.key);
-			if (!h) {
-				problems.push(`${bg}|li|${b.key}: vanished when the host sheet was added`);
-				continue;
-			}
-			comparisons += 1;
-			for (const p of LIST_ITEM_PROPS) {
-				if (b[p] !== h[p]) problems.push(`${bg}|li|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
-			}
-		}
+			const bareLists = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak', props: LIST_PROPS });
+			const bareItems = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-li', props: LIST_ITEM_PROPS });
+			const bareMarkers = await page.evaluate(readMarkerColors);
+			const bareBqs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-bq', props: BLOCKQUOTE_PROPS });
+			const bareBqChildren = await page.evaluate(readBlockquoteChildMargins);
+			const bareHrs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-hr', props: HR_PROPS });
+			const bareSyntheticLiP = visit.synth ? await page.evaluate(withSyntheticLiP) : null;
+			if (visit.synth && !bareSyntheticLiP) problems.push(`${bg}|${visit.label}|li>p synthetic probe: no tagged <ul> to attach to`);
 
-		const hostMarkers = await page.evaluate(readMarkerColors);
-		const hostMarkersByKey = new Map(hostMarkers.map((r) => [r.key, r]));
-		for (const b of bareMarkers) {
-			const h = hostMarkersByKey.get(b.key);
-			if (!h) {
-				problems.push(`${bg}|li::marker|${b.key}: vanished when the host sheet was added`);
-				continue;
+			// FIX ROUND (HIGH-1a) — a HARNESS-ONLY regression check (no host CSS involved
+			// at all, see `readNestedListMargin`'s own comment): only meaningful on the
+			// `title/nested` visit, which is the one fixture that genuinely nests a list.
+			if (visit.label === 'title/nested') {
+				const nestedMargin = await page.evaluate(readNestedListMargin);
+				if (!nestedMargin) {
+					problems.push(`${bg}|${visit.label}|nested-margin: no nested <li> > ul/ol found to check`);
+				} else {
+					ulComparisons += 1;
+					if (nestedMargin.marginBlockStart !== '0px')
+						problems.push(
+							`${bg}|${visit.label}|nested-margin: the PLUGIN's OWN CSS (no host involved) gives a nested list ` +
+								`marginBlockStart "${nestedMargin.marginBlockStart}", not "0px" — GROUP 1's flat :where(ul, ol) is winning over the nested-collapse GROUP 6 rule`,
+						);
+					if (nestedMargin.marginBlockEnd !== '0px')
+						problems.push(
+							`${bg}|${visit.label}|nested-margin: the PLUGIN's OWN CSS (no host involved) gives a nested list ` +
+								`marginBlockEnd "${nestedMargin.marginBlockEnd}", not "0px" — GROUP 1's flat :where(ul, ol) is winning over the nested-collapse GROUP 6 rule`,
+						);
+				}
 			}
-			comparisons += 1;
-			if (b.color !== h.color) problems.push(`${bg}|li::marker|${b.key}: Obsidian's real app.css changes color — "${b.color}" without the host, "${h.color}" with it`);
-		}
 
-		const hostBqs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-bq', props: BLOCKQUOTE_PROPS });
-		const hostBqsByKey = new Map(hostBqs.map((r) => [r.key, r]));
-		for (const b of bareBqs) {
-			const h = hostBqsByKey.get(b.key);
-			if (!h) {
-				problems.push(`${bg}|blockquote|${b.key}: vanished when the host sheet was added`);
-				continue;
+			await injectRealHostCss(page, host.css);
+			await wrapMountInMarkdownRendered(page);
+
+			const hostLists = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak', props: LIST_PROPS });
+			const hostListsByKey = new Map(hostLists.map((r) => [r.key, r]));
+			for (const b of bareLists) {
+				const h = hostListsByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|ul-ol|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				ulComparisons += 1;
+				for (const p of LIST_PROPS) {
+					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|ul-ol|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
 			}
-			comparisons += 1;
-			for (const p of BLOCKQUOTE_PROPS) {
-				if (b[p] !== h[p]) problems.push(`${bg}|blockquote|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+
+			const hostItems = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-li', props: LIST_ITEM_PROPS });
+			const hostItemsByKey = new Map(hostItems.map((r) => [r.key, r]));
+			for (const b of bareItems) {
+				const h = hostItemsByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|li|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				liBoxComparisons += 1;
+				for (const p of LIST_ITEM_PROPS) {
+					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|li|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+
+			const hostMarkers = await page.evaluate(readMarkerColors);
+			const hostMarkersByKey = new Map(hostMarkers.map((r) => [r.key, r]));
+			for (const b of bareMarkers) {
+				const h = hostMarkersByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|li::marker|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				liMarkerComparisons += 1;
+				if (b.color !== h.color) problems.push(`${bg}|${visit.label}|li::marker|${b.key}: Obsidian's real app.css changes color — "${b.color}" without the host, "${h.color}" with it`);
+			}
+
+			const hostBqs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-bq', props: BLOCKQUOTE_PROPS });
+			const hostBqsByKey = new Map(hostBqs.map((r) => [r.key, r]));
+			for (const b of bareBqs) {
+				const h = hostBqsByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|blockquote|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				bqBoxComparisons += 1;
+				for (const p of BLOCKQUOTE_PROPS) {
+					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|blockquote|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+
+			// FIX ROUND (MED-1) — the blockquote's own first/last element child margin.
+			const hostBqChildren = await page.evaluate(readBlockquoteChildMargins);
+			const hostBqChildrenByKey = new Map(hostBqChildren.map((r) => [r.key, r]));
+			for (const b of bareBqChildren) {
+				const h = hostBqChildrenByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|blockquote-child|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				bqChildComparisons += 1;
+				if ('marginTop' in b && b.marginTop !== h.marginTop)
+					problems.push(`${bg}|${visit.label}|blockquote-child|${b.key}: Obsidian's real app.css changes marginTop — "${b.marginTop}" without the host, "${h.marginTop}" with it`);
+				if ('marginBottom' in b && b.marginBottom !== h.marginBottom)
+					problems.push(`${bg}|${visit.label}|blockquote-child|${b.key}: Obsidian's real app.css changes marginBottom — "${b.marginBottom}" without the host, "${h.marginBottom}" with it`);
+			}
+
+			// FIX ROUND (MED-4) — bare `<hr>`.
+			const hostHrs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-hr', props: HR_PROPS });
+			const hostHrsByKey = new Map(hostHrs.map((r) => [r.key, r]));
+			for (const b of bareHrs) {
+				const h = hostHrsByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|hr|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				hrComparisons += 1;
+				for (const p of HR_PROPS) {
+					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|hr|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+
+			// FIX ROUND (MED-2) — the synthetic `<li><p>a</p><p>b</p></li>` probe (gallery
+			// visit only — any tagged <ul> works as the attach point, no need to repeat it
+			// per fixture-specific visit too).
+			if (visit.synth && bareSyntheticLiP) {
+				const hostSyntheticLiP = await page.evaluate(withSyntheticLiP);
+				if (hostSyntheticLiP) {
+					synthComparisons += 1;
+					if (bareSyntheticLiP.firstMarginBlockStart !== hostSyntheticLiP.firstMarginBlockStart)
+						problems.push(
+							`${bg}|${visit.label}|li>p synthetic|first-of-type: Obsidian's real app.css changes marginBlockStart — ` +
+								`"${bareSyntheticLiP.firstMarginBlockStart}" without the host, "${hostSyntheticLiP.firstMarginBlockStart}" with it`,
+						);
+					if (bareSyntheticLiP.lastMarginBlockEnd !== hostSyntheticLiP.lastMarginBlockEnd)
+						problems.push(
+							`${bg}|${visit.label}|li>p synthetic|last-of-type: Obsidian's real app.css changes marginBlockEnd — ` +
+								`"${bareSyntheticLiP.lastMarginBlockEnd}" without the host, "${hostSyntheticLiP.lastMarginBlockEnd}" with it`,
+						);
+				} else {
+					problems.push(`${bg}|${visit.label}|li>p synthetic probe: no tagged <ul> to attach to (host pass)`);
+				}
 			}
 		}
 	}
@@ -2667,13 +2875,20 @@ async function assertListHostLeak(page) {
 		);
 		process.exit(1);
 	}
+	// FIX ROUND (LOW-1) — the printed total is the literal SUM of the counters actually
+	// incremented above, never a separately-typed formula that can drift from the code.
+	const comparisons =
+		ulComparisons + liBoxComparisons + liMarkerComparisons + bqBoxComparisons + bqChildComparisons + hrComparisons + synthComparisons;
 	console.log(
-		`\nlist host-leak OK (${ulCount} ul/ol + ${liCount} li + ${bqCount} blockquote × dark/light = ` +
-			`${comparisons} comparisons against the real Obsidian app.css under a real ` +
-			`.markdown-preview-view.markdown-rendered ancestor: every sampled ul/ol/li/li::marker/` +
-			`blockquote property is identical with and without it; li.task-list-item's own three ` +
-			`declarations (list-style/data-task decorations) are deliberately NOT covered here — ` +
-			`checkbox round; ${pinNote})`,
+		`\nlist host-leak OK (${ulCount} ul/ol [${ulComparisons}] + ${liCount} li box [${liBoxComparisons}] + ` +
+			`${liCount} li::marker [${liMarkerComparisons}] + ${bqCount} blockquote box [${bqBoxComparisons}] + ` +
+			`${bqCount * 2} blockquote-child-margin (first+last) [${bqChildComparisons}] + ${hrCount} hr [${hrComparisons}] + ` +
+			`1 li>p synthetic probe [${synthComparisons}] × dark/light = ${comparisons} comparisons against the real ` +
+			`Obsidian app.css under a real .markdown-preview-view.markdown-rendered ancestor: every sampled ` +
+			`ul/ol/li/li::marker/blockquote/blockquote-child/hr property is identical with and without it, and ` +
+			`the li>p fix genuinely fires on a synthetic loose-list-item node; li.task-list-item's own three ` +
+			`declarations (list-style/data-task decorations) are deliberately NOT covered here — checkbox ` +
+			`round; ${pinNote})`,
 	);
 }
 

@@ -218,7 +218,16 @@
 	margin-block-start: 0;
 	margin-block-end: 0;
 }
-.dse-md-inline > ul {
+/* SC-202 r3 fix round (HIGH-1b) — `[data-dse-element]`-prefixed (was bare `.dse-md-inline
+   > ul`, (0,1,1)): the SC-202 r3 list re-grounding block's own `:where(ul, ol)` anchor sits
+   at (0,2,0), which used to outrank this rule and silently restore its 1em margin on top
+   of THIS deliberate zero — every markdown-rendered feature/card-row body with a bullet
+   list gained 16px of air it was explicitly built not to have (0 fixture proved it, so
+   nothing was gated). The ancestor is always present: both real call sites
+   (`renderFeature.ts`'s `md()`, `CardLayout.ts`'s row renderer) mount inside a
+   `[data-dse-element]` root. New specificity (0,2,1) — one attribute ahead of the
+   re-grounding block, never losing regardless of source order. */
+[data-dse-element] .dse-md-inline > ul {
 	display: grid;
 	margin-block-start: 0;
 	margin-block-end: 0;
@@ -423,7 +432,13 @@ code.dsa {
 	overflow-wrap: anywhere;
 }
 
-.dse-error-card-list {
+/* SC-202 r3 fix round (HIGH-1b) — `[data-dse-element]`+tag-qualified (was bare
+   `.dse-error-card-list`, (0,1,0)): same reason as `.dse-md-inline > ul` above — the
+   SC-202 r3 list block's `:where(ul, ol)` anchor at (0,2,0) used to outrank this rule's
+   `margin`/`padding-left` outright. `pipeline.ts:renderErrorCard` always builds this as a
+   real `<ul class="dse-error-card-list">` inside a `[data-dse-element]` root, so `ul.` is
+   accurate, not just a specificity trick. New specificity (0,2,1). */
+[data-dse-element] ul.dse-error-card-list {
 	margin: var(--size-4-1) 0 0;
 	padding-left: var(--size-4-4);
 	color: var(--text-muted);
@@ -15701,6 +15716,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    at all — confirmed by probing with the real app.css injected and NO wrapper present:
    `li::marker` colour still moved on every gallery list, table-family-style leaks did not.
 
+   FIX ROUND (2026-09-05, review of `a7820c1`) — the census below is CORRECTED against the
+   review's own independent enumeration (62 subject selectors, not the original's smaller
+   count) and its two "unreachable today" deferrals are OVERTURNED by real shipped content
+   the review found (`title/fleet-admiral.md` nests a list; `treasure/…/scorpion-tails.md`
+   renders a bare `hr`) — both now carry a seeded fixture and a live fix, not a Follow-up.
+
    ENUMERATED from the real sheet (`visual-harness/dist/obsidian-app.css`, Obsidian 1.14.0)
    via `obsidian-host-pin.mjs`'s own `iterRules`/`splitSelectorList` (never the `css` npm
    package — r2's own finding that it silently truncates this file's parse). Filtering
@@ -15712,8 +15733,13 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      `ol > li::marker { color: var(--list-marker-color) }` (also a `.is-collapsed::marker`
      variant — collapsed/folded lists never occur in rendered plugin output, no fold UI);
      `ul ul`/`ol ul`/`ol ol ul`/`ol ul ul`/`ul ol ul`/`ul ul ul { list-style-type: disc }`
-     (nested-list bullet shape); the bare `hr { border: none; border-top: var(--hr-thickness)
-     solid; border-color: var(--hr-color); margin: 2rem 0; }`.
+     (nested-list bullet shape — the harness/UA default is `circle` at this depth, `square`
+     one deeper, per FIX ROUND MED-3); the bare `hr { border: none; border-top:
+     var(--hr-thickness) solid; border-color: var(--hr-color); margin: 2rem 0; }` (FIX
+     ROUND MED-4 — genuinely reachable, see below); `ol { list-style-type:
+     var(--list-numbered-style) }` (FIX ROUND LOW-2 — `decimal` today, neutral only by
+     coincidence); `ul > li`/`ol > li { text-align: start }` (FIX ROUND LOW-2 — every live
+     node already computes `start`, same coincidence class).
 
      SCOPED under `.markdown-rendered` (this family's own version of r2's wrapper lesson):
      `ul`/`ol { padding-inline-start: 0; margin-block-start/end: var(--p-spacing); }`;
@@ -15722,19 +15748,38 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      var(--blockquote-color); font-style: var(--blockquote-font-style); background-color:
      var(--blockquote-background-color); border-inline-start: var(--blockquote-border-
      thickness) solid var(--blockquote-border-color); padding-top/-bottom: 0; padding-
-     inline-start: var(--size-4-6); margin-inline-start/-end: 0; }`; `li p:first-of-type
-     { margin-block-start: 0; }` / `li p:last-of-type { margin-block-end: 0; }` (both
-     `ul li`/`ol li` scoped, the brief's own "li > p"); `.markdown-rendered ul ul`/`ol ul`/
-     `ul ol`/`ol ol { margin-block-start/end: 0; }` and `ol ol > li`/`ul ul > li { margin-
-     inline-start: var(--list-indent); }` (nested-list overrides — a SECOND, DEEPER tier
-     `.markdown-rendered.show-indentation-guide li > ul`/`ol { position: relative }` plus a
-     `::before` guide-line pseudo-element only fires when a list nests INSIDE another list
-     item). Obsidian ships **no `caption`-shaped exception here** worth naming; every rule
-     above was checked against the real sheet, not assumed.
+     inline-start: var(--size-4-6); margin-inline-start/-end: 0; }`; **`blockquote >
+     :first-child { margin-top: 0; }` / `> :last-child { margin-bottom: 0; }`** (FIX ROUND
+     MED-1 — missed by the original census entirely; every plugin quote with 2+ children,
+     e.g. perk/familiar's, rendered 32px shorter in a vault with nothing gating it); `ul li
+     p:first-of-type { margin-block-start: 0; }` / `ul li p:last-of-type { margin-block-end:
+     0; }` (a DESCENDANT selector — "li p", not "li > p"; FIX ROUND MED-2 corrects the
+     original's narrower `li > p` shape, which never matched Obsidian's own rule and so
+     could never fire); `.markdown-rendered ul ul`/`ol ul`/`ul ol`/`ol ol { margin-block-
+     start/end: 0; }` and `ol ol > li`/`ul ul > li { margin-inline-start: var(--list-
+     indent); }` (nested-list overrides — FIX ROUND HIGH-1a/MED-3 now carry the margin
+     collapse; the deeper indent override stays deferred, see below) plus a SECOND, DEEPER
+     tier `.markdown-rendered.show-indentation-guide li > ul`/`ol { position: relative }`
+     plus a `::before` guide-line pseudo-element (FIX ROUND MED-3 — neutralised via a
+     `--indentation-guide-width: 0` token override rather than out-specificity-ing the
+     pseudo-element rule directly, see GROUP 6). Obsidian ships **no `caption`-shaped
+     exception here** worth naming; every rule above was checked against the real sheet,
+     not assumed.
+
+   THE PLUGIN'S OWN CSS THIS BLOCK USED TO OUTRANK BY ACCIDENT (FIX ROUND HIGH-1b) — the
+   review's central finding: this block's flat (0,2,0) anchor is not just higher than every
+   Obsidian rule it targets, it is ALSO higher than the plugin's OWN pre-existing component
+   rules for the same properties, which the original round never checked against:
+   `.dse-md-inline > ul` (`:227` — every markdown-rendered feature/card-row body's inline
+   list) and `.dse-error-card-list` (`:435` — the schema-error card's own list) both used to
+   lose their deliberate zero-margin design to this block's `1em` restatement. Both raised
+   to (0,2,1) (see their own site comments) — genuinely never losing regardless of source
+   order, not merely "usually wins by prepend order" the way a bare tie would.
 
    WHAT EMPIRICALLY LEAKS (measured bare vs. host+wrapper on career/class's prose lists,
-   montage's guide list, the skills picker's group lists, and class/perk's blockquotes —
-   see the round report for the full table):
+   montage's guide list, the skills picker's group lists, class/perk's blockquotes, the new
+   feature-list/title-nested/treasure-hr fixtures — see the round report for the full
+   table):
 
      `ul`/`ol` top-level box: `padding-inline-start` 40px → 0px on every UNCLASSED list
      (career/class's prose bullets); montage's/skills's OWN classed lists
@@ -15754,7 +15799,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      `position` static → relative on career/class/skills's unclassed items (montage's own
      `.dse-mt__guide-item` already declares `position: relative` for its own `::before`
      bullet, at far higher specificity than this leak or this fix — 0 diff, not this
-     block's doing); `margin-inline-start` 0px → `3ch`'s resolved px on every family.
+     block's doing); `margin-inline-start` 0px → `3ch`'s resolved px on every family;
+     `text-align` already `start` everywhere (FIX ROUND LOW-2, restated defensively).
 
      `li::marker` colour: every family's marker (bullet glyph) recolours from this
      element's own ambient ink (`rgba(220,226,230,.88)` body text / `.62` on montage's
@@ -15770,30 +15816,42 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      `--blockquote-background-color: transparent` are themselves neutral tokens in this
      theme, and `padding-top`/`-bottom: 0` already matches the browser's own UA default —
      restated explicitly anyway, same MED-1 reasoning as the list margin above.
-     `margin-top`/`margin-bottom` are UNTOUCHED by Obsidian's own rule (it only ever
-     names the inline axis) — verified safe, not restated, matching r2's own "never
-     declared → skip" convention.
+     `margin-top`/`margin-bottom` on the BLOCKQUOTE ELEMENT ITSELF are UNTOUCHED by
+     Obsidian's own rule (it only ever names the inline axis) — verified safe, not
+     restated, matching r2's own "never declared → skip" convention. Its first/last ELEMENT
+     CHILD's margin-top/-bottom is a DIFFERENT, real leak — see MED-1/GROUP 5 below.
+
+     Nested lists (LIVE — `title/fleet-admiral.md`'s five weather sub-items, FIX ROUND
+     MED-3): `margin-block` 0px → 16px (HIGH-1a); `list-style-type` harness `circle` →
+     Obsidian `disc`; `position` harness `static` → Obsidian `relative` (the indentation-
+     guide anchor) — all three now re-grounded (GROUP 6).
+
+     Bare `hr` (LIVE — `treasure/…/scorpion-tails.md:42`, FIX ROUND MED-4): harness `1px
+     inset` mid-grey + `8px` margin-block → Obsidian `2px solid` dark-grey + `32px` — now
+     re-grounded (GROUP 7).
 
    NOT FIXED THIS ROUND (measured, 0 live fixture to design or prove a value against —
    recorded here and under Follow-ups, never silently assumed):
 
-     - Nested lists (a `<ul>`/`<ol>` genuinely inside an `<li>`): no fixture anywhere nests
-       a markdown list, so `ul ul`/`ol ul`/`ul ol`/`ol ol`'s margin-block-collapse, the
-       `ul ul > li`/`ol ol > li` deeper indent override, and the
-       `.show-indentation-guide` pseudo-element guide line are all genuinely unreachable
-       today. This block's own `li`/`ul`/`ol` restatements are NOT level-specific (neither
-       is Obsidian's own `ul > li` rule — it matches a nested `li` too), so they degrade
-       safely rather than leaking outright; only the DEEPER nested-specific overrides are
-       missing. Fold into a future round if a fixture ever nests a list.
-     - `li > p:first-of-type`/`:last-of-type` — the brief's own "li > p": Obsidian zeroes
-       the FIRST/LAST paragraph's block-margin inside a list item, but every current list
-       fixture is a TIGHT list (no blank line between bullets in the source markdown), so
-       `<li>` never wraps its content in a `<p>` at all — restated below anyway (the
-       browser's own UA default, `1em`, mirroring every other restatement's "restore what
-       the harness already renders" rule), but with 0 live nodes to sweep against.
-     - Bare `hr` — Obsidian's rule is unscoped and would reach a plugin-rendered
-       `<hr>` the moment one appears, but no fixture anywhere renders one (no "---"
-       thematic break in any prose field) — deferred, not this round's fix, per Follow-ups.
+     - The DEEPER nested-list indent override (`ul ul > li`/`ol ol > li { margin-inline-
+       start: var(--list-indent) }`, distinct from the margin-COLLAPSE this round now
+       fixes) — `fleet-admiral`'s own nested `li`s still get the TOP-LEVEL `3ch` indent
+       (GROUP 2) rather than Obsidian's own deeper `--list-indent` value; visually close
+       (both are "some indent"), not byte-identical. No design decision made yet for the
+       correct nested `px` figure independent of the harness's own rendering; left for a
+       future round once a design question is asked, or if it starts mattering visually.
+     - Multi-paragraph / loose list items (a `<li>` whose content is wrapped in one or more
+       `<p>`, as opposed to bare inline text) — 0 occurrences in the shipped corpus (review
+       item 11, 3,143 files scanned); GROUP 4's fix (MED-2) is real and now genuinely fires
+       (proven by a synthetic sweep probe, since no fixture carries this shape), but no
+       LIVE fixture exercises it end-to-end.
+     - FIX ROUND LOW-3 — `CompendiumMigrationModal.ts`'s four `<ul>`s (`dse-migration__
+       summary`/`__sample`/`__paths`) have NO CSS of their own in this sheet at all, so they
+       now take GROUP 1/2/3/6's full restatement (40px padding, 1em margin, disc bullets,
+       etc.) completely unobserved — the gallery renders 0 `.dse-modal` list nodes (this
+       modal is Obsidian-camera-only), so nothing here can gate it. A modal fixture is the
+       "turn the sheet on" round's own job (the same deferral shape r1's HIGH-3 used for its
+       own modal-only controls); not attempted here.
 */
 
 /* GROUP 1 — `ul`/`ol` top-level box: restore the browser's own UA-default padding/margin
@@ -15806,20 +15864,37 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	margin-block-start: 1em;
 	margin-block-end: 1em;
 }
+/* FIX ROUND (LOW-2) — `list-style-type` restated per tag: Obsidian's bare `ol { list-
+   style-type: var(--list-numbered-style) }` resolves `decimal` today (== UA default, 0
+   diff — but a theme/snippet setting the token silently renumbers every plugin `<ol>`);
+   `ul`'s own top-level bullet is untouched by any Obsidian rule (only NESTED `ul` has one
+   — GROUP 6), restated anyway for symmetry with the same defensive reasoning. Split into
+   two rules (not one `:where(ul, ol)`) because the two tags need DIFFERENT values. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul) {
+	list-style-type: disc;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ol) {
+	list-style-type: decimal;
+}
 
 /* GROUP 2 — `li` (any `ul > li`/`ol > li`, classed or not — Obsidian's own selector
    qualifies neither side, so this reaches montage's/skills's own classed list items too;
    verified harmless there — their own per-family rules for OTHER properties (montage's
    `position: relative`, its own `::before` bullet) live at far higher specificity, nested
    under `[data-dse-theme='steel'][data-dse-element='montage']…`, and are untouched by
-   this block's flat (0,2,0) anchor). Not level-specific (see the block comment's own "not
-   fixed this round" note) — a nested `li` gets the SAME restatement Obsidian's own
-   `ul > li` selector would give it either way, degrading safely rather than leaking. */
+   this block's flat (0,2,0) anchor). Not level-specific for `margin-inline-start` (the
+   DEEPER nested indent override stays deferred — see the block comment's own "not fixed
+   this round" note); `padding-top`/`-bottom`/`position` genuinely ARE the same at every
+   depth (Obsidian's own `ul > li` rule matches a nested `li` too, so restating them here
+   is correct at any depth, not just top-level). `text-align: start` (FIX ROUND LOW-2) —
+   every live node already computes `start`, restated defensively (round-2 MED-1 class:
+   the coincidence holds only until a plugin container centres its text). */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul > li, ol > li) {
 	padding-top: 0;
 	padding-bottom: 0;
 	position: static;
 	margin-inline-start: 0;
+	text-align: start;
 }
 
 /* GROUP 3 — `li::marker`. BARE/UNSCOPED in Obsidian's own sheet (`ul > li::marker`/
@@ -15839,15 +15914,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	color: inherit;
 }
 
-/* GROUP 4 — `li > p:first-of-type`/`:last-of-type` (the brief's own "li > p"). 0 live
-   nodes today (every list fixture is tight — see the block comment) — `1em` mirrors the
-   browser's own UA default paragraph margin, the same "restore what the harness already
-   renders" rule every other GROUP here follows, so a future loose-list fixture inherits a
-   correct restatement rather than an untested guess. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li > p:first-of-type) {
+/* GROUP 4 — `li p:first-of-type`/`:last-of-type` (the brief's own "li > p"). FIX ROUND
+   (MED-2) — the original shape (`li > p`, subject inside `:where()`, (0,2,0)) was INERT:
+   Obsidian's real rule is `.markdown-rendered ul li p:first-of-type` — a DESCENDANT
+   selector (a `<p>` need not be a direct child of `<li>`) at (0,2,3), which always beat
+   the original regardless of any fixture. Corrected two ways: (1) the combinator is now a
+   descendant space, matching Obsidian's own shape (`li p`, not `li > p`); (2) the subject
+   (`p:first-of-type`/`:last-of-type`) is now OUTSIDE `:where()` — `:where(li) p:first-of-
+   type` — giving ANCHOR (0,2,0) + `:where(li)` (0) + `p:first-of-type` (0,1,1) = (0,3,1),
+   which beats Obsidian's (0,2,3) on the class column alone. Proven with a synthetic sweep
+   probe (`probeLiPParagraphs` in shoot.mjs) rather than a text-grep guard, since 0 live
+   fixture wraps list content in a loose `<p>` — see the block comment's own "not fixed
+   this round" note. `1em` mirrors the browser's own UA default paragraph margin, the same
+   "restore what the harness already renders" rule every other GROUP here follows. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li) p:first-of-type {
 	margin-block-start: 1em;
 }
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li > p:last-of-type) {
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li) p:last-of-type {
 	margin-block-end: 1em;
 }
 
@@ -15856,8 +15939,8 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    bottom` measure 0 diff today (the tokens are themselves neutral in this theme) but are
    restated anyway per the block comment's own MED-1-style reasoning — an un-restated
    coincidence is one theme token change away from a silent leak. `margin-top`/`-bottom`
-   are genuinely untouched by Obsidian's own rule (it only ever names the inline axis) —
-   verified safe, correctly NOT restated here. */
+   ON THE BLOCKQUOTE ELEMENT ITSELF are genuinely untouched by Obsidian's own rule (it only
+   ever names the inline axis) — verified safe, correctly NOT restated here. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(blockquote) {
 	color: inherit;
 	font-style: normal;
@@ -15868,4 +15951,103 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	padding-inline-start: 0;
 	margin-inline-start: 40px;
 	margin-inline-end: 40px;
+}
+/* FIX ROUND (MED-1) — `blockquote > :first-child`/`:last-child` were never censused in the
+   original round and still leak: Obsidian zeroes the FIRST child's own top margin and the
+   LAST child's own bottom margin (`.markdown-rendered blockquote > :first-child {
+   margin-top: 0 }` / `> :last-child { margin-bottom: 0 }`, both (0,2,1)) — every plugin
+   blockquote with 2+ children (e.g. perk/familiar's own "Telepathic" quote, a `<p>` title
+   + a `<p>` body) rendered 32px SHORTER in a real vault than the harness, with nothing
+   gating it (`BLOCKQUOTE_PROPS` sampled only the `<blockquote>` element itself). The
+   subject must leave `:where()` to clear (0,2,1): `:where(blockquote) > :first-child` =
+   ANCHOR (0,2,0) + `:where(blockquote)` (0) + `> :first-child` (0,1,0) = (0,3,0), which
+   beats (0,2,1) on the class column alone regardless of the element column. `1em` restores
+   the browser's own UA default paragraph margin — the harness's own bare rendering. A
+   single-child blockquote (first === last) gets BOTH declarations on the same node, which
+   is correct: it needs both its own top and bottom margin restored. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(blockquote) > :first-child {
+	margin-top: 1em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(blockquote) > :last-child {
+	margin-bottom: 1em;
+}
+
+/* GROUP 6 — FIX ROUND (HIGH-1a, MED-3): the nested-list tier. LIVE in shipped content
+   (`title/fleet-admiral.md`'s five weather sub-items, via `ds-scc`'s `useSourceBody`) —
+   the original round's own "genuinely unreachable today" claim for this tier is WRONG,
+   overturned by the review's own real-vault measurement.
+
+   (a) margin-block collapse: Obsidian's OWN nested rule (`.markdown-rendered ul ul` etc.,
+   (0,1,2)) and the browser's UA default (`ul ul, ul ol, ol ul, ol ol { margin-block: 0 }`,
+   bare, (0,0,2)) both zero a nested list's own margin — GROUP 1's flat `:where(ul, ol)`
+   restatement is NOT level-specific and so (correctly, per its own comment) also matches a
+   nested list, silently giving it the TOP-LEVEL `1em` instead of the collapse it needs
+   (measured: 0px → 16px on the fixed tree, `a7820c1`). Restated here at the SAME numeric
+   specificity GROUP 1 has, (0,2,0) — both rules are in THIS file, so the tie resolves by
+   plain same-stylesheet SOURCE ORDER (no dependency on how a separately-injected sheet like
+   app.css cascades against this one): this rule is written AFTER GROUP 1, so it wins for a
+   nested list, which BOTH rules match.
+
+   (b) `list-style-type` per UA nesting depth: Obsidian's own bare rule flattens every
+   nesting depth to `disc`; the harness/UA default cycles `disc` (top) → `circle` (depth 2)
+   → `square` (depth 3+) — restated at the two depths a real vault has been proven to
+   reach (`fleet-admiral` is depth 2 only; depth 3 is included defensively, matching every
+   other restatement's "restore what the harness renders" rule, 0 live proof for THAT
+   specific depth).
+
+   (c) `position: static` on a nested `ul`/`ol`: Obsidian's own
+   `.markdown-rendered.show-indentation-guide li > ul`/`ol` rule is (0,2,2) — TWO classes
+   in its own ancestor (`.markdown-rendered` + `.show-indentation-guide`), exactly matching
+   this block's own two class-equivalents (`:is(...)` + `:not(...)`), so the plain `li >
+   :is(ul, ol)` shape used elsewhere in this file (GROUP 3's `li::marker`) would only TIE,
+   not beat it. The anchor's own `:not([data-dse-print="on"])` is deliberately repeated a
+   second time — syntactically valid (a redundant, harmless second match on the same
+   condition), and it is the cheapest way to add one real specificity unit without
+   inventing an unrelated qualifier or depending on cascade/source-order between this
+   sheet and an injected one. Total (0,3,2), unambiguously above (0,2,2).
+
+   (d) the indentation-guide `::before` pseudo-element itself
+   (`.markdown-rendered.show-indentation-guide li > ul::before`, (0,2,3) — even higher than
+   (c)'s own rule) is neutralised WITHOUT fighting its specificity at all: its own
+   `border-inline-end: var(--indentation-guide-width) solid …` reads a custom property
+   Obsidian itself declares at `body` scope (0 specificity for a custom-property
+   declaration point). Overriding `--indentation-guide-width: 0` at THIS block's own (0,2,0)
+   safely wins that inheritance for the whole `[data-dse-element]`/`.dse-modal` subtree —
+   the `::before` rule still "wins" the DECLARATION, but the VALUE it reads now computes to
+   a 0-width border, which paints nothing regardless of the pseudo-element's own `position`/
+   `inset-*` values. Cheaper and more robust than trying to out-specify (0,2,3) directly. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul ul, ul ol, ol ul, ol ol) {
+	margin-block-start: 0;
+	margin-block-end: 0;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul ul, ol ul) {
+	list-style-type: circle;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul ul ul, ol ul ul, ul ol ul, ol ol ul) {
+	list-style-type: square;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]):not([data-dse-print="on"]) li > :is(ul, ol) {
+	position: static;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) {
+	--indentation-guide-width: 0;
+}
+
+/* GROUP 7 — FIX ROUND (MED-4): bare `hr`. LIVE in shipped content
+   (`treasure/leveled/weapon/scorpion-tails.md:42`'s "---" thematic break, via
+   `treasureLayout`'s `useSourceBody`) — the original round's own "genuinely unreachable
+   today" claim is WRONG, overturned by the review's own real-vault measurement (a real
+   treasure card already rendered a visibly thicker, darker divider with 4× the surrounding
+   air in a vault than the harness showed). Obsidian's OWN rule (bare `hr { border: none;
+   border-top: var(--hr-thickness) solid; border-color: var(--hr-color); margin: 2rem 0; }`
+   plus an identical `.markdown-rendered hr` minus the margin) is restated back to the
+   browser's own UA default the harness has always rendered: `border: 1px inset;
+   border-color: initial;` (the shorthand's own un-set colour would default to
+   `currentcolor`, not the UA's own special hr grey, hence the separate `initial`) plus
+   `margin-block: 0.5em` each side (Chrome's own UA default for a bare `<hr>`). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(hr) {
+	border: 1px inset;
+	border-color: initial;
+	margin-block-start: 0.5em;
+	margin-block-end: 0.5em;
 }

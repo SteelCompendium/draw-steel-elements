@@ -777,6 +777,74 @@ malice:
   value: 3
 `;
 
+// SC-202 r3 fix round (HIGH-1) — a real gallery node for `.dse-md-inline > ul`
+// (`renderFeature.ts`'s `md()` helper wraps EVERY markdown-rendered feature section body in
+// this class): the Effect field's own markdown carries a two-bullet list, which no fixture
+// anywhere rendered before this round, so the review's own HIGH-1 finding (this block's own
+// re-grounding anchor used to silently restore a 1em margin `.dse-md-inline > ul`'s
+// deliberate `margin-block: 0` design zeroed out) had nothing to be shot against. Harness-
+// local literal (same convention as `featureSpend`/`featureVillain` above), not an edit to
+// the frozen D9 example.
+const featureEffectList = `type: feature
+feature_type: ability
+name: Coverage Strike
+keywords:
+  - Attack
+  - Weapon
+usage: Main action
+distance: Melee 1
+target: One creature
+effects:
+  - name: Effect
+    effect: |-
+      Choose one:
+
+      - Deal damage equal to your Might score.
+      - Push the target 2 squares.
+`;
+
+// SC-202 r3 fix round (MED-3) — shaped like the real shipped
+// `data-unified/en/unified/md-dse/title/fleet-admiral.md:24-29` (the review's own Item 11
+// find: a nested list IS live in shipped content, through `titleLayout`'s
+// `useSourceBody: true`) — a top-level bullet whose own sub-items are a NESTED `<ul>`, the
+// shape no fixture anywhere rendered before this round. Harness-local literal, not an edit
+// to the frozen D9 `title` example (`titleDefault`).
+const titleNested = `content: |-
+    *Your mastery over the weather is total.*
+
+    - **Weather Wizard.** Once per session, you can call upon one of the following effects for up to 1 hour:
+      - *Calm* — the wind stills and the sky clears.
+      - *Fog* — a heavy mist reduces visibility to 2 squares.
+      - *High Winds* — ranged attacks beyond short range take a bane.
+      - *Light Winds* — a favorable breeze speeds sailing and flight.
+      - *Storm* — driving rain and lightning make the area difficult terrain.
+echelon: "4"
+name: Weather Wizard
+scc: mcdm.heroes.v1/title/weather-wizard
+type: title
+`;
+
+// SC-202 r3 fix round (MED-4) — shaped like the real shipped
+// `data-unified/en/unified/md-dse/treasure/leveled/weapon/scorpion-tails.md:42` (the
+// review's own Item 11 find: a bare "---" thematic break IS live in shipped content,
+// through `treasureLayout`'s `useSourceBody: true`) — a bare markdown `<hr>` between two
+// paragraphs, the shape no fixture anywhere rendered before this round. Harness-local
+// literal, not an edit to the frozen D9 `treasure` example (`treasureDefault`).
+const treasureHr = `content: |-
+    *A pair of enchanted twin blades, each ending in a barbed, scorpion-like tip.*
+
+    **Effect:** While wielding both blades, your attacks deal an extra 2 damage.
+
+    ---
+
+    **Scorpion Tail (2nd Echelon):** Once per turn when you hit with both blades, the target is grabbed.
+echelon: "1"
+name: Scorpion Tails
+scc: mcdm.heroes.v1/treasure.leveled.weapon/scorpion-tails
+treasure_type: weapon
+type: treasure
+`;
+
 export const FIXTURES: Record<string, Record<string, string>> = {
 	ancestry: { default: ancestryDefault },
 	career: { default: careerDefault },
@@ -788,7 +856,13 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 	counter: { default: counterDefault },
 	culture: { default: cultureDefault },
 	encounter: { default: encounterDefault, collapsed: encounterCollapsed },
-	feature: { default: featureDefault, spend: featureSpend, villain: featureVillain, collapsed: featureCollapsed },
+	feature: {
+		default: featureDefault,
+		spend: featureSpend,
+		villain: featureVillain,
+		collapsed: featureCollapsed,
+		list: featureEffectList,
+	},
 	featureblock: {
 		default: featureblockDefault,
 		advancement: featureblockAdvancement,
@@ -864,8 +938,8 @@ export const FIXTURES: Record<string, Record<string, string>> = {
 		collapsed: statblockCollapsed,
 	},
 	surges: { default: surgesDefault },
-	title: { default: titleDefault },
-	treasure: { default: treasureDefault },
+	title: { default: titleDefault, nested: titleNested },
+	treasure: { default: treasureDefault, hr: treasureHr },
 	'values-row': { default: valuesRowDefault },
 };
 
