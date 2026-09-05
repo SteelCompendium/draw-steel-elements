@@ -2097,11 +2097,42 @@ async function assertInputHostLeak(page) {
 // buttons/inputs did not: every `.markdown-rendered table/td/th/…` rule in app.css is
 // scoped to a `.markdown-rendered` ancestor (Obsidian's reading-view wrapper), and the
 // harness's `#mount` has none — 0 anywhere in the gallery DOM (verified). So the host pass
-// below also wraps `#mount` in `.markdown-preview-view.markdown-rendered`, mirroring the
-// phase-1 spike's permanently-wrapped `index.html`
+// below also wraps `#mount` via `wrapMountInMarkdownRendered`, mirroring the phase-1
+// spike's permanently-wrapped `index.html`
 // (`git show sc202-spike-archive:visual-harness/index.html`) but applied dynamically, only
 // for this sweep — the harness page itself still carries no host CSS or wrapper, per this
 // round's own fence.
+
+/**
+ * The ancestor every `.markdown-rendered …` rule requires — Obsidian's reading-view
+ * wrapper, which the codeblock processor's `el` always sits inside in a real vault but the
+ * browser harness's `#mount` never has. SC-202 r3 extracted this out of `assertTableHostLeak`
+ * (previously inlined there) so the list/blockquote sweep can reuse the SAME wrapper rather
+ * than forking a second copy — the round-2 review's own "reuse its helper" lesson.
+ *
+ * Enriched to the FULL real screen ancestor chain the r2 review measured (`sc202-r2-review.md`
+ * INFO-1: `div.markdown-preview-view.markdown-rendered.node-insert-event.allow-fold-headings.
+ * allow-fold-lists.show-indentation-guide.show-properties`), not just the two classes r2's own
+ * table-only proof needed — verified harmless for every table/list-family selector this file's
+ * two sweeps sample (`.node-insert-event` is an animation-only rule; `.allow-fold-headings`/
+ * `.allow-fold-lists` only ever appear as a NEGATIVE `:not(...)` guard on a fold-indicator this
+ * gallery never renders; `.show-properties` only ever gates a frontmatter-properties widget).
+ * `.show-indentation-guide` is real risk surface for a FUTURE round (Obsidian's nested-list
+ * indentation-guide pseudo-element is scoped under it) even though nothing in this round's own
+ * fix depends on it — carrying it now means the wrapper stays a true mirror of the real chain
+ * without every future round having to re-derive and re-verify it.
+ */
+async function wrapMountInMarkdownRendered(page) {
+	await page.evaluate(() => {
+		const mount = document.getElementById('mount');
+		const wrap = document.createElement('div');
+		wrap.className =
+			'markdown-preview-view markdown-rendered node-insert-event allow-fold-headings ' +
+			'allow-fold-lists show-indentation-guide show-properties';
+		mount.parentElement.insertBefore(wrap, mount);
+		wrap.appendChild(mount);
+	});
+}
 
 /** Every property Obsidian's `.markdown-rendered table` rules set on the `<table>` element
  *  itself, enumerated from the extracted sheet (see the styles-source.css block's own
@@ -2335,14 +2366,7 @@ async function assertTableHostLeak(page) {
 		}
 
 		await injectRealHostCss(page, host.css);
-		// The ancestor every `.markdown-rendered …` rule requires — see the block comment.
-		await page.evaluate(() => {
-			const mount = document.getElementById('mount');
-			const wrap = document.createElement('div');
-			wrap.className = 'markdown-preview-view markdown-rendered';
-			mount.parentElement.insertBefore(wrap, mount);
-			wrap.appendChild(mount);
-		});
+		await wrapMountInMarkdownRendered(page);
 		const { root: hostRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
 
 		const hostTables = await page.evaluate(readTaggedTables, TABLE_LEVEL_PROPS);
@@ -2430,6 +2454,226 @@ async function assertTableHostLeak(page) {
 				? `\n  ${exempt} cell records matched a declared, deferred exception — each one proved ` +
 					`against its known value pair, never assumed:\n${exemptBoundary}`
 				: ''),
+	);
+}
+
+// ======================================================================================
+// SC-202 r3 — LIST + BLOCKQUOTE host-leak sweep (leak family 3).
+//
+// Same asar/pin plumbing as r1/r2 (`loadLocalObsidianAppCss`, `R1_APP_CSS_SHA256`,
+// `injectRealHostCss`), same SKIP-when-no-asar self-gate, same bare-vs-host computed-style
+// invariance contract, and — per the round-2 lesson — the SAME synthesized
+// `.markdown-preview-view.markdown-rendered` wrapper `assertTableHostLeak` uses
+// (`wrapMountInMarkdownRendered`, extracted above so neither sweep forks its own copy):
+// Obsidian's `ul`/`ol`/`li`/`blockquote` BOX rules are scoped under it exactly like the
+// table family's were. Two things this family has that tables did not: (a) `li::marker`'s
+// colour rule is BARE/unscoped (`ul > li::marker`/`ol > li::marker`, no `.markdown-rendered`
+// ancestor at all) — sampled anyway under the same host+wrapper pass, since a bare rule
+// reaches through a wrapper just as well as around one; (b) no `:hover`/interactive state
+// exists for any of these selectors (verified by enumeration — 0 `:hover` hits), so this
+// sweep is REST-ONLY, unlike the button/input/table sweeps.
+//
+// SCOPE FENCE (own brief, "leave the checkbox control to the checkbox round"): Obsidian's
+// task-list rules (`ul > li.task-list-item { list-style: none }` and the two
+// `[data-task="x"/"X"]` decoration rules) are DELIBERATELY not sampled or fixed here — see
+// the styles-source.css block's own comment for the three declarations left for that round.
+
+/** `ul`/`ol` top-level box — GROUP 1. */
+const LIST_PROPS = ['paddingInlineStart', 'marginBlockStart', 'marginBlockEnd'];
+/** `li` (any `ul > li`/`ol > li`) — GROUP 2. `listStyleType`/nested-indent variants are
+ *  deliberately NOT sampled here — see the styles-source.css block's own "not fixed this
+ *  round" note (0 fixture nests a list). */
+const LIST_ITEM_PROPS = ['paddingTop', 'paddingBottom', 'position', 'marginInlineStart'];
+/** `blockquote` — GROUP 5. `marginTop`/`marginBottom` are deliberately NOT sampled:
+ *  Obsidian's own rule never touches them (verified safe, not this block's job). */
+const BLOCKQUOTE_PROPS = [
+	'color',
+	'fontStyle',
+	'backgroundColor',
+	'borderInlineStartWidth',
+	'borderInlineStartStyle',
+	'borderInlineStartColor',
+	'paddingTop',
+	'paddingBottom',
+	'paddingInlineStart',
+	'marginInlineStart',
+	'marginInlineEnd',
+];
+
+/** Tag EVERY `<ul>`/`<ol>`, `<li>` and `<blockquote>` the gallery renders under a
+ *  `[data-dse-element]`/`.dse-modal` root — not a representative-per-kind sample (unlike
+ *  `tagTables`'s own de-duped "kinds" convention): each node's key is uniquely suffixed by a
+ *  running index, so two structurally-identical siblings (e.g. skills's five per-group
+ *  `<ul>`s) are compared independently rather than collapsing into one Map entry. Returns
+ *  the per-kind counts so the sweep can hard-fail if a family the round's own report claims
+ *  to cover renders 0 nodes. */
+function tagLists() {
+	const counts = { ul: 0, ol: 0, li: 0, blockquote: 0 };
+	let i = 0;
+	for (const n of document.querySelectorAll('[data-dse-element] ul, [data-dse-element] ol, .dse-modal ul, .dse-modal ol')) {
+		const root = n.closest('[data-dse-element]');
+		const key = (root ? root.getAttribute('data-dse-element') : '(modal)') + '|' + n.tagName + '#' + i;
+		n.setAttribute('data-dse-listleak', key);
+		i += 1;
+		counts[n.tagName === 'OL' ? 'ol' : 'ul'] += 1;
+	}
+	let j = 0;
+	for (const n of document.querySelectorAll('[data-dse-element] li, .dse-modal li')) {
+		const root = n.closest('[data-dse-element]');
+		const key = (root ? root.getAttribute('data-dse-element') : '(modal)') + '|li#' + j;
+		n.setAttribute('data-dse-listleak-li', key);
+		j += 1;
+		counts.li += 1;
+	}
+	let k = 0;
+	for (const n of document.querySelectorAll('[data-dse-element] blockquote, .dse-modal blockquote')) {
+		const root = n.closest('[data-dse-element]');
+		const key = (root ? root.getAttribute('data-dse-element') : '(modal)') + '|bq#' + k;
+		n.setAttribute('data-dse-listleak-bq', key);
+		k += 1;
+		counts.blockquote += 1;
+	}
+	return counts;
+}
+
+/** Read every tagged node of one kind — `{ attr, props }` is a single PARAMETER object
+ *  (Playwright's `page.evaluate` accepts exactly one argument to the page function), not a
+ *  closure (same `page.evaluate` serialization reason `readTaggedTables`/`readTaggedCells`
+ *  document for their own params). */
+function readTaggedLists({ attr, props }) {
+	const out = [];
+	for (const n of document.querySelectorAll(`[${attr}]`)) {
+		const cs = getComputedStyle(n);
+		const rec = { key: n.getAttribute(attr) };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** `li::marker` colour — a pseudo-element, read via the two-argument `getComputedStyle`
+ *  form (same shape r1's `readPlaceholderColors` uses for `::placeholder`). */
+function readMarkerColors() {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-listleak-li]')) {
+		out.push({ key: n.getAttribute('data-dse-listleak-li'), color: getComputedStyle(n, '::marker').color });
+	}
+	return out;
+}
+
+async function assertListHostLeak(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\nlist host-leak SKIPPED (no local asar)');
+		return;
+	}
+	const pinNote =
+		host.sha256 === R1_APP_CSS_SHA256
+			? `matches the round's pin (Obsidian ${host.version})`
+			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
+				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
+	const problems = [];
+	let comparisons = 0;
+	let ulCount = 0;
+	let liCount = 0;
+	let bqCount = 0;
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		const counts = await page.evaluate(tagLists);
+		if (counts.ul < 1 || counts.li < 3 || counts.blockquote < 1) {
+			problems.push(
+				`${bg}: only ${counts.ul} ul/ol, ${counts.li} li, ${counts.blockquote} blockquote found — the sweep is blind`,
+			);
+			continue;
+		}
+		ulCount = Math.max(ulCount, counts.ul + counts.ol);
+		liCount = Math.max(liCount, counts.li);
+		bqCount = Math.max(bqCount, counts.blockquote);
+
+		const bareLists = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak', props: LIST_PROPS });
+		const bareItems = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-li', props: LIST_ITEM_PROPS });
+		const bareMarkers = await page.evaluate(readMarkerColors);
+		const bareBqs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-bq', props: BLOCKQUOTE_PROPS });
+
+		await injectRealHostCss(page, host.css);
+		await wrapMountInMarkdownRendered(page);
+
+		const hostLists = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak', props: LIST_PROPS });
+		const hostListsByKey = new Map(hostLists.map((r) => [r.key, r]));
+		for (const b of bareLists) {
+			const h = hostListsByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|ul-ol|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			for (const p of LIST_PROPS) {
+				if (b[p] !== h[p]) problems.push(`${bg}|ul-ol|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+			}
+		}
+
+		const hostItems = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-li', props: LIST_ITEM_PROPS });
+		const hostItemsByKey = new Map(hostItems.map((r) => [r.key, r]));
+		for (const b of bareItems) {
+			const h = hostItemsByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|li|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			for (const p of LIST_ITEM_PROPS) {
+				if (b[p] !== h[p]) problems.push(`${bg}|li|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+			}
+		}
+
+		const hostMarkers = await page.evaluate(readMarkerColors);
+		const hostMarkersByKey = new Map(hostMarkers.map((r) => [r.key, r]));
+		for (const b of bareMarkers) {
+			const h = hostMarkersByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|li::marker|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			if (b.color !== h.color) problems.push(`${bg}|li::marker|${b.key}: Obsidian's real app.css changes color — "${b.color}" without the host, "${h.color}" with it`);
+		}
+
+		const hostBqs = await page.evaluate(readTaggedLists, { attr: 'data-dse-listleak-bq', props: BLOCKQUOTE_PROPS });
+		const hostBqsByKey = new Map(hostBqs.map((r) => [r.key, r]));
+		for (const b of bareBqs) {
+			const h = hostBqsByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|blockquote|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			comparisons += 1;
+			for (const p of BLOCKQUOTE_PROPS) {
+				if (b[p] !== h[p]) problems.push(`${bg}|blockquote|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+			}
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
+		console.error(
+			`\nLIST HOST-LEAK VIOLATED — with the real Obsidian app.css present (and the ` +
+				`.markdown-preview-view.markdown-rendered ancestor a real vault always supplies) the ` +
+				`plugin's own lists/blockquotes do not hold their own box or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-202 r3 — LIST + BLOCKQUOTE HOST RE-GROUNDING".`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nlist host-leak OK (${ulCount} ul/ol + ${liCount} li + ${bqCount} blockquote × dark/light = ` +
+			`${comparisons} comparisons against the real Obsidian app.css under a real ` +
+			`.markdown-preview-view.markdown-rendered ancestor: every sampled ul/ol/li/li::marker/` +
+			`blockquote property is identical with and without it; li.task-list-item's own three ` +
+			`declarations (list-style/data-task decorations) are deliberately NOT covered here — ` +
+			`checkbox round; ${pinNote})`,
 	);
 }
 
@@ -2631,6 +2875,9 @@ try {
 		// SC-202 r2 — the same question asked of every markdown TABLE the plugin renders
 		// (leak family 2). Also self-gates on a local Obsidian asar.
 		await assertTableHostLeak(page);
+		// SC-202 r3 — the same question asked of every LIST/BLOCKQUOTE the plugin renders
+		// (leak family 3). Also self-gates on a local Obsidian asar.
+		await assertListHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself

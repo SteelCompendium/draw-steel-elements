@@ -19,7 +19,19 @@ import path from 'path';
 
 const rawCss = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'styles-source.css'), 'utf8');
 const blockStart = rawCss.indexOf('SC-202 r2 — MARKDOWN TABLE HOST RE-GROUNDING');
-const css = rawCss.slice(blockStart).replace(/\/\*[\s\S]*?\*\//g, '');
+/** SC-202 r3 fix (drive-by, own bug exposed by r3's block landing right after this one) —
+ *  this used to `rawCss.slice(blockStart)` with NO end bound, so "the block never touches
+ *  list/blockquote/…" silently meant "nothing AFTER this point in the whole file touches
+ *  them", which broke the moment SC-202 r3's own list/blockquote block was appended below
+ *  it. Every one of these round blocks opens with the SAME 84-`=` banner
+ *  (`/* ====...==== *\/`); bounding the slice at the NEXT one scopes this test to the r2
+ *  block alone, exactly what its own prose already claimed. */
+const BANNER = '/* ' + '='.repeat(84) + ' */';
+const nextBlockStart = rawCss.indexOf(BANNER, blockStart + BANNER.length);
+const css = (nextBlockStart === -1 ? rawCss.slice(blockStart) : rawCss.slice(blockStart, nextBlockStart)).replace(
+	/\/\*[\s\S]*?\*\//g,
+	'',
+);
 /** Whitespace-insensitive: the block wraps long selectors across lines. */
 const flat = css.replace(/\s+/g, ' ');
 const ANCHOR = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';

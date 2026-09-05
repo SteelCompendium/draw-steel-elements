@@ -15679,3 +15679,193 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	tbody tr:nth-child(odd):hover {
 	background-color: transparent;
 }
+
+/* ==================================================================================== */
+/*   SC-202 r3 — LIST + BLOCKQUOTE HOST RE-GROUNDING (leak family 3 of ~6)              */
+/* ==================================================================================== */
+/*
+   Phase 1 (sc202-proposal.md §4.3) found `ul`/`ol`/`li` and `blockquote` rendered inside
+   plugin bodies (career/class's prose "content" field, montage's own guide list, the
+   skills picker's group lists — anything `MarkdownRenderer`/`createEl('ul'|'li'|…)`
+   produces) inherit Obsidian's list/quote material: indentation, marker colour, per-item
+   padding/position, and the blockquote's accent-coloured rule + padding. Same shape of
+   defect as SC-202 r1/r2, two element families over.
+
+   ROUND 2'S LESSON APPLIES HERE TOO, in two different shapes. Obsidian's `ul`/`ol`/`li`
+   BOX rules (padding/margin/position) ARE scoped under `.markdown-rendered` exactly like
+   the table family — the can-fail sweep below reuses `assertTableHostLeak`'s own wrapper
+   helper (`wrapMountInMarkdownRendered`, extracted this round so both sweeps share ONE
+   copy) rather than forking a second one. But `li::marker`'s colour rule (`ul > li::marker
+   { color: var(--list-marker-color) }`) and the nested-list `list-style-type: disc`
+   restatements are BARE, unscoped selectors that reach the whole document with no ancestor
+   at all — confirmed by probing with the real app.css injected and NO wrapper present:
+   `li::marker` colour still moved on every gallery list, table-family-style leaks did not.
+
+   ENUMERATED from the real sheet (`visual-harness/dist/obsidian-app.css`, Obsidian 1.14.0)
+   via `obsidian-host-pin.mjs`'s own `iterRules`/`splitSelectorList` (never the `css` npm
+   package — r2's own finding that it silently truncates this file's parse). Filtering
+   every rule whose selector list names `ul`, `ol`, `li`, `blockquote` or `hr` as its
+   SUBJECT (plus a second pass for `p` subjects scoped under an `li` ancestor, the "li > p"
+   piece the brief names by name) finds:
+
+     BARE/UNSCOPED (reach anywhere, no `.markdown-rendered` needed): `ul > li::marker` /
+     `ol > li::marker { color: var(--list-marker-color) }` (also a `.is-collapsed::marker`
+     variant — collapsed/folded lists never occur in rendered plugin output, no fold UI);
+     `ul ul`/`ol ul`/`ol ol ul`/`ol ul ul`/`ul ol ul`/`ul ul ul { list-style-type: disc }`
+     (nested-list bullet shape); the bare `hr { border: none; border-top: var(--hr-thickness)
+     solid; border-color: var(--hr-color); margin: 2rem 0; }`.
+
+     SCOPED under `.markdown-rendered` (this family's own version of r2's wrapper lesson):
+     `ul`/`ol { padding-inline-start: 0; margin-block-start/end: var(--p-spacing); }`;
+     `ul > li`/`ol > li { padding-top/-bottom: var(--list-spacing); position: relative; }`
+     (a SEPARATE rule, same selector) `{ margin-inline-start: 3ch; }`; `blockquote { color:
+     var(--blockquote-color); font-style: var(--blockquote-font-style); background-color:
+     var(--blockquote-background-color); border-inline-start: var(--blockquote-border-
+     thickness) solid var(--blockquote-border-color); padding-top/-bottom: 0; padding-
+     inline-start: var(--size-4-6); margin-inline-start/-end: 0; }`; `li p:first-of-type
+     { margin-block-start: 0; }` / `li p:last-of-type { margin-block-end: 0; }` (both
+     `ul li`/`ol li` scoped, the brief's own "li > p"); `.markdown-rendered ul ul`/`ol ul`/
+     `ul ol`/`ol ol { margin-block-start/end: 0; }` and `ol ol > li`/`ul ul > li { margin-
+     inline-start: var(--list-indent); }` (nested-list overrides — a SECOND, DEEPER tier
+     `.markdown-rendered.show-indentation-guide li > ul`/`ol { position: relative }` plus a
+     `::before` guide-line pseudo-element only fires when a list nests INSIDE another list
+     item). Obsidian ships **no `caption`-shaped exception here** worth naming; every rule
+     above was checked against the real sheet, not assumed.
+
+   WHAT EMPIRICALLY LEAKS (measured bare vs. host+wrapper on career/class's prose lists,
+   montage's guide list, the skills picker's group lists, and class/perk's blockquotes —
+   see the round report for the full table):
+
+     `ul`/`ol` top-level box: `padding-inline-start` 40px → 0px on every UNCLASSED list
+     (career/class's prose bullets); montage's/skills's OWN classed lists
+     (`.dse-mt__guide-list`/`.dse-skills__list`) already zero this themselves at higher
+     specificity, so they show 0 diff — not this block's job to touch. `margin-block-
+     start/end` shows **0 diff everywhere** — a coincidence of the SAME SHAPE as r2's
+     table font-size one: this sheet's `--p-spacing` is `1rem` (16px), which happens to
+     equal the browser's own UA-default `1em` margin for an unstyled `<ul>`/`<ol>` at the
+     16px ambient size these prose fixtures render at. Restated explicitly anyway — r2's
+     own MED-1 lesson: an un-restated coincidence is one theme token change away from a
+     silent leak, not a designed invariant.
+
+     `li` (any `ul > li`/`ol > li`, classed or not — Obsidian's own selector never
+     qualifies the class either side): `padding-top`/`padding-bottom` 0px → `0.075em`'s
+     resolved px leak on EVERY family including montage's/skills's own classed items
+     (neither's own CSS touches padding-top/-bottom, so nothing there stops it);
+     `position` static → relative on career/class/skills's unclassed items (montage's own
+     `.dse-mt__guide-item` already declares `position: relative` for its own `::before`
+     bullet, at far higher specificity than this leak or this fix — 0 diff, not this
+     block's doing); `margin-inline-start` 0px → `3ch`'s resolved px on every family.
+
+     `li::marker` colour: every family's marker (bullet glyph) recolours from this
+     element's own ambient ink (`rgba(220,226,230,.88)` body text / `.62` on montage's
+     muted caption tier) to Obsidian's flat grey `rgb(102,102,102)` (`--list-marker-color:
+     var(--text-faint)`) — universal, unscoped, reaches every list regardless of class.
+
+     `blockquote` (class/perk): `border-inline-start` none → 2px solid **violet**
+     `rgb(127,109,242)` (`--blockquote-border-color: var(--interactive-accent)`, Obsidian's
+     own accent hue — Scott is colourblind, name it "violet"/"purple", never rely on hue
+     alone); `padding-inline-start` 0px → 24px; `margin-inline-start`/`margin-inline-end`
+     40px → 0px. `color`/`font-style`/`background-color`/`padding-top`/`padding-bottom`
+     show 0 diff — `--blockquote-color: inherit`, `--blockquote-font-style: normal`,
+     `--blockquote-background-color: transparent` are themselves neutral tokens in this
+     theme, and `padding-top`/`-bottom: 0` already matches the browser's own UA default —
+     restated explicitly anyway, same MED-1 reasoning as the list margin above.
+     `margin-top`/`margin-bottom` are UNTOUCHED by Obsidian's own rule (it only ever
+     names the inline axis) — verified safe, not restated, matching r2's own "never
+     declared → skip" convention.
+
+   NOT FIXED THIS ROUND (measured, 0 live fixture to design or prove a value against —
+   recorded here and under Follow-ups, never silently assumed):
+
+     - Nested lists (a `<ul>`/`<ol>` genuinely inside an `<li>`): no fixture anywhere nests
+       a markdown list, so `ul ul`/`ol ul`/`ul ol`/`ol ol`'s margin-block-collapse, the
+       `ul ul > li`/`ol ol > li` deeper indent override, and the
+       `.show-indentation-guide` pseudo-element guide line are all genuinely unreachable
+       today. This block's own `li`/`ul`/`ol` restatements are NOT level-specific (neither
+       is Obsidian's own `ul > li` rule — it matches a nested `li` too), so they degrade
+       safely rather than leaking outright; only the DEEPER nested-specific overrides are
+       missing. Fold into a future round if a fixture ever nests a list.
+     - `li > p:first-of-type`/`:last-of-type` — the brief's own "li > p": Obsidian zeroes
+       the FIRST/LAST paragraph's block-margin inside a list item, but every current list
+       fixture is a TIGHT list (no blank line between bullets in the source markdown), so
+       `<li>` never wraps its content in a `<p>` at all — restated below anyway (the
+       browser's own UA default, `1em`, mirroring every other restatement's "restore what
+       the harness already renders" rule), but with 0 live nodes to sweep against.
+     - Bare `hr` — Obsidian's rule is unscoped and would reach a plugin-rendered
+       `<hr>` the moment one appears, but no fixture anywhere renders one (no "---"
+       thematic break in any prose field) — deferred, not this round's fix, per Follow-ups.
+*/
+
+/* GROUP 1 — `ul`/`ol` top-level box: restore the browser's own UA-default padding/margin
+   Obsidian's `padding-inline-start: 0` / `margin-block-start/end: var(--p-spacing)`
+   otherwise wins. `1em`/`40px` are literal restatements of the SAME UA default this
+   harness already renders (verified: 0 pixel change on the fixed tree) — not a novel
+   design value. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul, ol) {
+	padding-inline-start: 40px;
+	margin-block-start: 1em;
+	margin-block-end: 1em;
+}
+
+/* GROUP 2 — `li` (any `ul > li`/`ol > li`, classed or not — Obsidian's own selector
+   qualifies neither side, so this reaches montage's/skills's own classed list items too;
+   verified harmless there — their own per-family rules for OTHER properties (montage's
+   `position: relative`, its own `::before` bullet) live at far higher specificity, nested
+   under `[data-dse-theme='steel'][data-dse-element='montage']…`, and are untouched by
+   this block's flat (0,2,0) anchor). Not level-specific (see the block comment's own "not
+   fixed this round" note) — a nested `li` gets the SAME restatement Obsidian's own
+   `ul > li` selector would give it either way, degrading safely rather than leaking. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(ul > li, ol > li) {
+	padding-top: 0;
+	padding-bottom: 0;
+	position: static;
+	margin-inline-start: 0;
+}
+
+/* GROUP 3 — `li::marker`. BARE/UNSCOPED in Obsidian's own sheet (`ul > li::marker`/
+   `ol > li::marker`), and `::marker` is a pseudo-ELEMENT — `:where()`'s own argument list
+   is restricted to compound selectors without one, so the subject itself cannot be
+   `:where(li::marker)` the way GROUP 1/2's subjects sit inside `:where()`. Chaining the
+   pseudo-element AFTER a `:where()` that resolves to the element (`:where(li)::marker`) is
+   the legal shape (same as any `:where(a, b)::before`) and keeps the SC-203 block's own
+   whole-file invariant intact ("every re-grounding subject starts with `:where(`" —
+   `hostRegrounding.test.ts`), which a bare `li::marker` right after the anchor would have
+   broken. Specificity: ANCHOR (0,2,0) + `:where(li)` (0) + `::marker` (0,0,1) = (0,2,1),
+   comfortably above Obsidian's own (0,0,3). `inherit` restores this element's own ambient
+   ink (matches every family's bare rendering — the harness never painted a marker colour
+   of its own; the browser's default is simply to inherit `color`, which Obsidian's rule
+   overrides). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li)::marker {
+	color: inherit;
+}
+
+/* GROUP 4 — `li > p:first-of-type`/`:last-of-type` (the brief's own "li > p"). 0 live
+   nodes today (every list fixture is tight — see the block comment) — `1em` mirrors the
+   browser's own UA default paragraph margin, the same "restore what the harness already
+   renders" rule every other GROUP here follows, so a future loose-list fixture inherits a
+   correct restatement rather than an untested guess. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li > p:first-of-type) {
+	margin-block-start: 1em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li > p:last-of-type) {
+	margin-block-end: 1em;
+}
+
+/* GROUP 5 — `blockquote` (class/perk's book-quote prose). Obsidian's own rule sets every
+   property named below; `color`/`font-style`/`background-color`/`padding-top`/`padding-
+   bottom` measure 0 diff today (the tokens are themselves neutral in this theme) but are
+   restated anyway per the block comment's own MED-1-style reasoning — an un-restated
+   coincidence is one theme token change away from a silent leak. `margin-top`/`-bottom`
+   are genuinely untouched by Obsidian's own rule (it only ever names the inline axis) —
+   verified safe, correctly NOT restated here. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(blockquote) {
+	color: inherit;
+	font-style: normal;
+	background-color: transparent;
+	border-inline-start: none;
+	padding-top: 0;
+	padding-bottom: 0;
+	padding-inline-start: 0;
+	margin-inline-start: 40px;
+	margin-inline-end: 40px;
+}
