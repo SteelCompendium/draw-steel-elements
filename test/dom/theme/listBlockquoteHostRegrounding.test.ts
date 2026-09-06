@@ -175,7 +175,13 @@ describe('SC-202 r3 — GROUP 7: hr (FIX ROUND MED-4 — live in treasure/scorpi
 		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(hr\\) \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('border: 1px inset;');
-		expect(m![1]).toContain('border-color: initial;');
+		// FIX ROUND 2 (scoped re-review MED-A) — `initial` resolves to `currentcolor`, and
+		// the harness and a real vault inherit DIFFERENT colours on a bare `<hr>` (the
+		// harness's own UA gives it `color: gray`; a real vault inherits the card's own
+		// ink) — the sweep cannot see this (both passes share one browser), so the fix is
+		// the LITERAL the harness already computes, `gray`, not a keyword that re-resolves
+		// per engine.
+		expect(m![1]).toContain('border-color: gray;');
 		expect(m![1]).toContain('margin-block-start: 0.5em;');
 		expect(m![1]).toContain('margin-block-end: 0.5em;');
 	});

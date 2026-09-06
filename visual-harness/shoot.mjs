@@ -2489,8 +2489,14 @@ async function assertTableHostLeak(page) {
 /** `ul`/`ol` top-level box — GROUP 1 (+ FIX ROUND LOW-2's `listStyleType`, restated per
  *  tag in the CSS — `ul`→disc/`ol`→decimal — so a single "expected" value cannot exist
  *  here; the sweep compares bare vs host per node regardless of which value each computes
- *  to, so this is still a correct same-node comparison). */
-const LIST_PROPS = ['paddingInlineStart', 'marginBlockStart', 'marginBlockEnd', 'listStyleType'];
+ *  to, so this is still a correct same-node comparison). FIX ROUND 2 (scoped re-review
+ *  LOW-A) adds `position` — GROUP 6(c) is the one place this round deliberately climbs to
+ *  a doubled-`:not()` (0,3,2) specificity to beat Obsidian's own indentation-guide
+ *  ancestor on a NESTED `ul`/`ol`, and until now nothing sampled `position` on a `ul`/`ol`
+ *  at all (only on `li`, via `LIST_ITEM_PROPS`) — the highest-stakes rule in the whole
+ *  block was guarded by a jest text-grep alone. Proven: deleting GROUP 6's `position:
+ *  static` rule produced 0 sweep problems before this line existed; can-fails now. */
+const LIST_PROPS = ['paddingInlineStart', 'marginBlockStart', 'marginBlockEnd', 'listStyleType', 'position'];
 /** `li` (any `ul > li`/`ol > li`) — GROUP 2. FIX ROUND LOW-2 adds `textAlign`. The DEEPER
  *  nested-indent override (`margin-inline-start` at a nested level) stays unsampled — see
  *  the styles-source.css block's own "not fixed this round" note. */

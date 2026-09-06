@@ -71,6 +71,25 @@ describe('SC-203 host re-grounding — the block exists and re-grounds what Obsi
 		// The block must stay at exactly the anchor's own (0,2,0): high enough to beat
 		// Obsidian's `button` (0,0,1) and `button:not(.clickable-icon)` (0,1,1), low
 		// enough that every component-level override in this sheet still wins.
+		//
+		// FIX ROUND 2 (SC-202 r3, scoped re-review LOW-B) — the scan regex requires a
+		// SPACE right after the anchor text (`ANCHOR + ' ' + [^{]+ + '{'`), so two real
+		// SC-202 r3 rules silently ESCAPE this invariant rather than satisfying it:
+		//   1. `ANCHOR:not([data-dse-print="on"]) li > :is(ul, ol) { position: static; }`
+		//      (styles-source.css's GROUP 6(c), the nested indentation-guide fix) — the
+		//      anchor is immediately followed by a SECOND `:not(...)`, no space, so the
+		//      regex never even sees it as a candidate.
+		//   2. `ANCHOR { --indentation-guide-width: 0; }` (GROUP 6(d)) — the anchor is
+		//      followed by a space then `{` with NOTHING between, so `[^{]+` (which
+		//      requires at least one character) never matches at all.
+		// Both are DELIBERATE: the doubled `:not()` genuinely climbs to (0,3,2) (needed to
+		// beat Obsidian's own `.markdown-rendered.show-indentation-guide li > ul` at
+		// (0,2,2) — a case `:where()`'s flat (0,2,0) cannot win, verified in
+		// `listBlockquoteHostRegrounding.test.ts`'s own GROUP 6 specificity test), and the
+		// bare-anchor rule is a custom-PROPERTY declaration, not a re-grounding subject at
+		// all — there is no "subject" for it to wrap in `:where()`. Asserted explicitly
+		// here (not merely left silent) so a FUTURE rule cannot slip past the same
+		// text-shape accident and be mistaken for compliance.
 		const anchored = [...flat.matchAll(new RegExp(escape(ANCHOR) + ' ([^{]+)\\{', 'g'))].map((x) =>
 			x[1].trim(),
 		);
@@ -78,6 +97,18 @@ describe('SC-203 host re-grounding — the block exists and re-grounds what Obsi
 		for (const sel of anchored) {
 			expect(sel.startsWith(':where(')).toBe(true);
 		}
+	});
+
+	test('SC-202 r3 GROUP 6(c)/(d): the two rules that deliberately escape the :where() invariant above are real, and exactly why', () => {
+		// GROUP 6(c): doubled `:not([data-dse-print="on"])`, no space after the anchor —
+		// specificity ANCHOR (0,2,0) + a second `:not()` (0,1,0) + `li` + `:is(ul, ol)`
+		// (0,0,2) = (0,3,2), above Obsidian's own (0,2,2) ancestor.
+		expect(flat).toContain(
+			`${ANCHOR}:not([data-dse-print="on"]) li > :is(ul, ol) { position: static; }`,
+		);
+		// GROUP 6(d): a bare custom-property declaration directly on the anchor — no
+		// selector subject exists to wrap in `:where()`.
+		expect(flat).toContain(`${ANCHOR} { --indentation-guide-width: 0; }`);
 	});
 });
 

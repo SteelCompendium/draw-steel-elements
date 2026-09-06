@@ -15835,9 +15835,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 
      - The DEEPER nested-list indent override (`ul ul > li`/`ol ol > li { margin-inline-
        start: var(--list-indent) }`, distinct from the margin-COLLAPSE this round now
-       fixes) — `fleet-admiral`'s own nested `li`s still get the TOP-LEVEL `3ch` indent
-       (GROUP 2) rather than Obsidian's own deeper `--list-indent` value; visually close
-       (both are "some indent"), not byte-identical. No design decision made yet for the
+       fixes) — **CORRECTED, fix round 2 (scoped re-review LOW-C): the claim here used to
+       say `fleet-admiral`'s nested `li`s "still get the TOP-LEVEL 3ch indent (GROUP 2)".
+       Measured in the real vault: a nested `<li>`'s `margin-inline-start` is `0px`, not
+       `3ch`.** `3ch` is *Obsidian's own* top-level value; GROUP 2's `:where(ul > li, ol >
+       li) { margin-inline-start: 0; }` is not level-specific and overrides it to `0` at
+       EVERY depth (top-level and nested alike) — the deferred item is only that the
+       nested `<ul>`'s own `padding-inline-start: 40px` (GROUP 1) carries the visible
+       indentation instead of Obsidian's deeper `--list-indent` token; the nesting still
+       reads correctly, just via a different property. No design decision made yet for the
        correct nested `px` figure independent of the harness's own rendering; left for a
        future round once a design question is asked, or if it starts mattering visually.
      - Multi-paragraph / loose list items (a `<li>` whose content is wrapped in one or more
@@ -16041,13 +16047,27 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    air in a vault than the harness showed). Obsidian's OWN rule (bare `hr { border: none;
    border-top: var(--hr-thickness) solid; border-color: var(--hr-color); margin: 2rem 0; }`
    plus an identical `.markdown-rendered hr` minus the margin) is restated back to the
-   browser's own UA default the harness has always rendered: `border: 1px inset;
-   border-color: initial;` (the shorthand's own un-set colour would default to
-   `currentcolor`, not the UA's own special hr grey, hence the separate `initial`) plus
-   `margin-block: 0.5em` each side (Chrome's own UA default for a bare `<hr>`). */
+   browser's own UA default the harness has always rendered: `border: 1px inset;` plus
+   `margin-block: 0.5em` each side (Chrome's own UA default for a bare `<hr>`).
+
+   FIX ROUND 2 (2026-09-05, scoped re-review MED-A) — `border-color: initial` was WRONG:
+   `initial` on `border-color` is `currentcolor`, so the divider's colour follows the
+   `<hr>`'s own INHERITED `color` — and the harness and a real vault inherit two DIFFERENT
+   colours there. The harness's own Chromium gives a bare `<hr>` a UA `color: gray`
+   (`rgb(128,128,128)`, independent of any authored CSS), so `currentcolor` there resolves
+   to mid-grey; a real vault's `<hr>` inherits the CARD's own ambient ink
+   (`rgba(220,226,230,.88)`, near-white on a dark card) — no UA-level `color` rule for `hr`
+   exists in a real Chromium/Electron build the way this harness's happens to. The sweep
+   cannot see this: both the bare and host+wrapper passes run in the SAME browser, where
+   `currentcolor` resolves identically either way, so `hr host-leak OK` reported 0 diffs
+   while the two real engines disagreed. Fixed by restating the LITERAL value the harness
+   already computes — `border-color: gray;` — the same "restore the literal, not a keyword
+   that re-resolves per engine" convention every other GROUP in this block already follows
+   (`40px`, `1em`, `0.5em`); 0 harness pixels move (proven: the harness's own `currentcolor`
+   already WAS `gray`), and the vault stops inheriting the card's ink. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(hr) {
 	border: 1px inset;
-	border-color: initial;
+	border-color: gray;
 	margin-block-start: 0.5em;
 	margin-block-end: 0.5em;
 }
