@@ -16060,14 +16060,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    exists in a real Chromium/Electron build the way this harness's happens to. The sweep
    cannot see this: both the bare and host+wrapper passes run in the SAME browser, where
    `currentcolor` resolves identically either way, so `hr host-leak OK` reported 0 diffs
-   while the two real engines disagreed. Fixed by restating the LITERAL value the harness
-   already computes — `border-color: gray;` — the same "restore the literal, not a keyword
-   that re-resolves per engine" convention every other GROUP in this block already follows
-   (`40px`, `1em`, `0.5em`); 0 harness pixels move (proven: the harness's own `currentcolor`
-   already WAS `gray`), and the vault stops inheriting the card's ink. */
+   while the two real engines disagreed.
+
+   FIX ROUND 3 (2026-09-05, scoped re-review LOW-D) — the round 2 fix (`border-color:
+   gray;`) got the vault right but moved 2 harness screen shots
+   (`treasure-hr--steel-{dark,light}.png`): Blink's `border-style: inset` bevel is painted
+   from a DIFFERENT internal path depending on whether `border-color` is author-specified
+   at all — author-setting it to the literal `gray` (even though it computes to the exact
+   same `rgb(128,128,128)` `currentcolor` already gave) still changes which path paints the
+   bevel, so the antialiased edge pixels differ even at identical resolved colour. Fixed by
+   setting `color: gray` on the `<hr>` and leaving `border-color` UNSET — this keeps
+   `currentcolor`'s implicit UA path painting the bevel (so the harness's own screen shots
+   stay byte-identical to `61cf21d`, before EITHER round 2 or 3 touched this rule) while
+   still overriding what `color` the vault's `currentcolor` resolves against, closing
+   MED-A's real leak the same way. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(hr) {
 	border: 1px inset;
-	border-color: gray;
+	color: gray;
 	margin-block-start: 0.5em;
 	margin-block-end: 0.5em;
 }

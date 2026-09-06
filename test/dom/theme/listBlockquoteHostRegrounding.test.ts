@@ -178,10 +178,15 @@ describe('SC-202 r3 — GROUP 7: hr (FIX ROUND MED-4 — live in treasure/scorpi
 		// FIX ROUND 2 (scoped re-review MED-A) — `initial` resolves to `currentcolor`, and
 		// the harness and a real vault inherit DIFFERENT colours on a bare `<hr>` (the
 		// harness's own UA gives it `color: gray`; a real vault inherits the card's own
-		// ink) — the sweep cannot see this (both passes share one browser), so the fix is
-		// the LITERAL the harness already computes, `gray`, not a keyword that re-resolves
-		// per engine.
-		expect(m![1]).toContain('border-color: gray;');
+		// ink) — the sweep cannot see this (both passes share one browser).
+		// FIX ROUND 3 (scoped re-review LOW-D) — round 2's own fix (`border-color: gray`)
+		// moved 2 harness screen shots: Blink paints the `inset` bevel from a DIFFERENT
+		// path once `border-color` is author-set, even at an identical resolved colour.
+		// `color: gray` with `border-color` left UNSET keeps the UA/`currentcolor` bevel
+		// path (harness bytes stay put) while still fixing what the vault's `currentcolor`
+		// resolves against.
+		expect(m![1]).not.toMatch(/border-color:/);
+		expect(m![1]).toContain('color: gray;');
 		expect(m![1]).toContain('margin-block-start: 0.5em;');
 		expect(m![1]).toContain('margin-block-end: 0.5em;');
 	});
