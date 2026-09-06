@@ -285,7 +285,7 @@ export class ConditionsModal extends DseModal {
 
 	private renderIconPicker(parent: HTMLElement, entry: Condition, index: number): void {
 		const picker = parent.createDiv({ cls: 'dse-cond-icons' });
-		const search = picker.createEl('input', { type: 'search', placeholder: 'Search icons…' });
+		const search = picker.createEl('input', { cls: 'dse-cond-icons__search', type: 'search', placeholder: 'Search icons…' });
 		search.setAttribute('aria-label', 'Search condition icons');
 		const grid = picker.createDiv({ cls: 'dse-cond-icons__grid' });
 		grid.setAttribute('role', 'group');

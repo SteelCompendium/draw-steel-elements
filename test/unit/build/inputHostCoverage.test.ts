@@ -16,6 +16,15 @@ import path from 'path';
  * {...})` call site in `src/**` and asserts the resulting CSS class is covered by the
  * SC-202 r1 re-grounding block, so a FUTURE input the sweep also cannot see still fails a
  * test instead of shipping silently leaking.
+ *
+ * SC-202 r4-resume Step A — this guard itself had a real bug: its per-call-site scan
+ * window was a flat character slice that could bleed into the FOLLOWING statement and
+ * mis-attribute a leak to a sibling element's class. It caught SC-277's own unclassed
+ * `type='search'` icon-filter input (`ConditionsModal.ts`) — but under the wrong name,
+ * a neighbouring `<div>`'s class. See `findInputCallSites`'s own comment for the fix,
+ * and note that an unclassed, non-exempt call site is now its own NAMED test
+ * ("unclassed … at file:line") rather than a silent skip, so the next one is visible on
+ * sight in the jest output.
  */
 
 const SRC_DIR = path.join(__dirname, '..', '..', '..', 'src');
@@ -42,14 +51,29 @@ function walk(dir: string, out: string[] = []): string[] {
 
 interface CallSite {
 	file: string;
+	line: number;
 	tag: 'input' | 'textarea';
 	cls: string | null;
 	type: string | null;
 }
 
-/** Every `createEl('input'|'textarea', { ... })` call site's class + type. Reads a bounded
- *  window after the match rather than a real parser — every call site in this codebase is
- *  a short object literal (checked: none exceeds ~200 chars), so 300 is generous. */
+/** Every `createEl('input'|'textarea', { ... })` call site's class + type.
+ *
+ *  SC-202 r4-resume Step A (guard fix) — this used to slice a FLAT 300-char text window
+ *  after the match rather than bounding it to the call's own options object, on the
+ *  theory that "every call site … is a short object literal (checked: none exceeds
+ *  ~200 chars)". That is true of the object literal itself, but the window is measured
+ *  from the match, not the object literal's own start — so a short SUBSEQUENT statement
+ *  (a `.setAttribute(...)` call, a sibling `createDiv({ cls: … })`) still sits well
+ *  inside 300 chars and its own `cls:`/`type:` text was silently captured as if it
+ *  belonged to THIS call site. Exactly this happened for SC-277's `ConditionsModal.ts`
+ *  icon-filter input (no class of its own): the window bled into the very next
+ *  statement, `picker.createDiv({ cls: 'dse-cond-icons__grid' })`, and the guard
+ *  reported the leak under the GRID's class — a real defect, attributed to the wrong
+ *  selector, which would have sent a fixer to re-ground `.dse-cond-icons__grid`
+ *  instead of the actual unclassed `<input>`. Fixed to balance braces from the options
+ *  object's own OPENING `{` (if the call has one at all) to its matching `}`, so the
+ *  scan never reads past the call's own argument list. */
 function findInputCallSites(): CallSite[] {
 	const out: CallSite[] = [];
 	for (const file of walk(SRC_DIR)) {
@@ -57,11 +81,35 @@ function findInputCallSites(): CallSite[] {
 		const re = /createEl\(\s*['"](input|textarea)['"]/g;
 		let m: RegExpExecArray | null;
 		while ((m = re.exec(text))) {
-			const win = text.slice(m.index, m.index + 300);
+			const line = text.slice(0, m.index).split('\n').length;
+			// Bound the scan to the options object literal: from its own opening `{`
+			// to the matching `}` (brace-depth counted, not regex-guessed), stopping
+			// at the call's own closing `)` if there is no options object at all
+			// (a bare `createEl('textarea')`). A generous 2000-char cap guards
+			// against a malformed/unbalanced file rather than reading to EOF.
+			const closeParenIdx = text.indexOf(')', m.index);
+			const openBraceIdx = text.indexOf('{', m.index);
+			let win = '';
+			if (openBraceIdx !== -1 && (closeParenIdx === -1 || openBraceIdx < closeParenIdx)) {
+				let depth = 0;
+				let i = openBraceIdx;
+				for (; i < text.length && i < openBraceIdx + 2000; i++) {
+					if (text[i] === '{') depth++;
+					else if (text[i] === '}') {
+						depth--;
+						if (depth === 0) {
+							i++;
+							break;
+						}
+					}
+				}
+				win = text.slice(openBraceIdx, i);
+			}
 			const clsMatch = win.match(/cls:\s*['"]([^'"]+)['"]/);
 			const typeMatch = win.match(/type:\s*['"]([^'"]+)['"]/);
 			out.push({
 				file: path.relative(SRC_DIR, file),
+				line,
 				tag: m[1] as 'input' | 'textarea',
 				cls: clsMatch?.[1] ?? null,
 				type: typeMatch?.[1] ?? null,
@@ -87,14 +135,28 @@ describe('every plugin input/textarea class is re-grounded against the host', ()
 	});
 
 	for (const site of sites) {
-		// No class: nothing for a class-keyed CSS block to cover (bare checkboxes read
-		// Obsidian's own checkbox rules by design elsewhere in this sheet).
-		if (!site.cls) continue;
 		// `checkbox`/`color` are later-round families (INFO-1 records the checkbox
 		// focus-visible leak for that round) — explicitly out of THIS scan's scope, not an
-		// oversight.
+		// oversight. Checked BEFORE the class check below: several of these are
+		// themselves unclassed (bare checkboxes read Obsidian's own checkbox rules by
+		// design elsewhere in this sheet), and must stay silently excluded rather than
+		// surfacing as an "unclassed" report — that would just be noise for a family
+		// this scan was never meant to police.
 		if (site.type === 'checkbox' || site.type === 'color') continue;
-		test(`${site.file}: .${site.cls} (${site.tag}${site.type ? `, type=${site.type}` : ''})`, () => {
+		if (!site.cls) {
+			// SC-202 r4-resume Step A (guard fix) — an unclassed call site used to be
+			// silently skipped with NO test emitted at all, which is exactly how SC-277's
+			// `type='search'` icon-filter input shipped invisible to this guard for a
+			// whole round: nothing failed, and nothing even named it. A named, always-
+			// green test instead puts every unclassed non-exempt call site in the jest
+			// output by file:line, so the next one is visible on sight instead of
+			// silently absent.
+			test(`${site.file}:${site.line} — unclassed ${site.tag}${site.type ? `, type=${site.type}` : ''} (no class for a class-keyed CSS block to cover)`, () => {
+				expect(site.cls).toBeNull();
+			});
+			continue;
+		}
+		test(`${site.file}:${site.line}: .${site.cls} (${site.tag}${site.type ? `, type=${site.type}` : ''})`, () => {
 			// A SELECTOR POSITION, not a bare substring: `.` + the class name, not
 			// immediately followed by another word/hyphen character (so `.dse-mt__char-input`
 			// cannot be satisfied by a comment mentioning `.dse-mt__char-input-extra`, and a
