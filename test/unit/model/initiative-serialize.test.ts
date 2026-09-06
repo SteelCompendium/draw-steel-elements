@@ -406,3 +406,26 @@ describe('SC-195: byte-compat — the new fields never appear on an ordinary squ
 		expect(serialize(m2)).toBe(s1); // stable second pass
 	});
 });
+
+
+test('SC-277: hero, regular creature and minion icon overrides survive both initiative parsers', async () => {
+	for (const fixture of [midEncounter, squad]) {
+		const model = parseLikePipeline(fixture);
+		const customized = { key: 'hexed', icon: 'sparkles', duration: 'save-ends' as const };
+		model.heroes[0].conditions = [customized];
+		for (const group of model.enemy_groups) {
+			for (const creature of group.creatures) {
+				for (const instance of creature.instances ?? []) instance.conditions = [customized];
+			}
+		}
+		const source = serialize(model);
+		for (const restored of [parseLikePipeline(source), await legacyMaterialize(source)]) {
+			expect(restored.heroes[0].conditions?.[0]).toMatchObject(customized);
+			for (const group of restored.enemy_groups) {
+				for (const creature of group.creatures) {
+					for (const instance of creature.instances ?? []) expect(instance.conditions?.[0]).toMatchObject(customized);
+				}
+			}
+		}
+	}
+});

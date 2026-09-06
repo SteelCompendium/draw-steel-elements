@@ -24,6 +24,10 @@ properties:
             key:
               type: string
               minLength: 1
+            icon:
+              type: string
+              minLength: 1
+              description: Obsidian icon name; omit to use the condition default.
             color:
               type: string
             effect:

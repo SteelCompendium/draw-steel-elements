@@ -31,6 +31,7 @@ function normalizeEntry(entry: unknown, index: number): Condition {
 	if (typeof entry === 'object' && entry !== null && typeof (entry as Condition).key === 'string') {
 		const e = entry as Condition;
 		const normalized: Condition = { key: e.key };
+		if (typeof e.icon === 'string' && e.icon.trim()) normalized.icon = e.icon;
 		if (e.color !== undefined) normalized.color = e.color;
 		if (e.effect !== undefined) normalized.effect = e.effect;
 		if (e.duration !== undefined) normalized.duration = e.duration; // SC-186, additive
@@ -66,7 +67,7 @@ export function parse(input: unknown, _raw: string): ConditionsModel {
  *  (SC-186: `duration` joins `color`/`effect` in the "any field set -> full object"
  *  test). */
 function toDtoEntry(c: Condition): string | Condition {
-	return c.color === undefined && c.effect === undefined && c.duration === undefined ? c.key : c;
+	return c.icon === undefined && c.color === undefined && c.effect === undefined && c.duration === undefined ? c.key : c;
 }
 
 /** serialize(model): stringifyYaml({conditions: [...down-converted]}).trim() — the

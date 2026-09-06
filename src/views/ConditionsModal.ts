@@ -10,7 +10,7 @@
 //     (arrow keys + Enter, Escape closes) whose dropdown live-filters the known catalog
 //     and always ends with an "Add custom: <text>" row, so any string a statblock
 //     invents becomes a condition (`{ key: slug(text) }`);
-//   - the cog expands an inline sunken Duration / Color / Effect editor UNDER the row
+//   - the cog expands an inline sunken Icon / Duration / Color / Effect editor UNDER the row
 //     (no child modal, one open at a time);
 //   - add/delete/customize all apply LIVE — `onChange` fires with the complete updated
 //     list after every mutation. There is no staged tray and no Cancel; the footer is a
@@ -50,7 +50,7 @@
 //     `focusout` (belt and braces — catches a real click-away without depending on focus
 //     timing).
 import type { App } from 'obsidian';
-import { setIcon } from 'obsidian';
+import { getIconIds, setIcon } from 'obsidian';
 import type { Condition, ConditionHolder } from '@drawSteelAdmonition/EncounterData';
 import { ConditionManager, ConditionConfig } from '@utils/Conditions';
 import { DseModal, iconButton } from '@/framework/kit';
@@ -73,7 +73,10 @@ const DURATION_PRESETS: { value: ConditionDuration | undefined; label: string }[
 ];
 
 /** Preset color swatches: the existing action-type hues, not new brand colors. */
-const SWATCHES = ['#c0392b', '#b9770e', '#1e8449', '#2874a6', '#7d3c98'];
+const SWATCHES = [
+	['Red', '#c0392b'], ['Amber', '#b9770e'], ['Green', '#1e8449'],
+	['Blue', '#2874a6'], ['Purple', '#7d3c98'],
+];
 
 /** 'static' clears `Condition.effect`; the rest are the shared CSS pulse vocabulary. */
 const EFFECT_PRESETS = ['static', ...CONDITION_EFFECTS] as const;
@@ -198,7 +201,7 @@ export class ConditionsModal extends DseModal {
 	private renderRow(entry: Condition, index: number): void {
 		const config = this.mgr.getAnyConditionByKey(entry.key);
 		const displayName = config?.displayName ?? titleCaseConditionKey(entry.key);
-		const iconName = config?.iconName ?? FALLBACK_CONDITION_ICON;
+		const iconName = entry.icon?.trim() || config?.iconName || FALLBACK_CONDITION_ICON;
 		const isOpen = this.openEditorIndex === index;
 
 		const rowEl = this.listEl.createDiv({ cls: 'dse-condal__row' });
@@ -274,9 +277,60 @@ export class ConditionsModal extends DseModal {
 
 	private renderEditor(entry: Condition, index: number): void {
 		const ed = this.listEl.createDiv({ cls: 'dse-condal__editor' });
+		this.renderIconPicker(field(ed, 'Icon'), entry, index);
 		this.renderDurationChips(field(ed, 'Duration'), entry, index);
 		this.renderSwatches(field(ed, 'Color'), entry, index);
 		this.renderEffectChips(field(ed, 'Effect'), entry, index);
+	}
+
+	private renderIconPicker(parent: HTMLElement, entry: Condition, index: number): void {
+		const picker = parent.createDiv({ cls: 'dse-cond-icons' });
+		const search = picker.createEl('input', { type: 'search', placeholder: 'Search icons…' });
+		search.setAttribute('aria-label', 'Search condition icons');
+		const grid = picker.createDiv({ cls: 'dse-cond-icons__grid' });
+		grid.setAttribute('role', 'group');
+		grid.setAttribute('aria-label', 'Condition icon');
+		const defaults = this.mgr.getAnyConditionByKey(entry.key)?.iconName ?? FALLBACK_CONDITION_ICON;
+		// Obsidian lists built-ins with a lucide- prefix; setIcon also accepts
+		// the short names used by our catalog and authored YAML.
+		const ids = [...new Set(getIconIds().map((id) => id.replace(/^lucide-/, '')))].sort();
+		const render = (): void => {
+			grid.empty();
+			const add = (icon: string, label: string, value: string | undefined): void => {
+				const button = grid.createEl('button', { cls: 'dse-optchip dse-cond-icons__choice' });
+				button.type = 'button';
+				button.setAttribute('aria-label', label);
+				button.setAttribute('title', label);
+				button.setAttribute('aria-pressed', String(value === entry.icon));
+				setIcon(button.createSpan(), icon);
+				if (value === undefined) button.createSpan({ text: 'Default' });
+				button.addEventListener('click', () => {
+					if (value === undefined) delete entry.icon;
+					else entry.icon = value;
+					this.emitChange();
+					// Keep the search and its query in place while updating the row preview.
+					const glyph = this.listEl.querySelectorAll('.dse-condal__glyph')[index] as HTMLElement;
+					setIcon(glyph, value ?? defaults);
+					render();
+					Array.from(grid.querySelectorAll<HTMLButtonElement>('button'))
+						.find((b) => b.getAttribute('aria-label') === label)?.focus();
+				});
+			};
+			add(defaults, 'Use default condition icon', undefined);
+			const query = search.value.trim().toLowerCase().replace(/\s+/g, '-');
+			const suggested = [...new Set([
+				...this.mgr.getConditions().map((c) => c.iconName),
+				'sparkles', 'skull', 'shield', 'flame', 'snowflake', 'eye-off', 'heart-crack',
+			])].filter((id) => ids.includes(id));
+			const matches = query ? ids.filter((id) => id.includes(query)) : suggested;
+			const visible = matches.slice(0, 24);
+			if (!query && entry.icon && !visible.includes(entry.icon)) visible.unshift(entry.icon);
+			for (const id of visible) add(id, `Icon: ${id}`, id);
+			if (matches.length === 0) grid.createSpan({ text: 'No matching icons.' });
+			if (matches.length > 24) grid.createSpan({ text: 'Showing the first 24 matches. Refine your search for more.' });
+		};
+		this.lifecycle.registerDomEvent(search, 'input', render);
+		render();
 	}
 
 	private renderDurationChips(parent: HTMLElement, entry: Condition, index: number): void {
@@ -321,9 +375,10 @@ export class ConditionsModal extends DseModal {
 		const row = parent.createDiv({ cls: 'dse-swatches' });
 		row.setAttribute('role', 'group');
 		row.setAttribute('aria-label', 'Color');
-		for (const hex of SWATCHES) {
+		for (const [name, hex] of SWATCHES) {
 			const sw = row.createEl('button', { cls: 'dse-swatch' });
 			sw.setAttribute('type', 'button');
+			sw.setAttribute('title', `${name} (${hex})`);
 			sw.setAttribute('aria-label', `Color ${hex}`);
 			sw.setAttribute('aria-pressed', String(hex === entry.color));
 			sw.style.setProperty('--dse-swatch', hex);

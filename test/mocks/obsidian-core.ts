@@ -1351,3 +1351,7 @@ export async function flushAsync(rounds = 3): Promise<void> {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	}
 }
+
+export function getIconIds(): string[] {
+	return ["circle-dashed", "droplet", "ghost", "shield", "skull", "sparkles"].map((id) => `lucide-${id}`);
+}

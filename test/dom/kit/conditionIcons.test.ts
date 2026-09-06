@@ -122,3 +122,11 @@ describe('D7 Task 1: kit/conditionIcons — buildConditionIcons', () => {
 		expect(root.querySelectorAll('.dse-cond')).toHaveLength(2);
 	});
 });
+
+
+test.each([true, false])('SC-277: renders custom icons in removable=%s condition strips', (canRemove) => {
+	const root = document.createElement('div');
+	buildConditionIcons(root, [{ key: 'bleeding', icon: 'skull' }, { key: 'hexed', icon: 'sparkles' }, 'bleeding'],
+		new ConditionManager(), { owner: fakeOwner(), canRemove });
+	expect(Array.from(root.querySelectorAll('.dse-cond')).map(iconOf)).toEqual(['skull', 'sparkles', 'droplet']);
+});

@@ -119,3 +119,10 @@ describe('D7 Task 2: serialize is byte-stable (deterministic key-only -> bare st
 		expect(serialize(m2)).toBe(s1);
 	});
 });
+
+
+test('SC-277: icon-only customization survives serialization and repeated parsing', () => {
+	const model = parseLikePipeline('conditions:\n  - key: hexed\n    icon: sparkles');
+	expect(model.conditions).toEqual([{ key: 'hexed', icon: 'sparkles' }]);
+	expect(parseLikePipeline(serialize(model))).toEqual(model);
+});

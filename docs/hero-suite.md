@@ -17,9 +17,9 @@ A conditions strip for one hero or creature, using the same Conditions manager a
 ~~~ds-conditions
 conditions:
   - key: bleeding
-    effect: save ends
+    duration: save-ends
   - key: slowed
-    effect: EoT
+    duration: eot
   - restrained
 ~~~
 ```
@@ -27,8 +27,12 @@ conditions:
 ![A conditions strip](Media/conditions.png)
 
 Each entry is either a bare condition name or an object with a `key` plus an optional
-`effect` (its duration — "save ends", "EoT", "EoE") and `color`. Click **+** to add
-conditions, click a condition to remove it.
+`icon` (an Obsidian icon name), `duration` (`eot`, `save-ends`, or `eoe`), `color`, and
+`effect` (an animation such as `glow`). Legacy duration text in `effect` still works.
+Click **+** to open the Conditions manager and use a row’s cog to choose its icon,
+color, duration, and effect. Search icons by name or choose **Default** to restore
+the standard icon. Custom conditions support the same controls. Changes are saved
+with the note; click a condition in the strip to remove it.
 
 ## Heroic resource (`ds-resource`)
 

@@ -29,6 +29,7 @@ import type { ConditionManager } from '@utils/Conditions';
  *  framework/utils. */
 export interface ConditionIconEntry {
 	key: string;
+	icon?: string;
 	color?: string;
 	effect?: string;
 }
@@ -113,7 +114,7 @@ export function buildConditionIcons(
 		const condition = mgr.getAnyConditionByKey(conditionKey);
 		// SC-186: unregistered keys no longer skip — they render the fallback glyph +
 		// title-cased key (a custom statblock condition, e.g. "hexed" -> "Hexed").
-		const iconName = condition?.iconName ?? FALLBACK_ICON;
+		const iconName = conditionData?.icon?.trim() || condition?.iconName || FALLBACK_ICON;
 		const displayName = condition?.displayName ?? titleCaseKey(conditionKey);
 
 		// Click-to-remove is a write — read-only renders a static state glyph.

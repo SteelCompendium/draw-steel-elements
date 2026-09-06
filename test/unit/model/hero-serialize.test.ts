@@ -607,3 +607,10 @@ describe('D7 Task 7: schema.yaml (AJV, drives Task 9 D9 form-editor reuse)', () 
 		expect(result).toEqual({ valid: true, errors: [] });
 	});
 });
+
+
+test('SC-277: hero conditions retain icon overrides across a saved state round trip', () => {
+	const model = parseLikePipeline(heroExample);
+	model.state.conditions = [{ key: 'hexed', icon: 'sparkles', duration: 'save-ends' }];
+	expect(parseLikePipeline(serialize(model)).state.conditions).toEqual(model.state.conditions);
+});

@@ -110,6 +110,7 @@ function normalizeConditions(
 			} else if (typeof cond === 'object' && cond.key) {
 				return {
 					key: cond.key,
+					icon: cond.icon ?? undefined,
 					color: cond.color ?? undefined,
 					effect: cond.effect ?? undefined,
 					duration: cond.duration ?? undefined,

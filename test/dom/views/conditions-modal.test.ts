@@ -663,7 +663,7 @@ describe('SC-186: managed lifecycle + hygiene', () => {
 		// (same exemption CustomizeConditionModal's own test used to carry).
 		const scanned = src
 			.replace(/^.*COLOR_INPUT_DEFAULT.*$/gm, '')
-			.replace(/^const SWATCHES = .*$/gm, '');
+			.replace(/^const SWATCHES = \[[\s\S]*?^\];/m, '');
 		expect(styleGuardFindings(scanned)).toEqual([]);
 	});
 
@@ -702,5 +702,27 @@ describe('SC-186: managed lifecycle + hygiene', () => {
 		for (const rule of steelRules) {
 			expect(rule).toContain(':not([data-dse-print="on"])');
 		}
+	});
+});
+
+
+describe('SC-277: per-condition icons', () => {
+	test.each(['bleeding', 'hexed'])('selects, retains and resets the icon for %s without changing other fields', (key) => {
+		const entry: Condition = { key, color: '#2874a6', duration: 'save-ends', effect: 'glow' };
+		const { container, holder, onChange } = makeModal([entry]);
+		(container.querySelector('button[aria-label^="Customize"]') as HTMLElement).click();
+		const search = container.querySelector<HTMLInputElement>('[aria-label="Search condition icons"]')!;
+		typeQuery(search, 'sparkles');
+		(container.querySelector('button[aria-label="Icon: sparkles"]') as HTMLElement).click();
+		expect(holder.conditions).toEqual([{ ...entry, icon: 'sparkles' }]);
+		expect(onChange).toHaveBeenLastCalledWith([{ ...entry, icon: 'sparkles' }]);
+		expect(container.querySelector('.dse-condal__glyph')?.getAttribute('data-icon')).toBe('sparkles');
+		expect(search.value).toBe('sparkles');
+		const reopened = makeModal(holder.conditions);
+		expect(reopened.container.querySelector('.dse-condal__glyph')?.getAttribute('data-icon')).toBe('sparkles');
+		(container.querySelector('button[aria-label="Use default condition icon"]') as HTMLElement).click();
+		expect(holder.conditions).toEqual([entry]);
+		expect(container.querySelector('.dse-condal__glyph')?.getAttribute('data-icon'))
+			.toBe(key === 'bleeding' ? 'droplet' : 'circle-dashed');
 	});
 });

@@ -67,3 +67,7 @@ export const requestUrl = async (
 	json: {},
 	arrayBuffer: new ArrayBuffer(0),
 });
+
+export function getIconIds(): string[] {
+	return Object.keys(icons).map((name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase());
+}

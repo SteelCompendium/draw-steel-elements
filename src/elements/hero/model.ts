@@ -193,6 +193,7 @@ function parseCondition(entry: unknown, index: number): Condition {
 		throw new Error(`state.conditions[${index}] must have a string 'key'.`);
 	}
 	const condition: Condition = { key: data.key };
+	if (typeof data.icon === 'string') condition.icon = data.icon;
 	if (typeof data.color === 'string') condition.color = data.color;
 	if (typeof data.effect === 'string') condition.effect = data.effect;
 	// SC-186 fix-round HIGH-3: this parser (the hero flagship's `state.conditions`) was

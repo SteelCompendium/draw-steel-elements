@@ -374,8 +374,10 @@ Adding a Condition:
 
 Customizing a Condition:
 
-- Click the "cog" icon on a condition's row to open its Duration / Color / Effect editor
+- Click the "cog" icon on a condition's row to open its Icon / Duration / Color / Effect editor
 	inline, under the row.
+- **Icon:** choose a suggested icon or search Obsidian’s available icons by name. This works for both standard and custom conditions. **Default** restores the original icon (a dashed circle for custom conditions). The choice applies only to this condition on this actor and is saved with the note.
+- **Color:** choose a red, amber, green, blue, or purple swatch, or use the eyedropper for a custom color. Hover a swatch to see its color name; an outline marks the selected preset.
 - Duration is End of Turn, Save Ends, End of Encounter, or Until Removed (the default).
 - Changes apply immediately — there's no separate Save button.
 

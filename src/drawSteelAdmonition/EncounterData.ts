@@ -542,6 +542,8 @@ export function appendMaliceLogEntry(malice: Malice, entry: MaliceLogEntry): voi
 
 export interface Condition {
     key: string;
+    /** Per-entry Obsidian icon override; absent uses the catalog default. */
+    icon?: string;
     color?: string;
     effect?: string;
     /** SC-186 — additive, first-class duration (absent = "until removed"). Preferred
@@ -695,6 +697,7 @@ Are there multiple instances of the '${hero.statblock}' file in your vault? If s
                 } else if (typeof cond === "object" && cond.key) {
                     return {
                         key: cond.key,
+                        icon: cond.icon ?? undefined,
                         color: cond.color ?? undefined,
                         effect: cond.effect ?? undefined,
                         duration: cond.duration ?? undefined,
@@ -815,6 +818,7 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
                                 } else if (typeof cond === "object" && cond.key) {
                                     return {
                                         key: cond.key,
+                                        icon: cond.icon ?? undefined,
                                         color: cond.color ?? undefined,
                                         effect: cond.effect ?? undefined,
                                         duration: cond.duration ?? undefined,
@@ -862,6 +866,7 @@ Are there multiple instances of the '${creature.statblock}' file in your vault? 
                                 } else if (typeof cond === "object" && cond.key) {
                                     return {
                                         key: cond.key,
+                                        icon: cond.icon ?? undefined,
                                         color: cond.color ?? undefined,
                                         effect: cond.effect ?? undefined,
                                         duration: cond.duration ?? undefined,

@@ -415,7 +415,7 @@ export class MinionStaminaPoolModal extends DseModal {
 			const condition = conditionManager.getAnyConditionByKey(conditionKey);
 			if (condition) {
 				const iconEl = container.createDiv({ cls: 'condition-icon' });
-				setIcon(iconEl, condition.iconName);
+				setIcon(iconEl, conditionData?.icon?.trim() || condition.iconName);
 				iconEl.title = condition.displayName;
 
 				// Apply color and effect customizations through the SHARED Task 8

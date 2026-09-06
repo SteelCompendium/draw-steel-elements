@@ -2042,12 +2042,26 @@ code.dsa {
 	box-shadow: var(--dse-chip-bevel);
 }
 
+/* Condition icon choices use the same pressed-chip grammar as duration/effect. */
+.dse-cond-icons { width: 100%; min-width: 0; }
+.dse-cond-icons input { width: 100%; margin-bottom: 0.5em; }
+.dse-cond-icons__grid { display: flex; flex-wrap: wrap; gap: 0.35em; }
+.dse-modal .dse-cond-icons__choice {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	min-width: 2.2em;
+	min-height: 2.2em;
+}
+.dse-cond-icons__choice svg { width: 1.2em; height: 1.2em; display: block; }
+
 .dse-swatches {
 	display: flex;
 	align-items: center;
 	gap: 0.45em;
 }
-.dse-swatch {
+/* Beat Obsidian button fills in resting, hovered and focused states. */
+.dse-modal .dse-swatches .dse-swatch {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
@@ -2064,7 +2078,7 @@ code.dsa {
 	outline: 2px solid var(--dse-accent);
 	outline-offset: 2px;
 }
-.dse-swatch--custom {
+.dse-modal .dse-swatches .dse-swatch--custom {
 	color: var(--dse-fg-muted);
 	background: var(--dse-surface);
 }
