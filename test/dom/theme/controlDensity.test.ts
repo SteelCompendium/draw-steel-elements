@@ -240,13 +240,31 @@ describe('D-3: negotiation checkboxes wear the plugin mark idiom + a real label 
 
 	test('every checkbox rule is Steel-scoped, print-excluded, and skips Obsidian task-list boxes', () => {
 		// 3 dedicated rules (base / :checked / :disabled) + the arm inside the kit's
-		// shared focus ring. The sheet is loaded app-wide, so an unscoped
-		// `input[type='checkbox']` arm would restyle every checkbox in Obsidian.
-		expect(boxRules.length).toBe(4);
+		// shared focus ring, from THIS block (SC-121 Batch 1) — plus 4 more from SC-202 r5,
+		// each closing a genuine, LIVE host leak neither this block nor the shared kit ring
+		// ever covered (see styles-source.css's own GROUP 6): `position` (never declared
+		// here at all), `:hover`'s `outline` (this block covers `:hover`'s border-color,
+		// never its outline), `:focus-visible`'s box-shadow, and the `:checked`/
+		// `[data-indeterminate]` `::after` tick/dash. The sheet is loaded app-wide, so an
+		// unscoped `input[type='checkbox']` arm would restyle every checkbox in Obsidian.
+		expect(boxRules.length).toBe(8);
 		for (const r of boxRules) {
 			expect(r.selector).toContain(STEEL_PRINT_SCOPE);
 			expect(r.selector).toContain(':not(.task-list-item-checkbox)');
 		}
+	});
+
+	test("SC-202 r5 — position is re-grounded to static (this block never declares it, so Obsidian's bare rule would otherwise win outright)", () => {
+		const position = boxRules.find(
+			(r) => r.body.trim() === 'position: static;' && !r.selector.includes(':hover') && !r.selector.includes(':focus'),
+		);
+		expect(position).toBeDefined();
+	});
+
+	test("SC-202 r5 — :hover's outline is neutralised (this block covers :hover's border-color only; outline is a SEPARATE, LIVE leak)", () => {
+		const hoverArm = boxRules.find((r) => r.selector.endsWith(':hover'));
+		expect(hoverArm).toBeDefined();
+		expect(hoverArm!.body).toMatch(/outline:\s*none/);
 	});
 
 	test('the box replaces the OS control and matches .dse-skills__mark (1em, 0.2em radius, muted hairline)', () => {
@@ -274,13 +292,38 @@ describe('D-3: negotiation checkboxes wear the plugin mark idiom + a real label 
 	});
 
 	test('appearance:none drops the UA ring, so the box JOINS the kit\'s one focus rule', () => {
-		// Not a second ring declaration (kit-index.test.ts guards against exactly that):
-		// the checkbox is an extra arm on the kit's shared :focus-visible selector list.
-		const focusArm = boxRules.filter((r) => r.selector.includes(':focus-visible'));
-		expect(focusArm).toHaveLength(1);
-		expect(focusArm[0].selector).toContain('.dse-btn:focus-visible');
-		expect(focusArm[0].body).toMatch(/outline:\s*2px solid var\(--dse-focus-ring\)/);
-		expect(focusArm[0].body).toMatch(/outline-offset:\s*2px/);
+		// Not a second RING declaration (kit-index.test.ts guards against exactly that):
+		// the checkbox is an extra arm on the kit's shared :focus-visible selector list —
+		// distinguished from SC-202 r5's own box-shadow-only companion (below) by its
+		// `outline` property, the one this test is actually pinning.
+		const focusArms = boxRules.filter((r) => r.selector.includes(':focus-visible'));
+		const ringArm = focusArms.find((r) => r.selector.includes('.dse-btn:focus-visible'));
+		expect(ringArm).toBeDefined();
+		expect(ringArm!.body).toMatch(/outline:\s*2px solid var\(--dse-focus-ring\)/);
+		expect(ringArm!.body).toMatch(/outline-offset:\s*2px/);
+	});
+
+	test('SC-202 r5 — a SEPARATE :focus-visible companion neutralises Obsidian\'s own box-shadow ring (a real, live leak the shared kit ring never touched)', () => {
+		const focusArms = boxRules.filter((r) => r.selector.includes(':focus-visible'));
+		expect(focusArms).toHaveLength(2);
+		const boxShadowArm = focusArms.find((r) => !r.selector.includes('.dse-btn:focus-visible'));
+		expect(boxShadowArm).toBeDefined();
+		expect(boxShadowArm!.body).toMatch(/box-shadow:\s*none/);
+		expect(boxShadowArm!.body).not.toMatch(/outline/);
+	});
+
+	test('SC-202 r5 — a :checked/[data-indeterminate] ::after companion removes Obsidian\'s own checkmark/dash glyph', () => {
+		const afterArm = rules.find(
+			(r) =>
+				r.selector.includes("input[type='checkbox']") &&
+				r.selector.includes("::after") &&
+				r.selector.includes(':checked'),
+		);
+		expect(afterArm).toBeDefined();
+		expect(afterArm!.selector).toContain(STEEL_PRINT_SCOPE);
+		expect(afterArm!.selector).toContain(":not(.task-list-item-checkbox)");
+		expect(afterArm!.selector).toContain("[data-indeterminate='true']");
+		expect(afterArm!.body).toMatch(/content:\s*none/);
 	});
 
 	test('disabled rows keep an affordance (the UA graying went with appearance:none)', () => {

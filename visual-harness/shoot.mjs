@@ -2942,9 +2942,19 @@ const CODE_PROPS = ['color', 'fontFamily', 'backgroundColor', 'borderRadius', 'f
  *  `outlineWidth` joins `outlineStyle` (fix round, MED-1) — the pair the UA's own
  *  `:focus-visible` rule sets (`auto 1px …`), sampled alongside the new companion rule
  *  below; neither can move at REST (Obsidian sets no unscoped `outline-width` for `a`),
- *  so both stay silent in this array's own REST comparison and only matter in the
+ *  so both stay silent in this array's own REST comparison and only show up in the
  *  `:focus-visible` pass this same array feeds (`probeLinksFocusVisible`/
- *  `assertLinkTokenOverride`). */
+ *  `assertLinkTokenOverride`) — where they ALSO stay silent, 0 diffs either way, because
+ *  the plugin's own `:focus-visible` companion rule (`outline: auto 1px
+ *  -webkit-focus-ring-color`) sets the identical value the bare browser already renders,
+ *  and Obsidian sets no competing `outline`/`outline-width` rule for `a:focus-visible` to
+ *  fight. **SC-202 r4 re-review, LOW-4 (non-blocking, folded into r5's commit):** that
+ *  means this bare-vs-host sweep structurally CANNOT tell "companion present" from
+ *  "companion absent" — both readings are identical either way. What actually guards the
+ *  companion rule existing at all is the jest SOURCE-TEXT contract
+ *  (`headingEmphasisLinkHostRegrounding.test.ts`'s own GROUP 5 focus-visible test, which
+ *  asserts the literal declaration and its specificity), not this runtime sweep — credit
+ *  that guard, not this one, for catching a regression here. */
 const LINK_REST_PROPS = ['fontWeight', 'textDecorationLine', 'textDecorationThickness', 'cursor', 'outlineStyle', 'outlineWidth', 'color'];
 /** `:hover` — the two properties Obsidian's own `a:hover`/`.internal-link:hover`/
  *  `.external-link:hover` rules touch (`color` IS sampled here, unlike at rest: hover
@@ -3380,6 +3390,482 @@ async function assertLinkTokenOverride(page) {
 	);
 }
 
+// ======================================================================================
+// SC-202 r5 — CHECKBOX + TASK-LIST host-leak sweep (leak family 5, the LAST one).
+//
+// Same asar/pin plumbing as r1-r4 (`loadLocalObsidianAppCss`, `R1_APP_CSS_SHA256`,
+// `injectRealHostCss`), same SKIP-when-no-asar self-gate, same bare-vs-host
+// computed-style invariance contract. Two genuinely different surfaces, tested two
+// different ways:
+//
+//  (a) The PLUGIN-AUTHORED checkbox (negotiation's motivation/pitfall rows, project's
+//      breakthrough/skill toggles, the minion pool's per-minion check) — tagged directly
+//      in the gallery, bare, same shape as `tagInputs`/`assertInputHostLeak`.
+//
+//  (b) The markdown TASK-LIST checkbox (`li.task-list-item` + `input.task-list-item-
+//      checkbox`) — NO gallery/marked-rendered fixture can ever produce this shape.
+//      `marked` (the harness's own markdown shim, `visual-harness/shim/obsidian.ts`) does
+//      not add Obsidian's `task-list-item`/`task-list-item-checkbox` classes or `data-task`
+//      at all for `- [ ]` syntax (measured directly: `marked.parse('- [ ] x')` emits a
+//      bare `<li><input disabled type=checkbox></li>`, no class, no attribute — checked
+//      against a real `marked@18` install, not assumed from its docs). So this half is
+//      built SYNTHETICALLY, matching round 3's own `withSyntheticLiP` precedent for the
+//      exact same "0 fixture can exercise this shape" situation.
+//
+// A FOOTGUN worth recording for whoever touches this sweep next: Obsidian's own base
+// checkbox rule declares `transition: box-shadow 0.15s ease-in-out`, so reading computed
+// style IMMEDIATELY after `CSS.forcePseudoState(['focus-visible'])` lands mid-transition —
+// measured directly: an immediate read reported `rgba(0,0,0,0) 0px 0px 0px 0px` (looks
+// like "no box-shadow", i.e. a false negative for the very leak this sweep exists to
+// catch), a read 250ms later reported the real settled value
+// (`rgb(85,85,85) 0px 0px 0px 2px` on the dark scheme). `settleFocusVisible` below always
+// waits before reading.
+
+const CHECKBOX_CONTROL_PROPS = [
+	'appearance',
+	'boxSizing',
+	'borderWidth',
+	'borderStyle',
+	'borderColor',
+	'borderRadius',
+	'padding',
+	'margin',
+	'width',
+	'height',
+	'position',
+	'transition',
+	'cursor',
+	'backgroundColor',
+	'outlineStyle',
+	'outlineWidth',
+	'boxShadow',
+];
+/** `li.task-list-item` itself — `list-style` is sampled but NOT compared against a "bare
+ *  wins" contract (see styles-source.css's own "THE ONE DECLARATION THIS BLOCK DOES NOT
+ *  FIGHT" note) — this sweep instead asserts it literally equals `"outside none none"`
+ *  (Obsidian's OWN value, deliberately adopted) on BOTH passes, since the plugin's own
+ *  GROUP 1 rule now sets it unconditionally. `textDecorationLine`/`color` ARE a bare-vs-
+ *  host diff contract, sampled only on the CHECKED `<li>` (Obsidian's decoration rule never
+ *  touches the unchecked one). */
+const TASKLIST_LI_DECORATION_PROPS = ['textDecorationLine', 'color'];
+
+/** Tags every distinct kind of plugin-authored `input[type=checkbox]` the gallery renders
+ *  — same (element, classes) keying convention as `tagInputs`, explicitly excluding
+ *  `.task-list-item-checkbox` (that half is synthetic, see `buildSyntheticTaskList`) so
+ *  the two families can never double-count a node. */
+function tagCheckboxes() {
+	const keys = [];
+	const seen = new Set();
+	for (const n of document.querySelectorAll("input[type='checkbox']:not(.task-list-item-checkbox)")) {
+		const root = n.closest('[data-dse-element]') || n.closest('.dse-modal');
+		const key =
+			(root ? root.getAttribute('data-dse-element') || '(modal)' : '(none)') +
+			'|' +
+			([...n.classList].sort().join('.') || '(no class)');
+		if (seen.has(key)) continue;
+		seen.add(key);
+		n.setAttribute('data-dse-cbleak', key);
+		n.setAttribute('data-dse-cbleak-i', String(keys.length));
+		keys.push(key);
+	}
+	return keys;
+}
+
+function readTaggedCheckboxesAtRest(props) {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-cbleak]')) {
+		const cs = getComputedStyle(n);
+		const rec = { key: n.getAttribute('data-dse-cbleak') };
+		for (const p of props) rec[p] = cs[p];
+		rec.afterContent = getComputedStyle(n, '::after').content;
+		out.push(rec);
+	}
+	return out;
+}
+
+function readOneCheckboxTaggedMatching({ i, props, pseudo }) {
+	const n = document.querySelector(`[data-dse-cbleak-i="${i}"]`);
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const rec = { key: n.getAttribute('data-dse-cbleak') };
+	for (const p of props) rec[p] = cs[p];
+	rec.active = n.matches(pseudo);
+	return rec;
+}
+
+/** `:checked`/`:indeterminate`/`:disabled` are all real DOM states, not pseudo-classes CDP
+ *  needs to force — driven directly, same shape as `readOneInputTaggedDisabled`. */
+function readOneCheckboxTaggedChecked({ i, props }) {
+	const n = document.querySelector(`[data-dse-cbleak-i="${i}"]`);
+	if (!n) return null;
+	const was = n.checked;
+	n.checked = true;
+	const cs = getComputedStyle(n);
+	const rec = { key: n.getAttribute('data-dse-cbleak') };
+	for (const p of props) rec[p] = cs[p];
+	rec.afterContent = getComputedStyle(n, '::after').content;
+	n.checked = was;
+	return rec;
+}
+function readOneCheckboxTaggedIndeterminate({ i, props }) {
+	const n = document.querySelector(`[data-dse-cbleak-i="${i}"]`);
+	if (!n) return null;
+	n.indeterminate = true;
+	n.setAttribute('data-indeterminate', 'true');
+	const cs = getComputedStyle(n);
+	const rec = { key: n.getAttribute('data-dse-cbleak') };
+	for (const p of props) rec[p] = cs[p];
+	rec.afterContent = getComputedStyle(n, '::after').content;
+	n.indeterminate = false;
+	n.removeAttribute('data-indeterminate');
+	return rec;
+}
+function readOneCheckboxTaggedDisabled({ i, props }) {
+	const n = document.querySelector(`[data-dse-cbleak-i="${i}"]`);
+	if (!n) return null;
+	const was = n.disabled;
+	n.disabled = true;
+	const cs = getComputedStyle(n);
+	const rec = { key: n.getAttribute('data-dse-cbleak') };
+	for (const p of props) rec[p] = cs[p];
+	n.disabled = was;
+	rec.active = true;
+	return rec;
+}
+
+/** Builds a REAL Obsidian-shaped task list — `ul > li.task-list-item[data-task]` wrapping
+ *  `input.task-list-item-checkbox` — under the first `[data-dse-element]` root the gallery
+ *  mounts. See this sweep's own header comment for why no gallery fixture can produce this
+ *  shape. Built once per pass (bare, then host), read, then removed by
+ *  `removeSyntheticTaskList` — never left in the DOM, never screenshotted. Two `<li>`s: one
+ *  permanently unchecked (`data-task=" "`, tagged `data-dse-tlcb="rest"` — used for
+ *  rest/hover/focus-visible/indeterminate/disabled, toggling `.checked`/`.indeterminate`/
+ *  `.disabled` on it directly rather than building a fifth node per state) and one
+ *  permanently checked (`data-task="x"`, tagged `data-dse-tlcb="checked"` — the
+ *  `data-task` decoration needs the ATTRIBUTE present from creation; toggling `.checked`
+ *  after the fact would not add it). */
+function buildSyntheticTaskList() {
+	const root = document.querySelector('[data-dse-element]');
+	if (!root) return false;
+	const ul = document.createElement('ul');
+	const liRest = document.createElement('li');
+	liRest.className = 'task-list-item';
+	liRest.setAttribute('data-task', ' ');
+	const cbRest = document.createElement('input');
+	cbRest.type = 'checkbox';
+	cbRest.className = 'task-list-item-checkbox';
+	cbRest.setAttribute('data-dse-tlcb', 'rest');
+	liRest.append(cbRest, document.createTextNode(' unchecked'));
+	const liChecked = document.createElement('li');
+	liChecked.className = 'task-list-item';
+	liChecked.setAttribute('data-task', 'x');
+	const cbChecked = document.createElement('input');
+	cbChecked.type = 'checkbox';
+	cbChecked.className = 'task-list-item-checkbox';
+	cbChecked.checked = true;
+	cbChecked.setAttribute('data-dse-tlcb', 'checked');
+	liChecked.append(cbChecked, document.createTextNode(' checked'));
+	ul.append(liRest, liChecked);
+	ul.setAttribute('data-dse-tlul', '1');
+	root.appendChild(ul);
+	return true;
+}
+function removeSyntheticTaskList() {
+	const ul = document.querySelector('[data-dse-tlul]');
+	if (ul) ul.remove();
+}
+function readSyntheticTaskListLi(props) {
+	const out = [];
+	const rest = document.querySelector('li.task-list-item[data-task=" "]');
+	if (rest) out.push({ key: 'unchecked', listStyle: getComputedStyle(rest).listStyle });
+	const checked = document.querySelector('li.task-list-item[data-task="x"]');
+	if (checked) {
+		const cs = getComputedStyle(checked);
+		const rec = { key: 'checked', listStyle: cs.listStyle };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+function readSyntheticTaskListCbAtRest(props) {
+	const n = document.querySelector('[data-dse-tlcb="rest"]');
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const rec = {};
+	for (const p of props) rec[p] = cs[p];
+	rec.afterContent = getComputedStyle(n, '::after').content;
+	return rec;
+}
+function readSyntheticTaskListCbChecked(props) {
+	const n = document.querySelector('[data-dse-tlcb="checked"]');
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const rec = {};
+	for (const p of props) rec[p] = cs[p];
+	rec.afterContent = getComputedStyle(n, '::after').content;
+	return rec;
+}
+function readSyntheticTaskListCbIndeterminate(props) {
+	const n = document.querySelector('[data-dse-tlcb="rest"]');
+	if (!n) return null;
+	n.indeterminate = true;
+	n.setAttribute('data-indeterminate', 'true');
+	const cs = getComputedStyle(n);
+	const rec = {};
+	for (const p of props) rec[p] = cs[p];
+	rec.afterContent = getComputedStyle(n, '::after').content;
+	n.indeterminate = false;
+	n.removeAttribute('data-indeterminate');
+	return rec;
+}
+function readSyntheticTaskListCbDisabled(props) {
+	const n = document.querySelector('[data-dse-tlcb="rest"]');
+	if (!n) return null;
+	const was = n.disabled;
+	n.disabled = true;
+	const cs = getComputedStyle(n);
+	const rec = {};
+	for (const p of props) rec[p] = cs[p];
+	n.disabled = was;
+	return rec;
+}
+
+/** CDP `CSS.forcePseudoState` + settle wait — see this sweep's own header comment for why
+ *  the wait is load-bearing for `:focus-visible` (Obsidian's own `transition: box-shadow
+ *  0.15s ease-in-out`). `hover` never transitions (Obsidian sets no transition on
+ *  `border-color`), so it does not need the wait, but pays the same small delay anyway for
+ *  one shared helper rather than two near-identical ones. */
+async function forceCheckboxPseudo(page, cdp, docRootNodeId, selector, pseudo) {
+	const found = await cdp.send('DOM.querySelector', { nodeId: docRootNodeId, selector });
+	if (!found?.nodeId) return false;
+	await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: [pseudo] });
+	await page.waitForTimeout(250);
+	return true;
+}
+async function clearCheckboxPseudo(cdp, docRootNodeId, selector) {
+	const found = await cdp.send('DOM.querySelector', { nodeId: docRootNodeId, selector });
+	if (found?.nodeId) await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: [] });
+}
+
+async function assertCheckboxHostLeak(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\ncheckbox host-leak SKIPPED (no local asar)');
+		return;
+	}
+	const pinNote =
+		host.sha256 === R1_APP_CSS_SHA256
+			? `matches the round's pin (Obsidian ${host.version})`
+			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
+				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('DOM.enable');
+	await cdp.send('CSS.enable');
+	const problems = [];
+	const STATES = ['rest', 'hover', 'focus-visible', 'checked', 'indeterminate', 'disabled'];
+	let pluginKindCount = 0;
+	let pluginComparisons = 0;
+	let taskListComparisons = 0;
+	let liDecorationComparisons = 0;
+
+	for (const bg of ['dark', 'light']) {
+		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+
+		// ---- (a) plugin-authored checkbox, bare ----
+		const keys = await page.evaluate(tagCheckboxes);
+		if (keys.length < 1) {
+			problems.push(`${bg}: 0 plugin-authored checkboxes found in the gallery — the sweep is blind`);
+		}
+		pluginKindCount = Math.max(pluginKindCount, keys.length);
+		const { root: bareRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+		const bareByState = {};
+		for (const state of STATES) {
+			bareByState[state] = await probeCheckboxesInState(page, cdp, bareRoot.nodeId, 'cbleak', state, keys.length, CHECKBOX_CONTROL_PROPS, problems, `${bg}|plugin|host-absent`);
+		}
+
+		// ---- (b) synthetic task list, bare ----
+		const built = await page.evaluate(buildSyntheticTaskList);
+		if (!built) problems.push(`${bg}: no [data-dse-element] root to attach the synthetic task list to`);
+		const bareLi = built ? await page.evaluate(readSyntheticTaskListLi, TASKLIST_LI_DECORATION_PROPS) : [];
+		const { root: bareRoot2 } = await cdp.send('DOM.getDocument', { depth: -1 });
+		const bareTlByState = built
+			? await probeSyntheticCheckboxInState(page, cdp, bareRoot2.nodeId, CHECKBOX_CONTROL_PROPS, problems, `${bg}|tasklist|host-absent`)
+			: {};
+
+		await injectRealHostCss(page, host.css);
+		await wrapMountInMarkdownRendered(page);
+
+		// ---- (a) plugin-authored checkbox, host ----
+		const { root: hostRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+		for (const state of STATES) {
+			const hostRecs = await probeCheckboxesInState(page, cdp, hostRoot.nodeId, 'cbleak', state, keys.length, CHECKBOX_CONTROL_PROPS, problems, `${bg}|plugin|host-present`);
+			const byKey = new Map(hostRecs.map((r) => [r.key, r]));
+			for (const b of bareByState[state]) {
+				const h = byKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|plugin|${state}|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				pluginComparisons += 1;
+				const propsToCheck = state === 'checked' || state === 'indeterminate' ? [...CHECKBOX_CONTROL_PROPS, 'afterContent'] : CHECKBOX_CONTROL_PROPS;
+				for (const p of propsToCheck) {
+					if (b[p] !== h[p]) problems.push(`${bg}|plugin|${state}|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+		}
+
+		// ---- (b) synthetic task list, host ----
+		const built2 = await page.evaluate(buildSyntheticTaskList);
+		if (!built2) problems.push(`${bg}: no [data-dse-element] root to attach the synthetic task list to (host pass)`);
+		if (built && built2) {
+			const hostLi = await page.evaluate(readSyntheticTaskListLi, TASKLIST_LI_DECORATION_PROPS);
+			const hostLiByKey = new Map(hostLi.map((r) => [r.key, r]));
+			for (const b of bareLi) {
+				const h = hostLiByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|tasklist-li|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				liDecorationComparisons += 1;
+				// `list-style` is asserted to LITERALLY equal Obsidian's own value on BOTH
+				// passes — see styles-source.css's own "THE ONE DECLARATION THIS BLOCK
+				// DOES NOT FIGHT" note. Everything else is the usual bare===host contract.
+				if (b.listStyle !== 'outside none none') problems.push(`${bg}|tasklist-li|${b.key}: list-style reads "${b.listStyle}" bare, expected "outside none none" (GROUP 1 should make this true with or without the host present)`);
+				if (h.listStyle !== 'outside none none') problems.push(`${bg}|tasklist-li|${b.key}: list-style reads "${h.listStyle}" with the host present, expected "outside none none"`);
+				if (b.key === 'checked') {
+					for (const p of TASKLIST_LI_DECORATION_PROPS) {
+						if (b[p] !== h[p]) problems.push(`${bg}|tasklist-li|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+					}
+				}
+			}
+
+			const { root: hostRoot2 } = await cdp.send('DOM.getDocument', { depth: -1 });
+			const hostTlByState = await probeSyntheticCheckboxInState(page, cdp, hostRoot2.nodeId, CHECKBOX_CONTROL_PROPS, problems, `${bg}|tasklist|host-present`);
+			for (const state of Object.keys(bareTlByState)) {
+				const b = bareTlByState[state];
+				const h = hostTlByState[state];
+				if (!b || !h) continue;
+				taskListComparisons += 1;
+				const propsToCheck = state === 'checked' || state === 'indeterminate' ? [...CHECKBOX_CONTROL_PROPS, 'afterContent'] : CHECKBOX_CONTROL_PROPS;
+				for (const p of propsToCheck) {
+					if (b[p] !== h[p]) problems.push(`${bg}|tasklist|${state}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+			await page.evaluate(removeSyntheticTaskList);
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
+		console.error(
+			`\nCHECKBOX HOST-LEAK VIOLATED — with the real Obsidian app.css present the plugin's own ` +
+				`checkboxes and/or a markdown task list rendered inside a plugin body do not hold their ` +
+				`own box or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-202 r5 — CHECKBOX + TASK-LIST HOST RE-GROUNDING".`,
+		);
+		process.exit(1);
+	}
+	const comparisons = pluginComparisons + taskListComparisons + liDecorationComparisons;
+	console.log(
+		`\ncheckbox host-leak OK (${pluginKindCount} plugin-authored checkbox kinds × ${STATES.length} ` +
+			`states [${pluginComparisons}] + 1 synthetic task-list checkbox × ${STATES.length} states ` +
+			`[${taskListComparisons}] + 2 synthetic task-list <li> decoration [${liDecorationComparisons}] × ` +
+			`dark/light = ${comparisons} comparisons against the real Obsidian app.css under a real ` +
+			`.markdown-preview-view.markdown-rendered ancestor: every sampled property is identical with ` +
+			`and without it; ${pinNote})`,
+	);
+}
+
+/** Drives one STATE for every tagged plugin-authored checkbox — same overall shape as
+ *  `probeInputsInState`, extended with `checked`/`indeterminate` (real DOM states, not
+ *  pseudo-classes CDP forces) alongside `disabled`. */
+async function probeCheckboxesInState(page, cdp, docRootNodeId, tagAttr, state, count, props, problems, label) {
+	if (state === 'rest') {
+		await page.mouse.move(0, 0);
+		const records = await page.evaluate(readTaggedCheckboxesAtRest, props);
+		return records;
+	}
+	if (state === 'checked') return runOverEach(page, count, readOneCheckboxTaggedChecked, props, problems, label);
+	if (state === 'indeterminate') return runOverEach(page, count, readOneCheckboxTaggedIndeterminate, props, problems, label);
+	if (state === 'disabled') return runOverEach(page, count, readOneCheckboxTaggedDisabled, props, problems, label);
+	// hover / focus-visible — CDP forced, one node at a time.
+	const records = [];
+	for (let i = 0; i < count; i += 1) {
+		const selector = `[data-dse-${tagAttr}-i="${i}"]`;
+		const ok = await forceCheckboxPseudo(page, cdp, docRootNodeId, selector, state);
+		if (!ok) {
+			problems.push(`${label}|${state}|#${i}: CDP could not resolve the tagged node`);
+			continue;
+		}
+		const rec = await page.evaluate(readOneCheckboxTaggedMatching, { i, props, pseudo: `:${state}` });
+		await clearCheckboxPseudo(cdp, docRootNodeId, selector);
+		if (!rec) {
+			problems.push(`${label}|${state}|#${i}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		if (!rec.active) {
+			problems.push(`${rec.key}: CSS.forcePseudoState(['${state}']) did not make the node match :${state}`);
+			continue;
+		}
+		records.push(rec);
+	}
+	return records;
+}
+async function runOverEach(page, count, evalFn, props, problems, label) {
+	const records = [];
+	for (let i = 0; i < count; i += 1) {
+		const rec = await page.evaluate(evalFn, { i, props });
+		if (!rec) {
+			problems.push(`${label}|#${i}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		records.push(rec);
+	}
+	return records;
+}
+
+/** Drives every STATE for the ONE synthetic task-list checkbox — `checkedKey` selects
+ *  whether `checked`'s own record comes from the permanently-checked `<li>` (used on the
+ *  host pass, where `readSyntheticTaskListCbChecked` reads the node that ALREADY carries
+ *  `data-task="x"` from creation) or is skipped on the bare pass (read separately, above,
+ *  since the bare pass only needs `rest`/`hover`/`focus-visible`/`indeterminate`/`disabled`
+ *  off the SAME node the host pass's non-checked states also use). */
+async function probeSyntheticCheckboxInState(page, cdp, docRootNodeId, props, problems, label) {
+	const out = {};
+	out.rest = await page.evaluate(readSyntheticTaskListCbAtRest, props);
+	if (!out.rest) problems.push(`${label}|rest: no synthetic checkbox to read`);
+	const restSelector = '[data-dse-tlcb="rest"]';
+	const okHover = await forceCheckboxPseudo(page, cdp, docRootNodeId, restSelector, 'hover');
+	if (okHover) {
+		out.hover = await page.evaluate(readOneTaggedTlcbMatching, { props, pseudo: ':hover' });
+		await clearCheckboxPseudo(cdp, docRootNodeId, restSelector);
+	} else problems.push(`${label}|hover: CDP could not resolve the synthetic checkbox`);
+	const okFocus = await forceCheckboxPseudo(page, cdp, docRootNodeId, restSelector, 'focus-visible');
+	if (okFocus) {
+		out['focus-visible'] = await page.evaluate(readOneTaggedTlcbMatching, { props, pseudo: ':focus-visible' });
+		await clearCheckboxPseudo(cdp, docRootNodeId, restSelector);
+	} else problems.push(`${label}|focus-visible: CDP could not resolve the synthetic checkbox`);
+	out.indeterminate = await page.evaluate(readSyntheticTaskListCbIndeterminate, props);
+	out.disabled = await page.evaluate(readSyntheticTaskListCbDisabled, props);
+	// `checked` reads the OTHER synthetic node (the one carrying `data-task="x"` from
+	// creation, see `buildSyntheticTaskList`'s own comment) — a real DOM state, not forced.
+	out.checked = await page.evaluate(readSyntheticTaskListCbChecked, props);
+	return out;
+}
+function readOneTaggedTlcbMatching({ props, pseudo }) {
+	const n = document.querySelector('[data-dse-tlcb="rest"]');
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const rec = {};
+	for (const p of props) rec[p] = cs[p];
+	rec.active = n.matches(pseudo);
+	return rec;
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 900, height: 1200 },
@@ -3585,6 +4071,10 @@ try {
 		// renders (leak family 4). Also self-gates on a local Obsidian asar.
 		await assertInlineHostLeak(page);
 		await assertLinkTokenOverride(page);
+		// SC-202 r5 — the same question asked of every CHECKBOX the plugin renders,
+		// plugin-authored and markdown task-list alike (leak family 5, the last one). Also
+		// self-gates on a local Obsidian asar.
+		await assertCheckboxHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
