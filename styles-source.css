@@ -16150,3 +16150,378 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	margin-block-start: 0.5em;
 	margin-block-end: 0.5em;
 }
+
+/* ==================================================================================== */
+/*   SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING (leak family 4 of ~6)      */
+/* ==================================================================================== */
+/*
+   Phase 1 (sc202-proposal.md §4.4) found `h1`-`h6`, `strong`/`em` and `a` rendered inside
+   plugin bodies (any `MarkdownRenderer`/`createEl('h1'..'h6')` output) inherit Obsidian's
+   rendered-markdown heading/emphasis/link material: heading font-size/weight/line-height/
+   margin, `strong`/`em` weight/style, link colour/decoration/cursor and the external-link
+   icon. Same shape of defect as SC-202 r1/r2/r3, three/two/one element families over.
+
+   ENUMERATED from the real sheet (`visual-harness/dist/obsidian-app.css`, Obsidian 1.14.0)
+   via `obsidian-host-pin.mjs`'s own `iterRules`/`splitSelectorList`/`splitSubject` (never
+   the `css` npm package — r2's own finding that it silently truncates this file's parse).
+   Filtering every rule whose selector list's SUBJECT compound is `h1`-`h6`, `strong`, `em`,
+   `mark`, `code`, `a`, `.internal-link` or `.external-link` finds:
+
+     BARE/UNSCOPED (reach anywhere, no `.markdown-rendered` needed): `h1,h2,h3,h4,h5,h6
+     { margin-block-start/-end: var(--p-spacing) }` (ONE shared value for every level,
+     replacing the browser's own per-tag em-based margin); `h1,.markdown-rendered h1`
+     (and the h2-h6 twins) `{ --font-weight: var(--h1-weight); font-variant; letter-
+     spacing; line-height; font-size: var(--h1-size); color; font-weight; font-style;
+     font-family }` (repeated, unscoped AND `.markdown-rendered`-scoped — this one reaches
+     the harness's bare `#mount` with NO wrapper, unlike every other family so far);
+     `h1 a,.markdown-rendered h1 a { --link-weight: var(--h1-weight) }` (a link INSIDE a
+     heading inherits the heading's own weight token — 0 live fixture nests a link inside
+     a plugin heading, deferred, see below); `strong { font-weight: calc(var(--font-
+     weight) + var(--bold-modifier)); color: var(--bold-color) }`; `em { font-style:
+     italic; color: var(--italic-color) }`; `a { --font-weight: var(--link-weight);
+     color: var(--link-color); font-weight: var(--link-weight); outline: none; text-
+     decoration-line: var(--link-decoration); text-decoration-thickness: var(--link-
+     decoration-thickness); cursor: var(--cursor-link); transition: opacity … }`;
+     `.external-link { color: var(--link-external-color); text-decoration-line: var(
+     --link-external-decoration); background-position: center right; background-repeat:
+     no-repeat; background-image: url(…svg); background-size: 0.825em; padding-inline-
+     end: 0.9em; background-position-y: 0.25em; cursor; filter: var(--link-external-
+     filter); transition }` — the brief's own "`::after` icon" is PROSE, not the real
+     mechanism: Obsidian paints the external-link glyph via `background-image` directly
+     on the anchor, not a `::after` pseudo-element (checked the real sheet, not assumed
+     from the brief's own wording).
+
+     SCOPED under `.markdown-rendered` (this family's own version of r2/r3's wrapper
+     lesson): `mark { background-color: var(--highlight-background); color: var(--text-
+     normal) }` (+ six `[data-highlight="…"]` colour-variant overrides — 0 live/synthetic
+     content ever uses `==highlight==`, the base rule alone is sampled, the colour variants
+     only ever touch the ONE custom property the base rule already reads, deferred
+     defensively, see below); `code { color: var(--code-normal); font-family: var(--font-
+     monospace); background-color: var(--code-background); border-radius: var(--code-
+     radius); font-size: var(--code-size); padding: 0.15em 0.3em; border: var(--code-
+     border-width) solid var(--code-border-color); -webkit-box-decoration-break: clone }`
+     (+ `pre code` neutralising most of it back out for a FENCED block — 0 live content
+     renders a `<pre>` in a plugin body, `pre code` deferred, see below); `.metadata-
+     property-value .internal-link,.markdown-rendered .internal-link { cursor: var(
+     --cursor-link); text-decoration-line: var(--link-decoration); --font-weight: var(
+     --link-weight); color: var(--link-color); transition }` (+ `:hover`/`.mobile-tap`/
+     `.is-unresolved`/`.is-unresolved:hover` variants — `.is-unresolved` is a BROKEN-link
+     decoration; 0 live/synthetic content renders one, deferred, see below); `:is(p,pre,
+     table,ul,ol) + :is(h1..h6) { margin-top: var(--heading-spacing) }` and `.markdown-
+     rendered li h1,h2,h3,h4,h5 { margin: 0 }` (heading-adjacency/nesting refinements —
+     both measured BELOW this block's own anchor specificity, see "SPECIFICITY" below, so
+     neither can ever win regardless of source order; not restated, matching r2's own
+     "never declared → skip" convention for a rule that can never fire).
+
+     `del`/`<s>` — CHECKED, per the brief's own instruction, and Obsidian's rendered-
+     markdown rules do NOT reach it at all: 0 rules anywhere in the real sheet name `del`
+     or `s` as a subject (grepped the raw sheet, not just the `iterRules` census, in case a
+     non-standard selector shape hid it). A plugin `~~strikethrough~~` renders with the
+     bare Chromium UA default (`text-decoration-line: line-through`, inherited colour/
+     weight) in BOTH the harness and a real vault — genuinely nothing to re-ground.
+
+   THE PLUGIN'S OWN CSS THIS BLOCK MUST NOT OUTRANK (r3's own HIGH-1 lesson, checked
+   against every REAL heading tag the plugin renders, not assumed): `createEl('h2'|'h3'|
+   'h4', …)` call sites are `.dse-hero__name` (h2), `.dse-enc__roster-heading`/`.dse-hero__
+   region-title`/`.dse-skills__group-title`/the initiative "Heroes"/"Enemy groups" headers
+   (h3), `.dse-init__grouphead > h4`/`.dse-mt__guide-title` (h4) — the plugin's own card
+   TITLE (`.dse-card__title`, every feature/featureblock/statblock/perk/title/rule/…
+   card's name) is a `<div>`, NOT a heading tag, and is correctly OUT of this block's
+   reach. Every one of the six classed headings above already carries its OWN font-size/
+   margin override at (0,3,0) or higher (`[data-dse-element="…"] .dse-… .dse-…__…-title`,
+   three classes, or a Steel-scoped `:is(…) :is(h3,h4,h5,h6)` compound at (0,2,1)+) —
+   comfortably above this block's own (0,2,0) anchor, so this block is a verified NO-OP
+   for every one of them (0 pixel change, proven by the full-sweep shot-byte diff, not
+   argued) and only ever fires for a GENUINE markdown-rendered heading with no such
+   override (career/class/perk/title/… prose headings via `.dse-md-inline`/`CardLayout`).
+
+   SPECIFICITY — the only real tie risk this round found: Obsidian's OWN `.internal-link`
+   rule is `.markdown-rendered .internal-link`, TWO classes, (0,2,0) — the EXACT same
+   numeric specificity as this block's own flat anchor. A tie would resolve by source
+   order alone (round-2 MED-1: never rely on that), so the `.internal-link`/`.external-
+   link` companions below move the differentiating class OUTSIDE `:where()` (same trick
+   r2's GROUP 4 and r3's GROUP 4 use), landing at (0,3,0)/(0,3,0) — never a tie, never
+   losing regardless of load order between this sheet and an injected app.css. Every other
+   subject in this block (h1-h6 bare/`.markdown-rendered`-scoped rule (0,0,1); the heading-
+   adjacency/li-heading rules above, (0,1,2)/(0,1,2); `strong`/`em`/bare `a`/`.external-
+   link` (0,0,1)/(0,0,1)/(0,0,1)/(0,1,0); `mark`/`code` (0,1,1)) sit well clear of (0,2,0)
+   with no tie to engineer around.
+
+   WHAT EMPIRICALLY LEAKS (measured bare vs. host+wrapper on perk's real h6 "Familiar
+   Statblock" heading + `**bold**` + scc-links, plus synthetic h1-h6/strong/em/mark/code/
+   a/.internal-link/.external-link nodes injected under a real card body — see the round
+   report for the full table):
+
+     `h1`-`h6`: `font-size`/`line-height`/`margin-block-start`/`-end` move from the
+     browser's own per-tag UA defaults (e.g. h6: 10.72px/normal/24.98px/24.98px, the
+     0.67em-of-16px / normal / 2.33em-of-10.72px triad every un-styled tag already renders
+     at) to Obsidian's own token-driven, LEVEL-FLATTENED values (one shared `--p-spacing`
+     margin for every level, one `--h*-size`/`--h*-weight`/`--h*-line-height` per level) —
+     `font-weight`/`font-style`/`font-variant`/`letter-spacing`/`font-family`/`color` show
+     0 diff today (browser UA bold/normal/normal/normal/ambient-inherited/ambient-inherited
+     happen to equal this theme's own `--h*-weight`/`--h*-style`/`--h*-variant`/`--h*-
+     letter-spacing` for headings with no other colour — restated anyway, same round-2
+     MED-1 coincidence-is-not-a-guarantee reasoning every prior round in this ticket has
+     used).
+
+     `strong`/`em`: `font-weight` 700→`calc(400+var(--bold-modifier))` and `font-style`
+     stay put (already `bold`/`italic` either way — browser UA default and this theme's
+     own tokens happen to agree); `color` 0 diff (`--bold-color`/`--italic-color` are
+     `inherit` in this theme) — both restated anyway.
+
+     `mark`/`code`: BOTH need the `.markdown-rendered` wrapper to leak at all (0 diff with
+     no wrapper present, confirming r2/r3's own lesson generalises here too). `mark`
+     background/colour move from the browser's own UA black-on-yellow to this theme's
+     highlight tokens; `code` colour/font-family/background/radius/size/padding/border
+     move from "no styling at all" (inherited ink, monospace UA default, transparent, 0,
+     ambient 1em, none) to the theme's own code-chip material.
+
+     `a` (generic): `font-weight` moves from the AMBIENT inherited weight (700 in a bold
+     context, 400 in perk/kit's own body-text context — confirming the phase-1 census's
+     "`a` drops 700 → 600 (and → 400 in kit, perk)" finding was about this same ambient-
+     vs-token inconsistency) to Obsidian's own flat `--link-weight` token; `outline`/
+     `text-decoration-line`/`text-decoration-thickness`/`cursor` move from the browser's
+     own UA anchor defaults (`none`/`underline`/`auto`/`pointer`) to Obsidian's own link
+     tokens. `color` shows 0 diff and needs NO fix here: `.dse-feature a`/`.dse-sb a`/
+     `.dse-fb a`/`.dse-section__body a`/`.dse-card a` (styles-source.css ~7965, pre-dating
+     this ticket) already re-grounds link colour to `--dse-accent` at (0,4,1) — every real
+     markdown body in this plugin renders inside one of those five containers, so this
+     PRE-EXISTING rule already fully protects colour (rest AND `:hover`, its own `:hover`
+     twin at the same specificity) without this round adding anything.
+
+     `.external-link`: the icon material (`background-image`/`-position`/`-repeat`/
+     `-size`/`padding-inline-end`/`filter`) moves from "no icon at all" (harness) to a
+     small icon + 0.9em trailing padding (a real vault) — `color`/`text-decoration-line`
+     are already covered by the same pre-existing `.dse-card a` family + this block's own
+     generic `a` companion, so the `.external-link` companion below only needs the icon
+     properties, not a full restatement.
+
+     `.internal-link`: EVERY property Obsidian's own rule sets is ALREADY safe by the time
+     this block's generic `a` companion exists (`cursor`/`text-decoration-line`/`font-
+     weight` — the tie risk this round's own SPECIFICITY section above closes structurally;
+     `color` — the same pre-existing `.dse-card a` family). The companion below exists to
+     CLOSE THE TIE, not to add new restated values beyond what the generic `a` rule
+     already carries.
+
+   NOT FIXED THIS ROUND (measured, 0 live fixture to design or prove a value against —
+   recorded here and under Follow-ups, never silently assumed):
+
+     - `h1 a`/`.markdown-rendered h1 a { --link-weight: var(--h1-weight) }` (and its h2-h6
+       twins) — a link NESTED inside a plugin heading. 0 live content anywhere links from
+       inside a heading; this block's own generic `a` companion already restates `font-
+       weight: inherit`, which is harmless either way (a heading-nested link would simply
+       inherit the (also-restated) heading's own `font-weight: bold`, matching the
+       browser's true default nesting behaviour with no extra rule needed).
+     - `pre code` (a FENCED code block) — 0 live content renders a `<pre>` in any plugin
+       body (Draw Steel prose has no code fences). The base `code` rule below covers an
+       INLINE code span, the only shape ever reachable.
+     - `mark[data-highlight="…"]` (6 colour variants) — 0 live/synthetic content ever
+       renders `==highlight==`; the base `mark` rule's own restatement already wins the
+       property these variants would otherwise override (`--highlight-background`), so
+       even if future content used a coloured highlight, nothing here would silently
+       mis-render it — it would simply render as this theme's own (uncoloured) highlight
+       token, a design question for that future content, not a defect this round leaves
+       open.
+     - `.internal-link.is-unresolved`/`:hover` (a BROKEN wiki-link — resolution failed) —
+       0 live/synthetic content renders one (every scc-link in the corpus resolves).
+       Deliberately left to Obsidian's own real styling in a vault; nothing here blocks it
+       (this block's own `.internal-link` companion is a strict SUBSET of properties, at a
+       LOWER specificity than `.markdown-rendered .internal-link.is-unresolved`'s own
+       three-class (0,3,0) — so if this ever becomes live, Obsidian's broken-link styling
+       simply wins on its own, untouched by this round).
+     - The harness never wires a real `SccAnchorResolver` into its render context
+       (`visual-harness/entry.ts` never sets `cx.sccAnchors`, so `rewriteSccAnchors` never
+       runs — see `src/framework/view.ts:235`) — EVERY existing scc-link fixture (perk,
+       title, rule, treasure) therefore renders a raw, UNCLASSED `<a href="scc.v1:…">` in
+       the harness, never a real `.internal-link`/`.external-link`. This is a genuine gap
+       (flagged under Follow-ups, not fixed here — wiring a resolver would change the DOM
+       class of every scc-link in every existing fixture at once, a broad blast radius
+       nowhere near "surgical," and arguably belongs to the "turn the sheet on" round
+       anyway). The new `perk/links` fixture below writes literal `class="internal-link"`/
+       `class="external-link"` HTML anchors instead — the EXACT DOM shape
+       `rewriteSccAnchors` produces in a real vault, and precisely what Obsidian's own CSS
+       keys off — so the can-fail sweep and the crops below are proving the real thing,
+       not a stand-in.
+
+   New fixture: `perk/links` — a heading, `**bold**`/`*italic*`, and one literal `class=
+   "internal-link"` anchor + one literal `class="external-link"` anchor, the shape no
+   existing fixture combines (perk's own DEFAULT already has a heading+bold+an UNCLASSED
+   link; nothing anywhere has a classed internal/external link). `rule` (a bare top-level
+   YAML scalar body, no `content:` key) was tried FIRST and rejected — `parseYaml` treats
+   any `#`-led line in a bare scalar as a COMMENT, stripping the heading and collapsing the
+   rest to a single line that `detectWholeBlockRef` then mounts as a whole-block reference
+   instead of the card at all (verified against the real parser, not assumed; see
+   `visual-harness/entry.ts`'s own `perkLinks` comment). `perk`'s `content: |-` YAML key
+   wraps a literal block scalar, which does not interpret `#` as a comment — the correct,
+   tested vehicle. New capture id, ships `sc202-r4-widening.txt` (additions only, never
+   edits the existing frozen 224).
+*/
+
+/* GROUP 1 — `h1`-`h6` base typography. Split per tag (unlike GROUP 1's list-family
+   cousin, ALL SIX properties here differ by level, not just one) — `font-size`/`margin-
+   block-start`/`-end` restate the browser's OWN em-based UA defaults, literally (`2em`/
+   `0.67em` for h1 … `0.67em`/`2.33em` for h6 — verified against the harness's own bare
+   rendering, not memorized), which is why they are expressed in `em` (relative to the
+   heading's OWN resolved font-size, exactly how the UA sheet computes them) rather than a
+   frozen px number: robust to any ambient font-size context, not just the one this round
+   measured in. `line-height: inherit` — CAUGHT BY THE FULL-SWEEP SHOT-BYTE DIFF, not
+   assumed: the first draft wrote `line-height: normal` (Chrome's own UA-INITIAL value,
+   reasoning "no unstyled tag has an explicit heading line-height"), which is true but
+   irrelevant — `line-height` is an INHERITED property, and this sheet's own body-text
+   rule sets `line-height: 1.5` ambiently (~2285/4134/8103/…), which every unstyled
+   heading was ALREADY inheriting (a bare h2 at 24px computing 36px = 1.5 × 24, measured
+   on `.dse-hero__name`). `normal` is the CSS-INITIAL value, not the inherited one — an
+   explicit author declaration of `normal` beats inheritance regardless of specificity,
+   so it was silently shrinking every heading's line-box from 1.5× to Chrome's own
+   ~normal ratio (moved 500+ screen-only shot bytes across every real heading in the
+   gallery before this fix). `inherit` reproduces the SAME value inheritance already
+   produced with no declaration at all — genuinely 0 pixel change, verified against a
+   full pre/post shot-byte diff after the correction — while still being an explicit
+   author declaration that beats Obsidian's own (0,0,1)/(0,1,1) `line-height` rule.
+   `font-weight: bold` is the one value shared by every level. The shared subject-only
+   properties (colour/style/variant/letter-spacing/family) move to their own tag-agnostic
+   rule below since a single value covers all six levels. */
+/* SC-202 r4-resume fix (fontSizeContract) — these six `font-size` literals are
+   on `fontSizeContract.test.ts`'s ALLOWLIST, not the nine-role `--dse-fs-*`
+   scale: they answer "what does a bare, unstyled heading already look like
+   with ZERO plugin opinion" (the literal Chromium UA ratios this round's own
+   census verified), not "how prominent is this text in the plugin's OWN
+   hierarchy" — the question the nine roles answer. A `--dse-fs-h3` next to
+   `--dse-fs-subheading` would misstate that these are the same kind of
+   decision, and a REAL new token would need registering in `DSE_TOKEN_NAMES`
+   + the workspace `D3-token-map.md` (a DIFFERENT repo, outside this worktree
+   — `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root"
+   guard catches exactly this if attempted locally instead, can-fail proven).
+   GROUP 4's `code { font-size: inherit }` below needs no such entry —
+   `inherit` hardcodes nothing, so `isOnScale()` was widened one line instead
+   (see that function's own comment). Six ALLOWLIST entries added with this
+   reasoning; see font-sizes.md's own "UA literals" note. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h1, h2, h3, h4, h5, h6) {
+	color: inherit;
+	font-style: normal;
+	font-variant: normal;
+	font-family: inherit;
+	letter-spacing: normal;
+	line-height: inherit;
+	font-weight: bold;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h1) {
+	font-size: 2em;
+	margin-block-start: 0.67em;
+	margin-block-end: 0.67em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h2) {
+	font-size: 1.5em;
+	margin-block-start: 0.83em;
+	margin-block-end: 0.83em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h3) {
+	font-size: 1.17em;
+	margin-block-start: 1em;
+	margin-block-end: 1em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h4) {
+	font-size: 1em;
+	margin-block-start: 1.33em;
+	margin-block-end: 1.33em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h5) {
+	font-size: 0.83em;
+	margin-block-start: 1.67em;
+	margin-block-end: 1.67em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h6) {
+	font-size: 0.67em;
+	margin-block-start: 2.33em;
+	margin-block-end: 2.33em;
+}
+
+/* GROUP 2 — `strong`/`em`. Both BARE/UNSCOPED in Obsidian's own sheet, exactly like
+   GROUP 3's `li::marker` in the r3 block — reach the harness with no wrapper needed
+   (verified: 0 diff either way). `color: inherit` restores the browser's own default
+   (neither tag has a UA colour of its own); `font-weight: bold`/`font-style: italic` are
+   the browser's own UA defaults for these two tags specifically. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(strong) {
+	font-weight: bold;
+	color: inherit;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(em) {
+	font-style: italic;
+	color: inherit;
+}
+
+/* GROUP 3 — `mark`. SCOPED under `.markdown-rendered` (needs the synthesized wrapper to
+   leak at all — verified). `background-color: yellow; color: black;` is the browser's OWN
+   UA default for a bare `<mark>` (WHATWG's html.css, present in every Chromium build) —
+   restated literally, matching every other "restore the same UA default" rule in this
+   file rather than the theme's own highlight tokens. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(mark) {
+	background-color: yellow;
+	color: black;
+}
+
+/* GROUP 4 — `code` (an INLINE code span; `pre code`, a FENCED block, is deferred — see
+   the block comment's own "not fixed this round" note). SCOPED under `.markdown-rendered`
+   (needs the wrapper). `font-family: monospace` is the one true UA default this tag adds;
+   every other property here is simply "un-styled" (inherits ambient colour/size, 0
+   padding/border/radius, transparent background) — restated explicitly per the round-2
+   MED-1 coincidence-is-not-a-guarantee rule rather than left to fall through. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(code) {
+	color: inherit;
+	font-family: monospace;
+	font-size: inherit;
+	background-color: transparent;
+	border-radius: 0;
+	padding: 0;
+	border: none;
+}
+
+/* GROUP 5 — `a` (generic, every anchor including `.internal-link`/`.external-link`
+   nodes — `:where(a)` matches regardless of class). BARE/UNSCOPED in Obsidian's own
+   sheet. `color` is deliberately NOT here — already safe, see the block comment's own
+   "0 diff, needs no fix" note (the pre-existing `.dse-card a` family, ~7965, already
+   re-grounds it at (0,4,1)). `font-weight: inherit` restores the browser's own true
+   default (an anchor has no UA font-weight of its own, so it always inherits — this is
+   why the harness shows 700 in one place and 400 in another: both are the CORRECT
+   ambient inheritance, and `inherit` reproduces either with 0 pixel change, unlike a
+   single hardcoded number which could only ever match one of them). `outline: none`/
+   `text-decoration-line: underline`/`text-decoration-thickness: auto`/`cursor: pointer`
+   are the browser's own UA anchor defaults, restated literally. `--font-weight`/
+   `transition` are excluded by design (an internal token-chain variable nothing else in
+   this sheet reads, and a timing-only property invisible to a still screenshot — same
+   class of exclusion as `assertBtnHostLeak`'s own `user-select`/`-webkit-app-region`). */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a) {
+	font-weight: inherit;
+	outline: none;
+	text-decoration-line: underline;
+	text-decoration-thickness: auto;
+	cursor: pointer;
+}
+/* GROUP 6 — `.internal-link`. SCOPED under `.markdown-rendered` in Obsidian's own sheet,
+   at this block's own EXACT numeric specificity (0,2,0) — the tie the block comment's own
+   "SPECIFICITY" section names. The class moves OUTSIDE `:where()` to land at (0,3,0),
+   never a tie. Every property here is already carried by GROUP 5's generic `a` rule
+   (`.internal-link` is still an `<a>`) — this companion exists purely to make sure THIS
+   subject beats Obsidian's `.internal-link`-specific rule structurally, not by luck of
+   source order, even though the computed VALUES are identical to GROUP 5's. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).internal-link {
+	font-weight: inherit;
+	text-decoration-line: underline;
+	cursor: pointer;
+}
+/* GROUP 7 — `.external-link`. BARE/UNSCOPED in Obsidian's own sheet (well clear of any
+   tie), but carries UNIQUE properties GROUP 5 does not touch: the icon material. Every
+   value here is the browser's own true default for a plain classed anchor with no icon —
+   `background-image: none` (no icon), `background-position`/`background-repeat`/
+   `background-size` at their initial values, `padding-inline-end: 0` (no reserved icon
+   gutter), `filter: none`. `color`/`text-decoration-line` are already covered (the
+   pre-existing `.dse-card a` family for colour, GROUP 5 for decoration) — not repeated
+   here. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a).external-link {
+	background-image: none;
+	background-position: 0 0;
+	background-repeat: repeat;
+	background-size: auto auto;
+	padding-inline-end: 0;
+	filter: none;
+}

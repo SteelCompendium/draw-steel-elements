@@ -103,6 +103,23 @@ violations:
 - **Obsidian's own font-FAMILY slots** (`--dse-font-title/body/card-body/label/controls/mono`)
   — the parallel vocabulary for *which face*, with its own six settings pickers. The size
   scale mirrors its shape on purpose, including the shared "controls" concept.
+- **The six `h1`-`h6` UA literals** (SC-202 r4-resume, `2em`/`1.5em`/`1.17em`/`1em`/
+  `0.83em`/`0.67em`) — the exact literal em ratios Chromium's own UA sheet gives a bare,
+  unstyled heading, restated so a real Obsidian vault's own `.markdown-rendered` heading
+  rule cannot leak into plugin-rendered markdown (`styles-source.css`, "SC-202 r4 —
+  HEADING + EMPHASIS + LINK HOST RE-GROUNDING"). These answer "what does an unstyled
+  heading already look like with ZERO plugin opinion", not "how prominent is this text in
+  the plugin's own hierarchy" — the question the nine roles above answer — so a tenth
+  `--dse-fs-h*` row would misstate them as the same kind of decision. A real token was
+  tried first and reverted: `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition
+  in :root" guard requires every `--dse-*` custom property to be registered in
+  `DSE_TOKEN_NAMES`, which in turn (`token-coverage.test.ts`) requires a matching row in
+  the WORKSPACE repo's `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git
+  repository this plugin's own worktree cannot commit to. The six literals are ALLOWLIST
+  entries instead (`fontSizeContract.test.ts`), each with the reasoning above at its own
+  site. `code`'s `font-size: inherit` in the same block needs no entry — `isOnScale()` was
+  widened one line to also accept bare `inherit`, which hardcodes nothing and so can never
+  be a new hardcoded size.
 
 ## Print and export
 

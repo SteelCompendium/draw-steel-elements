@@ -131,9 +131,20 @@ export function collectFontSizes(css: string): Decl[] {
 	return out;
 }
 
-/** A declaration honours the contract when its size comes from the role scale. */
+/** A declaration honours the contract when its size comes from the role scale.
+ *
+ *  SC-202 r4 fix round — `inherit` also honours it, and is not a gap this file's
+ *  own "no new hardcoded font-size" rule was ever meant to catch: unlike
+ *  `0.85em`/`14px`, `inherit` hardcodes NOTHING — it defers entirely to
+ *  whatever the cascade already resolved for the parent, which is on-scale by
+ *  construction wherever the ambient chain already is (and inert, matching the
+ *  UA default, wherever no plugin rule has opinion at all — SC-202 r4's own
+ *  `:where(code) { font-size: inherit; }`, restating the exact value the tag
+ *  already had). Verified this cannot silently launder a REAL literal: the
+ *  "gate HAS TEETH" test below feeds `0.85em`/`13px` through the same
+ *  function and still expects them reported. */
 export function isOnScale(value: string): boolean {
-	return /var\(\s*--dse-fs-/.test(value);
+	return /var\(\s*--dse-fs-/.test(value) || value === 'inherit';
 }
 
 export const key = (d: Decl): string => `${d.selector} :: ${d.value}`;
@@ -163,6 +174,24 @@ export const key = (d: Decl): string => `${d.selector} :: ${d.value}`;
  *     YAML-driven `--dse-value-scale`/`--dse-label-scale` knobs on counter/values-row/
  *     characteristics. These are deliberate, documented systems; they are listed here
  *     because they are still literal-bearing, not because they are wrong.
+ *
+ * A FIFTH family, added SC-202 r4-resume: the six `h1`-`h6` UA literals
+ * (styles-source.css, "SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING", GROUP 1).
+ * These are the SAME shape as the fourth family above — deliberate, documented,
+ * literal-bearing on purpose — but for the opposite reason: they answer "what does a bare,
+ * unstyled heading already look like with ZERO plugin opinion" (Chromium's own UA ratios,
+ * can-fail verified against the harness's bare rendering), never "how prominent is this
+ * text in the plugin's OWN hierarchy", so they are not a role-scale candidate at all. The
+ * prescribed remedy ("if no role fits, a new/retuned --dse-fs-* token") was tried and
+ * reverted: `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root" guard
+ * requires every `--dse-*` custom property in DSE_TOKEN_NAMES, which `token-coverage.test.ts`
+ * in turn requires a matching row for in the WORKSPACE repo's own
+ * `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git repository this
+ * plugin's worktree cannot commit to. Six ALLOWLIST entries here instead, each citing this
+ * comment; font-sizes.md carries the same reasoning under "What the scale does NOT
+ * replace". Follow-up, not required for this round: a small cross-repo change minting real
+ * `--dse-fs-h1`…`--dse-fs-h6` tokens + the matching D3-token-map.md rows, if the design
+ * team wants these six formally on the token map rather than allowlisted.
  */
 export const ALLOWLIST: readonly string[] = [
 	"span.dsa, code.dsa :: var(--tag-size)",
@@ -191,6 +220,15 @@ export const ALLOWLIST: readonly string[] = [
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb__sticky-role :: 0.85rem",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) :is(.dse-stamina__cslash, .dse-stamina__cmax) :: 0.46em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-stamina__ctemp :: 0.34em",
+	// SC-202 r4-resume — the fifth family (this file's own ALLOWLIST comment): six
+	// Chromium UA heading ratios, restated with zero plugin opinion, deliberately not a
+	// role-scale candidate.
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h1) :: 2em",
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h2) :: 1.5em",
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h3) :: 1.17em",
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h4) :: 1em",
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h5) :: 0.83em",
+	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h6) :: 0.67em",
 ];
 
 describe('SC-185: font sizes come from the --dse-fs-* role scale', () => {

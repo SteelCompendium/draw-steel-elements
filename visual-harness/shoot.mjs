@@ -2898,6 +2898,440 @@ async function assertListHostLeak(page) {
 	);
 }
 
+// ======================================================================================
+// SC-202 r4 — HEADING + EMPHASIS + LINK host-leak sweep (leak family 4).
+//
+// Same asar/pin plumbing as r1/r2/r3, same SKIP-when-no-asar self-gate, same bare-vs-host
+// computed-style invariance contract, same synthesized `.markdown-preview-view.markdown-
+// rendered` wrapper (`wrapMountInMarkdownRendered`) r2/r3 already share. Two things this
+// family has that r3's list sweep did not: (a) `a` genuinely has interactive states a real
+// vault styles (`:hover` under `@media (hover:hover)`) — sampled via the SAME CDP
+// `CSS.forcePseudoState` method r1/r2 use, never Playwright's own hover (INFO-3's lesson,
+// still true here: once app.css is injected the pointer-centre math goes stale); (b) a
+// genuine NUMERIC-SPECIFICITY TIE risk (`.markdown-rendered .internal-link` is EXACTLY
+// this block's own anchor specificity) that a plain bare-vs-host diff cannot distinguish
+// from a coincidence — closed with a dedicated `body`-scoped token-override probe
+// (`assertLinkTokenOverride` below), the same method round 2's MED-1 review introduced.
+const HEADING_PROPS = [
+	'fontSize',
+	'fontWeight',
+	'lineHeight',
+	'marginBlockStart',
+	'marginBlockEnd',
+	'letterSpacing',
+	'fontStyle',
+	'fontVariant',
+	'fontFamily',
+	'color',
+];
+const STRONG_PROPS = ['fontWeight', 'color'];
+const EM_PROPS = ['fontStyle', 'color'];
+const MARK_PROPS = ['backgroundColor', 'color'];
+const CODE_PROPS = ['color', 'fontFamily', 'backgroundColor', 'borderRadius', 'fontSize', 'padding', 'border'];
+/** `a` (generic, incl. `.internal-link`/`.external-link` — `color` deliberately absent:
+ *  already safe via the pre-existing `.dse-card a` family, see the styles-source.css
+ *  block's own note; sampling it here would only ever prove that OLDER rule, not this
+ *  round's own fix. */
+const LINK_REST_PROPS = ['fontWeight', 'textDecorationLine', 'textDecorationThickness', 'cursor', 'outlineStyle'];
+/** `:hover` — the two properties Obsidian's own `a:hover`/`.internal-link:hover`/
+ *  `.external-link:hover` rules touch (`color` IS sampled here, unlike at rest: hover
+ *  colour is protected by the pre-existing `.dse-card a:hover` twin, and this proves that
+ *  pre-existing protection rather than assuming it). */
+const LINK_HOVER_PROPS = ['color', 'textDecorationLine'];
+/** `.external-link`'s own unique icon material — GROUP 7. */
+const EXTERNAL_LINK_PROPS = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter'];
+const INLINE_PROPS_BY_KIND = {
+	h1: HEADING_PROPS,
+	h2: HEADING_PROPS,
+	h3: HEADING_PROPS,
+	h4: HEADING_PROPS,
+	h5: HEADING_PROPS,
+	h6: HEADING_PROPS,
+	strong: STRONG_PROPS,
+	em: EM_PROPS,
+	mark: MARK_PROPS,
+	code: CODE_PROPS,
+	a: LINK_REST_PROPS,
+};
+/** Tag every REAL h1-h6/strong/em/mark/code/a the gallery (or a named-fixture visit)
+ *  renders under a `[data-dse-element]`/`.dse-modal` root — same running-index-per-node
+ *  convention `tagLists` uses (not a de-duped "kinds" sample: two structurally-identical
+ *  headings are compared independently). Returns per-kind counts so the caller can
+ *  hard-fail if a family this round claims to cover renders 0 real nodes.
+ *
+ *  The selector is built INSIDE the function, not closed over from a module-level const:
+ *  `page.evaluate` serializes only this function's own source text (the same reason every
+ *  other reader in this file takes its prop list as an ARGUMENT rather than closing over
+ *  one — a free reference to a module-level const throws `ReferenceError` inside the
+ *  page). */
+function tagInline() {
+	const selector = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'mark', 'code', 'a']
+		.flatMap((tag) => [`[data-dse-element] ${tag}`, `.dse-modal ${tag}`])
+		.join(', ');
+	const counts = { h1: 0, h2: 0, h3: 0, h4: 0, h5: 0, h6: 0, strong: 0, em: 0, mark: 0, code: 0, a: 0 };
+	let i = 0;
+	for (const n of document.querySelectorAll(selector)) {
+		const root = n.closest('[data-dse-element]');
+		const kind = n.tagName.toLowerCase();
+		const key = (root ? root.getAttribute('data-dse-element') : '(modal)') + '|' + kind + '#' + i;
+		n.setAttribute('data-dse-inlineleak', key);
+		n.setAttribute('data-dse-inlineleak-kind', kind);
+		i += 1;
+		counts[kind] += 1;
+	}
+	return counts;
+}
+
+/** Read every tagged node's rest-state props (per-kind, via `propsByKind`) plus, for a
+ *  `.external-link`-classed anchor, its own extra icon-material props (hardcoded literally
+ *  here, not closed over from `EXTERNAL_LINK_PROPS` — same `page.evaluate` serialization
+ *  reason `propsByKind` is a PARAMETER: only this function's own source text crosses into
+ *  the page, so a free reference to ANY module-level const throws `ReferenceError` inside
+ *  it, not just the obvious ones). */
+function readTaggedInline(propsByKind) {
+	const externalLinkProps = ['backgroundImage', 'backgroundPositionX', 'backgroundPositionY', 'backgroundRepeat', 'backgroundSize', 'paddingInlineEnd', 'filter'];
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-inlineleak]')) {
+		const kind = n.getAttribute('data-dse-inlineleak-kind');
+		const cs = getComputedStyle(n);
+		const rec = { key: n.getAttribute('data-dse-inlineleak'), kind, isExternal: kind === 'a' && n.classList.contains('external-link') };
+		for (const p of propsByKind[kind] ?? []) rec[p] = cs[p];
+		if (rec.isExternal) for (const p of externalLinkProps) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** FIX ROUND-shaped synthetic probe (same method as r3's `withSyntheticLiP`/
+ *  `readNestedListMargin`): `h1`/`h5`/`mark`/`code` have NO live tag anywhere in the
+ *  corpus (censused — h2/h3/h4/h6 all occur for real, see the styles-source.css block's
+ *  own "THE PLUGIN'S OWN CSS" note), so this builds one of each under the first tagged
+ *  card body, measures, and removes — never left in the DOM, never screenshotted. Returns
+ *  `null` if no tagged host exists to attach to. `propsByKind` is a PARAMETER, same
+ *  serialization reason as `readTaggedInline`. */
+function withSyntheticInline(propsByKind) {
+	const host =
+		document.querySelector('[data-dse-element] .dse-card__body') ||
+		document.querySelector('[data-dse-element] .dse-md-inline') ||
+		document.querySelector('[data-dse-element] .dse-feature, [data-dse-element] .dse-card');
+	if (!host) return null;
+	const kinds = ['h1', 'h5', 'mark', 'code'];
+	const rec = {};
+	for (const kind of kinds) {
+		const el = document.createElement(kind);
+		el.textContent = 'x';
+		host.appendChild(el);
+		const cs = getComputedStyle(el);
+		const r = {};
+		for (const p of propsByKind[kind]) r[p] = cs[p];
+		rec[kind] = r;
+		el.remove();
+	}
+	return rec;
+}
+
+/** Focus ONE tagged link and report whether it reached `:focus-visible` — same shape as
+ *  `focusInputTagged`, minus the disabled/box-less exemptions no `<a>` in this gallery
+ *  ever needs (an anchor is never `disabled`, and every tagged one renders a real box). */
+function focusLinkTagged(key) {
+	const n = document.querySelector(`[data-dse-inlineleak="${key}"]`);
+	if (!n) return null;
+	n.scrollIntoView({ block: 'center', inline: 'center' });
+	n.focus();
+	return { active: n.matches(':focus-visible') };
+}
+
+/** Read one tagged link's `LINK_REST_PROPS`/`LINK_HOVER_PROPS` (both hardcoded literally,
+ *  same serialization reason as `readTaggedInline`) plus whether it currently matches the
+ *  given pseudo-class — same "never absorbed" contract as `readOneInputTaggedMatching`.
+ *  `{ key, pseudo }` is a single PARAMETER object (page.evaluate accepts exactly one
+ *  argument to the page function — same shape `readTaggedLists`'s own `{ attr, props }`
+ *  uses), not two, and not a wrapper arrow function either: an arrow function passed to
+ *  `page.evaluate` is serialized on its OWN, and a call inside it to a same-file sibling
+ *  function (`readOneLinkTagged`) is just as much a free reference across the Node/page
+ *  boundary as a bare module-level const — this function must be the thing `page.evaluate`
+ *  is given directly. */
+function readOneLinkTagged({ key, pseudo }) {
+	const linkRestProps = ['fontWeight', 'textDecorationLine', 'textDecorationThickness', 'cursor', 'outlineStyle'];
+	const linkHoverProps = ['color', 'textDecorationLine'];
+	const n = document.querySelector(`[data-dse-inlineleak="${key}"]`);
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const rec = { key, active: pseudo ? n.matches(pseudo) : true };
+	for (const p of linkRestProps) rec[p] = cs[p];
+	for (const p of linkHoverProps) rec['hover_' + p] = cs[p];
+	return rec;
+}
+
+/** CDP `CSS.forcePseudoState(['hover'])` pass over every tagged link — same method
+ *  `probeTableRowsInState`/`assertInputHostLeak`'s own hover branch use (Playwright's own
+ *  `hover()`/`mouse.move()` stop engaging once app.css is injected — INFO-3). */
+async function probeLinksHover(page, cdp, docRootNodeId, linkKeys) {
+	const records = [];
+	const problems = [];
+	for (const key of linkKeys) {
+		const found = await cdp.send('DOM.querySelector', { nodeId: docRootNodeId, selector: `[data-dse-inlineleak="${key}"]` });
+		if (!found?.nodeId) {
+			problems.push(`${key}: CDP could not resolve the tagged node`);
+			continue;
+		}
+		await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: ['hover'] });
+		const rec = await page.evaluate(readOneLinkTagged, { key, pseudo: ':hover' });
+		await cdp.send('CSS.forcePseudoState', { nodeId: found.nodeId, forcedPseudoClasses: [] });
+		if (!rec) {
+			problems.push(`${key}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		if (!rec.active) {
+			problems.push(`${key}: CSS.forcePseudoState(['hover']) did not make the node match :hover`);
+			continue;
+		}
+		records.push(rec);
+	}
+	return { records, problems };
+}
+
+/** `:focus-visible` pass — real `.focus()` after establishing keyboard modality once per
+ *  pass (`page.mouse.move(0,0)` + Tab), same shape `assertInputHostLeak`'s own focus-
+ *  visible branch uses. Every tagged `<a>` in this gallery renders a real, focusable box
+ *  (never `disabled`), so unlike the input/button sweeps this has no exemption ladder. */
+async function probeLinksFocusVisible(page, linkKeys) {
+	await page.mouse.move(0, 0);
+	await page.keyboard.press('Tab');
+	const records = [];
+	const problems = [];
+	for (const key of linkKeys) {
+		const res = await page.evaluate(focusLinkTagged, key);
+		if (!res) {
+			problems.push(`${key}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		const rec = await page.evaluate(readOneLinkTagged, { key, pseudo: ':focus-visible' });
+		if (!rec) {
+			problems.push(`${key}: the tagged node vanished mid-sweep`);
+			continue;
+		}
+		if (!rec.active) {
+			problems.push(`${key}: .focus() did not make the node match :focus-visible`);
+			continue;
+		}
+		records.push(rec);
+	}
+	return { records, problems };
+}
+
+// Gallery mounts each element's DEFAULT fixture only (same "must also visit by its own
+// URL" reasoning r3's `LIST_SWEEP_VISITS` documents) — `perk/links` is deliberately
+// non-default so no EXISTING shot can move.
+const INLINE_SWEEP_VISITS = [
+	{ label: 'gallery', query: { gallery: '1' }, min: { h1: 0, h2: 1, h3: 1, h4: 1, h5: 0, h6: 1, strong: 1, em: 1, a: 1 }, synth: true },
+	{ label: 'perk/links', query: { element: 'perk', fixture: 'links' }, min: { h1: 0, h2: 1, h3: 0, h4: 0, h5: 0, h6: 0, strong: 1, em: 1, a: 2 }, synth: false },
+];
+
+async function assertInlineHostLeak(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\ninline host-leak SKIPPED (no local asar)');
+		return;
+	}
+	const pinNote =
+		host.sha256 === R1_APP_CSS_SHA256
+			? `matches the round's pin (Obsidian ${host.version})`
+			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
+				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('DOM.enable');
+	await cdp.send('CSS.enable');
+	const problems = [];
+	let restComparisons = 0;
+	let externalComparisons = 0;
+	let hoverComparisons = 0;
+	let focusComparisons = 0;
+	let synthComparisons = 0;
+	const kindCounts = { h1: 0, h2: 0, h3: 0, h4: 0, h5: 0, h6: 0, strong: 0, em: 0, mark: 0, code: 0, a: 0, external: 0 };
+	for (const bg of ['dark', 'light']) {
+		for (const visit of INLINE_SWEEP_VISITS) {
+			const query = new URLSearchParams({ ...visit.query, theme: 'steel', bg });
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${query}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+			const counts = await page.evaluate(tagInline);
+			const blind = Object.entries(visit.min).filter(([kind, min]) => (counts[kind] ?? 0) < min);
+			if (blind.length) {
+				problems.push(`${bg}|${visit.label}: ${blind.map(([k, m]) => `only ${counts[k] ?? 0} ${k} (need ${m})`).join(', ')} — the sweep is blind`);
+				continue;
+			}
+			for (const k of Object.keys(kindCounts)) if (k !== 'external') kindCounts[k] = Math.max(kindCounts[k], counts[k] ?? 0);
+
+			const bareRest = await page.evaluate(readTaggedInline, INLINE_PROPS_BY_KIND);
+			const linkKeys = bareRest.filter((r) => r.kind === 'a').map((r) => r.key);
+			const { root: bareRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+			const bareHover = await probeLinksHover(page, cdp, bareRoot.nodeId, linkKeys);
+			for (const p of bareHover.problems) problems.push(`${bg}|${visit.label}|host-absent|hover: ${p}`);
+			const bareFocus = await probeLinksFocusVisible(page, linkKeys);
+			for (const p of bareFocus.problems) problems.push(`${bg}|${visit.label}|host-absent|focus-visible: ${p}`);
+			const bareSynth = visit.synth ? await page.evaluate(withSyntheticInline, INLINE_PROPS_BY_KIND) : null;
+			if (visit.synth && !bareSynth) problems.push(`${bg}|${visit.label}|synthetic probe: no tagged card body to attach to`);
+
+			await injectRealHostCss(page, host.css);
+			await wrapMountInMarkdownRendered(page);
+			const { root: hostRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+
+			const hostRest = await page.evaluate(readTaggedInline, INLINE_PROPS_BY_KIND);
+			const hostRestByKey = new Map(hostRest.map((r) => [r.key, r]));
+			for (const b of bareRest) {
+				const h = hostRestByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|${b.kind}|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				restComparisons += 1;
+				for (const p of INLINE_PROPS_BY_KIND[b.kind] ?? []) {
+					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|${b.kind}|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+				if (b.isExternal) {
+					externalComparisons += 1;
+					kindCounts.external += 1;
+					for (const p of EXTERNAL_LINK_PROPS) {
+						if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|external-link|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+					}
+				}
+			}
+
+			const hostHover = await probeLinksHover(page, cdp, hostRoot.nodeId, linkKeys);
+			for (const p of hostHover.problems) problems.push(`${bg}|${visit.label}|host-present|hover: ${p}`);
+			const hostHoverByKey = new Map(hostHover.records.map((r) => [r.key, r]));
+			for (const b of bareHover.records) {
+				const h = hostHoverByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|a:hover|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				hoverComparisons += 1;
+				for (const p of LINK_HOVER_PROPS) {
+					if (b['hover_' + p] !== h['hover_' + p]) problems.push(`${bg}|${visit.label}|a:hover|${b.key}: Obsidian's real app.css changes ${p} — "${b['hover_' + p]}" without the host, "${h['hover_' + p]}" with it`);
+				}
+			}
+
+			const hostFocus = await probeLinksFocusVisible(page, linkKeys);
+			for (const p of hostFocus.problems) problems.push(`${bg}|${visit.label}|host-present|focus-visible: ${p}`);
+			const hostFocusByKey = new Map(hostFocus.records.map((r) => [r.key, r]));
+			for (const b of bareFocus.records) {
+				const h = hostFocusByKey.get(b.key);
+				if (!h) {
+					problems.push(`${bg}|${visit.label}|a:focus-visible|${b.key}: vanished when the host sheet was added`);
+					continue;
+				}
+				focusComparisons += 1;
+				for (const p of LINK_REST_PROPS) {
+					if (b[p] !== h[p]) problems.push(`${bg}|${visit.label}|a:focus-visible|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+
+			if (visit.synth && bareSynth) {
+				const hostSynth = await page.evaluate(withSyntheticInline, INLINE_PROPS_BY_KIND);
+				if (hostSynth) {
+					for (const kind of Object.keys(bareSynth)) {
+						synthComparisons += 1;
+						for (const p of INLINE_PROPS_BY_KIND[kind]) {
+							if (bareSynth[kind][p] !== hostSynth[kind][p]) {
+								problems.push(
+									`${bg}|${visit.label}|synthetic|${kind}: Obsidian's real app.css changes ${p} — "${bareSynth[kind][p]}" without the host, "${hostSynth[kind][p]}" with it`,
+								);
+							}
+						}
+					}
+				} else {
+					problems.push(`${bg}|${visit.label}|synthetic probe: no tagged card body to attach to (host pass)`);
+				}
+			}
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
+		console.error(
+			`\nINLINE HOST-LEAK VIOLATED — with the real Obsidian app.css present (and the ` +
+				`.markdown-preview-view.markdown-rendered ancestor a real vault always supplies) the ` +
+				`plugin's own headings/emphasis/links do not hold their own type or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING".`,
+		);
+		process.exit(1);
+	}
+	const comparisons = restComparisons + externalComparisons + hoverComparisons + focusComparisons + synthComparisons;
+	console.log(
+		`\ninline host-leak OK (${kindCounts.h1}h1+${kindCounts.h2}h2+${kindCounts.h3}h3+${kindCounts.h4}h4+` +
+			`${kindCounts.h5}h5+${kindCounts.h6}h6+${kindCounts.strong}strong+${kindCounts.em}em+${kindCounts.a}a rest ` +
+			`[${restComparisons}] + ${kindCounts.external} external-link icon [${externalComparisons}] + a:hover ` +
+			`[${hoverComparisons}] + a:focus-visible [${focusComparisons}] + 4 synthetic (h1/h5/mark/code) ` +
+			`[${synthComparisons}] × dark/light = ${comparisons} comparisons against the real Obsidian app.css ` +
+			`under a real .markdown-preview-view.markdown-rendered ancestor: every sampled heading/strong/em/` +
+			`mark/code/link property is identical with and without it, rest AND :hover/:focus-visible for links; ` +
+			`del is deliberately NOT covered — Obsidian's rendered-markdown rules do not reach it at all (checked, ` +
+			`not assumed); ${pinNote})`,
+	);
+}
+
+/** SC-202 r4 — round-2 MED-1's own method applied to this round's one real tie risk: does
+ *  the `.internal-link` companion (styles-source.css GROUP 6) win because it is
+ *  STRUCTURALLY ahead of Obsidian's own `.markdown-rendered .internal-link` rule, or only
+ *  because the two currently happen to compute the same values? Overriding the tokens
+ *  Obsidian's rule actually reads (`--link-color`/`--link-weight`/`--link-decoration`/
+ *  `--link-decoration-thickness`/`--cursor-link`) at `body` scope to deliberately absurd
+ *  values and re-measuring proves it: this block's own companion rule never reads any of
+ *  these custom properties (it hardcodes the browser's literal UA defaults instead), so a
+ *  real structural win reports 0 diffs regardless of what the tokens are; a coincidental
+ *  win would leak the instant a real vault's theme picked different token values. */
+async function assertLinkTokenOverride(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\nlink token-override probe SKIPPED (no local asar)');
+		return;
+	}
+	const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg: 'dark' });
+	await page.emulateMedia({ media: 'screen' });
+	await page.goto(`${pageUrl}?${query}`);
+	await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+	await page.evaluate(tagInline);
+	const bare = await page.evaluate(readTaggedInline, INLINE_PROPS_BY_KIND);
+	const linkBare = bare.filter((r) => r.kind === 'a');
+
+	await injectRealHostCss(page, host.css);
+	await wrapMountInMarkdownRendered(page);
+	await page.addStyleTag({
+		content:
+			'body { --link-color: hotpink !important; --link-weight: 900 !important; ' +
+			'--link-decoration: overline !important; --link-decoration-thickness: 6px !important; ' +
+			'--cursor-link: help !important; }',
+	});
+	const overridden = await page.evaluate(readTaggedInline, INLINE_PROPS_BY_KIND);
+	const overriddenByKey = new Map(overridden.map((r) => [r.key, r]));
+
+	const problems = [];
+	let comparisons = 0;
+	for (const b of linkBare) {
+		const o = overriddenByKey.get(b.key);
+		if (!o) {
+			problems.push(`${b.key}: vanished under the token-override pass`);
+			continue;
+		}
+		comparisons += 1;
+		for (const p of LINK_REST_PROPS) {
+			if (b[p] !== o[p]) problems.push(`${b.key}: absurd body-scoped --link-* tokens still move ${p} — "${b[p]}" -> "${o[p]}" (the companion rule is winning by luck, not structure)`);
+		}
+	}
+	if (problems.length) {
+		console.error(`\nLINK TOKEN-OVERRIDE PROBE VIOLATED:\n${problems.map((p) => `  ${p}`).join('\n')}`);
+		process.exit(1);
+	}
+	console.log(
+		`\nlink token-override probe OK (${linkBare.length} links × ${LINK_REST_PROPS.length} properties = ` +
+			`${comparisons * LINK_REST_PROPS.length} samples: 0 diffs under absurd body-scoped --link-* tokens ` +
+			`— the .internal-link companion wins structurally, not by matching Obsidian's default token values)`,
+	);
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
 	viewport: { width: 900, height: 1200 },
@@ -3099,6 +3533,10 @@ try {
 		// SC-202 r3 — the same question asked of every LIST/BLOCKQUOTE the plugin renders
 		// (leak family 3). Also self-gates on a local Obsidian asar.
 		await assertListHostLeak(page);
+		// SC-202 r4 — the same question asked of every HEADING/EMPHASIS/LINK the plugin
+		// renders (leak family 4). Also self-gates on a local Obsidian asar.
+		await assertInlineHostLeak(page);
+		await assertLinkTokenOverride(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
