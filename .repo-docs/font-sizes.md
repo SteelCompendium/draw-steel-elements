@@ -115,11 +115,14 @@ violations:
   in :root" guard requires every `--dse-*` custom property to be registered in
   `DSE_TOKEN_NAMES`, which in turn (`token-coverage.test.ts`) requires a matching row in
   the WORKSPACE repo's `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git
-  repository this plugin's own worktree cannot commit to. The six literals are ALLOWLIST
-  entries instead (`fontSizeContract.test.ts`), each with the reasoning above at its own
-  site. `code`'s `font-size: inherit` in the same block needs no entry — `isOnScale()` was
-  widened one line to also accept bare `inherit`, which hardcodes nothing and so can never
-  be a new hardcoded size.
+  repository this plugin's own worktree cannot commit to. The six literals live in
+  `fontSizeContract.test.ts`'s own sibling `UA_RESTATEMENTS` const (fix round,
+  independent review LOW-1) — NOT in `ALLOWLIST`, whose own docstring calls its contents
+  adoption debt ("the list only ever shrinks"); these six are not debt and never will be
+  adopted, so they get a separate list with the reasoning above at its own site, checked
+  by the same assertions. `code`'s `font-size: inherit` in the same block needs no entry
+  at all — `isOnScale()` was widened one line to also accept bare `inherit`, which
+  hardcodes nothing and so can never be a new hardcoded size.
 
 ## Print and export
 

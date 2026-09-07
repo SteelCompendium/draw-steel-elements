@@ -72,15 +72,15 @@ describe('SC-202 r4 — GROUP 1: h1-h6 base typography', () => {
 	});
 });
 
-describe('SC-202 r4 — GROUP 2: strong/em', () => {
-	test('strong restates font-weight: bold and color: inherit', () => {
-		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(strong\\) \\{([^}]*)\\}'));
+describe('SC-202 r4 — GROUP 2: strong/em, joined by b/i (fix round MED-2)', () => {
+	test('strong AND b share one rule: font-weight: bold and color: inherit', () => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(strong, b\\) \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('font-weight: bold;');
 		expect(m![1]).toContain('color: inherit;');
 	});
-	test('em restates font-style: italic and color: inherit', () => {
-		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(em\\) \\{([^}]*)\\}'));
+	test('em AND i share one rule: font-style: italic and color: inherit', () => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(em, i\\) \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('font-style: italic;');
 		expect(m![1]).toContain('color: inherit;');
@@ -118,6 +118,19 @@ describe('SC-202 r4 — GROUP 5: a (generic — colour deliberately absent, alre
 		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\) \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).not.toMatch(/(?<!background-)color:/);
+	});
+
+	// fix round (MED-1) — `outline: none` at rest is an author declaration adopting
+	// Obsidian's OWN suppression, not a UA default (Chromium declares none for `a`); the
+	// UA's real anchor-focus rule only ever exists at `:focus-visible`, and only a
+	// dedicated state rule can restate it. `:focus-visible` sits OUTSIDE `:where()` for
+	// the same reason the GROUP 6/7 companions below do — `:where()` contributes zero
+	// specificity, and this state needs the third class to beat Obsidian's own
+	// `a { outline: none }` (0,0,1).
+	test('a :focus-visible restates the UA focus ring Obsidian only ever suppresses at rest', () => {
+		const m = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(a\\):focus-visible \\{([^}]*)\\}'));
+		expect(m).not.toBeNull();
+		expect(m![1]).toContain('outline: auto 1px -webkit-focus-ring-color;');
 	});
 });
 

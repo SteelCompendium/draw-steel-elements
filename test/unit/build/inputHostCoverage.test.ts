@@ -21,10 +21,14 @@ import path from 'path';
  * window was a flat character slice that could bleed into the FOLLOWING statement and
  * mis-attribute a leak to a sibling element's class. It caught SC-277's own unclassed
  * `type='search'` icon-filter input (`ConditionsModal.ts`) — but under the wrong name,
- * a neighbouring `<div>`'s class. See `findInputCallSites`'s own comment for the fix,
- * and note that an unclassed, non-exempt call site is now its own NAMED test
- * ("unclassed … at file:line") rather than a silent skip, so the next one is visible on
- * sight in the jest output.
+ * a neighbouring `<div>`'s class. See `findInputCallSites`'s own comment for the fix.
+ *
+ * SC-202 r4 fix round (independent review, HIGH-1) — Step A's OWN unclassed-branch fix
+ * was itself vacuous: it turned the silent skip into a named test whose assertion
+ * (`expect(site.cls).toBeNull()`) restates the very condition that put it in the branch,
+ * so it could never fail. Mutation-proven: re-removing SC-277's own class left the whole
+ * suite green. An unclassed, non-exempt call site now FAILS, naming the site — the
+ * promise at `:17-18` above is true again.
  */
 
 const SRC_DIR = path.join(__dirname, '..', '..', '..', 'src');
@@ -144,15 +148,17 @@ describe('every plugin input/textarea class is re-grounded against the host', ()
 		// this scan was never meant to police.
 		if (site.type === 'checkbox' || site.type === 'color') continue;
 		if (!site.cls) {
-			// SC-202 r4-resume Step A (guard fix) — an unclassed call site used to be
-			// silently skipped with NO test emitted at all, which is exactly how SC-277's
-			// `type='search'` icon-filter input shipped invisible to this guard for a
-			// whole round: nothing failed, and nothing even named it. A named, always-
-			// green test instead puts every unclassed non-exempt call site in the jest
-			// output by file:line, so the next one is visible on sight instead of
-			// silently absent.
-			test(`${site.file}:${site.line} — unclassed ${site.tag}${site.type ? `, type=${site.type}` : ''} (no class for a class-keyed CSS block to cover)`, () => {
-				expect(site.cls).toBeNull();
+			// SC-202 r4 fix round (independent review, HIGH-1) — the Step A rewrite made
+			// this branch a named test, but `expect(site.cls).toBeNull()` can NEVER fail
+			// (it asserts the very condition that put the site in this branch), so the
+			// guard went back to passing silently on an unclassed, non-exempt input — the
+			// exact defect it exists to catch (mutation-proven: re-removing SC-277's own
+			// `cls: 'dse-cond-icons__search'` left this suite fully green). FAIL instead,
+			// naming the site — give it a class and fold it into the SC-202 r1 block
+			// (checkbox/color are already excluded by TYPE above, not by being unclassed;
+			// nothing else is unclassed by design today).
+			test(`${site.file}:${site.line} — unclassed ${site.tag}${site.type ? `, type=${site.type}` : ''} must carry a class covered by the SC-202 r1 block`, () => {
+				expect(site.cls).not.toBeNull();
 			});
 			continue;
 		}

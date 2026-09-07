@@ -175,23 +175,8 @@ export const key = (d: Decl): string => `${d.selector} :: ${d.value}`;
  *     characteristics. These are deliberate, documented systems; they are listed here
  *     because they are still literal-bearing, not because they are wrong.
  *
- * A FIFTH family, added SC-202 r4-resume: the six `h1`-`h6` UA literals
- * (styles-source.css, "SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING", GROUP 1).
- * These are the SAME shape as the fourth family above — deliberate, documented,
- * literal-bearing on purpose — but for the opposite reason: they answer "what does a bare,
- * unstyled heading already look like with ZERO plugin opinion" (Chromium's own UA ratios,
- * can-fail verified against the harness's bare rendering), never "how prominent is this
- * text in the plugin's OWN hierarchy", so they are not a role-scale candidate at all. The
- * prescribed remedy ("if no role fits, a new/retuned --dse-fs-* token") was tried and
- * reverted: `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root" guard
- * requires every `--dse-*` custom property in DSE_TOKEN_NAMES, which `token-coverage.test.ts`
- * in turn requires a matching row for in the WORKSPACE repo's own
- * `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git repository this
- * plugin's worktree cannot commit to. Six ALLOWLIST entries here instead, each citing this
- * comment; font-sizes.md carries the same reasoning under "What the scale does NOT
- * replace". Follow-up, not required for this round: a small cross-repo change minting real
- * `--dse-fs-h1`…`--dse-fs-h6` tokens + the matching D3-token-map.md rows, if the design
- * team wants these six formally on the token map rather than allowlisted.
+ * A fifth family exists (`UA_RESTATEMENTS`, below) but is deliberately a SEPARATE const,
+ * not a 27th-31st entry here — see its own comment for why.
  */
 export const ALLOWLIST: readonly string[] = [
 	"span.dsa, code.dsa :: var(--tag-size)",
@@ -220,9 +205,39 @@ export const ALLOWLIST: readonly string[] = [
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-sb__sticky-role :: 0.85rem",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) :is(.dse-stamina__cslash, .dse-stamina__cmax) :: 0.46em",
 	"[data-dse-theme='steel']:not([data-dse-print=\"on\"]) .dse-stamina__ctemp :: 0.34em",
-	// SC-202 r4-resume — the fifth family (this file's own ALLOWLIST comment): six
-	// Chromium UA heading ratios, restated with zero plugin opinion, deliberately not a
-	// role-scale candidate.
+];
+
+/**
+ * UA RESTATEMENTS — SC-202 r4-resume, split out (fix round, independent review LOW-1)
+ * from `ALLOWLIST` above, where they were first added: right in substance, wrong list.
+ * `ALLOWLIST`'s own docstring calls it adoption DEBT ("still owing an adoption") and its
+ * own counter test ("records how much of the sweep is left") treats `ALLOWLIST.length` as
+ * that debt's size — six permanent residents that will never be adopted would make both
+ * claims false forever, the same shape of drift this file exists to prevent elsewhere.
+ *
+ * These six are not debt. They are the six `h1`-`h6` UA literals (styles-source.css,
+ * "SC-202 r4 — HEADING + EMPHASIS + LINK HOST RE-GROUNDING", GROUP 1) — deliberate,
+ * documented, literal-bearing ON PURPOSE, like `ALLOWLIST`'s own fourth family, but for
+ * the opposite reason: they answer "what does a bare, unstyled heading already look like
+ * with ZERO plugin opinion" (Chromium's own UA ratios, *derived* rather than chosen,
+ * can-fail verified against the harness's bare rendering), never "how prominent is this
+ * text in the plugin's OWN hierarchy" — the nine roles' question — so they are not a
+ * role-scale candidate at all, and never will be. They stay `em`-relative (so they still
+ * track the reader's font size, unlike the ALLOWLIST's own absolute `rem`/`px` family).
+ *
+ * The prescribed remedy ("if no role fits, a new/retuned --dse-fs-* token") was tried and
+ * reverted: `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root" guard
+ * requires every `--dse-*` custom property in `DSE_TOKEN_NAMES`, which
+ * `token-coverage.test.ts` in turn requires a matching row for in the WORKSPACE repo's own
+ * `docs/superpowers/dse-overhaul/D3-token-map.md` — a different git repository this
+ * plugin's worktree cannot commit to. A token would also be worse than this: it would be
+ * *retunable*, and retuning it would silently break the re-grounding this round's own jest
+ * guard pins to these exact literals. font-sizes.md carries the same reasoning under "What
+ * the scale does NOT replace". Follow-up, not required for this round: the small cross-repo
+ * change minting real `--dse-fs-h1`…`--dse-fs-h6` tokens + the matching D3-token-map.md
+ * rows, if the design team wants these six formally on the token map instead.
+ */
+export const UA_RESTATEMENTS: readonly string[] = [
 	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h1) :: 2em",
 	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h2) :: 1.5em",
 	":is([data-dse-element], .dse-modal):not([data-dse-print=\"on\"]) :where(h3) :: 1.17em",
@@ -248,15 +263,29 @@ describe('SC-185: font sizes come from the --dse-fs-* role scale', () => {
 		expect(duplicates).toEqual([]);
 	});
 
+	it('UA_RESTATEMENTS has no duplicate entries either', () => {
+		const seen = new Set<string>();
+		const duplicates = UA_RESTATEMENTS.filter((entry) => (seen.has(entry) ? true : (seen.add(entry), false)));
+		expect(duplicates).toEqual([]);
+	});
+
+	it('the two lists never name the same site (they are disjoint by construction)', () => {
+		const allowSet = new Set(ALLOWLIST);
+		const overlap = UA_RESTATEMENTS.filter((entry) => allowSet.has(entry));
+		expect(overlap).toEqual([]);
+	});
+
 	it('declares NO new hardcoded font-size', () => {
-		const allowed = new Set(ALLOWLIST);
+		const allowed = new Set([...ALLOWLIST, ...UA_RESTATEMENTS]);
 		const introduced = offScale
 			.filter((d) => !allowed.has(key(d)))
 			.map((d) => `styles-source.css:${d.line}  ${key(d)}`);
 		expect(introduced).toEqual([]);
 		// If this failed: put the size on the role scale (.repo-docs/font-sizes.md) —
 		// `font-size: var(--dse-fs-label)` and friends. Adding the site to ALLOWLIST
-		// is NOT the fix; the list only ever shrinks.
+		// is NOT the fix; the list only ever shrinks. A genuine UA-restatement-shaped
+		// literal (zero plugin opinion, `em`-relative, matching a `UA_RESTATEMENTS`
+		// entry's own reasoning) goes in THAT list instead, never this one.
 	});
 
 	it('the allowlist has no DEAD entries (adopting one deletes its line)', () => {
@@ -266,6 +295,12 @@ describe('SC-185: font sizes come from the --dse-fs-* role scale', () => {
 		// If this failed: the listed declaration was adopted, moved or reworded —
 		// delete its line from ALLOWLIST in the same commit. A stale entry is a
 		// promise about the sheet that is no longer true.
+	});
+
+	it('UA_RESTATEMENTS has no DEAD entries either', () => {
+		const live = new Set(offScale.map(key));
+		const dead = UA_RESTATEMENTS.filter((entry) => !live.has(entry));
+		expect(dead).toEqual([]);
 	});
 
 	it('the gate HAS TEETH: a synthetic hardcoded size is reported, a token one is not', () => {
@@ -291,7 +326,10 @@ describe('SC-185: font sizes come from the --dse-fs-* role scale', () => {
 	it('records how much of the sweep is left (SC-185 round 2)', () => {
 		// Not a threshold to game — a visible counter, so a round that claims to have
 		// adopted N sites has to move this number by N. Round 1 landed 106 outstanding.
-		expect(offScale.length).toBe(ALLOWLIST.length);
+		// Fix round (LOW-1): `UA_RESTATEMENTS` joins the sum, not `ALLOWLIST` alone —
+		// `ALLOWLIST.length` on its own must keep meaning adoption debt, never inflated
+		// by six sites that will never be adopted.
+		expect(offScale.length).toBe(ALLOWLIST.length + UA_RESTATEMENTS.length);
 	});
 });
 

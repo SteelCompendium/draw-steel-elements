@@ -16227,13 +16227,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    (h3), `.dse-init__grouphead > h4`/`.dse-mt__guide-title` (h4) — the plugin's own card
    TITLE (`.dse-card__title`, every feature/featureblock/statblock/perk/title/rule/…
    card's name) is a `<div>`, NOT a heading tag, and is correctly OUT of this block's
-   reach. Every one of the six classed headings above already carries its OWN font-size/
-   margin override at (0,3,0) or higher (`[data-dse-element="…"] .dse-… .dse-…__…-title`,
-   three classes, or a Steel-scoped `:is(…) :is(h3,h4,h5,h6)` compound at (0,2,1)+) —
-   comfortably above this block's own (0,2,0) anchor, so this block is a verified NO-OP
-   for every one of them (0 pixel change, proven by the full-sweep shot-byte diff, not
-   argued) and only ever fires for a GENUINE markdown-rendered heading with no such
-   override (career/class/perk/title/… prose headings via `.dse-md-inline`/`CardLayout`).
+   reach. **CORRECTED (fix round, independent review MED-5) — the claim used to read "every
+   one of the six classed headings above already carries its OWN font-size/margin override
+   … so this block is a verified NO-OP for every one of them". That is false for THREE of
+   the six: `.dse-hero__name` (h2, `:5734`), `.dse-hero__region-title` (h3, `:5804`) and
+   `.dse-enc__roster-heading` (h3, `:3496`) declare only `margin`/`color`, never a
+   font-size, at any specificity — `.dse-skills__group-title` (`--dse-fs-subheading`) and
+   `.dse-mt__guide-title`'s own size are the only two genuinely pinned.** This block IS a
+   verified NO-OP in the HARNESS (byte-proven: 0 of 524 shot bytes move, twice) — but that
+   is because the harness never injects a host sheet outside the can-fail sweep itself, not
+   because a higher-specificity plugin rule always wins; where a classed heading has no
+   size opinion of its own, this block is the ONLY thing standing between it and Obsidian's
+   real `.markdown-rendered` heading rule in a real vault, and it re-grounds the vault onto
+   exactly the harness's own values (measured: `.dse-hero__region-title` 21.088px →
+   18.72px, `.dse-hero__name` 23.39px → 24px, `.dse-enc__roster-heading` 21.09px →
+   18.72px — the round's own real-vault report carries the full delta table). It also
+   fires, as originally documented, for GENUINE markdown-rendered prose headings with no
+   class at all (career/class/perk/title/… via `.dse-md-inline`/`CardLayout`).
 
    SPECIFICITY — the only real tie risk this round found: Obsidian's OWN `.internal-link`
    rule is `.markdown-rendered .internal-link`, TWO classes, (0,2,0) — the EXACT same
@@ -16337,11 +16347,14 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
        (flagged under Follow-ups, not fixed here — wiring a resolver would change the DOM
        class of every scc-link in every existing fixture at once, a broad blast radius
        nowhere near "surgical," and arguably belongs to the "turn the sheet on" round
-       anyway). The new `perk/links` fixture below writes literal `class="internal-link"`/
-       `class="external-link"` HTML anchors instead — the EXACT DOM shape
-       `rewriteSccAnchors` produces in a real vault, and precisely what Obsidian's own CSS
-       keys off — so the can-fail sweep and the crops below are proving the real thing,
-       not a stand-in.
+       anyway). The new `perk/links` fixture below writes literal HTML anchors carrying
+       every class/attribute `rewriteSccAnchors` actually sets (fix round, independent
+       review LOW-3: `class="external-link ds-scc-web"` + `target`/`rel`/`data-scc` for
+       the web branch, `class="internal-link"` + `data-scc`/`rel` for the vault branch —
+       only the internal link's real vault-path `href` stays a harness-local
+       placeholder, unsampled by anything here) — precisely what Obsidian's own CSS keys
+       off, so the can-fail sweep and the crops below are proving the real thing, not a
+       stand-in.
 
    New fixture: `perk/links` — a heading, `**bold**`/`*italic*`, and one literal `class=
    "internal-link"` anchor + one literal `class="external-link"` anchor, the shape no
@@ -16382,20 +16395,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    properties (colour/style/variant/letter-spacing/family) move to their own tag-agnostic
    rule below since a single value covers all six levels. */
 /* SC-202 r4-resume fix (fontSizeContract) — these six `font-size` literals are
-   on `fontSizeContract.test.ts`'s ALLOWLIST, not the nine-role `--dse-fs-*`
-   scale: they answer "what does a bare, unstyled heading already look like
-   with ZERO plugin opinion" (the literal Chromium UA ratios this round's own
-   census verified), not "how prominent is this text in the plugin's OWN
-   hierarchy" — the question the nine roles answer. A `--dse-fs-h3` next to
+   in `fontSizeContract.test.ts`'s sibling `UA_RESTATEMENTS` const (fix round,
+   independent review LOW-1 — NOT `ALLOWLIST`, whose own docstring calls its
+   contents adoption debt that "only ever shrinks"; these six are not debt and
+   will never be adopted), not the nine-role `--dse-fs-*` scale either: they
+   answer "what does a bare, unstyled heading already look like with ZERO
+   plugin opinion" (the literal Chromium UA ratios this round's own census
+   verified), not "how prominent is this text in the plugin's OWN hierarchy"
+   — the question the nine roles answer. A `--dse-fs-h3` next to
    `--dse-fs-subheading` would misstate that these are the same kind of
    decision, and a REAL new token would need registering in `DSE_TOKEN_NAMES`
    + the workspace `D3-token-map.md` (a DIFFERENT repo, outside this worktree
    — `test/dom/kit/tokens.test.ts`'s "no stray --dse-* definition in :root"
    guard catches exactly this if attempted locally instead, can-fail proven).
-   GROUP 4's `code { font-size: inherit }` below needs no such entry —
-   `inherit` hardcodes nothing, so `isOnScale()` was widened one line instead
-   (see that function's own comment). Six ALLOWLIST entries added with this
-   reasoning; see font-sizes.md's own "UA literals" note. */
+   GROUP 4's `code { font-size: inherit }` below needs no entry in either
+   list — `inherit` hardcodes nothing, so `isOnScale()` was widened one line
+   instead (see that function's own comment). See font-sizes.md's own "UA
+   literals" note. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(h1, h2, h3, h4, h5, h6) {
 	color: inherit;
 	font-style: normal;
@@ -16436,16 +16452,29 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	margin-block-end: 2.33em;
 }
 
-/* GROUP 2 — `strong`/`em`. Both BARE/UNSCOPED in Obsidian's own sheet, exactly like
-   GROUP 3's `li::marker` in the r3 block — reach the harness with no wrapper needed
-   (verified: 0 diff either way). `color: inherit` restores the browser's own default
-   (neither tag has a UA colour of its own); `font-weight: bold`/`font-style: italic` are
-   the browser's own UA defaults for these two tags specifically. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(strong) {
+/* GROUP 2 — `strong`/`em`, joined by `b`/`i` (fix round, independent review MED-2). Both
+   pairs are BARE/UNSCOPED in Obsidian's own sheet, exactly like GROUP 3's `li::marker` in
+   the r3 block — reach the harness with no wrapper needed (verified: 0 diff either way).
+   `color: inherit` restores the browser's own default (none of the four tags has a UA
+   colour of its own); `font-weight: bold`/`font-style: italic` are the browser's own UA
+   defaults for these tags. **`b`/`i` were missing from round 4 as shipped — Obsidian's
+   own sheet declares them BYTE-IDENTICALLY to `strong`/`em`
+   (`b { font-weight: calc(var(--font-weight) + var(--bold-modifier)) }`,
+   `i { font-style: italic; color: var(--italic-color) }`), so a real vault's
+   `--bold-modifier: 200` renders a plugin `<b>` at 600 against the browser's 700 — the
+   exact `strong` leak this round already fixes, just spelled with the other tag.**
+   `i` alone happened not to move today only because `font-style: italic` is ALSO the UA
+   value for `i` — the coincidence round 2's MED-1 forbids relying on; restated anyway.
+   13 real `<b>` + 5 real `<i>` render today (`src/elements/statblock/stickyHeader.ts`),
+   currently protected only by an incidental higher-specificity sticky-header rule
+   (`:9982-9996`) that would not reach a `<b>`/`<i>` in any OTHER card body — Obsidian
+   renders raw inline HTML in markdown, and the shipped corpus already carries 16 `<u>`
+   tags, so a future `<b>` in ordinary prose is not hypothetical. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(strong, b) {
 	font-weight: bold;
 	color: inherit;
 }
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(em) {
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(em, i) {
 	font-style: italic;
 	color: inherit;
 }
@@ -16484,18 +16513,44 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    default (an anchor has no UA font-weight of its own, so it always inherits — this is
    why the harness shows 700 in one place and 400 in another: both are the CORRECT
    ambient inheritance, and `inherit` reproduces either with 0 pixel change, unlike a
-   single hardcoded number which could only ever match one of them). `outline: none`/
+   single hardcoded number which could only ever match one of them).
    `text-decoration-line: underline`/`text-decoration-thickness: auto`/`cursor: pointer`
-   are the browser's own UA anchor defaults, restated literally. `--font-weight`/
-   `transition` are excluded by design (an internal token-chain variable nothing else in
-   this sheet reads, and a timing-only property invisible to a still screenshot — same
-   class of exclusion as `assertBtnHostLeak`'s own `user-select`/`-webkit-app-region`). */
+   are the browser's own UA anchor defaults, restated literally. **`outline: none` is
+   NOT one of these (fix round, independent review MED-1) — Chromium's UA sheet declares
+   no `outline` for `a` at all; the ONLY UA anchor-focus rule is `outline: auto` inside
+   the `:focus-visible` UA origin, which any author declaration beats at any specificity.
+   This line therefore adopts *Obsidian's* own suppression (`a { outline: none }`), not a
+   browser default — measured A/B in the harness (no host sheet): `27851f0` showed a real
+   `outline-style: auto` ring on a focused anchor, this round's own `a8a89f5` showed
+   `none` with nothing standing in for it, silently deleting the plugin's own keyboard
+   focus indicator with no replacement. Restated below at `:focus-visible`, the same
+   "restate the UA behaviour the base rule alone cannot express" shape r1's GROUP 3 uses
+   for the shared kit ring.** `--font-weight`/`transition` are excluded by design (an
+   internal token-chain variable nothing else in this sheet reads, and a timing-only
+   property invisible to a still screenshot — same class of exclusion as
+   `assertBtnHostLeak`'s own `user-select`/`-webkit-app-region`). */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a) {
 	font-weight: inherit;
 	outline: none;
 	text-decoration-line: underline;
 	text-decoration-thickness: auto;
 	cursor: pointer;
+}
+/* GROUP 5 (fix round, MED-1) — the UA's OWN `:focus-visible` ring, restated: Chromium's
+   UA sheet gives every focusable element `outline: auto 1px -webkit-focus-ring-color` at
+   `:focus-visible` (in the UA origin, so REST's `outline: none` above — an author
+   declaration — always wins at rest, and only this dedicated state rule can reintroduce
+   it). The third class (`:focus-visible` outside `:where()`) reaches (0,3,0), which beats
+   Obsidian's own `a { outline: none }` at (0,0,1) — never a tie, and it beats GROUP 5's
+   own (0,2,0) `:where(a)` rest rule on specificity+order either way. Bare and host both
+   compute `auto` for a focused anchor (Obsidian sets no competing `:focus-visible`
+   outline rule of its own), so this stays 0 diffs in the can-fail sweep; focus is never
+   captured at rest, so it moves 0 frozen bytes. If Scott would rather plugin links wore
+   the shared kit ring instead (`outline: 2px solid var(--dse-focus-ring)`,
+   `styles-source.css:13717`), that is a design call, not a re-grounding one — either way
+   `outline: none` alone must never ship as "the browser's default" again. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(a):focus-visible {
+	outline: auto 1px -webkit-focus-ring-color;
 }
 /* GROUP 6 — `.internal-link`. SCOPED under `.markdown-rendered` in Obsidian's own sheet,
    at this block's own EXACT numeric specificity (0,2,0) — the tie the block comment's own

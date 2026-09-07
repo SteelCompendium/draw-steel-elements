@@ -18,7 +18,20 @@ import path from 'path';
 
 const rawCss = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'styles-source.css'), 'utf8');
 const blockStart = rawCss.indexOf('SC-202 r1 — INPUT/STEPPER HOST RE-GROUNDING');
-const css = rawCss.slice(blockStart).replace(/\/\*[\s\S]*?\*\//g, '');
+/** SC-202 r4 fix round — bounded at the NEXT round's own opening banner, the same fix
+ *  `listBlockquoteHostRegrounding.test.ts`/`headingEmphasisLinkHostRegrounding.test.ts`
+ *  already carry: an unbounded slice ran to EOF and silently absorbed the r4 block's own
+ *  NEW `:where(a):focus-visible` rule (MED-1) into this r1-scoped file's own GROUP 3
+ *  count, inflating `rules.length` from 3 to 4 with no r1 change at all — the exact
+ *  "sibling round lands after mine and desyncs my unbounded slice" shape r3's own report
+ *  already named once. `indexOf` returns -1 (slice runs to EOF) if nothing is ever
+ *  appended after r1's own SC-202 r2 neighbour, so this stays correct either way. */
+const BANNER = '/* ' + '='.repeat(84) + ' */';
+const nextBlockStart = rawCss.indexOf(BANNER, blockStart + BANNER.length);
+const css = (nextBlockStart === -1 ? rawCss.slice(blockStart) : rawCss.slice(blockStart, nextBlockStart)).replace(
+	/\/\*[\s\S]*?\*\//g,
+	'',
+);
 /** Whitespace-insensitive: the block wraps long selectors across lines. */
 const flat = css.replace(/\s+/g, ' ');
 const ANCHOR = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';

@@ -851,9 +851,15 @@ type: treasure
 // scc-link (`src/elements/display/perk/example.yaml`) — this fixture deliberately does NOT
 // duplicate that; it exists only to reach `.internal-link`/`.external-link`, which the
 // corpus never naturally produces in the harness (see the styles-source.css block's own
-// "the harness never wires a real SccAnchorResolver" note) — literal HTML anchors, the
-// EXACT DOM shape `rewriteSccAnchors` (src/refs/rewriteSccAnchors.ts) produces in a real
-// vault, not a stand-in shape. `rule` (`genericCard()`'s whole-raw-string body, no `content:`
+// "the harness never wires a real SccAnchorResolver" note) — literal HTML anchors carrying
+// every CLASS/ATTRIBUTE `rewriteSccAnchors` (src/refs/rewriteSccAnchors.ts) actually sets
+// (fix round, independent review LOW-3 — `class="external-link ds-scc-web"` +
+// `target="_blank"` + `rel="noopener"` + `data-scc` for the web branch,
+// `class="internal-link"` + `data-scc` + `rel="noopener"` for the vault branch), not a
+// stand-in shape. The one thing NOT reproduced is the internal link's real `href`/
+// `data-href` value (a genuine vault linkpath, which only a real resolver can compute) —
+// `href="#"` stays a harness-local placeholder; nothing this round samples selects on it.
+// `rule` (`genericCard()`'s whole-raw-string body, no `content:`
 // key) was tried FIRST and rejected: a bare top-level YAML scalar treats any `#`-led line as
 // a COMMENT (`parseYaml`'s own `yaml` package, verified against the real parser, not
 // assumed) — stripping a `#`/`##`/`### ` heading line entirely and, worse, collapsing the
@@ -868,7 +874,7 @@ const perkLinks = `content: |-
 
     ## Envoy's Charge
 
-    The bond is **permanent** unless *both* parties agree to end it. See <a href="https://steelcompendium.io/scc/mcdm.heroes.v1/rule.general/supernatural/" class="external-link">the Steel Compendium's own entry</a> for the supernatural trait, or your own <a href="#" class="internal-link" data-href="rule/adjacent">campaign notes on envoys</a> for house rules.
+    The bond is **permanent** unless *both* parties agree to end it. See <a href="https://steelcompendium.io/scc/mcdm.heroes.v1/rule.general/supernatural/" class="external-link ds-scc-web" target="_blank" rel="noopener" data-scc="mcdm.heroes.v1/rule.general/supernatural">the Steel Compendium's own entry</a> for the supernatural trait, or your own <a href="#" class="internal-link" data-href="rule/adjacent" data-scc="mcdm.heroes.v1/rule/adjacent" rel="noopener">campaign notes on envoys</a> for house rules.
 flavor: An envoy's oath binds them to your service.
 name: Envoy's Charge
 scc: mcdm.heroes.v1/perk/envoys-charge
