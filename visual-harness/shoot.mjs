@@ -3421,6 +3421,10 @@ async function assertLinkTokenOverride(page) {
 // (`rgb(85,85,85) 0px 0px 0px 2px` on the dark scheme). `settleFocusVisible` below always
 // waits before reading.
 
+// FIX ROUND (MED-2) — `top`/`flexShrink` join the sampled set: both were re-grounded in
+// styles-source.css's GROUP 2 without ever being added here, so the gate could never have
+// caught either leaking (`top` "auto"→"2.66667px", `flexShrink` "1"→"0", both measured
+// live on the shipped tree before the fix).
 const CHECKBOX_CONTROL_PROPS = [
 	'appearance',
 	'boxSizing',
@@ -3433,12 +3437,14 @@ const CHECKBOX_CONTROL_PROPS = [
 	'width',
 	'height',
 	'position',
+	'top',
 	'transition',
 	'cursor',
 	'backgroundColor',
 	'outlineStyle',
 	'outlineWidth',
 	'boxShadow',
+	'flexShrink',
 ];
 /** `li.task-list-item` itself — `list-style` is sampled but NOT compared against a "bare
  *  wins" contract (see styles-source.css's own "THE ONE DECLARATION THIS BLOCK DOES NOT
@@ -3536,14 +3542,20 @@ function readOneCheckboxTaggedDisabled({ i, props }) {
 /** Builds a REAL Obsidian-shaped task list — `ul > li.task-list-item[data-task]` wrapping
  *  `input.task-list-item-checkbox` — under the first `[data-dse-element]` root the gallery
  *  mounts. See this sweep's own header comment for why no gallery fixture can produce this
- *  shape. Built once per pass (bare, then host), read, then removed by
- *  `removeSyntheticTaskList` — never left in the DOM, never screenshotted. Two `<li>`s: one
- *  permanently unchecked (`data-task=" "`, tagged `data-dse-tlcb="rest"` — used for
- *  rest/hover/focus-visible/indeterminate/disabled, toggling `.checked`/`.indeterminate`/
- *  `.disabled` on it directly rather than building a fifth node per state) and one
- *  permanently checked (`data-task="x"`, tagged `data-dse-tlcb="checked"` — the
- *  `data-task` decoration needs the ATTRIBUTE present from creation; toggling `.checked`
- *  after the fact would not add it). */
+ *  shape. FIX ROUND (LOW-4) — built ONCE per scheme, on the BARE pass only: the same nodes
+ *  are read again for the host pass (`wrapMountInMarkdownRendered` wraps `#mount`, carrying
+ *  them along — nothing about injecting the host sheet requires fresh nodes), and are
+ *  removed once, at the end of the host pass, by `removeSyntheticTaskList`. (A first draft
+ *  called this twice per scheme — once per pass — leaving a dead, unread second `<ul>` in
+ *  the DOM that only `removeSyntheticTaskList`'s own `querySelector` half-cleaned-up;
+ *  harmless in practice since every reader already resolves the FIRST match, but dead code
+ *  that misled the next reader.) Two `<li>`s: one permanently unchecked (`data-task=" "`,
+ *  tagged `data-dse-tlcb="rest"` — used for rest/hover/focus-visible/indeterminate/
+ *  disabled/checked+hover, toggling `.checked`/`.indeterminate`/`.disabled` on it directly
+ *  rather than building a fifth node per state) and one permanently checked
+ *  (`data-task="x"`, tagged `data-dse-tlcb="checked"` — the `data-task` decoration needs
+ *  the ATTRIBUTE present from creation; toggling `.checked` after the fact would not add
+ *  it). */
 function buildSyntheticTaskList() {
 	const root = document.querySelector('[data-dse-element]');
 	if (!root) return false;
@@ -3570,9 +3582,13 @@ function buildSyntheticTaskList() {
 	root.appendChild(ul);
 	return true;
 }
+/** FIX ROUND (LOW-4) — removes EVERY tagged synthetic list, not just the first. Was
+ *  built ONCE per scheme (the bare pass only — see `buildSyntheticTaskList`'s own comment,
+ *  the host pass reuses those same nodes now), but stays `querySelectorAll` defensively:
+ *  a `querySelector`-only version silently leaves a stray list behind if this is ever
+ *  called after a second build, exactly the bug this fix closes. */
 function removeSyntheticTaskList() {
-	const ul = document.querySelector('[data-dse-tlul]');
-	if (ul) ul.remove();
+	for (const ul of document.querySelectorAll('[data-dse-tlul]')) ul.remove();
 }
 function readSyntheticTaskListLi(props) {
 	const out = [];
@@ -3662,7 +3678,14 @@ async function assertCheckboxHostLeak(page) {
 	await cdp.send('DOM.enable');
 	await cdp.send('CSS.enable');
 	const problems = [];
-	const STATES = ['rest', 'hover', 'focus-visible', 'checked', 'indeterminate', 'disabled'];
+	// FIX ROUND (MED-1) — `checked+hover` joins the sampled states: `@media(hover:hover)
+	// input[type=checkbox]:checked:hover` is a REAL Obsidian rule at (0,3,1) that neither
+	// `checked` nor `hover` sampled alone can ever see (each drives only ONE of the two
+	// conditions), and the pre-fix subject TIED it rather than beating it outright — held
+	// only by document order, exactly the "never rely on coincidental neutralisation"
+	// mistake round 2's own MED-1 named. See `probeCheckboxesInState`/
+	// `probeSyntheticCheckboxInState` for how the two conditions are composed.
+	const STATES = ['rest', 'hover', 'focus-visible', 'checked', 'checked+hover', 'indeterminate', 'disabled'];
 	let pluginKindCount = 0;
 	let pluginComparisons = 0;
 	let taskListComparisons = 0;
@@ -3710,7 +3733,10 @@ async function assertCheckboxHostLeak(page) {
 					continue;
 				}
 				pluginComparisons += 1;
-				const propsToCheck = state === 'checked' || state === 'indeterminate' ? [...CHECKBOX_CONTROL_PROPS, 'afterContent'] : CHECKBOX_CONTROL_PROPS;
+				const propsToCheck =
+					state === 'checked' || state === 'checked+hover' || state === 'indeterminate'
+						? [...CHECKBOX_CONTROL_PROPS, 'afterContent']
+						: CHECKBOX_CONTROL_PROPS;
 				for (const p of propsToCheck) {
 					if (b[p] !== h[p]) problems.push(`${bg}|plugin|${state}|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
 				}
@@ -3718,9 +3744,12 @@ async function assertCheckboxHostLeak(page) {
 		}
 
 		// ---- (b) synthetic task list, host ----
-		const built2 = await page.evaluate(buildSyntheticTaskList);
-		if (!built2) problems.push(`${bg}: no [data-dse-element] root to attach the synthetic task list to (host pass)`);
-		if (built && built2) {
+		// FIX ROUND (LOW-4) — reuses the SAME `built` nodes from the bare pass above (they
+		// travel into the `.markdown-preview-view` wrapper `wrapMountInMarkdownRendered`
+		// just applied, same as every other GROUP's own synthetic probe in this file). A
+		// first draft called `buildSyntheticTaskList` a SECOND time here, leaving a dead,
+		// never-read `<ul>` behind that `removeSyntheticTaskList` never fully cleaned up.
+		if (built) {
 			const hostLi = await page.evaluate(readSyntheticTaskListLi, TASKLIST_LI_DECORATION_PROPS);
 			const hostLiByKey = new Map(hostLi.map((r) => [r.key, r]));
 			for (const b of bareLi) {
@@ -3749,9 +3778,76 @@ async function assertCheckboxHostLeak(page) {
 				const h = hostTlByState[state];
 				if (!b || !h) continue;
 				taskListComparisons += 1;
-				const propsToCheck = state === 'checked' || state === 'indeterminate' ? [...CHECKBOX_CONTROL_PROPS, 'afterContent'] : CHECKBOX_CONTROL_PROPS;
+				const propsToCheck =
+					state === 'checked' || state === 'checked+hover' || state === 'indeterminate'
+						? [...CHECKBOX_CONTROL_PROPS, 'afterContent']
+						: CHECKBOX_CONTROL_PROPS;
 				for (const p of propsToCheck) {
 					if (b[p] !== h[p]) problems.push(`${bg}|tasklist|${state}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
+			}
+			// FIX ROUND (HIGH-1) — an ABSOLUTE assertion, not a bare-vs-host diff. The
+			// regression this closes was IDENTICALLY WRONG on both sides (GROUP 2's own
+			// `outline: none` outranking GROUP 4's focus-visible companion is a plugin-
+			// internal cascade defect, present whether or not the host sheet is even
+			// injected), so the relative diff above reports 0 either way and would ship
+			// this again — exactly the LOW-4-fold lesson this file's own header comment
+			// records for links, now also true for a property. Checked on the HOST pass
+			// (the real-world condition): the task-list checkbox, keyboard-focused, must
+			// show the harness's own native focus ring, not none.
+			const fv = hostTlByState['focus-visible'];
+			if (!fv) {
+				problems.push(`${bg}|tasklist|focus-visible ABSOLUTE: no record to check (HIGH-1)`);
+			} else {
+				if (fv.outlineStyle !== 'auto') {
+					problems.push(
+						`${bg}|tasklist|focus-visible ABSOLUTE: outlineStyle is "${fv.outlineStyle}", expected "auto" — GROUP 2 must never outrank GROUP 4's focus ring (HIGH-1, a repeat of round 4's MED-1)`,
+					);
+				}
+				if (fv.outlineWidth !== '1px') {
+					problems.push(
+						`${bg}|tasklist|focus-visible ABSOLUTE: outlineWidth is "${fv.outlineWidth}", expected "1px" (HIGH-1)`,
+					);
+				}
+			}
+			await page.evaluate(removeSyntheticTaskList);
+		}
+	}
+
+	// FIX ROUND (MED-1, "prove with the host-appended order") — the checked+hover fix
+	// above is exercised with the host sheet PREPENDED (matching real Obsidian's own load
+	// order, faithfully modelled by `injectRealHostCss`). Structural correctness — GROUP
+	// 5's own specificity genuinely outranking Obsidian's `:checked:hover`, not merely
+	// winning by document order — means the SAME result must hold with the host sheet
+	// APPENDED instead. One extra, order-only measurement (dark scheme; this is a
+	// specificity question, not a visual one) proves it rather than assuming the earlier
+	// prepended pass generalises.
+	{
+		const query = new URLSearchParams({ gallery: '1', theme: 'steel', bg: 'dark' });
+		await page.emulateMedia({ media: 'screen' });
+		await page.goto(`${pageUrl}?${query}`);
+		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		const builtAppend = await page.evaluate(buildSyntheticTaskList);
+		if (!builtAppend) {
+			problems.push(`host-appended-order: no [data-dse-element] root to attach the synthetic task list to`);
+		} else {
+			const handle = await page.addStyleTag({ content: host.css });
+			await page.evaluate((el) => document.head.append(el), handle); // APPENDED — the opposite of injectRealHostCss's own prepend
+			await wrapMountInMarkdownRendered(page);
+			const { root: appendRoot } = await cdp.send('DOM.getDocument', { depth: -1 });
+			const checkedSelector = '[data-dse-tlcb="checked"]';
+			const ok = await forceCheckboxPseudo(page, cdp, appendRoot.nodeId, checkedSelector, 'hover');
+			if (!ok) {
+				problems.push(`host-appended-order|tasklist|checked+hover: CDP could not resolve the synthetic checkbox`);
+			} else {
+				const rec = await page.evaluate(readOneTaggedTlcbMatchingChecked, { props: ['backgroundColor', 'borderColor'], pseudo: ':hover' });
+				await clearCheckboxPseudo(cdp, appendRoot.nodeId, checkedSelector);
+				if (!rec || !rec.active) {
+					problems.push(`host-appended-order|tasklist|checked+hover: could not force :hover on the checked node`);
+				} else if (rec.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+					problems.push(
+						`host-appended-order|tasklist|checked+hover ABSOLUTE: backgroundColor is "${rec.backgroundColor}" with the host sheet APPENDED, expected transparent — GROUP 5 must outrank Obsidian's :checked:hover regardless of stylesheet order (MED-1)`,
+					);
 				}
 			}
 			await page.evaluate(removeSyntheticTaskList);
@@ -3792,6 +3888,39 @@ async function probeCheckboxesInState(page, cdp, docRootNodeId, tagAttr, state, 
 	if (state === 'checked') return runOverEach(page, count, readOneCheckboxTaggedChecked, props, problems, label);
 	if (state === 'indeterminate') return runOverEach(page, count, readOneCheckboxTaggedIndeterminate, props, problems, label);
 	if (state === 'disabled') return runOverEach(page, count, readOneCheckboxTaggedDisabled, props, problems, label);
+	if (state === 'checked+hover') {
+		// FIX ROUND (MED-1) — composes a REAL DOM state (`.checked = true`) with a
+		// CDP-forced pseudo-class (`:hover`), one node at a time: neither alone reaches
+		// Obsidian's `@media(hover:hover) input[type=checkbox]:checked:hover` rule.
+		const records = [];
+		for (let i = 0; i < count; i += 1) {
+			const selector = `[data-dse-${tagAttr}-i="${i}"]`;
+			const was = await page.evaluate(setTaggedChecked, { tagAttr, i, checked: true });
+			if (was === null) {
+				problems.push(`${label}|checked+hover|#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			const ok = await forceCheckboxPseudo(page, cdp, docRootNodeId, selector, 'hover');
+			if (!ok) {
+				problems.push(`${label}|checked+hover|#${i}: CDP could not resolve the tagged node`);
+				await page.evaluate(setTaggedChecked, { tagAttr, i, checked: was });
+				continue;
+			}
+			const rec = await page.evaluate(readOneCheckboxTaggedMatching, { i, props, pseudo: ':hover' });
+			await clearCheckboxPseudo(cdp, docRootNodeId, selector);
+			await page.evaluate(setTaggedChecked, { tagAttr, i, checked: was });
+			if (!rec) {
+				problems.push(`${label}|checked+hover|#${i}: the tagged node vanished mid-sweep`);
+				continue;
+			}
+			if (!rec.active) {
+				problems.push(`${rec.key}: CSS.forcePseudoState(['hover']) did not make the checked node match :hover`);
+				continue;
+			}
+			records.push(rec);
+		}
+		return records;
+	}
 	// hover / focus-visible — CDP forced, one node at a time.
 	const records = [];
 	for (let i = 0; i < count; i += 1) {
@@ -3814,6 +3943,18 @@ async function probeCheckboxesInState(page, cdp, docRootNodeId, tagAttr, state, 
 		records.push(rec);
 	}
 	return records;
+}
+/** FIX ROUND (MED-1) — sets `.checked` directly on a tagged plugin-authored checkbox by
+ *  index, returning the PREVIOUS value so the caller can restore it. A real DOM property,
+ *  not a pseudo-class — composed with a CDP-forced `:hover` by the `checked+hover` branch
+ *  above. `null` (not `false`) signals "node not found", since `false` is itself a valid
+ *  previous `.checked` value the caller must be able to restore. */
+function setTaggedChecked({ tagAttr, i, checked }) {
+	const n = document.querySelector(`[data-dse-${tagAttr}-i="${i}"]`);
+	if (!n) return null;
+	const was = n.checked;
+	n.checked = checked;
+	return was;
 }
 async function runOverEach(page, count, evalFn, props, problems, label) {
 	const records = [];
@@ -3854,10 +3995,31 @@ async function probeSyntheticCheckboxInState(page, cdp, docRootNodeId, props, pr
 	// `checked` reads the OTHER synthetic node (the one carrying `data-task="x"` from
 	// creation, see `buildSyntheticTaskList`'s own comment) — a real DOM state, not forced.
 	out.checked = await page.evaluate(readSyntheticTaskListCbChecked, props);
+	// FIX ROUND (MED-1) — `checked+hover`, forced on the ALREADY-checked node (not the
+	// rest one): Obsidian's own `:checked:hover` rule needs BOTH conditions on the SAME
+	// element at once.
+	const checkedSelector = '[data-dse-tlcb="checked"]';
+	const okCheckedHover = await forceCheckboxPseudo(page, cdp, docRootNodeId, checkedSelector, 'hover');
+	if (okCheckedHover) {
+		out['checked+hover'] = await page.evaluate(readOneTaggedTlcbMatchingChecked, { props, pseudo: ':hover' });
+		await clearCheckboxPseudo(cdp, docRootNodeId, checkedSelector);
+	} else problems.push(`${label}|checked+hover: CDP could not resolve the synthetic checkbox`);
 	return out;
 }
 function readOneTaggedTlcbMatching({ props, pseudo }) {
 	const n = document.querySelector('[data-dse-tlcb="rest"]');
+	if (!n) return null;
+	const cs = getComputedStyle(n);
+	const rec = {};
+	for (const p of props) rec[p] = cs[p];
+	rec.active = n.matches(pseudo);
+	return rec;
+}
+/** FIX ROUND (MED-1) — same shape as `readOneTaggedTlcbMatching`, reading the CHECKED
+ *  synthetic node (`data-dse-tlcb="checked"`) instead of the rest one, for the
+ *  `checked+hover` combined state. */
+function readOneTaggedTlcbMatchingChecked({ props, pseudo }) {
+	const n = document.querySelector('[data-dse-tlcb="checked"]');
 	if (!n) return null;
 	const cs = getComputedStyle(n);
 	const rec = {};

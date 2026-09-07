@@ -1855,9 +1855,11 @@ code.dsa {
 .dse-minion:hover {
 	background-color: var(--dse-hover);
 }
-.dse-minion__check {
-	margin-right: 10px;
-}
+/* SC-202 r5 fix round (LOW-3) — `.dse-minion__check { margin-right: 10px; }` removed here:
+   dead on arrival, outranked by SC-121's own `margin: 0 0.5em 0 0` at (0,4,1) (this
+   selector was only (0,1,0)) — verified by a full `npm run shots` sweep, 0 of 524 bytes
+   moved. The class itself stays on the element (`MinionStaminaPoolModal.ts:163`) for JS
+   query selection; only the dead declaration is gone. */
 /* Row states ride the checkbox's REAL properties (CB-8). Order matters: the :checked
    rule wins for checked+disabled rows (auto-selected at pool 0), matching the legacy
    cascade. */
@@ -16635,8 +16637,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
      `MotivationsPitfallsView.ts:37` (negotiation pitfall row) — unclassed, covered.
      `project/view.ts:213` (breakthrough toggle) — unclassed, covered.
      `project/view.ts:249` (skill toggle) — unclassed, covered.
-     `MinionStaminaPoolModal.ts:163` (`.dse-minion__check`) — classed (for JS query
-     selection, not styling), covered by the same type selector regardless.
+     `MinionStaminaPoolModal.ts:163` (`.dse-minion__check`) — FIX ROUND (LOW-3) correction:
+     the class IS for JS query selection, but the claim that it carries "not styling" was
+     false — `styles-source.css:1858` declares `.dse-minion__check { margin-right: 10px;
+     }`, a REAL rule. It is dead in practice (SC-121's own `margin: 0 0.5em 0 0` at
+     (0,4,1) sits later in the file and outranks this (0,1,0) selector outright, verified
+     by a full shots sweep showing 0 bytes moved when it was removed), so the SUBSTANCE —
+     "this checkbox computes exactly like the four unclassed ones" — still holds; only the
+     sentence describing why was wrong.
+
+   FIX ROUND (LOW-2) — a SIXTH surface the grep triple above cannot see, because it never
+   creates an `<input>` at all: `new Setting(...).addToggle(...)`
+   (`src/authoring/FormModal.ts:145`) makes OBSIDIAN build `div.checkbox-container >
+   input[type=checkbox]` inside `FormModal` (a `DseModal`, so `data-dse-theme` reaches it
+   too). This is Obsidian's OWN control, not a plugin-authored one — see GROUP 6's own
+   comment for the measured leak this created and the `:not(.checkbox-container input)`
+   fix.
 
    `ConditionsModal.ts:390`'s `type='color'` stays exempt — a still-undesigned family of
    its own (SC-202 r1's own OUT-OF-SCOPE note), not this round's.
@@ -16743,7 +16759,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    font-size-derived). `padding`/`box-sizing`/`cursor`/`outline`/`box-shadow` are all
    0-diff-today coincidences (Obsidian sets no unscoped value for any of them at REST),
    restated defensively for the same MED-1 reasoning — they are NOT 0-diff at every state,
-   see GROUP 3/4 below.
+   see GROUP 3/4 below. FIX ROUND (MED-2) — `top: auto` and `flex-shrink: 1` join the same
+   defensive list: `.markdown-preview-view .task-list-item-checkbox { top: 0.2em }` and the
+   bare `input[type=checkbox] { flex-shrink: 0 }` were both measured genuinely LEAKING
+   (`top` "auto"→"2.66667px", `flexShrink` "1"→"0", real vault confirmed) and simply never
+   restated — an omission, not a considered "inert, skip it" call the way `padding`/
+   `box-sizing` were. Both stay cosmetically inert TODAY only because `position: static`
+   already neutralises `top` and the `<li>` is never a flex container — the SAME "not 0-diff
+   at every possible future state" reasoning as everything else in this list, now applied
+   consistently rather than half-applied.
    THE SUBJECT ITSELF is `:where(li.task-list-item) input.task-list-item-checkbox` — a can-
    fail-PROVEN correction, not the original flat `:where(input.task-list-item-checkbox)`:
    `margin` measured genuinely leaking at (0,2,0) because Obsidian's own task-list-scoped
@@ -16768,53 +16792,78 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	width: 13px;
 	height: 13px;
 	position: static;
+	top: auto;
 	transition: none;
 	cursor: default;
 	background-color: transparent;
 	outline: none;
 	box-shadow: none;
+	flex-shrink: 1;
 }
 
-/* GROUP 3 — `:hover`. Obsidian's `@media (hover: hover) { input[type=checkbox]:hover {
-   outline: 0; border-color: var(--checkbox-border-color-hover); } }` is (0,2,1) — TIES
-   GROUP 2's own (0,2,0) on class-count only if `:hover` were folded INSIDE `:where()`;
-   appended OUTSIDE it instead, reaching (0,3,0), which beats (0,2,1) outright. Restated to
-   GROUP 2's own REST value — a deliberate "hover changes nothing" decision, matching round
-   1's own GROUP 4 for plugin inputs. Cosmetically inert either way (GROUP 2's `border: 0
-   none` keeps the border invisible in every state, since nothing else in this family ever
-   sets `border-style` back to visible) — restated anyway, same round-2 MED-1 coincidence
-   reasoning as GROUP 2. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(input.task-list-item-checkbox):hover {
+/* GROUP 3 — `:hover`. FIX ROUND (HIGH-1) — the subject was `:where(input.task-list-item-
+   checkbox):hover` (0,3,0), which is genuinely correct against Obsidian's OWN hover rule
+   (0,2,1, beaten outright) — but GROUP 2's own mid-round subject fix (this file's own
+   report §6) silently raised GROUP 2 ITSELF to (0,3,1), a HIGHER specificity than this
+   companion, so GROUP 2's unconditional declarations were winning over GROUP 3/4/5 the
+   whole time, not just over Obsidian's rules. Given GROUP 2's own subject now
+   (`:where(li.task-list-item) input.task-list-item-checkbox`, (0,3,1)), this companion
+   takes the SAME subject, appending `:hover` outside `:where()` reaches (0,4,1) — beats
+   GROUP 2's own (0,3,1) AND Obsidian's hover rule (0,2,1), both unconditionally. Restated
+   to GROUP 2's own REST value — a deliberate "hover changes nothing" decision, matching
+   round 1's own GROUP 4 for plugin inputs. Cosmetically inert either way (GROUP 2's
+   `border: 0 none` keeps the border invisible in every state) — restated anyway, same
+   round-2 MED-1 coincidence reasoning as GROUP 2. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li.task-list-item) input.task-list-item-checkbox:hover {
 	border-color: currentcolor;
 	outline: none;
 }
 
-/* GROUP 4 — `:focus-visible`. TWO Obsidian rules reach it: `:active,:focus{outline:0;
-   border-color:var(--checkbox-border-color-hover)}` (0,2,1) — `:focus` is a superset of
-   `:focus-visible` — and `:focus-visible{box-shadow:0 0 0 2px var(--background-modifier-
-   border-focus)}` (0,2,1) on its own. Appended outside `:where()` the same way as GROUP 3
-   reaches (0,3,0), beating both. Restated to the harness's own bare focus ring — a real
-   native `appearance:auto` checkbox genuinely gets ONE (Chromium's own default `outline:
-   auto 1px -webkit-focus-ring-color` at `:focus-visible` — measured, not assumed), unlike
-   GROUP 3's inert hover: this is the one state where the CONTROL is visibly different
-   before/after in a real vault (a thin ring in the ambient ink colour instead of
-   Obsidian's own grey box-shadow ring) — both are accessibility affordances, so this is a
-   look change, not an accessibility regression either way. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(input.task-list-item-checkbox):focus-visible {
+/* GROUP 4 — `:focus-visible`. FIX ROUND (HIGH-1, the ROUND'S OWN a11y regression) — SAME
+   subject fix as GROUP 3 above, for the SAME reason, but this is the one that mattered:
+   with the old (0,3,0) subject, GROUP 2's `outline: none` at (0,3,1) outranked THIS
+   companion's `outline: auto 1px -webkit-focus-ring-color` — a markdown task-list checkbox
+   inside a plugin body had NO focus ring at all in a real vault (measured:
+   `outline-style: none`, `box-shadow: none`, on a node genuinely matching
+   `:focus-visible`) — the exact a11y regression round 4's MED-1 made and this ticket's own
+   LOW-4 fold predicts as invisible to a bare-vs-host diff (the property is IDENTICALLY
+   WRONG on both sides, so the sweep saw 0 diff and shipped it; closed here with an
+   ABSOLUTE runtime assertion in `assertCheckboxHostLeak`, not just a relative one). TWO
+   Obsidian rules also reach this state: `:active,:focus{outline:0;
+   border-color:var(--checkbox-border-color-hover)}` (0,2,1) and `:focus-visible{box-
+   shadow:0 0 0 2px var(--background-modifier-border-focus)}` (0,2,1). The corrected
+   subject + appended `:focus-visible` reaches (0,4,1) — beats GROUP 2's own (0,3,1) and
+   both Obsidian rules. Restated to the harness's own bare focus ring — a real native
+   `appearance:auto` checkbox genuinely gets ONE (Chromium's own default `outline: auto 1px
+   -webkit-focus-ring-color` at `:focus-visible` — measured, not assumed): this is the one
+   state where the CONTROL is visibly different before/after in a real vault (a thin ring
+   in the ambient ink colour instead of Obsidian's own grey box-shadow ring) — both are
+   accessibility affordances, so THAT is a look change, not a regression; having NO ring at
+   all (the bug this fix closes) was the regression. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li.task-list-item) input.task-list-item-checkbox:focus-visible {
 	outline: auto 1px -webkit-focus-ring-color;
 	border-color: currentcolor;
 	box-shadow: none;
 }
 
-/* GROUP 5 — `:checked`. Obsidian's own `input[type=checkbox]:checked {background-color:
-   var(--checkbox-color); border-color: var(--checkbox-color)}` is (0,2,1); appended
-   outside `:where()` reaches (0,3,0). A native `appearance:auto` checkbox draws its OWN
-   checked glyph (the OS/Chromium widget itself, invisible to any CSS property read here —
-   measured: bare `:checked` and bare REST report byte-identical computed styles for every
-   property in CHECKBOX_CONTROL_PROPS), so restating background/border-color back to
-   GROUP 2's own REST value is enough; there is no SEPARATE "checked tick" CSS property to
-   re-fight on the ELEMENT itself, only the pseudo-element GROUP 5b covers. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(input.task-list-item-checkbox):checked {
+/* GROUP 5 — `:checked`. FIX ROUND (HIGH-1's subject fix ALSO closes MED-1) — Obsidian's own
+   `input[type=checkbox]:checked {background-color: var(--checkbox-color); border-color:
+   var(--checkbox-color)}` is (0,2,1); `@media(hover:hover) …:checked:hover{background-
+   color;border-color}` is (0,3,1). The OLD (0,3,0) subject beat the REST `:checked` rule
+   but TIED the combined `:checked:hover` one — held only by source order (Obsidian's own
+   `app.css` loads first, so the plugin's later rule wins by document order, not by
+   specificity: "never rely on coincidental neutralisation," round 2's own MED-1 lesson,
+   violated by this very block until now). The corrected subject + appended `:checked`
+   reaches (0,4,1) — beats GROUP 2 (0,3,1), the bare `:checked` rule (0,2,1), AND the
+   `:checked:hover` rule (0,3,1) outright, regardless of source order (verified both
+   orders, `assertCheckboxHostLeak`'s new `checked+hover` state). A native `appearance:auto`
+   checkbox draws its OWN checked glyph (the OS/Chromium widget itself, invisible to any CSS
+   property read here — measured: bare `:checked` and bare REST report byte-identical
+   computed styles for every property in `CHECKBOX_CONTROL_PROPS`), so restating
+   background/border-color back to GROUP 2's own REST value is enough; there is no SEPARATE
+   "checked tick" CSS property to re-fight on the ELEMENT itself, only the pseudo-element
+   GROUP 5b covers. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(li.task-list-item) input.task-list-item-checkbox:checked {
 	background-color: transparent;
 	border-color: currentcolor;
 }
@@ -16876,20 +16925,38 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    ON TOP of the shared kit ring (`~:13723`, outline-only) when tabbed to, and a real
    Obsidian checkmark icon overlaid on the accent-filled box when checked.
    `::after` uses the SAME shared `:is(:checked, [data-indeterminate="true"])` shape GROUP
-   5b's own comment explains is UNSAFE for the task-list subject (a specificity tie the
-   task-list subject cannot win with one rule) — safe HERE because SC-121's own anchor is
-   already (0,4,1), five class-columns clear of Obsidian's highest competing rule
-   ((0,3,2), the indeterminate one) even after the two appended selectors; verified, not
-   assumed to carry over from the task-list case. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox) {
+   5b uses — FIX ROUND (LOW-1) — safe in BOTH places, not "unsafe for the task-list subject
+   but safe here" as a stale draft of this comment used to claim (a leftover from the
+   task-list companion's OWN abandoned two-rule split, reverted once GROUP 2's subject fix
+   made one shared rule enough there too — see GROUP 5b's own comment and the report's own
+   §6). Two real specificities, both comfortably clear of what they must beat: the
+   task-list companion reaches (0,4,2) against Obsidian's (0,2,2)/(0,3,2); this one reaches
+   (0,5,2) against the SAME two Obsidian rules, five and four class-columns clear
+   respectively.
+   FIX ROUND (LOW-2) — a SIXTH plugin-authored checkbox surface exists that the file's own
+   `grep -n "type: 'checkbox'"` census cannot see: `Setting.addToggle()`
+   (`src/authoring/FormModal.ts:145`) makes Obsidian itself build `div.checkbox-container >
+   input[type=checkbox]` — a HOST widget, not a plugin-authored `<input>` — inside
+   `FormModal`, which extends `DseModal` and so also carries `data-dse-theme` (`managedModal.ts`).
+   Both SC-121 and this block's own `position: static` rule (0,4,1) genuinely reach it,
+   measured, overriding Obsidian's OWN `.checkbox-container input[type=checkbox] { position:
+   absolute }` (0,2,1) and visibly shifting the toggle's knob (`rect.x` 866px → 880px in an
+   isolated repro). Cosmetically inert today only because the input stays `opacity: 0` and
+   the container has a fixed pixel width/height, so nothing else moves — but this was an
+   UN-ENUMERATED, un-tested reach into a host widget with no gate covering it (no modal
+   fixture exists in the browser gallery). Every GROUP 6 subject below now excludes
+   `.checkbox-container input` explicitly, so Obsidian's own toggle keeps its own layout
+   regardless of specificity math — re-measured: `position` returns to `absolute`, `rect.x`
+   back to 866px. */
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):not(.checkbox-container input) {
 	position: static;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):hover {
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):not(.checkbox-container input):hover {
 	outline: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):focus-visible {
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):not(.checkbox-container input):focus-visible {
 	box-shadow: none;
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):is(:checked, [data-indeterminate='true'])::after {
+[data-dse-theme='steel']:not([data-dse-print="on"]) input[type='checkbox']:not(.task-list-item-checkbox):not(.checkbox-container input):is(:checked, [data-indeterminate='true'])::after {
 	content: none;
 }

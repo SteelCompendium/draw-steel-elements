@@ -17,15 +17,24 @@ import path from 'path';
  * is: jsdom cascades no var(), computes no calc(), and lays out nothing, so rule text is
  * what is assertable here, and it runs everywhere the sweep cannot.
  *
- * Two things were WRONG in a first draft and can-fail-PROVEN wrong (a real `npm run shots`
- * run, not review): (1) the task-list checkbox subject needed MORE specificity than a flat
- * `:where(input.task-list-item-checkbox)` gives — Obsidian's own task-list-scoped margin
- * rule is two type selectors deep — so GROUP 2/5b's subject is
- * `:where(li.task-list-item) input.task-list-item-checkbox` (the `input` OUTSIDE
- * `:where()`); (2) the plugin-authored checkbox leaked `position` (SC-121 never declares
- * it) and `:hover`'s `outline` (SC-121 never declares it either — only `border-color` was
- * covered) at every state, live, until GROUP 6 grew two more dedicated rules. This file
- * pins the CORRECTED shape.
+ * Two things were WRONG in the FIRST draft and can-fail-PROVEN wrong (a real `npm run
+ * shots` run, not review): (1) the task-list checkbox subject needed MORE specificity than
+ * a flat `:where(input.task-list-item-checkbox)` gives; (2) the plugin-authored checkbox
+ * leaked `position` and `:hover`'s `outline` at every state, live.
+ *
+ * FIX ROUND (independent review of `fe69d37`, `sc202-r5-review.md`) — ONE more thing was
+ * wrong, and it was HIGH: GROUP 2's own subject fix (item 1 above) silently raised GROUP 2
+ * to a HIGHER specificity than its own GROUP 3/4/5 state companions, which were never
+ * updated to match — so GROUP 2's `outline: none` was outranking GROUP 4's focus-visible
+ * ring, and a real vault's task-list checkbox had NO focus indicator at all (a verbatim
+ * repeat of round 4's MED-1, invisible to the bare-vs-host sweep for the SAME reason LOW-4
+ * predicts: the property is identically wrong on both sides). GROUP 3/4/5 now share GROUP
+ * 2's own subject. The fix round also closed MED-1 (the same subject fix; `:checked:hover`
+ * was tied, not beaten, before), MED-2 (`top`/`flex-shrink` never re-grounded), LOW-1 (a
+ * stale contradictory comment), LOW-2 (a 6th checkbox surface — Obsidian's OWN
+ * `Setting.addToggle()` toggle, now excluded from GROUP 6) and LOW-3 (a dead
+ * `.dse-minion__check` declaration + a false "not styling" comment). This file pins the
+ * fix-round shape.
  */
 
 const rawCss = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'styles-source.css'), 'utf8');
@@ -44,10 +53,16 @@ const css = (nextBlockStart === -1 ? rawCss.slice(blockStart) : rawCss.slice(blo
 /** Whitespace-insensitive: the block wraps long selectors across lines. */
 const flat = css.replace(/\s+/g, ' ');
 const ANCHOR = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';
-/** GROUP 2/5b's own corrected subject (task-list checkbox), specificity (0,3,1) — see the
- *  specificity-guard describe block below for the derivation. */
+/** GROUP 2's own subject (task-list checkbox), specificity (0,3,1) — see the
+ *  specificity-guard describe block below for the derivation. FIX ROUND — GROUP 3/4/5 now
+ *  share this SAME subject (previously a flat, lower-specificity `:where(input.task-list-
+ *  item-checkbox)`, the HIGH-1/MED-1 bug). */
 const TL_SUBJECT = `${ANCHOR} :where(li.task-list-item) input.task-list-item-checkbox`;
 const SC121_ANCHOR = "[data-dse-theme='steel']:not([data-dse-print=\"on\"]) input[type='checkbox']:not(.task-list-item-checkbox)";
+/** FIX ROUND (LOW-2) — GROUP 6's own subject, excluding Obsidian's OWN `.checkbox-
+ *  container input` (the `Setting.addToggle()` toggle widget) from every rule in the
+ *  group. */
+const GROUP6_SUBJECT = `${SC121_ANCHOR}:not(.checkbox-container input)`;
 
 test('the SC-202 r5 block is still in the sheet', () => {
 	expect(blockStart).toBeGreaterThan(0);
@@ -95,6 +110,11 @@ describe('SC-202 r5 — GROUP 2: the task-list checkbox control, rest state', ()
 		expect(group2()).toContain('margin: 3px 3px 3px 4px;');
 	});
 
+	test('FIX ROUND (MED-2) — top/flex-shrink are re-grounded too, not just position', () => {
+		expect(group2()).toContain('top: auto;');
+		expect(group2()).toContain('flex-shrink: 1;');
+	});
+
 	test('transition is killed outright — the block comment names the footgun this avoids', () => {
 		expect(group2()).toContain('transition: none;');
 	});
@@ -106,45 +126,49 @@ describe('SC-202 r5 — GROUP 2: the task-list checkbox control, rest state', ()
 	});
 });
 
-describe('SC-202 r5 — GROUP 3/4: :hover and :focus-visible', () => {
+describe('SC-202 r5 — GROUP 3/4: :hover and :focus-visible (FIX ROUND — now GROUP 2\'s own subject, not a flat one)', () => {
 	test(':hover restates border-color back to REST (a deliberate "hover changes nothing" decision)', () => {
-		const m = flat.match(new RegExp(escape(`${ANCHOR} :where(input.task-list-item-checkbox):hover`) + ' \\{([^}]*)\\}'));
+		const m = flat.match(new RegExp(escape(`${TL_SUBJECT}:hover`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('border-color: currentcolor;');
 	});
 
-	test(':focus-visible restores the native browser focus ring and kills the host box-shadow ring', () => {
-		const m = flat.match(new RegExp(escape(`${ANCHOR} :where(input.task-list-item-checkbox):focus-visible`) + ' \\{([^}]*)\\}'));
+	test(':focus-visible restores the native browser focus ring and kills the host box-shadow ring — the HIGH-1 fix', () => {
+		const m = flat.match(new RegExp(escape(`${TL_SUBJECT}:focus-visible`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('outline: auto 1px -webkit-focus-ring-color;');
 		expect(m![1]).toContain('box-shadow: none;');
 	});
+
+	test('the OLD, under-specific flat subject is gone — a regression guard for HIGH-1 itself', () => {
+		expect(flat).not.toMatch(/:where\(input\.task-list-item-checkbox\):hover/);
+		expect(flat).not.toMatch(/:where\(input\.task-list-item-checkbox\):focus-visible/);
+		expect(flat).not.toMatch(/:where\(input\.task-list-item-checkbox\):checked(?!\))/);
+	});
 });
 
-describe('SC-202 r5 — GROUP 5/5b: :checked and the ::after tick/dash', () => {
+describe('SC-202 r5 — GROUP 5/5b: :checked and the ::after tick/dash (FIX ROUND — GROUP 5 also shares GROUP 2\'s subject, closing MED-1)', () => {
 	test(':checked restates background/border-color back to REST — no accent fill leaks in', () => {
-		const m = flat.match(new RegExp(escape(`${ANCHOR} :where(input.task-list-item-checkbox):checked`) + ' \\{([^}]*)\\}'));
+		const m = flat.match(new RegExp(escape(`${TL_SUBJECT}:checked`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('background-color: transparent;');
 		expect(m![1]).toContain('border-color: currentcolor;');
 	});
 
 	test('the ::after tick/indeterminate-dash pseudo-element is removed entirely, covering BOTH :checked and [data-indeterminate] with one shared companion', () => {
-		expect(flat).toContain(
-			`${TL_SUBJECT}:is(:checked, [data-indeterminate='true'])::after { content: none; }`,
-		);
+		expect(flat).toContain(`${TL_SUBJECT}:is(:checked, [data-indeterminate='true'])::after { content: none; }`);
 	});
 });
 
 describe("SC-202 r5 — GROUP 6: the plugin-authored checkbox's own missing properties/states", () => {
 	test('position is re-grounded to static — SC-121 never declares it at all', () => {
-		const m = flat.match(new RegExp(escape(SC121_ANCHOR) + ' \\{([^}]*)\\}'));
+		const m = flat.match(new RegExp(escape(GROUP6_SUBJECT) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('position: static;');
 	});
 
 	test(":hover's outline is neutralised — SC-121 covers border-color there but never outline", () => {
-		const m = flat.match(new RegExp(escape(`${SC121_ANCHOR}:hover`) + ' \\{([^}]*)\\}'));
+		const m = flat.match(new RegExp(escape(`${GROUP6_SUBJECT}:hover`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('outline: none;');
 	});
@@ -159,20 +183,51 @@ describe("SC-202 r5 — GROUP 6: the plugin-authored checkbox's own missing prop
 	});
 
 	test(':focus-visible box-shadow is neutralised for every plugin-authored checkbox', () => {
-		const m = flat.match(new RegExp(escape(`${SC121_ANCHOR}:focus-visible`) + ' \\{([^}]*)\\}'));
+		const m = flat.match(new RegExp(escape(`${GROUP6_SUBJECT}:focus-visible`) + ' \\{([^}]*)\\}'));
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('box-shadow: none;');
 	});
 
 	test('the ::after tick/indeterminate-dash pseudo-element is removed for every plugin-authored checkbox too', () => {
-		expect(flat).toContain(`${SC121_ANCHOR}:is(:checked, [data-indeterminate='true'])::after { content: none; }`);
+		expect(flat).toContain(`${GROUP6_SUBJECT}:is(:checked, [data-indeterminate='true'])::after { content: none; }`);
+	});
+
+	test('FIX ROUND (LOW-2) — every GROUP 6 rule excludes .checkbox-container input, so Obsidian\'s OWN Setting.addToggle() widget keeps its own layout', () => {
+		// The four GROUP 6 subjects (position, :hover, :focus-visible, ::after) must ALL
+		// carry the exclusion — a regression here would silently re-reach the toggle.
+		const group6Rules = [...flat.matchAll(new RegExp(escape(SC121_ANCHOR) + '([^{]*)\\{', 'g'))].map((m) => m[1].trim());
+		expect(group6Rules.length).toBeGreaterThanOrEqual(4);
+		for (const sel of group6Rules) {
+			expect(sel).toContain(':not(.checkbox-container input)');
+		}
+	});
+});
+
+describe('SC-202 r5 — FIX ROUND LOW-1: the GROUP 6 comment no longer contradicts GROUP 5b', () => {
+	test('the stale "UNSAFE for the task-list subject" claim is gone', () => {
+		expect(flat).not.toContain('UNSAFE for the task-list subject');
+	});
+});
+
+describe('SC-202 r5 — FIX ROUND LOW-3: .dse-minion__check no longer declares a dead margin-right, outside this block\'s own slice', () => {
+	test('the dead declaration is gone from the whole file (comments stripped — the removal note itself quotes the old rule verbatim)', () => {
+		const rawNoComments = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(rawNoComments).not.toMatch(/\.dse-minion__check\s*\{\s*margin-right:\s*10px;\s*\}/);
+	});
+
+	test('the class itself is untouched on the element (JS query selection survives)', () => {
+		const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src', 'views', 'MinionStaminaPoolModal.ts'), 'utf8');
+		expect(src).toContain('dse-minion__check');
 	});
 });
 
 describe('SC-202 r5 — specificity guard (round-4\'s own method, reused verbatim)', () => {
 	/** Copied verbatim from `headingEmphasisLinkHostRegrounding.test.ts`'s own GROUP —
 	 *  the brief's own instruction: "a specificity guard for any companion rules as
-	 *  tableHostRegrounding.test.ts does". */
+	 *  tableHostRegrounding.test.ts does". Handles `:not()`/`:is()` with a COMPLEX
+	 *  (multi-compound, descendant-combinator) argument the same way real browsers do —
+	 *  each compound in the argument contributes its own specificity, summed — needed for
+	 *  GROUP 6's own `:not(.checkbox-container input)` (FIX ROUND, LOW-2). */
 	function specificity(selector: string): [number, number, number] {
 		let a = 0;
 		let b = 0;
@@ -282,7 +337,7 @@ describe('SC-202 r5 — specificity guard (round-4\'s own method, reused verbati
 		expect(cmp(ours, theirs)).toBeGreaterThan(0);
 	});
 
-	test("GROUP 2/5b's corrected subject (0,3,1) beats Obsidian's own task-list-scoped margin rule (0,2,2) — the flat (0,2,0) anchor a first draft used did NOT (can-fail-proven, not merely argued)", () => {
+	test("GROUP 2's subject (0,3,1) beats Obsidian's own task-list-scoped margin rule (0,2,2) — the flat (0,2,0) anchor a first draft used did NOT (can-fail-proven, not merely argued)", () => {
 		const ours = specificity(TL_SUBJECT);
 		const theirsMargin = specificity('ul > li.task-list-item > .task-list-item-checkbox');
 		const flatAnchorAlone = specificity(`${ANCHOR} :where(input.task-list-item-checkbox)`);
@@ -292,22 +347,34 @@ describe('SC-202 r5 — specificity guard (round-4\'s own method, reused verbati
 		expect(cmp(flatAnchorAlone, theirsMargin)).toBeLessThan(0);
 	});
 
-	test('GROUP 3\'s :hover companion (0,3,0) beats Obsidian\'s own (0,2,1)', () => {
-		const ours = specificity(`${ANCHOR} :where(input.task-list-item-checkbox):hover`);
-		expect(ours).toEqual([0, 3, 0]);
+	test("FIX ROUND (HIGH-1) — EVERY GROUP 3/4/5 state companion strictly outranks GROUP 2's OWN subject (0,3,1), not just Obsidian's rules — the exact comparison the original draft never made, and the reason GROUP 2's outline:none was winning at :focus-visible", () => {
+		const group2 = specificity(TL_SUBJECT);
+		expect(group2).toEqual([0, 3, 1]);
+		for (const pseudo of [':hover', ':focus-visible', ':checked']) {
+			const companion = specificity(`${TL_SUBJECT}${pseudo}`);
+			expect(cmp(companion, group2)).toBeGreaterThan(0);
+		}
+	});
+
+	test('GROUP 3\'s :hover companion (0,4,1) beats Obsidian\'s own (0,2,1)', () => {
+		const ours = specificity(`${TL_SUBJECT}:hover`);
+		expect(ours).toEqual([0, 4, 1]);
 		expect(cmp(ours, [0, 2, 1])).toBeGreaterThan(0);
 	});
 
-	test('GROUP 4\'s :focus-visible companion (0,3,0) beats BOTH Obsidian rules it must outrank (0,2,1 each)', () => {
-		const ours = specificity(`${ANCHOR} :where(input.task-list-item-checkbox):focus-visible`);
-		expect(ours).toEqual([0, 3, 0]);
+	test('GROUP 4\'s :focus-visible companion (0,4,1) beats BOTH Obsidian rules it must outrank (0,2,1 each)', () => {
+		const ours = specificity(`${TL_SUBJECT}:focus-visible`);
+		expect(ours).toEqual([0, 4, 1]);
 		expect(cmp(ours, [0, 2, 1])).toBeGreaterThan(0);
 	});
 
-	test('GROUP 5\'s :checked companion (0,3,0) beats Obsidian\'s own (0,2,1)', () => {
-		const ours = specificity(`${ANCHOR} :where(input.task-list-item-checkbox):checked`);
-		expect(ours).toEqual([0, 3, 0]);
+	test("GROUP 5's :checked companion (0,4,1) beats Obsidian's own :checked (0,2,1) AND the combined :checked:hover rule (0,3,1) — closing MED-1, which the old (0,3,0) subject only TIED (held by document order alone)", () => {
+		const ours = specificity(`${TL_SUBJECT}:checked`);
+		const theirsCheckedHover = specificity('input[type=checkbox]:checked:hover');
+		expect(theirsCheckedHover).toEqual([0, 3, 1]);
+		expect(ours).toEqual([0, 4, 1]);
 		expect(cmp(ours, [0, 2, 1])).toBeGreaterThan(0);
+		expect(cmp(ours, theirsCheckedHover)).toBeGreaterThan(0);
 	});
 
 	// NOTE on "theirs" below: Obsidian's real CSS uses the LEGACY single-colon `:after`,
@@ -341,18 +408,21 @@ describe('SC-202 r5 — specificity guard (round-4\'s own method, reused verbati
 		expect(cmp(base, [0, 2, 1])).toBeGreaterThan(0);
 	});
 
-	test("GROUP 6's position/hover-outline companions (0,4,1)/(0,5,1) beat the bare (0,1,1) and hover (0,2,1) Obsidian rules they re-ground", () => {
-		const position = specificity(SC121_ANCHOR);
-		const hoverOutline = specificity(`${SC121_ANCHOR}:hover`);
-		expect(position).toEqual([0, 4, 1]);
-		expect(hoverOutline).toEqual([0, 5, 1]);
+	test("FIX ROUND (LOW-2) — GROUP 6's own subject (0,5,2), WITH the .checkbox-container exclusion, still beats every Obsidian rule it must outrank", () => {
+		const base = specificity(GROUP6_SUBJECT);
+		expect(base).toEqual([0, 5, 2]);
+		expect(cmp(base, [0, 2, 1])).toBeGreaterThan(0);
+	});
+
+	test("GROUP 6's position/hover-outline companions beat the bare (0,1,1) and hover (0,2,1) Obsidian rules they re-ground", () => {
+		const position = specificity(GROUP6_SUBJECT);
+		const hoverOutline = specificity(`${GROUP6_SUBJECT}:hover`);
 		expect(cmp(position, [0, 1, 1])).toBeGreaterThan(0);
 		expect(cmp(hoverOutline, [0, 2, 1])).toBeGreaterThan(0);
 	});
 
-	test("GROUP 6's ::after companion (0,5,2) beats BOTH Obsidian rules it must outrank ((0,2,2) tick, (0,3,2) indeterminate) — safe as ONE shared :is() here because SC-121's own anchor starts five class-columns higher than the task-list one did", () => {
-		const ours = specificity(`${SC121_ANCHOR}:is(:checked, [data-indeterminate='true'])::after`);
-		expect(ours).toEqual([0, 5, 2]);
+	test("GROUP 6's ::after companion beats BOTH Obsidian rules it must outrank ((0,2,2) tick, (0,3,2) indeterminate) — safe as ONE shared :is() here because SC-121's own anchor starts well clear of Obsidian's highest competing rule", () => {
+		const ours = specificity(`${GROUP6_SUBJECT}:is(:checked, [data-indeterminate='true'])::after`);
 		expect(cmp(ours, [0, 2, 2])).toBeGreaterThan(0);
 		expect(cmp(ours, [0, 3, 2])).toBeGreaterThan(0);
 	});
