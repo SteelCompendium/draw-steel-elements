@@ -1046,10 +1046,12 @@ export interface HarnessParams {
 	 *
 	 * Optional and defaulting to `false` so every existing `HarnessParams` literal
 	 * (tests, the other cameras) keeps compiling unchanged. `shoot.mjs`'s `snap()` sets
-	 * `sheet=1` for the screen (dark/light) combos only — never for the print twin or
-	 * realprint, which is this round's scope fence (0 frozen bytes may move). The six
-	 * host-leak sweeps (+ the token-override probe) also request it on their own
-	 * navigation, then flip `#dse-obsidian-app-css`'s own `.disabled` themselves via
+	 * `sheet=1` for the screen (dark/light) combos AND the print-preview twin (SC-202 r6c:
+	 * "the print preview inside the app" IS a screen-media capture, per the ruling's option
+	 * C) — never for realprint, which forces the sheet on unconditionally itself, in
+	 * `applyRealPrintCascade`, regardless of this flag (real paper is never optional about
+	 * it). The six host-leak sweeps (+ the token-override probe) also request it on their
+	 * own navigation, then flip `#dse-obsidian-app-css`'s own `.disabled` themselves via
 	 * `page.evaluate` for their bare-vs-host comparison — see shoot.mjs's own comments.
 	 */
 	sheet?: boolean;
@@ -1848,7 +1850,15 @@ async function mountOne(
  * Idempotent: safe to call twice on the same `doc` with the same or a different `sheetOn`
  * (a direct test caller's own concern, not a real navigation's — every real capture is a
  * fresh `page.goto`), so a stale wrapper from an earlier call in the same document is
- * removed before a `sheetOn: false` call and never doubled before a `sheetOn: true` one.
+ * removed before a `sheetOn: false` call and never doubled before a `sheetOn: true` one —
+ * see `unwrapHarnessCascade` below, shared with `applyRealPrintCascade`'s own DIFFERENT
+ * shape so the two can never be confused with each other or left half-applied.
+ *
+ * SC-202 r6c — this function is now the SCREEN-media cascade specifically (the plain
+ * dark/light combos AND the print-preview TWIN, both real reading-view captures under
+ * `media: screen`); real paper gets its own `applyRealPrintCascade` below, selected by
+ * `mountFromParams` on `matchMedia('print').matches` — see that function's own comment for
+ * why a query flag would have been the wrong signal.
  */
 /**
  * SC-202 r6b fix round (independent review MED-2) — clearing `.disabled` starts a REAL,
@@ -1862,62 +1872,170 @@ async function mountOne(
  * event already fired before the listener attached, or never fires at all in some
  * engine) before returning — every downstream await (a screenshot, `setHostSheetEnabled`'s
  * own sentinel, a jest caller) is guaranteed the sheet is genuinely live, not merely
- * requested. No-op (resolves immediately) when the link is already attached or sheetOn is
- * false. jsdom never fires `load` for a `file://`-backed `<link>` (nothing under this repo's
- * own tests requests `sheet: true`), so the 3s ceiling is a safety net, not a real-world
+ * requested. No-op (resolves immediately) when the link is already attached and loaded.
+ * jsdom never fires `load` for a `file://`-backed `<link>` (nothing under this repo's own
+ * tests requests `sheet: true`), so the 3s ceiling is a safety net, not a real-world
  * budget — a genuine local load is single-digit milliseconds.
+ *
+ * SC-202 r6c: factored out of `applyRealObsidianCascade` so `applyRealPrintCascade` (real
+ * paper, which the ruling's option C needs the sheet ON for unconditionally) shares the
+ * exact same wait, rather than a second copy drifting from it.
  */
+async function ensureSheetLinkLoaded(link: HTMLLinkElement): Promise<void> {
+	if (link.sheet != null) return;
+	await new Promise<void>((resolve) => {
+		let settled = false;
+		const done = () => {
+			if (settled) return;
+			settled = true;
+			resolve();
+		};
+		link.addEventListener('load', done, { once: true });
+		link.addEventListener('error', done, { once: true });
+		const poll = (): void => {
+			if (settled) return;
+			if (link.sheet != null) {
+				done();
+				return;
+			}
+			setTimeout(poll, 10);
+		};
+		setTimeout(poll, 10);
+		setTimeout(done, 3000);
+	});
+}
+
+/**
+ * SC-202 r6c — undo whichever DOM-chain wrap (`applyRealObsidianCascade`'s single-div
+ * SCREEN shape or `applyRealPrintCascade`'s nested `.print > .markdown-preview-view`
+ * REAL-PAPER shape) an earlier call against this SAME `doc` may have left — a direct test
+ * caller's own concern, not a real navigation's (every real capture is a fresh
+ * `page.goto`). Detected by the `data-dse-harness-wrap` marker each shape's OUTERMOST
+ * element carries, never by pattern-matching the class list, so the two shapes (and any
+ * future third one) can never be confused with each other — a screen-shape wrap and a
+ * print-shape wrap share the `markdown-preview-view markdown-rendered` classes but are NOT
+ * the same DOM, and unwrapping the wrong shape's way would corrupt the tree.
+ */
+function unwrapHarnessCascade(mount: HTMLElement): void {
+	const wrap = mount.closest<HTMLElement>('[data-dse-harness-wrap]');
+	if (!wrap) return;
+	wrap.parentElement?.insertBefore(mount, wrap);
+	wrap.remove();
+}
+
 async function applyRealObsidianCascade(doc: Document, sheetOn: boolean): Promise<void> {
 	const link = doc.getElementById('dse-obsidian-app-css') as HTMLLinkElement | null;
 	if (link) {
 		link.disabled = !sheetOn;
-		if (sheetOn && link.sheet == null) {
-			await new Promise<void>((resolve) => {
-				let settled = false;
-				const done = () => {
-					if (settled) return;
-					settled = true;
-					resolve();
-				};
-				link.addEventListener('load', done, { once: true });
-				link.addEventListener('error', done, { once: true });
-				const poll = (): void => {
-					if (settled) return;
-					if (link.sheet != null) {
-						done();
-						return;
-					}
-					setTimeout(poll, 10);
-				};
-				setTimeout(poll, 10);
-				setTimeout(done, 3000);
-			});
-		}
+		if (sheetOn) await ensureSheetLinkLoaded(link);
 	}
 	const mount = doc.getElementById('mount');
 	if (!mount) return;
-	const wrapped = mount.parentElement?.classList.contains('markdown-preview-view') === true;
+	const wrapped = mount.parentElement?.getAttribute('data-dse-harness-wrap') === 'screen';
 	if (sheetOn && !wrapped) {
+		unwrapHarnessCascade(mount); // in case a REAL-PAPER wrap is what's actually there
 		const wrap = doc.createElement('div');
 		wrap.className =
 			'markdown-preview-view markdown-rendered node-insert-event allow-fold-headings ' +
 			'allow-fold-lists show-indentation-guide show-properties';
+		wrap.setAttribute('data-dse-harness-wrap', 'screen');
 		mount.parentElement?.insertBefore(wrap, mount);
 		wrap.appendChild(mount);
 	} else if (!sheetOn && wrapped) {
-		const wrap = mount.parentElement!;
-		wrap.parentElement?.insertBefore(mount, wrap);
-		wrap.remove();
+		unwrapHarnessCascade(mount);
 	}
+}
+
+/**
+ * SC-202 r6c — option C: `--steel-realprint` becomes Obsidian's REAL Export-to-PDF/Ctrl-P
+ * path, not a second screen rendering. Measured live over CDP (a scratch Obsidian 1.13.7,
+ * `workspace:export-pdf` driven end to end — the save dialog is the one step a script
+ * cannot click through, so it was stubbed to resolve instantly with a canned path; every
+ * OTHER step, including the actual `webContents.printToPDF()` call and the resulting PDF
+ * bytes, ran unmodified) against this round's `feature`/`statblock` fixtures. Obsidian's
+ * own `printToPdf()` (app.js, minified but legible):
+ *
+ *   1. `window.open('about:blank', '_blank', 'popup,hide=true')` — a SEPARATE top-level
+ *      window/document, not the workspace window's own DOM.
+ *   2. Relays every `<style>`/`<link rel=stylesheet>` from the main document's `<head>`
+ *      into the popup's (app.css, no theme/snippet in a default vault, then the plugin's
+ *      own inline `<style>` — the SAME two-sheet order §1's screen-cascade measurement
+ *      found) and copies the popup's own `<body>` class list from the main window's.
+ *   3. `sleep(200)`, then `body.removeClass('theme-dark'); body.addClass('theme-light')`
+ *      — UNCONDITIONALLY, even starting from a dark vault (measured: the popup's body
+ *      class list carries every window-chrome class the main window's does, MINUS
+ *      `is-focused`, PLUS `is-popout-window` and `theme-light` — never `theme-dark`).
+ *   4. `body.createDiv('print')`, then inside it a SINGLE
+ *      `markdown-preview-view markdown-rendered show-properties` wrapper around the
+ *      rendered note (measured: NOT the screen cascade's own class list above — no
+ *      `node-insert-event`/`allow-fold-headings`/`allow-fold-lists`/
+ *      `show-indentation-guide`, because those come from the WORKSPACE reading pane's own
+ *      MarkdownRenderer call, a different code path `printToPdf()` never takes).
+ *
+ * `body.theme-light` and the app.css link are handled here, directly (this function is
+ * `mountFromParams`'s entire realprint-mode branch); the `.print` DOM chain is built the
+ * same way `applyRealObsidianCascade` builds its own single-div one, sharing
+ * `ensureSheetLinkLoaded`/`unwrapHarnessCascade`. `data-dse-print="on"` itself is NOT
+ * stamped here — the plugin's OWN `watchPrintMedia` (src/framework/printMedia.ts) does
+ * that, live, off `matchMedia('print')`, which is already true by the time this runs
+ * (`shoot.mjs`'s `snap()` calls `page.emulateMedia({media:'print'})` BEFORE `page.goto`) —
+ * reusing the real mechanism rather than faking its outcome is the whole point of making
+ * this surface true.
+ *
+ * Window-chrome classes (`mod-linux`, `is-frameless`, `is-popout-window`, …) are
+ * deliberately NOT reproduced on `doc.body` here, same call `applyRealObsidianCascade`
+ * made for the screen cascade and for the same reason: grepped against app.css, none of
+ * them pairs with any `.markdown-rendered`/table/list/input/checkbox/prose selector this
+ * file's sweeps or captures ever samples (`.is-popout-window` re-checked this round: two
+ * `.mod-macos`-scoped window-chrome hits only), and they are OS/window-manager-specific —
+ * baking Linux-only classes into every future realprint shot would be reproducing an
+ * artifact of THIS machine, not of Obsidian's export.
+ */
+async function applyRealPrintCascade(doc: Document): Promise<void> {
+	const link = doc.getElementById('dse-obsidian-app-css') as HTMLLinkElement | null;
+	if (link) {
+		link.disabled = false;
+		await ensureSheetLinkLoaded(link);
+	}
+	const mount = doc.getElementById('mount');
+	if (!mount) return;
+	const wrapped = mount.parentElement?.parentElement?.getAttribute('data-dse-harness-wrap') === 'realprint';
+	if (wrapped) return;
+	unwrapHarnessCascade(mount); // in case a SCREEN wrap is what's actually there
+	const inner = doc.createElement('div');
+	inner.className = 'markdown-preview-view markdown-rendered show-properties';
+	mount.parentElement?.insertBefore(inner, mount);
+	inner.appendChild(mount);
+	const outer = doc.createElement('div');
+	outer.className = 'print';
+	outer.setAttribute('data-dse-harness-wrap', 'realprint');
+	inner.parentElement?.insertBefore(outer, inner);
+	outer.appendChild(inner);
 }
 
 export async function mountFromParams(
 	doc: Document,
 	params: HarnessParams,
 ): Promise<{ errors: string[] }> {
+	// SC-202 r6c — real print is detected off `matchMedia('print')`, the SAME signal the
+	// plugin's own `watchPrintMedia` uses, rather than a new query flag: `shoot.mjs`'s
+	// realprint combo is the only one that ever calls `page.emulateMedia({media:'print'})`,
+	// and it does so BEFORE `page.goto` (so the root sees it at mount time), which means
+	// this is already true by the time `mountFromParams` runs for that one combo and false
+	// for every other — a flag would just be restating what the browser already knows, one
+	// more thing to keep in sync. jsdom's own `matchMedia` (when present at all) never
+	// matches anything unless a test installs its own driver (same convention
+	// `print-media.test.ts` already uses for the plugin's side of this), so a direct test
+	// caller gets the screen-cascade branch by default.
+	const isRealPrint = doc.defaultView?.matchMedia?.('print')?.matches === true;
 	doc.body.classList.remove('theme-dark', 'theme-light');
-	doc.body.classList.add(params.bg === 'light' ? 'theme-light' : 'theme-dark');
-	await applyRealObsidianCascade(doc, params.sheet === true);
+	// Real paper forces `theme-light` UNCONDITIONALLY (measured — `applyRealPrintCascade`'s
+	// own comment), even though this combo's OWN `bg` is 'dark': that mismatch is the
+	// point, proving the force holds regardless of the starting theme.
+	const bgClass = isRealPrint || params.bg === 'light' ? 'theme-light' : 'theme-dark';
+	doc.body.classList.add(bgClass);
+	if (isRealPrint) await applyRealPrintCascade(doc);
+	else await applyRealObsidianCascade(doc, params.sheet === true);
 	// SC-169: chosen BEFORE any element mounts — the chrome reads it once, at mount time.
 	// Always written (not only when true) so a direct test caller cannot inherit a
 	// previous call's mobile mode.

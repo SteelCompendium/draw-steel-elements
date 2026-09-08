@@ -143,6 +143,114 @@ describe('mountFromParams error seam', () => {
 	});
 });
 
+// SC-202 r6c (option C) — `applyRealPrintCascade`'s own DOM chain, and its selection
+// (`matchMedia('print')`, not a query flag — see `mountFromParams`'s own comment for why).
+// Same convention `test/dom/framework/print-media.test.ts` already uses for the PLUGIN
+// side of this: jsdom's own `matchMedia` never matches anything unless a test installs a
+// controllable driver, so a direct `mountFromParams` caller gets the screen-cascade branch
+// by default (proven below) and the realprint branch only when this test drives it.
+function installMatchMedia(initial = false) {
+	const state = { matches: initial };
+	const original = (window as unknown as { matchMedia?: unknown }).matchMedia;
+	(window as unknown as { matchMedia: unknown }).matchMedia = (media: string) => ({
+		media,
+		get matches() {
+			return media === 'print' ? state.matches : false;
+		},
+		addEventListener: () => {},
+		removeEventListener: () => {},
+	});
+	return {
+		setMatches: (m: boolean) => {
+			state.matches = m;
+		},
+		restore: () => {
+			(window as unknown as { matchMedia?: unknown }).matchMedia = original;
+		},
+	};
+}
+
+describe('mountFromParams realprint cascade (SC-202 r6c, option C)', () => {
+	let mount: HTMLDivElement;
+	let driver: ReturnType<typeof installMatchMedia>;
+
+	beforeEach(() => {
+		mount = document.createElement('div');
+		mount.id = 'mount';
+		document.body.appendChild(mount);
+		driver = installMatchMedia(false);
+	});
+
+	afterEach(() => {
+		// Remove #mount's OWN wrap shell(s) too, not just #mount itself — otherwise an
+		// orphaned, now-empty `.print`/`.markdown-preview-view` div is left attached to
+		// `document.body` for the NEXT test in this file to trip over.
+		document.getElementById('mount')?.closest('[data-dse-harness-wrap]')?.remove();
+		mount.remove();
+		driver.restore();
+	});
+
+	const params = (extra: Partial<Parameters<typeof mountFromParams>[1]> = {}) => ({
+		element: 'feature',
+		fixture: 'default',
+		theme: 'steel' as const,
+		bg: 'dark' as const,
+		print: false,
+		readonly: false,
+		gallery: false,
+		...extra,
+	});
+
+	test('screen media (matchMedia print not matching): the SCREEN single-div wrap, marked "screen"', async () => {
+		await mountFromParams(document, params({ sheet: true }));
+		const wrap = document.getElementById('mount')!.parentElement!;
+		expect(wrap.getAttribute('data-dse-harness-wrap')).toBe('screen');
+		expect(wrap.classList.contains('markdown-preview-view')).toBe(true);
+		expect(wrap.classList.contains('markdown-rendered')).toBe(true);
+		// The screen wrap carries the reading-pane classes real print/export never builds.
+		expect(wrap.classList.contains('node-insert-event')).toBe(true);
+	});
+
+	test('print media (matchMedia print matching): the .print > .markdown-preview-view nested wrap, marked "realprint"', async () => {
+		driver.setMatches(true);
+		await mountFromParams(document, params({ bg: 'dark' }));
+		const inner = document.getElementById('mount')!.parentElement!;
+		const outer = inner.parentElement!;
+		expect(outer.className).toBe('print');
+		expect(outer.getAttribute('data-dse-harness-wrap')).toBe('realprint');
+		expect(inner.classList.contains('markdown-preview-view')).toBe(true);
+		expect(inner.classList.contains('markdown-rendered')).toBe(true);
+		// Real export's own wrapper carries NONE of the reading-pane-only classes.
+		expect(inner.classList.contains('node-insert-event')).toBe(false);
+		expect(inner.classList.contains('show-indentation-guide')).toBe(false);
+	});
+
+	test('real print forces theme-light UNCONDITIONALLY, even from a dark combo', async () => {
+		driver.setMatches(true);
+		await mountFromParams(document, params({ bg: 'dark' }));
+		expect(document.body.classList.contains('theme-light')).toBe(true);
+		expect(document.body.classList.contains('theme-dark')).toBe(false);
+	});
+
+	test('switching media between navigations on the same doc never leaves both shapes applied (idempotent unwrap)', async () => {
+		await mountFromParams(document, params({ sheet: true })); // screen shape
+		driver.setMatches(true);
+		await mountFromParams(document, params({ bg: 'dark' })); // realprint shape
+		const inner = document.getElementById('mount')!.parentElement!;
+		const outer = inner.parentElement!;
+		expect(outer.getAttribute('data-dse-harness-wrap')).toBe('realprint');
+		// No leftover screen-shape marker anywhere in #mount's OWN ancestor chain (a
+		// document-wide query would also catch other tests' own, separately-cleaned-up,
+		// orphaned wrap shells — this scopes to the one #mount this test actually drives).
+		expect(mount.closest('[data-dse-harness-wrap="screen"]')).toBeNull();
+		// …and the reverse direction: back to screen media unwraps the realprint shape.
+		driver.setMatches(false);
+		await mountFromParams(document, params({ sheet: true }));
+		expect(mount.closest('[data-dse-harness-wrap="realprint"]')).toBeNull();
+		expect(mount.closest('.print')).toBeNull();
+	});
+});
+
 // SC-144 — the theme axis was retired. `shoot.mjs` sweeps 3 combos (steel-dark,
 // steel-light, steel-print) and no longer sends anything but `theme=steel`, so the
 // harness's own default must be Steel: before SC-144 an omitted `theme=` param resolved

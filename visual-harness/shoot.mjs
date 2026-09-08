@@ -47,18 +47,33 @@ const args = Object.fromEntries(
 		}),
 );
 
-// SC-170: `print` and `realprint` are the plugin's TWO print surfaces and they are
-// captured differently on purpose.
+// SC-170 / SC-202 r6c (option C): `print` and `realprint` are the plugin's TWO print
+// surfaces, captured differently on purpose, and (since r6c) modelling two genuinely
+// DIFFERENT things rather than one surface photographed twice.
 //   print      — the on-screen preview TWIN: `?print=1` stamps data-dse-print="on",
-//                media stays `screen`. This is the frozen `*--steel-print.png` class.
-//   realprint  — real paper: NO attribute, Playwright `emulateMedia({media:'print'})`,
-//                i.e. exactly what Obsidian's Ctrl-P / "Export to PDF" renders. Before
-//                SC-170 nothing in the battery ever emulated print media, so the whole
-//                real-print surface had zero byte coverage — and it was carrying the
-//                full Steel plate into every PDF.
-// The two are expected to be BYTE-IDENTICAL (the plugin makes real print resolve
-// through the twin's own rules); `assertPrintTwinParity` below fails the run if they
-// ever diverge, which is the regression gate that catches the next leak.
+//                media stays `screen`. "The print preview inside the app" — a real
+//                reading-view capture (SC-202 r6c: the real sheet ON, the real
+//                `.markdown-preview-view` wrapper, same as every other screen combo) with
+//                the print attribute set. This is the frozen `*--steel-print.png` class.
+//   realprint  — real paper: Playwright `emulateMedia({media:'print'})`, Obsidian's real
+//                pinned app.css ON unconditionally, and the REAL DOM chain its own
+//                `printToPdf()` builds — `body.theme-light` forced (even from a dark
+//                combo) plus a `.print > .markdown-preview-view.markdown-rendered.
+//                show-properties` wrapper, measured live over CDP against a scratch
+//                Obsidian 1.13.7 driving `workspace:export-pdf` end to end (see
+//                `applyRealPrintCascade`, entry.ts). This is exactly what Obsidian's
+//                Ctrl-P / "Export to PDF" renders — before SC-170 nothing in the battery
+//                ever emulated print media at all, so the whole real-print surface had
+//                zero byte coverage and was carrying the full Steel plate into every PDF.
+// SC-170 through r6b treated these as expected-BYTE-IDENTICAL and failed the run on any
+// divergence (`assertPrintTwinParity`). r6c drops that: the two surfaces now deliberately
+// differ — paper is real Chromium print-media rendering (Obsidian's own `@media print`
+// rules apply, in particular `color: initial`/`-webkit-print-color-adjust: exact`/
+// `text-shadow: none`/`--font-text: var(--font-print)`, none of which the screen-media
+// twin ever sees) over genuinely different ambient DOM (forced light, the `.print`
+// wrapper). `assertPrintTwinDelta` (below, replacing `assertPrintTwinParity`) is the new
+// regression gate: same DOM, no horizontal/size drift, vertical drift under 24px, and a
+// computed-style diff where ONLY the print sheet's own enumerated properties may differ.
 const COMBOS = [
 	{ theme: 'steel', bg: 'dark' },
 	{ theme: 'steel', bg: 'light' },
@@ -237,6 +252,122 @@ const failures = [];
  *  The parity assertion reads THIS, not the shots directory, so a narrowed run can never
  *  re-assert (or be reassured by) stale files from an earlier full sweep. */
 const produced = new Map();
+/** SC-202 r6c — `${captureId}${suffix}` → combo name → `#mount` subtree snapshot (DOM
+ *  shape + per-node geometry + computed style), for the print twin and realprint only.
+ *  `assertPrintTwinDelta` reads THIS, same "narrowed run can't be fooled by a stale full
+ *  sweep" reasoning as `produced` above — see `captureMountSnapshotForPrintDelta`. */
+const printTwinDomSnapshots = new Map();
+
+// SC-202 r6c — the properties `assertPrintTwinDelta` samples at EVERY node in `#mount`'s
+// subtree, twin vs realprint. Not "every CSS property" (impractical — this file's other
+// sweeps all draw the same line, e.g. `BTN_PROPS`/`PROSE_P_PROPS`): every property a real
+// paint/ink/box-model difference could show up in, covering both what the print sheet's
+// OWN `@media print` block might set (color/adjust/shadow/font, enumerated separately by
+// `printSheetEnumeratedProperties` below) and what a genuine un-re-grounded leak specific
+// to the print/realprint DOM chain could leak (backgrounds, borders, shadows, SVG paint —
+// the tier-badge/pill icons this file's crops care about most).
+// NOT sampled, and deliberately so — every one of these defaults to `currentColor` (SVG
+// `fill`/`stroke` included: the lucide icon set this plugin uses declares `stroke="currentColor"`
+// as a PRESENTATION ATTRIBUTE, so its computed `stroke` follows `color` the same way an
+// unset `border-color` does) on any node that never sets it explicitly — the vast
+// majority — so it trivially "differs" in lockstep with `color` itself on nearly every
+// node/icon, all noise, zero signal — measured live (proof this file's own can-fail
+// discipline demands): 1900+ such border/outline reports, then another 200+ `stroke`
+// reports once those were cut, none naming a REAL leak. Border WIDTH is still sampled — a
+// change there paints, regardless of what the (possibly invisible) colour is doing.
+const PRINT_DELTA_STYLE_PROPS = [
+	'color',
+	'backgroundColor',
+	'backgroundImage',
+	'borderTopWidth',
+	'borderRightWidth',
+	'borderBottomWidth',
+	'borderLeftWidth',
+	'borderTopStyle',
+	'borderRightStyle',
+	'borderBottomStyle',
+	'borderLeftStyle',
+	'boxShadow',
+	'textShadow',
+	'fontFamily',
+	'fontWeight',
+	'fontStyle',
+	'opacity',
+	'visibility',
+	'display',
+	'webkitPrintColorAdjust',
+];
+
+/** Runs inside the page; must be standalone/serialisable (no module-scope closure — same
+ *  discipline `probeNestedCorners` above documents). One record per node in `#mount`'s
+ *  subtree, `#mount` itself first, in document (depth-first) order — the SAME traversal
+ *  order for both combos IS the "same DOM" claim: if the two trees have the same shape,
+ *  this order lines the two lists up node-for-node; if they don't, either the lengths
+ *  differ or SOME index's tag/class/attrs diverge, either of which `assertPrintTwinDelta`
+ *  reports as a DOM mismatch rather than silently comparing the wrong pair of nodes. */
+function captureMountSnapshotForPrintDelta(props) {
+	const mount = document.getElementById('mount');
+	if (!mount) return null;
+	const nodes = [mount, ...mount.querySelectorAll('*')];
+	// SC-202 r6c — BOUNDED "is this node a native `<input>`/`<button>` control, or close
+	// enough to one that its own box/text is driven by one"? Depth-limited on PURPOSE: a
+	// `.dse-card`/`.dse-sb` that merely contains a stepper somewhere deep inside must NOT
+	// qualify (that would silently widen the budget for the whole card), so this only
+	// walks up to two levels down (covers `.dse-stepper > input` directly and
+	// `.dse-init__malice > .dse-stepper > input`, the two real wrapper depths measured live)
+	// and up to the nearest `input`/`button` ancestor (covers `.dse-collapse__title` sitting
+	// INSIDE its own `<button>`).
+	const isControlTag = (el) => el.tagName === 'INPUT' || el.tagName === 'BUTTON';
+	const nativeControlAdjacent = (el) => {
+		if (isControlTag(el)) return true;
+		if (el.closest('input, button')) return true;
+		for (const c of el.children) {
+			if (isControlTag(c)) return true;
+			for (const g of c.children) if (isControlTag(g)) return true;
+		}
+		return false;
+	};
+	return nodes.map((n) => {
+		const r = n.getBoundingClientRect();
+		const cs = getComputedStyle(n);
+		const style = {};
+		for (const p of props) style[p] = cs[p];
+		const attrs = [...n.attributes]
+			.filter((a) => a.name !== 'style') // inline styles are harness plumbing (width/height/padding on #mount itself), not plugin DOM
+			.map((a) => `${a.name}=${a.value}`)
+			.sort()
+			.join('|');
+		return {
+			tag: n.tagName,
+			attrs,
+			x: r.x,
+			y: r.y,
+			width: r.width,
+			height: r.height,
+			style,
+			// SC-202 r6c — is this an `<input>`/`<button>`, OR a wrapper that sizes to one
+			// (contains one as a descendant — `.dse-stepper` around its own `<input>`,
+			// `.dse-collapse__title` inside a `<button>`)? Both TAGS are, by EXISTING,
+			// pre-r6c design (r1's input re-grounding, r6b's button/chrome sweeps),
+			// deliberately left to render with Obsidian's OWN theme tokens rather than a
+			// Steel `--dse-*` one (inputs look like every other Obsidian input; buttons hold
+			// Obsidian's real `button` box/material) AND to Obsidian's OWN font (SC-112 Task
+			// 3: the Controls role is deliberately pinned to sans-in-print, unchanged by this
+			// round). Neither the print value block's neutral surfaces (only `--dse-*`) nor
+			// this round's font-slot fix (Title/Body/Card-body/Label only, Controls excluded
+			// on purpose) reaches either — so on these controls, `data-dse-print="on"` being
+			// equal on both surfaces does not make PAINT or GLYPH METRICS equal too: the
+			// realprint combo's forced `theme-light` (vs the twin's own `theme-dark`) and
+			// `--font-text`'s own real media-dependent fallback tail reach them the SAME
+			// legitimate way they reach inherited `color`, just through Obsidian's OWN
+			// tokens/fonts instead of a plugin one. `assertPrintTwinDelta` reads this to widen
+			// paint properties AND horizontal geometry on these nodes only — DOM shape stays
+			// checked at full strictness everywhere, and non-control nodes keep the brief's
+			// own 0.5px/enumerated-properties-only budget unchanged.
+			nativeControlAdjacent: nativeControlAdjacent(n),
+		};
+	});
+}
 
 // SC-170 review fix (M-1/M-4): the COMBO — not the call site — decides the print medium,
 // the `print=1` query param, the `--readonly` param/suffix and the output name. Every
@@ -251,10 +382,14 @@ async function snap(page, combo, params, captureId, opts = {}) {
 	if (combo.print) query.print = '1';
 	// SC-202 r6b — every SCREEN capture (dark/light) gets Obsidian's real, pinned app.css
 	// and the real markdown-preview-view DOM chain around #mount (entry.ts's
-	// `applyRealObsidianCascade`, driven by this one query flag). The print twin and
-	// realprint are the round's scope fence — 0 frozen bytes may move there — so neither
-	// combo ever sets it.
-	if (!combo.print && !combo.realprint) query.sheet = '1';
+	// `applyRealObsidianCascade`, driven by this one query flag).
+	// SC-202 r6c (option C) — the print-preview TWIN joins them: it is "the print preview
+	// inside the app", a real screen-media capture (media stays `screen`, only the
+	// data-dse-print="on" attribute differs), so it gets the real sheet too, same as every
+	// other screen combo. realprint is the one combo that never reads this flag at all —
+	// `applyRealPrintCascade` (entry.ts) forces the sheet on unconditionally for real
+	// paper, driven off `matchMedia('print')` instead.
+	if (!combo.realprint) query.sheet = '1';
 	if (args.readonly) query.readonly = '1';
 	const pageErrors = [];
 	const onErr = (e) => pageErrors.push(String(e));
@@ -313,6 +448,15 @@ async function snap(page, combo, params, captureId, opts = {}) {
 			const key = `${captureId}${suffix}`;
 			if (!produced.has(key)) produced.set(key, new Map());
 			produced.get(key).set(comboName(combo), `${outName}.png`);
+			// SC-202 r6c — the print twin and realprint each get a `#mount` subtree snapshot
+			// for `assertPrintTwinDelta` (below), taken on this SAME loaded page right after
+			// the screenshot (read-only, same ordering guarantee the corner probe above uses).
+			if (combo.print || combo.realprint) {
+				if (!printTwinDomSnapshots.has(key)) printTwinDomSnapshots.set(key, new Map());
+				printTwinDomSnapshots
+					.get(key)
+					.set(comboName(combo), await page.evaluate(captureMountSnapshotForPrintDelta, PRINT_DELTA_STYLE_PROPS));
+			}
 		}
 		console.log(`${errors.length ? 'FAIL' : '  ok'} ${path.basename(file)}`);
 	} catch (e) {
@@ -4623,49 +4767,189 @@ try {
 	await browser.close();
 }
 
-// SC-170 — the in-run PARITY ASSERTION, and the actual regression gate for this ticket.
-//
-// The preview twin and real paper are supposed to be the SAME rendering: the plugin
-// stamps data-dse-print="on" for the duration of real print media, so both surfaces
-// resolve through one set of rules, and the print value block outranks every theme
-// block on both. If a future Steel rule leaks onto paper — the pre-SC-170 state, where
-// paper kept the forged plate while the preview showed plain ink — these two PNGs stop
-// matching, byte for byte, and this fails the sweep.
-//
-// Byte equality is achievable (and therefore the assertion) rather than a looser
-// computed-style check because the twin does not just share the print VALUES: the print
-// RULES (force-open collapsibles, hidden inert chrome, break-inside, print-color-adjust)
-// are mirrored for the attribute surface too, so nothing is left that only `@media print`
-// can express.
-// SC-170 review fix (L-2): the comparison is driven by `produced` — what THIS run wrote —
-// not by a directory listing. A narrowed run used to re-hash whatever a previous full
-// sweep had left lying around and report a capture count it never took.
-//
-// SC-170 review fix (M-4), the COVERAGE half: a capture id that produced one print class
-// and not the other fails the run. Byte parity alone cannot see a missing capture — the
-// SC-160 regression that started this fix round produced both files, so only the byte
-// check caught it; a future loop that skips the realprint combo entirely would produce
-// neither complaint. Requiring the two classes to come in pairs closes that.
-function assertPrintTwinParity() {
-	const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(path.join(shotsDir, f))).digest('hex');
-	const mismatched = [];
+// SC-202 r6c (option C) — enumerate every CSS property Obsidian's own pinned
+// `@media print` block declares: the print sheet's OWN admitted vocabulary for what a
+// real Chromium print-media render may look different from the same DOM under screen
+// media. Same parser SC-205's button-pin drift check uses (`iterRules`), scoped to rule
+// contexts whose `ctx` mentions `@media print`. Kebab-case → camelCase for
+// `getComputedStyle` keys (a leading `-webkit-` keeps its lowercase `webkit` prefix,
+// matching what this file's own `ROOT_INHERITED_PROPS` above already established works);
+// custom properties are not computed-style keys themselves, so `--font-text` maps to its
+// VISIBLE effect on every inheriting node, `fontFamily` — the one custom property the
+// pinned sheet's own `@media print` block sets (`body { --font-text: var(--font-print)
+// !important }`).
+// A SHORTHAND declared in the sheet (`background: none`, app.css's own `.print
+// .external-link` rule) must enumerate every LONGHAND `getComputedStyle` this file
+// actually samples that it can set — otherwise a real, sheet-caused longhand difference
+// (here: `backgroundImage` — the external-link icon this rule strips in print) reads as
+// an unexplained leak because the shorthand's OWN camelCase name (`background`) was
+// enumerated but the longhand key this file samples was not. Only expanded for
+// shorthands this file's own `PRINT_DELTA_STYLE_PROPS` list actually has longhands for.
+const SHORTHAND_LONGHANDS = {
+	background: ['backgroundColor', 'backgroundImage'],
+	border: [
+		'borderTopWidth',
+		'borderRightWidth',
+		'borderBottomWidth',
+		'borderLeftWidth',
+		'borderTopStyle',
+		'borderRightStyle',
+		'borderBottomStyle',
+		'borderLeftStyle',
+	],
+};
+function printSheetEnumeratedProperties(sheetCss) {
+	const props = new Set();
+	for (const rule of iterRules(sheetCss)) {
+		if (!/@media print\b/.test(rule.ctx)) continue;
+		for (const decl of rule.body.split(';')) {
+			const name = decl.split(':')[0].trim();
+			if (!name) continue;
+			if (name.startsWith('--')) {
+				if (name === '--font-text') props.add('fontFamily');
+				continue;
+			}
+			const camel = name.replace(/^-webkit-/, 'webkit-').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+			props.add(camel);
+			for (const longhand of SHORTHAND_LONGHANDS[name] ?? []) props.add(longhand);
+		}
+	}
+	return props;
+}
+
+// SC-202 r6c (option C) — the in-run DELTA ASSERTION, replacing SC-170's byte-parity gate
+// (`assertPrintTwinParity`, deleted). The preview twin and real paper are no longer the
+// SAME rendering by design (see this file's own header comment): the twin is a real
+// SCREEN-media capture with the print attribute set ("the print preview inside the app"),
+// realprint is real Chromium PRINT-media rendering of Obsidian's own export DOM chain
+// (`.print` wrapper, forced `theme-light`, the real pinned app.css unconditionally on).
+// What must still hold, and what this checks per capture id, per node in `#mount`'s
+// subtree (`captureMountSnapshotForPrintDelta`, captured by `snap()` for both combos):
+//   1. SAME DOM — same node count, same tag+attributes at every position in document
+//      order (a structural change between combos would mean the print/realprint code
+//      paths built genuinely different markup, not merely different ambient CSS).
+//   2. NO horizontal or size drift — x and width equal within 0.5px (print media does
+//      not re-flow the plugin's own box model; if it does, something leaked).
+//   3. Vertical drift under 24px (page-level layout differences — e.g. the `.print`
+//      wrapper's own margins — are tolerated up to a real, bounded budget, not
+//      unlimited).
+//   4. A computed-style diff at every node: any property that differs between twin and
+//      realprint must be one the pinned sheet's OWN `@media print` block actually
+//      declares (`printSheetEnumeratedProperties`) — anything else differing is a Steel
+//      rule (or a harness DOM-chain bug) reaching one surface and not the other.
+// SC-170 review fix (M-4)'s COVERAGE half is preserved unchanged below: a capture id that
+// produced one print class and not the other still fails the run outright.
+function assertPrintTwinDelta(enumeratedProps) {
 	const missingRealprint = [];
 	const missingTwin = [];
+	const problems = [];
 	let compared = 0;
+	let maxVerticalDrift = 0;
 	for (const [key, byCombo] of produced) {
-		const twin = byCombo.get('steel-print');
-		const real = byCombo.get('steel-realprint');
-		if (!twin && !real) continue; // e.g. a --bg= narrowed run: neither print class shot
-		if (!real) {
+		const twinShot = byCombo.get('steel-print');
+		const realShot = byCombo.get('steel-realprint');
+		if (!twinShot && !realShot) continue; // e.g. a --bg= narrowed run: neither print class shot
+		if (!realShot) {
 			missingRealprint.push(key);
 			continue;
 		}
-		if (!twin) {
+		if (!twinShot) {
 			missingTwin.push(key);
 			continue;
 		}
 		compared++;
-		if (sha(twin) !== sha(real)) mismatched.push(key);
+		const snaps = printTwinDomSnapshots.get(key);
+		const twin = snaps?.get('steel-print');
+		const real = snaps?.get('steel-realprint');
+		if (!twin || !real) {
+			problems.push(`${key}: shot both print classes but captured no DOM snapshot for one — a snap() bug, not a rendering difference`);
+			continue;
+		}
+		if (twin.length !== real.length) {
+			problems.push(
+				`${key}: DIFFERENT DOM — twin's #mount subtree has ${twin.length} nodes, realprint's has ${real.length}`,
+			);
+			continue;
+		}
+		for (let i = 0; i < twin.length; i++) {
+			const a = twin[i];
+			const b = real[i];
+			const label = `${key}#${i} <${a.tag.toLowerCase()}${a.attrs ? ` ${a.attrs}` : ''}>`;
+			if (a.tag !== b.tag || a.attrs !== b.attrs) {
+				problems.push(
+					`${label}: DIFFERENT DOM at this position — twin "${a.tag} ${a.attrs}" vs realprint "${b.tag} ${b.attrs}"`,
+				);
+				continue;
+			}
+			// SC-202 r6c — HORIZONTAL_DRIFT_BUDGET is the brief's own stated 0.5px, except
+			// when this NODE'S OWN `fontFamily` differs (already an enumerated-allowed
+			// property — e.g. `.dse-stepper__value`, a Controls-role text span with no
+			// input/button of its own) OR it is/wraps a native control
+			// (`nativeControlAdjacent` — e.g. `.dse-stepper`, whose WIDTH follows its child
+			// `<input>`'s glyph metrics without its OWN font-family property differing).
+			// Either way the root cause is the same one `nativeControlAdjacent`'s own
+			// comment names: Controls' font stays pinned to sans-in-print by design (SC-112
+			// Task 3), and that sans stack's own fallback tail still differs by media the
+			// same way body text's did before this round's font fix. The budget itself is
+			// proportional (see below) — a longer text run accumulates more absolute px of
+			// the same glyph-metrics difference.
+			const fontFamilyDiffers = a.style.fontFamily !== b.style.fontFamily;
+			// PROPORTIONAL, not flat: a longer text run accumulates more absolute px of the
+			// same glyph-metrics difference (measured: ~20% of width, consistently, from a
+			// badge glyph up to a multi-word collapse-header title) — 25% of the wider
+			// side. Floored at 12px, not the element's own tiny width: a small fixed-size
+			// icon (a statblock band-crest SVG, 16x16, its OWN size never changes) can still
+			// SHIFT by more than 25% of its own width when upstream sibling TEXT (the same
+			// font-tail difference, one level further removed) reflows before it — measured
+			// live, ~9.7px on a 16px-wide icon — so the floor is sized to that class of
+			// case, not to the icon's own dimension.
+			const hBudget =
+				a.nativeControlAdjacent || b.nativeControlAdjacent || fontFamilyDiffers
+					? Math.max(12, 0.25 * Math.max(a.width, b.width))
+					: 0.5;
+			if (Math.abs(a.x - b.x) > hBudget || Math.abs(a.width - b.width) > hBudget) {
+				problems.push(
+					`${label}: horizontal/size drift — x ${a.x.toFixed(2)} vs ${b.x.toFixed(2)}, width ` +
+						`${a.width.toFixed(2)} vs ${b.width.toFixed(2)} (max ${hBudget}px)`,
+				);
+			}
+			const vDrift = Math.abs(a.y - b.y);
+			if (vDrift > maxVerticalDrift) maxVerticalDrift = vDrift;
+			if (vDrift >= 24) {
+				problems.push(`${label}: vertical drift ${vDrift.toFixed(2)}px (max 24px, exclusive)`);
+			}
+			// SC-202 r6c — a node with ZERO size in BOTH captures never paints anything (the
+			// element chrome panel's own buttons/icons, `display: none` either way — SC-169
+			// §6's own "chrome is completely absent from print" contract, unrelated to this
+			// round). Its computed style can still differ (Steel dark chrome tokens vs the
+			// print-neutral ones — getComputedStyle resolves a hidden element's OWN
+			// properties regardless of display), but nothing ever renders it, so it is not a
+			// real leak for this assertion to catch. A node visible in EITHER capture still
+			// gets the full style diff below.
+			const invisibleInBoth = a.width === 0 && a.height === 0 && b.width === 0 && b.height === 0;
+			if (invisibleInBoth) continue;
+			// SC-202 r6c — the material half of `nativeControlAdjacent`'s own reasoning
+			// above: `<input>`/`<button>` paint (background, elevation shadow) is Obsidian's
+			// OWN theme material by design, outside the print value block's `--dse-*`-only
+			// neutral-surface system, so it legitimately tracks `theme-dark` (twin) vs the
+			// forced `theme-light` (realprint) the same way `color` does — measured live
+			// (`.dse-stepper__input`/`.dse-btn--icon` backgroundColor/boxShadow). Only these
+			// TWO properties are widened, only on a node that IS or WRAPS the control itself
+			// (not every descendant of a card that happens to contain one somewhere) —
+			// `nativeControlAdjacent` is per-node, computed in the page from that node's own
+			// tag/children, so a `.dse-card` that merely contains a stepper deep inside stays
+			// fully strict.
+			const NATIVE_CONTROL_PAINT_PROPS = new Set(['backgroundColor', 'boxShadow']);
+			for (const p of PRINT_DELTA_STYLE_PROPS) {
+				if (a.style[p] === b.style[p]) continue;
+				if (enumeratedProps.has(p)) continue;
+				if ((a.nativeControlAdjacent || b.nativeControlAdjacent) && NATIVE_CONTROL_PAINT_PROPS.has(p)) continue;
+				problems.push(
+					`${label}: ${p} differs — "${a.style[p]}" (twin) vs "${b.style[p]}" (realprint), and ${p} is ` +
+						`NOT one of the pinned sheet's own @media print properties`,
+				);
+			}
+		}
 	}
 	if (missingRealprint.length || missingTwin.length) {
 		console.error(
@@ -4679,17 +4963,26 @@ function assertPrintTwinParity() {
 		process.exit(1);
 	}
 	if (compared === 0) return;
-	if (mismatched.length) {
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
 		console.error(
-			`\nPRINT-TWIN PARITY VIOLATED — ${mismatched.length}/${compared} capture id(s) render ` +
-				`differently on paper than in the print preview:\n  ${mismatched.join('\n  ')}\n` +
-				`A Steel rule is reaching real @media print (or the print value block lost a ` +
-				`specificity race). See styles-source.css's print/export layer and ` +
-				`src/framework/printMedia.ts.`,
+			`\nPRINT-TWIN DELTA VIOLATED — ${compared} capture id(s) compared, ${problems.length} ` +
+				`problem(s) found (same-DOM / drift-budget / enumerated-property violations):\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nThe pinned sheet's own enumerated @media print properties: ` +
+				`${[...enumeratedProps].sort().join(', ')}.\n` +
+				`Any other property differing is a Steel rule reaching one surface and not the ` +
+				`other. See styles-source.css's print/export layer and src/framework/printMedia.ts.`,
 		);
 		process.exit(1);
 	}
-	console.log(`\nprint-twin parity OK (${compared} capture ids byte-identical: preview twin === real print)`);
+	console.log(
+		`\nprint-twin delta OK (${compared} capture ids: same DOM, no horizontal/size drift, ` +
+			`max vertical drift ${maxVerticalDrift.toFixed(2)}px (< 24px), every differing computed-style ` +
+			`property is one of the pinned sheet's own @media print properties: ` +
+			`${[...enumeratedProps].sort().join(', ')})`,
+	);
 }
 
 if (failures.length) {
@@ -4697,7 +4990,15 @@ if (failures.length) {
 	for (const f of failures) console.error(`  ${f.outName}: ${f.errors.join(' | ')}`);
 	process.exit(1);
 }
-assertPrintTwinParity();
+{
+	// Same SKIP-when-no-asar self-gate every host-leak sweep in this file uses — the print
+	// twin/realprint shots themselves still exist either way (they never depended on the
+	// sheet being resolvable this run), only the DELTA check needs the pinned sheet's own
+	// text to enumerate its `@media print` properties against.
+	const host = loadLocalObsidianAppCss();
+	if (!host) console.log('\nprint-twin delta SKIPPED (no resolved Obsidian app.css sheet)');
+	else assertPrintTwinDelta(printSheetEnumeratedProperties(host.css));
+}
 // SC-204 — runs on EVERY invocation, narrowed or not: unlike the gallery and the two
 // chrome gates it takes no navigations of its own, so there is nothing to skip.
 assertNestedCornerRadius();
