@@ -1850,9 +1850,50 @@ async function mountOne(
  * fresh `page.goto`), so a stale wrapper from an earlier call in the same document is
  * removed before a `sheetOn: false` call and never doubled before a `sheetOn: true` one.
  */
-function applyRealObsidianCascade(doc: Document, sheetOn: boolean): void {
+/**
+ * SC-202 r6b fix round (independent review MED-2) — clearing `.disabled` starts a REAL,
+ * asynchronous fetch + parse of a 637 KB `file://` stylesheet; it does not synchronously
+ * attach one. Debugged live: `link.disabled === false` with `link.sheet === null` (still
+ * loading) was reproducible on ordinary navigations, screen-combo captures included, not
+ * only the sweeps' own toggle — meaning a screenshot or a sample taken right after
+ * `mountFromParams` resolved could, before this fix, race the stylesheet and capture
+ * `vars.css`'s fallback instead of the real sheet. So this now WAITS for the link to
+ * report a real `CSSStyleSheet` (its `load`/`error` events, backed by a poll in case an
+ * event already fired before the listener attached, or never fires at all in some
+ * engine) before returning — every downstream await (a screenshot, `setHostSheetEnabled`'s
+ * own sentinel, a jest caller) is guaranteed the sheet is genuinely live, not merely
+ * requested. No-op (resolves immediately) when the link is already attached or sheetOn is
+ * false. jsdom never fires `load` for a `file://`-backed `<link>` (nothing under this repo's
+ * own tests requests `sheet: true`), so the 3s ceiling is a safety net, not a real-world
+ * budget — a genuine local load is single-digit milliseconds.
+ */
+async function applyRealObsidianCascade(doc: Document, sheetOn: boolean): Promise<void> {
 	const link = doc.getElementById('dse-obsidian-app-css') as HTMLLinkElement | null;
-	if (link) link.disabled = !sheetOn;
+	if (link) {
+		link.disabled = !sheetOn;
+		if (sheetOn && link.sheet == null) {
+			await new Promise<void>((resolve) => {
+				let settled = false;
+				const done = () => {
+					if (settled) return;
+					settled = true;
+					resolve();
+				};
+				link.addEventListener('load', done, { once: true });
+				link.addEventListener('error', done, { once: true });
+				const poll = (): void => {
+					if (settled) return;
+					if (link.sheet != null) {
+						done();
+						return;
+					}
+					setTimeout(poll, 10);
+				};
+				setTimeout(poll, 10);
+				setTimeout(done, 3000);
+			});
+		}
+	}
 	const mount = doc.getElementById('mount');
 	if (!mount) return;
 	const wrapped = mount.parentElement?.classList.contains('markdown-preview-view') === true;
@@ -1876,7 +1917,7 @@ export async function mountFromParams(
 ): Promise<{ errors: string[] }> {
 	doc.body.classList.remove('theme-dark', 'theme-light');
 	doc.body.classList.add(params.bg === 'light' ? 'theme-light' : 'theme-dark');
-	applyRealObsidianCascade(doc, params.sheet === true);
+	await applyRealObsidianCascade(doc, params.sheet === true);
 	// SC-169: chosen BEFORE any element mounts — the chrome reads it once, at mount time.
 	// Always written (not only when true) so a direct test caller cannot inherit a
 	// previous call's mobile mode.

@@ -955,11 +955,21 @@ async function readPixels(page, buf, points) {
 	);
 }
 
-// SC-202 r6b — same non-finding as `assertBtnHostLeak` just above, same reason: this
-// sweep's own navigations never request `sheet: '1'`, so the real app.css never loads on
-// either its bare or its (still `injectHostCss`/`OBSIDIAN_HOST_BUTTON_CSS`-driven) host
-// pass. Not in the brief's own six-sweep list, and this round confirms why: nothing about
-// turning the sheet on for screen-combo captures touches it.
+// SC-202 r6b fix round (independent review MED-1) — this sweep's own navigations used to
+// build their query without `sheet: '1'`, which the first r6b commit defended as "not
+// tautological, so no reformulation needed". True, but beside the point the reviewer
+// raised: EVERY real screen capture now renders under the real sheet + the real
+// `.markdown-preview-view` wrapper + accepted-truth `box-sizing: border-box`, and this
+// gate was still measuring the OLD unwrapped, `content-box`, no-host-CSS-at-all page — a
+// box model nothing ships in any more. Fix: navigate WITH `sheet: '1'` (so `#mount` is
+// wrapped and `box-sizing: border-box` applies, exactly like every other capture) and
+// then explicitly disable the link before the bare sample — the same "disable-for-bare"
+// step every other sweep in this file takes — so the bare pass still has NO Obsidian CSS
+// at all (preserving this sweep's own can-fail power) while the DOM/box model it measures
+// finally matches reality. The `injectHostCss`/`OBSIDIAN_HOST_BUTTON_CSS` host mechanism
+// itself is UNCHANGED — that hand-modeled overlay is still what "host" means here, still
+// independent of the real sheet, still drift-pinned by `assertHostCopyPinnedToObsidian`
+// against the live installed Obsidian.
 async function assertChromeHostLeak(page) {
 	const problems = [];
 	let checked = 0;
@@ -971,11 +981,13 @@ async function assertChromeHostLeak(page) {
 				bg,
 				pad: '56',
 				prefs: 'authoringControls:true',
+				sheet: '1',
 			});
 			const id = `${c.element}${c.role ? `[${c.role}]` : ''}/${bg}`;
 			await page.emulateMedia({ media: 'screen' });
 			await page.goto(`${pageUrl}?${query}`);
 			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			await setHostSheetEnabled(page, false);
 			if (c.role) {
 				await page.evaluate(
 					({ sel, role }) => {
@@ -1520,16 +1532,21 @@ async function probeButtonsInState(page, state, count, props) {
 	return { records, problems };
 }
 
-// SC-202 r6b — reformulated (or not)? This sweep's own navigations below never request
-// `sheet: '1'` and never emulate print, so `applyRealObsidianCascade` leaves index.html's
-// `#dse-obsidian-app-css` link disabled and `#mount` unwrapped for BOTH its bare and host
-// passes exactly as before this round — its "host" state still comes ENTIRELY from
-// `injectHostCss`/`OBSIDIAN_HOST_BUTTON_CSS` (the hand-modeled, drift-pinned subject
-// SC-203/SC-205 own, unrelated to `dist/obsidian-app.css`). The round's "the sheet is
-// ALWAYS on for a screen-combo capture page" change therefore never reaches this sweep's
-// own bare-vs-host pair — it was never made tautological by it, so there is nothing here
-// to reformulate. Proven, not assumed: `sc202-r6b-canfail-button.log` mutates
-// `OBSIDIAN_HOST_BUTTON_CSS` and confirms this still fails loudly.
+// SC-202 r6b fix round (independent review MED-1) — this sweep used to navigate without
+// `sheet: '1'`, defended in the first r6b commit as "never made tautological, so nothing
+// to reformulate". True but beside the point: every real screen capture now renders
+// buttons under the real sheet, the real `.markdown-preview-view` wrapper and
+// accepted-truth `box-sizing: border-box`, and this gate was still measuring the OLD
+// unwrapped `content-box` page — proving nothing about the box model any capture actually
+// ships. Fix, same shape as `assertChromeHostLeak`'s own: navigate WITH `sheet: '1'`, then
+// explicitly disable the link before the bare sample (the "disable-for-bare" step every
+// other sweep in this file takes) — bare stays genuinely host-CSS-free (preserving this
+// sweep's own can-fail power, proven below), while the DOM/box model finally matches
+// reality. `injectHostCss`/`OBSIDIAN_HOST_BUTTON_CSS` (the hand-modeled, drift-pinned
+// subject SC-203/SC-205 own) is UNCHANGED as the "host" mechanism — unrelated to
+// `dist/obsidian-app.css`, still cross-checked against the live installed Obsidian by
+// `assertHostCopyPinnedToObsidian`. Can-fail re-proven under this formulation:
+// `sc202-r6bfix-canfail-button.log`.
 async function assertBtnHostLeak(page) {
 	const problems = [];
 	let kindCount = 0;
@@ -1543,10 +1560,12 @@ async function assertBtnHostLeak(page) {
 			theme: 'steel',
 			bg,
 			prefs: 'authoringControls:true',
+			sheet: '1',
 		});
 		await page.emulateMedia({ media: 'screen' });
 		await page.goto(`${pageUrl}?${query}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		await setHostSheetEnabled(page, false);
 		// SC-205 — Obsidian's `button:hover` sits inside `@media (hover: hover)`. If this
 		// context ever stopped reporting a hover-capable pointer, that rule would be inert and
 		// the hover pass would pin nothing while still printing OK. Assert the capability
@@ -1699,28 +1718,84 @@ function loadLocalObsidianAppCss() {
  * SC-202 r6b — retired `injectRealHostCss`'s own `addStyleTag`-per-sample injection. Now
  * that every screen-combo page already carries the real, pinned app.css by default (a
  * `<link id="dse-obsidian-app-css">` in index.html, driven by the `sheet=1` query param —
- * see `applyRealObsidianCascade` in entry.ts), the six host-leak sweeps (+ the
- * token-override probe) navigate WITH `sheet: '1'` (so the page's real cascade — link
- * enabled, `#mount` wrapped in the real `.markdown-preview-view.markdown-rendered`
- * ancestor — is exactly what a real capture gets) and then toggle the SAME link's
- * `.disabled` for their own bare-vs-host pass, rather than injecting (and never removing)
- * a second copy of the same stylesheet. This is what keeps the sweep non-tautological now
- * that the sheet defaults to on for screen combos: bare is the link EXPLICITLY disabled,
- * host is it EXPLICITLY re-enabled — the invariance under test ("plugin computed style is
- * identical with and without Obsidian's sheet") is unchanged, only the toggle mechanism
- * is. Reused for the button (`assertBtnHostLeak`) and chrome (`assertChromeHostLeak`)
- * sweeps too? No — those two never request `sheet: '1'` on their own navigation (they
- * compare against a DIFFERENT, hand-modeled CSS subject, `OBSIDIAN_HOST_BUTTON_CSS`, via
- * `injectHostCss`, unrelated to this file) and so never see the real sheet at all, on
- * either pass — this round's "sheet always on for screen" change does not reach them, so
- * neither becomes tautological and neither needed reformulating; see that pair's own
- * comment for the full reasoning.
+ * see `applyRealObsidianCascade` in entry.ts), every host-leak sweep in this file
+ * (input/table/list/inline/checkbox/link-token-override, and — fix round MED-1 — button
+ * and chrome too) navigates WITH `sheet: '1'` (so the page's real cascade — link enabled,
+ * `#mount` wrapped in the real `.markdown-preview-view.markdown-rendered` ancestor — is
+ * exactly what a real capture gets) and then toggles the SAME link's `.disabled` for its
+ * own bare-vs-host pass, rather than injecting (and never removing) a second copy of the
+ * same stylesheet. This is what keeps every sweep non-tautological now that the sheet
+ * defaults to on for screen combos: bare is the link EXPLICITLY disabled, host is it
+ * EXPLICITLY re-enabled — the invariance under test ("plugin computed style is identical
+ * with and without Obsidian's sheet") is unchanged, only the toggle mechanism is.
+ *
+ * FIX ROUND (independent review MED-2) — a toggle that silently did nothing used to be
+ * indistinguishable from a real one: emptying `dist/obsidian-app.css` in an isolated copy
+ * left all six original sweeps green with byte-identical comparison counts (the reviewer's
+ * `sc202-r6brev-v1-shots.log`), and `link.disabled = true` DETACHES the sheet
+ * (`link.sheet === null`) while re-enabling it does NOT reattach within the same
+ * `page.evaluate` call — only across a genuine round-trip (reproduced: same-call
+ * re-enable-then-read, even with a forced reflow + an awaited `requestAnimationFrame`,
+ * still reads the STALE value; a second, separate `page.evaluate` reads the correct one
+ * — usually. A FURTHER race showed up proving this fix: re-ENABLING a 637 KB `file://`
+ * stylesheet is a real, asynchronous fetch+parse, not a synchronous re-attach — debugged
+ * live (`el.disabled === false` but `el.sheet === null`, i.e. still loading) on both a
+ * heavy `gallery=1` page and a plain single-fixture one, so it is genuine load latency,
+ * not a page-weight effect. So this function now (1) toggles `disabled` in one round-trip,
+ * (2) when enabling, explicitly WAITS (`page.waitForFunction`, real timeout) for
+ * `link.sheet !== null` — i.e. for the browser to confirm the stylesheet actually
+ * attached, not merely that the attribute was set — and only THEN (3), in a separate
+ * round-trip, reads a SENTINEL token only the real sheet can produce (`--list-indent`,
+ * real app.css: `calc(0.5625em * 4)`; this file's own vars.css fallback: the literal
+ * `2em` — the two can never coincide) and throws loudly if the resolved value still does
+ * not match what was requested. (`link.sheet.cssRules.length` was considered as a second,
+ * independent sentinel — SC-205's own `assertHostCopyPinnedToObsidian` pattern — but
+ * `file://` pages throw a `SecurityError` reading `cssRules` cross-stylesheet in this
+ * harness's sandbox, so the computed-style sentinel is the only reliable signal
+ * available here.) This makes the "emptied sheet" failure mode loud: every sweep's very
+ * first `setHostSheetEnabled(page, true)` call now throws instead of silently sampling
+ * vars.css's fallback and calling it "the real sheet".
  */
 async function setHostSheetEnabled(page, enabled) {
 	await page.evaluate((on) => {
 		const el = document.getElementById('dse-obsidian-app-css');
 		if (el) el.disabled = !on;
 	}, enabled);
+	if (enabled) {
+		// Wait for the browser to actually finish attaching the stylesheet (a real fetch +
+		// parse of a 637 KB file, not a synchronous side effect of clearing `.disabled`) —
+		// see the comment above for the live debug that found this. 10 s is generous; a
+		// genuinely broken/missing sheet fails the sentinel check below immediately once
+		// this resolves, it never silently times out into a false pass.
+		await page
+			.waitForFunction(() => document.getElementById('dse-obsidian-app-css')?.sheet != null, null, {
+				timeout: 10000,
+			})
+			.catch(() => {
+				/* fall through to the sentinel check below, which reports the real failure */
+			});
+	}
+	// A SEPARATE evaluate call — see the comment above for why the toggle and the read must
+	// each be a genuine round-trip, never combined into one.
+	const sentinel = await page.evaluate(() =>
+		getComputedStyle(document.body).getPropertyValue('--list-indent').trim(),
+	);
+	const REAL_SHEET_VALUE = 'calc(0.5625em * 4)';
+	if (enabled && sentinel !== REAL_SHEET_VALUE) {
+		throw new Error(
+			`OBSIDIAN APP.CSS NOT APPLIED — setHostSheetEnabled(page, true) but --list-indent ` +
+				`reads "${sentinel}", expected the real sheet's own "${REAL_SHEET_VALUE}". The ` +
+				`injected stylesheet is not live (empty/corrupt dist/obsidian-app.css, or it never ` +
+				`finished attaching).\n${HASH_FAILURE_REMEDY}`,
+		);
+	}
+	if (!enabled && sentinel === REAL_SHEET_VALUE) {
+		throw new Error(
+			`OBSIDIAN APP.CSS STILL APPLIED — setHostSheetEnabled(page, false) but --list-indent ` +
+				`still reads the real sheet's own "${REAL_SHEET_VALUE}"; the "bare" sample below ` +
+				`would not be bare.\n${HASH_FAILURE_REMEDY}`,
+		);
+	}
 }
 
 /** Every property the real app.css's `input[type='number']`/`input[type='text']` rules
@@ -2189,9 +2264,17 @@ const TABLE_LEVEL_PROPS = ['marginBlockStart', 'marginBlockEnd', 'wordBreak', 'b
  *  and inherits `overflow-wrap: break-word` from the same wrapper's own rule — permanent,
  *  UNTOGGLED by `setHostSheetEnabled` (unlike the rest of the real sheet), because a real
  *  vault never has a "without Obsidian's page-wide CSS" state to model either — see
- *  vars.css's own comment. Bare and host now read the SAME value at both properties (both
- *  border-box/break-word) — no exception plumbing needed any more, `boxSizing`/
- *  `overflowWrap` are simply two more properties in the list below, like every other one. */
+ *  vars.css's own comment.
+ *
+ *  FIX ROUND (independent review LOW-1) — the first r6b commit left `boxSizing`/
+ *  `overflowWrap` IN this relative list, printing a gate line that implied they were
+ *  compared. They cannot be: the wrapper rule above is untoggled by design, so bare and
+ *  host read the identical value BY CONSTRUCTION — the relative comparison can never fail,
+ *  which is exactly the un-failable-gate shape the ticket exists to close. Moved OUT of
+ *  this list into `assertTableCellBoxModelIsAccepted`'s own ABSOLUTE assertion below (run
+ *  once per scheme, under the sheet, against a real sampled cell) — pinning the accepted
+ *  truth as a real, can-fail check instead of a relative comparison with nothing to
+ *  compare against. */
 const TABLE_CELL_PROPS = [
 	'padding',
 	'borderTopWidth',
@@ -2218,8 +2301,6 @@ const TABLE_CELL_PROPS = [
 	'color',
 	'fontWeight',
 	'lineHeight',
-	'boxSizing',
-	'overflowWrap',
 ];
 /** SC-202 r6b — `fontFamily`, excluded, same reasoning as `INPUT_PROPS_EXCLUDED`'s own
  *  addition (see that comment for the full account). `td` has no Obsidian font-family
@@ -2366,6 +2447,7 @@ async function assertTableHostLeak(page) {
 	const problems = [];
 	let kindCount = 0;
 	let comparisons = 0;
+	let boxModelChecked = 0;
 	for (const bg of ['dark', 'light']) {
 		// SC-202 r6b: `sheet: '1'` — see `assertInputHostLeak`'s own comment for why the
 		// link is explicitly disabled right after navigation to get a genuinely bare
@@ -2428,6 +2510,31 @@ async function assertTableHostLeak(page) {
 			}
 		}
 
+		// FIX ROUND (independent review LOW-1) — box-sizing/overflow-wrap as an ABSOLUTE
+		// assertion, not a relative bare-vs-host comparison: `vars.css`'s wrapper rule is
+		// untoggled by design (§ this file's own header), so a relative comparison here can
+		// NEVER fail — it would print a gate line implying coverage it does not have. Read
+		// separately (a dedicated call — `TABLE_CELL_PROPS` no longer carries either
+		// property) on every real cell already tagged for the host pass, against the literal
+		// accepted value, so a regression that stops the wrapper rule from reaching a real
+		// table cell is still caught.
+		const hostBoxModelCells = await page.evaluate(readTaggedCells, ['boxSizing', 'overflowWrap']);
+		for (const c of hostBoxModelCells) {
+			boxModelChecked += 1;
+			if (c.boxSizing !== 'border-box') {
+				problems.push(
+					`${bg}|cell|${c.key}(${c.tag}) ABSOLUTE: boxSizing is "${c.boxSizing}", expected ` +
+						`"border-box" (accepted Obsidian truth, vars.css)`,
+				);
+			}
+			if (c.overflowWrap !== 'break-word') {
+				problems.push(
+					`${bg}|cell|${c.key}(${c.tag}) ABSOLUTE: overflowWrap is "${c.overflowWrap}", expected ` +
+						`"break-word" (accepted Obsidian truth, vars.css)`,
+				);
+			}
+		}
+
 		for (const state of TABLE_ROW_STATES) {
 			const r = await probeTableRowsInState(page, cdp, hostRoot.nodeId, state, rowKeys);
 			for (const p of r.problems) problems.push(`${bg}|host-present|row|${state}: ${p}`);
@@ -2463,10 +2570,10 @@ async function assertTableHostLeak(page) {
 	console.log(
 		`\ntable host-leak OK (${kindCount} table kinds × dark/light = ${comparisons} comparisons ` +
 			`against the real Obsidian app.css under a real .markdown-preview-view.markdown-rendered ` +
-			`ancestor: every sampled table/row/cell property — including box-sizing/overflow-wrap, ` +
-			`accepted as Obsidian's permanent page-wide truth by vars.css rather than exempted here ` +
-			`(SC-202 r6b) — is identical with and without it; ` +
-			`${TABLE_CELL_PROPS_EXCLUDED.join(' and ')} excluded by design)`,
+			`ancestor: every sampled table/row/cell property is identical with and without it; ` +
+			`${TABLE_CELL_PROPS_EXCLUDED.join(' and ')} excluded by design; ` +
+			`${boxModelChecked} cells' box-sizing/overflow-wrap ABSOLUTE-asserted border-box/` +
+			`break-word — SC-202 r6b fix round LOW-1, accepted Obsidian truth pinned, not compared)`,
 	);
 }
 
@@ -3920,6 +4027,7 @@ async function assertCheckboxHostLeak(page) {
 	);
 }
 
+
 /** Drives one STATE for every tagged plugin-authored checkbox — same overall shape as
  *  `probeInputsInState`, extended with `checked`/`indeterminate` (real DOM states, not
  *  pseudo-classes CDP forces) alongside `disabled`. */
@@ -4287,8 +4395,8 @@ try {
 		await assertInlineHostLeak(page);
 		await assertLinkTokenOverride(page);
 		// SC-202 r5 — the same question asked of every CHECKBOX the plugin renders,
-		// plugin-authored and markdown task-list alike (leak family 5, the last one). Also
-		// self-gates on a local Obsidian asar.
+		// plugin-authored and markdown task-list alike (leak family 5). Also self-gates on
+		// a local Obsidian asar.
 		await assertCheckboxHostLeak(page);
 	}
 } catch (e) {

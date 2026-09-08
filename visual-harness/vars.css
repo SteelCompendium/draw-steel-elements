@@ -1,24 +1,40 @@
-/* visual-harness/vars.css — SC-202 r6b: FALLBACK FLOOR, not the source of truth any more.
+/* visual-harness/vars.css — SC-202 r6b fix round: TRUE FALLBACK FLOOR (fix round;
+   through the first r6b commit this was a CEILING, not a floor — see below).
    Through r6a this file vendored every Obsidian default-theme token styles-source.css
    references (F4 spec, 2026-07-10) as the harness's ONLY source for them — hand-vendored,
    always at risk of drifting from the real thing. Now that the real, pinned
    `visual-harness/dist/obsidian-app.css` is injected for every screen-combo capture
-   (index.html — see that file's own comment for load order), this file's tokens are used
-   ONLY while the real sheet is disabled: the print twin, realprint (this round's scope
-   fence — 0 frozen bytes may move there, and they never carry the real sheet), and the
-   bare half of every host-leak sweep's own bare/host toggle (shoot.mjs's
-   `setHostSheetEnabled`). Load order makes this automatic, not a JS branch: index.html
-   puts this file BEFORE the (disableable) real-sheet link, so whenever that link is
-   enabled its declarations — same selectors (`body`, `.theme-dark`, `.theme-light`) —
-   simply come LATER in the cascade and win; whenever it is disabled (or 404s — nothing
-   here depends on `dist/` existing), these are the only declarations left standing, so a
-   screen combo missing the real sheet degrades to exactly what every combo rendered
-   before this round rather than to undefined custom properties. Every value below was kept
-   or checked against the same real sheet this round measured (2026-07-10 vendoring, spot-
-   checked current for r6b) — drift here can only ever make the FALLBACK stale, never the
-   real capture, since the real sheet always wins when it is present. NOT here on purpose:
-   --sc-* (styles-source.css chains those with inline hex fallbacks — the v2-palette sync
-   is a snippet concern). */
+   (index.html — see that file's own comment for load order), this file's tokens are meant
+   to be used ONLY while the real sheet is disabled: the print twin, realprint (this
+   round's scope fence — 0 frozen bytes may move there, and they never carry the real
+   sheet), and the bare half of every host-leak sweep's own bare/host toggle (shoot.mjs's
+   `setHostSheetEnabled`).
+
+   FIX ROUND (independent review HIGH-1) — the first r6b commit's "load order alone makes
+   this automatic" claim was FALSE for the two theme blocks below. `body.theme-dark`/
+   `body.theme-light` (a type selector + a class) are specificity (0,1,1); app.css's own
+   `.theme-dark`/`.theme-light` is (0,1,0) and its `body` block is (0,0,1) — LOWER on both
+   counts. Specificity is decided BEFORE source order, so these two blocks won every
+   theme-scoped token regardless of where the real-sheet link sat: **11 dark / 8 light
+   tokens (+2 `color-mix()` hybrids matching neither side) stayed the stale 2026-07-10
+   vendoring even with the real sheet on** — measured on the shipped page against the real
+   vault, `sc202-r6b-review.md` HIGH-1. Only the tokens in the BARE `body {}` block below
+   ever actually got superseded (same (0,0,1)/(0,0,1) tie, decided by source order, which
+   IS what "load order" controls) — that is why `--font-text`/`--list-indent`/`--tag-*`
+   flipped and the colour tokens on `.theme-dark`/`.theme-light` did not.
+
+   THE FIX: `:where(body.theme-dark)`/`:where(body.theme-light)` — `:where()` matches
+   identically but contributes ZERO to specificity, so both drop to (0,1,0)/(0,1,0)
+   (`:where()` itself is (0,0,0); the class selector inside it is what remains) — a TRUE
+   tie with app.css's own `.theme-dark`/`.theme-light`, decided by source order exactly
+   like the bare `body {}` block already was. Verified end to end (fix round): 0 fake-wins
+   (was 11/8), 0 hybrids (was 2), all 46 tokens resolve to the real sheet when it is on and
+   to this file's own value when it is off; `freeze OK (252/252)`, 0 print/realprint bytes
+   moved. Every value below was kept or checked against the same real sheet this round
+   measured (2026-07-10 vendoring, spot-checked current for r6b) — drift here can only ever
+   make the FALLBACK stale, never the real capture, now that it genuinely IS only a
+   fallback. NOT here on purpose: --sc-* (styles-source.css chains those with inline hex
+   fallbacks — the v2-palette sync is a snippet concern). */
 
 body {
 	/* theme-independent */
@@ -61,7 +77,7 @@ body {
 	color: var(--text-normal);
 }
 
-body.theme-dark {
+:where(body.theme-dark) {
 	color-scheme: dark;
 	--color-base-25: #2a2a2a;
 	--color-base-30: #363636;
@@ -84,7 +100,7 @@ body.theme-dark {
 	--color-orange: #e9973f;
 }
 
-body.theme-light {
+:where(body.theme-light) {
 	color-scheme: light;
 	--color-base-25: #e6e6e6;
 	--color-base-30: #dddddd;
