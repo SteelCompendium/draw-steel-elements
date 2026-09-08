@@ -516,9 +516,10 @@ async function assertMontageTrackWidths(page) {
 // warns about. The ONLY difference in the six button-reaching rules: the base `button`
 // rule gained `transition: var(--button-transition)`, last in source order. Nothing else
 // in this model changed — same rules, same selectors, same token values. This bump is
-// UNRELATED to SC-202's own round-1 starting pin for the real app.css sweep
-// (`R1_APP_CSS_SHA256` below, still Obsidian 1.13.7 — that pin is a later round's own
-// decision to revisit, not this commit's).
+// UNRELATED to SC-202's own separate pin for the real app.css sweep
+// (`OBSIDIAN_APP_CSS_PIN` in `obsidian-app-css.pin.mjs`, still Obsidian 1.13.7 as of r6a —
+// see that file's header for the full pin history, including a same-day attempt at 1.14.0
+// that a verification step caught had no public release asset).
 //
 // DO NOT hand-edit this from memory: `assertHostCopyPinnedToObsidian` below re-extracts the
 // same rules and tokens from the installed Obsidian on every `npm run shots` and fails loudly
@@ -1639,43 +1640,40 @@ async function assertBtnHostLeak(page) {
 // UNLIKE `assertBtnHostLeak`, this does NOT compare against a hand-copied model. app.css
 // itself can never be committed (the phase-2 ruling, decisions.md 2026-09-02) — not even
 // as a transcribed excerpt — so there is no in-repo copy for a drift pin to protect. This
-// sweep instead injects the REAL, locally-extracted sheet directly and self-gates on its
-// presence: no local Obsidian asar, no sweep, loud SKIP, never a silent pass and never a
-// failure for lacking one. `visual-harness/dist/` is gitignored (see .gitignore) and nothing
-// under it is ever committed.
-const R1_APP_CSS_SHA256 = 'f612f1e8f36486fa57f3b8bd45f0c848409d5b168002e757a13c6d286a7b4c41';
+// sweep instead injects the REAL sheet directly and self-gates on its presence: no sheet
+// available, no sweep, loud SKIP, never a silent pass and never a failure for lacking one.
+// `visual-harness/dist/` is gitignored (see .gitignore) and nothing under it is ever
+// committed.
+//
+// SC-202 r6a: the sheet now comes from the FETCH-AND-PIN recipe
+// (`fetch-obsidian-app-css.mjs`), not from reading the installed asar directly — `npm run
+// shots`'s `preshots` step already ran it and wrote `dist/obsidian-app.css` +
+// `dist/obsidian-app.css.meta.json` before this file's sweeps ever run (see
+// `visual-harness/README.md` → "Obsidian app.css pin"). This loader just reads what that
+// step produced; it does not fetch, verify, or fall back itself — that plumbing lives in
+// one place. `obsidian-app-css.pin.mjs` holds the committed version+sha256 pin.
 
-/** Extracts (and caches under visual-harness/dist/, gitignored) the real installed
- *  Obsidian app.css. Reuses `findObsidianAsar`'s existing "usable" gate (SC-205) — the
- *  same newest-self-updated-asar lookup and >= PINNED_OBSIDIAN version check the button
- *  drift pin already applies, so the two pins agree on what counts as new enough. Returns
- *  `null` when nothing usable is installed; the caller turns that into a SKIP line, never
- *  a failure.
- *  LOW-3 (fix round) — writes `dist/obsidian-app.css` only when it is missing or its sha256
- *  differs from what is already on disk. Nothing ever reads that file back (the sweep uses
- *  the in-memory `css` string directly), so re-writing 637 KB on every `npm run shots` was
- *  pure avoidable churn — a stray `git add -f`/packaging-step/`dist/` upload away from
- *  becoming a real leak of a proprietary sheet that must never be redistributed. */
+/** Reads the sheet the `preshots` fetch-and-pin step already wrote (pinned/fetched sheet,
+ *  or — offline, item 4 of the r6a brief — the installed-Obsidian fallback with its own
+ *  WARNING already printed by that step). Returns `null` when neither file exists (no
+ *  fetch, no cache, no usable installed asar) so the caller can print its existing SKIP
+ *  line unchanged — never a failure for lacking one. Does not itself fetch/extract/verify
+ *  anything; a stale or hand-run `npm run host-css` is exactly what a dev sees reflected
+ *  here, which is the point. */
 function loadLocalObsidianAppCss() {
-	const found = findObsidianAsar();
-	if (!found || !found.usable) return null;
-	const css = readAsarFile(found.path, 'app.css');
-	if (!css) return null;
-	const sha256 = crypto.createHash('sha256').update(css, 'utf8').digest('hex');
 	const outDir = path.join(dir, 'dist');
 	const outFile = path.join(outDir, 'obsidian-app.css');
-	let upToDate = false;
+	const metaFile = path.join(outDir, 'obsidian-app.css.meta.json');
+	let css;
+	let meta;
 	try {
-		const onDisk = crypto.createHash('sha256').update(fs.readFileSync(outFile, 'utf8'), 'utf8').digest('hex');
-		upToDate = onDisk === sha256;
+		css = fs.readFileSync(outFile, 'utf8');
+		meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
 	} catch {
-		upToDate = false; // missing or unreadable — write it
+		return null;
 	}
-	if (!upToDate) {
-		fs.mkdirSync(outDir, { recursive: true });
-		fs.writeFileSync(outFile, css);
-	}
-	return { css, version: found.version, sha256 };
+	if (!css || !meta?.sha256) return null;
+	return { css, version: meta.version, sha256: meta.sha256, source: meta.source };
 }
 
 /** Injects a full stylesheet ahead of the plugin's own — same cascade shape as
@@ -1962,11 +1960,6 @@ async function assertInputHostLeak(page) {
 		console.log('\ninput host-leak SKIPPED (no local asar)');
 		return;
 	}
-	const pinNote =
-		host.sha256 === R1_APP_CSS_SHA256
-			? `matches the round's pin (Obsidian ${host.version})`
-			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
-				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
 	// INFO-3 — the hover pass needs CDP CSS.forcePseudoState (Playwright's own hover/mouse
 	// APIs stop engaging :hover once app.css is injected). One session for the whole sweep;
 	// the DOM domain's node tree is re-fetched per navigation AND per bare/host pass below
@@ -2084,7 +2077,7 @@ async function assertInputHostLeak(page) {
 		`\ninput host-leak OK (${kindCount} input kinds × ${stateLabels.length} states ` +
 			`(${stateLabels.join('/')}) × dark/light = ${comparisons} comparisons against the real ` +
 			`Obsidian app.css: every sampled property is identical with and without it; ` +
-			`${INPUT_PROPS_EXCLUDED.join(' and ')} are excluded by design; ${pinNote})`,
+			`${INPUT_PROPS_EXCLUDED.join(' and ')} are excluded by design)`,
 	);
 }
 
@@ -2092,7 +2085,7 @@ async function assertInputHostLeak(page) {
 // SC-202 r2 — markdown TABLE host-leak sweep (leak family 2).
 //
 // Same shape as `assertInputHostLeak` — same asar/pin plumbing (`loadLocalObsidianAppCss`,
-// `R1_APP_CSS_SHA256`, `injectRealHostCss`), same SKIP-when-no-asar self-gate, same
+// `OBSIDIAN_APP_CSS_PIN`, `injectRealHostCss`), same SKIP-when-no-asar self-gate, same
 // bare-vs-host computed-style invariance contract. The one thing this family needs that
 // buttons/inputs did not: every `.markdown-rendered table/td/th/…` rule in app.css is
 // scoped to a `.markdown-rendered` ancestor (Obsidian's reading-view wrapper), and the
@@ -2326,11 +2319,6 @@ async function assertTableHostLeak(page) {
 		console.log('\ntable host-leak SKIPPED (no local asar)');
 		return;
 	}
-	const pinNote =
-		host.sha256 === R1_APP_CSS_SHA256
-			? `matches the round's pin (Obsidian ${host.version})`
-			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
-				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
 	const cdp = await page.context().newCDPSession(page);
 	await cdp.send('DOM.enable');
 	await cdp.send('CSS.enable');
@@ -2449,7 +2437,7 @@ async function assertTableHostLeak(page) {
 			`ancestor: every sampled table/row/cell property is identical with and without it, except ` +
 			`${Object.keys(TABLE_CELL_PROPS_DECLARED_EXEMPT).length} declared, deferred exceptions ` +
 			`(box-sizing/overflow-wrap — ambient host declarations outside this round's table-rule ` +
-			`family, fold into the "turn the sheet on" round's census); ${pinNote})` +
+			`family, fold into the "turn the sheet on" round's census))` +
 			(exempt
 				? `\n  ${exempt} cell records matched a declared, deferred exception — each one proved ` +
 					`against its known value pair, never assumed:\n${exemptBoundary}`
@@ -2460,7 +2448,7 @@ async function assertTableHostLeak(page) {
 // ======================================================================================
 // SC-202 r3 — LIST + BLOCKQUOTE host-leak sweep (leak family 3).
 //
-// Same asar/pin plumbing as r1/r2 (`loadLocalObsidianAppCss`, `R1_APP_CSS_SHA256`,
+// Same asar/pin plumbing as r1/r2 (`loadLocalObsidianAppCss`, `OBSIDIAN_APP_CSS_PIN`,
 // `injectRealHostCss`), same SKIP-when-no-asar self-gate, same bare-vs-host computed-style
 // invariance contract, and — per the round-2 lesson — the SAME synthesized
 // `.markdown-preview-view.markdown-rendered` wrapper `assertTableHostLeak` uses
@@ -2688,11 +2676,6 @@ async function assertListHostLeak(page) {
 		console.log('\nlist host-leak SKIPPED (no local asar)');
 		return;
 	}
-	const pinNote =
-		host.sha256 === R1_APP_CSS_SHA256
-			? `matches the round's pin (Obsidian ${host.version})`
-			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
-				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
 	const problems = [];
 	// FIX ROUND (LOW-1) — named per-kind counters, summed at the end, so the printed line's
 	// arithmetic can never drift from what was actually compared (the original round's own
@@ -2894,7 +2877,7 @@ async function assertListHostLeak(page) {
 			`ul/ol/li/li::marker/blockquote/blockquote-child/hr property is identical with and without it, and ` +
 			`the li>p fix genuinely fires on a synthetic loose-list-item node; li.task-list-item's own three ` +
 			`declarations (list-style/data-task decorations) are deliberately NOT covered here — checkbox ` +
-			`round; ${pinNote})`,
+			`round)`,
 	);
 }
 
@@ -3169,11 +3152,6 @@ async function assertInlineHostLeak(page) {
 		console.log('\ninline host-leak SKIPPED (no local asar)');
 		return;
 	}
-	const pinNote =
-		host.sha256 === R1_APP_CSS_SHA256
-			? `matches the round's pin (Obsidian ${host.version})`
-			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
-				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
 	const cdp = await page.context().newCDPSession(page);
 	await cdp.send('DOM.enable');
 	await cdp.send('CSS.enable');
@@ -3305,7 +3283,7 @@ async function assertInlineHostLeak(page) {
 			`under a real .markdown-preview-view.markdown-rendered ancestor: every sampled heading/strong/em/b/i/` +
 			`mark/code/link property is identical with and without it, rest AND :hover/:focus-visible for links; ` +
 			`del is deliberately NOT covered — Obsidian's rendered-markdown rules do not reach it at all (checked, ` +
-			`not assumed); ${pinNote})`,
+			`not assumed))`,
 	);
 }
 
@@ -3393,7 +3371,7 @@ async function assertLinkTokenOverride(page) {
 // ======================================================================================
 // SC-202 r5 — CHECKBOX + TASK-LIST host-leak sweep (leak family 5, the LAST one).
 //
-// Same asar/pin plumbing as r1-r4 (`loadLocalObsidianAppCss`, `R1_APP_CSS_SHA256`,
+// Same asar/pin plumbing as r1-r4 (`loadLocalObsidianAppCss`, `OBSIDIAN_APP_CSS_PIN`,
 // `injectRealHostCss`), same SKIP-when-no-asar self-gate, same bare-vs-host
 // computed-style invariance contract. Two genuinely different surfaces, tested two
 // different ways:
@@ -3590,6 +3568,12 @@ function buildSyntheticTaskList() {
 function removeSyntheticTaskList() {
 	for (const ul of document.querySelectorAll('[data-dse-tlul]')) ul.remove();
 }
+/** r5 re-review LOW-4 residual, folded into r6a: the build/remove pairing above was already
+ *  correct (proven by inspection) but never PINNED — nothing failed the run if a future edit
+ *  broke it. Same tag `removeSyntheticTaskList` clears. */
+function countSyntheticTaskListNodes() {
+	return document.querySelectorAll('[data-dse-tlul]').length;
+}
 function readSyntheticTaskListLi(props) {
 	const out = [];
 	const rest = document.querySelector('li.task-list-item[data-task=" "]');
@@ -3669,11 +3653,6 @@ async function assertCheckboxHostLeak(page) {
 		console.log('\ncheckbox host-leak SKIPPED (no local asar)');
 		return;
 	}
-	const pinNote =
-		host.sha256 === R1_APP_CSS_SHA256
-			? `matches the round's pin (Obsidian ${host.version})`
-			: `Obsidian ${host.version}, sha256 ${host.sha256} does not match the round's pin ` +
-				`${R1_APP_CSS_SHA256} — sweeping against it anyway, a version drift, not a defect`;
 	const cdp = await page.context().newCDPSession(page);
 	await cdp.send('DOM.enable');
 	await cdp.send('CSS.enable');
@@ -3811,6 +3790,14 @@ async function assertCheckboxHostLeak(page) {
 				}
 			}
 			await page.evaluate(removeSyntheticTaskList);
+			// r5 re-review LOW-4 residual (folded into r6a): PINS the build/remove pairing —
+			// it was already correct, this just fails the run if a future edit breaks it.
+			const remainingAfterRemove = await page.evaluate(countSyntheticTaskListNodes);
+			if (remainingAfterRemove !== 0) {
+				problems.push(
+					`${bg}|tasklist-cleanup: ${remainingAfterRemove} synthetic task-list node(s) still in the DOM after removeSyntheticTaskList (LOW-4)`,
+				);
+			}
 		}
 	}
 
@@ -3851,6 +3838,13 @@ async function assertCheckboxHostLeak(page) {
 				}
 			}
 			await page.evaluate(removeSyntheticTaskList);
+			// Same LOW-4 pin as the per-scheme pass above.
+			const remainingAfterRemove = await page.evaluate(countSyntheticTaskListNodes);
+			if (remainingAfterRemove !== 0) {
+				problems.push(
+					`host-appended-order|tasklist-cleanup: ${remainingAfterRemove} synthetic task-list node(s) still in the DOM after removeSyntheticTaskList (LOW-4)`,
+				);
+			}
 		}
 	}
 	if (problems.length) {
@@ -3872,7 +3866,7 @@ async function assertCheckboxHostLeak(page) {
 			`[${taskListComparisons}] + 2 synthetic task-list <li> decoration [${liDecorationComparisons}] × ` +
 			`dark/light = ${comparisons} comparisons against the real Obsidian app.css under a real ` +
 			`.markdown-preview-view.markdown-rendered ancestor: every sampled property is identical with ` +
-			`and without it; ${pinNote})`,
+			`and without it)`,
 	);
 }
 

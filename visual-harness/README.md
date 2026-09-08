@@ -131,6 +131,54 @@ palette lives in the v2 site's snippet), so every Steel shot renders the inline 
 — the no-palette-snippet default-install look. The harness can't show Steel-with-`--sc-*`, so
 validate Steel design work against these fallback values.
 
+## Obsidian app.css pin (SC-202 r6a)
+
+`npm run shots` runs `npm run host-css` first (an npm `preshots` lifecycle hook — automatic,
+nothing to remember) to resolve the real Obsidian `app.css` the five `assert*HostLeak`
+sweeps inject: fetches the pinned release asset, verifies it against the committed
+`visual-harness/obsidian-app-css.pin.mjs` (version + sha256 — never the CSS itself, per the
+2026-09-02 phase-2 ruling), and writes `visual-harness/dist/obsidian-app.css` (gitignored)
+plus `dist/obsidian-app.css.meta.json` recording which sheet actually ended up there. Run it
+by hand with `npm run host-css` to pre-warm the cache (e.g. before going offline).
+
+**Idempotent and cache-first.** A cached `visual-harness/dist/obsidian-<ver>.asar.gz`
+(gitignored) is reused with no network — but the WHOLE chain (`.asar.gz` -> gunzip -> `app.css`)
+is re-verified against the pin every run, cached or fresh, so a corrupted cache fails loudly
+(`process.exit(1)`) instead of being silently trusted. Delete the cached `.asar.gz` to force
+a re-fetch.
+
+**Offline fallback.** If the fetch fails (no network) and no cache exists, the recipe falls
+back to the INSTALLED Obsidian's own `app.css` (the same asar SC-205's button-copy pin
+already reads) and prints a WARNING naming the sheet actually in use — that run's host-leak
+results are informative, not a verified gate against the pin. If neither a fetch nor an
+installed Obsidian is available, the sweeps print their usual `SKIPPED (no local asar)` line
+— never a failure for lacking one.
+
+**Warn-on-drift.** Every `npm run shots` also hashes the INSTALLED Obsidian's `app.css` (if
+any) and prints ONE `OBSIDIAN APP.CSS PIN DRIFT` line if it differs from the pin — this is
+expected on any machine whose Obsidian has self-updated past the pinned version, and the
+gate keeps running against the pin regardless.
+
+**Bumping the pin** (decisions.md: "a deliberate act with its own sanctioned rebaseline" once
+the real sheet is actually turned on in the harness — SC-202 round 6b onward):
+
+1. Confirm the target version has a real public release asset — enumerate
+   `https://api.github.com/repos/obsidianmd/obsidian-releases/releases` and check for the
+   exact `v<ver>` tag with a desktop `obsidian-<ver>.asar.gz` asset (not every version that
+   self-updates onto a dev's machine gets one — Obsidian's Insider/beta channel can run
+   ahead of what's published there; SC-202 r6a hit exactly this with 1.14.0).
+2. Fetch that asset, gunzip it, and extract `app.css` with `readAsarFile` from
+   `obsidian-host-pin.mjs` (reuse, don't fork) — or simply delete the cached `.asar.gz` and
+   run `npm run host-css` against a pin file edited to the candidate version/URL first, then
+   read the resulting hash-mismatch error, which names the real extracted hash.
+3. Update `visual-harness/obsidian-app-css.pin.mjs`'s `OBSIDIAN_APP_CSS_PIN` (version, both
+   hashes, source URL) and its header comment (append to the pin-history block, don't
+   overwrite it).
+4. Run the full battery. If the real sheet is already turned on in the harness at that point,
+   expect frozen/shot bytes to move and follow the freeze-delta sanction flow (dse-verify
+   skill → "Freeze semantics"); while the sheet is off (r6a/r6b's own scope), a pin bump
+   should move zero shot/frozen bytes.
+
 ## Obsidian camera (ground truth)
 
     npm run obsidian-shots                                    # every element × steel × dark/light
