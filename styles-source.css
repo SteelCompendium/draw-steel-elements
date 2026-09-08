@@ -212,8 +212,15 @@
 }
 
 /* -- inline-markdown helper (legacy .ds-feature-inline-p parity): keeps the
-   callback-rendered <p>/<ul> from breaking the inline title/value flow -- */
-.dse-md-inline > p {
+   callback-rendered <p>/<ul> from breaking the inline title/value flow --
+   SC-202 r6b fix round (HIGH-2) — `[data-dse-element]`-prefixed (was bare `.dse-md-inline
+   > p`, (0,1,1)): the new bare-`<p>` prose re-grounding block below (GROUP 1a, this
+   round's own sixth family) sits at (0,2,0), which would otherwise outrank this rule on
+   class/attr count and silently restore a 1em margin on top of THIS deliberate zero —
+   the exact `[data-dse-element] .dse-md-inline > ul` fix r3's own HIGH-1b already made for
+   the sibling `ul` selector, one element family later. New specificity (0,2,1) — one type
+   selector ahead of the prose block, never losing regardless of source order. */
+[data-dse-element] .dse-md-inline > p {
 	display: inline;
 	margin-block-start: 0;
 	margin-block-end: 0;
@@ -16151,6 +16158,59 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 	color: gray;
 	margin-block-start: 0.5em;
 	margin-block-end: 0.5em;
+}
+
+/* ==================================================================================== */
+/*   SC-202 r6b fix round — PROSE (p/img/caret-color) HOST RE-GROUNDING                 */
+/* ==================================================================================== */
+/*
+   HIGH-2 (independent review of `a8bc607`) — no round from 1 through 6b's own first
+   commit ever re-grounded a BARE `<p>` (only `.dse-md-inline > p`, the inline title/value
+   helper above, which does not cover every markdown body — `.dse-party__member-ref`'s own
+   callback-rendered description is a plain `<p>`) or an `<img>` at all. Obsidian's
+   `.markdown-rendered p { margin-block-start/end: var(--p-spacing) }` reaches
+   `.dse-party__member-ref p` and changes its margin 13.6px (this file's own UA-default
+   em-relative rendering, `.dse-party__member-ref`'s smaller `--dse-fs-label` context) to
+   16px (Obsidian's fixed, non-local token) — measured, both schemes, and the SOLE cause
+   `party--steel-{dark,light}` moved at all in r6b (see the fix-round report's hash proof).
+   `.markdown-rendered img { max-width: 100%; image-rendering:
+   -webkit-optimize-contrast }` reaches the 9 portraits in `initiative-roster` (no pixel
+   consequence measured at current sizes, but both are real box/paint properties). Fixed
+   the same way every other family in this file is: restate the browser's own UA default
+   (`margin: 1em 0`, `max-width: none`, `image-rendering: auto`) at (0,2,0) — the same
+   `:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(…)` anchor every
+   other GROUP 1 in this file uses, verified 0 pixel change on the fixed tree everywhere
+   except the two `party` shots (which return to their pre-r6b bytes — the acceptance test
+   for this fix). `unicode-bidi: plaintext` (the OTHER thing `.markdown-rendered p`
+   declares) is excluded by the same "cannot move a box or paint a pixel" reasoning every
+   other family in this file already uses for it (r1's `INPUT_PROPS_EXCLUDED`, r2's
+   equivalent). `-webkit-touch-callout: default` (the THIRD thing `.markdown-rendered img`
+   declares) is excluded the same way — a mobile-Safari long-press affordance, invisible on
+   desktop and paints nothing.
+
+   `caret-color` — r2's own MED-2 fix-round comment named this the round's own explicit
+   deferral ("fold into the 'turn the sheet on' round's census alongside r1's
+   `caret-color`"); this is that round. Obsidian's `body { --caret-color: var(--text-normal)
+   }` / `caret-color: var(--caret-color)` is INHERITED (caret-color is an inherited
+   property) into ~1,860 plugin nodes per scheme that never explicitly set their own —
+   invisible in a static screenshot (nothing here is editable), but real: `caret-color`'s
+   own UA-default computed value is `auto` (matches the element's own `color`), and
+   inheriting Obsidian's fixed token instead means a plugin node's caret (were it ever
+   made editable — the authoring-controls form fields, a future feature) would not track
+   the plugin's own ink. Restated at the plugin root: `caret-color: auto` returns every
+   descendant that does not already declare its own (r1's `GROUP 1` inputs already do, at
+   higher specificity, and keep winning) to the UA-default "matches my own colour"
+   behaviour. */
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) {
+	caret-color: auto;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(p) {
+	margin-block-start: 1em;
+	margin-block-end: 1em;
+}
+:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(img) {
+	max-width: none;
+	image-rendering: auto;
 }
 
 /* ==================================================================================== */

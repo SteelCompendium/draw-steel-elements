@@ -4028,6 +4028,182 @@ async function assertCheckboxHostLeak(page) {
 }
 
 
+// ======================================================================================
+// SC-202 r6b fix round — PROSE (p/img/caret-color) HOST RE-GROUNDING SWEEP (independent
+// review HIGH-2: a genuinely un-re-grounded host leak, the ticket's own reason to exist).
+//
+// Same asar/pin plumbing as every other family (`loadLocalObsidianAppCss`,
+// `OBSIDIAN_APP_CSS_PIN`, `setHostSheetEnabled`), same SKIP-when-no-asar self-gate, same
+// bare-vs-host computed-style invariance contract, same `.markdown-preview-view` ancestor
+// (the page's own default DOM for any `sheet=1` navigation). Rest only, dark + light — no
+// family before this one needed a bare `<p>`/`<img>` at all, so there is no existing
+// hover/focus state to re-drive.
+// ======================================================================================
+
+/** Obsidian's `.markdown-rendered p` rule sets these on the element (`unicode-bidi` is
+ *  excluded below — cannot move a box or paint a pixel, same reasoning as every other
+ *  family's own bare/unscoped exclusions). */
+const PROSE_P_PROPS = ['marginBlockStart', 'marginBlockEnd'];
+/** Obsidian's `.markdown-rendered img` rule sets these (`-webkit-touch-callout` excluded —
+ *  a mobile-Safari long-press affordance, invisible on desktop, paints nothing). */
+const PROSE_IMG_PROPS = ['maxWidth', 'imageRendering'];
+
+/** Tag every real `<p>` NOT inside `.dse-md-inline` (that family has its own, already
+ *  re-grounded, inline treatment — GROUP 1a is the family for every OTHER markdown body)
+ *  and every real `<img>`, under a `[data-dse-element]`/`.dse-modal` root. Same
+ *  (element, classes) keying convention as every other family's own tag function. */
+function tagProse() {
+	const keys = { p: [], img: [] };
+	let pi = 0;
+	let ii = 0;
+	for (const n of document.querySelectorAll('[data-dse-element] p, .dse-modal p')) {
+		if (n.closest('.dse-md-inline')) continue;
+		const root = n.closest('[data-dse-element]') || n.closest('.dse-modal');
+		const key = (root ? root.getAttribute('data-dse-element') || '(modal)' : '(none)') + '|p' + pi;
+		n.setAttribute('data-dse-proseleak-p', key);
+		keys.p.push(key);
+		pi += 1;
+	}
+	for (const n of document.querySelectorAll('[data-dse-element] img, .dse-modal img')) {
+		const root = n.closest('[data-dse-element]') || n.closest('.dse-modal');
+		const key = (root ? root.getAttribute('data-dse-element') || '(modal)' : '(none)') + '|img' + ii;
+		n.setAttribute('data-dse-proseleak-img', key);
+		keys.img.push(key);
+		ii += 1;
+	}
+	return keys;
+}
+
+function readTaggedProse({ attr, props }) {
+	const out = [];
+	for (const n of document.querySelectorAll(`[${attr}]`)) {
+		const cs = getComputedStyle(n);
+		const rec = { key: n.getAttribute(attr) };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
+	}
+	return out;
+}
+
+/** `caret-color`, sampled at the plugin ROOT of every gallery element (one read per root,
+ *  not per node — the property is uniform across a root unless something re-declares it,
+ *  and re-sampling ~1,860 individual nodes would cost a lot for no extra coverage: this
+ *  proves the re-grounding rule reaches the root, which is what makes it reach every
+ *  descendant that does not have a MORE specific rule of its own — r1's inputs already do,
+ *  at higher specificity, and are not sampled here). */
+function readCaretColorAtRoots() {
+	const out = [];
+	for (const n of document.querySelectorAll('[data-dse-element]')) {
+		out.push({ key: n.getAttribute('data-dse-element'), caretColor: getComputedStyle(n).caretColor });
+	}
+	return out;
+}
+
+// `gallery=1` (every default fixture) has real bare `<p>`s (`.dse-party__member-ref`
+// among them — see the CSS block's own HIGH-2 comment) but ZERO `<img>` elements — the
+// default `initiative` fixture's portraits are the SC-162 fallback capsule, not a real
+// `<img>`, and no other default fixture renders one at all (confirmed: `0 <img> found` —
+// this sweep is blind without the second visit below). `initiative/roster` is the one
+// fixture with real `<img>` portraits (9, per the independent review's own census).
+const PROSE_SWEEP_VISITS = [
+	{ label: 'gallery', query: { gallery: '1' }, needsP: true, needsImg: false },
+	// The roster table is control chrome, not markdown prose — no bare <p> to find here,
+	// on purpose; it exists solely for the <img> portraits.
+	{ label: 'initiative/roster', query: { element: 'initiative', fixture: 'roster' }, needsP: false, needsImg: true },
+];
+
+async function assertProseHostLeak(page) {
+	const host = loadLocalObsidianAppCss();
+	if (!host) {
+		console.log('\nprose host-leak SKIPPED (no resolved Obsidian app.css sheet)');
+		return;
+	}
+	const problems = [];
+	let pCount = 0;
+	let imgCount = 0;
+	let pComparisons = 0;
+	let imgComparisons = 0;
+	let caretComparisons = 0;
+	for (const bg of ['dark', 'light']) {
+		for (const visit of PROSE_SWEEP_VISITS) {
+			// SC-202 r6b: `sheet: '1'` — see `assertInputHostLeak`'s own comment.
+			const query = new URLSearchParams({ ...visit.query, theme: 'steel', bg, sheet: '1' });
+			await page.emulateMedia({ media: 'screen' });
+			await page.goto(`${pageUrl}?${query}`);
+			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+			await setHostSheetEnabled(page, false);
+			const keys = await page.evaluate(tagProse);
+			if (visit.needsP && keys.p.length < 1) problems.push(`${bg}|${visit.label}: 0 bare <p> found outside .dse-md-inline — the sweep is blind`);
+			if (visit.needsImg && keys.img.length < 1) problems.push(`${bg}|${visit.label}: 0 <img> found — the sweep is blind`);
+			pCount = Math.max(pCount, keys.p.length);
+			imgCount = Math.max(imgCount, keys.img.length);
+
+		const bareP = await page.evaluate(readTaggedProse, { attr: 'data-dse-proseleak-p', props: PROSE_P_PROPS });
+		const bareImg = await page.evaluate(readTaggedProse, { attr: 'data-dse-proseleak-img', props: PROSE_IMG_PROPS });
+		const bareCaret = await page.evaluate(readCaretColorAtRoots);
+
+		await setHostSheetEnabled(page, true);
+
+		const hostP = await page.evaluate(readTaggedProse, { attr: 'data-dse-proseleak-p', props: PROSE_P_PROPS });
+		const hostPByKey = new Map(hostP.map((r) => [r.key, r]));
+		for (const b of bareP) {
+			const h = hostPByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|p|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			pComparisons += 1;
+			for (const p of PROSE_P_PROPS) {
+				if (b[p] !== h[p]) problems.push(`${bg}|p|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+			}
+		}
+
+		const hostImg = await page.evaluate(readTaggedProse, { attr: 'data-dse-proseleak-img', props: PROSE_IMG_PROPS });
+		const hostImgByKey = new Map(hostImg.map((r) => [r.key, r]));
+		for (const b of bareImg) {
+			const h = hostImgByKey.get(b.key);
+			if (!h) {
+				problems.push(`${bg}|img|${b.key}: vanished when the host sheet was added`);
+				continue;
+			}
+			imgComparisons += 1;
+			for (const p of PROSE_IMG_PROPS) {
+				if (b[p] !== h[p]) problems.push(`${bg}|img|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+			}
+		}
+
+		const hostCaret = await page.evaluate(readCaretColorAtRoots);
+		const hostCaretByKey = new Map(hostCaret.map((r) => [r.key, r]));
+		for (const b of bareCaret) {
+			const h = hostCaretByKey.get(b.key);
+			if (!h) continue;
+			caretComparisons += 1;
+			if (b.caretColor !== h.caretColor) {
+				problems.push(`${bg}|caret-color|${b.key}: Obsidian's real app.css changes caret-color — "${b.caretColor}" without the host, "${h.caretColor}" with it`);
+			}
+		}
+		}
+	}
+	if (problems.length) {
+		const shown = problems.slice(0, 60);
+		console.error(
+			`\nPROSE HOST-LEAK VIOLATED — with the real Obsidian app.css present (and the ` +
+				`.markdown-preview-view.markdown-rendered ancestor a real vault always supplies) a ` +
+				`plugin body's own bare <p>/<img>/caret-color do not hold their own box or material:\n` +
+				shown.map((p) => `  ${p}`).join('\n') +
+				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
+				`\nSee styles-source.css → "SC-202 r6b fix round — PROSE HOST RE-GROUNDING".`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nprose host-leak OK (${pCount} bare <p> [${pComparisons}] + ${imgCount} <img> [${imgComparisons}] + ` +
+			`caret-color at ${caretComparisons / 2} plugin roots [${caretComparisons}] × dark/light against the ` +
+			`real Obsidian app.css under a real .markdown-preview-view.markdown-rendered ancestor: every ` +
+			`sampled property is identical with and without it; unicode-bidi and -webkit-touch-callout ` +
+			`excluded by design)`,
+	);
+}
 /** Drives one STATE for every tagged plugin-authored checkbox — same overall shape as
  *  `probeInputsInState`, extended with `checked`/`indeterminate` (real DOM states, not
  *  pseudo-classes CDP forces) alongside `disabled`. */
@@ -4398,6 +4574,11 @@ try {
 		// plugin-authored and markdown task-list alike (leak family 5). Also self-gates on
 		// a local Obsidian asar.
 		await assertCheckboxHostLeak(page);
+		// SC-202 r6b fix round (independent review HIGH-2) — the same question asked of
+		// every bare <p>/<img>/caret-color a plugin body renders (the last leak family;
+		// see the report for why this one was found only once the sheet was actually
+		// reachable). Also self-gates on a local Obsidian asar.
+		await assertProseHostLeak(page);
 	}
 } catch (e) {
 	// Anything that escapes snap()'s own try/catch (e.g. the manifest load itself
