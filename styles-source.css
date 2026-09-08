@@ -16200,9 +16200,32 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    the plugin's own ink. Restated at the plugin root: `caret-color: auto` returns every
    descendant that does not already declare its own (r1's `GROUP 1` inputs already do, at
    higher specificity, and keep winning) to the UA-default "matches my own colour"
-   behaviour. */
+   behaviour.
+
+   SC-202 r6c fold (re-review LOW-2d) — six more `body`-declared, INHERITED properties
+   reach every plugin node the same way `caret-color` does, un-re-grounded through r6b:
+   `text-rendering: optimizeLegibility` (`body`, ~:3202), `-webkit-tap-highlight-color:
+   rgba(255,255,255,0)` (`body`, ~:3208), `tab-size`/`scrollbar-color`/`-webkit-app-region`
+   (set on various non-plugin selectors but inherited down regardless — CodeMirror's
+   `tab-size: 4`/`8`, the scrollbar tokens, window-chrome drag regions), `user-select: none`
+   (`body`, blocked from reaching interactive text by the existing `[contenteditable]`
+   carve-out, but still inherited into every plugin node's own base). Reviewer-measured:
+   re-grounding all six moves 0 of 524 shots (none is a box, paint, or text-selection
+   property any fixture's own content exercises) — restated anyway, because "this
+   particular six happened to be invisible today" is not a guarantee against the next
+   plugin feature (a copy button, a text field) actually depending on one. Each restated
+   to its own CSS-spec initial value via the `initial` keyword — the general-purpose,
+   correct-by-construction form of "the browser's own UA default" for a non-standard
+   property (`-webkit-tap-highlight-color`, `-webkit-app-region`) as much as a standard one
+   (`text-rendering`, `tab-size`, `user-select`, `scrollbar-color`). */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) {
 	caret-color: auto;
+	text-rendering: initial;
+	tab-size: initial;
+	user-select: initial;
+	-webkit-tap-highlight-color: initial;
+	scrollbar-color: initial;
+	-webkit-app-region: initial;
 }
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :where(p) {
 	margin-block-start: 1em;

@@ -24,10 +24,15 @@
    flipped and the colour tokens on `.theme-dark`/`.theme-light` did not.
 
    THE FIX: `:where(body.theme-dark)`/`:where(body.theme-light)` — `:where()` matches
-   identically but contributes ZERO to specificity, so both drop to (0,1,0)/(0,1,0)
-   (`:where()` itself is (0,0,0); the class selector inside it is what remains) — a TRUE
-   tie with app.css's own `.theme-dark`/`.theme-light`, decided by source order exactly
-   like the bare `body {}` block already was. Verified end to end (fix round): 0 fake-wins
+   identically but its ENTIRE argument contributes ZERO to specificity (not just the
+   `:where()` wrapper itself), so both blocks drop to (0,0,0)/(0,0,0) — SC-202 r6c fold
+   (review LOW-2c): this comment previously said (0,1,0), as if only the wrapper zeroed
+   and the `.theme-dark`/`.theme-light` class inside it still counted; it does not — LOWER
+   than both of app.css's own real rules (`.theme-dark`/`.theme-light` at (0,1,0), its bare
+   `body {}` block at (0,0,1)), so the real sheet's value now wins WHENEVER PRESENT,
+   unconditionally, regardless of source order; this file's own value only shows through
+   when the real sheet is absent or silent on that property — exactly the fallback-floor
+   behaviour this file's own header describes. Verified end to end (fix round): 0 fake-wins
    (was 11/8), 0 hybrids (was 2), all 46 tokens resolve to the real sheet when it is on and
    to this file's own value when it is off; `freeze OK (252/252)`, 0 print/realprint bytes
    moved. Every value below was kept or checked against the same real sheet this round

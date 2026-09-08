@@ -987,6 +987,12 @@ async function assertChromeHostLeak(page) {
 			await page.emulateMedia({ media: 'screen' });
 			await page.goto(`${pageUrl}?${query}`);
 			await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+			// SC-202 r6c fold (review LOW-2b): the navigation above already requested
+			// `sheet: '1'`, but nothing verified it actually LOADED before this sweep's own
+			// `injectHostCss` overlay does its unrelated work — this sweep never ran the
+			// MED-2 sentinel at all. Toggling true-then-false, same as every other sweep's
+			// own host pass, makes an emptied `dist/obsidian-app.css` fail loudly here too.
+			await setHostSheetEnabled(page, true);
 			await setHostSheetEnabled(page, false);
 			if (c.role) {
 				await page.evaluate(
@@ -1565,6 +1571,11 @@ async function assertBtnHostLeak(page) {
 		await page.emulateMedia({ media: 'screen' });
 		await page.goto(`${pageUrl}?${query}`);
 		await page.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 60000 });
+		// SC-202 r6c fold (review LOW-2b): verify the requested `sheet: '1'` actually
+		// loaded (the MED-2 sentinel) before disabling it for the bare pass — this sweep
+		// used to call setHostSheetEnabled with `false` only, so an emptied real sheet
+		// went unnoticed here.
+		await setHostSheetEnabled(page, true);
 		await setHostSheetEnabled(page, false);
 		// SC-205 — Obsidian's `button:hover` sits inside `@media (hover: hover)`. If this
 		// context ever stopped reporting a hover-capable pointer, that rule would be inert and
@@ -4085,16 +4096,37 @@ function readTaggedProse({ attr, props }) {
 	return out;
 }
 
-/** `caret-color`, sampled at the plugin ROOT of every gallery element (one read per root,
- *  not per node — the property is uniform across a root unless something re-declares it,
- *  and re-sampling ~1,860 individual nodes would cost a lot for no extra coverage: this
- *  proves the re-grounding rule reaches the root, which is what makes it reach every
- *  descendant that does not have a MORE specific rule of its own — r1's inputs already do,
- *  at higher specificity, and are not sampled here). */
-function readCaretColorAtRoots() {
+/** `caret-color` plus the SC-202 r6c fold's six more inherited, `body`-declared
+ *  properties (review LOW-2d: `text-rendering`, `tab-size`, `user-select`,
+ *  `-webkit-tap-highlight-color`, `scrollbar-color`, `-webkit-app-region` — re-grounded
+ *  the same way, at the same anchor, in styles-source.css's own "PROSE HOST RE-GROUNDING"
+ *  block), sampled at the plugin ROOT of every gallery element (one read per root, not per
+ *  node — the property is uniform across a root unless something re-declares it, and
+ *  re-sampling ~1,860 individual nodes would cost a lot for no extra coverage: this proves
+ *  the re-grounding rule reaches the root, which is what makes it reach every descendant
+ *  that does not have a MORE specific rule of its own — r1's inputs already do, at higher
+ *  specificity, and are not sampled here). */
+const ROOT_INHERITED_PROPS = [
+	'caretColor',
+	'textRendering',
+	'tabSize',
+	'userSelect',
+	'webkitTapHighlightColor',
+	'scrollbarColor',
+	'webkitAppRegion',
+];
+/** `page.evaluate(fn, arg)` serialises only the function body, not this module's closure —
+ *  a default parameter referencing `ROOT_INHERITED_PROPS` would throw a ReferenceError
+ *  inside the page (the identifier doesn't exist there), so every call site threads the
+ *  list in explicitly as `arg`, same convention `readTaggedProse` already uses for
+ *  `PROSE_P_PROPS`/`PROSE_IMG_PROPS`. */
+function readInheritedPropsAtRoots(props) {
 	const out = [];
 	for (const n of document.querySelectorAll('[data-dse-element]')) {
-		out.push({ key: n.getAttribute('data-dse-element'), caretColor: getComputedStyle(n).caretColor });
+		const cs = getComputedStyle(n);
+		const rec = { key: n.getAttribute('data-dse-element') };
+		for (const p of props) rec[p] = cs[p];
+		out.push(rec);
 	}
 	return out;
 }
@@ -4123,7 +4155,7 @@ async function assertProseHostLeak(page) {
 	let imgCount = 0;
 	let pComparisons = 0;
 	let imgComparisons = 0;
-	let caretComparisons = 0;
+	let rootComparisons = 0;
 	for (const bg of ['dark', 'light']) {
 		for (const visit of PROSE_SWEEP_VISITS) {
 			// SC-202 r6b: `sheet: '1'` — see `assertInputHostLeak`'s own comment.
@@ -4140,7 +4172,7 @@ async function assertProseHostLeak(page) {
 
 		const bareP = await page.evaluate(readTaggedProse, { attr: 'data-dse-proseleak-p', props: PROSE_P_PROPS });
 		const bareImg = await page.evaluate(readTaggedProse, { attr: 'data-dse-proseleak-img', props: PROSE_IMG_PROPS });
-		const bareCaret = await page.evaluate(readCaretColorAtRoots);
+		const bareRoot = await page.evaluate(readInheritedPropsAtRoots, ROOT_INHERITED_PROPS);
 
 		await setHostSheetEnabled(page, true);
 
@@ -4172,14 +4204,16 @@ async function assertProseHostLeak(page) {
 			}
 		}
 
-		const hostCaret = await page.evaluate(readCaretColorAtRoots);
-		const hostCaretByKey = new Map(hostCaret.map((r) => [r.key, r]));
-		for (const b of bareCaret) {
-			const h = hostCaretByKey.get(b.key);
+		const hostRoot = await page.evaluate(readInheritedPropsAtRoots, ROOT_INHERITED_PROPS);
+		const hostRootByKey = new Map(hostRoot.map((r) => [r.key, r]));
+		for (const b of bareRoot) {
+			const h = hostRootByKey.get(b.key);
 			if (!h) continue;
-			caretComparisons += 1;
-			if (b.caretColor !== h.caretColor) {
-				problems.push(`${bg}|caret-color|${b.key}: Obsidian's real app.css changes caret-color — "${b.caretColor}" without the host, "${h.caretColor}" with it`);
+			for (const p of ROOT_INHERITED_PROPS) {
+				rootComparisons += 1;
+				if (b[p] !== h[p]) {
+					problems.push(`${bg}|${p}|${b.key}: Obsidian's real app.css changes ${p} — "${b[p]}" without the host, "${h[p]}" with it`);
+				}
 			}
 		}
 		}
@@ -4189,7 +4223,7 @@ async function assertProseHostLeak(page) {
 		console.error(
 			`\nPROSE HOST-LEAK VIOLATED — with the real Obsidian app.css present (and the ` +
 				`.markdown-preview-view.markdown-rendered ancestor a real vault always supplies) a ` +
-				`plugin body's own bare <p>/<img>/caret-color do not hold their own box or material:\n` +
+				`plugin body's own bare <p>/<img>/root-inherited properties do not hold their own box or material:\n` +
 				shown.map((p) => `  ${p}`).join('\n') +
 				(problems.length > shown.length ? `\n  … and ${problems.length - shown.length} more` : '') +
 				`\nSee styles-source.css → "SC-202 r6b fix round — PROSE HOST RE-GROUNDING".`,
@@ -4198,10 +4232,10 @@ async function assertProseHostLeak(page) {
 	}
 	console.log(
 		`\nprose host-leak OK (${pCount} bare <p> [${pComparisons}] + ${imgCount} <img> [${imgComparisons}] + ` +
-			`caret-color at ${caretComparisons / 2} plugin roots [${caretComparisons}] × dark/light against the ` +
-			`real Obsidian app.css under a real .markdown-preview-view.markdown-rendered ancestor: every ` +
-			`sampled property is identical with and without it; unicode-bidi and -webkit-touch-callout ` +
-			`excluded by design)`,
+			`${ROOT_INHERITED_PROPS.length} root-inherited properties (caret-color + the SC-202 r6c fold's ` +
+			`six) [${rootComparisons}] × dark/light against the real Obsidian app.css under a real ` +
+			`.markdown-preview-view.markdown-rendered ancestor: every sampled property is identical with and ` +
+			`without it; unicode-bidi and -webkit-touch-callout excluded by design)`,
 	);
 }
 /** Drives one STATE for every tagged plugin-authored checkbox — same overall shape as
