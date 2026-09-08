@@ -125,11 +125,17 @@ describe('Steel typography & spacing contract', () => {
 		// SC-112 Task 5 (Legacy font gate, SHIP): the font-family declaration itself moved to a
 		// theme-agnostic rule (no `[data-dse-theme='steel']`), so this no longer filters on
 		// STEEL_SCOPE — the element-root SHAPE contract holds regardless of theme scope.
+		// SC-202 r6c: the BARE form (`ELEMENT_ROOT_SELECTOR` with no `='<family>'` value) is
+		// what distinguishes this rule from the named-family Card-body rule now — it used to
+		// also require `:not([data-dse-print="on"])`, which was true of every arm in this
+		// block and so never actually did any distinguishing work; that guard is gone from
+		// this rule (option C: print/twin now render the real font, matching the real PDF —
+		// see the "Legacy font-slot gate" describe block below for the direct contract).
 		it('targets the body-font rule at the element-root selector, not an allow-list of card families', () => {
 			const rootBlocks = rules.filter(
 				(r) =>
-					/:not\(\[data-dse-print="on"\]\)/.test(r.selector) &&
-					r.selector.includes(ELEMENT_ROOT_SELECTOR),
+					r.selector.includes(ELEMENT_ROOT_SELECTOR) &&
+					!r.selector.includes(`${ELEMENT_ROOT_SELECTOR}=`),
 			);
 			expect(rootBlocks.length).toBeGreaterThan(0);
 			expect(
@@ -323,8 +329,9 @@ describe('Controls slot chain + print pin contract (SC-112 Task 3)', () => {
 // defaults (the chains resolve identically today) but without them the Task 6 pickers would
 // silently do nothing for these nodes.
 // SC-112 Task 5 (Legacy font gate, SHIP) moved BOTH consumer rules from Steel-scoped to
-// theme-agnostic (dropped `[data-dse-theme='steel']`, kept `:not([data-dse-print="on"])`) —
-// see the "Legacy font-slot gate" describe block below for that contract. This block's
+// theme-agnostic (dropped `[data-dse-theme='steel']`; kept `:not([data-dse-print="on"])`
+// at the time — SC-202 r6c later dropped that too, see the "Legacy font-slot gate"
+// describe block below for the current contract). This block's
 // lookups no longer require STEEL_SCOPE for that reason; the shape assertions themselves
 // (root-compound arm, descendant-form coverage, which selectors are pinned) are otherwise
 // unchanged from Task 4. Same comment-stripped/quote-tolerant source-text assertion style
@@ -353,17 +360,22 @@ describe('slot independence — Card-body root compound + Label pins (SC-112 Tas
 		// requires TWO elements (an ancestor carrying data-dse-theme, a separate descendant
 		// carrying data-dse-element) and can never match a node that carries both attributes on
 		// itself — which every `[data-dse-element='feature']`/`'featureblock'` root does (theme.ts's
-		// apply() and the pipeline both stamp the SAME root). The fix's compound arm has NO space
-		// between the print-exclusion prefix and `:is(...)`/`[data-dse-element=...]` — same shape
-		// as the Body rule's own bare-root arm — so it matches the root directly.
+		// apply() and the pipeline both stamp the SAME root). The fix's compound arm is a single
+		// `:is(...)` naming both families directly — no ancestor/descendant gap.
+		// SC-202 r6c: this arm's own print exclusion is gone (was
+		// `:not([data-dse-print="on"]):is(...)`, immediately compounded, always safe by the I1
+		// finding's own definition — see the retired "anchor guard" block's history below); the
+		// compound-arm SHAPE this test locks (one `:is(...)` naming both families, root-level,
+		// not a descendant) is otherwise unchanged.
 		const selector = cardBodyRule!.selector;
-		// The compound form: the print-exclusion prefix immediately followed (no descendant
-		// space) by something that names both 'feature' and 'featureblock', and carries the
-		// same error-stage exclusion the Body rule's bare-root arm uses.
-		expect(/:not\(\[data-dse-print="on"\]\):is\(/.test(selector)).toBe(true);
-		expect(selector).toMatch(/\[data-dse-element=['"]feature['"]\]/);
-		expect(selector).toMatch(/\[data-dse-element=['"]featureblock['"]\]/);
-		expect(selector).toMatch(/:not\(\[data-dse-error-stage\]\)/);
+		// No print exclusion left anywhere in this rule's selector list (SC-202 r6c).
+		expect(selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
+		// The compound arm itself: a bare `:is(...)` naming both families, immediately
+		// followed by the error-stage exclusion — root-level, not a descendant (no
+		// preceding selector text between a comma/start-of-string and this `:is(`).
+		expect(selector).toMatch(
+			/(?:^|,)\s*:is\(\s*\[data-dse-element=['"]feature['"]\],\s*\[data-dse-element=['"]featureblock['"]\]\s*\):not\(\[data-dse-error-stage\]\)/,
+		);
 	});
 
 	it('Card-body rule still covers .dse-sb/.dse-card via the pre-existing descendant form', () => {
@@ -379,27 +391,47 @@ describe('slot independence — Card-body root compound + Label pins (SC-112 Tas
 		expect(/\.dse-sb__item-l|\.dse-sb__kv-l/.test(labelRule!.selector)).toBe(true);
 	});
 
-	it('Label rule is print-excluded', () => {
-		expect(labelRule!.selector).toMatch(/:not\(\[data-dse-print="on"\]\)/);
+	// SC-202 r6c: was 'Label rule is print-excluded' — inverted. Print/twin now render the
+	// real font (option C: a real Export-to-PDF measured serif; the print exclusion here
+	// was hiding a genuine layout bug, `.dse-pr__badge-text` falling through to whatever
+	// ambient host font resolved and wrapping inside its own fixed-width badge — see
+	// styles-source.css's own SC-202 r6c comment at this block).
+	it('Label rule carries no print exclusion', () => {
+		expect(labelRule!.selector).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
 	});
 });
 
 // SC-112 Task 5 — Legacy font-slot gate: SHIP. Investigation ledger:
 // docs/superpowers/dse-overhaul/build-ledgers/sc112-legacy-font-gate.md (workspace repo).
 // Verdict: the five font-family CONSUMER rules for Title/Body/Card-body/Label/Controls
-// widen from Steel-only to theme-agnostic — drop `[data-dse-theme='steel']`, keep
-// `:not([data-dse-print="on"])` — so Legacy also receives whatever SC-112 Task 6's picker
-// writes via reflect()'s per-root inline override. jsdom can't resolve custom properties
-// (same limitation this whole file works around), so the actual "is it a no-op at
-// defaults" claim is proven empirically by the freeze check (101/101, recorded in the
-// ledger), not here. What THIS suite locks is the CSS SHAPE the freeze proof depends on:
-// (1) the five widened rules carry no Steel-theme qualifier, only the print exclusion;
+// widen from Steel-only to theme-agnostic — drop `[data-dse-theme='steel']` — so Legacy
+// also receives whatever SC-112 Task 6's picker writes via reflect()'s per-root inline
+// override. jsdom can't resolve custom properties (same limitation this whole file works
+// around), so the actual "is it a no-op at defaults" claim is proven empirically by the
+// freeze check (101/101 at the time), not here. What THIS suite locks is the CSS SHAPE
+// that proof depends on: (1) the five widened rules carry no Steel-theme qualifier;
 // (2) every Steel-only VISUAL property that used to ride along with font-family in the
 // SAME rule (weight/uppercase/letter-spacing/color) is still Steel-scoped and the old
 // rule no longer declares font-family itself — if a future edit put font-family back in
 // the Steel-scoped rule, this would silently re-narrow Legacy support without any of the
 // rules above catching it. (3) Mono is untouched — it was already theme-agnostic before
 // this task (no `[data-dse-theme]` ever gated it), so nothing widened there.
+//
+// SC-202 r6c (option C) — at Task 5's own SHIP, "keep `:not([data-dse-print="on"])`" was
+// also part of the verdict, and this suite carried an entire "anchor guard" sub-block (the
+// independent review's I1 finding) proving that exclusion was correctly anchored to
+// `:is([data-dse-element], .dse-modal)` rather than a bare, always-true ancestor form. That
+// guard, and the print exclusion it protected, are BOTH GONE now — this round found the
+// exclusion was never a considered design choice about matching real Obsidian output (the
+// paragraph it grew from records only that a stale FROZEN baseline happened to be sans,
+// preserved rather than questioned) and was actively hiding a real bug: a genuine
+// Export-to-PDF (CDP-driven, `sc202-r6c-report.md` §1/§3) renders body/title text SERIF,
+// and with the exclusion still in place the round's own realprint/twin comparison surfaced
+// `.dse-pr__badge-text` (a Label-slot consumer) wrapping inside its own fixed-width tier
+// badge once print fell through to an ambient host font instead of the bundled, metrically
+// stable "Source Serif 4" every screen capture already uses safely. The five-rule I1
+// anchor-guard machinery (`findUnanchoredPrintExclusions` and its two tests) is deleted
+// with it — the mechanism it protected no longer exists in these rules to protect.
 describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 	const fontFamilyRulesFor = (slot: string): Rule[] =>
 		rules.filter((r) => new RegExp(`font-family:\\s*var\\(--dse-font-${slot}\\)\\s*;`).test(r.body));
@@ -446,77 +478,24 @@ describe('Legacy font-slot gate (SC-112 Task 5 — SHIP)', () => {
 		}
 	});
 
-	it('every widened slot\'s font-family consumer(s) stay print-excluded', () => {
+	// SC-202 r6c: was 'every widened slot's font-family consumer(s) stay print-excluded' —
+	// inverted, and the I1 anchor-guard sub-block that used to follow it (proving that
+	// exclusion was correctly anchored, not a bare always-true ancestor form) is deleted —
+	// see this describe block's own header comment for why. ONE pair is deliberately
+	// exempt and stays print-excluded: `.dse-chrome-summary__label`/`__name` — chrome is
+	// `display: none` in print by chrome.test.ts's own SC-169 §6 contract ("the chrome is
+	// COMPLETELY ABSENT from the print scheme"), a broader guarantee than this rule, so
+	// there is no "real PDF" for its font to match — see styles-source.css's own comment
+	// at that pair.
+	const CHROME_SUMMARY_CONSUMERS = /\.dse-chrome-summary__(?:label|name)\b/;
+	it('every widened slot\'s font-family consumer(s) carry no print exclusion (chrome-summary exempt)', () => {
 		for (const slot of WIDENED_SLOTS) {
-			const matches = fontFamilyRulesFor(slot);
-			expect(matches.every((r) => /:not\(\[data-dse-print="on"\]\)/.test(r.selector))).toBe(true);
-		}
-	});
-
-	// Review finding I1: the tests above only check THAT `:not([data-dse-print="on"])`
-	// appears somewhere in the selector — they do NOT check that it is anchored correctly,
-	// so they pass just as happily on the buggy first-pass form this task's own freeze run
-	// caught (22/22 *--steel-print.png shots broke — see the ledger). A bare
-	// `:not([data-dse-print="on"]) X` descendant selector does not mean "X's real element
-	// root lacks print" — ANY ancestor lacking that attribute (`<html>`, `<body>`, the
-	// harness mount div) trivially satisfies it. The fix anchors every such arm directly
-	// onto `:is([data-dse-element], .dse-modal)` (the same root-or-modal union already used
-	// for the token value blocks, SC-104/FOLLOWUPS #31) — the exact element the harness
-	// stamps `data-dse-print="on"` on. This test locks THAT shape, not just the exclusion's
-	// presence: every occurrence of `:not([data-dse-print="on"])` used as a descendant-
-	// combinator ancestor (i.e. immediately followed by whitespace, not compounded further)
-	// must be immediately preceded by `:is([data-dse-element], .dse-modal)` with no space —
-	// a compound-on-the-same-element arm (Body's bare-root arm, Card-body's feature/
-	// featureblock arm, Title's initiative-family h3-h6 arm — where `:not(print)` is
-	// followed immediately by more compound selector text, not whitespace) is unaffected by
-	// this bug and is correctly exempted by the "followed by whitespace" test.
-	function findUnanchoredPrintExclusions(selectorText: string): string[] {
-		const violations: string[] = [];
-		const NOT_PRINT = /:not\(\[data-dse-print="on"\]\)/g;
-		const ANCHOR_SUFFIX = /:is\(\[data-dse-element\],\s*\.dse-modal\)$/;
-		let m: RegExpExecArray | null;
-		while ((m = NOT_PRINT.exec(selectorText))) {
-			const after = selectorText.slice(m.index + m[0].length);
-			// Only a concern when used as a descendant-combinator ancestor (followed by
-			// whitespace) — a `:not(print)` immediately compounded with more selector text
-			// (`:is(...)`, `[data-dse-element=...]`) is a same-element check, always safe.
-			if (!/^\s/.test(after)) continue;
-			const before = selectorText.slice(0, m.index);
-			if (!ANCHOR_SUFFIX.test(before)) {
-				violations.push(selectorText.slice(Math.max(0, m.index - 40), m.index + 30).trim());
-			}
-		}
-		return violations;
-	}
-
-	it('every widened slot\'s descendant-form print exclusion is anchored to :is([data-dse-element], .dse-modal), not a bare ancestor', () => {
-		for (const slot of WIDENED_SLOTS) {
-			const matches = fontFamilyRulesFor(slot).filter((r) => !STEEL_SCOPE.test(r.selector));
+			const matches = fontFamilyRulesFor(slot).filter(
+				(r) => !CHROME_SUMMARY_CONSUMERS.test(r.selector),
+			);
 			expect(matches.length).toBeGreaterThan(0);
-			for (const r of matches) {
-				expect(findUnanchoredPrintExclusions(r.selector)).toEqual([]);
-			}
+			expect(matches.every((r) => !/:not\(\[data-dse-print="on"\]\)/.test(r.selector))).toBe(true);
 		}
-	});
-
-	it('the anchor guard HAS TEETH: an unanchored bare descendant form is reported as a violation', () => {
-		// Guard against a vacuous pass: the detector must actually flag the exact buggy
-		// pattern this task's freeze run caught, not just always return [].
-		expect(
-			findUnanchoredPrintExclusions(':not([data-dse-print="on"]) .dse-head__primary--left'),
-		).not.toEqual([]);
-		// And must NOT flag the correctly anchored form.
-		expect(
-			findUnanchoredPrintExclusions(
-				':is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-head__primary--left',
-			),
-		).toEqual([]);
-		// And must NOT flag a same-element compound (no descendant combinator involved).
-		expect(
-			findUnanchoredPrintExclusions(
-				':not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage])',
-			),
-		).toEqual([]);
 	});
 
 	it('Title\'s Steel-only display treatment (.dse-head__primary--left) keeps weight/uppercase Steel-scoped and no longer declares font-family itself', () => {

@@ -429,7 +429,12 @@ describe('Plan 08 Task 4: badge CSS keeps the legacy clip-path shapes verbatim (
 	// silently goes back to whatever the reader's text font draws for U+2264. Pinned
 	// here because the failure mode is invisible to the browser harness — nothing else
 	// in the battery can catch a regression of it.
-	test('the tier-1 badge re-homes its "≤" onto a font with U+2264 coverage, Steel-scoped and print-excluded', () => {
+	// SC-202 r6c (option C): was '…Steel-scoped and print-excluded' — the print exclusion
+	// is gone (styles-source.css's own r6c comment at this rule, ~:9111, explains why:
+	// leaving print excluded genuinely diverged the harness's realprint from its twin, a
+	// real ~3px glyph-width drift the round's own delta check caught, for no upstream
+	// reason that survives SC-144's Legacy retirement). Steel-scoped stays true.
+	test('the tier-1 badge re-homes its "≤" onto a font with U+2264 coverage, Steel-scoped', () => {
 		const rule = sheet.match(
 			/^[^\n{}]*\.dse-pr__badge--t1 \.dse-pr__badge-text::first-letter\s*\{[\s\S]*?\n\}/m,
 		);
@@ -437,7 +442,8 @@ describe('Plan 08 Task 4: badge CSS keeps the legacy clip-path shapes verbatim (
 		expect(rule![0]).toMatch(/font-family:\s*var\(\s*--dse-font-mono\s*,/);
 		// …and the fallback half actually terminates in a monospace face.
 		expect(rule![0]).toMatch(/monospace\s*\)?\s*;/);
-		expect(rule![0]).toMatch(/\[data-dse-theme='steel'\]:not\(\[data-dse-print="on"\]\)/);
+		expect(rule![0]).toMatch(/\[data-dse-theme='steel'\]/);
+		expect(rule![0]).not.toMatch(/:not\(\[data-dse-print="on"\]\)/);
 		// The literal the fix protects is still the one the panel emits.
 		const panel = fs.readFileSync(
 			path.join(__dirname, '../../../src/framework/kit/powerRollPanel.ts'),

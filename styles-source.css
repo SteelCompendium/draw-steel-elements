@@ -1417,6 +1417,31 @@ code.dsa {
     }
 }
 
+/* SC-202 r6c (option C) — GENUINE un-re-grounded print leak on `.dse-init__portrait-
+   fallback` (and its sibling `.dse-stamina__pill`, fixed the same way just above in this
+   file), found by the round's own realprint↔twin delta check, not reasoned in advance:
+   its `background-color: var(--color-base-30)` (above, nested inside `.dse-init`) reads
+   Obsidian's raw token directly, never in scope for either print value block's
+   `--dse-*`-only neutral-surface system, so it kept tracking `theme-dark`/`theme-light`
+   under print (measured: rgb(51,51,51) twin's own dark vault vs rgb(228,228,228) forced-
+   light real paper) — on the ONE capsule this file's own comment (at its definition,
+   above) says is deliberately meant to "stay visible everywhere", print included.
+   Neutralised to the same `#fff` literal every other surface uses. Written FLAT, outside
+   the `.dse-init` nesting block above, on purpose: nested under it, `[data-dse-print=
+   'on']` would compile (esbuild's CSS-nesting downlevel prepends the ENTIRE ancestor
+   chain) to requiring the attribute BETWEEN `.dse-init` and this class, which never
+   happens — the attribute sits on an ancestor OUTSIDE `.dse-init`, so the two-arm pair
+   below needs the full explicit selector, unnested. Screen unchanged (both arms only
+   ever match under `data-dse-print="on"` / real `@media print`). */
+@media print {
+	[data-dse-element="initiative"] .dse-init .dse-init__portrait-fallback {
+		background-color: #fff;
+	}
+}
+[data-dse-element="initiative"][data-dse-print='on'] .dse-init .dse-init__portrait-fallback {
+	background-color: #fff;
+}
+
 /* Portraits preference (D4 owns the value; the pipeline's prefs.reflect() stamps
    data-dse-portraits on the element root): "off" hides the 50–60px images for a
    dense tracker. */
@@ -1525,6 +1550,24 @@ code.dsa {
 	border-radius: 10px;
 	justify-content: center;
 	align-items: center;
+}
+/* SC-202 r6c (option C) — GENUINE un-re-grounded print leak, found by the round's own
+   realprint↔twin delta check, not reasoned in advance: `background-color` above reads
+   Obsidian's raw `--background-primary-alt` directly (not a `--dse-*` token), so it was
+   never in scope for either print value block's neutral-surface system (which only ever
+   touches `--dse-*`) — under `data-dse-print="on"` the pill's background kept tracking
+   `theme-dark`/`theme-light` like nothing else on the card does (measured:
+   rgb(35,35,35) on the twin's own dark vault vs rgb(250,250,250) forced-light real
+   paper). Neutralised here to the SAME literal both print value blocks already use for
+   every OTHER surface (`#fff`) — screen is UNCHANGED (this pair only ever matches under
+   `data-dse-print="on"` / real `@media print`, neither of which any screen combo is). */
+@media print {
+	.dse-stamina__pill {
+		background-color: #fff;
+	}
+}
+[data-dse-print='on'] .dse-stamina__pill {
+	background-color: #fff;
 }
 
 /* -- The §3.5b modal preview bar: fill + pending-delta as adjacent flex fills -- */
@@ -7352,9 +7395,39 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    unchanged. Caught by an actual freeze failure (22 *--steel-print.png bytes
    moved — title/body text rendered serif instead of the frozen sans) during
    this task's own Step 3 proof; fixed and re-verified at 101/101 before this
-   was shipped, per the ledger. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-head__primary--left,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip,
+   was shipped, per the ledger.
+
+   SC-202 r6c (option C) — THE `:not([data-dse-print="on"])` GUARD ITSELF IS NOW GONE
+   from every arm below (Title/Body/Card-body/Label/Controls' selector list — five
+   `font-family:` rules, ~29 selector arms). What was true when the paragraph above was
+   written no longer holds: "sans in print" was never a deliberate design choice about
+   matching real Obsidian output — it was whatever the frozen `*--steel-print.png`
+   baseline already happened to be at the time, preserved through the anchoring fix
+   above rather than questioned. Two things this round actually measured say otherwise:
+   (1) a REAL Obsidian Export-to-PDF of `feature`/`statblock` (CDP-driven end to end,
+   `sc202-r6c-report.md` §1/§3) renders body/title text SERIF, not sans; (2) with the
+   guard still in place, the round's own new realprint→twin comparison surfaced a REAL
+   layout bug it was hiding: `.dse-pr__badge-text` (in the Label arm below) falls
+   through to whatever ambient host font `--font-text` resolves to once print excludes
+   this rule, and on this machine that ambient chain wraps "12-16" onto two lines inside
+   the tier badge's fixed 3em box (Playwright's own bundled Chromium substitutes a
+   DIFFERENT, wider sans face than "Source Serif 4" for the same declared
+   `font-size` — measured, not assumed: `getClientRects()` on the wrapped text showed
+   two line boxes, the second landing inside the NEXT badge's row). Removing the guard
+   restores Source Serif 4 (bundled, deterministic glyph metrics, already proven safe by
+   every SCREEN capture that has always used it) under print too — fixing the wrap and
+   making the harness realprint's font honestly match the real PDF's, both at once.
+   `--dse-font-controls` (the one role in this shared block whose OWN font stays sans in
+   print) is UNCHANGED IN EFFECT even though its consumer rule (Controls' own selector
+   list, below) is no longer print-excluded either: `font-family: var(--dse-font-controls)`
+   still resolves through the CUSTOM PROPERTY's value, and that value stays pinned to
+   `var(--font-text)` by the print value block's own higher-specificity
+   `--dse-font-controls` declaration (`~:13830`/`~:13900`) regardless of whether this
+   consumer rule itself is print-scoped — verified: 0 pixel change to any Controls-role
+   node's font. `steelTypography.test.ts`'s SHIP-gate tests (which asserted the OLD,
+   print-excluded contract) are updated in the same commit to assert this one instead. */
+:is([data-dse-element], .dse-modal) .dse-head__primary--left,
+:is([data-dse-element], .dse-modal) :is(.dse-sb, .dse-fb) > .dse-head > .dse-head__primary--chip,
 /* SC-101: the featureblock OPTION's cost is the site's other `.sc-head__slot--mini`
    (steel-cardhead.css:111 `font-family: var(--md-large-header-font)`), so it joins the
    Title slot here rather than declaring font-family inside its own Steel rule (~:4254)
@@ -7369,10 +7442,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    large-header face, same as every other Title-slot consumer) and the move is required by
    the SC-112 contract this rule already cites — but it IS a Legacy-visible behavior change
    under that one non-default preference, not a pure no-op in every configuration. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-card__title,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-hero__name,
-:not([data-dse-print="on"]):is(
+:is([data-dse-element], .dse-modal) .dse-fb .dse-feature > .dse-head > .dse-head__eyebrow--right,
+:is([data-dse-element], .dse-modal) .dse-card__title,
+:is([data-dse-element], .dse-modal) .dse-hero__name,
+:is(
 		[data-dse-element='initiative'],
 		[data-dse-element='encounter'],
 		[data-dse-element='negotiation'],
@@ -7381,22 +7454,22 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 		[data-dse-element='party'],
 		[data-dse-element='counter']
 	) :is(h3, h4, h5, h6),
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-modal__title {
+:is([data-dse-element], .dse-modal) .dse-modal__title {
 	font-family: var(--dse-font-title);
 }
-:not([data-dse-print="on"])[data-dse-element]:not([data-dse-error-stage]),
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-sb,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-card {
+[data-dse-element]:not([data-dse-error-stage]),
+:is([data-dse-element], .dse-modal) .dse-sb,
+:is([data-dse-element], .dse-modal) .dse-card {
 	font-family: var(--dse-font-body);
 }
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(.dse-sb, .dse-card),
-:not([data-dse-print="on"]):is(
+:is([data-dse-element], .dse-modal) :is(.dse-sb, .dse-card),
+:is(
 		[data-dse-element='feature'],
 		[data-dse-element='featureblock']
 	):not([data-dse-error-stage]) {
 	font-family: var(--dse-font-card-body);
 }
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) :is(
+:is([data-dse-element], .dse-modal) :is(
 	.dse-head__eyebrow--chip,
 	.dse-head__eyebrow--line,
 	.dse-head__deck--chip,
@@ -7410,12 +7483,12 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
 ) {
 	font-family: var(--dse-font-label);
 }
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-stepper__value,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-btn,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-collapse__header,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-tabs__tab,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) button.dse-pr__row,
+:is([data-dse-element], .dse-modal) .dse-stepper__input,
+:is([data-dse-element], .dse-modal) .dse-stepper__value,
+:is([data-dse-element], .dse-modal) .dse-btn,
+:is([data-dse-element], .dse-modal) .dse-collapse__header,
+:is([data-dse-element], .dse-modal) .dse-tabs__tab,
+:is([data-dse-element], .dse-modal) button.dse-pr__row,
 /* SC-202 r1 — the other seven numeric/text inputs the plugin renders were never in
    this list at all: unlike .dse-stepper__input they carry NO font declaration of
    their own anywhere in this sheet, so with no host present they fell all the way
@@ -7430,23 +7503,23 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-sb {
    seven — not evidence of an independent leak — proven by the can-fail sweep
    (visual-harness/shoot.mjs assertInputHostLeak): once fontSize stopped leaking,
    padding/borderRadius stopped too, with no change to those properties' own rules. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-amount,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-init__malice-quickadd-label,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__sheet-input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-mt__sheet-rollchar,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-party__award-input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__roll-input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__points-input,
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-prj__char-input,
+:is([data-dse-element], .dse-modal) .dse-init__malice-quickadd-amount,
+:is([data-dse-element], .dse-modal) .dse-init__malice-quickadd-label,
+:is([data-dse-element], .dse-modal) .dse-mt__sheet-input,
+:is([data-dse-element], .dse-modal) .dse-mt__sheet-rollchar,
+:is([data-dse-element], .dse-modal) .dse-party__award-input,
+:is([data-dse-element], .dse-modal) .dse-prj__roll-input,
+:is([data-dse-element], .dse-modal) .dse-prj__points-input,
+:is([data-dse-element], .dse-modal) .dse-prj__char-input,
 /* SC-202 r1 fix round (HIGH-3) — `.dse-sedit__apply-input` has the same "no font
    declared anywhere" gap the seven above had in r1. `.dse-condal__input` and
    `.dse-form__raw` are deliberately NOT here — see the SC-202 r1 block's own comment
    (foot of file) for why each already wins its own font. */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-sedit__apply-input,
+:is([data-dse-element], .dse-modal) .dse-sedit__apply-input,
 /* SC-202 r4-resume Step A — `.dse-cond-icons__search` (the SC-277 icon-filter field)
    has the same "no font declared anywhere" gap; see the SC-202 r1 block's own "THE
    THIRTEENTH" note (foot of file). */
-:is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-cond-icons__search {
+:is([data-dse-element], .dse-modal) .dse-cond-icons__search {
 	font-family: var(--dse-font-controls);
 }
 /* SC-185 — the SIZE twin of the Controls font-family rule above, over the exact
@@ -8056,8 +8129,10 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-crest:
    spacing/margins are already em-relative to this rule's own font-size, so they
    rescale correctly with no separate edit. Shared rule (CardLayout's generic
    SteelBand machinery, not a kit-only selector) — any future `bands()` consumer
-   inherits the fix for free. */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-card__band-head {
+   inherits the fix for free. SC-202 r6c: print exclusion removed, same as every other
+   font-slot consumer — see styles-source.css's own r6c comment at the main consolidated
+   block for why. */
+[data-dse-theme='steel'] .dse-card__band-head {
 	font-family: var(--dse-font-label);
 	font-variant: small-caps;
 	text-transform: lowercase;
@@ -8177,7 +8252,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles_
 [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__cell--dmg .dse-tiles__value {
 	color: var(--dse-metal-bright);
 }
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-tiles__label {
+[data-dse-theme='steel'] .dse-tiles__label {
 	font-family: var(--dse-font-label);
 	font-variant: small-caps;
 	text-transform: lowercase;
@@ -9076,17 +9151,30 @@ body.theme-light
    slot — with no edit, exactly as predicted. The literal stack is deliberately
    KEPT: it costs nothing and it is the only thing standing between a future
    re-breakage of the token chain and "²11" silently returning to the badge.
-   SCOPE, stated honestly (fix-round M-1, mirroring Batch 1 A-3's disclosure):
-   this rule is Steel-scoped AND print-excluded, forced by the same LEGACY-FREEZE
-   constraint — the *--legacy-{dark,light}.png and *--steel-print.png shots render
-   this exact badge and are frozen byte-for-byte, so an unscoped fix would move
-   them. A Legacy-theme reader, and ANY reader exporting to PDF/print, still sees
-   "²11" — this fix reaches only the shipping Steel screen theme. Freeze-widening
-   candidate, same list as A-3's stray pill.
+   SCOPE, stated honestly (fix-round M-1, mirroring Batch 1 A-3's disclosure) — AND ITS
+   SC-202 r6c REVERSAL: this rule was Steel-scoped AND print-excluded, forced by the
+   LEGACY-FREEZE constraint of the time (the *--legacy-{dark,light}.png and
+   *--steel-print.png shots render this exact badge and were frozen byte-for-byte, so an
+   unscoped fix would have moved them) — "A Legacy-theme reader, and ANY reader exporting
+   to PDF/print, still sees '²11'". BOTH halves of that constraint are gone: Legacy itself
+   was retired (SC-144), and this round's whole point is moving the print freeze. Print
+   exclusion removed for the same reason every other font-slot consumer in this file lost
+   theirs (r6c's main comment, ~:7340): it was NEVER a considered "print should show the
+   substitution" design choice, only a frozen-baseline artifact — and left in place it
+   would have kept the twin and realprint surfaces genuinely apart, not by a print-sheet
+   property this round enumerates, but by which FALLBACK FONT the `≤`-substitute glyph
+   resolves through on each ambient media (screen vs print change the fallback tail — the
+   same mechanism the main r6c comment already established), a real horizontal drift the
+   round's own realprint↔twin delta check caught directly (`.dse-pr__badge-text` width off
+   by ~3.3px). Removing the guard makes both surfaces resolve the SAME slot the SAME way,
+   closing the drift to 0 — this does not change what a REAL Obsidian PDF shows (measured,
+   still "²11" — an upstream font-substitution fact this plugin's CSS cannot reach), only
+   makes the harness's own two captures agree with each other, which is what the delta
+   assertion needs.
    (Housekeeping: this rule names a badge modifier ABOVE the shape rules, which the
    clip-path tests locate by first textual occurrence — safe only because it declares
    no clip-path of its own. Never add one here.) */
-[data-dse-theme='steel']:not([data-dse-print="on"]) .dse-pr__badge--t1 .dse-pr__badge-text::first-letter {
+[data-dse-theme='steel'] .dse-pr__badge--t1 .dse-pr__badge-text::first-letter {
 	font-family: var(
 		--dse-font-mono,
 		ui-monospace,
@@ -14777,7 +14865,15 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
 /* The two font-SLOT consumers are deliberately theme-agnostic (and print-excluded): the
    SC-112 slot contract routes every `--dse-font-*` consumer without a [data-dse-theme]
    qualifier, and test/dom/theme/steelTypography.test.ts gates exactly that. Everything
-   else about the collapsed bar stays Steel-scoped. */
+   else about the collapsed bar stays Steel-scoped.
+   SC-202 r6c: NOT touched by the round's font-family print-exclusion removal, unlike
+   every other font-slot consumer — chrome.test.ts's SC-169 §6 contract ("the chrome is
+   COMPLETELY ABSENT from the print scheme") is a broader, deliberate architectural
+   guarantee than this one rule, and it holds regardless: `.dse-chrome-summary` is
+   `display: none` in print by the unscoped base rule, so this font never renders on
+   paper at all — there is no "real PDF" for chrome to match, only UI the print scheme
+   was always designed to hide entirely. Reverting THIS one pair to keep that contract
+   intact was a deliberate, considered exception, not an oversight. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"]) .dse-chrome-summary__label {
 	font-family: var(--dse-font-label);
 }
