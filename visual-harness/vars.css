@@ -1,8 +1,24 @@
-/* visual-harness/vars.css — vendored Obsidian DEFAULT-theme variables (F4, Plan 11).
-   Close-enough fidelity by design (see the F4 spec): hand-vendored from Obsidian 1.x
-   defaults, 2026-07-10. Covers ONLY the non---dse- vars styles-source.css references,
-   plus page basics and harness chrome. NOT here on purpose: --sc-* (styles-source.css
-   chains those with inline hex fallbacks — the v2-palette sync is a snippet concern). */
+/* visual-harness/vars.css — SC-202 r6b: FALLBACK FLOOR, not the source of truth any more.
+   Through r6a this file vendored every Obsidian default-theme token styles-source.css
+   references (F4 spec, 2026-07-10) as the harness's ONLY source for them — hand-vendored,
+   always at risk of drifting from the real thing. Now that the real, pinned
+   `visual-harness/dist/obsidian-app.css` is injected for every screen-combo capture
+   (index.html — see that file's own comment for load order), this file's tokens are used
+   ONLY while the real sheet is disabled: the print twin, realprint (this round's scope
+   fence — 0 frozen bytes may move there, and they never carry the real sheet), and the
+   bare half of every host-leak sweep's own bare/host toggle (shoot.mjs's
+   `setHostSheetEnabled`). Load order makes this automatic, not a JS branch: index.html
+   puts this file BEFORE the (disableable) real-sheet link, so whenever that link is
+   enabled its declarations — same selectors (`body`, `.theme-dark`, `.theme-light`) —
+   simply come LATER in the cascade and win; whenever it is disabled (or 404s — nothing
+   here depends on `dist/` existing), these are the only declarations left standing, so a
+   screen combo missing the real sheet degrades to exactly what every combo rendered
+   before this round rather than to undefined custom properties. Every value below was kept
+   or checked against the same real sheet this round measured (2026-07-10 vendoring, spot-
+   checked current for r6b) — drift here can only ever make the FALLBACK stale, never the
+   real capture, since the real sheet always wins when it is present. NOT here on purpose:
+   --sc-* (styles-source.css chains those with inline hex fallbacks — the v2-palette sync
+   is a snippet concern). */
 
 body {
 	/* theme-independent */
@@ -89,6 +105,31 @@ body.theme-light {
 	--interactive-accent: #7f6df2;
 	--color-blue: #086ddd;
 	--color-orange: #ec7500;
+}
+
+/* SC-202 r6b — box-sizing/overflow-wrap, ACCEPTED AS TRUTH (owner ruling, decisions.md
+   2026-09-07): Obsidian's `* { box-sizing: border-box }` and
+   `.markdown-preview-view { overflow-wrap: break-word }` are page-wide declarations, not
+   this-or-that rule family's, and a real vault has ALWAYS rendered plugin content under
+   both — the harness was the one lying by ever measuring `content-box`/`normal` as "bare".
+   Rather than have the table host-leak sweep tolerate a known bare/host pair (r2 fix
+   round's `TABLE_CELL_PROPS_DECLARED_EXEMPT`, retired this round — see shoot.mjs), this is
+   baked in permanently — UNLIKE the rest of this file, it is NOT superseded by the real
+   sheet when the sheet is on (the real sheet declares the identical values at the same
+   selector, so there is nothing to override) and it is NOT toggled by the sweeps' own
+   `setHostSheetEnabled` either, because a real vault never has a "without Obsidian's
+   page-wide CSS" state to model. Scoped to the real `.markdown-preview-view` wrapper (the
+   page's own default DOM for any `sheet=1` navigation — entry.ts's
+   `applyRealObsidianCascade`) so it is INERT for the print twin and realprint, which never
+   carry that wrapper: 0 risk to the frozen `*--steel-print*` baseline. `overflow-wrap` is
+   inherited, so declaring it once on the wrapper itself reaches every table cell, list
+   item and card body beneath #mount exactly the way Obsidian's own rule does in a vault. */
+.markdown-preview-view,
+.markdown-preview-view * {
+	box-sizing: border-box;
+}
+.markdown-preview-view {
+	overflow-wrap: break-word;
 }
 
 /* harness chrome */

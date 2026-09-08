@@ -1037,6 +1037,22 @@ export interface HarnessParams {
 	 * different claim, about the YAML key, and it is worth its own pictures.)
 	 */
 	collapse?: boolean;
+	/**
+	 * SC-202 r6b — turn Obsidian's real, pinned `app.css` ON for this navigation (the
+	 * `#dse-obsidian-app-css` link in index.html, disabled by default) and reproduce the
+	 * real DOM chain around `#mount` (`wrapMountInMarkdownRendered`'s ancestor, promoted
+	 * here from a sweep-only helper to the page's own default behaviour — see
+	 * `applyRealObsidianCascade` below).
+	 *
+	 * Optional and defaulting to `false` so every existing `HarnessParams` literal
+	 * (tests, the other cameras) keeps compiling unchanged. `shoot.mjs`'s `snap()` sets
+	 * `sheet=1` for the screen (dark/light) combos only — never for the print twin or
+	 * realprint, which is this round's scope fence (0 frozen bytes may move). The six
+	 * host-leak sweeps (+ the token-override probe) also request it on their own
+	 * navigation, then flip `#dse-obsidian-app-css`'s own `.disabled` themselves via
+	 * `page.evaluate` for their bare-vs-host comparison — see shoot.mjs's own comments.
+	 */
+	sheet?: boolean;
 }
 
 /** SC-123: `kwUsage:text,sbCharBox:on` → `{ kwUsage: 'text', sbCharBox: 'on' }`.
@@ -1126,6 +1142,9 @@ export function parseParams(search: string): HarnessParams {
 		pad: Number.isFinite(pad) && pad > 0 ? pad : undefined,
 		mobile: q.get('mobile') === '1',
 		collapse: q.get('collapse') === '1',
+		// SC-202 r6b: absent/anything-but-'1' means false — every pre-existing URL (the
+		// print/realprint combos included) keeps the sheet off exactly as before.
+		sheet: q.get('sheet') === '1',
 	};
 }
 
@@ -1803,12 +1822,61 @@ async function mountOne(
 	}
 }
 
+/**
+ * SC-202 r6b — the page's OWN default cascade for a screen-combo capture: Obsidian's real,
+ * pinned `app.css` (the `#dse-obsidian-app-css` link index.html ships disabled) turned ON,
+ * and `#mount` wrapped in the real reading-view ancestor a codeblock processor's `el`
+ * always sits inside in a vault. Promoted here from `shoot.mjs`'s own
+ * `wrapMountInMarkdownRendered` (rounds 2-5's sweep-only helper) so every screen-combo
+ * navigation gets it — the sweeps stop calling it themselves (see shoot.mjs).
+ *
+ * The single wrapper div (rather than the full multi-level
+ * `.view-content > .markdown-reading-view > .markdown-preview-view.markdown-rendered`
+ * chain a real vault has) is deliberate, not a shortcut: rounds 2-5 already proved every
+ * `.markdown-rendered …` rule these sweeps sample matches with just this one ancestor in
+ * place (a CDP re-measurement in a real vault this round, `sc202-r6b-report.md` §1,
+ * confirms the SAME class list on the SAME single element — no rule any of this file's
+ * gates compare against ever needed the deeper levels). Body itself carries no extra
+ * `mod-*`/`is-*` class here: the same live measurement showed the real `<body>` carries
+ * several (`mod-linux`, `is-frameless`, `show-ribbon`, …), but all of them are WINDOW-CHROME
+ * state (frameless title bar, ribbon visibility, split-pane side) — none appear in app.css
+ * paired with a `.markdown-rendered`/table/list/input/checkbox selector this file's sweeps
+ * or any capture ever samples (grepped; see the report), and five rounds of clean sweeps
+ * already ran without them. `theme-dark`/`theme-light` (the one body class that DOES gate
+ * real rules) was already here.
+ *
+ * Idempotent: safe to call twice on the same `doc` with the same or a different `sheetOn`
+ * (a direct test caller's own concern, not a real navigation's — every real capture is a
+ * fresh `page.goto`), so a stale wrapper from an earlier call in the same document is
+ * removed before a `sheetOn: false` call and never doubled before a `sheetOn: true` one.
+ */
+function applyRealObsidianCascade(doc: Document, sheetOn: boolean): void {
+	const link = doc.getElementById('dse-obsidian-app-css') as HTMLLinkElement | null;
+	if (link) link.disabled = !sheetOn;
+	const mount = doc.getElementById('mount');
+	if (!mount) return;
+	const wrapped = mount.parentElement?.classList.contains('markdown-preview-view') === true;
+	if (sheetOn && !wrapped) {
+		const wrap = doc.createElement('div');
+		wrap.className =
+			'markdown-preview-view markdown-rendered node-insert-event allow-fold-headings ' +
+			'allow-fold-lists show-indentation-guide show-properties';
+		mount.parentElement?.insertBefore(wrap, mount);
+		wrap.appendChild(mount);
+	} else if (!sheetOn && wrapped) {
+		const wrap = mount.parentElement!;
+		wrap.parentElement?.insertBefore(mount, wrap);
+		wrap.remove();
+	}
+}
+
 export async function mountFromParams(
 	doc: Document,
 	params: HarnessParams,
 ): Promise<{ errors: string[] }> {
 	doc.body.classList.remove('theme-dark', 'theme-light');
 	doc.body.classList.add(params.bg === 'light' ? 'theme-light' : 'theme-dark');
+	applyRealObsidianCascade(doc, params.sheet === true);
 	// SC-169: chosen BEFORE any element mounts — the chrome reads it once, at mount time.
 	// Always written (not only when true) so a direct test caller cannot inherit a
 	// previous call's mobile mode.

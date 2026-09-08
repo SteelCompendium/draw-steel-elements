@@ -3,7 +3,28 @@
 <head>
 <meta charset="utf-8">
 <title>DSE visual harness</title>
+<!-- SC-202 r6b — vars.css FIRST: it is the harness's OWN fallback floor (Obsidian tokens
+     the plugin reads directly, e.g. --text-normal/--background-modifier-border — vars.css's
+     own header comment has the full story), never part of Obsidian's real cascade, so it
+     loads before the real sheet on purpose — the real sheet, when enabled, then OVERRIDES
+     it at every token they share (same selectors, later in source order wins), and vars.css
+     is the only source when the real sheet is off (print/realprint, and the bare half of
+     every host-leak sweep's own toggle). -->
 <link rel="stylesheet" href="vars.css">
+<!-- The pinned, real Obsidian app.css (visual-harness/dist/obsidian-app.css, produced by
+     `npm run host-css` / fetch-obsidian-app-css.mjs; gitignored, never committed).
+     DISABLED by default: entry.ts's mountFromParams (`applyRealObsidianCascade`) flips
+     `.disabled` on/off per-navigation from the `sheet` query param — ON only for the
+     SCREEN (dark/light) combos snap() shoots (see shoot.mjs) and for the host-leak sweeps'
+     own toggle, OFF for print/realprint (the round's scope fence: 0 frozen bytes may move
+     there). Measured over CDP in a real vault (2026-09; see sc202-r6b-report.md): a real
+     reading view loads exactly ONE host stylesheet, `app.css` as a `<link>`, with no
+     theme.css/snippet sheet in a default vault, followed by the plugin's own styles as an
+     inline `<style>` — i.e. app.css, then theme, then snippets (both absent here), then the
+     plugin's styles.css. This tag's position (after vars.css, before harness.css)
+     reproduces that order for the real Obsidian-vs-plugin half of the cascade; vars.css's
+     own earlier position is a harness-only concern, not part of what was measured. -->
+<link rel="stylesheet" id="dse-obsidian-app-css" href="dist/obsidian-app.css" disabled>
 <link rel="stylesheet" href="dist/harness.css">
 <style>
 /* deterministic shots */

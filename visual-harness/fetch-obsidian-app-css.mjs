@@ -423,7 +423,18 @@ async function main() {
 // LOW-3: compares resolved file:// URLs (not a raw string template) so a path needing
 // percent-encoding (a space, a non-ASCII character) still matches correctly instead of
 // silently skipping the whole CLI body.
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+//
+// r6a re-review (LOW-3b), folded here per the owner's ruling: LOW-3's own `pathToFileURL`
+// comparison is a silent no-op when the CLI is invoked THROUGH A SYMLINK —
+// `import.meta.url` is realpath-resolved by Node (it always names the file the symlink
+// points AT), but `process.argv[1]` is not (it names the symlink itself), so the two
+// never compare equal and `main()` never runs. `fs.realpathSync` on both sides fixes it:
+// resolve `process.argv[1]` to its real path (as a URL, still via `pathToFileURL`, so the
+// percent-encoding fix above survives) and compare that against `import.meta.url`'s own
+// (already-real) path.
+const entryArg = process.argv[1];
+const entryReal = entryArg ? pathToFileURL(fs.realpathSync(path.resolve(entryArg))).href : undefined;
+if (entryReal && entryReal === pathToFileURL(fs.realpathSync(fileURLToPath(import.meta.url))).href) {
 	main().catch((err) => {
 		// Defensive only — `ensurePinnedObsidianAppCss` already handles the expected failure
 		// shape (a verification error) with its own exit 1. This catches anything else (a
