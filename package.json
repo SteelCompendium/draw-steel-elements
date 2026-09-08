@@ -9,7 +9,6 @@
     "build-no-check": "node esbuild.config.mjs production",
     "harness:build": "node visual-harness/esbuild.mjs",
     "host-css": "node visual-harness/fetch-obsidian-app-css.mjs",
-    "preshots": "npm run host-css",
     "shots": "npm run harness:build && node visual-harness/shoot.mjs",
     "shot-url": "node visual-harness/shoot-url.mjs",
     "obsidian-shots": "node visual-harness/notes-gen.mjs && npm run build-no-check && node visual-harness/obsidian-camera.mjs",

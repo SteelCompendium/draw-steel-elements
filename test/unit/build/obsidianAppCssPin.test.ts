@@ -164,4 +164,125 @@ describe('SC-202 r6a: fetch-obsidian-app-css.mjs hash verification can-fail', ()
 		// fetch — no stale/unverified obsidian-app.css left behind for a sweep to trust.
 		expect(fs.existsSync(path.join(scratchDir, 'obsidian-app.css'))).toBe(false);
 	});
+
+	// Fix round LOW-1 (r6a review): the case above throws at the FIRST hash check
+	// (asar.gz), never reaching `assertHash(sha256(css), pin.appCssSha256, 'app.css')` —
+	// the one check this entire round exists for. Reproduced independently before this
+	// fix: replacing that line with a comment left the suite's can-fail tests all green.
+	// This case needs a REAL (if minimal) asar so extraction can succeed and reach the
+	// app.css check with a CORRECT asarGzSha256 but a deliberately WRONG appCssSha256.
+	it('resolvePinnedObsidianAppCss rejects an extracted app.css whose bytes do not match the pinned appCssSha256 (LOW-1)', () => {
+		const result = runModuleScript(`
+			import { resolvePinnedObsidianAppCss } from ${JSON.stringify(fetchModule)};
+			import zlib from 'zlib';
+			import crypto from 'crypto';
+
+			// A minimal, real asar containing one file, 'app.css' — just enough for
+			// obsidian-host-pin.mjs's readAsarFile to extract it. Format (that reader's own
+			// comment): uint32(unused) | uint32 headerPickleSize | uint32 headerPayloadSize |
+			// uint32 jsonLen | json | data, every file offset relative to 8+headerPickleSize.
+			function buildMinimalAsar(cssBuf) {
+				const index = { files: { 'app.css': { size: cssBuf.length, offset: '0' } } };
+				const jsonBuf = Buffer.from(JSON.stringify(index), 'utf8');
+				const headerPickleSize = 8 + jsonBuf.length; // -> data starts right after json
+				const head = Buffer.alloc(16);
+				head.writeUInt32LE(4, 0);
+				head.writeUInt32LE(headerPickleSize, 4);
+				head.writeUInt32LE(jsonBuf.length + 4, 8); // headerPayloadSize — unread, any value
+				head.writeUInt32LE(jsonBuf.length, 12);
+				return Buffer.concat([head, jsonBuf, cssBuf]);
+			}
+
+			const realCss = Buffer.from('body { color: red; } /* not really Obsidian */\\n');
+			const asarBuf = buildMinimalAsar(realCss);
+			const gz = zlib.gzipSync(asarBuf);
+			const badPin = {
+				obsidianVersion: '0.0.0-sc202-r6a-canfail-appcss',
+				appCssSha256: '0'.repeat(64), // deliberately wrong — realCss's real hash isn't this
+				asarGzSha256: crypto.createHash('sha256').update(gz).digest('hex'), // CORRECT
+				source: 'http://127.0.0.1:1/unreachable-by-construction',
+			};
+			const fetchImpl = async () => ({ ok: true, arrayBuffer: async () => gz });
+
+			let threw = false;
+			let message = '';
+			try {
+				await resolvePinnedObsidianAppCss({ pin: badPin, fetchImpl, distDir: ${JSON.stringify(scratchDir)} });
+			} catch (err) {
+				threw = true;
+				message = err.message;
+			}
+			console.log(JSON.stringify({ threw, message }));
+		`) as { threw: boolean; message: string };
+		expect(result.threw).toBe(true);
+		expect(result.message).toMatch(/HASH MISMATCH \(app\.css\)/);
+		expect(fs.existsSync(path.join(scratchDir, 'obsidian-app.css'))).toBe(false);
+	});
+});
+
+describe('SC-202 r6a fix round: readVerifiedSheet catches a sheet that no longer matches its own meta (MED-1)', () => {
+	// The review's exploit, reproduced hermetically: a hand-written CSS comment as
+	// dist/obsidian-app.css under a GENUINE pinned-cache/1.13.7 meta used to make every
+	// host-leak sweep print "OK against the real Obsidian app.css" over 34 bytes of
+	// comment. readVerifiedSheet now re-hashes the bytes on read, every call.
+	let scratchDir: string;
+
+	beforeEach(() => {
+		scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sc202-r6a-med1-'));
+	});
+
+	afterEach(() => {
+		fs.rmSync(scratchDir, { recursive: true, force: true });
+	});
+
+	it('throws when the on-disk bytes do not match the sidecar meta\'s recorded hash', () => {
+		fs.writeFileSync(path.join(scratchDir, 'obsidian-app.css'), 'not the real sheet');
+		fs.writeFileSync(
+			path.join(scratchDir, 'obsidian-app.css.meta.json'),
+			JSON.stringify({ source: 'pinned-cache', version: '1.13.7', sha256: 'f612f1e8f36486fa57f3b8bd45f0c848409d5b168002e757a13c6d286a7b4c41' }),
+		);
+		const result = runModuleScript(`
+			import { readVerifiedSheet } from ${JSON.stringify(fetchModule)};
+			let threw = false;
+			let message = '';
+			try { readVerifiedSheet({ distDir: ${JSON.stringify(scratchDir)} }); } catch (err) { threw = true; message = err.message; }
+			console.log(JSON.stringify({ threw, message }));
+		`) as { threw: boolean; message: string };
+		expect(result.threw).toBe(true);
+		expect(result.message).toMatch(/OBSIDIAN APP\.CSS MISMATCH/);
+	});
+
+	it('returns null (never throws) when no sheet is resolved at all', () => {
+		const result = runModuleScript(`
+			import { readVerifiedSheet } from ${JSON.stringify(fetchModule)};
+			console.log(JSON.stringify({ result: readVerifiedSheet({ distDir: ${JSON.stringify(scratchDir)} }) }));
+		`) as { result: null };
+		expect(result.result).toBeNull();
+	});
+});
+
+describe('SC-202 r6a fix round: a non-OK HTTP status is a wrong pin, never a silent offline fallback (MED-2)', () => {
+	it('resolvePinnedObsidianAppCss throws on a 404 rather than falling back to the installed sheet', () => {
+		const result = runModuleScript(`
+			import { resolvePinnedObsidianAppCss } from ${JSON.stringify(fetchModule)};
+			const badPin = {
+				obsidianVersion: '9.9.9-sc202-r6a-canfail-404',
+				appCssSha256: '0'.repeat(64),
+				asarGzSha256: '0'.repeat(64),
+				source: 'http://127.0.0.1:1/unreachable-by-construction',
+			};
+			const fetchImpl = async () => ({ ok: false, status: 404 });
+			let threw = false;
+			let message = '';
+			try {
+				await resolvePinnedObsidianAppCss({ pin: badPin, fetchImpl, distDir: ${JSON.stringify('/tmp')} + '/sc202-r6a-med2-' + Date.now() });
+			} catch (err) {
+				threw = true;
+				message = err.message;
+			}
+			console.log(JSON.stringify({ threw, message }));
+		`) as { threw: boolean; message: string };
+		expect(result.threw).toBe(true);
+		expect(result.message).toMatch(/^HTTP 404/);
+	});
 });

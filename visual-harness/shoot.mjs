@@ -26,6 +26,11 @@ import {
 	PINNED_TOKENS,
 	normalizeTokenValue,
 } from './obsidian-host-pin.mjs';
+// SC-202 r6a fix round (MED-4): every invocation path (`npm run shots`, `node
+// visual-harness/shoot.mjs` directly, `--ignore-scripts`) must resolve the SAME sheet or
+// hit the SAME loud failure — so this file awaits the fetch-and-pin recipe itself at
+// startup rather than relying on an npm lifecycle hook nothing here can guarantee ran.
+import { ensurePinnedObsidianAppCss, readVerifiedSheet, HASH_FAILURE_REMEDY } from './fetch-obsidian-app-css.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const pageUrl = 'file://' + path.join(dir, 'index.html');
@@ -1645,35 +1650,28 @@ async function assertBtnHostLeak(page) {
 // `visual-harness/dist/` is gitignored (see .gitignore) and nothing under it is ever
 // committed.
 //
-// SC-202 r6a: the sheet now comes from the FETCH-AND-PIN recipe
-// (`fetch-obsidian-app-css.mjs`), not from reading the installed asar directly — `npm run
-// shots`'s `preshots` step already ran it and wrote `dist/obsidian-app.css` +
-// `dist/obsidian-app.css.meta.json` before this file's sweeps ever run (see
-// `visual-harness/README.md` → "Obsidian app.css pin"). This loader just reads what that
-// step produced; it does not fetch, verify, or fall back itself — that plumbing lives in
-// one place. `obsidian-app-css.pin.mjs` holds the committed version+sha256 pin.
-
-/** Reads the sheet the `preshots` fetch-and-pin step already wrote (pinned/fetched sheet,
- *  or — offline, item 4 of the r6a brief — the installed-Obsidian fallback with its own
- *  WARNING already printed by that step). Returns `null` when neither file exists (no
- *  fetch, no cache, no usable installed asar) so the caller can print its existing SKIP
- *  line unchanged — never a failure for lacking one. Does not itself fetch/extract/verify
- *  anything; a stale or hand-run `npm run host-css` is exactly what a dev sees reflected
- *  here, which is the point. */
+// SC-202 r6a: the sheet comes from the FETCH-AND-PIN recipe (`fetch-obsidian-app-css.mjs`),
+// not from reading the installed asar directly — this file's own `main()` (bottom) awaits
+// `ensurePinnedObsidianAppCss()` once at startup, before any sweep runs, so
+// `dist/obsidian-app.css` + `dist/obsidian-app.css.meta.json` are always resolved (or the
+// run has already exited loudly) by the time any of the loaders below fires (see
+// `visual-harness/README.md` → "Obsidian app.css pin"). `obsidian-app-css.pin.mjs` holds
+// the committed version+sha256 pin.
+//
+// FIX ROUND (MED-1, r6a review) — this loader used to trust `meta.json` on its word. Proved
+// exploitable: `printf '/* not the pinned sheet */' > dist/obsidian-app.css` under the
+// GENUINE `pinned-cache`/`1.13.7`/`f612f1e8…` meta made all six SC-202 sweeps print "OK
+// against the real Obsidian app.css" over 34 bytes of comment. The actual verify-on-read
+// logic now lives in `fetch-obsidian-app-css.mjs`'s exported `readVerifiedSheet` (single
+// source of truth, and directly jest-testable without a browser); this is a thin wrapper
+// that turns its THROW on a genuine mismatch into this file's own loud-failure shape.
 function loadLocalObsidianAppCss() {
-	const outDir = path.join(dir, 'dist');
-	const outFile = path.join(outDir, 'obsidian-app.css');
-	const metaFile = path.join(outDir, 'obsidian-app.css.meta.json');
-	let css;
-	let meta;
 	try {
-		css = fs.readFileSync(outFile, 'utf8');
-		meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
-	} catch {
-		return null;
+		return readVerifiedSheet();
+	} catch (err) {
+		console.error(`\n${err.message}\n${HASH_FAILURE_REMEDY}`);
+		process.exit(1);
 	}
-	if (!css || !meta?.sha256) return null;
-	return { css, version: meta.version, sha256: meta.sha256, source: meta.source };
 }
 
 /** Injects a full stylesheet ahead of the plugin's own — same cascade shape as
@@ -1957,7 +1955,7 @@ async function probeInputsInState(page, cdp, docRootNodeId, state, count, props)
 async function assertInputHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
-		console.log('\ninput host-leak SKIPPED (no local asar)');
+		console.log('\ninput host-leak SKIPPED (no resolved Obsidian app.css sheet)');
 		return;
 	}
 	// INFO-3 — the hover pass needs CDP CSS.forcePseudoState (Playwright's own hover/mouse
@@ -2316,7 +2314,7 @@ async function probeTableRowsInState(page, cdp, docRootNodeId, state, rowKeys) {
 async function assertTableHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
-		console.log('\ntable host-leak SKIPPED (no local asar)');
+		console.log('\ntable host-leak SKIPPED (no resolved Obsidian app.css sheet)');
 		return;
 	}
 	const cdp = await page.context().newCDPSession(page);
@@ -2673,7 +2671,7 @@ const LIST_SWEEP_VISITS = [
 async function assertListHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
-		console.log('\nlist host-leak SKIPPED (no local asar)');
+		console.log('\nlist host-leak SKIPPED (no resolved Obsidian app.css sheet)');
 		return;
 	}
 	const problems = [];
@@ -3149,7 +3147,7 @@ const INLINE_SWEEP_VISITS = [
 async function assertInlineHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
-		console.log('\ninline host-leak SKIPPED (no local asar)');
+		console.log('\ninline host-leak SKIPPED (no resolved Obsidian app.css sheet)');
 		return;
 	}
 	const cdp = await page.context().newCDPSession(page);
@@ -3300,7 +3298,7 @@ async function assertInlineHostLeak(page) {
 async function assertLinkTokenOverride(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
-		console.log('\nlink token-override probe SKIPPED (no local asar)');
+		console.log('\nlink token-override probe SKIPPED (no resolved Obsidian app.css sheet)');
 		return;
 	}
 	// fix round MED-3 — used to visit ONLY `gallery: '1'`, which renders 0 classed
@@ -3650,7 +3648,7 @@ async function clearCheckboxPseudo(cdp, docRootNodeId, selector) {
 async function assertCheckboxHostLeak(page) {
 	const host = loadLocalObsidianAppCss();
 	if (!host) {
-		console.log('\ncheckbox host-leak SKIPPED (no local asar)');
+		console.log('\ncheckbox host-leak SKIPPED (no resolved Obsidian app.css sheet)');
 		return;
 	}
 	const cdp = await page.context().newCDPSession(page);
@@ -4021,6 +4019,15 @@ function readOneTaggedTlcbMatchingChecked({ props, pseudo }) {
 	rec.active = n.matches(pseudo);
 	return rec;
 }
+
+// SC-202 r6a fix round (MED-4) — resolve (or loudly fail on) the pinned Obsidian app.css
+// BEFORE launching a browser: every invocation of this file gets the same sheet or the
+// same loud failure, regardless of whether an npm lifecycle hook ran first. Idempotent and
+// cheap on a warm cache (~0.3 s, 0 network) — `npm run shots`'s own `harness:build` step
+// already ran by the time this file starts, so this is not the first thing in the combined
+// `npm run shots` output, but it is the first thing THIS file does. Prints the single
+// provenance line + the single drift line (see `ensurePinnedObsidianAppCss`'s own doc).
+await ensurePinnedObsidianAppCss();
 
 const browser = await chromium.launch();
 const context = await browser.newContext({

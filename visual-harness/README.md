@@ -133,29 +133,53 @@ validate Steel design work against these fallback values.
 
 ## Obsidian app.css pin (SC-202 r6a)
 
-`npm run shots` runs `npm run host-css` first (an npm `preshots` lifecycle hook — automatic,
-nothing to remember) to resolve the real Obsidian `app.css` the five `assert*HostLeak`
-sweeps inject: fetches the pinned release asset, verifies it against the committed
+`visual-harness/shoot.mjs` resolves the real Obsidian `app.css` the six host-leak/link-token
+sweeps inject **itself**, at startup, before launching a browser (`fetch-obsidian-app-css.mjs`'s
+`ensurePinnedObsidianAppCss()`, imported and awaited directly — not an npm lifecycle hook,
+fix round MED-4: every invocation of this file, `npm run shots` or `node
+visual-harness/shoot.mjs` directly or under `--ignore-scripts`, gets the same sheet or the
+same loud failure). It fetches the pinned release asset, verifies it against the committed
 `visual-harness/obsidian-app-css.pin.mjs` (version + sha256 — never the CSS itself, per the
 2026-09-02 phase-2 ruling), and writes `visual-harness/dist/obsidian-app.css` (gitignored)
-plus `dist/obsidian-app.css.meta.json` recording which sheet actually ended up there. Run it
-by hand with `npm run host-css` to pre-warm the cache (e.g. before going offline).
+plus `dist/obsidian-app.css.meta.json` recording which sheet actually ended up there — and
+`shoot.mjs`'s own sweeps re-hash those bytes against that meta (and, for anything claiming
+pinned equivalence, against the pin itself) before ever injecting them, so a stale or
+tampered `dist/obsidian-app.css` fails loudly rather than gating "OK" over the wrong sheet.
+Run `npm run host-css` by hand to pre-warm the cache (e.g. before going offline) — it's the
+identical resolve step, just without the browser sweep after it.
 
-**Idempotent and cache-first.** A cached `visual-harness/dist/obsidian-<ver>.asar.gz`
-(gitignored) is reused with no network — but the WHOLE chain (`.asar.gz` -> gunzip -> `app.css`)
-is re-verified against the pin every run, cached or fresh, so a corrupted cache fails loudly
-(`process.exit(1)`) instead of being silently trusted. Delete the cached `.asar.gz` to force
-a re-fetch.
+**Idempotent and cache-first, with one self-heal.** A cached `visual-harness/dist/obsidian-
+<ver>.asar.gz` (gitignored) is reused with no network — but the WHOLE chain (`.asar.gz` ->
+gunzip -> `app.css`) is re-verified against the pin every run, cached or fresh. A cached
+copy that FAILS verification (a truncated download, corruption) is not an immediate failure:
+the cache is deleted and ONE fresh fetch is attempted before giving up. A FRESH fetch
+(cached-then-retried, or fetched directly) that fails verification IS a loud failure
+(`process.exit(1)`, with a remedy line). Delete the cached `.asar.gz` yourself at any time to
+force a clean re-fetch.
 
-**Offline fallback.** If the fetch fails (no network) and no cache exists, the recipe falls
-back to the INSTALLED Obsidian's own `app.css` (the same asar SC-205's button-copy pin
-already reads) and prints a WARNING naming the sheet actually in use — that run's host-leak
-results are informative, not a verified gate against the pin. If neither a fetch nor an
-installed Obsidian is available, the sweeps print their usual `SKIPPED (no local asar)` line
-— never a failure for lacking one.
+**A 404/403/5xx is a WRONG PIN, not "offline" — and is a loud failure, never a fallback.**
+Only a genuine connection-level failure (DNS, connection refused/reset, timeout — `fetchImpl`
+itself throwing) is treated as offline. A completed HTTP error response means the pin names
+a version with no public release asset (SC-202 r6a hit exactly this with its first pin
+candidate, 1.14.0) and exits 1 rather than silently gating "whatever happens to be
+installed" while still claiming to test the pin.
 
-**Warn-on-drift.** Every `npm run shots` also hashes the INSTALLED Obsidian's `app.css` (if
-any) and prints ONE `OBSIDIAN APP.CSS PIN DRIFT` line if it differs from the pin — this is
+**Offline fallback, decoupled from SC-205's own version floor.** If the fetch is genuinely
+unreachable and no cache exists, the recipe looks for ANY real, parseable-version installed
+Obsidian (independent of SC-205's `PINNED_OBSIDIAN` floor, which answers a different
+question — see `fetch-obsidian-app-css.mjs`'s `isEligibleInstalledAsar`). If that installed
+version happens to equal the pin, its `app.css` is verified against the pin and used as a
+REAL gate (`source: "installed-pinned"` — an offline dev running exactly the pinned Obsidian
+does not lose the gate). Otherwise it falls back to whatever IS installed with a clear
+WARNING naming the sheet actually in use (`source: "installed-fallback"`) — that run's
+host-leak results are informative, not a verified gate against the pin. If neither a fetch
+nor any eligible installed Obsidian exists, nothing is written (a stale sheet from an earlier
+run is deleted, not left behind) and the sweeps print `SKIPPED (no resolved Obsidian app.css
+sheet)` — never a failure for lacking one.
+
+**Warn-on-drift.** Every `npm run shots` (or direct `node visual-harness/shoot.mjs`) also
+hashes the INSTALLED Obsidian's `app.css` (if any eligible one, same rule as the fallback
+above) and prints ONE `OBSIDIAN APP.CSS PIN DRIFT` line if it differs from the pin — this is
 expected on any machine whose Obsidian has self-updated past the pinned version, and the
 gate keeps running against the pin regardless.
 
@@ -170,7 +194,9 @@ the real sheet is actually turned on in the harness — SC-202 round 6b onward):
 2. Fetch that asset, gunzip it, and extract `app.css` with `readAsarFile` from
    `obsidian-host-pin.mjs` (reuse, don't fork) — or simply delete the cached `.asar.gz` and
    run `npm run host-css` against a pin file edited to the candidate version/URL first, then
-   read the resulting hash-mismatch error, which names the real extracted hash.
+   read the resulting mismatch error: with the `.asar.gz` check first, the FIRST failure
+   names the gz hash, not the app.css hash — a second pass (after fixing `asarGzSha256`, or
+   dropping it temporarily) is needed to learn the real `app.css` hash.
 3. Update `visual-harness/obsidian-app-css.pin.mjs`'s `OBSIDIAN_APP_CSS_PIN` (version, both
    hashes, source URL) and its header comment (append to the pin-history block, don't
    overwrite it).
