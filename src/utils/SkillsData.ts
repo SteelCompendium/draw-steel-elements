@@ -10,6 +10,8 @@ export const SKILL_DATA: SkillData = {
 		{ name: "alchemy", use: "Make bombs and potions" },
 		{ name: "architecture", use: "Create buildings and vehicles" },
 		{ name: "blacksmithing", use: "Forge metal armor and weapons" },
+		{ name: "carpentry", use: "Create items out of wood" },
+		{ name: "cooking", use: "Create delicious dishes" },
 		{ name: "fletching", use: "Make ranged weapons and ammunition" },
 		{ name: "forgery", use: "Create false badges, documents, and other items" },
 		{ name: "jewelry", use: "Create bracelets, crowns, rings, and other jewelry" },
@@ -68,6 +70,7 @@ export const SKILL_DATA: SkillData = {
 		{ name: "religion", use: "Knowing about religious mythology, practices, and rituals" },
 		{ name: "rumors", use: "Knowing gossip, legends, and uncertain truths" },
 		{ name: "society", use: "Knowing noble etiquette and the leadership and power dynamics of noble families" },
+		{ name: "strategy", use: "Knowing about battle tactics and logistics" },
 		{ name: "timescape", use: "Knowing about the various planets of the timescape" },
 	],
 };
