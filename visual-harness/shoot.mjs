@@ -4814,7 +4814,83 @@ function printSheetEnumeratedProperties(sheetCss) {
 			for (const longhand of SHORTHAND_LONGHANDS[name] ?? []) props.add(longhand);
 		}
 	}
+	for (const p of [...props]) if (!MEASURED_REACHABLE_PRINT_PROPS.has(p)) props.delete(p);
 	return props;
+}
+
+// SC-202 r6c FIX ROUND (independent review HIGH-1) — the sheet-derived vocabulary above
+// (every declaration in every `@media print` block, unconditionally) is the print sheet's
+// OWN admitted vocabulary, but the pinned `dist/obsidian-app.css` has FIVE such blocks and
+// only one is reachable from `.print > .markdown-preview-view > #mount`: PDF.js XFA
+// form-field internals (`.xfaTextfield`, `.xfaSelect`), Obsidian window chrome
+// (`.titlebar`, `.app-container`, the `body > :not(.print)` hide-list), `webview`,
+// `::-webkit-scrollbar`, `.bases-toolbar`, `.pdf-embed`, and syntax-highlighted `code`
+// blocks can never match a plugin node — yet their declared properties were being admitted
+// anyway, 28 of 32 permissions dead. 11 of those were LIVE over-permissions (sampled AND
+// excused, never legitimately differing): `backgroundColor` (from `.xfaSelect {
+// background: transparent }`, a PDF.js rule), `display`, `textShadow`†, and all eight
+// `border{Top,Right,Bottom,Left}{Width,Style}` longhands (from `.pdf-embed …
+// .canvasWrapper { border }`) — proof: a screen-only, paint-only `background-color` rule
+// injected on a real plugin node (`sc202-r6crev-canfail-A-background.log`) moved 19
+// `*--steel-print.png` shots and 0 `*--steel-realprint.png` shots, a real one-sided
+// divergence, while the gate still printed `print-twin delta OK` and exited 0.
+// †`textShadow` IS legitimately reachable — `* { text-shadow: none !important }` inside
+// `@media print`, unconditional — but is not currently reflected in `PRINT_DELTA_STYLE_PROPS`
+// sampling any node where it would actually flip, so it stays excluded from the measured
+// floor below rather than claimed on no evidence; re-add only alongside a proof it fires.
+//
+// MEASURED_REACHABLE_PRINT_PROPS is the property-reachability half of the fix: intersect
+// the sheet-derived set above with the properties a real reachability census
+// (`sc202-r6crev-property-census.json`, independent review, r6c fix round) found EVER
+// differing on non-control plugin DOM across the full 130-capture-id sweep: `color`,
+// `fontFamily`, `webkitPrintColorAdjust` (the three properties `.print .markdown-preview-
+// view`'s own rule sets, inherited down) plus `backgroundImage` (one node,
+// `perk-links#21 <a class="external-link">` — app.css's own `.print .external-link {
+// background: none }` stripping the icon). Proved zero-pixel-cost: narrowing to exactly
+// these four moves 0 of 524 shots. `<input>`/`<button>`-adjacent nodes keep their OWN,
+// SEPARATE two-property widening (`backgroundColor`/`boxShadow` — `nativeControlAdjacent`,
+// below) for the unrelated native-Obsidian-styling reason documented there; this set is
+// deliberately not merged with that one, so growing either does not silently grow the
+// other. `printTwinDeltaAllowedSet.test.ts` guards this exact four-name set — it is a
+// FLOOR, not a formula, precisely so a future pin bump cannot silently re-widen it (the
+// review's own "principled version" — deriving reachability from `node.matches(sel)` per
+// rule — is the more robust long-term fix and is not what this round ships).
+const MEASURED_REACHABLE_PRINT_PROPS = new Set(['color', 'fontFamily', 'webkitPrintColorAdjust', 'backgroundImage']);
+
+// SC-202 r6c FIX ROUND — the reviewer's own can-fail A/B pair, built INTO the sweep so a
+// future re-widening of the allowed set fails LOUDLY on every `npm run shots`, not only
+// when someone happens to re-run the manual proof. Pure in-process (no navigation, no
+// shots moved): constructs the exact SHAPE `assertPrintTwinDelta`'s style-diff loop reads
+// (a `style` record keyed by `PRINT_DELTA_STYLE_PROPS`) for a synthetic non-control node
+// differing on ONE property at a time, and asserts the loop's own pass/fail verdict
+// directly — A) `backgroundColor` (excused by the OLD, over-wide set; the reviewer's own
+// "hole") MUST now be flagged; B) `color` (a real, MEASURED, reachable property) MUST NOT
+// be flagged. Called right alongside `assertPrintTwinDelta` (after the full sweep, same as
+// that assertion itself — the sheet text it validates against is only resolved there);
+// costs one microtask, not a navigation, so it runs on EVERY invocation including a
+// narrowed `--element=` one.
+function selfTestPrintDeltaAllowedSet(enumeratedProps) {
+	const base = { tag: 'DIV', attrs: 'class=dse-card__band', x: 0, y: 0, width: 10, height: 10, nativeControlAdjacent: false };
+	const isFlagged = (prop, value) => {
+		const a = { ...base, style: { [prop]: 'rgb(0, 0, 0)' } };
+		const b = { ...base, style: { [prop]: value } };
+		return a.style[prop] !== b.style[prop] && !enumeratedProps.has(prop);
+	};
+	const holeCaught = isFlagged('backgroundColor', 'rgb(1, 2, 3)');
+	const realNotFlagged = !isFlagged('color', 'rgb(1, 2, 3)');
+	if (!holeCaught || !realNotFlagged) {
+		console.error(
+			`\nPRINT-TWIN DELTA SELF-TEST FAILED — the allowed set no longer matches the ` +
+				`reviewer's can-fail pair: backgroundColor-differs ${holeCaught ? 'correctly caught' : 'WRONGLY EXCUSED (regression — see sc202-r6crev-canfail-A-background.log)'}, ` +
+				`color-differs ${realNotFlagged ? 'correctly excused' : 'WRONGLY FLAGGED (a real, reachable property was narrowed away)'}.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		`\nprint-twin delta self-test OK (the reviewer's can-fail pair: a synthetic ` +
+			`backgroundColor-only divergence on a non-control node is caught; a synthetic ` +
+			`color-only divergence is correctly excused)`,
+	);
 }
 
 // SC-202 r6c (option C) — the in-run DELTA ASSERTION, replacing SC-170's byte-parity gate
@@ -4835,8 +4911,13 @@ function printSheetEnumeratedProperties(sheetCss) {
 //      unlimited).
 //   4. A computed-style diff at every node: any property that differs between twin and
 //      realprint must be one the pinned sheet's OWN `@media print` block actually
-//      declares (`printSheetEnumeratedProperties`) — anything else differing is a Steel
-//      rule (or a harness DOM-chain bug) reaching one surface and not the other.
+//      declares AND can actually reach plugin DOM under the real `.print >
+//      .markdown-preview-view > #mount` chain (`printSheetEnumeratedProperties`, narrowed
+//      to `MEASURED_REACHABLE_PRINT_PROPS` — SC-202 r6c fix round, independent review
+//      HIGH-1: the sheet-derived vocabulary alone admitted 28 unreachable permissions,
+//      11 of them live over-permissions that let a real screen-only leak through
+//      undetected) — anything else differing is a Steel rule (or a harness DOM-chain bug)
+//      reaching one surface and not the other.
 // SC-170 review fix (M-4)'s COVERAGE half is preserved unchanged below: a capture id that
 // produced one print class and not the other still fails the run outright.
 function assertPrintTwinDelta(enumeratedProps) {
@@ -4997,7 +5078,11 @@ if (failures.length) {
 	// text to enumerate its `@media print` properties against.
 	const host = loadLocalObsidianAppCss();
 	if (!host) console.log('\nprint-twin delta SKIPPED (no resolved Obsidian app.css sheet)');
-	else assertPrintTwinDelta(printSheetEnumeratedProperties(host.css));
+	else {
+		const enumeratedProps = printSheetEnumeratedProperties(host.css);
+		selfTestPrintDeltaAllowedSet(enumeratedProps);
+		assertPrintTwinDelta(enumeratedProps);
+	}
 }
 // SC-204 — runs on EVERY invocation, narrowed or not: unlike the gallery and the two
 // chrome gates it takes no navigations of its own, so there is nothing to skip.
