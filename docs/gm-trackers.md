@@ -107,10 +107,16 @@ right there resolves the test and picks the result for you.
 
 ![The Log an action sheet](Media/montage-sheet-modal.png)
 
+For an empty cell in the round currently in play, three small buttons sit right in the
+cell — a check, an X, and a plus — so you can log a success, failure, or assist in one
+click with no skill and no note; click the cell itself, or use **Log an action…**, when
+you want to record a skill or a note too.
+
 **Correcting a mistake.** Click an already-logged cell (it shows a small pencil mark) to
 open the same form pre-filled with what's recorded, so you can change the result, the
 skill, or the note — or remove it outright with the **Remove** button. This is also how you
-fix a hero's typo'd result if you ever hand-edit the note directly.
+fix a hero's typo'd result if you ever hand-edit the note directly. An empty cell from an
+earlier round works the same way — click it to add a test you forgot to log at the time.
 
 **Notes.** Anything you type in a test's Note field — a consequence, a complication, a
 reward — shows up listed under the outcome banner below the board, tagged with the hero and

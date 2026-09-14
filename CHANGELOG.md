@@ -51,7 +51,11 @@ for what needs action.
   resolves the test and picks the result for you. An already-logged cell opens the same
   form pre-filled for correcting a mistake or removing it outright, and the skill-reuse
   rule (a hero can't use the same skill twice in one montage) warns live in the form,
-  never blocking. The bar under the board carries **End round N** (the only way to advance
+  never blocking. An empty cell in the round currently in play also carries three small
+  buttons — check, X, and plus — that log a success, failure, or assist in one click with
+  no skill and no note (SC-299); an empty cell from an earlier round can be clicked too, to
+  add a test that was never logged at the time, without disturbing whose turn it is in the
+  round now in play (SC-299). The bar under the board carries **End round N** (the only way to advance
   the round), **Undo** (removes whatever was logged most recently, including the winning
   action that just finished the montage) and — once the montage is finished — **Reopen**
   (only when it simply ran out of rounds; a limit is final) alongside a danger **Clear
