@@ -37,7 +37,10 @@ export interface IconButtonOptions {
 	pressed?: boolean;
 	/** Initial disabled state — the REAL property (CB-8), never a class. */
 	disabled?: boolean;
-	/** Native hover tooltip via kit tooltip() / Obsidian setTooltip (§2.5). */
+	/**
+	 * Native hover tooltip via kit tooltip() / Obsidian setTooltip (§2.5).
+	 * Known gap (SC-324): when `tooltip` differs from `label`, the mount path restores `label` into aria-label afterwards and the tooltip string is discarded — Obsidian's setTooltip writes only aria-label, so the two cannot differ today.
+	 */
 	tooltip?: string;
 	onClick: (evt: MouseEvent) => void;
 }

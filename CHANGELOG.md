@@ -17,11 +17,10 @@ for what needs action.
 
 - [FIX] **The light color scheme has its own, darker status colors, and three color-only
   signals now show a hover tooltip** (SC-196). Every color-coded state — Stamina healthy
-  (green), winded (amber), dying (red), and temporary Stamina (purple); the power-roll
-  tier badges including the critical-hit gold; malice and victory points (gold); warnings
-  (orange); and the initiative tracker's selection ring (red) — used to reuse the dark
+  (green), winded (amber), dying (red), and temporary Stamina (purple); the critical-hit power-roll badge (gold); malice and victory points (gold); warnings
+  (orange); and the initiative tracker's selection ring (red), plus the turn-done and danger accents that share those colors — used to reuse the dark
   scheme's exact colors in light mode, where several were too pale to read reliably
-  against a white background. Light mode now has its own darker version of all ten,
+  against a white background. Light mode now has its own darker version of all eleven,
   checked against the WCAG AA contrast minimum; the dark scheme is unchanged. Three of
   those surfaces had no other way to tell the state apart by eye: hovering the `+N`
   temporary-Stamina badge, a selected creature in the initiative tracker, or a rolled
