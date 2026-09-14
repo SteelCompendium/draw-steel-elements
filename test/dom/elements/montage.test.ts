@@ -32,7 +32,7 @@ import { DEFAULT_SETTINGS } from '@model/Settings';
 import { App, Plugin, Notice, makeFakeContext, parseYaml } from '../../mocks/obsidian';
 import { montageElement } from '../../../src/elements/montage/definition';
 import { MontageView } from '../../../src/elements/montage/view';
-import { parse } from '../../../src/elements/montage/model';
+import { parse, nextHeroToAct } from '../../../src/elements/montage/model';
 import { LogActionModal } from '../../../src/elements/montage/LogActionModal';
 import DrawSteelAdmonitionPlugin, { registerFrameworkElementDefinitions } from 'main';
 import { styleGuardFindings } from '../kit/styleGuard';
@@ -446,6 +446,198 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(cell.getAttribute('data-noted')).toBe('on');
 		expect(cell.querySelector('.dse-mt__cell-notemark')?.getAttribute('title')).toBe('Turned an ankle.');
 		expect(cell.querySelector('.dse-mt__cell-glyph--none')).not.toBeNull();
+	});
+});
+
+// SC-299 R-1/R-2 — bullet 1 ("quick-entry buttons in cells are missing") and bullet 2
+// ("unable to edit previous rounds"), the mock's own open-socket quick trio
+// (mock6.js:1841-1856, round2.css:307-333) restored, plus a new writable-host edit target
+// on an empty PAST-round cell. `rounds: 4, current_round: 2` gives every state this slice
+// touches in one small fixture: Bram round 1 is an empty PAST cell (edit target, R-2);
+// Bram round 2 is the empty CURRENT cell (the quick trio, R-1) — Kira already has a round
+// 2 entry, so `nextHeroToAct` reads Bram deterministically before AND after a round-1
+// write lands, the R-2 "does not disturb nextHeroToAct" proof; round 3/4 stay empty FUTURE
+// cells (unaffected — the ticket says "previous rounds").
+const QUICK_TRIO_FIXTURE = [
+	'rounds: 4',
+	'success_limit: 6',
+	'failure_limit: 3',
+	'participants:',
+	'  - name: Kira',
+	'    skills_used: []',
+	'  - name: Bram',
+	'    skills_used: []',
+	'entries:',
+	'  - hero: Kira',
+	'    round: 1',
+	'    result: success',
+	'  - hero: Kira',
+	'    round: 2',
+	'    result: success',
+	'current_round: 2',
+].join('\n');
+
+describe('SC-299 R-1: the open-socket quick trio (mock6.js:1841-1856, round2.css:307-333)', () => {
+	test('an empty current-round cell renders three .dse-mt__quick buttons with the exact aria-labels and glyph shapes; clicking success writes one entry and does not open the sheet', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(QUICK_TRIO_FIXTURE);
+		const cell = cellFor(root, 'Bram', 2); // current round, empty — the open socket
+		const buttons = Array.from(cell.querySelectorAll('.dse-mt__quick')) as HTMLButtonElement[];
+		expect(buttons).toHaveLength(3);
+		expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+			'Log a success for Bram in round 2',
+			'Log a failure for Bram in round 2',
+			'Log an assist for Bram in round 2',
+		]);
+		expect(buttons.map((b) => b.getAttribute('data-kind'))).toEqual(['success', 'failure', 'assist']);
+		// Colourblind rule (Scott is colourblind, file header): glyph SHAPE is the primary
+		// channel — each button carries the SAME check/x/ringed-plus vocabulary a recorded
+		// cell's own seal uses (RESULT_ICON), not just its colour.
+		expect(buttons.map((b) => b.querySelector('.dse-btn__icon')?.getAttribute('data-icon'))).toEqual([
+			'check',
+			'x',
+			'circle-plus',
+		]);
+
+		// A modal from an earlier test in this suite can still be sitting in
+		// `document.body` (nothing here closes it) — snapshot the LAST child by
+		// reference rather than asserting global absence of `.dse-mt__sheet`.
+		const bodyLastBefore = document.body.lastElementChild;
+		const successBtn = cell.querySelector('.dse-mt__quick[data-kind="success"]') as HTMLButtonElement;
+		successBtn.click();
+		// One tap logs exactly once — never both the quick write AND the sheet (the
+		// stopPropagation half of the nesting fix, BoardView.ts).
+		expect(document.body.lastElementChild).toBe(bodyLastBefore);
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		const rebuiltCell = cellFor(rebuilt, 'Bram', 2);
+		expect(rebuiltCell.getAttribute('data-kind')).toBe('success');
+		expect(rebuiltCell.querySelector('.dse-mt__cell-skill')?.textContent ?? '').toBe(''); // no skill
+		const bram = tallyFor(rebuilt, 'Bram');
+		expect(tallyN(bram, 'success')).toBe('1');
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).not.toContain('skill:'); // no skill/note key on a quick-logged entry
+		expect(written).not.toContain('note:');
+		jest.useRealTimers();
+	});
+
+	test('clicking the cell surface outside the trio still opens the sheet in new mode', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE);
+		const cell = cellFor(root, 'Bram', 2);
+		cell.click(); // the cell's own click target, not a child button
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
+		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
+		const bramChip = heroChips.find((c) => c.textContent === 'Bram') as HTMLButtonElement;
+		expect(bramChip.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	test('read-only host: the three quick buttons exist, real-disabled, never hidden (owner ruling I-6)', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE, { canPersist: false });
+		const cell = cellFor(root, 'Bram', 2);
+		const buttons = Array.from(cell.querySelectorAll('.dse-mt__quick')) as HTMLButtonElement[];
+		expect(buttons).toHaveLength(3);
+		for (const b of buttons) expect(b.disabled).toBe(true);
+	});
+
+	test('keyboard: Enter on a focused quick button logs (never opens the sheet); Enter on the cell opens the sheet only', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(QUICK_TRIO_FIXTURE);
+		const cell = cellFor(root, 'Bram', 2);
+		const successBtn = cell.querySelector('.dse-mt__quick[data-kind="success"]') as HTMLButtonElement;
+		// A modal from an earlier test can still be sitting in `document.body` — snapshot
+		// the last child by reference rather than asserting global absence.
+		const bodyLastBefore = document.body.lastElementChild;
+
+		// A real browser fires `keydown` (bubbles to the cell) BEFORE synthesizing the
+		// button's own `click` — the cell's keydown handler has to recognise the target is
+		// inside `.dse-mt__cell-quick` and step aside (BoardView.ts's own doc).
+		successBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		expect(document.body.lastElementChild).toBe(bodyLastBefore);
+		// …then the button's native activation fires its `click` — jsdom does not
+		// synthesize this itself (unlike a real browser), so it is dispatched directly,
+		// matching the kit's own iconButton.test.ts convention for "keyboard activates".
+		successBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(document.body.lastElementChild).toBe(bodyLastBefore);
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(tallyN(tallyFor(rebuilt, 'Bram'), 'success')).toBe('1');
+
+		// Enter on the CELL itself (not a quick button) still opens the sheet — the
+		// pre-existing control, unaffected by the trio's nesting fix.
+		cellFor(rebuilt, 'Bram', 2).dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+		);
+		const opened = document.body.lastElementChild;
+		expect(opened).not.toBe(bodyLastBefore);
+		expect(opened?.classList.contains('dse-mt__sheet')).toBe(true);
+		jest.useRealTimers();
+	});
+});
+
+describe('SC-299 R-2: an empty PAST-round cell becomes an edit target', () => {
+	test('opens the sheet pre-filled { kind: new, hero, round } for THIS cell\'s round (not current_round), carries role=button and the plus editmark; logging into it lands the right round without disturbing nextHeroToAct', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(QUICK_TRIO_FIXTURE); // current_round: 2
+		const cell = cellFor(root, 'Bram', 1); // past, empty — Bram never acted round 1
+		expect(cell.getAttribute('role')).toBe('button');
+		expect(cell.getAttribute('tabindex')).toBe('0');
+		expect(cell.hasAttribute('aria-disabled')).toBe(false);
+		expect(cell.getAttribute('aria-label')).toBe('Bram, round 1: nothing logged — log an action');
+		// The round-in-play affordance (the quick trio) never leaks onto a past cell —
+		// R-2's own scope line ("no quick trio there").
+		expect(cell.querySelector('.dse-mt__cell-quick')).toBeNull();
+		const editMark = cell.querySelector('.dse-mt__cell-editmark') as HTMLElement;
+		expect(editMark).not.toBeNull();
+		expect(editMark.getAttribute('data-icon')).toBe('plus'); // plus, never the pencil a correction uses
+		expect(editMark.getAttribute('aria-hidden')).toBe('true');
+
+		cell.click();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
+		(modalEl.querySelector('.dse-optchip[data-kind="success"]') as HTMLButtonElement).click();
+		(modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		// Lands as ROUND 1, not current_round (2) — the sheet's Round chips already accept
+		// any 1..rounds and logMontageEntry does not care which round (R-2's own doc).
+		expect(cellFor(rebuilt, 'Bram', 1).getAttribute('data-kind')).toBe('success');
+		expect(tallyN(tallyFor(rebuilt, 'Bram'), 'success')).toBe('1');
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('round: 1');
+		// nextHeroToAct filters on current_round (2), not round: a round-1 write must not
+		// touch it — Bram still has no round-2 entry, so he is still next to act this round.
+		expect(written).toContain('current_round: 2');
+		expect(nextHeroToAct(parse(parseYaml(written), written))).toBe('Bram');
+		jest.useRealTimers();
+	});
+
+	test('a FUTURE-round empty cell stays inert (no role) — the ticket says "previous rounds"', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE); // rounds: 4, current_round: 2
+		const cell = cellFor(root, 'Kira', 4); // future, empty
+		expect(cell.hasAttribute('role')).toBe(false);
+		expect(cell.hasAttribute('tabindex')).toBe(false);
+		expect(cell.querySelector('.dse-mt__cell-editmark')).toBeNull();
+		expect(cell.querySelector('.dse-mt__cell-quick')).toBeNull();
+	});
+
+	test('an empty cell on a COMPLETE montage stays inert (no role) — the review-2 M-1 write path stays closed once the bar has stood down', async () => {
+		const { root } = await renderMontage(montageDoneYaml); // limit-ended mid-round 3
+		const cell = cellFor(root, 'Yenna', 3); // Yenna never got a round-3 entry
+		expect(cell.getAttribute('data-state')).toBe('past'); // complete forces every cell 'past'
+		expect(cell.hasAttribute('role')).toBe(false);
+		expect(cell.hasAttribute('tabindex')).toBe(false);
+		expect(cell.querySelector('.dse-mt__cell-editmark')).toBeNull();
+	});
+
+	test('read-only host: a past-round empty cell stays aria-disabled and carries no editmark (nothing to edit on a read-only host)', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE, { canPersist: false });
+		const cell = cellFor(root, 'Bram', 1);
+		expect(cell.getAttribute('role')).toBe('button');
+		expect(cell.getAttribute('aria-disabled')).toBe('true');
+		expect(cell.querySelector('.dse-mt__cell-editmark')).toBeNull();
 	});
 });
 
