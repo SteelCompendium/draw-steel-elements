@@ -105,6 +105,7 @@ export class MontageView extends ElementView<MontageModel> {
 			cycleOwner,
 			canPersist,
 			(mode) => this.openSheet(mode),
+			(entry) => this.commitNewEntry(entry),
 			() => this.openAddHero(),
 		).build(container);
 		new OutcomeBandView(model).build(container);
@@ -298,8 +299,20 @@ export class MontageView extends ElementView<MontageModel> {
 	}
 
 	private commitSheetSubmit(mode: SheetMode, entry: MontageEntry): void {
-		if (mode.kind === 'edit') correctMontageEntry(this.model, mode.entry, entry);
-		else logMontageEntry(this.model, entry);
+		if (mode.kind === 'edit') {
+			correctMontageEntry(this.model, mode.entry, entry);
+			void this.commit();
+		} else {
+			this.commitNewEntry(entry);
+		}
+	}
+
+	/** SC-299 R-1 — shared by the sheet's own "new" mode submit AND the board's
+	 *  open-socket quick trio (`BoardView`'s `onQuickLog`): the exact same
+	 *  `logMontageEntry` + rebuild/debounce-persist path, so the quick trio never grows a
+	 *  second write shape to keep in sync with the sheet's. */
+	private commitNewEntry(entry: MontageEntry): void {
+		logMontageEntry(this.model, entry);
 		void this.commit();
 	}
 

@@ -40,6 +40,14 @@ const RESULT_ICON: Record<MontageResult, string> = {
 	assist: 'circle-plus',
 };
 
+/** SC-299 R-1 — the open-socket quick trio's aria-label indefinite article, the mock's own
+ *  wording (mock6.js:1848-1850: `verb + ' a success'` / `'a failure'` / `'an assist'`). */
+const QUICK_ARTICLE: Record<MontageResult, string> = {
+	success: 'a success',
+	failure: 'a failure',
+	assist: 'an assist',
+};
+
 type RoundState = 'past' | 'current' | 'future';
 
 /** A read-only-host control never fires — the whole point is `disabled` suppresses it
@@ -58,6 +66,11 @@ export class BoardView {
 		/** Opens the Log an action… sheet, pre-filled per `mode` (view.ts owns turning a
 		 *  click into one — a cell/row-act click here never touches the model directly). */
 		private readonly onOpenSheet: (mode: SheetMode) => void,
+		/** SC-299 R-1 — one tap on the open-socket quick trio: `{hero, round, result}`,
+		 *  no skill, no note. view.ts owns the write (logMontageEntry + the same
+		 *  persist/rebuild path commitSheetSubmit uses) — this view never touches the
+		 *  model directly, matching `onOpenSheet`'s own separation. */
+		private readonly onQuickLog: (entry: MontageEntry) => void,
 		/** The Heroes header's "+" — the board-corner shortcut to the same "Add a hero"
 		 *  action the ⋯ chrome item fires. */
 		private readonly onAddHero: () => void,
@@ -218,9 +231,17 @@ export class BoardView {
 		// unrecognised `result` (a preserved Director typo, `known` false). Fixing that
 		// typo through the UI is exactly what the sheet is for; LogActionModal pre-selects
 		// no Result chip for it (see its own doc), forcing an explicit valid choice rather
-		// than guessing one. An EMPTY socket is interactive only in the round currently in
-		// play, unchanged from slices 2-3.
-		const isInteractive = entry !== undefined || state === 'current';
+		// than guessing one. An EMPTY socket is interactive in the round currently in play
+		// (unchanged from slices 2-3) OR — SC-299 R-2 — an empty PAST round: a Director who
+		// forgot to log a hero's test can click that cell to add it, pre-filled `{hero,
+		// round}` for THIS cell's round (the sheet's Round chips already accept any
+		// `1..rounds`; `logMontageEntry` does not care which round). `!complete` closes the
+		// write path back down once the bar itself has already stood down to
+		// Reopen/Clear all (review-2 M-1's own guard) — an empty cell on a finished montage
+		// stays inert, matching the round-in-play trio's own "never on a complete montage"
+		// rule. FUTURE-round empty cells are unaffected — the ticket says "previous
+		// rounds".
+		const isInteractive = entry !== undefined || state === 'current' || (state === 'past' && !complete);
 		const ariaLabel = known
 			? `${hero}, round ${round}: ${entry.result} with ${entry.skill ?? 'no skill'}${entry.note ? '. Note: ' + entry.note : ''} — edit`
 			: entry !== undefined
@@ -248,6 +269,16 @@ export class BoardView {
 				this.owner.registerDomEvent(cell, 'click', openThisCell);
 				this.owner.registerDomEvent(cell, 'keydown', (evt: KeyboardEvent) => {
 					if (evt.key !== 'Enter' && evt.key !== ' ') return;
+					// SC-299 R-1: the quick trio's real `<button>`s live INSIDE this
+					// `role="button"` cell — a nesting the file header already warns about.
+					// Enter/Space on a quick button is the button's own job (native
+					// activation → its `click` listener, which stops propagation before this
+					// keydown handler would otherwise ALSO fire and open the sheet). This
+					// guard only matters for a genuine browser keypress, where `keydown`
+					// bubbles from the button up to this cell BEFORE the browser synthesizes
+					// the button's `click` — without it, one Enter on a quick button would
+					// both log the entry AND open the sheet.
+					if ((evt.target as HTMLElement).closest('.dse-mt__cell-quick')) return;
 					evt.preventDefault();
 					openThisCell();
 				});
@@ -286,10 +317,57 @@ export class BoardView {
 				setIcon(mark, 'sticky-note');
 			}
 		} else if (state === 'current' && entry === undefined) {
+			// SC-299 R-1 — THE OPEN SOCKET (mock6.js:1841-1856 / round2.css:307-333, the
+			// SETTLED design SC-191 shipped without): the round-in-play empty cell IS the
+			// record control, and it says so without a hover — one tap on ✓ / ✕ / + records
+			// the common case whole; tapping the socket itself (outside the trio) still
+			// opens the sheet when the skill/note matters (isInteractive's own handler,
+			// above). Every button rides kit/iconButton, never a bare <button> (file header)
+			// — real, aria-labelled, disabled (never hidden, never a dead end) on a
+			// read-only host.
+			const quick = cell.createSpan({ cls: 'dse-mt__cell-quick' });
+			quick.setAttribute('role', 'group');
+			quick.setAttribute('aria-label', `Quick log for ${hero}, round ${round}`);
+			(['success', 'failure', 'assist'] as MontageResult[]).forEach((kind) => {
+				const handle = iconButton(
+					quick,
+					{
+						icon: RESULT_ICON[kind],
+						label: `Log ${QUICK_ARTICLE[kind]} for ${hero} in round ${round}`,
+						variant: 'ghost',
+						disabled: !this.canPersist,
+						onClick: !this.canPersist
+							? STUB_NOOP
+							: (evt) => {
+									// The cell itself is ALSO `role="button"` (isInteractive's
+									// own click listener, above) — stop the bubble here so one
+									// tap on a quick button logs exactly once, never both the
+									// quick write AND the sheet open (file header's
+									// interactive-in-interactive resolution).
+									evt.stopPropagation();
+									this.onQuickLog({ hero, round, result: kind });
+								},
+					},
+					this.owner,
+				);
+				handle.buttonEl.addClass('dse-mt__quick');
+				handle.buttonEl.setAttribute('data-kind', kind);
+			});
 			cell.createSpan({ cls: 'dse-mt__cell-hint', text: 'to act' });
 		} else {
 			const face = cell.createDiv({ cls: 'dse-mt__cell-face' });
 			setIcon(face.createSpan({ cls: 'dse-mt__cell-glyph dse-mt__cell-glyph--none' }), 'minus');
+			// SC-299 R-2 — an empty PAST-round cell (not on a complete montage, see
+			// isInteractive's own doc) is now an edit target too: the same writable-host-only
+			// editmark a recorded cell carries, but a `plus` glyph rather than `pencil` — this
+			// cell has nothing to correct yet, only something to add. Never on a `current`
+			// empty cell (the quick trio already IS that affordance there) or a `future`/
+			// complete one (both stay inert).
+			if (this.canPersist && state === 'past' && entry === undefined && !complete) {
+				const editMark = cell.createSpan({ cls: 'dse-mt__cell-editmark' });
+				editMark.setAttribute('aria-hidden', 'true');
+				setIcon(editMark, 'plus');
+			}
 			face.createSpan({
 				cls: 'dse-mt__cell-skill dse-mt__cell-skill--none',
 				text: state === 'past' || entry !== undefined ? 'no action' : '',
