@@ -3799,6 +3799,32 @@ Shared globals
 		width: 0.8em;
 		height: 0.8em;
 	}
+	/* SC-299 R-1 — THE OPEN SOCKET's quick trio (mock6.js:1841-1856, round2.css:307-333,
+	   the settled design SC-191 shipped without). `.dse-mt__quick` is the bespoke-sizing
+	   class layered onto `handle.buttonEl` (BoardView.ts) — the same "iconButton plus a
+	   second class" gesture `.dse-mt__board-rowact` uses, ~:3768 — overriding the kit's
+	   generic touch-target box down to the mock's flat 1.45em square; colour lives in the
+	   Steel decoration tier (~:4340) since it needs `--dse-metal-line`/`--dse-turn-done`/
+	   `--dse-danger`. */
+	.dse-mt__cell-quick {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.18em;
+	}
+	.dse-mt__quick {
+		width: 1.45em;
+		height: 1.45em;
+		min-width: 1.45em;
+		min-height: 1.45em;
+		padding: 0;
+		border-radius: 2px;
+
+		svg {
+			width: 0.8em;
+			height: 0.8em;
+		}
+	}
 	.dse-mt__cell-skill {
 		white-space: nowrap;
 		overflow: hidden;
@@ -4129,6 +4155,12 @@ Shared globals
 			gap: 0.45em;
 			width: auto;
 		}
+		/* SC-299 R-1 (round2.css:1750, the settled narrow rule) — the one-band-per-hero row
+		   layout above lays the cell out left-to-right; without this the trio would sit
+		   right after the hint text instead of hugging the row's trailing edge. */
+		.dse-mt__cell-quick {
+			margin-left: auto;
+		}
 		.dse-mt__board-total {
 			justify-content: flex-start;
 			gap: 0.7em;
@@ -4352,6 +4384,29 @@ Shared globals
 		background: none;
 		border: 1px dashed var(--dse-metal-line);
 		color: var(--dse-metal);
+	}
+	/* SC-299 R-1 — the quick trio's colour (round2.css:311-338). Colour is the SECOND
+	   channel, not the first (Scott is colourblind, file header): glyph SHAPE (check / x /
+	   ringed-plus, RESULT_ICON) plus the exact-mock aria-label carry the meaning; success/
+	   failure tint the same tokens the recorded-cell glyph ring uses just above (so the
+	   trio and the seal agree once a tap turns one into the other), assist stays metal —
+	   the ring is dashed there too, colour would add nothing. Hover always reads
+	   `--dse-accent`, matching every other ghost-vocabulary control in this file. */
+	.dse-mt__quick {
+		background: var(--dse-chip-bg);
+		border: 1px solid var(--dse-metal-line);
+		color: var(--dse-metal);
+	}
+	.dse-mt__quick[data-kind='success'] {
+		color: var(--dse-turn-done);
+	}
+	.dse-mt__quick[data-kind='failure'] {
+		color: var(--dse-danger);
+	}
+	.dse-mt__quick:hover:not([disabled]),
+	.dse-mt__quick:focus-visible {
+		border-color: var(--dse-accent);
+		color: var(--dse-accent);
 	}
 	.dse-mt__cell-skill {
 		font-size: var(--dse-fs-micro);
@@ -5056,8 +5111,12 @@ Shared globals
    its own `position: absolute` lives in the Steel decoration tier only (print-excluded),
    so without this rule the icon renders IN FLOW under print — a small but real leak of a
    write-affordance cue onto paper, the same class of bug `.dse-mt__board-addhero` above
-   already names. */
-[data-dse-print="on"][data-dse-element="montage"] .dse-mt__cell-editmark {
+   already names. SC-299 R-3: `.dse-mt__cell-quick` (the quick trio's group container)
+   joins it here belt-and-braces — its own buttons are `.dse-btn` and already caught by
+   print rule 4 (~:14138), but the empty container is not, and an authoring write
+   affordance never prints (spec §D). */
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__cell-editmark,
+[data-dse-print="on"][data-dse-element="montage"] .dse-mt__cell-quick {
 	display: none;
 }
 [data-dse-print="on"][data-dse-element="montage"] .dse-mt__track-slot {
