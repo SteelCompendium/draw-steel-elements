@@ -19,6 +19,7 @@
 // wrapping). Color is never the sole signal: each row always shows its range text
 // (§4.7). F1 §4.5: all listeners are owner-bound.
 import type { Component } from 'obsidian';
+import { tooltip } from './tooltip';
 
 export type PowerRollTier = 'low' | 'mid' | 'high' | 'crit';
 
@@ -69,8 +70,11 @@ export interface PowerRollPanelHandle {
 	 * D5 (Plan 14): roll-result highlight — data-dse-roll-result="active|dimmed"
 	 * on every row (null clears). A SEPARATE channel from selectable-mode
 	 * selection: never touches aria-checked/tabindex, works on static panels.
+	 * SC-196 round 3: also stamps an on-hover tooltip naming the state in words
+	 * (active/dimmed is otherwise color-only, §4.7) — `total`, when supplied,
+	 * folds the rolled number into the active row's tooltip.
 	 */
-	setRollResult(active: readonly PowerRollTier[] | null): void;
+	setRollResult(active: readonly PowerRollTier[] | null, total?: number): void;
 }
 
 /** Tier → badge modifier + range text (the .tN-key-body-text originals, verbatim). */
@@ -229,11 +233,31 @@ export function powerRollPanel(
 			change(tier, { notify: false, focus: false });
 		},
 		getSelected: () => selected,
-		setRollResult: (active: readonly PowerRollTier[] | null): void => {
+		setRollResult: (active: readonly PowerRollTier[] | null, total?: number): void => {
 			for (const tier of tiers) {
 				const rowEl = rowEls[tier]!;
-				if (active === null) rowEl.removeAttribute('data-dse-roll-result');
-				else rowEl.setAttribute('data-dse-roll-result', active.includes(tier) ? 'active' : 'dimmed');
+				if (active === null) {
+					rowEl.removeAttribute('data-dse-roll-result');
+					// Restores the content-derived accessible name (badge + outcome
+					// text) — the label below is scoped to an active roll only.
+					rowEl.removeAttribute('aria-label');
+					continue;
+				}
+				const isActive = active.includes(tier);
+				rowEl.setAttribute('data-dse-roll-result', isActive ? 'active' : 'dimmed');
+				// Color-only signal otherwise (§4.7): the tooltip names the state in
+				// words for a hovering sighted user; the aria-label carries the same
+				// word to screen readers WITHOUT losing the row's own outcome text
+				// (kit tooltip() stamps aria-label as a side effect — iconButton.ts
+				// §2.5's pattern — so the fuller label is written last, and wins).
+				const { range } = TIER_BADGES[tier];
+				const stateText = isActive
+					? total !== undefined
+						? `Rolled result — ${total} (${range})`
+						: `Rolled result (${range})`
+					: 'Not rolled';
+				tooltip(rowEl, stateText);
+				rowEl.setAttribute('aria-label', `${stateText}. ${rowEl.textContent ?? ''}`.trim());
 			}
 		},
 	};

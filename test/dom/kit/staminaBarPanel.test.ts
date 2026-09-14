@@ -5,6 +5,7 @@
 // the exact same DOM through this core — unmodified by this task).
 import { renderStaminaBar, updateStaminaBar } from '../../../src/framework/kit/StaminaBarPanel';
 import { Component } from '../../mocks/obsidian';
+import * as obsidian from '../../mocks/obsidian';
 
 // Same convention as iconButton.test.ts: the mock Component's runtime shape
 // (registerDomEvent/register/unload) is what matters, not structural tsc satisfaction.
@@ -236,5 +237,36 @@ describe('D7 Task 1: kit/StaminaBarPanel — updateStaminaBar (targeted, no rebu
 		expect(fill.getAttribute('data-state')).toBe('healthy');
 		const pill = bar.querySelector('.dse-stamina__num .dse-stamina__pill') as HTMLElement;
 		expect(pill.textContent).toBe('(20/20)');
+	});
+});
+
+describe('SC-196 round 3 — the cluster temp plate is color-only otherwise (§4.7)', () => {
+	test('temp > 0: the "+N" badge gets an on-hover tooltip naming it, and the same word in aria-label', () => {
+		const root = document.createElement('div');
+		const spy = jest.spyOn(obsidian, 'setTooltip');
+		const bar = renderStaminaBar(root, { current: 15, temp: 4, max: 20 }, { canPersist: true })!;
+		const tempEl = bar.querySelector('.dse-stamina__ctemp') as HTMLElement;
+		expect(tempEl.textContent).toBe('+4');
+		expect(spy).toHaveBeenCalledWith(tempEl, 'Temporary Stamina: 4');
+		expect(tempEl.getAttribute('aria-label')).toBe('Temporary Stamina: 4');
+	});
+
+	test('temp == 0: no badge text and no tooltip/aria-label', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 15, temp: 0, max: 20 }, { canPersist: true })!;
+		const tempEl = bar.querySelector('.dse-stamina__ctemp') as HTMLElement;
+		expect(tempEl.textContent).toBe('');
+		expect(tempEl.hasAttribute('aria-label')).toBe(false);
+	});
+
+	test('updateStaminaBar clears the tooltip in place when temp drops back to 0', () => {
+		const root = document.createElement('div');
+		const bar = renderStaminaBar(root, { current: 15, temp: 4, max: 20 }, { canPersist: true })!;
+		const tempEl = bar.querySelector('.dse-stamina__ctemp') as HTMLElement;
+		expect(tempEl.getAttribute('aria-label')).toBe('Temporary Stamina: 4');
+
+		updateStaminaBar(bar, { current: 19, temp: 0, max: 20 });
+		expect(tempEl.textContent).toBe('');
+		expect(tempEl.hasAttribute('aria-label')).toBe(false);
 	});
 });

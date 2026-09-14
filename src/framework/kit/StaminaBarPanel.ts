@@ -267,7 +267,15 @@ function updateCluster(bar: HTMLElement, s: StaminaBarValues): void {
 	cluster.querySelector<HTMLElement>('.dse-stamina__cstate')?.setText(STATE_LABEL[state]);
 	cluster.querySelector<HTMLElement>('.dse-stamina__ccur')?.setText(String(current));
 	cluster.querySelector<HTMLElement>('.dse-stamina__cmax')?.setText(String(max));
-	cluster.querySelector<HTMLElement>('.dse-stamina__ctemp')?.setText(temp > 0 ? `+${temp}` : '');
+	const tempEl = cluster.querySelector<HTMLElement>('.dse-stamina__ctemp');
+	if (tempEl) {
+		tempEl.setText(temp > 0 ? `+${temp}` : '');
+		// SC-196 round 3: the plate's purple border is otherwise the only signal that
+		// "+N" means temporary Stamina (§4.7) — name it in words on hover, and to
+		// screen readers, whenever the badge is showing anything at all.
+		if (temp > 0) setTooltip(tempEl, `Temporary Stamina: ${temp}`);
+		else tempEl.removeAttribute('aria-label');
+	}
 
 	const gauge = cluster.querySelector<HTMLElement>(':scope > .dse-stamina__gauge');
 	// SC-183: the gauge is self-describing — renderStaminaGauge stamps `data-zone="off"`

@@ -1315,14 +1315,20 @@ export class InitiativeView extends ElementView<EncounterData> {
 						{
 							label: `Select ${creature.name} #${instance.id}`,
 							pressed: selected,
+							// SC-196 round 3: the ring is otherwise a color-only selection
+							// signal (§4.7) — name the state on hover too. aria-pressed
+							// already carries it to AT (kit handles own aria-pressed).
+							tooltip: selected ? 'Selected' : 'Select',
 							onClick: () => {
 								// Repaint selection in place: kit handles own aria-pressed;
 								// [data-selected] carries the --dse-select ring.
 								cellHandles.forEach((h) => {
 									h.setPressed(false);
 									h.buttonEl.removeAttribute('data-selected');
+									h.setTooltip('Select');
 								});
 								handle.setPressed(true);
+								handle.setTooltip('Selected');
 								cellEl.setAttribute('data-selected', '');
 
 								detailRowContainer.empty();

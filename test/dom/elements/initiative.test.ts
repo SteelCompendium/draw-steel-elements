@@ -686,6 +686,34 @@ describe('T-9: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
+	// SC-196 round 3: the selection ring ([data-selected]) is otherwise a color-only
+	// signal (§4.7) — every cell also carries an on-hover tooltip naming the state
+	// (aria-pressed already carries it to AT; the accessible NAME stays the cell's own
+	// "Select <creature> #<id>", unchanged — only the hover word toggles).
+	test('instance-cell select: on-hover tooltip toggles Select/Selected in place, one per cell', async () => {
+		jest.useFakeTimers();
+		const spy = jest.spyOn(obsidian, 'setTooltip');
+		const { root } = await renderInit(quickStart);
+
+		const cells = [...root.querySelectorAll('.dse-init__cell')] as HTMLElement[];
+		// Nothing selected yet: every cell's own tooltip call reads "Select".
+		const cellCalls = spy.mock.calls.filter(([el]) => (el as HTMLElement).hasClass('dse-init__cell'));
+		expect(cellCalls.length).toBe(cells.length);
+		expect(cellCalls.every(([, text]) => text === 'Select')).toBe(true);
+		spy.mockClear();
+
+		cells[1].click(); // Orc #2
+
+		expect(spy).toHaveBeenCalledWith(cells[1], 'Selected', undefined);
+		for (const other of [cells[0], cells[2], cells[3], cells[4]]) {
+			expect(spy).toHaveBeenCalledWith(other, 'Select', undefined);
+		}
+		// The accessible name never drifts to the tooltip word (§4.2).
+		expect(cells[1].getAttribute('aria-label')).toBe('Select Orc #2');
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+	});
+
 	test('cell dblclick (non-minion): stamina modal for THAT instance -> its cell refreshes -> one write', async () => {
 		jest.useFakeTimers();
 		const { root, host } = await renderInit(quickStart);

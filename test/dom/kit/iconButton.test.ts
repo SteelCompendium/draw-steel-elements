@@ -190,6 +190,17 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 		expect(handle.buttonEl.getAttribute('aria-label')).toBe('Pause');
 	});
 
+	// SC-196 round 3: setTooltip updates the hover text in place WITHOUT drifting the
+	// required accessible name (the same "aria-label wins last" contract as mount time).
+	test('setTooltip updates the hover text in place, re-asserting the current aria-label afterward', () => {
+		const parent = document.createElement('div');
+		const spy = jest.spyOn(obsidian, 'setTooltip');
+		const handle = iconButton(parent, { label: 'Select Goblin #1', onClick: () => {} }, fakeOwner());
+		handle.setTooltip('Selected');
+		expect(spy).toHaveBeenCalledWith(handle.buttonEl, 'Selected', undefined);
+		expect(handle.buttonEl.getAttribute('aria-label')).toBe('Select Goblin #1');
+	});
+
 	test('lifecycle: owner.unload() detaches the click listener (F1 §4.5)', () => {
 		const parent = document.createElement('div');
 		const onClick = jest.fn();

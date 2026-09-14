@@ -50,6 +50,14 @@ export interface IconButtonHandle {
 	setPressed(pressed: boolean): void;
 	/** Updates the accessible name in place (e.g. Play ↔ Pause toggles). */
 	setLabel(label: string): void;
+	/**
+	 * Updates the hover tooltip in place (kit tooltip() / Obsidian setTooltip, §2.5),
+	 * e.g. a toggle's "Select" ↔ "Selected". Re-asserts the CURRENT aria-label
+	 * afterward (native setTooltip's own side effect, mount-time comment above) so
+	 * the required accessible name never drifts to the tooltip text — call setLabel
+	 * too if the accessible name itself must also change.
+	 */
+	setTooltip(text: string): void;
 }
 
 /**
@@ -117,6 +125,11 @@ export function iconButton(
 		setPressed,
 		setLabel: (label: string): void => {
 			buttonEl.setAttribute('aria-label', label);
+		},
+		setTooltip: (text: string): void => {
+			const currentLabel = buttonEl.getAttribute('aria-label');
+			tooltip(buttonEl, text);
+			if (currentLabel !== null) buttonEl.setAttribute('aria-label', currentLabel);
 		},
 	};
 }

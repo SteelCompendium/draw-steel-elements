@@ -109,7 +109,7 @@ export class RollView extends ElementView<RollModel> {
 				active = [TIER_TO_ROW[result.tier - 1]];
 				if (result.isCritical && this.panel.rowEls.crit) active.push('crit');
 			}
-			this.panel.setRollResult(active);
+			this.panel.setRollResult(active, result.total);
 		}
 		this.cardHostEl?.remove();
 		this.cardHostEl = this.areaEl.createDiv();

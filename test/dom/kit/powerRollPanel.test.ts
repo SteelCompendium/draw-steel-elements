@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { powerRollPanel, tierBadge } from '../../../src/framework/kit/powerRollPanel';
 import { Component } from '../../mocks/obsidian';
+import * as obsidian from '../../mocks/obsidian';
 
 function fakeOwner(): any {
 	return new Component();
@@ -484,5 +485,39 @@ describe('Plan 14 (D5 §3.4) — setRollResult: the roll-highlight channel', () 
 		expect(handle.rowEls.mid!.getAttribute('aria-checked')).toBe('true'); // selection intact
 		expect(handle.rowEls.mid!.getAttribute('tabindex')).toBe('0');
 		expect(handle.rowEls.low!.getAttribute('data-dse-roll-result')).toBe('active');
+	});
+
+	// SC-196 round 3: active/dimmed was otherwise a color-only signal (§4.7) — every row
+	// now carries an on-hover tooltip naming its state, and the same word in aria-label.
+	test('active row: on-hover tooltip + aria-label name the state, folding in the total when given', () => {
+		const { handle } = mount();
+		const spy = jest.spyOn(obsidian, 'setTooltip');
+		handle.setRollResult(['mid'], 14);
+		const row = handle.rowEls.mid!;
+		expect(spy).toHaveBeenCalledWith(row, 'Rolled result — 14 (12-16)', undefined);
+		expect(row.getAttribute('aria-label')).toBe(`Rolled result — 14 (12-16). ${row.textContent}`);
+	});
+
+	test('active row without a total still names the state (range only)', () => {
+		const { handle } = mount();
+		handle.setRollResult(['high']);
+		expect(handle.rowEls.high!.getAttribute('aria-label')).toContain('Rolled result (17+)');
+	});
+
+	test('dimmed rows are tooltipped/labelled "Not rolled"', () => {
+		const { handle } = mount();
+		handle.setRollResult(['mid'], 14);
+		expect(handle.rowEls.low!.getAttribute('aria-label')).toBe(`Not rolled. ${handle.rowEls.low!.textContent}`);
+		expect(handle.rowEls.crit!.getAttribute('aria-label')).toBe(`Not rolled. ${handle.rowEls.crit!.textContent}`);
+	});
+
+	test('clearing the result (null) removes the aria-label again — content-derived name restored', () => {
+		const { handle } = mount();
+		handle.setRollResult(['mid'], 14);
+		expect(handle.rowEls.mid!.hasAttribute('aria-label')).toBe(true);
+		handle.setRollResult(null);
+		for (const row of Object.values(handle.rowEls)) {
+			expect(row!.hasAttribute('aria-label')).toBe(false);
+		}
 	});
 });

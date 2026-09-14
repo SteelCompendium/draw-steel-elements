@@ -155,7 +155,7 @@ export function attachRollControls(opts: AttachRollControlsOptions): void {
 			// Nat-19–20 crit also lights the crit line when the ability has one (§3.4).
 			if (result.isCritical && opts.panel.rowEls.crit) active.push('crit');
 		}
-		opts.panel.setRollResult(active);
+		opts.panel.setRollResult(active, result.total);
 		cardHostEl?.remove();
 		cardHostEl = areaEl.createDiv();
 		rollResultCard(
