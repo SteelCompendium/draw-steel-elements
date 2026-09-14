@@ -15,6 +15,17 @@ below ships as 7.0.0.
 Upgrading from 5.x or 6.0.1? See the [migration guide](docs/migrating-to-7.md)
 for what needs action.
 
+- [FIX] **The light color scheme has its own, darker status colors, and three color-only
+  signals now show a hover tooltip** (SC-196). Every color-coded state — Stamina healthy
+  (green), winded (amber), dying (red), and temporary Stamina (purple); the power-roll
+  tier badges including the critical-hit gold; malice and victory points (gold); warnings
+  (orange); and the initiative tracker's selection ring (red) — used to reuse the dark
+  scheme's exact colors in light mode, where several were too pale to read reliably
+  against a white background. Light mode now has its own darker version of all ten,
+  checked against the WCAG AA contrast minimum; the dark scheme is unchanged. Three of
+  those surfaces had no other way to tell the state apart by eye: hovering the `+N`
+  temporary-Stamina badge, a selected creature in the initiative tracker, or a rolled
+  power-roll result row now shows a tooltip naming what's highlighted, in words.
 - [FEATURE] **The Montage Test tracker is now a working board, not just a scoreboard**
   (SC-191). A full visual overhaul on top of a purely additive schema: two new optional
   keys, `description` (a Director's brief rendered above the board) and `entries[]` (the
