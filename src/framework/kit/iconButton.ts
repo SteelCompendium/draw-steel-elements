@@ -48,16 +48,18 @@ export interface IconButtonHandle {
 	setDisabled(disabled: boolean): void;
 	/** Reflects toggle state: aria-pressed + [data-pressed], in place. */
 	setPressed(pressed: boolean): void;
-	/** Updates the accessible name in place (e.g. Play ↔ Pause toggles). */
-	setLabel(label: string): void;
 	/**
-	 * Updates the hover tooltip in place (kit tooltip() / Obsidian setTooltip, §2.5),
-	 * e.g. a toggle's "Select" ↔ "Selected". Re-asserts the CURRENT aria-label
-	 * afterward (native setTooltip's own side effect, mount-time comment above) so
-	 * the required accessible name never drifts to the tooltip text — call setLabel
-	 * too if the accessible name itself must also change.
+	 * Updates the accessible name in place (e.g. Play ↔ Pause toggles). SC-196 round 4
+	 * (HIGH-1/HIGH-2): this IS the hover-tooltip update too — Obsidian's `setTooltip`
+	 * has no storage of its own, it only writes `aria-label`, and the hover renderer
+	 * reads the tooltip text back off that same attribute at hover time (decompiled
+	 * from the shipped `app.js`: `setTooltip(e,t,n){e.setAttribute("aria-label",t),…}`).
+	 * Tooltip text and accessible name cannot differ once mounted — there is no
+	 * separate "just change the hover word" operation, which is why the round-3
+	 * `setTooltip` handle (a post-hoc `tooltip()` write immediately overwritten by a
+	 * restored aria-label) was a no-op in production. Design one string for both.
 	 */
-	setTooltip(text: string): void;
+	setLabel(label: string): void;
 }
 
 /**
@@ -125,11 +127,6 @@ export function iconButton(
 		setPressed,
 		setLabel: (label: string): void => {
 			buttonEl.setAttribute('aria-label', label);
-		},
-		setTooltip: (text: string): void => {
-			const currentLabel = buttonEl.getAttribute('aria-label');
-			tooltip(buttonEl, text);
-			if (currentLabel !== null) buttonEl.setAttribute('aria-label', currentLabel);
 		},
 	};
 }

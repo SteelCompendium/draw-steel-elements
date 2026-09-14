@@ -270,9 +270,11 @@ function updateCluster(bar: HTMLElement, s: StaminaBarValues): void {
 	const tempEl = cluster.querySelector<HTMLElement>('.dse-stamina__ctemp');
 	if (tempEl) {
 		tempEl.setText(temp > 0 ? `+${temp}` : '');
-		// SC-196 round 3: the plate's purple border is otherwise the only signal that
-		// "+N" means temporary Stamina (§4.7) — name it in words on hover, and to
-		// screen readers, whenever the badge is showing anything at all.
+		// SC-196 round 3/4: the plate's purple border is otherwise the only signal that
+		// "+N" means temporary Stamina (§4.7) — name it in words on hover, whenever the
+		// badge is showing anything at all. Hover-only (MEDIUM-2's finding applies here
+		// too, not just the roll rows): `tempEl` is a roleless <span>, so the aria-label
+		// this also sets is name-prohibited (ARIA 1.2) and reaches no screen reader.
 		if (temp > 0) setTooltip(tempEl, `Temporary Stamina: ${temp}`);
 		else tempEl.removeAttribute('aria-label');
 	}

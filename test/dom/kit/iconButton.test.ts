@@ -190,15 +190,22 @@ describe('Plan 08 Task 2: kit/iconButton (D2 §2.1)', () => {
 		expect(handle.buttonEl.getAttribute('aria-label')).toBe('Pause');
 	});
 
-	// SC-196 round 3: setTooltip updates the hover text in place WITHOUT drifting the
-	// required accessible name (the same "aria-label wins last" contract as mount time).
-	test('setTooltip updates the hover text in place, re-asserting the current aria-label afterward', () => {
+	// SC-196 round 4 (HIGH-1/HIGH-2): Obsidian's setTooltip has no storage of its own —
+	// it only ever writes aria-label, and the hover renderer reads the tooltip text
+	// back off that SAME attribute at hover time. So setLabel's rendered end state
+	// (asserted above, not a spy call) IS the hover tooltip a sighted user sees — there
+	// is no separate "just change the hover word" operation, which is why round 3's
+	// setTooltip handle (tooltip() immediately overwritten by a restored aria-label)
+	// was a no-op in production and has been removed rather than fixed in place.
+	test('setLabel IS the hover tooltip: Obsidian setTooltip only ever writes aria-label', () => {
 		const parent = document.createElement('div');
 		const spy = jest.spyOn(obsidian, 'setTooltip');
 		const handle = iconButton(parent, { label: 'Select Goblin #1', onClick: () => {} }, fakeOwner());
-		handle.setTooltip('Selected');
-		expect(spy).toHaveBeenCalledWith(handle.buttonEl, 'Selected', undefined);
-		expect(handle.buttonEl.getAttribute('aria-label')).toBe('Select Goblin #1');
+		handle.setLabel('Selected — Goblin #1');
+		// setLabel writes the attribute directly (no setTooltip() call needed or made);
+		// what matters is the RENDERED end state, since that is what the hover reads.
+		expect(spy).not.toHaveBeenCalled();
+		expect(handle.buttonEl.getAttribute('aria-label')).toBe('Selected — Goblin #1');
 	});
 
 	test('lifecycle: owner.unload() detaches the click listener (F1 §4.5)', () => {

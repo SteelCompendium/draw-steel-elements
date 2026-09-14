@@ -70,9 +70,12 @@ export interface PowerRollPanelHandle {
 	 * D5 (Plan 14): roll-result highlight — data-dse-roll-result="active|dimmed"
 	 * on every row (null clears). A SEPARATE channel from selectable-mode
 	 * selection: never touches aria-checked/tabindex, works on static panels.
-	 * SC-196 round 3: also stamps an on-hover tooltip naming the state in words
+	 * SC-196 round 4: also stamps an on-hover tooltip naming the state in words
 	 * (active/dimmed is otherwise color-only, §4.7) — `total`, when supplied,
-	 * folds the rolled number into the active row's tooltip.
+	 * folds the rolled number into the active row's tooltip. This is a HOVER-ONLY
+	 * signal: both real call sites (renderFeature.ts, roll/view.ts) mount the panel
+	 * WITHOUT `selectable`, so the rows are roleless `<div>`s and the aria-label this
+	 * writes is name-prohibited (ARIA 1.2) — it never reaches a screen reader there.
 	 */
 	setRollResult(active: readonly PowerRollTier[] | null, total?: number): void;
 }
@@ -245,19 +248,24 @@ export function powerRollPanel(
 				}
 				const isActive = active.includes(tier);
 				rowEl.setAttribute('data-dse-roll-result', isActive ? 'active' : 'dimmed');
-				// Color-only signal otherwise (§4.7): the tooltip names the state in
-				// words for a hovering sighted user; the aria-label carries the same
-				// word to screen readers WITHOUT losing the row's own outcome text
-				// (kit tooltip() stamps aria-label as a side effect — iconButton.ts
-				// §2.5's pattern — so the fuller label is written last, and wins).
+				// Color-only signal otherwise (§4.7): name the state in words for a
+				// hovering sighted user. SC-196 round 4 (MEDIUM-1): the badge span
+				// ("≤11") and the outcome span ("3 + M damage") sit with no separator
+				// node, so `rowEl.textContent` used to concatenate them into "≤113 + M
+				// damage" — build the label from the PARTS with real separators
+				// instead: "<state>. <range>: <outcome text>". Obsidian's setTooltip
+				// writes only aria-label (no separate tooltip storage, HIGH-1's decisive
+				// fact) and the hover renderer reads it back at hover time, so this one
+				// write is also the whole hover tooltip — call tooltip() once, with the
+				// FINAL string, rather than a shorter one a later write would clobber.
 				const { range } = TIER_BADGES[tier];
+				const outcomeText = rowEl.querySelector('.dse-pr__text')?.textContent ?? '';
 				const stateText = isActive
 					? total !== undefined
-						? `Rolled result — ${total} (${range})`
-						: `Rolled result (${range})`
+						? `Rolled result — ${total}`
+						: 'Rolled result'
 					: 'Not rolled';
-				tooltip(rowEl, stateText);
-				rowEl.setAttribute('aria-label', `${stateText}. ${rowEl.textContent ?? ''}`.trim());
+				tooltip(rowEl, `${stateText}. ${range}: ${outcomeText}`);
 			}
 		},
 	};

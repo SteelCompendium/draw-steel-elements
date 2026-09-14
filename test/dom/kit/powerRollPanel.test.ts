@@ -487,28 +487,39 @@ describe('Plan 14 (D5 §3.4) — setRollResult: the roll-highlight channel', () 
 		expect(handle.rowEls.low!.getAttribute('data-dse-roll-result')).toBe('active');
 	});
 
-	// SC-196 round 3: active/dimmed was otherwise a color-only signal (§4.7) — every row
-	// now carries an on-hover tooltip naming its state, and the same word in aria-label.
-	test('active row: on-hover tooltip + aria-label name the state, folding in the total when given', () => {
+	// SC-196 round 4 (MEDIUM-1 + LOW-1/LOW-2): active/dimmed was otherwise a color-only
+	// signal (§4.7) — every row carries an on-hover tooltip naming its state. Obsidian's
+	// setTooltip only ever writes aria-label (no separate tooltip storage, HIGH-1's
+	// decisive fact), so the RENDERED aria-label after the call IS the production hover
+	// text — assert that end state, not that a mock was merely called (LOW-2). The
+	// label is built from the row's PARTS with real separators ("<state>. <range>:
+	// <outcome>"), never `rowEl.textContent` (MEDIUM-1: the badge span and outcome span
+	// have no separator between them and used to concatenate into "≤113 + M damage").
+	test('active row: rendered aria-label names the state + range + outcome, folding in the total when given', () => {
 		const { handle } = mount();
 		const spy = jest.spyOn(obsidian, 'setTooltip');
 		handle.setRollResult(['mid'], 14);
 		const row = handle.rowEls.mid!;
-		expect(spy).toHaveBeenCalledWith(row, 'Rolled result — 14 (12-16)', undefined);
-		expect(row.getAttribute('aria-label')).toBe(`Rolled result — 14 (12-16). ${row.textContent}`);
+		// The ONE call carries the final string already — nothing overwrites it after.
+		expect(spy).toHaveBeenCalledWith(row, 'Rolled result — 14. 12-16: 6 + M damage', undefined);
+		expect(row.getAttribute('aria-label')).toBe('Rolled result — 14. 12-16: 6 + M damage');
 	});
 
-	test('active row without a total still names the state (range only)', () => {
+	test('active row without a total still names the state (range + outcome, no number)', () => {
 		const { handle } = mount();
 		handle.setRollResult(['high']);
-		expect(handle.rowEls.high!.getAttribute('aria-label')).toContain('Rolled result (17+)');
+		expect(handle.rowEls.high!.getAttribute('aria-label')).toBe(
+			'Rolled result. 17+: 9 + M damage; **bleeding**',
+		);
 	});
 
-	test('dimmed rows are tooltipped/labelled "Not rolled"', () => {
+	test('dimmed rows: rendered aria-label reads "Not rolled. <range>: <outcome>" — no run-together numbers', () => {
 		const { handle } = mount();
+		const spy = jest.spyOn(obsidian, 'setTooltip');
 		handle.setRollResult(['mid'], 14);
-		expect(handle.rowEls.low!.getAttribute('aria-label')).toBe(`Not rolled. ${handle.rowEls.low!.textContent}`);
-		expect(handle.rowEls.crit!.getAttribute('aria-label')).toBe(`Not rolled. ${handle.rowEls.crit!.textContent}`);
+		expect(handle.rowEls.low!.getAttribute('aria-label')).toBe('Not rolled. ≤11: 3 + M damage');
+		expect(handle.rowEls.crit!.getAttribute('aria-label')).toBe('Not rolled. crit: extra main action');
+		expect(spy).toHaveBeenCalledWith(handle.rowEls.low, 'Not rolled. ≤11: 3 + M damage', undefined);
 	});
 
 	test('clearing the result (null) removes the aria-label again — content-derived name restored', () => {

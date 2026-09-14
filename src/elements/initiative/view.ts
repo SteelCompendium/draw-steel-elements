@@ -1301,34 +1301,45 @@ export class InitiativeView extends ElementView<EncounterData> {
 		// [data-selected] on --dse-select) tagged data-instance-key (CB-6), or a static
 		// state display when read-only. Selection repaints through the kit handles.
 		const instancesGrid = groupEl.createDiv({ cls: 'dse-init__grid' });
-		const cellHandles: IconButtonHandle[] = [];
+		// SC-196 round 4 (HIGH-1): each entry keeps its own UNSELECTED label text —
+		// the repaint loop below (fired from whichever cell was clicked) needs every
+		// OTHER cell's own "Select <creature> #<id>" wording, not a generic one.
+		const cellHandles: { handle: IconButtonHandle; label: string }[] = [];
 
 		group.creatures.forEach((creature, creatureIndex) => {
 			creature.instances?.forEach((instance) => {
 				const instanceKey = `${creatureIndex}-${instance.id}`;
 				const selected = group.selectedInstanceKey === instanceKey;
+				// SC-196 round 4 (HIGH-1): Obsidian's `setTooltip` has no storage of its
+				// own — it only ever writes `aria-label`, and the hover renderer reads
+				// the tooltip text back off that same attribute at hover time. Tooltip
+				// text and accessible name are therefore the SAME string; the selection
+				// ring's state word has to live in the label itself, or it never reaches
+				// the hover tooltip at all (round 3's separate setTooltip() call was
+				// silently overwritten by the very next aria-label write and shipped a
+				// no-op). aria-pressed still carries the state to AT independently.
+				const label = `Select ${creature.name} #${instance.id}`;
+				const selectedLabel = `Selected — ${creature.name} #${instance.id}`;
 
 				let cellEl: HTMLElement;
 				if (this.canWrite) {
 					const handle = iconButton(
 						instancesGrid,
 						{
-							label: `Select ${creature.name} #${instance.id}`,
+							label: selected ? selectedLabel : label,
 							pressed: selected,
-							// SC-196 round 3: the ring is otherwise a color-only selection
-							// signal (§4.7) — name the state on hover too. aria-pressed
-							// already carries it to AT (kit handles own aria-pressed).
-							tooltip: selected ? 'Selected' : 'Select',
 							onClick: () => {
 								// Repaint selection in place: kit handles own aria-pressed;
-								// [data-selected] carries the --dse-select ring.
-								cellHandles.forEach((h) => {
-									h.setPressed(false);
-									h.buttonEl.removeAttribute('data-selected');
-									h.setTooltip('Select');
+								// [data-selected] carries the --dse-select ring; setLabel is
+								// the one update that reaches BOTH the accessible name and
+								// the hover tooltip (they cannot differ, see above).
+								cellHandles.forEach((entry) => {
+									entry.handle.setPressed(false);
+									entry.handle.buttonEl.removeAttribute('data-selected');
+									entry.handle.setLabel(entry.label);
 								});
 								handle.setPressed(true);
-								handle.setTooltip('Selected');
+								handle.setLabel(selectedLabel);
 								cellEl.setAttribute('data-selected', '');
 
 								detailRowContainer.empty();
@@ -1349,7 +1360,7 @@ export class InitiativeView extends ElementView<EncounterData> {
 						owner,
 					);
 					handle.buttonEl.addClass('dse-init__cell');
-					cellHandles.push(handle);
+					cellHandles.push({ handle, label });
 					cellEl = handle.buttonEl;
 
 					// Double-click: edit STAMINA (legacy :321).

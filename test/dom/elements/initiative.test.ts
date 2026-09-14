@@ -686,30 +686,45 @@ describe('T-9: persisted mutations — exactly ONE debounced write each, byte-co
 		);
 	});
 
-	// SC-196 round 3: the selection ring ([data-selected]) is otherwise a color-only
-	// signal (§4.7) — every cell also carries an on-hover tooltip naming the state
-	// (aria-pressed already carries it to AT; the accessible NAME stays the cell's own
-	// "Select <creature> #<id>", unchanged — only the hover word toggles).
-	test('instance-cell select: on-hover tooltip toggles Select/Selected in place, one per cell', async () => {
+	// SC-196 round 4 (HIGH-1): the selection ring ([data-selected]) is otherwise a
+	// color-only signal (§4.7). Obsidian's setTooltip only ever writes aria-label (no
+	// separate tooltip storage) and the hover renderer reads the tooltip text back off
+	// that SAME attribute at hover time — so the state word has to live IN the
+	// accessible name, and the rendered aria-label after the click (not a spy call) is
+	// what the LOW-2 fix requires asserting, since that attribute is the actual
+	// production hover text. aria-pressed still carries the state to AT independently.
+	test('instance-cell select: rendered aria-label flips Select -> "Selected — <creature>" on the clicked cell only', async () => {
 		jest.useFakeTimers();
-		const spy = jest.spyOn(obsidian, 'setTooltip');
 		const { root } = await renderInit(quickStart);
 
 		const cells = [...root.querySelectorAll('.dse-init__cell')] as HTMLElement[];
-		// Nothing selected yet: every cell's own tooltip call reads "Select".
-		const cellCalls = spy.mock.calls.filter(([el]) => (el as HTMLElement).hasClass('dse-init__cell'));
-		expect(cellCalls.length).toBe(cells.length);
-		expect(cellCalls.every(([, text]) => text === 'Select')).toBe(true);
-		spy.mockClear();
+		// Nothing selected yet: every cell reads its own plain "Select <creature> #<id>".
+		expect(cells.map((c) => c.getAttribute('aria-label'))).toEqual([
+			'Select Orc #1',
+			'Select Orc #2',
+			'Select Orc #3',
+			'Select Orc #4',
+			'Select Troll #1',
+		]);
 
 		cells[1].click(); // Orc #2
 
-		expect(spy).toHaveBeenCalledWith(cells[1], 'Selected', undefined);
-		for (const other of [cells[0], cells[2], cells[3], cells[4]]) {
-			expect(spy).toHaveBeenCalledWith(other, 'Select', undefined);
+		expect(cells[1].getAttribute('aria-label')).toBe('Selected — Orc #2');
+		for (const [i, expected] of [
+			'Select Orc #1',
+			undefined, // cells[1], checked above
+			'Select Orc #3',
+			'Select Orc #4',
+			'Select Troll #1',
+		].entries()) {
+			if (expected !== undefined) expect(cells[i].getAttribute('aria-label')).toBe(expected);
 		}
-		// The accessible name never drifts to the tooltip word (§4.2).
+
+		// Reselecting a different cell restores the first cell's plain label — the
+		// state word never sticks to a cell after it stops being the selected one.
+		cells[3].click(); // Orc #4
 		expect(cells[1].getAttribute('aria-label')).toBe('Select Orc #2');
+		expect(cells[3].getAttribute('aria-label')).toBe('Selected — Orc #4');
 
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 	});
