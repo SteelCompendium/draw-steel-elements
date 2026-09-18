@@ -116,7 +116,9 @@ you want to record a skill or a note too.
 open the same form pre-filled with what's recorded, so you can change the result, the
 skill, or the note — or remove it outright with the **Remove** button. This is also how you
 fix a hero's typo'd result if you ever hand-edit the note directly. An empty cell from an
-earlier round works the same way — click it to add a test you forgot to log at the time.
+earlier round works the same way — click it to add a test you forgot to log at the time —
+but only while the montage is still in play. Once it's finished, reopen it first (only
+possible if it simply ran out of rounds; a limit is final).
 
 **Notes.** Anything you type in a test's Note field — a consequence, a complication, a
 reward — shows up listed under the outcome banner below the board, tagged with the hero and
