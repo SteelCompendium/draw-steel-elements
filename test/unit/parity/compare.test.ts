@@ -268,14 +268,17 @@ describe('parity compare — narrowing `owns` on an UNSHARED plugin node cannot 
 	});
 
 	test('`excludes` is the ONLY drop, and it must cite a FOLLOWUPS number or ticket', () => {
+		// Material rules stay OWNED here (excluding one is its own hard error, covered
+		// below) — this test is only about the citation requirement on a legal exclude.
+		const kept = ['margin-top', 'margin-bottom', ...NON_DECLARABLE_RULES];
 		const drop = (why: string) => ({
 			pairs: [
 				{
 					id: 'solo',
 					site: '.s',
 					plugin: '.p',
-					owns: ['margin-top', 'margin-bottom'],
-					excludes: complement(['margin-top', 'margin-bottom']).map((rule: string) => ({ rule, why })),
+					owns: kept,
+					excludes: complement(kept).map((rule: string) => ({ rule, why })),
 				},
 			],
 		});
@@ -337,6 +340,76 @@ describe('parity compare — MATERIAL rules can never be declared away', () => {
 			expect(errs.join('\n')).toContain('plan 19');
 		},
 	);
+
+	// HIGH-1 (r3 review, ledger D5): `excludes` is ALSO a mute button, and before this fix
+	// it obeyed no class gate at all — a pair could `excludes` a material rule and
+	// `validateMap` would wave it through, exactly like the `declaredDeferrals` path this
+	// suite already guards above. Same rules, same rejection voice, mirrored onto the
+	// other drop mechanism.
+	test.each(['bg', 'bg-polarity', 'bg-color', 'shadow', 'hairline-top', 'hairline-bottom'])(
+		'excluding "%s" is a hard contract error (HIGH-1)',
+		(rule) => {
+			const errs = validateMap({
+				pairs: [
+					{
+						id: 'p',
+						site: '.s',
+						plugin: '.p',
+						owns: ALL_RULES.filter((r: string) => r !== rule),
+						excludes: [{ rule, why: 'SC-126 — looks fine' }],
+					},
+				],
+			});
+			expect(errs.join('\n')).toContain('can NEVER be excluded');
+		},
+	);
+
+	// CAN-FAIL, reproducing the r3 review's runtime probe: before HIGH-1's fix, `excludes`
+	// let a pair drop `bg-color` over a REAL, live regression (the plugin's sunken wash
+	// vanishing entirely — SC-126 step 2's own reason for existing) and `npm run parity`
+	// went green anyway. The malicious map must now be rejected at validation — which is
+	// what stops the real pipeline, since `diff.mjs` calls `validateMap` and dies on any
+	// error before `compare()` is ever reached.
+	test('excluding `bg-color` cannot hide the wash-vanished regression (HIGH-1 runtime probe)', () => {
+		const maliciousMap = {
+			pairs: [
+				{
+					id: 'p',
+					site: '.s',
+					plugin: '.p',
+					owns: ALL_RULES.filter((r: string) => r !== 'bg-color'),
+					excludes: [
+						{ rule: 'bg-color', why: 'SC-126 -- r3 probe: can a material rule be dropped via excludes?' },
+					],
+				},
+			],
+		};
+		expect(validateMap(maliciousMap).join('\n')).toContain('can NEVER be excluded');
+
+		// And the regression the exclude was hiding is real: on the honest map (bg-color
+		// owned, not excluded), the same inventories GAP in both schemes.
+		const siteInv = {
+			capturedAt: '2026-01-01T00:00:00.000Z',
+			entries: {
+				'page--dark': { '.s': styles({ 'background-color': 'rgba(0, 0, 0, 0.18)' }) },
+				'page--light': { '.s': styles({ 'background-color': 'rgba(0, 0, 0, 0.02)' }) },
+			},
+		};
+		const plugInv = {
+			capturedAt: '2026-01-01T00:00:00.000Z',
+			entries: {
+				'page--dark': { '.p': styles({ 'background-color': 'rgba(0, 0, 0, 0)' }) },
+				'page--light': { '.p': styles({ 'background-color': 'rgba(0, 0, 0, 0)' }) },
+			},
+		};
+		const r = compare({ site: siteInv, plug: plugInv, map: onePairMap() });
+		const hits = r.rows.filter((x: { rule: string }) => x.rule === 'bg-color');
+		expect(hits.map((x: { scheme: string; sev: string }) => `${x.scheme}:${x.sev}`).sort()).toEqual([
+			'dark:GAP',
+			'light:GAP',
+		]);
+		expect(wouldExitZero(r)).toBe(false);
+	});
 
 	test.each(['font-size', 'line-height', 'letter-spacing', 'body-font', 'padding-top', 'margin-top', 'ink'])(
 		'declaring "%s" (geometry/typography/ink) stays legal',
@@ -460,7 +533,11 @@ describe('parity compare — `bg-color` catches what `bg-polarity` cannot', () =
 		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-color' && x.scheme === 'dark');
 		expect(hit).toBeDefined();
 		expect(hit.sev).toBe('GAP');
-		expect(hit.msg).toMatch(/alpha Δ0\.020/);
+		// LOW-1: the firing axis (alpha) is marked FIRES; the silent axis (deposit) is
+		// NOT claimed to exceed its tolerance — it must read "≤", never "> 2".
+		expect(hit.msg).toMatch(/alpha Δ0\.020 > 0\.01 FIRES/);
+		expect(hit.msg).toMatch(/deposit Δ0\.000 ≤ 2/);
+		expect(hit.msg).not.toMatch(/deposit Δ0\.000 > 2/);
 		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
 		expect(wouldExitZero(r)).toBe(false);
 	});
@@ -474,9 +551,30 @@ describe('parity compare — `bg-color` catches what `bg-polarity` cannot', () =
 		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-color' && x.scheme === 'dark');
 		expect(hit).toBeDefined();
 		expect(hit.sev).toBe('GAP');
-		expect(hit.msg).toMatch(/alpha Δ0\.000/);
-		expect(hit.msg).toMatch(/deposit Δ16\.2/);
+		// LOW-1: this time deposit is the firing axis and alpha is silent — the message
+		// must not claim alpha exceeds its tolerance when it did not.
+		expect(hit.msg).toMatch(/alpha Δ0\.000 ≤ 0\.01/);
+		expect(hit.msg).not.toMatch(/alpha Δ0\.000 > 0\.01/);
+		expect(hit.msg).toMatch(/deposit Δ16\.200 > 2 FIRES/);
 		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+	});
+
+	// LOW-1 (r3 review, ledger D5): before this fix, `toFixed(1)` could round a FIRING
+	// deposit delta back to a string that reads as inside tolerance — rgb(20,20,20) vs
+	// rgb(22.01,22.01,22.01) at alpha 1 scores dep = 2.01*255/255... = 2.01 > 2 (fires),
+	// but printed as "Δ2.0 > 2", indistinguishable from a genuinely-borderline non-fire.
+	// 3 decimals fixes the precision; this also proves the FIRES marker is present.
+	test('a deposit delta just over tolerance is never rounded back under it (rounding-edge probe)', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgb(20, 20, 20)' }),
+			plug: inv('.p', { 'background-color': 'rgb(22.01, 22.01, 22.01)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-color' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(hit.msg).toMatch(/deposit Δ2\.010 > 2 FIRES/);
+		expect(hit.msg).not.toMatch(/Δ2\.0 > 2(?!\d)/);
 	});
 
 	// The live hole this rule exists to close, written against the REAL `section` pair

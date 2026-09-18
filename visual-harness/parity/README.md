@@ -355,7 +355,8 @@ Two severities:
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
 - **Known limitation — `background-color` is now fully compared; the residual is
-  `background-image` (SC-126 steps 1+2, landed).** `compare.cjs`'s `bg` rule (1) reads
+  `background-image` (SC-126 step 1 landed; step 2 this branch, unlanded).**
+  `compare.cjs`'s `bg` rule (1) reads
   `background-image` only — it fires strictly on **site-gradient + plugin-flat** and never
   looks at `background-color`. That is the hole SC-117 slipped through: 13 declaration sites
   washed the wrong **polarity** (translucent white where the site sits on translucent black)
@@ -442,9 +443,12 @@ Each entry names one rule and must cite a **Linear ticket** (`SC-N`). Legacy
 `FOLLOWUPS #N` citations stay valid and resolve via the workspace
 `docs/followups-archive/`, but new entries must not add them;
 a rule may be owned or excluded, never both, and `excludes` without `owns` is an error (it
-would be inert). **Nothing in the shipped map uses `excludes` today** — the honest shapes are
-"add the sibling pair that measures the rule" or "drop `owns` and declare the rows that
-surfaces", which is what `statblock-wrap` now does.
+would be inert). It is gated the same way as a declared deferral, too: a **material** rule
+(`bg`, `bg-polarity`, `bg-color`, `shadow`, `hairline-top`, `hairline-bottom`) can never be
+excluded any more than it can be declared away — fix the CSS, or move the rule to the
+sibling pair that measures it honestly. **Nothing in the shipped map uses `excludes`
+today** — the honest shapes are "add the sibling pair that measures the rule" or "drop
+`owns` and declare the rows that surfaces", which is what `statblock-wrap` now does.
 
 Valid rule names: `bg`, `bg-polarity`, `bg-color`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
 `line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,

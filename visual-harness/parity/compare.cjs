@@ -121,8 +121,9 @@ const ink = (v) => {
 
 // ── SC-126 step 1: wash POLARITY, not a full background-color comparison ───────────────
 // `bgFamily` buckets a computed background-color into a coarse polarity class for rule 1b
-// ONLY (below). It is deliberately narrow — see README.md "Known limitation" for the full
-// story and why a full colour comparison is separately-scoped, larger work.
+// ONLY (below). It is deliberately narrow by design — the full value comparison is rule 1c
+// / `bgColorMiss` below (SC-126 step 2); see README.md "Known limitation —
+// `background-color` is now fully compared".
 //
 // Thresholds are derived from the REAL spread in both committed inventories, not
 // intuition: every mapped pair's background-color today, in both schemes, on both site
@@ -257,6 +258,12 @@ function validateMap(map) {
 					}
 					if (seenX.has(rule)) errors.push(`${lbl}: duplicate exclusion`);
 					seenX.add(rule);
+					if (NON_DECLARABLE_RULES.includes(rule))
+						errors.push(
+							`${lbl}: rule "${rule}" is class "${RULE_CLASS[rule]}" and can NEVER be excluded ` +
+								`(non-declarable: ${NON_DECLARABLE_RULES.join(', ')}). Fix the CSS, or move the rule ` +
+								'to the sibling pair that measures it honestly.',
+						);
 					if (Array.isArray(p.owns) && p.owns.includes(rule))
 						errors.push(`${lbl}: the pair also OWNS this rule — a rule is owned or excluded, never both`);
 					if (!x.why || !CITATION_RE.test(x.why))
@@ -415,8 +422,8 @@ function compare({ site, plug, map }) {
 			// because it only ever looks at background-image — neither side's was
 			// `none`. Deliberately narrow (see bgFamily above and README.md "Known
 			// limitation"): fires only when BOTH sides are a classifiable, visible,
-			// near-achromatic wash and they land on OPPOSITE ends of the range. A full
-			// background-color comparison is separately-scoped, larger work.
+			// near-achromatic wash and they land on OPPOSITE ends of the range. The full
+			// value comparison is rule 1c below.
 			if (owns(pair, 'bg-polarity')) {
 				const sf = bgFamily(s['background-color']);
 				const pf = bgFamily(p['background-color']);
@@ -444,15 +451,27 @@ function compare({ site, plug, map }) {
 						'bg-color',
 						`bg-color not comparable: site background-color="${s['background-color']}", plugin="${p['background-color']}" — expected rgb()/rgba()`,
 					);
-				else if (m.gap)
+				else if (m.gap) {
+					// LOW-1 (r3 review, ledger D5): print each axis with its OWN verdict —
+					// the row used to print both deltas against "> tol" unconditionally,
+					// which is arithmetically false for whichever axis did not fire (and
+					// `toFixed(1)` could round a firing deposit, e.g. 2.001, back to a
+					// string that reads "2.0 > 2"). 3 decimals on both avoids that; each
+					// clause states its own true comparator (">" or "≤") and appends
+					// "FIRES" only on the axis that actually did.
+					const alphaFired = m.dA > BG_ALPHA_TOL;
+					const depositFired = m.dep > BG_DEPOSIT_TOL;
+					const alphaClause = `alpha Δ${m.dA.toFixed(3)} ${alphaFired ? '>' : '≤'} ${BG_ALPHA_TOL}${alphaFired ? ' FIRES' : ''}`;
+					const depositClause = `deposit Δ${m.dep.toFixed(3)} ${depositFired ? '>' : '≤'} ${BG_DEPOSIT_TOL}${depositFired ? ' FIRES' : ''}`;
 					add(
 						'GAP',
 						scheme,
 						pair,
 						'bg-color',
 						`bg-color miss: site background-color=${s['background-color']}, plugin=${p['background-color']} ` +
-							`(alpha Δ${m.dA.toFixed(3)} > ${BG_ALPHA_TOL}, deposit Δ${m.dep.toFixed(1)} > ${BG_DEPOSIT_TOL} — either fires)`,
+							`(${alphaClause}; ${depositClause})`,
 					);
+				}
 			}
 			// 2. Material: site has a bevel/shadow, plugin has none.
 			if (owns(pair, 'shadow') && !isFlat(s['box-shadow']) && isFlat(p['box-shadow']))
