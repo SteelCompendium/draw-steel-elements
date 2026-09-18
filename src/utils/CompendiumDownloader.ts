@@ -1,5 +1,5 @@
 import {App, Notice, request, requestUrl, RequestUrlParam} from "obsidian";
-import * as JSZip from "jszip";
+import {unzipSync} from "fflate";
 
 export class CompendiumDownloader {
 	private app: App;
@@ -83,9 +83,9 @@ export class CompendiumDownloader {
 				await this.app.vault.delete(dir, true);
 			}
 
-			// Load the zip file using JSZip
+			// Unzip with fflate (pure JS; no DOM-injecting polyfills)
 			new Notice('Draw Steel Elements: Extracting compendium...');
-			const zip = await JSZip.loadAsync(buffer);
+			const zip = unzipSync(buffer);
 
 			// Extract and save files to the vault
 			await this.extractAndSaveZip(zip, destinationDirectory);
@@ -97,22 +97,21 @@ export class CompendiumDownloader {
 		}
 	}
 
-	private async extractAndSaveZip(zip: JSZip, destinationDirectory: string) {
+	private async extractAndSaveZip(zip: Record<string, Uint8Array>, destinationDirectory: string) {
 		const vault = this.app.vault;
-		const files = Object.entries(zip.files);
+		const files = Object.entries(zip);
 		const batchSize = 20; // Adjust this number based on performance
 
 		for (let i = 0; i < files.length; i += batchSize) {
 			// console.log("Extracting batch " + i + "(+20) of " + files.length);
 			const batch = files.slice(i, i + batchSize);
 
-			await Promise.all(batch.map(async ([relativePath, zipEntry]) => {
-				if (zipEntry.dir) {
+			await Promise.all(batch.map(async ([relativePath, fileData]) => {
+				if (relativePath.endsWith('/')) {
 					// Directories are handled implicitly in Obsidian
 					return;
 				} else {
 					// Read file content and write to vault
-					const fileData = await zipEntry.async('uint8array');
 					const filePath = `${destinationDirectory}/${relativePath}`;
 
 					// Ensure the directory exists

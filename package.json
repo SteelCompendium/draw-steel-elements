@@ -1,6 +1,6 @@
 {
   "name": "draw-steel-elements",
-  "version": "5.1.1",
+  "version": "6.0.2",
   "description": "Components to support the Draw Steel TTRPG by MCDM.",
   "main": "main.js",
   "scripts": {
@@ -35,10 +35,9 @@
     "builtin-modules": "5.0.0",
     "css": "^3.0.0",
     "esbuild": "0.25.9",
+    "fflate": "^0.8.3",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
-    "jszip": "^3.10.1",
-    "jszip-utils": "^0.1.0",
     "obsidian": "1.8.7",
     "steel-compendium-sdk": "2.1.5",
     "ts-jest": "^29.4.1",

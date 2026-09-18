@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.0.2
+
+- Replaces the bundled zip library (JSZip -> fflate) used by the compendium download. JSZip's
+  legacy-browser polyfills contained dynamic `<script>` element creation, which failed
+  Obsidian's community-plugin review. No behavior change.
+- Adds missing Crafting/Lore skills: Carpentry, Cooking, Strategy (#81)
+
+## 6.0.1
+
+- Identical to 5.1.1. Recovery release for the accidentally published `6.0.0-rc1`; the 6.0.0
+  version number is retired.
+
 ## 5.1.1
 
 - Corrects issue where double-clicking on an Element in reading mode will open edit mode
