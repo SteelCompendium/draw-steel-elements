@@ -25,6 +25,17 @@ for what needs action.
   those surfaces had no other way to tell the state apart by eye: hovering the `+N`
   temporary-Stamina badge, a selected creature in the initiative tracker, or a rolled
   power-roll result row now shows a tooltip naming what's highlighted, in words.
+- [INTERNAL] The developer-run parity check (`npm run parity`) now fully compares
+  `background-color`, not just gradient/bevel/hairline flat-vs-forged (SC-126). A first rule
+  buckets each side's wash into black/white/unclassified and fails on opposite buckets — the
+  exact shape of a historical defect (SC-117) that used to slip through clean because neither
+  side's `background-image` was flat. A second rule compares the actual value (alpha +
+  premultiplied colour, ground-independent, so no site re-capture was needed), closing the
+  one hole the first rule couldn't: a wash that vanishes entirely reads as clean today and
+  will now fail. Both are material checks — never declarable, same as the flat-vs-forged
+  check they extend — and neither moved a single pixel or a frozen shot on landing: every
+  mapped surface's `background-color` was already byte-identical between the plugin and the
+  site.
 - [FEATURE] **The Montage Test tracker is now a working board, not just a scoreboard**
   (SC-191). A full visual overhaul on top of a purely additive schema: two new optional
   keys, `description` (a Director's brief rendered above the board) and `entries[]` (the

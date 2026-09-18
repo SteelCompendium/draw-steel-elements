@@ -324,10 +324,10 @@ describe('parity compare — MATERIAL rules can never be declared away', () => {
 	});
 
 	test('the non-declarable set is exactly the material rules', () => {
-		expect(NON_DECLARABLE_RULES).toEqual(['bg', 'bg-polarity', 'shadow', 'hairline-top', 'hairline-bottom']);
+		expect(NON_DECLARABLE_RULES).toEqual(['bg', 'bg-polarity', 'bg-color', 'shadow', 'hairline-top', 'hairline-bottom']);
 	});
 
-	test.each(['bg', 'bg-polarity', 'shadow', 'hairline-top', 'hairline-bottom'])(
+	test.each(['bg', 'bg-polarity', 'bg-color', 'shadow', 'hairline-top', 'hairline-bottom'])(
 		'declaring "%s" is a hard contract error',
 		(rule) => {
 			const errs = validateMap(
@@ -441,6 +441,119 @@ describe('parity compare — `bg-polarity` catches the SC-117 wrong-wash-directi
 			map: onePairMap(),
 		});
 		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+	});
+});
+
+// ── SC-126 step 2: the FULL `bg-color` value comparison ──────────────────────────────
+// `bg-polarity` above only ever buckets into black/white/unclassified. This is the
+// can-fail proof for the rule that compares the actual value: premultiplied
+// deposit+alpha, ground-independent (see the derivation comment in compare.cjs), either
+// axis fires. All three defect classes below are ones `bg-polarity` is silent on —
+// asserted explicitly per case.
+describe('parity compare — `bg-color` catches what `bg-polarity` cannot', () => {
+	test('same-family wrong alpha: Steel .18 vs the :root fallback .2 GAPs (bg-polarity silent)', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			plug: inv('.p', { 'background-color': 'rgba(0, 0, 0, 0.2)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-color' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(hit.msg).toMatch(/alpha Δ0\.020/);
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+		expect(wouldExitZero(r)).toBe(false);
+	});
+
+	test('tinted vs achromatic: same alpha, different hue GAPs on deposit alone (alpha axis silent)', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			plug: inv('.p', { 'background-color': 'rgba(90, 0, 0, 0.18)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-color' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(hit.msg).toMatch(/alpha Δ0\.000/);
+		expect(hit.msg).toMatch(/deposit Δ16\.2/);
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-polarity')).toHaveLength(0);
+	});
+
+	// The live hole this rule exists to close, written against the REAL `section` pair
+	// values (styles-source.css / steel-ability-cards.css): if the plugin's sunken wash
+	// vanished entirely in both schemes, `bg` (background-image both `none`) and
+	// `bg-polarity` (alpha 0 -> unclassified) both stay silent today.
+	test('wash vanished entirely: real `section` values GAP in both schemes (the live hole)', () => {
+		const siteInv = {
+			capturedAt: '2026-01-01T00:00:00.000Z',
+			entries: {
+				'page--dark': { '.s': styles({ 'background-color': 'rgba(0, 0, 0, 0.18)' }) },
+				'page--light': { '.s': styles({ 'background-color': 'rgba(0, 0, 0, 0.02)' }) },
+			},
+		};
+		const plugInv = {
+			capturedAt: '2026-01-01T00:00:00.000Z',
+			entries: {
+				'page--dark': { '.p': styles({ 'background-color': 'rgba(0, 0, 0, 0)' }) },
+				'page--light': { '.p': styles({ 'background-color': 'rgba(0, 0, 0, 0)' }) },
+			},
+		};
+		const r = compare({ site: siteInv, plug: plugInv, map: onePairMap() });
+		const hits = r.rows.filter((x: { rule: string }) => x.rule === 'bg-color');
+		expect(hits.map((x: { scheme: string; sev: string }) => `${x.scheme}:${x.sev}`).sort()).toEqual([
+			'dark:GAP',
+			'light:GAP',
+		]);
+		expect(r.rows.filter((x: { rule: string }) => ['bg', 'bg-polarity', 'shadow', 'hairline-top', 'hairline-bottom'].includes(x.rule))).toHaveLength(0);
+		expect(wouldExitZero(r)).toBe(false);
+	});
+
+	test('`bg-color` is MATERIAL — cannot be declared away', () => {
+		const errs = validateMap(
+			onePairMap({ declaredDeferrals: [{ pair: 'p', rule: 'bg-color', why: 'FOLLOWUPS #99 — looks fine' }] }),
+		);
+		expect(errs.join('\n')).toContain('can NEVER be declared');
+	});
+
+	test('an unparseable background-color WARNs, never crashes', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'color-mix(in srgb, red, blue)' }),
+			plug: inv('.p', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'bg-color' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('WARN');
+		expect(hit.msg).toContain('not comparable');
+		expect(wouldExitZero(r)).toBe(false);
+	});
+
+	// ── noise guards ──────────────────────────────────────────────────────────────────
+	test('fully transparent on both sides never fires, even with opposite RGB literals', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0)' }),
+			plug: inv('.p', { 'background-color': 'rgba(255, 255, 255, 0)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-color')).toHaveLength(0);
+	});
+
+	test('one-quantisation-step alpha drift never fires (authored .024 vs .0235-rounding noise)', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.024)' }),
+			plug: inv('.p', { 'background-color': 'rgba(0, 0, 0, 0.02)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-color')).toHaveLength(0);
+	});
+
+	test('byte-identical values never fire', () => {
+		const r = compare({
+			site: inv('.s', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			plug: inv('.p', { 'background-color': 'rgba(0, 0, 0, 0.18)' }),
+			map: onePairMap(),
+		});
+		expect(r.rows.filter((x: { rule: string }) => x.rule === 'bg-color')).toHaveLength(0);
 	});
 });
 

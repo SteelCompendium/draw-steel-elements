@@ -123,8 +123,8 @@ gate and jest.)
 
 Two severities:
 
-- **`GAP`** — a real difference. Rules 1–3 (plus 1b, added SC-126) are the **material** checks,
-  mostly in the "site is richer than the plugin" direction, because that is the failure mode
+- **`GAP`** — a real difference. Rules 1–3 (plus 1b and 1c, added SC-126) are the **material**
+  checks, mostly in the "site is richer than the plugin" direction, because that is the failure mode
   that shipped a flat theme before. Rules 4–7 are the **type/space/ink** checks added in plan
   21 task 1 (and widened in its fix round), which catch the *other* failure mode the material
   checks are blind to: a surface that is already forged (gradient + bevel + hairline all
@@ -151,8 +151,34 @@ Two severities:
      `bg`. **What it deliberately does NOT catch:** a hue/tint mismatch between two washes
      that are both black-family (or both white-family), and any wash that isn't
      near-achromatic (a colour-mix or role-tinted fill lands as unclassified `mid`, silently).
-     A full `background-color` comparison remains separately-scoped, larger work — see "Known
-     limitation" below.
+     Rule 1c below closes that.
+  1c. **the FULL `background-color` comparison** (`bg-color`, SC-126 step 2) — where 1b only
+     buckets into black/white/unclassified, this checks the actual value on a
+     **ground-independent premultiplied deposit + alpha** model: two translucent fills
+     composite identically over *every* possible ground iff their alphas match AND their
+     premultiplied colours match (`result = a·C + (1−a)·G`, equal for all `G` ⟺ `a1==a2` and
+     `a1·C1==a2·C2`), so no ancestor walk is needed even though neither capture script
+     samples one. `dA = |Δalpha|` (rounded to 3dp) and `dep = max` over R/G/B of
+     `|s.a·s.c − p.a·p.c|`; either axis firing is a `GAP`. Tolerances, derived rather than
+     chosen: `BG_ALPHA_TOL = 0.01` sits between Chromium's `1/255 = 0.00392` alpha
+     quantisation floor and the site's own smallest deliberate step — its dark sunken ladder
+     is `.25/.22/.20/.18/.16` (`styles-source.css` ladder comment), a **0.02** minimum step,
+     so 0.01 catches every real ladder confusion (e.g. the `:root` fallback
+     `--dse-surface-sunken: rgba(0,0,0,.2)` against the Steel value `.18` gives
+     `dA = 0.020 > 0.01`) without tripping on quantisation noise. `BG_DEPOSIT_TOL = 2` mirrors
+     `INK_RGB_TOL` — the premultiplied product's own rounding error is bounded at ≈1.5, so 2
+     absorbs double-sided quantisation with ~0 headroom to spare; it is inert on every
+     achromatic wash in the tree today and exists to catch a tinted-vs-achromatic miss (a
+     blue-grey `rgba(40,60,90,.18)` against a black `rgba(0,0,0,.18)` scores `dep = 16.2` even
+     though `dA = 0`). An unparseable value on either side is a loud `WARN`, never silent —
+     mirrors rule 7 (`ink`). `bg-color` is `material` — **never declarable**, same as `bg` and
+     `bg-polarity`: every value in play is a `styles-source.css` token, so it is always
+     CSS-closable, and on today's tree it fires 0 rows — nothing needs declaring, and a
+     declaration would be dead on arrival (`diff.mjs`'s anti-rot check). Can-fail proof:
+     `test/unit/parity/compare.test.ts` → "`bg-color` catches what `bg-polarity` cannot".
+     **What it still does NOT catch:** `background-image` gradient hue/tint (SC-322) and a
+     `card`-pair capture-order hazard unrelated to this rule's correctness (SC-321) — see
+     "Known limitation" below.
   2. site has a `box-shadow` (bevel/lift), plugin has `none`;
   3. site has a visible hairline on an edge — `border-top` **or `border-bottom`** — and the
      plugin has `border-<edge>-style: none` there. Both edges matter: nearly every head
@@ -301,20 +327,22 @@ Two severities:
   It was found by reading the inventories, not by the gate, and closed by hand
   (`styles-source.css`, the sb/fb plate deviation after the shared ground). Read the
   inventories directly when the exact value matters.
-- **Surface colour is still not asserted — only "flat vs. non-flat".** (Text `color` *is*
-  asserted, by rule 7; everything below is about the surface.) Checks 1 and 2 fire on
-  `none` vs. *anything*, so two surfaces can pass while being different colours; check 3
-  looks at `border-<edge>-style`, never `border-<edge>-color`. Concretely: the
-  `statblock-band` pair compares whichever page/element the diff samples **first**, which is
-  `statblock-minion` (a harrier, `.sb__head` = `linear-gradient(… color(srgb .421961 .275294
-  .355294) …)`, pink) against the plugin's statblock fixture — whose role is **leader**, so
-  its `.dse-sb > .dse-head` grey ramp is the *correct* tint for that role
-  (`--dse-role-leader: var(--sc-role-leader, #9aa2a8)`, `styles-source.css:3206`), not an
-  untinted band. Both sides are role-tinted gradients of different roles, and the pair reads
-  clean either way: the diff would equally not notice if the plugin band really were
-  untinted. Same trap for `background-color` and `color`. Read the inventories directly when
-  the hue matters — and note that a like-for-like hue comparison would need the two sides
-  pinned to the same role, which the current fixture/URL sets do not guarantee.
+- **Gradient (`background-image`) colour is still not asserted — only "flat vs. non-flat".**
+  (Text `color` *is* asserted by rule 7, and the flat *fill* `background-color` *is* now
+  asserted by rule 1c/`bg-color`, SC-126 step 2 — this bullet is about gradient stops
+  specifically.) Checks 1 and 2 fire on `none` vs. *anything*, so two gradients can pass
+  while being different colours; check 3 looks at `border-<edge>-style`, never
+  `border-<edge>-color`. Concretely: the `statblock-band` pair compares whichever
+  page/element the diff samples **first**, which is `statblock-minion` (a harrier,
+  `.sb__head` = `linear-gradient(… color(srgb .421961 .275294 .355294) …)`, pink) against the
+  plugin's statblock fixture — whose role is **leader**, so its `.dse-sb > .dse-head` grey
+  ramp is the *correct* tint for that role (`--dse-role-leader: var(--sc-role-leader,
+  #9aa2a8)`, `styles-source.css:3206`), not an untinted band. Both sides are role-tinted
+  gradients of different roles, and the pair reads clean either way: the diff would equally
+  not notice if the plugin band really were untinted, or the two roles' hue vs. tint values
+  simply diverged (SC-322). Read the inventories directly when the hue matters — and note
+  that a like-for-like hue comparison would need the two sides pinned to the same role, which
+  the current fixture/URL sets do not guarantee.
 - **Material-only pairs can still be structurally inert on rules 1–3.** A pair only fails
   rules 1–3 if the *site* side is forged on one of those three properties, so a pair whose
   site node is bare on all three can never report a material gap. The `head` pair
@@ -326,32 +354,44 @@ Two severities:
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
-- **Known limitation — `background-color` is sampled and now polarity-checked, but not fully
-  compared (SC-126 step 1 of 2).** `compare.cjs`'s `bg` rule (1) reads `background-image` only
-  — it fires strictly on **site-gradient + plugin-flat** and never looks at
-  `background-color` at all. That is the hole SC-117 slipped through: 13 declaration sites
+- **Known limitation — `background-color` is now fully compared; the residual is
+  `background-image` (SC-126 steps 1+2, landed).** `compare.cjs`'s `bg` rule (1) reads
+  `background-image` only — it fires strictly on **site-gradient + plugin-flat** and never
+  looks at `background-color`. That is the hole SC-117 slipped through: 13 declaration sites
   washed the wrong **polarity** (translucent white where the site sits on translucent black)
   across both schemes, and every pair passed clean the whole time, because neither side's
   `background-image` was `none`.
 
-  **What SC-126 step 1 closed:** a new `bg-polarity` rule (1b) buckets each side's
-  `background-color` into `black` / `white` / unclassified (transparent or a real mid-grey/
-  tinted wash) and fires when the two sides land in *opposite* buckets — exactly the SC-117
-  shape. Reconstructed from the real pre-fix values in git history (`169d62f^`) and proven
-  can-fail against them: see rule 1b above and
+  **What step 1 closed:** a `bg-polarity` rule (1b) buckets each side's `background-color`
+  into `black` / `white` / unclassified and fires when the two sides land in *opposite*
+  buckets — exactly the SC-117 shape. Reconstructed from the real pre-fix values in git
+  history (`169d62f^`) and proven can-fail against them: see rule 1b above and
   `test/unit/parity/compare.test.ts` → "`bg-polarity` catches the SC-117 wrong-wash-direction
-  defect". `bg-polarity` is `material` (never declarable — see "Which classes are
-  declarable"), so closing this only ever tightens the gate.
+  defect".
 
-  **What step 1 deliberately does NOT do (still open, step 2):** it is a coarse
-  black-vs-white bucket, not a value comparison. It says nothing about *how far apart* two
-  same-family washes are (two different blacks, two different whites), nothing about hue on a
-  coloured/tinted fill (anything that isn't near-achromatic lands as unclassified `mid` and is
-  silently skipped), and nothing about a polarity-correct wash that's simply the wrong alpha.
-  A full `background-color` comparison — closing all of that — is separately-scoped, larger
-  work: it will surface a burst of new rows across the mapped pairs that all need individual
-  triage against the site on landing, which is why it is its own step rather than a rider on
-  this one.
+  **What step 2 closed:** a `bg-color` rule (1c) compares the actual value — premultiplied
+  deposit + alpha, ground-independent, either axis fires (see rule 1c above for the full
+  model and tolerance derivation). It catches everything 1b's coarse bucket couldn't: how far
+  apart two same-family washes are, hue on a coloured/tinted fill, and — the hole that was
+  live until this landed — a wash that vanishes entirely (alpha 0 sends `bg-polarity` silent;
+  `bg` never looked at `background-color` at all). Concretely, deleting
+  `.dse-section`'s `background: var(--dse-surface-sunken)` in `styles-source.css` used to
+  leave every rule in the gate green in both schemes; `bg-color` now GAPs it in both. Both
+  `bg-polarity` and `bg-color` are `material` (never declarable — see "Which classes are
+  declarable"), so closing this hole only ever tightened the gate: on the real committed
+  inventories today, `bg-color` fires **0 rows** — every mapped pair's `background-color` is
+  byte-identical site-vs-plugin in both schemes, so there was no burst of new rows to triage
+  and nothing to adopt or declare.
+
+  **What remains open, deliberately out of scope for step 2:** `background-color` is now
+  fully asserted, but `background-image` still is not — rule 1 only checks flat-vs-non-flat,
+  never the gradient's own colour stops. Two residuals, both filed as their own tickets, not
+  fixed here: the role-band gradients on `statblock-band` / `featureblock-band` carry a
+  hue/tint difference between site and plugin (**SC-322**), and the `card` pair's site
+  selector (`.sc-ability`) can match a *nested* statblock/featureblock feature depending on
+  capture order, which would misfire this (or any) rule on that pair if `urls.json` were ever
+  reordered (**SC-321**, needs a site re-capture — not fixed here). Read the inventories
+  directly when a gradient's exact hue matters.
 
 ## Splitting a collapsed node (`owns`)
 
@@ -406,7 +446,7 @@ would be inert). **Nothing in the shipped map uses `excludes` today** — the ho
 "add the sibling pair that measures the rule" or "drop `owns` and declare the rows that
 surfaces", which is what `statblock-wrap` now does.
 
-Valid rule names: `bg`, `bg-polarity`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
+Valid rule names: `bg`, `bg-polarity`, `bg-color`, `shadow`, `hairline-top`, `hairline-bottom`, `font-size`,
 `line-height`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`,
 `margin-top`, `margin-bottom`, `body-font`, `letter-spacing`, `ink`.
 
@@ -454,7 +494,7 @@ whether a divergence in it may ever be excused:
 
 | Class | Rules | Declarable? |
 |---|---|---|
-| **material** | `bg`, `bg-polarity`, `shadow`, `hairline-top`, `hairline-bottom` | **NEVER** |
+| **material** | `bg`, `bg-polarity`, `bg-color`, `shadow`, `hairline-top`, `hairline-bottom` | **NEVER** |
 | geometry | `padding-top/right/bottom/left`, `margin-top`, `margin-bottom` | yes |
 | typography | `font-size`, `line-height`, `body-font`, `letter-spacing` | yes |
 | ink | `ink` | yes |

@@ -17,6 +17,7 @@
 const ALL_RULES = [
 	'bg',
 	'bg-polarity',
+	'bg-color',
 	'shadow',
 	'hairline-top',
 	'hairline-bottom',
@@ -53,6 +54,7 @@ const KNOWN_RULES = [...ALL_RULES, ...CAPTURE_RULES];
 const RULE_CLASS = {
 	bg: 'material',
 	'bg-polarity': 'material',
+	'bg-color': 'material',
 	shadow: 'material',
 	'hairline-top': 'material',
 	'hairline-bottom': 'material',
@@ -148,6 +150,55 @@ const bgFamily = (v) => {
 	if (avg <= BG_BLACK_MAX) return 'black';
 	if (avg >= BG_WHITE_MIN) return 'white';
 	return null;
+};
+
+// ── SC-126 step 2: the FULL background-color comparison ────────────────────────────────
+// `bgFamily` above only ever buckets a wash into black/white/unclassified — it says
+// nothing about how far apart two same-family washes are, nothing about hue on a
+// coloured/tinted fill, and nothing about a polarity-correct wash at the wrong alpha
+// (the `section` pair's sunken wash: no rule in the gate protects it once bg-polarity goes
+// silent at alpha 0). This closes that: a full value comparison, not a bucket.
+//
+// Two translucent fills composite IDENTICALLY over every possible ground iff their alphas
+// match AND their premultiplied colours match:
+//   result = a*C + (1-a)*G  =>  equal for all G  <=>  a1 == a2 AND a1*C1 == a2*C2
+// So the model is ground-independent by construction — no ancestor walk is needed, and
+// neither capture script samples one (site-capture.mjs / plugin-capture.mjs sample the
+// matched node only). It also handles the textbook false positive for free:
+// rgba(0,0,0,0) vs rgba(255,255,255,0) premultiply to the same (0,0,0) with dA=0, so
+// fully-transparent-with-opposite-literals never fires (see the noise-guard test).
+//
+// BG_ALPHA_TOL = 0.01 is derived, not chosen. Floor: Chromium quantises computed alpha to
+// n/255 = 0.00392 steps (this data proves it — the site authors rgba(0,0,0,.022) and the
+// baseline records rgba(0,0,0,.024): .022*255 = 5.61 -> 6/255 = 0.0235); a tolerance at or
+// under one step fires on round-trip noise, so 0.01 sits at 2.55 steps. Ceiling: the
+// site's own dark sunken ladder — .25/.22/.20/.18/.16 (styles-source.css:6313's "the
+// site's dark body-surface ladder is entirely black" comment) — has a minimum deliberate
+// step of 0.02; 0.01 is half that, so every real ladder confusion still fires (concretely:
+// a token regressing to the `:root` fallback --dse-surface-sunken: rgba(0,0,0,.2)
+// (styles-source.css:5980) against the Steel value .18 gives dA=0.020 > 0.01 -> GAP). 0.01
+// sits in the empty band between the quantisation floor and the smallest intended step —
+// nothing in either committed inventory lands between them.
+//
+// BG_DEPOSIT_TOL = 2 mirrors INK_RGB_TOL: the premultiplied product's own rounding error
+// is bounded by roughly c*da + a*dc <= 255*0.002 + 1*1 ~= 1.5, so 2 absorbs double-sided
+// quantisation with ~0 headroom to spare. Every achromatic black wash on the tree today
+// premultiplies to (0,0,0) on both sides, so this axis is inert on real data and exists
+// entirely to catch a tinted-vs-achromatic miss (rgba(0,0,0,.18) vs a blue-grey
+// rgba(40,60,90,.18) scores dep=16.2 -> GAP even though dA=0).
+const BG_ALPHA_TOL = 0.01;
+const BG_DEPOSIT_TOL = 2;
+const bgColorMiss = (sv, pv) => {
+	const s = ink(sv);
+	const p = ink(pv);
+	if (!s || !p) return { warn: true };
+	const dA = Math.round(Math.abs(s.a - p.a) * 1000) / 1000;
+	const dep = Math.max(
+		Math.abs(s.a * s.r - p.a * p.r),
+		Math.abs(s.a * s.g - p.a * p.g),
+		Math.abs(s.a * s.b - p.a * p.b),
+	);
+	return { dA, dep, gap: dA > BG_ALPHA_TOL || dep > BG_DEPOSIT_TOL };
 };
 
 const firstIn = (inv, scheme, sel) => {
@@ -378,6 +429,31 @@ function compare({ site, plug, map }) {
 						`wrong wash polarity: site background-color="${s['background-color']}" (${sf}), plugin="${p['background-color']}" (${pf})`,
 					);
 			}
+			// 1c. Material: the FULL background-color comparison (SC-126 step 2). Where
+			// 1b only buckets into black/white/unclassified, this checks the actual
+			// value — see the bgColorMiss derivation above for why premultiplied
+			// deposit+alpha, ground-independent, either axis fires. An unparseable value
+			// on either side is a loud WARN, never silent — mirrors rule 7 (`ink`).
+			if (owns(pair, 'bg-color')) {
+				const m = bgColorMiss(s['background-color'], p['background-color']);
+				if (m.warn)
+					add(
+						'WARN',
+						scheme,
+						pair,
+						'bg-color',
+						`bg-color not comparable: site background-color="${s['background-color']}", plugin="${p['background-color']}" — expected rgb()/rgba()`,
+					);
+				else if (m.gap)
+					add(
+						'GAP',
+						scheme,
+						pair,
+						'bg-color',
+						`bg-color miss: site background-color=${s['background-color']}, plugin=${p['background-color']} ` +
+							`(alpha Δ${m.dA.toFixed(3)} > ${BG_ALPHA_TOL}, deposit Δ${m.dep.toFixed(1)} > ${BG_DEPOSIT_TOL} — either fires)`,
+					);
+			}
 			// 2. Material: site has a bevel/shadow, plugin has none.
 			if (owns(pair, 'shadow') && !isFlat(s['box-shadow']) && isFlat(p['box-shadow']))
 				add('GAP', scheme, pair, 'shadow', `no bevel: site box-shadow="${s['box-shadow']}", plugin="none"`);
@@ -513,6 +589,8 @@ module.exports = {
 	LS_TOL,
 	INK_RGB_TOL,
 	INK_ALPHA_TOL,
+	BG_ALPHA_TOL,
+	BG_DEPOSIT_TOL,
 	validateMap,
 	checkBaselineCoverage,
 	compare,
