@@ -553,15 +553,22 @@ function compare({ site, plug, map }) {
 				else {
 					const dRgb = Math.max(Math.abs(si.r - pi.r), Math.abs(si.g - pi.g), Math.abs(si.b - pi.b));
 					const dA = Math.round(Math.abs(si.a - pi.a) * 1000) / 1000;
-					if (dRgb > INK_RGB_TOL || dA > INK_ALPHA_TOL)
+					if (dRgb > INK_RGB_TOL || dA > INK_ALPHA_TOL) {
+						// LOW-R5-1 (r5 re-review): same per-axis-verdict shape as the
+						// bg-color GAP message (LOW-1) — printing both deltas against
+						// "> tol" unconditionally is false for whichever axis did not fire.
+						const rgbFired = dRgb > INK_RGB_TOL;
+						const alphaFired = dA > INK_ALPHA_TOL;
+						const rgbClause = `max channel ${dRgb.toFixed(0)} ${rgbFired ? '>' : '≤'} ${INK_RGB_TOL}${rgbFired ? ' FIRES' : ''}`;
+						const alphaClause = `alpha ${dA.toFixed(3)} ${alphaFired ? '>' : '≤'} ${INK_ALPHA_TOL}${alphaFired ? ' FIRES' : ''}`;
 						add(
 							'GAP',
 							scheme,
 							pair,
 							'ink',
-							`ink miss: site color=${s['color']}, plugin color=${p['color']} ` +
-								`(max channel ${dRgb.toFixed(0)} > ${INK_RGB_TOL}, alpha ${dA.toFixed(2)} > ${INK_ALPHA_TOL} — either fires)`,
+							`ink miss: site color=${s['color']}, plugin color=${p['color']} (${rgbClause}; ${alphaClause})`,
 						);
+					}
 				}
 			}
 		}

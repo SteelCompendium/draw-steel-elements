@@ -655,6 +655,42 @@ describe('parity compare — `bg-color` catches what `bg-polarity` cannot', () =
 	});
 });
 
+// ── LOW-R5-1 (r5 re-review, ledger D7): rule 7 (`ink`) gets `bg-color`'s per-axis shape ──
+// The pre-existing `ink miss` message printed both deltas against "> tol" unconditionally,
+// same defect class as LOW-1 — and unlike LOW-1's hypothetical, this one is LIVE: the
+// `pr-chars` declared deferrals (a real, committed, always-firing divergence — see
+// selector-map.json `declaredDeferrals`) print a false `alpha 0.00 > 0.03` on every green
+// run. No test previously locked the message text down at all.
+describe('parity compare — `ink` prints a per-axis verdict, not a blanket false comparison', () => {
+	test('RGB axis fires alone: message marks it FIRES and states alpha is silent (≤, not >)', () => {
+		const r = compare({
+			site: inv('.s', { color: 'rgb(10, 20, 30)' }),
+			plug: inv('.p', { color: 'rgb(200, 20, 30)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'ink' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(hit.msg).toMatch(/max channel 190 > 2 FIRES/);
+		expect(hit.msg).toMatch(/alpha 0\.000 ≤ 0\.03/);
+		expect(hit.msg).not.toMatch(/alpha 0\.000 > 0\.03/);
+	});
+
+	test('alpha axis fires alone: message marks it FIRES and states RGB is silent (≤, not >) — the live `pr-chars` shape', () => {
+		const r = compare({
+			site: inv('.s', { color: 'rgba(10, 20, 30, 1)' }),
+			plug: inv('.p', { color: 'rgba(10, 20, 30, 0.9)' }),
+			map: onePairMap(),
+		});
+		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'ink' && x.scheme === 'dark');
+		expect(hit).toBeDefined();
+		expect(hit.sev).toBe('GAP');
+		expect(hit.msg).toMatch(/max channel 0 ≤ 2/);
+		expect(hit.msg).not.toMatch(/max channel 0 > 2/);
+		expect(hit.msg).toMatch(/alpha 0\.100 > 0\.03 FIRES/);
+	});
+});
+
 // ── L-1/P8: the capture rows are directional ─────────────────────────────────────────
 describe('parity compare — `capture` declarations are directional', () => {
 	test('a capture-site declaration does NOT silence "plugin never rendered"', () => {

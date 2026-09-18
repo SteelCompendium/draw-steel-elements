@@ -354,8 +354,8 @@ Two severities:
 - **A pair only monitors the node it names.** Wrapper-vs-plate mismatches used to read as
   clean here (see "Selector corrections already applied"); the same trap applies to any new
   pair, so verify against the real DOM on both sides before adding one.
-- **Known limitation — `background-color` is now fully compared; the residual is
-  `background-image` (SC-126 step 1 landed; step 2 this branch, unlanded).**
+- **Known limitation — `background-color` is fully compared (SC-126 steps 1 and 2); the
+  residual is `background-image`.**
   `compare.cjs`'s `bg` rule (1) reads
   `background-image` only — it fires strictly on **site-gradient + plugin-flat** and never
   looks at `background-color`. That is the hole SC-117 slipped through: 13 declaration sites
