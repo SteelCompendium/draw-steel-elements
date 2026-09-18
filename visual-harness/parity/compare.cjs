@@ -123,7 +123,7 @@ const ink = (v) => {
 // `bgFamily` buckets a computed background-color into a coarse polarity class for rule 1b
 // ONLY (below). It is deliberately narrow by design — the full value comparison is rule 1c
 // / `bgColorMiss` below (SC-126 step 2); see README.md "Known limitation —
-// `background-color` is now fully compared".
+// `background-color` is fully compared".
 //
 // Thresholds are derived from the REAL spread in both committed inventories, not
 // intuition: every mapped pair's background-color today, in both schemes, on both site
@@ -559,7 +559,7 @@ function compare({ site, plug, map }) {
 						// "> tol" unconditionally is false for whichever axis did not fire.
 						const rgbFired = dRgb > INK_RGB_TOL;
 						const alphaFired = dA > INK_ALPHA_TOL;
-						const rgbClause = `max channel ${dRgb.toFixed(0)} ${rgbFired ? '>' : '≤'} ${INK_RGB_TOL}${rgbFired ? ' FIRES' : ''}`;
+						const rgbClause = `max channel ${dRgb.toFixed(3)} ${rgbFired ? '>' : '≤'} ${INK_RGB_TOL}${rgbFired ? ' FIRES' : ''}`;
 						const alphaClause = `alpha ${dA.toFixed(3)} ${alphaFired ? '>' : '≤'} ${INK_ALPHA_TOL}${alphaFired ? ' FIRES' : ''}`;
 						add(
 							'GAP',

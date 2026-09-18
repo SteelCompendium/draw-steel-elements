@@ -671,7 +671,7 @@ describe('parity compare — `ink` prints a per-axis verdict, not a blanket fals
 		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'ink' && x.scheme === 'dark');
 		expect(hit).toBeDefined();
 		expect(hit.sev).toBe('GAP');
-		expect(hit.msg).toMatch(/max channel 190 > 2 FIRES/);
+		expect(hit.msg).toMatch(/max channel 190\.000 > 2 FIRES/);
 		expect(hit.msg).toMatch(/alpha 0\.000 ≤ 0\.03/);
 		expect(hit.msg).not.toMatch(/alpha 0\.000 > 0\.03/);
 	});
@@ -685,8 +685,8 @@ describe('parity compare — `ink` prints a per-axis verdict, not a blanket fals
 		const hit = r.rows.find((x: { rule: string; scheme: string }) => x.rule === 'ink' && x.scheme === 'dark');
 		expect(hit).toBeDefined();
 		expect(hit.sev).toBe('GAP');
-		expect(hit.msg).toMatch(/max channel 0 ≤ 2/);
-		expect(hit.msg).not.toMatch(/max channel 0 > 2/);
+		expect(hit.msg).toMatch(/max channel 0\.000 ≤ 2/);
+		expect(hit.msg).not.toMatch(/max channel 0\.000 > 2/);
 		expect(hit.msg).toMatch(/alpha 0\.100 > 0\.03 FIRES/);
 	});
 });
