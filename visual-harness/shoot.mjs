@@ -628,13 +628,19 @@ async function assertMontageTrackWidths(page) {
 // nothing" shape as `assertMontageTrackWidths` above it.
 //
 // Two invariants, both measured, neither inferable from the CSS source:
-//  1. CONTAINMENT — every `.dse-mt__cell-quick` box stays inside its own `.dse-mt__cell`
-//     box. A violation here is a purely visual overlap.
+//  1. CONTAINMENT — every `.dse-mt__cell-quick` box, AND (round 4, re-review-2 INFO (i))
+//     the union of the `.dse-mt__quick` buttons it contains, stays inside its own
+//     `.dse-mt__cell` box. The container's own rect is capped by `max-width: 100%` and so
+//     can only ever exceed the cell when that declaration is ALSO absent; the flex ITEMS
+//     are what can actually paint outside a present `max-width`, so both are measured. A
+//     violation here is a purely visual overlap.
 //  2. NO WRONG-WRITE — `elementFromPoint` 6px inside a RECORDED cell's right edge still
 //     returns that cell, not a neighbouring cell's quick button. This is the wrong-write
 //     review-1 found and measured: an overflowing trio steals the hit-test from the cell
 //     it is drawn on top of, so a tap that looks like "edit round 2" silently logs a NEW
-//     round-3 result instead.
+//     round-3 result instead. `elementFromPoint` is viewport-relative and returns null for
+//     an off-screen point — round 4, re-review-2 MED-1 — so a null hit is classified as its
+//     own PROBE POINT OFF-SCREEN finding, never folded into a wrong-write.
 //
 // Exercised at the three pane widths review-1 measured (560/700/900, `mid` fixture — 3
 // real round columns, 5 heroes) AND with the round TRACK LIST rewritten to 4/5/8 rounds at
@@ -664,15 +670,30 @@ async function assertMontageTrackWidths(page) {
 // occur without one.
 async function assertMontageCoarseContainment(page) {
 	const browser = page.context().browser();
+	// height 2400, not 1000 — re-review-2 MED-1: the wrong-write probe below hit-tests
+	// every recorded cell's own screen position, and `elementFromPoint` is
+	// viewport-relative (returns null past its bottom edge). At 1000px the shipped
+	// geometry already cleared the bottom by only 47px (Talin's round-2 probe at y=953,
+	// mid fixture, 560px pane) — one more hero row or ~50px of chrome above the board
+	// would have pushed a HEALTHY tree's probe off-screen and printed a phantom
+	// WRONG-WRITE. This gate never captures a PNG, so a taller viewport moves no frozen
+	// byte; 2400 leaves comfortable headroom over any fixture/round count this gate
+	// exercises.
+	const VIEWPORT_HEIGHT = 2400;
 	// `isMobile` (required to make Chromium match `pointer: coarse`) needs its own
 	// context — it cannot be toggled on the main sweep's page/context after the fact.
 	const context = await browser.newContext({
 		hasTouch: true,
 		isMobile: true,
-		viewport: { width: 1000, height: 1000 },
+		viewport: { width: 1000, height: VIEWPORT_HEIGHT },
 	});
 	const coarsePage = await context.newPage();
 	try {
+		// No `sheet=1` here, unlike every screen capture in the sweep — re-review-2 INFO:
+		// re-measured this gate's whole coarse matrix WITH Obsidian's real pinned app.css
+		// and every number (button/trio geometry, violation/wrong-write counts) came back
+		// identical, so the omission is harmless in practice; noted here rather than
+		// re-derived by the next reader.
 		const query = new URLSearchParams({ element: 'montage', fixture: 'mid', theme: 'steel', bg: 'dark' });
 		await coarsePage.goto(`${pageUrl}?${query}`);
 		await coarsePage.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
@@ -701,48 +722,76 @@ async function assertMontageCoarseContainment(page) {
 				for (const quick of document.querySelectorAll('.dse-mt__cell-quick')) {
 					const cell = quick.closest('.dse-mt__cell');
 					if (!cell) continue;
+					const hero = cell.getAttribute('data-hero');
+					const round = cell.getAttribute('data-round');
 					const cr = cell.getBoundingClientRect();
 					const qr = quick.getBoundingClientRect();
 					const overflowLeft = cr.left - qr.left;
 					const overflowRight = qr.right - cr.right;
 					if (overflowLeft > 0.5 || overflowRight > 0.5) {
-						violations.push({
-							hero: cell.getAttribute('data-hero'),
-							round: cell.getAttribute('data-round'),
-							cellWidth: cr.width,
-							quickWidth: qr.width,
-							overflowLeft,
-							overflowRight,
-						});
+						violations.push({ hero, round, box: 'container', cellWidth: cr.width, quickWidth: qr.width, overflowLeft, overflowRight });
+					}
+					// re-review-2 INFO (i) — `.dse-mt__cell-quick`'s own rect is capped by
+					// `max-width: 100%`, so it can only ever exceed the cell when that
+					// declaration is ALSO absent. What can actually paint outside a
+					// present `max-width` is the flex ITEMS it contains, so measure their
+					// union too, not just the container that bounds them.
+					const buttons = [...quick.querySelectorAll('.dse-mt__quick')];
+					if (buttons.length) {
+						const rects = buttons.map((b) => b.getBoundingClientRect());
+						const left = Math.min(...rects.map((r) => r.left));
+						const right = Math.max(...rects.map((r) => r.right));
+						const btnOverflowLeft = cr.left - left;
+						const btnOverflowRight = right - cr.right;
+						if (btnOverflowLeft > 0.5 || btnOverflowRight > 0.5) {
+							violations.push({
+								hero,
+								round,
+								box: 'buttons',
+								cellWidth: cr.width,
+								quickWidth: right - left,
+								overflowLeft: btnOverflowLeft,
+								overflowRight: btnOverflowRight,
+							});
+						}
 					}
 				}
 				const wrongWrites = [];
+				const offscreen = [];
 				if (checkWrongWrite) {
 					for (const cell of document.querySelectorAll(".dse-mt__cell[data-round='2']")) {
 						const cr = cell.getBoundingClientRect();
 						const x = cr.right - 6;
 						const y = cr.top + cr.height / 2;
 						const hit = document.elementFromPoint(x, y);
-						const hitCell = hit ? hit.closest('.dse-mt__cell') : null;
+						// re-review-2 MED-1 — `elementFromPoint` is viewport-relative and
+						// returns null for any point below the viewport; that is "nothing
+						// painted there / off-screen probe", a harness-configuration
+						// problem, and must never be folded into "a wrong-write happened".
+						if (!hit) {
+							offscreen.push({ hero: cell.getAttribute('data-hero'), round: cell.getAttribute('data-round'), y });
+							continue;
+						}
+						const hitCell = hit.closest('.dse-mt__cell');
 						if (hitCell !== cell) {
 							wrongWrites.push({
 								hero: cell.getAttribute('data-hero'),
-								hitTag: hit ? hit.tagName : null,
-								hitLabel: hit ? hit.getAttribute('aria-label') : null,
+								hitTag: hit.tagName,
+								hitLabel: hit.getAttribute('aria-label'),
 								hitRound: hitCell ? hitCell.getAttribute('data-round') : null,
 							});
 						}
 					}
 				}
-				return { violations, wrongWrites };
+				return { violations, wrongWrites, offscreen };
 			}, checkWrongWrite);
 
-		const report = (label, { violations, wrongWrites }) => {
-			if (violations.length === 0 && wrongWrites.length === 0) return;
+		const report = (label, { violations, wrongWrites, offscreen }) => {
+			if (violations.length === 0 && wrongWrites.length === 0 && offscreen.length === 0) return;
 			console.error(`\nMONTAGE COARSE-POINTER TRIO OVERFLOWS ITS CELL — ${label}:`);
 			for (const v of violations) {
 				console.error(
-					`  CONTAINMENT: ${v.hero} round ${v.round} — cell ${v.cellWidth.toFixed(2)}px, trio ` +
+					`  CONTAINMENT (${v.box}): ${v.hero} round ${v.round} — cell ${v.cellWidth.toFixed(2)}px, trio ` +
 						`${v.quickWidth.toFixed(2)}px, overflow left ${v.overflowLeft.toFixed(2)}px / right ` +
 						`${v.overflowRight.toFixed(2)}px`,
 				);
@@ -751,6 +800,14 @@ async function assertMontageCoarseContainment(page) {
 				console.error(
 					`  WRONG-WRITE: 6px inside ${w.hero}'s round-2 cell's right edge hit ` +
 						`${w.hitTag}[aria-label="${w.hitLabel}"] (round ${w.hitRound}) instead of the round-2 cell`,
+				);
+			}
+			for (const o of offscreen) {
+				console.error(
+					`  PROBE POINT OFF-SCREEN — not a wrong-write: ${o.hero}'s round ${o.round} probe at y=` +
+						`${o.y.toFixed(2)} falls outside this gate's own ${VIEWPORT_HEIGHT}px viewport, so ` +
+						`elementFromPoint returned null. Widen the gate's viewport rather than reading this ` +
+						`as a hit-test failure.`,
 				);
 			}
 			console.error(`See styles-source.css → @media (pointer: coarse) → .dse-mt__cell-quick / .dse-mt__board.`);
@@ -801,9 +858,10 @@ async function assertMontageCoarseContainment(page) {
 
 		console.log(
 			`\nmontage quick-trio containment OK (${checked} configurations: 560/700/900px panes + ` +
-				`4/5/8-round track lists, mid fixture, pointer: coarse — every .dse-mt__quick box ` +
-				`stays inside its own .dse-mt__cell; the width series also confirms ` +
-				`elementFromPoint 6px inside a recorded cell's right edge always returns that cell)`,
+				`4/5/8-round track lists, mid fixture, pointer: coarse — every .dse-mt__cell-quick box ` +
+				`AND its .dse-mt__quick buttons' union stay inside their own .dse-mt__cell; the width ` +
+				`series also confirms elementFromPoint 6px inside a recorded cell's right edge, on-screen ` +
+				`in this gate's ${VIEWPORT_HEIGHT}px viewport, always returns that cell)`,
 		);
 	} finally {
 		await context.close();
