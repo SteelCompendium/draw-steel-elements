@@ -223,20 +223,21 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(cell.querySelector('.dse-mt__cell-glyph')?.getAttribute('data-icon')).toBe('circle-plus');
 	});
 
-	// Fix-round-1 M-1: the cell is `role="button" tabindex="0"` per spec §D — a plain `div`,
-	// NOT a real `<button>` (which was a full `.dse-btn`: bordered, radiused, shadowed, and
-	// `opacity:.5`-dimmed the cell's own recorded data). SLICE 4: on a READ-ONLY host the
-	// cell stays `aria-disabled` (owner ruling I-6: explicit read-only states, never a
-	// dead-end live control) — on a WRITABLE host `aria-disabled` is gone and a real click
-	// opens the sheet.
-	test('read-only host: the open socket stays `div[role=button][tabindex=0][aria-disabled=true]` — never a dead-end live control, never a real <button>', async () => {
+	// review-1 MED-2: the empty CURRENT-round cell renders the quick trio (three real
+	// `<button>`s) as children — `role="button"` here is one of the ARIA roles with
+	// Children Presentational: True (ARIA 1.2 §5.2.7), which would prune the trio's own
+	// `role="group"` and all three buttons' labels from the accessibility tree. This cell
+	// shape therefore carries NO role/tabindex at all, on either host — on a READ-ONLY
+	// host it is a fully inert plain `div`; the trio's own three real, aria-labelled,
+	// disabled buttons are what announces the read-only state, not this wrapper.
+	test('read-only host: the open socket carries no role/tabindex — never a dead-end live control, never a real <button>', async () => {
 		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
 		const cell = cellFor(root, 'Kira', 3);
 		expect(cell.tagName).toBe('DIV');
 		expect(cell.classList.contains('dse-btn')).toBe(false);
-		expect(cell.getAttribute('role')).toBe('button');
-		expect(cell.getAttribute('tabindex')).toBe('0');
-		expect(cell.getAttribute('aria-disabled')).toBe('true');
+		expect(cell.hasAttribute('role')).toBe(false);
+		expect(cell.hasAttribute('tabindex')).toBe(false);
+		expect(cell.hasAttribute('aria-disabled')).toBe(false);
 		expect(cell.getAttribute('aria-label')).toBe('Kira, round 3: nothing logged — log an action');
 		expect(cell.querySelector('.dse-mt__cell-hint')?.textContent).toBe('to act');
 	});
@@ -531,6 +532,21 @@ describe('SC-299 R-1: the open-socket quick trio (mock6.js:1841-1856, round2.css
 		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
 		const bramChip = heroChips.find((c) => c.textContent === 'Bram') as HTMLButtonElement;
 		expect(bramChip.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	// review-1 MED-2: `role="button"` on the cell is one of the ARIA roles with Children
+	// Presentational: True (ARIA 1.2 §5.2.7) — it would prune the trio's own `role="group"`
+	// and all three buttons' labels from the accessibility tree, so a screen-reader user
+	// would never learn the quick trio exists. The empty current-round cell therefore
+	// carries no role/tabindex at all; the trio's own controls are the genuine, announced,
+	// first-class ones.
+	test('the empty current-round cell itself carries no role — the trio is the announced control, not this wrapper', async () => {
+		const { root } = await renderMontage(QUICK_TRIO_FIXTURE);
+		const cell = cellFor(root, 'Bram', 2);
+		expect(cell.hasAttribute('role')).toBe(false);
+		expect(cell.hasAttribute('tabindex')).toBe(false);
+		expect(cell.querySelector('.dse-mt__cell-quick')?.getAttribute('role')).toBe('group');
+		expect(cell.querySelectorAll('.dse-mt__quick')).toHaveLength(3);
 	});
 
 	test('read-only host: the three quick buttons exist, real-disabled, never hidden (owner ruling I-6)', async () => {
@@ -1516,6 +1532,25 @@ describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 		expect(sheet).not.toMatch(/\.dse-mt\[data-crest=/);
 		expect(sheet).not.toMatch(/\.dse-mt\[data-seal=/);
 		expect(sheet).not.toMatch(/\.dse-mt\[data-dedupe=/);
+	});
+
+	// review-1 MED-1: the trio's fine-pointer 1.45em square sets min-width/min-height
+	// EXPLICITLY at (0,3,0) under the montage's own ancestor, which out-specifies the
+	// kit's coarse-pointer touch-target escalation (`:where(.dse-btn)`, (0,2,0)) — so a
+	// coarse pointer never got the 44px `--dse-touch-min` floor. The shots harness does
+	// not emulate `pointer: coarse` (no camera catches this), so this is the only
+	// regression guard for the coarse twin. Structural-tier only (screen-only, cannot
+	// reach the frozen print bytes — the trio is `display:none` under print anyway).
+	test('CSS contract: `.dse-mt__quick` restores the full touch-target box under `pointer: coarse` (review-1 MED-1)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const structural = sheet.match(/\[data-dse-element="montage"\]\s+\.dse-mt\s*\{[\s\S]*?\n\}\n\n\/\* -- Steel decoration tier/);
+		expect(structural).not.toBeNull();
+		const coarse = structural![0].match(/@media \(pointer: coarse\)\s*\{[\s\S]*?\n\t\}\n/);
+		expect(coarse).not.toBeNull();
+		const block = coarse![0];
+		expect(block).toMatch(/\.dse-mt__quick\s*\{[\s\S]*?width:\s*var\(--dse-control-min,\s*var\(--dse-touch-min\)\);/);
+		expect(block).toMatch(/min-width:\s*var\(--dse-control-min,\s*var\(--dse-touch-min\)\);/);
+		expect(block).toMatch(/min-height:\s*var\(--dse-control-min,\s*var\(--dse-touch-min\)\);/);
 	});
 });
 
