@@ -242,6 +242,15 @@ export class BoardView {
 		// rule. FUTURE-round empty cells are unaffected — the ticket says "previous
 		// rounds".
 		const isInteractive = entry !== undefined || state === 'current' || (state === 'past' && !complete);
+		// review-1 MED-2: the empty CURRENT-round cell is the one that goes on to render the
+		// quick trio (below) — three real `<button>`s. `role="button"` on an ANCESTOR is one
+		// of the ARIA roles with Children Presentational: True (ARIA 1.2 §5.2.7), which prunes
+		// every descendant — the trio's `role="group"`, its label, and all three buttons' own
+		// labels — from the accessibility tree. This file already ruled against nesting a real
+		// button inside this cell's `div[role=button]` (the editmark comment below); giving
+		// this one cell shape no role/tabindex at all resolves the same question the same way
+		// for the trio, rather than re-opening it.
+		const isEmptyCurrentCell = state === 'current' && entry === undefined;
 		const ariaLabel = known
 			? `${hero}, round ${round}: ${entry.result} with ${entry.skill ?? 'no skill'}${entry.note ? '. Note: ' + entry.note : ''} — edit`
 			: entry !== undefined
@@ -250,12 +259,15 @@ export class BoardView {
 
 		const cell = board.createDiv({ cls: 'dse-mt__cell' });
 		cell.setAttribute('aria-label', ariaLabel);
-		if (isInteractive) {
+		if (isInteractive && !isEmptyCurrentCell) {
 			// A recorded cell opens the sheet in EDIT mode (fix-round-1 M-1: `aria-disabled`,
 			// not native `disabled` — a `div` isn't a button KIND, see file header); an open
-			// socket opens it in NEW mode pre-filled hero+round. Real-disabled (never wired)
-			// on a read-only host — the settled aria-label already states the wording either
-			// way.
+			// PAST-round socket (R-2) opens it in NEW mode pre-filled hero+round. Neither of
+			// these two cell shapes ever nests a real button (the editmark is an `aria-hidden`
+			// span; the past-empty cell has none), so `role="button"` prunes nothing here —
+			// the empty CURRENT-round cell is the one exception, handled separately below.
+			// Real-disabled (never wired) on a read-only host — the settled aria-label already
+			// states the wording either way.
 			cell.setAttribute('role', 'button');
 			cell.setAttribute('tabindex', '0');
 			if (!this.canPersist) {
@@ -269,20 +281,19 @@ export class BoardView {
 				this.owner.registerDomEvent(cell, 'click', openThisCell);
 				this.owner.registerDomEvent(cell, 'keydown', (evt: KeyboardEvent) => {
 					if (evt.key !== 'Enter' && evt.key !== ' ') return;
-					// SC-299 R-1: the quick trio's real `<button>`s live INSIDE this
-					// `role="button"` cell — a nesting the file header already warns about.
-					// Enter/Space on a quick button is the button's own job (native
-					// activation → its `click` listener, which stops propagation before this
-					// keydown handler would otherwise ALSO fire and open the sheet). This
-					// guard only matters for a genuine browser keypress, where `keydown`
-					// bubbles from the button up to this cell BEFORE the browser synthesizes
-					// the button's `click` — without it, one Enter on a quick button would
-					// both log the entry AND open the sheet.
-					if ((evt.target as HTMLElement).closest('.dse-mt__cell-quick')) return;
 					evt.preventDefault();
 					openThisCell();
 				});
 			}
+		} else if (isEmptyCurrentCell && this.canPersist) {
+			// review-1 MED-2 fix: no `role`/`tabindex` here (see the doc above) — this cell
+			// is mouse convenience only, not an announced control, so nothing is falsely
+			// promised to AT. Keyboard/AT access to this exact `{hero, current_round}` sheet
+			// is unaffected: it is already reachable from the row's own real
+			// "Log an action for <hero>" button and from the bar's "Log an action…", and the
+			// trio's three buttons are now genuine, first-class, `role="group"`-labelled
+			// controls in their own right rather than pruned descendants of this div.
+			this.owner.registerDomEvent(cell, 'click', () => this.onOpenSheet({ kind: 'new', hero, round }));
 		}
 		cell.setAttribute('data-kind', known ? entry.result : 'none');
 		cell.setAttribute('data-state', state);
@@ -316,15 +327,15 @@ export class BoardView {
 				mark.setAttribute('title', entry.note);
 				setIcon(mark, 'sticky-note');
 			}
-		} else if (state === 'current' && entry === undefined) {
+		} else if (isEmptyCurrentCell) {
 			// SC-299 R-1 — THE OPEN SOCKET (mock6.js:1841-1856 / round2.css:307-333, the
 			// SETTLED design SC-191 shipped without): the round-in-play empty cell IS the
 			// record control, and it says so without a hover — one tap on ✓ / ✕ / + records
 			// the common case whole; tapping the socket itself (outside the trio) still
-			// opens the sheet when the skill/note matters (isInteractive's own handler,
-			// above). Every button rides kit/iconButton, never a bare <button> (file header)
-			// — real, aria-labelled, disabled (never hidden, never a dead end) on a
-			// read-only host.
+			// opens the sheet when the skill/note matters (the cell's own plain click
+			// listener, above). Every button rides kit/iconButton, never a bare <button>
+			// (file header) — real, aria-labelled, disabled (never hidden, never a dead
+			// end) on a read-only host.
 			const quick = cell.createSpan({ cls: 'dse-mt__cell-quick' });
 			quick.setAttribute('role', 'group');
 			quick.setAttribute('aria-label', `Quick log for ${hero}, round ${round}`);
@@ -339,11 +350,10 @@ export class BoardView {
 						onClick: !this.canPersist
 							? STUB_NOOP
 							: (evt) => {
-									// The cell itself is ALSO `role="button"` (isInteractive's
-									// own click listener, above) — stop the bubble here so one
-									// tap on a quick button logs exactly once, never both the
-									// quick write AND the sheet open (file header's
-									// interactive-in-interactive resolution).
+									// review-1 MED-2: the cell itself still carries a plain click
+									// listener (mouse convenience, no `role` — see above), so a
+									// quick-button click would otherwise bubble up and ALSO open the
+									// sheet. Stop it here so one tap logs exactly once.
 									evt.stopPropagation();
 									this.onQuickLog({ hero, round, result: kind });
 								},
