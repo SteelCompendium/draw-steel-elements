@@ -3859,8 +3859,12 @@ Shared globals
 	       hit-test — flex items refuse to shrink below `min-width: auto`, i.e. their content
 	       size, without `flex-wrap`).
 	    2. GEOMETRY (`--dse-mt-colmin`, `.dse-mt__board`) — widen the round column itself
-	       under coarse so the trio stays on ONE row at ordinary round counts; wrapping above
-	       is the safety net for extreme round counts / narrow panes, not the everyday look.
+	       under coarse. Measured (re-review-2 LOW-1): this keeps the trio at TWO rows
+	       instead of three (the pre-branch 5.2em minimum wraps 3×1 at every coarse pane
+	       width, cell 183px tall; 9.2em wraps 2+1, cell 134px) and keeps the column from
+	       collapsing back toward that three-row shape — it does NOT reach one row, which
+	       needs `--dse-mt-colmin >= 10.4em` and is deliberately not chosen here because it
+	       would widen SC-326's board-clipping onset further than 9.2em already does.
 	       This rides the SAME sanctioned geometry seam BoardView.ts already uses for
 	       `--dse-mt-cols` (spec §D2 §5: the expanded track list is ONE `setProperty` call,
 	       never a literal per-column width) — BoardView.ts's own round-track literal became
