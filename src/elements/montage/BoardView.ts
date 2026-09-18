@@ -90,9 +90,14 @@ export class BoardView {
 
 		// The sanctioned geometry seam (spec §D2 §5 precedent): `repeat(var(--n), …)` is not
 		// legal CSS, so the expanded track list is computed once and handed to the sheet as
-		// ONE custom property — never a literal per-column width from TS.
+		// ONE custom property — never a literal per-column width from TS. review-1 (round 3)
+		// HIGH-1 part 2: the round track's own minimum now reads `--dse-mt-colmin` (default
+		// unchanged at 5.2em) so the coarse-pointer block (styles-source.css) can widen it
+		// for the 44px quick trio without a second seam — the var() nests inside this
+		// property's own value and resolves against whatever `--dse-mt-colmin` cascades onto
+		// `.dse-mt__board`, exactly like every other custom-property-driven token here.
 		const cols = ['minmax(6.2em, auto)'];
-		for (let r = 0; r < this.model.rounds; r++) cols.push('minmax(5.2em, 1fr)');
+		for (let r = 0; r < this.model.rounds; r++) cols.push('minmax(var(--dse-mt-colmin, 5.2em), 1fr)');
 		cols.push('minmax(4.4em, auto)');
 		board.style.setProperty('--dse-mt-cols', cols.join(' '));
 
@@ -258,7 +263,13 @@ export class BoardView {
 				: `${hero}, round ${round}: nothing logged — log an action`;
 
 		const cell = board.createDiv({ cls: 'dse-mt__cell' });
-		cell.setAttribute('aria-label', ariaLabel);
+		// review-1 (round 3) LOW-1: this one cell shape is role-less (MED-2, above) — ARIA
+		// 1.2 prohibits an accessible name on a role-less (`generic`) node, and axe-core
+		// flags it as `aria-prohibited-attr`. The trio's own three buttons already name
+		// every action, and the row's real "Log an action for <hero>" button already
+		// reaches this exact sheet, so nothing is lost by leaving this wrapper unnamed.
+		// Every OTHER cell shape keeps its aria-label — they all still carry `role="button"`.
+		if (!isEmptyCurrentCell) cell.setAttribute('aria-label', ariaLabel);
 		if (isInteractive && !isEmptyCurrentCell) {
 			// A recorded cell opens the sheet in EDIT mode (fix-round-1 M-1: `aria-disabled`,
 			// not native `disabled` — a `div` isn't a button KIND, see file header); an open

@@ -3837,7 +3837,35 @@ Shared globals
 	   `pointer: coarse`, ~:10709-10713) explicitly. Screen-only — print never matches
 	   `pointer: coarse`, and the trio is print-hidden anyway (~:5119), so this cannot move
 	   the frozen print bytes. The fine-pointer square Scott approved in the mock
-	   screenshots is untouched. */
+	   screenshots is untouched.
+
+	   review-1 (round 3) HIGH-1 — that fix made the trio 44×44 + gap = 141.6 CSS px wide,
+	   wider than the board's round columns (`minmax(5.2em, 1fr)` ≈ 83 px minimum) whenever
+	   the container is above the 420 px `@container` breakpoint (which re-lays the whole
+	   board to one column and is unaffected). `.dse-mt__cell-quick` had no `max-width`, so
+	   it simply spilled out of `.dse-mt__cell` on both sides with no scrollbar to absorb
+	   it — measured, not inferred, at 700/560 px panes and at ≥4 rounds even at a full
+	   900 px pane. Worse than a visual overlap: `document.elementFromPoint` on the
+	   spilled-over pixels resolves to the OVERFLOWING trio's button, not the cell drawn
+	   underneath it — a tap that looks like "edit round 2" silently logs a brand-new
+	   round-3 result. Owner ruling: BOTH halves below, not either alone.
+	    1. CONTAINMENT (`.dse-mt__cell-quick`) — cap the trio at its cell's width and let it
+	       WRAP (2+1, or 3×1 in a very narrow column) instead of overflowing. `max-width` on
+	       a `display: flex` row does not by itself stop flex items overflowing their own
+	       min-content, and the three fixed 44px squares plus gaps ARE that min-content — the
+	       two declarations are a pair, not a fallback: `flex-wrap: wrap` is what actually
+	       lets the row shrink, `max-width: 100%` is what stops the wrapped row from
+	       re-widening past the cell (A/B'd against `max-width` alone, which still failed the
+	       hit-test — flex items refuse to shrink below `min-width: auto`, i.e. their content
+	       size, without `flex-wrap`).
+	    2. GEOMETRY (`--dse-mt-colmin`, `.dse-mt__board`) — widen the round column itself
+	       under coarse so the trio stays on ONE row at ordinary round counts; wrapping above
+	       is the safety net for extreme round counts / narrow panes, not the everyday look.
+	       This rides the SAME sanctioned geometry seam BoardView.ts already uses for
+	       `--dse-mt-cols` (spec §D2 §5: the expanded track list is ONE `setProperty` call,
+	       never a literal per-column width) — BoardView.ts's own round-track literal became
+	       `minmax(var(--dse-mt-colmin, 5.2em), 1fr)`, so this coarse-only custom property is
+	       the ONLY thing that has to change to widen it; the seam itself is untouched. */
 	@media (pointer: coarse) {
 		.dse-mt__quick {
 			width: var(--dse-control-min, var(--dse-touch-min));
@@ -3847,6 +3875,11 @@ Shared globals
 		}
 		.dse-mt__cell-quick {
 			gap: 0.3em;
+			max-width: 100%;
+			flex-wrap: wrap; /* both lines are required — max-width alone does not contain it */
+		}
+		.dse-mt__board {
+			--dse-mt-colmin: 9.2em;
 		}
 	}
 	.dse-mt__cell-skill {
