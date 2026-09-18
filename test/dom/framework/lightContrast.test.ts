@@ -231,9 +231,13 @@ const PINS: Pin[] = [
 	// pin for it would not be a can-fail proof (the test below expects every pin's `wasDark`
 	// to fail) and would just be decoration. `turn-done`'s old green genuinely failed here
 	// (1.77:1) and is the surface the visual review actually flagged as faint.
+	//
+	// review-1 (round 3) LOW-2: `ground` reads the DECLARED token (`lightValue('chip-bg')`),
+	// not a hand-copied literal — a future edit to `--dse-chip-bg` now moves this pin's
+	// ground with it instead of leaving it measuring against a hex no longer rendered.
 	{
 		token: 'turn-done',
-		ground: '#eaeeef',
+		ground: lightValue('chip-bg'),
 		opacity: 1,
 		threshold: 3.0,
 		measured: 4.51,
