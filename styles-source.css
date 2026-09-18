@@ -3802,8 +3802,11 @@ Shared globals
 	/* SC-299 R-1 — THE OPEN SOCKET's quick trio (mock6.js:1841-1856, round2.css:307-333,
 	   the settled design SC-191 shipped without). `.dse-mt__quick` is the bespoke-sizing
 	   class layered onto `handle.buttonEl` (BoardView.ts) — the same "iconButton plus a
-	   second class" gesture `.dse-mt__board-rowact` uses, ~:3768 — overriding the kit's
-	   generic touch-target box down to the mock's flat 1.45em square; colour lives in the
+	   second class" gesture `.dse-mt__board-rowact` uses, ~:3768 — a deliberate
+	   fine-pointer override of the kit's generic touch-target box down to the mock's flat
+	   1.45em square, with its own coarse-pointer twin just below (review-1 MED-1); the
+	   real precedent for this gesture is `.dse-chrome .dse-btn` (~:14845), which does the
+	   same fine-pointer-only shrink for the panel's own controls. Colour lives in the
 	   Steel decoration tier (~:4340) since it needs `--dse-metal-line`/`--dse-turn-done`/
 	   `--dse-danger`. */
 	.dse-mt__cell-quick {
@@ -3823,6 +3826,27 @@ Shared globals
 		svg {
 			width: 0.8em;
 			height: 0.8em;
+		}
+	}
+	/* review-1 MED-1 — the fine-pointer 1.45em square above out-specifies the kit's
+	   coarse-pointer touch-target escalation (`:where(.dse-btn)` at (0,2,0) vs this block's
+	   (0,3,0) ancestor), so a coarse pointer never got the 44px `--dse-touch-min` floor —
+	   three 20 CSS px targets 3 px apart, WCAG 2.5.8-failing. Same remedy pattern as
+	   `.dse-mt__board-rowact`'s own coarse twin (~:4336) and `.dse-chrome .dse-btn`'s
+	   (~:14845): restore `--dse-control-min` (which resolves to `--dse-touch-min` under
+	   `pointer: coarse`, ~:10709-10713) explicitly. Screen-only — print never matches
+	   `pointer: coarse`, and the trio is print-hidden anyway (~:5119), so this cannot move
+	   the frozen print bytes. The fine-pointer square Scott approved in the mock
+	   screenshots is untouched. */
+	@media (pointer: coarse) {
+		.dse-mt__quick {
+			width: var(--dse-control-min, var(--dse-touch-min));
+			height: var(--dse-control-min, var(--dse-touch-min));
+			min-width: var(--dse-control-min, var(--dse-touch-min));
+			min-height: var(--dse-control-min, var(--dse-touch-min));
+		}
+		.dse-mt__cell-quick {
+			gap: 0.3em;
 		}
 	}
 	.dse-mt__cell-skill {
@@ -4156,8 +4180,9 @@ Shared globals
 			width: auto;
 		}
 		/* SC-299 R-1 (round2.css:1750, the settled narrow rule) — the one-band-per-hero row
-		   layout above lays the cell out left-to-right; without this the trio would sit
-		   right after the hint text instead of hugging the row's trailing edge. */
+		   layout above lays the cell out left-to-right; the trio is created BEFORE the hint
+		   (BoardView.ts), so without this it would sit immediately after the round label at
+		   the row's leading edge, with the hint trailing it. */
 		.dse-mt__cell-quick {
 			margin-left: auto;
 		}
@@ -4403,6 +4428,20 @@ Shared globals
 	.dse-mt__quick[data-kind='failure'] {
 		color: var(--dse-danger);
 	}
+	/* review-1 LOW-4 — on a read-only host `.dse-btn[disabled] { color: var(--dse-fg-muted) }`
+	   (~:13147, (0,2,0)) loses to the two `[data-kind]` rules above ((0,5,0) in this tier),
+	   so a disabled trio kept its full success-green/failure-red ink at 50% opacity instead
+	   of reading muted grey like every other disabled control. Functionally inert either way
+	   (real `disabled`, 0 writes) — this is vocabulary only. */
+	.dse-mt__quick[disabled] {
+		color: var(--dse-fg-muted);
+	}
+	/* review-1 INFO-4 — a deliberate divergence from the mock, not a porting slip: in
+	   round2.css the `[data-kind]` colour rules come AFTER `&:hover` at equal specificity,
+	   so hovering a success/failure button there never changes its ink. Here `:hover` is
+	   the more specific selector and wins, so all three go `--dse-accent` on hover like
+	   every other ghost-vocabulary control in this file — kept because consistency with
+	   the rest of the kit reads better than mock-fidelity on this one point. */
 	.dse-mt__quick:hover:not([disabled]),
 	.dse-mt__quick:focus-visible {
 		border-color: var(--dse-accent);
