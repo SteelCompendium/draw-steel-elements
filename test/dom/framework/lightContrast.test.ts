@@ -219,6 +219,27 @@ const PINS: Pin[] = [
 		surface: 'shares stamina-dying: .dse-btn--danger / killed minion row ink',
 		wasDark: '#e74c3c',
 	},
+	// SC-299 review-1 INFO-5. `.dse-mt__quick` (the montage board's quick-log trio) tints
+	// `--dse-turn-done`/`--dse-danger` against its own ground — `--dse-chip-bg`, a flat
+	// opaque fill (the `ghost` variant skips the generic Steel chip-chrome gradient,
+	// styles-source.css theming-contract), so the token's own declared hex IS the
+	// effective ground with no compositing needed, unlike the sampled-page-background
+	// surfaces above. Icon-only (stroke, not text — the aria-label carries the words), so
+	// WCAG 1.4.11 non-text contrast applies (3:1), not the 4.5:1 text threshold. Only
+	// `turn-done` gets a pin here: `danger`'s pre-SC-196 dark-inherited red (#e74c3c)
+	// already clears 3:1 against this particular (light) ground — 3.27:1, verified — so a
+	// pin for it would not be a can-fail proof (the test below expects every pin's `wasDark`
+	// to fail) and would just be decoration. `turn-done`'s old green genuinely failed here
+	// (1.77:1) and is the surface the visual review actually flagged as faint.
+	{
+		token: 'turn-done',
+		ground: '#eaeeef',
+		opacity: 1,
+		threshold: 3.0,
+		measured: 4.51,
+		surface: ".dse-mt__quick[data-kind='success'] icon — montage",
+		wasDark: '#5cc98a',
+	},
 ];
 
 /**
