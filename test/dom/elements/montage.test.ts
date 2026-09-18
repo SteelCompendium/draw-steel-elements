@@ -197,6 +197,19 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(cellFor(root, 'Kira', 2)).toBeDefined();
 	});
 
+	// review-1 round 3 HIGH-1 part 2: the geometry seam's own round-track literal now
+	// nests `var(--dse-mt-colmin, 5.2em)` (the fallback keeps every non-coarse pointer's
+	// layout byte-identical) rather than a bare `5.2em`, so the coarse-pointer block can
+	// widen the column for the 44px quick trio without a second seam. jsdom has no layout
+	// engine — this pins the STRING the seam hands to the sheet, not the resulting pixel
+	// width (that is `assertMontageCoarseContainment` in shoot.mjs, a real-Chromium gate).
+	test('the geometry seam (`--dse-mt-cols`) nests `--dse-mt-colmin` in each round track (review-1 round-3 HIGH-1)', async () => {
+		const { root } = await renderMontage(montageMidYaml); // rounds: 3
+		const board = root.querySelector('.dse-mt__board') as HTMLElement;
+		const cols = board.style.getPropertyValue('--dse-mt-cols');
+		expect(cols.match(/minmax\(var\(--dse-mt-colmin, 5\.2em\), 1fr\)/g)).toHaveLength(3);
+	});
+
 	test('a past round WITH an entry renders the seal glyph + skill, no note mark', async () => {
 		const { root } = await renderMontage(montageMidYaml);
 		const cell = cellFor(root, 'Kira', 1);
@@ -230,7 +243,10 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 	// shape therefore carries NO role/tabindex at all, on either host — on a READ-ONLY
 	// host it is a fully inert plain `div`; the trio's own three real, aria-labelled,
 	// disabled buttons are what announces the read-only state, not this wrapper.
-	test('read-only host: the open socket carries no role/tabindex — never a dead-end live control, never a real <button>', async () => {
+	// review-1 (round 3) LOW-1: nor does it carry an `aria-label` — ARIA 1.2 prohibits an
+	// accessible name on a role-less (`generic`) node, and the trio's own buttons already
+	// name every action.
+	test('read-only host: the open socket carries no role/tabindex/aria-label — never a dead-end live control, never a real <button>', async () => {
 		const { root } = await renderMontage(montageMidYaml, { canPersist: false });
 		const cell = cellFor(root, 'Kira', 3);
 		expect(cell.tagName).toBe('DIV');
@@ -238,7 +254,7 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		expect(cell.hasAttribute('role')).toBe(false);
 		expect(cell.hasAttribute('tabindex')).toBe(false);
 		expect(cell.hasAttribute('aria-disabled')).toBe(false);
-		expect(cell.getAttribute('aria-label')).toBe('Kira, round 3: nothing logged — log an action');
+		expect(cell.hasAttribute('aria-label')).toBe(false);
 		expect(cell.querySelector('.dse-mt__cell-hint')?.textContent).toBe('to act');
 	});
 
@@ -1551,6 +1567,32 @@ describe('SC-191 slice 2: source hygiene + CSS contract', () => {
 		expect(block).toMatch(/\.dse-mt__quick\s*\{[\s\S]*?width:\s*var\(--dse-control-min,\s*var\(--dse-touch-min\)\);/);
 		expect(block).toMatch(/min-width:\s*var\(--dse-control-min,\s*var\(--dse-touch-min\)\);/);
 		expect(block).toMatch(/min-height:\s*var\(--dse-control-min,\s*var\(--dse-touch-min\)\);/);
+	});
+
+	// review-1 round 3 HIGH-1 — MED-1's 44px trio outgrows its round column above the
+	// 420px `@container` breakpoint (a real-Chromium geometry bug jsdom cannot lay out to
+	// measure; the in-run `assertMontageCoarseContainment` gate in shoot.mjs is the actual
+	// measurement). This test pins the two DECLARATIONS the fix requires, so a future edit
+	// cannot silently drop either half of the ruling without a CSS-contract test noticing —
+	// it cannot itself prove the geometry the declarations produce.
+	test('CSS contract: `.dse-mt__cell-quick` wraps instead of overflowing, and the round column widens, under `pointer: coarse` (review-1 round-3 HIGH-1)', () => {
+		const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+		const structural = sheet.match(/\[data-dse-element="montage"\]\s+\.dse-mt\s*\{[\s\S]*?\n\}\n\n\/\* -- Steel decoration tier/);
+		expect(structural).not.toBeNull();
+		const coarse = structural![0].match(/@media \(pointer: coarse\)\s*\{[\s\S]*?\n\t\}\n/);
+		expect(coarse).not.toBeNull();
+		const block = coarse![0];
+		// Containment: both declarations are required (max-width alone still overflows —
+		// flex items refuse to shrink below their own min-content without flex-wrap).
+		const cellQuick = block.match(/\.dse-mt__cell-quick\s*\{([\s\S]*?)\}/);
+		expect(cellQuick).not.toBeNull();
+		expect(cellQuick![1]).toMatch(/max-width:\s*100%;/);
+		expect(cellQuick![1]).toMatch(/flex-wrap:\s*wrap;/);
+		// Geometry: the round column's own minimum widens under coarse via the sanctioned
+		// `--dse-mt-cols` seam (BoardView.ts), not a second literal column width.
+		const board = block.match(/\.dse-mt__board\s*\{([\s\S]*?)\}/);
+		expect(board).not.toBeNull();
+		expect(board![1]).toMatch(/--dse-mt-colmin:\s*9\.2em;/);
 	});
 });
 

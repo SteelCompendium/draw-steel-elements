@@ -616,6 +616,200 @@ async function assertMontageTrackWidths(page) {
 	);
 }
 
+// SC-299 review-1 round 3, HIGH-1 — the coarse-pointer quick-trio CONTAINMENT gate. The
+// trio's 44px coarse-pointer touch targets (review-1 MED-1) can outgrow the round column
+// that holds them; jsdom has no layout engine, so the CSS-contract test in
+// `montage.test.ts` can only pin the two DECLARATIONS the fix requires, never the geometry
+// they produce. This gate measures that geometry directly, in a real Chromium under REAL
+// `pointer: coarse` emulation — Playwright only matches that media feature under
+// `{ hasTouch: true, isMobile: true }`, which needs its OWN browser context (the main
+// sweep's context carries neither), so this proves the match with `matchMedia` in-page
+// rather than assuming the context option did its job. Same "own navigation, captures
+// nothing" shape as `assertMontageTrackWidths` above it.
+//
+// Two invariants, both measured, neither inferable from the CSS source:
+//  1. CONTAINMENT — every `.dse-mt__cell-quick` box stays inside its own `.dse-mt__cell`
+//     box. A violation here is a purely visual overlap.
+//  2. NO WRONG-WRITE — `elementFromPoint` 6px inside a RECORDED cell's right edge still
+//     returns that cell, not a neighbouring cell's quick button. This is the wrong-write
+//     review-1 found and measured: an overflowing trio steals the hit-test from the cell
+//     it is drawn on top of, so a tap that looks like "edit round 2" silently logs a NEW
+//     round-3 result instead.
+//
+// Exercised at the three pane widths review-1 measured (560/700/900, `mid` fixture — 3
+// real round columns, 5 heroes) AND with the round TRACK LIST rewritten to 4/5/8 rounds at
+// the full 900px pane (the `--dse-mt-cols` geometry seam, BoardView.ts — extra `1fr`
+// tracks shrink every existing track's own share, reproducing "more rounds" on the SAME
+// 3-cell DOM without a new fixture, exactly as review-1's own measurement did). One page,
+// one navigation; every variant is a DOM mutation + a fresh layout read, never a reload.
+//
+// The round-rewrite series checks CONTAINMENT ONLY, not the hit-test — deliberately, not
+// as a lesser guard. Rewriting `--dse-mt-cols` to N tracks widens the GRID TEMPLATE without
+// changing the DOM's actual child count per row (still hero + 3 rounds + tally), so the
+// round-2/round-3 cells under test are given an EXPLICIT `grid-column` (mirroring where a
+// real N-round board would put "the round right before current" and "current") — without
+// it, CSS Grid's implicit auto-placement (which relies on exactly `2 + rounds` children per
+// row to land each hero on its own row) miscounts and staggers every row diagonally, a
+// pure artifact of this synthetic rewrite that a real N-round DOM never has. Even with that
+// corrected, a large enough N can legitimately push the board's own required width past
+// `.dse-mt__board`'s own frame (`border-radius` + `overflow: hidden`, decoration tier) —
+// real, pre-existing, print-scoped-frame CSS, unrelated to the coarse fix — which clips
+// (and un-hit-tests) anything beyond it. That is a different, narrower concern than HIGH-1
+// (content clipped by its own container's frame, not a trio painting over a NEIGHBOUR), so
+// this gate does not chase it here. CONTAINMENT remains the right and sufficient check for
+// this series: cells in a CSS grid never overlap, so a trio proven to stay inside its own
+// cell's box cannot occupy any pixel of a DIFFERENT cell's box regardless of how many round
+// tracks exist or whether the frame clips the far side of the board — the wrong-write is a
+// direct, structural CONSEQUENCE of a containment violation, not a separate thing that can
+// occur without one.
+async function assertMontageCoarseContainment(page) {
+	const browser = page.context().browser();
+	// `isMobile` (required to make Chromium match `pointer: coarse`) needs its own
+	// context — it cannot be toggled on the main sweep's page/context after the fact.
+	const context = await browser.newContext({
+		hasTouch: true,
+		isMobile: true,
+		viewport: { width: 1000, height: 1000 },
+	});
+	const coarsePage = await context.newPage();
+	try {
+		const query = new URLSearchParams({ element: 'montage', fixture: 'mid', theme: 'steel', bg: 'dark' });
+		await coarsePage.goto(`${pageUrl}?${query}`);
+		await coarsePage.waitForFunction(() => window.__dseHarnessDone !== undefined, null, { timeout: 15000 });
+
+		const isCoarse = await coarsePage.evaluate(() => matchMedia('(pointer: coarse)').matches);
+		if (!isCoarse) {
+			console.error(
+				`\nMONTAGE COARSE CONTAINMENT: this Chromium did not match '(pointer: coarse)' under ` +
+					`{ hasTouch: true, isMobile: true } — the gate cannot prove anything about the ` +
+					`coarse-pointer CSS block without a real match. Check the Playwright/Chromium version.`,
+			);
+			process.exit(1);
+		}
+
+		// Settle one frame after a DOM/style mutation before reading layout — a single
+		// `evaluate` round-trip is not guaranteed to land after Chromium's next paint.
+		const settle = () => coarsePage.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+		// `checkWrongWrite`: false for the round-rewrite series (see the function's own
+		// doc — containment there implies no wrong-write is even possible, and the
+		// synthetic column count can legitimately run past the board's own clipped frame,
+		// which is a different, narrower concern this gate does not chase).
+		const measure = (checkWrongWrite) =>
+			coarsePage.evaluate((checkWrongWrite) => {
+				const violations = [];
+				for (const quick of document.querySelectorAll('.dse-mt__cell-quick')) {
+					const cell = quick.closest('.dse-mt__cell');
+					if (!cell) continue;
+					const cr = cell.getBoundingClientRect();
+					const qr = quick.getBoundingClientRect();
+					const overflowLeft = cr.left - qr.left;
+					const overflowRight = qr.right - cr.right;
+					if (overflowLeft > 0.5 || overflowRight > 0.5) {
+						violations.push({
+							hero: cell.getAttribute('data-hero'),
+							round: cell.getAttribute('data-round'),
+							cellWidth: cr.width,
+							quickWidth: qr.width,
+							overflowLeft,
+							overflowRight,
+						});
+					}
+				}
+				const wrongWrites = [];
+				if (checkWrongWrite) {
+					for (const cell of document.querySelectorAll(".dse-mt__cell[data-round='2']")) {
+						const cr = cell.getBoundingClientRect();
+						const x = cr.right - 6;
+						const y = cr.top + cr.height / 2;
+						const hit = document.elementFromPoint(x, y);
+						const hitCell = hit ? hit.closest('.dse-mt__cell') : null;
+						if (hitCell !== cell) {
+							wrongWrites.push({
+								hero: cell.getAttribute('data-hero'),
+								hitTag: hit ? hit.tagName : null,
+								hitLabel: hit ? hit.getAttribute('aria-label') : null,
+								hitRound: hitCell ? hitCell.getAttribute('data-round') : null,
+							});
+						}
+					}
+				}
+				return { violations, wrongWrites };
+			}, checkWrongWrite);
+
+		const report = (label, { violations, wrongWrites }) => {
+			if (violations.length === 0 && wrongWrites.length === 0) return;
+			console.error(`\nMONTAGE COARSE-POINTER TRIO OVERFLOWS ITS CELL — ${label}:`);
+			for (const v of violations) {
+				console.error(
+					`  CONTAINMENT: ${v.hero} round ${v.round} — cell ${v.cellWidth.toFixed(2)}px, trio ` +
+						`${v.quickWidth.toFixed(2)}px, overflow left ${v.overflowLeft.toFixed(2)}px / right ` +
+						`${v.overflowRight.toFixed(2)}px`,
+				);
+			}
+			for (const w of wrongWrites) {
+				console.error(
+					`  WRONG-WRITE: 6px inside ${w.hero}'s round-2 cell's right edge hit ` +
+						`${w.hitTag}[aria-label="${w.hitLabel}"] (round ${w.hitRound}) instead of the round-2 cell`,
+				);
+			}
+			console.error(`See styles-source.css → @media (pointer: coarse) → .dse-mt__cell-quick / .dse-mt__board.`);
+			process.exit(1);
+		};
+
+		let checked = 0;
+		for (const width of [560, 700, 900]) {
+			await coarsePage.evaluate((w) => {
+				document.getElementById('mount').style.width = `${w}px`;
+			}, width);
+			await settle();
+			report(`${width}px pane`, await measure(true));
+			checked++;
+		}
+
+		// Restore the full pane, then rewrite the round TRACK LIST itself (the
+		// `--dse-mt-cols` geometry seam) to simulate 4/5/8-round montages on the SAME
+		// 3-cell DOM: extra `1fr` tracks shrink every track's own share (including round
+		// 3's — the real cell under test), exactly as a real N-round montage would. The
+		// real round-2/round-3 cells are given the `grid-column` a genuine N-round board
+		// would place them at (round 3 — current — is always the LAST round column; round
+		// 2 is the one immediately before it) so CSS Grid's implicit auto-placement, which
+		// only lines hero rows up correctly when every row has exactly `2 + rounds`
+		// children, does not stagger them diagonally — a pure artifact of rewriting the
+		// template without changing the DOM to match, not anything a real board hits.
+		await coarsePage.evaluate(() => {
+			document.getElementById('mount').style.width = '900px';
+		});
+		for (const rounds of [4, 5, 8]) {
+			await coarsePage.evaluate((n) => {
+				const board = document.querySelector('.dse-mt__board');
+				const cols = ['minmax(6.2em, auto)'];
+				for (let r = 0; r < n; r++) cols.push('minmax(var(--dse-mt-colmin, 5.2em), 1fr)');
+				cols.push('minmax(4.4em, auto)');
+				board.style.setProperty('--dse-mt-cols', cols.join(' '));
+				const currentCol = n + 1;
+				const recordedCol = n;
+				const tallyCol = n + 2;
+				for (const cell of document.querySelectorAll(".dse-mt__cell[data-round='2']")) cell.style.gridColumn = String(recordedCol);
+				for (const cell of document.querySelectorAll(".dse-mt__cell[data-round='3']")) cell.style.gridColumn = String(currentCol);
+				for (const total of document.querySelectorAll('.dse-mt__board-total')) total.style.gridColumn = String(tallyCol);
+			}, rounds);
+			await settle();
+			report(`${rounds}-round track list, 900px pane`, await measure(false));
+			checked++;
+		}
+
+		console.log(
+			`\nmontage quick-trio containment OK (${checked} configurations: 560/700/900px panes + ` +
+				`4/5/8-round track lists, mid fixture, pointer: coarse — every .dse-mt__quick box ` +
+				`stays inside its own .dse-mt__cell; the width series also confirms ` +
+				`elementFromPoint 6px inside a recorded cell's right edge always returns that cell)`,
+		);
+	} finally {
+		await context.close();
+	}
+}
+
 // SC-189 ROUND 3 — the HOST-LEAK gate. Scott's four defects of 2026-08-25 all traced to one
 // cause: a kit `.dse-btn` is a real `<button>`, so Obsidian's own app.css reaches it, and
 // nothing in styles-source.css ever declared `box-shadow` for a chrome button. The panel
@@ -4724,6 +4918,10 @@ try {
 		// "own navigation, captures nothing" shape, skipped on a narrowed run for the same
 		// reason.
 		await assertMontageTrackWidths(page);
+		// SC-299 review-1 round 3, HIGH-1 — the coarse-pointer quick-trio containment gate
+		// (see the block above). Its own browser CONTEXT, not just its own navigation —
+		// same narrowed-run skip reasoning.
+		await assertMontageCoarseContainment(page);
 		// SC-189 round 3 — the host-leak gate (see the block above). Same "own navigations,
 		// captures nothing" shape, so it is skipped on a narrowed run for the same reason.
 		await assertChromeHostLeak(page);
