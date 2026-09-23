@@ -4678,15 +4678,20 @@ Shared globals
 		border-color: var(--dse-turn-done);
 	}
 	/* SC-334 (Scott: "failures should fill the cell with red (to match the successes
-	   cells) instead of just having the border be red"): a filled failure slot is a SOLID
-	   danger-red chip with the filled slot's own chip bevel — it used to be a dark hatch
-	   that read as empty with a red outline. Plain `--dse-danger`, no `--dse-sheen` layer:
-	   the kit keeps accent/danger fills out of the sheen (~:10470), and the light sheen
-	   (white at .9 alpha) over red read as a pink-to-red gradient (SC-334 review-1 LOW-2).
-	   Filled vs empty is carried by lightness (a red chip against the unfilled slots' bare
-	   outline), never by hue alone, and the row itself is labelled "✕ Failures". */
+	   cells) instead of just having the border be red"): a filled failure slot is a red
+	   chip with the filled slot's own chip bevel — it used to be a dark hatch that read as
+	   empty with a red outline. Its gradient (Scott, SC-334: "add a minor gradient to match
+	   the "successes"") copies `--dse-metal-grad`'s SHAPE — lit top, 48% mid, shaded bottom
+	   — as a white/black overlay on `--dse-danger`, so it tracks each theme's own danger red
+	   with no second colour to keep in sync. Deliberately NOT the kit's `--dse-sheen`: the
+	   light sheen (white at .9 alpha) turned the red pink (SC-334 review-1 LOW-2), and the
+	   kit keeps danger fills out of the sheen (~:10470). Filled vs empty is carried by
+	   lightness (a red chip against the unfilled slots' bare outline), never by hue alone,
+	   and the row itself is labelled "✕ Failures". */
 	.dse-mt__track[data-kind='failure'] .dse-mt__track-slot[data-filled='on'] {
-		background: var(--dse-danger);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 48%, rgba(0, 0, 0, 0.28) 100%),
+			var(--dse-danger);
 		border-color: var(--dse-danger);
 	}
 
