@@ -60,8 +60,8 @@ for what needs action.
   is reached; SC-334), **Undo** (removes whatever was logged most recently, including the
   winning action that just finished the montage) and — once the montage is finished —
   **Reopen** (only when it simply ran out of rounds; a limit is final) alongside a danger
-  **Clear all**. The outcome band's two limit tracks fill slot by slot — successes in
-  silver, failures in solid red (SC-334). Two collapsible reference panels — a **Test tiers**
+  **Clear all**. The outcome band's two limit tracks fill slot by slot — successes as
+  metal chips, failures as solid red chips (SC-334). Two collapsible reference panels — a **Test tiers**
   cheat-sheet above the board (the shipped Power Roll badges, flipped to tiers-as-rows) and
   a **Running a montage test** guide at the foot — stay closed by default and print
   expanded. The hand-rolled ⋯ menu is gone: the card's standard element menu now carries

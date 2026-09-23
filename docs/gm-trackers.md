@@ -102,7 +102,8 @@ recount.
 are named in the form's title, "Kira · round 3". Pick success, failure or assist, and
 optionally name the skill used and add a note. Nothing is written until you press **Log**.
 The **Log an action…** button at the bottom of the card opens the same form for the next
-hero who hasn't acted yet this round. The form doesn't let you switch to a different hero
+hero who hasn't acted yet this round; once every hero has acted, it's greyed out — end the
+round, or click a cell to correct it. The form doesn't let you switch to a different hero
 or round — close it and click the cell you want instead. For a reminder of which power
 roll result counts as a success at each difficulty, open the **Test tiers** strip above
 the board.
