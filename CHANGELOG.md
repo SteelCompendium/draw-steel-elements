@@ -45,21 +45,23 @@ for what needs action.
   each row — read from `entries[]`; `successes`/`failures` stay the stored, authoritative
   totals (never recomputed from the board, so a hand-kept total is never silently
   overwritten). A **Log an action…** button, a per-row shortcut, and a click on any cell
-  all open the same small form: hero, round, success/failure/assist, an optional skill and
-  note, with a live reminder of which power roll result starts a success at each
-  difficulty and — when [rolling is on](docs/settings.md#rolling) — a **Roll** button that
-  resolves the test and picks the result for you. An already-logged cell opens the same
-  form pre-filled for correcting a mistake or removing it outright, and the skill-reuse
+  all open the same small form — success/failure/assist, an optional skill and note — for
+  the hero and round named in its title; the form itself never switches hero or round
+  (SC-334). An already-logged cell opens the same form pre-filled for correcting a mistake
+  or removing it outright, and the skill-reuse
   rule (a hero can't use the same skill twice in one montage) warns live in the form,
   never blocking. An empty cell in the round currently in play also carries three small
   buttons — check, X, and plus — that log a success, failure, or assist in one click with
   no skill and no note (SC-299); an empty cell from an earlier round can be clicked too, to
   add a test that was never logged at the time, without disturbing whose turn it is in the
   round now in play (SC-299). The bar under the board carries **End round N** (the only way to advance
-  the round), **Undo** (removes whatever was logged most recently, including the winning
-  action that just finished the montage) and — once the montage is finished — **Reopen**
-  (only when it simply ran out of rounds; a limit is final) alongside a danger **Clear
-  all**. Two collapsible reference panels — a **Test tiers**
+  the round), **Back to round N** (steps back to the previous round without removing
+  anything logged — also offered when the montage ran out of rounds, never once a limit
+  is reached; SC-334), **Undo** (removes whatever was logged most recently, including the
+  winning action that just finished the montage) and — once the montage is finished —
+  **Reopen** (only when it simply ran out of rounds; a limit is final) alongside a danger
+  **Clear all**. The outcome band's two limit tracks fill slot by slot — successes in
+  silver, failures in solid red (SC-334). Two collapsible reference panels — a **Test tiers**
   cheat-sheet above the board (the shipped Power Roll badges, flipped to tiers-as-rows) and
   a **Running a montage test** guide at the foot — stay closed by default and print
   expanded. The hand-rolled ⋯ menu is gone: the card's standard element menu now carries

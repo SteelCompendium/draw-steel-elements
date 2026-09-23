@@ -97,13 +97,15 @@ hand-edited total (or a block from before this board existed) can disagree with 
 board shows and still be trusted: your kept total is never silently overwritten by a
 recount.
 
-**Logging an action.** Click the **Log an action…** button at the bottom of the card, or
-click directly on a hero's cell for the round in play, and a small form opens: pick the
-hero and the round (both are pre-filled for you), pick success, failure or assist, and
+**Logging an action.** Click directly on a hero's cell for the round in play (or the small
+**+** beside a hero's name), and a small form opens for that hero and that round — both
+are named in the form's title, "Kira · round 3". Pick success, failure or assist, and
 optionally name the skill used and add a note. Nothing is written until you press **Log**.
-The form also shows, as a reminder, which power roll result starts a success at each
-difficulty — and if you have [rolling turned on](settings.md#rolling), a **Roll** button
-right there resolves the test and picks the result for you.
+The **Log an action…** button at the bottom of the card opens the same form for the next
+hero who hasn't acted yet this round. The form doesn't let you switch to a different hero
+or round — close it and click the cell you want instead. For a reminder of which power
+roll result counts as a success at each difficulty, open the **Test tiers** strip above
+the board.
 
 ![The Log an action sheet](Media/montage-sheet-modal.png)
 
@@ -140,17 +142,27 @@ button moves everyone on to the next round — it's the only way to advance the 
 of hand-editing the block. If ending a round uses up the last one and no limit has been
 hit, the montage finishes there (the outcome banner updates on its own).
 
-**Undoing the last thing you logged.** The **Undo** button beside it removes whatever was
-logged most recently — handy right after a slip of the finger. It only undoes the single
-most recent entry; for anything further back, click that cell directly to correct or
-remove it.
+**Undoing the last thing you logged.** The **Undo** button in the same bar removes
+whatever was logged most recently — handy right after a slip of the finger. It only undoes
+the single most recent entry; for anything further back, click that cell directly to
+correct or remove it.
 
-**When a montage finishes.** The board stands down to two buttons: **Reopen**, if the
-montage simply ran out of rounds with no limit reached (it adds one more round and picks
-up where you left off), and **Clear all**, which wipes the running successes, failures,
-the round, and everyone's logged actions and used skills so the same block can run the
-montage again from the top. Once a success or failure *limit* has actually been hit, that
-result is final — **Reopen** isn't offered, and **Clear all** is the only way back.
+**Going back a round.** Ended a round too early? From round 2 on, **Back to round N** (just
+before **End round**) returns the montage to the previous round. It only moves which round
+is in play — nothing you logged is removed, so anything already logged in the round you
+left is still there when you end the round again (Undo it first if it shouldn't count). It
+is also offered on a montage that finished by running out of rounds, to step back into its
+last round. Once a success or failure *limit* has been hit, there's no going back a round —
+that result is final.
+
+**When a montage finishes.** The bar under the board changes: **Undo** stays (so you can
+take back the action that just finished it), **Back to round N** and **Reopen** appear if
+the montage simply ran out of rounds with no limit reached (Back steps into the last round
+again; Reopen adds one more round and picks up where you left off), and **Clear all** wipes
+the running successes, failures, the round, and everyone's logged actions and used skills
+so the same block can run the montage again from the top. Once a success or failure
+*limit* has actually been hit, that result is final — **Back to round N** and **Reopen**
+aren't offered, and **Clear all** is the only way back.
 
 **The card's menu (⋯).** Hover the card for its menu panel: **Add a round** extends the
 montage by one round; **Add a hero** adds a new participant by name; **Set limits…** opens
