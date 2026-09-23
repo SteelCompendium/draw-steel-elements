@@ -1244,13 +1244,16 @@ shows the running score, and the tracker never re-derives one from the other. Th
 hand-edited total (or a block from before this board existed) can disagree with what the
 board shows and still be trusted: your kept total is never silently overwritten by a
 recount.</p>
-<p><strong>Logging an action.</strong> Click the <strong>Log an action…</strong> button at the bottom of the card, or
-click directly on a hero's cell for the round in play, and a small form opens: pick the
-hero and the round (both are pre-filled for you), pick success, failure or assist, and
+<p><strong>Logging an action.</strong> Click directly on a hero's cell for the round in play (or the small
+<strong>+</strong> beside a hero's name), and a small form opens for that hero and that round — both
+are named in the form's title, "Kira · round 3". Pick success, failure or assist, and
 optionally name the skill used and add a note. Nothing is written until you press <strong>Log</strong>.
-The form also shows, as a reminder, which power roll result starts a success at each
-difficulty — and if you have <a href="../settings/#rolling">rolling turned on</a>, a <strong>Roll</strong> button
-right there resolves the test and picks the result for you.</p>
+The <strong>Log an action…</strong> button at the bottom of the card opens the same form for the next
+hero who hasn't acted yet this round; once every hero has acted, it's greyed out — end the
+round, or click a cell to correct it. The form doesn't let you switch to a different hero
+or round — close it and click the cell you want instead. For a reminder of which power
+roll result counts as a success at each difficulty, open the <strong>Test tiers</strong> strip above
+the board.</p>
 <p><img alt="The Log an action sheet" src="../Media/montage-sheet-modal.png" /></p>
 <p>For an empty cell in the round currently in play, three small buttons sit right in the
 cell — a check, an X, and a plus — so you can log a success, failure, or assist in one
@@ -1279,16 +1282,25 @@ detail.</p>
 button moves everyone on to the next round — it's the only way to advance the round short
 of hand-editing the block. If ending a round uses up the last one and no limit has been
 hit, the montage finishes there (the outcome banner updates on its own).</p>
-<p><strong>Undoing the last thing you logged.</strong> The <strong>Undo</strong> button beside it removes whatever was
-logged most recently — handy right after a slip of the finger. It only undoes the single
-most recent entry; for anything further back, click that cell directly to correct or
-remove it.</p>
-<p><strong>When a montage finishes.</strong> The board stands down to two buttons: <strong>Reopen</strong>, if the
-montage simply ran out of rounds with no limit reached (it adds one more round and picks
-up where you left off), and <strong>Clear all</strong>, which wipes the running successes, failures,
-the round, and everyone's logged actions and used skills so the same block can run the
-montage again from the top. Once a success or failure <em>limit</em> has actually been hit, that
-result is final — <strong>Reopen</strong> isn't offered, and <strong>Clear all</strong> is the only way back.</p>
+<p><strong>Undoing the last thing you logged.</strong> The <strong>Undo</strong> button in the same bar removes
+whatever was logged most recently — handy right after a slip of the finger. It only undoes
+the single most recent entry; for anything further back, click that cell directly to
+correct or remove it.</p>
+<p><strong>Going back a round.</strong> Ended a round too early? From round 2 on, <strong>Back to round N</strong> (just
+before <strong>End round</strong>) returns the montage to the previous round. It only moves which round
+is in play — nothing you logged is removed, so anything already logged in the round you
+left is still there when you end the round again (Undo it first if it shouldn't count). It
+is also offered on a montage that finished by running out of rounds, to step back into its
+last round. Once a success or failure <em>limit</em> has been hit, there's no going back a round —
+that result is final.</p>
+<p><strong>When a montage finishes.</strong> The bar under the board changes: <strong>Undo</strong> stays (so you can
+take back the action that just finished it), <strong>Back to round N</strong> and <strong>Reopen</strong> appear if
+the montage simply ran out of rounds with no limit reached (Back steps into the last round
+again; Reopen adds one more round and picks up where you left off), and <strong>Clear all</strong> wipes
+the running successes, failures, the round, and everyone's logged actions and used skills
+so the same block can run the montage again from the top. Once a success or failure
+<em>limit</em> has actually been hit, that result is final — <strong>Back to round N</strong> and <strong>Reopen</strong>
+aren't offered, and <strong>Clear all</strong> is the only way back.</p>
 <p><strong>The card's menu (⋯).</strong> Hover the card for its menu panel: <strong>Add a round</strong> extends the
 montage by one round; <strong>Add a hero</strong> adds a new participant by name; <strong>Set limits…</strong> opens
 a small form to change the success/failure limits; <strong>Reset progress</strong> clears the running
