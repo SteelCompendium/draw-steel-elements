@@ -110,13 +110,16 @@ export class OutcomeBandView {
 			row.createSpan({ cls: 'dse-mt__track-empty', text: 'no limit set' });
 		} else {
 			// The countable track: length always states the Director's limit (ledger
-			// 2026-08-29's equal-width ruling), only fill states progress.
+			// 2026-08-29's equal-width ruling), only fill states progress. SC-334 (Scott:
+			// "the last cell of the successes and failures should not have a white border")
+			// dropped the `data-goal` mark the LAST slot used to carry for its bright
+			// end-cap outline — every slot is now the same shape, and the tail beside the
+			// track ("1 from Total Success") already says where the limit is.
 			const track = row.createDiv({ cls: 'dse-mt__track' });
 			track.setAttribute('data-kind', kind);
 			for (let i = 0; i < limit; i++) {
 				const slot = track.createSpan({ cls: 'dse-mt__track-slot' });
 				slot.setAttribute('data-filled', i < filled ? 'on' : 'off');
-				if (i === limit - 1) slot.setAttribute('data-goal', 'on');
 			}
 		}
 		row.createSpan({ cls: 'dse-mt__prog-tail', text: tail });

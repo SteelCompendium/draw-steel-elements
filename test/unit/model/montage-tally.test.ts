@@ -23,6 +23,8 @@ import {
 	endMontageRound,
 	undoLastMontageEntry,
 	montageReopenable,
+	montagePreviousRound,
+	backMontageRound,
 } from '../../../src/elements/montage/model';
 import type { MontageModel, MontageEntry } from '../../../src/elements/montage/model';
 import { parseYaml } from '../../mocks/obsidian';
@@ -401,5 +403,79 @@ describe('SC-191 fix round 2: endMontageRound / undoLastMontageEntry / montageRe
 		const m = { ...base, successes: 1, failures: 0 };
 		expect(montageTallies(m).complete).toBe(false);
 		expect(montageReopenable(m)).toBe(false);
+	});
+});
+
+describe('SC-334: montagePreviousRound / backMontageRound — "Back to round N"', () => {
+	test('live, past round 1: targets current_round − 1 and moves only the round pointer', () => {
+		const entries: MontageEntry[] = [
+			{ hero: 'Kira', round: 1, result: 'success' },
+			{ hero: 'Kira', round: 2, result: 'failure' },
+		];
+		const m: MontageModel = { ...base, rounds: 3, successes: 1, failures: 1, current_round: 3, entries };
+		expect(montagePreviousRound(m)).toBe(2);
+		backMontageRound(m);
+		expect(m.current_round).toBe(2);
+		expect(m.successes).toBe(1);
+		expect(m.failures).toBe(1);
+		expect(m.entries).toBe(entries);
+		expect(m.entries).toHaveLength(2);
+	});
+
+	test('round 1: no way back (undefined), and backMontageRound is a no-op', () => {
+		const m: MontageModel = { ...base, current_round: 1 };
+		expect(montagePreviousRound(m)).toBeUndefined();
+		backMontageRound(m);
+		expect(m.current_round).toBe(1);
+	});
+
+	test('complete by ROUNDS alone: targets the last round and makes the montage live again, `rounds` unchanged', () => {
+		const m: MontageModel = { ...base, rounds: 3, successes: 2, failures: 1, current_round: 4 };
+		expect(montageTallies(m).complete).toBe(true);
+		expect(montagePreviousRound(m)).toBe(3);
+		backMontageRound(m);
+		expect(m.current_round).toBe(3);
+		expect(m.rounds).toBe(3);
+		expect(montageTallies(m).complete).toBe(false);
+	});
+
+	test('a hand-edited current_round far past the last column comes back to `rounds`, not current_round − 1', () => {
+		const m: MontageModel = { ...base, rounds: 3, current_round: 9 };
+		expect(montagePreviousRound(m)).toBe(3);
+	});
+
+	test('complete by the SUCCESS limit or the FAILURE limit: no way back — a limit is a verdict', () => {
+		const won: MontageModel = { ...base, rounds: 3, successes: 6, current_round: 2 };
+		const lost: MontageModel = { ...base, rounds: 3, failures: 3, current_round: 3 };
+		for (const m of [won, lost]) {
+			expect(montageTallies(m).complete).toBe(true);
+			expect(montagePreviousRound(m)).toBeUndefined();
+			const before = m.current_round;
+			backMontageRound(m);
+			expect(m.current_round).toBe(before);
+		}
+	});
+
+	test('Back then End round is a round trip that serializes byte-identically', () => {
+		const source = [
+			'rounds: 3',
+			'success_limit: 6',
+			'failure_limit: 3',
+			'successes: 1',
+			'failures: 0',
+			'participants:',
+			'  - name: Kira',
+			'    skills_used: []',
+			'entries:',
+			'  - hero: Kira',
+			'    round: 2',
+			'    result: success',
+			'current_round: 2',
+		].join('\n');
+		const m = parseLikePipeline(source);
+		backMontageRound(m);
+		expect(m.current_round).toBe(1);
+		endMontageRound(m);
+		expect(serialize(m)).toBe(serialize(parseLikePipeline(source)));
 	});
 });

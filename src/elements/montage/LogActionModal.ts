@@ -8,17 +8,20 @@
 // modal — same separation ConditionsPanel keeps from ConditionsModal (spec §D: "rendering
 // never writes").
 //
-// Five fields, in the mock's own order (mock6.js's `sheet()`): Hero, Round, Result (plus
-// the round-5 tier hint and, new this slice, the roll affordance — spec §D "keep the
-// capability by wiring the sheet's Result field to it"), Skill (plus the live skill-reuse
-// warning, Draw Steel Heroes:21286), Note (multi-line, optional, Scott's round-3 ask
-// verbatim). Footer: Remove (danger, edit only) · Cancel (ghost) · Log/Save (accent) —
-// spec §D's own footer line.
+// SC-334 (Scott, verbatim): "remove the "success starts at" row and the "roll" row" and
+// "remove the ability to change the hero and round. Those values should be determined when
+// opening the modal and represented in the title of the modal (as they already are). The
+// behavior to change the hero and round in the modal is confusing and not needed." So the
+// sheet is THREE fields now: Result, Skill (plus the live skill-reuse warning, Draw Steel
+// Heroes:21286), Note (multi-line, optional, Scott's SC-191 round-3 ask verbatim). The hero
+// and round are fixed by whatever opened the sheet (a cell, a row's button, the bar) and are
+// stated once, in the title. The difficulty tiers the hint used to repeat are still one tap
+// away in the card's own "Test tiers" strip. Footer: Remove (danger, edit only) · Cancel
+// (ghost) · Log/Save (accent) — spec §D's own footer line.
 import type { App } from 'obsidian';
 import { setIcon } from 'obsidian';
-import { DseModal, iconButton, tierBadge } from '@/framework/kit';
+import { DseModal } from '@/framework/kit';
 import type { IconButtonHandle } from '@/framework/kit';
-import type { RollService } from '@/framework/roll/service';
 import type { MontageEntry, MontageModel, MontageResult } from './model';
 import { wouldReuseSkill, isKnownMontageResult } from './model';
 
@@ -34,18 +37,9 @@ const RESULT_CHIPS: { value: MontageResult; label: string; icon: string }[] = [
 	{ value: 'assist', label: 'Assist', icon: 'circle-plus' },
 ];
 
-/** The tier hint's three difficulty/badge pairs, in the mock's own order
- *  (mock6.js:1577-1585) — fix round 3 (review-2 M-3). */
-const TIER_HINT_DIFFICULTIES: { tier: 'low' | 'mid' | 'high'; word: string }[] = [
-	{ tier: 'low', word: 'easy' },
-	{ tier: 'mid', word: 'medium' },
-	{ tier: 'high', word: 'hard' },
-];
-
 export interface LogActionModalOptions {
 	model: MontageModel;
 	mode: SheetMode;
-	roll: RollService | undefined;
 	/** Log (new mode) or Save (edit mode) — the caller applies the mutation. */
 	onSubmit: (entry: MontageEntry) => void;
 	/** Remove — present (and the footer button rendered) only in edit mode. */
@@ -73,40 +67,38 @@ function field(parent: HTMLElement, label: string): HTMLElement {
 export class LogActionModal extends DseModal {
 	private readonly model: MontageModel;
 	private readonly mode: SheetMode;
-	private readonly roll: RollService | undefined;
 	private readonly onSubmitCb: (entry: MontageEntry) => void;
 	private readonly onRemoveCb: (() => void) | undefined;
 
-	private selectedHero: string;
-	private selectedRound: number;
+	/** SC-334: fixed at open — the sheet has no Hero/Round controls any more, so these are
+	 *  never reassigned (a correction keeps the entry's own hero and round). */
+	private readonly hero: string;
+	private readonly round: number;
 	private selectedResult: MontageResult | undefined;
 	private skillValue: string;
 	private noteValue: string;
 
 	private commitBtn!: IconButtonHandle;
 	private skillWarnEl!: HTMLElement;
-	private heroChipEls: HTMLButtonElement[] = [];
-	private roundChipEls: HTMLButtonElement[] = [];
 	private resultChipEls: HTMLButtonElement[] = [];
 
 	constructor(app: App, opts: LogActionModalOptions) {
 		super(app);
 		this.model = opts.model;
 		this.mode = opts.mode;
-		this.roll = opts.roll;
 		this.onSubmitCb = opts.onSubmit;
 		this.onRemoveCb = opts.onRemove;
 
 		if (this.mode.kind === 'edit') {
 			const e = this.mode.entry;
-			this.selectedHero = e.hero;
-			this.selectedRound = e.round;
+			this.hero = e.hero;
+			this.round = e.round;
 			this.selectedResult = isKnownMontageResult(e.result) ? e.result : undefined;
 			this.skillValue = e.skill ?? '';
 			this.noteValue = e.note ?? '';
 		} else {
-			this.selectedHero = this.mode.hero;
-			this.selectedRound = this.mode.round;
+			this.hero = this.mode.hero;
+			this.round = this.mode.round;
 			// New records default to Success (mock6.js's own sheet() default) — the common
 			// case, one tap away from correct either way.
 			this.selectedResult = 'success';
@@ -121,9 +113,9 @@ export class LogActionModal extends DseModal {
 		// mock's own subject line (mock6.js:1508-1524, "Kira · round 3" / "Bram · round
 		// 2") — not a repeat of the eyebrow. "Naming it in the title is what makes a
 		// pre-filled dialog safe: you can see what it will change before you change
-		// anything" (the mock's own comment) — a Hero/Round chip row is still an EDITABLE
-		// control, so it cannot carry that safety property on its own.
-		this.setDseTitle(`${this.selectedHero} · round ${this.selectedRound}`);
+		// anything" (the mock's own comment). SC-334: with the Hero/Round chips gone, the
+		// title is now the ONLY place the sheet states who and which round it writes.
+		this.setDseTitle(`${this.hero} · round ${this.round}`);
 		this.dseModalRoot().addClass('dse-mt__sheet');
 
 		const head = this.body.createDiv({ cls: 'dse-mt__sheet-head' });
@@ -133,11 +125,9 @@ export class LogActionModal extends DseModal {
 			text:
 				this.mode.kind === 'edit'
 					? `recorded as ${article(this.mode.entry.result)} ${this.mode.entry.result}${this.mode.entry.skill ? ' with ' + this.mode.entry.skill : ''}`
-					: 'next hero yet to act in the round in play',
+					: this.newModeSub(),
 		});
 
-		this.renderHeroField();
-		this.renderRoundField();
 		this.renderResultField();
 		this.renderSkillField();
 		this.renderNoteField();
@@ -176,59 +166,14 @@ export class LogActionModal extends DseModal {
 		return this.modalEl ?? this.containerEl;
 	}
 
-	// ---------------------------------------------------------------------- Hero
-
-	private renderHeroField(): void {
-		const control = field(this.body, 'Hero');
-		const group = control.createDiv({ cls: 'dse-durseg' });
-		group.setAttribute('role', 'group');
-		group.setAttribute('aria-label', 'Hero');
-		this.heroChipEls = [];
-		for (const p of this.model.participants ?? []) {
-			const chip = group.createEl('button', { cls: 'dse-optchip', text: p.name });
-			chip.setAttribute('type', 'button');
-			chip.setAttribute('aria-label', p.name);
-			this.lifecycle.registerDomEvent(chip, 'click', () => {
-				this.selectedHero = p.name;
-				this.reflectHero();
-				this.refreshSkillWarning();
-			});
-			this.heroChipEls.push(chip);
-		}
-		this.reflectHero();
-	}
-
-	private reflectHero(): void {
-		for (const chip of this.heroChipEls) {
-			chip.setAttribute('aria-pressed', String(chip.textContent === this.selectedHero));
-		}
-	}
-
-	// ---------------------------------------------------------------------- Round
-
-	private renderRoundField(): void {
-		const control = field(this.body, 'Round');
-		const group = control.createDiv({ cls: 'dse-durseg' });
-		group.setAttribute('role', 'group');
-		group.setAttribute('aria-label', 'Round');
-		this.roundChipEls = [];
-		for (let r = 1; r <= this.model.rounds; r++) {
-			const chip = group.createEl('button', { cls: 'dse-optchip', text: String(r) });
-			chip.setAttribute('type', 'button');
-			chip.setAttribute('aria-label', `Round ${r}`);
-			this.lifecycle.registerDomEvent(chip, 'click', () => {
-				this.selectedRound = r;
-				this.reflectRound();
-			});
-			this.roundChipEls.push(chip);
-		}
-		this.reflectRound();
-	}
-
-	private reflectRound(): void {
-		this.roundChipEls.forEach((chip, i) => {
-			chip.setAttribute('aria-pressed', String(i + 1 === this.selectedRound));
-		});
+	/** SC-334: the new-mode sub-line used to read "next hero yet to act in the round in
+	 *  play" for EVERY new sheet — true only when the bar's `Log an action…` opened it. A
+	 *  cell or a row's own button can open it for any hero, and a past-round cell (SC-299
+	 *  R-2) for an earlier round; with the Hero/Round chips gone the head is the only
+	 *  context the sheet gives, so it now says which kind of round this is instead. */
+	private newModeSub(): string {
+		if (this.round === this.model.current_round) return 'the round in play';
+		return this.round < this.model.current_round ? 'a round already played' : 'a round still to come';
 	}
 
 	// ---------------------------------------------------------------------- Result
@@ -258,72 +203,12 @@ export class LogActionModal extends DseModal {
 			this.resultChipEls.push(chip);
 		}
 		this.reflectResult();
-
-		// ROUND 5 — the tier hint (spec §A/§D): "the sheet is the adjudication moment", so
-		// the one line the decision actually needs — where each difficulty's SUCCESS starts
-		// — lives here, read-only rules text, never touching the model (spec §D "strip and
-		// foot guide read nothing from the model" — this hint is cut from the same cloth).
-		// FIX ROUND 3 (review-2 M-3): each badge carries its DIFFICULTY WORD beside it
-		// (mock6.js:1577-1585's two-span `mt5-tierhint__diff`/`mt5-tierhint__band` shape,
-		// approved on `sc191-r5-sheet-log-dark.png`: "SUCCESS STARTS AT  EASY ≤11  MEDIUM
-		// 12–16  HARD 17+") — three bare ranges with no difficulty attached made the badges'
-		// own left-to-right order the only thing telling a reader which is which, which is
-		// exactly the fact this hint exists to supply.
-		const hint = control.createDiv({ cls: 'dse-mt__sheet-tierhint' });
-		hint.createSpan({ cls: 'dse-mt__sheet-tierhint-lead', text: 'success starts at' });
-		const badges = hint.createDiv({ cls: 'dse-mt__sheet-tiers' });
-		for (const { tier, word } of TIER_HINT_DIFFICULTIES) {
-			// `nowrap` on the pair (CSS): the mock's own rule is that the line wraps
-			// between the lead and the group, or between two tiers — never inside one.
-			const pair = badges.createSpan({ cls: 'dse-mt__sheet-tierhint-pair' });
-			pair.createSpan({ cls: 'dse-mt__sheet-tierhint-diff', text: word });
-			tierBadge(pair, tier);
-		}
-
-		// The roll affordance (spec §D: "keep the capability by wiring the sheet's Result
-		// field to it… when cx.roll exists"). A plain characteristic input + Roll button,
-		// the same shape the pre-SC-191 ParticipantsView offered — never blocks manual
-		// entry, only preselects a chip.
-		if (this.roll) this.renderRollAffordance(control);
 	}
 
 	private reflectResult(): void {
 		this.resultChipEls.forEach((chip, i) => {
 			chip.setAttribute('aria-pressed', String(RESULT_CHIPS[i].value === this.selectedResult));
 		});
-	}
-
-	private renderRollAffordance(control: HTMLElement): void {
-		const row = control.createDiv({ cls: 'dse-mt__sheet-roll' });
-		const charInput = row.createEl('input', { cls: 'dse-mt__sheet-rollchar', type: 'number' });
-		charInput.value = '0';
-		charInput.setAttribute('aria-label', 'Characteristic score for the roll');
-		const resultEl = row.createSpan({ cls: 'dse-mt__sheet-rollresult' });
-		resultEl.setAttribute('aria-live', 'polite');
-
-		const rollBtn = iconButton(
-			row,
-			{
-				icon: 'dices',
-				label: 'Roll a test',
-				text: 'Roll',
-				variant: 'ghost',
-				onClick: () => {
-					if (!this.roll) return;
-					const characteristic = Number(charInput.value) || 0;
-					const skillBonus = this.skillValue.trim() !== '' ? 2 : 0;
-					const result = this.roll.resolve({ mode: 'test', characteristic, skillBonus });
-					const tier = result.tier ?? 1;
-					const success = tier >= 2;
-					this.selectedResult = success ? 'success' : 'failure';
-					this.reflectResult();
-					this.refreshValidity();
-					resultEl.setText(`(${result.total}, tier ${tier}) — ${success ? 'success' : 'failure'}`);
-				},
-			},
-			this.lifecycle,
-		);
-		rollBtn.buttonEl.addClass('dse-mt__sheet-rollbtn');
 	}
 
 	// ---------------------------------------------------------------------- Skill
@@ -339,8 +224,8 @@ export class LogActionModal extends DseModal {
 			this.refreshSkillWarning();
 		});
 		// FIX ROUND 3 (review-2 L-4): the mock's own skill hint (mock6.js:1607,
-		// "optional · +2 when applicable") — the rule a Director needs at the same
-		// moment as the tier hint above. `.dse-mt__sheet-hint`, NOT `.dse-mt__sheet-warn`
+		// "optional · +2 when applicable") — the one rule a Director needs while choosing
+		// the skill. `.dse-mt__sheet-hint`, NOT `.dse-mt__sheet-warn`
 		// (round 4/5's own distinction, re-affirmed by L-4's fix: this is guidance, not a
 		// violation — the warn slot is reserved for the skill-reuse rule actually firing).
 		control.createSpan({ cls: 'dse-mt__sheet-hint', text: 'optional · +2 when applicable' });
@@ -356,8 +241,8 @@ export class LogActionModal extends DseModal {
 	private refreshSkillWarning(): void {
 		const skill = this.skillValue.trim();
 		const excluding = this.mode.kind === 'edit' ? this.mode.entry : undefined;
-		const reused = skill !== '' && wouldReuseSkill(this.model, this.selectedHero, skill, excluding);
-		this.skillWarnEl.setText(reused ? `${this.selectedHero} already used ${skill} in this montage — reuse is not allowed` : '');
+		const reused = skill !== '' && wouldReuseSkill(this.model, this.hero, skill, excluding);
+		this.skillWarnEl.setText(reused ? `${this.hero} already used ${skill} in this montage — reuse is not allowed` : '');
 		// D2 §5: shown/hidden via the `hidden` ATTRIBUTE, never inline display (the
 		// `.dse-sedit__warn` convention, StaminaEditModal.ts).
 		this.skillWarnEl.hidden = !reused;
@@ -386,23 +271,24 @@ export class LogActionModal extends DseModal {
 
 	// ---------------------------------------------------------------------- commit
 
-	/** Log/Save is disabled until a Hero, a Round and a Result are all chosen — the one
-	 *  case that starts unresolved is an EDIT of an entry whose `result` is an
+	/** Log/Save is disabled until a Result is chosen (the hero and round are fixed at open)
+	 *  — the one case that starts unresolved is an EDIT of an entry whose `result` is an
 	 *  unrecognised Director typo (model.ts's `isKnownMontageResult`), which pre-fills no
 	 *  chip on purpose rather than silently guessing one. FIX ROUND 3 (review-2 M-1,
 	 *  guard 2 of 2 — guard 1 is BoardView.ts's own row-chip `complete` gate): the round
 	 *  bound is `1..this.model.rounds`, not merely `> 0` — the sheet can be opened for a
 	 *  round that no longer has a board column at all (BoardView's per-row chip used to
 	 *  stay live after `End round N` on a complete montage, targeting
-	 *  `current_round === rounds + 1`; even with that fixed, `rounds` itself can still
-	 *  change WHILE the sheet is open in ways the sheet's own Round chips cannot exceed
-	 *  by construction — this is the second, independent guard so the commit can never
-	 *  write a round the board has no column for, whatever opened it). */
+	 *  `current_round === rounds + 1`; even with that fixed, this is the second,
+	 *  independent guard so the commit can never write a round the board has no column
+	 *  for, whatever opened it). SC-334: with the Round chips gone the round can no longer
+	 *  be corrected INSIDE the sheet, so an out-of-range round simply leaves Log/Save
+	 *  disabled — the sheet can only be cancelled, never write it. */
 	private refreshValidity(): void {
 		const valid =
-			this.selectedHero !== '' &&
-			this.selectedRound >= 1 &&
-			this.selectedRound <= this.model.rounds &&
+			this.hero !== '' &&
+			this.round >= 1 &&
+			this.round <= this.model.rounds &&
 			this.selectedResult !== undefined;
 		this.commitBtn?.setDisabled(!valid);
 	}
@@ -411,7 +297,7 @@ export class LogActionModal extends DseModal {
 		if (this.selectedResult === undefined) return; // defensive — the button is disabled
 		const skill = this.skillValue.trim();
 		const note = this.noteValue.trim();
-		const entry: MontageEntry = { hero: this.selectedHero, round: this.selectedRound, result: this.selectedResult };
+		const entry: MontageEntry = { hero: this.hero, round: this.round, result: this.selectedResult };
 		if (skill) entry.skill = skill;
 		if (note) entry.note = note;
 		this.onSubmitCb(entry);

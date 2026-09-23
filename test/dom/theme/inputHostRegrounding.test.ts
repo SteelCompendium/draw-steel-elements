@@ -43,16 +43,20 @@ const ANCHOR = ':is([data-dse-element], .dse-modal):not([data-dse-print="on"])';
 // left this list naming classes no `src/` call site emits any more; renamed rather
 // than dropped, since the sheet's own two fields need exactly the same coverage the
 // old board fields had (an "SC-202 integration delta", not a montage design change).
+// SC-334 retired `.dse-mt__sheet-rollchar` with the sheet's roll row (Scott: "remove …
+// the "roll" row"), so the montage half of this list is `.dse-mt__sheet-input` alone.
 const COUSIN_INPUTS = [
 	'.dse-init__malice-quickadd-amount',
 	'.dse-init__malice-quickadd-label',
 	'.dse-mt__sheet-input',
-	'.dse-mt__sheet-rollchar',
 	'.dse-party__award-input',
 	'.dse-prj__roll-input',
 	'.dse-prj__points-input',
 	'.dse-prj__char-input',
 ];
+/** SC-334: `.dse-mt__sheet-input` declares its own `width: 100%; box-sizing: border-box`,
+ *  so — like `.dse-form__raw` — it stays OUT of GROUP 1's `box-sizing: content-box`. */
+const GROUP1_COUSINS = COUSIN_INPUTS.filter((sel) => sel !== '.dse-mt__sheet-input');
 
 test('the SC-202 r1 block is still in the sheet', () => {
 	expect(blockStart).toBeGreaterThan(0);
@@ -63,10 +67,10 @@ describe('SC-202 r1 — GROUP 1: height + box-sizing, all nine input selectors',
 		new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\) \\{([^}]*)\\}'),
 	);
 
-	test('the shared block exists and names all nine selectors', () => {
+	test('the shared block exists and names the stepper plus every GROUP-1 cousin', () => {
 		expect(m).not.toBeNull();
 		expect(m![1]).toContain('.dse-stepper__input');
-		for (const sel of COUSIN_INPUTS) expect(m![1]).toContain(sel);
+		for (const sel of GROUP1_COUSINS) expect(m![1]).toContain(sel);
 	});
 
 	test('height is `auto` — never a pixel figure (same lesson as the SC-203 block)', () => {
@@ -209,6 +213,25 @@ describe('SC-202 r1 fix round (HIGH-3) — the three modal-only controls get GRO
 		// killed the ring on a source-order tie. See the dedicated guard test below, which
 		// checks this for every selector the ring names, not just condal.
 		expect(g![1]).not.toContain('outline: none;');
+	});
+
+	// SC-334: GROUP 1's `content-box` (0,0,2,0) beat the sheet rule's own
+	// `.dse-mt__sheet-input { width: 100%; box-sizing: border-box }` (0,0,1,0), so padding +
+	// border pushed the montage sheet's Skill input and Note textarea 14.8px past the modal
+	// body in a real vault and the body scrolled sideways (Scott's clipped-right-edge report,
+	// measured by obsidian-camera.mjs's modal overflow check). Can-fail: put the selector back
+	// in GROUP 1's list and the first expectation fails.
+	test('`.dse-mt__sheet-input` stays OUT of GROUP 1, and its own GROUP-2 rule carries `height: auto`', () => {
+		const group1 = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(([^)]*)\\) \\{ height: auto;'));
+		expect(group1).not.toBeNull();
+		expect(group1![1]).not.toContain('.dse-mt__sheet-input');
+		const g = flat.match(new RegExp(escape(ANCHOR) + ' :where\\(\\.dse-mt__sheet-input\\) \\{([^}]*)\\}'));
+		expect(g).not.toBeNull();
+		expect(g![1]).toContain('height: auto;');
+		expect(g![1]).toContain('caret-color: var(--dse-fg);');
+		expect(g![1]).not.toContain('box-sizing');
+		// ...and the declared value it must not be overridden away from is still there.
+		expect(rawCss).toMatch(/\n\.dse-mt__sheet-input \{\s*width: 100%;\s*box-sizing: border-box;/);
 	});
 
 	test('`.dse-form__raw` gets the modal-section field material, and stays OUT of GROUP 1', () => {

@@ -115,6 +115,9 @@ const verdictEyebrow = (root: HTMLElement) =>
 	outcomeBand(root).querySelector('.dse-mt__verdict-eyebrow') as HTMLElement;
 const trackSlots = (root: HTMLElement, kind: 'success' | 'failure') =>
 	Array.from(outcomeBand(root).querySelectorAll(`.dse-mt__track[data-kind="${kind}"] .dse-mt__track-slot`));
+/** SC-334: the Log an action… sheet's field labels, in DOM order. */
+const sheetFieldLabels = (modalEl: HTMLElement) =>
+	Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-mt__sheet-label')).map((l) => l.textContent);
 const progTail = (root: HTMLElement, kind: 'success' | 'failure') =>
 	outcomeBand(root).querySelector(`.dse-mt__prog[data-kind="${kind}"] .dse-mt__prog-tail`)?.textContent;
 
@@ -282,9 +285,10 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		cell.click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
 		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
-		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
-		const kiraChip = heroChips.find((c) => c.textContent === 'Kira') as HTMLButtonElement;
-		expect(kiraChip.getAttribute('aria-pressed')).toBe('true');
+		// SC-334: the hero and round are fixed at open and stated in the title — the sheet
+		// carries no Hero/Round chips to pre-select any more.
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Kira · round 3');
+		expect(sheetFieldLabels(modalEl)).toEqual(['Result', 'Skill', 'Note']);
 	});
 
 	// SLICE 4: clicking a RECORDED cell opens the sheet in EDIT mode, pre-filled from the
@@ -380,9 +384,9 @@ describe('SC-191 slice 2: BoardView (Heroes × rounds × Tally, read from model.
 		// the fixture's current round); the eyebrow carries "Log an action" instead.
 		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Bram · round 3');
 		expect(modalEl.querySelector('.dse-mt__sheet-eyebrow')?.textContent).toBe('Log an action');
-		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
-		const bramChip = heroChips.find((c) => c.textContent === 'Bram') as HTMLButtonElement;
-		expect(bramChip.getAttribute('aria-pressed')).toBe('true');
+		// SC-334: Bram is not the next hero to act (Kira is, on mid), so the sub-line must not
+		// claim he is — it names the round kind, which is true for every opener.
+		expect(modalEl.querySelector('.dse-mt__sheet-sub')?.textContent).toBe('the round in play');
 	});
 
 	test('with no participants authored, the board renders an explanatory empty row instead of throwing', async () => {
@@ -545,9 +549,7 @@ describe('SC-299 R-1: the open-socket quick trio (mock6.js:1841-1856, round2.css
 		cell.click(); // the cell's own click target, not a child button
 		const modalEl = document.body.lastElementChild as HTMLElement;
 		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
-		const heroChips = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field .dse-optchip'));
-		const bramChip = heroChips.find((c) => c.textContent === 'Bram') as HTMLButtonElement;
-		expect(bramChip.getAttribute('aria-pressed')).toBe('true');
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Bram · round 2');
 	});
 
 	// review-1 MED-2: `role="button"` on the cell is one of the ARIA roles with Children
@@ -628,13 +630,17 @@ describe('SC-299 R-2: an empty PAST-round cell becomes an edit target', () => {
 		cell.click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
 		expect(modalEl.classList.contains('dse-mt__sheet')).toBe(true);
+		// SC-334: the title states the PAST round this cell writes, and the sub-line says so
+		// in words rather than claiming "the round in play".
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe('Bram · round 1');
+		expect(modalEl.querySelector('.dse-mt__sheet-sub')?.textContent).toBe('a round already played');
 		(modalEl.querySelector('.dse-optchip[data-kind="success"]') as HTMLButtonElement).click();
 		(modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).click();
 		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 
 		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
-		// Lands as ROUND 1, not current_round (2) — the sheet's Round chips already accept
-		// any 1..rounds and logMontageEntry does not care which round (R-2's own doc).
+		// Lands as ROUND 1, not current_round (2) — the sheet writes whatever round opened it
+		// and logMontageEntry does not care which round (R-2's own doc).
 		expect(cellFor(rebuilt, 'Bram', 1).getAttribute('data-kind')).toBe('success');
 		expect(tallyN(tallyFor(rebuilt, 'Bram'), 'success')).toBe('1');
 		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
@@ -753,15 +759,15 @@ describe('SC-191 slice 2: OutcomeBandView (verdict / equal-width tracks / rule /
 	// `assertMontageTrackWidths` in visual-harness/shoot.mjs (`npm run shots`'s
 	// "montage track widths OK" line), a Playwright measurement on the `montage-mid`
 	// capture — this test's name says what IT proves, not the ruling as a whole.
-	test('track slot counts match `success_limit`/`failure_limit` exactly, and the goal slot marks the last one — the DOM-shape precondition the real width gate (shoot.mjs) depends on', async () => {
+	test('track slot counts match `success_limit`/`failure_limit` exactly, and every slot is drawn alike — the DOM-shape precondition the real width gate (shoot.mjs) depends on', async () => {
 		const { root } = await renderMontage(montageMidYaml); // success_limit 6, failure_limit 3
 		expect(trackSlots(root, 'success')).toHaveLength(6);
 		expect(trackSlots(root, 'failure')).toHaveLength(3);
-		// The goal slot (the limit itself) is marked on the LAST slot of each track.
-		const successSlots = trackSlots(root, 'success');
-		const failureSlots = trackSlots(root, 'failure');
-		expect(successSlots[successSlots.length - 1].getAttribute('data-goal')).toBe('on');
-		expect(failureSlots[failureSlots.length - 1].getAttribute('data-goal')).toBe('on');
+		// SC-334 (Scott: "the last cell of the successes and failures should not have a white
+		// border"): the last slot no longer carries the `data-goal` end-cap mark.
+		for (const slot of [...trackSlots(root, 'success'), ...trackSlots(root, 'failure')]) {
+			expect(slot.hasAttribute('data-goal')).toBe(false);
+		}
 	});
 
 	test('the at-a-glance tail phrasing matches montageBandCopy exactly on the mid fixture', async () => {
@@ -1001,12 +1007,17 @@ describe('T-6: Reset progress (⋯ item) / Clear all (done-state bar) — clear 
 });
 
 describe('SC-191 fix round 2: the bottom action bar (mock6.js `actionBar()`)', () => {
-	test('LIVE state (not complete): `Log an action…` (accent) · `Undo` · `End round N`, in that DOM order, no Reopen/Clear all', async () => {
+	test('LIVE state (not complete): `Log an action…` (accent) · `Undo` · `Back to round N−1` · `End round N`, in that DOM order, no Reopen/Clear all', async () => {
 		const { root } = await renderMontage(montageMidYaml); // current_round 3, not complete
 		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
 		expect(bar.getAttribute('data-complete')).toBe('off');
 		const buttons = Array.from(bar.querySelectorAll('button'));
-		expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Log an action…', 'Undo', 'End round 3']);
+		expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+			'Log an action…',
+			'Undo',
+			'Back to round 2',
+			'End round 3',
+		]);
 		expect(buttons[0].classList.contains('dse-btn--accent')).toBe(true);
 		expect(bar.querySelector('button[aria-label="Reopen"]')).toBeNull();
 		expect(bar.querySelector('button[aria-label="Clear all"]')).toBeNull();
@@ -1059,6 +1070,102 @@ describe('SC-191 fix round 2: the bottom action bar (mock6.js `actionBar()`)', (
 		expect(outcomeBand(rebuilt).getAttribute('data-band')).not.toBe('pending');
 		expect((rebuilt.querySelector('.dse-mt__actionrow') as HTMLElement).getAttribute('data-complete')).toBe('on');
 		jest.useRealTimers();
+	});
+
+	// SC-334 (Scott, verbatim): "I cant find a way to go to the previous round. For
+	// example, if I remove round results or hit the "undo" button enough, it should be a
+	// previous round, but I have no controls to mark that."
+	test('SC-334: "Back to round N" moves `current_round` back one round, persists, and touches no entry — End round then returns to it intact', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // current_round 3, entries in rounds 1-2
+		const back = root.querySelector('.dse-mt__actionrow button[aria-label="Back to round 2"]') as HTMLButtonElement;
+		expect(back).not.toBeNull();
+		expect(back.disabled).toBe(false);
+		expect(back.textContent).toContain('Back to round 2');
+		back.click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).toHaveBeenCalledTimes(1);
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('current_round: 2');
+		// Pure pointer movement: tallies and entries are byte-for-byte what they were.
+		expect(written).toContain('successes: 5');
+		expect(written).toContain('failures: 2');
+		expect(parse(parseYaml(written), written).entries).toEqual(parse(parseYaml(montageMidYaml), montageMidYaml).entries);
+
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(rebuilt.querySelector('.dse-mt__board-rhead[data-round="2"]')?.getAttribute('data-state')).toBe('current');
+		expect(rebuilt.querySelector('.dse-mt__board-rhead[data-round="3"]')?.getAttribute('data-state')).toBe('future');
+		// The bar now offers the way back to round 1 and ends round 2 — the round trip.
+		const labels = Array.from(rebuilt.querySelectorAll('.dse-mt__actionrow button')).map((b) => b.getAttribute('aria-label'));
+		expect(labels).toEqual(['Log an action…', 'Undo', 'Back to round 1', 'End round 2']);
+		jest.useRealTimers();
+	});
+
+	test('SC-334: no "Back to round" in round 1 — there is no earlier round to go back to', async () => {
+		const { root } = await renderMontage(); // default fixture, current_round 1
+		expect(root.querySelector('.dse-mt__actionrow button[aria-label^="Back to round"]')).toBeNull();
+	});
+
+	test('SC-334: Undo then Back — Scott\'s own sequence lands in the previous round with its entries intact', async () => {
+		jest.useFakeTimers();
+		const { host } = await renderMontage(QUICK_TRIO_FIXTURE); // current_round 2; last entry: Kira round 2
+		let root = host.containerEl.firstElementChild as HTMLElement;
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Undo"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		root = host.containerEl.firstElementChild as HTMLElement;
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Back to round 1"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const calls = (host.replaceSource as jest.Mock).mock.calls;
+		const written = calls[calls.length - 1][0] as string;
+		expect(written).toContain('current_round: 1');
+		const model = parse(parseYaml(written), written);
+		expect(model.entries).toEqual([{ hero: 'Kira', round: 1, result: 'success' }]);
+		root = host.containerEl.firstElementChild as HTMLElement;
+		expect(cellFor(root, 'Kira', 1).getAttribute('data-kind')).toBe('success');
+		expect(cellFor(root, 'Kira', 1).getAttribute('data-state')).toBe('current');
+		jest.useRealTimers();
+	});
+
+	test('SC-334: a montage that ran out of ROUNDS offers "Back to round <last>", which makes it live again without adding a round', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(
+			[
+				'title: Ended Too Soon',
+				'rounds: 3',
+				'success_limit: 6',
+				'failure_limit: 3',
+				'successes: 4',
+				'failures: 1',
+				'participants:',
+				'  - name: Kira',
+				'    skills_used: []',
+				'current_round: 4',
+			].join('\n'),
+		);
+		const bar = root.querySelector('.dse-mt__actionrow') as HTMLElement;
+		expect(bar.getAttribute('data-complete')).toBe('on');
+		expect(Array.from(bar.querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual([
+			'Undo',
+			'Back to round 3',
+			'Reopen',
+			'Clear all',
+		]);
+		(bar.querySelector('button[aria-label="Back to round 3"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toContain('current_round: 3');
+		expect(written).toContain('rounds: 3'); // unlike Reopen, no round is added
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect((rebuilt.querySelector('.dse-mt__actionrow') as HTMLElement).getAttribute('data-complete')).toBe('off');
+		jest.useRealTimers();
+	});
+
+	test('SC-334: a montage completed by a LIMIT offers no "Back to round" — a limit is a verdict (montage-done)', async () => {
+		const { root } = await renderMontage(montageDoneYaml);
+		expect(root.querySelector('.dse-mt__actionrow button[aria-label^="Back to round"]')).toBeNull();
 	});
 
 	// FIX ROUND 3 (review-2 L-3): the complete-state bar keeps `Undo` — logging the
@@ -1390,26 +1497,49 @@ describe('SC-191 slice 4: the Log an action… sheet — full write path (spec �
 		expect(warnEl.hidden).toBe(true);
 	});
 
-	test('the roll affordance: with cx.roll present, Roll resolves a test and preselects the resulting chip', async () => {
+	// SC-334 (Scott, verbatim): "remove the "success starts at" row and the "roll" row" and
+	// "remove the ability to change the hero and round. Those values should be determined
+	// when opening the modal and represented in the title of the modal". A roll service IS
+	// present here (makeDeps always supplies one), so the roll row's absence is the sheet's
+	// own shape, not a missing dependency.
+	test('SC-334: the sheet is Result · Skill · Note only — no Hero/Round chips, no tier hint, no roll row — in both modes', async () => {
 		const roll = { resolve: () => ({ total: 14, tier: 2 }) } as unknown as RollService;
 		const { root } = await renderMontage(montageMidYaml, {}, { roll });
-		cellFor(root, 'Kira', 3).click();
-		const modalEl = document.body.lastElementChild as HTMLElement;
-		const rollBtn = modalEl.querySelector('.dse-mt__sheet-rollbtn') as HTMLButtonElement;
-		expect(rollBtn).not.toBeNull();
-		rollBtn.click();
-		const successChip = modalEl.querySelector('.dse-optchip[data-kind="success"]') as HTMLButtonElement;
-		expect(successChip.getAttribute('aria-pressed')).toBe('true');
-		expect(modalEl.querySelector('.dse-mt__sheet-rollresult')?.textContent).toContain('tier 2');
+		for (const [hero, round, title] of [
+			['Kira', 3, 'Kira · round 3'], // new (the open socket)
+			['Kira', 1, 'Kira · round 1'], // edit (a recorded cell)
+		] as const) {
+			cellFor(root, hero, round).click();
+			const modalEl = document.body.lastElementChild as HTMLElement;
+			expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe(title);
+			expect(sheetFieldLabels(modalEl)).toEqual(['Result', 'Skill', 'Note']);
+			// The only chip group left is Result's three.
+			expect(Array.from(modalEl.querySelectorAll('.dse-optchip')).map((c) => c.getAttribute('aria-label'))).toEqual([
+				'Success',
+				'Failure',
+				'Assist',
+			]);
+			expect(modalEl.querySelector('[class*="dse-mt__sheet-tierhint"]')).toBeNull();
+			expect(modalEl.querySelector('.dse-pr__badge')).toBeNull();
+			expect(modalEl.querySelector('[class*="dse-mt__sheet-roll"]')).toBeNull();
+			expect(modalEl.querySelector('input[type="number"]')).toBeNull();
+			(modalEl.querySelector('button[aria-label="Cancel"]') as HTMLButtonElement).click();
+		}
 	});
 
-	test('the roll affordance is absent when cx.roll is undefined — cx.roll stays reachable but optional', async () => {
-		const { root } = await renderMontage(montageMidYaml, {}, { roll: undefined });
-		cellFor(root, 'Kira', 3).click();
+	test('SC-334: saving a correction keeps the entry\'s own hero and round — the sheet cannot move an entry', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(montageMidYaml); // Bram round 2: failure/Lift, noted
+		cellFor(root, 'Bram', 2).click();
 		const modalEl = document.body.lastElementChild as HTMLElement;
-		expect(modalEl.querySelector('.dse-mt__sheet-rollbtn')).toBeNull();
-		// Manual entry still works with no roll service.
-		expect(modalEl.querySelector('button[aria-label="Log"]')).not.toBeNull();
+		(modalEl.querySelector('.dse-optchip[data-kind="success"]') as HTMLButtonElement).click();
+		(modalEl.querySelector('button[aria-label="Save"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect(cellFor(rebuilt, 'Bram', 2).getAttribute('data-kind')).toBe('success');
+		const written = (host.replaceSource as jest.Mock).mock.calls[0][0] as string;
+		expect(written).toMatch(/hero: Bram\n\s*round: 2\n\s*result: success/);
+		jest.useRealTimers();
 	});
 
 	test('a11y: the dialog is labelled by its own visible title, and Log starts disabled when editing an entry with an unrecognised result', async () => {
@@ -1464,18 +1594,15 @@ describe('SC-191 fix round 3: review-2 findings (M-1, I-3)', () => {
 		const modal = new LogActionModal(new App() as any, {
 			model,
 			mode: { kind: 'new', hero: 'Kira', round: model.rounds + 1 }, // one past the last column
-			roll: undefined,
 			onSubmit: () => {},
 		});
 		modal.open();
 		const modalEl = document.body.lastElementChild as HTMLElement;
-		// The Round field only builds chips 1..model.rounds — no chip exists for the
-		// out-of-range value at all, so none of them is pre-pressed.
-		const roundField = Array.from(modalEl.querySelectorAll('.dse-mt__sheet-field')).find(
-			(f) => f.querySelector('.dse-mt__sheet-label')?.textContent === 'Round',
-		) as HTMLElement;
-		expect(roundField.querySelectorAll('.dse-optchip')).toHaveLength(model.rounds);
-		expect(roundField.querySelectorAll('.dse-optchip[aria-pressed="true"]')).toHaveLength(0);
+		// SC-334: there are no Round chips to fix it with inside the sheet any more, so the
+		// out-of-range round simply stays uncommittable — Success is pre-selected (the new-mode
+		// default), so the round bound is the ONLY thing holding Log disabled here.
+		expect(modalEl.querySelector('.dse-modal__title')?.textContent).toBe(`Kira · round ${model.rounds + 1}`);
+		expect(modalEl.querySelector('.dse-optchip[data-kind="success"]')?.getAttribute('aria-pressed')).toBe('true');
 		expect((modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).disabled).toBe(true);
 	});
 

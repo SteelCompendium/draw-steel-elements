@@ -44,9 +44,11 @@ import type { MontageModel, MontageEntry } from './model';
 import {
 	addMontageHero,
 	addMontageRound,
+	backMontageRound,
 	correctMontageEntry,
 	endMontageRound,
 	logMontageEntry,
+	montagePreviousRound,
 	montageReopenable,
 	montageTallies,
 	nextHeroToAct,
@@ -140,6 +142,12 @@ export class MontageView extends ElementView<MontageModel> {
 	 * fourth live-state control, `more` (⋯), is the SC-169 chrome panel here, not a bar
 	 * button — never duplicated.
 	 *
+	 * SC-334: `Back to round N` joins both bars whenever `montagePreviousRound` names a round
+	 * to go back to — the live bar past round 1 (just before `End round N`, the control it
+	 * reverses), and the complete bar of a montage that only ran out of ROUNDS (ending the
+	 * last round by mistake used to leave `Reopen`, which ADDS a round, as the only way
+	 * out). Like `Reopen`, it is present only when it applies, never a dead control.
+	 *
 	 * Read-only: every button in the bar renders real-disabled rather than the row being
 	 * omitted (owner ruling I-6, "explicit read-only states" — the board's own
 	 * convention, matched here for consistency within one bar rather than mixing
@@ -153,6 +161,7 @@ export class MontageView extends ElementView<MontageModel> {
 
 		if (complete) {
 			this.buildUndoButton(row, model, disabled, owner);
+			this.buildBackButton(row, model, disabled, owner);
 			if (montageReopenable(model)) {
 				iconButton(
 					row,
@@ -211,6 +220,7 @@ export class MontageView extends ElementView<MontageModel> {
 			owner,
 		);
 		this.buildUndoButton(row, model, disabled, owner);
+		this.buildBackButton(row, model, disabled, owner);
 		iconButton(
 			row,
 			{
@@ -253,6 +263,31 @@ export class MontageView extends ElementView<MontageModel> {
 		);
 	}
 
+	/** SC-334 — `Back to round N`, shared between the LIVE and COMPLETE bars: moves
+	 *  `current_round` back one round (model.ts's `backMontageRound`), never touching an
+	 *  entry. Not rendered at all when `montagePreviousRound` names no round (round 1, or a
+	 *  limit already reached) — the same "only when it applies" rule `Reopen` follows. */
+	private buildBackButton(row: HTMLElement, model: MontageModel, disabled: boolean, owner: Component): void {
+		const target = montagePreviousRound(model);
+		if (target === undefined) return;
+		iconButton(
+			row,
+			{
+				icon: 'chevron-left',
+				label: `Back to round ${target}`,
+				text: `Back to round ${target}`,
+				disabled,
+				onClick: disabled
+					? STUB_NOOP
+					: () => {
+							backMontageRound(model);
+							void this.commit();
+						},
+			},
+			owner,
+		);
+	}
+
 	// -------------------------------------------------------------------- the sheet
 
 	/** Opens the "Log an action…" sheet — the SAME modal for a fresh record and a
@@ -265,7 +300,6 @@ export class MontageView extends ElementView<MontageModel> {
 			new LogActionModal(this.cx.app, {
 				model: this.model,
 				mode,
-				roll: this.cx.roll,
 				onSubmit: (entry) => this.commitSheetSubmit(mode, entry),
 				onRemove: mode.kind === 'edit' ? () => this.commitSheetRemove(mode.entry) : undefined,
 			}),

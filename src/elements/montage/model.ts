@@ -463,6 +463,35 @@ export function endMontageRound(m: MontageModel): void {
 	m.current_round += 1;
 }
 
+/** SC-334 — the round "Back to round N" (the bottom action bar) would return to, or
+ *  `undefined` when the bar offers no way back. Scott: "I cant find a way to go to the
+ *  previous round … if I remove round results or hit the "undo" button enough, it should
+ *  be a previous round, but I have no controls to mark that." `End round N` was the only
+ *  control that ever moved `current_round`, and only forward; this is its inverse.
+ *
+ *  Offered while the montage is live and past round 1, AND on a montage completed by
+ *  running out of ROUNDS alone (`montageReopenable` — ending the last round by mistake is
+ *  exactly the case Undo cannot reach, because Undo only removes entries and never un-ends
+ *  a round). NOT offered once a success or failure LIMIT is reached: a limit is a verdict,
+ *  and stepping the round pointer back cannot un-reach it (montageReopenable's own rule).
+ *
+ *  The target is clamped to `rounds`, so a hand-edited `current_round` far past the last
+ *  column still comes back to a round the board actually draws. Pure pointer movement:
+ *  no entry is touched, so Back then End round is a round trip that loses nothing — an
+ *  entry already logged in the round being left simply sits in a round "to come". */
+export function montagePreviousRound(m: MontageModel): number | undefined {
+	if (montageTallies(m).complete && !montageReopenable(m)) return undefined;
+	const target = Math.min(m.current_round - 1, m.rounds);
+	return target >= 1 ? target : undefined;
+}
+
+/** SC-334 — "Back to round N": moves `current_round` to `montagePreviousRound(m)`. A no-op
+ *  when there is no way back (the caller does not render the button in that case). */
+export function backMontageRound(m: MontageModel): void {
+	const target = montagePreviousRound(m);
+	if (target !== undefined) m.current_round = target;
+}
+
 /** FIX ROUND 2 — "Undo" (the bottom action bar, mock6.js:1459): removes the MOST
  *  RECENTLY LOGGED entry. Tie-break: `entries[]` preserves LOG ORDER (§B.5 "entries
  *  preserve their authored array order"; `logMontageEntry` always `.push()`es), so "most
