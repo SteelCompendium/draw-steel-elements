@@ -32,8 +32,20 @@ export class OutcomeBandView {
 		const party = m.participants?.length ?? 0;
 		const entries = m.entries ?? [];
 		const roundsLeft = Math.max(0, m.rounds - m.current_round + 1);
-		const actionsThisRound = entries.filter((e) => e.round === m.current_round).length;
-		const actionsLeft = tallies.complete ? 0 : Math.max(0, roundsLeft * party - actionsThisRound);
+		// SC-334 review-1 LOW-1: the slots already taken are every DISTINCT roster
+		// (hero, round) with an entry in the round in play OR a later one — not just the
+		// round in play. "Back to round N" leaves the round it steps out of (now a round to
+		// come) holding whatever was logged there; counting only `current_round` overstated
+		// the actions left by exactly those entries, and the brink alert below reads the
+		// same number. Distinct pairs, roster heroes only, `rounds` as the ceiling: the
+		// same "first entry per cell" and "no column, no slot" rules the board draws by.
+		const roster = new Set((m.participants ?? []).map((p) => p.name));
+		const taken = new Set(
+			entries
+				.filter((e) => e.round >= m.current_round && e.round <= m.rounds && roster.has(e.hero))
+				.map((e) => `${e.round}\u0000${e.hero}`),
+		);
+		const actionsLeft = tallies.complete ? 0 : Math.max(0, roundsLeft * party - taken.size);
 		const margin = tallies.successes - tallies.failures;
 		// The brink: one success from Total Success AND still reachable in the actions left
 		// — a montage that cannot possibly log enough successes before it runs out is not
@@ -67,7 +79,14 @@ export class OutcomeBandView {
 		const stats = top.createDiv({ cls: 'dse-mt__verdict-stats' });
 		const s = stats.createDiv({ cls: 'dse-mt__stat' });
 		s.setAttribute('data-kind', 'actions');
-		s.createSpan({ cls: 'dse-mt__stat-value', text: String(complete ? this.model.current_round : actionsLeft) });
+		// SC-334 review-1 INFO-2: a montage that ran out of rounds has `current_round` one
+		// PAST the last round (End round on the last round is what completes it), so the
+		// raw pointer read "4 rounds used" on a 3-round montage. Capped at `rounds`; a
+		// montage completed by a limit mid-round still reports the round it ended in.
+		s.createSpan({
+			cls: 'dse-mt__stat-value',
+			text: String(complete ? Math.min(this.model.current_round, this.model.rounds) : actionsLeft),
+		});
 		s.createSpan({ cls: 'dse-mt__stat-label', text: complete ? 'rounds used' : 'hero actions left' });
 	}
 

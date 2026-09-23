@@ -1289,7 +1289,14 @@ async function main() {
 						`(() => {
 							const body = document.querySelector('.dse-modal .dse-modal__body');
 							if (!body) return { missing: true };
-							const right = body.getBoundingClientRect().left + body.clientWidth;
+							// The CONTENT edge (SC-334 review-1 INFO-7): the body carries 4px of
+							// padding for focus rings, and Chromium counts inline-end padding
+							// into scrollable overflow, so a child past the content edge is what
+							// makes the body scroll — measured from there, the px figure is the
+							// real overflow, not 4px short of it.
+							const right =
+								body.getBoundingClientRect().left + body.clientLeft + body.clientWidth -
+								parseFloat(getComputedStyle(body).paddingRight);
 							const offenders = Array.from(body.querySelectorAll('*'))
 								.map((el) => ({ el, r: el.getBoundingClientRect() }))
 								.filter(({ r }) => r.width > 0 && r.right > right + 0.5)
@@ -1306,6 +1313,48 @@ async function main() {
 						);
 					}
 
+					// SC-334 review-1 LOW-3: the focused field's focus ring must fit inside the
+					// body's scroll box. Obsidian focuses a modal's first field on open, and the
+					// shared ring (outline + outline-offset) paints OUTSIDE the field, where a
+					// scroll box clips it — "Set limits…" lost the top of its ring before
+					// `.dse-modal__body` got its 4px of room. Skipped (not failed) when nothing
+					// inside the body holds :focus-visible or the ring is not an outline; the
+					// bottom edge is only checked when the body does not scroll vertically (a
+					// field below the fold is legitimately clipped until scrolled to).
+					const ring = await evaluate(
+						cdp,
+						`(() => {
+							const body = document.querySelector('.dse-modal .dse-modal__body');
+							const el = document.activeElement;
+							if (!body || !el || !body.contains(el) || !el.matches(':focus-visible')) return { skipped: 'no focused field in the body' };
+							const cs = getComputedStyle(el);
+							if (cs.outlineStyle === 'none') return { skipped: 'focused field draws no outline' };
+							const reach = parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset);
+							const r = el.getBoundingClientRect();
+							const b = body.getBoundingClientRect();
+							const box = {
+								top: b.top + body.clientTop,
+								left: b.left + body.clientLeft,
+								right: b.left + body.clientLeft + body.clientWidth,
+								bottom: b.top + body.clientTop + body.clientHeight,
+							};
+							const clipped = {
+								top: box.top - (r.top - reach),
+								left: box.left - (r.left - reach),
+								right: r.right + reach - box.right,
+								bottom: body.scrollHeight > body.clientHeight ? 0 : r.bottom + reach - box.bottom,
+							};
+							const cut = Object.entries(clipped).filter(([, px]) => px > 0.5).map(([side, px]) => side + ' ' + px.toFixed(1) + 'px');
+							return { el: el.tagName.toLowerCase() + '.' + [...el.classList].join('.'), reach, cut };
+						})()`,
+					);
+					if (ring.cut && ring.cut.length > 0) {
+						throw new Error(
+							`FOCUS RING CLIPPED BY THE MODAL BODY: ${ring.el} (ring reaches ${ring.reach}px outside it) — ` +
+								`cut off on ${ring.cut.join(', ')}`,
+						);
+					}
+
 					// Clip the DIALOG box (`.dse-modal` is stamped on Obsidian's `.modal`),
 					// not the full-window `.modal-container` overlay — the subject is the
 					// modal's own layout and control density.
@@ -1315,7 +1364,9 @@ async function main() {
 							const r = document.querySelector('.dse-modal').getBoundingClientRect();
 							return { x: r.x, y: r.y, width: r.width, height: r.height, vh: window.innerHeight, vw: window.innerWidth };
 						})()`,
-						'modal confirmed',
+						`modal confirmed; no sideways scroll; focus ring ${
+							ring.skipped ? `not checked (${ring.skipped})` : `inside the body (${ring.el})`
+						}`,
 					);
 				} catch (e) {
 					failures.push({ outName, errors: [String(e)] });

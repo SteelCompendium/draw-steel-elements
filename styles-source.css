@@ -4679,12 +4679,14 @@ Shared globals
 	}
 	/* SC-334 (Scott: "failures should fill the cell with red (to match the successes
 	   cells) instead of just having the border be red"): a filled failure slot is a SOLID
-	   danger-red chip under the standard sheen, the same filled-chip material a success
-	   slot has — it used to be a dark hatch that read as empty with a red outline. Filled
-	   vs empty is carried by lightness (a bright red chip against the unfilled slots'
-	   bare outline), never by hue alone, and the row itself is labelled "✕ Failures". */
+	   danger-red chip with the filled slot's own chip bevel — it used to be a dark hatch
+	   that read as empty with a red outline. Plain `--dse-danger`, no `--dse-sheen` layer:
+	   the kit keeps accent/danger fills out of the sheen (~:10470), and the light sheen
+	   (white at .9 alpha) over red read as a pink-to-red gradient (SC-334 review-1 LOW-2).
+	   Filled vs empty is carried by lightness (a red chip against the unfilled slots' bare
+	   outline), never by hue alone, and the row itself is labelled "✕ Failures". */
 	.dse-mt__track[data-kind='failure'] .dse-mt__track-slot[data-filled='on'] {
-		background: var(--dse-sheen), var(--dse-danger);
+		background: var(--dse-danger);
 		border-color: var(--dse-danger);
 	}
 
@@ -15577,7 +15579,7 @@ body.theme-light [data-dse-theme='steel']:not([data-dse-print="on"]) .dse-chrome
    has its own GROUP-2 rule now) have no GROUP-2 rule of their own to carry it (their existing ancestor-scoped rule never declared it either, so it
    was a genuine gap even though every OTHER property on them is already safe at rest —
    caught by the can-fail sweep after GROUP 2's own per-selector caret-color additions
-   still left these six red), and (0,0,2,0) is more than enough since caret-color has no
+   still left the then-six ancestor-scoped siblings red), and (0,0,2,0) is more than enough since caret-color has no
    competing declaration anywhere in this sheet to beat. */
 :is([data-dse-element], .dse-modal):not([data-dse-print="on"])
 	:where(

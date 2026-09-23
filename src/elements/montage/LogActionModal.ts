@@ -283,12 +283,19 @@ export class LogActionModal extends DseModal {
 	 *  independent guard so the commit can never write a round the board has no column
 	 *  for, whatever opened it). SC-334: with the Round chips gone the round can no longer
 	 *  be corrected INSIDE the sheet, so an out-of-range round simply leaves Log/Save
-	 *  disabled — the sheet can only be cancelled, never write it. */
+	 *  disabled — the sheet can only be cancelled, never write it. SC-334 review-1 MED-1
+	 *  (defence in depth; the bar's own guard is view.ts's no-fallback `nextHeroToAct`):
+	 *  a NEW entry for a (hero, round) that already has one is refused the same way — the
+	 *  board draws only the first entry per cell, so a second would move the stored tally
+	 *  while staying invisible. Correcting the existing entry is the edit sheet's job. */
 	private refreshValidity(): void {
+		const duplicate =
+			this.mode.kind === 'new' && (this.model.entries ?? []).some((e) => e.hero === this.hero && e.round === this.round);
 		const valid =
 			this.hero !== '' &&
 			this.round >= 1 &&
 			this.round <= this.model.rounds &&
+			!duplicate &&
 			this.selectedResult !== undefined;
 		this.commitBtn?.setDisabled(!valid);
 	}

@@ -10,6 +10,8 @@ import type { PrefDescriptor, PreferenceStore, PrefsStorage } from '../../../src
 import { createThemeService, registerThemeServiceForApp } from '../../../src/framework/seams/theme';
 import type { ThemeServiceInternal } from '../../../src/framework/seams/theme';
 import { App, Component } from '../../mocks/obsidian';
+import * as fs from 'fs';
+import * as path from 'path';
 
 function fakeOwner(): any {
 	return new Component();
@@ -396,5 +398,31 @@ describe('Plan 08 Task 3: kit/managedModal (D2 §2.6)', () => {
 			expect(modal.containerEl.style.cssText).toBe('');
 			modal.close();
 		});
+	});
+});
+
+// SC-334: `.dse-modal__body` is a scroll box, and a scroll box clips whatever paints outside
+// its padding box — including the shared focus ring (outline 2px + outline-offset 2px), which
+// sits 4px OUTSIDE a field. With no padding, "Set limits…"'s first input lost the top of its
+// ring. jsdom cannot lay this out, so the real-Obsidian camera (obsidian-camera.mjs, "FOCUS
+// RING CLIPPED BY THE MODAL BODY") is the geometric gate; this pins the declarations it
+// depends on, and that the padding covers the ring's full reach and is exactly cancelled by
+// the negative margin (so no field moves).
+describe('SC-334: the modal body leaves room for the focus ring', () => {
+	const sheet = fs.readFileSync(path.join(__dirname, '../../../styles-source.css'), 'utf8');
+	const px = (v: string): number => Number(/^(-?\d+(?:\.\d+)?)px$/.exec(v.trim())?.[1] ?? NaN);
+
+	test('`.dse-modal__body` pads by at least the ring reach and cancels it with an equal negative margin', () => {
+		const body = /\n\.dse-modal__body \{([^}]*)\}/.exec(sheet);
+		expect(body).not.toBeNull();
+		const padding = /padding:\s*([^;]+);/.exec(body![1])?.[1] ?? '';
+		const margin = /margin:\s*([^;]+);/.exec(body![1])?.[1] ?? '';
+		expect(body![1]).toMatch(/overflow-y:\s*auto;/);
+
+		const ring = /outline:\s*(\d+)px solid var\(--dse-focus-ring\);\s*outline-offset:\s*(\d+)px;/.exec(sheet);
+		expect(ring).not.toBeNull();
+		const reach = Number(ring![1]) + Number(ring![2]);
+		expect(px(padding)).toBeGreaterThanOrEqual(reach);
+		expect(px(margin)).toBe(-px(padding));
 	});
 });

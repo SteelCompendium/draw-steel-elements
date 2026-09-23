@@ -201,7 +201,15 @@ export class MontageView extends ElementView<MontageModel> {
 			return;
 		}
 
-		const hero = nextHeroToAct(model) ?? model.participants?.[0]?.name;
+		// SC-334 review-1 MED-1: NO fallback hero. This used to be `?? participants[0]`, so
+		// once every hero had acted in the round in play the button still opened a new sheet
+		// for the first hero — whose (hero, round) cell was already filled. Logging it wrote a
+		// second entry the board never draws (first entry wins, BoardView.entriesForHero) but
+		// the stored tally still counted — a Total Success from an entry nobody can see.
+		// SC-334's own Back to round lands exactly in that state, and the sheet has no Hero
+		// chips left to steer away with, so the button now stands down instead: every hero
+		// has acted, so the next move is End round or a click on a cell to correct it.
+		const hero = nextHeroToAct(model);
 		iconButton(
 			row,
 			{
@@ -209,8 +217,9 @@ export class MontageView extends ElementView<MontageModel> {
 				label: 'Log an action…',
 				text: 'Log an action…',
 				variant: 'accent',
-				// No dead end (F1 §4.4): a real host with an empty roster has nobody to
-				// pre-fill, so this stays disabled rather than opening a sheet with no Hero.
+				// No dead end (F1 §4.4): an empty roster, or a round every hero has already
+				// acted in, has nobody to pre-fill, so this stays disabled rather than opening
+				// a sheet with no Hero (or a sheet for a hero who already acted).
 				disabled: disabled || !hero,
 				onClick:
 					disabled || !hero

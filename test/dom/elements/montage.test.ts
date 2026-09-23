@@ -1163,6 +1163,108 @@ describe('SC-191 fix round 2: the bottom action bar (mock6.js `actionBar()`)', (
 		jest.useRealTimers();
 	});
 
+	// SC-334 review-1 MED-1: the bar's "Log an action…" used to fall back to the FIRST hero
+	// once every hero had acted in the round in play, and logging from that sheet wrote a
+	// second (hero, round) entry the board never draws but the stored tally counts.
+	test('SC-334 MED-1: after Back to a round every hero has acted in, "Log an action…" is real-disabled — never a sheet for a hero who already acted', async () => {
+		jest.useFakeTimers();
+		const { host } = await renderMontage(montageMidYaml); // rounds 1-2 fully logged
+		let root = host.containerEl.firstElementChild as HTMLElement;
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Back to round 2"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		root = host.containerEl.firstElementChild as HTMLElement;
+		const log = root.querySelector('.dse-mt__actionrow button[aria-label="Log an action…"]') as HTMLButtonElement;
+		expect(log.disabled).toBe(true);
+		const before = document.body.children.length;
+		log.click();
+		expect(document.body.children.length).toBe(before); // no sheet opened
+		// End round is still there — the next move once everyone has acted.
+		expect((root.querySelector('.dse-mt__actionrow button[aria-label="End round 2"]') as HTMLButtonElement).disabled).toBe(false);
+		jest.useRealTimers();
+	});
+
+	test('SC-334 MED-1: the same holds without Back — once the last hero quick-logs the round in play, "Log an action…" stands down', async () => {
+		jest.useFakeTimers();
+		const { root, host } = await renderMontage(QUICK_TRIO_FIXTURE); // round 2: Kira acted, Bram open
+		expect((root.querySelector('.dse-mt__actionrow button[aria-label="Log an action…"]') as HTMLButtonElement).disabled).toBe(false);
+		(cellFor(root, 'Bram', 2).querySelector('.dse-mt__quick[data-kind="failure"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const rebuilt = host.containerEl.firstElementChild as HTMLElement;
+		expect((rebuilt.querySelector('.dse-mt__actionrow button[aria-label="Log an action…"]') as HTMLButtonElement).disabled).toBe(true);
+		jest.useRealTimers();
+	});
+
+	test('SC-334 MED-1 (defence in depth): the sheet itself refuses a NEW entry for a (hero, round) that already has one', () => {
+		const model = parse(parseYaml(montageMidYaml), montageMidYaml); // Kira round 1: success/Nature
+		const modal = new LogActionModal(new App() as any, {
+			model,
+			mode: { kind: 'new', hero: 'Kira', round: 1 },
+			onSubmit: () => {},
+		});
+		modal.open();
+		const modalEl = document.body.lastElementChild as HTMLElement;
+		// Success is pre-selected (the new-mode default), so the duplicate is the ONLY thing
+		// holding Log disabled — and no chip changes that.
+		expect(modalEl.querySelector('.dse-optchip[data-kind="success"]')?.getAttribute('aria-pressed')).toBe('true');
+		expect((modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).disabled).toBe(true);
+		(modalEl.querySelector('.dse-optchip[data-kind="failure"]') as HTMLButtonElement).click();
+		expect((modalEl.querySelector('button[aria-label="Log"]') as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	// SC-334 review-1 LOW-1: "hero actions left" subtracted only the round in play's
+	// entries, so Back (which leaves the round it steps out of holding its entries)
+	// overstated it — and the brink alert reads the same figure.
+	test('SC-334 LOW-1: "hero actions left" still counts the entries in the round Back stepped out of', async () => {
+		jest.useFakeTimers();
+		const source = [
+			'rounds: 3',
+			'success_limit: 9',
+			'failure_limit: 5',
+			'successes: 5',
+			'failures: 0',
+			'participants:',
+			'  - name: Kira',
+			'    skills_used: []',
+			'  - name: Bram',
+			'    skills_used: []',
+			'entries:',
+			...[1, 2].flatMap((r) => ['Kira', 'Bram'].flatMap((h) => [`  - hero: ${h}`, `    round: ${r}`, '    result: success'])),
+			'  - hero: Kira',
+			'    round: 3',
+			'    result: success',
+			'current_round: 3',
+		].join('\n');
+		const actionsLeft = (el: HTMLElement) =>
+			outcomeBand(el).querySelector('.dse-mt__stat[data-kind="actions"] .dse-mt__stat-value')?.textContent;
+		const { root, host } = await renderMontage(source);
+		expect(actionsLeft(root)).toBe('1'); // only Bram's round-3 slot is open
+		(root.querySelector('.dse-mt__actionrow button[aria-label="Back to round 2"]') as HTMLButtonElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		expect(actionsLeft(host.containerEl.firstElementChild as HTMLElement)).toBe('1'); // not 2
+		jest.useRealTimers();
+	});
+
+	// SC-334 review-1 INFO-2: a montage that ran out of rounds has current_round one past the
+	// last round, and the raw pointer used to read "4 rounds used" on a 3-round montage.
+	test('SC-334 INFO-2: a montage that ran out of rounds reports its own round count as "rounds used", never one more', async () => {
+		const { root } = await renderMontage(
+			[
+				'rounds: 3',
+				'success_limit: 6',
+				'failure_limit: 3',
+				'successes: 4',
+				'failures: 1',
+				'participants:',
+				'  - name: Kira',
+				'    skills_used: []',
+				'current_round: 4',
+			].join('\n'),
+		);
+		const stat = outcomeBand(root).querySelector('.dse-mt__stat[data-kind="actions"]') as HTMLElement;
+		expect(stat.querySelector('.dse-mt__stat-value')?.textContent).toBe('3');
+		expect(stat.querySelector('.dse-mt__stat-label')?.textContent).toBe('rounds used');
+	});
+
 	test('SC-334: a montage completed by a LIMIT offers no "Back to round" — a limit is a verdict (montage-done)', async () => {
 		const { root } = await renderMontage(montageDoneYaml);
 		expect(root.querySelector('.dse-mt__actionrow button[aria-label^="Back to round"]')).toBeNull();
