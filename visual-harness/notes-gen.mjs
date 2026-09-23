@@ -115,6 +115,18 @@ fs.writeFileSync(
 );
 console.log('wrote Harness/modal-stamina.md (stamina block WITH recoveries — Spend Recovery modal state)');
 
+// SC-334's two montage modal captures (the Log an action… sheet in EDIT mode, and "Set
+// limits…") need a montage with RECORDED cells to click: the montage example.yaml has no
+// entries, so its board has nothing to correct. The `mid` fixture (round 3 of 3, entries in
+// rounds 1-2) is the same board the browser harness's `montage-mid` shot renders.
+fs.writeFileSync(
+	path.join(outDir, 'modal-montage.md'),
+	'# modal-montage\n\n```ds-montage\n' +
+		fs.readFileSync(path.join(elementsDir, 'montage', 'fixture-mid.yaml'), 'utf8').replace(/\n?$/, '\n') +
+		'```\n',
+);
+console.log('wrote Harness/modal-montage.md (montage mid fixture — recorded cells for the edit-sheet capture)');
+
 // D-6's canvas read-only capture. Canvas TEXT nodes are the quarantined path
 // (ctx.sourcePath === '' -> canPersist false -> data-dse-readonly); two interactive
 // elements side by side, at fixed coordinates so the capture's clip is deterministic.

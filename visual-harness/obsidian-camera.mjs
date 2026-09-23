@@ -15,8 +15,10 @@
 //                              plugin's "Send initiative tracker to sidebar" command
 //   step 3d  (D7 T10 / D-7)    four elements in a real SIDEBAR leaf via the GENERIC "Send
 //                              block to sidebar" command (narrow-width coverage)
-//   step 3e  (SC-121 D-5)      the four MODALS — stamina edit, its Spend Recovery state,
-//                              the condition picker, the generic form editor
+//   step 3e  (SC-121 D-5)      the MODALS — stamina edit, its Spend Recovery state,
+//                              the condition picker, the generic form editor, and (SC-334)
+//                              the montage Log an action… sheet in edit mode + Set limits…;
+//                              every one also fails if its body scrolls sideways
 //   step 3f  (SC-121 D-8)      the plugin SETTINGS tab, over a second CDP connection to
 //                              Obsidian 1.13's Settings POPOUT window
 //   step 3g  (SC-121 D-6)      the CANVAS read-only quarantine (canvas text nodes render
@@ -197,6 +199,25 @@ const MODAL_SHOTS = [
 		pref: ['authoringControls', true],
 		trigger: '[data-dse-element="feature"] button[aria-label^="Edit "]',
 		ready: '.dse-modal .dse-modal__body',
+	},
+	{
+		id: 'modal-montage-edit',
+		note: 'modal-montage',
+		// SC-334: the Log an action… sheet in EDIT mode — a RECORDED cell (Kira's round-1
+		// success on the mid fixture) is the affordance Scott found the right-edge clipping
+		// through. The first recorded success cell in DOM order is Kira · round 1.
+		trigger: '[data-dse-element="montage"] .dse-mt__cell[role="button"][data-kind="success"]',
+		ready: '.dse-modal.dse-mt__sheet .dse-modal__body',
+	},
+	{
+		id: 'modal-montage-limits',
+		note: 'modal-montage',
+		// SC-334: "Set limits…" — a ⋯ chrome item. The panel's items are always in the DOM
+		// (hover only reveals them), so the item itself is the trigger; a DOM click needs no
+		// hover. Obsidian focuses the first input on open, which is the state whose focus
+		// ring Scott saw clipped.
+		trigger: '[data-dse-element="montage"] button[data-dse-chrome-item="montage-set-limits"]',
+		ready: '.dse-modal input[aria-label="Success limit"]',
 	},
 ];
 
@@ -1256,6 +1277,34 @@ async function main() {
 					await clearNotices();
 					const themed = await evaluate(cdp, `document.querySelector('.dse-modal')?.dataset.dseTheme ?? '(none)'`);
 					if (themed !== 'steel') throw new Error(`modal not Steel-themed (data-dse-theme=${themed})`);
+
+					// SC-334: a modal body must never scroll SIDEWAYS. `.dse-modal__body` is
+					// `overflow-y: auto`, which computes `overflow-x: auto` too, so any child a
+					// few px wider than the body turns into a horizontal scrollbar that clips the
+					// right edge of every field (Scott's montage-sheet report). Measured here, in
+					// real Obsidian, because only the real host's modal chrome decides the body's
+					// width — the browser harness has no `.modal` box at all.
+					const overflow = await evaluate(
+						cdp,
+						`(() => {
+							const body = document.querySelector('.dse-modal .dse-modal__body');
+							if (!body) return { missing: true };
+							const right = body.getBoundingClientRect().left + body.clientWidth;
+							const offenders = Array.from(body.querySelectorAll('*'))
+								.map((el) => ({ el, r: el.getBoundingClientRect() }))
+								.filter(({ r }) => r.width > 0 && r.right > right + 0.5)
+								.slice(0, 6)
+								.map(({ el, r }) => el.tagName.toLowerCase() + '.' + [...el.classList].join('.') + ' right+' + (r.right - right).toFixed(1) + 'px');
+							return { scrollWidth: body.scrollWidth, clientWidth: body.clientWidth, offenders };
+						})()`,
+					);
+					if (overflow.missing) throw new Error('modal has no .dse-modal__body');
+					if (overflow.scrollWidth > overflow.clientWidth) {
+						throw new Error(
+							`MODAL BODY SCROLLS SIDEWAYS: scrollWidth ${overflow.scrollWidth} > clientWidth ` +
+								`${overflow.clientWidth} — ${overflow.offenders.join('; ') || '(no visible offender)'}`,
+						);
+					}
 
 					// Clip the DIALOG box (`.dse-modal` is stamped on Obsidian's `.modal`),
 					// not the full-window `.modal-container` overlay — the subject is the

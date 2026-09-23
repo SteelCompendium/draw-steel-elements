@@ -231,6 +231,7 @@ visual combo sweeps), each selectable as its own `--element=` value:
 | `sidebar-initiative` | the dedicated "Send initiative tracker to sidebar" command |
 | `sidebar-hero` / `sidebar-statblock` / `sidebar-scc` / `sidebar-negotiation` | the GENERIC "Send block to sidebar" command — and narrow-width behaviour in a real 300px leaf |
 | `modal-stamina` / `modal-stamina-recovery` / `modal-conditions` / `modal-form` | the four interactive modals, opened by clicking their REAL affordances |
+| `modal-montage-edit` / `modal-montage-limits` | the montage Log an action… sheet opened from a recorded cell (edit mode), and the ⋯ "Set limits…" modal (SC-334). Every modal capture also FAILS if its `.dse-modal__body` scrolls sideways, naming the overflowing elements — the class of bug that clipped the sheet's right edge |
 | `settings` | the plugin settings tab, over a 2nd CDP connection to Obsidian 1.13's Settings POPOUT window |
 | `canvas` | the canvas read-only quarantine (`data-dse-readonly` asserted, not just eyeballed) |
 
