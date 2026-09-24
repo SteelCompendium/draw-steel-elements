@@ -341,11 +341,15 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 		});
 
 		test('blur alone commits once', () => {
-			const { inputEl, onChange } = editable();
+			const { handle, inputEl, onChange } = editable();
+			// SC-340 §9.1: a real blur (the field stays in the document) still commits —
+			// only a blur fired while the section is disconnected (adoption) is ignored.
+			document.body.appendChild(handle.rootEl);
 			inputEl.value = '5';
 			blur(inputEl);
 			expect(onChange).toHaveBeenCalledTimes(1);
 			expect(onChange).toHaveBeenCalledWith(5);
+			handle.rootEl.remove();
 		});
 
 		test('Escape reverts the draft to the current value without committing', () => {
@@ -451,5 +455,25 @@ describe('Plan 08 Task 2: kit/stepper (D2 §2.2)', () => {
 		blur(inputEl);
 
 		expect(onChange).not.toHaveBeenCalled();
+	});
+});
+
+describe('SC-340 §9.1: the adoption blur does not commit a half-typed draft', () => {
+	test('blur while the input is out of the document is ignored; a real blur commits', () => {
+		const owner = fakeOwner();
+		const parent = document.body.createDiv();
+		const onChange = jest.fn();
+		stepper(parent, { value: 3, min: 0, max: 10, editable: true, label: 'Hero tokens', onChange }, owner);
+		const input = parent.querySelector('input.dse-stepper__input') as HTMLInputElement;
+		input.value = '7';
+
+		parent.remove(); // the section left the document (adoption)
+		input.dispatchEvent(new FocusEvent('blur'));
+		expect(onChange).not.toHaveBeenCalled();
+
+		document.body.appendChild(parent);
+		input.dispatchEvent(new FocusEvent('blur'));
+		expect(onChange).toHaveBeenCalledWith(7);
+		parent.remove();
 	});
 });

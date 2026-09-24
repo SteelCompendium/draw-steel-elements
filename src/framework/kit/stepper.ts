@@ -184,7 +184,13 @@ export function stepper(
 				}
 			}
 		});
-		owner.registerDomEvent(el, 'blur', () => commitDraft());
+		// SC-340 §9.1: when the block is adopted after its own write, Obsidian takes the
+		// section out of the document and a focused input blurs (B11) — then focus comes back.
+		// That blur is not the user leaving the field: never commit a half-typed draft on it.
+		owner.registerDomEvent(el, 'blur', () => {
+			if (!el.isConnected) return;
+			commitDraft();
+		});
 	}
 
 	render();

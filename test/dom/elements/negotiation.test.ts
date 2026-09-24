@@ -492,6 +492,9 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
+		// SC-340 §9.1: a real change (the section stays in the document) still commits —
+		// only a change fired while the section is disconnected (adoption) is ignored.
+		document.body.appendChild(root);
 
 		const checkbox = root.querySelector(
 			'.dse-nt__motivations input[type="checkbox"]',
@@ -505,6 +508,28 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		expect(host.replaceSource.mock.calls[0][0]).toBe(
 			legacyBytes(frodoYaml, (m) => m.setMotivationUsed('Higher Authority', true)),
 		);
+		root.remove();
+	});
+
+	// SC-340 §9.1 audit: the same adoption-blur guard as stepper.ts — a change fired while
+	// the checkbox's section is out of the document (mid-adoption) must not commit.
+	test('details motivation checkbox: a change while disconnected from the document is ignored', async () => {
+		jest.useFakeTimers();
+		const pipeline = new ElementPipeline(makeDeps());
+		const host = makeHost();
+		const root = await renderFrodo(pipeline, host);
+		document.body.appendChild(root); // a normally-connected view root
+
+		const checkbox = root.querySelector(
+			'.dse-nt__motivations input[type="checkbox"]',
+		) as HTMLInputElement;
+		root.remove(); // the section left the document (adoption)
+		checkbox.checked = true;
+		checkbox.dispatchEvent(new Event('change'));
+
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+
+		expect(host.replaceSource).not.toHaveBeenCalled();
 	});
 
 	test('argument-tab motivation checkbox -> currentArgument.motivationsUsed -> one write with legacy bytes', async () => {
@@ -512,6 +537,7 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
+		document.body.appendChild(root); // SC-340 §9.1: a real, connected change commits
 
 		const checkbox = root.querySelector(
 			'.dse-nt__argument-motivations input[type="checkbox"]',
@@ -525,6 +551,7 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		expect(host.replaceSource.mock.calls[0][0]).toBe(
 			legacyBytes(frodoYaml, (m) => m.currentArgument.motivationsUsed.push('Higher Authority')),
 		);
+		root.remove();
 	});
 
 	test('tier radiogroup: click checks EXACTLY ONE radio (roving tabindex) and enables Complete — selection alone never writes', async () => {
@@ -583,6 +610,7 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 		const pipeline = new ElementPipeline(makeDeps());
 		const host = makeHost();
 		const root = await renderFrodo(pipeline, host);
+		document.body.appendChild(root); // SC-340 §9.1: a real, connected change commits
 
 		const checkbox = root.querySelector(
 			'.dse-nt__argument-motivations input[type="checkbox"]',
@@ -603,6 +631,7 @@ describe('T-7: persisted mutations — exactly ONE debounced replaceSource, byte
 				m.current_interest = 4;
 			}),
 		);
+		root.remove();
 	});
 });
 

@@ -59,8 +59,13 @@ export class ArgumentView {
 		if (!this.canPersist) checkbox.disabled = true;
 		line.createSpan({ text });
 		// Read-only: no listener at all — there is no write path to reach (§4.4).
+		// SC-340 §9.1 audit: the same adoption-blur guard as stepper.ts — ignore a
+		// change fired while this control's section is mid-adoption (out of the document).
 		if (this.canPersist) {
-			this.owner.registerDomEvent(checkbox, 'change', () => onChange(checkbox));
+			this.owner.registerDomEvent(checkbox, 'change', () => {
+				if (!checkbox.isConnected) return;
+				onChange(checkbox);
+			});
 		}
 		return { line, checkbox };
 	}

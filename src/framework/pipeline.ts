@@ -539,6 +539,11 @@ export class ElementPipeline {
 			let chromeOwner: Component | undefined;
 			let pencilEl: HTMLElement | undefined;
 
+			// SC-340 §9.2: an adopted view outlives the pipeline run that captured `source`;
+			// the form editor must start from the body on disk NOW (SC-343's lastKnownBody).
+			const currentBody = (): string =>
+				(host instanceof ReadingModeBlockHost ? host.lastKnownBody : null) ?? source;
+
 			const mountPipelineChrome = (current: M): void => {
 				// One Component per (re)mount, owned by the view: unloading it detaches every
 				// listener the previous panel registered, so a long-lived view that rebuilds
@@ -618,7 +623,7 @@ export class ElementPipeline {
 												id: 'edit',
 												icon: 'pencil',
 												label: `Edit ${def.name}`,
-												onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
+												onClick: () => openFormEditor(view, cx, def, currentBody(), this.deps.validation),
 											} satisfies ChromeMenuItem,
 										]
 									: []),
@@ -668,7 +673,7 @@ export class ElementPipeline {
 							icon: 'pencil',
 							label: `Edit ${def.name}`,
 							variant: 'ghost',
-							onClick: () => openFormEditor(view, cx, def, source, this.deps.validation),
+							onClick: () => openFormEditor(view, cx, def, currentBody(), this.deps.validation),
 						},
 						owner,
 					).buttonEl;

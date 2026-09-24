@@ -10,6 +10,7 @@ import { ViewRegistry, CLAIM_WINDOW_MS } from '../../../src/framework/host/viewR
 import { ReadingModeBlockHost } from '../../../src/framework/host/ReadingModeBlockHost';
 import { captureFocus, restoreFocusWhenConnected } from '../../../src/framework/host/adoptView';
 import { PERSIST_DEBOUNCE_MS } from '../../../src/framework/view';
+import * as FormModal from '../../../src/authoring/FormModal';
 import { makeFakeContext } from '../../mocks/obsidian';
 import { makeEnv } from './_adoptionEnv';
 import quickStart from '../../fixtures/initiative/quick-start.yaml';
@@ -322,6 +323,7 @@ describe('SC-340 Task 5: docId collision guard', () => {
 		jest.useFakeTimers();
 		const { app, registry, render } = await setup(COUNTER_NOTE);
 		const a = await render('ds-counter', 0, 'doc-same');
+		const aRoot = a.el.firstElementChild as HTMLElement; // captured before the rebuild
 		const b = await render('ds-counter', 0, 'doc-same'); // two instances, same docId, same block
 		// An edit ABOVE the block: shifts its true line, but (B5) rerenders neither instance,
 		// so both hosts' cached lastKnownLineStart stay at the OLD (pre-edit) line for now.
@@ -331,6 +333,7 @@ describe('SC-340 Task 5: docId collision guard', () => {
 		const c = await render('ds-counter', 0, 'doc-same'); // the rebuild the writer's click caused
 		expect(c.el.firstElementChild).not.toBe(a.el.firstElementChild); // NOT moved into b's spot
 		expect(c.el.firstElementChild).not.toBe(b.el.firstElementChild);
+		expect(a.el.firstElementChild).toBe(aRoot); // the writer's root was not moved (not adopted)
 		expect(registry.stats.collisions).toBe(1);
 		expect(registry.stats.claims).toBe(0);
 	});
@@ -355,5 +358,27 @@ describe('SC-340 Task 5: docId collision guard', () => {
 		expect(c.el.firstElementChild).toBe(aRoot); // adopted normally
 		expect(registry.stats.claims).toBe(1);
 		expect(registry.stats.collisions).toBe(0);
+	});
+});
+
+describe('SC-340 §9.2: the form editor opens with the CURRENT body after adopted writes', () => {
+	test('pencil after a write passes the written body, not the mount-time source', async () => {
+		jest.useFakeTimers();
+		const spy = jest.spyOn(FormModal, 'openFormEditor').mockImplementation(() => ({}) as any);
+		const { app, render } = await setup(COUNTER_NOTE, undefined, true, true);
+		const ctx1 = await render('ds-counter');
+		const root = ctx1.el.firstElementChild as HTMLElement;
+		(root.querySelector('button[aria-label^="Increase"]') as HTMLElement).click();
+		await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
+		const ctx2 = await render('ds-counter'); // adopted
+		expect(ctx2.el.firstElementChild).toBe(root);
+		const pencil = root.querySelector<HTMLElement>('.dse-btn[aria-label^="Edit "]'); // the counter's chrome-panel pencil (authoringAnchor.test.ts)
+		expect(pencil).not.toBeNull();
+		pencil!.click();
+		expect(spy).toHaveBeenCalledTimes(1);
+		expect(spy.mock.calls[0][3]).toBe(bodyOf(app.vault.getContent('Note.md')!));
+		expect(spy.mock.calls[0][3]).toContain('current_value: 11');
+		spy.mockRestore();
+		jest.useRealTimers();
 	});
 });

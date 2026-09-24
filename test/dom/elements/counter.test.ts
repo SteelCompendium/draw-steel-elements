@@ -397,6 +397,9 @@ describe('Plan 09 Task 4: counter rendered through the REAL ElementPipeline (D2 
 		test('blur alone commits the edit (legacy behavior preserved)', async () => {
 			jest.useFakeTimers();
 			const { host, root } = await renderCounter();
+			// SC-340 §9.1: a real blur (the section stays in the document) still commits —
+			// only a blur fired while the section is disconnected (adoption) is ignored.
+			document.body.appendChild(root);
 
 			const input = inputEl(root)!;
 			input.value = '12';
@@ -406,6 +409,7 @@ describe('Plan 09 Task 4: counter rendered through the REAL ElementPipeline (D2 
 			await jest.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS);
 			expect(host.replaceSource).toHaveBeenCalledTimes(1);
 			expect(host.replaceSource.mock.calls[0][0]).toBe(healthSerialized(12));
+			root.remove();
 		});
 
 		test('integer: a typed "5.5" commits 5 (Math.trunc, parseInt semantics) — the counter NEVER persists a float', async () => {
