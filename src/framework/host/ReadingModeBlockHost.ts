@@ -363,9 +363,14 @@ export class ReadingModeBlockHost implements BlockHost {
 
 		let wrote = false;
 		let dropped = false;
+		let changedContent = false;
 		// SC-340 §6.2: the claim ticket must exist before Vault.process — Obsidian fires
-		// `modify` inside it and runs the new section's processor right after.
-		if (this.entry && this.registry) this.registry.noteWrite(this.entry, newSource);
+		// `modify` inside it and runs the new section's processor right after. Task 4 review
+		// (carried fix): kept so it can be dropped below if this write changes nothing — a
+		// no-op write causes no rebuild, so an uncollected ticket would otherwise linger up to
+		// CLAIM_WINDOW_MS and could let claim() hand this view to an unrelated rebuild of an
+		// identical-body TWIN block.
+		const ticket = this.entry && this.registry ? this.registry.noteWrite(this.entry, newSource) : null;
 		await this.plugin.app.vault.process(abstractFile, (content) => {
 			const target = this.resolveWriteTarget(content, section);
 			if (target === 'abort') return content;
@@ -390,9 +395,15 @@ export class ReadingModeBlockHost implements BlockHost {
 			// locate path hunting for a body nobody has any more — a dropped write + a false
 			// Notice for two writes that both actually landed.
 			this.knownBody = newSource;
-			return lines.join('\n');
+			const next = lines.join('\n');
+			changedContent = next !== content;
+			return next;
 		});
 		if (dropped) notifyDroppedWrite(this.ctx.sourcePath, abstractFile.basename);
+		// Task 4 review (carried fix): no ticket for a write that changed nothing on disk.
+		if (ticket && this.entry && this.registry && (!wrote || !changedContent)) {
+			this.registry.dropTicket(this.entry, ticket);
+		}
 		return wrote;
 	}
 

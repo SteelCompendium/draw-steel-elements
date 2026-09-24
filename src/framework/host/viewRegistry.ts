@@ -18,12 +18,18 @@ import { normalizeBody } from './ReadingModeBlockHost';
 /** A write's claim ticket is valid this long (spec §6.2; the rebuild arrives ~5 ms after modify). */
 export const CLAIM_WINDOW_MS = 3000;
 
+/** One write's claim ticket: valid for CLAIM_WINDOW_MS, consumed by the rebuild it caused. */
+export interface ClaimTicket {
+	body: string;
+	at: number;
+}
+
 export interface ViewRegistryEntry {
 	readonly view: Component;
 	readonly host: ReadingModeBlockHost;
 	readonly root: HTMLElement;
 	/** Bodies this view wrote, oldest first; each one is a ticket for one rebuild. */
-	tickets: Array<{ body: string; at: number }>;
+	tickets: ClaimTicket[];
 	/** True between a successful claim() and finishClaim(). */
 	claiming: boolean;
 	released: boolean;
@@ -74,12 +80,28 @@ export class ViewRegistry extends Component {
 		return entry;
 	}
 
-	/** Record a claim ticket for `body` (called by the host BEFORE Vault.process). */
-	noteWrite(entry: ViewRegistryEntry, body: string): void {
-		if (entry.released) return;
+	/** Record a claim ticket for `body` (called by the host BEFORE Vault.process). Returns
+	 *  the ticket so the caller can drop it again (dropTicket) if the write turns out to
+	 *  change nothing — see dropTicket's doc. */
+	noteWrite(entry: ViewRegistryEntry, body: string): ClaimTicket {
 		const at = this.now();
-		entry.tickets = entry.tickets.filter((ticket) => at - ticket.at < CLAIM_WINDOW_MS);
-		entry.tickets.push({ body, at });
+		const ticket: ClaimTicket = { body, at };
+		if (entry.released) return ticket;
+		entry.tickets = entry.tickets.filter((t) => at - t.at < CLAIM_WINDOW_MS);
+		entry.tickets.push(ticket);
+		return ticket;
+	}
+
+	/**
+	 * SC-340 Task 4 review (carried fix): a write that changes nothing on disk ('abort',
+	 * 'miss', or a spliced body identical to what was already there) causes no rebuild, so
+	 * its ticket would otherwise linger up to CLAIM_WINDOW_MS and could let claim() hand
+	 * this view to an unrelated rebuild of an identical-body TWIN block. Removes exactly
+	 * that one ticket (by reference); a no-op if it was already consumed/expired/removed.
+	 */
+	dropTicket(entry: ViewRegistryEntry, ticket: ClaimTicket): void {
+		const index = entry.tickets.indexOf(ticket);
+		if (index >= 0) entry.tickets.splice(index, 1);
 	}
 
 	/**

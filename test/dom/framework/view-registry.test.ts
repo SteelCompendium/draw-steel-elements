@@ -10,6 +10,8 @@ import { makeEnv } from './_adoptionEnv';
 
 const COUNTER_BODY = 'name: Health\ncurrent_value: 10\nmax_value: 20\nmin_value: 0';
 const NOTE = `# N\n\n\`\`\`ds-counter\n${COUNTER_BODY}\n\`\`\`\n`;
+/** SC-340 Task 4 review (carried fix): a two-block note, for rebinding to the SECOND block. */
+const TWO_BLOCK_NOTE = `# N\n\n\`\`\`ds-counter\n${COUNTER_BODY}\n\`\`\`\n\nSome text.\n\n\`\`\`ds-counter\nname: Mana\ncurrent_value: 5\nmax_value: 10\nmin_value: 0\n\`\`\`\n`;
 
 async function mountCounter(enabled = false) {
 	const { deps, app, plugin } = makeEnv();
@@ -128,19 +130,36 @@ describe('SC-340 Task 2: ViewRegistry ownership and release', () => {
 describe('SC-340 Task 3: rebind and claim tickets', () => {
 	test('rebind re-points containerEl, docId and position; the OLD render child unload is then a no-op', async () => {
 		const { app, registry, host, renderChild } = await mountCounter();
+		const bodyBeforeRebind = host.lastKnownBody;
+		const lineBeforeRebind = host.lastKnownLineStart;
 		const ctx2 = makeFakeContext(app, 'Note.md');
 		(ctx2 as any).docId = 'doc-2';
 		host.rebind(ctx2.el, ctx2 as any);
 		expect(host.containerEl).toBe(ctx2.el);
 		expect(host.docId).toBe('doc-2');
 		expect(ctx2.addedChildren).toHaveLength(1);
+		// SC-340 Task 4 review (carried fix): rebind must never clear/change knownBody.
+		expect(host.lastKnownBody).toBe(bodyBeforeRebind);
 
 		renderChild.unload(); // superseded
 		expect(registry.size).toBe(1);
 
 		const renderChild2 = ctx2.addedChildren[0];
 		renderChild2.load();
-		renderChild2.unload(); // current
+
+		// SC-340 Task 4 review (carried fix): rebind to the SECOND block of a two-block note
+		// moves the durable position (lastKnownLineStart), same host, same registry entry.
+		app.vault.setFile('Note.md', TWO_BLOCK_NOTE);
+		const ctx3 = makeFakeContext(app, 'Note.md', 1);
+		host.rebind(ctx3.el, ctx3 as any);
+		expect(host.lastKnownLineStart).not.toBe(lineBeforeRebind);
+
+		renderChild2.unload(); // superseded
+		expect(registry.size).toBe(1);
+
+		const renderChild3 = ctx3.addedChildren[0];
+		renderChild3.load();
+		renderChild3.unload(); // current
 		expect(registry.size).toBe(0);
 	});
 
@@ -171,5 +190,22 @@ describe('SC-340 Task 3: rebind and claim tickets', () => {
 		now += CLAIM_WINDOW_MS;
 		registry.noteWrite(entry, 'a: 2');
 		expect(entry.tickets.map((t) => t.body)).toEqual(['a: 2']);
+	});
+});
+
+describe('SC-340 Task 4 review (carried fix): no claim ticket for a write that changed nothing', () => {
+	test('a write whose spliced body equals what is already on disk leaves no live ticket', async () => {
+		const { registry, host } = await mountCounter();
+		const [entry] = registry.liveEntries();
+		expect(entry.tickets).toHaveLength(0);
+		await host.replaceSource(COUNTER_BODY); // identical to what mountCounter already wrote
+		expect(entry.tickets).toHaveLength(0);
+	});
+
+	test('a real write (the body actually changes) leaves exactly one ticket', async () => {
+		const { registry, host } = await mountCounter();
+		const [entry] = registry.liveEntries();
+		await host.replaceSource('name: Health\ncurrent_value: 11\nmax_value: 20\nmin_value: 0');
+		expect(entry.tickets).toHaveLength(1);
 	});
 });
