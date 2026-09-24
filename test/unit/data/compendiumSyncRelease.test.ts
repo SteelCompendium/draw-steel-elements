@@ -144,12 +144,13 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 
 	test("F2 review MUST-FIX #2: rejectedPaths (path-traversal defense) are surfaced in the sync summary Notice + console.warn payload", async () => {
 		const { app } = makeFakeApp();
-		// fflate's `unzipSync` hands entry names through raw — unlike JSZip's writer,
-		// which used to path-clean a ".." segment on write, fflate authors and
-		// round-trips one unchanged (see the raw-traversal-names test below). That makes
-		// `isUnsafeRelativePath` (CompendiumSyncService.ts:313-316) load-bearing for a
-		// literal ".." entry in a way it never had to be with JSZip. A leading-slash
-		// entry is exactly as unsafe and exercises the same defense here.
+		// fflate's `unzipSync` hands entry names through raw — unlike JSZip's reader
+		// (`loadAsync`, the CVE-2022-48285 fix), which used to path-clean a ".." segment
+		// on read, fflate authors and round-trips one unchanged (see the
+		// raw-traversal-names test below). That makes `isUnsafeRelativePath` (see that
+		// function in CompendiumSyncService.ts) load-bearing for a literal ".." entry in
+		// a way it never had to be with JSZip. A leading-slash entry is exactly as unsafe
+		// and exercises the same defense here.
 		const zip = await zipOf({ "safe.md": "official", "/abs.md": "pwned" });
 		const fetchFake = githubFake(zip, "v4.rejected");
 		const service = new CompendiumSyncService(
@@ -172,7 +173,7 @@ describe("CompendiumSyncService.sync (release download path)", () => {
 		}
 	});
 
-	test("SC-328: raw traversal names fflate can author (unlike JSZip's writer) are rejected, not just leading-slash paths", async () => {
+	test("SC-328: raw traversal names fflate can author (unlike JSZip's reader) are rejected, not just leading-slash paths", async () => {
 		const { app } = makeFakeApp();
 		const zip = await zipOf({
 			"safe.md": "official",
