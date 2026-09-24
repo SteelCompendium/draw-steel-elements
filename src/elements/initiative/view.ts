@@ -1180,8 +1180,12 @@ export class InitiativeView extends ElementView<EncounterData> {
 			// tracker otherwise logged one warning per creature purely because md-dse
 			// statblocks carry no `image` key, which is a handled, expected state (the
 			// fallback glyph renders exactly the same either way), not a warning-worthy one.
+			// Review round 1, INFO-1 (folded): a whitespace-only `image: "   "` is not a
+			// real value either — `.trim()` treats it the same as absent, consistent with
+			// the ruling's intent ("absence of an optional field is not a warning
+			// anywhere").
 			.catch(() => {
-				if (imgSrcRaw) {
+				if (imgSrcRaw?.trim()) {
 					console.warn(`Draw Steel Elements: no portrait image found for "${name}" (and no default token image)`);
 				}
 				this.renderPortraitFallback(container, kind);

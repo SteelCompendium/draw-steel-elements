@@ -22,9 +22,10 @@
 // (unlike initiative.test.ts's makeEnv, which seeds Media/token_1.png per CB-14) and
 // pins: no unhandled rejection, ZERO console.warn calls when no `image:` field is set,
 // the correct fallback glyph per hero/enemy slot regardless — plus (below) that a warn
-// STILL fires when an image was specified but can't be resolved, that a real resolvable
-// image still wins over the fallback, and that a load failure on an already-mounted
-// <img> swaps to the same fallback.
+// STILL fires (hero AND enemy sites) when an image was specified but can't be resolved,
+// that a whitespace-only `image:` value is treated the same as absent (round 1, INFO-1),
+// that a real resolvable image still wins over the fallback, and that a load failure on
+// an already-mounted <img> swaps to the same fallback.
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -144,7 +145,9 @@ describe('SC-4 / SC-162: initiative portraits with no resolvable image', () => {
 		}
 	});
 
-	test('SC-240: warn STILL fires when an image WAS specified and could not be resolved', async () => {
+	// Review round 1, INFO-1 (folded): a whitespace-only `image:` value is not a real
+	// value either — treat it the same as absent (silent), consistent with the ruling.
+	test('SC-240: a WHITESPACE-ONLY image value is treated as not specified — no warn', async () => {
 		const deps = makeDeps(new App()); // no default token image seeded either
 		const pipeline = new ElementPipeline(deps);
 		const container = document.createElement('div');
@@ -154,8 +157,44 @@ describe('SC-4 / SC-162: initiative portraits with no resolvable image', () => {
   - name: Frodo Baggins
     initiative: 1
     max_stamina: 20
-    image: images/does-not-exist.png
+    image: "   "
 enemy_groups: []
+`;
+		await pipeline.run(initiativeElement, source, makeHost(container));
+		await flushAsync(5);
+
+		expect(rejections).toEqual([]);
+		expect(warnSpy).not.toHaveBeenCalled();
+		const portrait = container.querySelector('.dse-init__portrait')!;
+		expect(portrait.querySelector('img')).toBeNull();
+		const fallback = portrait.querySelector('.dse-init__portrait-fallback');
+		expect(fallback).not.toBeNull();
+		expect(fallback!.getAttribute('data-icon')).toBe('shield');
+	});
+
+	test('SC-240: warn STILL fires when an image WAS specified and could not be resolved (hero AND enemy sites)', async () => {
+		const deps = makeDeps(new App()); // no default token image seeded either
+		const pipeline = new ElementPipeline(deps);
+		const container = document.createElement('div');
+		document.body.appendChild(container);
+
+		// Review round 1, LOW-3: the hero row, the enemy detail row, and each instance
+		// grid cell all share ONE renderPortrait, but only the hero call site had a
+		// positive-warn test — cover the enemy sites too (amount: 2 -> detail row + 2
+		// grid cells, all sharing the one unresolvable `image`).
+		const source = `heroes:
+  - name: Frodo Baggins
+    initiative: 1
+    max_stamina: 20
+    image: images/does-not-exist.png
+enemy_groups:
+  - name: Goblin Squad
+    creatures:
+      - name: Goblin
+        initiative: 1
+        max_stamina: 10
+        amount: 2
+        image: images/also-does-not-exist.png
 `;
 		await pipeline.run(initiativeElement, source, makeHost(container));
 		await flushAsync(5);
@@ -163,14 +202,27 @@ enemy_groups: []
 		expect(rejections).toEqual([]);
 		// A non-empty imgSrcRaw that fails to resolve (and no default to fall back on
 		// either) is still a real problem worth logging — unlike the "no image key at
-		// all" case above.
-		expect(warnSpy).toHaveBeenCalledTimes(1);
-		expect(String(warnSpy.mock.calls[0][0])).toContain('no portrait image found');
-		const portrait = container.querySelector('.dse-init__portrait')!;
-		expect(portrait.querySelector('img')).toBeNull();
-		const fallback = portrait.querySelector('.dse-init__portrait-fallback');
-		expect(fallback).not.toBeNull();
-		expect(fallback!.getAttribute('data-icon')).toBe('shield');
+		// all" case above. 1 hero + (1 enemy detail row + 2 grid cells) = 4.
+		expect(warnSpy).toHaveBeenCalledTimes(4);
+		for (const call of warnSpy.mock.calls) {
+			expect(String(call[0])).toContain('no portrait image found');
+		}
+		const heroPortrait = container.querySelector('.dse-init__group--heroes .dse-init__portrait')!;
+		expect(heroPortrait.querySelector('img')).toBeNull();
+		const heroFallback = heroPortrait.querySelector('.dse-init__portrait-fallback');
+		expect(heroFallback).not.toBeNull();
+		expect(heroFallback!.getAttribute('data-icon')).toBe('shield');
+
+		const enemyPortraits = container.querySelectorAll(
+			'.dse-init__group--enemies .dse-init__portrait, .dse-init__group--enemies .dse-init__cell-portrait',
+		);
+		expect(enemyPortraits.length).toBeGreaterThan(0);
+		for (const slot of Array.from(enemyPortraits)) {
+			expect(slot.querySelector('img')).toBeNull();
+			const fallback = slot.querySelector('.dse-init__portrait-fallback');
+			expect(fallback).not.toBeNull();
+			expect(fallback!.getAttribute('data-icon')).toBe('skull');
+		}
 	});
 
 	test('a resolvable image still wins: no fallback when the vault has a real file at the given path', async () => {

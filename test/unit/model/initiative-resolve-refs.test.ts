@@ -425,6 +425,28 @@ describe('T-2 / SC-240: SCC-shaped ref failures drop the "multiple instances" hi
 			"Are there multiple instances of the 'Nope' file in your vault? If so, please specify the full path.",
 		);
 	});
+
+	// Review round 1, LOW-2: isSccShapedRef's `.trim()` is now shared by BOTH the routing
+	// dispatch (resolveStatblockRef) and this hint-suppression decision, but nothing
+	// pinned the trim itself — a padded ref is exactly the case SC-134 M1 already had to
+	// handle for routing (see resolveStatblockRef's own doc comment), and it must land
+	// here too: a leading/trailing-whitespace scc.v1: ref still reaches SccRefProvider
+	// (not resolveBarePath) and still drops the hint.
+	test('hero: PADDED unsynced scc.v1: code still routes through SccRefProvider and drops the hint', async () => {
+		const { refs } = makeSccEnv();
+		const src = [
+			'heroes:',
+			'  - statblock: "  scc.v1:mcdm.monsters.v1/monster.goblin.statblock/goblin-stinker  "',
+			'enemy_groups: []',
+		].join('\n');
+		const message = await errorMessageOf(resolveLikePipeline(src, refs));
+		expect(message).toContain('is not available in this vault. Sync the compendium');
+		expect(message).not.toContain('multiple instances');
+		expect(message).not.toContain('full path');
+		// Not the bare-path "Reference file (...) not found" message a `.trim()` regression
+		// would fall back to.
+		expect(message).not.toContain('not found in root, DS Compendium');
+	});
 });
 
 describe('T-2: idempotency — ref-free models are BYTE-unchanged', () => {

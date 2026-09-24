@@ -57,6 +57,13 @@ interface StatblockFields {
 // ReferenceResolver.ts and rewriteSccAnchors.ts) rather than a shared export.
 const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
 
+/** SC-240: the SAME scc:/scc.vN: shape predicate resolveStatblockRef dispatches on,
+ *  reused (not re-implemented) by the hero/creature failure-message branches below so
+ *  the error-text decision can never drift out of sync with the resolution routing. */
+function isSccShapedRef(raw: string): boolean {
+	return SCC_PREFIX_RE.test(raw.trim());
+}
+
 /**
  * SC-134 fix: the encounter builder emits `statblock: scc.v1:<code>` (encounter/view.ts
  * soloGroup + the squad minion/captain rows), but this function previously resolved
@@ -85,13 +92,6 @@ const SCC_PREFIX_RE = /^scc(\.v\d+)?:/;
  * would report the generic "no provider could resolve this" message instead of the
  * shape-aware SCC one for a padded ref in a provider-less context.
  */
-/** SC-240: the SAME scc:/scc.vN: shape predicate resolveStatblockRef dispatches on,
- *  reused (not re-implemented) by the hero/creature failure-message branches below so
- *  the error-text decision can never drift out of sync with the resolution routing. */
-function isSccShapedRef(raw: string): boolean {
-	return SCC_PREFIX_RE.test(raw.trim());
-}
-
 async function resolveStatblockRef(refs: ReferenceService, raw: string): Promise<ResolvedRef | null> {
 	const trimmed = raw.trim();
 	if (isSccShapedRef(raw)) {
