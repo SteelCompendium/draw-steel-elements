@@ -24,8 +24,10 @@
 // the correct fallback glyph per hero/enemy slot regardless — plus (below) that a warn
 // STILL fires (hero AND enemy sites) when an image was specified but can't be resolved,
 // that a whitespace-only `image:` value is treated the same as absent (round 1, INFO-1),
-// that a real resolvable image still wins over the fallback, and that a load failure on
-// an already-mounted <img> swaps to the same fallback.
+// that a NON-STRING `image:` value (an unquoted wikilink parses as an array, re-review
+// MEDIUM-1) is treated as specified without throwing, that a real resolvable image still
+// wins over the fallback, and that a load failure on an already-mounted <img> swaps to
+// the same fallback.
 import { ElementPipeline } from '../../../src/framework/pipeline';
 import type { ElementPipelineDeps } from '../../../src/framework/pipeline';
 import type { BlockHost, RenderMode } from '../../../src/framework/host/BlockHost';
@@ -223,6 +225,41 @@ enemy_groups:
 			expect(fallback).not.toBeNull();
 			expect(fallback!.getAttribute('data-icon')).toBe('skull');
 		}
+	});
+
+	// Re-review, MEDIUM-1: Hero/Creature.image is declared `string` (EncounterData.ts) but
+	// nothing validates the parsed YAML value at runtime. An UNQUOTED wikilink is the
+	// realistic way a real vault note produces a non-string here: YAML reads
+	// `image: [[Frodo.png]]` as a nested flow sequence (an array containing one array),
+	// not a string. A bare `imgSrcRaw?.trim()` throws `TypeError: imgSrcRaw.trim is not a
+	// function` for this — caught nowhere, since it throws INSIDE the `.catch` handler —
+	// so the fallback glyph never mounts and the slot stays empty: a visible regression
+	// ruling 2 ("No visual change") forbids. Pins: no TypeError/unhandled rejection, the
+	// shield glyph still mounts, and the warn still fires (a non-string is "specified").
+	test('SC-240 re-review MEDIUM-1: a non-string image (unquoted wikilink) does not throw and still warns+falls back', async () => {
+		const deps = makeDeps(new App());
+		const pipeline = new ElementPipeline(deps);
+		const container = document.createElement('div');
+		document.body.appendChild(container);
+
+		const source = `heroes:
+  - name: Frodo Baggins
+    initiative: 1
+    max_stamina: 20
+    image: [[Frodo.png]]
+enemy_groups: []
+`;
+		await pipeline.run(initiativeElement, source, makeHost(container));
+		await flushAsync(5);
+
+		expect(rejections).toEqual([]);
+		expect(warnSpy).toHaveBeenCalledTimes(1);
+		expect(String(warnSpy.mock.calls[0][0])).toContain('no portrait image found');
+		const portrait = container.querySelector('.dse-init__portrait')!;
+		expect(portrait.querySelector('img')).toBeNull();
+		const fallback = portrait.querySelector('.dse-init__portrait-fallback');
+		expect(fallback).not.toBeNull();
+		expect(fallback!.getAttribute('data-icon')).toBe('shield');
 	});
 
 	test('a resolvable image still wins: no fallback when the vault has a real file at the given path', async () => {
