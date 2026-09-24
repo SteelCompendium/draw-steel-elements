@@ -680,11 +680,14 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
      * The two direct `syncService.sync(...)` calls below hand this SAME token through
      * (`heldToken`) so `sync()` never tries to acquire its own and refuse itself
      * (B3's no-self-deadlock requirement) — see `CompendiumSyncService.beginOperation`'s
-     * doc for the full reasoning. The `LegacyCompendiumModal`/`offerMigration` callbacks
-     * further down call `syncService.sync` BARE (no token): by the time a user acts on
-     * that modal, this method has already returned and released the lock, so those are
-     * correctly their own, independently-guarded busy spans (O2's "later syncs from
-     * modal callbacks... are busy for their own duration").
+     * doc for the full reasoning. By the time a user acts on the `LegacyCompendiumModal`/
+     * `CompendiumMigrationModal` further down, this method has already returned and
+     * released the lock, so those are correctly their own, independently-guarded busy
+     * spans (O2's "later syncs from modal callbacks... are busy for their own
+     * duration") — SC-243 fix round 1 (review L1) made `LegacyCompendiumModal`'s choice
+     * and `syncAnyway` acquire their OWN token and hand it into `sync(options, token)`
+     * the same lock-first way (trash/markSettled happens under the lock too, not just
+     * the sync); only `syncAfter` still calls `syncService.sync` bare.
      */
     async syncCompendium(): Promise<void> {
         const token = this.syncService.beginOperation('sync');

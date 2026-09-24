@@ -268,10 +268,14 @@ export class CompendiumSyncService {
 	 * caller already holds (from its own `beginOperation('sync')`); `sync` then runs
 	 * entirely under that lock without acquiring or releasing it itself — see
 	 * `beginOperation`'s doc for why `main.syncCompendium`'s prelude needs exactly this.
-	 * Every other caller (a direct `syncService.sync(options)` — the modal callbacks in
-	 * `main.offerMigration`, which fire once the busy span they were offered from has
-	 * already cleared) omits `heldToken`; `sync` then acquires its own lock and releases
-	 * it in `finally` (success, thrown error, and refusal alike leave the lock clear).
+	 * Every other caller acquires its OWN lock first — `LegacyCompendiumModal`'s choice
+	 * and `offerMigration`'s `syncAnyway` (SC-243 fix round 1, review L1) do this and
+	 * pass their own fresh token through exactly like `syncCompendium` does; only
+	 * `syncAfter` still calls `syncService.sync(options)` bare, omitting `heldToken`
+	 * entirely, since by the time it fires the migration run it followed has its own
+	 * cleared busy span. Either way, a caller that omits `heldToken` makes `sync`
+	 * acquire its own lock and release it in `finally` (success, thrown error, and
+	 * refusal alike leave the lock clear).
 	 * Returns null, WITHOUT starting any work, when the lock could not be acquired (a
 	 * genuinely concurrent caller) — the exact-wording Notice B3 specifies is shown
 	 * either here (a bare call) or by `syncCompendium`'s own earlier guard, never both.
