@@ -305,7 +305,17 @@ export abstract class ElementView<M> extends Component {
 			.then((ok) => {
 				for (const resolve of waiters) resolve(ok);
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
+				// SC-282 r2 re-review (LOW-B) — the plain `.catch` above (LOW-2) turned every
+				// write failure silent: no unhandled rejection AND no console output, so the
+				// callers' own try/catch + console.error wrappers around persist() (e.g.
+				// montage/view.ts, initiative/view.ts, negotiation/view.ts) never fire either,
+				// because persist() now RESOLVES instead of rejecting. An EACCES/EBUSY/full-
+				// disk failure left the panel showing the new value while the disk kept the
+				// old one, with no trace anywhere. Logging here restores that one diagnostic
+				// without reintroducing the unhandled-rejection crash LOW-2 fixed — waiters
+				// still resolve `false`, same as every other "couldn't write" outcome.
+				console.error('Draw Steel Elements: block write failed', error);
 				for (const resolve of waiters) resolve(false);
 			});
 	}
