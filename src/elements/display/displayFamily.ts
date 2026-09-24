@@ -107,20 +107,49 @@ export function displayFamily<M>(d: DisplayFamilyDescriptor<M>): ReferenceElemen
 // duplicate as its own `humanizeType` — consolidated round-3 review LOW-2, shared with
 // perk's eyebrow (layouts.ts).
 
-// SC-272 -- steel-etl's `dirToTitle()` (cards.go/build.go) is the site's general
-// directory->title humanizer for EVERY index section, not a rule-specific one, and it
-// checks a `typeTitles` override map before falling back to plain title-casing. Two of
-// that map's entries collide with real rule-group segment names in the corpus today
-// (`rule.monster`, `rule.treasure` -- verified against
-// data/data-unified/en/unified/md-dse/rule/*), so the site's rule tiles for those two
-// groups read the PLURAL "Monsters"/"Treasures", not "Monster"/"Treasure". Mirrored here
-// so the plugin's eyebrow matches byte-for-byte; extend only if a NEW rule-group segment
-// is verified (against the corpus, not this comment) to collide with another
-// `typeTitles` entry -- most of that map (ancestry, career, kit, …) can never collide
-// with a rule group, since rule groups are steel-etl's own fixed glossary vocabulary.
+// SC-272 fix round 2 (review HIGH-1) -- steel-etl's `dirToTitle()` (cards.go/build.go) is
+// the site's general directory->title humanizer for EVERY index section, not a rule-
+// specific one, and it checks a `typeTitles` override map (`build.go:1412`) before falling
+// back to plain title-casing. round 1 mirrored only the two entries that collided with the
+// real rule-group corpus at the time (`monster`/`treasure`) -- the review caught a THIRD,
+// real-corpus collision this subset missed (`negotiation` -> "Negotiations", 7 files) and
+// pointed out that any FUTURE rule-group segment could collide with any of the map's other
+// entries too. Mirrored here in FULL (verbatim values, `build.go:1412-1435`) so this can
+// never drift again the same way, with exactly one deliberate omission:
+//
+// `typeTitles["rule"]` = "Rules" is itself excluded. It exists on the site for the TOP-
+// LEVEL "Rules" index page's own nav title (`dirToTitle("rule")`, the `rule/` directory
+// itself) -- never for a per-tile GROUP label, because "rule" is the parent directory, not
+// a leaf group; no real rule-group segment can ever literally equal "rule". But
+// `humanizeRuleGroup` below is also what the FALLBACK paths route through (no `scc:`, a
+// malformed code, a bare `rule` scc segment -- typeAdapters.ts's `sccTypeSegment`), and
+// every one of those hands this function the literal string `"rule"` on purpose, expecting
+// the singular "Rule" eyebrow the ticket's brief pins. Including this entry verbatim would
+// silently turn every one of those fallbacks into the plural "Rules" -- so it stays out,
+// on purpose, and `titleCase("rule")` (the map-miss path) supplies the correct singular.
 const RULE_GROUP_TITLE_OVERRIDES: Record<string, string> = {
-	monster: 'Monsters',
+	ancestry: 'Ancestries',
+	career: 'Careers',
+	chapter: 'Chapters',
+	class: 'Classes',
+	complication: 'Complications',
+	condition: 'Conditions',
+	culture: 'Cultures',
+	feature: 'Features',
+	kit: 'Kits',
+	perk: 'Perks',
+	skill: 'Skills',
+	title: 'Titles',
 	treasure: 'Treasures',
+	ability: 'Abilities',
+	trait: 'Traits',
+	// "rule": "Rules" deliberately omitted -- see the comment above.
+	monster: 'Monsters',
+	negotiation: 'Negotiations',
+	religion: 'Gods & Religion',
+	god: 'Gods',
+	saint: 'Saints',
+	project: 'Downtime Projects',
 };
 
 /** Humanizes one rule-group segment (the `scc:` type's last dot-segment, or the bare

@@ -266,13 +266,17 @@ describe('SC-120 Batch C round-3 review MED-1 / owner ruling 10: eyebrow suppres
 	});
 });
 
-// SC-272 — the eyebrow's group humanization must match the site's OWN humanization
-// (steel-etl cards.go's `ruleCard` / build.go's `dirToTitle`), not just plain title-casing:
-// `dirToTitle` checks a general `typeTitles` override map before falling back to
-// title-casing, and two of that map's entries collide with real rule-group segment names
-// in the corpus — `rule.monster` and `rule.treasure` render as the PLURAL "Monsters"/
-// "Treasures" on the site, not "Monster"/"Treasure". `humanizeRuleGroup`
-// (displayFamily.ts) mirrors that override for exactly those two groups.
+// SC-272 fix round 2 (review HIGH-1) — the eyebrow's group humanization must match the
+// site's OWN humanization (steel-etl cards.go's `ruleCard` / build.go's `dirToTitle`), not
+// just plain title-casing: `dirToTitle` checks a general `typeTitles` override map
+// (`build.go:1412`) before falling back to title-casing. Round 1 mirrored only the two
+// entries that collided with the corpus at the time (`monster`/`treasure`) and missed a
+// THIRD real collision — `negotiation` -> "Negotiations" (7 corpus files) — which this
+// suite used to pin as the WRONG value ("Negotiation", singular) under the "non-overridden
+// control" label. `humanizeRuleGroup` (displayFamily.ts) now mirrors the site's map in
+// full (21 of its 22 entries — `rule` itself is deliberately excluded, see that file's
+// comment), so this suite uses `rule.dice` (a group with no `typeTitles` entry at all) as
+// the actual non-overridden control instead.
 describe('SC-272: rule-group humanization matches the site\'s dirToTitle, including its plural overrides', () => {
 	test('"rule.monster" group -> "Monsters" (plural, site\'s typeTitles override), not "Monster"', () => {
 		const model: GenericNote = { name: 'Swarm', type: 'rule.monster', body: 'x' };
@@ -284,8 +288,44 @@ describe('SC-272: rule-group humanization matches the site\'s dirToTitle, includ
 		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Treasures');
 	});
 
-	test('an ordinary (non-overridden) group is plain title-cased — "rule.negotiation" -> "Negotiation"', () => {
+	// SC-272 fix round 2 (review HIGH-1) — the collision round 1 missed: steel-etl's site
+	// prints "Negotiations" (plural) on all 7 real `rule.negotiation` corpus tiles
+	// (v2/docs/Browse/rule/negotiation/index.md), not "Negotiation".
+	test('"rule.negotiation" group -> "Negotiations" (plural, site\'s typeTitles override), not "Negotiation"', () => {
 		const model: GenericNote = { name: 'Motivation', type: 'rule.negotiation', body: 'x' };
-		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Negotiation');
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Negotiations');
+	});
+
+	test('an ordinary (non-overridden) group is plain title-cased — "rule.dice" -> "Dice"', () => {
+		const model: GenericNote = { name: 'Power Roll', type: 'rule.dice', body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe('Dice');
+	});
+
+	// SC-272 fix round 2 (review HIGH-1, "add a table test pinning all 16 corpus groups") —
+	// every distinct `rule.<group>` scc segment in the real corpus
+	// (data/data-unified/en/unified/md-dse/rule/*, 163 files, verified 2026-09-24) against
+	// the site's own label for that group's tile (steel-etl's generated
+	// v2/docs/Browse/rule/<group>/index.md card headings). Guards the whole map at once,
+	// not just the two/three entries that happened to be caught by hand so far.
+	test.each<[string, string]>([
+		['character', 'Character'],
+		['combat', 'Combat'],
+		['damage', 'Damage'],
+		['dice', 'Dice'],
+		['downtime', 'Downtime'],
+		['general', 'General'],
+		['health', 'Health'],
+		['keyword', 'Keyword'],
+		['monster', 'Monsters'],
+		['negotiation', 'Negotiations'],
+		['organization', 'Organization'],
+		['resource', 'Resource'],
+		['role', 'Role'],
+		['test', 'Test'],
+		['treasure', 'Treasures'],
+		['world', 'World'],
+	])('corpus group "rule.%s" -> site label %j', (group, siteLabel) => {
+		const model: GenericNote = { name: `${siteLabel} Example`, type: `rule.${group}`, body: 'x' };
+		expect(genericLayout.steel!.eyebrow(model, undefined)).toBe(siteLabel);
 	});
 });

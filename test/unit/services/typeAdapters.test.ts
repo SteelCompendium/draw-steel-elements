@@ -87,4 +87,41 @@ describe("SC-272: genericNoteAdapter derives GenericNote.type from scc: (typeAda
 		const note = (await adapter.fromFile(app, file)) as GenericNote;
 		expect(note.type).toBe("rule.dice");
 	});
+
+	// SC-272 fix round 2 (review LOW-1) — a hand-authored or miscopied `type: rule` note
+	// can carry a `scc:` code from a DIFFERENT family (adapter dispatch keys off the
+	// frontmatter `type:`, CompendiumIndex.ts, so `genericNoteAdapter` still claims it).
+	// Before this fix, `sccTypeSegment` handed back that foreign segment verbatim — a
+	// `feature.trait.…` or bare `kit` scc leaked into the rule eyebrow as "Level 1"/"Kit".
+	test.each<[string, string]>([
+		["foreign multi-segment family (feature.trait…)", "mcdm.heroes.v1/feature.trait.fury.level-1/x"],
+		["foreign bare-slug family (kit)", "mcdm.heroes.v1/kit/x"],
+	])("scc: from a %s on a type: rule note falls back to the bare frontmatter type, not the foreign segment", async (_label, scc) => {
+		const { vault, metadataCache, app } = makeFakeApp();
+		const file = seedRule(vault, metadataCache, "rule/general/foreign-scc.md", {
+			type: "rule",
+			scc,
+			item_name: "Foreign Scc",
+		});
+		const adapter = adapterForType("rule")!;
+		const note = (await adapter.fromFile(app, file)) as GenericNote;
+		expect(note.type).toBe("rule");
+	});
+
+	// SC-272 fix round 2 (review LOW-2) — a malformed `scc:` type segment with a trailing
+	// dot (`rule.`) used to survive `sccTypeSegment` as the literal string `"rule."`;
+	// `genericLayout.steel.eyebrow`'s `split('.').pop()` then returned `""` instead of
+	// falling back to "Rule", so the eyebrow rendered EMPTY rather than absent-or-"Rule".
+	// The same `RULE_SCC_SEGMENT_RE` gate LOW-1 uses rejects this segment too.
+	test("scc: type segment with a trailing dot (\"rule.\") falls back to the bare frontmatter type, not the empty string", async () => {
+		const { vault, metadataCache, app } = makeFakeApp();
+		const file = seedRule(vault, metadataCache, "rule/general/trailing-dot.md", {
+			type: "rule",
+			scc: "mcdm.heroes.v1/rule./trailing-dot",
+			item_name: "Trailing Dot",
+		});
+		const adapter = adapterForType("rule")!;
+		const note = (await adapter.fromFile(app, file)) as GenericNote;
+		expect(note.type).toBe("rule");
+	});
 });

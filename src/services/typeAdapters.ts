@@ -161,6 +161,22 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: unknown) => unknown, alias
 }
 
 /**
+ * SC-272 fix round 2 (review findings LOW-1/LOW-2) -- a `scc:` segment may only stand in
+ * for the frontmatter `type:` when it actually belongs to the RULE family: `rule`, followed
+ * by one or more non-empty, non-dot pieces (`rule.combat`, `rule.combat.hidden-cover`, …).
+ * Without this, `sccTypeSegment` below would happily hand back a FOREIGN family's segment
+ * (a hand-authored/miscopied `type: rule` note carrying `scc: …/kit/x` or
+ * `…/feature.trait.fury.level-1/x` produced eyebrows "Kit"/"Level 1" -- LOW-1) or a
+ * malformed trailing-dot segment (`scc: …/rule./x` -> `type = "rule."` ->
+ * `split('.').pop()` = `""` -> an EMPTY eyebrow instead of falling back to "Rule" -- LOW-2).
+ * This scope is deliberately hardcoded to "rule" (not derived from `genericNoteAdapter`'s
+ * own `re` parameter below): `genericNoteAdapter` is the model-less family's ONLY consumer
+ * today and "rule" is its sole instance (typeAdapters.ts's `TYPE_ADAPTERS` array) -- if a
+ * second model-less family is ever added, this regex needs generalizing alongside it.
+ */
+const RULE_SCC_SEGMENT_RE = /^rule(\.[^.]+)+$/;
+
+/**
  * SC-272 -- the real corpus's `rule.*` files all carry a bare `type: rule` in frontmatter
  * (steel-etl never writes anything more specific there), so the only place a rule's actual
  * GROUP (e.g. "combat", "dice") lives is the middle segment of the file's OWN `scc:` code
@@ -168,14 +184,14 @@ function frontmatterAdapter(re: RegExp, adapter: (fm: unknown) => unknown, alias
  * the site derives its rule-tile label from the matching directory (steel-etl
  * cards.go/build.go's `dirToTitle(groupDir)`), and this is the by-SCC-file equivalent of
  * that directory name. Returns the segment verbatim (e.g. `"rule.combat"`), or undefined
- * when `scc:` is missing/not a string or carries no second `/`-segment (a malformed code) --
- * both leave the caller to fall back to the bare frontmatter `type:`, same as before this
- * ticket.
+ * when `scc:` is missing/not a string, carries no second `/`-segment (a malformed code), or
+ * that segment doesn't match `RULE_SCC_SEGMENT_RE` above (LOW-1/LOW-2) -- all three leave
+ * the caller to fall back to the bare frontmatter `type:`, same as before this ticket.
  */
 function sccTypeSegment(fm: Record<string, unknown>): string | undefined {
 	if (typeof fm.scc !== "string") return undefined;
 	const segment = fm.scc.split("/")[1];
-	return segment ? segment : undefined;
+	return segment && RULE_SCC_SEGMENT_RE.test(segment) ? segment : undefined;
 }
 
 /**
@@ -190,9 +206,11 @@ function sccTypeSegment(fm: Record<string, unknown>): string | undefined {
  * the bare frontmatter `type:` field, but ONLY when that frontmatter value is itself still
  * bare (no `.` -- e.g. `rule`): a frontmatter `type:` that is ALREADY namespaced (e.g. a
  * hand-authored `rule.combat`, not something steel-etl emits today) is left exactly alone,
- * matching this adapter's pre-SC-272 behavior for that case. A missing/malformed `scc:`, or
- * one whose type segment is itself bare (`rule`), falls through to the unchanged frontmatter
- * value -- same "Rule" eyebrow the duplicate-title guard already covers (displayFamily.ts).
+ * matching this adapter's pre-SC-272 behavior for that case. A missing/malformed `scc:`, a
+ * segment that doesn't belong to the rule family, or one whose type segment is itself bare
+ * (`rule`) (`sccTypeSegment`'s `RULE_SCC_SEGMENT_RE` gate, fix round 2 -- LOW-1/LOW-2) falls
+ * through to the unchanged frontmatter value -- same "Rule" eyebrow the duplicate-title
+ * guard already covers (displayFamily.ts).
  */
 function genericNoteAdapter(re: RegExp, alias: string): TypeAdapter {
 	return {
