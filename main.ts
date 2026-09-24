@@ -735,12 +735,31 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
                     // trips `no-misused-promises`. Wrap in a `void`-discarded async IIFE
                     // instead: identical fire-and-forget execution/ordering/error handling,
                     // just an explicit `void` where it was implicit before.
+                    //
+                    // SC-243 fix round 1 (review L1): lock-first. This callback fires well
+                    // after `syncCompendium`'s own span has released the lock (the modal was
+                    // just opened, awaiting a click), so it is correctly its own busy span —
+                    // but `trashFile(root)` is destructive and `root` is the SAME folder a
+                    // concurrently-started sync (hotkey/command palette while the modal sits
+                    // open) would be writing into. Acquiring the lock BEFORE the trash call,
+                    // not just before `sync()`, closes that window: a sync already in flight
+                    // refuses this choice (Notice, no trash, no second run) instead of losing
+                    // the root out from under the running sync.
                     new LegacyCompendiumModal(this.app, options.root, (trashOldRoot) => {
                         void (async () => {
-                            if (trashOldRoot) {
-                                await this.app.fileManager.trashFile(root);
+                            const trashToken = this.syncService.beginOperation('sync');
+                            if (trashToken === null) {
+                                new Notice(SYNC_BUSY_NOTICE);
+                                return;
                             }
-                            await this.syncService.sync(this.syncOptions());
+                            try {
+                                if (trashOldRoot) {
+                                    await this.app.fileManager.trashFile(root);
+                                }
+                                await this.syncService.sync(this.syncOptions(), trashToken);
+                            } finally {
+                                this.syncService.endOperation(trashToken);
+                            }
                         })();
                     }).open();
                     return;
@@ -810,10 +829,24 @@ export default class DrawSteelAdmonitionPlugin extends Plugin {
             run: (onProgress, shouldAbort) =>
                 this.migrationService.execute(plan, { onProgress, shouldAbort }),
             decline: declined,
+            // SC-243 fix round 1 (review L1, owner FOLD): same lock-first pattern as the
+            // legacy-modal choice above. `markSettled(root)` itself isn't destructive, but
+            // acquiring before it (rather than only before `sync()`) means a concurrent
+            // sync's refusal is reported honestly up front, instead of settling migration
+            // state and only then discovering the sync itself was refused.
             syncAnyway: () => {
                 void (async () => {
-                    await this.migrationService.markSettled(root);
-                    await this.syncService.sync(this.syncOptions());
+                    const anywayToken = this.syncService.beginOperation('sync');
+                    if (anywayToken === null) {
+                        new Notice(SYNC_BUSY_NOTICE);
+                        return;
+                    }
+                    try {
+                        await this.migrationService.markSettled(root);
+                        await this.syncService.sync(this.syncOptions(), anywayToken);
+                    } finally {
+                        this.syncService.endOperation(anywayToken);
+                    }
                 })();
             },
             finishRemaining: () => { void this.offerMigration(root); },
